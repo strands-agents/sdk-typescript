@@ -1,0 +1,112 @@
+name: Task Reviewer Agent
+
+on:
+  issues:
+    types: [labeled]
+  workflow_dispatch:
+    inputs:
+      prompt:
+        description: 'A prompt to give the agent'
+        required: false
+        type: string
+      issue_id:
+        description: 'Issue ID for task to implement'
+        required: true
+        type: string
+      project_overview_file:
+        description: 'Path to the project overview markdown file'
+        required: false
+        type: string
+        default: '.project/project-overview.md'
+      execution_mode:
+        description: 'Execution mode for the agent'
+        required: true
+        type: choice
+        options:
+          - Initialize
+          - Continue
+
+jobs:
+  task-reviewer:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || (github.event.action == 'labeled' && github.event.label.name == 'run-review')
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+      id-token: write  # Required for OIDC
+    steps:
+      - name: Replace run-review label with review-running
+        if: github.event_name == 'issues'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.removeLabel({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              name: 'run-review'
+            });
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              labels: ['review-running']
+            });
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+            fetch-depth: 0
+
+      - name: Read task implementer script
+        id: task-reviewer-agent-script
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            
+            const systemPrompt = fs.readFileSync('.github/agent-scripts/task-reviewer.script.md', 'utf8');
+            const projectOverview = fs.readFileSync('${{ inputs.project_overview_file || '.project/project-overview.md' }}', 'utf8');
+            
+            const issueId = '${{ inputs.issue_id || github.event.issue.number }}';
+            
+            const task = `project_overview:
+            \`\`\`markdown
+            ${projectOverview}
+            \`\`\`
+
+            issue_number: ${issueId}
+
+            Review the feature in the issue.`;
+
+            core.setOutput('system_prompt', systemPrompt);
+            core.setOutput('task', task);
+
+      - uses: Unshure/strands-action@main
+        with:
+          aws_role_arn: ${{ secrets.AWS_ROLE_ARN }}
+          system_prompt: ${{ steps.task-reviewer-agent-script.outputs.system_prompt }}
+          session_id: "reviewer-${{ inputs.issue_id || github.event.issue.number || github.run_id }}"
+          session_s3_bucket: "ncclegg-typescript-session-test"
+          tools: "editor,file_read,shell,http_request,list_pull_requests,list_issues,add_comment,create_issue,get_issue,get_pull_request,update_pull_request,get_pr_reviews,update_issue,get_issue_comments,notebook"
+          # Prompt always overrides the task prompt for any mode
+          # If the mode is "Initialize", then the prompt should provide the input parameters to the script
+          # If the mode is "Continue", then the prompt should tell the agent to review the feedback on the issue.
+          task: ${{ inputs.prompt || (inputs.execution_mode == 'Continue' && 'Review the feedback and continue.') || steps.task-reviewer-agent-script.outputs.task }}
+
+      - name: Remove agent-running label
+        if: always() && github.event_name == 'issues'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            try {
+              await github.rest.issues.removeLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                name: 'review-running'
+              });
+            } catch (error) {
+              console.log('Label may not exist:', error.message);
+            }
