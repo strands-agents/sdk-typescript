@@ -65,13 +65,13 @@ Identify tasks that have all dependencies completed and are ready to begin.
 Review current repository issues to identify which ready tasks already have issues created.
 
 **Constraints:**
-- You MUST list all open issues in the 
+- You MUST list all open issues in the repository
 - You MUST ignore closed issues
 - You MUST compare issue titles against ready-to-start task names
 - You MUST identify which ready tasks already have corresponding GitHub issues
 - You SHOULD use fuzzy matching to account for slight title variations
 - You MUST create a list of ready tasks that need new issues in your notebook
-- You MUST not update the title or descript of any task issues
+- You MUST not update the title or description of any task issues
 - You MUST not comment on any task issues
 - You MUST not identify a task as completed by its issue. A task is complete ONLY by being in the completed directory
 

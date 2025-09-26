@@ -31,9 +31,9 @@ Initialize the project environment and discover repository instruction files.
 - You MUST run unit test to ensure the repository and environment are functional
 - You MAY run integration tests if your feature requires new tests to be added
 - You MUST comment on the github issue if the tests fail, and wait for user feedback on how to continue.
-- You MUST use `git checkout -b <BRANCH_NAME>` to create and switch to a new feature branch
+- You MUST use `git checkout -b agent-tasks/{TASK_NUMBER}` to create and switch to a new feature branch
 - You MUST make note of the newly created branch name
-- You MUST use `git push origin <BRANCH_NAME>` to create the feature branch in remote
+- You MUST use `git push origin agent-tasks/{TASK_NUMBER}` to create the feature branch in remote
 
 
 ### 2. Explore Phase
@@ -85,10 +85,6 @@ Compile all findings into a comprehensive code context notebook.
 - You MUST clearly label any included code snippets as examples or references, not as the actual implementation
 - You MUST keep any included code snippets brief and focused on the specific concept being illustrated
 
-**Collaboration Guidance:**
-- **Interactive Mode:** Present an outline of the code context document for user review and make adjustments based on feedback.
-- **Minimal Mode:** Provide a brief summary of the document structure and only seek input on critical uncertainties.
-- **FSC Mode:** Create the code context document autonomously with comprehensive information based on available resources.
 
 ### 3. Plan Phase
 
@@ -199,7 +195,7 @@ Write implementation code to pass the tests, focusing on simplicity and correctn
 
 #### 4.3 Refactor and Optimize
 
-If the implementation of is complete, proceed with review of the implementation to identify opportunities for simplification or improvement.
+If the implementation is complete, proceed with review of the implementation to identify opportunities for simplification or improvement.
 
 **Constraints:**
 - You MUST check that all tasks are complete before proceeding
