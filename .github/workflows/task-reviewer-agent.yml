@@ -88,7 +88,7 @@ jobs:
           aws_role_arn: ${{ secrets.AWS_ROLE_ARN }}
           system_prompt: ${{ steps.task-reviewer-agent-script.outputs.system_prompt }}
           session_id: "reviewer-${{ inputs.issue_id || github.event.issue.number || github.run_id }}"
-          session_s3_bucket: "ncclegg-typescript-session-test"
+          session_s3_bucket: ${{ secrets.TYPESCRIPT_SESSIONS_BUCKET }}
           tools: "editor,file_read,shell,http_request,list_pull_requests,list_issues,add_comment,create_issue,get_issue,get_pull_request,update_pull_request,get_pr_reviews,update_issue,get_issue_comments,notebook"
           # Prompt always overrides the task prompt for any mode
           # If the mode is "Initialize", then the prompt should provide the input parameters to the script
