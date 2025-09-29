@@ -11,7 +11,7 @@ Set up a minimal TypeScript SDK project with a simple hello world implementation
   - Include instructions to update the AGENTS.md, README.md, and CONTRIBUITNG.md after making any changes that would impact their current content.
 - Create src/ directory with simple hello world function
 - Set up basic Vitest testing configuration with test coverage reporting
-- Add docstring coverage checking to ensure code is well documetnd, and following the TSDoc standard
+- Add docstring coverage checking to ensure code is well documented, and following the TSDoc standard
 - Create index.ts that exports the hello world function
 - Add unit tests for hello world function
 - Add integration test that validates the complete project setup. These can be no-op tests for now
