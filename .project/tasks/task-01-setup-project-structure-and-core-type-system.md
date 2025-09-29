@@ -5,7 +5,7 @@ Set up a minimal TypeScript SDK project with a simple hello world implementation
 
 ## Work Required:
 - Initialize package.json with TypeScript SDK basics
-- Name the package: "@strands-agents/agents"
+- Name the package: "@strands-agents/sdk"
 - Create tsconfig.json with Node.js 20+ and browser compatibility (Chrome 90+, Firefox 88+, Safari 14+)
 - Update the CONTRIBUITING.md file with testing instructions and best practices to follow when implementing features
   - Include instructions to update the AGENTS.md, README.md, and CONTRIBUITNG.md after making any changes that would impact their current content.
