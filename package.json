@@ -1,0 +1,61 @@
+{
+  "name": "@strands-agents/sdk",
+  "version": "0.1.0",
+  "description": "TypeScript SDK for Strands Agents framework",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:integ": "vitest run tests_integ",
+    "lint": "eslint src tests tests_integ",
+    "lint:fix": "eslint src tests tests_integ --fix",
+    "format": "prettier --write src tests tests_integ",
+    "format:check": "prettier --check src tests tests_integ",
+    "type-check": "tsc --noEmit"
+  },
+  "keywords": [
+    "agents",
+    "ai",
+    "typescript",
+    "sdk",
+    "strands"
+  ],
+  "author": "Strands Agents",
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "@types/node": "^24.6.0",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "@vitest/coverage-v8": "^2.0.0",
+    "eslint": "^9.0.0",
+    "eslint-plugin-tsdoc": "^0.3.0",
+    "prettier": "^3.0.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/strands-agents/sdk-typescript.git"
+  },
+  "bugs": {
+    "url": "https://github.com/strands-agents/sdk-typescript/issues"
+  },
+  "homepage": "https://github.com/strands-agents/sdk-typescript#readme"
+}
