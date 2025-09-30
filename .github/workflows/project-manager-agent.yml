@@ -77,7 +77,7 @@ jobs:
             core.setOutput('system_prompt', systemPrompt);
             core.setOutput('task', task);
 
-      - uses: Unshure/strands-action@main
+      - uses: strands-agents/strands-action@main
         with:
           aws_role_arn: ${{ secrets.AWS_ROLE_ARN }}
           system_prompt: ${{ steps.project-manager-agent-script.outputs.system_prompt }}
