@@ -64,7 +64,7 @@ jobs:
         uses: actions/checkout@v4
         with:
             fetch-depth: 0
-            ref: ${{ inputs.pull_request_id && format('refs/pull/{0}/head', inputs.pull_request_id) || (github.event_name == 'pull_request' && github.event.pull_request.number && format('refs/pull/{0}/head', inputs.pull_request_id)) || 'main' }}
+            ref: ${{ inputs.pull_request_id && format('refs/pull/{0}/head', inputs.pull_request_id) || (github.event_name == 'pull_request' && github.event.pull_request.number && format('refs/pull/{0}/head', github.event.pull_request.number)) || 'main' }}
 
       - name: Read task implementer script
         id: task-implementer-agent-script
