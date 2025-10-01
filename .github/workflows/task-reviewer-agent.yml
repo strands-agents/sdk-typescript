@@ -3,6 +3,8 @@ name: Task Reviewer Agent
 on:
   issues:
     types: [labeled]
+  issue_comment:
+    types: [created]
   workflow_dispatch:
     inputs:
       prompt:
@@ -29,74 +31,17 @@ on:
 jobs:
   task-reviewer:
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' || (github.event.action == 'labeled' && github.event.label.name == 'run-review')
+    if: |
+      github.event_name == 'workflow_dispatch' || 
+      (github.event.action == 'labeled' && github.event.label.name == 'review-task') ||
+      (github.event_name == 'issue_comment' && !github.event.issue.pull_request && contains(github.event.comment.body, '/strands-review'))
     permissions:
       contents: write
       issues: write
       pull-requests: write
       id-token: write  # Required for OIDC
     steps:
-      - name: Replace run-review label with review-running
-        if: github.event_name == 'issues'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            await github.rest.issues.removeLabel({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              name: 'run-review'
-            });
-            await github.rest.issues.addLabels({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              labels: ['review-running']
-            });
-
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-            fetch-depth: 0
-
-      - name: Read task implementer script
-        id: task-reviewer-agent-script
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            
-            const systemPrompt = fs.readFileSync('.github/agent-scripts/task-reviewer.script.md', 'utf8');
-            const projectOverview = fs.readFileSync('${{ inputs.project_overview_file || '.project/project-overview.md' }}', 'utf8');
-            
-            const issueId = '${{ inputs.issue_id || github.event.issue.number }}';
-            
-            const task = `project_overview:
-            \`\`\`markdown
-            ${projectOverview}
-            \`\`\`
-
-            issue_number: ${issueId}
-
-            Review the feature in the issue.`;
-
-            core.setOutput('system_prompt', systemPrompt);
-            core.setOutput('task', task);
-
-      - uses: strands-agents/strands-action@main
-        with:
-          aws_role_arn: ${{ secrets.AWS_ROLE_ARN }}
-          system_prompt: ${{ steps.task-reviewer-agent-script.outputs.system_prompt }}
-          session_id: "reviewer-${{ inputs.issue_id || github.event.issue.number || github.run_id }}"
-          session_s3_bucket: ${{ secrets.TYPESCRIPT_SESSIONS_BUCKET }}
-          tools: "editor,file_read,shell,http_request,list_pull_requests,list_issues,add_comment,create_issue,get_issue,get_pull_request,update_pull_request,get_pr_reviews,update_issue,get_issue_comments,notebook"
-          # Prompt always overrides the task prompt for any mode
-          # If the mode is "Initialize", then the prompt should provide the input parameters to the script
-          # If the mode is "Continue", then the prompt should tell the agent to review the feedback on the issue.
-          task: ${{ inputs.prompt || (inputs.execution_mode == 'Continue' && 'Review the feedback and continue.') || steps.task-reviewer-agent-script.outputs.task }}
-
-      - name: Remove agent-running label
-        if: always() && github.event_name == 'issues'
+      - name: Replace review-task label with task-review-running
         uses: actions/github-script@v7
         with:
           script: |
@@ -105,7 +50,89 @@ jobs:
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: context.issue.number,
-                name: 'review-running'
+                name: 'review-task'
+              });
+            } catch (error) {
+              console.log('review-task label may not exist:', error.message);
+            }
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              labels: ['task-review-running']
+            });
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+            fetch-depth: 0
+
+      - name: Read task reviewer script
+        id: task-reviewer-agent-script
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            
+            const systemPrompt = fs.readFileSync('.github/agent-scripts/task-reviewer.script.md', 'utf8');
+            
+            // Determine task based on execution mode
+            let task;
+            
+            // Prompt always overrides the task prompt for any mode
+            if ('${{ inputs.prompt }}') {
+              task = '${{ inputs.prompt }}';
+            }
+            // If the mode is "Continue", tell agent to review feedback
+            else if ('${{ inputs.execution_mode }}' === 'Continue') {
+              task = 'Review the feedback and continue.';
+            }
+            // Otherwise, generate the full task with project overview
+            else {
+              const projectOverview = fs.readFileSync('${{ inputs.project_overview_file || '.project/project-overview.md' }}', 'utf8');
+              const issueId = '${{ inputs.issue_id || github.event.issue.number }}';
+              
+              task = `project_overview:
+              \`\`\`markdown
+              ${projectOverview}
+              \`\`\`
+
+              issue_number: ${issueId}
+
+              Review the feature in the issue.`;
+            }
+
+            core.setOutput('system_prompt', systemPrompt);
+            core.setOutput('task', task);
+
+      - uses: strands-agents/strands-action@main
+        with:
+          aws_role_arn: ${{ secrets.AWS_ROLE_ARN }}
+          system_prompt: ${{ steps.task-reviewer-agent-script.outputs.system_prompt }}
+          session_id: "reviewer-${{ inputs.issue_id || github.event.issue.number }}"
+          session_s3_bucket: ${{ secrets.TYPESCRIPT_SESSIONS_BUCKET }}
+
+          thinking_type: "enabled"
+          budget_tokens: "8000"
+          model: "global.anthropic.claude-sonnet-4-5-20250929-v1:0"
+          anthropic_beta: "interleaved-thinking-2025-05-14"
+          max_tokens: "64000"
+
+          tools: "editor,file_read,shell,http_request,create_issue,get_issue,update_issue,list_issues,add_issue_comment,get_issue_comments,get_pull_request,update_pull_request,list_pull_requests,get_pr_review_and_comments,notebook,handoff_to_user"
+          task: ${{ steps.task-reviewer-agent-script.outputs.task }}
+
+      - name: Remove task-review-running label
+        uses: actions/github-script@v7
+        # Always remove the label even on failure
+        if: always()
+        with:
+          script: |
+            try {
+              await github.rest.issues.removeLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                name: 'task-review-running'
               });
             } catch (error) {
               console.log('Label may not exist:', error.message);

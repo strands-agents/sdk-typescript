@@ -28,12 +28,15 @@ Initialize the project environment and discover repository instruction files.
   - `README.md`
 - You MAY explore more files in the repository if you did not find instructions
 - You MUST make a note of environment setup and testing instructions
+- You MUST make note of the tasks number from the issue title
+- You MUST make note of the issue number
 - You MUST run unit test to ensure the repository and environment are functional
 - You MAY run integration tests if your feature requires new tests to be added
-- You MUST comment on the github issue if the tests fail, and wait for user feedback on how to continue.
-- You MUST use `git checkout -b agent-tasks/{TASK_NUMBER}` to create and switch to a new feature branch
+- You MUST comment on the github issue if the tests fail, and use the handoff_to_user tool to get feedback on how to continue.
+- You MUST use `git checkout -b <BRANCH_NAME>` to create and switch to a new feature branch
+- You SHOULD use the BRANCH_NAME pattern `agent-tasks/{TASK_NUMBER}` unless this branch already exists
 - You MUST make note of the newly created branch name
-- You MUST use `git push origin agent-tasks/{TASK_NUMBER}` to create the feature branch in remote
+- You MUST use `git push origin <BRANCH_NAME>` to create the feature branch in remote
 
 
 ### 2. Explore Phase
@@ -160,7 +163,7 @@ Write test cases based on the outlines, following strict TDD principles.
   - Tests fail for unexpected reasons that you cannot resolve
   - There are structural issues with the test framework
   - You encounter environment issues that prevent test execution
-- You MAY seek user input by commenting on the issue, and informing the user you are ready for their instruction
+- You MAY seek user input by commenting on the issue, and informing the user you are ready for their instruction by using the handoff_to_user tool
 - You MUST otherwise continue automatically after verifying expected failures
 - You MUST follow the Build Output Management practices defined in the Best Practices section
 
@@ -189,7 +192,7 @@ Write implementation code to pass the tests, focusing on simplicity and correctn
   - Tests continue to fail after implementation for reasons you cannot resolve
   - You encounter a design decision that cannot be inferred from requirements
   - Multiple valid implementation approaches exist with significant trade-offs
-- You MAY seek user input by commenting on the issue, and informing the user you are ready for their instruction
+- You MAY seek user input by commenting on the issue, and informing the user you are ready for their instruction by using the handoff_to_user tool
 - You MUST otherwise continue automatically after verifying test results
 - You MUST follow the Build Output Management practices defined in the Best Practices section
 
@@ -238,7 +241,9 @@ If all tests are passing, draft a conventional commit message, perform the git c
 - You MUST use `git push origin <BRANCH_NAME>` to push the local branch to the remote 
 - You MUST use the `create_pull_request` tool to create the pull request if it does not exist yet
   - You MUST use the following title format: `Task <TASK_ID>: <TASK_NAME> Implementation`
-  - You MUST link to the Task issue in the pull request body
+  - You MUST use the task id recorded in your notes, not the issue id
+  - You MUST include "Resolves: #<ISSUE NUMBER>" in the body of the pull request
+    - You MUST NOT bold this line
   - You MUST give an overview of the feature being implemented
   - You MUST include any notes on key implementation decisions, ambiguity, or other information as part of the pull request description
 - You MUST use the `get_pull_request` tool to verify the pull request was created/updated properly
@@ -250,19 +255,20 @@ If all tests are passing, draft a conventional commit message, perform the git c
 
 #### 6.1 Report Ready for Review
 
-Request the user for feedback on the implementation and wait for PR comments.
+Request the user for feedback on the implementation using the handoff_to_user tool.
 
 **Constraints:**
-- You MUST ask the user to review the implementation and provide feedback
-- You MUST wait for the user to indicate they have added comments to the PR
-- You MUST NOT proceed to the next step until the user confirms feedback has been added
+- You MUST use the handoff_to_user tool to inform the user you want their feedback as comments on the pull request
 
 #### 6.2. Read User Responses
 
 Retrieve and analyze the user's responses from the pull request reviews and comments.
 
 **Constraints:**
-- You MUST fetch the latest comments from the PR using available tools
+- You MUST fetch the review and the review comments from the PR using available tools
+  - You MUST use the list_pr_reviews to list all pr reviews
+  - You MUST use get_pr_review_comments to list the comments from the review
+  - You MUST use get_issue_comments to list the comments on the pull request
 - You MUST analyze each comment to determine if the request is clear and actionable
 - You MUST categorize comments as:
   - Clear actionable requests that can be implemented
@@ -281,8 +287,9 @@ Based on the users feedback, you will review and update your implementation plan
 - You MUST update your implementation plan based on the feedback from the user
 - You MUST return to step 3 if you need to re-plan your implementation
 - You MUST return to step 4 if you only need to make minor fixes
+- You MUST NOT close the parent issue - only the user should close it after the pull request is merged
 - You MUST not attempt to merge the pull request
-- You MUST ask the user for any clarifying information on the pull request
+- You MUST use the handoff_to_user tool to inform the user you are ready for clarifying information on the pull request
 
 ## Desired Outcome
 
@@ -315,6 +322,7 @@ issue_number: 123
 
 ### Branch Creation Issues
 If feature branch creation fails:
+- Move any changes in the `.github` directory to the `.github_temp` directory
 - Check for existing branch with same name
 - Generate alternative branch name with timestamp
 - Ensure git repository is properly 

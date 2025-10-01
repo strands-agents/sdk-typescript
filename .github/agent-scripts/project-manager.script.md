@@ -84,7 +84,7 @@ Create GitHub issues for ready-to-start tasks that don't have existing issues.
 - You MUST create a GitHub issue with the title format: "Task <TASK_ID>: <TASK_TITLE>"
 - You MUST include all task information (description, work required, exit criteria, dependencies) in the issue body
 - You MUST NOT assign the issue to anyone
-- You MUST NOT add labels to the issues
+- You MUST add the `review-task` label to the issue
 - You MUST NOT read task files that are not ready to start
 - You SHOULD format the issue body clearly with sections for each task component
 - You SHOULD create a comment on the project tracking issue ONLY if you created an issue

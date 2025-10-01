@@ -26,6 +26,7 @@ Project Manager → Task Reviewer → Task Implementer
 
 **Triggers**:
 - `run-review` label added to issue
+- Post a comment on an issue which includes `/strands-review`
 - Manual workflow dispatch
 
 ### 3. Task Implementer Agent (`task-implementer.script.md`)
@@ -33,7 +34,11 @@ Project Manager → Task Reviewer → Task Implementer
 
 **Triggers**:
 - `run-implement` label added to issue or pull request
+- Post a comment on an issue/pull reqeust, or create a review, that includes `/strands-implement`
 - Manual workflow dispatch
+
+**Note**: You must enable "Allow GitHub Actions to create and approve pull requests" on your repo:
+- https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/enabling-features-for-your-repository/managing-github-actions-settings-for-a-repository#preventing-github-actions-from-creating-or-approving-pull-requests
 
 ## Project Structure
 

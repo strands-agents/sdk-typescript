@@ -81,5 +81,11 @@ jobs:
         with:
           aws_role_arn: ${{ secrets.AWS_ROLE_ARN }}
           system_prompt: ${{ steps.project-manager-agent-script.outputs.system_prompt }}
-          tools: "editor,file_read,shell,http_request,add_comment,list_issues,list_pull_requests,create_issue,get_issue,get_pull_request,get_pr_reviews,update_issue,get_issue_comments,notebook"
+          thinking_type: "enabled"
+          budget_tokens: "8000"
+          model: "global.anthropic.claude-sonnet-4-5-20250929-v1:0"
+          anthropic_beta: "interleaved-thinking-2025-05-14"
+          max_tokens: "64000"
+
+          tools: "editor,file_read,shell,http_request,add_comment,list_issues,list_pull_requests,create_issue,get_issue,get_pull_request,get_pr_review_and_comments,update_issue,get_issue_comments,notebook"
           task: ${{ inputs.prompt || steps.project-manager-agent-script.outputs.task }}
