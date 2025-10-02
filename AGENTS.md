@@ -111,22 +111,56 @@ npm run test:integ
 
 ### Writing Tests
 
+#### Test Organization Pattern
+
+Follow this nested describe pattern to keep tests organized:
+
 ```typescript
 import { describe, it, expect } from 'vitest'
-import { functionToTest } from '../src/module'
 
-describe('functionToTest', () => {
-  it('should handle basic case', () => {
-    const result = functionToTest('input')
-    expect(result).toBe('expected output')
+// For a class in lib/executor.ts:
+class Executor {
+  execute() {
+    return 'result'
+  }
+}
+
+// Tests in tests/executor.test.ts should follow this structure:
+describe('Executor', () => {        // Using the class name as the top level descriptor if there is one
+  describe('execute', () => {       // Create a describe scope for each method being tested
+    it('returns a result', () => {  // Describe specifically functionality of method being tested
+      const executor = new Executor()
+      expect(executor.execute()).toBe('result')
+    })
+    
+    it('raises exception on invalid input', () => {  // Describe another functionality
+      // test implementation
+    })
   })
+})
 
-  it('should handle edge case', () => {
-    const result = functionToTest('')
-    expect(result).toBe('default output')
+// For functions (not classes):
+describe('hello', () => {           // Use the function name as the top level descriptor
+  describe('basic usage', () => {   // Create nested describes for different scenarios
+    it('returns greeting message', () => {
+      // test implementation
+    })
+  })
+  
+  describe('edge cases', () => {    // Group related edge case tests
+    it('handles empty string', () => {
+      // test implementation
+    })
   })
 })
 ```
+
+**Key Principles:**
+- Use the class/function name as the top-level descriptor
+- Create a nested `describe` scope for each method or scenario being tested
+- Use descriptive test names that explain the specific functionality being tested
+- Avoid generic prefixes like "should" - be specific about what the test validates
+- Group related tests together in nested describe blocks
 
 ## Code Quality Standards
 
