@@ -153,7 +153,7 @@ The purpose of this project is to create a Typescript SDK of the Strands Agents 
 ./.project/tasks/task-05-create-tool-interface.md
 ./.project/tasks/task-06-create-tool-decorator-system.md
 ./.project/tasks/task-07-create-tool-registry.md
-./.project/tasks/task-08-implement-event-loop-and-async-processing.md
+./.project/tasks/task-08-implement-agentic-loop-and-async-processing.md
 ./.project/tasks/task-09-implement-core-agent-class.md
 ./.project/tasks/task-10-implement-conversation-manager.md
 ./.project/tasks/task-11-implement-hooks-system-for-extensibility.md

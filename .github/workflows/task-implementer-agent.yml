@@ -98,6 +98,7 @@ jobs:
             const prBody = context.payload.pull_request?.body || '';
             const issueMatch = prBody.match(/(?:close[ds]?|fix(?:e[ds])?|resolve[ds]?):\s*#(\d+)|(?:close[ds]?|fix(?:e[ds])?|resolve[ds]?)\s+#(\d+)/i);
             const issueNumber = issueMatch ? (issueMatch[1] || issueMatch[2]) : null;
+            console.log('Issue Number:', issueNumber);
             core.setOutput('issue_number', issueNumber);
 
       - name: Checkout repository
