@@ -30,23 +30,22 @@ information to effectively respond to your bug report or contribution.
    npm run type-check
    ```
 
+3. Install git hooks for automatic quality checks:
+   ```bash
+   npm run prepare
+   ```
+
+This will set up pre-commit hooks that automatically run tests, linting, formatting checks, and type checking before each commit.
+
 ## Testing Instructions and Best Practices
-
-### Test-Driven Development (TDD)
-
-We follow strict TDD practices:
-
-1. **Write failing tests first** - Tests should fail initially
-2. **Implement minimal code** - Write just enough code to make tests pass
-3. **Refactor** - Improve code while keeping tests green
 
 ### Running Tests
 
 ```bash
-# Run all tests
+# Run unit tests only
 npm test
 
-# Run tests with coverage (required: 100%)
+# Run tests with coverage (required: 80%+)
 npm run test:coverage
 
 # Run tests in watch mode during development
@@ -58,28 +57,10 @@ npm run test:integ
 
 ### Test Requirements
 
-- **100% Coverage**: All code must have complete test coverage
+- **80%+ Coverage**: All code should have at least 80% test coverage
 - **Unit Tests**: Test individual functions in `tests/` directory
 - **Integration Tests**: Test complete workflows in `tests_integ/` directory
 - **TSDoc Coverage**: All exported functions must have complete documentation
-
-### Code Quality Standards
-
-Before submitting any pull request, ensure:
-
-```bash
-# All tests pass
-npm test
-
-# Code quality checks pass
-npm run lint
-
-# Code is properly formatted
-npm run format:check
-
-# TypeScript types are valid
-npm run type-check
-```
 
 ### Documentation Updates
 
@@ -113,10 +94,10 @@ To send us a pull request, please:
 
 1. Fork the repository.
 2. Create a feature branch from `main`.
-3. Follow TDD practices when implementing changes.
-4. Ensure all quality checks pass:
+3. Make your changes, ensuring code quality and test coverage.
+4. Quality checks will run automatically on commit via pre-commit hooks. You can also run them manually:
    ```bash
-   npm test              # 100% test coverage required
+   npm test              # 80%+ test coverage required
    npm run lint          # No linting errors allowed
    npm run format:check  # Code must be properly formatted
    npm run type-check    # TypeScript must compile without errors
@@ -128,7 +109,7 @@ To send us a pull request, please:
 
 ### Pull Request Requirements
 
-- **All tests pass**: 100% test coverage maintained
+- **All tests pass**: 80%+ test coverage maintained
 - **Code quality**: ESLint passes with no errors
 - **Documentation**: TSDoc comments for all exported functions
 - **Formatting**: Prettier formatting applied consistently
@@ -137,15 +118,6 @@ To send us a pull request, please:
 
 GitHub provides additional document on [forking a repository](https://help.github.com/articles/fork-a-repo/) and
 [creating a pull request](https://help.github.com/articles/creating-a-pull-request/).
-
-## Development Workflow
-
-1. **Create feature branch**: `git checkout -b feature/your-feature-name`
-2. **Write failing tests**: Following TDD, write tests first
-3. **Implement code**: Write minimal code to pass tests
-4. **Run quality checks**: Ensure all checks pass
-5. **Update documentation**: Update relevant files if needed
-6. **Create pull request**: With clear description and conventional title
 
 ## Finding contributions to work on
 

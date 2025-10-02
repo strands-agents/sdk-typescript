@@ -55,6 +55,7 @@ sdk-typescript/
    npm run lint
    npm run format:check
    npm run type-check
+   npm run prepare  # Set up git pre-commit hooks
    ```
 
 ### Development Workflow
@@ -103,7 +104,7 @@ npm run test:integ
 
 ### Test Requirements
 
-- **Coverage**: 100% line, function, branch, and statement coverage required
+- **Coverage**: 80%+ line, function, branch, and statement coverage required
 - **Framework**: Vitest for fast, modern testing
 - **Assertions**: Use Vitest's built-in `expect` assertions
 - **Async Testing**: Use `async/await` for asynchronous tests
@@ -205,7 +206,8 @@ npm run type-check        # TypeScript type checking
 2. **Code quality**: `npm run lint` passes without errors  
 3. **Formatting**: `npm run format:check` passes
 4. **Type checking**: `npm run type-check` passes
-5. **Coverage**: 100% test coverage maintained
+5. **Coverage**: 80%+ test coverage maintained
+6. **Pre-commit hooks**: Installed and passing (`npm run prepare`)
 
 ### PR Requirements
 

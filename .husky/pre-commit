@@ -1,0 +1,22 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+echo "Running pre-commit checks..."
+
+# Run tests
+echo "Running tests..."
+npm test || { echo "Tests failed. Commit aborted."; exit 1; }
+
+# Run linting
+echo "Running linting..."
+npm run lint || { echo "Linting failed. Commit aborted."; exit 1; }
+
+# Check formatting
+echo "Checking code formatting..."
+npm run format:check || { echo "Formatting check failed. Run 'npm run format' to fix. Commit aborted."; exit 1; }
+
+# Type checking
+echo "Running type checks..."
+npm run type-check || { echo "Type checking failed. Commit aborted."; exit 1; }
+
+echo "All pre-commit checks passed!"

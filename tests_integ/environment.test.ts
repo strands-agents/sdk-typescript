@@ -1,30 +1,36 @@
 import { describe, it, expect } from 'vitest'
 
-describe('environment compatibility', () => {
-  it('should work in Node.js environment', () => {
-    // Test Node.js specific features are available
-    expect(typeof process).toBe('object')
-    expect(process.version).toBeDefined()
+describe('environment', () => {
+  describe('Node.js compatibility', () => {
+    it('works in Node.js environment', () => {
+      // Test Node.js specific features are available
+      expect(typeof process).toBe('object')
+      expect(process.version).toBeDefined()
+    })
   })
 
-  it('should support modern JavaScript features', () => {
-    // Test ES2022 features work
-    const testArray = [1, 2, 3]
-    const lastElement = testArray.at(-1)
-    expect(lastElement).toBe(3)
+  describe('JavaScript features', () => {
+    it('supports modern JavaScript features', () => {
+      // Test ES2022 features work
+      const testArray = [1, 2, 3]
+      const lastElement = testArray.at(-1)
+      expect(lastElement).toBe(3)
+    })
+
+    it('supports async/await functionality', async () => {
+      // Test async functionality works
+      const promise = Promise.resolve('test')
+      const result = await promise
+      expect(result).toBe('test')
+    })
   })
 
-  it('should support async/await functionality', async () => {
-    // Test async functionality works
-    const promise = Promise.resolve('test')
-    const result = await promise
-    expect(result).toBe('test')
-  })
-
-  it('should validate strict typing environment', () => {
-    // This test validates strict TypeScript configuration
-    // If this compiles and runs, strict typing is working
-    const testValue: string = 'test'
-    expect(typeof testValue).toBe('string')
+  describe('TypeScript configuration', () => {
+    it('validates strict typing environment', () => {
+      // This test validates strict TypeScript configuration
+      // If this compiles and runs, strict typing is working
+      const testValue: string = 'test'
+      expect(typeof testValue).toBe('string')
+    })
   })
 })

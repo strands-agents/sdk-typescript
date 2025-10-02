@@ -25,7 +25,8 @@
     "lint:fix": "eslint src tests tests_integ --fix",
     "format": "prettier --write src tests tests_integ",
     "format:check": "prettier --check src tests tests_integ",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "prepare": "husky"
   },
   "keywords": [
     "agents",
@@ -43,6 +44,7 @@
     "@vitest/coverage-v8": "^2.0.0",
     "eslint": "^9.0.0",
     "eslint-plugin-tsdoc": "^0.3.0",
+    "husky": "^9.1.7",
     "prettier": "^3.0.0",
     "typescript": "^5.5.0",
     "vitest": "^2.0.0"
