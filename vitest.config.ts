@@ -1,6 +1,12 @@
 import { defineConfig } from 'vitest/config'
+import { resolve } from 'path'
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      '@': resolve(__dirname, './src'),
+    },
+  },
   test: {
     coverage: {
       provider: 'v8',
@@ -8,10 +14,10 @@ export default defineConfig({
       exclude: [
         'node_modules/',
         'dist/',
-        'tests/',
+        'src/__tests__/',
         'tests_integ/',
         '*.config.*',
-        'eslint.config.js'
+        'eslint.config.js',
       ],
       thresholds: {
         lines: 80,
@@ -20,6 +26,6 @@ export default defineConfig({
         statements: 80,
       },
     },
-    environment: 'node'
-  }
+    environment: 'node',
+  },
 })

@@ -1,10 +1,10 @@
 # Contributing Guidelines
 
-Thank you for your interest in contributing to our project. Whether it's a bug report, new feature, correction, or additional
-documentation, we greatly value feedback and contributions from our community.
+Thank you for your interest in contributing to the Strands TypeScript SDK! Whether it's a bug report, new feature, correction, or additional documentation, we greatly value feedback and contributions from our community.
 
-Please read through this document before submitting any issues or pull requests to ensure we have all the necessary
-information to effectively respond to your bug report or contribution.
+Please read through this document before submitting any issues or pull requests.
+
+> **Note**: For AI agent-specific development patterns and guidelines, see [AGENTS.md](AGENTS.md).
 
 ## Development Environment
 
@@ -58,24 +58,25 @@ npm run test:integ
 ### Test Requirements
 
 - **80%+ Coverage**: All code should have at least 80% test coverage
-- **Unit Tests**: Test individual functions in `tests/` directory
+- **Unit Tests**: Test individual functions in `src/__tests__/` directory
 - **Integration Tests**: Test complete workflows in `tests_integ/` directory
 - **TSDoc Coverage**: All exported functions must have complete documentation
+
+For detailed testing patterns and examples, see [AGENTS.md - Testing Patterns](AGENTS.md#testing-patterns).
 
 ### Documentation Updates
 
 **Important**: When implementing changes that impact the following files, you must update them:
 
-- **AGENTS.md**: Update if changes affect development environment setup, testing procedures, or development workflow
-- **README.md**: Update if changes affect public API, usage examples, or project description  
-- **CONTRIBUTING.md**: Update if changes affect contribution requirements or development processes
+- **AGENTS.md**: Agent-specific development guidance (directory structure, coding patterns, testing patterns, things to do/not do)
+- **README.md**: Project overview, getting started guide, usage examples, public API documentation
+- **CONTRIBUTING.md**: Human contribution guidelines (development requirements, testing procedures, PR process)
 
 ## Reporting Bugs/Feature Requests
 
 We welcome you to use the GitHub issue tracker to report bugs or suggest features.
 
-When filing an issue, please check existing open, or recently closed, issues to make sure somebody else hasn't already
-reported the issue. Please try to include as much information as you can. Details like these are incredibly useful:
+When filing an issue, please check existing open, or recently closed, issues to make sure somebody else hasn't already reported the issue. Please try to include as much information as you can. Details like these are incredibly useful:
 
 * A reproducible test case or series of steps
 * The version of our code being used
@@ -116,7 +117,7 @@ To send us a pull request, please:
 - **Type safety**: No `any` types allowed, explicit return types required
 - **Conventional commits**: Use conventional commit message format
 
-GitHub provides additional document on [forking a repository](https://help.github.com/articles/fork-a-repo/) and
+GitHub provides additional documentation on [forking a repository](https://help.github.com/articles/fork-a-repo/) and
 [creating a pull request](https://help.github.com/articles/creating-a-pull-request/).
 
 ## Finding contributions to work on
@@ -136,3 +137,4 @@ If you discover a potential security issue in this project we ask that you notif
 ## Licensing
 
 See the [LICENSE](LICENSE) file for our project's licensing. We will ask you to confirm the licensing of your contribution.
+

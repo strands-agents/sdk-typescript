@@ -24,8 +24,13 @@
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
     "sourceMap": true,
-    "removeComments": false
+    "removeComments": false,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"],
+      "@/tests/*": ["src/__tests__/*"]
+    }
   },
-  "include": ["src/**/*", "tests/**/*", "tests_integ/**/*"],
+  "include": ["src/**/*", "tests_integ/**/*"],
   "exclude": ["node_modules", "dist"]
 }

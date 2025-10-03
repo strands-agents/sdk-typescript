@@ -1,315 +1,477 @@
-# Development Guide - Strands TypeScript SDK
+# Agent Development Guide - Strands TypeScript SDK
 
-This document provides comprehensive information for developers working on the Strands TypeScript SDK.
+This document provides guidance specifically for AI agents working on the Strands TypeScript SDK codebase. For human contributor guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Purpose and Scope
+
+**AGENTS.md** contains agent-specific repository information including:
+- Directory structure with summaries of what is included in each directory
+- Development workflow instructions for agents to follow when developing features
+- Coding patterns and testing patterns to follow when writing code
+- Style guidelines, organizational patterns, and best practices
+
+**For human contributors**: See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, testing, and contribution guidelines.
 
 ## Directory Structure
 
 ```
 sdk-typescript/
-├── src/                          # Source code
-│   ├── index.ts                  # Main SDK entry point
-│   └── hello.ts                  # Hello world function (example)
-├── tests/                        # Unit tests
-│   ├── hello.test.ts             # Tests for hello function
-│   └── index.test.ts             # Tests for main entry point
-├── tests_integ/                  # Integration tests
-│   ├── setup.test.ts             # Project setup validation
+├── src/                          # Source code (all production code)
+│   ├── __tests__/                # Unit tests (co-located with source)
+│   │   ├── hello.test.ts         # Tests for hello.ts
+│   │   └── index.test.ts         # Tests for main entry point
+│   ├── index.ts                  # Main SDK entry point (single export point)
+│   └── hello.ts                  # Example: Hello world function
+│
+├── tests_integ/                  # Integration tests (separate from source)
 │   └── environment.test.ts       # Environment compatibility tests
-├── dist/                         # Compiled output (generated)
+│
+├── .github/                      # GitHub Actions workflows
+│   ├── workflows/                # CI/CD workflows
+│   │   ├── pr-and-push.yml       # Triggers test/lint on PR and push
+│   │   ├── test-lint.yml         # Unit tests and linting
+│   │   └── integration-test.yml  # Secure integration tests with AWS
+│   └── agent-scripts/            # Agent system prompts and configs
+│
+├── .project/                     # Project management (tasks, tracking)
+│   ├── tasks/                    # Active tasks
+│   ├── tasks/completed/          # Completed tasks
+│   ├── project-overview.md       # Project goals and roadmap
+│   └── task-registry.md          # Task dependencies
+│
+├── dist/                         # Compiled output (generated, not in git)
 ├── coverage/                     # Test coverage reports (generated)
 ├── node_modules/                 # Dependencies (generated)
-├── package.json                  # Project configuration
-├── tsconfig.json                 # TypeScript configuration
-├── vitest.config.ts              # Test configuration
+│
+├── package.json                  # Project configuration and dependencies
+├── tsconfig.json                 # TypeScript compiler configuration
+├── vitest.config.ts              # Testing configuration
 ├── eslint.config.js              # Linting configuration
 ├── .prettierrc                   # Code formatting configuration
 ├── .gitignore                    # Git ignore rules
-├── AGENTS.md                     # This file
-├── CONTRIBUTING.md               # Contribution guidelines
-└── README.md                     # Project documentation
+├── .husky/                       # Git hooks (pre-commit checks)
+│
+├── AGENTS.md                     # This file (agent guidance)
+├── CONTRIBUTING.md               # Human contributor guidelines
+└── README.md                     # Project overview and usage
 ```
 
-## Development Environment Setup
+### Directory Purposes
 
-### Prerequisites
+- **`src/`**: All production code lives here with co-located unit tests
+- **`src/__tests__/`**: Unit tests for specific source files (tests internal functionality)
+- **`tests_integ/`**: Integration tests (tests public API and external integrations)
+- **`.github/workflows/`**: CI/CD automation and quality gates
+- **`.project/`**: Task management and project tracking
 
-- **Node.js**: Version 20.0.0 or higher
-- **npm**: Version 9.0.0 or higher (comes with Node.js)
+## Development Workflow for Agents
 
-### Initial Setup
+### 1. Environment Setup
 
-1. **Clone the repository**:
-   ```bash
-   git clone https://github.com/strands-agents/sdk-typescript.git
-   cd sdk-typescript
-   ```
+See [CONTRIBUTING.md - Development Environment](CONTRIBUTING.md#development-environment) for:
+- Prerequisites (Node.js 20+, npm)
+- Installation steps
+- Verification commands
 
-2. **Install dependencies**:
-   ```bash
-   npm install
-   ```
+### 2. Making Changes
 
-3. **Verify setup**:
-   ```bash
-   npm test
-   npm run lint
-   npm run format:check
-   npm run type-check
-   npm run prepare  # Set up git pre-commit hooks
-   ```
+1. **Create feature branch**: `git checkout -b agent-tasks/{TASK_NUMBER}`
+2. **Implement changes** following the patterns below
+3. **Run quality checks** before committing (pre-commit hooks will run automatically)
+4. **Commit with conventional commits**: `feat:`, `fix:`, `refactor:`, `docs:`, etc.
+5. **Push to remote**: `git push origin agent-tasks/{TASK_NUMBER}`
 
-### Development Workflow
+### 3. Quality Gates
 
-1. **Create a feature branch**:
-   ```bash
-   git checkout -b feature/your-feature-name
-   ```
+Pre-commit hooks automatically run:
+- Unit tests (via npm test)
+- Linting (via npm run lint)
+- Format checking (via npm run format:check)
+- Type checking (via npm run type-check)
 
-2. **Make changes following TDD approach**:
-   - Write failing tests first
-   - Implement minimal code to pass tests
-   - Refactor while keeping tests green
+All checks must pass before commit is allowed.
 
-3. **Run quality checks**:
-   ```bash
-   npm test              # Run all tests
-   npm run test:coverage # Run tests with coverage
-   npm run lint          # Check code quality
-   npm run format        # Fix formatting issues
-   npm run type-check    # Verify TypeScript types
-   ```
+## Coding Patterns and Best Practices
 
-## Testing Instructions
+### TypeScript Path Aliases
 
-### Running Tests
-
-```bash
-# Run all tests (unit + integration)
-npm test
-
-# Run tests in watch mode
-npm run test:watch
-
-# Run tests with coverage report
-npm run test:coverage
-
-# Run only integration tests
-npm run test:integ
-```
-
-### Test Structure
-
-- **Unit Tests** (`tests/`): Test individual functions and modules
-- **Integration Tests** (`tests_integ/`): Test complete workflows and environment compatibility
-
-### Test Requirements
-
-- **Coverage**: 80%+ line, function, branch, and statement coverage required
-- **Framework**: Vitest for fast, modern testing
-- **Assertions**: Use Vitest's built-in `expect` assertions
-- **Async Testing**: Use `async/await` for asynchronous tests
-
-### Writing Tests
-
-#### Test Organization Pattern
-
-Follow this nested describe pattern to keep tests organized:
+Use path aliases for cleaner imports:
 
 ```typescript
+// Good: Use path alias
+import { hello } from '@/hello'
+import { Agent } from '@/agent'
+
+// Avoid: Relative paths
+import { hello } from '../hello'
+import { Agent } from '../../agent'
+```
+
+**Configuration**: Path aliases are configured in `tsconfig.json` and `vitest.config.ts`:
+- `@/*` maps to `src/*`
+
+### File Organization Pattern
+
+**For source files**:
+```
+src/
+├── module.ts              # Source file
+└── __tests__/
+    └── module.test.ts     # Unit tests co-located
+```
+
+**For integration tests**:
+```
+tests_integ/
+└── feature.test.ts        # Tests public API
+```
+
+### Test Organization Pattern
+
+Follow this nested describe pattern for consistency:
+
+**For functions**:
+```typescript
 import { describe, it, expect } from 'vitest'
+import { functionName } from '@/module'
 
-// For a class in lib/executor.ts:
-class Executor {
-  execute() {
-    return 'result'
-  }
-}
-
-// Tests in tests/executor.test.ts should follow this structure:
-describe('Executor', () => {        // Using the class name as the top level descriptor if there is one
-  describe('execute', () => {       // Create a describe scope for each method being tested
-    it('returns a result', () => {  // Describe specifically functionality of method being tested
-      const executor = new Executor()
-      expect(executor.execute()).toBe('result')
-    })
-    
-    it('raises exception on invalid input', () => {  // Describe another functionality
-      // test implementation
+describe('functionName', () => {
+  describe('when called with valid input', () => {
+    it('returns expected result', () => {
+      const result = functionName('input')
+      expect(result).toBe('expected')
     })
   })
-})
 
-// For functions (not classes):
-describe('hello', () => {           // Use the function name as the top level descriptor
-  describe('basic usage', () => {   // Create nested describes for different scenarios
-    it('returns greeting message', () => {
-      // test implementation
-    })
-  })
-  
-  describe('edge cases', () => {    // Group related edge case tests
-    it('handles empty string', () => {
-      // test implementation
+  describe('when called with edge case', () => {
+    it('handles gracefully', () => {
+      const result = functionName('')
+      expect(result).toBeDefined()
     })
   })
 })
 ```
 
-**Key Principles:**
-- Use the class/function name as the top-level descriptor
-- Create a nested `describe` scope for each method or scenario being tested
-- Use descriptive test names that explain the specific functionality being tested
-- Avoid generic prefixes like "should" - be specific about what the test validates
-- Group related tests together in nested describe blocks
+**For classes**:
+```typescript
+import { describe, it, expect } from 'vitest'
+import { ClassName } from '@/module'
 
-## Code Quality Standards
+describe('ClassName', () => {
+  describe('methodName', () => {
+    it('returns expected result', () => {
+      const instance = new ClassName()
+      const result = instance.methodName()
+      expect(result).toBe('expected')
+    })
 
-### TypeScript Configuration
+    it('handles error case', () => {
+      const instance = new ClassName()
+      expect(() => instance.methodName()).toThrow()
+    })
+  })
 
-- **Strict Mode**: All strict TypeScript checks enabled
-- **No Any Types**: `any` type is forbidden (`@typescript-eslint/no-explicit-any`)
-- **Explicit Return Types**: All functions must have explicit return types
-- **Node.js 20+ Support**: Minimum supported Node.js version
-- **Browser Compatibility**: Chrome 90+, Firefox 88+, Safari 14+
+  describe('anotherMethod', () => {
+    it('performs expected action', () => {
+      // Test implementation
+    })
+  })
+})
+```
+
+**Key principles**:
+- Top-level `describe` uses the function/class name
+- Nested `describe` blocks group related test scenarios
+- Use descriptive test names without "should" prefix
+- Group tests by functionality or scenario
+
+### TypeScript Type Safety
+
+**Strict requirements**:
+```typescript
+// Good: Explicit return types
+export function process(input: string): string {
+  return input.toUpperCase()
+}
+
+// Bad: No return type
+export function process(input: string) {
+  return input.toUpperCase()
+}
+
+// Good: Proper typing
+export function getData(): { id: number; name: string } {
+  return { id: 1, name: 'test' }
+}
+
+// Bad: Using any
+export function getData(): any {
+  return { id: 1, name: 'test' }
+}
+```
+
+**Rules**:
+- Always provide explicit return types
+- Never use `any` type (enforced by ESLint)
+- Use TypeScript strict mode features
+- Leverage type inference where appropriate
 
 ### Documentation Requirements
 
-- **TSDoc**: 100% documentation coverage required
-- **Function Documentation**: All exported functions must have TSDoc comments
-- **Parameter Documentation**: Document all parameters with types and descriptions
-- **Example Usage**: Include `@example` blocks for complex functions
-
-### Code Style
-
-- **Prettier**: Enforced code formatting
-  - No semicolons
-  - Single quotes
-  - Line length: 120 characters
-  - Tab width: 2 spaces
-- **ESLint**: Enforced code quality rules
-  - TypeScript best practices
-  - No unused variables
-  - TSDoc syntax validation
-
-### Example Code Style
+**TSDoc format** (required for all exported functions):
 
 ```typescript
 /**
- * Performs a specific operation with the given parameters.
+ * Brief description of what the function does.
  * 
- * @param input - The input value to process
- * @param options - Configuration options for the operation
- * @returns The processed result
+ * @param paramName - Description of the parameter
+ * @param optionalParam - Description of optional parameter
+ * @returns Description of what is returned
  * 
  * @example
  * ```typescript
- * const result = performOperation('hello', { uppercase: true })
- * console.log(result) // "HELLO"
+ * const result = functionName('input')
+ * console.log(result) // "output"
  * ```
  */
-export function performOperation(input: string, options: OperationOptions): string {
-  // Implementation here
-  return processedInput
+export function functionName(paramName: string, optionalParam?: number): string {
+  // Implementation
 }
 ```
 
-## Build and Development Scripts
+**Requirements**:
+- All exported functions, classes, and interfaces must have TSDoc
+- Include `@param` for all parameters
+- Include `@returns` for return values
+- Include `@example` for complex functionality
+- TSDoc validation enforced by ESLint
 
-```bash
-# Build the project
-npm run build
+### Code Style Guidelines
 
-# Development
-npm run test:watch        # Watch mode for tests
-npm run lint:fix          # Auto-fix linting issues
-npm run format            # Auto-format code
+**Formatting** (enforced by Prettier):
+- No semicolons
+- Single quotes
+- Line length: 120 characters
+- Tab width: 2 spaces
+- Trailing commas in ES5 style
 
-# Quality Checks
-npm run test              # Run all tests
-npm run test:coverage     # Test coverage report
-npm run lint              # Check code quality
-npm run format:check      # Verify formatting
-npm run type-check        # TypeScript type checking
+**Example**:
+```typescript
+export function example(name: string, options?: Options): Result {
+  const config = {
+    name,
+    enabled: true,
+    settings: {
+      timeout: 5000,
+      retries: 3,
+    },
+  }
+
+  return processConfig(config)
+}
 ```
 
-## Pull Request Guidelines
+### Import Organization
 
-### Before Creating a PR
+Organize imports in this order:
+```typescript
+// 1. External dependencies
+import { something } from 'external-package'
 
-1. **All tests pass**: `npm test` returns success
-2. **Code quality**: `npm run lint` passes without errors  
-3. **Formatting**: `npm run format:check` passes
-4. **Type checking**: `npm run type-check` passes
-5. **Coverage**: 80%+ test coverage maintained
-6. **Pre-commit hooks**: Installed and passing (`npm run prepare`)
+// 2. Internal modules (using path aliases)
+import { Agent } from '@/agent'
+import { Tool } from '@/tools'
 
-### PR Requirements
+// 3. Types (if separate)
+import type { Options, Config } from '@/types'
+```
 
-- **Descriptive title**: Use format "feat: add new feature" or "fix: resolve issue"
-- **Clear description**: Explain what changes were made and why
-- **Test coverage**: All new code must have tests
-- **Documentation**: Update relevant documentation files
-- **No breaking changes**: Unless explicitly discussed and approved
+### Error Handling
 
-### Documentation Updates
+```typescript
+// Good: Explicit error handling
+export function process(input: string): string {
+  if (!input) {
+    throw new Error('Input cannot be empty')
+  }
+  return input.trim()
+}
 
-When implementing features that impact the following files, ensure they are updated:
+// Good: Custom error types
+export class ValidationError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'ValidationError'
+  }
+}
+```
 
-- **AGENTS.md**: Development environment or testing procedure changes
-- **README.md**: Public API changes or usage examples  
-- **CONTRIBUTING.md**: New development requirements or processes
+## Testing Patterns
 
-## Architecture Guidelines
+### Unit Test Location
 
-### Module Structure
+**Rule**: Unit tests are co-located with source files in `src/__tests__/`
 
-- **Single Entry Point**: All exports go through `src/index.ts`
-- **ES Modules**: Use ES6 import/export syntax
-- **Type Safety**: Leverage TypeScript's type system fully
-- **Browser Compatible**: Code should work in both Node.js and browser environments
+```
+src/
+├── agent.ts                    # Source file
+├── model.ts                    # Source file
+└── __tests__/
+    ├── agent.test.ts           # Tests for agent.ts
+    └── model.test.ts           # Tests for model.ts
+```
 
-### Dependencies
+### Integration Test Location
 
-- **Minimal Runtime Dependencies**: Keep the SDK lightweight
-- **Development Dependencies**: Use modern tooling for developer experience
-- **Peer Dependencies**: Consider making large dependencies peer dependencies
+**Rule**: Integration tests are separate in `tests_integ/`
 
-## Environment Compatibility
+```
+tests_integ/
+├── api.test.ts                 # Tests public API
+└── environment.test.ts         # Tests environment compatibility
+```
 
-### Node.js Environment
+### Test File Naming
 
-- **Minimum Version**: Node.js 20.0.0
-- **ES Features**: ES2022 features are supported
-- **Async/Await**: Full support for modern async patterns
+- Unit tests: `{sourceFileName}.test.ts` in `src/__tests__/`
+- Integration tests: `{feature}.test.ts` in `tests_integ/`
 
-### Browser Environment
+### Test Coverage
 
-- **Target Browsers**: Chrome 90+, Firefox 88+, Safari 14+
-- **ES Modules**: Native ES module support expected
-- **No Polyfills**: Consumers handle their own polyfills if needed
+- **Minimum**: 80% coverage required (enforced by Vitest)
+- **Target**: Aim for high coverage on critical paths
+- **Exclusions**: Test files, config files, generated code
 
-## Troubleshooting
+### Writing Effective Tests
 
-### Common Issues
+```typescript
+// Good: Clear, specific test
+describe('calculateTotal', () => {
+  describe('when given valid numbers', () => {
+    it('returns the sum', () => {
+      expect(calculateTotal([1, 2, 3])).toBe(6)
+    })
+  })
 
-1. **Test Failures**: 
-   - Ensure all dependencies are installed: `npm install`
-   - Check if tests were written before implementation (TDD)
+  describe('when given empty array', () => {
+    it('returns zero', () => {
+      expect(calculateTotal([])).toBe(0)
+    })
+  })
+})
 
-2. **Linting Errors**:
-   - Fix formatting: `npm run format`
-   - Check TSDoc syntax for functions
+// Bad: Vague, unclear test
+describe('calculateTotal', () => {
+  it('works', () => {
+    expect(calculateTotal([1, 2, 3])).toBeTruthy()
+  })
+})
+```
 
-3. **Type Errors**:
-   - Ensure all functions have explicit return types
-   - Avoid using `any` type anywhere in the codebase
+## Things to Do
 
-4. **Coverage Issues**:
-   - Write tests for all code paths
-   - Check coverage report: `npm run test:coverage`
+✅ **Do**:
+- Use path aliases (`@/`) for all imports
+- Co-locate unit tests with source in `src/__tests__/`
+- Follow nested describe pattern for test organization
+- Write explicit return types for all functions
+- Document all exported functions with TSDoc
+- Use meaningful variable and function names
+- Keep functions small and focused (single responsibility)
+- Use async/await for asynchronous operations
+- Handle errors explicitly
 
-### Getting Help
+## Things NOT to Do
 
-- Check existing issues in the GitHub repository
-- Review the CONTRIBUTING.md guidelines
-- Ensure you're following the development workflow outlined in this document
+❌ **Don't**:
+- Use `any` type (enforced by ESLint)
+- Use relative paths like `../` when path aliases are available
+- Put unit tests in separate `tests/` directory (use `src/__tests__/`)
+- Skip documentation for exported functions
+- Use semicolons (Prettier will remove them)
+- Commit without running pre-commit hooks
+- Ignore linting errors
+- Skip type checking
+- Use implicit return types
+
+## Development Commands
+
+For detailed command usage, see [CONTRIBUTING.md - Testing Instructions](CONTRIBUTING.md#testing-instructions-and-best-practices).
+
+Quick reference:
+```bash
+npm test              # Run unit tests
+npm run test:integ    # Run integration tests  
+npm run test:coverage # Run tests with coverage report
+npm run lint          # Check code quality
+npm run format        # Auto-fix formatting
+npm run type-check    # Verify TypeScript types
+npm run build         # Compile TypeScript
+```
+
+## Troubleshooting Common Issues
+
+### Path Alias Not Resolving
+
+If `@/` imports don't work:
+1. Verify `tsconfig.json` has `baseUrl` and `paths` configured
+2. Verify `vitest.config.ts` has alias configuration
+3. Restart your IDE/editor
+
+### Tests Not Found
+
+If tests aren't discovered:
+1. Ensure unit tests are in `src/__tests__/*.test.ts`
+2. Ensure integration tests are in `tests_integ/*.test.ts`
+3. Check `vitest.config.ts` configuration
+
+### Pre-commit Hooks Failing
+
+If hooks fail:
+1. Run the failing command manually to see details
+2. Fix the issues (tests, linting, formatting, or type errors)
+3. Try committing again
+
+### Type Errors
+
+If TypeScript compilation fails:
+1. Run `npm run type-check` to see all type errors
+2. Ensure all functions have explicit return types
+3. Verify no `any` types are used
+4. Check that all imports are correctly typed
+
+## Agent-Specific Notes
+
+### When Implementing Features
+
+1. **Read task requirements** carefully from the GitHub issue
+2. **Follow TDD approach** if appropriate:
+   - Write failing tests first
+   - Implement minimal code to pass tests
+   - Refactor while keeping tests green
+3. **Use existing patterns** as reference
+4. **Document as you go** with TSDoc comments
+5. **Run all checks** before committing (pre-commit hooks will enforce this)
+
+### Code Review Considerations
+
+When responding to PR feedback:
+- Address all review comments
+- Test changes thoroughly
+- Update documentation if behavior changes
+- Maintain test coverage
+- Follow conventional commit format for fix commits
+
+### Integration with Other Files
+
+- **CONTRIBUTING.md**: Contains testing/setup commands and human contribution guidelines
+- **README.md**: Public-facing documentation, links to strandsagents.com
+- **package.json**: Defines all npm scripts referenced in documentation
+
+## Additional Resources
+
+- [TypeScript Handbook](https://www.typescriptlang.org/docs/handbook/intro.html)
+- [Vitest Documentation](https://vitest.dev/)
+- [TSDoc Reference](https://tsdoc.org/)
+- [Conventional Commits](https://www.conventionalcommits.org/)
+- [Strands Agents Documentation](https://strandsagents.com/)

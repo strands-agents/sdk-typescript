@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { hello } from '../src/hello'
+import { hello } from '@/hello'
 
 describe('hello', () => {
   describe('when called without parameters', () => {
