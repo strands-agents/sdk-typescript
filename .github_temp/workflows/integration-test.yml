@@ -1,0 +1,95 @@
+name: Integration Tests
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+jobs:
+  authorize:
+    name: Authorize Integration Tests
+    runs-on: ubuntu-latest
+    outputs:
+      should-run: ${{ steps.check.outputs.should-run }}
+      environment: ${{ steps.check.outputs.environment }}
+    steps:
+      - name: Check authorization
+        id: check
+        run: |
+          # For external contributors (from forks), require manual approval
+          if [ "${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.repository }}" ]; then
+            echo "External contributor detected - requiring manual approval"
+            echo "should-run=true" >> $GITHUB_OUTPUT
+            echo "environment=manual-approval" >> $GITHUB_OUTPUT
+          else
+            echo "Internal contributor or push to main - auto-approving"
+            echo "should-run=true" >> $GITHUB_OUTPUT
+            echo "environment=auto-approve" >> $GITHUB_OUTPUT
+          fi
+
+  integration-test:
+    name: Run Integration Tests
+    needs: authorize
+    if: needs.authorize.outputs.should-run == 'true'
+    runs-on: ubuntu-latest
+    environment: ${{ needs.authorize.outputs.environment }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+          role-session-name: GitHubActions-IntegrationTest
+
+      - name: Run integration tests
+        run: npm run test:integ
+        env:
+          AWS_REGION: us-east-1
+          NODE_ENV: test
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-results
+          path: coverage/
+          retention-days: 7
+
+      - name: Comment on PR with results
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const status = '${{ job.status }}';
+            const emoji = status === 'success' ? '✅' : '❌';
+            const message = `${emoji} Integration tests ${status}\n\nCommit: ${context.sha}`;
+            
+            github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: message
+            });

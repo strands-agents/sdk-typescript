@@ -38,14 +38,11 @@ Strands Agents is a simple yet powerful SDK that takes a model-driven approach t
 
 - **Lightweight & Flexible**: Simple agent loop that works seamlessly in Node.js and browsers
 - **Model Agnostic**: Support for Amazon Bedrock, OpenAI, and custom model providers
-- **TypeScript-First**: Full type safety with no `any` types, comprehensive TSDoc documentation
 - **Tool System**: Decorator-based tool definition with automatic registry management
-- **Advanced Capabilities**: Event-driven architecture, hooks system, and streaming support
-- **Dual Environment**: Run agents on the server (Node.js 20+) or in the browser
 
 ## Quick Start (Coming Soon)
 
-Once the SDK is complete, usage will look like this:
+Once the SDK is complete, usage will look something like this:
 
 ```typescript
 import { Agent } from '@strands-agents/sdk'
@@ -55,8 +52,6 @@ const agent = new Agent({ tools: [calculator] })
 const response = await agent.invoke('What is the square root of 1764?')
 console.log(response)
 ```
-
-> **Current Status**: The project foundation is complete. Core agent features are being implemented in subsequent tasks.
 
 ## Installation (Coming Soon)
 
@@ -115,50 +110,6 @@ We welcome contributions! See our [Contributing Guide](CONTRIBUTING.md) for deta
 - Pull request process
 - Code of Conduct
 - Security issue reporting
-
-For agent-based development workflows, see [AGENTS.md](AGENTS.md).
-
-## Example Usage (Future)
-
-Once complete, the TypeScript SDK will support patterns like:
-
-```typescript
-import { Agent, tool } from '@strands-agents/sdk'
-import { BedrockModel } from '@strands-agents/sdk/models'
-
-// Define custom tools
-const wordCount = tool({
-  name: 'word_count',
-  description: 'Count words in text',
-  parameters: {
-    text: { type: 'string', description: 'The text to count words in' }
-  },
-  execute: async (text: string) => {
-    return text.split(/\s+/).length
-  }
-})
-
-// Create agent with custom model
-const model = new BedrockModel({
-  modelId: 'us.amazon.nova-pro-v1:0',
-  region: 'us-east-1'
-})
-
-const agent = new Agent({
-  model,
-  tools: [wordCount],
-  systemPrompt: 'You are a helpful assistant.'
-})
-
-// Invoke the agent
-const response = await agent.invoke('How many words are in this sentence?')
-console.log(response.content)
-
-// Stream responses
-for await (const chunk of agent.stream('Tell me a story')) {
-  console.log(chunk.content)
-}
-```
 
 ## License
 
