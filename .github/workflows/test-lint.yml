@@ -48,10 +48,3 @@ jobs:
 
       - name: Build package
         run: npm run build
-
-      - name: Upload coverage reports (Ubuntu Node 20 only)
-        if: matrix.os == 'ubuntu-latest' && matrix.node-version == 20
-        uses: codecov/codecov-action@v4
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          fail_ci_if_error: false

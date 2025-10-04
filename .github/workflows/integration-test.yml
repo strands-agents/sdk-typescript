@@ -67,28 +67,3 @@ jobs:
         env:
           AWS_REGION: us-east-1
           NODE_ENV: test
-
-      - name: Upload test results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: integration-test-results
-          path: coverage/
-          retention-days: 7
-
-      - name: Comment on PR with results
-        if: github.event_name == 'pull_request' && always()
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            const status = '${{ job.status }}';
-            const emoji = status === 'success' ? '✅' : '❌';
-            const message = `${emoji} Integration tests ${status}\n\nCommit: ${context.sha}`;
-            
-            github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: message
-            });
