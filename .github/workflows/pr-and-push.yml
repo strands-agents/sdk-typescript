@@ -1,24 +1,19 @@
-name: PR and Push
+name: Pull Request and Push Action
 
 on:
-  pull_request:
-    branches:
-      - main
+  pull_request:  # Safer than pull_request_target for untrusted code
+    branches: [ main ]
+    types: [opened, synchronize, reopened, ready_for_review]
   push:
-    branches:
-      - main
+    branches: [ main ]  # Also run on direct pushes to main
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  trigger-tests:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Trigger test-lint workflow
-        uses: actions/github-script@v7
-        with:
-          script: |
-            github.rest.actions.createWorkflowDispatch({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              workflow_id: 'test-lint.yml',
-              ref: context.ref
-            })
+  call-test-lint:
+    uses: ./.github/workflows/test-lint.yml
+    permissions:
+      contents: read
+    with:
+      ref: ${{ github.event.pull_request.head.sha }}
