@@ -4,7 +4,7 @@
 Create an async iterator agentic loop that coordinates execution between model providers and tools. The agentic loop manages the conversation flow by streaming model responses, executing tools when needed, and continuing until completion.
 
 ## Work Required:
-- Implement agentic_loop fucntion as an async iterator that takes a list of messages, tool_registry, system_prompt, and model_provider
+- Implement agentic_loop function as an async iterator that takes a list of messages, tool_registry, system_prompt, and model_provider
 - Create a function that aggregates the stream of events from the model provider, and returns a stream of ContentBlock types to represent message responses constructed from model provider events
 - Implement model provider invocation with messages, tool_specs (from tool_registry), and system_prompt
 - Append message to the end of the messages array after the model is finished invoking
