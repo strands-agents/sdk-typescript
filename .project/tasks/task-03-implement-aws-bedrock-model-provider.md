@@ -6,7 +6,7 @@ Create the AWS Bedrock model provider implementation using the AWS SDK v3. Imple
 ## Work Required:
 - Add AWS Bedrock SDK as a dependency to package.json
   - https://www.npmjs.com/package/@aws-sdk/client-bedrock-runtime
-- Implement BedrockModel class implementing the ModelProvider interface implemented in task-01 (update_config, get_config, stream methods)
+- Implement BedrockModel class implementing the ModelProvider interface implemented in task-02 (update_config, get_config, stream methods)
 - Create BedrockConfig interface including all config options needed for the bedrock converse_stream API (guardrails, caching, model parameters, etc.)
   - Python example of this: https://github.com/strands-agents/sdk-python/blob/eef11cc890266b48a22dcc3e555880926d52ec88/src/strands/models/bedrock.py#L66-L112
 - Implement constructor with client configuration
