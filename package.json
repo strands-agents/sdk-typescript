@@ -17,6 +17,7 @@
   },
   "scripts": {
     "build": "tsc",
+    "clean": "rm -rf node_modules dist package-lock.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
@@ -41,13 +42,13 @@
     "@types/node": "^24.6.0",
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",
-    "@vitest/coverage-v8": "^2.0.0",
+    "@vitest/coverage-v8": "^3.2.4",
     "eslint": "^9.0.0",
     "eslint-plugin-tsdoc": "^0.3.0",
     "husky": "^9.1.7",
     "prettier": "^3.0.0",
     "typescript": "^5.5.0",
-    "vitest": "^2.0.0"
+    "vitest": "^3.2.4"
   },
   "engines": {
     "node": ">=20.0.0"
