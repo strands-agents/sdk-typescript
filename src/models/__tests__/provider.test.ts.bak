@@ -1,0 +1,161 @@
+import { describe, it, expect } from 'vitest'
+import type { StreamOptions, ModelProvider } from '@/models/provider'
+
+describe('model provider types', () => {
+  describe('StreamOptions interface', () => {
+    it('accepts empty options', () => {
+      const options: StreamOptions = {}
+      expect(options).toBeDefined()
+    })
+
+    it('accepts options with toolSpecs', () => {
+      const options: StreamOptions = {
+        toolSpecs: [
+          {
+            name: 'calculator',
+            description: 'Calculates math',
+            inputSchema: { type: 'object' },
+          },
+        ],
+      }
+      expect(options.toolSpecs).toHaveLength(1)
+      expect(options.toolSpecs?.[0].name).toBe('calculator')
+    })
+
+    it('accepts options with systemPrompt', () => {
+      const options: StreamOptions = {
+        systemPrompt: 'You are a helpful assistant',
+      }
+      expect(options.systemPrompt).toBe('You are a helpful assistant')
+    })
+
+    it('accepts options with toolChoice auto', () => {
+      const options: StreamOptions = {
+        toolChoice: { auto: {} },
+      }
+      expect(options.toolChoice).toBeDefined()
+    })
+
+    it('accepts options with toolChoice any', () => {
+      const options: StreamOptions = {
+        toolChoice: { any: {} },
+      }
+      expect(options.toolChoice).toBeDefined()
+    })
+
+    it('accepts options with toolChoice specific tool', () => {
+      const options: StreamOptions = {
+        toolChoice: { tool: { name: 'calculator' } },
+      }
+      expect(options.toolChoice).toBeDefined()
+    })
+
+    it('accepts options with all fields', () => {
+      const options: StreamOptions = {
+        toolSpecs: [
+          {
+            name: 'search',
+            description: 'Searches',
+            inputSchema: {},
+          },
+        ],
+        systemPrompt: 'Be helpful',
+        toolChoice: { auto: {} },
+      }
+      expect(options.toolSpecs).toHaveLength(1)
+      expect(options.systemPrompt).toBe('Be helpful')
+      expect(options.toolChoice).toBeDefined()
+    })
+  })
+
+  describe('ModelProvider interface', () => {
+    it('defines updateConfig method signature', () => {
+      // Type test: this validates the interface structure compiles
+      const mockProvider: ModelProvider = {
+        updateConfig: (modelConfig: Record<string, unknown>): void => {
+          expect(modelConfig).toBeDefined()
+        },
+        getConfig: (): Record<string, unknown> => {
+          return {}
+        },
+        stream: async function* () {
+          yield { messageStart: { role: 'assistant' } }
+        },
+      }
+      expect(mockProvider.updateConfig).toBeDefined()
+    })
+
+    it('defines getConfig method signature', () => {
+      const mockProvider: ModelProvider = {
+        updateConfig: (): void => {},
+        getConfig: (): Record<string, unknown> => {
+          return { modelId: 'test' }
+        },
+        stream: async function* () {
+          yield { messageStart: { role: 'assistant' } }
+        },
+      }
+      const config = mockProvider.getConfig()
+      expect(config).toBeDefined()
+    })
+
+    it('defines stream method signature returning AsyncIterable', () => {
+      const mockProvider: ModelProvider = {
+        updateConfig: (): void => {},
+        getConfig: (): Record<string, unknown> => ({}),
+        stream: async function* () {
+          yield { messageStart: { role: 'assistant' } }
+          yield { contentBlockDelta: { delta: { text: 'Hello' } } }
+          yield { messageStop: { stopReason: 'end_turn' } }
+        },
+      }
+      expect(mockProvider.stream).toBeDefined()
+    })
+
+    it('stream method can be async iterated', async () => {
+      const mockProvider: ModelProvider = {
+        updateConfig: (): void => {},
+        getConfig: (): Record<string, unknown> => ({}),
+        stream: async function* () {
+          yield { messageStart: { role: 'assistant' } }
+          yield { messageStop: { stopReason: 'end_turn' } }
+        },
+      }
+
+      const events = []
+      for await (const event of mockProvider.stream([], {})) {
+        events.push(event)
+      }
+      expect(events).toHaveLength(2)
+    })
+
+    it('accepts provider implementation with all methods', async () => {
+      let currentConfig: Record<string, unknown> = { modelId: 'initial' }
+
+      const provider: ModelProvider = {
+        updateConfig: (modelConfig: Record<string, unknown>): void => {
+          currentConfig = { ...currentConfig, ...modelConfig }
+        },
+        getConfig: (): Record<string, unknown> => {
+          return currentConfig
+        },
+        stream: async function* (messages, options) {
+          expect(messages).toBeDefined()
+          expect(options).toBeDefined()
+          yield { messageStart: { role: 'assistant' } }
+        },
+      }
+
+      expect(provider.getConfig()).toEqual({ modelId: 'initial' })
+      provider.updateConfig({ temperature: 0.7 })
+      expect(provider.getConfig()).toEqual({ modelId: 'initial', temperature: 0.7 })
+
+      let eventCount = 0
+      for await (const event of provider.stream([], {})) {
+        expect(event).toBeDefined()
+        eventCount++
+      }
+      expect(eventCount).toBe(1)
+    })
+  })
+})
