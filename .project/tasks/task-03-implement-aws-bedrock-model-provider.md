@@ -20,7 +20,7 @@ Create the AWS Bedrock model provider implementation using the AWS SDK v3. Imple
 - Add unit tests with mocked AWS SDK client
 
 ## Exit Criteria:
-A fully functional BedrockModel that implements the ModelProvider interface, converts the aws bedrock client repsonse stream to the expected shape outlined in task-01, has ContextWindowOverflow error handling, and includes+passes both unit and integration tests against real AWS Bedrock service.
+A fully functional BedrockModel that implements the ModelProvider interface, converts the aws bedrock client repsonse stream to the expected shape outlined in task-02, has ContextWindowOverflow error handling, and includes+passes both unit and integration tests against real AWS Bedrock service.
 
 ## Dependencies:
 - task-02-create-base-model-provider-interface
