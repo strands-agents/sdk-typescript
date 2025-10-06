@@ -14,7 +14,7 @@
 ### Task 03: Implement AWS Bedrock Model Provider
 **Can start after completion:**
 - Task 04: Implement OpenAI Model Provider
-- Task 08: Implement Event Loop (requires both Task 03 and Task 07)
+- Task 08: Implement Agentic Loop (requires both Task 03 and Task 07)
 
 ### Task 04: Implement OpenAI Model Provider
 **Can start after completion:**
