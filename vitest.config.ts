@@ -14,7 +14,7 @@ export default defineConfig({
       exclude: [
         'node_modules/',
         'dist/',
-        'src/__tests__/',
+        'src/**/__tests__/**',
         'tests_integ/',
         '*.config.*',
         'eslint.config.js',

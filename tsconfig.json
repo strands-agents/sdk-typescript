@@ -27,8 +27,7 @@
     "removeComments": false,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"],
-      "@/tests/*": ["src/__tests__/*"]
+      "@/*": ["src/*"]
     }
   },
   "include": ["src/**/*", "tests_integ/**/*"],

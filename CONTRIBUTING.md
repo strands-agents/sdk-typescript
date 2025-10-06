@@ -58,7 +58,7 @@ npm run test:integ
 ### Test Requirements
 
 - **80%+ Coverage**: All code should have at least 80% test coverage
-- **Unit Tests**: Test individual functions in `src/__tests__/` directory
+- **Unit Tests**: Test individual functions in `src/**/__tests__/**` directories
 - **Integration Tests**: Test complete workflows in `tests_integ/` directory
 - **TSDoc Coverage**: All exported functions must have complete documentation
 

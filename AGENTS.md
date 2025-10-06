@@ -310,10 +310,10 @@ export class ValidationError extends Error {
 
 ### Unit Test Location
 
-**Rule**: Unit tests are co-located with source files in `src/__tests__/`
+**Rule**: Unit tests files are co-located with source files, grouped in a directory named `__tests__`
 
 ```
-src/
+src/subdir/
 ├── agent.ts                    # Source file
 ├── model.ts                    # Source file
 └── __tests__/
@@ -333,7 +333,7 @@ tests_integ/
 
 ### Test File Naming
 
-- Unit tests: `{sourceFileName}.test.ts` in `src/__tests__/`
+- Unit tests: `{sourceFileName}.test.ts` in `src/**/__tests__/**`
 - Integration tests: `{feature}.test.ts` in `tests_integ/`
 
 ### Test Coverage
@@ -372,7 +372,7 @@ describe('calculateTotal', () => {
 
 ✅ **Do**:
 - Use path aliases (`@/`) for all imports
-- Co-locate unit tests with source in `src/__tests__/`
+- Co-locate unit tests with source under `__tests__` directories
 - Follow nested describe pattern for test organization
 - Write explicit return types for all functions
 - Document all exported functions with TSDoc
@@ -386,7 +386,7 @@ describe('calculateTotal', () => {
 ❌ **Don't**:
 - Use `any` type (enforced by ESLint)
 - Use relative paths like `../` when path aliases are available
-- Put unit tests in separate `tests/` directory (use `src/__tests__/`)
+- Put unit tests in separate `tests/` directory (use `src/**/__tests__/**`)
 - Skip documentation for exported functions
 - Use semicolons (Prettier will remove them)
 - Commit without running pre-commit hooks

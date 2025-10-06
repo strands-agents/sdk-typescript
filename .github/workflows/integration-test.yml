@@ -1,69 +1,71 @@
-name: Integration Tests
+name: Secure Integration test
 
 on:
-  workflow_dispatch:
-  pull_request:
-    branches:
-      - main
-  push:
-    branches:
-      - main
-
-permissions:
-  id-token: write
-  contents: read
-  pull-requests: write
+  pull_request_target:
+    branches: main
 
 jobs:
-  authorize:
-    name: Authorize Integration Tests
+  authorization-check:
+    permissions: read-all
     runs-on: ubuntu-latest
     outputs:
-      should-run: ${{ steps.check.outputs.should-run }}
-      environment: ${{ steps.check.outputs.environment }}
+      approval-env: ${{ steps.collab-check.outputs.result }}
     steps:
-      - name: Check authorization
-        id: check
-        run: |
-          # For external contributors (from forks), require manual approval
-          if [ "${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.repository }}" ]; then
-            echo "External contributor detected - requiring manual approval"
-            echo "should-run=true" >> $GITHUB_OUTPUT
-            echo "environment=manual-approval" >> $GITHUB_OUTPUT
-          else
-            echo "Internal contributor or push to main - auto-approving"
-            echo "should-run=true" >> $GITHUB_OUTPUT
-            echo "environment=auto-approve" >> $GITHUB_OUTPUT
-          fi
-
-  integration-test:
-    name: Run Integration Tests
-    needs: authorize
-    if: needs.authorize.outputs.should-run == 'true'
+      - name: Collaborator Check
+        uses: actions/github-script@v8
+        id: collab-check
+        with:
+          result-encoding: string
+          script: |
+            try {
+              const permissionResponse = await github.rest.repos.getCollaboratorPermissionLevel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                username: context.payload.pull_request.user.login,
+              });
+              const permission = permissionResponse.data.permission;
+              const hasWriteAccess = ['write', 'admin'].includes(permission);
+              if (!hasWriteAccess) {
+                console.log(`User ${context.payload.pull_request.user.login} does not have write access to the repository (permission: ${permission})`);
+                return "manual-approval"
+              } else {
+                console.log(`Verifed ${context.payload.pull_request.user.login} has write access. Auto Approving PR Checks.`)
+                return "auto-approve"
+              }
+            } catch (error) {
+              console.log(`${context.payload.pull_request.user.login} does not have write access. Requiring Manual Approval to run PR Checks.`)
+              return "manual-approval"
+            }
+  check-access-and-checkout:
     runs-on: ubuntu-latest
-    environment: ${{ needs.authorize.outputs.environment }}
-    
+    needs: authorization-check
+    environment: ${{ needs.authorization-check.outputs.approval-env }}
+    permissions:
+      id-token: write
+      pull-requests: read
+      contents: read
+
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - name: Configure Credentials
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+         role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+         aws-region: us-east-1
+         mask-aws-account-id: true
+
+      - name: Checkout head commit
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha }} # Pull the commit from the forked repo
+          persist-credentials: false  # Don't persist credentials for subsequent actions
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Install dependencies
         run: npm install
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: us-east-1
-          role-session-name: GitHubActions-IntegrationTest
-
       - name: Run integration tests
         run: npm run test:integ
-        env:
-          AWS_REGION: us-east-1
-          NODE_ENV: test
