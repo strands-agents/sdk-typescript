@@ -15,7 +15,7 @@ Implement the @tool decorator system for TypeScript using experimental decorator
 - Include a `raise_error: bool` parameter on the tool decorator to optionally raise the error the tool raised. This will default to false, and if it is false, then the tool will capture the error, and turn this into a ToolResult with status: error
 - Implement automatic OpenAPI JSON spec generation from TypeScript function signatures with override support
 - Add streaming wrapper for non-streaming decorated functions to work with Tool interface stream method
-- decorated funcitons create an implemented tool instance with the Tool interface from previous task
+- Decorated functions wrap the function in an implemented tool instance with the Tool interface from previous task, but still allows invoking the decorated function as if it's a normal function
 - Add unit tests for decorator functionality, spec generation, and Tool instance creation
 
 ## Exit Criteria:
