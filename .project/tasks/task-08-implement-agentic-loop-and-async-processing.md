@@ -14,7 +14,7 @@ Create an async iterator agentic loop that coordinates execution between model p
 - Implement loop termination when stop_reason is not tool_use
 - Add error propagation for failed operations
 - The final result of the agentic loop should be an interface that includes the stop reason, and the last message
-- Create unit tests for event loop scenarios including tool execution cycles and transactional message handling
+- Create unit tests for agentic loop scenarios including tool execution cycles and transactional message handling
 - Create integration test that uses real model provider and decorated tools to test complete flow
 
 ### Relevant links:
