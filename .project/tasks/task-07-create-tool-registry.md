@@ -9,8 +9,7 @@ Create a ToolRegistry class for registering tools, getting tools, listing all re
   - register_tools - register multiple tools with the ToolRegistry
   - get_tool - return a tool with the defined name
   - update_tool - update the registered tool with the defined name
-  - list_tool_specs - return all registered tool specs to be used by the model
-  - list_tool_names - return a list of all registered tool names
+  - list_tools - return a list of all registered tools
   - remove_tool - remove a tool from the registry
 - Implement tool name validation and duplicate handling
 - Create unit tests for all operations and edge cases
