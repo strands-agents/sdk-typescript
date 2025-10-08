@@ -1,4 +1,23 @@
-import type { JSONValue, ToolResultContent } from '@/tools/types'
+import type { JSONValue } from '@/types/json'
+import type { ToolResultContent } from '@/tools/types'
+
+/**
+ * Reason why the model stopped generating content.
+ *
+ * - `content_filtered` - Content was filtered by safety mechanisms
+ * - `end_turn` - Natural end of the model's turn
+ * - `guardrail_intervened` - A guardrail policy stopped generation
+ * - `max_tokens` - Maximum token limit was reached
+ * - `stop_sequence` - A stop sequence was encountered
+ * - `tool_use` - Model wants to use a tool
+ */
+export type StopReason =
+  | 'content_filtered'
+  | 'end_turn'
+  | 'guardrail_intervened'
+  | 'max_tokens'
+  | 'stop_sequence'
+  | 'tool_use'
 
 /**
  * Role of a message in a conversation.
@@ -7,26 +26,29 @@ import type { JSONValue, ToolResultContent } from '@/tools/types'
 export type Role = 'user' | 'assistant'
 
 /**
- * Represents reasoning content that models may include in their responses.
- * This allows models to show their thought process.
+ * Text content block within a message.
  */
-export interface ReasoningTextBlock {
+export interface TextBlock {
   /**
-   * The text content of the reasoning process.
+   * Discriminator for text content.
    */
-  text: string
+  type: 'text'
 
   /**
-   * A cryptographic signature for verification purposes.
+   * Plain text content.
    */
-  signature?: string
+  text: string
 }
 
 /**
- * ToolUse represents a request to execute a tool.
- * This is a forward reference to the ToolUse type defined in tools/types.
+ * Tool use content block within a message.
  */
-export interface ToolUse {
+export interface ToolUseBlock {
+  /**
+   * Discriminator for tool use content.
+   */
+  type: 'tool_use'
+
   /**
    * The name of the tool to execute.
    */
@@ -45,10 +67,14 @@ export interface ToolUse {
 }
 
 /**
- * ToolResult represents the result of a tool execution.
- * This is a forward reference to the ToolResult type defined in tools/types.
+ * Tool result content block within a message.
  */
-export interface ToolResult {
+export interface ToolResultBlock {
+  /**
+   * Discriminator for tool result content.
+   */
+  type: 'tool_result'
+
   /**
    * The ID of the tool use that this result corresponds to.
    */
@@ -66,59 +92,81 @@ export interface ToolResult {
 }
 
 /**
+ * Reasoning content block within a message.
+ */
+export interface ReasoningBlock {
+  /**
+   * Discriminator for reasoning content.
+   */
+  type: 'reasoning'
+
+  /**
+   * The text content of the reasoning process.
+   */
+  text: string
+
+  /**
+   * A cryptographic signature for verification purposes.
+   */
+  signature?: string
+}
+
+/**
  * A block of content within a message.
  * Content blocks can contain text, tool usage requests, tool results, or reasoning content.
+ *
+ * This is a discriminated union where the `type` field determines the content format.
  *
  * @example
  * ```typescript
  * // Text content block
- * const textBlock: ContentBlock = { text: 'Hello, world!' }
+ * const textBlock: ContentBlock = {
+ *   type: 'text',
+ *   text: 'Hello, world!'
+ * }
  *
  * // Tool use content block
  * const toolUseBlock: ContentBlock = {
- *   toolUse: { name: 'calculator', toolUseId: 'calc-1', input: { a: 1, b: 2 } }
+ *   type: 'tool_use',
+ *   name: 'calculator',
+ *   toolUseId: 'calc-1',
+ *   input: { a: 1, b: 2 }
  * }
  *
  * // Tool result content block
  * const toolResultBlock: ContentBlock = {
- *   toolResult: {
- *     toolUseId: 'calc-1',
- *     status: 'success',
- *     content: [{ text: 'Result: 3' }]
- *   }
+ *   type: 'tool_result',
+ *   toolUseId: 'calc-1',
+ *   status: 'success',
+ *   content: [{ type: 'text', text: 'Result: 3' }]
  * }
  *
  * // Reasoning content block
  * const reasoningBlock: ContentBlock = {
- *   reasoningContent: { text: 'Analyzing the problem...' }
+ *   type: 'reasoning',
+ *   text: 'Analyzing the problem...'
+ * }
+ *
+ * // Type-safe handling
+ * function handleBlock(block: ContentBlock) {
+ *   switch (block.type) {
+ *     case 'text':
+ *       console.log(block.text)
+ *       break
+ *     case 'tool_use':
+ *       console.log(`Using tool: ${block.name}`)
+ *       break
+ *     case 'tool_result':
+ *       console.log(`Tool result: ${block.status}`)
+ *       break
+ *     case 'reasoning':
+ *       console.log(`Reasoning: ${block.text}`)
+ *       break
+ *   }
  * }
  * ```
  */
-export type ContentBlock =
-  | {
-      /**
-       * Plain text content.
-       */
-      text: string
-    }
-  | {
-      /**
-       * A tool usage request from the model.
-       */
-      toolUse: ToolUse
-    }
-  | {
-      /**
-       * The result of a tool execution.
-       */
-      toolResult: ToolResult
-    }
-  | {
-      /**
-       * Reasoning or thinking content from the model.
-       */
-      reasoningContent: ReasoningTextBlock
-    }
+export type ContentBlock = TextBlock | ToolUseBlock | ToolResultBlock | ReasoningBlock
 
 /**
  * A message in a conversation between user and assistant.
@@ -128,14 +176,14 @@ export type ContentBlock =
  * ```typescript
  * const userMessage: Message = {
  *   role: 'user',
- *   content: [{ text: 'What is 2 + 2?' }]
+ *   content: [{ type: 'text', text: 'What is 2 + 2?' }]
  * }
  *
  * const assistantMessage: Message = {
  *   role: 'assistant',
  *   content: [
- *     { text: 'Let me calculate that for you.' },
- *     { toolUse: { name: 'calculator', toolUseId: 'calc-1', input: { a: 2, b: 2 } } }
+ *     { type: 'text', text: 'Let me calculate that for you.' },
+ *     { type: 'tool_use', name: 'calculator', toolUseId: 'calc-1', input: { a: 2, b: 2 } }
  *   ]
  * }
  * ```
@@ -158,8 +206,8 @@ export interface Message {
  * @example
  * ```typescript
  * const conversation: Messages = [
- *   { role: 'user', content: [{ text: 'Hello!' }] },
- *   { role: 'assistant', content: [{ text: 'Hi! How can I help you?' }] }
+ *   { role: 'user', content: [{ type: 'text', text: 'Hello!' }] },
+ *   { role: 'assistant', content: [{ type: 'text', text: 'Hi! How can I help you?' }] }
  * ]
  * ```
  */

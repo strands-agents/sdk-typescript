@@ -81,11 +81,11 @@ export interface ModelProvider {
    * @example
    * ```typescript
    * const messages: Message[] = [
-   *   { role: 'user', content: [{ text: 'Hello!' }] }
+   *   { role: 'user', content: [{ type: 'text', text: 'Hello!' }] }
    * ]
    *
    * for await (const event of provider.stream(messages)) {
-   *   if (event.type === 'contentBlockDelta' && 'text' in event.delta) {
+   *   if (event.type === 'contentBlockDelta' && event.delta.type === 'text') {
    *     process.stdout.write(event.delta.text)
    *   }
    * }

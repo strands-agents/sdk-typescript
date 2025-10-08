@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
+import type { StopReason } from '@/types/messages'
 import type {
-  StopReason,
   Usage,
   Metrics,
   MessageStartEvent,
@@ -118,19 +118,27 @@ describe('streaming event types', () => {
   describe('ContentBlockStart type', () => {
     it('accepts content block start with toolUse', () => {
       const start: ContentBlockStart = {
-        toolUse: {
-          name: 'calculator',
-          toolUseId: 'calc-123',
-        },
+        type: 'tool_use',
+        name: 'calculator',
+        toolUseId: 'calc-123',
       }
-      if ('toolUse' in start) {
-        expect(start.toolUse.name).toBe('calculator')
+      if (start.type === 'tool_use') {
+        expect(start.name).toBe('calculator')
       }
     })
 
-    it('accepts empty content block start', () => {
-      const start: ContentBlockStart = {}
-      expect(start).toBeDefined()
+    it('accepts content block start with text type', () => {
+      const start: ContentBlockStart = {
+        type: 'text',
+      }
+      expect(start.type).toBe('text')
+    })
+
+    it('accepts content block start with reasoning type', () => {
+      const start: ContentBlockStart = {
+        type: 'reasoning',
+      }
+      expect(start.type).toBe('reasoning')
     })
   })
 
@@ -139,15 +147,14 @@ describe('streaming event types', () => {
       const event: ContentBlockStartEvent = {
         contentBlockIndex: 0,
         start: {
-          toolUse: {
-            name: 'search',
-            toolUseId: 'search-456',
-          },
+          type: 'tool_use',
+          name: 'search',
+          toolUseId: 'search-456',
         },
       }
       expect(event.contentBlockIndex).toBe(0)
-      if (event.start && 'toolUse' in event.start) {
-        expect(event.start.toolUse.name).toBe('search')
+      if (event.start && event.start.type === 'tool_use') {
+        expect(event.start.name).toBe('search')
       }
     })
 
@@ -160,7 +167,7 @@ describe('streaming event types', () => {
 
     it('accepts event with only start', () => {
       const event: ContentBlockStartEvent = {
-        start: { toolUse: { name: 'tool', toolUseId: 'id' } },
+        start: { type: 'tool_use', name: 'tool', toolUseId: 'id' },
       }
       expect(event.start).toBeDefined()
     })
@@ -174,56 +181,53 @@ describe('streaming event types', () => {
   describe('ContentBlockDelta type', () => {
     it('accepts delta with text', () => {
       const delta: ContentBlockDelta = {
+        type: 'text',
         text: 'Hello',
       }
-      if ('text' in delta) {
+      if (delta.type === 'text') {
         expect(delta.text).toBe('Hello')
       }
     })
 
     it('accepts delta with toolUse input', () => {
       const delta: ContentBlockDelta = {
-        toolUse: {
-          input: '{"query": "test"}',
-        },
+        type: 'tool_use',
+        input: '{"query": "test"}',
       }
-      if ('toolUse' in delta) {
-        expect(delta.toolUse.input).toBe('{"query": "test"}')
+      if (delta.type === 'tool_use') {
+        expect(delta.input).toBe('{"query": "test"}')
       }
     })
 
     it('accepts delta with reasoning content text', () => {
       const delta: ContentBlockDelta = {
-        reasoningContent: {
-          text: 'Thinking...',
-        },
+        type: 'reasoning',
+        text: 'Thinking...',
       }
-      if ('reasoningContent' in delta) {
-        expect(delta.reasoningContent.text).toBe('Thinking...')
+      if (delta.type === 'reasoning') {
+        expect(delta.text).toBe('Thinking...')
       }
     })
 
     it('accepts delta with reasoning content signature', () => {
       const delta: ContentBlockDelta = {
-        reasoningContent: {
-          signature: 'sig-789',
-        },
+        type: 'reasoning',
+        signature: 'sig-789',
       }
-      if ('reasoningContent' in delta) {
-        expect(delta.reasoningContent.signature).toBe('sig-789')
+      if (delta.type === 'reasoning') {
+        expect(delta.signature).toBe('sig-789')
       }
     })
 
     it('accepts delta with reasoning content both fields', () => {
       const delta: ContentBlockDelta = {
-        reasoningContent: {
-          text: 'Reasoning',
-          signature: 'sig-123',
-        },
+        type: 'reasoning',
+        text: 'Reasoning',
+        signature: 'sig-123',
       }
-      if ('reasoningContent' in delta) {
-        expect(delta.reasoningContent.text).toBe('Reasoning')
-        expect(delta.reasoningContent.signature).toBe('sig-123')
+      if (delta.type === 'reasoning') {
+        expect(delta.text).toBe('Reasoning')
+        expect(delta.signature).toBe('sig-123')
       }
     })
   })
@@ -233,20 +237,21 @@ describe('streaming event types', () => {
       const event: ContentBlockDeltaEvent = {
         contentBlockIndex: 0,
         delta: {
+          type: 'text',
           text: 'streaming text',
         },
       }
       expect(event.contentBlockIndex).toBe(0)
-      if ('text' in event.delta) {
+      if (event.delta.type === 'text') {
         expect(event.delta.text).toBe('streaming text')
       }
     })
 
     it('accepts event with only delta', () => {
       const event: ContentBlockDeltaEvent = {
-        delta: { text: 'more text' },
+        delta: { type: 'text', text: 'more text' },
       }
-      if ('text' in event.delta) {
+      if (event.delta.type === 'text') {
         expect(event.delta.text).toBe('more text')
       }
     })
@@ -363,7 +368,7 @@ describe('streaming event types', () => {
       const event: ModelProviderStreamEvent = {
         type: 'contentBlockStart',
         contentBlockIndex: 0,
-        start: { toolUse: { name: 'tool', toolUseId: 'id' } },
+        start: { type: 'tool_use', name: 'tool', toolUseId: 'id' },
       }
       expect(event.type).toBe('contentBlockStart')
     })
@@ -372,7 +377,7 @@ describe('streaming event types', () => {
       const event: ModelProviderStreamEvent = {
         type: 'contentBlockDelta',
         contentBlockIndex: 0,
-        delta: { text: 'chunk' },
+        delta: { type: 'text', text: 'chunk' },
       }
       expect(event.type).toBe('contentBlockDelta')
     })

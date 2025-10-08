@@ -1,16 +1,4 @@
-import type { JSONSchema7 } from 'json-schema'
-
-/**
- * Represents a JSON Schema definition.
- * Used for defining the structure of tool inputs and outputs.
- */
-export type JSONSchema = JSONSchema7
-
-/**
- * Represents any valid JSON value.
- * This type ensures type safety for JSON-serializable data.
- */
-export type JSONValue = string | number | boolean | null | { [key: string]: JSONValue } | JSONValue[]
+import type { JSONSchema, JSONValue } from '@/types/json'
 
 /**
  * Specification for a tool that can be used by the model.
@@ -88,22 +76,69 @@ export interface ToolUse {
 }
 
 /**
+ * Text content returned from a tool execution.
+ */
+export interface ToolResultTextContent {
+  /**
+   * Discriminator for text content.
+   */
+  type: 'text'
+
+  /**
+   * Plain text result from the tool.
+   */
+  text: string
+}
+
+/**
+ * JSON content returned from a tool execution.
+ */
+export interface ToolResultJsonContent {
+  /**
+   * Discriminator for JSON content.
+   */
+  type: 'json'
+
+  /**
+   * Structured JSON result from the tool.
+   */
+  json: JSONValue
+}
+
+/**
  * Content returned from a tool execution.
  * Can be either text or structured JSON data.
+ *
+ * This is a discriminated union where the `type` field determines the content format.
+ *
+ * @example
+ * ```typescript
+ * // Text result
+ * const textResult: ToolResultContent = {
+ *   type: 'text',
+ *   text: 'Operation completed successfully'
+ * }
+ *
+ * // JSON result
+ * const jsonResult: ToolResultContent = {
+ *   type: 'json',
+ *   json: { result: 42, status: 'success' }
+ * }
+ *
+ * // Type-safe handling
+ * function handleResult(content: ToolResultContent) {
+ *   switch (content.type) {
+ *     case 'text':
+ *       console.log(content.text)
+ *       break
+ *     case 'json':
+ *       console.log(JSON.stringify(content.json))
+ *       break
+ *   }
+ * }
+ * ```
  */
-export type ToolResultContent =
-  | {
-      /**
-       * Plain text result from the tool.
-       */
-      text: string
-    }
-  | {
-      /**
-       * Structured JSON result from the tool.
-       */
-      json: JSONValue
-    }
+export type ToolResultContent = ToolResultTextContent | ToolResultJsonContent
 
 /**
  * Status of a tool execution.
@@ -121,15 +156,15 @@ export type ToolResultStatus = 'success' | 'error'
  *   toolUseId: 'calc-123',
  *   status: 'success',
  *   content: [
- *     { text: 'The result is 8' },
- *     { json: { result: 8 } }
+ *     { type: 'text', text: 'The result is 8' },
+ *     { type: 'json', json: { result: 8 } }
  *   ]
  * }
  *
  * const errorResult: ToolResult = {
  *   toolUseId: 'calc-456',
  *   status: 'error',
- *   content: [{ text: 'Error: Division by zero' }]
+ *   content: [{ type: 'text', text: 'Error: Division by zero' }]
  * }
  * ```
  */

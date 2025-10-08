@@ -1,13 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import type {
-  JSONSchema,
-  ToolSpec,
-  ToolUse,
-  ToolResultContent,
-  ToolResultStatus,
-  ToolResult,
-  ToolChoice,
-} from '@/tools/types'
+import type { JSONSchema } from '@/types/json'
+import type { ToolSpec, ToolUse, ToolResultContent, ToolResultStatus, ToolResult, ToolChoice } from '@/tools/types'
 
 describe('tool types', () => {
   describe('JSONSchema type', () => {
@@ -113,18 +106,20 @@ describe('tool types', () => {
   describe('ToolResultContent type', () => {
     it('accepts content with text only', () => {
       const content: ToolResultContent = {
+        type: 'text',
         text: 'Result: 42',
       }
-      if ('text' in content) {
+      if (content.type === 'text') {
         expect(content.text).toBe('Result: 42')
       }
     })
 
     it('accepts content with json only', () => {
       const content: ToolResultContent = {
+        type: 'json',
         json: { result: 42, unit: 'answer' },
       }
-      if ('json' in content) {
+      if (content.type === 'json') {
         expect(content.json).toEqual({ result: 42, unit: 'answer' })
       }
     })
@@ -147,7 +142,7 @@ describe('tool types', () => {
       const result: ToolResult = {
         toolUseId: 'tool-123',
         status: 'success',
-        content: [{ text: 'Operation completed' }],
+        content: [{ type: 'text', text: 'Operation completed' }],
       }
       expect(result.status).toBe('success')
       expect(result.content).toHaveLength(1)
@@ -157,7 +152,7 @@ describe('tool types', () => {
       const result: ToolResult = {
         toolUseId: 'tool-456',
         status: 'error',
-        content: [{ text: 'Division by zero error' }],
+        content: [{ type: 'text', text: 'Division by zero error' }],
       }
       expect(result.status).toBe('error')
     })
@@ -166,7 +161,10 @@ describe('tool types', () => {
       const result: ToolResult = {
         toolUseId: 'tool-789',
         status: 'success',
-        content: [{ text: 'Result summary' }, { json: { data: [1, 2, 3] } }],
+        content: [
+          { type: 'text', text: 'Result summary' },
+          { type: 'json', json: { data: [1, 2, 3] } },
+        ],
       }
       expect(result.content).toHaveLength(2)
     })

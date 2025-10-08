@@ -105,7 +105,7 @@ describe('model provider types', () => {
         getConfig: (): unknown => ({}),
         stream: async function* () {
           yield { type: 'messageStart', role: 'assistant' } as const
-          yield { type: 'contentBlockDelta', delta: { text: 'Hello' } } as const
+          yield { type: 'contentBlockDelta', delta: { type: 'text', text: 'Hello' } } as const
           yield { type: 'messageStop', stopReason: 'end_turn' } as const
         },
       }

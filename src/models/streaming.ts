@@ -1,22 +1,5 @@
-import type { Role } from '@/types/messages'
-
-/**
- * Reason why the model stopped generating content.
- *
- * - `content_filtered` - Content was filtered by safety mechanisms
- * - `end_turn` - Natural end of the model's turn
- * - `guardrail_intervened` - A guardrail policy stopped generation
- * - `max_tokens` - Maximum token limit was reached
- * - `stop_sequence` - A stop sequence was encountered
- * - `tool_use` - Model wants to use a tool
- */
-export type StopReason =
-  | 'content_filtered'
-  | 'end_turn'
-  | 'guardrail_intervened'
-  | 'max_tokens'
-  | 'stop_sequence'
-  | 'tool_use'
+import type { Role, StopReason } from '@/types/messages'
+import type { JSONValue } from '@/types/json'
 
 /**
  * Token usage statistics for a model invocation.
@@ -72,27 +55,40 @@ export interface MessageStartEvent {
 }
 
 /**
- * Information about a content block that is starting.
- * Can represent the start of a tool use.
+ * Information about a tool use that is starting.
  */
-export type ContentBlockStart =
-  | {
-      /**
-       * Information about a tool use that is starting.
-       */
-      toolUse: {
-        /**
-         * The name of the tool being used.
-         */
-        name: string
+export interface ToolUseStart {
+  /**
+   * Discriminator for tool use start.
+   */
+  type: 'tool_use'
 
-        /**
-         * Unique identifier for this tool use.
-         */
-        toolUseId: string
-      }
-    }
-  | Record<string, never> // Empty object for non-tool-use content blocks
+  /**
+   * The name of the tool being used.
+   */
+  name: string
+
+  /**
+   * Unique identifier for this tool use.
+   */
+  toolUseId: string
+}
+
+/**
+ * Information about other content blocks starting (e.g., text, reasoning).
+ */
+export interface GenericBlockStart {
+  /**
+   * Discriminator for generic content block start.
+   */
+  type: 'text' | 'reasoning'
+}
+
+/**
+ * Information about a content block that is starting.
+ * Can represent the start of a tool use or other content types.
+ */
+export type ContentBlockStart = ToolUseStart | GenericBlockStart
 
 /**
  * Event emitted when a new content block starts in the stream.
@@ -110,43 +106,103 @@ export interface ContentBlockStartEvent {
 }
 
 /**
+ * Text delta within a content block.
+ * Represents incremental text content from the model.
+ */
+export interface TextDelta {
+  /**
+   * Discriminator for text delta.
+   */
+  type: 'text'
+
+  /**
+   * Incremental text content.
+   */
+  text: string
+}
+
+/**
+ * Tool use input delta within a content block.
+ * Represents incremental tool input being generated.
+ */
+export interface ToolUseInputDelta {
+  /**
+   * Discriminator for tool use input delta.
+   */
+  type: 'tool_use'
+
+  /**
+   * Partial JSON string representing the tool input.
+   */
+  input: string
+}
+
+/**
+ * Reasoning content delta within a content block.
+ * Represents incremental reasoning or thinking content.
+ */
+export interface ReasoningDelta {
+  /**
+   * Discriminator for reasoning delta.
+   */
+  type: 'reasoning'
+
+  /**
+   * Incremental reasoning text.
+   */
+  text?: string
+
+  /**
+   * Incremental signature data.
+   */
+  signature?: string
+}
+
+/**
  * A delta (incremental chunk) of content within a content block.
  * Can be text, tool use input, or reasoning content.
+ *
+ * This is a discriminated union following AWS Bedrock ContentBlockDelta specification.
+ *
+ * @see https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_ContentBlockDelta.html
+ *
+ * @example
+ * ```typescript
+ * // Text delta
+ * const textDelta: ContentBlockDelta = {
+ *   type: 'text',
+ *   text: 'Hello, '
+ * }
+ *
+ * // Tool use input delta
+ * const toolDelta: ContentBlockDelta = {
+ *   type: 'tool_use',
+ *   input: '{"operation":'
+ * }
+ *
+ * // Reasoning delta
+ * const reasoningDelta: ContentBlockDelta = {
+ *   type: 'reasoning',
+ *   text: 'Let me think...'
+ * }
+ *
+ * // Type-safe handling
+ * function handleDelta(delta: ContentBlockDelta) {
+ *   switch (delta.type) {
+ *     case 'text':
+ *       console.log(delta.text)
+ *       break
+ *     case 'tool_use':
+ *       console.log(delta.input)
+ *       break
+ *     case 'reasoning':
+ *       console.log(delta.text)
+ *       break
+ *   }
+ * }
+ * ```
  */
-export type ContentBlockDelta =
-  | {
-      /**
-       * Incremental text content.
-       */
-      text: string
-    }
-  | {
-      /**
-       * Incremental tool use input (as a JSON string chunk).
-       */
-      toolUse: {
-        /**
-         * Partial JSON string representing the tool input.
-         */
-        input: string
-      }
-    }
-  | {
-      /**
-       * Incremental reasoning content.
-       */
-      reasoningContent: {
-        /**
-         * Incremental reasoning text.
-         */
-        text?: string
-
-        /**
-         * Incremental signature data.
-         */
-        signature?: string
-      }
-    }
+export type ContentBlockDelta = TextDelta | ToolUseInputDelta | ReasoningDelta
 
 /**
  * Event emitted when there is new content in a content block.
@@ -185,7 +241,7 @@ export interface MessageStopEvent {
   /**
    * Additional provider-specific response fields.
    */
-  additionalModelResponseFields?: unknown
+  additionalModelResponseFields?: JSONValue
 }
 
 /**
@@ -223,7 +279,7 @@ export interface MetadataEvent {
  *       console.log('Message started:', event.role)
  *       break
  *     case 'contentBlockDelta':
- *       if ('text' in event.delta) {
+ *       if (event.delta.type === 'text') {
  *         console.log('Content delta:', event.delta.text)
  *       }
  *       break

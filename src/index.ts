@@ -7,15 +7,28 @@
 
 export { hello } from './hello'
 
+// JSON types
+export type { JSONSchema, JSONValue } from './types/json'
+
 // Message types
-export type { Role, ReasoningTextBlock, ContentBlock, Message, Messages } from './types/messages'
+export type {
+  Role,
+  StopReason,
+  TextBlock,
+  ToolUseBlock,
+  ToolResultBlock,
+  ReasoningBlock,
+  ContentBlock,
+  Message,
+  Messages,
+} from './types/messages'
 
 // Tool types
 export type {
-  JSONSchema,
-  JSONValue,
   ToolSpec,
   ToolUse,
+  ToolResultTextContent,
+  ToolResultJsonContent,
   ToolResultContent,
   ToolResultStatus,
   ToolResult,
@@ -24,12 +37,16 @@ export type {
 
 // Streaming event types
 export type {
-  StopReason,
   Usage,
   Metrics,
   MessageStartEvent,
+  ToolUseStart,
+  GenericBlockStart,
   ContentBlockStart,
   ContentBlockStartEvent,
+  TextDelta,
+  ToolUseInputDelta,
+  ReasoningDelta,
   ContentBlockDelta,
   ContentBlockDeltaEvent,
   ContentBlockStopEvent,
