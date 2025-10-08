@@ -1,12 +1,20 @@
+import type { JSONSchema7 } from 'json-schema'
+
 /**
  * Represents a JSON Schema definition.
  * Used for defining the structure of tool inputs and outputs.
  */
-export type JSONSchema = Record<string, unknown>
+export type JSONSchema = JSONSchema7
+
+/**
+ * Represents any valid JSON value.
+ * This type ensures type safety for JSON-serializable data.
+ */
+export type JSONValue = string | number | boolean | null | { [key: string]: JSONValue } | JSONValue[]
 
 /**
  * Specification for a tool that can be used by the model.
- * Defines the tool's name, description, and input/output schemas.
+ * Defines the tool's name, description, and input schema.
  *
  * @example
  * ```typescript
@@ -41,12 +49,6 @@ export interface ToolSpec {
    * JSON Schema defining the expected input structure for the tool.
    */
   inputSchema: JSONSchema
-
-  /**
-   * Optional JSON Schema defining the expected output structure.
-   * Note: Not all model providers support output schemas.
-   */
-  outputSchema?: JSONSchema
 }
 
 /**
@@ -82,24 +84,26 @@ export interface ToolUse {
    * The input parameters for the tool.
    * Must be JSON-serializable.
    */
-  input: unknown
+  input: JSONValue
 }
 
 /**
  * Content returned from a tool execution.
- * Can contain text, structured JSON data, or both.
+ * Can be either text or structured JSON data.
  */
-export interface ToolResultContent {
-  /**
-   * Plain text result from the tool.
-   */
-  text?: string
-
-  /**
-   * Structured JSON result from the tool.
-   */
-  json?: unknown
-}
+export type ToolResultContent =
+  | {
+      /**
+       * Plain text result from the tool.
+       */
+      text: string
+    }
+  | {
+      /**
+       * Structured JSON result from the tool.
+       */
+      json: JSONValue
+    }
 
 /**
  * Status of a tool execution.

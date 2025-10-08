@@ -73,23 +73,26 @@ export interface MessageStartEvent {
 
 /**
  * Information about a content block that is starting.
+ * Can represent the start of a tool use.
  */
-export interface ContentBlockStart {
-  /**
-   * If this content block is a tool use, contains the tool information.
-   */
-  toolUse?: {
-    /**
-     * The name of the tool being used.
-     */
-    name: string
+export type ContentBlockStart =
+  | {
+      /**
+       * Information about a tool use that is starting.
+       */
+      toolUse: {
+        /**
+         * The name of the tool being used.
+         */
+        name: string
 
-    /**
-     * Unique identifier for this tool use.
-     */
-    toolUseId: string
-  }
-}
+        /**
+         * Unique identifier for this tool use.
+         */
+        toolUseId: string
+      }
+    }
+  | Record<string, never> // Empty object for non-tool-use content blocks
 
 /**
  * Event emitted when a new content block starts in the stream.
@@ -108,38 +111,42 @@ export interface ContentBlockStartEvent {
 
 /**
  * A delta (incremental chunk) of content within a content block.
+ * Can be text, tool use input, or reasoning content.
  */
-export interface ContentBlockDelta {
-  /**
-   * Incremental text content.
-   */
-  text?: string
+export type ContentBlockDelta =
+  | {
+      /**
+       * Incremental text content.
+       */
+      text: string
+    }
+  | {
+      /**
+       * Incremental tool use input (as a JSON string chunk).
+       */
+      toolUse: {
+        /**
+         * Partial JSON string representing the tool input.
+         */
+        input: string
+      }
+    }
+  | {
+      /**
+       * Incremental reasoning content.
+       */
+      reasoningContent: {
+        /**
+         * Incremental reasoning text.
+         */
+        text?: string
 
-  /**
-   * Incremental tool use input (as a JSON string chunk).
-   */
-  toolUse?: {
-    /**
-     * Partial JSON string representing the tool input.
-     */
-    input: string
-  }
-
-  /**
-   * Incremental reasoning content.
-   */
-  reasoningContent?: {
-    /**
-     * Incremental reasoning text.
-     */
-    text?: string
-
-    /**
-     * Incremental signature data.
-     */
-    signature?: string
-  }
-}
+        /**
+         * Incremental signature data.
+         */
+        signature?: string
+      }
+    }
 
 /**
  * Event emitted when there is new content in a content block.
@@ -203,28 +210,46 @@ export interface MetadataEvent {
 }
 
 /**
- * Union type representing all possible streaming events.
- * Each event type is wrapped in an object with a single discriminator property.
+ * Union type representing all possible streaming events from a model provider.
+ * This is a discriminated union where each event has a unique type field.
  *
- * This allows for type-safe event handling using discriminated unions:
+ * This allows for type-safe event handling using switch statements:
  *
  * @example
  * ```typescript
  * for await (const event of stream) {
- *   if ('messageStart' in event) {
- *     console.log('Message started:', event.messageStart.role)
- *   } else if ('contentBlockDelta' in event) {
- *     console.log('Content delta:', event.contentBlockDelta.delta.text)
- *   } else if ('messageStop' in event) {
- *     console.log('Message stopped:', event.messageStop.stopReason)
+ *   switch (event.type) {
+ *     case 'messageStart':
+ *       console.log('Message started:', event.role)
+ *       break
+ *     case 'contentBlockDelta':
+ *       if ('text' in event.delta) {
+ *         console.log('Content delta:', event.delta.text)
+ *       }
+ *       break
+ *     case 'messageStop':
+ *       console.log('Message stopped:', event.stopReason)
+ *       break
  *   }
  * }
  * ```
  */
-export type StreamEvent =
-  | { messageStart: MessageStartEvent }
-  | { contentBlockStart: ContentBlockStartEvent }
-  | { contentBlockDelta: ContentBlockDeltaEvent }
-  | { contentBlockStop: ContentBlockStopEvent }
-  | { messageStop: MessageStopEvent }
-  | { metadata: MetadataEvent }
+export type ModelProviderStreamEvent =
+  | ({
+      type: 'messageStart'
+    } & MessageStartEvent)
+  | ({
+      type: 'contentBlockStart'
+    } & ContentBlockStartEvent)
+  | ({
+      type: 'contentBlockDelta'
+    } & ContentBlockDeltaEvent)
+  | ({
+      type: 'contentBlockStop'
+    } & ContentBlockStopEvent)
+  | ({
+      type: 'messageStop'
+    } & MessageStopEvent)
+  | ({
+      type: 'metadata'
+    } & MetadataEvent)

@@ -11,8 +11,8 @@ import type {
   ContentBlockStopEvent,
   MessageStopEvent,
   MetadataEvent,
-  StreamEvent,
-} from '@/streaming/events'
+  ModelProviderStreamEvent,
+} from '@/models/streaming'
 
 describe('streaming event types', () => {
   describe('StopReason type', () => {
@@ -115,7 +115,7 @@ describe('streaming event types', () => {
     })
   })
 
-  describe('ContentBlockStart interface', () => {
+  describe('ContentBlockStart type', () => {
     it('accepts content block start with toolUse', () => {
       const start: ContentBlockStart = {
         toolUse: {
@@ -123,7 +123,9 @@ describe('streaming event types', () => {
           toolUseId: 'calc-123',
         },
       }
-      expect(start.toolUse?.name).toBe('calculator')
+      if ('toolUse' in start) {
+        expect(start.toolUse.name).toBe('calculator')
+      }
     })
 
     it('accepts empty content block start', () => {
@@ -144,7 +146,9 @@ describe('streaming event types', () => {
         },
       }
       expect(event.contentBlockIndex).toBe(0)
-      expect(event.start?.toolUse?.name).toBe('search')
+      if (event.start && 'toolUse' in event.start) {
+        expect(event.start.toolUse.name).toBe('search')
+      }
     })
 
     it('accepts event with only contentBlockIndex', () => {
@@ -167,12 +171,14 @@ describe('streaming event types', () => {
     })
   })
 
-  describe('ContentBlockDelta interface', () => {
+  describe('ContentBlockDelta type', () => {
     it('accepts delta with text', () => {
       const delta: ContentBlockDelta = {
         text: 'Hello',
       }
-      expect(delta.text).toBe('Hello')
+      if ('text' in delta) {
+        expect(delta.text).toBe('Hello')
+      }
     })
 
     it('accepts delta with toolUse input', () => {
@@ -181,7 +187,9 @@ describe('streaming event types', () => {
           input: '{"query": "test"}',
         },
       }
-      expect(delta.toolUse?.input).toBe('{"query": "test"}')
+      if ('toolUse' in delta) {
+        expect(delta.toolUse.input).toBe('{"query": "test"}')
+      }
     })
 
     it('accepts delta with reasoning content text', () => {
@@ -190,7 +198,9 @@ describe('streaming event types', () => {
           text: 'Thinking...',
         },
       }
-      expect(delta.reasoningContent?.text).toBe('Thinking...')
+      if ('reasoningContent' in delta) {
+        expect(delta.reasoningContent.text).toBe('Thinking...')
+      }
     })
 
     it('accepts delta with reasoning content signature', () => {
@@ -199,23 +209,22 @@ describe('streaming event types', () => {
           signature: 'sig-789',
         },
       }
-      expect(delta.reasoningContent?.signature).toBe('sig-789')
+      if ('reasoningContent' in delta) {
+        expect(delta.reasoningContent.signature).toBe('sig-789')
+      }
     })
 
-    it('accepts delta with multiple fields', () => {
+    it('accepts delta with reasoning content both fields', () => {
       const delta: ContentBlockDelta = {
-        text: 'Response',
         reasoningContent: {
           text: 'Reasoning',
+          signature: 'sig-123',
         },
       }
-      expect(delta.text).toBe('Response')
-      expect(delta.reasoningContent?.text).toBe('Reasoning')
-    })
-
-    it('accepts empty delta', () => {
-      const delta: ContentBlockDelta = {}
-      expect(delta).toBeDefined()
+      if ('reasoningContent' in delta) {
+        expect(delta.reasoningContent.text).toBe('Reasoning')
+        expect(delta.reasoningContent.signature).toBe('sig-123')
+      }
     })
   })
 
@@ -228,14 +237,18 @@ describe('streaming event types', () => {
         },
       }
       expect(event.contentBlockIndex).toBe(0)
-      expect(event.delta.text).toBe('streaming text')
+      if ('text' in event.delta) {
+        expect(event.delta.text).toBe('streaming text')
+      }
     })
 
     it('accepts event with only delta', () => {
       const event: ContentBlockDeltaEvent = {
         delta: { text: 'more text' },
       }
-      expect(event.delta.text).toBe('more text')
+      if ('text' in event.delta) {
+        expect(event.delta.text).toBe('more text')
+      }
     })
   })
 
@@ -334,55 +347,64 @@ describe('streaming event types', () => {
     })
   })
 
-  describe('StreamEvent union type', () => {
+  describe('ModelProviderStreamEvent union type', () => {
     it('accepts messageStart event', () => {
-      const event: StreamEvent = {
-        messageStart: { role: 'assistant' },
+      const event: ModelProviderStreamEvent = {
+        type: 'messageStart',
+        role: 'assistant',
       }
-      expect(event.messageStart).toBeDefined()
+      expect(event.type).toBe('messageStart')
+      if (event.type === 'messageStart') {
+        expect(event.role).toBe('assistant')
+      }
     })
 
     it('accepts contentBlockStart event', () => {
-      const event: StreamEvent = {
-        contentBlockStart: {
-          contentBlockIndex: 0,
-          start: { toolUse: { name: 'tool', toolUseId: 'id' } },
-        },
+      const event: ModelProviderStreamEvent = {
+        type: 'contentBlockStart',
+        contentBlockIndex: 0,
+        start: { toolUse: { name: 'tool', toolUseId: 'id' } },
       }
-      expect(event.contentBlockStart).toBeDefined()
+      expect(event.type).toBe('contentBlockStart')
     })
 
     it('accepts contentBlockDelta event', () => {
-      const event: StreamEvent = {
-        contentBlockDelta: {
-          contentBlockIndex: 0,
-          delta: { text: 'chunk' },
-        },
+      const event: ModelProviderStreamEvent = {
+        type: 'contentBlockDelta',
+        contentBlockIndex: 0,
+        delta: { text: 'chunk' },
       }
-      expect(event.contentBlockDelta).toBeDefined()
+      expect(event.type).toBe('contentBlockDelta')
     })
 
     it('accepts contentBlockStop event', () => {
-      const event: StreamEvent = {
-        contentBlockStop: { contentBlockIndex: 0 },
+      const event: ModelProviderStreamEvent = {
+        type: 'contentBlockStop',
+        contentBlockIndex: 0,
       }
-      expect(event.contentBlockStop).toBeDefined()
+      expect(event.type).toBe('contentBlockStop')
     })
 
     it('accepts messageStop event', () => {
-      const event: StreamEvent = {
-        messageStop: { stopReason: 'end_turn' },
+      const event: ModelProviderStreamEvent = {
+        type: 'messageStop',
+        stopReason: 'end_turn',
       }
-      expect(event.messageStop).toBeDefined()
+      expect(event.type).toBe('messageStop')
+      if (event.type === 'messageStop') {
+        expect(event.stopReason).toBe('end_turn')
+      }
     })
 
     it('accepts metadata event', () => {
-      const event: StreamEvent = {
-        metadata: {
-          usage: { inputTokens: 10, outputTokens: 20, totalTokens: 30 },
-        },
+      const event: ModelProviderStreamEvent = {
+        type: 'metadata',
+        usage: { inputTokens: 10, outputTokens: 20, totalTokens: 30 },
       }
-      expect(event.metadata).toBeDefined()
+      expect(event.type).toBe('metadata')
+      if (event.type === 'metadata') {
+        expect(event.usage?.totalTokens).toBe(30)
+      }
     })
   })
 })

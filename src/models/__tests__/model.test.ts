@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import type { StreamOptions, ModelProvider } from '@/models/provider'
+import type { StreamOptions, ModelProvider } from '@/models/model'
 
 describe('model provider types', () => {
   describe('StreamOptions interface', () => {
@@ -19,7 +19,7 @@ describe('model provider types', () => {
         ],
       }
       expect(options.toolSpecs).toHaveLength(1)
-      expect(options.toolSpecs?.[0].name).toBe('calculator')
+      expect(options.toolSpecs?.[0]?.name).toBe('calculator')
     })
 
     it('accepts options with systemPrompt', () => {
@@ -72,14 +72,14 @@ describe('model provider types', () => {
     it('defines updateConfig method signature', () => {
       // Type test: this validates the interface structure compiles
       const mockProvider: ModelProvider = {
-        updateConfig: (modelConfig: Record<string, unknown>): void => {
+        updateConfig: (modelConfig: unknown): void => {
           expect(modelConfig).toBeDefined()
         },
-        getConfig: (): Record<string, unknown> => {
+        getConfig: (): unknown => {
           return {}
         },
         stream: async function* () {
-          yield { messageStart: { role: 'assistant' } }
+          yield { type: 'messageStart', role: 'assistant' } as const
         },
       }
       expect(mockProvider.updateConfig).toBeDefined()
@@ -88,11 +88,11 @@ describe('model provider types', () => {
     it('defines getConfig method signature', () => {
       const mockProvider: ModelProvider = {
         updateConfig: (): void => {},
-        getConfig: (): Record<string, unknown> => {
+        getConfig: (): unknown => {
           return { modelId: 'test' }
         },
         stream: async function* () {
-          yield { messageStart: { role: 'assistant' } }
+          yield { type: 'messageStart', role: 'assistant' } as const
         },
       }
       const config = mockProvider.getConfig()
@@ -102,11 +102,11 @@ describe('model provider types', () => {
     it('defines stream method signature returning AsyncIterable', () => {
       const mockProvider: ModelProvider = {
         updateConfig: (): void => {},
-        getConfig: (): Record<string, unknown> => ({}),
+        getConfig: (): unknown => ({}),
         stream: async function* () {
-          yield { messageStart: { role: 'assistant' } }
-          yield { contentBlockDelta: { delta: { text: 'Hello' } } }
-          yield { messageStop: { stopReason: 'end_turn' } }
+          yield { type: 'messageStart', role: 'assistant' } as const
+          yield { type: 'contentBlockDelta', delta: { text: 'Hello' } } as const
+          yield { type: 'messageStop', stopReason: 'end_turn' } as const
         },
       }
       expect(mockProvider.stream).toBeDefined()
@@ -115,10 +115,10 @@ describe('model provider types', () => {
     it('stream method can be async iterated', async () => {
       const mockProvider: ModelProvider = {
         updateConfig: (): void => {},
-        getConfig: (): Record<string, unknown> => ({}),
+        getConfig: (): unknown => ({}),
         stream: async function* () {
-          yield { messageStart: { role: 'assistant' } }
-          yield { messageStop: { stopReason: 'end_turn' } }
+          yield { type: 'messageStart', role: 'assistant' } as const
+          yield { type: 'messageStop', stopReason: 'end_turn' } as const
         },
       }
 
@@ -130,19 +130,22 @@ describe('model provider types', () => {
     })
 
     it('accepts provider implementation with all methods', async () => {
-      let currentConfig: Record<string, unknown> = { modelId: 'initial' }
+      let currentConfig: unknown = { modelId: 'initial' }
 
       const provider: ModelProvider = {
-        updateConfig: (modelConfig: Record<string, unknown>): void => {
-          currentConfig = { ...currentConfig, ...modelConfig }
+        updateConfig: (modelConfig: unknown): void => {
+          currentConfig = {
+            ...(currentConfig as Record<string, unknown>),
+            ...(modelConfig as Record<string, unknown>),
+          }
         },
-        getConfig: (): Record<string, unknown> => {
+        getConfig: (): unknown => {
           return currentConfig
         },
         stream: async function* (messages, options) {
           expect(messages).toBeDefined()
           expect(options).toBeDefined()
-          yield { messageStart: { role: 'assistant' } }
+          yield { type: 'messageStart', role: 'assistant' } as const
         },
       }
 

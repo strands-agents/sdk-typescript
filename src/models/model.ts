@@ -1,6 +1,6 @@
 import type { Message } from '@/types/messages'
 import type { ToolSpec, ToolChoice } from '@/tools/types'
-import type { StreamEvent } from '@/streaming/events'
+import type { ModelProviderStreamEvent } from '@/models/streaming'
 
 /**
  * Options for configuring a streaming model invocation.
@@ -32,24 +32,24 @@ export interface StreamOptions {
  * @example
  * ```typescript
  * class MyProvider implements ModelProvider {
- *   private config: Record<string, unknown> = {}
+ *   private config: unknown = {}
  *
- *   updateConfig(modelConfig: Record<string, unknown>): void {
- *     this.config = { ...this.config, ...modelConfig }
+ *   updateConfig(modelConfig: unknown): void {
+ *     this.config = { ...this.config as object, ...modelConfig as object }
  *   }
  *
- *   getConfig(): Record<string, unknown> {
+ *   getConfig(): unknown {
  *     return this.config
  *   }
  *
  *   async *stream(
  *     messages: Message[],
  *     options?: StreamOptions
- *   ): AsyncIterable<StreamEvent> {
+ *   ): AsyncIterable<ModelProviderStreamEvent> {
  *     // Implementation for streaming from LLM
- *     yield { messageStart: { role: 'assistant' } }
- *     yield { contentBlockDelta: { delta: { text: 'Hello' } } }
- *     yield { messageStop: { stopReason: 'end_turn' } }
+ *     yield { type: 'messageStart', role: 'assistant' }
+ *     yield { type: 'contentBlockDelta', delta: { text: 'Hello' } }
+ *     yield { type: 'messageStop', stopReason: 'end_turn' }
  *   }
  * }
  * ```
@@ -61,14 +61,14 @@ export interface ModelProvider {
    *
    * @param modelConfig - Configuration object with model-specific settings
    */
-  updateConfig(modelConfig: Record<string, unknown>): void
+  updateConfig(modelConfig: unknown): void
 
   /**
    * Retrieves the current model configuration.
    *
    * @returns The current configuration object
    */
-  getConfig(): Record<string, unknown>
+  getConfig(): unknown
 
   /**
    * Streams a conversation with the model.
@@ -85,11 +85,11 @@ export interface ModelProvider {
    * ]
    *
    * for await (const event of provider.stream(messages)) {
-   *   if ('contentBlockDelta' in event) {
-   *     process.stdout.write(event.contentBlockDelta.delta.text || '')
+   *   if (event.type === 'contentBlockDelta' && 'text' in event.delta) {
+   *     process.stdout.write(event.delta.text)
    *   }
    * }
    * ```
    */
-  stream(messages: Message[], options?: StreamOptions): AsyncIterable<StreamEvent>
+  stream(messages: Message[], options?: StreamOptions): AsyncIterable<ModelProviderStreamEvent>
 }

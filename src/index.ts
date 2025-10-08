@@ -8,11 +8,12 @@
 export { hello } from './hello'
 
 // Message types
-export type { Role, ReasoningContent, ContentBlock, Message, Messages } from './types/messages'
+export type { Role, ReasoningTextBlock, ContentBlock, Message, Messages } from './types/messages'
 
 // Tool types
 export type {
   JSONSchema,
+  JSONValue,
   ToolSpec,
   ToolUse,
   ToolResultContent,
@@ -34,11 +35,11 @@ export type {
   ContentBlockStopEvent,
   MessageStopEvent,
   MetadataEvent,
-  StreamEvent,
-} from './streaming/events'
+  ModelProviderStreamEvent,
+} from './models/streaming'
 
 // Model configuration types
 export type { ModelConfig } from './models/config'
 
 // Model provider types
-export type { StreamOptions, ModelProvider } from './models/provider'
+export type { StreamOptions, ModelProvider } from './models/model'

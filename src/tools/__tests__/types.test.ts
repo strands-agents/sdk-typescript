@@ -63,23 +63,13 @@ describe('tool types', () => {
       expect(spec.description).toBe('Performs mathematical calculations')
     })
 
-    it('accepts tool spec with optional outputSchema', () => {
-      const spec: ToolSpec = {
-        name: 'search',
-        description: 'Searches the web',
-        inputSchema: { type: 'object' },
-        outputSchema: { type: 'string' },
-      }
-      expect(spec.outputSchema).toBeDefined()
-    })
-
-    it('accepts tool spec without outputSchema', () => {
+    it('accepts tool spec with minimal schema', () => {
       const spec: ToolSpec = {
         name: 'notify',
         description: 'Sends a notification',
         inputSchema: {},
       }
-      expect(spec.outputSchema).toBeUndefined()
+      expect(spec.name).toBe('notify')
     })
   })
 
@@ -120,33 +110,23 @@ describe('tool types', () => {
     })
   })
 
-  describe('ToolResultContent interface', () => {
+  describe('ToolResultContent type', () => {
     it('accepts content with text only', () => {
       const content: ToolResultContent = {
         text: 'Result: 42',
       }
-      expect(content.text).toBe('Result: 42')
+      if ('text' in content) {
+        expect(content.text).toBe('Result: 42')
+      }
     })
 
     it('accepts content with json only', () => {
       const content: ToolResultContent = {
         json: { result: 42, unit: 'answer' },
       }
-      expect(content.json).toEqual({ result: 42, unit: 'answer' })
-    })
-
-    it('accepts content with both text and json', () => {
-      const content: ToolResultContent = {
-        text: 'Calculation complete',
-        json: { value: 100 },
+      if ('json' in content) {
+        expect(content.json).toEqual({ result: 42, unit: 'answer' })
       }
-      expect(content.text).toBeDefined()
-      expect(content.json).toBeDefined()
-    })
-
-    it('accepts empty content', () => {
-      const content: ToolResultContent = {}
-      expect(content).toBeDefined()
     })
   })
 

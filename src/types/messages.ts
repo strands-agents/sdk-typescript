@@ -1,3 +1,5 @@
+import type { JSONValue, ToolResultContent } from '@/tools/types'
+
 /**
  * Role of a message in a conversation.
  * Can be either 'user' (human input) or 'assistant' (model response).
@@ -6,13 +8,13 @@ export type Role = 'user' | 'assistant'
 
 /**
  * Represents reasoning content that models may include in their responses.
- * This allows models to show their thought process or include verification signatures.
+ * This allows models to show their thought process.
  */
-export interface ReasoningContent {
+export interface ReasoningTextBlock {
   /**
    * The text content of the reasoning process.
    */
-  text?: string
+  text: string
 
   /**
    * A cryptographic signature for verification purposes.
@@ -39,7 +41,7 @@ export interface ToolUse {
    * The input parameters for the tool.
    * This can be any JSON-serializable value.
    */
-  input: unknown
+  input: JSONValue
 }
 
 /**
@@ -60,35 +62,63 @@ export interface ToolResult {
   /**
    * The content returned by the tool.
    */
-  content: Array<{ text?: string; json?: unknown }>
+  content: ToolResultContent[]
 }
 
 /**
  * A block of content within a message.
  * Content blocks can contain text, tool usage requests, tool results, or reasoning content.
- * Multiple content blocks can exist in a single message.
+ *
+ * @example
+ * ```typescript
+ * // Text content block
+ * const textBlock: ContentBlock = { text: 'Hello, world!' }
+ *
+ * // Tool use content block
+ * const toolUseBlock: ContentBlock = {
+ *   toolUse: { name: 'calculator', toolUseId: 'calc-1', input: { a: 1, b: 2 } }
+ * }
+ *
+ * // Tool result content block
+ * const toolResultBlock: ContentBlock = {
+ *   toolResult: {
+ *     toolUseId: 'calc-1',
+ *     status: 'success',
+ *     content: [{ text: 'Result: 3' }]
+ *   }
+ * }
+ *
+ * // Reasoning content block
+ * const reasoningBlock: ContentBlock = {
+ *   reasoningContent: { text: 'Analyzing the problem...' }
+ * }
+ * ```
  */
-export interface ContentBlock {
-  /**
-   * Plain text content.
-   */
-  text?: string
-
-  /**
-   * A tool usage request from the model.
-   */
-  toolUse?: ToolUse
-
-  /**
-   * The result of a tool execution.
-   */
-  toolResult?: ToolResult
-
-  /**
-   * Reasoning or thinking content from the model.
-   */
-  reasoningContent?: ReasoningContent
-}
+export type ContentBlock =
+  | {
+      /**
+       * Plain text content.
+       */
+      text: string
+    }
+  | {
+      /**
+       * A tool usage request from the model.
+       */
+      toolUse: ToolUse
+    }
+  | {
+      /**
+       * The result of a tool execution.
+       */
+      toolResult: ToolResult
+    }
+  | {
+      /**
+       * Reasoning or thinking content from the model.
+       */
+      reasoningContent: ReasoningTextBlock
+    }
 
 /**
  * A message in a conversation between user and assistant.

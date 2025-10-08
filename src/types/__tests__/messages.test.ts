@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import type { Role, ReasoningContent, ContentBlock, Message, Messages } from '@/types/messages'
+import type { Role, ReasoningTextBlock, ContentBlock, Message, Messages } from '@/types/messages'
 
 describe('messages types', () => {
   describe('Role type', () => {
@@ -14,42 +14,32 @@ describe('messages types', () => {
     })
   })
 
-  describe('ReasoningContent interface', () => {
+  describe('ReasoningTextBlock interface', () => {
     it('accepts valid reasoning content with text', () => {
-      const reasoning: ReasoningContent = {
+      const reasoning: ReasoningTextBlock = {
         text: 'Thinking about the problem...',
       }
       expect(reasoning.text).toBe('Thinking about the problem...')
     })
 
-    it('accepts valid reasoning content with signature', () => {
-      const reasoning: ReasoningContent = {
-        signature: 'signature-hash-123',
-      }
-      expect(reasoning.signature).toBe('signature-hash-123')
-    })
-
     it('accepts reasoning content with both text and signature', () => {
-      const reasoning: ReasoningContent = {
+      const reasoning: ReasoningTextBlock = {
         text: 'Reasoning process',
         signature: 'sig-456',
       }
       expect(reasoning.text).toBe('Reasoning process')
       expect(reasoning.signature).toBe('sig-456')
     })
-
-    it('allows empty reasoning content object', () => {
-      const reasoning: ReasoningContent = {}
-      expect(reasoning).toBeDefined()
-    })
   })
 
-  describe('ContentBlock interface', () => {
+  describe('ContentBlock type', () => {
     it('accepts content block with text only', () => {
       const block: ContentBlock = {
         text: 'Hello, world!',
       }
-      expect(block.text).toBe('Hello, world!')
+      if ('text' in block) {
+        expect(block.text).toBe('Hello, world!')
+      }
     })
 
     it('accepts content block with toolUse only', () => {
@@ -60,7 +50,9 @@ describe('messages types', () => {
           input: { operation: 'add', a: 1, b: 2 },
         },
       }
-      expect(block.toolUse?.name).toBe('calculator')
+      if ('toolUse' in block) {
+        expect(block.toolUse.name).toBe('calculator')
+      }
     })
 
     it('accepts content block with toolResult only', () => {
@@ -71,7 +63,9 @@ describe('messages types', () => {
           content: [{ text: 'Result: 3' }],
         },
       }
-      expect(block.toolResult?.status).toBe('success')
+      if ('toolResult' in block) {
+        expect(block.toolResult.status).toBe('success')
+      }
     })
 
     it('accepts content block with reasoningContent only', () => {
@@ -80,25 +74,9 @@ describe('messages types', () => {
           text: 'Analyzing the request',
         },
       }
-      expect(block.reasoningContent?.text).toBe('Analyzing the request')
-    })
-
-    it('allows empty content block', () => {
-      const block: ContentBlock = {}
-      expect(block).toBeDefined()
-    })
-
-    it('allows multiple fields in content block', () => {
-      const block: ContentBlock = {
-        text: 'Using calculator',
-        toolUse: {
-          name: 'calculator',
-          toolUseId: 'tool-456',
-          input: { operation: 'multiply', a: 5, b: 10 },
-        },
+      if ('reasoningContent' in block) {
+        expect(block.reasoningContent.text).toBe('Analyzing the request')
       }
-      expect(block.text).toBe('Using calculator')
-      expect(block.toolUse?.name).toBe('calculator')
     })
   })
 
@@ -110,7 +88,9 @@ describe('messages types', () => {
       }
       expect(message.role).toBe('user')
       expect(message.content).toHaveLength(1)
-      expect(message.content[0]?.text).toBe('Hello')
+      if (message.content[0] && 'text' in message.content[0]) {
+        expect(message.content[0].text).toBe('Hello')
+      }
     })
 
     it('accepts assistant message with tool use', () => {
@@ -127,7 +107,9 @@ describe('messages types', () => {
         ],
       }
       expect(message.role).toBe('assistant')
-      expect(message.content[0]?.toolUse?.name).toBe('search')
+      if (message.content[0] && 'toolUse' in message.content[0]) {
+        expect(message.content[0].toolUse.name).toBe('search')
+      }
     })
 
     it('accepts message with multiple content blocks', () => {
