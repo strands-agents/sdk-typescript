@@ -55,8 +55,5 @@ export type {
   ModelProviderStreamEvent,
 } from './models/streaming'
 
-// Model configuration types
-export type { ModelConfig } from './models/config'
-
 // Model provider types
 export type { StreamOptions, ModelProvider } from './models/model'
