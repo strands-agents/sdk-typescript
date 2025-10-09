@@ -47,7 +47,15 @@ export interface Metrics {
 /**
  * Event emitted when a new message starts in the stream.
  */
+/**
+ * Event emitted when a new message starts in the stream.
+ */
 export interface MessageStartEvent {
+  /**
+   * Discriminator for message start events.
+   */
+  type: 'messageStart'
+
   /**
    * The role of the message being started.
    */
@@ -94,6 +102,11 @@ export type ContentBlockStart = ToolUseStart | GenericBlockStart
  * Event emitted when a new content block starts in the stream.
  */
 export interface ContentBlockStartEvent {
+  /**
+   * Discriminator for content block start events.
+   */
+  type: 'contentBlockStart'
+
   /**
    * Index of this content block within the message.
    */
@@ -209,6 +222,11 @@ export type ContentBlockDelta = TextDelta | ToolUseInputDelta | ReasoningDelta
  */
 export interface ContentBlockDeltaEvent {
   /**
+   * Discriminator for content block delta events.
+   */
+  type: 'contentBlockDelta'
+
+  /**
    * Index of the content block being updated.
    */
   contentBlockIndex?: number
@@ -224,6 +242,11 @@ export interface ContentBlockDeltaEvent {
  */
 export interface ContentBlockStopEvent {
   /**
+   * Discriminator for content block stop events.
+   */
+  type: 'contentBlockStop'
+
+  /**
    * Index of the content block that stopped.
    */
   contentBlockIndex?: number
@@ -233,6 +256,11 @@ export interface ContentBlockStopEvent {
  * Event emitted when the message completes.
  */
 export interface MessageStopEvent {
+  /**
+   * Discriminator for message stop events.
+   */
+  type: 'messageStop'
+
   /**
    * Reason why generation stopped.
    */
@@ -249,6 +277,11 @@ export interface MessageStopEvent {
  * Includes usage statistics, performance metrics, and trace information.
  */
 export interface MetadataEvent {
+  /**
+   * Discriminator for metadata events.
+   */
+  type: 'metadata'
+
   /**
    * Token usage information.
    */
@@ -291,21 +324,9 @@ export interface MetadataEvent {
  * ```
  */
 export type ModelProviderStreamEvent =
-  | ({
-      type: 'messageStart'
-    } & MessageStartEvent)
-  | ({
-      type: 'contentBlockStart'
-    } & ContentBlockStartEvent)
-  | ({
-      type: 'contentBlockDelta'
-    } & ContentBlockDeltaEvent)
-  | ({
-      type: 'contentBlockStop'
-    } & ContentBlockStopEvent)
-  | ({
-      type: 'messageStop'
-    } & MessageStopEvent)
-  | ({
-      type: 'metadata'
-    } & MetadataEvent)
+  | MessageStartEvent
+  | ContentBlockStartEvent
+  | ContentBlockDeltaEvent
+  | ContentBlockStopEvent
+  | MessageStopEvent
+  | MetadataEvent

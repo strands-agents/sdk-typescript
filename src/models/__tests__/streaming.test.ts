@@ -102,6 +102,7 @@ describe('streaming event types', () => {
   describe('MessageStartEvent interface', () => {
     it('accepts message start with user role', () => {
       const event: MessageStartEvent = {
+        type: 'messageStart',
         role: 'user',
       }
       expect(event.role).toBe('user')
@@ -109,6 +110,7 @@ describe('streaming event types', () => {
 
     it('accepts message start with assistant role', () => {
       const event: MessageStartEvent = {
+        type: 'messageStart',
         role: 'assistant',
       }
       expect(event.role).toBe('assistant')
@@ -145,6 +147,7 @@ describe('streaming event types', () => {
   describe('ContentBlockStartEvent interface', () => {
     it('accepts event with content block index and start', () => {
       const event: ContentBlockStartEvent = {
+        type: 'contentBlockStart',
         contentBlockIndex: 0,
         start: {
           type: 'tool_use',
@@ -160,6 +163,7 @@ describe('streaming event types', () => {
 
     it('accepts event with only contentBlockIndex', () => {
       const event: ContentBlockStartEvent = {
+        type: 'contentBlockStart',
         contentBlockIndex: 1,
       }
       expect(event.contentBlockIndex).toBe(1)
@@ -167,13 +171,16 @@ describe('streaming event types', () => {
 
     it('accepts event with only start', () => {
       const event: ContentBlockStartEvent = {
+        type: 'contentBlockStart',
         start: { type: 'tool_use', name: 'tool', toolUseId: 'id' },
       }
       expect(event.start).toBeDefined()
     })
 
     it('accepts empty event', () => {
-      const event: ContentBlockStartEvent = {}
+      const event: ContentBlockStartEvent = {
+        type: 'contentBlockStart',
+      }
       expect(event).toBeDefined()
     })
   })
@@ -235,6 +242,7 @@ describe('streaming event types', () => {
   describe('ContentBlockDeltaEvent interface', () => {
     it('accepts event with contentBlockIndex and delta', () => {
       const event: ContentBlockDeltaEvent = {
+        type: 'contentBlockDelta',
         contentBlockIndex: 0,
         delta: {
           type: 'text',
@@ -249,6 +257,7 @@ describe('streaming event types', () => {
 
     it('accepts event with only delta', () => {
       const event: ContentBlockDeltaEvent = {
+        type: 'contentBlockDelta',
         delta: { type: 'text', text: 'more text' },
       }
       if (event.delta.type === 'text') {
@@ -260,13 +269,16 @@ describe('streaming event types', () => {
   describe('ContentBlockStopEvent interface', () => {
     it('accepts event with contentBlockIndex', () => {
       const event: ContentBlockStopEvent = {
+        type: 'contentBlockStop',
         contentBlockIndex: 2,
       }
       expect(event.contentBlockIndex).toBe(2)
     })
 
     it('accepts empty event', () => {
-      const event: ContentBlockStopEvent = {}
+      const event: ContentBlockStopEvent = {
+        type: 'contentBlockStop',
+      }
       expect(event).toBeDefined()
     })
   })
@@ -274,6 +286,7 @@ describe('streaming event types', () => {
   describe('MessageStopEvent interface', () => {
     it('accepts event with stopReason', () => {
       const event: MessageStopEvent = {
+        type: 'messageStop',
         stopReason: 'end_turn',
       }
       expect(event.stopReason).toBe('end_turn')
@@ -281,6 +294,7 @@ describe('streaming event types', () => {
 
     it('accepts event with additionalModelResponseFields', () => {
       const event: MessageStopEvent = {
+        type: 'messageStop',
         additionalModelResponseFields: { customField: 'value' },
       }
       expect(event.additionalModelResponseFields).toBeDefined()
@@ -288,6 +302,7 @@ describe('streaming event types', () => {
 
     it('accepts event with all fields', () => {
       const event: MessageStopEvent = {
+        type: 'messageStop',
         stopReason: 'tool_use',
         additionalModelResponseFields: { trace: 'xyz' },
       }
@@ -296,7 +311,9 @@ describe('streaming event types', () => {
     })
 
     it('accepts empty event', () => {
-      const event: MessageStopEvent = {}
+      const event: MessageStopEvent = {
+        type: 'messageStop',
+      }
       expect(event).toBeDefined()
     })
   })
@@ -304,6 +321,7 @@ describe('streaming event types', () => {
   describe('MetadataEvent interface', () => {
     it('accepts event with usage', () => {
       const event: MetadataEvent = {
+        type: 'metadata',
         usage: {
           inputTokens: 10,
           outputTokens: 20,
@@ -315,6 +333,7 @@ describe('streaming event types', () => {
 
     it('accepts event with metrics', () => {
       const event: MetadataEvent = {
+        type: 'metadata',
         metrics: {
           latencyMs: 150,
         },
@@ -324,6 +343,7 @@ describe('streaming event types', () => {
 
     it('accepts event with trace', () => {
       const event: MetadataEvent = {
+        type: 'metadata',
         trace: { traceId: 'trace-123' },
       }
       expect(event.trace).toBeDefined()
@@ -331,6 +351,7 @@ describe('streaming event types', () => {
 
     it('accepts event with all fields', () => {
       const event: MetadataEvent = {
+        type: 'metadata',
         usage: {
           inputTokens: 10,
           outputTokens: 20,
@@ -347,7 +368,9 @@ describe('streaming event types', () => {
     })
 
     it('accepts empty event', () => {
-      const event: MetadataEvent = {}
+      const event: MetadataEvent = {
+        type: 'metadata',
+      }
       expect(event).toBeDefined()
     })
   })
