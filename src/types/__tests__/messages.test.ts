@@ -47,24 +47,24 @@ describe('messages types', () => {
 
     it('accepts content block with toolUse', () => {
       const block: ContentBlock = {
-        type: 'tool_use',
+        type: 'toolUse',
         name: 'calculator',
         toolUseId: 'tool-123',
         input: { operation: 'add', a: 1, b: 2 },
       }
-      if (block.type === 'tool_use') {
+      if (block.type === 'toolUse') {
         expect(block.name).toBe('calculator')
       }
     })
 
     it('accepts content block with toolResult', () => {
       const block: ContentBlock = {
-        type: 'tool_result',
+        type: 'toolResult',
         toolUseId: 'tool-123',
         status: 'success',
         content: [{ type: 'text', text: 'Result: 3' }],
       }
-      if (block.type === 'tool_result') {
+      if (block.type === 'toolResult') {
         expect(block.status).toBe('success')
       }
     })
@@ -98,7 +98,7 @@ describe('messages types', () => {
         role: 'assistant',
         content: [
           {
-            type: 'tool_use',
+            type: 'toolUse',
             name: 'search',
             toolUseId: 'search-1',
             input: { query: 'TypeScript' },
@@ -106,7 +106,7 @@ describe('messages types', () => {
         ],
       }
       expect(message.role).toBe('assistant')
-      if (message.content[0] && message.content[0].type === 'tool_use') {
+      if (message.content[0] && message.content[0].type === 'toolUse') {
         expect(message.content[0].name).toBe('search')
       }
     })
@@ -117,7 +117,7 @@ describe('messages types', () => {
         content: [
           { type: 'text', text: 'Let me help you' },
           { type: 'text', text: 'I will use a tool' },
-          { type: 'tool_use', name: 'tool', toolUseId: 'id', input: {} },
+          { type: 'toolUse', name: 'tool', toolUseId: 'id', input: {} },
         ],
       }
       expect(message.content).toHaveLength(3)
@@ -156,7 +156,7 @@ describe('messages types', () => {
           role: 'assistant',
           content: [
             {
-              type: 'tool_use',
+              type: 'toolUse',
               name: 'calculator',
               toolUseId: 'calc-1',
               input: { a: 5, b: 3 },
@@ -167,7 +167,7 @@ describe('messages types', () => {
           role: 'user',
           content: [
             {
-              type: 'tool_result',
+              type: 'toolResult',
               toolUseId: 'calc-1',
               status: 'success',
               content: [{ type: 'text', text: '8' }],

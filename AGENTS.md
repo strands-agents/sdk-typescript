@@ -368,6 +368,44 @@ describe('calculateTotal', () => {
 })
 ```
 
+### Testing Implementation Over Interfaces
+
+**PREFERRED**: Test implementations rather than interface types alone.
+
+```typescript
+// ✅ Preferred - Testing actual implementation
+describe('BedrockModelProvider', () => {
+  it('streams messages correctly', async () => {
+    const provider = new BedrockModelProvider(config)
+    const stream = provider.stream(messages)
+    
+    for await (const event of stream) {
+      // Test actual streaming behavior
+      if (event.type === 'messageStart') {
+        expect(event.role).toBe('assistant')
+      }
+    }
+  })
+})
+
+// ⚠️ Less useful - Testing only type interfaces
+describe('ModelProviderStreamEvent', () => {
+  it('accepts messageStart event', () => {
+    const event: ModelProviderStreamEvent = {
+      type: 'messageStart',
+      role: 'assistant',
+    }
+    expect(event.type).toBe('messageStart')
+  })
+})
+```
+
+**Rationale**: 
+- Interface tests only verify TypeScript compilation, not runtime behavior
+- Implementation tests verify actual functionality and integration
+- Type safety is already enforced by TypeScript compiler
+- Reduces test maintenance burden when interfaces change
+
 ## Things to Do
 
 ✅ **Do**:

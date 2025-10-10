@@ -17,33 +17,33 @@ import type {
 describe('streaming event types', () => {
   describe('StopReason type', () => {
     it('accepts "content_filtered"', () => {
-      const reason: StopReason = 'content_filtered'
-      expect(reason).toBe('content_filtered')
+      const reason: StopReason = 'contentFiltered'
+      expect(reason).toBe('contentFiltered')
     })
 
     it('accepts "end_turn"', () => {
-      const reason: StopReason = 'end_turn'
-      expect(reason).toBe('end_turn')
+      const reason: StopReason = 'endTurn'
+      expect(reason).toBe('endTurn')
     })
 
     it('accepts "guardrail_intervened"', () => {
-      const reason: StopReason = 'guardrail_intervened'
-      expect(reason).toBe('guardrail_intervened')
+      const reason: StopReason = 'guardrailIntervened'
+      expect(reason).toBe('guardrailIntervened')
     })
 
     it('accepts "max_tokens"', () => {
-      const reason: StopReason = 'max_tokens'
-      expect(reason).toBe('max_tokens')
+      const reason: StopReason = 'maxTokens'
+      expect(reason).toBe('maxTokens')
     })
 
     it('accepts "stop_sequence"', () => {
-      const reason: StopReason = 'stop_sequence'
-      expect(reason).toBe('stop_sequence')
+      const reason: StopReason = 'stopSequence'
+      expect(reason).toBe('stopSequence')
     })
 
     it('accepts "tool_use"', () => {
-      const reason: StopReason = 'tool_use'
-      expect(reason).toBe('tool_use')
+      const reason: StopReason = 'toolUse'
+      expect(reason).toBe('toolUse')
     })
   })
 
@@ -120,11 +120,11 @@ describe('streaming event types', () => {
   describe('ContentBlockStart type', () => {
     it('accepts content block start with toolUse', () => {
       const start: ContentBlockStart = {
-        type: 'tool_use',
+        type: 'toolUse',
         name: 'calculator',
         toolUseId: 'calc-123',
       }
-      if (start.type === 'tool_use') {
+      if (start.type === 'toolUse') {
         expect(start.name).toBe('calculator')
       }
     })
@@ -150,13 +150,13 @@ describe('streaming event types', () => {
         type: 'contentBlockStart',
         contentBlockIndex: 0,
         start: {
-          type: 'tool_use',
+          type: 'toolUse',
           name: 'search',
           toolUseId: 'search-456',
         },
       }
       expect(event.contentBlockIndex).toBe(0)
-      if (event.start && event.start.type === 'tool_use') {
+      if (event.start && event.start.type === 'toolUse') {
         expect(event.start.name).toBe('search')
       }
     })
@@ -172,7 +172,7 @@ describe('streaming event types', () => {
     it('accepts event with only start', () => {
       const event: ContentBlockStartEvent = {
         type: 'contentBlockStart',
-        start: { type: 'tool_use', name: 'tool', toolUseId: 'id' },
+        start: { type: 'toolUse', name: 'tool', toolUseId: 'id' },
       }
       expect(event.start).toBeDefined()
     })
@@ -198,10 +198,10 @@ describe('streaming event types', () => {
 
     it('accepts delta with toolUse input', () => {
       const delta: ContentBlockDelta = {
-        type: 'tool_use',
+        type: 'toolUseInput',
         input: '{"query": "test"}',
       }
-      if (delta.type === 'tool_use') {
+      if (delta.type === 'toolUseInput') {
         expect(delta.input).toBe('{"query": "test"}')
       }
     })
@@ -287,9 +287,9 @@ describe('streaming event types', () => {
     it('accepts event with stopReason', () => {
       const event: MessageStopEvent = {
         type: 'messageStop',
-        stopReason: 'end_turn',
+        stopReason: 'endTurn',
       }
-      expect(event.stopReason).toBe('end_turn')
+      expect(event.stopReason).toBe('endTurn')
     })
 
     it('accepts event with additionalModelResponseFields', () => {
@@ -303,10 +303,10 @@ describe('streaming event types', () => {
     it('accepts event with all fields', () => {
       const event: MessageStopEvent = {
         type: 'messageStop',
-        stopReason: 'tool_use',
+        stopReason: 'toolUse',
         additionalModelResponseFields: { trace: 'xyz' },
       }
-      expect(event.stopReason).toBe('tool_use')
+      expect(event.stopReason).toBe('toolUse')
       expect(event.additionalModelResponseFields).toBeDefined()
     })
 
@@ -391,7 +391,7 @@ describe('streaming event types', () => {
       const event: ModelProviderStreamEvent = {
         type: 'contentBlockStart',
         contentBlockIndex: 0,
-        start: { type: 'tool_use', name: 'tool', toolUseId: 'id' },
+        start: { type: 'toolUse', name: 'tool', toolUseId: 'id' },
       }
       expect(event.type).toBe('contentBlockStart')
     })
@@ -416,11 +416,11 @@ describe('streaming event types', () => {
     it('accepts messageStop event', () => {
       const event: ModelProviderStreamEvent = {
         type: 'messageStop',
-        stopReason: 'end_turn',
+        stopReason: 'endTurn',
       }
       expect(event.type).toBe('messageStop')
       if (event.type === 'messageStop') {
-        expect(event.stopReason).toBe('end_turn')
+        expect(event.stopReason).toBe('endTurn')
       }
     })
 

@@ -69,7 +69,7 @@ export interface ToolUseStart {
   /**
    * Discriminator for tool use start.
    */
-  type: 'tool_use'
+  type: 'toolUse'
 
   /**
    * The name of the tool being used.
@@ -142,7 +142,7 @@ export interface ToolUseInputDelta {
   /**
    * Discriminator for tool use input delta.
    */
-  type: 'tool_use'
+  type: 'toolUseInput'
 
   /**
    * Partial JSON string representing the tool input.
@@ -175,9 +175,7 @@ export interface ReasoningDelta {
  * A delta (incremental chunk) of content within a content block.
  * Can be text, tool use input, or reasoning content.
  *
- * This is a discriminated union following AWS Bedrock ContentBlockDelta specification.
- *
- * @see https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_ContentBlockDelta.html
+ * This is a discriminated union for type-safe delta handling.
  *
  * @example
  * ```typescript
@@ -189,7 +187,7 @@ export interface ReasoningDelta {
  *
  * // Tool use input delta
  * const toolDelta: ContentBlockDelta = {
- *   type: 'tool_use',
+ *   type: 'toolUseInput',
  *   input: '{"operation":'
  * }
  *
@@ -205,7 +203,7 @@ export interface ReasoningDelta {
  *     case 'text':
  *       console.log(delta.text)
  *       break
- *     case 'tool_use':
+ *     case 'toolUseInput':
  *       console.log(delta.input)
  *       break
  *     case 'reasoning':

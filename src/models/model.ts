@@ -49,7 +49,7 @@ export interface StreamOptions {
  *     // Implementation for streaming from LLM
  *     yield { type: 'messageStart', role: 'assistant' }
  *     yield { type: 'contentBlockDelta', delta: { text: 'Hello' } }
- *     yield { type: 'messageStop', stopReason: 'end_turn' }
+ *     yield { type: 'messageStop', stopReason: 'endTurn' }
  *   }
  * }
  * ```

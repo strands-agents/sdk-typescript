@@ -4,6 +4,7 @@
 Create the AWS Bedrock model provider implementation using the AWS SDK v3. Implement the ModelProvider interface with proper configuration management, streaming support, and comprehensive error handling for all Bedrock model types.
 
 ## Work Required:
+- **NOTE**: Remove interface tests from task-02 implementation. These tests should be replaced with implementation-specific tests in this task. Interface tests only verify TypeScript compilation; implementation tests verify actual runtime behavior.
 - Add AWS Bedrock SDK as a dependency to package.json
   - https://www.npmjs.com/package/@aws-sdk/client-bedrock-runtime
 - Implement BedrockModel class implementing the ModelProvider interface implemented in task-02 (update_config, get_config, stream methods)

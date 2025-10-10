@@ -4,20 +4,20 @@ import type { ToolResultContent } from '@/tools/types'
 /**
  * Reason why the model stopped generating content.
  *
- * - `content_filtered` - Content was filtered by safety mechanisms
- * - `end_turn` - Natural end of the model's turn
- * - `guardrail_intervened` - A guardrail policy stopped generation
- * - `max_tokens` - Maximum token limit was reached
- * - `stop_sequence` - A stop sequence was encountered
- * - `tool_use` - Model wants to use a tool
+ * - `contentFiltered` - Content was filtered by safety mechanisms
+ * - `endTurn` - Natural end of the model's turn
+ * - `guardrailIntervened` - A guardrail policy stopped generation
+ * - `maxTokens` - Maximum token limit was reached
+ * - `stopSequence` - A stop sequence was encountered
+ * - `toolUse` - Model wants to use a tool
  */
 export type StopReason =
-  | 'content_filtered'
-  | 'end_turn'
-  | 'guardrail_intervened'
-  | 'max_tokens'
-  | 'stop_sequence'
-  | 'tool_use'
+  | 'contentFiltered'
+  | 'endTurn'
+  | 'guardrailIntervened'
+  | 'maxTokens'
+  | 'stopSequence'
+  | 'toolUse'
 
 /**
  * Role of a message in a conversation.
@@ -47,7 +47,7 @@ export interface ToolUseBlock {
   /**
    * Discriminator for tool use content.
    */
-  type: 'tool_use'
+  type: 'toolUse'
 
   /**
    * The name of the tool to execute.
@@ -73,7 +73,7 @@ export interface ToolResultBlock {
   /**
    * Discriminator for tool result content.
    */
-  type: 'tool_result'
+  type: 'toolResult'
 
   /**
    * The ID of the tool use that this result corresponds to.
@@ -127,7 +127,7 @@ export interface ReasoningBlock {
  *
  * // Tool use content block
  * const toolUseBlock: ContentBlock = {
- *   type: 'tool_use',
+ *   type: 'toolUse',
  *   name: 'calculator',
  *   toolUseId: 'calc-1',
  *   input: { a: 1, b: 2 }
@@ -135,7 +135,7 @@ export interface ReasoningBlock {
  *
  * // Tool result content block
  * const toolResultBlock: ContentBlock = {
- *   type: 'tool_result',
+ *   type: 'toolResult',
  *   toolUseId: 'calc-1',
  *   status: 'success',
  *   content: [{ type: 'text', text: 'Result: 3' }]
@@ -153,10 +153,10 @@ export interface ReasoningBlock {
  *     case 'text':
  *       console.log(block.text)
  *       break
- *     case 'tool_use':
+ *     case 'toolUse':
  *       console.log(`Using tool: ${block.name}`)
  *       break
- *     case 'tool_result':
+ *     case 'toolResult':
  *       console.log(`Tool result: ${block.status}`)
  *       break
  *     case 'reasoning':
@@ -183,7 +183,7 @@ export type ContentBlock = TextBlock | ToolUseBlock | ToolResultBlock | Reasonin
  *   role: 'assistant',
  *   content: [
  *     { type: 'text', text: 'Let me calculate that for you.' },
- *     { type: 'tool_use', name: 'calculator', toolUseId: 'calc-1', input: { a: 2, b: 2 } }
+ *     { type: 'toolUse', name: 'calculator', toolUseId: 'calc-1', input: { a: 2, b: 2 } }
  *   ]
  * }
  * ```
