@@ -79,7 +79,7 @@ describe('model provider types', () => {
           return {}
         },
         stream: async function* () {
-          yield { type: 'messageStart', role: 'assistant' } as const
+          yield { type: 'modelMessageStartEvent', role: 'assistant' } as const
         },
       }
       expect(mockProvider.updateConfig).toBeDefined()
@@ -92,7 +92,7 @@ describe('model provider types', () => {
           return { modelId: 'test' }
         },
         stream: async function* () {
-          yield { type: 'messageStart', role: 'assistant' } as const
+          yield { type: 'modelMessageStartEvent', role: 'assistant' } as const
         },
       }
       const config = mockProvider.getConfig()
@@ -104,9 +104,9 @@ describe('model provider types', () => {
         updateConfig: (): void => {},
         getConfig: (): unknown => ({}),
         stream: async function* () {
-          yield { type: 'messageStart', role: 'assistant' } as const
-          yield { type: 'contentBlockDelta', delta: { type: 'text', text: 'Hello' } } as const
-          yield { type: 'messageStop', stopReason: 'endTurn' } as const
+          yield { type: 'modelMessageStartEvent', role: 'assistant' } as const
+          yield { type: 'modelContentBlockDeltaEvent', delta: { type: 'text', text: 'Hello' } } as const
+          yield { type: 'modelMessageStopEvent', stopReason: 'endTurn' } as const
         },
       }
       expect(mockProvider.stream).toBeDefined()
@@ -117,8 +117,8 @@ describe('model provider types', () => {
         updateConfig: (): void => {},
         getConfig: (): unknown => ({}),
         stream: async function* () {
-          yield { type: 'messageStart', role: 'assistant' } as const
-          yield { type: 'messageStop', stopReason: 'endTurn' } as const
+          yield { type: 'modelMessageStartEvent', role: 'assistant' } as const
+          yield { type: 'modelMessageStopEvent', stopReason: 'endTurn' } as const
         },
       }
 
@@ -145,7 +145,7 @@ describe('model provider types', () => {
         stream: async function* (messages, options) {
           expect(messages).toBeDefined()
           expect(options).toBeDefined()
-          yield { type: 'messageStart', role: 'assistant' } as const
+          yield { type: 'modelMessageStartEvent', role: 'assistant' } as const
         },
       }
 

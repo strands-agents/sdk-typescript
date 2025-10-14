@@ -381,7 +381,7 @@ describe('BedrockModelProvider', () => {
     
     for await (const event of stream) {
       // Test actual streaming behavior
-      if (event.type === 'messageStart') {
+      if (event.type === 'modelMessageStartEvent') {
         expect(event.role).toBe('assistant')
       }
     }
@@ -392,10 +392,10 @@ describe('BedrockModelProvider', () => {
 describe('ModelProviderStreamEvent', () => {
   it('accepts messageStart event', () => {
     const event: ModelProviderStreamEvent = {
-      type: 'messageStart',
+      type: 'modelMessageStartEvent',
       role: 'assistant',
     }
-    expect(event.type).toBe('messageStart')
+    expect(event.type).toBe('modelMessageStartEvent')
   })
 })
 ```
@@ -405,6 +405,49 @@ describe('ModelProviderStreamEvent', () => {
 - Implementation tests verify actual functionality and integration
 - Type safety is already enforced by TypeScript compiler
 - Reduces test maintenance burden when interfaces change
+
+### Vitest Type Testing
+
+**For pure type validation**, use Vitest's type testing feature with `.test-d.ts` files:
+
+```typescript
+// src/types/__tests__/messages.test-d.ts
+import { expectTypeOf, test } from 'vitest'
+import type { ContentBlock, TextBlock } from '@/types/messages'
+
+test('ContentBlock is a discriminated union', () => {
+  expectTypeOf<ContentBlock>().toMatchTypeOf<{ type: string }>()
+})
+
+test('TextBlock has correct structure', () => {
+  expectTypeOf<TextBlock>().toEqualTypeOf<{
+    type: 'text'
+    text: string
+  }>()
+})
+```
+
+**When to use type tests**:
+- Validating complex discriminated union structures
+- Ensuring type compatibility across modules
+- Testing generic type constraints
+- Verifying type inference behavior
+
+**Configuration**: Enable type testing in `vitest.config.ts`:
+```typescript
+export default defineConfig({
+  test: {
+    typecheck: {
+      enabled: true,
+    },
+    // ... other config
+  },
+})
+```
+
+**Test file naming**:
+- Implementation tests: `*.test.ts`
+- Type tests: `*.test-d.ts`
 
 ## Things to Do
 

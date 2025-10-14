@@ -7,14 +7,14 @@ import type { ModelProviderStreamEvent } from '@/models/streaming'
  */
 export interface StreamOptions {
   /**
-   * Array of tool specifications that the model can use.
-   */
-  toolSpecs?: ToolSpec[]
-
-  /**
    * System prompt to guide the model's behavior.
    */
   systemPrompt?: string
+
+  /**
+   * Array of tool specifications that the model can use.
+   */
+  toolSpecs?: ToolSpec[]
 
   /**
    * Controls how the model selects tools to use.
@@ -47,9 +47,9 @@ export interface StreamOptions {
  *     options?: StreamOptions
  *   ): AsyncIterable<ModelProviderStreamEvent> {
  *     // Implementation for streaming from LLM
- *     yield { type: 'messageStart', role: 'assistant' }
- *     yield { type: 'contentBlockDelta', delta: { text: 'Hello' } }
- *     yield { type: 'messageStop', stopReason: 'endTurn' }
+ *     yield { type: 'modelMessageStartEvent', role: 'assistant' }
+ *     yield { type: 'modelContentBlockDeltaEvent', delta: { type: 'text', text: 'Hello' } }
+ *     yield { type: 'modelMessageStopEvent', stopReason: 'endTurn' }
  *   }
  * }
  * ```
@@ -85,7 +85,7 @@ export interface ModelProvider {
    * ]
    *
    * for await (const event of provider.stream(messages)) {
-   *   if (event.type === 'contentBlockDelta' && event.delta.type === 'text') {
+   *   if (event.type === 'modelContentBlockDeltaEvent' && event.delta.type === 'text') {
    *     process.stdout.write(event.delta.text)
    *   }
    * }

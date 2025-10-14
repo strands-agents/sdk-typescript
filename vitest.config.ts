@@ -8,6 +8,9 @@ export default defineConfig({
     },
   },
   test: {
+    typecheck: {
+      enabled: true,
+    },
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
