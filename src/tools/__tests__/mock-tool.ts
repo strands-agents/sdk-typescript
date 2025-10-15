@@ -2,84 +2,152 @@ import type { Tool, ToolContext, ToolExecutionEvent } from '@/tools/tool'
 import type { ToolSpec, ToolUse } from '@/tools/types'
 
 /**
- * Mock implementation of the Tool interface for testing purposes.
- * Implements a simple calculator that performs basic arithmetic operations.
+ * Callback function for mock tool invocations.
+ * Allows custom behavior during tool execution.
  *
- * This serves as both a test fixture and a reference implementation
- * demonstrating how to properly implement the Tool interface.
+ * @param toolUse - The tool use request
+ * @param toolContext - The tool execution context
+ * @returns An async iterable of tool execution events, or undefined to use default behavior
+ */
+export type MockToolCallback = (
+  toolUse: ToolUse,
+  toolContext: ToolContext
+) => AsyncIterable<ToolExecutionEvent> | undefined
+
+/**
+ * Mock implementation of the Tool interface for testing purposes.
+ * Provides a flexible mock that can be customized for different testing scenarios.
+ *
+ * This serves as both a test fixture and a utility for creating mock tools
+ * with custom behavior.
  *
  * @example
  * ```typescript
- * const tool = new MockAgentTool()
+ * // Basic usage with default calculator behavior
+ * const tool1 = new MockAgentTool('calculator1')
+ * const tool2 = new MockAgentTool('calculator2')
  *
- * const toolUse = {
- *   name: 'mockCalculator',
- *   toolUseId: 'calc-123',
- *   input: { operation: 'add', a: 5, b: 3 }
- * }
- *
- * const context = { invocationState: {} }
- *
- * for await (const event of tool.stream(toolUse, context)) {
- *   if (event.type === 'toolStreamEvent') {
- *     console.log('Progress:', event.delta)
- *   } else {
- *     console.log('Result:', event.status, event.content)
+ * // Custom tool with specific spec
+ * const customTool = new MockAgentTool(
+ *   'customTool',
+ *   'Performs custom operations',
+ *   {
+ *     name: 'customTool',
+ *     description: 'Performs custom operations',
+ *     inputSchema: { type: 'object', properties: {} }
  *   }
- * }
+ * )
+ *
+ * // Tool with custom callback
+ * const callbackTool = new MockAgentTool(
+ *   'callbackTool',
+ *   undefined,
+ *   undefined,
+ *   async function* (toolUse, context) {
+ *     yield { type: 'toolStreamEvent', data: 'Custom progress' }
+ *     yield {
+ *       toolUseId: toolUse.toolUseId,
+ *       status: 'success',
+ *       content: [{ type: 'toolResultTextContent', text: 'Custom result' }]
+ *     }
+ *   }
+ * )
  * ```
  */
 export class MockAgentTool implements Tool {
   /**
    * The unique name of the tool.
    */
-  readonly toolName = 'mockCalculator'
+  readonly toolName: string
 
   /**
    * Human-readable description of what the tool does.
    */
-  readonly description = 'A simple calculator for testing that performs basic arithmetic operations'
+  readonly description: string
 
   /**
    * OpenAPI JSON specification for the tool.
    */
-  readonly toolSpec: ToolSpec = {
-    name: 'mockCalculator',
-    description: 'A simple calculator for testing that performs basic arithmetic operations',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        operation: {
-          type: 'string',
-          enum: ['add', 'subtract', 'multiply', 'divide'],
-          description: 'The arithmetic operation to perform',
+  readonly toolSpec: ToolSpec
+
+  /**
+   * Optional callback to customize tool behavior.
+   */
+  private readonly callback: MockToolCallback | undefined
+
+  /**
+   * Creates a new MockAgentTool instance.
+   *
+   * @param toolName - The unique name of the tool
+   * @param description - Human-readable description (defaults to general purpose calculator description)
+   * @param toolSpec - OpenAPI specification (defaults to general purpose calculator spec)
+   * @param callback - Optional callback to customize tool execution behavior
+   */
+  constructor(toolName: string, description?: string, toolSpec?: ToolSpec, callback?: MockToolCallback) {
+    this.toolName = toolName
+    this.description =
+      description ?? 'A general purpose calculator for testing that performs basic arithmetic operations'
+    this.toolSpec = toolSpec ?? {
+      name: toolName,
+      description: this.description,
+      inputSchema: {
+        type: 'object',
+        properties: {
+          operation: {
+            type: 'string',
+            enum: ['add', 'subtract', 'multiply', 'divide'],
+            description: 'The arithmetic operation to perform',
+          },
+          a: {
+            type: 'number',
+            description: 'The first operand',
+          },
+          b: {
+            type: 'number',
+            description: 'The second operand',
+          },
         },
-        a: {
-          type: 'number',
-          description: 'The first operand',
-        },
-        b: {
-          type: 'number',
-          description: 'The second operand',
-        },
+        required: ['operation', 'a', 'b'],
       },
-      required: ['operation', 'a', 'b'],
-    },
+    }
+    this.callback = callback
   }
 
   /**
-   * Executes the calculator tool with streaming support.
-   * Validates input, performs the calculation, and yields appropriate events.
+   * Executes the mock tool with streaming support.
+   * If a callback is provided, delegates to the callback.
+   * Otherwise, performs default calculator behavior.
    *
-   * @param toolUse - The tool use request containing the operation and operands
+   * @param toolUse - The tool use request
    * @param toolContext - Context information including invocation state
    * @returns Async iterable of tool execution events
    */
-  async *stream(toolUse: ToolUse, _toolContext: ToolContext): AsyncIterable<ToolExecutionEvent> {
+  async *stream(toolUse: ToolUse, toolContext: ToolContext): AsyncIterable<ToolExecutionEvent> {
+    // If callback is provided, use it
+    if (this.callback) {
+      const result = this.callback(toolUse, toolContext)
+      if (result) {
+        yield* result
+        return
+      }
+    }
+
+    // Default behavior: calculator implementation
+    yield* this.defaultCalculatorBehavior(toolUse)
+  }
+
+  /**
+   * Default calculator implementation for testing.
+   * Validates input, performs calculation, and yields appropriate events.
+   *
+   * @param toolUse - The tool use request containing the operation and operands
+   * @returns Async iterable of tool execution events
+   */
+  private async *defaultCalculatorBehavior(toolUse: ToolUse): AsyncIterable<ToolExecutionEvent> {
     // Yield a progress event to demonstrate streaming
     yield {
       type: 'toolStreamEvent',
-      delta: 'Starting calculation...',
+      data: 'Starting calculation...',
     }
 
     try {
@@ -178,7 +246,7 @@ export class MockAgentTool implements Tool {
       // Yield another progress event
       yield {
         type: 'toolStreamEvent',
-        delta: 'Calculation complete',
+        data: 'Calculation complete',
       }
 
       // Yield the final result

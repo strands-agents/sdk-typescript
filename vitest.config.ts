@@ -21,12 +21,14 @@ export default defineConfig({
         'tests_integ/',
         '*.config.*',
         'eslint.config.js',
-        // Exclude type-only files (interfaces, types) that have no executable code
-        'src/types/**/*.ts',
-        'src/tools/types.ts',
-        'src/tools/tool.ts',
-        'src/models/model.ts',
-        'src/models/streaming.ts',
+        // REQUIRED: Exclude type-only files that contain no executable code.
+        // These files have 0% coverage naturally (only type definitions, interfaces, type aliases).
+        // Without these exclusions, coverage thresholds fail because v8 reports 0% for type-only files.
+        'src/types/**/*.ts', // Type definition files (json.ts, messages.ts)
+        'src/tools/types.ts', // Tool type definitions
+        'src/tools/tool.ts', // Tool interface (no executable code)
+        'src/models/model.ts', // ModelProvider interface (no executable code)
+        'src/models/streaming.ts', // Streaming type definitions
         'src/index.ts', // Re-export file with no executable code
       ],
       thresholds: {

@@ -4,9 +4,16 @@ import type { ToolSpec, ToolUse, ToolResult } from '@/tools/types'
  * Context provided to tool implementations during execution.
  * Contains framework-level state and information from the agent invocation.
  *
+ * @typeParam T - The type of invocation state, must extend Record\<string, unknown\>
+ *
  * @example
  * ```typescript
- * const context: ToolContext = {
+ * interface MyState {
+ *   userId: string
+ *   sessionId: string
+ * }
+ *
+ * const context: ToolContext<MyState> = {
  *   invocationState: {
  *     userId: 'user-123',
  *     sessionId: 'session-456'
@@ -14,12 +21,12 @@ import type { ToolSpec, ToolUse, ToolResult } from '@/tools/types'
  * }
  * ```
  */
-export interface ToolContext {
+export interface ToolContext<T extends Record<string, unknown> = Record<string, unknown>> {
   /**
    * Caller-provided state from agent invocation.
    * This allows passing context from the agent level down to tool execution.
    */
-  invocationState: Record<string, unknown>
+  invocationState: T
 }
 
 /**
@@ -30,7 +37,13 @@ export interface ToolContext {
  * ```typescript
  * const streamEvent: ToolStreamEvent = {
  *   type: 'toolStreamEvent',
- *   delta: 'Processing step 1...'
+ *   data: 'Processing step 1...'
+ * }
+ *
+ * // Or with structured data
+ * const streamEvent: ToolStreamEvent = {
+ *   type: 'toolStreamEvent',
+ *   data: { progress: 50, message: 'Halfway complete' }
  * }
  * ```
  */
@@ -41,15 +54,10 @@ export interface ToolStreamEvent {
   type: 'toolStreamEvent'
 
   /**
-   * Index of the content block being updated.
-   * Useful for tracking multiple concurrent operations.
+   * Caller-provided data for the progress update.
+   * Can be any type of data the tool wants to report.
    */
-  contentBlockIndex?: number
-
-  /**
-   * Incremental content update or progress message.
-   */
-  delta?: string
+  data?: unknown
 }
 
 /**
@@ -62,7 +70,7 @@ export interface ToolStreamEvent {
  * ```typescript
  * for await (const event of tool.stream(toolUse, context)) {
  *   if (event.type === 'toolStreamEvent') {
- *     console.log('Progress:', event.delta)
+ *     console.log('Progress:', event.data)
  *   } else {
  *     // Must be ToolResult (final event)
  *     console.log('Result:', event.status)
@@ -99,7 +107,7 @@ export type ToolExecutionEvent = ToolStreamEvent | ToolResult
  *   }
  *
  *   async *stream(toolUse: ToolUse, toolContext: ToolContext): AsyncIterable<ToolExecutionEvent> {
- *     yield { type: 'toolStreamEvent', delta: 'Calculating...' }
+ *     yield { type: 'toolStreamEvent', data: 'Calculating...' }
  *
  *     const { operation, a, b } = toolUse.input
  *     const result = operation === 'add' ? a + b : a - b
@@ -116,7 +124,7 @@ export type ToolExecutionEvent = ToolStreamEvent | ToolResult
 export interface Tool {
   /**
    * The unique name of the tool.
-   * This should match the name in the toolSpec.
+   * This MUST match the name in the toolSpec.
    */
   toolName: string
 
@@ -124,8 +132,7 @@ export interface Tool {
    * Human-readable description of what the tool does.
    * This helps the model understand when to use the tool.
    *
-   * Note: This is also present in toolSpec.description, but having it as a
-   * direct property provides convenient access.
+   * This MUST match the description in the toolSpec.description.
    */
   description: string
 
@@ -156,7 +163,7 @@ export interface Tool {
    *
    * for await (const event of tool.stream(toolUse, context)) {
    *   if (event.type === 'toolStreamEvent') {
-   *     console.log('Progress:', event.delta)
+   *     console.log('Progress:', event.data)
    *   } else {
    *     console.log('Result:', event.status)
    *   }

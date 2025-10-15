@@ -6,21 +6,21 @@ import type { ToolResult } from '@/tools/types'
 describe('MockAgentTool', () => {
   describe('properties', () => {
     it('has a non-empty toolName', () => {
-      const tool = new MockAgentTool()
+      const tool = new MockAgentTool('testTool')
       expect(tool.toolName).toBeTruthy()
       expect(typeof tool.toolName).toBe('string')
       expect(tool.toolName.length).toBeGreaterThan(0)
     })
 
     it('has a non-empty description', () => {
-      const tool = new MockAgentTool()
+      const tool = new MockAgentTool('testTool')
       expect(tool.description).toBeTruthy()
       expect(typeof tool.description).toBe('string')
       expect(tool.description.length).toBeGreaterThan(0)
     })
 
     it('has a valid toolSpec', () => {
-      const tool = new MockAgentTool()
+      const tool = new MockAgentTool('testTool')
       expect(tool.toolSpec).toBeDefined()
       expect(tool.toolSpec.name).toBe(tool.toolName)
       expect(tool.toolSpec.description).toBeTruthy()
@@ -29,7 +29,7 @@ describe('MockAgentTool', () => {
     })
 
     it('has matching toolName and toolSpec.name', () => {
-      const tool = new MockAgentTool()
+      const tool = new MockAgentTool('testTool')
       expect(tool.toolName).toBe(tool.toolSpec.name)
     })
   })
@@ -37,7 +37,7 @@ describe('MockAgentTool', () => {
   describe('stream method', () => {
     describe('with valid input', () => {
       it('yields events and returns success result for addition', async () => {
-        const tool = new MockAgentTool()
+        const tool = new MockAgentTool('mockCalculator')
         const toolUse = {
           name: 'mockCalculator',
           toolUseId: 'test-123',
@@ -66,7 +66,7 @@ describe('MockAgentTool', () => {
       })
 
       it('yields events and returns success result for subtraction', async () => {
-        const tool = new MockAgentTool()
+        const tool = new MockAgentTool('mockCalculator')
         const toolUse = {
           name: 'mockCalculator',
           toolUseId: 'test-456',
@@ -85,7 +85,7 @@ describe('MockAgentTool', () => {
       })
 
       it('yields events and returns success result for multiplication', async () => {
-        const tool = new MockAgentTool()
+        const tool = new MockAgentTool('mockCalculator')
         const toolUse = {
           name: 'mockCalculator',
           toolUseId: 'test-789',
@@ -104,7 +104,7 @@ describe('MockAgentTool', () => {
       })
 
       it('yields events and returns success result for division', async () => {
-        const tool = new MockAgentTool()
+        const tool = new MockAgentTool('mockCalculator')
         const toolUse = {
           name: 'mockCalculator',
           toolUseId: 'test-012',
@@ -123,7 +123,7 @@ describe('MockAgentTool', () => {
       })
 
       it('may yield ToolStreamEvents before final ToolResult', async () => {
-        const tool = new MockAgentTool()
+        const tool = new MockAgentTool('mockCalculator')
         const toolUse = {
           name: 'mockCalculator',
           toolUseId: 'test-345',
@@ -159,7 +159,7 @@ describe('MockAgentTool', () => {
 
     describe('with invalid input', () => {
       it('returns error result for missing operation', async () => {
-        const tool = new MockAgentTool()
+        const tool = new MockAgentTool('mockCalculator')
         const toolUse = {
           name: 'mockCalculator',
           toolUseId: 'test-error-1',
@@ -179,7 +179,7 @@ describe('MockAgentTool', () => {
       })
 
       it('returns error result for missing operands', async () => {
-        const tool = new MockAgentTool()
+        const tool = new MockAgentTool('mockCalculator')
         const toolUse = {
           name: 'mockCalculator',
           toolUseId: 'test-error-2',
@@ -198,7 +198,7 @@ describe('MockAgentTool', () => {
       })
 
       it('returns error result for invalid operation', async () => {
-        const tool = new MockAgentTool()
+        const tool = new MockAgentTool('mockCalculator')
         const toolUse = {
           name: 'mockCalculator',
           toolUseId: 'test-error-3',
@@ -217,7 +217,7 @@ describe('MockAgentTool', () => {
       })
 
       it('returns error result for division by zero', async () => {
-        const tool = new MockAgentTool()
+        const tool = new MockAgentTool('mockCalculator')
         const toolUse = {
           name: 'mockCalculator',
           toolUseId: 'test-error-4',
@@ -236,7 +236,7 @@ describe('MockAgentTool', () => {
       })
 
       it('returns error result for non-numeric inputs', async () => {
-        const tool = new MockAgentTool()
+        const tool = new MockAgentTool('mockCalculator')
         const toolUse = {
           name: 'mockCalculator',
           toolUseId: 'test-error-5',
@@ -257,7 +257,7 @@ describe('MockAgentTool', () => {
 
     describe('with ToolContext', () => {
       it('receives and can access invocationState', async () => {
-        const tool = new MockAgentTool()
+        const tool = new MockAgentTool('mockCalculator')
         const toolUse = {
           name: 'mockCalculator',
           toolUseId: 'test-context',
@@ -282,7 +282,7 @@ describe('MockAgentTool', () => {
 
 describe('Tool interface backwards compatibility', () => {
   it('maintains stable interface signature', () => {
-    const tool = new MockAgentTool()
+    const tool = new MockAgentTool('testTool')
 
     // Verify interface properties exist
     expect(tool).toHaveProperty('toolName')
@@ -295,7 +295,7 @@ describe('Tool interface backwards compatibility', () => {
   })
 
   it('stream method accepts correct parameter types', async () => {
-    const tool = new MockAgentTool()
+    const tool = new MockAgentTool('mockCalculator')
     const toolUse = {
       name: 'mockCalculator',
       toolUseId: 'test-types',
