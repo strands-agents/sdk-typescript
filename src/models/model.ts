@@ -3,6 +3,38 @@ import type { ToolSpec, ToolChoice } from '@/tools/types'
 import type { ModelProviderStreamEvent } from '@/models/streaming'
 
 /**
+ * Base configuration interface for all model providers.
+ *
+ * This interface defines the common configuration properties that all
+ * model providers should support. Provider-specific configurations
+ * should extend this interface.
+ *
+ * @example
+ * ```typescript
+ * interface MyProviderConfig extends BaseModelConfig {
+ *   apiKey: string
+ *   maxRetries: number
+ * }
+ * ```
+ */
+export interface BaseModelConfig {
+  /**
+   * The model identifier.
+   * This typically specifies which model to use from the provider's catalog.
+   *
+   * @example
+   * ```typescript
+   * // Bedrock model ID
+   * modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0'
+   *
+   * // OpenAI model ID
+   * modelId: 'gpt-4o'
+   * ```
+   */
+  modelId?: string
+}
+
+/**
  * Options for configuring a streaming model invocation.
  */
 export interface StreamOptions {
@@ -29,16 +61,34 @@ export interface StreamOptions {
  * Model providers handle communication with LLM APIs and implement streaming
  * responses using async iterables.
  *
+ * @typeParam T - Model configuration type extending BaseModelConfig
+ * @typeParam _C - Client configuration type for provider-specific client setup (used by implementations)
+ *
  * @example
  * ```typescript
- * class MyProvider implements ModelProvider {
- *   private config: unknown = {}
+ * interface MyProviderConfig extends BaseModelConfig {
+ *   temperature: number
+ *   maxTokens: number
+ * }
  *
- *   updateConfig(modelConfig: unknown): void {
- *     this.config = { ...this.config as object, ...modelConfig as object }
+ * interface MyClientConfig {
+ *   apiKey: string
+ *   baseUrl?: string
+ * }
+ *
+ * class MyProvider implements ModelProvider<MyProviderConfig, MyClientConfig> {
+ *   private config: MyProviderConfig
+ *
+ *   constructor(modelConfig: MyProviderConfig, clientConfig: MyClientConfig) {
+ *     this.config = modelConfig
+ *     // Initialize client with clientConfig
  *   }
  *
- *   getConfig(): unknown {
+ *   updateConfig(modelConfig: Partial<MyProviderConfig>): void {
+ *     this.config = { ...this.config, ...modelConfig }
+ *   }
+ *
+ *   getConfig(): MyProviderConfig {
  *     return this.config
  *   }
  *
@@ -48,20 +98,21 @@ export interface StreamOptions {
  *   ): AsyncIterable<ModelProviderStreamEvent> {
  *     // Implementation for streaming from LLM
  *     yield { type: 'modelMessageStartEvent', role: 'assistant' }
- *     yield { type: 'modelContentBlockDeltaEvent', delta: { type: 'text', text: 'Hello' } }
+ *     yield { type: 'modelContentBlockDeltaEvent', delta: { type: 'textDelta', text: 'Hello' } }
  *     yield { type: 'modelMessageStopEvent', stopReason: 'endTurn' }
  *   }
  * }
  * ```
  */
-export interface ModelProvider<T> {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export interface ModelProvider<T extends BaseModelConfig, _C = unknown> {
   /**
    * Updates the model configuration.
    * Merges the provided configuration with existing settings.
    *
-   * @param modelConfig - Configuration object with model-specific settings
+   * @param modelConfig - Partial configuration object with model-specific settings to update
    */
-  updateConfig(modelConfig: T): void
+  updateConfig(modelConfig: Partial<T>): void
 
   /**
    * Retrieves the current model configuration.
@@ -81,11 +132,11 @@ export interface ModelProvider<T> {
    * @example
    * ```typescript
    * const messages: Message[] = [
-   *   { role: 'user', content: [{ type: 'text', text: 'Hello!' }] }
+   *   { role: 'user', content: [{ type: 'textBlock', text: 'Hello!' }] }
    * ]
    *
    * for await (const event of provider.stream(messages)) {
-   *   if (event.type === 'modelContentBlockDeltaEvent' && event.delta.type === 'text') {
+   *   if (event.type === 'modelContentBlockDeltaEvent' && event.delta.type === 'textDelta') {
    *     process.stdout.write(event.delta.text)
    *   }
    * }
