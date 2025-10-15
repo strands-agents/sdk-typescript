@@ -37,6 +37,7 @@ Initialize the project environment and discover repository instruction files.
 - You SHOULD use the BRANCH_NAME pattern `agent-tasks/{TASK_NUMBER}` unless this branch already exists
 - You MUST make note of the newly created branch name
 - You MUST use `git push origin <BRANCH_NAME>` to create the feature branch in remote
+- You MUST move the current task file into the `.project/tasks/completed` directory
 
 
 ### 2. Explore Phase
