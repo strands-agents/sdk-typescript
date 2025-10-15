@@ -35,56 +35,6 @@ export type ModelProviderStreamEvent =
   | ModelMetadataEvent
 
 /**
- * A delta (incremental chunk) of content within a content block.
- * Can be text, tool use input, or reasoning content.
- *
- * This is a discriminated union for type-safe delta handling.
- *
- * @example
- * ```typescript
- * // Text delta
- * const textDelta: ContentBlockDelta = {
- *   type: 'text',
- *   text: 'Hello, '
- * }
- *
- * // Tool use input delta
- * const toolDelta: ContentBlockDelta = {
- *   type: 'toolUseInput',
- *   input: '{"operation":'
- * }
- *
- * // Reasoning delta
- * const reasoningDelta: ContentBlockDelta = {
- *   type: 'reasoning',
- *   text: 'Let me think...'
- * }
- *
- * // Type-safe handling
- * function handleDelta(delta: ContentBlockDelta) {
- *   switch (delta.type) {
- *     case 'text':
- *       console.log(delta.text)
- *       break
- *     case 'toolUseInput':
- *       console.log(delta.input)
- *       break
- *     case 'reasoning':
- *       console.log(delta.text)
- *       break
- *   }
- * }
- * ```
- */
-export type ContentBlockDelta = TextDelta | ToolUseInputDelta | ReasoningDelta
-
-/**
- * Information about a content block that is starting.
- * Currently only represents tool use starts.
- */
-export type ContentBlockStart = ToolUseStart
-
-/**
  * Event emitted when a new message starts in the stream.
  */
 export interface ModelMessageStartEvent {
@@ -202,6 +152,76 @@ export interface ModelMetadataEvent {
 }
 
 /**
+ * Information about a content block that is starting.
+ * Currently only represents tool use starts.
+ */
+export type ContentBlockStart = ToolUseStart
+
+/**
+ * Information about a tool use that is starting.
+ */
+export interface ToolUseStart {
+  /**
+   * Discriminator for tool use start.
+   */
+  type: 'toolUse'
+
+  /**
+   * The name of the tool being used.
+   */
+  name: string
+
+  /**
+   * Unique identifier for this tool use.
+   */
+  toolUseId: string
+}
+
+/**
+ * A delta (incremental chunk) of content within a content block.
+ * Can be text, tool use input, or reasoning content.
+ *
+ * This is a discriminated union for type-safe delta handling.
+ *
+ * @example
+ * ```typescript
+ * // Text delta
+ * const textDelta: ContentBlockDelta = {
+ *   type: 'text',
+ *   text: 'Hello, '
+ * }
+ *
+ * // Tool use input delta
+ * const toolDelta: ContentBlockDelta = {
+ *   type: 'toolUseInput',
+ *   input: '{"operation":'
+ * }
+ *
+ * // Reasoning delta
+ * const reasoningDelta: ContentBlockDelta = {
+ *   type: 'reasoning',
+ *   text: 'Let me think...'
+ * }
+ *
+ * // Type-safe handling
+ * function handleDelta(delta: ContentBlockDelta) {
+ *   switch (delta.type) {
+ *     case 'text':
+ *       console.log(delta.text)
+ *       break
+ *     case 'toolUseInput':
+ *       console.log(delta.input)
+ *       break
+ *     case 'reasoning':
+ *       console.log(delta.text)
+ *       break
+ *   }
+ * }
+ * ```
+ */
+export type ContentBlockDelta = TextDelta | ToolUseInputDelta | ReasoningDelta
+
+/**
  * Text delta within a content block.
  * Represents incremental text content from the model.
  */
@@ -252,26 +272,6 @@ export interface ReasoningDelta {
    * Incremental signature data.
    */
   signature?: string
-}
-
-/**
- * Information about a tool use that is starting.
- */
-export interface ToolUseStart {
-  /**
-   * Discriminator for tool use start.
-   */
-  type: 'toolUse'
-
-  /**
-   * The name of the tool being used.
-   */
-  name: string
-
-  /**
-   * Unique identifier for this tool use.
-   */
-  toolUseId: string
 }
 
 /**

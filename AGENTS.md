@@ -286,6 +286,56 @@ import { Tool } from '@/tools'
 import type { Options, Config } from '@/types'
 ```
 
+### Interface and Type Organization
+
+**When defining interfaces or types, organize them so the top-level interface comes first, followed by its dependencies, and then all nested dependencies.**
+
+```typescript
+// ✅ Correct - Top-level first, then dependencies
+export interface Message {
+  role: Role
+  content: ContentBlock[]
+}
+
+export type Role = 'user' | 'assistant'
+
+export type ContentBlock = TextBlock | ToolUseBlock | ToolResultBlock
+
+export interface TextBlock {
+  type: 'text'
+  text: string
+}
+
+export interface ToolUseBlock {
+  type: 'toolUse'
+  name: string
+  toolUseId: string
+  input: JSONValue
+}
+
+export interface ToolResultBlock {
+  type: 'toolResult'
+  toolUseId: string
+  status: 'success' | 'error'
+  content: ToolResultContent[]
+}
+
+// ❌ Wrong - Dependencies before top-level
+export type Role = 'user' | 'assistant'
+
+export interface TextBlock {
+  type: 'text'
+  text: string
+}
+
+export interface Message {  // Top-level should come first
+  role: Role
+  content: ContentBlock[]
+}
+```
+
+**Rationale**: This ordering makes files more readable by providing an overview first, then details.
+
 ### Error Handling
 
 ```typescript
@@ -368,86 +418,28 @@ describe('calculateTotal', () => {
 })
 ```
 
-### Testing Implementation Over Interfaces
+### Testing Guidelines
 
-**PREFERRED**: Test implementations rather than interface types alone.
+**Testing Approach:**
+- You **MUST** write tests for implementations (functions, classes, methods)
+- You **SHOULD NOT** write tests for interfaces since TypeScript compiler already enforces type correctness
+- You **SHOULD** write Vitest type tests (`*.test-d.ts`) for complex types to ensure backwards compatibility
 
+**Example Implementation Test:**
 ```typescript
-// ✅ Preferred - Testing actual implementation
 describe('BedrockModelProvider', () => {
   it('streams messages correctly', async () => {
     const provider = new BedrockModelProvider(config)
     const stream = provider.stream(messages)
     
     for await (const event of stream) {
-      // Test actual streaming behavior
       if (event.type === 'modelMessageStartEvent') {
         expect(event.role).toBe('assistant')
       }
     }
   })
 })
-
-// ⚠️ Less useful - Testing only type interfaces
-describe('ModelProviderStreamEvent', () => {
-  it('accepts messageStart event', () => {
-    const event: ModelProviderStreamEvent = {
-      type: 'modelMessageStartEvent',
-      role: 'assistant',
-    }
-    expect(event.type).toBe('modelMessageStartEvent')
-  })
-})
 ```
-
-**Rationale**: 
-- Interface tests only verify TypeScript compilation, not runtime behavior
-- Implementation tests verify actual functionality and integration
-- Type safety is already enforced by TypeScript compiler
-- Reduces test maintenance burden when interfaces change
-
-### Vitest Type Testing
-
-**For pure type validation**, use Vitest's type testing feature with `.test-d.ts` files:
-
-```typescript
-// src/types/__tests__/messages.test-d.ts
-import { expectTypeOf, test } from 'vitest'
-import type { ContentBlock, TextBlock } from '@/types/messages'
-
-test('ContentBlock is a discriminated union', () => {
-  expectTypeOf<ContentBlock>().toMatchTypeOf<{ type: string }>()
-})
-
-test('TextBlock has correct structure', () => {
-  expectTypeOf<TextBlock>().toEqualTypeOf<{
-    type: 'text'
-    text: string
-  }>()
-})
-```
-
-**When to use type tests**:
-- Validating complex discriminated union structures
-- Ensuring type compatibility across modules
-- Testing generic type constraints
-- Verifying type inference behavior
-
-**Configuration**: Enable type testing in `vitest.config.ts`:
-```typescript
-export default defineConfig({
-  test: {
-    typecheck: {
-      enabled: true,
-    },
-    // ... other config
-  },
-})
-```
-
-**Test file naming**:
-- Implementation tests: `*.test.ts`
-- Type tests: `*.test-d.ts`
 
 ## Things to Do
 

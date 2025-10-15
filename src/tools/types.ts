@@ -1,6 +1,116 @@
 import type { JSONSchema, JSONValue } from '@/types/json'
 
 /**
+ * Result of a tool execution.
+ * Contains the outcome and any data returned by the tool.
+ *
+ * @example
+ * ```typescript
+ * const successResult: ToolResult = {
+ *   toolUseId: 'calc-123',
+ *   status: 'success',
+ *   content: [
+ *     { type: 'text', text: 'The result is 8' },
+ *     { type: 'json', json: { result: 8 } }
+ *   ]
+ * }
+ *
+ * const errorResult: ToolResult = {
+ *   toolUseId: 'calc-456',
+ *   status: 'error',
+ *   content: [{ type: 'text', text: 'Error: Division by zero' }]
+ * }
+ * ```
+ */
+export interface ToolResult {
+  /**
+   * The ID of the tool use that this result corresponds to.
+   */
+  toolUseId: string
+
+  /**
+   * Status indicating success or error.
+   */
+  status: ToolResultStatus
+
+  /**
+   * Array of content blocks containing the tool's output.
+   */
+  content: ToolResultContent[]
+}
+
+/**
+ * Status of a tool execution.
+ * Indicates whether the tool executed successfully or encountered an error.
+ */
+export type ToolResultStatus = 'success' | 'error'
+
+/**
+ * Content returned from a tool execution.
+ * Can be either text or structured JSON data.
+ *
+ * This is a discriminated union where the `type` field determines the content format.
+ *
+ * @example
+ * ```typescript
+ * // Text result
+ * const textResult: ToolResultContent = {
+ *   type: 'text',
+ *   text: 'Operation completed successfully'
+ * }
+ *
+ * // JSON result
+ * const jsonResult: ToolResultContent = {
+ *   type: 'json',
+ *   json: { result: 42, status: 'success' }
+ * }
+ *
+ * // Type-safe handling
+ * function handleResult(content: ToolResultContent) {
+ *   switch (content.type) {
+ *     case 'text':
+ *       console.log(content.text)
+ *       break
+ *     case 'json':
+ *       console.log(JSON.stringify(content.json))
+ *       break
+ *   }
+ * }
+ * ```
+ */
+export type ToolResultContent = ToolResultTextContent | ToolResultJsonContent
+
+/**
+ * Text content returned from a tool execution.
+ */
+export interface ToolResultTextContent {
+  /**
+   * Discriminator for text content.
+   */
+  type: 'text'
+
+  /**
+   * Plain text result from the tool.
+   */
+  text: string
+}
+
+/**
+ * JSON content returned from a tool execution.
+ */
+export interface ToolResultJsonContent {
+  /**
+   * Discriminator for JSON content.
+   */
+  type: 'json'
+
+  /**
+   * Structured JSON result from the tool.
+   */
+  json: JSONValue
+}
+
+/**
  * Specification for a tool that can be used by the model.
  * Defines the tool's name, description, and input schema.
  *
@@ -73,116 +183,6 @@ export interface ToolUse {
    * Must be JSON-serializable.
    */
   input: JSONValue
-}
-
-/**
- * Text content returned from a tool execution.
- */
-export interface ToolResultTextContent {
-  /**
-   * Discriminator for text content.
-   */
-  type: 'text'
-
-  /**
-   * Plain text result from the tool.
-   */
-  text: string
-}
-
-/**
- * JSON content returned from a tool execution.
- */
-export interface ToolResultJsonContent {
-  /**
-   * Discriminator for JSON content.
-   */
-  type: 'json'
-
-  /**
-   * Structured JSON result from the tool.
-   */
-  json: JSONValue
-}
-
-/**
- * Content returned from a tool execution.
- * Can be either text or structured JSON data.
- *
- * This is a discriminated union where the `type` field determines the content format.
- *
- * @example
- * ```typescript
- * // Text result
- * const textResult: ToolResultContent = {
- *   type: 'text',
- *   text: 'Operation completed successfully'
- * }
- *
- * // JSON result
- * const jsonResult: ToolResultContent = {
- *   type: 'json',
- *   json: { result: 42, status: 'success' }
- * }
- *
- * // Type-safe handling
- * function handleResult(content: ToolResultContent) {
- *   switch (content.type) {
- *     case 'text':
- *       console.log(content.text)
- *       break
- *     case 'json':
- *       console.log(JSON.stringify(content.json))
- *       break
- *   }
- * }
- * ```
- */
-export type ToolResultContent = ToolResultTextContent | ToolResultJsonContent
-
-/**
- * Status of a tool execution.
- * Indicates whether the tool executed successfully or encountered an error.
- */
-export type ToolResultStatus = 'success' | 'error'
-
-/**
- * Result of a tool execution.
- * Contains the outcome and any data returned by the tool.
- *
- * @example
- * ```typescript
- * const successResult: ToolResult = {
- *   toolUseId: 'calc-123',
- *   status: 'success',
- *   content: [
- *     { type: 'text', text: 'The result is 8' },
- *     { type: 'json', json: { result: 8 } }
- *   ]
- * }
- *
- * const errorResult: ToolResult = {
- *   toolUseId: 'calc-456',
- *   status: 'error',
- *   content: [{ type: 'text', text: 'Error: Division by zero' }]
- * }
- * ```
- */
-export interface ToolResult {
-  /**
-   * The ID of the tool use that this result corresponds to.
-   */
-  toolUseId: string
-
-  /**
-   * Status indicating success or error.
-   */
-  status: ToolResultStatus
-
-  /**
-   * Array of content blocks containing the tool's output.
-   */
-  content: ToolResultContent[]
 }
 
 /**

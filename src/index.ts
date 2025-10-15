@@ -20,7 +20,6 @@ export type {
   ReasoningBlock,
   ContentBlock,
   Message,
-  Messages,
 } from './types/messages'
 
 // Tool types
