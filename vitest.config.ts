@@ -21,6 +21,13 @@ export default defineConfig({
         'tests_integ/',
         '*.config.*',
         'eslint.config.js',
+        // Exclude type-only files (interfaces, types) that have no executable code
+        'src/types/**/*.ts',
+        'src/tools/types.ts',
+        'src/tools/tool.ts',
+        'src/models/model.ts',
+        'src/models/streaming.ts',
+        'src/index.ts', // Re-export file with no executable code
       ],
       thresholds: {
         lines: 80,

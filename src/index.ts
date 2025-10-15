@@ -32,6 +32,12 @@ export type {
   ToolChoice,
 } from './tools/types'
 
+// Tool interface and related types
+export type { Tool, ToolContext, ToolExecutionEvent, ToolStreamEvent } from './tools/tool'
+
+// Mock tool for testing
+export { MockAgentTool } from './tools/__tests__/mock-tool'
+
 // Streaming event types
 export type {
   Usage,
