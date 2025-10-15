@@ -10,15 +10,15 @@ import type { JSONSchema, JSONValue } from '@/types/json'
  *   toolUseId: 'calc-123',
  *   status: 'success',
  *   content: [
- *     { type: 'text', text: 'The result is 8' },
- *     { type: 'json', json: { result: 8 } }
+ *     { type: 'toolResultTextContent', text: 'The result is 8' },
+ *     { type: 'toolResultJsonContent', json: { result: 8 } }
  *   ]
  * }
  *
  * const errorResult: ToolResult = {
  *   toolUseId: 'calc-456',
  *   status: 'error',
- *   content: [{ type: 'text', text: 'Error: Division by zero' }]
+ *   content: [{ type: 'toolResultTextContent', text: 'Error: Division by zero' }]
  * }
  * ```
  */
@@ -55,13 +55,13 @@ export type ToolResultStatus = 'success' | 'error'
  * ```typescript
  * // Text result
  * const textResult: ToolResultContent = {
- *   type: 'text',
+ *   type: 'toolResultTextContent',
  *   text: 'Operation completed successfully'
  * }
  *
  * // JSON result
  * const jsonResult: ToolResultContent = {
- *   type: 'json',
+ *   type: 'toolResultJsonContent',
  *   json: { result: 42, status: 'success' }
  * }
  *
@@ -87,7 +87,7 @@ export interface ToolResultTextContent {
   /**
    * Discriminator for text content.
    */
-  type: 'text'
+  type: 'toolResultTextContent'
 
   /**
    * Plain text result from the tool.
@@ -102,7 +102,7 @@ export interface ToolResultJsonContent {
   /**
    * Discriminator for JSON content.
    */
-  type: 'json'
+  type: 'toolResultJsonContent'
 
   /**
    * Structured JSON result from the tool.

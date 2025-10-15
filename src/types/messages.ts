@@ -9,14 +9,14 @@ import type { ToolResultContent } from '@/tools/types'
  * ```typescript
  * const userMessage: Message = {
  *   role: 'user',
- *   content: [{ type: 'text', text: 'What is 2 + 2?' }]
+ *   content: [{ type: 'textBlock', text: 'What is 2 + 2?' }]
  * }
  *
  * const assistantMessage: Message = {
  *   role: 'assistant',
  *   content: [
- *     { type: 'text', text: 'Let me calculate that for you.' },
- *     { type: 'toolUse', name: 'calculator', toolUseId: 'calc-1', input: { a: 2, b: 2 } }
+ *     { type: 'textBlock', text: 'Let me calculate that for you.' },
+ *     { type: 'toolUseBlock', name: 'calculator', toolUseId: 'calc-1', input: { a: 2, b: 2 } }
  *   ]
  * }
  * ```
@@ -49,13 +49,13 @@ export type Role = 'user' | 'assistant'
  * ```typescript
  * // Text content block
  * const textBlock: ContentBlock = {
- *   type: 'text',
+ *   type: 'textBlock',
  *   text: 'Hello, world!'
  * }
  *
  * // Tool use content block
  * const toolUseBlock: ContentBlock = {
- *   type: 'toolUse',
+ *   type: 'toolUseBlock',
  *   name: 'calculator',
  *   toolUseId: 'calc-1',
  *   input: { a: 1, b: 2 }
@@ -63,22 +63,22 @@ export type Role = 'user' | 'assistant'
  *
  * // Tool result content block
  * const toolResultBlock: ContentBlock = {
- *   type: 'toolResult',
+ *   type: 'toolResultBlock',
  *   toolUseId: 'calc-1',
  *   status: 'success',
- *   content: [{ type: 'text', text: 'Result: 3' }]
+ *   content: [{ type: 'textBlock', text: 'Result: 3' }]
  * }
  *
  * // Reasoning content block
  * const reasoningBlock: ContentBlock = {
- *   type: 'reasoning',
+ *   type: 'reasoningBlock',
  *   text: 'Analyzing the problem...'
  * }
  *
  * // Type-safe handling
  * function handleBlock(block: ContentBlock) {
  *   switch (block.type) {
- *     case 'text':
+ *     case 'textBlock':
  *       console.log(block.text)
  *       break
  *     case 'toolUse':
@@ -103,7 +103,7 @@ export interface TextBlock {
   /**
    * Discriminator for text content.
    */
-  type: 'text'
+  type: 'textBlock'
 
   /**
    * Plain text content.
@@ -118,7 +118,7 @@ export interface ToolUseBlock {
   /**
    * Discriminator for tool use content.
    */
-  type: 'toolUse'
+  type: 'toolUseBlock'
 
   /**
    * The name of the tool to execute.
@@ -144,7 +144,7 @@ export interface ToolResultBlock {
   /**
    * Discriminator for tool result content.
    */
-  type: 'toolResult'
+  type: 'toolResultBlock'
 
   /**
    * The ID of the tool use that this result corresponds to.
@@ -169,7 +169,7 @@ export interface ReasoningBlock {
   /**
    * Discriminator for reasoning content.
    */
-  type: 'reasoning'
+  type: 'reasoningBlock'
 
   /**
    * The text content of the reasoning process.

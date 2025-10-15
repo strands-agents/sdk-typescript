@@ -164,7 +164,7 @@ export interface ToolUseStart {
   /**
    * Discriminator for tool use start.
    */
-  type: 'toolUse'
+  type: 'toolUseStart'
 
   /**
    * The name of the tool being used.
@@ -245,7 +245,7 @@ export interface ToolUseInputDelta {
   /**
    * Discriminator for tool use input delta.
    */
-  type: 'toolUseInput'
+  type: 'toolUseInputDelta'
 
   /**
    * Partial JSON string representing the tool input.
@@ -261,7 +261,7 @@ export interface ReasoningDelta {
   /**
    * Discriminator for reasoning delta.
    */
-  type: 'reasoning'
+  type: 'reasoningDelta'
 
   /**
    * Incremental reasoning text.
