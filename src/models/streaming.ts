@@ -229,7 +229,7 @@ export interface TextDelta {
   /**
    * Discriminator for text delta.
    */
-  type: 'text'
+  type: 'textDelta'
 
   /**
    * Incremental text content.
