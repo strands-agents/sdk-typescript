@@ -35,7 +35,7 @@ jobs:
         run: npm install && npm audit --audit-level=low
 
       - name: Run unit tests
-        run: npm test
+        run: npm run test:coverage
 
       - name: Run linting
         run: npm run lint

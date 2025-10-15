@@ -2,7 +2,7 @@ echo "Running pre-commit checks..."
 
 # Run tests
 echo "Running tests..."
-npm test || { echo "Tests failed. Commit aborted."; exit 1; }
+npm run test:coverage || { echo "Tests failed. Commit aborted."; exit 1; }
 
 # Run linting
 echo "Running linting..."

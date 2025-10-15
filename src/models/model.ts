@@ -54,21 +54,21 @@ export interface StreamOptions {
  * }
  * ```
  */
-export interface ModelProvider {
+export interface ModelProvider<T> {
   /**
    * Updates the model configuration.
    * Merges the provided configuration with existing settings.
    *
    * @param modelConfig - Configuration object with model-specific settings
    */
-  updateConfig(modelConfig: unknown): void
+  updateConfig(modelConfig: T): void
 
   /**
    * Retrieves the current model configuration.
    *
    * @returns The current configuration object
    */
-  getConfig(): unknown
+  getConfig(): T
 
   /**
    * Streams a conversation with the model.

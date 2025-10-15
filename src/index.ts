@@ -5,8 +5,6 @@
  * public APIs and functionality.
  */
 
-export { hello } from './hello'
-
 // JSON types
 export type { JSONSchema, JSONValue } from './types/json'
 
