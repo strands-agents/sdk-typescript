@@ -171,7 +171,7 @@ jobs:
             core.setOutput('system_prompt', systemPrompt);
             core.setOutput('task', task);
 
-      - uses: strands-agents/strands-action@main
+      - uses: zastrowm/strands-action@main
         timeout-minutes: ${{ inputs.timeout_minutes || 60 }}
         with:
           aws_role_arn: ${{ secrets.AWS_ROLE_ARN }}
