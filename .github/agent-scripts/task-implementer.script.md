@@ -247,13 +247,13 @@ If all tests are passing, draft a conventional commit message, perform the git c
     - You MUST NOT bold this line
   - You MUST give an overview of the feature being implemented
   - You MUST include any notes on key implementation decisions, ambiguity, or other information as part of the pull request description
-- If the `create_pull_request` tool fails due to GitHub Actions restrictions:
+- If the `create_pull_request` tool fails:
   - You MUST create a PR creation link using GitHub's query parameters
   - You MUST post the link as a comment on the issue
-  - You MUST use the format: `https://github.com/{owner}/{repo}/compare/{base}...{head}?quick_pull=1&title={url_encoded_title}&body={url_encoded_body}`
-  - Reference the Troubleshooting section for the complete pattern
+    - You MUST use the format: `https://github.com/{owner}/{repo}/compare/{base}...{head}?quick_pull=1&title={url_encoded_title}&body={url_encoded_body}`
+    - URL-encode the title and body parameters
+    - Include "Resolves: #{issue_number}" in the body
 - If PR creation succeeds:
-  - You MUST use the `get_pull_request` tool to verify the pull request was created/updated properly
   - You MUST review your notes for any updates to provide on the pull request
   - You MAY use the `update_pull_request` tool to update the pull request body or title
 - You MUST use your notebook to record the new commit hash and PR status (created or link provided)
@@ -336,23 +336,7 @@ If feature branch creation fails:
 - As a last resort, leave a comment on the Task Issue mentioning the issue you are facing
 
 ### Pull Request Creation Issues
-If PR creation fails due to GitHub Actions restrictions:
-- Create a GitHub PR creation link using query parameters and post it as a comment on the issue
-- Use the URL format: `https://github.com/{owner}/{repo}/compare/{base}...{head}?quick_pull=1&title={title}&body={body}`
-- URL-encode the title and body parameters
-- Include "Resolves: #{issue_number}" in the body
-- Reference: https://docs.github.com/en/enterprise-server@3.18/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/using-query-parameters-to-create-a-pull-request
-
-Example comment format:
-```markdown
-## Pull Request Ready for Creation
-
-You can create the pull request by clicking this link:
-
-**[Create Pull Request for Task XX](https://github.com/owner/repo/compare/main...branch-name?quick_pull=1&title=...&body=...)**
-```
-
-If other PR creation issues occur:
+If PR creation fails:
 - Verify GitHub authentication and permissions
 - Check if remote repository exists and is accessible
 - As a last resort, leave a comment on the Task Issue mentioning the issue you are facing
