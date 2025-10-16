@@ -42,6 +42,20 @@ export type FunctionToolCallback = (
 ) => AsyncGenerator<unknown, unknown, unknown> | Promise<unknown> | unknown
 
 /**
+ * Configuration options for creating a FunctionTool.
+ */
+export interface FunctionToolConfig {
+  /** The unique name of the tool */
+  name: string
+  /** Human-readable description of the tool's purpose */
+  description: string
+  /** JSON Schema defining the expected input structure */
+  inputSchema: JSONSchema
+  /** Function that implements the tool logic */
+  callback: FunctionToolCallback
+}
+
+/**
  * A Tool implementation that wraps a callback function and handles all ToolResult conversion.
  *
  * FunctionTool allows creating tools from existing functions without needing to manually
@@ -56,10 +70,10 @@ export type FunctionToolCallback = (
  * @example
  * ```typescript
  * // Create a simple calculator tool
- * const calculator = new FunctionTool(
- *   'calculator',
- *   'Performs arithmetic operations',
- *   {
+ * const calculator = new FunctionTool({
+ *   name: 'calculator',
+ *   description: 'Performs arithmetic operations',
+ *   inputSchema: {
  *     type: 'object',
  *     properties: {
  *       operation: { type: 'string', enum: ['add', 'subtract'] },
@@ -68,25 +82,25 @@ export type FunctionToolCallback = (
  *     },
  *     required: ['operation', 'a', 'b']
  *   },
- *   (input: any) => {
+ *   callback: (input: any) => {
  *     const { operation, a, b } = input
  *     return operation === 'add' ? a + b : a - b
  *   }
- * )
+ * })
  *
  * // Create a tool with streaming
- * const streamingTool = new FunctionTool(
- *   'processor',
- *   'Processes data with progress updates',
- *   { type: 'object', properties: { data: { type: 'string' } } },
- *   async function* (input: any) {
+ * const streamingTool = new FunctionTool({
+ *   name: 'processor',
+ *   description: 'Processes data with progress updates',
+ *   inputSchema: { type: 'object', properties: { data: { type: 'string' } } },
+ *   callback: async function* (input: any) {
  *     yield 'Starting processing...'
  *     // Do some work
  *     yield 'Halfway done...'
  *     // More work
  *     return 'Processing complete!'
  *   }
- * )
+ * })
  * ```
  */
 export class FunctionTool implements Tool {
@@ -113,34 +127,31 @@ export class FunctionTool implements Tool {
   /**
    * Creates a new FunctionTool instance.
    *
-   * @param name - The unique name of the tool
-   * @param description - Human-readable description of the tool's purpose
-   * @param inputSchema - JSON Schema defining the expected input structure
-   * @param callback - Function that implements the tool logic
+   * @param config - Configuration object for the tool
    *
    * @example
    * ```typescript
-   * const tool = new FunctionTool(
-   *   'greeter',
-   *   'Greets a person by name',
-   *   {
+   * const tool = new FunctionTool({
+   *   name: 'greeter',
+   *   description: 'Greets a person by name',
+   *   inputSchema: {
    *     type: 'object',
    *     properties: { name: { type: 'string' } },
    *     required: ['name']
    *   },
-   *   (input: any) => `Hello, ${input.name}!`
-   * )
+   *   callback: (input: any) => `Hello, ${input.name}!`
+   * })
    * ```
    */
-  constructor(name: string, description: string, inputSchema: JSONSchema, callback: FunctionToolCallback) {
-    this.toolName = name
-    this.description = description
+  constructor(config: FunctionToolConfig) {
+    this.toolName = config.name
+    this.description = config.description
     this.toolSpec = {
-      name,
-      description,
-      inputSchema,
+      name: config.name,
+      description: config.description,
+      inputSchema: config.inputSchema,
     }
-    this.callback = callback
+    this.callback = config.callback
   }
 
   /**
@@ -158,7 +169,22 @@ export class FunctionTool implements Tool {
       // Check if result is an async generator
       if (result && typeof result === 'object' && Symbol.asyncIterator in result) {
         // Handle async generator: yield each value as ToolStreamEvent, wrap final value in ToolResult
-        yield* this.handleAsyncGenerator(result as AsyncGenerator<unknown, unknown, unknown>, toolUse.toolUseId)
+        const generator = result as AsyncGenerator<unknown, unknown, unknown>
+
+        // Iterate through all yielded values
+        let iterResult = await generator.next()
+
+        while (!iterResult.done) {
+          // Each yielded value becomes a ToolStreamEvent
+          yield {
+            type: 'toolStreamEvent',
+            data: iterResult.value,
+          }
+          iterResult = await generator.next()
+        }
+
+        // The generator's return value (when done = true) is wrapped in ToolResult
+        yield this.wrapInToolResult(iterResult.value, toolUse.toolUseId)
       } else if (result instanceof Promise) {
         // Handle promise: await and wrap in ToolResult
         const value = await result
@@ -168,41 +194,8 @@ export class FunctionTool implements Tool {
         yield this.wrapInToolResult(result, toolUse.toolUseId)
       }
     } catch (error) {
-      // Handle any errors and return as error ToolResult
+      // Handle any errors and yield as error ToolResult
       yield this.createErrorResult(error, toolUse.toolUseId)
-    }
-  }
-
-  /**
-   * Handles async generator callbacks.
-   * Yields each value as a ToolStreamEvent, then wraps the final return value in a ToolResult.
-   *
-   * @param generator - The async generator from the callback
-   * @param toolUseId - The tool use ID for the ToolResult
-   * @returns Async iterable of tool execution events
-   */
-  private async *handleAsyncGenerator(
-    generator: AsyncGenerator<unknown, unknown, unknown>,
-    toolUseId: string
-  ): AsyncIterable<ToolExecutionEvent> {
-    try {
-      let finalValue: unknown
-
-      for await (const value of generator) {
-        // Each yielded value becomes a ToolStreamEvent
-        yield {
-          type: 'toolStreamEvent',
-          data: value,
-        }
-        finalValue = value
-      }
-
-      // The final return value is wrapped in ToolResult
-      // Note: In JavaScript/TypeScript, the return value of a generator is separate from yielded values
-      // For simplicity, we'll use the last yielded value if no explicit return
-      yield this.wrapInToolResult(finalValue, toolUseId)
-    } catch (error) {
-      yield this.createErrorResult(error, toolUseId)
     }
   }
 
@@ -239,6 +232,9 @@ export class FunctionTool implements Tool {
 
   /**
    * Creates an error ToolResult from an error object.
+   *
+   * TODO: Implement consistent logging format as defined in #30
+   * This error should be logged to the caller using the established logging pattern.
    *
    * @param error - The error that occurred
    * @param toolUseId - The tool use ID for the ToolResult

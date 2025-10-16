@@ -6,7 +6,12 @@ import type { ToolResult } from '@/tools/types'
 describe('FunctionTool', () => {
   describe('properties', () => {
     it('has a non-empty toolName', () => {
-      const tool = new FunctionTool('testTool', 'Test description', { type: 'object' }, () => 'result')
+      const tool = new FunctionTool({
+        name: 'testTool',
+        description: 'Test description',
+        inputSchema: { type: 'object' },
+        callback: (): string => 'result',
+      })
       expect(tool.toolName).toBeTruthy()
       expect(typeof tool.toolName).toBe('string')
       expect(tool.toolName.length).toBeGreaterThan(0)
@@ -14,7 +19,12 @@ describe('FunctionTool', () => {
     })
 
     it('has a non-empty description', () => {
-      const tool = new FunctionTool('testTool', 'Test description', { type: 'object' }, () => 'result')
+      const tool = new FunctionTool({
+        name: 'testTool',
+        description: 'Test description',
+        inputSchema: { type: 'object' },
+        callback: (): string => 'result',
+      })
       expect(tool.description).toBeTruthy()
       expect(typeof tool.description).toBe('string')
       expect(tool.description.length).toBeGreaterThan(0)
@@ -28,7 +38,12 @@ describe('FunctionTool', () => {
           value: { type: 'string' as const },
         },
       }
-      const tool = new FunctionTool('testTool', 'Test description', inputSchema, () => 'result')
+      const tool = new FunctionTool({
+        name: 'testTool',
+        description: 'Test description',
+        inputSchema,
+        callback: (): string => 'result',
+      })
       expect(tool.toolSpec).toBeDefined()
       expect(tool.toolSpec.name).toBe(tool.toolName)
       expect(tool.toolSpec.description).toBe(tool.description)
@@ -36,12 +51,22 @@ describe('FunctionTool', () => {
     })
 
     it('has matching toolName and toolSpec.name', () => {
-      const tool = new FunctionTool('testTool', 'Test description', { type: 'object' }, () => 'result')
+      const tool = new FunctionTool({
+        name: 'testTool',
+        description: 'Test description',
+        inputSchema: { type: 'object' },
+        callback: (): string => 'result',
+      })
       expect(tool.toolName).toBe(tool.toolSpec.name)
     })
 
     it('has matching description and toolSpec.description', () => {
-      const tool = new FunctionTool('testTool', 'Test description', { type: 'object' }, () => 'result')
+      const tool = new FunctionTool({
+        name: 'testTool',
+        description: 'Test description',
+        inputSchema: { type: 'object' },
+        callback: (): string => 'result',
+      })
       expect(tool.description).toBe(tool.toolSpec.description)
     })
   })
@@ -49,15 +74,15 @@ describe('FunctionTool', () => {
   describe('stream method', () => {
     describe('with synchronous callback', () => {
       it('wraps return value in ToolResult', async () => {
-        const tool = new FunctionTool(
-          'syncTool',
-          'Returns synchronous value',
-          { type: 'object', properties: { value: { type: 'number' } } },
-          (input: unknown) => {
+        const tool = new FunctionTool({
+          name: 'syncTool',
+          description: 'Returns synchronous value',
+          inputSchema: { type: 'object', properties: { value: { type: 'number' } } },
+          callback: (input: unknown): number => {
             const { value } = input as { value: number }
             return value * 2
-          }
-        )
+          },
+        })
 
         const toolUse = {
           name: 'syncTool',
@@ -79,12 +104,12 @@ describe('FunctionTool', () => {
       })
 
       it('handles string return values', async () => {
-        const tool = new FunctionTool(
-          'stringTool',
-          'Returns string',
-          { type: 'object' },
-          () => 'Hello, World!'
-        )
+        const tool = new FunctionTool({
+          name: 'stringTool',
+          description: 'Returns string',
+          inputSchema: { type: 'object' },
+          callback: (): string => 'Hello, World!',
+        })
 
         const toolUse = {
           name: 'stringTool',
@@ -105,12 +130,12 @@ describe('FunctionTool', () => {
       })
 
       it('handles object return values', async () => {
-        const tool = new FunctionTool(
-          'objectTool',
-          'Returns object',
-          { type: 'object' },
-          () => ({ key: 'value', count: 42 })
-        )
+        const tool = new FunctionTool({
+          name: 'objectTool',
+          description: 'Returns object',
+          inputSchema: { type: 'object' },
+          callback: (): { key: string; count: number } => ({ key: 'value', count: 42 }),
+        })
 
         const toolUse = {
           name: 'objectTool',
@@ -130,7 +155,12 @@ describe('FunctionTool', () => {
       })
 
       it('handles null and undefined return values', async () => {
-        const tool = new FunctionTool('nullTool', 'Returns null', { type: 'object' }, () => null)
+        const tool = new FunctionTool({
+          name: 'nullTool',
+          description: 'Returns null',
+          inputSchema: { type: 'object' },
+          callback: (): null => null,
+        })
 
         const toolUse = {
           name: 'nullTool',
@@ -152,15 +182,15 @@ describe('FunctionTool', () => {
 
     describe('with promise callback', () => {
       it('wraps resolved value in ToolResult', async () => {
-        const tool = new FunctionTool(
-          'promiseTool',
-          'Returns promise',
-          { type: 'object', properties: { value: { type: 'number' } } },
-          async (input: unknown) => {
+        const tool = new FunctionTool({
+          name: 'promiseTool',
+          description: 'Returns promise',
+          inputSchema: { type: 'object', properties: { value: { type: 'number' } } },
+          callback: async (input: unknown): Promise<number> => {
             const { value } = input as { value: number }
             return value + 10
-          }
-        )
+          },
+        })
 
         const toolUse = {
           name: 'promiseTool',
@@ -181,14 +211,14 @@ describe('FunctionTool', () => {
       })
 
       it('can access ToolContext in promise', async () => {
-        const tool = new FunctionTool(
-          'contextTool',
-          'Uses context',
-          { type: 'object' },
-          async (_input: unknown, context: ToolContext) => {
+        const tool = new FunctionTool({
+          name: 'contextTool',
+          description: 'Uses context',
+          inputSchema: { type: 'object' },
+          callback: async (_input: unknown, context: ToolContext): Promise<Record<string, unknown>> => {
             return context.invocationState
-          }
-        )
+          },
+        })
 
         const toolUse = {
           name: 'contextTool',
@@ -210,17 +240,17 @@ describe('FunctionTool', () => {
 
     describe('with async generator callback', () => {
       it('yields ToolStreamEvents then final ToolResult', async () => {
-        const tool = new FunctionTool(
-          'generatorTool',
-          'Streams progress',
-          { type: 'object' },
-          async function* (_input: unknown, _context: ToolContext) {
+        const tool = new FunctionTool({
+          name: 'generatorTool',
+          description: 'Streams progress',
+          inputSchema: { type: 'object' },
+          callback: async function* (_input: unknown, _context: ToolContext): AsyncGenerator<string, string, unknown> {
             yield 'Starting...'
             yield 'Processing...'
             yield 'Complete!'
             return 'Final result'
-          }
-        )
+          },
+        })
 
         const toolUse = {
           name: 'generatorTool',
@@ -254,17 +284,17 @@ describe('FunctionTool', () => {
       })
 
       it('can yield objects as ToolStreamEvents', async () => {
-        const tool = new FunctionTool(
-          'objectGenTool',
-          'Streams objects',
-          { type: 'object' },
-          async function* () {
+        const tool = new FunctionTool({
+          name: 'objectGenTool',
+          description: 'Streams objects',
+          inputSchema: { type: 'object' },
+          callback: async function* (): AsyncGenerator<{ progress: number; message: string }, string, unknown> {
             yield { progress: 0.25, message: 'Quarter done' }
             yield { progress: 0.5, message: 'Halfway done' }
             yield { progress: 1.0, message: 'Complete' }
             return 'Done'
-          }
-        )
+          },
+        })
 
         const toolUse = {
           name: 'objectGenTool',
@@ -292,8 +322,13 @@ describe('FunctionTool', () => {
 
     describe('error handling', () => {
       it('catches synchronous errors', async () => {
-        const tool = new FunctionTool('errorTool', 'Throws error', { type: 'object' }, () => {
-          throw new Error('Something went wrong')
+        const tool = new FunctionTool({
+          name: 'errorTool',
+          description: 'Throws error',
+          inputSchema: { type: 'object' },
+          callback: (): never => {
+            throw new Error('Something went wrong')
+          },
         })
 
         const toolUse = {
@@ -317,8 +352,13 @@ describe('FunctionTool', () => {
       })
 
       it('catches promise rejections', async () => {
-        const tool = new FunctionTool('rejectTool', 'Rejects promise', { type: 'object' }, async () => {
-          throw new Error('Promise rejected')
+        const tool = new FunctionTool({
+          name: 'rejectTool',
+          description: 'Rejects promise',
+          inputSchema: { type: 'object' },
+          callback: async (): Promise<never> => {
+            throw new Error('Promise rejected')
+          },
         })
 
         const toolUse = {
@@ -339,15 +379,15 @@ describe('FunctionTool', () => {
       })
 
       it('catches errors in async generators', async () => {
-        const tool = new FunctionTool(
-          'genErrorTool',
-          'Generator throws',
-          { type: 'object' },
-          async function* () {
+        const tool = new FunctionTool({
+          name: 'genErrorTool',
+          description: 'Generator throws',
+          inputSchema: { type: 'object' },
+          callback: async function* (): AsyncGenerator<string, never, unknown> {
             yield 'Starting...'
             throw new Error('Generator error')
-          }
-        )
+          },
+        })
 
         const toolUse = {
           name: 'genErrorTool',
@@ -370,8 +410,13 @@ describe('FunctionTool', () => {
       })
 
       it('handles non-Error thrown values', async () => {
-        const tool = new FunctionTool('stringErrorTool', 'Throws string', { type: 'object' }, () => {
-          throw 'String error'
+        const tool = new FunctionTool({
+          name: 'stringErrorTool',
+          description: 'Throws string',
+          inputSchema: { type: 'object' },
+          callback: (): never => {
+            throw 'String error'
+          },
         })
 
         const toolUse = {
@@ -396,7 +441,12 @@ describe('FunctionTool', () => {
 
 describe('Tool interface backwards compatibility', () => {
   it('maintains stable interface signature', () => {
-    const tool = new FunctionTool('testTool', 'Test description', { type: 'object' }, () => 'result')
+    const tool = new FunctionTool({
+      name: 'testTool',
+      description: 'Test description',
+      inputSchema: { type: 'object' },
+      callback: (): string => 'result',
+    })
 
     // Verify interface properties exist
     expect(tool).toHaveProperty('toolName')
@@ -409,7 +459,12 @@ describe('Tool interface backwards compatibility', () => {
   })
 
   it('stream method accepts correct parameter types', async () => {
-    const tool = new FunctionTool('testTool', 'Test description', { type: 'object' }, (input: unknown) => input)
+    const tool = new FunctionTool({
+      name: 'testTool',
+      description: 'Test description',
+      inputSchema: { type: 'object' },
+      callback: (input: unknown): unknown => input,
+    })
     const toolUse = {
       name: 'testTool',
       toolUseId: 'test-types',
