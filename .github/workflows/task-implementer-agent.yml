@@ -124,6 +124,9 @@ jobs:
             fetch-depth: 0
             ref: ${{ inputs.pull_request_id && format('refs/pull/{0}/head', inputs.pull_request_id) || (github.event.pull_request.number && format('refs/pull/{0}/head', github.event.pull_request.number)) || (github.event.review.pull_request.number && format('refs/pull/{0}/head', github.event.review.pull_request.number)) || (github.event.issue.pull_request && format('refs/pull/{0}/head', github.event.issue.number)) || 'main' }}
 
+      - name: Install dependencies
+        run: npm install
+
       - name: Read task implementer script
         id: task-implementer-agent-script
         uses: actions/github-script@v7
