@@ -20,13 +20,11 @@ on:
         required: false
         type: string
         default: '.project/project-overview.md'
-      execution_mode:
-        description: 'Execution mode for the agent'
-        required: true
-        type: choice
-        options:
-          - Initialize
-          - Continue
+      timeout_minutes:
+        description: 'Timeout in minutes for the agent execution'
+        required: false
+        type: number
+        default: 60
 
 jobs:
   task-reviewer:
@@ -41,11 +39,21 @@ jobs:
       pull-requests: write
       id-token: write  # Required for OIDC
     steps:
-      - name: Replace review-task label with task-review-running
+      - name: Manage labels and check continuation status
+        id: manage-labels
         uses: actions/github-script@v7
         with:
           script: |
             const issueNumber = '${{ inputs.issue_id }}' || context.issue.number;
+            
+            // Check if project-task label exists to determine if continuing
+            const { data: issue } = await github.rest.issues.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber
+            });
+            const isContinuing = issue.labels.some(label => label.name === 'project-task');
+            
             try {
               await github.rest.issues.removeLabel({
                 owner: context.repo.owner,
@@ -56,12 +64,15 @@ jobs:
             } catch (error) {
               console.log('review-task label may not exist:', error.message);
             }
+            
             await github.rest.issues.addLabels({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: issueNumber,
-              labels: ['task-review-running']
+              labels: ['task-review-running', 'project-task']
             });
+            
+            core.setOutput('is_continuing', isContinuing);
 
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -76,6 +87,7 @@ jobs:
             const fs = require('fs');
             
             const systemPrompt = fs.readFileSync('.github/agent-scripts/task-reviewer.script.md', 'utf8');
+            const isContinuing = '${{ steps.manage-labels.outputs.is_continuing }}' === 'true';
             
             // Determine task based on execution mode
             let task;
@@ -84,8 +96,8 @@ jobs:
             if ('${{ inputs.prompt }}') {
               task = '${{ inputs.prompt }}';
             }
-            // If the mode is "Continue", tell agent to review feedback
-            else if ('${{ inputs.execution_mode }}' === 'Continue') {
+            // If continuing, tell agent to review feedback
+            else if (isContinuing) {
               task = 'Review the feedback and continue.';
             }
             // Otherwise, generate the full task with project overview
@@ -107,6 +119,7 @@ jobs:
             core.setOutput('task', task);
 
       - uses: strands-agents/strands-action@main
+        timeout-minutes: ${{ inputs.timeout_minutes || 60 }}
         with:
           aws_role_arn: ${{ secrets.AWS_ROLE_ARN }}
           system_prompt: ${{ steps.task-reviewer-agent-script.outputs.system_prompt }}

@@ -32,13 +32,11 @@ on:
         description: 'Pull request ID to checkout code from (optional)'
         required: false
         type: string
-      execution_mode:
-        description: 'Execution mode for the agent'
-        required: true
-        type: choice
-        options:
-          - Initialize
-          - Continue
+      timeout_minutes:
+        description: 'Timeout in minutes for the agent execution'
+        required: false
+        type: number
+        default: 60
 
 jobs:
   task-implementer:
@@ -66,15 +64,26 @@ jobs:
       pull-requests: write
       id-token: write  # Required for OIDC
     steps:
-      - name: Replace implement-task label with task-implement-running
+      - name: Manage labels and check continuation status
+        id: manage-labels
         uses: actions/github-script@v7
         with:
           script: |
             const issueNumber = '${{ inputs.issue_id }}' || context.issue.number || context.payload.pull_request?.number;
             if (!issueNumber) {
               console.log('No issue number available, skipping label management');
+              core.setOutput('is_continuing', false);
               return;
             }
+            
+            // Check if project-task label exists to determine if continuing
+            const { data: issue } = await github.rest.issues.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber
+            });
+            const isContinuing = issue.labels.some(label => label.name === 'project-task');
+            
             try {
               await github.rest.issues.removeLabel({
                 owner: context.repo.owner,
@@ -85,12 +94,15 @@ jobs:
             } catch (error) {
               console.log('implement-task label may not exist:', error.message);
             }
+            
             await github.rest.issues.addLabels({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: issueNumber,
-              labels: ['task-implement-running']
+              labels: ['task-implement-running', 'project-task']
             });
+            
+            core.setOutput('is_continuing', isContinuing);
 
       - name: Extract issue ID from PR body
         id: extract-issue
@@ -120,20 +132,17 @@ jobs:
             const fs = require('fs');
             
             const systemPrompt = fs.readFileSync('.github/agent-scripts/task-implementer.script.md', 'utf8');
+            const isContinuing = '${{ steps.manage-labels.outputs.is_continuing }}' === 'true';
             
-            // Determine task based on execution mode and event type
+            // Determine task based on continuation status
             let task;
             
             // Input prompt always overrides everything for testing
             if ('${{ inputs.prompt }}') {
               task = '${{ inputs.prompt }}';
             }
-            // If the mode is "Continue" or it's a PR-related event, tell agent to review feedback
-            else if ('${{ inputs.execution_mode }}' === 'Continue' || 
-                     '${{ github.event_name }}' === 'pull_request' || 
-                     '${{ github.event_name }}' === 'pull_request_comment' || 
-                     '${{ github.event_name }}' === 'pull_request_review' ||
-                     ('${{ github.event_name }}' === 'issue_comment' && '${{ github.event.issue.pull_request }}')) {
+            // If continuing, tell agent to review feedback
+            else if (isContinuing) {
               task = 'Review and address the feedback on the pr.';
             }
             // Otherwise, generate the full task with project overview
@@ -155,6 +164,7 @@ jobs:
             core.setOutput('task', task);
 
       - uses: strands-agents/strands-action@main
+        timeout-minutes: ${{ inputs.timeout_minutes || 60 }}
         with:
           aws_role_arn: ${{ secrets.AWS_ROLE_ARN }}
           system_prompt: ${{ steps.task-implementer-agent-script.outputs.system_prompt }}
