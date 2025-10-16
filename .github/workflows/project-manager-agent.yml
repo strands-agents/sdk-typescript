@@ -77,7 +77,7 @@ jobs:
             core.setOutput('system_prompt', systemPrompt);
             core.setOutput('task', task);
 
-      - uses: strands-agents/strands-action@main
+      - uses: zastrowm/strands-action@main
         with:
           aws_role_arn: ${{ secrets.AWS_ROLE_ARN }}
           system_prompt: ${{ steps.project-manager-agent-script.outputs.system_prompt }}
