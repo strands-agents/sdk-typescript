@@ -7,8 +7,16 @@
  * @see https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_ConverseStream.html
  */
 
-import { BedrockRuntimeClient, ConverseStreamCommand } from '@aws-sdk/client-bedrock-runtime'
-import type { AwsCredentialIdentity } from '@aws-sdk/types'
+import {
+  BedrockRuntimeClient,
+  ConverseStreamCommand,
+  ThrottlingException,
+  type BedrockRuntimeClientConfig,
+  type ConverseStreamCommandInput,
+  type Message as BedrockMessage,
+  type ContentBlock as BedrockContentBlock,
+  type InferenceConfiguration,
+} from '@aws-sdk/client-bedrock-runtime'
 import type { BaseModelConfig, ModelProvider, StreamOptions } from '@/models/model'
 import type { Message, ContentBlock } from '@/types/messages'
 import type { ModelProviderStreamEvent } from '@/models/streaming'
@@ -22,11 +30,6 @@ import { ContextWindowOverflowError, ModelThrottledError } from '@/errors'
 export const DEFAULT_BEDROCK_MODEL_ID = 'global.anthropic.claude-sonnet-4-5-20250929-v1:0'
 
 /**
- * Default AWS region for Bedrock client.
- */
-export const DEFAULT_BEDROCK_REGION = 'us-west-2'
-
-/**
  * Error messages that indicate context window overflow.
  * Used to detect when input exceeds the model's context window.
  */
@@ -35,79 +38,6 @@ const BEDROCK_CONTEXT_WINDOW_OVERFLOW_MESSAGES = [
   'input length and `max_tokens` exceed context limit',
   'too many total text bytes',
 ]
-
-/**
- * Configuration interface for AWS Bedrock client initialization.
- *
- * This configuration controls how the Bedrock Runtime client is initialized,
- * including region selection, custom endpoints, and credential management.
- *
- * @example
- * ```typescript
- * // Use default credential chain with specific region
- * const clientConfig: BedrockClientConfig = {
- *   region: 'us-east-1'
- * }
- *
- * // Use custom endpoint for VPC/PrivateLink
- * const vpcConfig: BedrockClientConfig = {
- *   region: 'us-west-2',
- *   endpoint: 'https://vpce-abc123.bedrock-runtime.us-west-2.vpce.amazonaws.com'
- * }
- *
- * // Override credentials
- * const credConfig: BedrockClientConfig = {
- *   region: 'us-west-2',
- *   credentials: {
- *     accessKeyId: 'AKIAIOSFODNN7EXAMPLE',
- *     secretAccessKey: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY'
- *   }
- * }
- * ```
- */
-export interface BedrockClientConfig {
-  /**
-   * AWS region for the Bedrock service.
-   *
-   * If not specified, will use:
-   * 1. AWS_REGION environment variable
-   * 2. Default region from AWS credential chain
-   * 3. DEFAULT_BEDROCK_REGION constant ('us-west-2')
-   */
-  region?: string
-
-  /**
-   * Custom endpoint URL for VPC endpoints (AWS PrivateLink).
-   *
-   * Use this when accessing Bedrock through a VPC endpoint for enhanced security
-   * and to keep traffic within your VPC.
-   *
-   * @example
-   * ```typescript
-   * endpoint: 'https://vpce-abc123.bedrock-runtime.us-west-2.vpce.amazonaws.com'
-   * ```
-   */
-  endpoint?: string
-
-  /**
-   * Optional credential override for AWS authentication.
-   *
-   * If not provided, the AWS SDK will use the default credential chain:
-   * 1. Environment variables (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY)
-   * 2. Shared credentials file (~/.aws/credentials)
-   * 3. ECS/EC2 instance metadata
-   *
-   * @example
-   * ```typescript
-   * credentials: {
-   *   accessKeyId: 'AKIAIOSFODNN7EXAMPLE',
-   *   secretAccessKey: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
-   *   sessionToken: 'optional-session-token'
-   * }
-   * ```
-   */
-  credentials?: AwsCredentialIdentity
-}
 
 /**
  * Configuration interface for AWS Bedrock model provider.
@@ -128,142 +58,51 @@ export interface BedrockClientConfig {
 export interface BedrockModelConfig extends BaseModelConfig {
   /**
    * Maximum number of tokens to generate in the response.
-   *
-   * This controls the length of the model's output. The actual number of tokens
-   * generated may be less if the model naturally completes its response.
-   *
-   * @example
-   * ```typescript
-   * maxTokens: 1024  // Generate up to 1024 tokens
-   * ```
    */
   maxTokens?: number
 
   /**
-   * Controls randomness in generation.
-   *
-   * Higher values (e.g., 0.8) make output more random and creative.
-   * Lower values (e.g., 0.2) make output more focused and deterministic.
-   *
-   * Range: 0 to 1
-   *
-   * @example
-   * ```typescript
-   * temperature: 0.7  // Balanced creativity and focus
-   * ```
+   * Controls randomness in generation (0 to 1).
    */
   temperature?: number
 
   /**
-   * Controls diversity via nucleus sampling.
-   *
-   * An alternative to temperature. The model considers the results of tokens
-   * with top_p probability mass.
-   *
-   * Range: 0 to 1
-   *
-   * @example
-   * ```typescript
-   * topP: 0.9  // Consider tokens in the top 90% probability mass
-   * ```
+   * Controls diversity via nucleus sampling (0 to 1).
    */
   topP?: number
 
   /**
    * Array of sequences that will stop generation when encountered.
-   *
-   * When the model generates any of these sequences, it will immediately
-   * stop generation and return the response.
-   *
-   * @example
-   * ```typescript
-   * stopSequences: ['END', 'STOP', '###']
-   * ```
    */
   stopSequences?: string[]
 
   /**
    * Cache point type for the system prompt.
-   *
-   * Enables prompt caching to reduce latency and cost for repeated requests
-   * with the same system prompt.
-   *
-   * Supported values: 'ephemeral', 'default'
-   *
    * @see https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-caching.html
-   *
-   * @example
-   * ```typescript
-   * cachePrompt: 'ephemeral'  // Cache the system prompt
-   * ```
    */
   cachePrompt?: string
 
   /**
    * Cache point type for tools.
-   *
-   * Enables prompt caching for tool definitions to reduce latency and cost
-   * when using the same tools across multiple requests.
-   *
-   * Supported values: 'ephemeral', 'default'
-   *
    * @see https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-caching.html
-   *
-   * @example
-   * ```typescript
-   * cacheTools: 'ephemeral'  // Cache tool definitions
-   * ```
    */
   cacheTools?: string
 
   /**
    * Additional fields to include in the Bedrock request.
-   *
-   * Use this for provider-specific features not directly supported by the SDK.
-   * These fields are merged into the request sent to Bedrock.
-   *
-   * @example
-   * ```typescript
-   * additionalRequestFields: {
-   *   customField: 'value'
-   * }
-   * ```
    */
-  additionalRequestFields?: Record<string, unknown>
+  additionalRequestFields?: JSONValue
 
   /**
    * Additional response field paths to extract from the Bedrock response.
-   *
-   * Specify paths to custom fields in the response that should be included
-   * in the returned metadata.
-   *
-   * @example
-   * ```typescript
-   * additionalResponseFieldPaths: [
-   *   '/customMetadata/field1',
-   *   '/customMetadata/field2'
-   * ]
-   * ```
    */
   additionalResponseFieldPaths?: string[]
 
   /**
-   * Whether to include status field in tool results.
-   *
-   * When true, tool results will include a 'status' field ('success' or 'error').
-   * When false, the status field will be omitted.
-   *
-   * Default: true
-   *
-   * Note: In a future update, this will support 'auto' mode which will
-   * automatically determine whether to include status based on the model ID.
-   *
-   * @example
-   * ```typescript
-   * includeToolResultStatus: true  // Include status field
-   * ```
+   * Additional arguments to pass through to the Bedrock Converse API.
+   * @see https://docs.aws.amazon.com/AWSJavaScriptSDK/v3/latest/client/bedrock-runtime/command/ConverseStreamCommand/
    */
-  includeToolResultStatus?: boolean
+  additionalArgs?: Record<string, JSONValue>
 }
 
 /**
@@ -296,7 +135,9 @@ export interface BedrockModelConfig extends BaseModelConfig {
  * }
  * ```
  */
-export class BedrockModelProvider implements ModelProvider<BedrockModelConfig, BedrockClientConfig> {
+export class BedrockModelProvider
+  implements ModelProvider<BedrockModelConfig, BedrockRuntimeClientConfig>
+{
   private config: BedrockModelConfig
   private client: BedrockRuntimeClient
 
@@ -326,48 +167,25 @@ export class BedrockModelProvider implements ModelProvider<BedrockModelConfig, B
    * )
    * ```
    */
-  constructor(modelConfig: BedrockModelConfig, clientConfig: BedrockClientConfig) {
+  constructor(modelConfig: BedrockModelConfig, clientConfig: BedrockRuntimeClientConfig) {
     // Initialize model config with default model ID if not provided
     this.config = {
       modelId: DEFAULT_BEDROCK_MODEL_ID,
-      includeToolResultStatus: true,
       ...modelConfig,
     }
 
-    // Determine region from clientConfig, environment, or default
-    // eslint-disable-next-line no-undef
-    const region = clientConfig.region || process.env.AWS_REGION || DEFAULT_BEDROCK_REGION
-
-    // Build client configuration, only including defined values
-    const clientInitConfig: {
-      region: string
-      endpoint?: string
-      credentials?: AwsCredentialIdentity
-      customUserAgent: string
-    } = {
-      region,
+    // Initialize Bedrock Runtime client with custom user agent
+    this.client = new BedrockRuntimeClient({
+      ...clientConfig,
       customUserAgent: 'strands-agents-ts-sdk',
-    }
-
-    // Only add endpoint if provided
-    if (clientConfig.endpoint) {
-      clientInitConfig.endpoint = clientConfig.endpoint
-    }
-
-    // Only add credentials if provided
-    if (clientConfig.credentials) {
-      clientInitConfig.credentials = clientConfig.credentials
-    }
-
-    // Initialize Bedrock Runtime client
-    this.client = new BedrockRuntimeClient(clientInitConfig)
+    })
   }
 
   /**
    * Updates the model configuration.
    * Merges the provided configuration with existing settings.
    *
-   * @param modelConfig - Partial configuration object with model-specific settings to update
+   * @param modelConfig - Configuration object with model-specific settings to update
    *
    * @example
    * ```typescript
@@ -378,7 +196,7 @@ export class BedrockModelProvider implements ModelProvider<BedrockModelConfig, B
    * })
    * ```
    */
-  updateConfig(modelConfig: Partial<BedrockModelConfig>): void {
+  updateConfig(modelConfig: BedrockModelConfig): void {
     this.config = { ...this.config, ...modelConfig }
   }
 
@@ -447,7 +265,7 @@ export class BedrockModelProvider implements ModelProvider<BedrockModelConfig, B
       }
     } catch (error) {
       // Detect and throw specific error types
-      this.handleError(error)
+      this.handleError(error as Error)
     }
   }
 
@@ -458,30 +276,30 @@ export class BedrockModelProvider implements ModelProvider<BedrockModelConfig, B
    * @param options - Stream options
    * @returns Formatted Bedrock request
    */
-  private formatRequest(messages: Message[], options?: StreamOptions): Record<string, unknown> {
-    const request: Record<string, unknown> = {
+  private formatRequest(messages: Message[], options?: StreamOptions): ConverseStreamCommandInput {
+    const request: ConverseStreamCommandInput = {
       modelId: this.config.modelId,
       messages: this.formatMessages(messages),
     }
 
     // Add system prompt with optional caching
     if (options?.systemPrompt || this.config.cachePrompt) {
-      const system: unknown[] = []
+      const system: BedrockContentBlock[] = []
 
       if (options?.systemPrompt) {
         system.push({ text: options.systemPrompt })
       }
 
       if (this.config.cachePrompt) {
-        system.push({ cachePoint: { type: this.config.cachePrompt } })
+        system.push({ cachePoint: { type: this.config.cachePrompt as 'default' } } as never)
       }
 
-      request.system = system
+      request.system = system as never
     }
 
     // Add tool configuration
     if (options?.toolSpecs && options.toolSpecs.length > 0) {
-      const tools: unknown[] = options.toolSpecs.map((spec) => ({
+      const tools = options.toolSpecs.map((spec) => ({
         toolSpec: {
           name: spec.name,
           description: spec.description,
@@ -490,22 +308,22 @@ export class BedrockModelProvider implements ModelProvider<BedrockModelConfig, B
       }))
 
       if (this.config.cacheTools) {
-        tools.push({ cachePoint: { type: this.config.cacheTools } })
+        tools.push({ cachePoint: { type: this.config.cacheTools as 'default' } } as never)
       }
 
-      const toolConfig: Record<string, unknown> = {
-        tools,
+      const toolConfig = {
+        tools: tools as never,
       }
 
       if (options.toolChoice) {
-        toolConfig.toolChoice = options.toolChoice
+        Object.assign(toolConfig, { toolChoice: options.toolChoice as JSONValue })
       }
 
-      request.toolConfig = toolConfig
+      request.toolConfig = toolConfig as never
     }
 
     // Add inference configuration
-    const inferenceConfig: Record<string, unknown> = {}
+    const inferenceConfig: InferenceConfiguration = {}
     if (this.config.maxTokens !== undefined) inferenceConfig.maxTokens = this.config.maxTokens
     if (this.config.temperature !== undefined) inferenceConfig.temperature = this.config.temperature
     if (this.config.topP !== undefined) inferenceConfig.topP = this.config.topP
@@ -517,12 +335,17 @@ export class BedrockModelProvider implements ModelProvider<BedrockModelConfig, B
 
     // Add additional request fields
     if (this.config.additionalRequestFields) {
-      request.additionalModelRequestFields = this.config.additionalRequestFields
+      request.additionalModelRequestFields = this.config.additionalRequestFields as never
     }
 
     // Add additional response field paths
     if (this.config.additionalResponseFieldPaths) {
       request.additionalModelResponseFieldPaths = this.config.additionalResponseFieldPaths
+    }
+
+    // Add additional args (spread them into the request for forward compatibility)
+    if (this.config.additionalArgs) {
+      Object.assign(request, this.config.additionalArgs)
     }
 
     return request
@@ -534,7 +357,7 @@ export class BedrockModelProvider implements ModelProvider<BedrockModelConfig, B
    * @param messages - SDK messages
    * @returns Bedrock-formatted messages
    */
-  private formatMessages(messages: Message[]): unknown[] {
+  private formatMessages(messages: Message[]): BedrockMessage[] {
     return messages.map((message) => ({
       role: message.role,
       content: message.content.map((block) => this.formatContentBlock(block)),
@@ -547,45 +370,46 @@ export class BedrockModelProvider implements ModelProvider<BedrockModelConfig, B
    * @param block - SDK content block
    * @returns Bedrock-formatted content block
    */
-  private formatContentBlock(block: ContentBlock): unknown {
-    if (block.type === 'textBlock') {
-      return { text: block.text }
-    }
+  private formatContentBlock(block: ContentBlock): BedrockContentBlock {
+    switch (block.type) {
+      case 'textBlock':
+        return { text: block.text }
 
-    if (block.type === 'toolUseBlock') {
-      return {
-        toolUse: {
-          toolUseId: block.toolUseId,
-          name: block.name,
-          input: block.input,
-        },
-      }
-    }
+      case 'toolUseBlock':
+        return {
+          toolUse: {
+            toolUseId: block.toolUseId,
+            name: block.name,
+            input: block.input,
+          },
+        }
 
-    if (block.type === 'toolResultBlock') {
-      const toolResult: Record<string, unknown> = {
-        toolUseId: block.toolUseId,
-        content: block.content.map((content) => {
-          if (content.type === 'toolResultTextContent') {
-            return { text: content.text }
+      case 'toolResultBlock': {
+        const content = block.content.map((content) => {
+          switch (content.type) {
+            case 'toolResultTextContent':
+              return { text: content.text }
+            case 'toolResultJsonContent':
+              return { json: content.json }
+            default:
+              return { text: JSON.stringify(content) }
           }
-          if (content.type === 'toolResultJsonContent') {
-            return { json: content.json }
-          }
-          return { text: JSON.stringify(content) }
-        }),
+        })
+
+        return {
+          toolResult: {
+            toolUseId: block.toolUseId,
+            content,
+            status: block.status,
+          },
+        }
       }
 
-      if (this.config.includeToolResultStatus !== false) {
-        toolResult.status = block.status
-      }
-
-      return { toolResult }
+      default:
+        // For unsupported content types, pass through as-is
+        // This allows for graceful degradation and future compatibility
+        return block as BedrockContentBlock
     }
-
-    // For unsupported content types, pass through as-is
-    // This allows for graceful degradation and future compatibility
-    return block
   }
 
   /**
@@ -594,184 +418,208 @@ export class BedrockModelProvider implements ModelProvider<BedrockModelConfig, B
    * @param chunk - Bedrock event chunk
    * @returns Array of SDK streaming events
    */
-  private mapBedrockEventToSDKEvents(chunk: Record<string, unknown>): ModelProviderStreamEvent[] {
+  private mapBedrockEventToSDKEvents(chunk: JSONValue): ModelProviderStreamEvent[] {
     const events: ModelProviderStreamEvent[] = []
 
-    // Message start event
-    if ('messageStart' in chunk && chunk.messageStart && typeof chunk.messageStart === 'object') {
-      const messageStart = chunk.messageStart as Record<string, unknown>
-      events.push({
-        type: 'modelMessageStartEvent',
-        role: (messageStart.role as 'user' | 'assistant') || 'assistant',
-      })
+    // Each chunk should only have a single key present
+    if (typeof chunk !== 'object' || chunk === null || Array.isArray(chunk)) {
+      return events
     }
 
-    // Content block start event
-    if ('contentBlockStart' in chunk && chunk.contentBlockStart && typeof chunk.contentBlockStart === 'object') {
-      const contentBlockStart = chunk.contentBlockStart as Record<string, unknown>
-      const event: ModelProviderStreamEvent = {
-        type: 'modelContentBlockStartEvent',
-      }
-
-      if ('contentBlockIndex' in contentBlockStart) {
-        event.contentBlockIndex = contentBlockStart.contentBlockIndex as number
-      }
-
-      if ('start' in contentBlockStart && contentBlockStart.start && typeof contentBlockStart.start === 'object') {
-        const start = contentBlockStart.start as Record<string, unknown>
-        if ('toolUse' in start && start.toolUse && typeof start.toolUse === 'object') {
-          const toolUse = start.toolUse as Record<string, unknown>
-          event.start = {
-            type: 'toolUseStart',
-            name: toolUse.name as string,
-            toolUseId: toolUse.toolUseId as string,
-          }
-        }
-      }
-
-      events.push(event)
+    // Extract the event type key
+    const eventKeys = Object.keys(chunk)
+    if (eventKeys.length === 0) {
+      return events
     }
 
-    // Content block delta event
-    if ('contentBlockDelta' in chunk && chunk.contentBlockDelta && typeof chunk.contentBlockDelta === 'object') {
-      const contentBlockDelta = chunk.contentBlockDelta as Record<string, unknown>
-      const delta = contentBlockDelta.delta as Record<string, unknown>
+    const eventType = eventKeys[0]
+    if (!eventType) {
+      return events
+    }
 
-      if (delta) {
+    const eventData = chunk[eventType]
+
+    if (!eventData || typeof eventData !== 'object' || Array.isArray(eventData)) {
+      return events
+    }
+
+    switch (eventType) {
+      case 'messageStart': {
+        const messageStart = eventData as Record<string, JSONValue>
+        events.push({
+          type: 'modelMessageStartEvent',
+          role: ((messageStart.role as string) || 'assistant') as 'user' | 'assistant',
+        })
+        break
+      }
+
+      case 'contentBlockStart': {
+        const contentBlockStart = eventData as Record<string, JSONValue>
         const event: ModelProviderStreamEvent = {
-          type: 'modelContentBlockDeltaEvent',
-          delta: { type: 'textDelta', text: '' },
+          type: 'modelContentBlockStartEvent',
         }
 
-        if ('contentBlockIndex' in contentBlockDelta) {
-          event.contentBlockIndex = contentBlockDelta.contentBlockIndex as number
+        if ('contentBlockIndex' in contentBlockStart) {
+          event.contentBlockIndex = contentBlockStart.contentBlockIndex as number
         }
 
-        // Text delta
-        if ('text' in delta) {
-          event.delta = {
-            type: 'textDelta',
-            text: delta.text as string,
+        if ('start' in contentBlockStart && contentBlockStart.start && typeof contentBlockStart.start === 'object') {
+          const start = contentBlockStart.start as Record<string, JSONValue>
+          if ('toolUse' in start && start.toolUse && typeof start.toolUse === 'object') {
+            const toolUse = start.toolUse as Record<string, JSONValue>
+            event.start = {
+              type: 'toolUseStart',
+              name: toolUse.name as string,
+              toolUseId: toolUse.toolUseId as string,
+            }
           }
-        }
-
-        // Tool use input delta
-        if ('toolUse' in delta && delta.toolUse && typeof delta.toolUse === 'object') {
-          const toolUse = delta.toolUse as Record<string, unknown>
-          event.delta = {
-            type: 'toolUseInputDelta',
-            input: toolUse.input as string,
-          }
-        }
-
-        // Reasoning delta
-        if ('reasoningContent' in delta && delta.reasoningContent && typeof delta.reasoningContent === 'object') {
-          const reasoning = delta.reasoningContent as Record<string, unknown>
-          const reasoningDelta: { type: 'reasoningDelta'; text?: string; signature?: string } = {
-            type: 'reasoningDelta',
-          }
-          if (reasoning.text) reasoningDelta.text = reasoning.text as string
-          if (reasoning.signature) reasoningDelta.signature = reasoning.signature as string
-          event.delta = reasoningDelta
         }
 
         events.push(event)
-      }
-    }
-
-    // Content block stop event
-    if ('contentBlockStop' in chunk && chunk.contentBlockStop && typeof chunk.contentBlockStop === 'object') {
-      const contentBlockStop = chunk.contentBlockStop as Record<string, unknown>
-      const event: ModelProviderStreamEvent = {
-        type: 'modelContentBlockStopEvent',
+        break
       }
 
-      if ('contentBlockIndex' in contentBlockStop) {
-        event.contentBlockIndex = contentBlockStop.contentBlockIndex as number
-      }
+      case 'contentBlockDelta': {
+        const contentBlockDelta = eventData as Record<string, JSONValue>
+        const delta = contentBlockDelta.delta as Record<string, JSONValue>
 
-      events.push(event)
-    }
+        if (delta) {
+          const event: ModelProviderStreamEvent = {
+            type: 'modelContentBlockDeltaEvent',
+            delta: { type: 'textDelta', text: '' },
+          }
 
-    // Message stop event
-    if ('messageStop' in chunk && chunk.messageStop && typeof chunk.messageStop === 'object') {
-      const messageStop = chunk.messageStop as Record<string, unknown>
-      const event: ModelProviderStreamEvent = {
-        type: 'modelMessageStopEvent',
-      }
+          if ('contentBlockIndex' in contentBlockDelta) {
+            event.contentBlockIndex = contentBlockDelta.contentBlockIndex as number
+          }
 
-      if ('stopReason' in messageStop && messageStop.stopReason) {
-        const stopReason = messageStop.stopReason as string
-        const mappedStopReason =
-          stopReason === 'end_turn'
-            ? 'endTurn'
-            : stopReason === 'tool_use'
-              ? 'toolUse'
-              : stopReason === 'max_tokens'
-                ? 'maxTokens'
-                : stopReason === 'stop_sequence'
-                  ? 'stopSequence'
-                  : stopReason === 'content_filtered'
-                    ? 'contentFiltered'
-                    : stopReason === 'guardrail_intervened'
-                      ? 'guardrailIntervened'
-                      : null
+          // Text delta
+          if ('text' in delta) {
+            event.delta = {
+              type: 'textDelta',
+              text: delta.text as string,
+            }
+          }
 
-        if (mappedStopReason) {
-          event.stopReason = mappedStopReason
+          // Tool use input delta
+          if ('toolUse' in delta && delta.toolUse && typeof delta.toolUse === 'object') {
+            const toolUse = delta.toolUse as Record<string, JSONValue>
+            event.delta = {
+              type: 'toolUseInputDelta',
+              input: toolUse.input as string,
+            }
+          }
+
+          // Reasoning delta
+          if ('reasoningContent' in delta && delta.reasoningContent && typeof delta.reasoningContent === 'object') {
+            const reasoning = delta.reasoningContent as Record<string, JSONValue>
+            const reasoningDelta: { type: 'reasoningDelta'; text?: string; signature?: string } = {
+              type: 'reasoningDelta',
+            }
+            if (reasoning.text) reasoningDelta.text = reasoning.text as string
+            if (reasoning.signature) reasoningDelta.signature = reasoning.signature as string
+            event.delta = reasoningDelta
+          }
+
+          events.push(event)
         }
+        break
       }
 
-      if ('additionalModelResponseFields' in messageStop) {
-        event.additionalModelResponseFields = messageStop.additionalModelResponseFields as JSONValue
-      }
-
-      events.push(event)
-    }
-
-    // Metadata event
-    if ('metadata' in chunk && chunk.metadata && typeof chunk.metadata === 'object') {
-      const metadata = chunk.metadata as Record<string, unknown>
-      const event: ModelProviderStreamEvent = {
-        type: 'modelMetadataEvent',
-      }
-
-      if ('usage' in metadata && metadata.usage && typeof metadata.usage === 'object') {
-        const usage = metadata.usage as Record<string, unknown>
-        const usageInfo: {
-          inputTokens: number
-          outputTokens: number
-          totalTokens: number
-          cacheReadInputTokens?: number
-          cacheWriteInputTokens?: number
-        } = {
-          inputTokens: (usage.inputTokens as number) || 0,
-          outputTokens: (usage.outputTokens as number) || 0,
-          totalTokens: (usage.totalTokens as number) || 0,
+      case 'contentBlockStop': {
+        const contentBlockStop = eventData as Record<string, JSONValue>
+        const event: ModelProviderStreamEvent = {
+          type: 'modelContentBlockStopEvent',
         }
 
-        if (usage.cacheReadInputTokens) {
-          usageInfo.cacheReadInputTokens = usage.cacheReadInputTokens as number
-        }
-        if (usage.cacheCreationInputTokens) {
-          usageInfo.cacheWriteInputTokens = usage.cacheCreationInputTokens as number
+        if ('contentBlockIndex' in contentBlockStop) {
+          event.contentBlockIndex = contentBlockStop.contentBlockIndex as number
         }
 
-        event.usage = usageInfo
+        events.push(event)
+        break
       }
 
-      if ('metrics' in metadata && metadata.metrics && typeof metadata.metrics === 'object') {
-        const metrics = metadata.metrics as Record<string, unknown>
-        event.metrics = {
-          latencyMs: (metrics.latencyMs as number) || 0,
+      case 'messageStop': {
+        const messageStop = eventData as Record<string, JSONValue>
+        const event: ModelProviderStreamEvent = {
+          type: 'modelMessageStopEvent',
         }
+
+        if ('stopReason' in messageStop && messageStop.stopReason) {
+          const stopReason = messageStop.stopReason as string
+          const mappedStopReason =
+            stopReason === 'end_turn'
+              ? 'endTurn'
+              : stopReason === 'tool_use'
+                ? 'toolUse'
+                : stopReason === 'max_tokens'
+                  ? 'maxTokens'
+                  : stopReason === 'stop_sequence'
+                    ? 'stopSequence'
+                    : stopReason === 'content_filtered'
+                      ? 'contentFiltered'
+                      : stopReason === 'guardrail_intervened'
+                        ? 'guardrailIntervened'
+                        : null
+
+          if (mappedStopReason) {
+            event.stopReason = mappedStopReason
+          }
+        }
+
+        if ('additionalModelResponseFields' in messageStop) {
+          event.additionalModelResponseFields = messageStop.additionalModelResponseFields as JSONValue
+        }
+
+        events.push(event)
+        break
       }
 
-      if ('trace' in metadata) {
-        event.trace = metadata.trace
-      }
+      case 'metadata': {
+        const metadata = eventData as Record<string, JSONValue>
+        const event: ModelProviderStreamEvent = {
+          type: 'modelMetadataEvent',
+        }
 
-      events.push(event)
+        if ('usage' in metadata && metadata.usage && typeof metadata.usage === 'object') {
+          const usage = metadata.usage as Record<string, JSONValue>
+          const usageInfo: {
+            inputTokens: number
+            outputTokens: number
+            totalTokens: number
+            cacheReadInputTokens?: number
+            cacheWriteInputTokens?: number
+          } = {
+            inputTokens: (usage.inputTokens as number) || 0,
+            outputTokens: (usage.outputTokens as number) || 0,
+            totalTokens: (usage.totalTokens as number) || 0,
+          }
+
+          if (usage.cacheReadInputTokens) {
+            usageInfo.cacheReadInputTokens = usage.cacheReadInputTokens as number
+          }
+          if (usage.cacheCreationInputTokens) {
+            usageInfo.cacheWriteInputTokens = usage.cacheCreationInputTokens as number
+          }
+
+          event.usage = usageInfo
+        }
+
+        if ('metrics' in metadata && metadata.metrics && typeof metadata.metrics === 'object') {
+          const metrics = metadata.metrics as Record<string, JSONValue>
+          event.metrics = {
+            latencyMs: (metrics.latencyMs as number) || 0,
+          }
+        }
+
+        if ('trace' in metadata) {
+          event.trace = metadata.trace
+        }
+
+        events.push(event)
+        break
+      }
     }
 
     return events
@@ -785,27 +633,15 @@ export class BedrockModelProvider implements ModelProvider<BedrockModelConfig, B
    * @throws \{ModelThrottledError\} For throttling errors
    * @throws The original error for other error types
    */
-  private handleError(error: unknown): never {
-    if (error instanceof Error) {
-      const errorMessage = error.message
+  private handleError(error: Error): never {
+    // Check for throttling (check this first as it's most specific)
+    if (error instanceof ThrottlingException) {
+      throw new ModelThrottledError(error.message)
+    }
 
-      // Check for context window overflow
-      if (BEDROCK_CONTEXT_WINDOW_OVERFLOW_MESSAGES.some((msg) => errorMessage.includes(msg))) {
-        throw new ContextWindowOverflowError(errorMessage)
-      }
-
-      // Check for throttling
-      if ('name' in error && error.name === 'ThrottlingException') {
-        throw new ModelThrottledError(errorMessage)
-      }
-
-      // Check AWS SDK error code for throttling
-      if ('$metadata' in error && typeof error.$metadata === 'object') {
-        const metadata = error.$metadata as Record<string, unknown>
-        if ('httpStatusCode' in metadata && metadata.httpStatusCode === 429) {
-          throw new ModelThrottledError(errorMessage)
-        }
-      }
+    // Check for context window overflow
+    if (BEDROCK_CONTEXT_WINDOW_OVERFLOW_MESSAGES.some((msg) => error.message.includes(msg))) {
+      throw new ContextWindowOverflowError(error.message)
     }
 
     // Re-throw other errors as-is

@@ -239,11 +239,33 @@ export function functionName(paramName: string, optionalParam?: number): string 
 }
 ```
 
+**Interface property documentation**:
+
+```typescript
+/**
+ * Interface description.
+ */
+export interface MyConfig {
+  /**
+   * Single-line description of the property.
+   */
+  propertyName: string
+
+  /**
+   * Single-line description with optional reference link.
+   * @see https://docs.example.com/property-details
+   */
+  anotherProperty?: number
+}
+```
+
 **Requirements**:
 - All exported functions, classes, and interfaces must have TSDoc
 - Include `@param` for all parameters
 - Include `@returns` for return values
 - Include `@example` for complex functionality
+- Interface properties MUST have single-line descriptions
+- Interface properties MAY include an optional `@see` link for additional details
 - TSDoc validation enforced by ESLint
 
 ### Code Style Guidelines

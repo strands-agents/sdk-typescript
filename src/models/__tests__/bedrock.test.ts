@@ -1,12 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { BedrockRuntimeClient } from '@aws-sdk/client-bedrock-runtime'
-import {
-  BedrockModelProvider,
-  DEFAULT_BEDROCK_MODEL_ID,
-  DEFAULT_BEDROCK_REGION,
-  type BedrockModelConfig,
-  type BedrockClientConfig,
-} from '@/models/bedrock'
+import { BedrockModelProvider, DEFAULT_BEDROCK_MODEL_ID, type BedrockModelConfig } from '@/models/bedrock'
 import { ContextWindowOverflowError, ModelThrottledError } from '@/errors'
 import type { Message } from '@/types/messages'
 
@@ -34,11 +28,20 @@ vi.mock('@aws-sdk/client-bedrock-runtime', () => {
     })(),
   }))
 
+  // Create a mock ThrottlingException class
+  class MockThrottlingException extends Error {
+    constructor(opts: { message: string; $metadata: Record<string, unknown> }) {
+      super(opts.message)
+      this.name = 'ThrottlingException'
+    }
+  }
+
   return {
     BedrockRuntimeClient: vi.fn().mockImplementation(() => ({
       send: mockSend,
     })),
     ConverseStreamCommand: vi.fn(),
+    ThrottlingException: MockThrottlingException,
   }
 })
 
@@ -58,11 +61,6 @@ describe('BedrockModelProvider', () => {
       expect(provider.getConfig().modelId).toBe(DEFAULT_BEDROCK_MODEL_ID)
     })
 
-    it('sets includeToolResultStatus to true by default', () => {
-      const provider = new BedrockModelProvider({}, {})
-      expect(provider.getConfig().includeToolResultStatus).toBe(true)
-    })
-
     it('uses provided model ID', () => {
       const customModelId = 'us.anthropic.claude-3-5-sonnet-20241022-v2:0'
       const provider = new BedrockModelProvider({ modelId: customModelId }, {})
@@ -78,29 +76,12 @@ describe('BedrockModelProvider', () => {
       })
     })
 
-    it('uses AWS_REGION environment variable', () => {
-      process.env.AWS_REGION = 'ap-southeast-1'
-      new BedrockModelProvider({}, {})
-      expect(BedrockRuntimeClient).toHaveBeenCalledWith({
-        region: 'ap-southeast-1',
-        customUserAgent: 'strands-agents-ts-sdk',
-      })
-    })
-
-    it('prefers clientConfig region over environment variable', () => {
-      process.env.AWS_REGION = 'ap-southeast-1'
-      new BedrockModelProvider({}, { region: 'us-east-1' })
-      expect(BedrockRuntimeClient).toHaveBeenCalledWith({
-        region: 'us-east-1',
-        customUserAgent: 'strands-agents-ts-sdk',
-      })
-    })
-
     it('passes custom endpoint to client', () => {
       const endpoint = 'https://vpce-abc.bedrock-runtime.us-west-2.vpce.amazonaws.com'
-      new BedrockModelProvider({}, { endpoint })
+      const region = 'us-west-2'
+      new BedrockModelProvider({}, { endpoint, region })
       expect(BedrockRuntimeClient).toHaveBeenCalledWith({
-        region: DEFAULT_BEDROCK_REGION,
+        region,
         endpoint,
         customUserAgent: 'strands-agents-ts-sdk',
       })
@@ -111,9 +92,10 @@ describe('BedrockModelProvider', () => {
         accessKeyId: 'AKIAIOSFODNN7EXAMPLE',
         secretAccessKey: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
       }
-      new BedrockModelProvider({}, { credentials })
+      const region = 'us-west-2'
+      new BedrockModelProvider({}, { credentials, region })
       expect(BedrockRuntimeClient).toHaveBeenCalledWith({
-        region: DEFAULT_BEDROCK_REGION,
+        region,
         credentials,
         customUserAgent: 'strands-agents-ts-sdk',
       })
@@ -271,6 +253,7 @@ describe('BedrockModelProvider', () => {
       const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
       
       await expect(async () => {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         for await (const _event of provider.stream(messages)) {
           // Should not reach here
         }
@@ -279,8 +262,8 @@ describe('BedrockModelProvider', () => {
 
     it('throws ModelThrottledError for throttling', async () => {
       vi.clearAllMocks()
-      const error = new Error('Rate limit exceeded')
-      error.name = 'ThrottlingException'
+      const { ThrottlingException } = await import('@aws-sdk/client-bedrock-runtime')
+      const error = new ThrottlingException({ message: 'Rate limit exceeded', $metadata: {} })
       const mockSendError = vi.fn().mockRejectedValue(error)
       vi.mocked(BedrockRuntimeClient).mockImplementation(() => ({ send: mockSendError }) as never)
       
@@ -288,6 +271,7 @@ describe('BedrockModelProvider', () => {
       const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
       
       await expect(async () => {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         for await (const _event of provider.stream(messages)) {
           // Should not reach here
         }

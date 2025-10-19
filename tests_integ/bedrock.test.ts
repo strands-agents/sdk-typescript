@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll } from 'vitest'
+import { fromNodeProviderChain } from '@aws-sdk/credential-providers'
 import { BedrockModelProvider, DEFAULT_BEDROCK_MODEL_ID } from '@/models/bedrock'
 import type { Message } from '@/types/messages'
 import type { ToolSpec } from '@/tools/types'
@@ -8,17 +9,16 @@ import type { ToolSpec } from '@/tools/types'
 describe('BedrockModelProvider Integration Tests', () => {
   let hasCredentials = false
 
-  beforeAll(() => {
-    // Check if AWS credentials are available
-    // Tests will be skipped if credentials are not configured
-    hasCredentials =
-      !!process.env.AWS_ACCESS_KEY_ID ||
-      !!process.env.AWS_PROFILE ||
-      !!process.env.AWS_CONTAINER_CREDENTIALS_RELATIVE_URI
-
-    if (!hasCredentials) {
+  beforeAll(async () => {
+    // Check if AWS credentials are available using the node provider chain
+    try {
+      const credentialProvider = fromNodeProviderChain()
+      await credentialProvider()
+      hasCredentials = true
+    } catch {
       // Tests will be skipped if credentials not available
       // This is expected in environments without AWS access
+      hasCredentials = false
     }
   })
 

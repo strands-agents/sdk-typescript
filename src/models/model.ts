@@ -84,7 +84,7 @@ export interface StreamOptions {
  *     // Initialize client with clientConfig
  *   }
  *
- *   updateConfig(modelConfig: Partial<MyProviderConfig>): void {
+ *   updateConfig(modelConfig: MyProviderConfig): void {
  *     this.config = { ...this.config, ...modelConfig }
  *   }
  *
@@ -110,9 +110,9 @@ export interface ModelProvider<T extends BaseModelConfig, _C = unknown> {
    * Updates the model configuration.
    * Merges the provided configuration with existing settings.
    *
-   * @param modelConfig - Partial configuration object with model-specific settings to update
+   * @param modelConfig - Configuration object with model-specific settings to update
    */
-  updateConfig(modelConfig: Partial<T>): void
+  updateConfig(modelConfig: T): void
 
   /**
    * Retrieves the current model configuration.
