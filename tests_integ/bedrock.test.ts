@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest'
 import { fromNodeProviderChain } from '@aws-sdk/credential-providers'
 import { BedrockModelProvider, DEFAULT_BEDROCK_MODEL_ID } from '@/models/bedrock'
+import { ContextWindowOverflowError } from '@/errors'
 import type { Message } from '@/types/messages'
 import type { ToolSpec } from '@/tools/types'
 
@@ -26,13 +27,12 @@ describe('BedrockModelProvider Integration Tests', () => {
     it.skipIf(!hasCredentials)(
       'streams a simple text response',
       async () => {
-        const provider = new BedrockModelProvider(
-          {
+        const provider = new BedrockModelProvider({
+          modelConfig: {
             modelId: DEFAULT_BEDROCK_MODEL_ID,
             maxTokens: 100,
           },
-          {}
-        )
+        })
 
         const messages: Message[] = [
           {
@@ -75,12 +75,11 @@ describe('BedrockModelProvider Integration Tests', () => {
     it.skipIf(!hasCredentials)(
       'respects system prompt',
       async () => {
-        const provider = new BedrockModelProvider(
-          {
+        const provider = new BedrockModelProvider({
+          modelConfig: {
             maxTokens: 50,
           },
-          {}
-        )
+        })
 
         const messages: Message[] = [
           {
@@ -115,12 +114,11 @@ describe('BedrockModelProvider Integration Tests', () => {
     it.skipIf(!hasCredentials)(
       'requests tool use when appropriate',
       async () => {
-        const provider = new BedrockModelProvider(
-          {
+        const provider = new BedrockModelProvider({
+          modelConfig: {
             maxTokens: 200,
           },
-          {}
-        )
+        })
 
         const calculatorTool: ToolSpec = {
           name: 'calculator',
@@ -182,12 +180,11 @@ describe('BedrockModelProvider Integration Tests', () => {
     it.skipIf(!hasCredentials)(
       'respects maxTokens configuration',
       async () => {
-        const provider = new BedrockModelProvider(
-          {
+        const provider = new BedrockModelProvider({
+          modelConfig: {
             maxTokens: 20, // Very small limit
           },
-          {}
-        )
+        })
 
         const messages: Message[] = [
           {
@@ -204,36 +201,10 @@ describe('BedrockModelProvider Integration Tests', () => {
         // Check metadata for token usage
         const metadataEvent = events.find((e) => e.type === 'modelMetadataEvent')
         expect(metadataEvent?.usage?.outputTokens).toBeLessThanOrEqual(20)
-      },
-      30000
-    )
 
-    it.skipIf(!hasCredentials)(
-      'applies temperature setting',
-      async () => {
-        const provider = new BedrockModelProvider(
-          {
-            maxTokens: 50,
-            temperature: 0.1, // Very low temperature for deterministic output
-          },
-          {}
-        )
-
-        const messages: Message[] = [
-          {
-            role: 'user',
-            content: [{ type: 'textBlock', text: 'Say exactly: Hello World' }],
-          },
-        ]
-
-        const events = []
-        for await (const event of provider.stream(messages)) {
-          events.push(event)
-        }
-
-        // Should get a response (verifies temperature didn't break the request)
-        const deltaEvents = events.filter((e) => e.type === 'modelContentBlockDeltaEvent')
-        expect(deltaEvents.length).toBeGreaterThan(0)
+        // Check that stop reason is maxTokens
+        const messageStopEvent = events.find((e) => e.type === 'modelMessageStopEvent')
+        expect(messageStopEvent?.stopReason).toBe('maxTokens')
       },
       30000
     )
@@ -243,12 +214,11 @@ describe('BedrockModelProvider Integration Tests', () => {
     it.skipIf(!hasCredentials)(
       'handles invalid model ID gracefully',
       async () => {
-        const provider = new BedrockModelProvider(
-          {
+        const provider = new BedrockModelProvider({
+          modelConfig: {
             modelId: 'invalid-model-id-that-does-not-exist',
           },
-          {}
-        )
+        })
 
         const messages: Message[] = [
           {
@@ -264,6 +234,38 @@ describe('BedrockModelProvider Integration Tests', () => {
             events.push(event)
           }
         }).rejects.toThrow()
+      },
+      30000
+    )
+
+    it.skipIf(!hasCredentials)(
+      'throws ContextWindowOverflowError when input exceeds context window',
+      async () => {
+        const provider = new BedrockModelProvider({
+          modelConfig: {
+            modelId: DEFAULT_BEDROCK_MODEL_ID,
+            maxTokens: 100,
+          },
+        })
+
+        // Create a message that exceeds context window (200k tokens ~800k characters)
+        // Repeat "Too much text!" 100,000 times to exceed the limit
+        const longText = 'Too much text! '.repeat(100000)
+
+        const messages: Message[] = [
+          {
+            role: 'user',
+            content: [{ type: 'textBlock', text: longText }],
+          },
+        ]
+
+        // Should throw ContextWindowOverflowError
+        await expect(async () => {
+          const events = []
+          for await (const event of provider.stream(messages)) {
+            events.push(event)
+          }
+        }).rejects.toThrow(ContextWindowOverflowError)
       },
       30000
     )

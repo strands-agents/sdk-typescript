@@ -13,12 +13,14 @@ import {
   ThrottlingException,
   type BedrockRuntimeClientConfig,
   type ConverseStreamCommandInput,
+  type ConverseStreamOutput,
   type Message as BedrockMessage,
   type ContentBlock as BedrockContentBlock,
   type InferenceConfiguration,
+  type TokenUsage,
 } from '@aws-sdk/client-bedrock-runtime'
 import type { BaseModelConfig, ModelProvider, StreamOptions } from '@/models/model'
-import type { Message, ContentBlock } from '@/types/messages'
+import type { Message, ContentBlock, Role } from '@/types/messages'
 import type { ModelProviderStreamEvent } from '@/models/streaming'
 import type { JSONValue } from '@/types/json'
 import { ContextWindowOverflowError, ModelThrottledError } from '@/errors'
@@ -102,7 +104,22 @@ export interface BedrockModelConfig extends BaseModelConfig {
    * Additional arguments to pass through to the Bedrock Converse API.
    * @see https://docs.aws.amazon.com/AWSJavaScriptSDK/v3/latest/client/bedrock-runtime/command/ConverseStreamCommand/
    */
-  additionalArgs?: Record<string, JSONValue>
+  additionalArgs?: JSONValue
+}
+
+/**
+ * Options for creating a BedrockModelProvider instance.
+ */
+export interface BedrockModelProviderOptions {
+  /**
+   * Configuration for the Bedrock model.
+   */
+  modelConfig?: BedrockModelConfig
+
+  /**
+   * Configuration for the Bedrock Runtime client.
+   */
+  clientConfig?: BedrockRuntimeClientConfig
 }
 
 /**
@@ -113,16 +130,16 @@ export interface BedrockModelConfig extends BaseModelConfig {
  *
  * @example
  * ```typescript
- * const provider = new BedrockModelProvider(
- *   {
+ * const provider = new BedrockModelProvider({
+ *   modelConfig: {
  *     modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
  *     maxTokens: 1024,
  *     temperature: 0.7
  *   },
- *   {
+ *   clientConfig: {
  *     region: 'us-west-2'
  *   }
- * )
+ * })
  *
  * const messages: Message[] = [
  *   { role: 'user', content: [{ type: 'textBlock', text: 'Hello!' }] }
@@ -144,40 +161,51 @@ export class BedrockModelProvider
   /**
    * Creates a new BedrockModelProvider instance.
    *
-   * @param modelConfig - Configuration for the Bedrock model
-   * @param clientConfig - Configuration for the Bedrock Runtime client
+   * @param options - Optional configuration for model and client
    *
    * @example
    * ```typescript
    * // Minimal configuration with defaults
-   * const provider = new BedrockModelProvider({}, {})
+   * const provider = new BedrockModelProvider()
    *
-   * // Full configuration
-   * const provider = new BedrockModelProvider(
-   *   {
+   * // With model configuration
+   * const provider = new BedrockModelProvider({
+   *   modelConfig: {
    *     modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
    *     maxTokens: 2048,
    *     temperature: 0.8,
    *     cachePrompt: 'ephemeral'
-   *   },
-   *   {
+   *   }
+   * })
+   *
+   * // With client configuration
+   * const provider = new BedrockModelProvider({
+   *   clientConfig: {
    *     region: 'us-east-1',
    *     credentials: myCredentials
    *   }
-   * )
+   * })
    * ```
    */
-  constructor(modelConfig: BedrockModelConfig, clientConfig: BedrockRuntimeClientConfig) {
+  constructor(options?: BedrockModelProviderOptions) {
+    const modelConfig = options?.modelConfig || {}
+    const clientConfig = options?.clientConfig || {}
+
     // Initialize model config with default model ID if not provided
     this.config = {
       modelId: DEFAULT_BEDROCK_MODEL_ID,
       ...modelConfig,
     }
 
+    // Build user agent string (extend if provided, otherwise use SDK identifier)
+    const customUserAgent = clientConfig.customUserAgent
+      ? `${clientConfig.customUserAgent} strands-agents-ts-sdk`
+      : 'strands-agents-ts-sdk'
+
     // Initialize Bedrock Runtime client with custom user agent
     this.client = new BedrockRuntimeClient({
       ...clientConfig,
-      customUserAgent: 'strands-agents-ts-sdk',
+      customUserAgent,
     })
   }
 
@@ -250,14 +278,14 @@ export class BedrockModelProvider
       const request = this.formatRequest(messages, options)
 
       // Create and send the command
-      const command = new ConverseStreamCommand(request as never)
+      const command = new ConverseStreamCommand(request)
       const response = await this.client.send(command)
 
       // Stream the response
       if (response.stream) {
         for await (const chunk of response.stream) {
           // Map Bedrock events to SDK events
-          const events = this.mapBedrockEventToSDKEvents(chunk as never)
+          const events = this.mapBedrockEventToSDKEvents(chunk)
           for (const event of events) {
             yield event
           }
@@ -291,10 +319,10 @@ export class BedrockModelProvider
       }
 
       if (this.config.cachePrompt) {
-        system.push({ cachePoint: { type: this.config.cachePrompt as 'default' } } as never)
+        system.push({ cachePoint: { type: this.config.cachePrompt as 'default' } })
       }
 
-      request.system = system as never
+      request.system = system
     }
 
     // Add tool configuration
@@ -312,7 +340,7 @@ export class BedrockModelProvider
       }
 
       const toolConfig = {
-        tools: tools as never,
+        tools: tools,
       }
 
       if (options.toolChoice) {
@@ -335,7 +363,7 @@ export class BedrockModelProvider
 
     // Add additional request fields
     if (this.config.additionalRequestFields) {
-      request.additionalModelRequestFields = this.config.additionalRequestFields as never
+      request.additionalModelRequestFields = this.config.additionalRequestFields
     }
 
     // Add additional response field paths
@@ -392,7 +420,7 @@ export class BedrockModelProvider
             case 'toolResultJsonContent':
               return { json: content.json }
             default:
-              return { text: JSON.stringify(content) }
+              throw new Error(`Unsupported tool result content type: ${JSON.stringify(content)}`)
           }
         })
 
@@ -406,9 +434,7 @@ export class BedrockModelProvider
       }
 
       default:
-        // For unsupported content types, pass through as-is
-        // This allows for graceful degradation and future compatibility
-        return block as BedrockContentBlock
+        throw new Error(`Unsupported content block type: ${JSON.stringify(block)}`)
     }
   }
 
@@ -418,43 +444,55 @@ export class BedrockModelProvider
    * @param chunk - Bedrock event chunk
    * @returns Array of SDK streaming events
    */
-  private mapBedrockEventToSDKEvents(chunk: JSONValue): ModelProviderStreamEvent[] {
+  /**
+   * Maps a Bedrock event to SDK streaming events.
+   *
+   * @param chunk - Bedrock event chunk
+   * @returns Array of SDK streaming events
+   */
+  private mapBedrockEventToSDKEvents(chunk: ConverseStreamOutput): ModelProviderStreamEvent[] {
     const events: ModelProviderStreamEvent[] = []
 
     // Each chunk should only have a single key present
     if (typeof chunk !== 'object' || chunk === null || Array.isArray(chunk)) {
-      return events
+      throw new Error(`Invalid chunk format: expected object, got ${typeof chunk}`)
     }
 
     // Extract the event type key
     const eventKeys = Object.keys(chunk)
     if (eventKeys.length === 0) {
-      return events
+      throw new Error('Invalid chunk: no event keys present')
     }
 
     const eventType = eventKeys[0]
     if (!eventType) {
-      return events
+      throw new Error('Invalid chunk: event type is undefined')
     }
 
-    const eventData = chunk[eventType]
+    const eventData = chunk[eventType as keyof ConverseStreamOutput]
 
     if (!eventData || typeof eventData !== 'object' || Array.isArray(eventData)) {
-      return events
+      throw new Error(`Invalid event data for ${eventType}: expected object, got ${typeof eventData}`)
     }
 
     switch (eventType) {
       case 'messageStart': {
-        const messageStart = eventData as Record<string, JSONValue>
+        const messageStart = eventData as unknown as JSONValue
+        if (typeof messageStart !== 'object' || messageStart === null || Array.isArray(messageStart)) {
+          throw new Error('Invalid messageStart format')
+        }
         events.push({
           type: 'modelMessageStartEvent',
-          role: ((messageStart.role as string) || 'assistant') as 'user' | 'assistant',
+          role: ((messageStart.role as string) || 'assistant') as Role,
         })
         break
       }
 
       case 'contentBlockStart': {
-        const contentBlockStart = eventData as Record<string, JSONValue>
+        const contentBlockStart = eventData as unknown as JSONValue
+        if (typeof contentBlockStart !== 'object' || contentBlockStart === null || Array.isArray(contentBlockStart)) {
+          throw new Error('Invalid contentBlockStart format')
+        }
         const event: ModelProviderStreamEvent = {
           type: 'modelContentBlockStartEvent',
         }
@@ -480,54 +518,61 @@ export class BedrockModelProvider
       }
 
       case 'contentBlockDelta': {
-        const contentBlockDelta = eventData as Record<string, JSONValue>
-        const delta = contentBlockDelta.delta as Record<string, JSONValue>
-
-        if (delta) {
-          const event: ModelProviderStreamEvent = {
-            type: 'modelContentBlockDeltaEvent',
-            delta: { type: 'textDelta', text: '' },
-          }
-
-          if ('contentBlockIndex' in contentBlockDelta) {
-            event.contentBlockIndex = contentBlockDelta.contentBlockIndex as number
-          }
-
-          // Text delta
-          if ('text' in delta) {
-            event.delta = {
-              type: 'textDelta',
-              text: delta.text as string,
-            }
-          }
-
-          // Tool use input delta
-          if ('toolUse' in delta && delta.toolUse && typeof delta.toolUse === 'object') {
-            const toolUse = delta.toolUse as Record<string, JSONValue>
-            event.delta = {
-              type: 'toolUseInputDelta',
-              input: toolUse.input as string,
-            }
-          }
-
-          // Reasoning delta
-          if ('reasoningContent' in delta && delta.reasoningContent && typeof delta.reasoningContent === 'object') {
-            const reasoning = delta.reasoningContent as Record<string, JSONValue>
-            const reasoningDelta: { type: 'reasoningDelta'; text?: string; signature?: string } = {
-              type: 'reasoningDelta',
-            }
-            if (reasoning.text) reasoningDelta.text = reasoning.text as string
-            if (reasoning.signature) reasoningDelta.signature = reasoning.signature as string
-            event.delta = reasoningDelta
-          }
-
-          events.push(event)
+        const contentBlockDelta = eventData as unknown as JSONValue
+        if (typeof contentBlockDelta !== 'object' || contentBlockDelta === null || Array.isArray(contentBlockDelta)) {
+          throw new Error('Invalid contentBlockDelta format')
         }
+        const delta = contentBlockDelta.delta as JSONValue
+        if (!delta || typeof delta !== 'object' || Array.isArray(delta)) {
+          throw new Error('Invalid delta format')
+        }
+
+        const event: ModelProviderStreamEvent = {
+          type: 'modelContentBlockDeltaEvent',
+          delta: { type: 'textDelta', text: '' },
+        }
+
+        if ('contentBlockIndex' in contentBlockDelta) {
+          event.contentBlockIndex = contentBlockDelta.contentBlockIndex as number
+        }
+
+        // Text delta
+        if ('text' in delta) {
+          event.delta = {
+            type: 'textDelta',
+            text: delta.text as string,
+          }
+        }
+
+        // Tool use input delta
+        if ('toolUse' in delta && delta.toolUse && typeof delta.toolUse === 'object') {
+          const toolUse = delta.toolUse as Record<string, JSONValue>
+          event.delta = {
+            type: 'toolUseInputDelta',
+            input: toolUse.input as string,
+          }
+        }
+
+        // Reasoning delta
+        if ('reasoningContent' in delta && delta.reasoningContent && typeof delta.reasoningContent === 'object') {
+          const reasoning = delta.reasoningContent as Record<string, JSONValue>
+          const reasoningDelta: { type: 'reasoningDelta'; text?: string; signature?: string } = {
+            type: 'reasoningDelta',
+          }
+          if (reasoning.text) reasoningDelta.text = reasoning.text as string
+          if (reasoning.signature) reasoningDelta.signature = reasoning.signature as string
+          event.delta = reasoningDelta
+        }
+
+        events.push(event)
         break
       }
 
       case 'contentBlockStop': {
-        const contentBlockStop = eventData as Record<string, JSONValue>
+        const contentBlockStop = eventData as unknown as JSONValue
+        if (typeof contentBlockStop !== 'object' || contentBlockStop === null || Array.isArray(contentBlockStop)) {
+          throw new Error('Invalid contentBlockStop format')
+        }
         const event: ModelProviderStreamEvent = {
           type: 'modelContentBlockStopEvent',
         }
@@ -541,7 +586,10 @@ export class BedrockModelProvider
       }
 
       case 'messageStop': {
-        const messageStop = eventData as Record<string, JSONValue>
+        const messageStop = eventData as unknown as JSONValue
+        if (typeof messageStop !== 'object' || messageStop === null || Array.isArray(messageStop)) {
+          throw new Error('Invalid messageStop format')
+        }
         const event: ModelProviderStreamEvent = {
           type: 'modelMessageStopEvent',
         }
@@ -577,13 +625,17 @@ export class BedrockModelProvider
       }
 
       case 'metadata': {
-        const metadata = eventData as Record<string, JSONValue>
+        const metadata = eventData as unknown as JSONValue
+        if (typeof metadata !== 'object' || metadata === null || Array.isArray(metadata)) {
+          throw new Error('Invalid metadata format')
+        }
         const event: ModelProviderStreamEvent = {
           type: 'modelMetadataEvent',
         }
 
         if ('usage' in metadata && metadata.usage && typeof metadata.usage === 'object') {
-          const usage = metadata.usage as Record<string, JSONValue>
+          const usage = metadata.usage as unknown as TokenUsage
+
           const usageInfo: {
             inputTokens: number
             outputTokens: number
@@ -591,16 +643,16 @@ export class BedrockModelProvider
             cacheReadInputTokens?: number
             cacheWriteInputTokens?: number
           } = {
-            inputTokens: (usage.inputTokens as number) || 0,
-            outputTokens: (usage.outputTokens as number) || 0,
-            totalTokens: (usage.totalTokens as number) || 0,
+            inputTokens: usage.inputTokens || 0,
+            outputTokens: usage.outputTokens || 0,
+            totalTokens: usage.totalTokens || 0,
           }
 
-          if (usage.cacheReadInputTokens) {
-            usageInfo.cacheReadInputTokens = usage.cacheReadInputTokens as number
+          if (usage.cacheReadInputTokens !== undefined) {
+            usageInfo.cacheReadInputTokens = usage.cacheReadInputTokens
           }
-          if (usage.cacheCreationInputTokens) {
-            usageInfo.cacheWriteInputTokens = usage.cacheCreationInputTokens as number
+          if (usage.cacheWriteInputTokens !== undefined) {
+            usageInfo.cacheWriteInputTokens = usage.cacheWriteInputTokens
           }
 
           event.usage = usageInfo
@@ -620,6 +672,11 @@ export class BedrockModelProvider
         events.push(event)
         break
       }
+
+      default:
+        // Log warning for unsupported event types (for forward compatibility)
+        console.warn(`Unsupported Bedrock event type: ${eventType}`)
+        break
     }
 
     return events

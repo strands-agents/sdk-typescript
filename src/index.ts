@@ -59,4 +59,4 @@ export type { BaseModelConfig, StreamOptions, ModelProvider } from './models/mod
 
 // Bedrock model provider
 export { BedrockModelProvider, DEFAULT_BEDROCK_MODEL_ID } from './models/bedrock'
-export type { BedrockModelConfig } from './models/bedrock'
+export type { BedrockModelConfig, BedrockModelProviderOptions } from './models/bedrock'

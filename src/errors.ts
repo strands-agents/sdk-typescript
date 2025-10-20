@@ -32,6 +32,7 @@ export class ContextWindowOverflowError extends Error {
   constructor(message: string) {
     super(message)
     this.name = 'ContextWindowOverflowError'
+    Object.setPrototypeOf(this, ContextWindowOverflowError.prototype)
 
     // Maintains proper stack trace for where our error was thrown (only available on V8)
     if (Error.captureStackTrace) {
@@ -67,6 +68,7 @@ export class ModelThrottledError extends Error {
   constructor(message: string) {
     super(message)
     this.name = 'ModelThrottledError'
+    Object.setPrototypeOf(this, ModelThrottledError.prototype)
 
     // Maintains proper stack trace for where our error was thrown (only available on V8)
     if (Error.captureStackTrace) {

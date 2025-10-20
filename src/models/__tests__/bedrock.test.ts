@@ -57,29 +57,37 @@ describe('BedrockModelProvider', () => {
 
   describe('constructor', () => {
     it('creates an instance with default model ID', () => {
-      const provider = new BedrockModelProvider({}, {})
+      const provider = new BedrockModelProvider()
       expect(provider.getConfig().modelId).toBe(DEFAULT_BEDROCK_MODEL_ID)
     })
 
     it('uses provided model ID', () => {
       const customModelId = 'us.anthropic.claude-3-5-sonnet-20241022-v2:0'
-      const provider = new BedrockModelProvider({ modelId: customModelId }, {})
+      const provider = new BedrockModelProvider({ modelConfig: { modelId: customModelId } })
       expect(provider.getConfig().modelId).toBe(customModelId)
     })
 
     it('uses provided region in clientConfig', () => {
       const customRegion = 'eu-west-1'
-      new BedrockModelProvider({}, { region: customRegion })
+      new BedrockModelProvider({ clientConfig: { region: customRegion } })
       expect(BedrockRuntimeClient).toHaveBeenCalledWith({
         region: customRegion,
         customUserAgent: 'strands-agents-ts-sdk',
       })
     })
 
+    it('extends custom user agent if provided', () => {
+      const customAgent = 'my-app/1.0'
+      new BedrockModelProvider({ clientConfig: { customUserAgent: customAgent } })
+      expect(BedrockRuntimeClient).toHaveBeenCalledWith({
+        customUserAgent: 'my-app/1.0 strands-agents-ts-sdk',
+      })
+    })
+
     it('passes custom endpoint to client', () => {
       const endpoint = 'https://vpce-abc.bedrock-runtime.us-west-2.vpce.amazonaws.com'
       const region = 'us-west-2'
-      new BedrockModelProvider({}, { endpoint, region })
+      new BedrockModelProvider({ clientConfig: { endpoint, region } })
       expect(BedrockRuntimeClient).toHaveBeenCalledWith({
         region,
         endpoint,
@@ -93,7 +101,7 @@ describe('BedrockModelProvider', () => {
         secretAccessKey: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
       }
       const region = 'us-west-2'
-      new BedrockModelProvider({}, { credentials, region })
+      new BedrockModelProvider({ clientConfig: { credentials, region } })
       expect(BedrockRuntimeClient).toHaveBeenCalledWith({
         region,
         credentials,
@@ -104,7 +112,7 @@ describe('BedrockModelProvider', () => {
 
   describe('updateConfig', () => {
     it('merges new config with existing config', () => {
-      const provider = new BedrockModelProvider({ temperature: 0.5 }, {})
+      const provider = new BedrockModelProvider({ modelConfig: { temperature: 0.5 } })
       provider.updateConfig({ temperature: 0.8, maxTokens: 2048 })
       const config = provider.getConfig()
       expect(config.temperature).toBe(0.8)
@@ -112,7 +120,9 @@ describe('BedrockModelProvider', () => {
     })
 
     it('preserves fields not included in the update', () => {
-      const provider = new BedrockModelProvider({ modelId: 'custom-model', temperature: 0.5, maxTokens: 1024 }, {})
+      const provider = new BedrockModelProvider({
+        modelConfig: { modelId: 'custom-model', temperature: 0.5, maxTokens: 1024 },
+      })
       provider.updateConfig({ temperature: 0.8 })
       const config = provider.getConfig()
       expect(config.modelId).toBe('custom-model')
@@ -128,7 +138,7 @@ describe('BedrockModelProvider', () => {
         maxTokens: 1024,
         temperature: 0.7,
       }
-      const provider = new BedrockModelProvider(modelConfig, {})
+      const provider = new BedrockModelProvider({ modelConfig })
       const config = provider.getConfig()
       expect(config.modelId).toBe('test-model')
       expect(config.maxTokens).toBe(1024)
@@ -138,7 +148,7 @@ describe('BedrockModelProvider', () => {
 
   describe('stream', () => {
     it('yields message start event', async () => {
-      const provider = new BedrockModelProvider({}, {})
+      const provider = new BedrockModelProvider()
       const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
       
       const events = []
@@ -152,7 +162,7 @@ describe('BedrockModelProvider', () => {
     })
 
     it('yields content block delta events', async () => {
-      const provider = new BedrockModelProvider({}, {})
+      const provider = new BedrockModelProvider()
       const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
       
       const events = []
@@ -166,7 +176,7 @@ describe('BedrockModelProvider', () => {
     })
 
     it('yields message stop event with correct stop reason', async () => {
-      const provider = new BedrockModelProvider({}, {})
+      const provider = new BedrockModelProvider()
       const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
       
       const events = []
@@ -180,7 +190,7 @@ describe('BedrockModelProvider', () => {
     })
 
     it('yields metadata event with usage', async () => {
-      const provider = new BedrockModelProvider({}, {})
+      const provider = new BedrockModelProvider()
       const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
       
       const events = []
@@ -195,7 +205,7 @@ describe('BedrockModelProvider', () => {
     })
 
     it('formats tool use messages', async () => {
-      const provider = new BedrockModelProvider({}, {})
+      const provider = new BedrockModelProvider()
       const messages: Message[] = [
         {
           role: 'assistant',
@@ -220,7 +230,7 @@ describe('BedrockModelProvider', () => {
     })
 
     it('formats tool result messages', async () => {
-      const provider = new BedrockModelProvider({}, {})
+      const provider = new BedrockModelProvider()
       const messages: Message[] = [
         {
           role: 'user',
@@ -249,7 +259,7 @@ describe('BedrockModelProvider', () => {
       const mockSendError = vi.fn().mockRejectedValue(new Error('Input is too long for requested model'))
       vi.mocked(BedrockRuntimeClient).mockImplementation(() => ({ send: mockSendError }) as never)
       
-      const provider = new BedrockModelProvider({}, {})
+      const provider = new BedrockModelProvider()
       const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
       
       await expect(async () => {
@@ -267,7 +277,7 @@ describe('BedrockModelProvider', () => {
       const mockSendError = vi.fn().mockRejectedValue(error)
       vi.mocked(BedrockRuntimeClient).mockImplementation(() => ({ send: mockSendError }) as never)
       
-      const provider = new BedrockModelProvider({}, {})
+      const provider = new BedrockModelProvider()
       const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
       
       await expect(async () => {
