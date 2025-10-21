@@ -1,7 +1,29 @@
 import { describe, it, expect } from 'vitest'
 import { FunctionTool } from './function-tool'
-import type { ToolContext, ToolExecutionEvent } from '@/tools/tool'
+import type { ToolContext, ToolStreamEvent } from '@/tools/tool'
 import type { ToolResult } from '@/tools/types'
+
+/**
+ * Helper function to consume an async generator and collect all events including the return value.
+ * For await loops only capture yielded values, not the return value.
+ */
+async function collectGeneratorEvents(generator: AsyncGenerator<ToolStreamEvent, ToolResult, unknown>): Promise<{
+  streamEvents: ToolStreamEvent[]
+  result: ToolResult
+}> {
+  const streamEvents: ToolStreamEvent[] = []
+  let result = await generator.next()
+
+  while (!result.done) {
+    streamEvents.push(result.value)
+    result = await generator.next()
+  }
+
+  return {
+    streamEvents,
+    result: result.value,
+  }
+}
 
 describe('FunctionTool', () => {
   describe('properties', () => {
@@ -91,13 +113,9 @@ describe('FunctionTool', () => {
         }
         const context: ToolContext = { invocationState: {} }
 
-        const events: ToolExecutionEvent[] = []
-        for await (const event of tool.stream(toolUse, context)) {
-          events.push(event)
-        }
+        const { streamEvents, result } = await collectGeneratorEvents(tool.stream(toolUse, context))
 
-        expect(events.length).toBe(1)
-        const result = events[0] as ToolResult
+        expect(streamEvents.length).toBe(0) // No stream events for sync callback
         expect(result.toolUseId).toBe('test-sync-1')
         expect(result.status).toBe('success')
         expect(result.content.length).toBeGreaterThan(0)
@@ -118,13 +136,9 @@ describe('FunctionTool', () => {
         }
         const context: ToolContext = { invocationState: {} }
 
-        const events: ToolExecutionEvent[] = []
-        for await (const event of tool.stream(toolUse, context)) {
-          events.push(event)
-        }
+        const { streamEvents, result } = await collectGeneratorEvents(tool.stream(toolUse, context))
 
-        expect(events.length).toBe(1)
-        const result = events[0] as ToolResult
+        expect(streamEvents.length).toBe(0)
         expect(result.status).toBe('success')
         expect(result.content[0]).toHaveProperty('type', 'toolResultTextContent')
       })
@@ -144,13 +158,9 @@ describe('FunctionTool', () => {
         }
         const context: ToolContext = { invocationState: {} }
 
-        const events: ToolExecutionEvent[] = []
-        for await (const event of tool.stream(toolUse, context)) {
-          events.push(event)
-        }
+        const { streamEvents, result } = await collectGeneratorEvents(tool.stream(toolUse, context))
 
-        expect(events.length).toBe(1)
-        const result = events[0] as ToolResult
+        expect(streamEvents.length).toBe(0)
         expect(result.status).toBe('success')
       })
 
@@ -169,13 +179,9 @@ describe('FunctionTool', () => {
         }
         const context: ToolContext = { invocationState: {} }
 
-        const events: ToolExecutionEvent[] = []
-        for await (const event of tool.stream(toolUse, context)) {
-          events.push(event)
-        }
+        const { streamEvents, result } = await collectGeneratorEvents(tool.stream(toolUse, context))
 
-        expect(events.length).toBe(1)
-        const result = events[0] as ToolResult
+        expect(streamEvents.length).toBe(0)
         expect(result.status).toBe('success')
       })
     })
@@ -199,13 +205,9 @@ describe('FunctionTool', () => {
         }
         const context: ToolContext = { invocationState: {} }
 
-        const events: ToolExecutionEvent[] = []
-        for await (const event of tool.stream(toolUse, context)) {
-          events.push(event)
-        }
+        const { streamEvents, result } = await collectGeneratorEvents(tool.stream(toolUse, context))
 
-        expect(events.length).toBe(1)
-        const result = events[0] as ToolResult
+        expect(streamEvents.length).toBe(0)
         expect(result.toolUseId).toBe('test-promise-1')
         expect(result.status).toBe('success')
       })
@@ -227,13 +229,9 @@ describe('FunctionTool', () => {
         }
         const context: ToolContext = { invocationState: { userId: 'user-123' } }
 
-        const events: ToolExecutionEvent[] = []
-        for await (const event of tool.stream(toolUse, context)) {
-          events.push(event)
-        }
+        const { streamEvents, result } = await collectGeneratorEvents(tool.stream(toolUse, context))
 
-        expect(events.length).toBe(1)
-        const result = events[0] as ToolResult
+        expect(streamEvents.length).toBe(0)
         expect(result.status).toBe('success')
       })
     })
@@ -259,28 +257,21 @@ describe('FunctionTool', () => {
         }
         const context: ToolContext = { invocationState: {} }
 
-        const events: ToolExecutionEvent[] = []
-        for await (const event of tool.stream(toolUse, context)) {
-          events.push(event)
+        const { streamEvents, result } = await collectGeneratorEvents(tool.stream(toolUse, context))
+
+        // Should have 3 stream events
+        expect(streamEvents.length).toBe(3)
+
+        // Check that all intermediate events are ToolStreamEvents
+        for (const event of streamEvents) {
+          expect(event.type).toBe('toolStreamEvent')
+          expect(event).toHaveProperty('data')
         }
 
-        // Should have multiple events: 3 stream events + 1 result
-        expect(events.length).toBeGreaterThan(1)
-
-        // Check that intermediate events are ToolStreamEvents
-        for (let i = 0; i < events.length - 1; i++) {
-          const event = events[i]
-          if (event && 'type' in event && event.type === 'toolStreamEvent') {
-            expect(event.type).toBe('toolStreamEvent')
-            expect(event).toHaveProperty('data')
-          }
-        }
-
-        // Final event should be ToolResult
-        const finalEvent = events[events.length - 1] as ToolResult
-        expect(finalEvent).toHaveProperty('toolUseId', 'test-gen-1')
-        expect(finalEvent).toHaveProperty('status', 'success')
-        expect(finalEvent).toHaveProperty('content')
+        // Final result should be ToolResult
+        expect(result).toHaveProperty('toolUseId', 'test-gen-1')
+        expect(result).toHaveProperty('status', 'success')
+        expect(result).toHaveProperty('content')
       })
 
       it('can yield objects as ToolStreamEvents', async () => {
@@ -303,20 +294,18 @@ describe('FunctionTool', () => {
         }
         const context: ToolContext = { invocationState: {} }
 
-        const events: ToolExecutionEvent[] = []
-        for await (const event of tool.stream(toolUse, context)) {
-          events.push(event)
-        }
+        const { streamEvents, result } = await collectGeneratorEvents(tool.stream(toolUse, context))
 
-        expect(events.length).toBeGreaterThan(1)
+        expect(streamEvents.length).toBe(3)
 
-        // Verify intermediate events have data
-        const streamEvents = events.slice(0, -1)
+        // Verify all stream events have data
         for (const event of streamEvents) {
-          if ('type' in event && event.type === 'toolStreamEvent') {
-            expect(event.data).toBeDefined()
-          }
+          expect(event.type).toBe('toolStreamEvent')
+          expect(event.data).toBeDefined()
         }
+
+        // Verify final result
+        expect(result.status).toBe('success')
       })
     })
 
@@ -338,13 +327,9 @@ describe('FunctionTool', () => {
         }
         const context: ToolContext = { invocationState: {} }
 
-        const events: ToolExecutionEvent[] = []
-        for await (const event of tool.stream(toolUse, context)) {
-          events.push(event)
-        }
+        const { streamEvents, result } = await collectGeneratorEvents(tool.stream(toolUse, context))
 
-        expect(events.length).toBe(1)
-        const result = events[0] as ToolResult
+        expect(streamEvents.length).toBe(0)
         expect(result.toolUseId).toBe('test-error-1')
         expect(result.status).toBe('error')
         expect(result.content.length).toBeGreaterThan(0)
@@ -368,13 +353,9 @@ describe('FunctionTool', () => {
         }
         const context: ToolContext = { invocationState: {} }
 
-        const events: ToolExecutionEvent[] = []
-        for await (const event of tool.stream(toolUse, context)) {
-          events.push(event)
-        }
+        const { streamEvents, result } = await collectGeneratorEvents(tool.stream(toolUse, context))
 
-        expect(events.length).toBe(1)
-        const result = events[0] as ToolResult
+        expect(streamEvents.length).toBe(0)
         expect(result.status).toBe('error')
       })
 
@@ -396,17 +377,14 @@ describe('FunctionTool', () => {
         }
         const context: ToolContext = { invocationState: {} }
 
-        const events: ToolExecutionEvent[] = []
-        for await (const event of tool.stream(toolUse, context)) {
-          events.push(event)
-        }
+        const { streamEvents, result } = await collectGeneratorEvents(tool.stream(toolUse, context))
 
-        // Should have at least one event (could have stream event before error)
-        expect(events.length).toBeGreaterThan(0)
+        // Should have one stream event before the error
+        expect(streamEvents.length).toBe(1)
+        expect(streamEvents[0]?.type).toBe('toolStreamEvent')
 
-        // Final event should be error result
-        const finalEvent = events[events.length - 1] as ToolResult
-        expect(finalEvent.status).toBe('error')
+        // Final result should be error
+        expect(result.status).toBe('error')
       })
 
       it('handles non-Error thrown values', async () => {
@@ -426,13 +404,9 @@ describe('FunctionTool', () => {
         }
         const context: ToolContext = { invocationState: {} }
 
-        const events: ToolExecutionEvent[] = []
-        for await (const event of tool.stream(toolUse, context)) {
-          events.push(event)
-        }
+        const { streamEvents, result } = await collectGeneratorEvents(tool.stream(toolUse, context))
 
-        expect(events.length).toBe(1)
-        const result = events[0] as ToolResult
+        expect(streamEvents.length).toBe(0)
         expect(result.status).toBe('error')
       })
     })
@@ -477,12 +451,10 @@ describe('Tool interface backwards compatibility', () => {
     expect(stream).toBeDefined()
     expect(Symbol.asyncIterator in stream).toBe(true)
 
-    // Consume the stream
-    const events: ToolExecutionEvent[] = []
-    for await (const event of stream) {
-      events.push(event)
-    }
+    // Consume the stream with helper
+    const { result } = await collectGeneratorEvents(stream)
 
-    expect(events.length).toBeGreaterThan(0)
+    expect(result).toBeDefined()
+    expect(result.status).toBe('success')
   })
 })

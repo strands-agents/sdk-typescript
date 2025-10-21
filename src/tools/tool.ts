@@ -106,13 +106,13 @@ export type ToolExecutionEvent = ToolStreamEvent | ToolResult
  *     }
  *   }
  *
- *   async *stream(toolUse: ToolUse, toolContext: ToolContext): AsyncIterable<ToolExecutionEvent> {
+ *   async *stream(toolUse: ToolUse, toolContext: ToolContext): AsyncGenerator<ToolStreamEvent, ToolResult, unknown> {
  *     yield { type: 'toolStreamEvent', data: 'Calculating...' }
  *
  *     const { operation, a, b } = toolUse.input
  *     const result = operation === 'add' ? a + b : a - b
  *
- *     yield {
+ *     return {
  *       toolUseId: toolUse.toolUseId,
  *       status: 'success',
  *       content: [{ type: 'toolResultTextContent', text: `Result: ${result}` }]
@@ -144,12 +144,12 @@ export interface Tool {
 
   /**
    * Executes the tool with streaming support.
-   * Yields zero or more ToolStreamEvents during execution, then yields
-   * exactly one ToolResult as the final event.
+   * Yields zero or more ToolStreamEvents during execution, then returns
+   * exactly one ToolResult as the final value.
    *
    * @param toolUse - The tool use request from the model containing the tool name, ID, and input
    * @param toolContext - Context information including invocation state
-   * @returns Async iterable of tool execution events
+   * @returns Async generator that yields ToolStreamEvents and returns a ToolResult
    *
    * @example
    * ```typescript
@@ -161,14 +161,20 @@ export interface Tool {
    *
    * const context = { invocationState: {} }
    *
-   * for await (const event of tool.stream(toolUse, context)) {
-   *   if (event.type === 'toolStreamEvent') {
-   *     console.log('Progress:', event.data)
-   *   } else {
-   *     console.log('Result:', event.status)
-   *   }
+   * // The return value is only accessible via explicit .next() calls
+   * const generator = tool.stream(toolUse, context)
+   * for await (const event of generator) {
+   *   // Only yields are captured here
+   *   console.log('Progress:', event.data)
    * }
+   * // Or manually handle the return value:
+   * let result = await generator.next()
+   * while (!result.done) {
+   *   console.log('Progress:', result.value.data)
+   *   result = await generator.next()
+   * }
+   * console.log('Final result:', result.value.status)
    * ```
    */
-  stream(toolUse: ToolUse, toolContext: ToolContext): AsyncIterable<ToolExecutionEvent>
+  stream(toolUse: ToolUse, toolContext: ToolContext): AsyncGenerator<ToolStreamEvent, ToolResult, unknown>
 }

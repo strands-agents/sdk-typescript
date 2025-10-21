@@ -216,6 +216,41 @@ export function getData(): any {
 - Use TypeScript strict mode features
 - Leverage type inference where appropriate
 
+### Class Field Naming Conventions
+
+**Private fields**: Use underscore prefix for private class fields to improve readability and distinguish them from public members.
+
+```typescript
+// ✅ Good: Private fields with underscore prefix
+export class Example {
+  private readonly _config: Config
+  private _state: State
+
+  constructor(config: Config) {
+    this._config = config
+    this._state = { initialized: false }
+  }
+
+  public getConfig(): Config {
+    return this._config
+  }
+}
+
+// ❌ Bad: No underscore for private fields
+export class Example {
+  private readonly config: Config  // Missing underscore
+
+  constructor(config: Config) {
+    this.config = config
+  }
+}
+```
+
+**Rules**:
+- Private fields MUST use underscore prefix (e.g., `_field`)
+- Public fields MUST NOT use underscore prefix
+- This convention improves code readability and makes the distinction between public and private members immediately visible
+
 ### Documentation Requirements
 
 **TSDoc format** (required for all exported functions):

@@ -1,4 +1,4 @@
-import type { Tool, ToolContext, ToolExecutionEvent } from '@/tools/tool'
+import type { Tool, ToolContext, ToolStreamEvent } from '@/tools/tool'
 import type { ToolSpec, ToolUse, ToolResult } from '@/tools/types'
 import type { JSONSchema } from '@/types/json'
 
@@ -122,7 +122,7 @@ export class FunctionTool implements Tool {
   /**
    * The callback function that implements the tool's logic.
    */
-  private readonly callback: FunctionToolCallback
+  private readonly _callback: FunctionToolCallback
 
   /**
    * Creates a new FunctionTool instance.
@@ -151,7 +151,7 @@ export class FunctionTool implements Tool {
       description: config.description,
       inputSchema: config.inputSchema,
     }
-    this.callback = config.callback
+    this._callback = config.callback
   }
 
   /**
@@ -160,11 +160,11 @@ export class FunctionTool implements Tool {
    *
    * @param toolUse - The tool use request containing the tool name, ID, and input
    * @param toolContext - Context information including invocation state
-   * @returns Async iterable of tool execution events
+   * @returns Async generator that yields ToolStreamEvents and returns a ToolResult
    */
-  async *stream(toolUse: ToolUse, toolContext: ToolContext): AsyncIterable<ToolExecutionEvent> {
+  async *stream(toolUse: ToolUse, toolContext: ToolContext): AsyncGenerator<ToolStreamEvent, ToolResult, unknown> {
     try {
-      const result = this.callback(toolUse.input, toolContext)
+      const result = this._callback(toolUse.input, toolContext)
 
       // Check if result is an async generator
       if (result && typeof result === 'object' && Symbol.asyncIterator in result) {
@@ -184,18 +184,18 @@ export class FunctionTool implements Tool {
         }
 
         // The generator's return value (when done = true) is wrapped in ToolResult
-        yield this.wrapInToolResult(iterResult.value, toolUse.toolUseId)
+        return this.wrapInToolResult(iterResult.value, toolUse.toolUseId)
       } else if (result instanceof Promise) {
         // Handle promise: await and wrap in ToolResult
         const value = await result
-        yield this.wrapInToolResult(value, toolUse.toolUseId)
+        return this.wrapInToolResult(value, toolUse.toolUseId)
       } else {
         // Handle synchronous value: wrap in ToolResult
-        yield this.wrapInToolResult(result, toolUse.toolUseId)
+        return this.wrapInToolResult(result, toolUse.toolUseId)
       }
     } catch (error) {
       // Handle any errors and yield as error ToolResult
-      yield this.createErrorResult(error, toolUse.toolUseId)
+      return this.createErrorResult(error, toolUse.toolUseId)
     }
   }
 
