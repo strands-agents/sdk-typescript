@@ -35,7 +35,7 @@ export interface BaseModelConfig {
 }
 
 /**
- * Options for configuring a streaming model invocation.
+ * Options interface for configuring streaming model invocation.
  */
 export interface StreamOptions {
   /**
@@ -52,6 +52,31 @@ export interface StreamOptions {
    * Controls how the model selects tools to use.
    */
   toolChoice?: ToolChoice
+}
+
+/**
+ * Constructor interface for model providers.
+ * Defines the expected constructor signature for ModelProvider implementations.
+ *
+ * @typeParam T - Model configuration type extending BaseModelConfig
+ * @typeParam C - Initialization options type
+ *
+ * @example
+ * ```typescript
+ * interface MyProviderOptions {
+ *   modelConfig?: MyProviderConfig
+ *   clientConfig?: MyClientConfig
+ * }
+ *
+ * class MyProvider implements ModelProvider<MyProviderConfig, MyProviderOptions> {
+ *   constructor(options?: MyProviderOptions) {
+ *     // Initialize with options
+ *   }
+ * }
+ * ```
+ */
+export interface ModelProviderConstructor<T extends BaseModelConfig, C = unknown> {
+  new (initOptions?: C): ModelProvider<T, C>
 }
 
 /**

@@ -21,7 +21,7 @@ import {
 } from '@aws-sdk/client-bedrock-runtime'
 import type { BaseModelConfig, ModelProvider, StreamOptions } from '@/models/model'
 import type { Message, ContentBlock, Role } from '@/types/messages'
-import type { ModelProviderStreamEvent } from '@/models/streaming'
+import type { ModelProviderStreamEvent, Usage } from '@/models/streaming'
 import type { JSONValue } from '@/types/json'
 import { ContextWindowOverflowError, ModelThrottledError } from '@/errors'
 
@@ -636,13 +636,7 @@ export class BedrockModelProvider
         if ('usage' in metadata && metadata.usage && typeof metadata.usage === 'object') {
           const usage = metadata.usage as unknown as TokenUsage
 
-          const usageInfo: {
-            inputTokens: number
-            outputTokens: number
-            totalTokens: number
-            cacheReadInputTokens?: number
-            cacheWriteInputTokens?: number
-          } = {
+          const usageInfo: Usage = {
             inputTokens: usage.inputTokens || 0,
             outputTokens: usage.outputTokens || 0,
             totalTokens: usage.totalTokens || 0,
