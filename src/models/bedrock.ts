@@ -31,6 +31,7 @@ import type { Message, ContentBlock } from '../types/messages'
 import type { ModelProviderStreamEvent, ReasoningDelta, Usage } from '../models/streaming'
 import type { JSONValue } from '../types/json'
 import { ContextWindowOverflowError } from '../errors'
+import { ensureDefined } from '../types/validation'
 
 /**
  * Default Bedrock model ID.
@@ -483,12 +484,14 @@ export class BedrockModelProvider implements ModelProvider<BedrockModelConfig, B
               },
             },
           }
-        } else {
+        } else if (block.redactedContent) {
           return {
             reasoningContent: {
-              redactedContent: block.redactedContent!,
+              redactedContent: block.redactedContent,
             },
           }
+        } else {
+          throw Error("reasoning content format incorrect. Either 'text' or 'redactedContent' must be set.")
         }
       }
     }
@@ -504,7 +507,7 @@ export class BedrockModelProvider implements ModelProvider<BedrockModelConfig, B
     const events: ModelProviderStreamEvent[] = []
 
     // Extract the event type key
-    const eventType = Object.keys(chunk)[0]! as keyof ConverseStreamOutput
+    const eventType = ensureDefined(Object.keys(chunk)[0], 'eventType') as keyof ConverseStreamOutput
     const eventData = chunk[eventType as keyof ConverseStreamOutput]
 
     switch (eventType) {
@@ -512,7 +515,7 @@ export class BedrockModelProvider implements ModelProvider<BedrockModelConfig, B
         const data = eventData as BedrockMessageStartEvent
         events.push({
           type: 'modelMessageStartEvent',
-          role: data.role!,
+          role: ensureDefined(data.role, 'messageStart.role'),
         })
         break
       }
@@ -532,8 +535,8 @@ export class BedrockModelProvider implements ModelProvider<BedrockModelConfig, B
           const toolUse = data.start.toolUse
           event.start = {
             type: 'toolUseStart',
-            name: toolUse.name!,
-            toolUseId: toolUse.toolUseId!,
+            name: ensureDefined(toolUse.name, 'toolUse.name'),
+            toolUseId: ensureDefined(toolUse.toolUseId, 'toolUse.toolUseId'),
           }
         }
 
@@ -543,7 +546,7 @@ export class BedrockModelProvider implements ModelProvider<BedrockModelConfig, B
 
       case 'contentBlockDelta': {
         const data = eventData as BedrockContentBlockDeltaEvent
-        const delta = data.delta!
+        const delta = ensureDefined(data.delta, 'contentBlockDelta.delta')
         let event: ModelProviderStreamEvent | undefined = {
           type: 'modelContentBlockDeltaEvent',
           delta: { type: 'textDelta', text: '' },
@@ -553,25 +556,26 @@ export class BedrockModelProvider implements ModelProvider<BedrockModelConfig, B
           event.contentBlockIndex = data.contentBlockIndex
         }
 
-        const deltaKey = Object.keys(delta)[0]! as keyof ContentBlockDelta
+        const deltaKey = ensureDefined(Object.keys(delta)[0], 'delta key') as keyof ContentBlockDelta
 
         switch (deltaKey) {
           case 'text': {
             event.delta = {
               type: 'textDelta',
-              text: delta.text!,
+              text: ensureDefined(delta.text, 'delta.text'),
             }
             break
           }
           case 'toolUse': {
+            const toolUse = ensureDefined(delta.toolUse, 'delta.toolUse')
             event.delta = {
               type: 'toolUseInputDelta',
-              input: delta.toolUse!.input!,
+              input: ensureDefined(toolUse.input, 'toolUse.input'),
             }
             break
           }
           case 'reasoningContent': {
-            const reasoning = delta.reasoningContent!
+            const reasoning = ensureDefined(delta.reasoningContent, 'delta.reasoningContent')
 
             const reasoningDelta: ReasoningDelta = {
               type: 'reasoningDelta',
@@ -619,7 +623,7 @@ export class BedrockModelProvider implements ModelProvider<BedrockModelConfig, B
           type: 'modelMessageStopEvent',
         }
 
-        const stopReason = data.stopReason! as string
+        const stopReason = ensureDefined(data.stopReason, 'messageStop.stopReason') as string
         let mappedStopReason: string
         if (stopReason in STOP_REASON_MAP) {
           mappedStopReason = STOP_REASON_MAP[stopReason as keyof typeof STOP_REASON_MAP]
@@ -649,9 +653,9 @@ export class BedrockModelProvider implements ModelProvider<BedrockModelConfig, B
           const usage = data.usage
 
           const usageInfo: Usage = {
-            inputTokens: usage.inputTokens!,
-            outputTokens: usage.outputTokens!,
-            totalTokens: usage.totalTokens!,
+            inputTokens: ensureDefined(usage.inputTokens, 'usage.inputTokens'),
+            outputTokens: ensureDefined(usage.outputTokens, 'usage.outputTokens'),
+            totalTokens: ensureDefined(usage.totalTokens, 'usage.totalTokens'),
           }
 
           if (usage.cacheReadInputTokens !== undefined) {
@@ -666,7 +670,7 @@ export class BedrockModelProvider implements ModelProvider<BedrockModelConfig, B
 
         if (data.metrics) {
           event.metrics = {
-            latencyMs: data.metrics.latencyMs!,
+            latencyMs: ensureDefined(data.metrics.latencyMs, 'metrics.latencyMs'),
           }
         }
 

@@ -13,6 +13,7 @@ export default defineConfig({
         test: {
           include: ['tests_integ/**'],
           name: { label: 'integ', color: 'magenta' },
+          testTimeout: 30000
         }
       }
     ],

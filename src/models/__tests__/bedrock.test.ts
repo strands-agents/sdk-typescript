@@ -739,5 +739,76 @@ describe('BedrockModelProvider', () => {
         }
       }).rejects.toThrow()
     })
+
+    it('throws error when required fields are undefined', async () => {
+      vi.clearAllMocks()
+      const mockSend = vi.fn(
+        async (): Promise<{ stream: AsyncIterable<unknown> }> => ({
+          stream: (async function* (): AsyncGenerator<unknown> {
+            yield { messageStart: { role: undefined } }
+          })(),
+        })
+      )
+      vi.mocked(BedrockRuntimeClient).mockImplementation(() => ({ send: mockSend }) as never)
+
+      const provider = new BedrockModelProvider()
+      const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+
+      await expect(async () => {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        for await (const _event of provider.stream(messages)) {
+          // Should throw before finishing
+        }
+      }).rejects.toThrow('Expected messageStart.role to be defined')
+    })
+
+    it('throws error when delta is undefined', async () => {
+      vi.clearAllMocks()
+      const mockSend = vi.fn(
+        async (): Promise<{ stream: AsyncIterable<unknown> }> => ({
+          stream: (async function* (): AsyncGenerator<unknown> {
+            yield { messageStart: { role: 'assistant' } }
+            yield { contentBlockDelta: { delta: undefined, contentBlockIndex: 0 } }
+          })(),
+        })
+      )
+      vi.mocked(BedrockRuntimeClient).mockImplementation(() => ({ send: mockSend }) as never)
+
+      const provider = new BedrockModelProvider()
+      const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+
+      await expect(async () => {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        for await (const _event of provider.stream(messages)) {
+          // Should throw before finishing
+        }
+      }).rejects.toThrow('Expected contentBlockDelta.delta to be defined')
+    })
+
+    it('throws error for invalid reasoning content format', async () => {
+      const provider = new BedrockModelProvider()
+      const messages: Message[] = [
+        {
+          role: 'user',
+          content: [{ type: 'textBlock', text: 'Hello' }],
+        },
+        {
+          role: 'assistant',
+          content: [
+            {
+              type: 'reasoningBlock',
+              // Neither text nor redactedContent is set
+            } as never,
+          ],
+        },
+      ]
+
+      await expect(async () => {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        for await (const _event of provider.stream(messages)) {
+          // Should throw before finishing
+        }
+      }).rejects.toThrow("reasoning content format incorrect. Either 'text' or 'redactedContent' must be set.")
+    })
   })
 })

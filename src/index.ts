@@ -23,6 +23,9 @@ export type {
   Message,
 } from './types/messages'
 
+// Utility functions
+export { ensureDefined } from './types/validation'
+
 // Tool types
 export type {
   ToolSpec,
