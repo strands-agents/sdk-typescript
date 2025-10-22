@@ -35,8 +35,8 @@ export type {
 // Tool interface and related types
 export type { Tool, ToolContext, ToolExecutionEvent, ToolStreamEvent } from './tools/tool'
 
-// FunctionTool implementation for testing
-export { FunctionTool } from './tools/__tests__/function-tool'
+// FunctionTool implementation
+export { FunctionTool } from './tools/function-tool'
 
 // Streaming event types
 export type {

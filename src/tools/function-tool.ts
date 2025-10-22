@@ -1,5 +1,5 @@
-import type { Tool, ToolContext, ToolStreamEvent } from '@/tools/tool'
-import type { ToolSpec, ToolUse, ToolResult } from '@/tools/types'
+import type { Tool, ToolContext, ToolStreamEvent } from './tool'
+import type { ToolSpec, ToolResult } from './types'
 import type { JSONSchema } from '@/types/json'
 
 /**
@@ -69,25 +69,6 @@ export interface FunctionToolConfig {
  *
  * @example
  * ```typescript
- * // Create a simple calculator tool
- * const calculator = new FunctionTool({
- *   name: 'calculator',
- *   description: 'Performs arithmetic operations',
- *   inputSchema: {
- *     type: 'object',
- *     properties: {
- *       operation: { type: 'string', enum: ['add', 'subtract'] },
- *       a: { type: 'number' },
- *       b: { type: 'number' }
- *     },
- *     required: ['operation', 'a', 'b']
- *   },
- *   callback: (input: any) => {
- *     const { operation, a, b } = input
- *     return operation === 'add' ? a + b : a - b
- *   }
- * })
- *
  * // Create a tool with streaming
  * const streamingTool = new FunctionTool({
  *   name: 'processor',
@@ -158,11 +139,12 @@ export class FunctionTool implements Tool {
    * Executes the tool with streaming support.
    * Handles all callback patterns (async generator, promise, sync) and converts results to ToolResult.
    *
-   * @param toolUse - The tool use request containing the tool name, ID, and input
-   * @param toolContext - Context information including invocation state
+   * @param toolContext - Context information including the tool use request and invocation state
    * @returns Async generator that yields ToolStreamEvents and returns a ToolResult
    */
-  async *stream(toolUse: ToolUse, toolContext: ToolContext): AsyncGenerator<ToolStreamEvent, ToolResult, unknown> {
+  async *stream(toolContext: ToolContext): AsyncGenerator<ToolStreamEvent, ToolResult, unknown> {
+    const { toolUse } = toolContext
+
     try {
       const result = this._callback(toolUse.input, toolContext)
 

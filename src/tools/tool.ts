@@ -23,6 +23,12 @@ import type { ToolSpec, ToolUse, ToolResult } from '@/tools/types'
  */
 export interface ToolContext<T extends Record<string, unknown> = Record<string, unknown>> {
   /**
+   * The tool use request that triggered this tool execution.
+   * Contains the tool name, toolUseId, and input parameters.
+   */
+  toolUse: ToolUse
+
+  /**
    * Caller-provided state from agent invocation.
    * This allows passing context from the agent level down to tool execution.
    */
@@ -106,14 +112,14 @@ export type ToolExecutionEvent = ToolStreamEvent | ToolResult
  *     }
  *   }
  *
- *   async *stream(toolUse: ToolUse, toolContext: ToolContext): AsyncGenerator<ToolStreamEvent, ToolResult, unknown> {
+ *   async *stream(toolContext: ToolContext): AsyncGenerator<ToolStreamEvent, ToolResult, unknown> {
  *     yield { type: 'toolStreamEvent', data: 'Calculating...' }
  *
- *     const { operation, a, b } = toolUse.input
+ *     const { operation, a, b } = toolContext.toolUse.input
  *     const result = operation === 'add' ? a + b : a - b
  *
  *     return {
- *       toolUseId: toolUse.toolUseId,
+ *       toolUseId: toolContext.toolUse.toolUseId,
  *       status: 'success',
  *       content: [{ type: 'toolResultTextContent', text: `Result: ${result}` }]
  *     }
@@ -147,22 +153,22 @@ export interface Tool {
    * Yields zero or more ToolStreamEvents during execution, then returns
    * exactly one ToolResult as the final value.
    *
-   * @param toolUse - The tool use request from the model containing the tool name, ID, and input
-   * @param toolContext - Context information including invocation state
+   * @param toolContext - Context information including the tool use request and invocation state
    * @returns Async generator that yields ToolStreamEvents and returns a ToolResult
    *
    * @example
    * ```typescript
-   * const toolUse = {
-   *   name: 'calculator',
-   *   toolUseId: 'calc-123',
-   *   input: { operation: 'add', a: 5, b: 3 }
+   * const context = {
+   *   toolUse: {
+   *     name: 'calculator',
+   *     toolUseId: 'calc-123',
+   *     input: { operation: 'add', a: 5, b: 3 }
+   *   },
+   *   invocationState: {}
    * }
    *
-   * const context = { invocationState: {} }
-   *
    * // The return value is only accessible via explicit .next() calls
-   * const generator = tool.stream(toolUse, context)
+   * const generator = tool.stream(context)
    * for await (const event of generator) {
    *   // Only yields are captured here
    *   console.log('Progress:', event.data)
@@ -176,5 +182,5 @@ export interface Tool {
    * console.log('Final result:', result.value.status)
    * ```
    */
-  stream(toolUse: ToolUse, toolContext: ToolContext): AsyncGenerator<ToolStreamEvent, ToolResult, unknown>
+  stream(toolContext: ToolContext): AsyncGenerator<ToolStreamEvent, ToolResult, unknown>
 }
