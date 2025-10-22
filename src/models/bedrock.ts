@@ -18,8 +18,9 @@ import {
   type ContentBlock as BedrockContentBlock,
   type InferenceConfiguration,
   type TokenUsage,
+  type Tool,
 } from '@aws-sdk/client-bedrock-runtime'
-import type { BaseModelConfig, ModelProvider, StreamOptions } from '@/models/model'
+import { ModelProvider, type BaseModelConfig, type StreamOptions } from '@/models/model'
 import type { Message, ContentBlock, Role } from '@/types/messages'
 import type { ModelProviderStreamEvent, Usage } from '@/models/streaming'
 import type { JSONValue } from '@/types/json'
@@ -152,9 +153,10 @@ export interface BedrockModelProviderOptions {
  * }
  * ```
  */
-export class BedrockModelProvider
-  implements ModelProvider<BedrockModelConfig, BedrockRuntimeClientConfig>
-{
+export class BedrockModelProvider extends ModelProvider<
+  BedrockModelConfig,
+  BedrockRuntimeClientConfig
+> {
   private config: BedrockModelConfig
   private client: BedrockRuntimeClient
 
@@ -188,6 +190,7 @@ export class BedrockModelProvider
    * ```
    */
   constructor(options?: BedrockModelProviderOptions) {
+    super()
     const modelConfig = options?.modelConfig || {}
     const clientConfig = options?.clientConfig || {}
 
@@ -292,8 +295,20 @@ export class BedrockModelProvider
         }
       }
     } catch (error) {
-      // Detect and throw specific error types
-      this.handleError(error as Error)
+      const err = error as Error
+
+      // Check for throttling (check this first as it's most specific)
+      if (err instanceof ThrottlingException) {
+        throw new ModelThrottledError(err.message)
+      }
+
+      // Check for context window overflow
+      if (BEDROCK_CONTEXT_WINDOW_OVERFLOW_MESSAGES.some((msg) => err.message.includes(msg))) {
+        throw new ContextWindowOverflowError(err.message)
+      }
+
+      // Re-throw other errors as-is
+      throw err
     }
   }
 
@@ -327,16 +342,21 @@ export class BedrockModelProvider
 
     // Add tool configuration
     if (options?.toolSpecs && options.toolSpecs.length > 0) {
-      const tools = options.toolSpecs.map((spec) => ({
-        toolSpec: {
-          name: spec.name,
-          description: spec.description,
-          inputSchema: { json: spec.inputSchema },
-        },
-      }))
+      const tools: Tool[] = options.toolSpecs.map(
+        (spec) =>
+          ({
+            toolSpec: {
+              name: spec.name,
+              description: spec.description,
+              inputSchema: { json: spec.inputSchema },
+            },
+          }) as Tool
+      )
 
       if (this.config.cacheTools) {
-        tools.push({ cachePoint: { type: this.config.cacheTools as 'default' } } as never)
+        tools.push({
+          cachePoint: { type: this.config.cacheTools as 'default' },
+        } as Tool)
       }
 
       const toolConfig = {
@@ -347,7 +367,7 @@ export class BedrockModelProvider
         Object.assign(toolConfig, { toolChoice: options.toolChoice as JSONValue })
       }
 
-      request.toolConfig = toolConfig as never
+      request.toolConfig = toolConfig
     }
 
     // Add inference configuration
@@ -475,34 +495,35 @@ export class BedrockModelProvider
       throw new Error(`Invalid event data for ${eventType}: expected object, got ${typeof eventData}`)
     }
 
+    // Cast once for all cases
+    const data = eventData as unknown as JSONValue
+    if (typeof data !== 'object' || data === null || Array.isArray(data)) {
+      throw new Error(`Invalid data format: expected object, got ${typeof data}`)
+    }
+
     switch (eventType) {
       case 'messageStart': {
-        const messageStart = eventData as unknown as JSONValue
-        if (typeof messageStart !== 'object' || messageStart === null || Array.isArray(messageStart)) {
-          throw new Error('Invalid messageStart format')
+        if (!('role' in data)) {
+          throw new Error('Missing required field: role')
         }
         events.push({
           type: 'modelMessageStartEvent',
-          role: ((messageStart.role as string) || 'assistant') as Role,
+          role: (data.role as string) as Role,
         })
         break
       }
 
       case 'contentBlockStart': {
-        const contentBlockStart = eventData as unknown as JSONValue
-        if (typeof contentBlockStart !== 'object' || contentBlockStart === null || Array.isArray(contentBlockStart)) {
-          throw new Error('Invalid contentBlockStart format')
-        }
         const event: ModelProviderStreamEvent = {
           type: 'modelContentBlockStartEvent',
         }
 
-        if ('contentBlockIndex' in contentBlockStart) {
-          event.contentBlockIndex = contentBlockStart.contentBlockIndex as number
+        if ('contentBlockIndex' in data) {
+          event.contentBlockIndex = data.contentBlockIndex as number
         }
 
-        if ('start' in contentBlockStart && contentBlockStart.start && typeof contentBlockStart.start === 'object') {
-          const start = contentBlockStart.start as Record<string, JSONValue>
+        if ('start' in data && data.start && typeof data.start === 'object') {
+          const start = data.start as Record<string, JSONValue>
           if ('toolUse' in start && start.toolUse && typeof start.toolUse === 'object') {
             const toolUse = start.toolUse as Record<string, JSONValue>
             event.start = {
@@ -518,11 +539,7 @@ export class BedrockModelProvider
       }
 
       case 'contentBlockDelta': {
-        const contentBlockDelta = eventData as unknown as JSONValue
-        if (typeof contentBlockDelta !== 'object' || contentBlockDelta === null || Array.isArray(contentBlockDelta)) {
-          throw new Error('Invalid contentBlockDelta format')
-        }
-        const delta = contentBlockDelta.delta as JSONValue
+        const delta = data.delta as JSONValue
         if (!delta || typeof delta !== 'object' || Array.isArray(delta)) {
           throw new Error('Invalid delta format')
         }
@@ -532,29 +549,23 @@ export class BedrockModelProvider
           delta: { type: 'textDelta', text: '' },
         }
 
-        if ('contentBlockIndex' in contentBlockDelta) {
-          event.contentBlockIndex = contentBlockDelta.contentBlockIndex as number
+        if ('contentBlockIndex' in data) {
+          event.contentBlockIndex = data.contentBlockIndex as number
         }
 
-        // Text delta
+        // Determine delta type based on which field is present
         if ('text' in delta) {
           event.delta = {
             type: 'textDelta',
             text: delta.text as string,
           }
-        }
-
-        // Tool use input delta
-        if ('toolUse' in delta && delta.toolUse && typeof delta.toolUse === 'object') {
+        } else if ('toolUse' in delta && delta.toolUse && typeof delta.toolUse === 'object') {
           const toolUse = delta.toolUse as Record<string, JSONValue>
           event.delta = {
             type: 'toolUseInputDelta',
             input: toolUse.input as string,
           }
-        }
-
-        // Reasoning delta
-        if ('reasoningContent' in delta && delta.reasoningContent && typeof delta.reasoningContent === 'object') {
+        } else if ('reasoningContent' in delta && delta.reasoningContent && typeof delta.reasoningContent === 'object') {
           const reasoning = delta.reasoningContent as Record<string, JSONValue>
           const reasoningDelta: { type: 'reasoningDelta'; text?: string; signature?: string } = {
             type: 'reasoningDelta',
@@ -562,6 +573,8 @@ export class BedrockModelProvider
           if (reasoning.text) reasoningDelta.text = reasoning.text as string
           if (reasoning.signature) reasoningDelta.signature = reasoning.signature as string
           event.delta = reasoningDelta
+        } else {
+          console.warn(`Unsupported delta format: ${JSON.stringify(delta)}`)
         }
 
         events.push(event)
@@ -569,16 +582,12 @@ export class BedrockModelProvider
       }
 
       case 'contentBlockStop': {
-        const contentBlockStop = eventData as unknown as JSONValue
-        if (typeof contentBlockStop !== 'object' || contentBlockStop === null || Array.isArray(contentBlockStop)) {
-          throw new Error('Invalid contentBlockStop format')
-        }
         const event: ModelProviderStreamEvent = {
           type: 'modelContentBlockStopEvent',
         }
 
-        if ('contentBlockIndex' in contentBlockStop) {
-          event.contentBlockIndex = contentBlockStop.contentBlockIndex as number
+        if ('contentBlockIndex' in data) {
+          event.contentBlockIndex = data.contentBlockIndex as number
         }
 
         events.push(event)
@@ -586,16 +595,12 @@ export class BedrockModelProvider
       }
 
       case 'messageStop': {
-        const messageStop = eventData as unknown as JSONValue
-        if (typeof messageStop !== 'object' || messageStop === null || Array.isArray(messageStop)) {
-          throw new Error('Invalid messageStop format')
-        }
         const event: ModelProviderStreamEvent = {
           type: 'modelMessageStopEvent',
         }
 
-        if ('stopReason' in messageStop && messageStop.stopReason) {
-          const stopReason = messageStop.stopReason as string
+        if ('stopReason' in data && data.stopReason) {
+          const stopReason = data.stopReason as string
           const mappedStopReason =
             stopReason === 'end_turn'
               ? 'endTurn'
@@ -616,8 +621,8 @@ export class BedrockModelProvider
           }
         }
 
-        if ('additionalModelResponseFields' in messageStop) {
-          event.additionalModelResponseFields = messageStop.additionalModelResponseFields as JSONValue
+        if ('additionalModelResponseFields' in data) {
+          event.additionalModelResponseFields = data.additionalModelResponseFields as JSONValue
         }
 
         events.push(event)
@@ -625,16 +630,12 @@ export class BedrockModelProvider
       }
 
       case 'metadata': {
-        const metadata = eventData as unknown as JSONValue
-        if (typeof metadata !== 'object' || metadata === null || Array.isArray(metadata)) {
-          throw new Error('Invalid metadata format')
-        }
         const event: ModelProviderStreamEvent = {
           type: 'modelMetadataEvent',
         }
 
-        if ('usage' in metadata && metadata.usage && typeof metadata.usage === 'object') {
-          const usage = metadata.usage as unknown as TokenUsage
+        if ('usage' in data && data.usage && typeof data.usage === 'object') {
+          const usage = data.usage as unknown as TokenUsage
 
           const usageInfo: Usage = {
             inputTokens: usage.inputTokens || 0,
@@ -652,15 +653,15 @@ export class BedrockModelProvider
           event.usage = usageInfo
         }
 
-        if ('metrics' in metadata && metadata.metrics && typeof metadata.metrics === 'object') {
-          const metrics = metadata.metrics as Record<string, JSONValue>
+        if ('metrics' in data && data.metrics && typeof data.metrics === 'object') {
+          const metrics = data.metrics as Record<string, JSONValue>
           event.metrics = {
             latencyMs: (metrics.latencyMs as number) || 0,
           }
         }
 
-        if ('trace' in metadata) {
-          event.trace = metadata.trace
+        if ('trace' in data) {
+          event.trace = data.trace
         }
 
         events.push(event)
@@ -674,28 +675,5 @@ export class BedrockModelProvider
     }
 
     return events
-  }
-
-  /**
-   * Handles errors from Bedrock API calls.
-   *
-   * @param error - The error to handle
-   * @throws \{ContextWindowOverflowError\} For context overflow errors
-   * @throws \{ModelThrottledError\} For throttling errors
-   * @throws The original error for other error types
-   */
-  private handleError(error: Error): never {
-    // Check for throttling (check this first as it's most specific)
-    if (error instanceof ThrottlingException) {
-      throw new ModelThrottledError(error.message)
-    }
-
-    // Check for context window overflow
-    if (BEDROCK_CONTEXT_WINDOW_OVERFLOW_MESSAGES.some((msg) => error.message.includes(msg))) {
-      throw new ContextWindowOverflowError(error.message)
-    }
-
-    // Re-throw other errors as-is
-    throw error
   }
 }
