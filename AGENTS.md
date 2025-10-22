@@ -453,6 +453,63 @@ describe('calculateTotal', () => {
 })
 ```
 
+### Object Assertion Best Practices
+
+**Prefer testing entire objects at once** instead of individual properties for better readability and test coverage.
+
+```typescript
+// ✅ Good: Verify entire object at once
+it('returns expected user object', () => {
+  const user = getUser('123')
+  expect(user).toEqual({
+    id: '123',
+    name: 'John Doe',
+    email: 'john@example.com',
+    isActive: true
+  })
+})
+
+// ✅ Good: Verify entire array of objects
+it('yields expected stream events', async () => {
+  const events = await collectEvents(stream)
+  expect(events).toEqual([
+    { type: 'streamEvent', data: 'Starting...' },
+    { type: 'streamEvent', data: 'Processing...' },
+    { type: 'streamEvent', data: 'Complete!' },
+  ])
+})
+
+// ❌ Bad: Testing individual properties
+it('returns expected user object', () => {
+  const user = getUser('123')
+  expect(user).toBeDefined()
+  expect(user.id).toBe('123')
+  expect(user.name).toBe('John Doe')
+  expect(user.email).toBe('john@example.com')
+  expect(user.isActive).toBe(true)
+})
+
+// ❌ Bad: Testing array elements individually in a loop
+it('yields expected stream events', async () => {
+  const events = await collectEvents(stream)
+  for (const event of events) {
+    expect(event.type).toBe('streamEvent')
+    expect(event).toHaveProperty('data')
+  }
+})
+```
+
+**Benefits of testing entire objects**:
+- **More concise**: Single assertion instead of multiple
+- **Better test coverage**: Catches unexpected additional or missing properties
+- **More readable**: Clear expectation of the entire structure
+- **Easier to maintain**: Changes to the object require updating one place
+
+**Use cases**:
+- Always use `toEqual()` for object and array comparisons
+- Use `toBe()` only for primitive values and reference equality
+- When testing error objects, verify the entire structure including message and type
+
 ### Testing Guidelines
 
 **Testing Approach:**

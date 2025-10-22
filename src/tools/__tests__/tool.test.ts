@@ -276,16 +276,24 @@ describe('FunctionTool', () => {
         // Should have 3 stream events
         expect(streamEvents.length).toBe(3)
 
-        // Check that all intermediate events are ToolStreamEvents
-        for (const event of streamEvents) {
-          expect(event.type).toBe('toolStreamEvent')
-          expect(event).toHaveProperty('data')
-        }
+        // Verify all stream events are as expected
+        expect(streamEvents).toEqual([
+          { type: 'toolStreamEvent', data: 'Starting...' },
+          { type: 'toolStreamEvent', data: 'Processing...' },
+          { type: 'toolStreamEvent', data: 'Complete!' },
+        ])
 
-        // Final result should be ToolResult
-        expect(result).toHaveProperty('toolUseId', 'test-gen-1')
-        expect(result).toHaveProperty('status', 'success')
-        expect(result).toHaveProperty('content')
+        // Verify entire result object
+        expect(result).toEqual({
+          toolUseId: 'test-gen-1',
+          status: 'success',
+          content: [
+            {
+              type: 'toolResultTextContent',
+              text: 'Final result',
+            },
+          ],
+        })
       })
 
       it('can yield objects as ToolStreamEvents', async () => {
