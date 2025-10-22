@@ -20,7 +20,7 @@ import {
   type TokenUsage,
   type Tool,
 } from '@aws-sdk/client-bedrock-runtime'
-import { ModelProvider, type BaseModelConfig, type StreamOptions } from '@/models/model'
+import type { ModelProvider, BaseModelConfig, StreamOptions } from '@/models/model'
 import type { Message, ContentBlock, Role } from '@/types/messages'
 import type { ModelProviderStreamEvent, Usage } from '@/models/streaming'
 import type { JSONValue } from '@/types/json'
@@ -153,10 +153,9 @@ export interface BedrockModelProviderOptions {
  * }
  * ```
  */
-export class BedrockModelProvider extends ModelProvider<
-  BedrockModelConfig,
-  BedrockRuntimeClientConfig
-> {
+export class BedrockModelProvider
+  implements ModelProvider<BedrockModelConfig, BedrockRuntimeClientConfig>
+{
   private config: BedrockModelConfig
   private client: BedrockRuntimeClient
 
@@ -190,7 +189,6 @@ export class BedrockModelProvider extends ModelProvider<
    * ```
    */
   constructor(options?: BedrockModelProviderOptions) {
-    super()
     const modelConfig = options?.modelConfig || {}
     const clientConfig = options?.clientConfig || {}
 
@@ -503,12 +501,9 @@ export class BedrockModelProvider extends ModelProvider<
 
     switch (eventType) {
       case 'messageStart': {
-        if (!('role' in data)) {
-          throw new Error('Missing required field: role')
-        }
         events.push({
           type: 'modelMessageStartEvent',
-          role: (data.role as string) as Role,
+          role: data.role! as Role,
         })
         break
       }
@@ -522,14 +517,16 @@ export class BedrockModelProvider extends ModelProvider<
           event.contentBlockIndex = data.contentBlockIndex as number
         }
 
-        if ('start' in data && data.start && typeof data.start === 'object') {
-          const start = data.start as Record<string, JSONValue>
-          if ('toolUse' in start && start.toolUse && typeof start.toolUse === 'object') {
-            const toolUse = start.toolUse as Record<string, JSONValue>
-            event.start = {
-              type: 'toolUseStart',
-              name: toolUse.name as string,
-              toolUseId: toolUse.toolUseId as string,
+        if ('start' in data && data.start && typeof data.start === 'object' && !Array.isArray(data.start)) {
+          const start = data.start as JSONValue
+          if (typeof start === 'object' && start !== null && !Array.isArray(start)) {
+            if ('toolUse' in start && start.toolUse && typeof start.toolUse === 'object') {
+              const toolUse = start.toolUse as Record<string, JSONValue>
+              event.start = {
+                type: 'toolUseStart',
+                name: toolUse.name as string,
+                toolUseId: toolUse.toolUseId as string,
+              }
             }
           }
         }

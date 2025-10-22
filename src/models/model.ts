@@ -101,11 +101,10 @@ export interface ModelProviderConstructor<T extends BaseModelConfig, C = unknown
  *   baseUrl?: string
  * }
  *
- * class MyProvider extends ModelProvider<MyProviderConfig, MyClientConfig> {
+ * class MyProvider implements ModelProvider<MyProviderConfig, MyClientConfig> {
  *   private config: MyProviderConfig
  *
  *   constructor(options?: { modelConfig?: MyProviderConfig; clientConfig?: MyClientConfig }) {
- *     super()
  *     const modelConfig = options?.modelConfig || {}
  *     this.config = { ...modelConfig }
  *     // Initialize client with options?.clientConfig
@@ -132,21 +131,21 @@ export interface ModelProviderConstructor<T extends BaseModelConfig, C = unknown
  * ```
  */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-export abstract class ModelProvider<T extends BaseModelConfig, _C = unknown> {
+export interface ModelProvider<T extends BaseModelConfig, _C = unknown> {
   /**
    * Updates the model configuration.
    * Merges the provided configuration with existing settings.
    *
    * @param modelConfig - Configuration object with model-specific settings to update
    */
-  abstract updateConfig(modelConfig: T): void
+  updateConfig(modelConfig: T): void
 
   /**
    * Retrieves the current model configuration.
    *
    * @returns The current configuration object
    */
-  abstract getConfig(): T
+  getConfig(): T
 
   /**
    * Streams a conversation with the model.
@@ -169,5 +168,5 @@ export abstract class ModelProvider<T extends BaseModelConfig, _C = unknown> {
    * }
    * ```
    */
-  abstract stream(messages: Message[], options?: StreamOptions): AsyncIterable<ModelProviderStreamEvent>
+  stream(messages: Message[], options?: StreamOptions): AsyncIterable<ModelProviderStreamEvent>
 }
