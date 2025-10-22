@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { BedrockRuntimeClient } from '@aws-sdk/client-bedrock-runtime'
+import { BedrockRuntimeClient, ThrottlingException } from '@aws-sdk/client-bedrock-runtime'
 import { BedrockModelProvider, DEFAULT_BEDROCK_MODEL_ID, type BedrockModelConfig } from '../bedrock'
 import { ContextWindowOverflowError, ModelThrottledError } from '../../errors'
 import type { Message } from '../../types/messages'
+import type { StreamOptions } from '../model'
 
 // Mock the AWS SDK
 vi.mock('@aws-sdk/client-bedrock-runtime', () => {
@@ -157,6 +158,85 @@ describe('BedrockModelProvider', () => {
     })
   })
 
+  describe('format_message', () => {
+    it('formats the request to bedrock properly', async () => {
+      const { ConverseStreamCommand } = await import('@aws-sdk/client-bedrock-runtime')
+      const mockConverseStreamCommand = vi.mocked(ConverseStreamCommand)
+
+      const provider = new BedrockModelProvider({
+        modelConfig: {
+          modelId: 'test-model',
+          maxTokens: 1024,
+          temperature: 0.7,
+          topP: 0.9,
+          stopSequences: ['STOP'],
+          cachePrompt: 'default',
+          cacheTools: 'default',
+          additionalResponseFieldPaths: ['Hello!'],
+          additionalRequestFields: ['World!'],
+          additionalArgs: {
+            MyExtraArg: 'ExtraArg',
+          },
+        },
+      })
+
+      const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+
+      const options: StreamOptions = {
+        systemPrompt: 'You are a helpful assistant',
+        toolSpecs: [
+          {
+            name: 'calculator',
+            description: 'Perform calculations',
+            inputSchema: { type: 'object', properties: { expression: { type: 'string' } } },
+          },
+        ],
+        toolChoice: { auto: {} },
+      }
+
+      // Trigger the stream to make the request
+      const stream = provider.stream(messages, options)
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      for await (const _event of stream) {
+        break // Just need to trigger the request
+      }
+
+      // Verify ConverseStreamCommand was called with properly formatted request
+      expect(mockConverseStreamCommand).toHaveBeenCalledWith({
+        MyExtraArg: 'ExtraArg',
+        additionalModelRequestFields: ['World!'],
+        additionalModelResponseFieldPaths: ['Hello!'],
+        modelId: 'test-model',
+        messages: [
+          {
+            role: 'user',
+            content: [{ text: 'Hello' }],
+          },
+        ],
+        system: [{ text: 'You are a helpful assistant' }, { cachePoint: { type: 'default' } }],
+        toolConfig: {
+          toolChoice: { auto: {} },
+          tools: [
+            {
+              toolSpec: {
+                name: 'calculator',
+                description: 'Perform calculations',
+                inputSchema: { json: { type: 'object', properties: { expression: { type: 'string' } } } },
+              },
+            },
+            { cachePoint: { type: 'default' } },
+          ],
+        },
+        inferenceConfig: {
+          maxTokens: 1024,
+          temperature: 0.7,
+          topP: 0.9,
+          stopSequences: ['STOP'],
+        },
+      })
+    })
+  })
+
   describe('stream', () => {
     it('yields message start event', async () => {
       const provider = new BedrockModelProvider()
@@ -250,7 +330,38 @@ describe('BedrockModelProvider', () => {
               type: 'toolResultBlock',
               toolUseId: 'tool-123',
               status: 'success',
-              content: [{ type: 'toolResultTextContent', text: 'Result: 8' }],
+              content: [
+                { type: 'toolResultTextContent', text: 'Result: 8' },
+                { type: 'toolResultJsonContent', json: { hello: 'world' } },
+              ],
+            },
+          ],
+        },
+      ]
+
+      const stream = provider.stream(messages)
+      const events = []
+      for await (const event of stream) {
+        events.push(event)
+      }
+
+      expect(events.length).toBeGreaterThan(0)
+    })
+
+    it('formats reasoning messages properly', async () => {
+      const provider = new BedrockModelProvider()
+      const messages: Message[] = [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'reasoningBlock',
+              text: 'Hello',
+              signature: 'World',
+            },
+            {
+              type: 'reasoningBlock',
+              redactedContent: new Uint8Array(1),
             },
           ],
         },
@@ -283,7 +394,6 @@ describe('BedrockModelProvider', () => {
 
     it('throws ModelThrottledError for throttling', async () => {
       vi.clearAllMocks()
-      const { ThrottlingException } = await import('@aws-sdk/client-bedrock-runtime')
       const error = new ThrottlingException({ message: 'Rate limit exceeded', $metadata: {} })
       const mockSendError = vi.fn().mockRejectedValue(error)
       vi.mocked(BedrockRuntimeClient).mockImplementation(() => ({ send: mockSendError }) as never)
@@ -341,14 +451,16 @@ describe('BedrockModelProvider', () => {
         events.push(event)
       }
 
-      const toolDelta = events.find((e) => e.type === 'modelContentBlockDeltaEvent' && e.delta.type === 'toolUseInputDelta')
+      const toolDelta = events.find(
+        (e) => e.type === 'modelContentBlockDeltaEvent' && e.delta.type === 'toolUseInputDelta'
+      )
       expect(toolDelta).toBeDefined()
       if (toolDelta?.type === 'modelContentBlockDeltaEvent' && toolDelta.delta.type === 'toolUseInputDelta') {
         expect(toolDelta.delta.input).toBe('{"a": 1}')
       }
     })
 
-    it('handles reasoning content delta with both text and signature', async () => {
+    it('handles reasoning content delta with both text and signature, as well as redactedContent', async () => {
       vi.clearAllMocks()
       const mockSend = vi.fn(
         async (): Promise<{ stream: AsyncIterable<unknown> }> => ({
@@ -361,40 +473,9 @@ describe('BedrockModelProvider', () => {
                 contentBlockIndex: 0,
               },
             }
-            yield { contentBlockStop: { contentBlockIndex: 0 } }
-            yield { messageStop: { stopReason: 'end_turn' } }
-            yield { metadata: { usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } } }
-          })(),
-        })
-      )
-      vi.mocked(BedrockRuntimeClient).mockImplementation(() => ({ send: mockSend }) as never)
-
-      const provider = new BedrockModelProvider()
-      const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
-
-      const events = []
-      for await (const event of provider.stream(messages)) {
-        events.push(event)
-      }
-
-      const reasoningDelta = events.find((e) => e.type === 'modelContentBlockDeltaEvent' && e.delta.type === 'reasoningDelta')
-      expect(reasoningDelta).toBeDefined()
-      if (reasoningDelta?.type === 'modelContentBlockDeltaEvent' && reasoningDelta.delta.type === 'reasoningDelta') {
-        expect(reasoningDelta.delta.text).toBe('thinking...')
-        expect(reasoningDelta.delta.signature).toBe('sig123')
-      }
-    })
-
-    it('handles reasoning content delta with only text', async () => {
-      vi.clearAllMocks()
-      const mockSend = vi.fn(
-        async (): Promise<{ stream: AsyncIterable<unknown> }> => ({
-          stream: (async function* (): AsyncGenerator<unknown> {
-            yield { messageStart: { role: 'assistant' } }
-            yield { contentBlockStart: { contentBlockIndex: 0 } }
             yield {
               contentBlockDelta: {
-                delta: { reasoningContent: { text: 'thinking...' } },
+                delta: { reasoningContent: { redactedContent: new Uint8Array(1) } },
                 contentBlockIndex: 0,
               },
             }
@@ -414,7 +495,55 @@ describe('BedrockModelProvider', () => {
         events.push(event)
       }
 
-      const reasoningDelta = events.find((e) => e.type === 'modelContentBlockDeltaEvent' && e.delta.type === 'reasoningDelta')
+      const reasoningDelta = events.find(
+        (e) => e.type === 'modelContentBlockDeltaEvent' && e.delta.type === 'reasoningDelta'
+      )
+      expect(reasoningDelta).toBeDefined()
+      if (reasoningDelta?.type === 'modelContentBlockDeltaEvent' && reasoningDelta.delta.type === 'reasoningDelta') {
+        expect(reasoningDelta.delta.text).toBe('thinking...')
+        expect(reasoningDelta.delta.signature).toBe('sig123')
+      }
+    })
+
+    it('handles reasoning content delta with only text, skips unsupported types', async () => {
+      vi.clearAllMocks()
+      const mockSend = vi.fn(
+        async (): Promise<{ stream: AsyncIterable<unknown> }> => ({
+          stream: (async function* (): AsyncGenerator<unknown> {
+            yield { messageStart: { role: 'assistant' } }
+            yield { contentBlockStart: { contentBlockIndex: 0 } }
+            yield {
+              contentBlockDelta: {
+                delta: { reasoningContent: { text: 'thinking...' } },
+                contentBlockIndex: 0,
+              },
+            }
+            yield {
+              contentBlockDelta: {
+                delta: { unknown: 'type' },
+                contentBlockIndex: 0,
+              },
+            }
+            yield { contentBlockStop: { contentBlockIndex: 0 } }
+            yield { messageStop: { stopReason: 'end_turn' } }
+            yield { metadata: { usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } } }
+            yield { unknown: 'type' }
+          })(),
+        })
+      )
+      vi.mocked(BedrockRuntimeClient).mockImplementation(() => ({ send: mockSend }) as never)
+
+      const provider = new BedrockModelProvider()
+      const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+
+      const events = []
+      for await (const event of provider.stream(messages)) {
+        events.push(event)
+      }
+
+      const reasoningDelta = events.find(
+        (e) => e.type === 'modelContentBlockDeltaEvent' && e.delta.type === 'reasoningDelta'
+      )
       expect(reasoningDelta).toBeDefined()
       if (reasoningDelta?.type === 'modelContentBlockDeltaEvent' && reasoningDelta.delta.type === 'reasoningDelta') {
         expect(reasoningDelta.delta.text).toBe('thinking...')
@@ -451,7 +580,9 @@ describe('BedrockModelProvider', () => {
         events.push(event)
       }
 
-      const reasoningDelta = events.find((e) => e.type === 'modelContentBlockDeltaEvent' && e.delta.type === 'reasoningDelta')
+      const reasoningDelta = events.find(
+        (e) => e.type === 'modelContentBlockDeltaEvent' && e.delta.type === 'reasoningDelta'
+      )
       expect(reasoningDelta).toBeDefined()
       if (reasoningDelta?.type === 'modelContentBlockDeltaEvent' && reasoningDelta.delta.type === 'reasoningDelta') {
         expect(reasoningDelta.delta.text).toBeUndefined()
@@ -576,6 +707,7 @@ describe('BedrockModelProvider', () => {
         ['stop_sequence', 'stopSequence'],
         ['content_filtered', 'contentFiltered'],
         ['guardrail_intervened', 'guardrailIntervened'],
+        ['model_context_window_exceeded', 'modelContextWindowExceeded'],
       ]
 
       for (const [bedrockReason, expectedReason] of stopReasons) {

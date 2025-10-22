@@ -174,12 +174,17 @@ export interface ReasoningBlock {
   /**
    * The text content of the reasoning process.
    */
-  text: string
+  text?: string
 
   /**
    * A cryptographic signature for verification purposes.
    */
   signature?: string
+
+  /**
+   * The redacted content of the reasoning process.
+   */
+  redactedContent?: Uint8Array
 }
 
 /**
@@ -199,3 +204,4 @@ export type StopReason =
   | 'maxTokens'
   | 'stopSequence'
   | 'toolUse'
+  | 'modelContextWindowExceeded'

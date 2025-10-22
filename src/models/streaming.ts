@@ -272,6 +272,11 @@ export interface ReasoningDelta {
    * Incremental signature data.
    */
   signature?: string
+
+  /**
+   * Incremental redacted content data.
+   */
+  redactedContent?: Uint8Array
 }
 
 /**
