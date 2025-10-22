@@ -33,7 +33,7 @@ export type {
 } from './tools/types'
 
 // Tool interface and related types
-export type { Tool, ToolContext, ToolExecutionEvent, ToolStreamEvent } from './tools/tool'
+export type { Tool, ToolContext, ToolStreamEvent } from './tools/tool'
 
 // FunctionTool implementation
 export { FunctionTool } from './tools/function-tool'

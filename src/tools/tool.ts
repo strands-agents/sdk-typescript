@@ -66,25 +66,7 @@ export interface ToolStreamEvent {
   data?: unknown
 }
 
-/**
- * Union type representing all possible events that can be yielded during tool execution.
- * Tools must yield zero or more ToolStreamEvents, then exactly one ToolResult as the final event.
- *
- * This is a discriminated union that allows type-safe event handling.
- *
- * @example
- * ```typescript
- * for await (const event of tool.stream(toolUse, context)) {
- *   if (event.type === 'toolStreamEvent') {
- *     console.log('Progress:', event.data)
- *   } else {
- *     // Must be ToolResult (final event)
- *     console.log('Result:', event.status)
- *   }
- * }
- * ```
- */
-export type ToolExecutionEvent = ToolStreamEvent | ToolResult
+
 
 /**
  * Interface for tool implementations.
@@ -93,39 +75,7 @@ export type ToolExecutionEvent = ToolStreamEvent | ToolResult
  * The Tool interface provides a streaming execution model where tools can yield
  * progress events during execution before returning a final result.
  *
- * @example
- * ```typescript
- * class CalculatorTool implements Tool {
- *   toolName = 'calculator'
- *   description = 'Performs basic arithmetic operations'
- *   toolSpec: ToolSpec = {
- *     name: 'calculator',
- *     description: 'Performs basic arithmetic operations',
- *     inputSchema: {
- *       type: 'object',
- *       properties: {
- *         operation: { type: 'string', enum: ['add', 'subtract'] },
- *         a: { type: 'number' },
- *         b: { type: 'number' }
- *       },
- *       required: ['operation', 'a', 'b']
- *     }
- *   }
- *
- *   async *stream(toolContext: ToolContext): AsyncGenerator<ToolStreamEvent, ToolResult, unknown> {
- *     yield { type: 'toolStreamEvent', data: 'Calculating...' }
- *
- *     const { operation, a, b } = toolContext.toolUse.input
- *     const result = operation === 'add' ? a + b : a - b
- *
- *     return {
- *       toolUseId: toolContext.toolUse.toolUseId,
- *       status: 'success',
- *       content: [{ type: 'toolResultTextContent', text: `Result: ${result}` }]
- *     }
- *   }
- * }
- * ```
+ * Most implementations should use FunctionTool rather than implementing this interface directly.
  */
 export interface Tool {
   /**

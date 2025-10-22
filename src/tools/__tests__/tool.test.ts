@@ -66,10 +66,13 @@ describe('FunctionTool', () => {
         inputSchema,
         callback: (): string => 'result',
       })
-      expect(tool.toolSpec).toBeDefined()
-      expect(tool.toolSpec.name).toBe(tool.toolName)
-      expect(tool.toolSpec.description).toBe(tool.description)
-      expect(tool.toolSpec.inputSchema).toBe(inputSchema)
+      
+      // Verify entire toolSpec object at once
+      expect(tool.toolSpec).toEqual({
+        name: 'testTool',
+        description: 'Test description',
+        inputSchema,
+      })
     })
 
     it('has matching toolName and toolSpec.name', () => {
@@ -117,10 +120,20 @@ describe('FunctionTool', () => {
           tool.stream({ toolUse, invocationState: context.invocationState })
         )
 
-        expect(streamEvents.length).toBe(0) // No stream events for sync callback
-        expect(result.toolUseId).toBe('test-sync-1')
-        expect(result.status).toBe('success')
-        expect(result.content.length).toBeGreaterThan(0)
+        // No stream events for sync callback
+        expect(streamEvents.length).toBe(0)
+        
+        // Verify entire result with actual calculated value
+        expect(result).toEqual({
+          toolUseId: 'test-sync-1',
+          status: 'success',
+          content: [
+            {
+              type: 'toolResultTextContent',
+              text: '10', // 5 * 2 = 10
+            },
+          ],
+        })
       })
 
       it('handles string return values', async () => {
@@ -143,8 +156,18 @@ describe('FunctionTool', () => {
         )
 
         expect(streamEvents.length).toBe(0)
-        expect(result.status).toBe('success')
-        expect(result.content[0]).toHaveProperty('type', 'toolResultTextContent')
+        
+        // Verify entire result object
+        expect(result).toEqual({
+          toolUseId: 'test-string',
+          status: 'success',
+          content: [
+            {
+              type: 'toolResultTextContent',
+              text: 'Hello, World!',
+            },
+          ],
+        })
       })
 
       it('handles object return values', async () => {
@@ -167,7 +190,17 @@ describe('FunctionTool', () => {
         )
 
         expect(streamEvents.length).toBe(0)
+        
+        // Verify result structure
+        expect(result.toolUseId).toBe('test-object')
         expect(result.status).toBe('success')
+        expect(result.content.length).toBe(1)
+        expect(result.content[0]).toHaveProperty('type', 'toolResultTextContent')
+        
+        // Verify the content contains the serialized object
+        const content = result.content[0] as { type: string; text: string }
+        const parsedContent = JSON.parse(content.text)
+        expect(parsedContent).toEqual({ key: 'value', count: 42 })
       })
 
       it('handles null and undefined return values', async () => {
