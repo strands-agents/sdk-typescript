@@ -93,22 +93,18 @@ All checks must pass before commit is allowed.
 
 ## Coding Patterns and Best Practices
 
-### TypeScript Path Aliases
+### Import Organization
 
-Use path aliases for cleaner imports:
+Use relative imports for internal modules:
 
 ```typescript
-// Good: Use path alias
-import { hello } from '@/hello'
-import { Agent } from '@/agent'
+// Good: Relative imports for internal modules
+import { hello } from './hello'
+import { Agent } from '../agent'
 
-// Avoid: Relative paths
-import { hello } from '../hello'
-import { Agent } from '../../agent'
+// Good: External dependencies
+import { something } from 'external-package'
 ```
-
-**Configuration**: Path aliases are configured in `tsconfig.json` and `vitest.config.ts`:
-- `@/*` maps to `src/*`
 
 ### File Organization Pattern
 
@@ -133,7 +129,7 @@ Follow this nested describe pattern for consistency:
 **For functions**:
 ```typescript
 import { describe, it, expect } from 'vitest'
-import { functionName } from '@/module'
+import { functionName } from '../module'
 
 describe('functionName', () => {
   describe('when called with valid input', () => {
@@ -155,7 +151,7 @@ describe('functionName', () => {
 **For classes**:
 ```typescript
 import { describe, it, expect } from 'vitest'
-import { ClassName } from '@/module'
+import { ClassName } from '../module'
 
 describe('ClassName', () => {
   describe('methodName', () => {
@@ -300,12 +296,12 @@ Organize imports in this order:
 // 1. External dependencies
 import { something } from 'external-package'
 
-// 2. Internal modules (using path aliases)
-import { Agent } from '@/agent'
-import { Tool } from '@/tools'
+// 2. Internal modules (using relative paths)
+import { Agent } from '../agent'
+import { Tool } from '../tools'
 
 // 3. Types (if separate)
-import type { Options, Config } from '@/types'
+import type { Options, Config } from '../types'
 ```
 
 ### Interface and Type Organization
@@ -466,7 +462,7 @@ describe('BedrockModelProvider', () => {
 ## Things to Do
 
 ✅ **Do**:
-- Use path aliases (`@/`) for all imports
+- Use relative imports for internal modules
 - Co-locate unit tests with source under `__tests__` directories
 - Follow nested describe pattern for test organization
 - Write explicit return types for all functions
@@ -480,7 +476,6 @@ describe('BedrockModelProvider', () => {
 
 ❌ **Don't**:
 - Use `any` type (enforced by ESLint)
-- Use relative paths like `../` when path aliases are available
 - Put unit tests in separate `tests/` directory (use `src/**/__tests__/**`)
 - Skip documentation for exported functions
 - Use semicolons (Prettier will remove them)
@@ -505,13 +500,6 @@ npm run build         # Compile TypeScript
 ```
 
 ## Troubleshooting Common Issues
-
-### Path Alias Not Resolving
-
-If `@/` imports don't work:
-1. Verify `tsconfig.json` has `baseUrl` and `paths` configured
-2. Verify `vitest.config.ts` has alias configuration
-3. Restart your IDE/editor
 
 ### Tests Not Found
 

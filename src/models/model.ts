@@ -1,6 +1,6 @@
-import type { Message } from '@/types/messages'
-import type { ToolSpec, ToolChoice } from '@/tools/types'
-import type { ModelProviderStreamEvent } from '@/models/streaming'
+import type { Message } from '../types/messages'
+import type { ToolSpec, ToolChoice } from '../tools/types'
+import type { ModelProviderStreamEvent } from './streaming'
 
 /**
  * Base configuration interface for all model providers.

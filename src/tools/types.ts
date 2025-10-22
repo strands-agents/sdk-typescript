@@ -1,4 +1,4 @@
-import type { JSONSchema, JSONValue } from '@/types/json'
+import type { JSONSchema, JSONValue } from '../types/json'
 
 /**
  * Result of a tool execution.

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { ContextWindowOverflowError, ModelThrottledError } from '@/errors'
+import { ContextWindowOverflowError, ModelThrottledError } from '../errors'
 
 describe('ContextWindowOverflowError', () => {
   describe('when instantiated with a message', () => {

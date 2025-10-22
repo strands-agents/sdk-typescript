@@ -1,5 +1,5 @@
-import type { Role, StopReason } from '@/types/messages'
-import type { JSONValue } from '@/types/json'
+import type { Role, StopReason } from '../types/messages'
+import type { JSONValue } from '../types/json'
 
 /**
  * Union type representing all possible streaming events from a model provider.

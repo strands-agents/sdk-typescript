@@ -1,30 +1,25 @@
-import { describe, it, expect, beforeAll } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { fromNodeProviderChain } from '@aws-sdk/credential-providers'
-import { BedrockModelProvider, DEFAULT_BEDROCK_MODEL_ID } from '@/models/bedrock'
-import { ContextWindowOverflowError } from '@/errors'
-import type { Message } from '@/types/messages'
-import type { ToolSpec } from '@/tools/types'
+import { BedrockModelProvider, DEFAULT_BEDROCK_MODEL_ID } from '@strands-agents/sdk'
+import { ContextWindowOverflowError } from '@strands-agents/sdk'
+import type { Message } from '@strands-agents/sdk'
+import type { ToolSpec } from '@strands-agents/sdk'
 
-// Integration tests that require real AWS credentials
-// These tests will be skipped if AWS credentials are not available
+// Check credentials at module level so skipIf can use it
+let hasCredentials = false
+try {
+  const credentialProvider = fromNodeProviderChain()
+  await credentialProvider()
+  hasCredentials = true
+  console.log('✅ AWS credentials found for integration tests')
+} catch {
+  hasCredentials = false
+  console.log('⏭️  AWS credentials not available - integration tests will be skipped')
+}
+
 describe('BedrockModelProvider Integration Tests', () => {
-  let hasCredentials = false
-
-  beforeAll(async () => {
-    // Check if AWS credentials are available using the node provider chain
-    try {
-      const credentialProvider = fromNodeProviderChain()
-      await credentialProvider()
-      hasCredentials = true
-    } catch {
-      // Tests will be skipped if credentials not available
-      // This is expected in environments without AWS access
-      hasCredentials = false
-    }
-  })
-
   describe('Basic Streaming', () => {
-    it.skipIf(!hasCredentials)(
+    it.skipIf(!hasCredentials).concurrent(
       'streams a simple text response',
       async () => {
         const provider = new BedrockModelProvider({
@@ -72,7 +67,7 @@ describe('BedrockModelProvider Integration Tests', () => {
       30000
     ) // 30 second timeout for API call
 
-    it.skipIf(!hasCredentials)(
+    it.skipIf(!hasCredentials).concurrent(
       'respects system prompt',
       async () => {
         const provider = new BedrockModelProvider({
@@ -111,7 +106,7 @@ describe('BedrockModelProvider Integration Tests', () => {
   })
 
   describe('Tool Use', () => {
-    it.skipIf(!hasCredentials)(
+    it.skipIf(!hasCredentials).concurrent(
       'requests tool use when appropriate',
       async () => {
         const provider = new BedrockModelProvider({
@@ -177,7 +172,7 @@ describe('BedrockModelProvider Integration Tests', () => {
   })
 
   describe('Configuration', () => {
-    it.skipIf(!hasCredentials)(
+    it.skipIf(!hasCredentials).concurrent(
       'respects maxTokens configuration',
       async () => {
         const provider = new BedrockModelProvider({
@@ -211,7 +206,7 @@ describe('BedrockModelProvider Integration Tests', () => {
   })
 
   describe('Error Handling', () => {
-    it.skipIf(!hasCredentials)(
+    it.skipIf(!hasCredentials).concurrent(
       'handles invalid model ID gracefully',
       async () => {
         const provider = new BedrockModelProvider({
@@ -238,7 +233,7 @@ describe('BedrockModelProvider Integration Tests', () => {
       30000
     )
 
-    it.skipIf(!hasCredentials)(
+    it.skipIf(!hasCredentials).concurrent(
       'throws ContextWindowOverflowError when input exceeds context window',
       async () => {
         const provider = new BedrockModelProvider({
@@ -265,7 +260,7 @@ describe('BedrockModelProvider Integration Tests', () => {
           for await (const event of provider.stream(messages)) {
             events.push(event)
           }
-        }).rejects.toThrow(ContextWindowOverflowError)
+        }).rejects.toBeInstanceOf(ContextWindowOverflowError)
       },
       30000
     )

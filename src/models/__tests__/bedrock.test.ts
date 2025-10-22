@@ -1,32 +1,34 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { BedrockRuntimeClient } from '@aws-sdk/client-bedrock-runtime'
-import { BedrockModelProvider, DEFAULT_BEDROCK_MODEL_ID, type BedrockModelConfig } from '@/models/bedrock'
-import { ContextWindowOverflowError, ModelThrottledError } from '@/errors'
-import type { Message } from '@/types/messages'
+import { BedrockModelProvider, DEFAULT_BEDROCK_MODEL_ID, type BedrockModelConfig } from '../bedrock'
+import { ContextWindowOverflowError, ModelThrottledError } from '../../errors'
+import type { Message } from '../../types/messages'
 
 // Mock the AWS SDK
 vi.mock('@aws-sdk/client-bedrock-runtime', () => {
-  const mockSend = vi.fn(async (): Promise<{ stream: AsyncIterable<unknown> }> => ({
-    stream: (async function* (): AsyncGenerator<unknown> {
-      yield { messageStart: { role: 'assistant' } }
-      yield { contentBlockStart: { contentBlockIndex: 0 } }
-      yield { contentBlockDelta: { delta: { text: 'Hello' }, contentBlockIndex: 0 } }
-      yield { contentBlockStop: { contentBlockIndex: 0 } }
-      yield { messageStop: { stopReason: 'end_turn' } }
-      yield {
-        metadata: {
-          usage: {
-            inputTokens: 10,
-            outputTokens: 5,
-            totalTokens: 15,
+  const mockSend = vi.fn(
+    async (): Promise<{ stream: AsyncIterable<unknown> }> => ({
+      stream: (async function* (): AsyncGenerator<unknown> {
+        yield { messageStart: { role: 'assistant' } }
+        yield { contentBlockStart: { contentBlockIndex: 0 } }
+        yield { contentBlockDelta: { delta: { text: 'Hello' }, contentBlockIndex: 0 } }
+        yield { contentBlockStop: { contentBlockIndex: 0 } }
+        yield { messageStop: { stopReason: 'end_turn' } }
+        yield {
+          metadata: {
+            usage: {
+              inputTokens: 10,
+              outputTokens: 5,
+              totalTokens: 15,
+            },
+            metrics: {
+              latencyMs: 100,
+            },
           },
-          metrics: {
-            latencyMs: 100,
-          },
-        },
-      }
-    })(),
-  }))
+        }
+      })(),
+    })
+  )
 
   // Create a mock ThrottlingException class
   class MockThrottlingException extends Error {
@@ -150,12 +152,12 @@ describe('BedrockModelProvider', () => {
     it('yields message start event', async () => {
       const provider = new BedrockModelProvider()
       const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
-      
+
       const events = []
       for await (const event of provider.stream(messages)) {
         events.push(event)
       }
-      
+
       const messageStartEvent = events.find((e) => e.type === 'modelMessageStartEvent')
       expect(messageStartEvent).toBeDefined()
       expect(messageStartEvent?.role).toBe('assistant')
@@ -164,12 +166,12 @@ describe('BedrockModelProvider', () => {
     it('yields content block delta events', async () => {
       const provider = new BedrockModelProvider()
       const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
-      
+
       const events = []
       for await (const event of provider.stream(messages)) {
         events.push(event)
       }
-      
+
       const deltaEvents = events.filter((e) => e.type === 'modelContentBlockDeltaEvent')
       expect(deltaEvents.length).toBeGreaterThan(0)
       expect(deltaEvents[0]?.delta.type).toBe('textDelta')
@@ -178,12 +180,12 @@ describe('BedrockModelProvider', () => {
     it('yields message stop event with correct stop reason', async () => {
       const provider = new BedrockModelProvider()
       const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
-      
+
       const events = []
       for await (const event of provider.stream(messages)) {
         events.push(event)
       }
-      
+
       const messageStopEvent = events.find((e) => e.type === 'modelMessageStopEvent')
       expect(messageStopEvent).toBeDefined()
       expect(messageStopEvent?.stopReason).toBe('endTurn')
@@ -192,12 +194,12 @@ describe('BedrockModelProvider', () => {
     it('yields metadata event with usage', async () => {
       const provider = new BedrockModelProvider()
       const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
-      
+
       const events = []
       for await (const event of provider.stream(messages)) {
         events.push(event)
       }
-      
+
       const metadataEvent = events.find((e) => e.type === 'modelMetadataEvent')
       expect(metadataEvent).toBeDefined()
       expect(metadataEvent?.usage?.inputTokens).toBe(10)
@@ -219,13 +221,13 @@ describe('BedrockModelProvider', () => {
           ],
         },
       ]
-      
+
       const stream = provider.stream(messages)
       const events = []
       for await (const event of stream) {
         events.push(event)
       }
-      
+
       expect(events.length).toBeGreaterThan(0)
     })
 
@@ -244,13 +246,13 @@ describe('BedrockModelProvider', () => {
           ],
         },
       ]
-      
+
       const stream = provider.stream(messages)
       const events = []
       for await (const event of stream) {
         events.push(event)
       }
-      
+
       expect(events.length).toBeGreaterThan(0)
     })
 
@@ -258,10 +260,10 @@ describe('BedrockModelProvider', () => {
       vi.clearAllMocks()
       const mockSendError = vi.fn().mockRejectedValue(new Error('Input is too long for requested model'))
       vi.mocked(BedrockRuntimeClient).mockImplementation(() => ({ send: mockSendError }) as never)
-      
+
       const provider = new BedrockModelProvider()
       const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
-      
+
       await expect(async () => {
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         for await (const _event of provider.stream(messages)) {
@@ -276,16 +278,34 @@ describe('BedrockModelProvider', () => {
       const error = new ThrottlingException({ message: 'Rate limit exceeded', $metadata: {} })
       const mockSendError = vi.fn().mockRejectedValue(error)
       vi.mocked(BedrockRuntimeClient).mockImplementation(() => ({ send: mockSendError }) as never)
-      
+
       const provider = new BedrockModelProvider()
       const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
-      
+
       await expect(async () => {
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         for await (const _event of provider.stream(messages)) {
           // Should not reach here
         }
       }).rejects.toThrow(ModelThrottledError)
+    })
+
+    it('throws ValidationException', async () => {
+      vi.clearAllMocks()
+      const { ValidationException } = await import('@aws-sdk/client-bedrock-runtime')
+      const error = new ValidationException({ message: 'ValidationException', $metadata: {} })
+      const mockSendError = vi.fn().mockRejectedValue(error)
+      vi.mocked(BedrockRuntimeClient).mockImplementation(() => ({ send: mockSendError }) as never)
+
+      const provider = new BedrockModelProvider()
+      const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+
+      await expect(async () => {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        for await (const _event of provider.stream(messages)) {
+          // Should not reach here
+        }
+      }).rejects.toThrow(ValidationException)
     })
   })
 })

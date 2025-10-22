@@ -1,26 +1,19 @@
 import { defineConfig } from 'vitest/config'
-import { resolve } from 'path'
 
 export default defineConfig({
-  resolve: {
-    alias: {
-      '@': resolve(__dirname, './src'),
-    },
-  },
   test: {
+    sequence: {
+      concurrent: true
+    },
     typecheck: {
       enabled: true,
     },
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
+      include: ['src/**/*'],
       exclude: [
-        'node_modules/',
-        'dist/',
         'src/**/__tests__/**',
-        'tests_integ/',
-        '*.config.*',
-        'eslint.config.js',
       ],
       thresholds: {
         lines: 80,

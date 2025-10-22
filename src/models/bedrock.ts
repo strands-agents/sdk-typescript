@@ -17,14 +17,19 @@ import {
   type Message as BedrockMessage,
   type ContentBlock as BedrockContentBlock,
   type InferenceConfiguration,
-  type TokenUsage,
   type Tool,
+  type MessageStartEvent as BedrockMessageStartEvent,
+  type ContentBlockStartEvent as BedrockContentBlockStartEvent,
+  type ContentBlockDeltaEvent as BedrockContentBlockDeltaEvent,
+  type ContentBlockStopEvent as BedrockContentBlockStopEvent,
+  type MessageStopEvent as BedrockMessageStopEvent,
+  type ConverseStreamMetadataEvent as BedrockConverseStreamMetadataEvent,
 } from '@aws-sdk/client-bedrock-runtime'
-import type { ModelProvider, BaseModelConfig, StreamOptions } from '@/models/model'
-import type { Message, ContentBlock, Role } from '@/types/messages'
-import type { ModelProviderStreamEvent, Usage } from '@/models/streaming'
-import type { JSONValue } from '@/types/json'
-import { ContextWindowOverflowError, ModelThrottledError } from '@/errors'
+import type { ModelProvider, BaseModelConfig, StreamOptions } from '../models/model'
+import type { Message, ContentBlock, Role } from '../types/messages'
+import type { ModelProviderStreamEvent, ReasoningDelta, Usage } from '../models/streaming'
+import type { JSONValue } from '../types/json'
+import { ContextWindowOverflowError, ModelThrottledError } from '../errors'
 
 /**
  * Default Bedrock model ID.
@@ -153,9 +158,7 @@ export interface BedrockModelProviderOptions {
  * }
  * ```
  */
-export class BedrockModelProvider
-  implements ModelProvider<BedrockModelConfig, BedrockRuntimeClientConfig>
-{
+export class BedrockModelProvider implements ModelProvider<BedrockModelConfig, BedrockRuntimeClientConfig> {
   private config: BedrockModelConfig
   private client: BedrockRuntimeClient
 
@@ -471,36 +474,18 @@ export class BedrockModelProvider
   private mapBedrockEventToSDKEvents(chunk: ConverseStreamOutput): ModelProviderStreamEvent[] {
     const events: ModelProviderStreamEvent[] = []
 
-    // Each chunk should only have a single key present
-    if (typeof chunk !== 'object' || chunk === null || Array.isArray(chunk)) {
-      throw new Error(`Invalid chunk format: expected object, got ${typeof chunk}`)
-    }
-
     // Extract the event type key
     const eventKeys = Object.keys(chunk)
     if (eventKeys.length === 0) {
       throw new Error('Invalid chunk: no event keys present')
     }
 
-    const eventType = eventKeys[0]
-    if (!eventType) {
-      throw new Error('Invalid chunk: event type is undefined')
-    }
-
+    const eventType = eventKeys[0]! as keyof ConverseStreamOutput
     const eventData = chunk[eventType as keyof ConverseStreamOutput]
-
-    if (!eventData || typeof eventData !== 'object' || Array.isArray(eventData)) {
-      throw new Error(`Invalid event data for ${eventType}: expected object, got ${typeof eventData}`)
-    }
-
-    // Cast once for all cases
-    const data = eventData as unknown as JSONValue
-    if (typeof data !== 'object' || data === null || Array.isArray(data)) {
-      throw new Error(`Invalid data format: expected object, got ${typeof data}`)
-    }
 
     switch (eventType) {
       case 'messageStart': {
+        const data = eventData as BedrockMessageStartEvent
         events.push({
           type: 'modelMessageStartEvent',
           role: data.role! as Role,
@@ -509,6 +494,8 @@ export class BedrockModelProvider
       }
 
       case 'contentBlockStart': {
+        const data = eventData as BedrockContentBlockStartEvent
+
         const event: ModelProviderStreamEvent = {
           type: 'modelContentBlockStartEvent',
         }
@@ -517,17 +504,12 @@ export class BedrockModelProvider
           event.contentBlockIndex = data.contentBlockIndex as number
         }
 
-        if ('start' in data && data.start && typeof data.start === 'object' && !Array.isArray(data.start)) {
-          const start = data.start as JSONValue
-          if (typeof start === 'object' && start !== null && !Array.isArray(start)) {
-            if ('toolUse' in start && start.toolUse && typeof start.toolUse === 'object') {
-              const toolUse = start.toolUse as Record<string, JSONValue>
-              event.start = {
-                type: 'toolUseStart',
-                name: toolUse.name as string,
-                toolUseId: toolUse.toolUseId as string,
-              }
-            }
+        if ('start' in data && data.start && 'toolUse' in data.start) {
+          const toolUse = data.start.toolUse
+          event.start = {
+            type: 'toolUseStart',
+            name: toolUse.name! as string,
+            toolUseId: toolUse.toolUseId! as string,
           }
         }
 
@@ -536,11 +518,8 @@ export class BedrockModelProvider
       }
 
       case 'contentBlockDelta': {
-        const delta = data.delta as JSONValue
-        if (!delta || typeof delta !== 'object' || Array.isArray(delta)) {
-          throw new Error('Invalid delta format')
-        }
-
+        const data = eventData as BedrockContentBlockDeltaEvent
+        const delta = data.delta!
         const event: ModelProviderStreamEvent = {
           type: 'modelContentBlockDeltaEvent',
           delta: { type: 'textDelta', text: '' },
@@ -550,28 +529,37 @@ export class BedrockModelProvider
           event.contentBlockIndex = data.contentBlockIndex as number
         }
 
-        // Determine delta type based on which field is present
-        if ('text' in delta) {
-          event.delta = {
-            type: 'textDelta',
-            text: delta.text as string,
+        const deltaKey = Object.keys(delta)[0]!
+
+        switch (deltaKey) {
+          case 'text': {
+            event.delta = {
+              type: 'textDelta',
+              text: delta.text! as string,
+            }
+            break
           }
-        } else if ('toolUse' in delta && delta.toolUse && typeof delta.toolUse === 'object') {
-          const toolUse = delta.toolUse as Record<string, JSONValue>
-          event.delta = {
-            type: 'toolUseInputDelta',
-            input: toolUse.input as string,
+          case 'toolUse': {
+            event.delta = {
+              type: 'toolUseInputDelta',
+              input: delta.toolUse!.input! as string,
+            }
+            break
           }
-        } else if ('reasoningContent' in delta && delta.reasoningContent && typeof delta.reasoningContent === 'object') {
-          const reasoning = delta.reasoningContent as Record<string, JSONValue>
-          const reasoningDelta: { type: 'reasoningDelta'; text?: string; signature?: string } = {
-            type: 'reasoningDelta',
+          case 'reasoningContent': {
+            const reasoning = delta.reasoningContent!
+            const reasoningDelta: ReasoningDelta = {
+              type: 'reasoningDelta',
+            }
+            if (reasoning.text) reasoningDelta.text = reasoning.text as string
+            if (reasoning.signature) reasoningDelta.signature = reasoning.signature as string
+            event.delta = reasoningDelta
+            break
           }
-          if (reasoning.text) reasoningDelta.text = reasoning.text as string
-          if (reasoning.signature) reasoningDelta.signature = reasoning.signature as string
-          event.delta = reasoningDelta
-        } else {
-          console.warn(`Unsupported delta format: ${JSON.stringify(delta)}`)
+          default: {
+            console.warn(`Unsupported delta format: ${JSON.stringify(delta)}`)
+            break
+          }
         }
 
         events.push(event)
@@ -579,6 +567,8 @@ export class BedrockModelProvider
       }
 
       case 'contentBlockStop': {
+        const data = eventData as BedrockContentBlockStopEvent
+
         const event: ModelProviderStreamEvent = {
           type: 'modelContentBlockStopEvent',
         }
@@ -592,31 +582,29 @@ export class BedrockModelProvider
       }
 
       case 'messageStop': {
+        const data = eventData as BedrockMessageStopEvent
+
         const event: ModelProviderStreamEvent = {
           type: 'modelMessageStopEvent',
         }
 
-        if ('stopReason' in data && data.stopReason) {
-          const stopReason = data.stopReason as string
-          const mappedStopReason =
-            stopReason === 'end_turn'
-              ? 'endTurn'
-              : stopReason === 'tool_use'
-                ? 'toolUse'
-                : stopReason === 'max_tokens'
-                  ? 'maxTokens'
-                  : stopReason === 'stop_sequence'
-                    ? 'stopSequence'
-                    : stopReason === 'content_filtered'
-                      ? 'contentFiltered'
-                      : stopReason === 'guardrail_intervened'
-                        ? 'guardrailIntervened'
-                        : null
+        const stopReason = data.stopReason! as string
+        const mappedStopReason =
+          stopReason === 'end_turn'
+            ? 'endTurn'
+            : stopReason === 'tool_use'
+              ? 'toolUse'
+              : stopReason === 'max_tokens'
+                ? 'maxTokens'
+                : stopReason === 'stop_sequence'
+                  ? 'stopSequence'
+                  : stopReason === 'content_filtered'
+                    ? 'contentFiltered'
+                    : stopReason === 'guardrail_intervened'
+                      ? 'guardrailIntervened'
+                      : undefined
 
-          if (mappedStopReason) {
-            event.stopReason = mappedStopReason
-          }
-        }
+        event.stopReason = mappedStopReason!
 
         if ('additionalModelResponseFields' in data) {
           event.additionalModelResponseFields = data.additionalModelResponseFields as JSONValue
@@ -627,17 +615,19 @@ export class BedrockModelProvider
       }
 
       case 'metadata': {
+        const data = eventData as BedrockConverseStreamMetadataEvent
+
         const event: ModelProviderStreamEvent = {
           type: 'modelMetadataEvent',
         }
 
-        if ('usage' in data && data.usage && typeof data.usage === 'object') {
-          const usage = data.usage as unknown as TokenUsage
+        if (data.usage) {
+          const usage = data.usage
 
           const usageInfo: Usage = {
-            inputTokens: usage.inputTokens || 0,
-            outputTokens: usage.outputTokens || 0,
-            totalTokens: usage.totalTokens || 0,
+            inputTokens: usage.inputTokens!,
+            outputTokens: usage.outputTokens!,
+            totalTokens: usage.totalTokens!,
           }
 
           if (usage.cacheReadInputTokens !== undefined) {
@@ -650,21 +640,26 @@ export class BedrockModelProvider
           event.usage = usageInfo
         }
 
-        if ('metrics' in data && data.metrics && typeof data.metrics === 'object') {
-          const metrics = data.metrics as Record<string, JSONValue>
+        if (data.metrics) {
           event.metrics = {
-            latencyMs: (metrics.latencyMs as number) || 0,
+            latencyMs: data.metrics.latencyMs!,
           }
         }
 
-        if ('trace' in data) {
+        if (data.trace) {
           event.trace = data.trace
         }
 
         events.push(event)
         break
       }
-
+      case 'internalServerException':
+      case 'modelStreamErrorException':
+      case 'serviceUnavailableException':
+      case 'validationException':
+      case 'throttlingException': {
+        throw eventData
+      }
       default:
         // Log warning for unsupported event types (for forward compatibility)
         console.warn(`Unsupported Bedrock event type: ${eventType}`)
