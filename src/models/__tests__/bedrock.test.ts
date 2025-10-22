@@ -4,6 +4,18 @@ import { BedrockModelProvider } from '../bedrock'
 import { ContextWindowOverflowError } from '../../errors'
 import type { Message } from '../../types/messages'
 import type { StreamOptions } from '../model'
+import type { ModelProviderStreamEvent } from '../streaming'
+
+/**
+ * Helper function to collect all events from a stream.
+ */
+async function collectEvents(stream: AsyncIterable<ModelProviderStreamEvent>): Promise<ModelProviderStreamEvent[]> {
+  const events: ModelProviderStreamEvent[] = []
+  for await (const event of stream) {
+    events.push(event)
+  }
+  return events
+}
 
 // Mock the AWS SDK
 vi.mock('@aws-sdk/client-bedrock-runtime', () => {
@@ -380,12 +392,17 @@ describe('BedrockModelProvider', () => {
       const provider = new BedrockModelProvider()
       const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
 
+      let eventCount = 0
       await expect(async () => {
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         for await (const _event of provider.stream(messages)) {
+          eventCount++
           // Should not reach here
         }
       }).rejects.toThrow(ContextWindowOverflowError)
+
+      // Verify no events were yielded before error was thrown
+      expect(eventCount).toBe(0)
     })
 
     it('throws ValidationException', async () => {
@@ -398,12 +415,17 @@ describe('BedrockModelProvider', () => {
       const provider = new BedrockModelProvider()
       const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
 
+      let eventCount = 0
       await expect(async () => {
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         for await (const _event of provider.stream(messages)) {
+          eventCount++
           // Should not reach here
         }
       }).rejects.toThrow(ValidationException)
+
+      // Verify no events were yielded before error was thrown
+      expect(eventCount).toBe(0)
     })
 
     it('handles tool use input delta', async () => {
@@ -678,24 +700,14 @@ describe('BedrockModelProvider', () => {
       }
     })
 
-    it('handles all stop reason types', async () => {
-      const stopReasons = [
-        ['end_turn', 'endTurn'],
-        ['tool_use', 'toolUse'],
-        ['max_tokens', 'maxTokens'],
-        ['stop_sequence', 'stopSequence'],
-        ['content_filtered', 'contentFiltered'],
-        ['guardrail_intervened', 'guardrailIntervened'],
-        ['model_context_window_exceeded', 'modelContextWindowExceeded'],
-      ]
-
-      for (const [bedrockReason, expectedReason] of stopReasons) {
+    describe('handles all stop reason types', () => {
+      it('maps end_turn to endTurn', async () => {
         vi.clearAllMocks()
         const mockSend = vi.fn(
           async (): Promise<{ stream: AsyncIterable<unknown> }> => ({
             stream: (async function* (): AsyncGenerator<unknown> {
               yield { messageStart: { role: 'assistant' } }
-              yield { messageStop: { stopReason: bedrockReason } }
+              yield { messageStop: { stopReason: 'end_turn' } }
               yield { metadata: { usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } } }
             })(),
           })
@@ -705,15 +717,164 @@ describe('BedrockModelProvider', () => {
         const provider = new BedrockModelProvider()
         const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
 
-        const events = []
-        for await (const event of provider.stream(messages)) {
-          events.push(event)
-        }
+        const events = await collectEvents(provider.stream(messages))
 
         const stopEvent = events.find((e) => e.type === 'modelMessageStopEvent')
-        expect(stopEvent).toBeDefined()
-        expect(stopEvent?.stopReason).toBe(expectedReason)
-      }
+        expect(stopEvent).toEqual({
+          type: 'modelMessageStopEvent',
+          stopReason: 'endTurn',
+        })
+      })
+
+      it('maps tool_use to toolUse', async () => {
+        vi.clearAllMocks()
+        const mockSend = vi.fn(
+          async (): Promise<{ stream: AsyncIterable<unknown> }> => ({
+            stream: (async function* (): AsyncGenerator<unknown> {
+              yield { messageStart: { role: 'assistant' } }
+              yield { messageStop: { stopReason: 'tool_use' } }
+              yield { metadata: { usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } } }
+            })(),
+          })
+        )
+        vi.mocked(BedrockRuntimeClient).mockImplementation(() => ({ send: mockSend }) as never)
+
+        const provider = new BedrockModelProvider()
+        const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+
+        const events = await collectEvents(provider.stream(messages))
+
+        const stopEvent = events.find((e) => e.type === 'modelMessageStopEvent')
+        expect(stopEvent).toEqual({
+          type: 'modelMessageStopEvent',
+          stopReason: 'toolUse',
+        })
+      })
+
+      it('maps max_tokens to maxTokens', async () => {
+        vi.clearAllMocks()
+        const mockSend = vi.fn(
+          async (): Promise<{ stream: AsyncIterable<unknown> }> => ({
+            stream: (async function* (): AsyncGenerator<unknown> {
+              yield { messageStart: { role: 'assistant' } }
+              yield { messageStop: { stopReason: 'max_tokens' } }
+              yield { metadata: { usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } } }
+            })(),
+          })
+        )
+        vi.mocked(BedrockRuntimeClient).mockImplementation(() => ({ send: mockSend }) as never)
+
+        const provider = new BedrockModelProvider()
+        const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+
+        const events = await collectEvents(provider.stream(messages))
+
+        const stopEvent = events.find((e) => e.type === 'modelMessageStopEvent')
+        expect(stopEvent).toEqual({
+          type: 'modelMessageStopEvent',
+          stopReason: 'maxTokens',
+        })
+      })
+
+      it('maps stop_sequence to stopSequence', async () => {
+        vi.clearAllMocks()
+        const mockSend = vi.fn(
+          async (): Promise<{ stream: AsyncIterable<unknown> }> => ({
+            stream: (async function* (): AsyncGenerator<unknown> {
+              yield { messageStart: { role: 'assistant' } }
+              yield { messageStop: { stopReason: 'stop_sequence' } }
+              yield { metadata: { usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } } }
+            })(),
+          })
+        )
+        vi.mocked(BedrockRuntimeClient).mockImplementation(() => ({ send: mockSend }) as never)
+
+        const provider = new BedrockModelProvider()
+        const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+
+        const events = await collectEvents(provider.stream(messages))
+
+        const stopEvent = events.find((e) => e.type === 'modelMessageStopEvent')
+        expect(stopEvent).toEqual({
+          type: 'modelMessageStopEvent',
+          stopReason: 'stopSequence',
+        })
+      })
+
+      it('maps content_filtered to contentFiltered', async () => {
+        vi.clearAllMocks()
+        const mockSend = vi.fn(
+          async (): Promise<{ stream: AsyncIterable<unknown> }> => ({
+            stream: (async function* (): AsyncGenerator<unknown> {
+              yield { messageStart: { role: 'assistant' } }
+              yield { messageStop: { stopReason: 'content_filtered' } }
+              yield { metadata: { usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } } }
+            })(),
+          })
+        )
+        vi.mocked(BedrockRuntimeClient).mockImplementation(() => ({ send: mockSend }) as never)
+
+        const provider = new BedrockModelProvider()
+        const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+
+        const events = await collectEvents(provider.stream(messages))
+
+        const stopEvent = events.find((e) => e.type === 'modelMessageStopEvent')
+        expect(stopEvent).toEqual({
+          type: 'modelMessageStopEvent',
+          stopReason: 'contentFiltered',
+        })
+      })
+
+      it('maps guardrail_intervened to guardrailIntervened', async () => {
+        vi.clearAllMocks()
+        const mockSend = vi.fn(
+          async (): Promise<{ stream: AsyncIterable<unknown> }> => ({
+            stream: (async function* (): AsyncGenerator<unknown> {
+              yield { messageStart: { role: 'assistant' } }
+              yield { messageStop: { stopReason: 'guardrail_intervened' } }
+              yield { metadata: { usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } } }
+            })(),
+          })
+        )
+        vi.mocked(BedrockRuntimeClient).mockImplementation(() => ({ send: mockSend }) as never)
+
+        const provider = new BedrockModelProvider()
+        const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+
+        const events = await collectEvents(provider.stream(messages))
+
+        const stopEvent = events.find((e) => e.type === 'modelMessageStopEvent')
+        expect(stopEvent).toEqual({
+          type: 'modelMessageStopEvent',
+          stopReason: 'guardrailIntervened',
+        })
+      })
+
+      it('maps model_context_window_exceeded to modelContextWindowExceeded', async () => {
+        vi.clearAllMocks()
+        const mockSend = vi.fn(
+          async (): Promise<{ stream: AsyncIterable<unknown> }> => ({
+            stream: (async function* (): AsyncGenerator<unknown> {
+              yield { messageStart: { role: 'assistant' } }
+              yield { messageStop: { stopReason: 'model_context_window_exceeded' } }
+              yield { metadata: { usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } } }
+            })(),
+          })
+        )
+        vi.mocked(BedrockRuntimeClient).mockImplementation(() => ({ send: mockSend }) as never)
+
+        const provider = new BedrockModelProvider()
+        const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+
+        const events = await collectEvents(provider.stream(messages))
+
+        const stopEvent = events.find((e) => e.type === 'modelMessageStopEvent')
+        expect(stopEvent).toEqual({
+          type: 'modelMessageStopEvent',
+          stopReason: 'modelContextWindowExceeded',
+        })
+      })
     })
 
     it('throws exception for error event types', async () => {
@@ -732,12 +893,17 @@ describe('BedrockModelProvider', () => {
       const provider = new BedrockModelProvider()
       const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
 
+      let eventCount = 0
       await expect(async () => {
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         for await (const _event of provider.stream(messages)) {
+          eventCount++
           // Should throw before finishing
         }
       }).rejects.toThrow()
+
+      // Should only yield the messageStart event before throwing
+      expect(eventCount).toBe(1)
     })
 
     it('throws error when required fields are undefined', async () => {
@@ -754,12 +920,17 @@ describe('BedrockModelProvider', () => {
       const provider = new BedrockModelProvider()
       const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
 
+      let eventCount = 0
       await expect(async () => {
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         for await (const _event of provider.stream(messages)) {
+          eventCount++
           // Should throw before finishing
         }
       }).rejects.toThrow('Expected messageStart.role to be defined')
+
+      // Verify no events were yielded before error was thrown
+      expect(eventCount).toBe(0)
     })
 
     it('throws error when delta is undefined', async () => {
@@ -777,12 +948,17 @@ describe('BedrockModelProvider', () => {
       const provider = new BedrockModelProvider()
       const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
 
+      let eventCount = 0
       await expect(async () => {
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         for await (const _event of provider.stream(messages)) {
+          eventCount++
           // Should throw before finishing
         }
       }).rejects.toThrow('Expected contentBlockDelta.delta to be defined')
+
+      // Should yield messageStart event before throwing
+      expect(eventCount).toBe(1)
     })
 
     it('throws error for invalid reasoning content format', async () => {
@@ -803,12 +979,17 @@ describe('BedrockModelProvider', () => {
         },
       ]
 
+      let eventCount = 0
       await expect(async () => {
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         for await (const _event of provider.stream(messages)) {
+          eventCount++
           // Should throw before finishing
         }
       }).rejects.toThrow("reasoning content format incorrect. Either 'text' or 'redactedContent' must be set.")
+
+      // Verify no events were yielded before error was thrown (error happens during request formatting)
+      expect(eventCount).toBe(0)
     })
   })
 })

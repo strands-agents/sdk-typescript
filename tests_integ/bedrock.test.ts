@@ -4,6 +4,18 @@ import { BedrockModelProvider } from '@strands-agents/sdk'
 import { ContextWindowOverflowError } from '@strands-agents/sdk'
 import type { Message } from '@strands-agents/sdk'
 import type { ToolSpec } from '@strands-agents/sdk'
+import type { ModelProviderStreamEvent } from '@strands-agents/sdk'
+
+/**
+ * Helper function to collect all events from a stream.
+ */
+async function collectEvents(stream: AsyncIterable<ModelProviderStreamEvent>): Promise<ModelProviderStreamEvent[]> {
+  const events: ModelProviderStreamEvent[] = []
+  for await (const event of stream) {
+    events.push(event)
+  }
+  return events
+}
 
 // Check credentials at module level so skipIf can use it
 let hasCredentials = false
@@ -31,10 +43,7 @@ describe.skipIf(!hasCredentials)('BedrockModelProvider Integration Tests', () =>
         },
       ]
 
-      const events = []
-      for await (const event of provider.stream(messages)) {
-        events.push(event)
-      }
+      const events = await collectEvents(provider.stream(messages))
 
       // Verify we got the expected event sequence
       expect(events.length).toBeGreaterThan(0)
@@ -74,10 +83,7 @@ describe.skipIf(!hasCredentials)('BedrockModelProvider Integration Tests', () =>
 
       const systemPrompt = 'Always respond with exactly the word "TEST" and nothing else.'
 
-      const events = []
-      for await (const event of provider.stream(messages, { systemPrompt })) {
-        events.push(event)
-      }
+      const events = await collectEvents(provider.stream(messages, { systemPrompt }))
 
       // Collect the text response
       let responseText = ''
@@ -129,10 +135,7 @@ describe.skipIf(!hasCredentials)('BedrockModelProvider Integration Tests', () =>
         },
       ]
 
-      const events = []
-      for await (const event of provider.stream(messages, { toolSpecs: [calculatorTool] })) {
-        events.push(event)
-      }
+      const events = await collectEvents(provider.stream(messages, { toolSpecs: [calculatorTool] }))
 
       // Should have tool use in the response
       const toolUseStartEvents = events.filter(
@@ -165,10 +168,7 @@ describe.skipIf(!hasCredentials)('BedrockModelProvider Integration Tests', () =>
         },
       ]
 
-      const events = []
-      for await (const event of provider.stream(messages)) {
-        events.push(event)
-      }
+      const events = await collectEvents(provider.stream(messages))
 
       // Check metadata for token usage
       const metadataEvent = events.find((e) => e.type === 'modelMetadataEvent')
@@ -195,9 +195,9 @@ describe.skipIf(!hasCredentials)('BedrockModelProvider Integration Tests', () =>
 
       // Should throw an error
       await expect(async () => {
-        const events = []
-        for await (const event of provider.stream(messages)) {
-          events.push(event)
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        for await (const _event of provider.stream(messages)) {
+          // Should not reach here - expecting an error
         }
       }).rejects.toThrow()
     })
@@ -220,9 +220,9 @@ describe.skipIf(!hasCredentials)('BedrockModelProvider Integration Tests', () =>
 
       // Should throw ContextWindowOverflowError
       await expect(async () => {
-        const events = []
-        for await (const event of provider.stream(messages)) {
-          events.push(event)
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        for await (const _event of provider.stream(messages)) {
+          // Should not reach here - expecting an error
         }
       }).rejects.toBeInstanceOf(ContextWindowOverflowError)
     })
