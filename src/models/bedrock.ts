@@ -17,7 +17,6 @@ import {
   type ContentBlock as BedrockContentBlock,
   type InferenceConfiguration,
   type Tool,
-  type ToolChoice,
   type MessageStartEvent as BedrockMessageStartEvent,
   type ContentBlockStartEvent as BedrockContentBlockStartEvent,
   type ContentBlockDeltaEvent as BedrockContentBlockDeltaEvent,
@@ -25,9 +24,10 @@ import {
   type MessageStopEvent as BedrockMessageStopEvent,
   type ConverseStreamMetadataEvent as BedrockConverseStreamMetadataEvent,
   ContentBlockDelta,
+  type ToolConfiguration,
 } from '@aws-sdk/client-bedrock-runtime'
 import type { ModelProvider, BaseModelConfig, StreamOptions } from '../models/model'
-import type { Message, ContentBlock, StopReason } from '../types/messages'
+import type { Message, ContentBlock } from '../types/messages'
 import type { ModelProviderStreamEvent, ReasoningDelta, Usage } from '../models/streaming'
 import type { JSONValue } from '../types/json'
 import { ContextWindowOverflowError } from '../errors'
@@ -144,7 +144,7 @@ export interface BedrockModelProviderOptions extends BedrockModelConfig {
   /**
    * AWS region to use for the Bedrock service.
    */
-  region: string
+  region?: string
 
   /**
    * Configuration for the Bedrock Runtime client.
@@ -217,7 +217,7 @@ export class BedrockModelProvider implements ModelProvider<BedrockModelConfig, B
    * ```
    */
   constructor(options?: BedrockModelProviderOptions) {
-    const { region, clientConfig, ...modelConfig } = options ?? { region: '' }
+    const { region, clientConfig, ...modelConfig } = options ?? {}
 
     // Initialize model config with default model ID if not provided
     this.config = {
@@ -230,16 +230,11 @@ export class BedrockModelProvider implements ModelProvider<BedrockModelConfig, B
       ? `${clientConfig.customUserAgent} strands-agents-ts-sdk`
       : 'strands-agents-ts-sdk'
 
-    // Ensure we have a region
-    const finalRegion = region || clientConfig?.region
-    if (!finalRegion) {
-      throw new Error('AWS region is required. Please provide it via the region parameter or clientConfig.region.')
-    }
-
     // Initialize Bedrock Runtime client with custom user agent
     this.client = new BedrockRuntimeClient({
-      ...(clientConfig || {}),
-      region: finalRegion,
+      ...(clientConfig ?? {}),
+      // region takes precedence over clientConfig
+      ...(region ? { region: region } : {}),
       customUserAgent,
     })
   }
@@ -386,12 +381,12 @@ export class BedrockModelProvider implements ModelProvider<BedrockModelConfig, B
         } as Tool)
       }
 
-      const toolConfig: { tools: Tool[]; toolChoice?: ToolChoice } = {
+      const toolConfig: ToolConfiguration = {
         tools: tools,
       }
 
       if (options.toolChoice) {
-        toolConfig.toolChoice = options.toolChoice as ToolChoice
+        toolConfig.toolChoice = options.toolChoice
       }
 
       request.toolConfig = toolConfig
@@ -549,7 +544,7 @@ export class BedrockModelProvider implements ModelProvider<BedrockModelConfig, B
       case 'contentBlockDelta': {
         const data = eventData as BedrockContentBlockDeltaEvent
         const delta = data.delta!
-        const event: ModelProviderStreamEvent = {
+        let event: ModelProviderStreamEvent | undefined = {
           type: 'modelContentBlockDeltaEvent',
           delta: { type: 'textDelta', text: '' },
         }
@@ -591,12 +586,14 @@ export class BedrockModelProvider implements ModelProvider<BedrockModelConfig, B
 
           default: {
             console.warn(`Unsupported delta format: ${JSON.stringify(delta)}`)
-            // Don't add event for unsupported formats - return early
-            return events
+            event = undefined
+            break
           }
         }
 
-        events.push(event)
+        if (event !== undefined) {
+          events.push(event)
+        }
         break
       }
 
@@ -623,8 +620,13 @@ export class BedrockModelProvider implements ModelProvider<BedrockModelConfig, B
         }
 
         const stopReason = data.stopReason! as string
-        const mappedStopReason =
-          STOP_REASON_MAP[stopReason as keyof typeof STOP_REASON_MAP] ?? (snakeToCamel(stopReason) as StopReason)
+        let mappedStopReason: string
+        if (stopReason in STOP_REASON_MAP) {
+          mappedStopReason = STOP_REASON_MAP[stopReason as keyof typeof STOP_REASON_MAP]
+        } else {
+          console.warn(`Unknown stop reason: "${stopReason}". Converting to camelCase: "${snakeToCamel(stopReason)}"`)
+          mappedStopReason = snakeToCamel(stopReason)
+        }
 
         event.stopReason = mappedStopReason
 

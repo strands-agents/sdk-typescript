@@ -60,7 +60,7 @@ describe('BedrockModelProvider', () => {
 
   describe('constructor', () => {
     it('creates an instance with default configuration when region is provided', () => {
-      const provider = new BedrockModelProvider({ region: 'us-west-2' })
+      const provider = new BedrockModelProvider()
       const config = provider.getConfig()
       expect(config.modelId).toBeDefined()
       expect(config.modelId).toContain('anthropic.claude')
@@ -235,7 +235,7 @@ describe('BedrockModelProvider', () => {
 
   describe('stream', () => {
     it('yields message start event', async () => {
-      const provider = new BedrockModelProvider({ region: 'us-west-2' })
+      const provider = new BedrockModelProvider()
       const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
 
       const events = []
@@ -249,7 +249,7 @@ describe('BedrockModelProvider', () => {
     })
 
     it('yields content block delta events', async () => {
-      const provider = new BedrockModelProvider({ region: 'us-west-2' })
+      const provider = new BedrockModelProvider()
       const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
 
       const events = []
@@ -263,7 +263,7 @@ describe('BedrockModelProvider', () => {
     })
 
     it('yields message stop event with correct stop reason', async () => {
-      const provider = new BedrockModelProvider({ region: 'us-west-2' })
+      const provider = new BedrockModelProvider()
       const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
 
       const events = []
@@ -277,7 +277,7 @@ describe('BedrockModelProvider', () => {
     })
 
     it('yields metadata event with usage', async () => {
-      const provider = new BedrockModelProvider({ region: 'us-west-2' })
+      const provider = new BedrockModelProvider()
       const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
 
       const events = []
@@ -292,7 +292,7 @@ describe('BedrockModelProvider', () => {
     })
 
     it('formats tool use messages', async () => {
-      const provider = new BedrockModelProvider({ region: 'us-west-2' })
+      const provider = new BedrockModelProvider()
       const messages: Message[] = [
         {
           role: 'assistant',
@@ -317,7 +317,7 @@ describe('BedrockModelProvider', () => {
     })
 
     it('formats tool result messages', async () => {
-      const provider = new BedrockModelProvider({ region: 'us-west-2' })
+      const provider = new BedrockModelProvider()
       const messages: Message[] = [
         {
           role: 'user',
@@ -345,7 +345,7 @@ describe('BedrockModelProvider', () => {
     })
 
     it('formats reasoning messages properly', async () => {
-      const provider = new BedrockModelProvider({ region: 'us-west-2' })
+      const provider = new BedrockModelProvider()
       const messages: Message[] = [
         {
           role: 'user',
@@ -377,7 +377,7 @@ describe('BedrockModelProvider', () => {
       const mockSendError = vi.fn().mockRejectedValue(new Error('Input is too long for requested model'))
       vi.mocked(BedrockRuntimeClient).mockImplementation(() => ({ send: mockSendError }) as never)
 
-      const provider = new BedrockModelProvider({ region: 'us-west-2' })
+      const provider = new BedrockModelProvider()
       const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
 
       await expect(async () => {
@@ -395,7 +395,7 @@ describe('BedrockModelProvider', () => {
       const mockSendError = vi.fn().mockRejectedValue(error)
       vi.mocked(BedrockRuntimeClient).mockImplementation(() => ({ send: mockSendError }) as never)
 
-      const provider = new BedrockModelProvider({ region: 'us-west-2' })
+      const provider = new BedrockModelProvider()
       const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
 
       await expect(async () => {
@@ -422,7 +422,7 @@ describe('BedrockModelProvider', () => {
       )
       vi.mocked(BedrockRuntimeClient).mockImplementation(() => ({ send: mockSend }) as never)
 
-      const provider = new BedrockModelProvider({ region: 'us-west-2' })
+      const provider = new BedrockModelProvider()
       const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
 
       const events = []
@@ -466,7 +466,7 @@ describe('BedrockModelProvider', () => {
       )
       vi.mocked(BedrockRuntimeClient).mockImplementation(() => ({ send: mockSend }) as never)
 
-      const provider = new BedrockModelProvider({ region: 'us-west-2' })
+      const provider = new BedrockModelProvider()
       const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
 
       const events = []
@@ -512,7 +512,7 @@ describe('BedrockModelProvider', () => {
       )
       vi.mocked(BedrockRuntimeClient).mockImplementation(() => ({ send: mockSend }) as never)
 
-      const provider = new BedrockModelProvider({ region: 'us-west-2' })
+      const provider = new BedrockModelProvider()
       const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
 
       const events = []
@@ -551,7 +551,7 @@ describe('BedrockModelProvider', () => {
       )
       vi.mocked(BedrockRuntimeClient).mockImplementation(() => ({ send: mockSend }) as never)
 
-      const provider = new BedrockModelProvider({ region: 'us-west-2' })
+      const provider = new BedrockModelProvider()
       const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
 
       const events = []
@@ -595,7 +595,7 @@ describe('BedrockModelProvider', () => {
       )
       vi.mocked(BedrockRuntimeClient).mockImplementation(() => ({ send: mockSend }) as never)
 
-      const provider = new BedrockModelProvider({ region: 'us-west-2' })
+      const provider = new BedrockModelProvider()
       const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
 
       const events = []
@@ -632,7 +632,7 @@ describe('BedrockModelProvider', () => {
       )
       vi.mocked(BedrockRuntimeClient).mockImplementation(() => ({ send: mockSend }) as never)
 
-      const provider = new BedrockModelProvider({ region: 'us-west-2' })
+      const provider = new BedrockModelProvider()
       const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
 
       const events = []
@@ -663,7 +663,7 @@ describe('BedrockModelProvider', () => {
       )
       vi.mocked(BedrockRuntimeClient).mockImplementation(() => ({ send: mockSend }) as never)
 
-      const provider = new BedrockModelProvider({ region: 'us-west-2' })
+      const provider = new BedrockModelProvider()
       const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
 
       const events = []
@@ -702,7 +702,7 @@ describe('BedrockModelProvider', () => {
         )
         vi.mocked(BedrockRuntimeClient).mockImplementation(() => ({ send: mockSend }) as never)
 
-        const provider = new BedrockModelProvider({ region: 'us-west-2' })
+        const provider = new BedrockModelProvider()
         const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
 
         const events = []
@@ -729,7 +729,7 @@ describe('BedrockModelProvider', () => {
       )
       vi.mocked(BedrockRuntimeClient).mockImplementation(() => ({ send: mockSend }) as never)
 
-      const provider = new BedrockModelProvider({ region: 'us-west-2' })
+      const provider = new BedrockModelProvider()
       const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
 
       await expect(async () => {

@@ -17,13 +17,12 @@ try {
   console.log('⏭️  AWS credentials not available - integration tests will be skipped')
 }
 
-describe('BedrockModelProvider Integration Tests', () => {
+describe.skipIf(!hasCredentials)('BedrockModelProvider Integration Tests', () => {
   describe('Basic Streaming', () => {
-    it.skipIf(!hasCredentials).concurrent(
+    it.concurrent(
       'streams a simple text response',
       async () => {
         const provider = new BedrockModelProvider({
-          region: process.env.AWS_REGION || 'us-west-2',
           maxTokens: 100,
         })
 
@@ -65,11 +64,10 @@ describe('BedrockModelProvider Integration Tests', () => {
       30000
     ) // 30 second timeout for API call
 
-    it.skipIf(!hasCredentials).concurrent(
+    it.concurrent(
       'respects system prompt',
       async () => {
         const provider = new BedrockModelProvider({
-          region: process.env.AWS_REGION || 'us-west-2',
           maxTokens: 50,
         })
 
@@ -103,11 +101,10 @@ describe('BedrockModelProvider Integration Tests', () => {
   })
 
   describe('Tool Use', () => {
-    it.skipIf(!hasCredentials).concurrent(
+    it.concurrent(
       'requests tool use when appropriate',
       async () => {
         const provider = new BedrockModelProvider({
-          region: process.env.AWS_REGION || 'us-west-2',
           maxTokens: 200,
         })
 
@@ -168,11 +165,10 @@ describe('BedrockModelProvider Integration Tests', () => {
   })
 
   describe('Configuration', () => {
-    it.skipIf(!hasCredentials).concurrent(
+    it.concurrent(
       'respects maxTokens configuration',
       async () => {
         const provider = new BedrockModelProvider({
-          region: process.env.AWS_REGION || 'us-west-2',
           maxTokens: 20, // Very small limit,
         })
 
@@ -201,11 +197,10 @@ describe('BedrockModelProvider Integration Tests', () => {
   })
 
   describe('Error Handling', () => {
-    it.skipIf(!hasCredentials).concurrent(
+    it.concurrent(
       'handles invalid model ID gracefully',
       async () => {
         const provider = new BedrockModelProvider({
-          region: process.env.AWS_REGION || 'us-west-2',
           modelId: 'invalid-model-id-that-does-not-exist',
         })
 
@@ -227,11 +222,10 @@ describe('BedrockModelProvider Integration Tests', () => {
       30000
     )
 
-    it.skipIf(!hasCredentials).concurrent(
+    it.concurrent(
       'throws ContextWindowOverflowError when input exceeds context window',
       async () => {
         const provider = new BedrockModelProvider({
-          region: process.env.AWS_REGION || 'us-west-2',
           maxTokens: 100,
         })
 

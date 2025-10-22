@@ -205,3 +205,4 @@ export type StopReason =
   | 'stopSequence'
   | 'toolUse'
   | 'modelContextWindowExceeded'
+  | string
