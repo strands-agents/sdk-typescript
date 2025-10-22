@@ -10,7 +10,6 @@
 import {
   BedrockRuntimeClient,
   ConverseStreamCommand,
-  ThrottlingException,
   type BedrockRuntimeClientConfig,
   type ConverseStreamCommandInput,
   type ConverseStreamOutput,
@@ -18,6 +17,7 @@ import {
   type ContentBlock as BedrockContentBlock,
   type InferenceConfiguration,
   type Tool,
+  type ToolChoice,
   type MessageStartEvent as BedrockMessageStartEvent,
   type ContentBlockStartEvent as BedrockContentBlockStartEvent,
   type ContentBlockDeltaEvent as BedrockContentBlockDeltaEvent,
@@ -30,13 +30,13 @@ import type { ModelProvider, BaseModelConfig, StreamOptions } from '../models/mo
 import type { Message, ContentBlock, StopReason } from '../types/messages'
 import type { ModelProviderStreamEvent, ReasoningDelta, Usage } from '../models/streaming'
 import type { JSONValue } from '../types/json'
-import { ContextWindowOverflowError, ModelThrottledError } from '../errors'
+import { ContextWindowOverflowError } from '../errors'
 
 /**
  * Default Bedrock model ID.
  * Uses Claude Sonnet 4.5 with global inference profile for cross-region availability.
  */
-export const DEFAULT_BEDROCK_MODEL_ID = 'global.anthropic.claude-sonnet-4-5-20250929-v1:0'
+const DEFAULT_BEDROCK_MODEL_ID = 'global.anthropic.claude-sonnet-4-5-20250929-v1:0'
 
 /**
  * Error messages that indicate context window overflow.
@@ -47,6 +47,29 @@ const BEDROCK_CONTEXT_WINDOW_OVERFLOW_MESSAGES = [
   'input length and `max_tokens` exceed context limit',
   'too many total text bytes',
 ]
+
+/**
+ * Mapping of Bedrock stop reasons to SDK stop reasons.
+ */
+const STOP_REASON_MAP = {
+  end_turn: 'endTurn',
+  tool_use: 'toolUse',
+  max_tokens: 'maxTokens',
+  stop_sequence: 'stopSequence',
+  content_filtered: 'contentFiltered',
+  guardrail_intervened: 'guardrailIntervened',
+} as const
+
+/**
+ * Converts a snake_case string to camelCase.
+ * Used for mapping unknown stop reasons from Bedrock to SDK format.
+ *
+ * @param str - Snake case string
+ * @returns Camel case string
+ */
+function snakeToCamel(str: string): string {
+  return str.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase())
+}
 
 /**
  * Configuration interface for AWS Bedrock model provider.
@@ -117,11 +140,11 @@ export interface BedrockModelConfig extends BaseModelConfig {
 /**
  * Options for creating a BedrockModelProvider instance.
  */
-export interface BedrockModelProviderOptions {
+export interface BedrockModelProviderOptions extends BedrockModelConfig {
   /**
-   * Configuration for the Bedrock model.
+   * AWS region to use for the Bedrock service.
    */
-  modelConfig?: BedrockModelConfig
+  region: string
 
   /**
    * Configuration for the Bedrock Runtime client.
@@ -171,30 +194,30 @@ export class BedrockModelProvider implements ModelProvider<BedrockModelConfig, B
    * @example
    * ```typescript
    * // Minimal configuration with defaults
-   * const provider = new BedrockModelProvider()
+   * const provider = new BedrockModelProvider({
+   *   region: 'us-west-2'
+   * })
    *
    * // With model configuration
    * const provider = new BedrockModelProvider({
-   *   modelConfig: {
-   *     modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
-   *     maxTokens: 2048,
-   *     temperature: 0.8,
-   *     cachePrompt: 'ephemeral'
-   *   }
+   *   region: 'us-west-2',
+   *   modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
+   *   maxTokens: 2048,
+   *   temperature: 0.8,
+   *   cachePrompt: 'ephemeral'
    * })
    *
    * // With client configuration
    * const provider = new BedrockModelProvider({
+   *   region: 'us-east-1',
    *   clientConfig: {
-   *     region: 'us-east-1',
    *     credentials: myCredentials
    *   }
    * })
    * ```
    */
   constructor(options?: BedrockModelProviderOptions) {
-    const modelConfig = options?.modelConfig || {}
-    const clientConfig = options?.clientConfig || {}
+    const { region, clientConfig, ...modelConfig } = options ?? { region: '' }
 
     // Initialize model config with default model ID if not provided
     this.config = {
@@ -203,13 +226,20 @@ export class BedrockModelProvider implements ModelProvider<BedrockModelConfig, B
     }
 
     // Build user agent string (extend if provided, otherwise use SDK identifier)
-    const customUserAgent = clientConfig.customUserAgent
+    const customUserAgent = clientConfig?.customUserAgent
       ? `${clientConfig.customUserAgent} strands-agents-ts-sdk`
       : 'strands-agents-ts-sdk'
 
+    // Ensure we have a region
+    const finalRegion = region || clientConfig?.region
+    if (!finalRegion) {
+      throw new Error('AWS region is required. Please provide it via the region parameter or clientConfig.region.')
+    }
+
     // Initialize Bedrock Runtime client with custom user agent
     this.client = new BedrockRuntimeClient({
-      ...clientConfig,
+      ...(clientConfig || {}),
+      region: finalRegion,
       customUserAgent,
     })
   }
@@ -299,11 +329,6 @@ export class BedrockModelProvider implements ModelProvider<BedrockModelConfig, B
     } catch (error) {
       const err = error as Error
 
-      // Check for throttling (check this first as it's most specific)
-      if (err instanceof ThrottlingException) {
-        throw new ModelThrottledError(err.message)
-      }
-
       // Check for context window overflow
       if (BEDROCK_CONTEXT_WINDOW_OVERFLOW_MESSAGES.some((msg) => err.message.includes(msg))) {
         throw new ContextWindowOverflowError(err.message)
@@ -361,12 +386,12 @@ export class BedrockModelProvider implements ModelProvider<BedrockModelConfig, B
         } as Tool)
       }
 
-      const toolConfig = {
+      const toolConfig: { tools: Tool[]; toolChoice?: ToolChoice } = {
         tools: tools,
       }
 
       if (options.toolChoice) {
-        Object.assign(toolConfig, { toolChoice: options.toolChoice as JSONValue })
+        toolConfig.toolChoice = options.toolChoice as ToolChoice
       }
 
       request.toolConfig = toolConfig
@@ -566,7 +591,8 @@ export class BedrockModelProvider implements ModelProvider<BedrockModelConfig, B
 
           default: {
             console.warn(`Unsupported delta format: ${JSON.stringify(delta)}`)
-            break
+            // Don't add event for unsupported formats - return early
+            return events
           }
         }
 
@@ -596,37 +622,9 @@ export class BedrockModelProvider implements ModelProvider<BedrockModelConfig, B
           type: 'modelMessageStopEvent',
         }
 
-        let mappedStopReason: StopReason
-        switch (data.stopReason!) {
-          case 'end_turn': {
-            mappedStopReason = 'endTurn'
-            break
-          }
-          case 'content_filtered': {
-            mappedStopReason = 'contentFiltered'
-            break
-          }
-          case 'guardrail_intervened': {
-            mappedStopReason = 'guardrailIntervened'
-            break
-          }
-          case 'max_tokens': {
-            mappedStopReason = 'maxTokens'
-            break
-          }
-          case 'model_context_window_exceeded': {
-            mappedStopReason = 'modelContextWindowExceeded'
-            break
-          }
-          case 'stop_sequence': {
-            mappedStopReason = 'stopSequence'
-            break
-          }
-          case 'tool_use': {
-            mappedStopReason = 'toolUse'
-            break
-          }
-        }
+        const stopReason = data.stopReason! as string
+        const mappedStopReason =
+          STOP_REASON_MAP[stopReason as keyof typeof STOP_REASON_MAP] ?? (snakeToCamel(stopReason) as StopReason)
 
         event.stopReason = mappedStopReason
 

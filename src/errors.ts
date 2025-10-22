@@ -32,47 +32,10 @@ export class ContextWindowOverflowError extends Error {
   constructor(message: string) {
     super(message)
     this.name = 'ContextWindowOverflowError'
-    Object.setPrototypeOf(this, ContextWindowOverflowError.prototype)
 
     // Maintains proper stack trace for where our error was thrown (only available on V8)
     if (Error.captureStackTrace) {
       Error.captureStackTrace(this, ContextWindowOverflowError)
-    }
-  }
-}
-
-/**
- * Error thrown when the model provider throttles requests.
- *
- * This error indicates that the model service is rate-limiting requests,
- * typically due to exceeding quota limits or making too many requests
- * in a short period.
- *
- * @example
- * ```typescript
- * try {
- *   await provider.stream(messages)
- * } catch (error) {
- *   if (error instanceof ModelThrottledError) {
- *     console.log('Requests are being throttled, need to implement retry logic')
- *   }
- * }
- * ```
- */
-export class ModelThrottledError extends Error {
-  /**
-   * Creates a new ModelThrottledError.
-   *
-   * @param message - Error message describing the throttling condition
-   */
-  constructor(message: string) {
-    super(message)
-    this.name = 'ModelThrottledError'
-    Object.setPrototypeOf(this, ModelThrottledError.prototype)
-
-    // Maintains proper stack trace for where our error was thrown (only available on V8)
-    if (Error.captureStackTrace) {
-      Error.captureStackTrace(this, ModelThrottledError)
     }
   }
 }

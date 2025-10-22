@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { fromNodeProviderChain } from '@aws-sdk/credential-providers'
-import { BedrockModelProvider, DEFAULT_BEDROCK_MODEL_ID } from '@strands-agents/sdk'
+import { BedrockModelProvider } from '@strands-agents/sdk'
 import { ContextWindowOverflowError } from '@strands-agents/sdk'
 import type { Message } from '@strands-agents/sdk'
 import type { ToolSpec } from '@strands-agents/sdk'
@@ -23,10 +23,8 @@ describe('BedrockModelProvider Integration Tests', () => {
       'streams a simple text response',
       async () => {
         const provider = new BedrockModelProvider({
-          modelConfig: {
-            modelId: DEFAULT_BEDROCK_MODEL_ID,
-            maxTokens: 100,
-          },
+          region: process.env.AWS_REGION || 'us-west-2',
+          maxTokens: 100,
         })
 
         const messages: Message[] = [
@@ -71,9 +69,8 @@ describe('BedrockModelProvider Integration Tests', () => {
       'respects system prompt',
       async () => {
         const provider = new BedrockModelProvider({
-          modelConfig: {
-            maxTokens: 50,
-          },
+          region: process.env.AWS_REGION || 'us-west-2',
+          maxTokens: 50,
         })
 
         const messages: Message[] = [
@@ -110,9 +107,8 @@ describe('BedrockModelProvider Integration Tests', () => {
       'requests tool use when appropriate',
       async () => {
         const provider = new BedrockModelProvider({
-          modelConfig: {
-            maxTokens: 200,
-          },
+          region: process.env.AWS_REGION || 'us-west-2',
+          maxTokens: 200,
         })
 
         const calculatorTool: ToolSpec = {
@@ -176,9 +172,8 @@ describe('BedrockModelProvider Integration Tests', () => {
       'respects maxTokens configuration',
       async () => {
         const provider = new BedrockModelProvider({
-          modelConfig: {
-            maxTokens: 20, // Very small limit
-          },
+          region: process.env.AWS_REGION || 'us-west-2',
+          maxTokens: 20, // Very small limit,
         })
 
         const messages: Message[] = [
@@ -210,9 +205,8 @@ describe('BedrockModelProvider Integration Tests', () => {
       'handles invalid model ID gracefully',
       async () => {
         const provider = new BedrockModelProvider({
-          modelConfig: {
-            modelId: 'invalid-model-id-that-does-not-exist',
-          },
+          region: process.env.AWS_REGION || 'us-west-2',
+          modelId: 'invalid-model-id-that-does-not-exist',
         })
 
         const messages: Message[] = [
@@ -237,10 +231,8 @@ describe('BedrockModelProvider Integration Tests', () => {
       'throws ContextWindowOverflowError when input exceeds context window',
       async () => {
         const provider = new BedrockModelProvider({
-          modelConfig: {
-            modelId: DEFAULT_BEDROCK_MODEL_ID,
-            maxTokens: 100,
-          },
+          region: process.env.AWS_REGION || 'us-west-2',
+          maxTokens: 100,
         })
 
         // Create a message that exceeds context window (200k tokens ~800k characters)

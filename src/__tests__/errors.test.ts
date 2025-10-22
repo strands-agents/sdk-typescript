@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { ContextWindowOverflowError, ModelThrottledError } from '../errors'
+import { ContextWindowOverflowError } from '../errors'
 
 describe('ContextWindowOverflowError', () => {
   describe('when instantiated with a message', () => {
@@ -18,29 +18,6 @@ describe('ContextWindowOverflowError', () => {
 
     it('is an instance of Error', () => {
       const error = new ContextWindowOverflowError('test')
-
-      expect(error).toBeInstanceOf(Error)
-    })
-  })
-})
-
-describe('ModelThrottledError', () => {
-  describe('when instantiated with a message', () => {
-    it('creates an error with the correct message', () => {
-      const message = 'Model requests are being throttled'
-      const error = new ModelThrottledError(message)
-
-      expect(error.message).toBe(message)
-    })
-
-    it('has the correct error name', () => {
-      const error = new ModelThrottledError('test')
-
-      expect(error.name).toBe('ModelThrottledError')
-    })
-
-    it('is an instance of Error', () => {
-      const error = new ModelThrottledError('test')
 
       expect(error).toBeInstanceOf(Error)
     })

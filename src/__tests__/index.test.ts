@@ -5,16 +5,14 @@ describe('index', () => {
   describe('when importing from main entry point', () => {
     it('exports error classes', () => {
       expect(SDK.ContextWindowOverflowError).toBeDefined()
-      expect(SDK.ModelThrottledError).toBeDefined()
     })
 
     it('exports BedrockModelProvider', () => {
       expect(SDK.BedrockModelProvider).toBeDefined()
-      expect(SDK.DEFAULT_BEDROCK_MODEL_ID).toBeDefined()
     })
 
     it('can instantiate BedrockModelProvider', () => {
-      const provider = new SDK.BedrockModelProvider()
+      const provider = new SDK.BedrockModelProvider({ region: 'us-west-2' })
       expect(provider).toBeInstanceOf(SDK.BedrockModelProvider)
       expect(provider.getConfig()).toBeDefined()
     })
@@ -25,15 +23,11 @@ describe('index', () => {
       const _typeCheck: {
         // Error types
         contextError: typeof SDK.ContextWindowOverflowError
-        throttleError: typeof SDK.ModelThrottledError
         // Model provider
         provider: typeof SDK.BedrockModelProvider
-        modelId: typeof SDK.DEFAULT_BEDROCK_MODEL_ID
       } = {
         contextError: SDK.ContextWindowOverflowError,
-        throttleError: SDK.ModelThrottledError,
         provider: SDK.BedrockModelProvider,
-        modelId: SDK.DEFAULT_BEDROCK_MODEL_ID,
       }
       expect(_typeCheck).toBeDefined()
     })

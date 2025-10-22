@@ -74,12 +74,7 @@ export interface StreamOptions {
  *   }
  * }
  * ```
- */
-export interface ModelProviderConstructor<T extends BaseModelConfig, C = unknown> {
-  new (initOptions?: C): ModelProvider<T, C>
-}
-
-/**
+ *
  * Base interface for model providers.
  * Defines the contract that all model provider implementations must follow.
  *
