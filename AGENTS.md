@@ -17,14 +17,29 @@ This document provides guidance specifically for AI agents working on the Strand
 ```
 sdk-typescript/
 ├── src/                          # Source code (all production code)
-│   ├── __tests__/                # Unit tests (co-located with source)
-│   │   ├── hello.test.ts         # Tests for hello.ts
+│   ├── __tests__/                # Unit tests for root-level source files
+│   │   ├── errors.test.ts        # Tests for error classes
 │   │   └── index.test.ts         # Tests for main entry point
-│   ├── index.ts                  # Main SDK entry point (single export point)
-│   └── hello.ts                  # Example: Hello world function
+│   │
+│   ├── models/                   # Model provider implementations
+│   │   ├── __tests__/            # Unit tests for model providers
+│   │   │   └── bedrock.test.ts   # Tests for Bedrock model provider
+│   │   ├── bedrock.ts            # AWS Bedrock model provider
+│   │   ├── model.ts              # Base model provider interface
+│   │   └── streaming.ts          # Streaming event types
+│   │
+│   ├── tools/                    # Tool definitions and types
+│   │   └── types.ts              # Tool-related type definitions
+│   │
+│   ├── types/                    # Core type definitions
+│   │   ├── json.ts               # JSON schema and value types
+│   │   └── messages.ts           # Message and content block types
+│   │
+│   ├── errors.ts                 # Custom error classes
+│   └── index.ts                  # Main SDK entry point (single export point)
 │
 ├── tests_integ/                  # Integration tests (separate from source)
-│   └── environment.test.ts       # Environment compatibility tests
+│   └── bedrock.test.ts           # Bedrock integration tests (requires AWS credentials)
 │
 ├── .github/                      # GitHub Actions workflows
 │   ├── workflows/                # CI/CD workflows
@@ -45,7 +60,7 @@ sdk-typescript/
 │
 ├── package.json                  # Project configuration and dependencies
 ├── tsconfig.json                 # TypeScript compiler configuration
-├── vitest.config.ts              # Testing configuration
+├── vitest.config.ts              # Testing configuration (with unit/integ projects)
 ├── eslint.config.js              # Linting configuration
 ├── .prettierrc                   # Code formatting configuration
 ├── .gitignore                    # Git ignore rules
@@ -59,10 +74,15 @@ sdk-typescript/
 ### Directory Purposes
 
 - **`src/`**: All production code lives here with co-located unit tests
-- **`src/__tests__/`**: Unit tests for specific source files (tests internal functionality)
+- **`src/__tests__/`**: Unit tests for root-level source files
+- **`src/models/`**: Model provider implementations (Bedrock, future providers)
+- **`src/tools/`**: Tool definitions and types for agent tool use
+- **`src/types/`**: Core type definitions used across the SDK
 - **`tests_integ/`**: Integration tests (tests public API and external integrations)
 - **`.github/workflows/`**: CI/CD automation and quality gates
 - **`.project/`**: Task management and project tracking
+
+**IMPORTANT**: After making changes that affect the directory structure (adding new directories, moving files, or adding significant new files), you MUST update this directory structure section to reflect the current state of the repository.
 
 ## Development Workflow for Agents
 
