@@ -2,6 +2,20 @@ import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
   test: {
+    projects: [
+      {
+        test: {
+          include: ['src/**/__tests__/**'],
+          name: { label: 'unit', color: 'green' },
+        }
+      },
+      {
+        test: {
+          include: ['tests_integ/**'],
+          name: { label: 'integ', color: 'magenta' },
+        }
+      }
+    ],
     sequence: {
       concurrent: true
     },

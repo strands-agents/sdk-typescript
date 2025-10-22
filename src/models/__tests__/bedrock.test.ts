@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { BedrockRuntimeClient } from '@aws-sdk/client-bedrock-runtime'
+import { BedrockRuntimeClient, ValidationException } from '@aws-sdk/client-bedrock-runtime'
 import { BedrockModelProvider, DEFAULT_BEDROCK_MODEL_ID, type BedrockModelConfig } from '../bedrock'
 import { ContextWindowOverflowError, ModelThrottledError } from '../../errors'
 import type { Message } from '../../types/messages'
@@ -38,12 +38,21 @@ vi.mock('@aws-sdk/client-bedrock-runtime', () => {
     }
   }
 
+  // Create a mock ValidationException class
+  class MockValidationException extends Error {
+    constructor(opts: { message: string; $metadata: Record<string, unknown> }) {
+      super(opts.message)
+      this.name = 'ValidationException'
+    }
+  }
+
   return {
     BedrockRuntimeClient: vi.fn().mockImplementation(() => ({
       send: mockSend,
     })),
     ConverseStreamCommand: vi.fn(),
     ThrottlingException: MockThrottlingException,
+    ValidationException: MockValidationException,
   }
 })
 

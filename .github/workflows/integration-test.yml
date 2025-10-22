@@ -67,5 +67,8 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Build the package
+        run: npm run build
+
       - name: Run integration tests
         run: npm run test:integ
