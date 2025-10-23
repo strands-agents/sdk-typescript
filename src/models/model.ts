@@ -48,7 +48,7 @@ export interface StreamOptions {
  * @typeParam _C - Client configuration type for provider-specific client setup (used by implementations)
  */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-export interface ModelProvider<T extends BaseModelConfig, _C = unknown> {
+export interface Model<T extends BaseModelConfig, _C = unknown> {
   /**
    * Updates the model configuration.
    * Merges the provided configuration with existing settings.

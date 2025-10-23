@@ -465,9 +465,9 @@ describe('calculateTotal', () => {
 
 **Example Implementation Test:**
 ```typescript
-describe('BedrockModelProvider', () => {
+describe('BedrockModel', () => {
   it('streams messages correctly', async () => {
-    const provider = new BedrockModelProvider(config)
+    const provider = new BedrockModel(config)
     const stream = provider.stream(messages)
     
     for await (const event of stream) {

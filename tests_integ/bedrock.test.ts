@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { fromNodeProviderChain } from '@aws-sdk/credential-providers'
-import { BedrockModelProvider } from '@strands-agents/sdk'
+import { BedrockModel } from '@strands-agents/sdk'
 import { ContextWindowOverflowError } from '@strands-agents/sdk'
 import type { Message } from '@strands-agents/sdk'
 import type { ToolSpec } from '@strands-agents/sdk'
@@ -30,10 +30,10 @@ try {
   console.log('⏭️  AWS credentials not available - integration tests will be skipped')
 }
 
-describe.skipIf(!hasCredentials)('BedrockModelProvider Integration Tests', () => {
+describe.skipIf(!hasCredentials)('BedrockModel Integration Tests', () => {
   describe('Basic Streaming', () => {
     it.concurrent('streams a simple text response', async () => {
-      const provider = new BedrockModelProvider({
+      const provider = new BedrockModel({
         maxTokens: 100,
       })
 
@@ -71,7 +71,7 @@ describe.skipIf(!hasCredentials)('BedrockModelProvider Integration Tests', () =>
     })
 
     it.concurrent('respects system prompt', async () => {
-      const provider = new BedrockModelProvider({
+      const provider = new BedrockModel({
         maxTokens: 50,
       })
 
@@ -101,7 +101,7 @@ describe.skipIf(!hasCredentials)('BedrockModelProvider Integration Tests', () =>
 
   describe('Tool Use', () => {
     it.concurrent('requests tool use when appropriate', async () => {
-      const provider = new BedrockModelProvider({
+      const provider = new BedrockModel({
         maxTokens: 200,
       })
 
@@ -158,7 +158,7 @@ describe.skipIf(!hasCredentials)('BedrockModelProvider Integration Tests', () =>
 
   describe('Configuration', () => {
     it.concurrent('respects maxTokens configuration', async () => {
-      const provider = new BedrockModelProvider({
+      const provider = new BedrockModel({
         maxTokens: 20, // Very small limit,
       })
 
@@ -183,7 +183,7 @@ describe.skipIf(!hasCredentials)('BedrockModelProvider Integration Tests', () =>
 
   describe('Error Handling', () => {
     it.concurrent('handles invalid model ID gracefully', async () => {
-      const provider = new BedrockModelProvider({
+      const provider = new BedrockModel({
         modelId: 'invalid-model-id-that-does-not-exist',
       })
 
@@ -204,7 +204,7 @@ describe.skipIf(!hasCredentials)('BedrockModelProvider Integration Tests', () =>
     })
 
     it.concurrent('throws ContextWindowOverflowError when input exceeds context window', async () => {
-      const provider = new BedrockModelProvider({
+      const provider = new BedrockModel({
         maxTokens: 100,
       })
 

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { BedrockRuntimeClient } from '@aws-sdk/client-bedrock-runtime'
-import { BedrockModelProvider } from '../bedrock'
+import { BedrockModel } from '../bedrock'
 import { ContextWindowOverflowError } from '../../errors'
 import type { Message } from '../../types/messages'
 import type { StreamOptions } from '../model'
@@ -15,6 +15,19 @@ async function collectEvents(stream: AsyncIterable<ModelProviderStreamEvent>): P
     events.push(event)
   }
   return events
+}
+
+/**
+ * Helper function to setup mock send with custom stream generator.
+ */
+function setupMockSend(streamGenerator: () => AsyncGenerator<unknown>): void {
+  vi.clearAllMocks()
+  const mockSend = vi.fn(
+    async (): Promise<{ stream: AsyncIterable<unknown> }> => ({
+      stream: streamGenerator(),
+    })
+  )
+  vi.mocked(BedrockRuntimeClient).mockImplementation(() => ({ send: mockSend }) as never)
 }
 
 // Mock the AWS SDK
@@ -60,7 +73,7 @@ vi.mock('@aws-sdk/client-bedrock-runtime', () => {
   }
 })
 
-describe('BedrockModelProvider', () => {
+describe('BedrockModel', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     delete process.env.AWS_REGION
@@ -72,14 +85,14 @@ describe('BedrockModelProvider', () => {
 
   describe('constructor', () => {
     it('creates an instance with default configuration', () => {
-      const provider = new BedrockModelProvider()
+      const provider = new BedrockModel()
       const config = provider.getConfig()
       expect(config.modelId).toBeDefined()
     })
 
     it('uses provided model ID ', () => {
       const customModelId = 'us.anthropic.claude-3-5-sonnet-20241022-v2:0'
-      const provider = new BedrockModelProvider({ modelId: customModelId })
+      const provider = new BedrockModel({ modelId: customModelId })
       expect(provider.getConfig()).toStrictEqual({
         modelId: customModelId,
       })
@@ -87,7 +100,7 @@ describe('BedrockModelProvider', () => {
 
     it('uses provided region', () => {
       const customRegion = 'eu-west-1'
-      new BedrockModelProvider({ region: customRegion })
+      new BedrockModel({ region: customRegion })
       expect(BedrockRuntimeClient).toHaveBeenCalledWith({
         region: customRegion,
         customUserAgent: 'strands-agents-ts-sdk',
@@ -96,7 +109,7 @@ describe('BedrockModelProvider', () => {
 
     it('extends custom user agent if provided', () => {
       const customAgent = 'my-app/1.0'
-      new BedrockModelProvider({ region: 'us-west-2', clientConfig: { customUserAgent: customAgent } })
+      new BedrockModel({ region: 'us-west-2', clientConfig: { customUserAgent: customAgent } })
       expect(BedrockRuntimeClient).toHaveBeenCalledWith({
         region: 'us-west-2',
         customUserAgent: 'my-app/1.0 strands-agents-ts-sdk',
@@ -106,7 +119,7 @@ describe('BedrockModelProvider', () => {
     it('passes custom endpoint to client', () => {
       const endpoint = 'https://vpce-abc.bedrock-runtime.us-west-2.vpce.amazonaws.com'
       const region = 'us-west-2'
-      new BedrockModelProvider({ region, clientConfig: { endpoint } })
+      new BedrockModel({ region, clientConfig: { endpoint } })
       expect(BedrockRuntimeClient).toHaveBeenCalledWith({
         region,
         endpoint,
@@ -120,7 +133,7 @@ describe('BedrockModelProvider', () => {
         secretAccessKey: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
       }
       const region = 'us-west-2'
-      new BedrockModelProvider({ region, clientConfig: { credentials } })
+      new BedrockModel({ region, clientConfig: { credentials } })
       expect(BedrockRuntimeClient).toHaveBeenCalledWith({
         region,
         credentials,
@@ -131,7 +144,7 @@ describe('BedrockModelProvider', () => {
 
   describe('updateConfig', () => {
     it('merges new config with existing config', () => {
-      const provider = new BedrockModelProvider({ region: 'us-west-2', temperature: 0.5 })
+      const provider = new BedrockModel({ region: 'us-west-2', temperature: 0.5 })
       provider.updateConfig({ temperature: 0.8, maxTokens: 2048 })
       expect(provider.getConfig()).toStrictEqual({
         modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
@@ -141,7 +154,7 @@ describe('BedrockModelProvider', () => {
     })
 
     it('preserves fields not included in the update', () => {
-      const provider = new BedrockModelProvider({
+      const provider = new BedrockModel({
         region: 'us-west-2',
         modelId: 'custom-model',
         temperature: 0.5,
@@ -158,7 +171,7 @@ describe('BedrockModelProvider', () => {
 
   describe('getConfig', () => {
     it('returns the current configuration', () => {
-      const provider = new BedrockModelProvider({
+      const provider = new BedrockModel({
         region: 'us-west-2',
         modelId: 'test-model',
         maxTokens: 1024,
@@ -176,7 +189,7 @@ describe('BedrockModelProvider', () => {
     const { ConverseStreamCommand } = await import('@aws-sdk/client-bedrock-runtime')
     const mockConverseStreamCommand = vi.mocked(ConverseStreamCommand)
     it('formats the request to bedrock properly', async () => {
-      const provider = new BedrockModelProvider({
+      const provider = new BedrockModel({
         region: 'us-west-2',
         modelId: 'test-model',
         maxTokens: 1024,
@@ -247,7 +260,7 @@ describe('BedrockModelProvider', () => {
     it('formats tool use messages', async () => {
       const { ConverseStreamCommand } = await import('@aws-sdk/client-bedrock-runtime')
       const mockConverseStreamCommand = vi.mocked(ConverseStreamCommand)
-      const provider = new BedrockModelProvider()
+      const provider = new BedrockModel()
       const messages: Message[] = [
         {
           role: 'assistant',
@@ -287,7 +300,7 @@ describe('BedrockModelProvider', () => {
     })
 
     it('formats tool result messages', async () => {
-      const provider = new BedrockModelProvider()
+      const provider = new BedrockModel()
       const messages: Message[] = [
         {
           role: 'user',
@@ -338,7 +351,7 @@ describe('BedrockModelProvider', () => {
     })
 
     it('formats reasoning messages properly', async () => {
-      const provider = new BedrockModelProvider()
+      const provider = new BedrockModel()
       const messages: Message[] = [
         {
           role: 'user',
@@ -388,7 +401,7 @@ describe('BedrockModelProvider', () => {
 
   describe('stream', () => {
     it('yields and validate events', async () => {
-      const provider = new BedrockModelProvider()
+      const provider = new BedrockModel()
       const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
 
       const events = await collectEvents(provider.stream(messages))
@@ -434,7 +447,7 @@ describe('BedrockModelProvider', () => {
       const mockSendError = vi.fn().mockRejectedValue(new Error('Input is too long for requested model'))
       vi.mocked(BedrockRuntimeClient).mockImplementation(() => ({ send: mockSendError }) as never)
 
-      const provider = new BedrockModelProvider()
+      const provider = new BedrockModel()
       const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
 
       let eventCount = 0
@@ -453,7 +466,7 @@ describe('BedrockModelProvider', () => {
       const mockSendError = vi.fn().mockRejectedValue(error)
       vi.mocked(BedrockRuntimeClient).mockImplementation(() => ({ send: mockSendError }) as never)
 
-      const provider = new BedrockModelProvider()
+      const provider = new BedrockModel()
       const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
 
       let eventCount = 0
@@ -466,24 +479,18 @@ describe('BedrockModelProvider', () => {
     })
 
     it('handles tool use input delta', async () => {
-      vi.clearAllMocks()
-      const mockSend = vi.fn(
-        async (): Promise<{ stream: AsyncIterable<unknown> }> => ({
-          stream: (async function* (): AsyncGenerator<unknown> {
-            yield { messageStart: { role: 'assistant' } }
-            yield {
-              contentBlockStart: { contentBlockIndex: 0, start: { toolUse: { name: 'calc', toolUseId: 'id' } } },
-            }
-            yield { contentBlockDelta: { delta: { toolUse: { input: '{"a": 1}' } }, contentBlockIndex: 0 } }
-            yield { contentBlockStop: { contentBlockIndex: 0 } }
-            yield { messageStop: { stopReason: 'tool_use' } }
-            yield { metadata: { usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } } }
-          })(),
-        })
-      )
-      vi.mocked(BedrockRuntimeClient).mockImplementation(() => ({ send: mockSend }) as never)
+      setupMockSend(async function* () {
+        yield { messageStart: { role: 'assistant' } }
+        yield {
+          contentBlockStart: { contentBlockIndex: 0, start: { toolUse: { name: 'calc', toolUseId: 'id' } } },
+        }
+        yield { contentBlockDelta: { delta: { toolUse: { input: '{"a": 1}' } }, contentBlockIndex: 0 } }
+        yield { contentBlockStop: { contentBlockIndex: 0 } }
+        yield { messageStop: { stopReason: 'tool_use' } }
+        yield { metadata: { usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } } }
+      })
 
-      const provider = new BedrockModelProvider()
+      const provider = new BedrockModel()
       const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
 
       const events = await collectEvents(provider.stream(messages))
@@ -498,33 +505,27 @@ describe('BedrockModelProvider', () => {
     })
 
     it('handles reasoning content delta with both text and signature, as well as redactedContent', async () => {
-      vi.clearAllMocks()
-      const mockSend = vi.fn(
-        async (): Promise<{ stream: AsyncIterable<unknown> }> => ({
-          stream: (async function* (): AsyncGenerator<unknown> {
-            yield { messageStart: { role: 'assistant' } }
-            yield { contentBlockStart: { contentBlockIndex: 0 } }
-            yield {
-              contentBlockDelta: {
-                delta: { reasoningContent: { text: 'thinking...', signature: 'sig123' } },
-                contentBlockIndex: 0,
-              },
-            }
-            yield {
-              contentBlockDelta: {
-                delta: { reasoningContent: { redactedContent: new Uint8Array(1) } },
-                contentBlockIndex: 0,
-              },
-            }
-            yield { contentBlockStop: { contentBlockIndex: 0 } }
-            yield { messageStop: { stopReason: 'end_turn' } }
-            yield { metadata: { usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } } }
-          })(),
-        })
-      )
-      vi.mocked(BedrockRuntimeClient).mockImplementation(() => ({ send: mockSend }) as never)
+      setupMockSend(async function* () {
+        yield { messageStart: { role: 'assistant' } }
+        yield { contentBlockStart: { contentBlockIndex: 0 } }
+        yield {
+          contentBlockDelta: {
+            delta: { reasoningContent: { text: 'thinking...', signature: 'sig123' } },
+            contentBlockIndex: 0,
+          },
+        }
+        yield {
+          contentBlockDelta: {
+            delta: { reasoningContent: { redactedContent: new Uint8Array(1) } },
+            contentBlockIndex: 0,
+          },
+        }
+        yield { contentBlockStop: { contentBlockIndex: 0 } }
+        yield { messageStop: { stopReason: 'end_turn' } }
+        yield { metadata: { usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } } }
+      })
 
-      const provider = new BedrockModelProvider()
+      const provider = new BedrockModel()
       const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
 
       const events = await collectEvents(provider.stream(messages))
@@ -547,34 +548,28 @@ describe('BedrockModelProvider', () => {
     })
 
     it('handles reasoning content delta with only text, skips unsupported types', async () => {
-      vi.clearAllMocks()
-      const mockSend = vi.fn(
-        async (): Promise<{ stream: AsyncIterable<unknown> }> => ({
-          stream: (async function* (): AsyncGenerator<unknown> {
-            yield { messageStart: { role: 'assistant' } }
-            yield { contentBlockStart: { contentBlockIndex: 0 } }
-            yield {
-              contentBlockDelta: {
-                delta: { reasoningContent: { text: 'thinking...' } },
-                contentBlockIndex: 0,
-              },
-            }
-            yield {
-              contentBlockDelta: {
-                delta: { unknown: 'type' },
-                contentBlockIndex: 0,
-              },
-            }
-            yield { contentBlockStop: { contentBlockIndex: 0 } }
-            yield { messageStop: { stopReason: 'end_turn' } }
-            yield { metadata: { usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } } }
-            yield { unknown: 'type' }
-          })(),
-        })
-      )
-      vi.mocked(BedrockRuntimeClient).mockImplementation(() => ({ send: mockSend }) as never)
+      setupMockSend(async function* () {
+        yield { messageStart: { role: 'assistant' } }
+        yield { contentBlockStart: { contentBlockIndex: 0 } }
+        yield {
+          contentBlockDelta: {
+            delta: { reasoningContent: { text: 'thinking...' } },
+            contentBlockIndex: 0,
+          },
+        }
+        yield {
+          contentBlockDelta: {
+            delta: { unknown: 'type' },
+            contentBlockIndex: 0,
+          },
+        }
+        yield { contentBlockStop: { contentBlockIndex: 0 } }
+        yield { messageStop: { stopReason: 'end_turn' } }
+        yield { metadata: { usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } } }
+        yield { unknown: 'type' }
+      })
 
-      const provider = new BedrockModelProvider()
+      const provider = new BedrockModel()
       const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
 
       const events = await collectEvents(provider.stream(messages))
@@ -590,27 +585,21 @@ describe('BedrockModelProvider', () => {
     })
 
     it('handles reasoning content delta with only signature', async () => {
-      vi.clearAllMocks()
-      const mockSend = vi.fn(
-        async (): Promise<{ stream: AsyncIterable<unknown> }> => ({
-          stream: (async function* (): AsyncGenerator<unknown> {
-            yield { messageStart: { role: 'assistant' } }
-            yield { contentBlockStart: { contentBlockIndex: 0 } }
-            yield {
-              contentBlockDelta: {
-                delta: { reasoningContent: { signature: 'sig123' } },
-                contentBlockIndex: 0,
-              },
-            }
-            yield { contentBlockStop: { contentBlockIndex: 0 } }
-            yield { messageStop: { stopReason: 'end_turn' } }
-            yield { metadata: { usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } } }
-          })(),
-        })
-      )
-      vi.mocked(BedrockRuntimeClient).mockImplementation(() => ({ send: mockSend }) as never)
+      setupMockSend(async function* () {
+        yield { messageStart: { role: 'assistant' } }
+        yield { contentBlockStart: { contentBlockIndex: 0 } }
+        yield {
+          contentBlockDelta: {
+            delta: { reasoningContent: { signature: 'sig123' } },
+            contentBlockIndex: 0,
+          },
+        }
+        yield { contentBlockStop: { contentBlockIndex: 0 } }
+        yield { messageStop: { stopReason: 'end_turn' } }
+        yield { metadata: { usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } } }
+      })
 
-      const provider = new BedrockModelProvider()
+      const provider = new BedrockModel()
       const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
 
       const events = await collectEvents(provider.stream(messages))
@@ -626,94 +615,72 @@ describe('BedrockModelProvider', () => {
     })
 
     it('handles cache usage metrics', async () => {
-      vi.clearAllMocks()
-      const mockSend = vi.fn(
-        async (): Promise<{ stream: AsyncIterable<unknown> }> => ({
-          stream: (async function* (): AsyncGenerator<unknown> {
-            yield { messageStart: { role: 'assistant' } }
-            yield { contentBlockStart: { contentBlockIndex: 0 } }
-            yield { contentBlockDelta: { delta: { text: 'Hello' }, contentBlockIndex: 0 } }
-            yield { contentBlockStop: { contentBlockIndex: 0 } }
-            yield { messageStop: { stopReason: 'end_turn' } }
-            yield {
-              metadata: {
-                usage: {
-                  inputTokens: 100,
-                  outputTokens: 50,
-                  totalTokens: 150,
-                  cacheReadInputTokens: 80,
-                  cacheWriteInputTokens: 20,
-                },
-              },
-            }
-          })(),
-        })
-      )
-      vi.mocked(BedrockRuntimeClient).mockImplementation(() => ({ send: mockSend }) as never)
+      setupMockSend(async function* () {
+        yield { messageStart: { role: 'assistant' } }
+        yield { contentBlockStart: { contentBlockIndex: 0 } }
+        yield { contentBlockDelta: { delta: { text: 'Hello' }, contentBlockIndex: 0 } }
+        yield { contentBlockStop: { contentBlockIndex: 0 } }
+        yield { messageStop: { stopReason: 'end_turn' } }
+        yield {
+          metadata: {
+            usage: {
+              inputTokens: 100,
+              outputTokens: 50,
+              totalTokens: 150,
+              cacheReadInputTokens: 80,
+              cacheWriteInputTokens: 20,
+            },
+          },
+        }
+      })
 
-      const provider = new BedrockModelProvider()
+      const provider = new BedrockModel()
       const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
 
       const events = await collectEvents(provider.stream(messages))
 
       const metadataEvent = events.find((e) => e.type === 'modelMetadataEvent')
       expect(metadataEvent).toBeDefined()
-      if (metadataEvent?.type === 'modelMetadataEvent') {
-        expect(metadataEvent.usage?.cacheReadInputTokens).toBe(80)
-        expect(metadataEvent.usage?.cacheWriteInputTokens).toBe(20)
-      }
+      expect(metadataEvent?.usage?.cacheReadInputTokens).toBe(80)
+      expect(metadataEvent?.usage?.cacheWriteInputTokens).toBe(20)
     })
 
     it('handles trace in metadata', async () => {
-      vi.clearAllMocks()
-      const mockSend = vi.fn(
-        async (): Promise<{ stream: AsyncIterable<unknown> }> => ({
-          stream: (async function* (): AsyncGenerator<unknown> {
-            yield { messageStart: { role: 'assistant' } }
-            yield { contentBlockStart: { contentBlockIndex: 0 } }
-            yield { contentBlockDelta: { delta: { text: 'Hello' }, contentBlockIndex: 0 } }
-            yield { contentBlockStop: { contentBlockIndex: 0 } }
-            yield { messageStop: { stopReason: 'end_turn' } }
-            yield {
-              metadata: {
-                usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
-                trace: { guardrail: { action: 'INTERVENED' } },
-              },
-            }
-          })(),
-        })
-      )
-      vi.mocked(BedrockRuntimeClient).mockImplementation(() => ({ send: mockSend }) as never)
+      setupMockSend(async function* () {
+        yield { messageStart: { role: 'assistant' } }
+        yield { contentBlockStart: { contentBlockIndex: 0 } }
+        yield { contentBlockDelta: { delta: { text: 'Hello' }, contentBlockIndex: 0 } }
+        yield { contentBlockStop: { contentBlockIndex: 0 } }
+        yield { messageStop: { stopReason: 'end_turn' } }
+        yield {
+          metadata: {
+            usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+            trace: { guardrail: { action: 'INTERVENED' } },
+          },
+        }
+      })
 
-      const provider = new BedrockModelProvider()
+      const provider = new BedrockModel()
       const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
 
       const events = await collectEvents(provider.stream(messages))
 
       const metadataEvent = events.find((e) => e.type === 'modelMetadataEvent')
       expect(metadataEvent).toBeDefined()
-      if (metadataEvent?.type === 'modelMetadataEvent') {
-        expect(metadataEvent.trace).toBeDefined()
-      }
+      expect(metadataEvent?.trace).toBeDefined()
     })
 
     it('handles additionalModelResponseFields', async () => {
-      vi.clearAllMocks()
-      const mockSend = vi.fn(
-        async (): Promise<{ stream: AsyncIterable<unknown> }> => ({
-          stream: (async function* (): AsyncGenerator<unknown> {
-            yield { messageStart: { role: 'assistant' } }
-            yield { contentBlockStart: { contentBlockIndex: 0 } }
-            yield { contentBlockDelta: { delta: { text: 'Hello' }, contentBlockIndex: 0 } }
-            yield { contentBlockStop: { contentBlockIndex: 0 } }
-            yield { messageStop: { stopReason: 'end_turn', additionalModelResponseFields: { customField: 'value' } } }
-            yield { metadata: { usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } } }
-          })(),
-        })
-      )
-      vi.mocked(BedrockRuntimeClient).mockImplementation(() => ({ send: mockSend }) as never)
+      setupMockSend(async function* () {
+        yield { messageStart: { role: 'assistant' } }
+        yield { contentBlockStart: { contentBlockIndex: 0 } }
+        yield { contentBlockDelta: { delta: { text: 'Hello' }, contentBlockIndex: 0 } }
+        yield { contentBlockStop: { contentBlockIndex: 0 } }
+        yield { messageStop: { stopReason: 'end_turn', additionalModelResponseFields: { customField: 'value' } } }
+        yield { metadata: { usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } } }
+      })
 
-      const provider = new BedrockModelProvider()
+      const provider = new BedrockModel()
       const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
 
       const events = await collectEvents(provider.stream(messages))
@@ -737,20 +704,14 @@ describe('BedrockModelProvider', () => {
         ['new_stop_reason', 'newStopReason'],
       ]
       for (const [bedrockReason, expectedReason] of stopReasons) {
-        vi.clearAllMocks()
         it(`handles ${bedrockReason} stop reason types`, async () => {
-          const mockSend = vi.fn(
-            async (): Promise<{ stream: AsyncIterable<unknown> }> => ({
-              stream: (async function* (): AsyncGenerator<unknown> {
-                yield { messageStart: { role: 'assistant' } }
-                yield { messageStop: { stopReason: bedrockReason } }
-                yield { metadata: { usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } } }
-              })(),
-            })
-          )
-          vi.mocked(BedrockRuntimeClient).mockImplementation(() => ({ send: mockSend }) as never)
+          setupMockSend(async function* () {
+            yield { messageStart: { role: 'assistant' } }
+            yield { messageStop: { stopReason: bedrockReason } }
+            yield { metadata: { usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } } }
+          })
 
-          const provider = new BedrockModelProvider()
+          const provider = new BedrockModel()
           const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
 
           const events = []

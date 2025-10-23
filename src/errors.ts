@@ -11,17 +11,6 @@
  * This error indicates that the combined length of the input (prompt, messages,
  * system prompt, and tool definitions) exceeds the maximum context window size
  * supported by the model.
- *
- * @example
- * ```typescript
- * try {
- *   await provider.stream(veryLongMessages)
- * } catch (error) {
- *   if (error instanceof ContextWindowOverflowError) {
- *     console.log('Input too long, need to reduce context')
- *   }
- * }
- * ```
  */
 export class ContextWindowOverflowError extends Error {
   /**
@@ -32,10 +21,5 @@ export class ContextWindowOverflowError extends Error {
   constructor(message: string) {
     super(message)
     this.name = 'ContextWindowOverflowError'
-
-    // Maintains proper stack trace for where our error was thrown (only available on V8)
-    if (Error.captureStackTrace) {
-      Error.captureStackTrace(this, ContextWindowOverflowError)
-    }
   }
 }

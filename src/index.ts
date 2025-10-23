@@ -23,9 +23,6 @@ export type {
   Message,
 } from './types/messages'
 
-// Utility functions
-export { ensureDefined } from './types/validation'
-
 // Tool types
 export type {
   ToolSpec,
@@ -58,8 +55,8 @@ export type {
 } from './models/streaming'
 
 // Model provider types
-export type { BaseModelConfig, StreamOptions, ModelProvider } from './models/model'
+export type { BaseModelConfig, StreamOptions, Model } from './models/model'
 
 // Bedrock model provider
-export { BedrockModelProvider } from './models/bedrock'
-export type { BedrockModelConfig, BedrockModelProviderOptions } from './models/bedrock'
+export { BedrockModel as BedrockModel } from './models/bedrock'
+export type { BedrockModelConfig, BedrockModelOptions } from './models/bedrock'

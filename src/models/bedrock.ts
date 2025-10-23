@@ -26,7 +26,7 @@ import {
   ContentBlockDelta,
   type ToolConfiguration,
 } from '@aws-sdk/client-bedrock-runtime'
-import type { ModelProvider, BaseModelConfig, StreamOptions } from '../models/model'
+import type { Model, BaseModelConfig, StreamOptions } from '../models/model'
 import type { Message, ContentBlock } from '../types/messages'
 import type { ModelProviderStreamEvent, ReasoningDelta, Usage } from '../models/streaming'
 import type { JSONValue } from '../types/json'
@@ -139,9 +139,9 @@ export interface BedrockModelConfig extends BaseModelConfig {
 }
 
 /**
- * Options for creating a BedrockModelProvider instance.
+ * Options for creating a BedrockModel instance.
  */
-export interface BedrockModelProviderOptions extends BedrockModelConfig {
+export interface BedrockModelOptions extends BedrockModelConfig {
   /**
    * AWS region to use for the Bedrock service.
    */
@@ -156,12 +156,12 @@ export interface BedrockModelProviderOptions extends BedrockModelConfig {
 /**
  * AWS Bedrock model provider implementation.
  *
- * Implements the ModelProvider interface for AWS Bedrock using the Converse Stream API.
+ * Implements the Model interface for AWS Bedrock using the Converse Stream API.
  * Supports streaming responses, tool use, prompt caching, and comprehensive error handling.
  *
  * @example
  * ```typescript
- * const provider = new BedrockModelProvider({
+ * const provider = new BedrockModel({
  *   modelConfig: {
  *     modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
  *     maxTokens: 1024,
@@ -183,24 +183,24 @@ export interface BedrockModelProviderOptions extends BedrockModelConfig {
  * }
  * ```
  */
-export class BedrockModelProvider implements ModelProvider<BedrockModelConfig, BedrockRuntimeClientConfig> {
-  private config: BedrockModelConfig
-  private client: BedrockRuntimeClient
+export class BedrockModel implements Model<BedrockModelConfig, BedrockRuntimeClientConfig> {
+  private _config: BedrockModelConfig
+  private _client: BedrockRuntimeClient
 
   /**
-   * Creates a new BedrockModelProvider instance.
+   * Creates a new BedrockModel instance.
    *
    * @param options - Optional configuration for model and client
    *
    * @example
    * ```typescript
    * // Minimal configuration with defaults
-   * const provider = new BedrockModelProvider({
+   * const provider = new BedrockModel({
    *   region: 'us-west-2'
    * })
    *
    * // With model configuration
-   * const provider = new BedrockModelProvider({
+   * const provider = new BedrockModel({
    *   region: 'us-west-2',
    *   modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
    *   maxTokens: 2048,
@@ -209,7 +209,7 @@ export class BedrockModelProvider implements ModelProvider<BedrockModelConfig, B
    * })
    *
    * // With client configuration
-   * const provider = new BedrockModelProvider({
+   * const provider = new BedrockModel({
    *   region: 'us-east-1',
    *   clientConfig: {
    *     credentials: myCredentials
@@ -217,11 +217,11 @@ export class BedrockModelProvider implements ModelProvider<BedrockModelConfig, B
    * })
    * ```
    */
-  constructor(options?: BedrockModelProviderOptions) {
+  constructor(options?: BedrockModelOptions) {
     const { region, clientConfig, ...modelConfig } = options ?? {}
 
     // Initialize model config with default model ID if not provided
-    this.config = {
+    this._config = {
       modelId: DEFAULT_BEDROCK_MODEL_ID,
       ...modelConfig,
     }
@@ -232,7 +232,7 @@ export class BedrockModelProvider implements ModelProvider<BedrockModelConfig, B
       : 'strands-agents-ts-sdk'
 
     // Initialize Bedrock Runtime client with custom user agent
-    this.client = new BedrockRuntimeClient({
+    this._client = new BedrockRuntimeClient({
       ...(clientConfig ?? {}),
       // region takes precedence over clientConfig
       ...(region ? { region: region } : {}),
@@ -256,7 +256,7 @@ export class BedrockModelProvider implements ModelProvider<BedrockModelConfig, B
    * ```
    */
   updateConfig(modelConfig: BedrockModelConfig): void {
-    this.config = { ...this.config, ...modelConfig }
+    this._config = { ...this._config, ...modelConfig }
   }
 
   /**
@@ -271,7 +271,7 @@ export class BedrockModelProvider implements ModelProvider<BedrockModelConfig, B
    * ```
    */
   getConfig(): BedrockModelConfig {
-    return this.config
+    return this._config
   }
 
   /**
@@ -306,17 +306,17 @@ export class BedrockModelProvider implements ModelProvider<BedrockModelConfig, B
   async *stream(messages: Message[], options?: StreamOptions): AsyncIterable<ModelProviderStreamEvent> {
     try {
       // Format the request for Bedrock
-      const request = this.formatRequest(messages, options)
+      const request = this._formatRequest(messages, options)
 
       // Create and send the command
       const command = new ConverseStreamCommand(request)
-      const response = await this.client.send(command)
+      const response = await this._client.send(command)
 
       // Stream the response
       if (response.stream) {
         for await (const chunk of response.stream) {
           // Map Bedrock events to SDK events
-          const events = this.mapBedrockEventToSDKEvents(chunk)
+          const events = this._mapBedrockEventToSDKEvents(chunk)
           for (const event of events) {
             yield event
           }
@@ -342,22 +342,22 @@ export class BedrockModelProvider implements ModelProvider<BedrockModelConfig, B
    * @param options - Stream options
    * @returns Formatted Bedrock request
    */
-  private formatRequest(messages: Message[], options?: StreamOptions): ConverseStreamCommandInput {
+  private _formatRequest(messages: Message[], options?: StreamOptions): ConverseStreamCommandInput {
     const request: ConverseStreamCommandInput = {
-      modelId: this.config.modelId,
-      messages: this.formatMessages(messages),
+      modelId: this._config.modelId,
+      messages: this._formatMessages(messages),
     }
 
     // Add system prompt with optional caching
-    if (options?.systemPrompt || this.config.cachePrompt) {
+    if (options?.systemPrompt || this._config.cachePrompt) {
       const system: BedrockContentBlock[] = []
 
       if (options?.systemPrompt) {
         system.push({ text: options.systemPrompt })
       }
 
-      if (this.config.cachePrompt) {
-        system.push({ cachePoint: { type: this.config.cachePrompt as 'default' } })
+      if (this._config.cachePrompt) {
+        system.push({ cachePoint: { type: this._config.cachePrompt as 'default' } })
       }
 
       request.system = system
@@ -376,9 +376,9 @@ export class BedrockModelProvider implements ModelProvider<BedrockModelConfig, B
           }) as Tool
       )
 
-      if (this.config.cacheTools) {
+      if (this._config.cacheTools) {
         tools.push({
-          cachePoint: { type: this.config.cacheTools as 'default' },
+          cachePoint: { type: this._config.cacheTools as 'default' },
         } as Tool)
       }
 
@@ -395,28 +395,28 @@ export class BedrockModelProvider implements ModelProvider<BedrockModelConfig, B
 
     // Add inference configuration
     const inferenceConfig: InferenceConfiguration = {}
-    if (this.config.maxTokens !== undefined) inferenceConfig.maxTokens = this.config.maxTokens
-    if (this.config.temperature !== undefined) inferenceConfig.temperature = this.config.temperature
-    if (this.config.topP !== undefined) inferenceConfig.topP = this.config.topP
-    if (this.config.stopSequences !== undefined) inferenceConfig.stopSequences = this.config.stopSequences
+    if (this._config.maxTokens !== undefined) inferenceConfig.maxTokens = this._config.maxTokens
+    if (this._config.temperature !== undefined) inferenceConfig.temperature = this._config.temperature
+    if (this._config.topP !== undefined) inferenceConfig.topP = this._config.topP
+    if (this._config.stopSequences !== undefined) inferenceConfig.stopSequences = this._config.stopSequences
 
     if (Object.keys(inferenceConfig).length > 0) {
       request.inferenceConfig = inferenceConfig
     }
 
     // Add additional request fields
-    if (this.config.additionalRequestFields) {
-      request.additionalModelRequestFields = this.config.additionalRequestFields
+    if (this._config.additionalRequestFields) {
+      request.additionalModelRequestFields = this._config.additionalRequestFields
     }
 
     // Add additional response field paths
-    if (this.config.additionalResponseFieldPaths) {
-      request.additionalModelResponseFieldPaths = this.config.additionalResponseFieldPaths
+    if (this._config.additionalResponseFieldPaths) {
+      request.additionalModelResponseFieldPaths = this._config.additionalResponseFieldPaths
     }
 
     // Add additional args (spread them into the request for forward compatibility)
-    if (this.config.additionalArgs) {
-      Object.assign(request, this.config.additionalArgs)
+    if (this._config.additionalArgs) {
+      Object.assign(request, this._config.additionalArgs)
     }
 
     return request
@@ -428,10 +428,10 @@ export class BedrockModelProvider implements ModelProvider<BedrockModelConfig, B
    * @param messages - SDK messages
    * @returns Bedrock-formatted messages
    */
-  private formatMessages(messages: Message[]): BedrockMessage[] {
+  private _formatMessages(messages: Message[]): BedrockMessage[] {
     return messages.map((message) => ({
       role: message.role,
-      content: message.content.map((block) => this.formatContentBlock(block)),
+      content: message.content.map((block) => this._formatContentBlock(block)),
     }))
   }
 
@@ -441,7 +441,7 @@ export class BedrockModelProvider implements ModelProvider<BedrockModelConfig, B
    * @param block - SDK content block
    * @returns Bedrock-formatted content block
    */
-  private formatContentBlock(block: ContentBlock): BedrockContentBlock {
+  private _formatContentBlock(block: ContentBlock): BedrockContentBlock {
     switch (block.type) {
       case 'textBlock':
         return { text: block.text }
@@ -503,7 +503,7 @@ export class BedrockModelProvider implements ModelProvider<BedrockModelConfig, B
    * @param chunk - Bedrock event chunk
    * @returns Array of SDK streaming events
    */
-  private mapBedrockEventToSDKEvents(chunk: ConverseStreamOutput): ModelProviderStreamEvent[] {
+  private _mapBedrockEventToSDKEvents(chunk: ConverseStreamOutput): ModelProviderStreamEvent[] {
     const events: ModelProviderStreamEvent[] = []
 
     // Extract the event type key
