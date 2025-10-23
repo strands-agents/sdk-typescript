@@ -279,7 +279,8 @@ export interface MyConfig {
 - All exported functions, classes, and interfaces must have TSDoc
 - Include `@param` for all parameters
 - Include `@returns` for return values
-- Include `@example` for complex functionality
+- Include `@example` only for exported classes (main SDK entry points like BedrockModel, Agent)
+- Do NOT include `@example` for type definitions, interfaces, or internal types
 - Interface properties MUST have single-line descriptions
 - Interface properties MAY include an optional `@see` link for additional details
 - TSDoc validation enforced by ESLint

@@ -5,26 +5,7 @@ import type { JSONValue } from '../types/json'
  * Union type representing all possible streaming events from a model provider.
  * This is a discriminated union where each event has a unique type field.
  *
- * This allows for type-safe event handling using switch statements:
- *
- * @example
- * ```typescript
- * for await (const event of stream) {
- *   switch (event.type) {
- *     case 'modelMessageStartEvent':
- *       console.log('Message started:', event.role)
- *       break
- *     case 'modelContentBlockDeltaEvent':
- *       if (event.delta.type === 'text') {
- *         console.log('Content delta:', event.delta.text)
- *       }
- *       break
- *     case 'modelMessageStopEvent':
- *       console.log('Message stopped:', event.stopReason)
- *       break
- *   }
- * }
- * ```
+ * This allows for type-safe event handling using switch statements.
  */
 export type ModelProviderStreamEvent =
   | ModelMessageStartEvent
@@ -182,42 +163,6 @@ export interface ToolUseStart {
  * Can be text, tool use input, or reasoning content.
  *
  * This is a discriminated union for type-safe delta handling.
- *
- * @example
- * ```typescript
- * // Text delta
- * const textDelta: ContentBlockDelta = {
- *   type: 'text',
- *   text: 'Hello, '
- * }
- *
- * // Tool use input delta
- * const toolDelta: ContentBlockDelta = {
- *   type: 'toolUseInput',
- *   input: '{"operation":'
- * }
- *
- * // Reasoning delta
- * const reasoningDelta: ContentBlockDelta = {
- *   type: 'reasoning',
- *   text: 'Let me think...'
- * }
- *
- * // Type-safe handling
- * function handleDelta(delta: ContentBlockDelta) {
- *   switch (delta.type) {
- *     case 'text':
- *       console.log(delta.text)
- *       break
- *     case 'toolUseInput':
- *       console.log(delta.input)
- *       break
- *     case 'reasoning':
- *       console.log(delta.text)
- *       break
- *   }
- * }
- * ```
  */
 export type ContentBlockDelta = TextDelta | ToolUseInputDelta | ReasoningDelta
 

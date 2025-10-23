@@ -71,19 +71,6 @@ export interface Model<T extends BaseModelConfig, _C = unknown> {
    * @param messages - Array of conversation messages
    * @param options - Optional streaming configuration
    * @returns Async iterable of streaming events
-   *
-   * @example
-   * ```typescript
-   * const messages: Message[] = [
-   *   { role: 'user', content: [{ type: 'textBlock', text: 'Hello!' }] }
-   * ]
-   *
-   * for await (const event of provider.stream(messages)) {
-   *   if (event.type === 'modelContentBlockDeltaEvent' && event.delta.type === 'textDelta') {
-   *     process.stdout.write(event.delta.text)
-   *   }
-   * }
-   * ```
    */
   stream(messages: Message[], options?: StreamOptions): AsyncIterable<ModelProviderStreamEvent>
 }

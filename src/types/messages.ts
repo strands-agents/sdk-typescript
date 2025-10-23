@@ -4,22 +4,6 @@ import type { ToolResultContent } from '../tools/types'
 /**
  * A message in a conversation between user and assistant.
  * Each message has a role (user or assistant) and an array of content blocks.
- *
- * @example
- * ```typescript
- * const userMessage: Message = {
- *   role: 'user',
- *   content: [{ type: 'textBlock', text: 'What is 2 + 2?' }]
- * }
- *
- * const assistantMessage: Message = {
- *   role: 'assistant',
- *   content: [
- *     { type: 'textBlock', text: 'Let me calculate that for you.' },
- *     { type: 'toolUseBlock', name: 'calculator', toolUseId: 'calc-1', input: { a: 2, b: 2 } }
- *   ]
- * }
- * ```
  */
 export interface Message {
   /**
@@ -44,55 +28,6 @@ export type Role = 'user' | 'assistant'
  * Content blocks can contain text, tool usage requests, tool results, or reasoning content.
  *
  * This is a discriminated union where the `type` field determines the content format.
- *
- * @example
- * ```typescript
- * // Text content block
- * const textBlock: ContentBlock = {
- *   type: 'textBlock',
- *   text: 'Hello, world!'
- * }
- *
- * // Tool use content block
- * const toolUseBlock: ContentBlock = {
- *   type: 'toolUseBlock',
- *   name: 'calculator',
- *   toolUseId: 'calc-1',
- *   input: { a: 1, b: 2 }
- * }
- *
- * // Tool result content block
- * const toolResultBlock: ContentBlock = {
- *   type: 'toolResultBlock',
- *   toolUseId: 'calc-1',
- *   status: 'success',
- *   content: [{ type: 'textBlock', text: 'Result: 3' }]
- * }
- *
- * // Reasoning content block
- * const reasoningBlock: ContentBlock = {
- *   type: 'reasoningBlock',
- *   text: 'Analyzing the problem...'
- * }
- *
- * // Type-safe handling
- * function handleBlock(block: ContentBlock) {
- *   switch (block.type) {
- *     case 'textBlock':
- *       console.log(block.text)
- *       break
- *     case 'toolUse':
- *       console.log(`Using tool: ${block.name}`)
- *       break
- *     case 'toolResult':
- *       console.log(`Tool result: ${block.status}`)
- *       break
- *     case 'reasoning':
- *       console.log(`Reasoning: ${block.text}`)
- *       break
- *   }
- * }
- * ```
  */
 export type ContentBlock = TextBlock | ToolUseBlock | ToolResultBlock | ReasoningBlock
 
