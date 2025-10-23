@@ -21,6 +21,10 @@ export type {
   ReasoningBlock,
   ContentBlock,
   Message,
+  SystemPrompt,
+  SystemContentBlock,
+  SystemTextBlock,
+  SystemCachePointBlock,
 } from './types/messages'
 
 // Tool types

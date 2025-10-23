@@ -141,3 +141,67 @@ export type StopReason =
   | 'toolUse'
   | 'modelContextWindowExceeded'
   | string
+
+/**
+ * System prompt for guiding model behavior.
+ * Can be a simple string or an array of content blocks for advanced caching.
+ *
+ * @example
+ * ```typescript
+ * // Simple string
+ * const prompt: SystemPrompt = 'You are a helpful assistant'
+ *
+ * // Array with caching
+ * const prompt: SystemPrompt = [
+ *   { type: 'text', text: 'You are a helpful assistant' },
+ *   { type: 'text', text: largeContextDocument },
+ *   { type: 'cachePoint', cacheType: 'default' }
+ * ]
+ * ```
+ *
+ * @see https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_SystemContentBlock.html
+ */
+export type SystemPrompt = string | SystemContentBlock[]
+
+/**
+ * A block of content within a system prompt.
+ * Supports text content and cache points for prompt caching.
+ *
+ * This is a discriminated union where the `type` field determines the block format.
+ *
+ * @see https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_SystemContentBlock.html
+ */
+export type SystemContentBlock = SystemTextBlock | SystemCachePointBlock
+
+/**
+ * Text content block in a system prompt.
+ */
+export interface SystemTextBlock {
+  /**
+   * Discriminator for text content.
+   */
+  type: 'text'
+
+  /**
+   * The text content of the system prompt.
+   */
+  text: string
+}
+
+/**
+ * Cache point block in a system prompt.
+ * Marks a position in the system prompt where caching should occur.
+ *
+ * @see https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-caching.html
+ */
+export interface SystemCachePointBlock {
+  /**
+   * Discriminator for cache point.
+   */
+  type: 'cachePoint'
+
+  /**
+   * The cache type (e.g., 'default', 'ephemeral').
+   */
+  cacheType: string
+}

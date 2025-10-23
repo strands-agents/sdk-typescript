@@ -726,4 +726,133 @@ describe('BedrockModel', () => {
       }
     })
   })
+
+  describe('system prompt formatting', async () => {
+    const { ConverseStreamCommand } = await import('@aws-sdk/client-bedrock-runtime')
+    const mockConverseStreamCommand = vi.mocked(ConverseStreamCommand)
+
+    beforeEach(() => {
+      vi.clearAllMocks()
+    })
+
+    it('formats string system prompt (backward compatibility)', async () => {
+      const provider = new BedrockModel()
+      const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+      const options: StreamOptions = {
+        systemPrompt: 'You are a helpful assistant',
+      }
+
+      collectEvents(provider.stream(messages, options))
+
+      expect(mockConverseStreamCommand).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          system: [{ text: 'You are a helpful assistant' }],
+        })
+      )
+    })
+
+    it('formats string system prompt with cachePrompt config', async () => {
+      const provider = new BedrockModel({ cachePrompt: 'default' })
+      const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+      const options: StreamOptions = {
+        systemPrompt: 'You are a helpful assistant',
+      }
+
+      collectEvents(provider.stream(messages, options))
+
+      expect(mockConverseStreamCommand).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          system: [{ text: 'You are a helpful assistant' }, { cachePoint: { type: 'default' } }],
+        })
+      )
+    })
+
+    it('formats array system prompt with text blocks only', async () => {
+      const provider = new BedrockModel()
+      const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+      const options: StreamOptions = {
+        systemPrompt: [
+          { type: 'text', text: 'You are a helpful assistant' },
+          { type: 'text', text: 'Additional context here' },
+        ],
+      }
+
+      collectEvents(provider.stream(messages, options))
+
+      expect(mockConverseStreamCommand).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          system: [{ text: 'You are a helpful assistant' }, { text: 'Additional context here' }],
+        })
+      )
+    })
+
+    it('formats array system prompt with cache points', async () => {
+      const provider = new BedrockModel()
+      const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+      const options: StreamOptions = {
+        systemPrompt: [
+          { type: 'text', text: 'You are a helpful assistant' },
+          { type: 'text', text: 'Large context document' },
+          { type: 'cachePoint', cacheType: 'default' },
+        ],
+      }
+
+      collectEvents(provider.stream(messages, options))
+
+      expect(mockConverseStreamCommand).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          system: [
+            { text: 'You are a helpful assistant' },
+            { text: 'Large context document' },
+            { cachePoint: { type: 'default' } },
+          ],
+        })
+      )
+    })
+
+    it('warns when both array system prompt and cachePrompt config are provided', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const provider = new BedrockModel({ cachePrompt: 'default' })
+      const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+      const options: StreamOptions = {
+        systemPrompt: [
+          { type: 'text', text: 'You are a helpful assistant' },
+          { type: 'cachePoint', cacheType: 'default' },
+        ],
+      }
+
+      collectEvents(provider.stream(messages, options))
+
+      // Verify warning was logged
+      expect(warnSpy).toHaveBeenCalledWith(
+        'cachePrompt config is ignored when systemPrompt is an array. Use explicit cache points in the array instead.'
+      )
+
+      // Verify array is used as-is (cachePrompt config ignored)
+      expect(mockConverseStreamCommand).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          system: [{ text: 'You are a helpful assistant' }, { cachePoint: { type: 'default' } }],
+        })
+      )
+
+      warnSpy.mockRestore()
+    })
+
+    it('handles empty array system prompt', async () => {
+      const provider = new BedrockModel()
+      const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+      const options: StreamOptions = {
+        systemPrompt: [],
+      }
+
+      collectEvents(provider.stream(messages, options))
+
+      // Empty array should not set system field
+      expect(mockConverseStreamCommand).toHaveBeenLastCalledWith(
+        expect.not.objectContaining({
+          system: expect.anything(),
+        })
+      )
+    })
+  })
 })

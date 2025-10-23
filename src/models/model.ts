@@ -1,4 +1,4 @@
-import type { Message } from '../types/messages'
+import type { Message, SystemPrompt } from '../types/messages'
 import type { ToolSpec, ToolChoice } from '../tools/types'
 import type { ModelStreamEvent } from './streaming'
 
@@ -23,8 +23,22 @@ export interface BaseModelConfig {
 export interface StreamOptions {
   /**
    * System prompt to guide the model's behavior.
+   * Can be a simple string or an array of content blocks for advanced caching.
+   *
+   * @example
+   * ```typescript
+   * // Simple string
+   * systemPrompt: 'You are a helpful assistant'
+   *
+   * // Array with caching
+   * systemPrompt: [
+   *   { type: 'text', text: 'You are a helpful assistant with access to:' },
+   *   { type: 'text', text: largeContextDocument },
+   *   { type: 'cachePoint', cacheType: 'default' }
+   * ]
+   * ```
    */
-  systemPrompt?: string
+  systemPrompt?: SystemPrompt
 
   /**
    * Array of tool specifications that the model can use.

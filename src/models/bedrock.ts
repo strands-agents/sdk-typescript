@@ -349,18 +349,40 @@ export class BedrockModel implements Model<BedrockModelConfig, BedrockRuntimeCli
     }
 
     // Add system prompt with optional caching
-    if (options?.systemPrompt || this._config.cachePrompt) {
-      const system: BedrockContentBlock[] = []
+    if (options?.systemPrompt !== undefined) {
+      if (typeof options.systemPrompt === 'string') {
+        // String path: apply cachePrompt config if set
+        const system: BedrockContentBlock[] = [{ text: options.systemPrompt }]
 
-      if (options?.systemPrompt) {
-        system.push({ text: options.systemPrompt })
+        if (this._config.cachePrompt) {
+          system.push({ cachePoint: { type: this._config.cachePrompt as 'default' } })
+        }
+
+        request.system = system
+      } else {
+        // Array path: use as-is
+        if (this._config.cachePrompt) {
+          console.warn(
+            'cachePrompt config is ignored when systemPrompt is an array. Use explicit cache points in the array instead.'
+          )
+        }
+
+        // Only set system if array is not empty
+        if (options.systemPrompt.length > 0) {
+          request.system = options.systemPrompt.map((block): BedrockContentBlock => {
+            if (block.type === 'text') {
+              return { text: block.text }
+            } else {
+              // block.type === 'cachePoint'
+              return { cachePoint: { type: block.cacheType as 'default' } }
+            }
+          })
+        }
       }
-
-      if (this._config.cachePrompt) {
-        system.push({ cachePoint: { type: this._config.cachePrompt as 'default' } })
-      }
-
-      request.system = system
+    } else if (this._config.cachePrompt) {
+      // No system prompt provided but cachePrompt config is set
+      // This is unusual but we should handle it for backward compatibility
+      request.system = [{ cachePoint: { type: this._config.cachePrompt as 'default' } }]
     }
 
     // Add tool configuration
