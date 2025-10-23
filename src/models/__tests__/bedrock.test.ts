@@ -4,13 +4,13 @@ import { BedrockModel } from '../bedrock'
 import { ContextWindowOverflowError } from '../../errors'
 import type { Message } from '../../types/messages'
 import type { StreamOptions } from '../model'
-import type { ModelProviderStreamEvent } from '../streaming'
+import type { ModelStreamEvent } from '../streaming'
 
 /**
  * Helper function to collect all events from a stream.
  */
-async function collectEvents(stream: AsyncIterable<ModelProviderStreamEvent>): Promise<ModelProviderStreamEvent[]> {
-  const events: ModelProviderStreamEvent[] = []
+async function collectEvents(stream: AsyncIterable<ModelStreamEvent>): Promise<ModelStreamEvent[]> {
+  const events: ModelStreamEvent[] = []
   for await (const event of stream) {
     events.push(event)
   }

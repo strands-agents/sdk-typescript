@@ -26,7 +26,7 @@ import type { JSONValue } from '../types/json'
  * }
  * ```
  */
-export type ModelProviderStreamEvent =
+export type ModelStreamEvent =
   | ModelMessageStartEvent
   | ModelContentBlockStartEvent
   | ModelContentBlockDeltaEvent

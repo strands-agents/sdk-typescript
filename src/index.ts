@@ -51,7 +51,7 @@ export type {
   ModelContentBlockStopEvent,
   ModelMessageStopEvent,
   ModelMetadataEvent,
-  ModelProviderStreamEvent,
+  ModelStreamEvent,
 } from './models/streaming'
 
 // Model provider types

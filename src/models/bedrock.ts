@@ -28,7 +28,7 @@ import {
 } from '@aws-sdk/client-bedrock-runtime'
 import type { Model, BaseModelConfig, StreamOptions } from '../models/model'
 import type { Message, ContentBlock } from '../types/messages'
-import type { ModelProviderStreamEvent, ReasoningDelta, Usage } from '../models/streaming'
+import type { ModelStreamEvent, ReasoningDelta, Usage } from '../models/streaming'
 import type { JSONValue } from '../types/json'
 import { ContextWindowOverflowError } from '../errors'
 import { ensureDefined } from '../types/validation'
@@ -303,7 +303,7 @@ export class BedrockModel implements Model<BedrockModelConfig, BedrockRuntimeCli
    * }
    * ```
    */
-  async *stream(messages: Message[], options?: StreamOptions): AsyncIterable<ModelProviderStreamEvent> {
+  async *stream(messages: Message[], options?: StreamOptions): AsyncIterable<ModelStreamEvent> {
     try {
       // Format the request for Bedrock
       const request = this._formatRequest(messages, options)
@@ -503,8 +503,8 @@ export class BedrockModel implements Model<BedrockModelConfig, BedrockRuntimeCli
    * @param chunk - Bedrock event chunk
    * @returns Array of SDK streaming events
    */
-  private _mapBedrockEventToSDKEvents(chunk: ConverseStreamOutput): ModelProviderStreamEvent[] {
-    const events: ModelProviderStreamEvent[] = []
+  private _mapBedrockEventToSDKEvents(chunk: ConverseStreamOutput): ModelStreamEvent[] {
+    const events: ModelStreamEvent[] = []
 
     // Extract the event type key
     const eventType = ensureDefined(Object.keys(chunk)[0], 'eventType') as keyof ConverseStreamOutput
@@ -523,7 +523,7 @@ export class BedrockModel implements Model<BedrockModelConfig, BedrockRuntimeCli
       case 'contentBlockStart': {
         const data = eventData as BedrockContentBlockStartEvent
 
-        const event: ModelProviderStreamEvent = {
+        const event: ModelStreamEvent = {
           type: 'modelContentBlockStartEvent',
         }
 
@@ -547,7 +547,7 @@ export class BedrockModel implements Model<BedrockModelConfig, BedrockRuntimeCli
       case 'contentBlockDelta': {
         const data = eventData as BedrockContentBlockDeltaEvent
         const delta = ensureDefined(data.delta, 'contentBlockDelta.delta')
-        let event: ModelProviderStreamEvent | undefined = {
+        let event: ModelStreamEvent | undefined = {
           type: 'modelContentBlockDeltaEvent',
           delta: { type: 'textDelta', text: '' },
         }
@@ -604,7 +604,7 @@ export class BedrockModel implements Model<BedrockModelConfig, BedrockRuntimeCli
       case 'contentBlockStop': {
         const data = eventData as BedrockContentBlockStopEvent
 
-        const event: ModelProviderStreamEvent = {
+        const event: ModelStreamEvent = {
           type: 'modelContentBlockStopEvent',
         }
 
@@ -619,7 +619,7 @@ export class BedrockModel implements Model<BedrockModelConfig, BedrockRuntimeCli
       case 'messageStop': {
         const data = eventData as BedrockMessageStopEvent
 
-        const event: ModelProviderStreamEvent = {
+        const event: ModelStreamEvent = {
           type: 'modelMessageStopEvent',
         }
 
@@ -645,7 +645,7 @@ export class BedrockModel implements Model<BedrockModelConfig, BedrockRuntimeCli
       case 'metadata': {
         const data = eventData as BedrockConverseStreamMetadataEvent
 
-        const event: ModelProviderStreamEvent = {
+        const event: ModelStreamEvent = {
           type: 'modelMetadataEvent',
         }
 

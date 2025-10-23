@@ -1,6 +1,6 @@
 import type { Message } from '../types/messages'
 import type { ToolSpec, ToolChoice } from '../tools/types'
-import type { ModelProviderStreamEvent } from './streaming'
+import type { ModelStreamEvent } from './streaming'
 
 /**
  * Base configuration interface for all model providers.
@@ -85,5 +85,5 @@ export interface Model<T extends BaseModelConfig, _C = unknown> {
    * }
    * ```
    */
-  stream(messages: Message[], options?: StreamOptions): AsyncIterable<ModelProviderStreamEvent>
+  stream(messages: Message[], options?: StreamOptions): AsyncIterable<ModelStreamEvent>
 }

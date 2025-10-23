@@ -4,14 +4,14 @@ import { BedrockModel } from '@strands-agents/sdk'
 import { ContextWindowOverflowError } from '@strands-agents/sdk'
 import type { Message } from '@strands-agents/sdk'
 import type { ToolSpec } from '@strands-agents/sdk'
-import type { ModelProviderStreamEvent } from '@strands-agents/sdk'
+import type { ModelStreamEvent } from '@strands-agents/sdk'
 import { ValidationException } from '@aws-sdk/client-bedrock-runtime'
 
 /**
  * Helper function to collect all events from a stream.
  */
-async function collectEvents(stream: AsyncIterable<ModelProviderStreamEvent>): Promise<ModelProviderStreamEvent[]> {
-  const events: ModelProviderStreamEvent[] = []
+async function collectEvents(stream: AsyncIterable<ModelStreamEvent>): Promise<ModelStreamEvent[]> {
+  const events: ModelStreamEvent[] = []
   for await (const event of stream) {
     events.push(event)
   }
