@@ -5,6 +5,7 @@ import { ContextWindowOverflowError } from '@strands-agents/sdk'
 import type { Message } from '@strands-agents/sdk'
 import type { ToolSpec } from '@strands-agents/sdk'
 import type { ModelProviderStreamEvent } from '@strands-agents/sdk'
+import { ValidationException } from '@aws-sdk/client-bedrock-runtime'
 
 /**
  * Helper function to collect all events from a stream.
@@ -197,9 +198,9 @@ describe.skipIf(!hasCredentials)('BedrockModelProvider Integration Tests', () =>
       await expect(async () => {
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         for await (const _event of provider.stream(messages)) {
-          // Should not reach here - expecting an error
+          throw Error('Should not get here')
         }
-      }).rejects.toThrow()
+      }).rejects.toThrow(ValidationException)
     })
 
     it.concurrent('throws ContextWindowOverflowError when input exceeds context window', async () => {
@@ -222,7 +223,7 @@ describe.skipIf(!hasCredentials)('BedrockModelProvider Integration Tests', () =>
       await expect(async () => {
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         for await (const _event of provider.stream(messages)) {
-          // Should not reach here - expecting an error
+          throw Error('Should not get here')
         }
       }).rejects.toBeInstanceOf(ContextWindowOverflowError)
     })
