@@ -1,5 +1,5 @@
-import type { JSONValue } from '@/types/json'
-import type { ToolResultContent } from '@/tools/types'
+import type { JSONValue } from './json'
+import type { ToolResultContent } from '../tools/types'
 
 /**
  * A message in a conversation between user and assistant.
@@ -174,12 +174,17 @@ export interface ReasoningBlock {
   /**
    * The text content of the reasoning process.
    */
-  text: string
+  text?: string
 
   /**
    * A cryptographic signature for verification purposes.
    */
   signature?: string
+
+  /**
+   * The redacted content of the reasoning process.
+   */
+  redactedContent?: Uint8Array
 }
 
 /**
@@ -199,3 +204,5 @@ export type StopReason =
   | 'maxTokens'
   | 'stopSequence'
   | 'toolUse'
+  | 'modelContextWindowExceeded'
+  | string

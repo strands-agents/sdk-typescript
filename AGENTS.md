@@ -17,14 +17,29 @@ This document provides guidance specifically for AI agents working on the Strand
 ```
 sdk-typescript/
 ├── src/                          # Source code (all production code)
-│   ├── __tests__/                # Unit tests (co-located with source)
-│   │   ├── hello.test.ts         # Tests for hello.ts
+│   ├── __tests__/                # Unit tests for root-level source files
+│   │   ├── errors.test.ts        # Tests for error classes
 │   │   └── index.test.ts         # Tests for main entry point
-│   ├── index.ts                  # Main SDK entry point (single export point)
-│   └── hello.ts                  # Example: Hello world function
+│   │
+│   ├── models/                   # Model provider implementations
+│   │   ├── __tests__/            # Unit tests for model providers
+│   │   │   └── bedrock.test.ts   # Tests for Bedrock model provider
+│   │   ├── bedrock.ts            # AWS Bedrock model provider
+│   │   ├── model.ts              # Base model provider interface
+│   │   └── streaming.ts          # Streaming event types
+│   │
+│   ├── tools/                    # Tool definitions and types
+│   │   └── types.ts              # Tool-related type definitions
+│   │
+│   ├── types/                    # Core type definitions
+│   │   ├── json.ts               # JSON schema and value types
+│   │   └── messages.ts           # Message and content block types
+│   │
+│   ├── errors.ts                 # Custom error classes
+│   └── index.ts                  # Main SDK entry point (single export point)
 │
 ├── tests_integ/                  # Integration tests (separate from source)
-│   └── environment.test.ts       # Environment compatibility tests
+│   └── bedrock.test.ts           # Bedrock integration tests (requires AWS credentials)
 │
 ├── .github/                      # GitHub Actions workflows
 │   ├── workflows/                # CI/CD workflows
@@ -45,7 +60,7 @@ sdk-typescript/
 │
 ├── package.json                  # Project configuration and dependencies
 ├── tsconfig.json                 # TypeScript compiler configuration
-├── vitest.config.ts              # Testing configuration
+├── vitest.config.ts              # Testing configuration (with unit/integ projects)
 ├── eslint.config.js              # Linting configuration
 ├── .prettierrc                   # Code formatting configuration
 ├── .gitignore                    # Git ignore rules
@@ -59,10 +74,15 @@ sdk-typescript/
 ### Directory Purposes
 
 - **`src/`**: All production code lives here with co-located unit tests
-- **`src/__tests__/`**: Unit tests for specific source files (tests internal functionality)
+- **`src/__tests__/`**: Unit tests for root-level source files
+- **`src/models/`**: Model provider implementations (Bedrock, future providers)
+- **`src/tools/`**: Tool definitions and types for agent tool use
+- **`src/types/`**: Core type definitions used across the SDK
 - **`tests_integ/`**: Integration tests (tests public API and external integrations)
 - **`.github/workflows/`**: CI/CD automation and quality gates
 - **`.project/`**: Task management and project tracking
+
+**IMPORTANT**: After making changes that affect the directory structure (adding new directories, moving files, or adding significant new files), you MUST update this directory structure section to reflect the current state of the repository.
 
 ## Development Workflow for Agents
 
@@ -93,22 +113,18 @@ All checks must pass before commit is allowed.
 
 ## Coding Patterns and Best Practices
 
-### TypeScript Path Aliases
+### Import Organization
 
-Use path aliases for cleaner imports:
+Use relative imports for internal modules:
 
 ```typescript
-// Good: Use path alias
-import { hello } from '@/hello'
-import { Agent } from '@/agent'
+// Good: Relative imports for internal modules
+import { hello } from './hello'
+import { Agent } from '../agent'
 
-// Avoid: Relative paths
-import { hello } from '../hello'
-import { Agent } from '../../agent'
+// Good: External dependencies
+import { something } from 'external-package'
 ```
-
-**Configuration**: Path aliases are configured in `tsconfig.json` and `vitest.config.ts`:
-- `@/*` maps to `src/*`
 
 ### File Organization Pattern
 
@@ -133,7 +149,7 @@ Follow this nested describe pattern for consistency:
 **For functions**:
 ```typescript
 import { describe, it, expect } from 'vitest'
-import { functionName } from '@/module'
+import { functionName } from '../module'
 
 describe('functionName', () => {
   describe('when called with valid input', () => {
@@ -155,7 +171,7 @@ describe('functionName', () => {
 **For classes**:
 ```typescript
 import { describe, it, expect } from 'vitest'
-import { ClassName } from '@/module'
+import { ClassName } from '../module'
 
 describe('ClassName', () => {
   describe('methodName', () => {
@@ -239,11 +255,33 @@ export function functionName(paramName: string, optionalParam?: number): string 
 }
 ```
 
+**Interface property documentation**:
+
+```typescript
+/**
+ * Interface description.
+ */
+export interface MyConfig {
+  /**
+   * Single-line description of the property.
+   */
+  propertyName: string
+
+  /**
+   * Single-line description with optional reference link.
+   * @see https://docs.example.com/property-details
+   */
+  anotherProperty?: number
+}
+```
+
 **Requirements**:
 - All exported functions, classes, and interfaces must have TSDoc
 - Include `@param` for all parameters
 - Include `@returns` for return values
 - Include `@example` for complex functionality
+- Interface properties MUST have single-line descriptions
+- Interface properties MAY include an optional `@see` link for additional details
 - TSDoc validation enforced by ESLint
 
 ### Code Style Guidelines
@@ -278,12 +316,12 @@ Organize imports in this order:
 // 1. External dependencies
 import { something } from 'external-package'
 
-// 2. Internal modules (using path aliases)
-import { Agent } from '@/agent'
-import { Tool } from '@/tools'
+// 2. Internal modules (using relative paths)
+import { Agent } from '../agent'
+import { Tool } from '../tools'
 
 // 3. Types (if separate)
-import type { Options, Config } from '@/types'
+import type { Options, Config } from '../types'
 ```
 
 ### Interface and Type Organization
@@ -427,9 +465,9 @@ describe('calculateTotal', () => {
 
 **Example Implementation Test:**
 ```typescript
-describe('BedrockModelProvider', () => {
+describe('BedrockModel', () => {
   it('streams messages correctly', async () => {
-    const provider = new BedrockModelProvider(config)
+    const provider = new BedrockModel(config)
     const stream = provider.stream(messages)
     
     for await (const event of stream) {
@@ -444,7 +482,7 @@ describe('BedrockModelProvider', () => {
 ## Things to Do
 
 ✅ **Do**:
-- Use path aliases (`@/`) for all imports
+- Use relative imports for internal modules
 - Co-locate unit tests with source under `__tests__` directories
 - Follow nested describe pattern for test organization
 - Write explicit return types for all functions
@@ -458,7 +496,6 @@ describe('BedrockModelProvider', () => {
 
 ❌ **Don't**:
 - Use `any` type (enforced by ESLint)
-- Use relative paths like `../` when path aliases are available
 - Put unit tests in separate `tests/` directory (use `src/**/__tests__/**`)
 - Skip documentation for exported functions
 - Use semicolons (Prettier will remove them)
@@ -483,13 +520,6 @@ npm run build         # Compile TypeScript
 ```
 
 ## Troubleshooting Common Issues
-
-### Path Alias Not Resolving
-
-If `@/` imports don't work:
-1. Verify `tsconfig.json` has `baseUrl` and `paths` configured
-2. Verify `vitest.config.ts` has alias configuration
-3. Restart your IDE/editor
 
 ### Tests Not Found
 

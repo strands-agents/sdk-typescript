@@ -5,6 +5,9 @@
  * public APIs and functionality.
  */
 
+// Error types
+export { ContextWindowOverflowError } from './errors'
+
 // JSON types
 export type { JSONSchema, JSONValue } from './types/json'
 
@@ -52,4 +55,8 @@ export type {
 } from './models/streaming'
 
 // Model provider types
-export type { StreamOptions, ModelProvider } from './models/model'
+export type { BaseModelConfig, StreamOptions, Model } from './models/model'
+
+// Bedrock model provider
+export { BedrockModel as BedrockModel } from './models/bedrock'
+export type { BedrockModelConfig, BedrockModelOptions } from './models/bedrock'

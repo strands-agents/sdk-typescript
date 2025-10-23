@@ -13,6 +13,9 @@ export default [
         ecmaVersion: 2022,
         sourceType: 'module',
         project: './tsconfig.json'
+      },
+      globals: {
+        console: 'readonly'
       }
     },
     plugins: {
@@ -34,11 +37,11 @@ export default [
       parser: tsparser,
       parserOptions: {
         ecmaVersion: 2022,
-        sourceType: 'module',
-        project: './tsconfig.json'
+        sourceType: 'module'
       },
       globals: {
-        process: 'readonly'
+        process: 'readonly',
+        console: 'readonly'
       }
     },
     plugins: {
