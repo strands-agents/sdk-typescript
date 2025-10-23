@@ -66,7 +66,7 @@ describe('FunctionTool', () => {
         inputSchema,
         callback: (): string => 'result',
       })
-      
+
       // Verify entire toolSpec object at once
       expect(tool.toolSpec).toEqual({
         name: 'testTool',
@@ -122,7 +122,7 @@ describe('FunctionTool', () => {
 
         // No stream events for sync callback
         expect(streamEvents.length).toBe(0)
-        
+
         // Verify entire result with actual calculated value
         expect(result).toEqual({
           toolUseId: 'test-sync-1',
@@ -156,7 +156,7 @@ describe('FunctionTool', () => {
         )
 
         expect(streamEvents.length).toBe(0)
-        
+
         // Verify entire result object
         expect(result).toEqual({
           toolUseId: 'test-string',
@@ -190,20 +190,45 @@ describe('FunctionTool', () => {
         )
 
         expect(streamEvents.length).toBe(0)
-        
+
         // Verify result structure
         expect(result.toolUseId).toBe('test-object')
         expect(result.status).toBe('success')
         expect(result.content.length).toBe(1)
         expect(result.content[0]).toHaveProperty('type', 'toolResultTextContent')
-        
+
         // Verify the content contains the serialized object
         const content = result.content[0] as { type: string; text: string }
         const parsedContent = JSON.parse(content.text)
         expect(parsedContent).toEqual({ key: 'value', count: 42 })
       })
 
-      it('handles null and undefined return values', async () => {
+      it('passes input to callback exactly as provided to stream', async () => {
+        const inputData = { name: 'test', value: 42, nested: { key: 'value' } }
+        let receivedInput: unknown
+
+        const tool = new FunctionTool({
+          name: 'inputTool',
+          description: 'Captures input',
+          inputSchema: { type: 'object' },
+          callback: (input: unknown): string => {
+            receivedInput = input
+            return 'success'
+          },
+        })
+
+        const toolUse = {
+          name: 'inputTool',
+          toolUseId: 'test-input',
+          input: inputData,
+        }
+
+        await collectGeneratorEvents(tool.stream({ toolUse, invocationState: {} }))
+
+        expect(receivedInput).toEqual(inputData)
+      })
+
+      it('handles null return values correctly', async () => {
         const tool = new FunctionTool({
           name: 'nullTool',
           description: 'Returns null',
@@ -211,19 +236,37 @@ describe('FunctionTool', () => {
           callback: (): null => null,
         })
 
-        const toolUse = {
-          name: 'nullTool',
-          toolUseId: 'test-null',
-          input: {},
-        }
-        const context: ToolContext = { toolUse, invocationState: {} }
-
-        const { streamEvents, result } = await collectGeneratorEvents(
-          tool.stream({ toolUse, invocationState: context.invocationState })
+        const { result } = await collectGeneratorEvents(
+          tool.stream({ toolUse: { name: 'nullTool', toolUseId: 'test-null', input: {} }, invocationState: {} })
         )
 
-        expect(streamEvents.length).toBe(0)
-        expect(result.status).toBe('success')
+        expect(result).toEqual({
+          toolUseId: 'test-null',
+          status: 'success',
+          content: [{ type: 'toolResultTextContent', text: '<null>' }],
+        })
+      })
+
+      it('handles undefined return values correctly', async () => {
+        const tool = new FunctionTool({
+          name: 'undefinedTool',
+          description: 'Returns undefined',
+          inputSchema: { type: 'object' },
+          callback: (): undefined => undefined,
+        })
+
+        const { result } = await collectGeneratorEvents(
+          tool.stream({
+            toolUse: { name: 'undefinedTool', toolUseId: 'test-undefined', input: {} },
+            invocationState: {},
+          })
+        )
+
+        expect(result).toEqual({
+          toolUseId: 'test-undefined',
+          status: 'success',
+          content: [{ type: 'toolResultTextContent', text: '<undefined>' }],
+        })
       })
     })
 
@@ -252,6 +295,7 @@ describe('FunctionTool', () => {
 
         expect(streamEvents.length).toBe(0)
         expect(result.toolUseId).toBe('test-promise-1')
+        expect(result.status).toBe('success')
         expect(result.status).toBe('success')
       })
 

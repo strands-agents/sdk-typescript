@@ -4,7 +4,9 @@ import type { ToolSpec, ToolUse, ToolResult } from '@/tools/types'
  * Context provided to tool implementations during execution.
  * Contains framework-level state and information from the agent invocation.
  *
- * @typeParam T - The type of invocation state, must extend Record\<string, unknown\>
+ * @typeParam T - Optional type for strongly typing invocationState. Callers can pass any object
+ *               as invocationState (including references), but it must be a dictionary/object.
+ *               T allows strong typing when desired, while Record\<string, unknown\> accepts any object.
  *
  * @example
  * ```typescript
@@ -66,7 +68,11 @@ export interface ToolStreamEvent {
   data?: unknown
 }
 
-
+/**
+ * Type alias for the async generator returned by tool stream methods.
+ * Yields ToolStreamEvents during execution and returns a ToolResult.
+ */
+export type ToolStreamGenerator = AsyncGenerator<ToolStreamEvent, ToolResult, never>
 
 /**
  * Interface for tool implementations.
@@ -132,5 +138,5 @@ export interface Tool {
    * console.log('Final result:', result.value.status)
    * ```
    */
-  stream(toolContext: ToolContext): AsyncGenerator<ToolStreamEvent, ToolResult, unknown>
+  stream(toolContext: ToolContext): ToolStreamGenerator
 }

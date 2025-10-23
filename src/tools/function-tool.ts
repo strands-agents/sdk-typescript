@@ -192,8 +192,10 @@ export class FunctionTool implements Tool {
     // Convert value to appropriate content format
     let text: string
 
-    if (value === null || value === undefined) {
-      text = 'null'
+    if (value === null) {
+      text = '<null>'
+    } else if (value === undefined) {
+      text = '<undefined>'
     } else if (typeof value === 'object') {
       text = JSON.stringify(value, null, 2)
     } else {
