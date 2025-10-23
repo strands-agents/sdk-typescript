@@ -39,7 +39,7 @@ import type { JSONSchema, JSONValue } from '../types/json'
 export type FunctionToolCallback = (
   input: unknown,
   toolContext: ToolContext
-) => AsyncGenerator<JSONValue, JSONValue, never> | Promise<unknown> | unknown
+) => AsyncGenerator<JSONValue, JSONValue, never> | Promise<JSONValue> | JSONValue
 
 /**
  * Configuration options for creating a FunctionTool.
@@ -166,18 +166,18 @@ export class FunctionTool implements Tool {
         }
 
         // The generator's return value (when done = true) is wrapped in ToolResult
-        return this.wrapInToolResult(iterResult.value, toolUse.toolUseId)
+        return this._wrapInToolResult(iterResult.value, toolUse.toolUseId)
       } else if (result instanceof Promise) {
         // Handle promise: await and wrap in ToolResult
         const value = await result
-        return this.wrapInToolResult(value, toolUse.toolUseId)
+        return this._wrapInToolResult(value, toolUse.toolUseId)
       } else {
         // Handle synchronous value: wrap in ToolResult
-        return this.wrapInToolResult(result, toolUse.toolUseId)
+        return this._wrapInToolResult(result, toolUse.toolUseId)
       }
     } catch (error) {
       // Handle any errors and yield as error ToolResult
-      return this.createErrorResult(error, toolUse.toolUseId)
+      return this._createErrorResult(error, toolUse.toolUseId)
     }
   }
 
@@ -188,7 +188,7 @@ export class FunctionTool implements Tool {
    * @param toolUseId - The tool use ID for the ToolResult
    * @returns A ToolResult containing the value
    */
-  private wrapInToolResult(value: unknown, toolUseId: string): ToolResult {
+  private _wrapInToolResult(value: unknown, toolUseId: string): ToolResult {
     // Convert value to appropriate content format
     let text: string
 
@@ -224,7 +224,7 @@ export class FunctionTool implements Tool {
    * @param toolUseId - The tool use ID for the ToolResult
    * @returns A ToolResult with error status
    */
-  private createErrorResult(error: unknown, toolUseId: string): ToolResult {
+  private _createErrorResult(error: unknown, toolUseId: string): ToolResult {
     const errorMessage = error instanceof Error ? error.message : String(error)
 
     return {

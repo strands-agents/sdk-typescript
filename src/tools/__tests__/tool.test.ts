@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { FunctionTool } from '../function-tool'
 import type { ToolContext, ToolStreamEvent } from '../tool'
 import type { ToolResult } from '../types'
+import type { JSONValue } from '../../types/json'
 
 /**
  * Helper function to consume an async generator and collect all events including the return value.
@@ -252,6 +253,7 @@ describe('FunctionTool', () => {
           name: 'undefinedTool',
           description: 'Returns undefined',
           inputSchema: { type: 'object' },
+          // @ts-expect-error we're intentionally testing a type violation
           callback: (): undefined => undefined,
         })
 
@@ -304,8 +306,8 @@ describe('FunctionTool', () => {
           name: 'contextTool',
           description: 'Uses context',
           inputSchema: { type: 'object' },
-          callback: async (_input: unknown, context: ToolContext): Promise<Record<string, unknown>> => {
-            return context.invocationState
+          callback: async (_input: unknown, context: ToolContext): Promise<JSONValue> => {
+            return context.invocationState as JSONValue
           },
         })
 
@@ -331,7 +333,7 @@ describe('FunctionTool', () => {
           name: 'generatorTool',
           description: 'Streams progress',
           inputSchema: { type: 'object' },
-          callback: async function* (_input: unknown, _context: ToolContext): AsyncGenerator<string, string, unknown> {
+          callback: async function* (): AsyncGenerator<string, string, unknown> {
             yield 'Starting...'
             yield 'Processing...'
             yield 'Complete!'
@@ -546,7 +548,7 @@ describe('Tool interface backwards compatibility', () => {
       name: 'testTool',
       description: 'Test description',
       inputSchema: { type: 'object' },
-      callback: (input: unknown): unknown => input,
+      callback: (input: unknown): JSONValue => input as JSONValue,
     })
     const toolUse = {
       name: 'testTool',
