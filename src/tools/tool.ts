@@ -1,4 +1,4 @@
-import type { ToolSpec, ToolUse, ToolResult } from '@/tools/types'
+import type { ToolSpec, ToolUse, ToolResult } from './types'
 
 /**
  * Context provided to tool implementations during execution.

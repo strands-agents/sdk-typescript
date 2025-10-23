@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { FunctionTool } from '@/tools/function-tool'
-import type { ToolContext, ToolStreamEvent } from '@/tools/tool'
-import type { ToolResult } from '@/tools/types'
+import { FunctionTool } from '../function-tool'
+import type { ToolContext, ToolStreamEvent } from '../tool'
+import type { ToolResult } from '../types'
 
 /**
  * Helper function to consume an async generator and collect all events including the return value.

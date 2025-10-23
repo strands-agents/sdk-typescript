@@ -1,9 +1,24 @@
-import type { Message } from '@/types/messages'
-import type { ToolSpec, ToolChoice } from '@/tools/types'
-import type { ModelProviderStreamEvent } from '@/models/streaming'
+import type { Message } from '../types/messages'
+import type { ToolSpec, ToolChoice } from '../tools/types'
+import type { ModelProviderStreamEvent } from './streaming'
 
 /**
- * Options for configuring a streaming model invocation.
+ * Base configuration interface for all model providers.
+ *
+ * This interface defines the common configuration properties that all
+ * model providers should support. Provider-specific configurations
+ * should extend this interface.
+ */
+export interface BaseModelConfig {
+  /**
+   * The model identifier.
+   * This typically specifies which model to use from the provider's catalog.
+   */
+  modelId?: string
+}
+
+/**
+ * Options interface for configuring streaming model invocation.
  */
 export interface StreamOptions {
   /**
@@ -29,37 +44,16 @@ export interface StreamOptions {
  * Model providers handle communication with LLM APIs and implement streaming
  * responses using async iterables.
  *
- * @example
- * ```typescript
- * class MyProvider implements ModelProvider {
- *   private config: unknown = {}
- *
- *   updateConfig(modelConfig: unknown): void {
- *     this.config = { ...this.config as object, ...modelConfig as object }
- *   }
- *
- *   getConfig(): unknown {
- *     return this.config
- *   }
- *
- *   async *stream(
- *     messages: Message[],
- *     options?: StreamOptions
- *   ): AsyncIterable<ModelProviderStreamEvent> {
- *     // Implementation for streaming from LLM
- *     yield { type: 'modelMessageStartEvent', role: 'assistant' }
- *     yield { type: 'modelContentBlockDeltaEvent', delta: { type: 'text', text: 'Hello' } }
- *     yield { type: 'modelMessageStopEvent', stopReason: 'endTurn' }
- *   }
- * }
- * ```
+ * @typeParam T - Model configuration type extending BaseModelConfig
+ * @typeParam _C - Client configuration type for provider-specific client setup (used by implementations)
  */
-export interface ModelProvider<T> {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export interface Model<T extends BaseModelConfig, _C = unknown> {
   /**
    * Updates the model configuration.
    * Merges the provided configuration with existing settings.
    *
-   * @param modelConfig - Configuration object with model-specific settings
+   * @param modelConfig - Configuration object with model-specific settings to update
    */
   updateConfig(modelConfig: T): void
 
@@ -81,11 +75,11 @@ export interface ModelProvider<T> {
    * @example
    * ```typescript
    * const messages: Message[] = [
-   *   { role: 'user', content: [{ type: 'text', text: 'Hello!' }] }
+   *   { role: 'user', content: [{ type: 'textBlock', text: 'Hello!' }] }
    * ]
    *
    * for await (const event of provider.stream(messages)) {
-   *   if (event.type === 'modelContentBlockDeltaEvent' && event.delta.type === 'text') {
+   *   if (event.type === 'modelContentBlockDeltaEvent' && event.delta.type === 'textDelta') {
    *     process.stdout.write(event.delta.text)
    *   }
    * }

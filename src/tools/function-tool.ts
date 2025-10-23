@@ -1,6 +1,6 @@
 import type { Tool, ToolContext, ToolStreamEvent } from './tool'
 import type { ToolSpec, ToolResult } from './types'
-import type { JSONSchema, JSONValue } from '@/types/json'
+import type { JSONSchema, JSONValue } from '../types/json'
 
 /**
  * Callback function for FunctionTool implementations.
