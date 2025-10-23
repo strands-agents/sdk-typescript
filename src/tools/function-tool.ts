@@ -1,6 +1,6 @@
 import type { Tool, ToolContext, ToolStreamEvent } from './tool'
 import type { ToolSpec, ToolResult } from './types'
-import type { JSONSchema } from '@/types/json'
+import type { JSONSchema, JSONValue } from '@/types/json'
 
 /**
  * Callback function for FunctionTool implementations.
@@ -39,7 +39,7 @@ import type { JSONSchema } from '@/types/json'
 export type FunctionToolCallback = (
   input: unknown,
   toolContext: ToolContext
-) => AsyncGenerator<unknown, unknown, unknown> | Promise<unknown> | unknown
+) => AsyncGenerator<JSONValue, JSONValue, never> | Promise<unknown> | unknown
 
 /**
  * Configuration options for creating a FunctionTool.
