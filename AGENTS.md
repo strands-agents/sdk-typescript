@@ -410,6 +410,39 @@ export interface Message {  // Top-level should come first
 
 **Rationale**: This ordering makes files more readable by providing an overview first, then details.
 
+### Discriminated Union Naming Convention
+
+**When creating discriminated unions with a `type` field, the type value MUST match the interface name with the first letter lowercase.**
+
+```typescript
+// ✅ Correct - type matches interface name (first letter lowercase)
+export interface TextBlock {
+  type: 'textBlock'  // Matches 'TextBlock' interface name
+  text: string
+}
+
+export interface ToolUseBlock {
+  type: 'toolUseBlock'  // Matches 'ToolUseBlock' interface name
+  name: string
+  toolUseId: string
+}
+
+export interface CachePointBlock {
+  type: 'cachePointBlock'  // Matches 'CachePointBlock' interface name
+  cacheType: 'default'
+}
+
+export type ContentBlock = TextBlock | ToolUseBlock | CachePointBlock
+
+// ❌ Wrong - type doesn't match interface name
+export interface CachePointBlock {
+  type: 'cachePoint'  // Should be 'cachePointBlock'
+  cacheType: 'default'
+}
+```
+
+**Rationale**: This consistent naming makes discriminated unions predictable and improves code readability. Developers can easily understand the relationship between the type value and the interface.
+
 ### Error Handling
 
 ```typescript

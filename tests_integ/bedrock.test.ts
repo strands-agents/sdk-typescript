@@ -187,18 +187,19 @@ describe.skipIf(!hasCredentials)('BedrockModel Integration Tests', () => {
       // Use enough text to be worth caching (minimum 1024 tokens recommended by AWS)
       const largeContext = 'Context information: ' + 'x'.repeat(5000)
       const cachedSystemPrompt = [
-        { type: 'text' as const, text: 'You are a helpful assistant.' },
-        { type: 'text' as const, text: largeContext },
-        { type: 'cachePoint' as const, cacheType: 'default' },
+        { type: 'textBlock' as const, text: 'You are a helpful assistant.' },
+        { type: 'textBlock' as const, text: largeContext },
+        { type: 'cachePointBlock' as const, cacheType: 'default' as const },
       ]
 
       // First request - creates cache
       const messages1: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Say hello' }] }]
       const events1 = await collectEvents(provider.stream(messages1, { systemPrompt: cachedSystemPrompt }))
 
-      // Verify first request succeeds
+      // Verify first request creates cache
       const metadata1 = events1.find((e) => e.type === 'modelMetadataEvent')
       expect(metadata1?.usage?.inputTokens).toBeGreaterThan(0)
+      expect(metadata1?.usage?.cacheWriteInputTokens).toBeGreaterThan(0)
 
       // Second request - should use cache
       const messages2: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Say goodbye' }] }]
@@ -207,17 +208,50 @@ describe.skipIf(!hasCredentials)('BedrockModel Integration Tests', () => {
       // Verify second request uses cache
       const metadata2 = events2.find((e) => e.type === 'modelMetadataEvent')
       expect(metadata2?.usage).toBeDefined()
+      expect(metadata2?.usage?.cacheReadInputTokens).toBeGreaterThan(0)
+    })
 
-      // The second request should have cache read tokens
-      // Note: This test may be flaky if caching doesn't work as expected
-      // In some cases, cacheReadInputTokens might not be set immediately
-      if (metadata2?.usage?.cacheReadInputTokens !== undefined) {
-        expect(metadata2.usage.cacheReadInputTokens).toBeGreaterThan(0)
-      } else {
-        // If cacheReadInputTokens is not set, at least verify the request succeeded
-        console.log('Note: cacheReadInputTokens not available, but request succeeded')
-        expect(metadata2?.usage?.inputTokens).toBeGreaterThan(0)
-      }
+    it.concurrent('uses message cache points on subsequent requests', async () => {
+      const provider = new BedrockModel({ maxTokens: 100 })
+
+      // Create messages with cache points
+      const largeContext = 'Context information: ' + 'x'.repeat(5000)
+      const messages1: Message[] = [
+        {
+          role: 'user',
+          content: [
+            { type: 'textBlock', text: largeContext },
+            { type: 'cachePointBlock', cacheType: 'default' },
+            { type: 'textBlock', text: 'Say hello' },
+          ],
+        },
+      ]
+
+      // First request - creates cache
+      const events1 = await collectEvents(provider.stream(messages1))
+
+      // Verify first request creates cache
+      const metadata1 = events1.find((e) => e.type === 'modelMetadataEvent')
+      expect(metadata1?.usage?.inputTokens).toBeGreaterThan(0)
+      expect(metadata1?.usage?.cacheWriteInputTokens).toBeGreaterThan(0)
+
+      // Second request - should use cache
+      const messages2: Message[] = [
+        {
+          role: 'user',
+          content: [
+            { type: 'textBlock', text: largeContext },
+            { type: 'cachePointBlock', cacheType: 'default' },
+            { type: 'textBlock', text: 'Say goodbye' },
+          ],
+        },
+      ]
+      const events2 = await collectEvents(provider.stream(messages2))
+
+      // Verify second request uses cache
+      const metadata2 = events2.find((e) => e.type === 'modelMetadataEvent')
+      expect(metadata2?.usage).toBeDefined()
+      expect(metadata2?.usage?.cacheReadInputTokens).toBeGreaterThan(0)
     })
   })
 

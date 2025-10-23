@@ -397,6 +397,32 @@ describe('BedrockModel', () => {
         modelId: expect.any(String),
       })
     })
+
+    it('formats cache point blocks in messages', async () => {
+      const provider = new BedrockModel()
+      const messages: Message[] = [
+        {
+          role: 'user',
+          content: [
+            { type: 'textBlock', text: 'Message with cache point' },
+            { type: 'cachePointBlock', cacheType: 'default' },
+          ],
+        },
+      ]
+
+      collectEvents(provider.stream(messages))
+
+      // Verify ConverseStreamCommand was called with properly formatted request
+      expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
+        messages: [
+          {
+            role: 'user',
+            content: [{ text: 'Message with cache point' }, { cachePoint: { type: 'default' } }],
+          },
+        ],
+        modelId: expect.any(String),
+      })
+    })
   })
 
   describe('stream', () => {
@@ -772,8 +798,8 @@ describe('BedrockModel', () => {
       const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
       const options: StreamOptions = {
         systemPrompt: [
-          { type: 'text', text: 'You are a helpful assistant' },
-          { type: 'text', text: 'Additional context here' },
+          { type: 'textBlock', text: 'You are a helpful assistant' },
+          { type: 'textBlock', text: 'Additional context here' },
         ],
       }
 
@@ -791,9 +817,9 @@ describe('BedrockModel', () => {
       const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
       const options: StreamOptions = {
         systemPrompt: [
-          { type: 'text', text: 'You are a helpful assistant' },
-          { type: 'text', text: 'Large context document' },
-          { type: 'cachePoint', cacheType: 'default' },
+          { type: 'textBlock', text: 'You are a helpful assistant' },
+          { type: 'textBlock', text: 'Large context document' },
+          { type: 'cachePointBlock', cacheType: 'default' },
         ],
       }
 
@@ -816,8 +842,8 @@ describe('BedrockModel', () => {
       const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
       const options: StreamOptions = {
         systemPrompt: [
-          { type: 'text', text: 'You are a helpful assistant' },
-          { type: 'cachePoint', cacheType: 'default' },
+          { type: 'textBlock', text: 'You are a helpful assistant' },
+          { type: 'cachePointBlock', cacheType: 'default' },
         ],
       }
 

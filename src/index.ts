@@ -19,12 +19,11 @@ export type {
   ToolUseBlock,
   ToolResultBlock,
   ReasoningBlock,
+  CachePointBlock,
   ContentBlock,
   Message,
   SystemPrompt,
   SystemContentBlock,
-  SystemTextBlock,
-  SystemCachePointBlock,
 } from './types/messages'
 
 // Tool types

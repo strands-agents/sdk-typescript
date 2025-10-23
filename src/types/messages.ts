@@ -25,11 +25,11 @@ export type Role = 'user' | 'assistant'
 
 /**
  * A block of content within a message.
- * Content blocks can contain text, tool usage requests, tool results, or reasoning content.
+ * Content blocks can contain text, tool usage requests, tool results, reasoning content, or cache points.
  *
  * This is a discriminated union where the `type` field determines the content format.
  */
-export type ContentBlock = TextBlock | ToolUseBlock | ToolResultBlock | ReasoningBlock
+export type ContentBlock = TextBlock | ToolUseBlock | ToolResultBlock | ReasoningBlock | CachePointBlock
 
 /**
  * Text content block within a message.
@@ -123,6 +123,22 @@ export interface ReasoningBlock {
 }
 
 /**
+ * Cache point block for prompt caching.
+ * Marks a position in a message or system prompt where caching should occur.
+ */
+export interface CachePointBlock {
+  /**
+   * Discriminator for cache point.
+   */
+  type: 'cachePointBlock'
+
+  /**
+   * The cache type. Currently only 'default' is supported.
+   */
+  cacheType: 'default'
+}
+
+/**
  * Reason why the model stopped generating content.
  *
  * - `contentFiltered` - Content was filtered by safety mechanisms
@@ -153,13 +169,11 @@ export type StopReason =
  *
  * // Array with caching
  * const prompt: SystemPrompt = [
- *   { type: 'text', text: 'You are a helpful assistant' },
- *   { type: 'text', text: largeContextDocument },
- *   { type: 'cachePoint', cacheType: 'default' }
+ *   { type: 'textBlock', text: 'You are a helpful assistant' },
+ *   { type: 'textBlock', text: largeContextDocument },
+ *   { type: 'cachePointBlock', cacheType: 'default' }
  * ]
  * ```
- *
- * @see https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_SystemContentBlock.html
  */
 export type SystemPrompt = string | SystemContentBlock[]
 
@@ -168,40 +182,5 @@ export type SystemPrompt = string | SystemContentBlock[]
  * Supports text content and cache points for prompt caching.
  *
  * This is a discriminated union where the `type` field determines the block format.
- *
- * @see https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_SystemContentBlock.html
  */
-export type SystemContentBlock = SystemTextBlock | SystemCachePointBlock
-
-/**
- * Text content block in a system prompt.
- */
-export interface SystemTextBlock {
-  /**
-   * Discriminator for text content.
-   */
-  type: 'text'
-
-  /**
-   * The text content of the system prompt.
-   */
-  text: string
-}
-
-/**
- * Cache point block in a system prompt.
- * Marks a position in the system prompt where caching should occur.
- *
- * @see https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-caching.html
- */
-export interface SystemCachePointBlock {
-  /**
-   * Discriminator for cache point.
-   */
-  type: 'cachePoint'
-
-  /**
-   * The cache type (e.g., 'default', 'ephemeral').
-   */
-  cacheType: string
-}
+export type SystemContentBlock = TextBlock | CachePointBlock

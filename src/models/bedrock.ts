@@ -359,30 +359,17 @@ export class BedrockModel implements Model<BedrockModelConfig, BedrockRuntimeCli
         }
 
         request.system = system
-      } else {
-        // Array path: use as-is
+      } else if (options.systemPrompt.length > 0) {
+        // Array path: use as-is, but warn if cachePrompt config is also set
         if (this._config.cachePrompt) {
           console.warn(
             'cachePrompt config is ignored when systemPrompt is an array. Use explicit cache points in the array instead.'
           )
         }
 
-        // Only set system if array is not empty
-        if (options.systemPrompt.length > 0) {
-          request.system = options.systemPrompt.map((block): BedrockContentBlock => {
-            if (block.type === 'text') {
-              return { text: block.text }
-            } else {
-              // block.type === 'cachePoint'
-              return { cachePoint: { type: block.cacheType as 'default' } }
-            }
-          })
-        }
+        // Use _formatContentBlock to handle all block types including cache points
+        request.system = options.systemPrompt.map((block) => this._formatContentBlock(block))
       }
-    } else if (this._config.cachePrompt) {
-      // No system prompt provided but cachePrompt config is set
-      // This is unusual but we should handle it for backward compatibility
-      request.system = [{ cachePoint: { type: this._config.cachePrompt as 'default' } }]
     }
 
     // Add tool configuration
@@ -516,6 +503,9 @@ export class BedrockModel implements Model<BedrockModelConfig, BedrockRuntimeCli
           throw Error("reasoning content format incorrect. Either 'text' or 'redactedContent' must be set.")
         }
       }
+
+      case 'cachePointBlock':
+        return { cachePoint: { type: block.cacheType } }
     }
   }
 
