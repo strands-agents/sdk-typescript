@@ -76,13 +76,8 @@ jobs:
               return;
             }
             
-            // Check if project-task label exists to determine if continuing
-            const { data: issue } = await github.rest.issues.get({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: issueNumber
-            });
-            const isContinuing = issue.labels.some(label => label.name === 'project-task');
+            // Task implementer continues when the request is from a pull request
+            const isContinuing = !!context.payload.pull_request;
             
             try {
               await github.rest.issues.removeLabel({
