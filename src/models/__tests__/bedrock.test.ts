@@ -770,11 +770,16 @@ describe('BedrockModel', () => {
 
       collectEvents(provider.stream(messages, options))
 
-      expect(mockConverseStreamCommand).toHaveBeenLastCalledWith(
-        expect.objectContaining({
-          system: [{ text: 'You are a helpful assistant' }],
-        })
-      )
+      expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
+        modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
+        messages: [
+          {
+            role: 'user',
+            content: [{ text: 'Hello' }],
+          },
+        ],
+        system: [{ text: 'You are a helpful assistant' }],
+      })
     })
 
     it('formats string system prompt with cachePrompt config', async () => {
@@ -786,11 +791,16 @@ describe('BedrockModel', () => {
 
       collectEvents(provider.stream(messages, options))
 
-      expect(mockConverseStreamCommand).toHaveBeenLastCalledWith(
-        expect.objectContaining({
-          system: [{ text: 'You are a helpful assistant' }, { cachePoint: { type: 'default' } }],
-        })
-      )
+      expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
+        modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
+        messages: [
+          {
+            role: 'user',
+            content: [{ text: 'Hello' }],
+          },
+        ],
+        system: [{ text: 'You are a helpful assistant' }, { cachePoint: { type: 'default' } }],
+      })
     })
 
     it('formats array system prompt with text blocks only', async () => {
@@ -805,11 +815,16 @@ describe('BedrockModel', () => {
 
       collectEvents(provider.stream(messages, options))
 
-      expect(mockConverseStreamCommand).toHaveBeenLastCalledWith(
-        expect.objectContaining({
-          system: [{ text: 'You are a helpful assistant' }, { text: 'Additional context here' }],
-        })
-      )
+      expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
+        modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
+        messages: [
+          {
+            role: 'user',
+            content: [{ text: 'Hello' }],
+          },
+        ],
+        system: [{ text: 'You are a helpful assistant' }, { text: 'Additional context here' }],
+      })
     })
 
     it('formats array system prompt with cache points', async () => {
@@ -825,15 +840,20 @@ describe('BedrockModel', () => {
 
       collectEvents(provider.stream(messages, options))
 
-      expect(mockConverseStreamCommand).toHaveBeenLastCalledWith(
-        expect.objectContaining({
-          system: [
-            { text: 'You are a helpful assistant' },
-            { text: 'Large context document' },
-            { cachePoint: { type: 'default' } },
-          ],
-        })
-      )
+      expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
+        modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
+        messages: [
+          {
+            role: 'user',
+            content: [{ text: 'Hello' }],
+          },
+        ],
+        system: [
+          { text: 'You are a helpful assistant' },
+          { text: 'Large context document' },
+          { cachePoint: { type: 'default' } },
+        ],
+      })
     })
 
     it('warns when both array system prompt and cachePrompt config are provided', async () => {
@@ -855,11 +875,16 @@ describe('BedrockModel', () => {
       )
 
       // Verify array is used as-is (cachePrompt config ignored)
-      expect(mockConverseStreamCommand).toHaveBeenLastCalledWith(
-        expect.objectContaining({
-          system: [{ text: 'You are a helpful assistant' }, { cachePoint: { type: 'default' } }],
-        })
-      )
+      expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
+        modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
+        messages: [
+          {
+            role: 'user',
+            content: [{ text: 'Hello' }],
+          },
+        ],
+        system: [{ text: 'You are a helpful assistant' }, { cachePoint: { type: 'default' } }],
+      })
 
       warnSpy.mockRestore()
     })
@@ -874,11 +899,15 @@ describe('BedrockModel', () => {
       collectEvents(provider.stream(messages, options))
 
       // Empty array should not set system field
-      expect(mockConverseStreamCommand).toHaveBeenLastCalledWith(
-        expect.not.objectContaining({
-          system: expect.anything(),
-        })
-      )
+      expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
+        modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
+        messages: [
+          {
+            role: 'user',
+            content: [{ text: 'Hello' }],
+          },
+        ],
+      })
     })
   })
 })
