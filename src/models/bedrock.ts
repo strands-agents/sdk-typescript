@@ -367,7 +367,6 @@ export class BedrockModel implements Model<BedrockModelConfig, BedrockRuntimeCli
           )
         }
 
-        // Use _formatContentBlock to handle all block types including cache points
         request.system = options.systemPrompt.map((block) => this._formatContentBlock(block))
       }
     }
