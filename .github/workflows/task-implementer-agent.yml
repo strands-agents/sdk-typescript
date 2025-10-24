@@ -77,7 +77,7 @@ jobs:
             }
             
             // Task implementer continues when the request is from a pull request
-            const isContinuing = !!context.payload.pull_request;
+            const isContinuing = !!context.payload.pull_request || (context.payload.issue && context.payload.issue.pull_request);
             
             try {
               await github.rest.issues.removeLabel({
