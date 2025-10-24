@@ -130,8 +130,8 @@ describe('FunctionTool', () => {
           status: 'success',
           content: [
             {
-              type: 'toolResultJsonContent',
-              json: 10, // 5 * 2 = 10
+              type: 'toolResultTextContent',
+              text: '10', // 5 * 2 = 10 (converted to string)
             },
           ],
         })
@@ -245,7 +245,7 @@ describe('FunctionTool', () => {
         expect(result).toEqual({
           toolUseId: 'test-null',
           status: 'success',
-          content: [{ type: 'toolResultJsonContent', json: '<null>' }],
+          content: [{ type: 'toolResultTextContent', text: '<null>' }],
         })
       })
 
@@ -268,11 +268,11 @@ describe('FunctionTool', () => {
         expect(result).toEqual({
           toolUseId: 'test-undefined',
           status: 'success',
-          content: [{ type: 'toolResultJsonContent', json: '<undefined>' }],
+          content: [{ type: 'toolResultTextContent', text: '<undefined>' }],
         })
       })
 
-      it('handles boolean return values as JSON content', async () => {
+      it('handles boolean return values as text content', async () => {
         const trueTool = new FunctionTool({
           name: 'trueTool',
           description: 'Returns true',
@@ -287,7 +287,7 @@ describe('FunctionTool', () => {
         expect(trueResult).toEqual({
           toolUseId: 'test-true',
           status: 'success',
-          content: [{ type: 'toolResultJsonContent', json: true }],
+          content: [{ type: 'toolResultTextContent', text: 'true' }],
         })
 
         const falseTool = new FunctionTool({
@@ -304,11 +304,51 @@ describe('FunctionTool', () => {
         expect(falseResult).toEqual({
           toolUseId: 'test-false',
           status: 'success',
-          content: [{ type: 'toolResultJsonContent', json: false }],
+          content: [{ type: 'toolResultTextContent', text: 'false' }],
         })
       })
 
-      it('handles array return values as JSON content', async () => {
+      it('handles number return values as text content', async () => {
+        const tool = new FunctionTool({
+          name: 'numberTool',
+          description: 'Returns number',
+          inputSchema: { type: 'object' },
+          callback: (): number => 42,
+        })
+
+        const { result } = await collectGeneratorEvents(
+          tool.stream({ toolUse: { name: 'numberTool', toolUseId: 'test-number', input: {} }, invocationState: {} })
+        )
+
+        expect(result).toEqual({
+          toolUseId: 'test-number',
+          status: 'success',
+          content: [{ type: 'toolResultTextContent', text: '42' }],
+        })
+
+        // Test negative number
+        const negativeTool = new FunctionTool({
+          name: 'negativeTool',
+          description: 'Returns negative number',
+          inputSchema: { type: 'object' },
+          callback: (): number => -3.14,
+        })
+
+        const { result: negativeResult } = await collectGeneratorEvents(
+          negativeTool.stream({
+            toolUse: { name: 'negativeTool', toolUseId: 'test-negative', input: {} },
+            invocationState: {},
+          })
+        )
+
+        expect(negativeResult).toEqual({
+          toolUseId: 'test-negative',
+          status: 'success',
+          content: [{ type: 'toolResultTextContent', text: '-3.14' }],
+        })
+      })
+
+      it('handles array return values as wrapped JSON content', async () => {
         const tool = new FunctionTool({
           name: 'arrayTool',
           description: 'Returns array',
@@ -323,7 +363,7 @@ describe('FunctionTool', () => {
         expect(result).toEqual({
           toolUseId: 'test-array',
           status: 'success',
-          content: [{ type: 'toolResultJsonContent', json: [1, 2, 3, { key: 'value' }] }],
+          content: [{ type: 'toolResultJsonContent', json: { $value: [1, 2, 3, { key: 'value' }] } }],
         })
       })
 
@@ -370,11 +410,11 @@ describe('FunctionTool', () => {
         // Mutate the original array
         original[0]!.value = 'mutated'
 
-        // Verify the result still has the original value
+        // Verify the result still has the original value (wrapped in $value)
         expect(result).toEqual({
           toolUseId: 'test-array-copy',
           status: 'success',
-          content: [{ type: 'toolResultJsonContent', json: [{ value: 'original' }] }],
+          content: [{ type: 'toolResultJsonContent', json: { $value: [{ value: 'original' }] } }],
         })
       })
     })

@@ -185,10 +185,13 @@ export class FunctionTool implements Tool {
   /**
    * Wraps a value in a ToolResult with success status.
    *
-   * Strings are returned as toolResultTextContent, while all other types
-   * (numbers, booleans, objects, arrays, null, undefined) are returned as
-   * toolResultJsonContent. Objects and arrays are deep copied to prevent
-   * mutation of the original values.
+   * Due to AWS Bedrock limitations (only accepts objects as JSON content), the following
+   * rules are applied:
+   * - Strings → toolResultTextContent
+   * - Numbers, Booleans → toolResultTextContent (converted to string)
+   * - null, undefined → toolResultTextContent (special string representation)
+   * - Objects → toolResultJsonContent (with deep copy)
+   * - Arrays → toolResultJsonContent wrapped in \{ $value: array \} (with deep copy)
    *
    * @param value - The value to wrap (can be any type)
    * @param toolUseId - The tool use ID for the ToolResult
@@ -209,49 +212,83 @@ export class FunctionTool implements Tool {
       }
     }
 
-    // Handle null with special string representation
+    // Handle numbers as text content (Bedrock doesn't accept primitives as JSON)
+    if (typeof value === 'number') {
+      return {
+        toolUseId,
+        status: 'success',
+        content: [
+          {
+            type: 'toolResultTextContent',
+            text: String(value),
+          },
+        ],
+      }
+    }
+
+    // Handle booleans as text content (Bedrock doesn't accept primitives as JSON)
+    if (typeof value === 'boolean') {
+      return {
+        toolUseId,
+        status: 'success',
+        content: [
+          {
+            type: 'toolResultTextContent',
+            text: String(value),
+          },
+        ],
+      }
+    }
+
+    // Handle null with special string representation as text content
     if (value === null) {
       return {
         toolUseId,
         status: 'success',
         content: [
           {
-            type: 'toolResultJsonContent',
-            json: '<null>',
+            type: 'toolResultTextContent',
+            text: '<null>',
           },
         ],
       }
     }
 
-    // Handle undefined with special string representation
+    // Handle undefined with special string representation as text content
     if (value === undefined) {
       return {
         toolUseId,
         status: 'success',
         content: [
           {
-            type: 'toolResultJsonContent',
-            json: '<undefined>',
+            type: 'toolResultTextContent',
+            text: '<undefined>',
           },
         ],
       }
     }
 
-    // Handle numbers and booleans as JSON content (no deep copy needed for primitives)
-    if (typeof value === 'number' || typeof value === 'boolean') {
-      return {
-        toolUseId,
-        status: 'success',
-        content: [
-          {
-            type: 'toolResultJsonContent',
-            json: value,
-          },
-        ],
+    // Handle arrays by wrapping in object { $value: array }
+    if (Array.isArray(value)) {
+      try {
+        const copiedValue = deepCopyJson(value)
+        return {
+          toolUseId,
+          status: 'success',
+          content: [
+            {
+              type: 'toolResultJsonContent',
+              json: { $value: copiedValue },
+            },
+          ],
+        }
+      } catch (error) {
+        // If deep copy fails (circular references, non-serializable values), return error result
+        return this._createErrorResult(error, toolUseId)
       }
     }
 
-    // Handle objects and arrays as JSON content with deep copy
+    // Handle objects as JSON content with deep copy
     try {
       const copiedValue = deepCopyJson(value)
       return {
