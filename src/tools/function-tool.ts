@@ -198,48 +198,6 @@ export class FunctionTool implements Tool {
    * @returns A ToolResult containing the value
    */
   private _wrapInToolResult(value: unknown, toolUseId: string): ToolResult {
-    // Handle strings as text content
-    if (typeof value === 'string') {
-      return {
-        toolUseId,
-        status: 'success',
-        content: [
-          {
-            type: 'toolResultTextContent',
-            text: value,
-          },
-        ],
-      }
-    }
-
-    // Handle numbers as text content (Bedrock doesn't accept primitives as JSON)
-    if (typeof value === 'number') {
-      return {
-        toolUseId,
-        status: 'success',
-        content: [
-          {
-            type: 'toolResultTextContent',
-            text: String(value),
-          },
-        ],
-      }
-    }
-
-    // Handle booleans as text content (Bedrock doesn't accept primitives as JSON)
-    if (typeof value === 'boolean') {
-      return {
-        toolUseId,
-        status: 'success',
-        content: [
-          {
-            type: 'toolResultTextContent',
-            text: String(value),
-          },
-        ],
-      }
-    }
-
     // Handle null with special string representation as text content
     if (value === null) {
       return {
@@ -263,6 +221,21 @@ export class FunctionTool implements Tool {
           {
             type: 'toolResultTextContent',
             text: '<undefined>',
+          },
+        ],
+      }
+    }
+
+    // Handle primitives (strings, numbers, booleans) as text content
+    // Bedrock doesn't accept primitives as JSON content, so we convert all to strings
+    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+      return {
+        toolUseId,
+        status: 'success',
+        content: [
+          {
+            type: 'toolResultTextContent',
+            text: String(value),
           },
         ],
       }
