@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import OpenAI from 'openai'
-import { OpenAIModel, type OpenAIModelOptions } from '../openai'
+import { OpenAIModel } from '../openai'
 import type { Message } from '../../types/messages'
 
 // Mock the OpenAI SDK
@@ -31,12 +31,6 @@ describe('OpenAIModel', () => {
   })
 
   describe('constructor', () => {
-    it('throws error when modelId is not provided', () => {
-      expect(() => new OpenAIModel({ apiKey: 'sk-test' } as OpenAIModelOptions)).toThrow(
-        "OpenAI model ID is required. Provide it via the 'modelId' option."
-      )
-    })
-
     it('creates an instance with required modelId', () => {
       const provider = new OpenAIModel({ modelId: 'gpt-4o', apiKey: 'sk-test' })
       const config = provider.getConfig()
@@ -62,14 +56,14 @@ describe('OpenAIModel', () => {
     })
 
     it('uses API key from environment variable', () => {
-      process.env.OPENAI_API_KEY = 'sk-from-env'
+      vi.stubEnv('OPENAI_API_KEY', 'sk-from-env')
       new OpenAIModel({ modelId: 'gpt-4o' })
       // OpenAI client should be called without explicit apiKey (uses env var internally)
       expect(OpenAI).toHaveBeenCalled()
     })
 
     it('explicit API key takes precedence over environment variable', () => {
-      process.env.OPENAI_API_KEY = 'sk-from-env'
+      vi.stubEnv('OPENAI_API_KEY', 'sk-from-env')
       const explicitKey = 'sk-explicit'
       new OpenAIModel({ modelId: 'gpt-4o', apiKey: explicitKey })
       expect(OpenAI).toHaveBeenCalledWith(
@@ -80,7 +74,7 @@ describe('OpenAIModel', () => {
     })
 
     it('throws error when no API key is available', () => {
-      delete process.env.OPENAI_API_KEY
+      vi.stubEnv('OPENAI_API_KEY', '')
       expect(() => new OpenAIModel({ modelId: 'gpt-4o' })).toThrow(
         "OpenAI API key is required. Provide it via the 'apiKey' option or set the OPENAI_API_KEY environment variable."
       )
@@ -128,6 +122,7 @@ describe('OpenAIModel', () => {
     it('returns the current configuration', () => {
       const provider = new OpenAIModel({
         modelId: 'gpt-4o',
+        apiKey: 'sk-test',
         maxTokens: 1024,
         temperature: 0.7,
       })

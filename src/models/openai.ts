@@ -148,15 +148,10 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
    * })
    * ```
    */
-  constructor(options?: OpenAIModelOptions) {
-    // Validate modelId is provided
-    if (!options?.modelId) {
-      throw new Error("OpenAI model ID is required. Provide it via the 'modelId' option.")
-    }
-
+  constructor(options: OpenAIModelOptions) {
     // Check if API key is available
     // eslint-disable-next-line no-undef
-    if (!options?.apiKey && !process.env.OPENAI_API_KEY) {
+    if (!options.apiKey && !process.env.OPENAI_API_KEY) {
       throw new Error(
         "OpenAI API key is required. Provide it via the 'apiKey' option or set the OPENAI_API_KEY environment variable."
       )
