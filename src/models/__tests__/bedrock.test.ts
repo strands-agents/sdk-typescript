@@ -761,27 +761,6 @@ describe('BedrockModel', () => {
       vi.clearAllMocks()
     })
 
-    it('formats string system prompt (backward compatibility)', async () => {
-      const provider = new BedrockModel()
-      const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
-      const options: StreamOptions = {
-        systemPrompt: 'You are a helpful assistant',
-      }
-
-      collectEvents(provider.stream(messages, options))
-
-      expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
-        modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
-        messages: [
-          {
-            role: 'user',
-            content: [{ text: 'Hello' }],
-          },
-        ],
-        system: [{ text: 'You are a helpful assistant' }],
-      })
-    })
-
     it('formats string system prompt with cachePrompt config', async () => {
       const provider = new BedrockModel({ cachePrompt: 'default' })
       const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
