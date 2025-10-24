@@ -216,16 +216,19 @@ export class FunctionTool implements Tool {
 
   /**
    * Creates an error ToolResult from an error object.
+   * Ensures all errors are normalized to Error objects and includes the original error
+   * in the ToolResult for inspection by hooks, error handlers, and event loop.
    *
    * TODO: Implement consistent logging format as defined in #30
    * This error should be logged to the caller using the established logging pattern.
    *
-   * @param error - The error that occurred
+   * @param error - The error that occurred (can be Error object or any thrown value)
    * @param toolUseId - The tool use ID for the ToolResult
-   * @returns A ToolResult with error status
+   * @returns A ToolResult with error status, error message content, and original error object
    */
   private _createErrorResult(error: unknown, toolUseId: string): ToolResult {
-    const errorMessage = error instanceof Error ? error.message : String(error)
+    // Ensure error is an Error object (wrap non-Error values)
+    const errorObject = error instanceof Error ? error : new Error(String(error))
 
     return {
       toolUseId,
@@ -233,9 +236,10 @@ export class FunctionTool implements Tool {
       content: [
         {
           type: 'toolResultTextContent',
-          text: `Error: ${errorMessage}`,
+          text: `Error: ${errorObject.message}`,
         },
       ],
+      error: errorObject,
     }
   }
 }

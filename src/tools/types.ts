@@ -19,6 +19,13 @@ export interface ToolResult {
    * Array of content blocks containing the tool's output.
    */
   content: ToolResultContent[]
+
+  /**
+   * The original error object when status is 'error'.
+   * Available for inspection by hooks, error handlers, and event loop.
+   * Tools must wrap non-Error thrown values into Error objects.
+   */
+  error?: Error
 }
 
 /**

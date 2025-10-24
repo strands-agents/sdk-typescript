@@ -466,6 +466,159 @@ describe('FunctionTool', () => {
         expect(result.status).toBe('error')
       })
 
+      it('captures Error object in ToolResult when callback throws Error', async () => {
+        const testError = new Error('Test error message')
+        const tool = new FunctionTool({
+          name: 'errorObjectTool',
+          description: 'Throws Error object',
+          inputSchema: { type: 'object' },
+          callback: (): never => {
+            throw testError
+          },
+        })
+
+        const toolUse = {
+          name: 'errorObjectTool',
+          toolUseId: 'test-error-capture',
+          input: {},
+        }
+
+        const { result } = await collectGeneratorEvents(tool.stream({ toolUse, invocationState: {} }))
+
+        expect(result).toEqual({
+          toolUseId: 'test-error-capture',
+          status: 'error',
+          content: [
+            {
+              type: 'toolResultTextContent',
+              text: 'Error: Test error message',
+            },
+          ],
+          error: testError,
+        })
+        expect(result.error).toBe(testError)
+        expect(result.error?.message).toBe('Test error message')
+      })
+
+      it('wraps non-Error thrown values into Error object', async () => {
+        const tool = new FunctionTool({
+          name: 'stringThrowTool',
+          description: 'Throws string',
+          inputSchema: { type: 'object' },
+          callback: (): never => {
+            throw 'string error'
+          },
+        })
+
+        const toolUse = {
+          name: 'stringThrowTool',
+          toolUseId: 'test-string-wrap',
+          input: {},
+        }
+
+        const { result } = await collectGeneratorEvents(tool.stream({ toolUse, invocationState: {} }))
+
+        expect(result.status).toBe('error')
+        expect(result.error).toBeInstanceOf(Error)
+        expect(result.error?.message).toBe('string error')
+        expect(result.content).toEqual([
+          {
+            type: 'toolResultTextContent',
+            text: 'Error: string error',
+          },
+        ])
+      })
+
+      it('preserves custom Error subclass instances', async () => {
+        class CustomError extends Error {
+          constructor(
+            message: string,
+            public code: string
+          ) {
+            super(message)
+            this.name = 'CustomError'
+          }
+        }
+
+        const customError = new CustomError('Custom error message', 'ERR_001')
+        const tool = new FunctionTool({
+          name: 'customErrorTool',
+          description: 'Throws custom error',
+          inputSchema: { type: 'object' },
+          callback: (): never => {
+            throw customError
+          },
+        })
+
+        const toolUse = {
+          name: 'customErrorTool',
+          toolUseId: 'test-custom-error',
+          input: {},
+        }
+
+        const { result } = await collectGeneratorEvents(tool.stream({ toolUse, invocationState: {} }))
+
+        expect(result.status).toBe('error')
+        expect(result.error).toBe(customError)
+        expect(result.error).toBeInstanceOf(CustomError)
+        expect((result.error as CustomError).code).toBe('ERR_001')
+        expect(result.error?.message).toBe('Custom error message')
+      })
+
+      it('preserves error stack traces', async () => {
+        const tool = new FunctionTool({
+          name: 'stackTraceTool',
+          description: 'Throws error with stack trace',
+          inputSchema: { type: 'object' },
+          callback: (): never => {
+            throw new Error('Error with stack')
+          },
+        })
+
+        const toolUse = {
+          name: 'stackTraceTool',
+          toolUseId: 'test-stack-trace',
+          input: {},
+        }
+
+        const { result } = await collectGeneratorEvents(tool.stream({ toolUse, invocationState: {} }))
+
+        expect(result.status).toBe('error')
+        expect(result.error).toBeInstanceOf(Error)
+        expect(result.error?.stack).toBeDefined()
+        expect(result.error?.stack).toContain('Error: Error with stack')
+      })
+
+      it('captures errors thrown in async generator callbacks', async () => {
+        const testError = new Error('Async generator error')
+        const tool = new FunctionTool({
+          name: 'asyncGenErrorTool',
+          description: 'Async generator that throws',
+          inputSchema: { type: 'object' },
+          callback: async function* (): AsyncGenerator<string, never, unknown> {
+            yield 'Starting...'
+            throw testError
+          },
+        })
+
+        const toolUse = {
+          name: 'asyncGenErrorTool',
+          toolUseId: 'test-async-gen-error',
+          input: {},
+        }
+
+        const { streamEvents, result } = await collectGeneratorEvents(tool.stream({ toolUse, invocationState: {} }))
+
+        // Should have one stream event before the error
+        expect(streamEvents.length).toBe(1)
+        expect(streamEvents[0]).toEqual({ type: 'toolStreamEvent', data: 'Starting...' })
+
+        // Final result should have error object
+        expect(result.status).toBe('error')
+        expect(result.error).toBe(testError)
+        expect(result.error?.message).toBe('Async generator error')
+      })
+
       it('catches errors in async generators', async () => {
         const tool = new FunctionTool({
           name: 'genErrorTool',
@@ -519,6 +672,159 @@ describe('FunctionTool', () => {
 
         expect(streamEvents.length).toBe(0)
         expect(result.status).toBe('error')
+      })
+
+      it('captures Error object in ToolResult when callback throws Error', async () => {
+        const testError = new Error('Test error message')
+        const tool = new FunctionTool({
+          name: 'errorObjectTool',
+          description: 'Throws Error object',
+          inputSchema: { type: 'object' },
+          callback: (): never => {
+            throw testError
+          },
+        })
+
+        const toolUse = {
+          name: 'errorObjectTool',
+          toolUseId: 'test-error-capture',
+          input: {},
+        }
+
+        const { result } = await collectGeneratorEvents(tool.stream({ toolUse, invocationState: {} }))
+
+        expect(result).toEqual({
+          toolUseId: 'test-error-capture',
+          status: 'error',
+          content: [
+            {
+              type: 'toolResultTextContent',
+              text: 'Error: Test error message',
+            },
+          ],
+          error: testError,
+        })
+        expect(result.error).toBe(testError)
+        expect(result.error?.message).toBe('Test error message')
+      })
+
+      it('wraps non-Error thrown values into Error object', async () => {
+        const tool = new FunctionTool({
+          name: 'stringThrowTool',
+          description: 'Throws string',
+          inputSchema: { type: 'object' },
+          callback: (): never => {
+            throw 'string error'
+          },
+        })
+
+        const toolUse = {
+          name: 'stringThrowTool',
+          toolUseId: 'test-string-wrap',
+          input: {},
+        }
+
+        const { result } = await collectGeneratorEvents(tool.stream({ toolUse, invocationState: {} }))
+
+        expect(result.status).toBe('error')
+        expect(result.error).toBeInstanceOf(Error)
+        expect(result.error?.message).toBe('string error')
+        expect(result.content).toEqual([
+          {
+            type: 'toolResultTextContent',
+            text: 'Error: string error',
+          },
+        ])
+      })
+
+      it('preserves custom Error subclass instances', async () => {
+        class CustomError extends Error {
+          constructor(
+            message: string,
+            public code: string
+          ) {
+            super(message)
+            this.name = 'CustomError'
+          }
+        }
+
+        const customError = new CustomError('Custom error message', 'ERR_001')
+        const tool = new FunctionTool({
+          name: 'customErrorTool',
+          description: 'Throws custom error',
+          inputSchema: { type: 'object' },
+          callback: (): never => {
+            throw customError
+          },
+        })
+
+        const toolUse = {
+          name: 'customErrorTool',
+          toolUseId: 'test-custom-error',
+          input: {},
+        }
+
+        const { result } = await collectGeneratorEvents(tool.stream({ toolUse, invocationState: {} }))
+
+        expect(result.status).toBe('error')
+        expect(result.error).toBe(customError)
+        expect(result.error).toBeInstanceOf(CustomError)
+        expect((result.error as CustomError).code).toBe('ERR_001')
+        expect(result.error?.message).toBe('Custom error message')
+      })
+
+      it('preserves error stack traces', async () => {
+        const tool = new FunctionTool({
+          name: 'stackTraceTool',
+          description: 'Throws error with stack trace',
+          inputSchema: { type: 'object' },
+          callback: (): never => {
+            throw new Error('Error with stack')
+          },
+        })
+
+        const toolUse = {
+          name: 'stackTraceTool',
+          toolUseId: 'test-stack-trace',
+          input: {},
+        }
+
+        const { result } = await collectGeneratorEvents(tool.stream({ toolUse, invocationState: {} }))
+
+        expect(result.status).toBe('error')
+        expect(result.error).toBeInstanceOf(Error)
+        expect(result.error?.stack).toBeDefined()
+        expect(result.error?.stack).toContain('Error: Error with stack')
+      })
+
+      it('captures errors thrown in async generator callbacks', async () => {
+        const testError = new Error('Async generator error')
+        const tool = new FunctionTool({
+          name: 'asyncGenErrorTool',
+          description: 'Async generator that throws',
+          inputSchema: { type: 'object' },
+          callback: async function* (): AsyncGenerator<string, never, unknown> {
+            yield 'Starting...'
+            throw testError
+          },
+        })
+
+        const toolUse = {
+          name: 'asyncGenErrorTool',
+          toolUseId: 'test-async-gen-error',
+          input: {},
+        }
+
+        const { streamEvents, result } = await collectGeneratorEvents(tool.stream({ toolUse, invocationState: {} }))
+
+        // Should have one stream event before the error
+        expect(streamEvents.length).toBe(1)
+        expect(streamEvents[0]).toEqual({ type: 'toolStreamEvent', data: 'Starting...' })
+
+        // Final result should have error object
+        expect(result.status).toBe('error')
+        expect(result.error).toBe(testError)
+        expect(result.error?.message).toBe('Async generator error')
       })
     })
   })
