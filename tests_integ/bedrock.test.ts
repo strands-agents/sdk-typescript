@@ -265,8 +265,7 @@ describe.skipIf(!hasCredentials)('BedrockModel Integration Tests', () => {
       expect(metadata2?.usage).toBeDefined()
 
       // Verify cache read
-      expect(metadata2?.usage?.cacheReadInputTokens).toBeDefined()
-      expect(metadata2.usage.cacheReadInputTokens).toBeGreaterThan(0)
+      expect(metadata2.usage?.cacheReadInputTokens).toBeGreaterThan(0)
     })
   })
 

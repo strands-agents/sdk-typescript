@@ -166,6 +166,13 @@ export type StopReason =
  * ```typescript
  * // Simple string
  * const prompt: SystemPrompt = 'You are a helpful assistant'
+ *
+ * // Array with cache points for advanced caching
+ * const prompt: SystemPrompt = [
+ *   { type: 'textBlock', text: 'You are a helpful assistant' },
+ *   { type: 'textBlock', text: largeContextDocument },
+ *   { type: 'cachePointBlock', cacheType: 'default' }
+ * ]
  * ```
  */
 export type SystemPrompt = string | SystemContentBlock[]
