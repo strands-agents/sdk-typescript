@@ -315,4 +315,69 @@ describe.skipIf(!hasCredentials)('BedrockModel Integration Tests', () => {
       }).rejects.toBeInstanceOf(ContextWindowOverflowError)
     })
   })
+
+  describe('Stream Aggregation', () => {
+    it.concurrent('streamAggregated yields events, content blocks, and complete message', async () => {
+      const provider = new BedrockModel({
+        maxTokens: 100,
+      })
+
+      const messages: Message[] = [
+        {
+          type: 'message',
+          role: 'user',
+          content: [{ type: 'textBlock', text: 'Say hello in exactly one word.' }],
+        },
+      ]
+
+      const items = []
+      for await (const item of provider.streamAggregated(messages)) {
+        items.push(item)
+      }
+
+      // Count different types using switch-case pattern
+      let streamEventCount = 0
+      let contentBlockCount = 0
+      let messageCount = 0
+
+      for (const item of items) {
+        switch (item.type) {
+          case 'modelMessageStartEvent':
+          case 'modelContentBlockStartEvent':
+          case 'modelContentBlockDeltaEvent':
+          case 'modelContentBlockStopEvent':
+          case 'modelMessageStopEvent':
+          case 'modelMetadataEvent':
+            streamEventCount++
+            break
+          case 'textBlock':
+          case 'toolUseBlock':
+          case 'reasoningBlock':
+            contentBlockCount++
+            break
+          case 'message':
+            messageCount++
+            break
+        }
+      }
+
+      // Verify we got all three types
+      expect(streamEventCount).toBeGreaterThan(0)
+      expect(contentBlockCount).toBe(1)
+      expect(messageCount).toBe(1)
+
+      // Verify the complete message structure
+      const message = items.find((i) => i.type === 'message')
+      expect(message).toBeDefined()
+      expect(message).toMatchObject({
+        type: 'message',
+        role: 'assistant',
+        content: expect.arrayContaining([
+          expect.objectContaining({
+            type: 'textBlock',
+          }),
+        ]),
+      })
+    })
+  })
 })
