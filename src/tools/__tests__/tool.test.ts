@@ -496,8 +496,6 @@ describe('FunctionTool', () => {
           ],
           error: testError,
         })
-        expect(result.error).toBe(testError)
-        expect(result.error?.message).toBe('Test error message')
       })
 
       it('wraps non-Error thrown values into Error object', async () => {
@@ -518,15 +516,18 @@ describe('FunctionTool', () => {
 
         const { result } = await collectGeneratorEvents(tool.stream({ toolUse, invocationState: {} }))
 
-        expect(result.status).toBe('error')
-        expect(result.error).toBeInstanceOf(Error)
+        expect(result).toEqual({
+          toolUseId: 'test-string-wrap',
+          status: 'error',
+          content: [
+            {
+              type: 'toolResultTextContent',
+              text: 'Error: string error',
+            },
+          ],
+          error: expect.any(Error),
+        })
         expect(result.error?.message).toBe('string error')
-        expect(result.content).toEqual([
-          {
-            type: 'toolResultTextContent',
-            text: 'Error: string error',
-          },
-        ])
       })
 
       it('preserves custom Error subclass instances', async () => {
@@ -558,11 +559,18 @@ describe('FunctionTool', () => {
 
         const { result } = await collectGeneratorEvents(tool.stream({ toolUse, invocationState: {} }))
 
-        expect(result.status).toBe('error')
-        expect(result.error).toBe(customError)
-        expect(result.error).toBeInstanceOf(CustomError)
+        expect(result).toEqual({
+          toolUseId: 'test-custom-error',
+          status: 'error',
+          content: [
+            {
+              type: 'toolResultTextContent',
+              text: 'Error: Custom error message',
+            },
+          ],
+          error: customError,
+        })
         expect((result.error as CustomError).code).toBe('ERR_001')
-        expect(result.error?.message).toBe('Custom error message')
       })
 
       it('preserves error stack traces', async () => {
@@ -583,8 +591,17 @@ describe('FunctionTool', () => {
 
         const { result } = await collectGeneratorEvents(tool.stream({ toolUse, invocationState: {} }))
 
-        expect(result.status).toBe('error')
-        expect(result.error).toBeInstanceOf(Error)
+        expect(result).toEqual({
+          toolUseId: 'test-stack-trace',
+          status: 'error',
+          content: [
+            {
+              type: 'toolResultTextContent',
+              text: 'Error: Error with stack',
+            },
+          ],
+          error: expect.any(Error),
+        })
         expect(result.error?.stack).toBeDefined()
         expect(result.error?.stack).toContain('Error: Error with stack')
       })
@@ -614,9 +631,17 @@ describe('FunctionTool', () => {
         expect(streamEvents[0]).toEqual({ type: 'toolStreamEvent', data: 'Starting...' })
 
         // Final result should have error object
-        expect(result.status).toBe('error')
-        expect(result.error).toBe(testError)
-        expect(result.error?.message).toBe('Async generator error')
+        expect(result).toEqual({
+          toolUseId: 'test-async-gen-error',
+          status: 'error',
+          content: [
+            {
+              type: 'toolResultTextContent',
+              text: 'Error: Async generator error',
+            },
+          ],
+          error: testError,
+        })
       })
 
       it('catches errors in async generators', async () => {
@@ -704,8 +729,6 @@ describe('FunctionTool', () => {
           ],
           error: testError,
         })
-        expect(result.error).toBe(testError)
-        expect(result.error?.message).toBe('Test error message')
       })
 
       it('wraps non-Error thrown values into Error object', async () => {
@@ -726,15 +749,18 @@ describe('FunctionTool', () => {
 
         const { result } = await collectGeneratorEvents(tool.stream({ toolUse, invocationState: {} }))
 
-        expect(result.status).toBe('error')
-        expect(result.error).toBeInstanceOf(Error)
+        expect(result).toEqual({
+          toolUseId: 'test-string-wrap',
+          status: 'error',
+          content: [
+            {
+              type: 'toolResultTextContent',
+              text: 'Error: string error',
+            },
+          ],
+          error: expect.any(Error),
+        })
         expect(result.error?.message).toBe('string error')
-        expect(result.content).toEqual([
-          {
-            type: 'toolResultTextContent',
-            text: 'Error: string error',
-          },
-        ])
       })
 
       it('preserves custom Error subclass instances', async () => {
@@ -766,11 +792,18 @@ describe('FunctionTool', () => {
 
         const { result } = await collectGeneratorEvents(tool.stream({ toolUse, invocationState: {} }))
 
-        expect(result.status).toBe('error')
-        expect(result.error).toBe(customError)
-        expect(result.error).toBeInstanceOf(CustomError)
+        expect(result).toEqual({
+          toolUseId: 'test-custom-error',
+          status: 'error',
+          content: [
+            {
+              type: 'toolResultTextContent',
+              text: 'Error: Custom error message',
+            },
+          ],
+          error: customError,
+        })
         expect((result.error as CustomError).code).toBe('ERR_001')
-        expect(result.error?.message).toBe('Custom error message')
       })
 
       it('preserves error stack traces', async () => {
@@ -791,8 +824,17 @@ describe('FunctionTool', () => {
 
         const { result } = await collectGeneratorEvents(tool.stream({ toolUse, invocationState: {} }))
 
-        expect(result.status).toBe('error')
-        expect(result.error).toBeInstanceOf(Error)
+        expect(result).toEqual({
+          toolUseId: 'test-stack-trace',
+          status: 'error',
+          content: [
+            {
+              type: 'toolResultTextContent',
+              text: 'Error: Error with stack',
+            },
+          ],
+          error: expect.any(Error),
+        })
         expect(result.error?.stack).toBeDefined()
         expect(result.error?.stack).toContain('Error: Error with stack')
       })
@@ -822,9 +864,17 @@ describe('FunctionTool', () => {
         expect(streamEvents[0]).toEqual({ type: 'toolStreamEvent', data: 'Starting...' })
 
         // Final result should have error object
-        expect(result.status).toBe('error')
-        expect(result.error).toBe(testError)
-        expect(result.error?.message).toBe('Async generator error')
+        expect(result).toEqual({
+          toolUseId: 'test-async-gen-error',
+          status: 'error',
+          content: [
+            {
+              type: 'toolResultTextContent',
+              text: 'Error: Async generator error',
+            },
+          ],
+          error: testError,
+        })
       })
     })
   })
