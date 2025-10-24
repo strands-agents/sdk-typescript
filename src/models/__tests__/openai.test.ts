@@ -12,22 +12,16 @@ vi.mock('openai', () => {
 })
 
 describe('OpenAIModel', () => {
-  const originalEnv = process.env.OPENAI_API_KEY
-
   beforeEach(() => {
     vi.clearAllMocks()
-    // Set default env var for most tests
-    process.env.OPENAI_API_KEY = 'sk-test-env'
+    // Set default env var for most tests using Vitest's stubEnv
+    vi.stubEnv('OPENAI_API_KEY', 'sk-test-env')
   })
 
   afterEach(() => {
     vi.clearAllMocks()
-    // Restore original env var
-    if (originalEnv !== undefined) {
-      process.env.OPENAI_API_KEY = originalEnv
-    } else {
-      delete process.env.OPENAI_API_KEY
-    }
+    // Restore all environment variables to their original state
+    vi.unstubAllEnvs()
   })
 
   describe('constructor', () => {
