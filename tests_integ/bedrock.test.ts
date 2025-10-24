@@ -201,12 +201,9 @@ describe.skipIf(!hasCredentials)('BedrockModel Integration Tests', () => {
       const metadata1 = events1.find((e) => e.type === 'modelMetadataEvent')
       expect(metadata1?.usage?.inputTokens).toBeGreaterThan(0)
 
-      // If caching is supported, verify cache creation
-      if (metadata1?.usage?.cacheWriteInputTokens !== undefined) {
-        expect(metadata1.usage.cacheWriteInputTokens).toBeGreaterThan(0)
-      } else {
-        console.log('⚠️  Cache write tokens not returned - caching may not be supported for this model')
-      }
+      // Verify cache creation
+      expect(metadata1?.usage?.cacheWriteInputTokens).toBeDefined()
+      expect(metadata1.usage.cacheWriteInputTokens).toBeGreaterThan(0)
 
       // Second request - should use cache
       const messages2: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Say goodbye' }] }]
@@ -247,12 +244,9 @@ describe.skipIf(!hasCredentials)('BedrockModel Integration Tests', () => {
       const metadata1 = events1.find((e) => e.type === 'modelMetadataEvent')
       expect(metadata1?.usage?.inputTokens).toBeGreaterThan(0)
 
-      // If caching is supported, verify cache creation
-      if (metadata1?.usage?.cacheWriteInputTokens !== undefined) {
-        expect(metadata1.usage.cacheWriteInputTokens).toBeGreaterThan(0)
-      } else {
-        console.log('⚠️  Cache write tokens not returned - caching may not be supported for this model')
-      }
+      // Verify cache creation
+      expect(metadata1?.usage?.cacheWriteInputTokens).toBeDefined()
+      expect(metadata1.usage.cacheWriteInputTokens).toBeGreaterThan(0)
 
       // Second request - should use cache
       const messages2: Message[] = [
