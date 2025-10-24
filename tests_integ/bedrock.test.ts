@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { setTimeout } from 'node:timers/promises'
 import { fromNodeProviderChain } from '@aws-sdk/credential-providers'
 import { BedrockModel } from '../src/models/bedrock'
 import { ContextWindowOverflowError } from '../src/errors'
@@ -181,11 +182,16 @@ describe.skipIf(!hasCredentials)('BedrockModel Integration Tests', () => {
     })
 
     it.concurrent('uses system prompt cache on subsequent requests', async () => {
+      // Add delay to avoid throttling from previous tests
+      await setTimeout(5000)
+
       const provider = new BedrockModel({ maxTokens: 100 })
 
       // Create a system prompt with text + cache point
       // Use enough text to be worth caching (minimum 1024 tokens recommended by AWS)
-      const largeContext = 'Context information: ' + 'x'.repeat(5000)
+      // Append unique string to ensure fresh cache creation on each test run
+      const largeContext =
+        'Context information: ' + 'hello '.repeat(2000) + ` [test-${Date.now()}-${Math.random()}]`
       const cachedSystemPrompt = [
         { type: 'textBlock' as const, text: 'You are a helpful assistant.' },
         { type: 'textBlock' as const, text: largeContext },
@@ -224,10 +230,17 @@ describe.skipIf(!hasCredentials)('BedrockModel Integration Tests', () => {
     })
 
     it.concurrent('uses message cache points on subsequent requests', async () => {
+      // Add delay to avoid throttling from previous test
+      await setTimeout(5000)
+
       const provider = new BedrockModel({ maxTokens: 100 })
 
       // Create messages with cache points
-      const largeContext = 'Context information: ' + 'x'.repeat(5000)
+      // Append unique string to ensure fresh cache creation on each test run
+      const largeContext =
+        'Context information: ' + 'hello '.repeat(2000) + ` [test-${Date.now()}-${Math.random()}]`
+
+      // First request - creates cache
       const messages1: Message[] = [
         {
           role: 'user',
