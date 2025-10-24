@@ -65,6 +65,7 @@
   },
   "homepage": "https://github.com/strands-agents/sdk-typescript#readme",
   "dependencies": {
-    "@aws-sdk/client-bedrock-runtime": "^3.911.0"
+    "@aws-sdk/client-bedrock-runtime": "^3.911.0",
+    "openai": "^4.77.3"
   }
 }

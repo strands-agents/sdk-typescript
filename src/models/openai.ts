@@ -1,0 +1,236 @@
+/**
+ * OpenAI model provider implementation.
+ *
+ * This module provides integration with OpenAI's Chat Completions API,
+ * supporting streaming responses, tool use, and configurable model parameters.
+ *
+ * @see https://platform.openai.com/docs/api-reference/chat/create
+ */
+
+import OpenAI, { type ClientOptions } from 'openai'
+import type { Model, BaseModelConfig, StreamOptions } from '../models/model'
+import type { Message } from '../types/messages'
+import type { ModelStreamEvent } from '../models/streaming'
+
+/**
+ * Default OpenAI model ID.
+ * Uses GPT-4o as the default model.
+ */
+const DEFAULT_OPENAI_MODEL_ID = 'gpt-4o'
+
+/**
+ * Default OpenAI API base URL.
+ */
+const DEFAULT_OPENAI_BASE_URL = 'https://api.openai.com/v1'
+
+/**
+ * Configuration interface for OpenAI model provider.
+ *
+ * Extends BaseModelConfig with OpenAI-specific configuration options
+ * for model parameters and request settings.
+ *
+ * @example
+ * ```typescript
+ * const config: OpenAIModelConfig = {
+ *   modelId: 'gpt-4o',
+ *   temperature: 0.7,
+ *   maxTokens: 1024
+ * }
+ * ```
+ */
+export interface OpenAIModelConfig extends BaseModelConfig {
+  /**
+   * OpenAI model identifier (e.g., gpt-4o, gpt-3.5-turbo).
+   */
+  modelId?: string
+
+  /**
+   * Controls randomness in generation (0 to 2).
+   */
+  temperature?: number
+
+  /**
+   * Maximum number of tokens to generate in the response.
+   */
+  maxTokens?: number
+
+  /**
+   * Controls diversity via nucleus sampling (0 to 1).
+   */
+  topP?: number
+
+  /**
+   * Reduces repetition of token sequences (-2.0 to 2.0).
+   */
+  frequencyPenalty?: number
+
+  /**
+   * Encourages the model to talk about new topics (-2.0 to 2.0).
+   */
+  presencePenalty?: number
+
+  /**
+   * Stop sequences that will stop generation when encountered.
+   */
+  stop?: string | string[]
+
+  /**
+   * Additional parameters for forward compatibility.
+   */
+  params?: Record<string, unknown>
+}
+
+/**
+ * Options interface for creating an OpenAIModel instance.
+ */
+export interface OpenAIModelOptions extends OpenAIModelConfig {
+  /**
+   * OpenAI API key (falls back to OPENAI_API_KEY environment variable).
+   */
+  apiKey?: string
+
+  /**
+   * Base URL for OpenAI-compatible servers (defaults to https://api.openai.com/v1).
+   */
+  baseUrl?: string
+
+  /**
+   * Additional OpenAI client configuration.
+   */
+  clientConfig?: ClientOptions
+}
+
+/**
+ * OpenAI model provider implementation.
+ *
+ * Implements the Model interface for OpenAI using the Chat Completions API.
+ * Supports streaming responses, tool use, and comprehensive configuration.
+ *
+ * @example
+ * ```typescript
+ * const provider = new OpenAIModel({
+ *   apiKey: 'sk-...',
+ *   modelId: 'gpt-4o',
+ *   temperature: 0.7,
+ *   maxTokens: 1024
+ * })
+ *
+ * const messages: Message[] = [
+ *   { role: 'user', content: [{ type: 'textBlock', text: 'Hello!' }] }
+ * ]
+ *
+ * for await (const event of provider.stream(messages)) {
+ *   if (event.type === 'modelContentBlockDeltaEvent' && event.delta.type === 'textDelta') {
+ *     process.stdout.write(event.delta.text)
+ *   }
+ * }
+ * ```
+ */
+export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
+  private _config: OpenAIModelConfig
+  private _client: OpenAI
+
+  /**
+   * Creates a new OpenAIModel instance.
+   *
+   * @param options - Optional configuration for model and client
+   *
+   * @example
+   * ```typescript
+   * // Minimal configuration with API key
+   * const provider = new OpenAIModel({
+   *   apiKey: 'sk-...'
+   * })
+   *
+   * // With model configuration
+   * const provider = new OpenAIModel({
+   *   apiKey: 'sk-...',
+   *   modelId: 'gpt-4o',
+   *   temperature: 0.8,
+   *   maxTokens: 2048
+   * })
+   *
+   * // With custom base URL (for OpenAI-compatible servers)
+   * const provider = new OpenAIModel({
+   *   apiKey: 'sk-...',
+   *   baseUrl: 'https://api.custom-openai.com/v1'
+   * })
+   * ```
+   */
+  constructor(options?: OpenAIModelOptions) {
+    // Check if API key is available
+    // eslint-disable-next-line no-undef
+    if (!options?.apiKey && !process.env.OPENAI_API_KEY) {
+      throw new Error(
+        "OpenAI API key is required. Provide it via the 'apiKey' option or set the OPENAI_API_KEY environment variable."
+      )
+    }
+
+    const { apiKey, baseUrl, clientConfig, ...modelConfig } = options ?? {}
+
+    // Initialize model config with default model ID
+    this._config = {
+      modelId: DEFAULT_OPENAI_MODEL_ID,
+      ...modelConfig,
+    }
+
+    // Initialize OpenAI client
+    // Only include apiKey if explicitly provided, otherwise let client use env var
+    this._client = new OpenAI({
+      ...(apiKey ? { apiKey } : {}),
+      baseURL: baseUrl ?? DEFAULT_OPENAI_BASE_URL,
+      ...clientConfig,
+    })
+  }
+
+  /**
+   * Updates the model configuration.
+   * Merges the provided configuration with existing settings.
+   *
+   * @param modelConfig - Configuration object with model-specific settings to update
+   *
+   * @example
+   * ```typescript
+   * // Update temperature and maxTokens
+   * provider.updateConfig({
+   *   temperature: 0.9,
+   *   maxTokens: 2048
+   * })
+   * ```
+   */
+  updateConfig(modelConfig: OpenAIModelConfig): void {
+    this._config = { ...this._config, ...modelConfig }
+  }
+
+  /**
+   * Retrieves the current model configuration.
+   *
+   * @returns The current configuration object
+   *
+   * @example
+   * ```typescript
+   * const config = provider.getConfig()
+   * console.log(config.modelId)
+   * ```
+   */
+  getConfig(): OpenAIModelConfig {
+    return this._config
+  }
+
+  /**
+   * Streams a conversation with the OpenAI model.
+   * Returns an async iterable that yields streaming events as they occur.
+   *
+   * Note: This method will be implemented in Task 04.2.
+   *
+   * @param messages - Array of conversation messages
+   * @param options - Optional streaming configuration
+   * @returns Async iterable of streaming events
+   *
+   * @throws Error indicating implementation pending in Task 04.2
+   */
+  // eslint-disable-next-line require-yield, @typescript-eslint/no-unused-vars
+  async *stream(messages: Message[], options?: StreamOptions): AsyncIterable<ModelStreamEvent> {
+    throw new Error('Not yet implemented - will be completed in Task 04.2')
+  }
+}

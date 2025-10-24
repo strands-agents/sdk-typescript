@@ -66,3 +66,7 @@ export type { BaseModelConfig, StreamOptions, Model } from './models/model'
 // Bedrock model provider
 export { BedrockModel as BedrockModel } from './models/bedrock'
 export type { BedrockModelConfig, BedrockModelOptions } from './models/bedrock'
+
+// OpenAI model provider
+export { OpenAIModel } from './models/openai'
+export type { OpenAIModelConfig, OpenAIModelOptions } from './models/openai'
