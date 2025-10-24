@@ -36,32 +36,16 @@ export type JSONValue = string | number | boolean | null | { [key: string]: JSON
 export type JSONSchema = JSONSchema7
 
 /**
- * Creates a deep copy of a JSON-serializable value.
- * Ensures that the returned value is immutable from the original.
- *
- * Uses JSON serialization to create the copy, which has the benefit of
- * detecting and rejecting non-JSON-serializable values like circular
- * references and functions.
+ * Creates a deep copy of a value using JSON serialization.
  *
  * @param value - The value to copy
  * @returns A deep copy of the value
- * @throws Error if the value cannot be serialized to JSON (circular references, functions, etc.)
- *
- * @example
- * ```typescript
- * const original = { nested: { value: 'test' } }
- * const copy = deepCopyJson(original)
- * original.nested.value = 'changed'
- * console.log(copy.nested.value) // 'test' - copy is unchanged
- * ```
+ * @throws Error if the value cannot be JSON serialized
  */
-export function deepCopyJson(value: unknown): JSONValue {
+export function deepCopy(value: unknown): JSONValue {
   try {
-    // Use JSON serialization for deep copying
-    // This will throw for circular references and other non-serializable values
     return JSON.parse(JSON.stringify(value)) as JSONValue
   } catch (error) {
-    // Value is not JSON-serializable (e.g., circular reference)
     const errorMessage = error instanceof Error ? error.message : String(error)
     throw new Error(`Unable to serialize tool result: ${errorMessage}`)
   }

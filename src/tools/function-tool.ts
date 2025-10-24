@@ -1,7 +1,7 @@
 import type { Tool, ToolContext, ToolStreamEvent } from './tool'
 import type { ToolSpec, ToolResult } from './types'
 import type { JSONSchema, JSONValue } from '../types/json'
-import { deepCopyJson } from '../types/json'
+import { deepCopy } from '../types/json'
 
 /**
  * Callback function for FunctionTool implementations.
@@ -244,7 +244,7 @@ export class FunctionTool implements Tool {
     // Handle arrays by wrapping in object { $value: array }
     if (Array.isArray(value)) {
       try {
-        const copiedValue = deepCopyJson(value)
+        const copiedValue = deepCopy(value)
         return {
           toolUseId,
           status: 'success',
@@ -263,7 +263,7 @@ export class FunctionTool implements Tool {
 
     // Handle objects as JSON content with deep copy
     try {
-      const copiedValue = deepCopyJson(value)
+      const copiedValue = deepCopy(value)
       return {
         toolUseId,
         status: 'success',

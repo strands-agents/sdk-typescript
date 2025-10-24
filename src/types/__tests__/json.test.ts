@@ -1,25 +1,25 @@
 import { describe, it, expect } from 'vitest'
-import { deepCopyJson } from '../json'
+import { deepCopy } from '../json'
 
-describe('deepCopyJson', () => {
+describe('deepCopy', () => {
   describe('primitive values', () => {
     it('copies strings', () => {
-      const result = deepCopyJson('hello')
+      const result = deepCopy('hello')
       expect(result).toBe('hello')
     })
 
     it('copies numbers', () => {
-      const result = deepCopyJson(42)
+      const result = deepCopy(42)
       expect(result).toBe(42)
     })
 
     it('copies booleans', () => {
-      const result = deepCopyJson(true)
+      const result = deepCopy(true)
       expect(result).toBe(true)
     })
 
     it('copies null', () => {
-      const result = deepCopyJson(null)
+      const result = deepCopy(null)
       expect(result).toBe(null)
     })
   })
@@ -27,7 +27,7 @@ describe('deepCopyJson', () => {
   describe('object values', () => {
     it('creates a deep copy of objects', () => {
       const original = { nested: { value: 'test' } }
-      const copy = deepCopyJson(original)
+      const copy = deepCopy(original)
 
       expect(copy).toEqual(original)
       expect(copy).not.toBe(original) // Different reference
@@ -38,13 +38,13 @@ describe('deepCopyJson', () => {
     })
 
     it('copies empty objects', () => {
-      const result = deepCopyJson({})
+      const result = deepCopy({})
       expect(result).toEqual({})
     })
 
     it('copies objects with multiple properties', () => {
       const original = { a: 1, b: 'two', c: true, d: null }
-      const copy = deepCopyJson(original)
+      const copy = deepCopy(original)
       expect(copy).toEqual(original)
     })
   })
@@ -52,7 +52,7 @@ describe('deepCopyJson', () => {
   describe('array values', () => {
     it('creates a deep copy of arrays', () => {
       const original = [1, 2, 3, { nested: 'value' }]
-      const copy = deepCopyJson(original)
+      const copy = deepCopy(original)
 
       expect(copy).toEqual(original)
       expect(copy).not.toBe(original) // Different reference
@@ -63,7 +63,7 @@ describe('deepCopyJson', () => {
     })
 
     it('copies empty arrays', () => {
-      const result = deepCopyJson([])
+      const result = deepCopy([])
       expect(result).toEqual([])
     })
 
@@ -72,7 +72,7 @@ describe('deepCopyJson', () => {
         [1, 2],
         [3, 4],
       ]
-      const copy = deepCopyJson(original)
+      const copy = deepCopy(original)
       expect(copy).toEqual(original)
     })
   })
@@ -82,7 +82,7 @@ describe('deepCopyJson', () => {
       const circular: { self?: unknown } = {}
       circular.self = circular
 
-      expect(() => deepCopyJson(circular)).toThrow('Unable to serialize tool result')
+      expect(() => deepCopy(circular)).toThrow('Unable to serialize tool result')
     })
 
     it('silently drops functions from objects', () => {
@@ -91,7 +91,7 @@ describe('deepCopyJson', () => {
         funcProp: (): string => 'test',
       }
 
-      const result = deepCopyJson(withFunction)
+      const result = deepCopy(withFunction)
       expect(result).toEqual({ normalProp: 'value' })
       expect(result).not.toHaveProperty('funcProp')
     })
@@ -103,7 +103,7 @@ describe('deepCopyJson', () => {
         [sym]: 'symbolValue',
       }
 
-      const result = deepCopyJson(withSymbol)
+      const result = deepCopy(withSymbol)
       expect(result).toEqual({ normalProp: 'value' })
       // Symbols are dropped during JSON serialization
       expect(Object.getOwnPropertySymbols(result as object)).toHaveLength(0)
@@ -115,7 +115,7 @@ describe('deepCopyJson', () => {
         undefinedProp: undefined,
       }
 
-      const result = deepCopyJson(withUndefined)
+      const result = deepCopy(withUndefined)
       expect(result).toEqual({ normalProp: 'value' })
       expect(result).not.toHaveProperty('undefinedProp')
     })
@@ -134,7 +134,7 @@ describe('deepCopyJson', () => {
         },
       }
 
-      const copy = deepCopyJson(original)
+      const copy = deepCopy(original)
       expect(copy).toEqual(original)
       expect(copy).not.toBe(original)
     })
@@ -146,7 +146,7 @@ describe('deepCopyJson', () => {
         { id: 3, name: 'third' },
       ]
 
-      const copy = deepCopyJson(original)
+      const copy = deepCopy(original)
       expect(copy).toEqual(original)
       expect(copy).not.toBe(original)
     })
