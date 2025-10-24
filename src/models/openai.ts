@@ -86,7 +86,14 @@ export interface OpenAIModelOptions extends OpenAIModelConfig {
   apiKey?: string
 
   /**
+   * Pre-configured OpenAI client instance.
+   * If provided, this client will be used instead of creating a new one.
+   */
+  client?: OpenAI
+
+  /**
    * Additional OpenAI client configuration.
+   * Only used if client is not provided.
    */
   clientConfig?: ClientOptions
 }
@@ -146,28 +153,40 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
    * const provider = new OpenAIModel({
    *   modelId: 'gpt-3.5-turbo'
    * })
+   *
+   * // Using a pre-configured client instance
+   * const client = new OpenAI({ apiKey: 'sk-...', timeout: 60000 })
+   * const provider = new OpenAIModel({
+   *   modelId: 'gpt-4o',
+   *   client
+   * })
    * ```
    */
   constructor(options: OpenAIModelOptions) {
-    // Check if API key is available
-    // eslint-disable-next-line no-undef
-    if (!options.apiKey && !process.env.OPENAI_API_KEY) {
-      throw new Error(
-        "OpenAI API key is required. Provide it via the 'apiKey' option or set the OPENAI_API_KEY environment variable."
-      )
-    }
-
-    const { apiKey, clientConfig, ...modelConfig } = options
+    const { apiKey, client, clientConfig, ...modelConfig } = options
 
     // Initialize model config
     this._config = modelConfig
 
-    // Initialize OpenAI client
-    // Only include apiKey if explicitly provided, otherwise let client use env var
-    this._client = new OpenAI({
-      ...(apiKey ? { apiKey } : {}),
-      ...clientConfig,
-    })
+    // Use provided client or create a new one
+    if (client) {
+      this._client = client
+    } else {
+      // Check if API key is available when creating a new client
+      // eslint-disable-next-line no-undef
+      if (!apiKey && !process.env.OPENAI_API_KEY) {
+        throw new Error(
+          "OpenAI API key is required. Provide it via the 'apiKey' option or set the OPENAI_API_KEY environment variable."
+        )
+      }
+
+      // Initialize OpenAI client
+      // Only include apiKey if explicitly provided, otherwise let client use env var
+      this._client = new OpenAI({
+        ...(apiKey ? { apiKey } : {}),
+        ...clientConfig,
+      })
+    }
   }
 
   /**

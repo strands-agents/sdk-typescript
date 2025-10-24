@@ -89,6 +89,35 @@ describe('OpenAIModel', () => {
         })
       )
     })
+
+    it('uses provided client instance', () => {
+      vi.clearAllMocks()
+      const mockClient = {} as OpenAI
+      const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
+      // Should not create a new OpenAI client
+      expect(OpenAI).not.toHaveBeenCalled()
+      expect(provider).toBeDefined()
+    })
+
+    it('provided client takes precedence over apiKey and clientConfig', () => {
+      vi.clearAllMocks()
+      const mockClient = {} as OpenAI
+      new OpenAIModel({
+        modelId: 'gpt-4o',
+        apiKey: 'sk-test',
+        client: mockClient,
+        clientConfig: { timeout: 30000 },
+      })
+      // Should not create a new OpenAI client when client is provided
+      expect(OpenAI).not.toHaveBeenCalled()
+    })
+
+    it('does not require API key when client is provided', () => {
+      vi.clearAllMocks()
+      vi.stubEnv('OPENAI_API_KEY', '')
+      const mockClient = {} as OpenAI
+      expect(() => new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })).not.toThrow()
+    })
   })
 
   describe('updateConfig', () => {
