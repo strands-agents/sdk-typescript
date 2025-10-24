@@ -198,52 +198,52 @@ export class FunctionTool implements Tool {
    * @returns A ToolResult containing the value
    */
   private _wrapInToolResult(value: unknown, toolUseId: string): ToolResult {
-    // Handle null with special string representation as text content
-    if (value === null) {
-      return {
-        toolUseId,
-        status: 'success',
-        content: [
-          {
-            type: 'toolResultTextContent',
-            text: '<null>',
-          },
-        ],
+    try {
+      // Handle null with special string representation as text content
+      if (value === null) {
+        return {
+          toolUseId,
+          status: 'success',
+          content: [
+            {
+              type: 'toolResultTextContent',
+              text: '<null>',
+            },
+          ],
+        }
       }
-    }
 
-    // Handle undefined with special string representation as text content
-    if (value === undefined) {
-      return {
-        toolUseId,
-        status: 'success',
-        content: [
-          {
-            type: 'toolResultTextContent',
-            text: '<undefined>',
-          },
-        ],
+      // Handle undefined with special string representation as text content
+      if (value === undefined) {
+        return {
+          toolUseId,
+          status: 'success',
+          content: [
+            {
+              type: 'toolResultTextContent',
+              text: '<undefined>',
+            },
+          ],
+        }
       }
-    }
 
-    // Handle primitives (strings, numbers, booleans) as text content
-    // Bedrock doesn't accept primitives as JSON content, so we convert all to strings
-    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-      return {
-        toolUseId,
-        status: 'success',
-        content: [
-          {
-            type: 'toolResultTextContent',
-            text: String(value),
-          },
-        ],
+      // Handle primitives (strings, numbers, booleans) as text content
+      // Bedrock doesn't accept primitives as JSON content, so we convert all to strings
+      if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+        return {
+          toolUseId,
+          status: 'success',
+          content: [
+            {
+              type: 'toolResultTextContent',
+              text: String(value),
+            },
+          ],
+        }
       }
-    }
 
-    // Handle arrays by wrapping in object { $value: array }
-    if (Array.isArray(value)) {
-      try {
+      // Handle arrays by wrapping in object { $value: array }
+      if (Array.isArray(value)) {
         const copiedValue = deepCopy(value)
         return {
           toolUseId,
@@ -255,14 +255,9 @@ export class FunctionTool implements Tool {
             },
           ],
         }
-      } catch (error) {
-        // If deep copy fails (circular references, non-serializable values), return error result
-        return this._createErrorResult(error, toolUseId)
       }
-    }
 
-    // Handle objects as JSON content with deep copy
-    try {
+      // Handle objects as JSON content with deep copy
       const copiedValue = deepCopy(value)
       return {
         toolUseId,
