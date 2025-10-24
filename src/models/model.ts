@@ -1,4 +1,4 @@
-import type { Message } from '../types/messages'
+import type { Message, ContentBlock } from '../types/messages'
 import type { ToolSpec, ToolChoice } from '../tools/types'
 import type { ModelStreamEvent } from './streaming'
 
@@ -73,4 +73,30 @@ export interface Model<T extends BaseModelConfig, _C = unknown> {
    * @returns Async iterable of streaming events
    */
   stream(messages: Message[], options?: StreamOptions): AsyncIterable<ModelStreamEvent>
+
+  /**
+   * Streams a conversation with aggregated content blocks and messages.
+   * Returns an async iterable that yields streaming events, complete content blocks, and complete messages.
+   *
+   * This method enhances the basic stream() by collecting streaming events into complete
+   * ContentBlock and Message objects, which are needed by the agentic loop for tool execution
+   * and conversation management.
+   *
+   * The method yields a union of three types (all with discriminator `type` field):
+   * - ModelStreamEvent - Original streaming events (passed through)
+   * - ContentBlock - Complete content block (emitted when block completes)
+   * - Message - Complete message (emitted when message completes)
+   *
+   * All returned types support type-safe switch-case handling via the `type` discriminator field.
+   *
+   * @param messages - Array of conversation messages
+   * @param options - Optional streaming configuration
+   * @returns Async iterable yielding ModelStreamEvent | ContentBlock | Message
+   *
+   * @throws \{StreamAggregationError\} When stream ends unexpectedly or contains malformed events
+   */
+  streamAggregated(
+    messages: Message[],
+    options?: StreamOptions
+  ): AsyncIterable<ModelStreamEvent | ContentBlock | Message>
 }

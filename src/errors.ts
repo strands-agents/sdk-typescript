@@ -23,3 +23,19 @@ export class ContextWindowOverflowError extends Error {
     this.name = 'ContextWindowOverflowError'
   }
 }
+
+/**
+ * Error thrown when stream aggregation fails due to malformed events,
+ * unexpected stream termination, or invalid event sequences.
+ */
+export class StreamAggregationError extends Error {
+  /**
+   * Creates a new StreamAggregationError.
+   *
+   * @param message - Error message describing the aggregation failure
+   */
+  constructor(message: string) {
+    super(message)
+    this.name = 'StreamAggregationError'
+  }
+}
