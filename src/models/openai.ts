@@ -59,12 +59,19 @@ export interface OpenAIModelConfig extends BaseModelConfig {
   presencePenalty?: number
 
   /**
-   * Stop sequences that will stop generation when encountered.
-   */
-  stop?: string | string[]
-
-  /**
-   * Additional parameters for forward compatibility.
+   * Additional parameters to pass through to the OpenAI API.
+   * This field provides forward compatibility for any new parameters
+   * that OpenAI introduces. All properties in this object will be
+   * spread into the API request.
+   *
+   * @example
+   * ```typescript
+   * // Pass stop sequences
+   * { params: { stop: ['END', 'STOP'] } }
+   *
+   * // Pass any future OpenAI parameters
+   * { params: { newParameter: 'value' } }
+   * ```
    */
   params?: Record<string, unknown>
 }
