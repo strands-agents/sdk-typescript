@@ -13,17 +13,6 @@ import type { Message } from '../types/messages'
 import type { ModelStreamEvent } from '../models/streaming'
 
 /**
- * Default OpenAI model ID.
- * Uses GPT-4o as the default model.
- */
-const DEFAULT_OPENAI_MODEL_ID = 'gpt-4o'
-
-/**
- * Default OpenAI API base URL.
- */
-const DEFAULT_OPENAI_BASE_URL = 'https://api.openai.com/v1'
-
-/**
  * Configuration interface for OpenAI model provider.
  *
  * Extends BaseModelConfig with OpenAI-specific configuration options
@@ -42,7 +31,7 @@ export interface OpenAIModelConfig extends BaseModelConfig {
   /**
    * OpenAI model identifier (e.g., gpt-4o, gpt-3.5-turbo).
    */
-  modelId?: string
+  modelId: string
 
   /**
    * Controls randomness in generation (0 to 2).
@@ -90,11 +79,6 @@ export interface OpenAIModelOptions extends OpenAIModelConfig {
   apiKey?: string
 
   /**
-   * Base URL for OpenAI-compatible servers (defaults to https://api.openai.com/v1).
-   */
-  baseUrl?: string
-
-  /**
    * Additional OpenAI client configuration.
    */
   clientConfig?: ClientOptions
@@ -133,31 +117,36 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
   /**
    * Creates a new OpenAIModel instance.
    *
-   * @param options - Optional configuration for model and client
+   * @param options - Configuration for model and client (modelId is required)
    *
    * @example
    * ```typescript
-   * // Minimal configuration with API key
+   * // Minimal configuration with API key and model ID
    * const provider = new OpenAIModel({
+   *   modelId: 'gpt-4o',
    *   apiKey: 'sk-...'
    * })
    *
-   * // With model configuration
+   * // With additional model configuration
    * const provider = new OpenAIModel({
-   *   apiKey: 'sk-...',
    *   modelId: 'gpt-4o',
+   *   apiKey: 'sk-...',
    *   temperature: 0.8,
    *   maxTokens: 2048
    * })
    *
-   * // With custom base URL (for OpenAI-compatible servers)
+   * // Using environment variable for API key
    * const provider = new OpenAIModel({
-   *   apiKey: 'sk-...',
-   *   baseUrl: 'https://api.custom-openai.com/v1'
+   *   modelId: 'gpt-3.5-turbo'
    * })
    * ```
    */
   constructor(options?: OpenAIModelOptions) {
+    // Validate modelId is provided
+    if (!options?.modelId) {
+      throw new Error("OpenAI model ID is required. Provide it via the 'modelId' option.")
+    }
+
     // Check if API key is available
     // eslint-disable-next-line no-undef
     if (!options?.apiKey && !process.env.OPENAI_API_KEY) {
@@ -166,19 +155,15 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
       )
     }
 
-    const { apiKey, baseUrl, clientConfig, ...modelConfig } = options ?? {}
+    const { apiKey, clientConfig, ...modelConfig } = options
 
-    // Initialize model config with default model ID
-    this._config = {
-      modelId: DEFAULT_OPENAI_MODEL_ID,
-      ...modelConfig,
-    }
+    // Initialize model config
+    this._config = modelConfig
 
     // Initialize OpenAI client
     // Only include apiKey if explicitly provided, otherwise let client use env var
     this._client = new OpenAI({
       ...(apiKey ? { apiKey } : {}),
-      baseURL: baseUrl ?? DEFAULT_OPENAI_BASE_URL,
       ...clientConfig,
     })
   }
