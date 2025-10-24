@@ -202,8 +202,7 @@ describe.skipIf(!hasCredentials)('BedrockModel Integration Tests', () => {
       expect(metadata1?.usage?.inputTokens).toBeGreaterThan(0)
 
       // Verify cache creation
-      expect(metadata1?.usage?.cacheWriteInputTokens).toBeDefined()
-      expect(metadata1.usage.cacheWriteInputTokens).toBeGreaterThan(0)
+      expect(metadata1.usage?.cacheWriteInputTokens).toBeGreaterThan(0)
 
       // Second request - should use cache
       const messages2: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Say goodbye' }] }]
