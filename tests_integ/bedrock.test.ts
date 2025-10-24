@@ -1,5 +1,4 @@
 import { describe, it, expect } from 'vitest'
-import { setTimeout } from 'node:timers/promises'
 import { fromNodeProviderChain } from '@aws-sdk/credential-providers'
 import { BedrockModel } from '../src/models/bedrock'
 import { ContextWindowOverflowError } from '../src/errors'
@@ -182,16 +181,12 @@ describe.skipIf(!hasCredentials)('BedrockModel Integration Tests', () => {
     })
 
     it.concurrent('uses system prompt cache on subsequent requests', async () => {
-      // Add delay to avoid throttling from previous tests
-      await setTimeout(5000)
-
       const provider = new BedrockModel({ maxTokens: 100 })
 
       // Create a system prompt with text + cache point
       // Use enough text to be worth caching (minimum 1024 tokens recommended by AWS)
       // Append unique string to ensure fresh cache creation on each test run
-      const largeContext =
-        'Context information: ' + 'hello '.repeat(2000) + ` [test-${Date.now()}-${Math.random()}]`
+      const largeContext = 'Context information: ' + 'hello '.repeat(2000) + ` [test-${Date.now()}-${Math.random()}]`
       const cachedSystemPrompt = [
         { type: 'textBlock' as const, text: 'You are a helpful assistant.' },
         { type: 'textBlock' as const, text: largeContext },
@@ -221,24 +216,17 @@ describe.skipIf(!hasCredentials)('BedrockModel Integration Tests', () => {
       const metadata2 = events2.find((e) => e.type === 'modelMetadataEvent')
       expect(metadata2?.usage).toBeDefined()
 
-      // If caching is supported, verify cache read
-      if (metadata2?.usage?.cacheReadInputTokens !== undefined) {
-        expect(metadata2.usage.cacheReadInputTokens).toBeGreaterThan(0)
-      } else {
-        console.log('⚠️  Cache read tokens not returned - caching may not be supported for this model')
-      }
+      // Verify cache read
+      expect(metadata2?.usage?.cacheReadInputTokens).toBeDefined()
+      expect(metadata2.usage.cacheReadInputTokens).toBeGreaterThan(0)
     })
 
     it.concurrent('uses message cache points on subsequent requests', async () => {
-      // Add delay to avoid throttling from previous test
-      await setTimeout(5000)
-
       const provider = new BedrockModel({ maxTokens: 100 })
 
       // Create messages with cache points
       // Append unique string to ensure fresh cache creation on each test run
-      const largeContext =
-        'Context information: ' + 'hello '.repeat(2000) + ` [test-${Date.now()}-${Math.random()}]`
+      const largeContext = 'Context information: ' + 'hello '.repeat(2000) + ` [test-${Date.now()}-${Math.random()}]`
 
       // First request - creates cache
       const messages1: Message[] = [
@@ -283,12 +271,9 @@ describe.skipIf(!hasCredentials)('BedrockModel Integration Tests', () => {
       const metadata2 = events2.find((e) => e.type === 'modelMetadataEvent')
       expect(metadata2?.usage).toBeDefined()
 
-      // If caching is supported, verify cache read
-      if (metadata2?.usage?.cacheReadInputTokens !== undefined) {
-        expect(metadata2.usage.cacheReadInputTokens).toBeGreaterThan(0)
-      } else {
-        console.log('⚠️  Cache read tokens not returned - caching may not be supported for this model')
-      }
+      // Verify cache read
+      expect(metadata2?.usage?.cacheReadInputTokens).toBeDefined()
+      expect(metadata2.usage.cacheReadInputTokens).toBeGreaterThan(0)
     })
   })
 
