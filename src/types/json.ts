@@ -56,37 +56,9 @@ export type JSONSchema = JSONSchema7
  * ```
  */
 export function deepCopyJson(value: unknown): JSONValue {
-  // First, try to detect if value contains functions or other non-serializable types
-  // JSON.stringify will silently drop functions, so we need to check for this
-  if (typeof value === 'object' && value !== null) {
-    // Check if it's an object or array with non-serializable properties
-    const stringified = JSON.stringify(value)
-    const parsed = JSON.parse(stringified)
-
-    // If the value is an array, check if lengths match
-    if (Array.isArray(value) && Array.isArray(parsed)) {
-      if (value.length !== parsed.length) {
-        throw new Error('Unable to serialize tool result: Array contains non-serializable values')
-      }
-    }
-
-    // If the value is an object, check if keys match
-    if (!Array.isArray(value) && typeof parsed === 'object') {
-      const originalKeys = Object.keys(value).sort()
-      const parsedKeys = Object.keys(parsed).sort()
-
-      if (originalKeys.length !== parsedKeys.length || !originalKeys.every((key, i) => key === parsedKeys[i])) {
-        throw new Error(
-          'Unable to serialize tool result: Object contains non-serializable values (functions, symbols, etc.)'
-        )
-      }
-    }
-
-    return parsed as JSONValue
-  }
-
-  // For primitives, just use JSON serialization
   try {
+    // Use JSON serialization for deep copying
+    // This will throw for circular references and other non-serializable values
     return JSON.parse(JSON.stringify(value)) as JSONValue
   } catch (error) {
     // Value is not JSON-serializable (e.g., circular reference)

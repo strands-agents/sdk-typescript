@@ -658,7 +658,7 @@ describe('FunctionTool', () => {
         })
       })
 
-      it('returns error for non-serializable values (functions)', async () => {
+      it('silently drops non-serializable values (functions)', async () => {
         const tool = new FunctionTool({
           name: 'functionTool',
           description: 'Returns object with function',
@@ -676,13 +676,14 @@ describe('FunctionTool', () => {
           })
         )
 
+        // Functions are silently dropped during JSON serialization
         expect(result).toEqual({
           toolUseId: 'test-function',
-          status: 'error',
+          status: 'success',
           content: [
             {
-              type: 'toolResultTextContent',
-              text: expect.stringContaining('Error:'),
+              type: 'toolResultJsonContent',
+              json: {},
             },
           ],
         })
