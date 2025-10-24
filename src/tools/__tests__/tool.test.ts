@@ -130,8 +130,8 @@ describe('FunctionTool', () => {
           status: 'success',
           content: [
             {
-              type: 'toolResultTextContent',
-              text: '10', // 5 * 2 = 10
+              type: 'toolResultJsonContent',
+              json: 10, // 5 * 2 = 10
             },
           ],
         })
@@ -192,16 +192,17 @@ describe('FunctionTool', () => {
 
         expect(streamEvents.length).toBe(0)
 
-        // Verify result structure
-        expect(result.toolUseId).toBe('test-object')
-        expect(result.status).toBe('success')
-        expect(result.content.length).toBe(1)
-        expect(result.content[0]).toHaveProperty('type', 'toolResultTextContent')
-
-        // Verify the content contains the serialized object
-        const content = result.content[0] as { type: string; text: string }
-        const parsedContent = JSON.parse(content.text)
-        expect(parsedContent).toEqual({ key: 'value', count: 42 })
+        // Verify entire result object
+        expect(result).toEqual({
+          toolUseId: 'test-object',
+          status: 'success',
+          content: [
+            {
+              type: 'toolResultJsonContent',
+              json: { key: 'value', count: 42 },
+            },
+          ],
+        })
       })
 
       it('passes input to callback exactly as provided to stream', async () => {
@@ -244,7 +245,7 @@ describe('FunctionTool', () => {
         expect(result).toEqual({
           toolUseId: 'test-null',
           status: 'success',
-          content: [{ type: 'toolResultTextContent', text: '<null>' }],
+          content: [{ type: 'toolResultJsonContent', json: '<null>' }],
         })
       })
 
@@ -267,7 +268,113 @@ describe('FunctionTool', () => {
         expect(result).toEqual({
           toolUseId: 'test-undefined',
           status: 'success',
-          content: [{ type: 'toolResultTextContent', text: '<undefined>' }],
+          content: [{ type: 'toolResultJsonContent', json: '<undefined>' }],
+        })
+      })
+
+      it('handles boolean return values as JSON content', async () => {
+        const trueTool = new FunctionTool({
+          name: 'trueTool',
+          description: 'Returns true',
+          inputSchema: { type: 'object' },
+          callback: (): boolean => true,
+        })
+
+        const { result: trueResult } = await collectGeneratorEvents(
+          trueTool.stream({ toolUse: { name: 'trueTool', toolUseId: 'test-true', input: {} }, invocationState: {} })
+        )
+
+        expect(trueResult).toEqual({
+          toolUseId: 'test-true',
+          status: 'success',
+          content: [{ type: 'toolResultJsonContent', json: true }],
+        })
+
+        const falseTool = new FunctionTool({
+          name: 'falseTool',
+          description: 'Returns false',
+          inputSchema: { type: 'object' },
+          callback: (): boolean => false,
+        })
+
+        const { result: falseResult } = await collectGeneratorEvents(
+          falseTool.stream({ toolUse: { name: 'falseTool', toolUseId: 'test-false', input: {} }, invocationState: {} })
+        )
+
+        expect(falseResult).toEqual({
+          toolUseId: 'test-false',
+          status: 'success',
+          content: [{ type: 'toolResultJsonContent', json: false }],
+        })
+      })
+
+      it('handles array return values as JSON content', async () => {
+        const tool = new FunctionTool({
+          name: 'arrayTool',
+          description: 'Returns array',
+          inputSchema: { type: 'object' },
+          callback: (): JSONValue[] => [1, 2, 3, { key: 'value' }],
+        })
+
+        const { result } = await collectGeneratorEvents(
+          tool.stream({ toolUse: { name: 'arrayTool', toolUseId: 'test-array', input: {} }, invocationState: {} })
+        )
+
+        expect(result).toEqual({
+          toolUseId: 'test-array',
+          status: 'success',
+          content: [{ type: 'toolResultJsonContent', json: [1, 2, 3, { key: 'value' }] }],
+        })
+      })
+
+      it('deep copies objects to prevent mutation', async () => {
+        const original = { nested: { value: 'original' } }
+        const tool = new FunctionTool({
+          name: 'copyTool',
+          description: 'Returns object',
+          inputSchema: { type: 'object' },
+          callback: (): { nested: { value: string } } => original,
+        })
+
+        const { result } = await collectGeneratorEvents(
+          tool.stream({ toolUse: { name: 'copyTool', toolUseId: 'test-copy', input: {} }, invocationState: {} })
+        )
+
+        // Mutate the original object
+        original.nested.value = 'mutated'
+
+        // Verify the result still has the original value
+        expect(result).toEqual({
+          toolUseId: 'test-copy',
+          status: 'success',
+          content: [{ type: 'toolResultJsonContent', json: { nested: { value: 'original' } } }],
+        })
+      })
+
+      it('deep copies arrays to prevent mutation', async () => {
+        const original = [{ value: 'original' }]
+        const tool = new FunctionTool({
+          name: 'arrayCopyTool',
+          description: 'Returns array',
+          inputSchema: { type: 'object' },
+          callback: (): JSONValue[] => original,
+        })
+
+        const { result } = await collectGeneratorEvents(
+          tool.stream({
+            toolUse: { name: 'arrayCopyTool', toolUseId: 'test-array-copy', input: {} },
+            invocationState: {},
+          })
+        )
+
+        // Mutate the original array
+        original[0]!.value = 'mutated'
+
+        // Verify the result still has the original value
+        expect(result).toEqual({
+          toolUseId: 'test-array-copy',
+          status: 'success',
+          content: [{ type: 'toolResultJsonContent', json: [{ value: 'original' }] }],
         })
       })
     })
@@ -519,6 +626,66 @@ describe('FunctionTool', () => {
 
         expect(streamEvents.length).toBe(0)
         expect(result.status).toBe('error')
+      })
+
+      it('returns error for circular references', async () => {
+        const tool = new FunctionTool({
+          name: 'circularTool',
+          description: 'Returns circular object',
+          inputSchema: { type: 'object' },
+          callback: (): JSONValue => {
+            // Create circular reference
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const obj: any = { a: 1 }
+            obj.self = obj
+            return obj
+          },
+        })
+
+        const { result } = await collectGeneratorEvents(
+          tool.stream({ toolUse: { name: 'circularTool', toolUseId: 'test-circular', input: {} }, invocationState: {} })
+        )
+
+        expect(result).toEqual({
+          toolUseId: 'test-circular',
+          status: 'error',
+          content: [
+            {
+              type: 'toolResultTextContent',
+              text: expect.stringContaining('Error:'),
+            },
+          ],
+        })
+      })
+
+      it('returns error for non-serializable values (functions)', async () => {
+        const tool = new FunctionTool({
+          name: 'functionTool',
+          description: 'Returns object with function',
+          inputSchema: { type: 'object' },
+          callback: (): JSONValue => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            return { fn: () => {} } as any
+          },
+        })
+
+        const { result } = await collectGeneratorEvents(
+          tool.stream({
+            toolUse: { name: 'functionTool', toolUseId: 'test-function', input: {} },
+            invocationState: {},
+          })
+        )
+
+        expect(result).toEqual({
+          toolUseId: 'test-function',
+          status: 'error',
+          content: [
+            {
+              type: 'toolResultTextContent',
+              text: expect.stringContaining('Error:'),
+            },
+          ],
+        })
       })
     })
   })

@@ -1,6 +1,7 @@
 import type { Tool, ToolContext, ToolStreamEvent } from './tool'
 import type { ToolSpec, ToolResult } from './types'
 import type { JSONSchema, JSONValue } from '../types/json'
+import { deepCopyJson } from '../types/json'
 
 /**
  * Callback function for FunctionTool implementations.
@@ -184,33 +185,88 @@ export class FunctionTool implements Tool {
   /**
    * Wraps a value in a ToolResult with success status.
    *
+   * Strings are returned as toolResultTextContent, while all other types
+   * (numbers, booleans, objects, arrays, null, undefined) are returned as
+   * toolResultJsonContent. Objects and arrays are deep copied to prevent
+   * mutation of the original values.
+   *
    * @param value - The value to wrap (can be any type)
    * @param toolUseId - The tool use ID for the ToolResult
    * @returns A ToolResult containing the value
    */
   private _wrapInToolResult(value: unknown, toolUseId: string): ToolResult {
-    // Convert value to appropriate content format
-    let text: string
-
-    if (value === null) {
-      text = '<null>'
-    } else if (value === undefined) {
-      text = '<undefined>'
-    } else if (typeof value === 'object') {
-      text = JSON.stringify(value, null, 2)
-    } else {
-      text = String(value)
+    // Handle strings as text content
+    if (typeof value === 'string') {
+      return {
+        toolUseId,
+        status: 'success',
+        content: [
+          {
+            type: 'toolResultTextContent',
+            text: value,
+          },
+        ],
+      }
     }
 
-    return {
-      toolUseId,
-      status: 'success',
-      content: [
-        {
-          type: 'toolResultTextContent',
-          text,
-        },
-      ],
+    // Handle null with special string representation
+    if (value === null) {
+      return {
+        toolUseId,
+        status: 'success',
+        content: [
+          {
+            type: 'toolResultJsonContent',
+            json: '<null>',
+          },
+        ],
+      }
+    }
+
+    // Handle undefined with special string representation
+    if (value === undefined) {
+      return {
+        toolUseId,
+        status: 'success',
+        content: [
+          {
+            type: 'toolResultJsonContent',
+            json: '<undefined>',
+          },
+        ],
+      }
+    }
+
+    // Handle numbers and booleans as JSON content (no deep copy needed for primitives)
+    if (typeof value === 'number' || typeof value === 'boolean') {
+      return {
+        toolUseId,
+        status: 'success',
+        content: [
+          {
+            type: 'toolResultJsonContent',
+            json: value,
+          },
+        ],
+      }
+    }
+
+    // Handle objects and arrays as JSON content with deep copy
+    try {
+      const copiedValue = deepCopyJson(value)
+      return {
+        toolUseId,
+        status: 'success',
+        content: [
+          {
+            type: 'toolResultJsonContent',
+            json: copiedValue,
+          },
+        ],
+      }
+    } catch (error) {
+      // If deep copy fails (circular references, non-serializable values), return error result
+      return this._createErrorResult(error, toolUseId)
     }
   }
 
