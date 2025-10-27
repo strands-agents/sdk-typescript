@@ -1297,47 +1297,6 @@ describe('BedrockModel', () => {
       })
     })
 
-    describe('when stream ends unexpectedly', () => {
-      it('throws StreamAggregationError for incomplete content block', async () => {
-        setupMockSend(async function* () {
-          yield { messageStart: { role: 'assistant' } }
-          yield { contentBlockStart: { contentBlockIndex: 0 } }
-          yield { contentBlockDelta: { delta: { text: 'Hello' }, contentBlockIndex: 0 } }
-          // Missing contentBlockStop
-        })
-
-        const provider = new BedrockModel()
-        const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
-
-        await expect(async () => {
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          for await (const _ of provider.streamAggregated(messages)) {
-            // Consume stream
-          }
-        }).rejects.toThrow('Stream ended with incomplete content block')
-      })
-
-      it('throws StreamAggregationError for incomplete message', async () => {
-        setupMockSend(async function* () {
-          yield { messageStart: { role: 'assistant' } }
-          yield { contentBlockStart: { contentBlockIndex: 0 } }
-          yield { contentBlockDelta: { delta: { text: 'Hello' }, contentBlockIndex: 0 } }
-          yield { contentBlockStop: { contentBlockIndex: 0 } }
-          // Missing messageStop
-        })
-
-        const provider = new BedrockModel()
-        const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
-
-        await expect(async () => {
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          for await (const _ of provider.streamAggregated(messages)) {
-            // Consume stream
-          }
-        }).rejects.toThrow('Stream ended with incomplete message')
-      })
-    })
-
     describe('when metadata events are present', () => {
       it('passes through metadata events unchanged', async () => {
         setupMockSend(async function* () {

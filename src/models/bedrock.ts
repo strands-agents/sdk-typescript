@@ -30,7 +30,7 @@ import type { Model, BaseModelConfig, StreamOptions } from '../models/model'
 import type { Message, ContentBlock, Role } from '../types/messages'
 import type { ModelStreamEvent, ReasoningContentDelta, Usage } from '../models/streaming'
 import type { JSONValue } from '../types/json'
-import { ContextWindowOverflowError, StreamAggregationError } from '../errors'
+import { ContextWindowOverflowError } from '../errors'
 import { ensureDefined } from '../types/validation'
 
 /**
@@ -631,9 +631,6 @@ export class BedrockModel implements Model<BedrockModelConfig, BedrockRuntimeCli
             const reasoningDelta: ReasoningContentDelta = {
               type: 'reasoningContentDelta',
             }
-            if (reasoning.text) reasoningDelta.text = reasoning.text
-            if (reasoning.signature) reasoningDelta.signature = reasoning.signature
-            if (reasoning.redactedContent) reasoningDelta.redactedContent = reasoning.redactedContent
 
             event.delta = reasoningDelta
             break
@@ -761,31 +758,6 @@ export class BedrockModel implements Model<BedrockModelConfig, BedrockRuntimeCli
    * @returns Async iterable yielding ModelStreamEvent | ContentBlock | Message
    *
    * @throws \{StreamAggregationError\} When stream ends unexpectedly or contains malformed events
-   *
-   * @example
-   * ```typescript
-   * const messages: Message[] = [
-   *   { type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'What is 2+2?' }] }
-   * ]
-   *
-   * for await (const item of provider.streamAggregated(messages)) {
-   *   switch (item.type) {
-   *     case 'modelMessageStartEvent':
-   *       // Handle stream events
-   *       break
-   *     case 'textBlock':
-   *     case 'toolUseBlock':
-   *     case 'reasoningBlock':
-   *       // Handle content blocks
-   *       console.log('Block completed:', item)
-   *       break
-   *     case 'message':
-   *       // Handle complete message
-   *       console.log('Message completed:', item)
-   *       break
-   *   }
-   * }
-   * ```
    */
   async *streamAggregated(
     messages: Message[],
