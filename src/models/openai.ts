@@ -11,6 +11,7 @@ import OpenAI, { type ClientOptions } from 'openai'
 import type { Model, BaseModelConfig, StreamOptions } from '../models/model'
 import type { Message } from '../types/messages'
 import type { ModelStreamEvent } from '../models/streaming'
+import { ContextWindowOverflowError } from '../errors'
 
 /**
  * Configuration interface for OpenAI model provider.
@@ -227,16 +228,392 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
    * Streams a conversation with the OpenAI model.
    * Returns an async iterable that yields streaming events as they occur.
    *
-   * Note: This method will be implemented in Task 04.2.
-   *
    * @param messages - Array of conversation messages
    * @param options - Optional streaming configuration
    * @returns Async iterable of streaming events
    *
-   * @throws Error indicating implementation pending in Task 04.2
+   * @throws \{ContextWindowOverflowError\} When input exceeds the model's context window
+   *
+   * @example
+   * ```typescript
+   * const provider = new OpenAIModel({ modelId: 'gpt-4o', apiKey: 'sk-...' })
+   * const messages: Message[] = [
+   *   { role: 'user', content: [{ type: 'textBlock', text: 'What is 2+2?' }] }
+   * ]
+   *
+   * for await (const event of provider.stream(messages)) {
+   *   if (event.type === 'modelContentBlockDeltaEvent' && event.delta.type === 'textDelta') {
+   *     process.stdout.write(event.delta.text)
+   *   }
+   * }
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // With tool use
+   * const options: StreamOptions = {
+   *   systemPrompt: 'You are a helpful assistant',
+   *   toolSpecs: [calculatorTool]
+   * }
+   *
+   * for await (const event of provider.stream(messages, options)) {
+   *   if (event.type === 'modelMessageStopEvent' && event.stopReason === 'toolUse') {
+   *     console.log('Model wants to use a tool')
+   *   }
+   * }
+   * ```
    */
-  // eslint-disable-next-line require-yield, @typescript-eslint/no-unused-vars
   async *stream(messages: Message[], options?: StreamOptions): AsyncIterable<ModelStreamEvent> {
-    throw new Error('Not yet implemented - will be completed in Task 04.2')
+    try {
+      // Format the request
+      const request = this._formatRequest(messages, options)
+
+      // Create streaming request with usage tracking
+      const stream = await this._client.chat.completions.create(request)
+
+      // Track message start state
+      let messageStarted = false
+
+      // Process streaming response
+      for await (const chunk of stream) {
+        if (!chunk.choices || chunk.choices.length === 0) {
+          // Handle usage chunk (no choices)
+          if (chunk.usage) {
+            yield {
+              type: 'modelMetadataEvent',
+              usage: {
+                inputTokens: chunk.usage.prompt_tokens,
+                outputTokens: chunk.usage.completion_tokens,
+                totalTokens: chunk.usage.total_tokens,
+              },
+            }
+          }
+          continue
+        }
+
+        // Map chunk to SDK events
+        const events = this._mapOpenAIChunkToSDKEvents(chunk, messageStarted)
+        for (const event of events) {
+          if (event.type === 'modelMessageStartEvent') {
+            messageStarted = true
+          }
+          yield event
+        }
+      }
+    } catch (error) {
+      // Check for context window overflow
+      const err = error as Error
+      const errorMessage = err.message.toLowerCase()
+
+      if (
+        errorMessage.includes('maximum context length') ||
+        errorMessage.includes('context_length_exceeded') ||
+        errorMessage.includes('too many tokens')
+      ) {
+        throw new ContextWindowOverflowError(err.message)
+      }
+
+      // Re-throw other errors unchanged
+      throw error
+    }
+  }
+
+  /**
+   * Formats a request for the OpenAI Chat Completions API.
+   *
+   * @param messages - Conversation messages
+   * @param options - Stream options
+   * @returns Formatted OpenAI request
+   */
+  private _formatRequest(
+    messages: Message[],
+    options?: StreamOptions
+  ): OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming {
+    // Start with required fields
+    const request: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming = {
+      model: this._config.modelId,
+      messages: [] as OpenAI.Chat.Completions.ChatCompletionMessageParam[],
+      stream: true,
+      stream_options: { include_usage: true },
+    }
+
+    // Add system prompt if provided
+    if (options?.systemPrompt) {
+      request.messages.push({
+        role: 'system',
+        content: options.systemPrompt,
+      } as OpenAI.Chat.Completions.ChatCompletionMessageParam)
+    }
+
+    // Add formatted messages
+    const formattedMessages = this._formatMessages(messages) as OpenAI.Chat.Completions.ChatCompletionMessageParam[]
+    request.messages.push(...formattedMessages)
+
+
+    // Add model configuration parameters
+    if (this._config.temperature !== undefined) {
+      request.temperature = this._config.temperature
+    }
+    if (this._config.maxTokens !== undefined) {
+      request.max_tokens = this._config.maxTokens
+    }
+    if (this._config.topP !== undefined) {
+      request.top_p = this._config.topP
+    }
+    if (this._config.frequencyPenalty !== undefined) {
+      request.frequency_penalty = this._config.frequencyPenalty
+    }
+    if (this._config.presencePenalty !== undefined) {
+      request.presence_penalty = this._config.presencePenalty
+    }
+
+    // Add tool specifications if provided
+    if (options?.toolSpecs && options.toolSpecs.length > 0) {
+      request.tools = options.toolSpecs.map((spec) => ({
+        type: 'function' as const,
+        function: {
+          name: spec.name,
+          description: spec.description,
+          parameters: spec.inputSchema as Record<string, unknown>,
+        },
+      }))
+
+      // Add tool choice if specified
+      if (options.toolChoice) {
+        if ('auto' in options.toolChoice) {
+          request.tool_choice = 'auto'
+        } else if ('any' in options.toolChoice) {
+          request.tool_choice = 'required'
+        } else if ('tool' in options.toolChoice) {
+          request.tool_choice = {
+            type: 'function',
+            function: { name: options.toolChoice.tool.name },
+          }
+        }
+      }
+    }
+
+    // Spread params object last for forward compatibility
+    if (this._config.params) {
+      Object.assign(request, this._config.params)
+    }
+
+    return request
+  }
+
+  /**
+   * Formats messages for OpenAI API.
+   * Handles splitting tool results into separate messages.
+   *
+   * @param messages - SDK messages
+   * @returns OpenAI-formatted messages
+   */
+  private _formatMessages(messages: Message[]): unknown[] {
+    const openAIMessages: unknown[] = []
+
+    for (const message of messages) {
+      if (message.role === 'user') {
+        // Separate tool results from other content
+        const toolResults = message.content.filter((b) => b.type === 'toolResultBlock')
+        const otherContent = message.content.filter((b) => b.type !== 'toolResultBlock')
+
+        // Add non-tool-result content as user message
+        if (otherContent.length > 0) {
+          const contentText = otherContent
+            .map((block) => {
+              if (block.type === 'textBlock') {
+                return block.text
+              } else if (block.type === 'reasoningBlock') {
+                throw new Error(
+                  'Reasoning blocks are not supported by OpenAI. ' +
+                    'This feature is specific to AWS Bedrock models.'
+                )
+              }
+              return ''
+            })
+            .join('')
+
+          openAIMessages.push({
+            role: 'user',
+            content: contentText,
+          })
+        }
+
+        // Add each tool result as separate tool message
+        for (const toolResult of toolResults) {
+          if (toolResult.type === 'toolResultBlock') {
+            // Format tool result content
+            const contentText = toolResult.content
+              .map((c) => {
+                if (c.type === 'toolResultTextContent') {
+                  return c.text
+                } else if (c.type === 'toolResultJsonContent') {
+                  return JSON.stringify(c.json)
+                }
+                return ''
+              })
+              .join('')
+
+            openAIMessages.push({
+              role: 'tool',
+              tool_call_id: toolResult.toolUseId,
+              content: contentText,
+            })
+          }
+        }
+      } else {
+        // Handle assistant messages
+        const toolUseCalls: unknown[] = []
+        let textContent = ''
+
+        for (const block of message.content) {
+          if (block.type === 'textBlock') {
+            textContent += block.text
+          } else if (block.type === 'toolUseBlock') {
+            toolUseCalls.push({
+              id: block.toolUseId,
+              type: 'function',
+              function: {
+                name: block.name,
+                arguments: JSON.stringify(block.input),
+              },
+            })
+          } else if (block.type === 'reasoningBlock') {
+            throw new Error(
+              'Reasoning blocks are not supported by OpenAI. ' + 'This feature is specific to AWS Bedrock models.'
+            )
+          }
+        }
+
+        const assistantMessage: { role: string; content: string; tool_calls?: unknown[] } = {
+          role: 'assistant',
+          content: textContent,
+        }
+
+        if (toolUseCalls.length > 0) {
+          assistantMessage.tool_calls = toolUseCalls
+        }
+
+        openAIMessages.push(assistantMessage)
+      }
+    }
+
+    return openAIMessages
+  }
+
+  /**
+   * Converts a snake_case string to camelCase.
+   *
+   * @param str - Snake case string
+   * @returns Camel case string
+   */
+  private _snakeToCamel(str: string): string {
+    return str.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase())
+  }
+
+  /**
+   * Maps an OpenAI chunk to SDK streaming events.
+   *
+   * @param chunk - OpenAI chunk
+   * @param messageStarted - Whether message start event has been emitted
+   * @returns Array of SDK streaming events
+   */
+  private _mapOpenAIChunkToSDKEvents(chunk: { choices: unknown[] }, messageStarted: boolean): ModelStreamEvent[] {
+    const events: ModelStreamEvent[] = []
+
+    // Process first choice (OpenAI typically returns one choice in streaming)
+    const choice = chunk.choices[0] as {
+      delta?: {
+        role?: string
+        content?: string
+        tool_calls?: Array<{
+          index: number
+          id?: string
+          type?: string
+          function?: {
+            name?: string
+            arguments?: string
+          }
+        }>
+      }
+      finish_reason?: string
+      index: number
+    }
+
+    if (!choice.delta && !choice.finish_reason) {
+      return events
+    }
+
+    const delta = choice.delta
+
+    // Handle message start (role appears)
+    if (delta?.role && !messageStarted) {
+      events.push({
+        type: 'modelMessageStartEvent',
+        role: delta.role as 'user' | 'assistant',
+      })
+    }
+
+    // Handle text content delta
+    if (delta?.content) {
+      events.push({
+        type: 'modelContentBlockDeltaEvent',
+        delta: {
+          type: 'textDelta',
+          text: delta.content,
+        },
+      })
+    }
+
+    // Handle tool calls
+    if (delta?.tool_calls && delta.tool_calls.length > 0) {
+      for (const toolCall of delta.tool_calls) {
+        // If tool call has id and name, it's the start of a new tool call
+        if (toolCall.id && toolCall.function?.name) {
+          events.push({
+            type: 'modelContentBlockStartEvent',
+            contentBlockIndex: toolCall.index,
+            start: {
+              type: 'toolUseStart',
+              name: toolCall.function.name,
+              toolUseId: toolCall.id,
+            },
+          })
+        }
+
+        // If tool call has arguments, it's a delta
+        if (toolCall.function?.arguments) {
+          events.push({
+            type: 'modelContentBlockDeltaEvent',
+            contentBlockIndex: toolCall.index,
+            delta: {
+              type: 'toolUseInputDelta',
+              input: toolCall.function.arguments,
+            },
+          })
+        }
+      }
+    }
+
+    // Handle finish reason (message stop)
+    if (choice.finish_reason) {
+      // Map OpenAI stop reason to SDK stop reason
+      const stopReasonMap: Record<string, string> = {
+        stop: 'endTurn',
+        tool_calls: 'toolUse',
+        length: 'maxTokens',
+        content_filter: 'contentFiltered',
+      }
+
+      const stopReason =
+        stopReasonMap[choice.finish_reason] || this._snakeToCamel(choice.finish_reason)
+
+      events.push({
+        type: 'modelMessageStopEvent',
+        stopReason,
+      })
+    }
+
+    return events
   }
 }

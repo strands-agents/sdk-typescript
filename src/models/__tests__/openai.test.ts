@@ -157,18 +157,4 @@ describe('OpenAIModel', () => {
     })
   })
 
-  describe('stream', () => {
-    it('throws not yet implemented error', async () => {
-      const provider = new OpenAIModel({ modelId: 'gpt-4o' })
-      const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
-
-      await expect(async () => {
-        // Try to consume the async generator
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        for await (const _event of provider.stream(messages)) {
-          // Should not reach here
-        }
-      }).rejects.toThrow('Not yet implemented - will be completed in Task 04.2')
-    })
-  })
 })
