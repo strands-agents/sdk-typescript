@@ -209,24 +209,19 @@ export interface ReasoningContentDelta {
   type: 'reasoningContentDelta'
 
   /**
-   * Nested reasoning content containing the incremental updates.
+   * Incremental reasoning text.
    */
-  reasoningContent: {
-    /**
-     * Incremental reasoning text.
-     */
-    text?: string
+  text?: string
 
-    /**
-     * Incremental signature data.
-     */
-    signature?: string
+  /**
+   * Incremental signature data.
+   */
+  signature?: string
 
-    /**
-     * Incremental redacted content data.
-     */
-    redactedContent?: Uint8Array
-  }
+  /**
+   * Incremental redacted content data.
+   */
+  redactedContent?: Uint8Array
 }
 
 /**

@@ -39,30 +39,29 @@ export interface StreamOptions {
 }
 
 /**
- * Base interface for model providers.
+ * Base abstract class for model providers.
  * Defines the contract that all model provider implementations must follow.
  *
  * Model providers handle communication with LLM APIs and implement streaming
  * responses using async iterables.
  *
  * @typeParam T - Model configuration type extending BaseModelConfig
- * @typeParam _C - Client configuration type for provider-specific client setup (used by implementations)
  */
-export interface Model<T extends BaseModelConfig, _C = unknown> {
+export abstract class Model<T extends BaseModelConfig> {
   /**
    * Updates the model configuration.
    * Merges the provided configuration with existing settings.
    *
    * @param modelConfig - Configuration object with model-specific settings to update
    */
-  updateConfig(modelConfig: T): void
+  abstract updateConfig(modelConfig: T): void
 
   /**
    * Retrieves the current model configuration.
    *
    * @returns The current configuration object
    */
-  getConfig(): T
+  abstract getConfig(): T
 
   /**
    * Streams a conversation with the model.
@@ -72,145 +71,126 @@ export interface Model<T extends BaseModelConfig, _C = unknown> {
    * @param options - Optional streaming configuration
    * @returns Async iterable of streaming events
    */
-  stream(messages: Message[], options?: StreamOptions): AsyncIterable<ModelStreamEvent>
+  abstract stream(messages: Message[], options?: StreamOptions): AsyncIterable<ModelStreamEvent>
 
   /**
    * Streams a conversation with aggregated content blocks and messages.
-   * Returns an async iterable that yields streaming events, complete content blocks, and complete messages.
+   * Returns an async generator that yields streaming events and content blocks, and returns the final message.
    *
    * This method enhances the basic stream() by collecting streaming events into complete
    * ContentBlock and Message objects, which are needed by the agentic loop for tool execution
    * and conversation management.
    *
-   * The method yields a union of three types (all with discriminator `type` field):
+   * The method yields:
    * - ModelStreamEvent - Original streaming events (passed through)
    * - ContentBlock - Complete content block (emitted when block completes)
-   * - Message - Complete message (emitted when message completes)
    *
-   * All returned types support type-safe switch-case handling via the `type` discriminator field.
+   * The method returns:
+   * - Message - Complete message (returned when message completes)
    *
    * @param messages - Array of conversation messages
    * @param options - Optional streaming configuration
-   * @returns Async iterable yielding ModelStreamEvent | ContentBlock | Message
-   *
-   * @throws \{StreamAggregationError\} When stream ends unexpectedly or contains malformed events
+   * @returns Async generator yielding ModelStreamEvent | ContentBlock and returning Message
    */
-  streamAggregated(
+  async *streamAggregated(
     messages: Message[],
     options?: StreamOptions
-  ): AsyncIterable<ModelStreamEvent | ContentBlock | Message>
-}
+  ): AsyncGenerator<ModelStreamEvent | ContentBlock, Message, never> {
+    // State maintained in closure
+    let messageRole: Role | null = null
+    const contentBlocks: ContentBlock[] = []
+    let accumulatedText = ''
+    let accumulatedToolInput = ''
+    let toolName = ''
+    let toolUseId = ''
+    let accumulatedReasoning: {
+      text?: string
+      signature?: string
+      redactedContent?: Uint8Array
+    } = {}
 
-/**
- * Helper function that wraps a streaming model to provide aggregated content blocks and messages.
- * This implements the aggregation logic that collects streaming events into complete objects.
- *
- * @param streamFn - Function that returns an async iterable of streaming events
- * @returns Async iterable yielding ModelStreamEvent | ContentBlock | Message
- */
-export async function* aggregateStream(
-  streamFn: () => AsyncIterable<ModelStreamEvent>
-): AsyncIterable<ModelStreamEvent | ContentBlock | Message> {
-  // State maintained in closure
-  let messageRole: Role | null = null
-  const contentBlocks: ContentBlock[] = []
-  let accumulatedText = ''
-  let accumulatedToolInput = ''
-  let toolName = ''
-  let toolUseId = ''
-  const accumulatedReasoning: {
-    text?: string
-    signature?: string
-    redactedContent?: Uint8Array
-  } = {}
+    for await (const event of this.stream(messages, options)) {
+      yield event // Pass through immediately
 
-  for await (const event of streamFn()) {
-    yield event // Pass through immediately
+      // Aggregation logic based on event type
+      switch (event.type) {
+        case 'modelMessageStartEvent':
+          messageRole = event.role
+          contentBlocks.length = 0 // Reset
+          break
 
-    // Aggregation logic based on event type
-    switch (event.type) {
-      case 'modelMessageStartEvent':
-        messageRole = event.role
-        contentBlocks.length = 0 // Reset
-        break
-
-      case 'modelContentBlockStartEvent':
-        if (event.start?.type === 'toolUseStart') {
-          toolName = event.start.name
-          toolUseId = event.start.toolUseId
+        case 'modelContentBlockStartEvent':
+          if (event.start?.type === 'toolUseStart') {
+            toolName = event.start.name
+            toolUseId = event.start.toolUseId
+          }
           accumulatedToolInput = ''
-        } else {
           accumulatedText = ''
-        }
-        // Reset reasoning accumulator
-        Object.keys(accumulatedReasoning).forEach(
-          (key) => delete accumulatedReasoning[key as keyof typeof accumulatedReasoning]
-        )
-        break
+          accumulatedReasoning = {}
+          break
 
-      case 'modelContentBlockDeltaEvent':
-        switch (event.delta.type) {
-          case 'textDelta':
-            accumulatedText += event.delta.text
-            break
-          case 'toolUseInputDelta':
-            accumulatedToolInput += event.delta.input
-            break
-          case 'reasoningDelta':
-            if (event.delta.reasoningContent.text)
-              accumulatedReasoning.text = (accumulatedReasoning.text ?? '') + event.delta.reasoningContent.text
-            if (event.delta.reasoningContent.signature)
-              accumulatedReasoning.signature = event.delta.reasoningContent.signature
-            if (event.delta.reasoningContent.redactedContent)
-              accumulatedReasoning.redactedContent = event.delta.reasoningContent.redactedContent
-            break
-        }
-        break
+        case 'modelContentBlockDeltaEvent':
+          switch (event.delta.type) {
+            case 'textDelta':
+              accumulatedText += event.delta.text
+              break
+            case 'toolUseInputDelta':
+              accumulatedToolInput += event.delta.input
+              break
+            case 'reasoningContentDelta':
+              if (event.delta.text) accumulatedReasoning.text = (accumulatedReasoning.text ?? '') + event.delta.text
+              if (event.delta.signature) accumulatedReasoning.signature = event.delta.signature
+              if (event.delta.redactedContent) accumulatedReasoning.redactedContent = event.delta.redactedContent
+              break
+          }
+          break
 
-      case 'modelContentBlockStopEvent': {
-        // Finalize and emit complete ContentBlock
-        let block: ContentBlock
-        if (toolUseId) {
-          block = {
-            type: 'toolUseBlock',
-            name: toolName,
-            toolUseId: toolUseId,
-            input: JSON.parse(accumulatedToolInput),
+        case 'modelContentBlockStopEvent': {
+          // Finalize and emit complete ContentBlock
+          let block: ContentBlock
+          if (toolUseId) {
+            block = {
+              type: 'toolUseBlock',
+              name: toolName,
+              toolUseId: toolUseId,
+              input: JSON.parse(accumulatedToolInput),
+            }
+            toolUseId = '' // Reset
+            toolName = ''
+          } else if (Object.keys(accumulatedReasoning).length > 0) {
+            block = {
+              type: 'reasoningBlock',
+              ...accumulatedReasoning,
+            }
+          } else {
+            block = {
+              type: 'textBlock',
+              text: accumulatedText,
+            }
           }
-          toolUseId = '' // Reset
-          toolName = ''
-        } else if (Object.keys(accumulatedReasoning).length > 0) {
-          block = {
-            type: 'reasoningBlock',
-            ...accumulatedReasoning,
-          }
-        } else {
-          block = {
-            type: 'textBlock',
-            text: accumulatedText,
-          }
+          contentBlocks.push(block)
+          yield block
+          break
         }
-        contentBlocks.push(block)
-        yield block
-        break
+
+        case 'modelMessageStopEvent':
+          // Complete message - will be returned at the end
+          if (messageRole) {
+            const message: Message = {
+              type: 'message',
+              role: messageRole,
+              content: [...contentBlocks],
+            }
+            return message
+          }
+          break
+
+        default:
+          break
       }
-
-      case 'modelMessageStopEvent':
-        // Emit complete Message
-        if (messageRole) {
-          const message: Message = {
-            type: 'message',
-            role: messageRole,
-            content: [...contentBlocks],
-          }
-          yield message
-          messageRole = null
-        }
-        break
-
-      case 'modelMetadataEvent':
-        // Pass through - already yielded above
-        break
     }
+
+    // If we exit the loop without returning a message, throw an error
+    throw new Error('Stream ended without completing a message')
   }
 }

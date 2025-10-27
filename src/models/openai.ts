@@ -8,7 +8,8 @@
  */
 
 import OpenAI, { type ClientOptions } from 'openai'
-import type { Model, BaseModelConfig, StreamOptions } from '../models/model'
+import { Model } from '../models/model'
+import type { BaseModelConfig, StreamOptions } from '../models/model'
 import type { Message } from '../types/messages'
 import type { ModelStreamEvent } from '../models/streaming'
 import { ContextWindowOverflowError } from '../errors'
@@ -160,7 +161,7 @@ export interface OpenAIModelOptions extends OpenAIModelConfig {
  * }
  * ```
  */
-export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
+export class OpenAIModel extends Model<OpenAIModelConfig> {
   private _config: OpenAIModelConfig
   private _client: OpenAI
 
@@ -199,6 +200,7 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
    * ```
    */
   constructor(options: OpenAIModelOptions) {
+    super()
     const { apiKey, client, clientConfig, ...modelConfig } = options
 
     // Initialize model config

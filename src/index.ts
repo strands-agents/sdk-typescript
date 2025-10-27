@@ -6,7 +6,7 @@
  */
 
 // Error types
-export { ContextWindowOverflowError, StreamAggregationError } from './errors'
+export { ContextWindowOverflowError } from './errors'
 
 // JSON types
 export type { JSONSchema, JSONValue } from './types/json'

@@ -4,7 +4,7 @@
  * requiring actual API clients.
  */
 
-import type { Model } from '../models/model'
+import { Model } from '../models/model'
 import type { Message } from '../types/messages'
 import type { ModelStreamEvent } from '../models/streaming'
 import type { BaseModelConfig, StreamOptions } from '../models/model'
@@ -27,11 +27,12 @@ import type { BaseModelConfig, StreamOptions } from '../models/model'
  * const message = await collectAggregated(provider.streamAggregated(messages))
  * ```
  */
-export class TestModelProvider implements Model<BaseModelConfig, undefined> {
+export class TestModelProvider extends Model<BaseModelConfig> {
   private eventGenerator: (() => AsyncGenerator<ModelStreamEvent>) | undefined
   private config: BaseModelConfig = { modelId: 'test-model' }
 
   constructor(eventGenerator?: () => AsyncGenerator<ModelStreamEvent>) {
+    super()
     this.eventGenerator = eventGenerator
   }
 

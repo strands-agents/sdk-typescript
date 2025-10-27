@@ -7,7 +7,7 @@ import type { ToolSpec } from '@strands-agents/sdk'
 import { ValidationException } from '@aws-sdk/client-bedrock-runtime'
 
 // eslint-disable-next-line no-restricted-imports
-import { collectIterator } from '../src/__fixtures__/model-test-helpers'
+import { collectIterator, collectGenerator } from '../src/__fixtures__/model-test-helpers'
 
 // Check credentials at module level so skipIf can use it
 let hasCredentials = false
@@ -317,7 +317,7 @@ describe.skipIf(!hasCredentials)('BedrockModel Integration Tests', () => {
   })
 
   describe('Stream Aggregation', () => {
-    it.concurrent('streamAggregated yields events, content blocks, and complete message', async () => {
+    it.concurrent('streamAggregated yields events, content blocks, and returns complete message', async () => {
       const provider = new BedrockModel({
         maxTokens: 100,
       })
@@ -330,15 +330,11 @@ describe.skipIf(!hasCredentials)('BedrockModel Integration Tests', () => {
         },
       ]
 
-      const items = []
-      for await (const item of provider.streamAggregated(messages)) {
-        items.push(item)
-      }
+      const { items, result } = await collectGenerator(provider.streamAggregated(messages))
 
       // Count different types using switch-case pattern
       let streamEventCount = 0
       let contentBlockCount = 0
-      let messageCount = 0
 
       for (const item of items) {
         switch (item.type) {
@@ -355,21 +351,15 @@ describe.skipIf(!hasCredentials)('BedrockModel Integration Tests', () => {
           case 'reasoningBlock':
             contentBlockCount++
             break
-          case 'message':
-            messageCount++
-            break
         }
       }
 
-      // Verify we got all three types
+      // Verify we got events and content blocks
       expect(streamEventCount).toBeGreaterThan(0)
       expect(contentBlockCount).toBe(1)
-      expect(messageCount).toBe(1)
 
-      // Verify the complete message structure
-      const message = items.find((i) => i.type === 'message')
-      expect(message).toBeDefined()
-      expect(message).toMatchObject({
+      // Verify the complete message structure is returned
+      expect(result).toMatchObject({
         type: 'message',
         role: 'assistant',
         content: expect.arrayContaining([
