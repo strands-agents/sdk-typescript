@@ -218,7 +218,7 @@ jobs:
         run: npm install
 
       - name: Execute strands command
-        uses: Unshure/strands-action@main
+        uses: strands-agents/strands-action@main
         timeout-minutes: 60
         with:
           aws_role_arn: ${{ secrets.AWS_ROLE_ARN }}
