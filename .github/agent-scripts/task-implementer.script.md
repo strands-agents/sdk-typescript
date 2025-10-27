@@ -139,7 +139,7 @@ Write test cases based on the outlines, following strict TDD principles.
 - You MUST validate that the task environment is set up properly
   - If you already created a commit, ensure the latest commit matches the expected hash
   - If not, ensure the correct branch is checked out
-  - As a last resort, you MUST push your current work, then leave a comment on the Task issue or Pull Request for feedback on how to proceed
+  - As a last resort, you MUST push your current work to the current branch, then leave a comment on the Task issue or Pull Request for feedback on how to proceed
 - You MUST save test implementations to the appropriate test directories in repo_root
 - You MUST implement tests for ALL requirements before writing ANY implementation code
 - You MUST follow the testing framework conventions used in the existing codebase
@@ -231,6 +231,7 @@ If all tests are passing, draft a conventional commit message, perform the git c
 
 **Constraints:**
 - You MUST check that all tasks are complete before proceeding
+- You MUST reference your notes for the issue you are creating a pull request for
 - You MUST NOT commit changes until builds AND tests have been verified because committing broken code can disrupt the development workflow and introduce bugs into the codebase 
 - You MUST follow the Conventional Commits specification
 - You MUST use `git status` to check which files have been modified
@@ -340,7 +341,7 @@ If builds fail during implementation:
 ## Best Practices
 
 ### Repository-Specific Instructions
-- Always check for DEVELOPMENT.md, AGENTS.md, and README.md in repo_root and follow any instructions provided
+- Always check for DEVELOPMENT.md, AGENTS.md, and README.md in the current repository and follow any instructions provided
 - If these don't exist, suggest creating it
 - Always follow build commands, testing frameworks, and coding standards as specified
 
