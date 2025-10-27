@@ -27,10 +27,11 @@ import {
   type ToolConfiguration,
 } from '@aws-sdk/client-bedrock-runtime'
 import type { Model, BaseModelConfig, StreamOptions } from '../models/model'
-import type { Message, ContentBlock, Role } from '../types/messages'
+import { aggregateStream } from '../models/model'
+import type { Message, ContentBlock } from '../types/messages'
 import type { ModelStreamEvent, ReasoningDelta, Usage } from '../models/streaming'
 import type { JSONValue } from '../types/json'
-import { ContextWindowOverflowError, StreamAggregationError } from '../errors'
+import { ContextWindowOverflowError } from '../errors'
 import { ensureDefined } from '../types/validation'
 
 /**
@@ -579,10 +580,12 @@ export class BedrockModel implements Model<BedrockModelConfig, BedrockRuntimeCli
 
             const reasoningDelta: ReasoningDelta = {
               type: 'reasoningDelta',
+              reasoningContent: {
+                ...(reasoning.text && { text: reasoning.text }),
+                ...(reasoning.signature && { signature: reasoning.signature }),
+                ...(reasoning.redactedContent && { redactedContent: reasoning.redactedContent }),
+              },
             }
-            if (reasoning.text) reasoningDelta.text = reasoning.text
-            if (reasoning.signature) reasoningDelta.signature = reasoning.signature
-            if (reasoning.redactedContent) reasoningDelta.redactedContent = reasoning.redactedContent
 
             event.delta = reasoningDelta
             break
@@ -710,141 +713,11 @@ export class BedrockModel implements Model<BedrockModelConfig, BedrockRuntimeCli
    * @returns Async iterable yielding ModelStreamEvent | ContentBlock | Message
    *
    * @throws \{StreamAggregationError\} When stream ends unexpectedly or contains malformed events
-   *
-   * @example
-   * ```typescript
-   * const messages: Message[] = [
-   *   { type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'What is 2+2?' }] }
-   * ]
-   *
-   * for await (const item of provider.streamAggregated(messages)) {
-   *   switch (item.type) {
-   *     case 'modelMessageStartEvent':
-   *       // Handle stream events
-   *       break
-   *     case 'textBlock':
-   *     case 'toolUseBlock':
-   *     case 'reasoningBlock':
-   *       // Handle content blocks
-   *       console.log('Block completed:', item)
-   *       break
-   *     case 'message':
-   *       // Handle complete message
-   *       console.log('Message completed:', item)
-   *       break
-   *   }
-   * }
-   * ```
    */
   async *streamAggregated(
     messages: Message[],
     options?: StreamOptions
   ): AsyncIterable<ModelStreamEvent | ContentBlock | Message> {
-    // State maintained in closure
-    let messageRole: Role | null = null
-    let currentBlockActive = false
-    const contentBlocks: ContentBlock[] = []
-    let accumulatedText = ''
-    let accumulatedToolInput = ''
-    let toolName = ''
-    let toolUseId = ''
-    const accumulatedReasoning: {
-      text?: string
-      signature?: string
-      redactedContent?: Uint8Array
-    } = {}
-
-    for await (const event of this.stream(messages, options)) {
-      yield event // Pass through immediately
-
-      // Aggregation logic based on event type
-      switch (event.type) {
-        case 'modelMessageStartEvent':
-          messageRole = event.role
-          contentBlocks.length = 0 // Reset
-          break
-
-        case 'modelContentBlockStartEvent':
-          currentBlockActive = true
-          if (event.start?.type === 'toolUseStart') {
-            toolName = event.start.name
-            toolUseId = event.start.toolUseId
-            accumulatedToolInput = ''
-          } else {
-            accumulatedText = ''
-          }
-          // Reset reasoning accumulator
-          Object.keys(accumulatedReasoning).forEach(
-            (key) => delete accumulatedReasoning[key as keyof typeof accumulatedReasoning]
-          )
-          break
-
-        case 'modelContentBlockDeltaEvent':
-          if (event.delta.type === 'textDelta') {
-            accumulatedText += event.delta.text
-          } else if (event.delta.type === 'toolUseInputDelta') {
-            accumulatedToolInput += event.delta.input
-          } else if (event.delta.type === 'reasoningDelta') {
-            if (event.delta.text) accumulatedReasoning.text = (accumulatedReasoning.text || '') + event.delta.text
-            if (event.delta.signature) accumulatedReasoning.signature = event.delta.signature
-            if (event.delta.redactedContent) accumulatedReasoning.redactedContent = event.delta.redactedContent
-          }
-          break
-
-        case 'modelContentBlockStopEvent': {
-          // Finalize and emit complete ContentBlock
-          let block: ContentBlock
-          if (toolUseId) {
-            block = {
-              type: 'toolUseBlock',
-              name: toolName,
-              toolUseId: toolUseId,
-              input: JSON.parse(accumulatedToolInput),
-            }
-            toolUseId = '' // Reset
-            toolName = ''
-          } else if (Object.keys(accumulatedReasoning).length > 0) {
-            block = {
-              type: 'reasoningBlock',
-              ...accumulatedReasoning,
-            }
-          } else {
-            block = {
-              type: 'textBlock',
-              text: accumulatedText,
-            }
-          }
-          contentBlocks.push(block)
-          yield block
-          currentBlockActive = false
-          break
-        }
-
-        case 'modelMessageStopEvent':
-          // Emit complete Message
-          if (messageRole) {
-            const message: Message = {
-              type: 'message',
-              role: messageRole,
-              content: [...contentBlocks],
-            }
-            yield message
-            messageRole = null
-          }
-          break
-
-        case 'modelMetadataEvent':
-          // Pass through - already yielded above
-          break
-      }
-    }
-
-    // Validate complete aggregation
-    if (currentBlockActive) {
-      throw new StreamAggregationError('Stream ended with incomplete content block')
-    }
-    if (messageRole !== null) {
-      throw new StreamAggregationError('Stream ended with incomplete message')
-    }
+    yield* aggregateStream(() => this.stream(messages, options))
   }
 }
