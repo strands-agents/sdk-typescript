@@ -264,6 +264,11 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
    * ```
    */
   async *stream(messages: Message[], options?: StreamOptions): AsyncIterable<ModelStreamEvent> {
+    // Issue #1: Validate messages array is not empty
+    if (!messages || messages.length === 0) {
+      throw new Error('At least one message is required')
+    }
+
     try {
       // Format the request
       const request = this._formatRequest(messages, options)
@@ -274,17 +279,21 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
       // Track message start state
       let messageStarted = false
 
+      // Track active tool calls for stop events (Issue #7, #8)
+      const activeToolCalls = new Map<number, boolean>()
+
       // Process streaming response
       for await (const chunk of stream) {
         if (!chunk.choices || chunk.choices.length === 0) {
           // Handle usage chunk (no choices)
+          // Issue #11: Add null checks for usage properties
           if (chunk.usage) {
             yield {
               type: 'modelMetadataEvent',
               usage: {
-                inputTokens: chunk.usage.prompt_tokens,
-                outputTokens: chunk.usage.completion_tokens,
-                totalTokens: chunk.usage.total_tokens,
+                inputTokens: chunk.usage.prompt_tokens ?? 0,
+                outputTokens: chunk.usage.completion_tokens ?? 0,
+                totalTokens: chunk.usage.total_tokens ?? 0,
               },
             }
           }
@@ -292,19 +301,32 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
         }
 
         // Map chunk to SDK events
-        const events = this._mapOpenAIChunkToSDKEvents(chunk, messageStarted)
+        const events = this._mapOpenAIChunkToSDKEvents(chunk, messageStarted, activeToolCalls)
         for (const event of events) {
           if (event.type === 'modelMessageStartEvent') {
+            // Issue #6: Prevent duplicate message start events
+            if (messageStarted) {
+              console.warn('Received multiple message start events from OpenAI')
+              continue
+            }
             messageStarted = true
           }
           yield event
         }
       }
     } catch (error) {
-      // Check for context window overflow
-      const err = error as Error
-      const errorMessage = err.message.toLowerCase()
+      // Issue #10: Check for context window overflow using structured error codes
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const err = error as any
 
+      // Check OpenAI's structured error first
+      if (err.code === 'context_length_exceeded' || err.error?.code === 'context_length_exceeded') {
+        const errorMessage = err.message || err.error?.message || 'Context length exceeded'
+        throw new ContextWindowOverflowError(errorMessage)
+      }
+
+      // Fallback: Check error message patterns
+      const errorMessage = (err.message || '').toLowerCase()
       if (
         errorMessage.includes('maximum context length') ||
         errorMessage.includes('context_length_exceeded') ||
@@ -337,8 +359,8 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
       stream_options: { include_usage: true },
     }
 
-    // Add system prompt if provided
-    if (options?.systemPrompt) {
+    // Issue #13: Add system prompt validation
+    if (options?.systemPrompt && options.systemPrompt.trim().length > 0) {
       request.messages.push({
         role: 'system',
         content: options.systemPrompt,
@@ -348,7 +370,6 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
     // Add formatted messages
     const formattedMessages = this._formatMessages(messages) as OpenAI.Chat.Completions.ChatCompletionMessageParam[]
     request.messages.push(...formattedMessages)
-
 
     // Add model configuration parameters
     if (this._config.temperature !== undefined) {
@@ -367,16 +388,21 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
       request.presence_penalty = this._config.presencePenalty
     }
 
-    // Add tool specifications if provided
+    // Issue #16: Add tool specifications with validation
     if (options?.toolSpecs && options.toolSpecs.length > 0) {
-      request.tools = options.toolSpecs.map((spec) => ({
-        type: 'function' as const,
-        function: {
-          name: spec.name,
-          description: spec.description,
-          parameters: spec.inputSchema as Record<string, unknown>,
-        },
-      }))
+      request.tools = options.toolSpecs.map((spec) => {
+        if (!spec.name || !spec.description) {
+          throw new Error('Tool specification must have both name and description')
+        }
+        return {
+          type: 'function' as const,
+          function: {
+            name: spec.name,
+            description: spec.description,
+            parameters: spec.inputSchema as Record<string, unknown>,
+          },
+        }
+      })
 
       // Add tool choice if specified
       if (options.toolChoice) {
@@ -391,6 +417,11 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
           }
         }
       }
+    }
+
+    // Issue #12: Validate that n=1 for streaming (if n is in params)
+    if (this._config.params?.n && typeof this._config.params.n === 'number' && this._config.params.n > 1) {
+      throw new Error('Streaming with n > 1 is not supported. Multiple choices cannot be streamed simultaneously.')
     }
 
     // Spread params object last for forward compatibility
@@ -425,34 +456,67 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
                 return block.text
               } else if (block.type === 'reasoningBlock') {
                 throw new Error(
-                  'Reasoning blocks are not supported by OpenAI. ' +
-                    'This feature is specific to AWS Bedrock models.'
+                  'Reasoning blocks are not supported by OpenAI. ' + 'This feature is specific to AWS Bedrock models.'
                 )
               }
               return ''
             })
             .join('')
 
-          openAIMessages.push({
-            role: 'user',
-            content: contentText,
-          })
+          // Issue #2: Validate content is not empty before adding
+          if (contentText.trim().length > 0) {
+            openAIMessages.push({
+              role: 'user',
+              content: contentText,
+            })
+          }
+        }
+
+        // Issue #2: Validate message sequence for tool-only messages
+        if (toolResults.length > 0 && otherContent.length === 0) {
+          // Having only tool results without user text is acceptable in OpenAI
+          // The tool results will be added as separate tool messages below
         }
 
         // Add each tool result as separate tool message
         for (const toolResult of toolResults) {
           if (toolResult.type === 'toolResultBlock') {
             // Format tool result content
-            const contentText = toolResult.content
-              .map((c) => {
-                if (c.type === 'toolResultTextContent') {
-                  return c.text
-                } else if (c.type === 'toolResultJsonContent') {
-                  return JSON.stringify(c.json)
-                }
-                return ''
-              })
-              .join('')
+            // Issue #14: Wrap JSON.stringify in try-catch
+            let contentText = ''
+            try {
+              contentText = toolResult.content
+                .map((c) => {
+                  if (c.type === 'toolResultTextContent') {
+                    return c.text
+                  } else if (c.type === 'toolResultJsonContent') {
+                    try {
+                      return JSON.stringify(c.json)
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    } catch (error: any) {
+                      return `[JSON Serialization Error: ${error.message}]`
+                    }
+                  }
+                  return ''
+                })
+                .join('')
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            } catch (error: any) {
+              throw new Error(`Failed to format tool result for toolUseId "${toolResult.toolUseId}": ${error.message}`)
+            }
+
+            // Issue #4: Validate content is not empty
+            if (!contentText || contentText.trim().length === 0) {
+              throw new Error(
+                `Tool result for toolUseId "${toolResult.toolUseId}" has empty content. ` +
+                  'OpenAI requires tool messages to have non-empty content.'
+              )
+            }
+
+            // Issue #5: Prepend error indicator if status is error
+            if (toolResult.status === 'error') {
+              contentText = `[ERROR] ${contentText}`
+            }
 
             openAIMessages.push({
               role: 'tool',
@@ -470,14 +534,20 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
           if (block.type === 'textBlock') {
             textContent += block.text
           } else if (block.type === 'toolUseBlock') {
-            toolUseCalls.push({
-              id: block.toolUseId,
-              type: 'function',
-              function: {
-                name: block.name,
-                arguments: JSON.stringify(block.input),
-              },
-            })
+            // Issue #14: Wrap JSON.stringify in try-catch
+            try {
+              toolUseCalls.push({
+                id: block.toolUseId,
+                type: 'function',
+                function: {
+                  name: block.name,
+                  arguments: JSON.stringify(block.input),
+                },
+              })
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            } catch (error: any) {
+              throw new Error(`Failed to serialize tool input for "${block.name}": ${error.message}`)
+            }
           } else if (block.type === 'reasoningBlock') {
             throw new Error(
               'Reasoning blocks are not supported by OpenAI. ' + 'This feature is specific to AWS Bedrock models.'
@@ -494,7 +564,12 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
           assistantMessage.tool_calls = toolUseCalls
         }
 
-        openAIMessages.push(assistantMessage)
+        // Issue #3: Only add if message has content or tool calls
+        if (textContent.trim().length > 0 || toolUseCalls.length > 0) {
+          openAIMessages.push(assistantMessage)
+        } else {
+          throw new Error('Assistant message must have either text content or tool calls')
+        }
       }
     }
 
@@ -516,9 +591,14 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
    *
    * @param chunk - OpenAI chunk
    * @param messageStarted - Whether message start event has been emitted
+   * @param activeToolCalls - Map tracking active tool calls by index
    * @returns Array of SDK streaming events
    */
-  private _mapOpenAIChunkToSDKEvents(chunk: { choices: unknown[] }, messageStarted: boolean): ModelStreamEvent[] {
+  private _mapOpenAIChunkToSDKEvents(
+    chunk: { choices: unknown[] },
+    messageStarted: boolean,
+    activeToolCalls: Map<number, boolean>
+  ): ModelStreamEvent[] {
     const events: ModelStreamEvent[] = []
 
     // Process first choice (OpenAI typically returns one choice in streaming)
@@ -554,8 +634,8 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
       })
     }
 
-    // Handle text content delta
-    if (delta?.content) {
+    // Issue #17: Handle text content delta (check for non-empty)
+    if (delta?.content && delta.content.length > 0) {
       events.push({
         type: 'modelContentBlockDeltaEvent',
         delta: {
@@ -568,6 +648,12 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
     // Handle tool calls
     if (delta?.tool_calls && delta.tool_calls.length > 0) {
       for (const toolCall of delta.tool_calls) {
+        // Issue #9: Validate tool call index
+        if (toolCall.index === undefined || typeof toolCall.index !== 'number') {
+          console.warn('Received tool call with invalid index:', toolCall)
+          continue
+        }
+
         // If tool call has id and name, it's the start of a new tool call
         if (toolCall.id && toolCall.function?.name) {
           events.push({
@@ -579,6 +665,8 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
               toolUseId: toolCall.id,
             },
           })
+          // Issue #7, #8: Track active tool calls
+          activeToolCalls.set(toolCall.index, true)
         }
 
         // If tool call has arguments, it's a delta
@@ -597,6 +685,15 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
 
     // Handle finish reason (message stop)
     if (choice.finish_reason) {
+      // Issue #7: Emit stop events for all active tool calls before message stop
+      for (const [index] of activeToolCalls) {
+        events.push({
+          type: 'modelContentBlockStopEvent',
+          contentBlockIndex: index,
+        })
+      }
+      activeToolCalls.clear()
+
       // Map OpenAI stop reason to SDK stop reason
       const stopReasonMap: Record<string, string> = {
         stop: 'endTurn',
@@ -605,8 +702,7 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
         content_filter: 'contentFiltered',
       }
 
-      const stopReason =
-        stopReasonMap[choice.finish_reason] || this._snakeToCamel(choice.finish_reason)
+      const stopReason = stopReasonMap[choice.finish_reason] || this._snakeToCamel(choice.finish_reason)
 
       events.push({
         type: 'modelMessageStopEvent',
