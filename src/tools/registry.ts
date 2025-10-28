@@ -2,9 +2,6 @@ import type { Tool } from './tool'
 
 /**
  * Registry for managing Tool instances.
- *
- * Provides CRUDL operations for Tool management with name-based lookup.
- * Multiple independent registry instances can be created.
  */
 export class ToolRegistry {
   private readonly _tools: Map<string, Tool>
