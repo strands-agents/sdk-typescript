@@ -7,11 +7,24 @@
  * @see https://platform.openai.com/docs/api-reference/chat/create
  */
 
-import OpenAI, { type ClientOptions, APIError } from 'openai'
+import OpenAI, { type ClientOptions } from 'openai'
 import type { Model, BaseModelConfig, StreamOptions } from '../models/model'
 import type { Message } from '../types/messages'
 import type { ModelStreamEvent } from '../models/streaming'
 import { ContextWindowOverflowError } from '../errors'
+
+/**
+ * Error message patterns that indicate context window overflow.
+ * Used to detect when input exceeds the model's context window.
+ *
+ * @see https://platform.openai.com/docs/guides/error-codes
+ */
+const OPENAI_CONTEXT_WINDOW_OVERFLOW_PATTERNS = [
+  'maximum context length',
+  'context_length_exceeded',
+  'too many tokens',
+  'context length',
+]
 
 /**
  * Configuration interface for OpenAI model provider.
@@ -332,38 +345,15 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
         yield bufferedUsage
       }
     } catch (error) {
-      // Issue #5: Check for context window overflow using proper error type checking
-      if (error instanceof APIError) {
-        // Check for context length exceeded by error code and status
-        if (
-          error.code === 'context_length_exceeded' ||
-          (error.status === 400 && error.message?.toLowerCase().includes('context length'))
-        ) {
-          throw new ContextWindowOverflowError(error.message || 'Context length exceeded')
-        }
-      }
+      const err = error as Error
 
-      // Fallback: Check error properties for duck-typed APIError or regular errors
-      if (error && typeof error === 'object' && 'code' in error && error.code === 'context_length_exceeded') {
-        const message =
-          'message' in error && typeof error.message === 'string' ? error.message : 'Context length exceeded'
-        throw new ContextWindowOverflowError(message)
-      }
-
-      // Fallback: Check error message patterns for non-APIError cases
-      if (error instanceof Error) {
-        const errorMessage = error.message.toLowerCase()
-        if (
-          errorMessage.includes('maximum context length') ||
-          errorMessage.includes('context_length_exceeded') ||
-          errorMessage.includes('too many tokens')
-        ) {
-          throw new ContextWindowOverflowError(error.message)
-        }
+      // Check for context window overflow using simple pattern matching
+      if (OPENAI_CONTEXT_WINDOW_OVERFLOW_PATTERNS.some((pattern) => err.message?.toLowerCase().includes(pattern))) {
+        throw new ContextWindowOverflowError(err.message)
       }
 
       // Re-throw other errors unchanged
-      throw error
+      throw err
     }
   }
 

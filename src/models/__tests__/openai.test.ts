@@ -34,20 +34,8 @@ function createMockClient(streamGenerator: () => AsyncGenerator<any>): OpenAI {
 // Mock the OpenAI SDK
 vi.mock('openai', () => {
   const mockConstructor = vi.fn().mockImplementation(() => ({}))
-  // Mock APIError class for error handling tests
-  class MockAPIError extends Error {
-    status?: number
-    code?: string
-    constructor(message: string, status?: number, code?: string) {
-      super(message)
-      this.name = 'APIError'
-      if (status !== undefined) this.status = status
-      if (code !== undefined) this.code = code
-    }
-  }
   return {
     default: mockConstructor,
-    APIError: MockAPIError,
   }
 })
 
