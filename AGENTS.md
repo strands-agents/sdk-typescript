@@ -612,22 +612,6 @@ describe('BedrockModel', () => {
 })
 ```
 
-**Example Implementation Test:**
-```typescript
-describe('BedrockModel', () => {
-  it('streams messages correctly', async () => {
-    const provider = new BedrockModel(config)
-    const stream = provider.stream(messages)
-
-    for await (const event of stream) {
-      if (event.type === 'modelMessageStartEvent') {
-        expect(event.role).toBe('assistant')
-      }
-    }
-  })
-})
-```
-
 ## Things to Do
 
 ✅ **Do**:
