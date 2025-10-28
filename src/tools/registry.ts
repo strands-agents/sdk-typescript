@@ -19,15 +19,34 @@ export class ToolRegistry {
    *
    * @param tool - Single Tool instance or array of Tool instances to register
    * @throws If a tool with duplicate name already exists
-   * @throws If tool name is empty or not a string
+   * @throws If tool name is invalid (must be 1-64 chars, alphanumeric with hyphens/underscores)
+   * @throws If tool description is empty
    */
   public register(tool: Tool | Tool[]): void {
     const tools = Array.isArray(tool) ? tool : [tool]
 
     for (const t of tools) {
-      // Validate tool name is non-empty string
-      if (typeof t.toolName !== 'string' || t.toolName.trim() === '') {
-        throw new Error('Tool name must be a non-empty string')
+      // Validate tool name is a string
+      if (typeof t.toolName !== 'string') {
+        throw new Error('Tool name must be a string')
+      }
+
+      // Validate tool name length (1-64 characters)
+      if (t.toolName.length < 1 || t.toolName.length > 64) {
+        throw new Error('Tool name must be between 1 and 64 characters')
+      }
+
+      // Validate tool name pattern (alphanumeric with hyphens and underscores)
+      const validNamePattern = /^[a-zA-Z0-9_-]+$/
+      if (!validNamePattern.test(t.toolName)) {
+        throw new Error('Tool name must contain only alphanumeric characters, hyphens, and underscores')
+      }
+
+      // Validate tool description if present
+      if (t.description !== undefined && t.description !== null) {
+        if (typeof t.description !== 'string' || t.description.length < 1) {
+          throw new Error('Tool description must be a non-empty string')
+        }
       }
 
       // Check for duplicate names

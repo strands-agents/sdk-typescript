@@ -109,7 +109,78 @@ describe('ToolRegistry', () => {
         const registry = new ToolRegistry()
         const tool = createMockTool('')
 
-        expect(() => registry.register(tool)).toThrow('Tool name must be a non-empty string')
+        expect(() => registry.register(tool)).toThrow('Tool name must be between 1 and 64 characters')
+      })
+    })
+
+    describe('when registering a tool with name too long', () => {
+      it('throws an error with descriptive message', () => {
+        const registry = new ToolRegistry()
+        const longName = 'a'.repeat(65)
+        const tool = createMockTool(longName)
+
+        expect(() => registry.register(tool)).toThrow('Tool name must be between 1 and 64 characters')
+      })
+    })
+
+    describe('when registering a tool with invalid name characters', () => {
+      it('throws an error for spaces', () => {
+        const registry = new ToolRegistry()
+        const tool = createMockTool('invalid name')
+
+        expect(() => registry.register(tool)).toThrow(
+          'Tool name must contain only alphanumeric characters, hyphens, and underscores'
+        )
+      })
+
+      it('throws an error for special characters', () => {
+        const registry = new ToolRegistry()
+        const tool = createMockTool('invalid@name!')
+
+        expect(() => registry.register(tool)).toThrow(
+          'Tool name must contain only alphanumeric characters, hyphens, and underscores'
+        )
+      })
+
+      it('allows valid characters', () => {
+        const registry = new ToolRegistry()
+        const tool1 = createMockTool('valid_name')
+        const tool2 = createMockTool('valid-name')
+        const tool3 = createMockTool('ValidName123')
+
+        expect(() => {
+          registry.register([tool1, tool2, tool3])
+        }).not.toThrow()
+
+        expect(registry.list()).toHaveLength(3)
+      })
+    })
+
+    describe('when registering a tool with empty description', () => {
+      it('throws an error with descriptive message', () => {
+        const registry = new ToolRegistry()
+        const tool = createMockTool('validName', '')
+
+        expect(() => registry.register(tool)).toThrow('Tool description must be a non-empty string')
+      })
+    })
+
+    describe('when registering a tool with valid name at boundary', () => {
+      it('accepts name with 1 character', () => {
+        const registry = new ToolRegistry()
+        const tool = createMockTool('a')
+
+        expect(() => registry.register(tool)).not.toThrow()
+        expect(registry.get('a')).toBe(tool)
+      })
+
+      it('accepts name with 64 characters', () => {
+        const registry = new ToolRegistry()
+        const name64 = 'a'.repeat(64)
+        const tool = createMockTool(name64)
+
+        expect(() => registry.register(tool)).not.toThrow()
+        expect(registry.get(name64)).toBe(tool)
       })
     })
   })
