@@ -436,11 +436,6 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
       }
     }
 
-    //  Validate that n=1 for streaming (if n is in params)
-    if (this._config.params?.n && typeof this._config.params.n === 'number' && this._config.params.n > 1) {
-      throw new Error('Streaming with n > 1 is not supported. Multiple choices cannot be streamed simultaneously.')
-    }
-
     // Spread params object last for forward compatibility
     if (this._config.params) {
       Object.assign(request, this._config.params)

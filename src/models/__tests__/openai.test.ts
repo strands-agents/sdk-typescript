@@ -192,9 +192,7 @@ describe('OpenAIModel', () => {
         const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
 
         await expect(async () => {
-          for await (const _ of provider.stream([])) {
-            // Should not reach here
-          }
+          await collectEvents(provider.stream([]))
         }).rejects.toThrow('At least one message is required')
       })
 
