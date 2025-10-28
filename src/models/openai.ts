@@ -489,12 +489,6 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
           }
         }
 
-        // Validate message sequence for tool-only messages
-        if (toolResults.length > 0 && otherContent.length === 0) {
-          // Having only tool results without user text is acceptable in OpenAI
-          // The tool results will be added as separate tool messages below
-        }
-
         // Add each tool result as separate tool message
         for (const toolResult of toolResults) {
           if (toolResult.type === 'toolResultBlock') {
