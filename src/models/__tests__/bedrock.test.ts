@@ -31,30 +31,49 @@ function setupMockSend(streamGenerator: () => AsyncGenerator<unknown>): void {
 }
 
 // Mock the AWS SDK
-vi.mock('@aws-sdk/client-bedrock-runtime', () => {
-  const mockSend = vi.fn(
-    async (): Promise<{ stream: AsyncIterable<unknown> }> => ({
-      stream: (async function* (): AsyncGenerator<unknown> {
-        yield { messageStart: { role: 'assistant' } }
-        yield { contentBlockStart: { contentBlockIndex: 0 } }
-        yield { contentBlockDelta: { delta: { text: 'Hello' }, contentBlockIndex: 0 } }
-        yield { contentBlockStop: { contentBlockIndex: 0 } }
-        yield { messageStop: { stopReason: 'end_turn' } }
-        yield {
-          metadata: {
-            usage: {
-              inputTokens: 10,
-              outputTokens: 5,
-              totalTokens: 15,
+vi.mock('@aws-sdk/client-bedrock-runtime', async () => {
+  // Mock command classes that the code under test will instantiate
+  const ConverseStreamCommand = vi.fn()
+  const ConverseCommand = vi.fn()
+
+  const mockSend = vi.fn(async (command: unknown) => {
+    // Check which constructor was used to create the command object
+    if (command instanceof ConverseStreamCommand) {
+      // Return a streaming response
+      return {
+        stream: (async function* (): AsyncGenerator<unknown> {
+          yield { messageStart: { role: 'assistant' } }
+          yield { contentBlockStart: { contentBlockIndex: 0 } }
+          yield { contentBlockDelta: { delta: { text: 'Hello' }, contentBlockIndex: 0 } }
+          yield { contentBlockStop: { contentBlockIndex: 0 } }
+          yield { messageStop: { stopReason: 'end_turn' } }
+          yield {
+            metadata: {
+              usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+              metrics: { latencyMs: 100 },
             },
-            metrics: {
-              latencyMs: 100,
-            },
+          }
+        })(),
+      }
+    }
+
+    if (command instanceof ConverseCommand) {
+      // Return a non-streaming (full) response for the non-streaming API
+      return {
+        output: {
+          message: {
+            role: 'assistant',
+            content: [{ text: 'Hello' }],
           },
-        }
-      })(),
-    })
-  )
+        },
+        stopReason: 'end_turn',
+        usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+        metrics: { latencyMs: 100 },
+      }
+    }
+
+    throw new Error('Unhandled command type in mock')
+  })
 
   // Create a mock ValidationException class
   class MockValidationException extends Error {
@@ -68,7 +87,8 @@ vi.mock('@aws-sdk/client-bedrock-runtime', () => {
     BedrockRuntimeClient: vi.fn().mockImplementation(() => ({
       send: mockSend,
     })),
-    ConverseStreamCommand: vi.fn(),
+    ConverseStreamCommand,
+    ConverseCommand,
     ValidationException: MockValidationException,
   }
 })
@@ -400,7 +420,49 @@ describe('BedrockModel', () => {
   })
 
   describe('stream', () => {
-    it('yields and validate events', async () => {
+    it('yields and validates nonstreaming events', async () => {
+      const provider = new BedrockModel({ stream: false })
+      const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+
+      const events = await collectEvents(provider.stream(messages))
+
+      expect(events).toStrictEqual([
+        {
+          role: 'assistant',
+          type: 'modelMessageStartEvent',
+        },
+        {
+          type: 'modelContentBlockStartEvent',
+        },
+        {
+          delta: {
+            text: 'Hello',
+            type: 'textDelta',
+          },
+          type: 'modelContentBlockDeltaEvent',
+        },
+        {
+          type: 'modelContentBlockStopEvent',
+        },
+        {
+          stopReason: 'endTurn',
+          type: 'modelMessageStopEvent',
+        },
+        {
+          metrics: {
+            latencyMs: 100,
+          },
+          type: 'modelMetadataEvent',
+          usage: {
+            inputTokens: 10,
+            outputTokens: 5,
+            totalTokens: 15,
+          },
+        },
+      ])
+    })
+
+    it('yields and validates streaming events', async () => {
       const provider = new BedrockModel()
       const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
 

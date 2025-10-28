@@ -25,6 +25,8 @@ import {
   type ConverseStreamMetadataEvent as BedrockConverseStreamMetadataEvent,
   ContentBlockDelta,
   type ToolConfiguration,
+  ConverseCommand,
+  type ConverseCommandOutput,
 } from '@aws-sdk/client-bedrock-runtime'
 import type { Model, BaseModelConfig, StreamOptions } from '../models/model'
 import type { Message, ContentBlock } from '../types/messages'
@@ -136,6 +138,16 @@ export interface BedrockModelConfig extends BaseModelConfig {
    * @see https://docs.aws.amazon.com/AWSJavaScriptSDK/v3/latest/client/bedrock-runtime/command/ConverseStreamCommand/
    */
   additionalArgs?: JSONValue
+
+  /**
+   * Whether or not to stream responses from the model.
+   *
+   * This will use the ConverseStream API instead of the Converse API.
+   *
+   * @see https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_Converse.html
+   * @see https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_ConverseStream.html
+   */
+  stream?: boolean
 }
 
 /**
@@ -308,18 +320,26 @@ export class BedrockModel implements Model<BedrockModelConfig, BedrockRuntimeCli
       // Format the request for Bedrock
       const request = this._formatRequest(messages, options)
 
-      // Create and send the command
-      const command = new ConverseStreamCommand(request)
-      const response = await this._client.send(command)
+      if (this._config.stream !== false) {
+        // Create and send the command
+        const command = new ConverseStreamCommand(request)
+        const response = await this._client.send(command)
 
-      // Stream the response
-      if (response.stream) {
-        for await (const chunk of response.stream) {
-          // Map Bedrock events to SDK events
-          const events = this._mapBedrockEventToSDKEvents(chunk)
-          for (const event of events) {
-            yield event
+        // Stream the response
+        if (response.stream) {
+          for await (const chunk of response.stream) {
+            // Map Bedrock events to SDK events
+            const events = this._mapStreamedBedrockEventToSDKEvent(chunk)
+            for (const event of events) {
+              yield event
+            }
           }
+        }
+      } else {
+        const command = new ConverseCommand(request)
+        const response = await this._client.send(command)
+        for (const event of this._mapBedrockEventToSDKEvent(response)) {
+          yield event
         }
       }
     } catch (error) {
@@ -497,13 +517,139 @@ export class BedrockModel implements Model<BedrockModelConfig, BedrockRuntimeCli
     }
   }
 
+  private _mapBedrockEventToSDKEvent(event: ConverseCommandOutput): ModelStreamEvent[] {
+    const events: ModelStreamEvent[] = []
+
+    // Message start
+    const output = ensureDefined(event.output, 'event.output')
+    const message = ensureDefined(output.message, 'output.message')
+    const role = ensureDefined(message.role, 'message.role')
+    events.push({
+      type: 'modelMessageStartEvent',
+      role,
+    })
+
+    // Match on content blocks
+    const content = ensureDefined(message.content, 'message.content')
+    content.forEach((block, index) => {
+      if (block.text) {
+        events.push({
+          type: 'modelContentBlockStartEvent',
+        })
+
+        events.push({
+          type: 'modelContentBlockDeltaEvent',
+          delta: {
+            type: 'textDelta',
+            text: block.text,
+          },
+        })
+
+        events.push({
+          type: 'modelContentBlockStopEvent',
+        })
+      } else if (block.toolUse) {
+        events.push({
+          type: 'modelContentBlockStartEvent',
+          contentBlockIndex: index,
+          start: {
+            type: 'toolUseStart',
+            name: ensureDefined(block.toolUse.name, 'toolUse.name'),
+            toolUseId: ensureDefined(block.toolUse.toolUseId, 'toolUse.toolUseId'),
+          },
+        })
+
+        events.push({
+          type: 'modelContentBlockDeltaEvent',
+          contentBlockIndex: index,
+          delta: {
+            type: 'toolUseInputDelta',
+            input: JSON.stringify(ensureDefined(block.toolUse.input, 'toolUse.input')),
+          },
+        })
+
+        events.push({
+          type: 'modelContentBlockStopEvent',
+          contentBlockIndex: index,
+        })
+      } else if (block.reasoningContent) {
+        const reasoningText = ensureDefined(block.reasoningContent.reasoningText, 'reasoningContent.reasoningText')
+        events.push({
+          type: 'modelContentBlockDeltaEvent',
+          contentBlockIndex: index,
+          delta: {
+            type: 'reasoningDelta',
+            text: ensureDefined(reasoningText.text, 'reasoningText.text'),
+          },
+        })
+
+        if (reasoningText.signature) {
+          events.push({
+            type: 'modelContentBlockDeltaEvent',
+            contentBlockIndex: index,
+            delta: {
+              type: 'reasoningDelta',
+              signature: reasoningText.signature,
+            },
+          })
+        }
+
+        events.push({
+          type: 'modelContentBlockStopEvent',
+          contentBlockIndex: index,
+        })
+      }
+    })
+
+    const stopReasonRaw = ensureDefined(event.stopReason, 'event.stopReason') as string
+    let mappedStopReason: string
+
+    if (stopReasonRaw in STOP_REASON_MAP) {
+      mappedStopReason = STOP_REASON_MAP[stopReasonRaw as keyof typeof STOP_REASON_MAP]
+    } else {
+      console.warn(`Unknown stop reason: "${stopReasonRaw}". Converting to camelCase: "${snakeToCamel(stopReasonRaw)}"`)
+      mappedStopReason = snakeToCamel(stopReasonRaw) // Assumes snakeToCamel utility exists
+    }
+
+    // Adjust for tool_use, which is sometimes incorrectly reported as end_turn
+    if (mappedStopReason === 'endTurn' && event.output?.message?.content?.some((block) => 'toolUse' in block)) {
+      mappedStopReason = 'toolUse'
+      console.warn(`Adjusting stop reason from 'end_turn' to 'tool_use' due to tool use in content blocks.`)
+    }
+
+    events.push({
+      type: 'modelMessageStopEvent',
+      stopReason: mappedStopReason,
+    })
+
+    const usage = ensureDefined(event.usage, 'output.usage')
+    const metadataEvent: ModelStreamEvent = {
+      type: 'modelMetadataEvent',
+      usage: {
+        inputTokens: ensureDefined(usage.inputTokens, 'usage.inputTokens'),
+        outputTokens: ensureDefined(usage.outputTokens, 'usage.outputTokens'),
+        totalTokens: ensureDefined(usage.totalTokens, 'usage.totalTokens'),
+      },
+    }
+
+    if (event.metrics) {
+      metadataEvent.metrics = {
+        latencyMs: ensureDefined(event.metrics.latencyMs, 'metrics.latencyMs'),
+      }
+    }
+
+    events.push(metadataEvent)
+
+    return events
+  }
+
   /**
    * Maps a Bedrock event to SDK streaming events.
    *
    * @param chunk - Bedrock event chunk
    * @returns Array of SDK streaming events
    */
-  private _mapBedrockEventToSDKEvents(chunk: ConverseStreamOutput): ModelStreamEvent[] {
+  private _mapStreamedBedrockEventToSDKEvent(chunk: ConverseStreamOutput): ModelStreamEvent[] {
     const events: ModelStreamEvent[] = []
 
     // Extract the event type key
