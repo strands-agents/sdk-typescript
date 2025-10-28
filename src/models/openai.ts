@@ -277,7 +277,7 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
    * ```
    */
   async *stream(messages: Message[], options?: StreamOptions): AsyncIterable<ModelStreamEvent> {
-    // Issue #1: Validate messages array is not empty
+    // Validate messages array is not empty
     if (!messages || messages.length === 0) {
       throw new Error('At least one message is required')
     }
@@ -289,16 +289,16 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
       // Create streaming request with usage tracking
       const stream = await this._client.chat.completions.create(request)
 
-      // Track streaming state (Issue #1: Use mutable object for proper state tracking)
+      // Track streaming state (Use mutable object for proper state tracking)
       const streamState = {
         messageStarted: false,
         textContentBlockStarted: false,
       }
 
-      // Track active tool calls for stop events (Issue #7, #8)
+      // Track active tool calls for stop events
       const activeToolCalls = new Map<number, boolean>()
 
-      // Buffer usage to emit before message stop (Issue #10)
+      // Buffer usage to emit before message stop
       let bufferedUsage: {
         type: 'modelMetadataEvent'
         usage: {
@@ -312,8 +312,7 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
       for await (const chunk of stream) {
         if (!chunk.choices || chunk.choices.length === 0) {
           // Handle usage chunk (no choices)
-          // Issue #11: Add null checks for usage properties
-          // Issue #10: Buffer usage to emit before message stop
+          // Buffer usage to emit before message stop
           if (chunk.usage) {
             bufferedUsage = {
               type: 'modelMetadataEvent',
@@ -330,7 +329,7 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
         // Map chunk to SDK events
         const events = this._mapOpenAIChunkToSDKEvents(chunk, streamState, activeToolCalls)
         for (const event of events) {
-          // Issue #10: Emit buffered usage before message stop
+          // Emit buffered usage before message stop
           if (event.type === 'modelMessageStopEvent' && bufferedUsage) {
             yield bufferedUsage
             bufferedUsage = null
@@ -340,7 +339,7 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
         }
       }
 
-      // Emit any remaining buffered usage (Issue #10)
+      // Emit any remaining buffered usage
       if (bufferedUsage) {
         yield bufferedUsage
       }
@@ -376,8 +375,8 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
       stream_options: { include_usage: true },
     }
 
-    // Issue #13: Add system prompt validation
-    // Issue #17: Remove redundant type assertion
+    // Add system prompt validation
+    // Remove redundant type assertion
     if (options?.systemPrompt && options.systemPrompt.trim().length > 0) {
       request.messages.push({
         role: 'system',
@@ -406,7 +405,7 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
       request.presence_penalty = this._config.presencePenalty
     }
 
-    // Issue #16: Add tool specifications with validation
+    // Add tool specifications with validation
     if (options?.toolSpecs && options.toolSpecs.length > 0) {
       request.tools = options.toolSpecs.map((spec) => {
         if (!spec.name || !spec.description) {
@@ -437,7 +436,7 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
       }
     }
 
-    // Issue #12: Validate that n=1 for streaming (if n is in params)
+    //  Validate that n=1 for streaming (if n is in params)
     if (this._config.params?.n && typeof this._config.params.n === 'number' && this._config.params.n > 1) {
       throw new Error('Streaming with n > 1 is not supported. Multiple choices cannot be streamed simultaneously.')
     }
@@ -481,7 +480,7 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
             })
             .join('')
 
-          // Issue #2: Validate content is not empty before adding
+          // Validate content is not empty before adding
           if (contentText.trim().length > 0) {
             openAIMessages.push({
               role: 'user',
@@ -490,7 +489,7 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
           }
         }
 
-        // Issue #2: Validate message sequence for tool-only messages
+        // Validate message sequence for tool-only messages
         if (toolResults.length > 0 && otherContent.length === 0) {
           // Having only tool results without user text is acceptable in OpenAI
           // The tool results will be added as separate tool messages below
@@ -500,7 +499,7 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
         for (const toolResult of toolResults) {
           if (toolResult.type === 'toolResultBlock') {
             // Format tool result content
-            // Issue #14, #15, #19: Handle JSON serialization with context and consistent error handling
+            // Handle JSON serialization with context and consistent error handling
             const contentText = toolResult.content
               .map((c) => {
                 if (c.type === 'toolResultTextContent') {
@@ -510,7 +509,6 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
                     return JSON.stringify(c.json)
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
                   } catch (error: any) {
-                    // Issue #15: Include data type information in error message
                     const dataPreview =
                       typeof c.json === 'object' && c.json !== null
                         ? `object with keys: ${Object.keys(c.json).slice(0, 5).join(', ')}`
@@ -522,7 +520,7 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
               })
               .join('')
 
-            // Issue #4: Validate content is not empty
+            // Validate content is not empty
             if (!contentText || contentText.trim().length === 0) {
               throw new Error(
                 `Tool result for toolUseId "${toolResult.toolUseId}" has empty content. ` +
@@ -530,7 +528,7 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
               )
             }
 
-            // Issue #5: Prepend error indicator if status is error
+            // Prepend error indicator if status is error
             const finalContent = toolResult.status === 'error' ? `[ERROR] ${contentText}` : contentText
 
             openAIMessages.push({
@@ -543,14 +541,13 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
       } else {
         // Handle assistant messages
         const toolUseCalls: unknown[] = []
-        // Issue #21: Use array + join pattern for efficient string concatenation
+        // Use array + join pattern for efficient string concatenation
         const textParts: string[] = []
 
         for (const block of message.content) {
           if (block.type === 'textBlock') {
             textParts.push(block.text)
           } else if (block.type === 'toolUseBlock') {
-            // Issue #14: Wrap JSON.stringify in try-catch
             try {
               toolUseCalls.push({
                 id: block.toolUseId,
@@ -571,7 +568,7 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
           }
         }
 
-        // Issue #11: Trim text content to avoid whitespace-only messages
+        // Trim text content to avoid whitespace-only messages
         const textContent = textParts.join('').trim()
 
         const assistantMessage: { role: string; content: string; tool_calls?: unknown[] } = {
@@ -583,7 +580,7 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
           assistantMessage.tool_calls = toolUseCalls
         }
 
-        // Issue #3, #11: Only add if message has content or tool calls
+        // Only add if message has content or tool calls
         if (textContent.length > 0 || toolUseCalls.length > 0) {
           openAIMessages.push(assistantMessage)
         } else {
@@ -627,17 +624,17 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
   ): ModelStreamEvent[] {
     const events: ModelStreamEvent[] = []
 
-    // Issue #18: Use named constant for text content block index
+    // Use named constant for text content block index
     const TEXT_CONTENT_BLOCK_INDEX = 0
 
-    // Issue #6: Validate choices array has at least one element
+    // Validate choices array has at least one element
     if (!chunk.choices || chunk.choices.length === 0) {
       return events
     }
 
     const choice = chunk.choices[0]
 
-    // Issue #6: Validate choice is an object
+    // Validate choice is an object
     if (!choice || typeof choice !== 'object') {
       console.warn('Invalid choice format in OpenAI chunk:', choice)
       return events
@@ -668,7 +665,7 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
 
     const delta = typedChoice.delta
 
-    // Issue #1: Handle message start (role appears) - update mutable state
+    // Handle message start (role appears) - update mutable state
     if (delta?.role && !streamState.messageStarted) {
       streamState.messageStarted = true
       events.push({
@@ -677,9 +674,9 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
       })
     }
 
-    // Issue #2, #3: Handle text content delta with contentBlockIndex and start event
+    // Handle text content delta with contentBlockIndex and start event
     if (delta?.content && delta.content.length > 0) {
-      // Issue #3: Emit start event on first text delta
+      // Emit start event on first text delta
       if (!streamState.textContentBlockStarted) {
         streamState.textContentBlockStarted = true
         events.push({
@@ -688,7 +685,7 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
         })
       }
 
-      // Issue #2: Include contentBlockIndex for text deltas
+      // Include contentBlockIndex for text deltas
       events.push({
         type: 'modelContentBlockDeltaEvent',
         contentBlockIndex: TEXT_CONTENT_BLOCK_INDEX,
@@ -702,13 +699,13 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
     // Handle tool calls
     if (delta?.tool_calls && delta.tool_calls.length > 0) {
       for (const toolCall of delta.tool_calls) {
-        // Issue #9: Validate tool call index
+        // Validate tool call index
         if (toolCall.index === undefined || typeof toolCall.index !== 'number') {
           console.warn('Received tool call with invalid index:', toolCall)
           continue
         }
 
-        // Issue #9: Validate index is non-negative and reasonable
+        // Validate index is non-negative and reasonable
         if (toolCall.index < 0 || toolCall.index > 100) {
           console.warn(`Received tool call with out-of-range index: ${toolCall.index}`, toolCall)
           continue
@@ -725,7 +722,7 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
               toolUseId: toolCall.id,
             },
           })
-          // Issue #7, #8: Track active tool calls
+          // Track active tool calls
           activeToolCalls.set(toolCall.index, true)
         }
 
@@ -745,7 +742,7 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
 
     // Handle finish reason (message stop)
     if (typedChoice.finish_reason) {
-      // Issue #4: Emit stop event for text content if it was started
+      // Emit stop event for text content if it was started
       if (streamState.textContentBlockStarted) {
         events.push({
           type: 'modelContentBlockStopEvent',
@@ -754,7 +751,7 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
         streamState.textContentBlockStarted = false
       }
 
-      // Issue #7, #22: Emit stop events for all active tool calls and delete during iteration
+      // Emit stop events for all active tool calls and delete during iteration
       for (const [index] of activeToolCalls) {
         events.push({
           type: 'modelContentBlockStopEvent',
@@ -771,7 +768,7 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
         content_filter: 'contentFiltered',
       }
 
-      // Issue #13: Log unknown stop reasons
+      // Log unknown stop reasons
       let stopReason = stopReasonMap[typedChoice.finish_reason]
       if (!stopReason) {
         const fallbackReason = this._snakeToCamel(typedChoice.finish_reason)
