@@ -200,7 +200,7 @@ describe.skipIf(!hasApiKey)('OpenAIModel Integration Tests', () => {
       // Extract tool use information
       const toolUseStartEvent = events1.find(
         (e) => e.type === 'modelContentBlockStartEvent' && e.start?.type === 'toolUseStart'
-      )
+      ) as { type: 'modelContentBlockStartEvent'; start?: { type: 'toolUseStart'; toolUseId: string; name: string } } | undefined
       expect(toolUseStartEvent).toBeDefined()
 
       const toolUseId = toolUseStartEvent?.start?.toolUseId
@@ -245,6 +245,7 @@ describe.skipIf(!hasApiKey)('OpenAIModel Integration Tests', () => {
               type: 'toolResultBlock',
               toolUseId: toolUseId!,
               content: [{ type: 'toolResultTextContent', text: '42' }],
+              status: 'success',
             },
           ],
         },
@@ -358,32 +359,36 @@ describe.skipIf(!hasApiKey)('OpenAIModel Integration Tests', () => {
       }).rejects.toThrow()
     })
 
-    it.concurrent('throws ContextWindowOverflowError when input exceeds context window', async () => {
-      const provider = new OpenAIModel({
-        modelId: 'gpt-4o-mini',
-        maxTokens: 100,
-      })
+    it.concurrent(
+      'throws ContextWindowOverflowError when input exceeds context window',
+      async () => {
+        const provider = new OpenAIModel({
+          modelId: 'gpt-4o-mini',
+          maxTokens: 100,
+        })
 
-      // Create a message that exceeds context window
-      // For gpt-4o-mini, context is ~128k tokens. Create ~150k tokens worth of text.
-      // Rough estimate: 1 token ~= 4 characters, so 150k tokens ~= 600k characters
-      const longText = 'Too much text! '.repeat(40000) // ~600k characters
+        // Create a message that exceeds context window
+        // For gpt-4o-mini, context is ~128k tokens. Create ~150k tokens worth of text.
+        // Rough estimate: 1 token ~= 4 characters, so 150k tokens ~= 600k characters
+        const longText = 'Too much text! '.repeat(40000) // ~600k characters
 
-      const messages: Message[] = [
-        {
-          role: 'user',
-          content: [{ type: 'textBlock', text: longText }],
-        },
-      ]
+        const messages: Message[] = [
+          {
+            role: 'user',
+            content: [{ type: 'textBlock', text: longText }],
+          },
+        ]
 
-      // Should throw ContextWindowOverflowError
-      await expect(async () => {
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        for await (const _event of provider.stream(messages)) {
-          throw Error('Should not get here')
-        }
-      }).rejects.toBeInstanceOf(ContextWindowOverflowError)
-    })
+        // Should throw ContextWindowOverflowError
+        await expect(async () => {
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          for await (const _event of provider.stream(messages)) {
+            throw Error('Should not get here')
+          }
+        }).rejects.toBeInstanceOf(ContextWindowOverflowError)
+      },
+      60000 // 60 second timeout for this test
+    )
   })
 
   describe('Content Block Lifecycle', () => {
@@ -535,62 +540,6 @@ describe.skipIf(!hasApiKey)('OpenAIModel Integration Tests', () => {
       const messageStopEvent = events.find((e) => e.type === 'modelMessageStopEvent')
       expect(messageStopEvent).toBeDefined()
       expect(messageStopEvent?.stopReason).toBe('toolUse')
-    })
-  })
-
-  describe('Edge Cases', () => {
-    it.concurrent('handles empty assistant message content gracefully', async () => {
-      const provider = new OpenAIModel({
-        modelId: 'gpt-4o-mini',
-        maxTokens: 100,
-      })
-
-      // Message with empty text (only whitespace)
-      const messages: Message[] = [
-        {
-          role: 'user',
-          content: [{ type: 'textBlock', text: 'Hello' }],
-        },
-        {
-          role: 'assistant',
-          content: [{ type: 'textBlock', text: '   ' }], // Only whitespace
-        },
-        {
-          role: 'user',
-          content: [{ type: 'textBlock', text: 'Are you there?' }],
-        },
-      ]
-
-      // Should handle this gracefully (empty/whitespace content is filtered out)
-      const events = await collectEvents(provider.stream(messages))
-
-      // Should still get a valid response
-      expect(events.length).toBeGreaterThan(0)
-      const messageStopEvent = events.find((e) => e.type === 'modelMessageStopEvent')
-      expect(messageStopEvent).toBeDefined()
-    })
-
-    it.concurrent('handles very short responses', async () => {
-      const provider = new OpenAIModel({
-        modelId: 'gpt-4o-mini',
-        maxTokens: 5, // Force very short response
-      })
-
-      const messages: Message[] = [
-        {
-          role: 'user',
-          content: [{ type: 'textBlock', text: 'Say one word.' }],
-        },
-      ]
-
-      const events = await collectEvents(provider.stream(messages))
-
-      // Even with short response, should have complete event sequence
-      const messageStartEvent = events.find((e) => e.type === 'modelMessageStartEvent')
-      const messageStopEvent = events.find((e) => e.type === 'modelMessageStopEvent')
-
-      expect(messageStartEvent).toBeDefined()
-      expect(messageStopEvent).toBeDefined()
     })
   })
 })

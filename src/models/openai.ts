@@ -583,8 +583,6 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
         // Only add if message has content or tool calls
         if (textContent.length > 0 || toolUseCalls.length > 0) {
           openAIMessages.push(assistantMessage)
-        } else {
-          throw new Error('Assistant message must have either text content or tool calls')
         }
       }
     }

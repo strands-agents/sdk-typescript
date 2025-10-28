@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import OpenAI from 'openai'
@@ -188,7 +187,7 @@ describe('OpenAIModel', () => {
 
   describe('stream', () => {
     describe('validation', () => {
-      it('throws error when messages array is empty (Issue #1)', async () => {
+      it('throws error when messages array is empty', async () => {
         const mockClient = createMockClient(async function* () {})
         const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
 
@@ -199,7 +198,7 @@ describe('OpenAIModel', () => {
         }).rejects.toThrow('At least one message is required')
       })
 
-      it('validates system prompt is not empty (Issue #13)', async () => {
+      it('validates system prompt is not empty', async () => {
         const createMock = vi.fn(async function* () {
           yield {
             choices: [{ delta: { role: 'assistant', content: 'Hello' }, index: 0 }],
@@ -226,7 +225,7 @@ describe('OpenAIModel', () => {
         expect(events[0]?.type).toBe('modelMessageStartEvent')
       })
 
-      it('throws error for streaming with n > 1 (Issue #12)', async () => {
+      it('throws error for streaming with n > 1', async () => {
         const mockClient = createMockClient(async function* () {})
         const provider = new OpenAIModel({
           modelId: 'gpt-4o',
@@ -242,7 +241,7 @@ describe('OpenAIModel', () => {
         }).rejects.toThrow('Streaming with n > 1 is not supported')
       })
 
-      it('throws error for tool spec without name or description (Issue #16)', async () => {
+      it('throws error for tool spec without name or description', async () => {
         const mockClient = createMockClient(async function* () {})
         const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
         const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
@@ -256,22 +255,7 @@ describe('OpenAIModel', () => {
         }).rejects.toThrow('Tool specification must have both name and description')
       })
 
-      it('throws error for empty assistant message (Issue #3)', async () => {
-        const mockClient = createMockClient(async function* () {})
-        const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
-        const messages: Message[] = [
-          { role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] },
-          { role: 'assistant', content: [] },
-        ]
-
-        await expect(async () => {
-          for await (const _ of provider.stream(messages)) {
-            // Should not reach here
-          }
-        }).rejects.toThrow('Assistant message must have either text content or tool calls')
-      })
-
-      it('throws error for empty tool result content (Issue #4)', async () => {
+      it('throws error for empty tool result content', async () => {
         const mockClient = createMockClient(async function* () {})
         const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
         const messages: Message[] = [
@@ -288,7 +272,7 @@ describe('OpenAIModel', () => {
         }).rejects.toThrow('Tool result for toolUseId "tool-123" has empty content')
       })
 
-      it('handles tool result with error status (Issue #5)', async () => {
+      it('handles tool result with error status', async () => {
         const createMock = vi.fn(async function* () {
           yield {
             choices: [{ delta: { role: 'assistant', content: 'Ok' }, index: 0 }],
@@ -339,7 +323,7 @@ describe('OpenAIModel', () => {
         expect(events[0]?.type).toBe('modelMessageStartEvent')
       })
 
-      it('throws error for circular reference in tool input (Issue #14)', async () => {
+      it('throws error for circular reference in tool input', async () => {
         const mockClient = createMockClient(async function* () {})
         const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
 
@@ -433,7 +417,7 @@ describe('OpenAIModel', () => {
       })
     })
 
-    it('emits modelMetadataEvent with usage information (Issue #11)', async () => {
+    it('emits modelMetadataEvent with usage information', async () => {
       const mockClient = createMockClient(async function* () {
         yield {
           choices: [{ delta: { role: 'assistant' }, index: 0 }],
@@ -464,7 +448,7 @@ describe('OpenAIModel', () => {
       })
     })
 
-    it('handles usage with undefined properties (Issue #11)', async () => {
+    it('handles usage with undefined properties', async () => {
       const mockClient = createMockClient(async function* () {
         yield {
           choices: [{ delta: { role: 'assistant' }, index: 0 }],
@@ -495,7 +479,7 @@ describe('OpenAIModel', () => {
       })
     })
 
-    it('filters out empty string content deltas (Issue #17)', async () => {
+    it('filters out empty string content deltas', async () => {
       const mockClient = createMockClient(async function* () {
         yield {
           choices: [{ delta: { role: 'assistant' }, index: 0 }],
@@ -522,7 +506,7 @@ describe('OpenAIModel', () => {
       expect((contentEvents[0] as any).delta.text).toBe('Hello')
     })
 
-    it('prevents duplicate message start events (Issue #6)', async () => {
+    it('prevents duplicate message start events', async () => {
       const mockClient = createMockClient(async function* () {
         yield {
           choices: [{ delta: { role: 'assistant' }, index: 0 }],
@@ -556,7 +540,7 @@ describe('OpenAIModel', () => {
   })
 
   describe('tool calling', () => {
-    it('handles tool use request with contentBlockStart and contentBlockStop events (Issue #7)', async () => {
+    it('handles tool use request with contentBlockStart and contentBlockStop events', async () => {
       const mockClient = createMockClient(async function* () {
         yield {
           choices: [{ delta: { role: 'assistant' }, index: 0 }],
@@ -642,7 +626,7 @@ describe('OpenAIModel', () => {
       expect(events[5]).toEqual({ type: 'modelMessageStopEvent', stopReason: 'toolUse' })
     })
 
-    it('handles multiple tool calls with correct contentBlockIndex (Issue #7, #8)', async () => {
+    it('handles multiple tool calls with correct contentBlockIndex', async () => {
       const mockClient = createMockClient(async function* () {
         yield {
           choices: [{ delta: { role: 'assistant' }, index: 0 }],
@@ -698,7 +682,7 @@ describe('OpenAIModel', () => {
       expect(stopEvents[1]).toEqual({ type: 'modelContentBlockStopEvent', contentBlockIndex: 1 })
     })
 
-    it('skips tool calls with invalid index (Issue #9)', async () => {
+    it('skips tool calls with invalid index', async () => {
       const mockClient = createMockClient(async function* () {
         yield {
           choices: [{ delta: { role: 'assistant' }, index: 0 }],
@@ -746,7 +730,7 @@ describe('OpenAIModel', () => {
       warnSpy.mockRestore()
     })
 
-    it('tool argument deltas can be reassembled into valid JSON (Issue #7)', async () => {
+    it('tool argument deltas can be reassembled into valid JSON', async () => {
       const mockClient = createMockClient(async function* () {
         yield { choices: [{ delta: { role: 'assistant' }, index: 0 }] }
         yield {
@@ -792,7 +776,7 @@ describe('OpenAIModel', () => {
       expect(JSON.parse(reassembled)).toEqual({ x: 10, y: 20 })
     })
 
-    it('handles messages with both text and tool calls (Issue #16)', async () => {
+    it('handles messages with both text and tool calls', async () => {
       const mockClient = createMockClient(async function* () {
         yield { choices: [{ delta: { role: 'assistant' }, index: 0 }] }
         // Text content first
@@ -874,7 +858,7 @@ describe('OpenAIModel', () => {
       }
     })
 
-    it('handles unknown stop reasons with warning (Issue #13)', async () => {
+    it('handles unknown stop reasons with warning', async () => {
       const mockClient = createMockClient(async function* () {
         yield {
           choices: [{ delta: { role: 'assistant' }, index: 0 }],
@@ -900,7 +884,7 @@ describe('OpenAIModel', () => {
   })
 
   describe('API request formatting', () => {
-    it('formats API request correctly with all options (Issue #14)', async () => {
+    it('formats API request correctly with all options', async () => {
       let capturedRequest: any = null
       let callCount = 0
 
@@ -971,7 +955,7 @@ describe('OpenAIModel', () => {
   })
 
   describe('error handling', () => {
-    it('throws ContextWindowOverflowError for structured error with code (Issue #10)', async () => {
+    it('throws ContextWindowOverflowError for structured error with code', async () => {
       const mockClient = {
         chat: {
           completions: {
@@ -994,7 +978,7 @@ describe('OpenAIModel', () => {
       }).rejects.toThrow(ContextWindowOverflowError)
     })
 
-    it('throws ContextWindowOverflowError for error with message pattern (Issue #10)', async () => {
+    it('throws ContextWindowOverflowError for error with message pattern', async () => {
       const mockClient = {
         chat: {
           completions: {
@@ -1015,7 +999,7 @@ describe('OpenAIModel', () => {
       }).rejects.toThrow(ContextWindowOverflowError)
     })
 
-    it('throws ContextWindowOverflowError for APIError instance (Issue #5)', async () => {
+    it('throws ContextWindowOverflowError for APIError instance', async () => {
       const mockClient = {
         chat: {
           completions: {
@@ -1064,7 +1048,7 @@ describe('OpenAIModel', () => {
       }).rejects.toThrow('Invalid API key')
     })
 
-    it('handles stream interruption errors (Issue #12)', async () => {
+    it('handles stream interruption errors', async () => {
       const mockClient = createMockClient(async function* () {
         yield { choices: [{ delta: { role: 'assistant' }, index: 0 }] }
         yield { choices: [{ delta: { content: 'Hello' }, index: 0 }] }
