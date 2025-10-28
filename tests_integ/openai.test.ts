@@ -200,7 +200,9 @@ describe.skipIf(!hasApiKey)('OpenAIModel Integration Tests', () => {
       // Extract tool use information
       const toolUseStartEvent = events1.find(
         (e) => e.type === 'modelContentBlockStartEvent' && e.start?.type === 'toolUseStart'
-      ) as { type: 'modelContentBlockStartEvent'; start?: { type: 'toolUseStart'; toolUseId: string; name: string } } | undefined
+      ) as
+        | { type: 'modelContentBlockStartEvent'; start?: { type: 'toolUseStart'; toolUseId: string; name: string } }
+        | undefined
       expect(toolUseStartEvent).toBeDefined()
 
       const toolUseId = toolUseStartEvent?.start?.toolUseId

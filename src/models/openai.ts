@@ -27,6 +27,28 @@ const OPENAI_CONTEXT_WINDOW_OVERFLOW_PATTERNS = [
 ]
 
 /**
+ * Type representing an OpenAI streaming chat choice.
+ * Used for type-safe handling of streaming responses.
+ */
+type OpenAIChatChoice = {
+  delta?: {
+    role?: string
+    content?: string
+    tool_calls?: Array<{
+      index: number
+      id?: string
+      type?: string
+      function?: {
+        name?: string
+        arguments?: string
+      }
+    }>
+  }
+  finish_reason?: string
+  index: number
+}
+
+/**
  * Configuration interface for OpenAI model provider.
  *
  * Extends BaseModelConfig with OpenAI-specific configuration options
@@ -385,7 +407,7 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
     }
 
     // Add formatted messages
-    const formattedMessages = this._formatMessages(messages) as OpenAI.Chat.Completions.ChatCompletionMessageParam[]
+    const formattedMessages = this._formatMessages(messages)
     request.messages.push(...formattedMessages)
 
     // Add model configuration parameters
@@ -441,6 +463,11 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
       Object.assign(request, this._config.params)
     }
 
+    // Validate n parameter (number of completions) - only n=1 supported for streaming
+    if ('n' in request && request.n !== undefined && request.n !== null && request.n > 1) {
+      throw new Error('Streaming with n > 1 is not supported')
+    }
+
     return request
   }
 
@@ -451,8 +478,8 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
    * @param messages - SDK messages
    * @returns OpenAI-formatted messages
    */
-  private _formatMessages(messages: Message[]): unknown[] {
-    const openAIMessages: unknown[] = []
+  private _formatMessages(messages: Message[]): OpenAI.Chat.Completions.ChatCompletionMessageParam[] {
+    const openAIMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = []
 
     for (const message of messages) {
       if (message.role === 'user') {
@@ -485,10 +512,11 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
         }
 
         // Add each tool result as separate tool message
+        // OpenAI only supports text content in tool result messages, not JSON
         for (const toolResult of toolResults) {
           if (toolResult.type === 'toolResultBlock') {
-            // Format tool result content
-            // Handle JSON serialization with context and consistent error handling
+            // Format tool result content - convert all to text string
+            // Note: OpenAI tool messages only accept string content (not structured JSON)
             const contentText = toolResult.content
               .map((c) => {
                 if (c.type === 'toolResultTextContent') {
@@ -529,7 +557,7 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
         }
       } else {
         // Handle assistant messages
-        const toolUseCalls: unknown[] = []
+        const toolUseCalls: OpenAI.Chat.Completions.ChatCompletionMessageToolCall[] = []
         // Use array + join pattern for efficient string concatenation
         const textParts: string[] = []
 
@@ -560,7 +588,7 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
         // Trim text content to avoid whitespace-only messages
         const textContent = textParts.join('').trim()
 
-        const assistantMessage: { role: string; content: string; tool_calls?: unknown[] } = {
+        const assistantMessage: OpenAI.Chat.Completions.ChatCompletionAssistantMessageParam = {
           role: 'assistant',
           content: textContent,
         }
@@ -628,23 +656,7 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
     }
 
     // Process first choice (OpenAI typically returns one choice in streaming)
-    const typedChoice = choice as {
-      delta?: {
-        role?: string
-        content?: string
-        tool_calls?: Array<{
-          index: number
-          id?: string
-          type?: string
-          function?: {
-            name?: string
-            arguments?: string
-          }
-        }>
-      }
-      finish_reason?: string
-      index: number
-    }
+    const typedChoice = choice as OpenAIChatChoice
 
     if (!typedChoice.delta && !typedChoice.finish_reason) {
       return events
