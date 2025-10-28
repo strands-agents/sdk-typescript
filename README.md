@@ -81,13 +81,115 @@ This TypeScript SDK is being developed with the following features (see [project
 
 - ✅ **Project Structure**: TypeScript configuration, testing framework, development infrastructure
 - 🚧 **Model Providers**: Amazon Bedrock, OpenAI, and custom provider support
-- 🚧 **Tool System**: Tool execution, registry, and decorator-based definitions
+- ✅ **Tool System**: Tool execution, registry, and decorator-based definitions
 - 🚧 **Agent Interface**: Core agent class with `invoke` and `stream` methods
 - 🚧 **Event Loop**: Async iterator-based agent loop for orchestration
 - 🚧 **Conversation Manager**: Context window overflow handling
 - 🚧 **Hooks System**: Lifecycle event extensibility
 - 🚧 **Telemetry**: OpenTelemetry-based observability
 - 🚧 **Metrics**: Usage tracking and reporting
+
+## Tool System
+
+The SDK includes a flexible tool system for managing and executing tools that agents can use to interact with their environment.
+
+### ToolRegistry
+
+The `ToolRegistry` class provides CRUDL (Create, Read, Update, Delete, List) operations for managing tool instances:
+
+```typescript
+import { ToolRegistry, FunctionTool } from '@strands-agents/sdk'
+
+// Create a registry
+const registry = new ToolRegistry()
+
+// Create some tools
+const calculator = new FunctionTool({
+  name: 'calculator',
+  description: 'Performs basic arithmetic operations',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      operation: { type: 'string' },
+      a: { type: 'number' },
+      b: { type: 'number' }
+    },
+    required: ['operation', 'a', 'b']
+  },
+  callback: (input: unknown) => {
+    const { operation, a, b } = input as any
+    switch (operation) {
+      case 'add': return a + b
+      case 'subtract': return a - b
+      case 'multiply': return a * b
+      case 'divide': return a / b
+      default: throw new Error(`Unknown operation: ${operation}`)
+    }
+  }
+})
+
+// Register tools (single or multiple)
+registry.register(calculator)
+registry.register([tool1, tool2, tool3])
+
+// Retrieve a tool
+const tool = registry.get('calculator')
+
+// Update a tool
+registry.update('calculator', updatedCalculator)
+
+// List all tools
+const allTools = registry.list()
+
+// Remove a tool
+registry.remove('calculator')
+```
+
+### FunctionTool
+
+The `FunctionTool` class wraps callback functions and handles all ToolResult conversion automatically:
+
+```typescript
+import { FunctionTool } from '@strands-agents/sdk'
+
+// Synchronous tool
+const greeter = new FunctionTool({
+  name: 'greeter',
+  description: 'Greets a person by name',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      name: { type: 'string' }
+    },
+    required: ['name']
+  },
+  callback: (input: unknown) => {
+    const { name } = input as any
+    return `Hello, ${name}!`
+  }
+})
+
+// Async tool with streaming
+const processor = new FunctionTool({
+  name: 'processor',
+  description: 'Processes data with progress updates',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      data: { type: 'string' }
+    },
+    required: ['data']
+  },
+  callback: async function* (input: unknown) {
+    const { data } = input as any
+    yield 'Starting processing...'
+    // Do some work
+    yield 'Halfway done...'
+    // More work
+    return `Processed: ${data.toUpperCase()}`
+  }
+})
+```
 
 ## Documentation
 

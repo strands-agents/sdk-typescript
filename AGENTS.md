@@ -29,6 +29,12 @@ sdk-typescript/
 │   │   └── streaming.ts          # Streaming event types
 │   │
 │   ├── tools/                    # Tool definitions and types
+│   │   ├── __tests__/            # Unit tests for tools
+│   │   │   ├── registry.test.ts  # Tests for ToolRegistry
+│   │   │   └── tool.test.ts      # Tests for FunctionTool
+│   │   ├── function-tool.ts      # FunctionTool implementation
+│   │   ├── registry.ts           # ToolRegistry implementation
+│   │   ├── tool.ts               # Tool interface
 │   │   └── types.ts              # Tool-related type definitions
 │   │
 │   ├── types/                    # Core type definitions
@@ -39,7 +45,8 @@ sdk-typescript/
 │   └── index.ts                  # Main SDK entry point (single export point)
 │
 ├── tests_integ/                  # Integration tests (separate from source)
-│   └── bedrock.test.ts           # Bedrock integration tests (requires AWS credentials)
+│   ├── bedrock.test.ts           # Bedrock integration tests (requires AWS credentials)
+│   └── registry.test.ts          # ToolRegistry integration tests
 │
 ├── .github/                      # GitHub Actions workflows
 │   ├── workflows/                # CI/CD workflows
@@ -603,6 +610,111 @@ describe('BedrockModel', () => {
     }
   })
 })
+```
+
+**Example Implementation Test:**
+```typescript
+describe('BedrockModel', () => {
+  it('streams messages correctly', async () => {
+    const provider = new BedrockModel(config)
+    const stream = provider.stream(messages)
+
+    for await (const event of stream) {
+      if (event.type === 'modelMessageStartEvent') {
+        expect(event.role).toBe('assistant')
+      }
+    }
+  })
+})
+```
+
+## ToolRegistry Patterns
+
+The `ToolRegistry` class provides CRUDL operations for managing Tool instances. Follow these patterns when working with the registry:
+
+### Basic Usage
+
+```typescript
+import { ToolRegistry, FunctionTool } from '@strands-agents/sdk'
+
+// Create a registry instance
+const registry = new ToolRegistry()
+
+// Register single tool
+const calculator = new FunctionTool({ ... })
+registry.register(calculator)
+
+// Register multiple tools at once
+registry.register([tool1, tool2, tool3])
+
+// Retrieve a tool by name
+const tool = registry.get('calculator')
+
+// Update an existing tool
+registry.update('calculator', updatedCalculator)
+
+// List all registered tools
+const allTools = registry.list()
+
+// Remove a tool
+registry.remove('calculator')
+```
+
+### Key Implementation Details
+
+- **Storage**: Uses `Map<string, Tool>` internally for O(1) operations
+- **Validation**: Only validates tool name (non-empty string) and checks for duplicates
+- **No Internal Validation**: Does NOT validate tool internal consistency (trusts Tool instances)
+- **Immutability**: `list()` returns a copy to prevent external mutation
+- **Multiple Instances**: Supports multiple independent registry instances
+
+### Error Handling
+
+The registry throws descriptive errors for common issues:
+
+```typescript
+// Duplicate registration
+registry.register(tool)
+registry.register(tool) // Throws: "Tool with name 'X' already registered"
+
+// Tool not found
+registry.get('nonexistent') // Throws: "Tool with name 'X' not found"
+registry.update('nonexistent', tool) // Throws: "Tool with name 'X' not found"
+registry.remove('nonexistent') // Throws: "Tool with name 'X' not found"
+
+// Name mismatch on update
+registry.update('oldName', toolWithDifferentName) 
+// Throws: "Tool name 'Y' does not match parameter name 'X'"
+
+// Empty name
+registry.register(toolWithEmptyName)
+// Throws: "Tool name must be a non-empty string"
+```
+
+### Testing Patterns
+
+When testing with ToolRegistry:
+
+```typescript
+// Create inline registries for test isolation
+it('performs CRUDL operations', () => {
+  const registry = new ToolRegistry()  // Fresh instance per test
+  // ... test code
+})
+
+// Use FunctionTool for integration tests
+const realTool = new FunctionTool({
+  name: 'test',
+  description: 'Test tool',
+  inputSchema: { type: 'object' },
+  callback: () => 'result'
+})
+registry.register(realTool)
+
+// Verify list() returns a copy
+const tools = registry.list()
+tools.pop() // Mutate the array
+expect(registry.list()).toHaveLength(originalCount) // Registry unchanged
 ```
 
 ## Things to Do

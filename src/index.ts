@@ -44,6 +44,9 @@ export type { Tool, ToolContext, ToolStreamEvent, ToolStreamGenerator } from './
 // FunctionTool implementation
 export { FunctionTool } from './tools/function-tool'
 
+// ToolRegistry implementation
+export { ToolRegistry } from './tools/registry'
+
 // Streaming event types
 export type {
   Usage,
