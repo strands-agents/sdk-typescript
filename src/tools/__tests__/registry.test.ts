@@ -60,7 +60,7 @@ describe('ToolRegistry', () => {
         registry.register(tool)
 
         const retrieved = registry.get('calculator')
-        expect(retrieved.toolName).toBe('calculator')
+        expect(retrieved?.toolName).toBe('calculator')
       })
     })
 
@@ -127,84 +127,19 @@ describe('ToolRegistry', () => {
     })
 
     describe('when tool does not exist', () => {
-      it('throws an error with descriptive message', () => {
+      it('returns undefined', () => {
         const registry = new ToolRegistry()
-        expect(() => registry.get('nonExistentTool')).toThrow("Tool with name 'nonExistentTool' not found")
+        expect(registry.get('nonExistentTool')).toBeUndefined()
       })
     })
 
     describe('when registry is empty', () => {
-      it('throws an error with descriptive message', () => {
+      it('returns undefined', () => {
         const registry = new ToolRegistry()
-        expect(() => registry.get('anyTool')).toThrow("Tool with name 'anyTool' not found")
+        expect(registry.get('anyTool')).toBeUndefined()
       })
     })
   })
-
-  describe('update', () => {
-    describe('when updating an existing tool', () => {
-      it('replaces the tool in the registry', () => {
-        const registry = new ToolRegistry()
-        const originalTool = createMockTool('updateableTool', 'Original description')
-        const updatedTool = createMockTool('updateableTool', 'Updated description')
-
-        registry.register(originalTool)
-        registry.update('updateableTool', updatedTool)
-
-        const retrieved = registry.get('updateableTool')
-        expect(retrieved).toBe(updatedTool)
-        expect(retrieved.description).toBe('Updated description')
-      })
-
-      it('get() returns the updated tool', () => {
-        const registry = new ToolRegistry()
-        const tool1 = createMockTool('myTool', 'Version 1')
-        const tool2 = createMockTool('myTool', 'Version 2')
-
-        registry.register(tool1)
-        expect(registry.get('myTool').description).toBe('Version 1')
-
-        registry.update('myTool', tool2)
-        expect(registry.get('myTool').description).toBe('Version 2')
-      })
-    })
-
-    describe('when tool does not exist', () => {
-      it('throws an error with descriptive message', () => {
-        const registry = new ToolRegistry()
-        const tool = createMockTool('nonExistent')
-
-        expect(() => registry.update('nonExistent', tool)).toThrow("Tool with name 'nonExistent' not found")
-      })
-    })
-
-    describe('when new tool name does not match parameter', () => {
-      it('throws an error with descriptive message', () => {
-        const registry = new ToolRegistry()
-        const originalTool = createMockTool('originalName')
-        const newTool = createMockTool('differentName')
-
-        registry.register(originalTool)
-
-        expect(() => registry.update('originalName', newTool)).toThrow(
-          "Tool name 'differentName' does not match parameter name 'originalName'"
-        )
-      })
-    })
-
-    describe('when new tool has empty name', () => {
-      it('throws an error with descriptive message', () => {
-        const registry = new ToolRegistry()
-        const originalTool = createMockTool('validName')
-        const emptyNameTool = createMockTool('')
-
-        registry.register(originalTool)
-
-        expect(() => registry.update('validName', emptyNameTool)).toThrow('Tool name must be a non-empty string')
-      })
-    })
-  })
-
   describe('remove', () => {
     describe('when removing an existing tool', () => {
       it('removes the tool from registry', () => {
@@ -217,14 +152,14 @@ describe('ToolRegistry', () => {
         expect(registry.list()).toEqual([])
       })
 
-      it('get() throws error after removal', () => {
+      it('get() returns undefined after removal', () => {
         const registry = new ToolRegistry()
         const tool = createMockTool('temporaryTool')
         registry.register(tool)
 
         registry.remove('temporaryTool')
 
-        expect(() => registry.get('temporaryTool')).toThrow("Tool with name 'temporaryTool' not found")
+        expect(registry.get('temporaryTool')).toBeUndefined()
       })
     })
 
