@@ -3,19 +3,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import OpenAI from 'openai'
 import { OpenAIModel } from '../openai'
 import { ContextWindowOverflowError } from '../../errors'
+import { collectEvents } from './test-utils'
 import type { Message } from '../../types/messages'
-import type { ModelStreamEvent } from '../streaming'
-
-/**
- * Helper function to collect all events from a stream.
- */
-async function collectEvents(stream: AsyncIterable<ModelStreamEvent>): Promise<ModelStreamEvent[]> {
-  const events: ModelStreamEvent[] = []
-  for await (const event of stream) {
-    events.push(event)
-  }
-  return events
-}
 
 /**
  * Helper to create a mock OpenAI client with streaming support

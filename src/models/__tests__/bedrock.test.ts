@@ -2,20 +2,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { BedrockRuntimeClient } from '@aws-sdk/client-bedrock-runtime'
 import { BedrockModel } from '../bedrock'
 import { ContextWindowOverflowError } from '../../errors'
+import { collectEvents } from './test-utils'
 import type { Message } from '../../types/messages'
 import type { StreamOptions } from '../model'
-import type { ModelStreamEvent } from '../streaming'
-
-/**
- * Helper function to collect all events from a stream.
- */
-async function collectEvents(stream: AsyncIterable<ModelStreamEvent>): Promise<ModelStreamEvent[]> {
-  const events: ModelStreamEvent[] = []
-  for await (const event of stream) {
-    events.push(event)
-  }
-  return events
-}
 
 /**
  * Helper function to setup mock send with custom stream generator.
