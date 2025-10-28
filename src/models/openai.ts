@@ -7,7 +7,7 @@
  * @see https://platform.openai.com/docs/api-reference/chat/create
  */
 
-import OpenAI, { type ClientOptions } from 'openai'
+import OpenAI, { type ClientOptions, APIError } from 'openai'
 import type { Model, BaseModelConfig, StreamOptions } from '../models/model'
 import type { Message } from '../types/messages'
 import type { ModelStreamEvent } from '../models/streaming'
@@ -276,19 +276,33 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
       // Create streaming request with usage tracking
       const stream = await this._client.chat.completions.create(request)
 
-      // Track message start state
-      let messageStarted = false
+      // Track streaming state (Issue #1: Use mutable object for proper state tracking)
+      const streamState = {
+        messageStarted: false,
+        textContentBlockStarted: false,
+      }
 
       // Track active tool calls for stop events (Issue #7, #8)
       const activeToolCalls = new Map<number, boolean>()
+
+      // Buffer usage to emit before message stop (Issue #10)
+      let bufferedUsage: {
+        type: 'modelMetadataEvent'
+        usage: {
+          inputTokens: number
+          outputTokens: number
+          totalTokens: number
+        }
+      } | null = null
 
       // Process streaming response
       for await (const chunk of stream) {
         if (!chunk.choices || chunk.choices.length === 0) {
           // Handle usage chunk (no choices)
           // Issue #11: Add null checks for usage properties
+          // Issue #10: Buffer usage to emit before message stop
           if (chunk.usage) {
-            yield {
+            bufferedUsage = {
               type: 'modelMetadataEvent',
               usage: {
                 inputTokens: chunk.usage.prompt_tokens ?? 0,
@@ -301,38 +315,51 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
         }
 
         // Map chunk to SDK events
-        const events = this._mapOpenAIChunkToSDKEvents(chunk, messageStarted, activeToolCalls)
+        const events = this._mapOpenAIChunkToSDKEvents(chunk, streamState, activeToolCalls)
         for (const event of events) {
-          if (event.type === 'modelMessageStartEvent') {
-            // Issue #6: Prevent duplicate message start events
-            if (messageStarted) {
-              console.warn('Received multiple message start events from OpenAI')
-              continue
-            }
-            messageStarted = true
+          // Issue #10: Emit buffered usage before message stop
+          if (event.type === 'modelMessageStopEvent' && bufferedUsage) {
+            yield bufferedUsage
+            bufferedUsage = null
           }
+
           yield event
         }
       }
-    } catch (error) {
-      // Issue #10: Check for context window overflow using structured error codes
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const err = error as any
 
-      // Check OpenAI's structured error first
-      if (err.code === 'context_length_exceeded' || err.error?.code === 'context_length_exceeded') {
-        const errorMessage = err.message || err.error?.message || 'Context length exceeded'
-        throw new ContextWindowOverflowError(errorMessage)
+      // Emit any remaining buffered usage (Issue #10)
+      if (bufferedUsage) {
+        yield bufferedUsage
+      }
+    } catch (error) {
+      // Issue #5: Check for context window overflow using proper error type checking
+      if (error instanceof APIError) {
+        // Check for context length exceeded by error code and status
+        if (
+          error.code === 'context_length_exceeded' ||
+          (error.status === 400 && error.message?.toLowerCase().includes('context length'))
+        ) {
+          throw new ContextWindowOverflowError(error.message || 'Context length exceeded')
+        }
       }
 
-      // Fallback: Check error message patterns
-      const errorMessage = (err.message || '').toLowerCase()
-      if (
-        errorMessage.includes('maximum context length') ||
-        errorMessage.includes('context_length_exceeded') ||
-        errorMessage.includes('too many tokens')
-      ) {
-        throw new ContextWindowOverflowError(err.message)
+      // Fallback: Check error properties for duck-typed APIError or regular errors
+      if (error && typeof error === 'object' && 'code' in error && error.code === 'context_length_exceeded') {
+        const message =
+          'message' in error && typeof error.message === 'string' ? error.message : 'Context length exceeded'
+        throw new ContextWindowOverflowError(message)
+      }
+
+      // Fallback: Check error message patterns for non-APIError cases
+      if (error instanceof Error) {
+        const errorMessage = error.message.toLowerCase()
+        if (
+          errorMessage.includes('maximum context length') ||
+          errorMessage.includes('context_length_exceeded') ||
+          errorMessage.includes('too many tokens')
+        ) {
+          throw new ContextWindowOverflowError(error.message)
+        }
       }
 
       // Re-throw other errors unchanged
@@ -360,11 +387,12 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
     }
 
     // Issue #13: Add system prompt validation
+    // Issue #17: Remove redundant type assertion
     if (options?.systemPrompt && options.systemPrompt.trim().length > 0) {
       request.messages.push({
         role: 'system',
         content: options.systemPrompt,
-      } as OpenAI.Chat.Completions.ChatCompletionMessageParam)
+      })
     }
 
     // Add formatted messages
@@ -482,28 +510,27 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
         for (const toolResult of toolResults) {
           if (toolResult.type === 'toolResultBlock') {
             // Format tool result content
-            // Issue #14: Wrap JSON.stringify in try-catch
-            let contentText = ''
-            try {
-              contentText = toolResult.content
-                .map((c) => {
-                  if (c.type === 'toolResultTextContent') {
-                    return c.text
-                  } else if (c.type === 'toolResultJsonContent') {
-                    try {
-                      return JSON.stringify(c.json)
-                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    } catch (error: any) {
-                      return `[JSON Serialization Error: ${error.message}]`
-                    }
+            // Issue #14, #15, #19: Handle JSON serialization with context and consistent error handling
+            const contentText = toolResult.content
+              .map((c) => {
+                if (c.type === 'toolResultTextContent') {
+                  return c.text
+                } else if (c.type === 'toolResultJsonContent') {
+                  try {
+                    return JSON.stringify(c.json)
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  } catch (error: any) {
+                    // Issue #15: Include data type information in error message
+                    const dataPreview =
+                      typeof c.json === 'object' && c.json !== null
+                        ? `object with keys: ${Object.keys(c.json).slice(0, 5).join(', ')}`
+                        : typeof c.json
+                    return `[JSON Serialization Error: ${error.message}. Data type: ${dataPreview}]`
                   }
-                  return ''
-                })
-                .join('')
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            } catch (error: any) {
-              throw new Error(`Failed to format tool result for toolUseId "${toolResult.toolUseId}": ${error.message}`)
-            }
+                }
+                return ''
+              })
+              .join('')
 
             // Issue #4: Validate content is not empty
             if (!contentText || contentText.trim().length === 0) {
@@ -514,25 +541,24 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
             }
 
             // Issue #5: Prepend error indicator if status is error
-            if (toolResult.status === 'error') {
-              contentText = `[ERROR] ${contentText}`
-            }
+            const finalContent = toolResult.status === 'error' ? `[ERROR] ${contentText}` : contentText
 
             openAIMessages.push({
               role: 'tool',
               tool_call_id: toolResult.toolUseId,
-              content: contentText,
+              content: finalContent,
             })
           }
         }
       } else {
         // Handle assistant messages
         const toolUseCalls: unknown[] = []
-        let textContent = ''
+        // Issue #21: Use array + join pattern for efficient string concatenation
+        const textParts: string[] = []
 
         for (const block of message.content) {
           if (block.type === 'textBlock') {
-            textContent += block.text
+            textParts.push(block.text)
           } else if (block.type === 'toolUseBlock') {
             // Issue #14: Wrap JSON.stringify in try-catch
             try {
@@ -555,6 +581,9 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
           }
         }
 
+        // Issue #11: Trim text content to avoid whitespace-only messages
+        const textContent = textParts.join('').trim()
+
         const assistantMessage: { role: string; content: string; tool_calls?: unknown[] } = {
           role: 'assistant',
           content: textContent,
@@ -564,8 +593,8 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
           assistantMessage.tool_calls = toolUseCalls
         }
 
-        // Issue #3: Only add if message has content or tool calls
-        if (textContent.trim().length > 0 || toolUseCalls.length > 0) {
+        // Issue #3, #11: Only add if message has content or tool calls
+        if (textContent.length > 0 || toolUseCalls.length > 0) {
           openAIMessages.push(assistantMessage)
         } else {
           throw new Error('Assistant message must have either text content or tool calls')
@@ -578,9 +607,16 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
 
   /**
    * Converts a snake_case string to camelCase.
+   * Used for mapping OpenAI stop reasons to SDK format.
    *
-   * @param str - Snake case string
-   * @returns Camel case string
+   * @param str - Snake case string (e.g., 'content_filter')
+   * @returns Camel case string (e.g., 'contentFilter')
+   *
+   * @example
+   * ```typescript
+   * _snakeToCamel('context_length_exceeded') // => 'contextLengthExceeded'
+   * _snakeToCamel('tool_calls') // => 'toolCalls'
+   * ```
    */
   private _snakeToCamel(str: string): string {
     return str.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase())
@@ -590,19 +626,35 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
    * Maps an OpenAI chunk to SDK streaming events.
    *
    * @param chunk - OpenAI chunk
-   * @param messageStarted - Whether message start event has been emitted
+   * @param streamState - Mutable state object tracking message and content block state
    * @param activeToolCalls - Map tracking active tool calls by index
    * @returns Array of SDK streaming events
    */
   private _mapOpenAIChunkToSDKEvents(
     chunk: { choices: unknown[] },
-    messageStarted: boolean,
+    streamState: { messageStarted: boolean; textContentBlockStarted: boolean },
     activeToolCalls: Map<number, boolean>
   ): ModelStreamEvent[] {
     const events: ModelStreamEvent[] = []
 
+    // Issue #18: Use named constant for text content block index
+    const TEXT_CONTENT_BLOCK_INDEX = 0
+
+    // Issue #6: Validate choices array has at least one element
+    if (!chunk.choices || chunk.choices.length === 0) {
+      return events
+    }
+
+    const choice = chunk.choices[0]
+
+    // Issue #6: Validate choice is an object
+    if (!choice || typeof choice !== 'object') {
+      console.warn('Invalid choice format in OpenAI chunk:', choice)
+      return events
+    }
+
     // Process first choice (OpenAI typically returns one choice in streaming)
-    const choice = chunk.choices[0] as {
+    const typedChoice = choice as {
       delta?: {
         role?: string
         content?: string
@@ -620,24 +672,36 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
       index: number
     }
 
-    if (!choice.delta && !choice.finish_reason) {
+    if (!typedChoice.delta && !typedChoice.finish_reason) {
       return events
     }
 
-    const delta = choice.delta
+    const delta = typedChoice.delta
 
-    // Handle message start (role appears)
-    if (delta?.role && !messageStarted) {
+    // Issue #1: Handle message start (role appears) - update mutable state
+    if (delta?.role && !streamState.messageStarted) {
+      streamState.messageStarted = true
       events.push({
         type: 'modelMessageStartEvent',
         role: delta.role as 'user' | 'assistant',
       })
     }
 
-    // Issue #17: Handle text content delta (check for non-empty)
+    // Issue #2, #3: Handle text content delta with contentBlockIndex and start event
     if (delta?.content && delta.content.length > 0) {
+      // Issue #3: Emit start event on first text delta
+      if (!streamState.textContentBlockStarted) {
+        streamState.textContentBlockStarted = true
+        events.push({
+          type: 'modelContentBlockStartEvent',
+          contentBlockIndex: TEXT_CONTENT_BLOCK_INDEX,
+        })
+      }
+
+      // Issue #2: Include contentBlockIndex for text deltas
       events.push({
         type: 'modelContentBlockDeltaEvent',
+        contentBlockIndex: TEXT_CONTENT_BLOCK_INDEX,
         delta: {
           type: 'textDelta',
           text: delta.content,
@@ -651,6 +715,12 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
         // Issue #9: Validate tool call index
         if (toolCall.index === undefined || typeof toolCall.index !== 'number') {
           console.warn('Received tool call with invalid index:', toolCall)
+          continue
+        }
+
+        // Issue #9: Validate index is non-negative and reasonable
+        if (toolCall.index < 0 || toolCall.index > 100) {
+          console.warn(`Received tool call with out-of-range index: ${toolCall.index}`, toolCall)
           continue
         }
 
@@ -684,15 +754,24 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
     }
 
     // Handle finish reason (message stop)
-    if (choice.finish_reason) {
-      // Issue #7: Emit stop events for all active tool calls before message stop
+    if (typedChoice.finish_reason) {
+      // Issue #4: Emit stop event for text content if it was started
+      if (streamState.textContentBlockStarted) {
+        events.push({
+          type: 'modelContentBlockStopEvent',
+          contentBlockIndex: TEXT_CONTENT_BLOCK_INDEX,
+        })
+        streamState.textContentBlockStarted = false
+      }
+
+      // Issue #7, #22: Emit stop events for all active tool calls and delete during iteration
       for (const [index] of activeToolCalls) {
         events.push({
           type: 'modelContentBlockStopEvent',
           contentBlockIndex: index,
         })
+        activeToolCalls.delete(index)
       }
-      activeToolCalls.clear()
 
       // Map OpenAI stop reason to SDK stop reason
       const stopReasonMap: Record<string, string> = {
@@ -702,7 +781,17 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
         content_filter: 'contentFiltered',
       }
 
-      const stopReason = stopReasonMap[choice.finish_reason] || this._snakeToCamel(choice.finish_reason)
+      // Issue #13: Log unknown stop reasons
+      let stopReason = stopReasonMap[typedChoice.finish_reason]
+      if (!stopReason) {
+        const fallbackReason = this._snakeToCamel(typedChoice.finish_reason)
+        console.warn(
+          `Unknown OpenAI stop reason: "${typedChoice.finish_reason}". ` +
+            `Using camelCase conversion as fallback: "${fallbackReason}". ` +
+            'Please report this to update the stop reason mapping.'
+        )
+        stopReason = fallbackReason
+      }
 
       events.push({
         type: 'modelMessageStopEvent',

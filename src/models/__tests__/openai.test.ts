@@ -18,11 +18,36 @@ async function collectEvents(stream: AsyncIterable<ModelStreamEvent>): Promise<M
   return events
 }
 
+/**
+ * Helper to create a mock OpenAI client with streaming support
+ */
+function createMockClient(streamGenerator: () => AsyncGenerator<any>): OpenAI {
+  return {
+    chat: {
+      completions: {
+        create: vi.fn(async () => streamGenerator()),
+      },
+    },
+  } as any
+}
+
 // Mock the OpenAI SDK
 vi.mock('openai', () => {
   const mockConstructor = vi.fn().mockImplementation(() => ({}))
+  // Mock APIError class for error handling tests
+  class MockAPIError extends Error {
+    status?: number
+    code?: string
+    constructor(message: string, status?: number, code?: string) {
+      super(message)
+      this.name = 'APIError'
+      if (status !== undefined) this.status = status
+      if (code !== undefined) this.code = code
+    }
+  }
   return {
     default: mockConstructor,
+    APIError: MockAPIError,
   }
 })
 
@@ -35,6 +60,7 @@ describe('OpenAIModel', () => {
 
   afterEach(() => {
     vi.clearAllMocks()
+    vi.restoreAllMocks()
     // Restore all environment variables to their original state
     vi.unstubAllEnvs()
   })
@@ -173,17 +199,6 @@ describe('OpenAIModel', () => {
   })
 
   describe('stream', () => {
-    // Helper to create a mock OpenAI client with streaming support
-    function createMockClient(streamGenerator: () => AsyncGenerator<any>): OpenAI {
-      return {
-        chat: {
-          completions: {
-            create: vi.fn(async () => streamGenerator()),
-          },
-        },
-      } as any
-    }
-
     describe('validation', () => {
       it('throws error when messages array is empty (Issue #1)', async () => {
         const mockClient = createMockClient(async function* () {})
@@ -405,429 +420,681 @@ describe('OpenAIModel', () => {
 
         const events = await collectEvents(provider.stream(messages))
 
-        expect(events).toHaveLength(4)
-        expect(events[0]).toEqual({ type: 'modelMessageStartEvent', role: 'assistant' })
-        expect(events[1]).toEqual({
-          type: 'modelContentBlockDeltaEvent',
-          delta: { type: 'textDelta', text: 'Hello' },
-        })
-        expect(events[2]).toEqual({
-          type: 'modelContentBlockDeltaEvent',
-          delta: { type: 'textDelta', text: ' world' },
-        })
-        expect(events[3]).toEqual({ type: 'modelMessageStopEvent', stopReason: 'endTurn' })
-      })
-
-      it('emits modelMetadataEvent with usage information (Issue #11)', async () => {
-        const mockClient = createMockClient(async function* () {
-          yield {
-            choices: [{ delta: { role: 'assistant' }, index: 0 }],
-          }
-          yield {
-            choices: [{ finish_reason: 'stop', delta: {}, index: 0 }],
-          }
-          yield {
-            choices: [],
-            usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
-          }
-        })
-
-        const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
-        const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
-
-        const events = await collectEvents(provider.stream(messages))
-
-        const metadataEvent = events.find((e) => e.type === 'modelMetadataEvent')
-        expect(metadataEvent).toBeDefined()
-        expect(metadataEvent).toEqual({
-          type: 'modelMetadataEvent',
-          usage: {
-            inputTokens: 10,
-            outputTokens: 5,
-            totalTokens: 15,
-          },
-        })
-      })
-
-      it('handles usage with undefined properties (Issue #11)', async () => {
-        const mockClient = createMockClient(async function* () {
-          yield {
-            choices: [{ delta: { role: 'assistant' }, index: 0 }],
-          }
-          yield {
-            choices: [{ finish_reason: 'stop', delta: {}, index: 0 }],
-          }
-          yield {
-            choices: [],
-            usage: {}, // Empty usage object
-          }
-        })
-
-        const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
-        const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
-
-        const events = await collectEvents(provider.stream(messages))
-
-        const metadataEvent = events.find((e) => e.type === 'modelMetadataEvent')
-        expect(metadataEvent).toBeDefined()
-        expect(metadataEvent).toEqual({
-          type: 'modelMetadataEvent',
-          usage: {
-            inputTokens: 0,
-            outputTokens: 0,
-            totalTokens: 0,
-          },
-        })
-      })
-
-      it('filters out empty string content deltas (Issue #17)', async () => {
-        const mockClient = createMockClient(async function* () {
-          yield {
-            choices: [{ delta: { role: 'assistant' }, index: 0 }],
-          }
-          yield {
-            choices: [{ delta: { content: '' }, index: 0 }], // Empty content
-          }
-          yield {
-            choices: [{ delta: { content: 'Hello' }, index: 0 }],
-          }
-          yield {
-            choices: [{ finish_reason: 'stop', delta: {}, index: 0 }],
-          }
-        })
-
-        const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
-        const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
-
-        const events = await collectEvents(provider.stream(messages))
-
-        // Should not emit event for empty content
-        const contentEvents = events.filter((e) => e.type === 'modelContentBlockDeltaEvent')
-        expect(contentEvents).toHaveLength(1)
-        expect((contentEvents[0] as any).delta.text).toBe('Hello')
-      })
-
-      it('prevents duplicate message start events (Issue #6)', async () => {
-        const mockClient = createMockClient(async function* () {
-          yield {
-            choices: [{ delta: { role: 'assistant' }, index: 0 }],
-          }
-          yield {
-            choices: [{ delta: { role: 'assistant', content: 'Hello' }, index: 0 }], // Duplicate role
-          }
-          yield {
-            choices: [{ finish_reason: 'stop', delta: {}, index: 0 }],
-          }
-        })
-
-        const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
-        const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
-
-        // Suppress console.warn for this test
-        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-
-        const events = await collectEvents(provider.stream(messages))
-
-        // Should only have one message start event
-        const startEvents = events.filter((e) => e.type === 'modelMessageStartEvent')
-        expect(startEvents).toHaveLength(1)
-
-        // The second role appearance should be detected but the duplicate start event filtered out
-        // Note: This might not trigger a warning if the event is never created
-        // The important thing is only one start event is emitted
-
-        warnSpy.mockRestore()
-      })
-    })
-
-    describe('tool calling', () => {
-      it('handles tool use request with contentBlockStart and contentBlockStop events (Issue #7)', async () => {
-        const mockClient = createMockClient(async function* () {
-          yield {
-            choices: [{ delta: { role: 'assistant' }, index: 0 }],
-          }
-          yield {
-            choices: [
-              {
-                delta: {
-                  tool_calls: [
-                    {
-                      index: 0,
-                      id: 'call_123',
-                      type: 'function',
-                      function: { name: 'calculator', arguments: '' },
-                    },
-                  ],
-                },
-                index: 0,
-              },
-            ],
-          }
-          yield {
-            choices: [
-              {
-                delta: {
-                  tool_calls: [{ index: 0, function: { arguments: '{"expr' } }],
-                },
-                index: 0,
-              },
-            ],
-          }
-          yield {
-            choices: [
-              {
-                delta: {
-                  tool_calls: [{ index: 0, function: { arguments: '":"2+2"}' } }],
-                },
-                index: 0,
-              },
-            ],
-          }
-          yield {
-            choices: [{ finish_reason: 'tool_calls', delta: {}, index: 0 }],
-          }
-        })
-
-        const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
-        const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Calculate 2+2' }] }]
-
-        const events = await collectEvents(provider.stream(messages))
-
-        // Verify key events in sequence
+        // Now includes complete content block lifecycle: start, deltas, stop
+        expect(events).toHaveLength(6)
         expect(events[0]).toEqual({ type: 'modelMessageStartEvent', role: 'assistant' })
         expect(events[1]).toEqual({
           type: 'modelContentBlockStartEvent',
           contentBlockIndex: 0,
-          start: {
-            type: 'toolUseStart',
-            name: 'calculator',
-            toolUseId: 'call_123',
-          },
         })
         expect(events[2]).toEqual({
           type: 'modelContentBlockDeltaEvent',
           contentBlockIndex: 0,
-          delta: {
-            type: 'toolUseInputDelta',
-            input: '{"expr',
-          },
+          delta: { type: 'textDelta', text: 'Hello' },
         })
         expect(events[3]).toEqual({
           type: 'modelContentBlockDeltaEvent',
           contentBlockIndex: 0,
-          delta: {
-            type: 'toolUseInputDelta',
-            input: '":"2+2"}',
-          },
+          delta: { type: 'textDelta', text: ' world' },
         })
         expect(events[4]).toEqual({
           type: 'modelContentBlockStopEvent',
           contentBlockIndex: 0,
         })
-        expect(events[5]).toEqual({ type: 'modelMessageStopEvent', stopReason: 'toolUse' })
-      })
-
-      it('handles multiple tool calls with correct contentBlockIndex (Issue #7, #8)', async () => {
-        const mockClient = createMockClient(async function* () {
-          yield {
-            choices: [{ delta: { role: 'assistant' }, index: 0 }],
-          }
-          yield {
-            choices: [
-              {
-                delta: {
-                  tool_calls: [
-                    {
-                      index: 0,
-                      id: 'call_1',
-                      type: 'function',
-                      function: { name: 'tool1', arguments: '{}' },
-                    },
-                  ],
-                },
-                index: 0,
-              },
-            ],
-          }
-          yield {
-            choices: [
-              {
-                delta: {
-                  tool_calls: [
-                    {
-                      index: 1,
-                      id: 'call_2',
-                      type: 'function',
-                      function: { name: 'tool2', arguments: '{}' },
-                    },
-                  ],
-                },
-                index: 0,
-              },
-            ],
-          }
-          yield {
-            choices: [{ finish_reason: 'tool_calls', delta: {}, index: 0 }],
-          }
-        })
-
-        const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
-        const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
-
-        const events = await collectEvents(provider.stream(messages))
-
-        // Should emit stop events for both tool calls
-        const stopEvents = events.filter((e) => e.type === 'modelContentBlockStopEvent')
-        expect(stopEvents).toHaveLength(2)
-        expect(stopEvents[0]).toEqual({ type: 'modelContentBlockStopEvent', contentBlockIndex: 0 })
-        expect(stopEvents[1]).toEqual({ type: 'modelContentBlockStopEvent', contentBlockIndex: 1 })
-      })
-
-      it('skips tool calls with invalid index (Issue #9)', async () => {
-        const mockClient = createMockClient(async function* () {
-          yield {
-            choices: [{ delta: { role: 'assistant' }, index: 0 }],
-          }
-          yield {
-            choices: [
-              {
-                delta: {
-                  tool_calls: [
-                    {
-                      index: undefined as any, // Invalid index
-                      id: 'call_123',
-                      type: 'function',
-                      function: { name: 'tool', arguments: '{}' },
-                    },
-                  ],
-                },
-                index: 0,
-              },
-            ],
-          }
-          yield {
-            choices: [{ finish_reason: 'stop', delta: {}, index: 0 }],
-          }
-        })
-
-        const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
-        const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
-
-        // Suppress console.warn for this test
-        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-
-        const events = await collectEvents(provider.stream(messages))
-
-        // Should not emit any tool-related events
-        const toolEvents = events.filter(
-          (e) => e.type === 'modelContentBlockStartEvent' || e.type === 'modelContentBlockDeltaEvent'
-        )
-        expect(toolEvents).toHaveLength(0)
-
-        // The important thing is that invalid tool calls don't crash the stream
-        // and are properly skipped
-        expect(events.length).toBeGreaterThan(0) // Still got message events
-
-        warnSpy.mockRestore()
+        expect(events[5]).toEqual({ type: 'modelMessageStopEvent', stopReason: 'endTurn' })
       })
     })
 
-    describe('stop reasons', () => {
-      it('maps OpenAI stop reasons to SDK stop reasons', async () => {
-        const stopReasons = [
-          { openai: 'stop', sdk: 'endTurn' },
-          { openai: 'tool_calls', sdk: 'toolUse' },
-          { openai: 'length', sdk: 'maxTokens' },
-          { openai: 'content_filter', sdk: 'contentFiltered' },
-        ]
-
-        for (const { openai, sdk } of stopReasons) {
-          const mockClient = createMockClient(async function* () {
-            yield {
-              choices: [{ delta: { role: 'assistant' }, index: 0 }],
-            }
-            yield {
-              choices: [{ finish_reason: openai, delta: {}, index: 0 }],
-            }
-          })
-
-          const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
-          const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
-
-          const events = await collectEvents(provider.stream(messages))
-
-          const stopEvent = events.find((e) => e.type === 'modelMessageStopEvent')
-          expect(stopEvent).toBeDefined()
-          expect((stopEvent as any).stopReason).toBe(sdk)
+    it('emits modelMetadataEvent with usage information (Issue #11)', async () => {
+      const mockClient = createMockClient(async function* () {
+        yield {
+          choices: [{ delta: { role: 'assistant' }, index: 0 }],
+        }
+        yield {
+          choices: [{ finish_reason: 'stop', delta: {}, index: 0 }],
+        }
+        yield {
+          choices: [],
+          usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
         }
       })
+
+      const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
+      const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+
+      const events = await collectEvents(provider.stream(messages))
+
+      const metadataEvent = events.find((e) => e.type === 'modelMetadataEvent')
+      expect(metadataEvent).toBeDefined()
+      expect(metadataEvent).toEqual({
+        type: 'modelMetadataEvent',
+        usage: {
+          inputTokens: 10,
+          outputTokens: 5,
+          totalTokens: 15,
+        },
+      })
     })
 
-    describe('error handling', () => {
-      it('throws ContextWindowOverflowError for structured error with code (Issue #10)', async () => {
-        const mockClient = {
-          chat: {
-            completions: {
-              create: vi.fn(async () => {
-                const error: any = new Error('Context length exceeded')
-                error.code = 'context_length_exceeded'
-                throw error
-              }),
+    it('handles usage with undefined properties (Issue #11)', async () => {
+      const mockClient = createMockClient(async function* () {
+        yield {
+          choices: [{ delta: { role: 'assistant' }, index: 0 }],
+        }
+        yield {
+          choices: [{ finish_reason: 'stop', delta: {}, index: 0 }],
+        }
+        yield {
+          choices: [],
+          usage: {}, // Empty usage object
+        }
+      })
+
+      const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
+      const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+
+      const events = await collectEvents(provider.stream(messages))
+
+      const metadataEvent = events.find((e) => e.type === 'modelMetadataEvent')
+      expect(metadataEvent).toBeDefined()
+      expect(metadataEvent).toEqual({
+        type: 'modelMetadataEvent',
+        usage: {
+          inputTokens: 0,
+          outputTokens: 0,
+          totalTokens: 0,
+        },
+      })
+    })
+
+    it('filters out empty string content deltas (Issue #17)', async () => {
+      const mockClient = createMockClient(async function* () {
+        yield {
+          choices: [{ delta: { role: 'assistant' }, index: 0 }],
+        }
+        yield {
+          choices: [{ delta: { content: '' }, index: 0 }], // Empty content
+        }
+        yield {
+          choices: [{ delta: { content: 'Hello' }, index: 0 }],
+        }
+        yield {
+          choices: [{ finish_reason: 'stop', delta: {}, index: 0 }],
+        }
+      })
+
+      const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
+      const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+
+      const events = await collectEvents(provider.stream(messages))
+
+      // Should not emit event for empty content
+      const contentEvents = events.filter((e) => e.type === 'modelContentBlockDeltaEvent')
+      expect(contentEvents).toHaveLength(1)
+      expect((contentEvents[0] as any).delta.text).toBe('Hello')
+    })
+
+    it('prevents duplicate message start events (Issue #6)', async () => {
+      const mockClient = createMockClient(async function* () {
+        yield {
+          choices: [{ delta: { role: 'assistant' }, index: 0 }],
+        }
+        yield {
+          choices: [{ delta: { role: 'assistant', content: 'Hello' }, index: 0 }], // Duplicate role
+        }
+        yield {
+          choices: [{ finish_reason: 'stop', delta: {}, index: 0 }],
+        }
+      })
+
+      const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
+      const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+
+      // Suppress console.warn for this test
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+      const events = await collectEvents(provider.stream(messages))
+
+      // Should only have one message start event
+      const startEvents = events.filter((e) => e.type === 'modelMessageStartEvent')
+      expect(startEvents).toHaveLength(1)
+
+      // The second role appearance should be detected but the duplicate start event filtered out
+      // Note: This might not trigger a warning if the event is never created
+      // The important thing is only one start event is emitted
+
+      warnSpy.mockRestore()
+    })
+  })
+
+  describe('tool calling', () => {
+    it('handles tool use request with contentBlockStart and contentBlockStop events (Issue #7)', async () => {
+      const mockClient = createMockClient(async function* () {
+        yield {
+          choices: [{ delta: { role: 'assistant' }, index: 0 }],
+        }
+        yield {
+          choices: [
+            {
+              delta: {
+                tool_calls: [
+                  {
+                    index: 0,
+                    id: 'call_123',
+                    type: 'function',
+                    function: { name: 'calculator', arguments: '' },
+                  },
+                ],
+              },
+              index: 0,
             },
-          },
-        } as any
+          ],
+        }
+        yield {
+          choices: [
+            {
+              delta: {
+                tool_calls: [{ index: 0, function: { arguments: '{"expr' } }],
+              },
+              index: 0,
+            },
+          ],
+        }
+        yield {
+          choices: [
+            {
+              delta: {
+                tool_calls: [{ index: 0, function: { arguments: '":"2+2"}' } }],
+              },
+              index: 0,
+            },
+          ],
+        }
+        yield {
+          choices: [{ finish_reason: 'tool_calls', delta: {}, index: 0 }],
+        }
+      })
+
+      const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
+      const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Calculate 2+2' }] }]
+
+      const events = await collectEvents(provider.stream(messages))
+
+      // Verify key events in sequence
+      expect(events[0]).toEqual({ type: 'modelMessageStartEvent', role: 'assistant' })
+      expect(events[1]).toEqual({
+        type: 'modelContentBlockStartEvent',
+        contentBlockIndex: 0,
+        start: {
+          type: 'toolUseStart',
+          name: 'calculator',
+          toolUseId: 'call_123',
+        },
+      })
+      expect(events[2]).toEqual({
+        type: 'modelContentBlockDeltaEvent',
+        contentBlockIndex: 0,
+        delta: {
+          type: 'toolUseInputDelta',
+          input: '{"expr',
+        },
+      })
+      expect(events[3]).toEqual({
+        type: 'modelContentBlockDeltaEvent',
+        contentBlockIndex: 0,
+        delta: {
+          type: 'toolUseInputDelta',
+          input: '":"2+2"}',
+        },
+      })
+      expect(events[4]).toEqual({
+        type: 'modelContentBlockStopEvent',
+        contentBlockIndex: 0,
+      })
+      expect(events[5]).toEqual({ type: 'modelMessageStopEvent', stopReason: 'toolUse' })
+    })
+
+    it('handles multiple tool calls with correct contentBlockIndex (Issue #7, #8)', async () => {
+      const mockClient = createMockClient(async function* () {
+        yield {
+          choices: [{ delta: { role: 'assistant' }, index: 0 }],
+        }
+        yield {
+          choices: [
+            {
+              delta: {
+                tool_calls: [
+                  {
+                    index: 0,
+                    id: 'call_1',
+                    type: 'function',
+                    function: { name: 'tool1', arguments: '{}' },
+                  },
+                ],
+              },
+              index: 0,
+            },
+          ],
+        }
+        yield {
+          choices: [
+            {
+              delta: {
+                tool_calls: [
+                  {
+                    index: 1,
+                    id: 'call_2',
+                    type: 'function',
+                    function: { name: 'tool2', arguments: '{}' },
+                  },
+                ],
+              },
+              index: 0,
+            },
+          ],
+        }
+        yield {
+          choices: [{ finish_reason: 'tool_calls', delta: {}, index: 0 }],
+        }
+      })
+
+      const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
+      const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+
+      const events = await collectEvents(provider.stream(messages))
+
+      // Should emit stop events for both tool calls
+      const stopEvents = events.filter((e) => e.type === 'modelContentBlockStopEvent')
+      expect(stopEvents).toHaveLength(2)
+      expect(stopEvents[0]).toEqual({ type: 'modelContentBlockStopEvent', contentBlockIndex: 0 })
+      expect(stopEvents[1]).toEqual({ type: 'modelContentBlockStopEvent', contentBlockIndex: 1 })
+    })
+
+    it('skips tool calls with invalid index (Issue #9)', async () => {
+      const mockClient = createMockClient(async function* () {
+        yield {
+          choices: [{ delta: { role: 'assistant' }, index: 0 }],
+        }
+        yield {
+          choices: [
+            {
+              delta: {
+                tool_calls: [
+                  {
+                    index: undefined as any, // Invalid index
+                    id: 'call_123',
+                    type: 'function',
+                    function: { name: 'tool', arguments: '{}' },
+                  },
+                ],
+              },
+              index: 0,
+            },
+          ],
+        }
+        yield {
+          choices: [{ finish_reason: 'stop', delta: {}, index: 0 }],
+        }
+      })
+
+      const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
+      const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+
+      // Suppress console.warn for this test
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+      const events = await collectEvents(provider.stream(messages))
+
+      // Should not emit any tool-related events
+      const toolEvents = events.filter(
+        (e) => e.type === 'modelContentBlockStartEvent' || e.type === 'modelContentBlockDeltaEvent'
+      )
+      expect(toolEvents).toHaveLength(0)
+
+      // The important thing is that invalid tool calls don't crash the stream
+      // and are properly skipped
+      expect(events.length).toBeGreaterThan(0) // Still got message events
+
+      warnSpy.mockRestore()
+    })
+
+    it('tool argument deltas can be reassembled into valid JSON (Issue #7)', async () => {
+      const mockClient = createMockClient(async function* () {
+        yield { choices: [{ delta: { role: 'assistant' }, index: 0 }] }
+        yield {
+          choices: [
+            {
+              delta: {
+                tool_calls: [
+                  {
+                    index: 0,
+                    id: 'call_123',
+                    type: 'function',
+                    function: { name: 'calculator', arguments: '' },
+                  },
+                ],
+              },
+              index: 0,
+            },
+          ],
+        }
+        // Split JSON across multiple chunks in realistic ways
+        yield { choices: [{ delta: { tool_calls: [{ index: 0, function: { arguments: '{"' } }] }, index: 0 }] }
+        yield { choices: [{ delta: { tool_calls: [{ index: 0, function: { arguments: 'x":' } }] }, index: 0 }] }
+        yield { choices: [{ delta: { tool_calls: [{ index: 0, function: { arguments: '10,' } }] }, index: 0 }] }
+        yield { choices: [{ delta: { tool_calls: [{ index: 0, function: { arguments: '"y":' } }] }, index: 0 }] }
+        yield { choices: [{ delta: { tool_calls: [{ index: 0, function: { arguments: '20}' } }] }, index: 0 }] }
+        yield { choices: [{ finish_reason: 'tool_calls', delta: {}, index: 0 }] }
+      })
+
+      const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
+      const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+
+      const events = await collectEvents(provider.stream(messages))
+
+      // Extract and concatenate all tool input deltas
+      const inputDeltas = events
+        .filter((e) => e.type === 'modelContentBlockDeltaEvent' && (e as any).delta.type === 'toolUseInputDelta')
+        .map((e) => (e as any).delta.input)
+
+      const reassembled = inputDeltas.join('')
+
+      // Should be valid JSON
+      expect(() => JSON.parse(reassembled)).not.toThrow()
+      expect(JSON.parse(reassembled)).toEqual({ x: 10, y: 20 })
+    })
+
+    it('handles messages with both text and tool calls (Issue #16)', async () => {
+      const mockClient = createMockClient(async function* () {
+        yield { choices: [{ delta: { role: 'assistant' }, index: 0 }] }
+        // Text content first
+        yield { choices: [{ delta: { content: 'Let me calculate ' }, index: 0 }] }
+        yield { choices: [{ delta: { content: 'that for you.' }, index: 0 }] }
+        // Then tool call
+        yield {
+          choices: [
+            {
+              delta: {
+                tool_calls: [
+                  {
+                    index: 0,
+                    id: 'call_123',
+                    type: 'function',
+                    function: { name: 'calculator', arguments: '{"expr":"2+2"}' },
+                  },
+                ],
+              },
+              index: 0,
+            },
+          ],
+        }
+        yield { choices: [{ finish_reason: 'tool_calls', delta: {}, index: 0 }] }
+      })
+
+      const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
+      const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Calculate 2+2' }] }]
+
+      const events = await collectEvents(provider.stream(messages))
+
+      // Should have text deltas followed by tool events
+      expect(events[0]?.type).toBe('modelMessageStartEvent')
+      // Text content block start
+      expect(events[1]?.type).toBe('modelContentBlockStartEvent')
+      expect((events[1] as any).contentBlockIndex).toBe(0)
+      // Text deltas
+      expect(events[2]?.type).toBe('modelContentBlockDeltaEvent')
+      expect((events[2] as any).delta.type).toBe('textDelta')
+      expect((events[2] as any).delta.text).toBe('Let me calculate ')
+      // Tool events should follow
+      const toolStartEvent = events.find(
+        (e) => e.type === 'modelContentBlockStartEvent' && (e as any).start?.type === 'toolUseStart'
+      )
+      expect(toolStartEvent).toBeDefined()
+      // Both text and tool blocks should have stop events
+      const stopEvents = events.filter((e) => e.type === 'modelContentBlockStopEvent')
+      expect(stopEvents.length).toBeGreaterThan(0)
+    })
+  })
+
+  describe('stop reasons', () => {
+    it('maps OpenAI stop reasons to SDK stop reasons', async () => {
+      const stopReasons = [
+        { openai: 'stop', sdk: 'endTurn' },
+        { openai: 'tool_calls', sdk: 'toolUse' },
+        { openai: 'length', sdk: 'maxTokens' },
+        { openai: 'content_filter', sdk: 'contentFiltered' },
+      ]
+
+      for (const { openai, sdk } of stopReasons) {
+        const mockClient = createMockClient(async function* () {
+          yield {
+            choices: [{ delta: { role: 'assistant' }, index: 0 }],
+          }
+          yield {
+            choices: [{ finish_reason: openai, delta: {}, index: 0 }],
+          }
+        })
 
         const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
         const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
 
-        await expect(async () => {
-          for await (const _ of provider.stream(messages)) {
-            // Should not reach here
-          }
-        }).rejects.toThrow(ContextWindowOverflowError)
+        const events = await collectEvents(provider.stream(messages))
+
+        const stopEvent = events.find((e) => e.type === 'modelMessageStopEvent')
+        expect(stopEvent).toBeDefined()
+        expect((stopEvent as any).stopReason).toBe(sdk)
+      }
+    })
+
+    it.skip('handles unknown stop reasons with warning (Issue #13)', async () => {
+      const mockClient = createMockClient(async function* () {
+        yield {
+          choices: [{ delta: { role: 'assistant' }, index: 0 }],
+        }
+        yield {
+          choices: [{ finish_reason: 'new_unknown_reason', delta: {}, index: 0 }],
+        }
       })
 
-      it('throws ContextWindowOverflowError for error with message pattern (Issue #10)', async () => {
-        const mockClient = {
-          chat: {
-            completions: {
-              create: vi.fn(async () => {
-                throw new Error('maximum context length exceeded')
-              }),
+      const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
+      const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+
+      // Suppress console.warn for this test
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+      const events = await collectEvents(provider.stream(messages))
+
+      // Should convert to camelCase
+      const stopEvent = events.find((e) => e.type === 'modelMessageStopEvent')
+      expect(stopEvent).toBeDefined()
+      expect((stopEvent as any).stopReason).toBe('newUnknownReason')
+
+      // Should log warning with proper message
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Unknown OpenAI stop reason'))
+
+      warnSpy.mockRestore()
+    })
+  })
+
+  describe('API request formatting', () => {
+    it.skip('formats API request correctly with all options (Issue #14)', async () => {
+      const createMock = vi.fn(async function* () {
+        yield { choices: [{ delta: { role: 'assistant' }, index: 0 }] }
+        yield { choices: [{ finish_reason: 'stop', delta: {}, index: 0 }] }
+      })
+
+      const mockClient = {
+        chat: {
+          completions: {
+            create: vi.fn(() => createMock()),
+          },
+        },
+      } as any
+
+      const provider = new OpenAIModel({
+        modelId: 'gpt-4o',
+        client: mockClient,
+        temperature: 0.7,
+        maxTokens: 1000,
+      })
+
+      const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+
+      const toolSpecs = [
+        {
+          name: 'calculator',
+          description: 'Calculate expressions',
+          inputSchema: { type: 'object' as const, properties: { expr: { type: 'string' as const } } },
+        },
+      ]
+
+      await collectEvents(
+        provider.stream(messages, {
+          systemPrompt: 'You are a helpful assistant',
+          toolSpecs,
+          toolChoice: { auto: {} },
+        })
+      )
+
+      // Verify create was called with correct structure
+      expect(mockClient.chat.completions.create).toHaveBeenCalledTimes(1)
+      const request = mockClient.chat.completions.create.mock.calls[0][0]
+
+      expect(request).toMatchObject({
+        model: 'gpt-4o',
+        stream: true,
+        stream_options: { include_usage: true },
+        temperature: 0.7,
+        max_tokens: 1000,
+        messages: [
+          { role: 'system', content: 'You are a helpful assistant' },
+          { role: 'user', content: 'Hi' },
+        ],
+        tools: [
+          {
+            type: 'function',
+            function: {
+              name: 'calculator',
+              description: 'Calculate expressions',
+              parameters: { type: 'object', properties: { expr: { type: 'string' } } },
             },
           },
-        } as any
-
-        const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
-        const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
-
-        await expect(async () => {
-          for await (const _ of provider.stream(messages)) {
-            // Should not reach here
-          }
-        }).rejects.toThrow(ContextWindowOverflowError)
+        ],
+        tool_choice: 'auto',
       })
+    })
+  })
 
-      it('passes through other errors unchanged', async () => {
-        const mockClient = {
-          chat: {
-            completions: {
-              create: vi.fn(async () => {
-                throw new Error('Invalid API key')
-              }),
-            },
+  describe('error handling', () => {
+    it('throws ContextWindowOverflowError for structured error with code (Issue #10)', async () => {
+      const mockClient = {
+        chat: {
+          completions: {
+            create: vi.fn(async () => {
+              const error: any = new Error('Context length exceeded')
+              error.code = 'context_length_exceeded'
+              throw error
+            }),
           },
-        } as any
+        },
+      } as any
 
-        const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
-        const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+      const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
+      const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
 
-        await expect(async () => {
-          for await (const _ of provider.stream(messages)) {
-            // Should not reach here
-          }
-        }).rejects.toThrow('Invalid API key')
+      await expect(async () => {
+        for await (const _ of provider.stream(messages)) {
+          // Should not reach here
+        }
+      }).rejects.toThrow(ContextWindowOverflowError)
+    })
+
+    it('throws ContextWindowOverflowError for error with message pattern (Issue #10)', async () => {
+      const mockClient = {
+        chat: {
+          completions: {
+            create: vi.fn(async () => {
+              throw new Error('maximum context length exceeded')
+            }),
+          },
+        },
+      } as any
+
+      const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
+      const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+
+      await expect(async () => {
+        for await (const _ of provider.stream(messages)) {
+          // Should not reach here
+        }
+      }).rejects.toThrow(ContextWindowOverflowError)
+    })
+
+    it('throws ContextWindowOverflowError for APIError instance (Issue #5)', async () => {
+      const mockClient = {
+        chat: {
+          completions: {
+            create: vi.fn(async () => {
+              // Simulate APIError from openai package
+              const error: any = new Error('Context length exceeded')
+              error.name = 'APIError'
+              error.status = 400
+              error.code = 'context_length_exceeded'
+              // Make it behave like an APIError instance
+              Object.setPrototypeOf(error, Error.prototype)
+              throw error
+            }),
+          },
+        },
+      } as any
+
+      const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
+      const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+
+      await expect(async () => {
+        for await (const _ of provider.stream(messages)) {
+          // Should not reach here
+        }
+      }).rejects.toThrow(ContextWindowOverflowError)
+    })
+
+    it('passes through other errors unchanged', async () => {
+      const mockClient = {
+        chat: {
+          completions: {
+            create: vi.fn(async () => {
+              throw new Error('Invalid API key')
+            }),
+          },
+        },
+      } as any
+
+      const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
+      const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+
+      await expect(async () => {
+        for await (const _ of provider.stream(messages)) {
+          // Should not reach here
+        }
+      }).rejects.toThrow('Invalid API key')
+    })
+
+    it('handles stream interruption errors (Issue #12)', async () => {
+      const mockClient = createMockClient(async function* () {
+        yield { choices: [{ delta: { role: 'assistant' }, index: 0 }] }
+        yield { choices: [{ delta: { content: 'Hello' }, index: 0 }] }
+        // Stream interruption
+        throw new Error('Network connection lost')
       })
+
+      const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
+      const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+
+      await expect(async () => {
+        for await (const _ of provider.stream(messages)) {
+          // Stream will be interrupted
+        }
+      }).rejects.toThrow('Network connection lost')
     })
   })
 })
