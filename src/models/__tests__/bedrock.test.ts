@@ -900,6 +900,7 @@ describe('BedrockModel', () => {
         const provider = new BedrockModel({ includeToolResultStatus: true })
         const messages: Message[] = [
           {
+            type: 'message',
             role: 'user',
             content: [
               {
@@ -912,7 +913,7 @@ describe('BedrockModel', () => {
           },
         ]
 
-        collectEvents(provider.stream(messages))
+        collectIterator(provider.stream(messages))
 
         expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
           messages: [
@@ -939,6 +940,7 @@ describe('BedrockModel', () => {
         const provider = new BedrockModel({ includeToolResultStatus: false })
         const messages: Message[] = [
           {
+            type: 'message',
             role: 'user',
             content: [
               {
@@ -951,7 +953,7 @@ describe('BedrockModel', () => {
           },
         ]
 
-        collectEvents(provider.stream(messages))
+        collectIterator(provider.stream(messages))
 
         expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
           messages: [
@@ -980,6 +982,7 @@ describe('BedrockModel', () => {
         })
         const messages: Message[] = [
           {
+            type: 'message',
             role: 'user',
             content: [
               {
@@ -992,7 +995,7 @@ describe('BedrockModel', () => {
           },
         ]
 
-        collectEvents(provider.stream(messages))
+        collectIterator(provider.stream(messages))
 
         expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
           messages: [
@@ -1021,6 +1024,7 @@ describe('BedrockModel', () => {
         })
         const messages: Message[] = [
           {
+            type: 'message',
             role: 'user',
             content: [
               {
@@ -1033,7 +1037,7 @@ describe('BedrockModel', () => {
           },
         ]
 
-        collectEvents(provider.stream(messages))
+        collectIterator(provider.stream(messages))
 
         expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
           messages: [
