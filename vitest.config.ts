@@ -5,13 +5,13 @@ export default defineConfig({
     projects: [
       {
         test: {
-          include: ['src/**/__tests__/**'],
+          include: ['src/**/__tests__/**/*.test.ts'],
           name: { label: 'unit', color: 'green' },
         },
       },
       {
         test: {
-          include: ['tests_integ/**'],
+          include: ['tests_integ/**/*.test.ts'],
           name: { label: 'integ', color: 'magenta' },
           testTimeout: 30000,
         },
