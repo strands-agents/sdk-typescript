@@ -514,22 +514,12 @@ export class BedrockModel implements Model<BedrockModelConfig, BedrockRuntimeCli
           }
         })
 
-        // Build tool result with conditional status field
-        if (this._shouldIncludeToolResultStatus()) {
-          return {
-            toolResult: {
-              toolUseId: block.toolUseId,
-              content,
-              status: block.status,
-            },
-          }
-        } else {
-          return {
-            toolResult: {
-              toolUseId: block.toolUseId,
-              content,
-            },
-          }
+        return {
+          toolResult: {
+            toolUseId: block.toolUseId,
+            content,
+            ...(this._shouldIncludeToolResultStatus() && { status: block.status }),
+          },
         }
       }
 
