@@ -282,7 +282,6 @@ describe.skipIf(!hasCredentials)('BedrockModel Integration Tests', () => {
 
       // Should throw an error
       await expect(async () => {
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         for await (const _event of provider.stream(messages)) {
           throw Error('Should not get here')
         }
@@ -307,7 +306,6 @@ describe.skipIf(!hasCredentials)('BedrockModel Integration Tests', () => {
 
       // Should throw ContextWindowOverflowError
       await expect(async () => {
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         for await (const _event of provider.stream(messages)) {
           throw Error('Should not get here')
         }

@@ -12,15 +12,15 @@ export default [
       parserOptions: {
         ecmaVersion: 2022,
         sourceType: 'module',
-        project: './tsconfig.json'
+        project: './tsconfig.json',
       },
       globals: {
-        console: 'readonly'
-      }
+        console: 'readonly',
+      },
     },
     plugins: {
       '@typescript-eslint': tseslint,
-      'tsdoc': tsdoc
+      tsdoc: tsdoc,
     },
     rules: {
       ...tseslint.configs.recommended.rules,
@@ -28,29 +28,30 @@ export default [
       '@typescript-eslint/no-unused-vars': 'error',
       '@typescript-eslint/explicit-function-return-type': 'error',
       '@typescript-eslint/explicit-module-boundary-types': 'error',
-      'tsdoc/syntax': 'error'
-    }
+      'tsdoc/syntax': 'error',
+    },
   },
   {
-    files: ['src/**/__tests__/**/*.ts', 'tests_integ/**/*.ts'],
+    files: ['src/**/__tests__/*.ts', 'tests_integ/*.ts'],
     languageOptions: {
       parser: tsparser,
       parserOptions: {
         ecmaVersion: 2022,
-        sourceType: 'module'
+        sourceType: 'module',
       },
       globals: {
         process: 'readonly',
-        console: 'readonly'
-      }
+        console: 'readonly',
+      },
     },
     plugins: {
-      '@typescript-eslint': tseslint
+      '@typescript-eslint': tseslint,
     },
     rules: {
       ...tseslint.configs.recommended.rules,
       '@typescript-eslint/no-explicit-any': 'off',
-      '@typescript-eslint/no-unused-vars': 'error'
-    }
-  }
+      '@typescript-eslint/no-unused-vars': 'off',
+      '@typescript-eslint/explicit-function-return-type': 'off',
+    },
+  },
 ]
