@@ -867,6 +867,7 @@ describe('FunctionTool', () => {
         expect(result).toEqual({
           toolUseId: 'test-circular',
           status: 'error',
+          error: expect.any(Error),
           content: [
             {
               type: 'toolResultTextContent',
