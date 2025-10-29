@@ -32,7 +32,7 @@ export default [
     },
   },
   {
-    files: ['src/**/__tests__/*.ts', 'tests_integ/*.ts'],
+    files: ['src/**/__tests__/**/*.ts', 'tests_integ/**/*.ts'],
     languageOptions: {
       parser: tsparser,
       parserOptions: {
