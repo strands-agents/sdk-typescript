@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { BedrockRuntimeClient } from '@aws-sdk/client-bedrock-runtime'
 import { BedrockModel } from '../bedrock'
 import { ContextWindowOverflowError } from '../../errors'
-import { collectEvents } from './test-utils'
+import { collectEvents } from './testing-utils'
 import type { Message } from '../../types/messages'
 import type { StreamOptions } from '../model'
 

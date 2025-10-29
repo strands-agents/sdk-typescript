@@ -5,7 +5,7 @@ export default defineConfig({
     projects: [
       {
         test: {
-          include: ['src/**/__tests__/**'],
+          include: ['src/**/__tests__/**/*.test.ts'],
           name: { label: 'unit', color: 'green' },
         },
       },

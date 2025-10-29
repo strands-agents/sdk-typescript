@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import OpenAI from 'openai'
 import { OpenAIModel } from '../openai'
 import { ContextWindowOverflowError } from '../../errors'
-import { collectEvents } from './test-utils'
+import { collectEvents } from './testing-utils'
 import type { Message } from '../../types/messages'
 
 /**
@@ -214,6 +214,7 @@ describe('OpenAIModel', () => {
         const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
 
         await expect(async () => {
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
           for await (const _ of provider.stream(messages)) {
             // Should not reach here
           }
@@ -226,6 +227,7 @@ describe('OpenAIModel', () => {
         const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
 
         await expect(async () => {
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
           for await (const _ of provider.stream(messages, {
             toolSpecs: [{ name: '', description: 'test', inputSchema: {} }],
           })) {
@@ -245,6 +247,7 @@ describe('OpenAIModel', () => {
         ]
 
         await expect(async () => {
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
           for await (const _ of provider.stream(messages)) {
             // Should not reach here
           }
@@ -318,6 +321,7 @@ describe('OpenAIModel', () => {
         ]
 
         await expect(async () => {
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
           for await (const _ of provider.stream(messages)) {
             // Should not reach here
           }
@@ -335,6 +339,7 @@ describe('OpenAIModel', () => {
         ]
 
         await expect(async () => {
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
           for await (const _ of provider.stream(messages)) {
             // Should not reach here
           }
@@ -495,6 +500,7 @@ describe('OpenAIModel', () => {
       const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
 
       // Suppress console.warn for this test
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
       const events = await collectEvents(provider.stream(messages))
@@ -679,6 +685,7 @@ describe('OpenAIModel', () => {
       const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
 
       // Suppress console.warn for this test
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
       const events = await collectEvents(provider.stream(messages))
@@ -859,7 +866,7 @@ describe('OpenAIModel', () => {
               capturedRequest = request
               callCount++
               // Return an async generator
-              return (async function* () {
+              return (async function* (): AsyncGenerator<{ choices: any[] }, void, unknown> {
                 yield { choices: [{ delta: { role: 'assistant' }, index: 0 }] }
                 yield { choices: [{ finish_reason: 'stop', delta: {}, index: 0 }] }
               })()
@@ -939,6 +946,7 @@ describe('OpenAIModel', () => {
       const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
 
       await expect(async () => {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         for await (const _ of provider.stream(messages)) {
           // Should not reach here
         }
@@ -960,6 +968,7 @@ describe('OpenAIModel', () => {
       const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
 
       await expect(async () => {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         for await (const _ of provider.stream(messages)) {
           // Should not reach here
         }
@@ -988,6 +997,7 @@ describe('OpenAIModel', () => {
       const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
 
       await expect(async () => {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         for await (const _ of provider.stream(messages)) {
           // Should not reach here
         }
@@ -1009,6 +1019,7 @@ describe('OpenAIModel', () => {
       const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
 
       await expect(async () => {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         for await (const _ of provider.stream(messages)) {
           // Should not reach here
         }
@@ -1027,6 +1038,7 @@ describe('OpenAIModel', () => {
       const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
 
       await expect(async () => {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         for await (const _ of provider.stream(messages)) {
           // Stream will be interrupted
         }

@@ -853,7 +853,7 @@ describe('FunctionTool', () => {
           inputSchema: { type: 'object' },
           callback: (): JSONValue => {
             // Create circular reference
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
             const obj: any = { a: 1 }
             obj.self = obj
             return obj
@@ -873,6 +873,7 @@ describe('FunctionTool', () => {
               text: expect.stringContaining('Error:'),
             },
           ],
+          error: expect.any(Error),
         })
       })
 
@@ -882,7 +883,6 @@ describe('FunctionTool', () => {
           description: 'Returns object with function',
           inputSchema: { type: 'object' },
           callback: (): JSONValue => {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             return { fn: () => {} } as any
           },
         })

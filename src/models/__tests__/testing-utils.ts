@@ -6,7 +6,7 @@ import type { ModelStreamEvent } from '../streaming'
 /**
  * Helper function to collect all events from a stream.
  * Useful for testing streaming model responses.
- * 
+ *
  * @param stream - An async iterable of ModelStreamEvent
  * @returns Promise resolving to an array of all emitted events
  */
