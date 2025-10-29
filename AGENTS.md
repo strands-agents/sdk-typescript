@@ -508,6 +508,68 @@ tests_integ/
 
 ### Writing Effective Tests
 
+**Batch tests together when setup exceeds testing**:
+
+When the setup code for a test (creating objects, preparing data) is more complex than what you're actually testing, consider batching multiple related assertions into a single test instead of creating separate tests.
+
+```typescript
+// ✅ Good: Single test with multiple related assertions (setup > testing)
+describe('tool creation', () => {
+  it('creates tool with correct properties', () => {
+    const myTool = tool({
+      name: 'testTool',
+      description: 'Test description',
+      inputSchema: z.object({ value: z.string() }),
+      callback: (input) => input.value,
+    })
+
+    // Multiple related assertions in one test since setup is complex
+    expect(myTool.toolName).toBe('testTool')
+    expect(myTool.description).toBe('Test description')
+    expect(myTool.toolSpec.name).toBe('testTool')
+    expect(myTool.toolSpec.description).toBe('Test description')
+    expect(myTool.toolSpec.inputSchema.type).toBe('object')
+  })
+})
+
+// ❌ Bad: Separate tests with duplicated complex setup
+describe('tool creation', () => {
+  it('has correct toolName property', () => {
+    const myTool = tool({
+      name: 'testTool',
+      description: 'Test description',
+      inputSchema: z.object({ value: z.string() }),
+      callback: (input) => input.value,
+    })
+    expect(myTool.toolName).toBe('testTool')
+  })
+
+  it('has correct description property', () => {
+    const myTool = tool({  // Duplicated setup!
+      name: 'testTool',
+      description: 'Test description',
+      inputSchema: z.object({ value: z.string() }),
+      callback: (input) => input.value,
+    })
+    expect(myTool.description).toBe('Test description')
+  })
+
+  // More tests with more duplication...
+})
+```
+
+**When to batch tests**:
+- Setup/arrange phase is more complex than the test/assert phase
+- Tests are checking basic properties or structure validation
+- All assertions are testing the same logical concept
+- Setup code would need to be duplicated across multiple tests
+
+**When to keep tests separate**:
+- Testing different behaviors or functionality
+- Setup is minimal (1-2 lines)
+- Tests need different setup or inputs
+- Tests are for different scenarios or edge cases
+
 ```typescript
 // Good: Clear, specific test
 describe('calculateTotal', () => {

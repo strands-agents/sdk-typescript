@@ -1,5 +1,8 @@
 import type { ToolSpec, ToolUse, ToolResult } from './types'
 
+// Re-export ToolSpec for convenience
+export type { ToolSpec } from './types'
+
 /**
  * Context provided to tool implementations during execution.
  * Contains framework-level state and information from the agent invocation.
@@ -78,12 +81,15 @@ export type ToolStreamGenerator = AsyncGenerator<ToolStreamEvent, ToolResult, ne
  * Interface for tool implementations.
  * Tools are used by agents to interact with their environment and perform specific actions.
  *
- * The Tool interface provides a streaming execution model where tools can yield
- * progress events during execution before returning a final result.
+ * The Tool interface provides both a streaming execution model (via stream()) for agent use
+ * and a direct invocation model (via invoke()) for testing and standalone execution.
  *
- * Most implementations should use FunctionTool rather than implementing this interface directly.
+ * Most implementations should use FunctionTool or tool() rather than implementing this interface directly.
+ *
+ * @typeParam TInput - Optional type for the tool's input parameters. When specified, this enables
+ *                     type-safe invoke() calls. Defaults to unknown for generic tool instances.
  */
-export interface Tool {
+export interface Tool<TInput = unknown> {
   /**
    * The unique name of the tool.
    * This MUST match the name in the toolSpec.
@@ -139,4 +145,19 @@ export interface Tool {
    * ```
    */
   stream(toolContext: ToolContext): ToolStreamGenerator
+
+  /**
+   * Invokes the tool directly with type-safe input and returns the unwrapped result.
+   * This is useful for testing and standalone tool execution.
+   *
+   * Unlike stream(), this method:
+   * - Returns the raw result (not wrapped in ToolResult)
+   * - Consumes async generators and returns only the final value
+   * - Lets errors throw naturally (not wrapped in error ToolResult)
+   *
+   * @param input - The input parameters for the tool
+   * @param context - Optional tool execution context
+   * @returns The unwrapped result
+   */
+  invoke(input: TInput, context?: ToolContext): Promise<unknown>
 }
