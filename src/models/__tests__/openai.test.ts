@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import OpenAI from 'openai'
 import { OpenAIModel } from '../openai'
@@ -517,12 +516,6 @@ describe('OpenAIModel', () => {
       // Should only have one message start event
       const startEvents = events.filter((e) => e.type === 'modelMessageStartEvent')
       expect(startEvents).toHaveLength(1)
-
-      // The second role appearance should be detected but the duplicate start event filtered out
-      // Note: This might not trigger a warning if the event is never created
-      // The important thing is only one start event is emitted
-
-      warnSpy.mockRestore()
     })
   })
 
@@ -713,8 +706,6 @@ describe('OpenAIModel', () => {
       // The important thing is that invalid tool calls don't crash the stream
       // and are properly skipped
       expect(events.length).toBeGreaterThan(0) // Still got message events
-
-      warnSpy.mockRestore()
     })
 
     it('tool argument deltas can be reassembled into valid JSON', async () => {
