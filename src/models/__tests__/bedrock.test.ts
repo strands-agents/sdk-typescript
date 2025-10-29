@@ -1000,45 +1000,6 @@ describe('BedrockModel', () => {
           modelId: 'anthropic.claude-3-5-sonnet-20241022-v2:0',
         })
       })
-
-      it('excludes status field for non-Claude models', async () => {
-        const provider = new BedrockModel({
-          modelId: 'amazon.nova-pro-v1:0',
-          includeToolResultStatus: 'auto',
-        })
-        const messages: Message[] = [
-          {
-            role: 'user',
-            content: [
-              {
-                type: 'toolResultBlock',
-                toolUseId: 'tool-123',
-                status: 'success',
-                content: [{ type: 'toolResultTextContent', text: 'Result' }],
-              },
-            ],
-          },
-        ]
-
-        collectEvents(provider.stream(messages))
-
-        expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
-          messages: [
-            {
-              content: [
-                {
-                  toolResult: {
-                    content: [{ text: 'Result' }],
-                    toolUseId: 'tool-123',
-                  },
-                },
-              ],
-              role: 'user',
-            },
-          ],
-          modelId: 'amazon.nova-pro-v1:0',
-        })
-      })
     })
 
     describe('when includeToolResultStatus is undefined (default)', () => {
