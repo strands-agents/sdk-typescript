@@ -922,14 +922,13 @@ describe('OpenAIModel', () => {
   })
 
   describe('systemPrompt handling', () => {
-    it('formats array system prompt with text blocks only', async () => {
-      let capturedRequest: any = null
-
-      const mockClient = {
+    // Create mock client factory that captures request in provided container
+    const createMockClientWithCapture = (captureContainer: { request: any }): any => {
+      return {
         chat: {
           completions: {
             create: vi.fn(async (request: any) => {
-              capturedRequest = request
+              captureContainer.request = request
               return (async function* () {
                 yield { choices: [{ delta: { role: 'assistant' }, index: 0 }] }
                 yield { choices: [{ finish_reason: 'stop', delta: {}, index: 0 }] }
@@ -938,7 +937,11 @@ describe('OpenAIModel', () => {
           },
         },
       } as any
+    }
 
+    it('formats array system prompt with text blocks only', async () => {
+      const captured: { request: any } = { request: null }
+      const mockClient = createMockClientWithCapture(captured)
       const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
       const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
 
@@ -951,31 +954,17 @@ describe('OpenAIModel', () => {
         })
       )
 
-      expect(capturedRequest).toBeDefined()
-      expect(capturedRequest.messages).toEqual([
-        { role: 'system', content: 'You are a helpful assistant\nAdditional context here' },
+      expect(captured.request).toBeDefined()
+      expect(captured.request!.messages).toEqual([
+        { role: 'system', content: 'You are a helpful assistantAdditional context here' },
         { role: 'user', content: 'Hello' },
       ])
     })
 
     it('formats array system prompt with cache points', async () => {
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-      let capturedRequest: any = null
-
-      const mockClient = {
-        chat: {
-          completions: {
-            create: vi.fn(async (request: any) => {
-              capturedRequest = request
-              return (async function* () {
-                yield { choices: [{ delta: { role: 'assistant' }, index: 0 }] }
-                yield { choices: [{ finish_reason: 'stop', delta: {}, index: 0 }] }
-              })()
-            }),
-          },
-        },
-      } as any
-
+      const captured: { request: any } = { request: null }
+      const mockClient = createMockClientWithCapture(captured)
       const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
       const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
 
@@ -995,9 +984,9 @@ describe('OpenAIModel', () => {
       )
 
       // Verify system message contains only text (cache points ignored)
-      expect(capturedRequest).toBeDefined()
-      expect(capturedRequest.messages).toEqual([
-        { role: 'system', content: 'You are a helpful assistant\nLarge context document' },
+      expect(captured.request).toBeDefined()
+      expect(captured.request!.messages).toEqual([
+        { role: 'system', content: 'You are a helpful assistantLarge context document' },
         { role: 'user', content: 'Hello' },
       ])
 
@@ -1005,22 +994,8 @@ describe('OpenAIModel', () => {
     })
 
     it('handles empty array system prompt', async () => {
-      let capturedRequest: any = null
-
-      const mockClient = {
-        chat: {
-          completions: {
-            create: vi.fn(async (request: any) => {
-              capturedRequest = request
-              return (async function* () {
-                yield { choices: [{ delta: { role: 'assistant' }, index: 0 }] }
-                yield { choices: [{ finish_reason: 'stop', delta: {}, index: 0 }] }
-              })()
-            }),
-          },
-        },
-      } as any
-
+      const captured: { request: any } = { request: null }
+      const mockClient = createMockClientWithCapture(captured)
       const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
       const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
 
@@ -1031,27 +1006,13 @@ describe('OpenAIModel', () => {
       )
 
       // Empty array should not add system message
-      expect(capturedRequest).toBeDefined()
-      expect(capturedRequest.messages).toEqual([{ role: 'user', content: 'Hello' }])
+      expect(captured.request).toBeDefined()
+      expect(captured.request!.messages).toEqual([{ role: 'user', content: 'Hello' }])
     })
 
     it('formats array system prompt with single text block', async () => {
-      let capturedRequest: any = null
-
-      const mockClient = {
-        chat: {
-          completions: {
-            create: vi.fn(async (request: any) => {
-              capturedRequest = request
-              return (async function* () {
-                yield { choices: [{ delta: { role: 'assistant' }, index: 0 }] }
-                yield { choices: [{ finish_reason: 'stop', delta: {}, index: 0 }] }
-              })()
-            }),
-          },
-        },
-      } as any
-
+      const captured: { request: any } = { request: null }
+      const mockClient = createMockClientWithCapture(captured)
       const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
       const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
 
@@ -1061,8 +1022,8 @@ describe('OpenAIModel', () => {
         })
       )
 
-      expect(capturedRequest).toBeDefined()
-      expect(capturedRequest.messages).toEqual([
+      expect(captured.request).toBeDefined()
+      expect(captured.request!.messages).toEqual([
         { role: 'system', content: 'You are a helpful assistant' },
         { role: 'user', content: 'Hello' },
       ])

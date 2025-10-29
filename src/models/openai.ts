@@ -407,7 +407,7 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
             content: options.systemPrompt,
           })
         }
-      } else if (options.systemPrompt.length > 0) {
+      } else if (Array.isArray(options.systemPrompt) && options.systemPrompt.length > 0) {
         // Array path: extract text blocks and warn about cache points
         const textBlocks: string[] = []
         let hasCachePoints = false
@@ -427,7 +427,7 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
         if (textBlocks.length > 0) {
           request.messages.push({
             role: 'system',
-            content: textBlocks.join('\n'),
+            content: textBlocks.join(''),
           })
         }
       }
