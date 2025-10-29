@@ -41,7 +41,8 @@ const DEFAULT_BEDROCK_MODEL_ID = 'global.anthropic.claude-sonnet-4-5-20250929-v1
 
 /**
  * Models that require the status field in tool results.
- * These model families expect the status field to be present.
+ * According to AWS Bedrock API documentation, the status field is only supported by Anthropic Claude models.
+ * @see https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_ToolResultBlock.html
  */
 const MODELS_INCLUDE_STATUS = ['anthropic.claude']
 
@@ -148,8 +149,6 @@ export interface BedrockModelConfig extends BaseModelConfig {
    * - `true`: Always include status field
    * - `false`: Never include status field
    * - `'auto'`: Automatically determine based on model ID (default)
-   *
-   * @see https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters.html
    */
   includeToolResultStatus?: 'auto' | boolean
 }
