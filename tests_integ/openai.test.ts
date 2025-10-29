@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { OpenAIModel } from '@strands-agents/sdk'
+import { OpenAIModel } from '@strands-agents/sdk/openai'
 import { ContextWindowOverflowError } from '@strands-agents/sdk'
 import type { Message } from '@strands-agents/sdk'
 import type { ToolSpec } from '@strands-agents/sdk'

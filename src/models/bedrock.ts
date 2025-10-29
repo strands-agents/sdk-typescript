@@ -188,7 +188,7 @@ export interface BedrockModelOptions extends BedrockModelConfig {
  * })
  *
  * const messages: Message[] = [
- *   { type: 'message', role: $1, content: [{ type: 'textBlock', text: 'Hello!' }] }
+ *   { type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello!' }] }
  * ]
  *
  * for await (const event of provider.stream(messages)) {
