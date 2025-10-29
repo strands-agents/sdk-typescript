@@ -869,7 +869,6 @@ export class BedrockModel implements Model<BedrockModelConfig, BedrockRuntimeCli
     }
 
     // Adjust for tool_use, which is sometimes incorrectly reported as end_turn
-    // This check is specific to the non-streaming ConverseCommandOutput
     if (
       mappedStopReason === 'endTurn' &&
       event &&
