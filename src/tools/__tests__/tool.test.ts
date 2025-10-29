@@ -1,30 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import { FunctionTool } from '../function-tool'
-import type { ToolContext, ToolStreamEvent } from '../tool'
-import type { ToolResult } from '../types'
+import type { ToolContext } from '../tool'
 import type { JSONValue } from '../../types/json'
 
-/**
- * Helper function to consume an async generator and collect all events including the return value.
- * For await loops only capture yielded values, not the return value.
- */
-async function collectGeneratorEvents(generator: AsyncGenerator<ToolStreamEvent, ToolResult, unknown>): Promise<{
-  streamEvents: ToolStreamEvent[]
-  result: ToolResult
-}> {
-  const streamEvents: ToolStreamEvent[] = []
-  let result = await generator.next()
-
-  while (!result.done) {
-    streamEvents.push(result.value)
-    result = await generator.next()
-  }
-
-  return {
-    streamEvents,
-    result: result.value,
-  }
-}
+import { collectGenerator } from '../../__fixtures__/model-test-helpers'
 
 describe('FunctionTool', () => {
   describe('properties', () => {
@@ -117,7 +96,7 @@ describe('FunctionTool', () => {
         }
         const context: ToolContext = { toolUse, invocationState: {} }
 
-        const { streamEvents, result } = await collectGeneratorEvents(
+        const { items: streamEvents, result } = await collectGenerator(
           tool.stream({ toolUse, invocationState: context.invocationState })
         )
 
@@ -152,7 +131,7 @@ describe('FunctionTool', () => {
         }
         const context: ToolContext = { toolUse, invocationState: {} }
 
-        const { streamEvents, result } = await collectGeneratorEvents(
+        const { items: streamEvents, result } = await collectGenerator(
           tool.stream({ toolUse, invocationState: context.invocationState })
         )
 
@@ -186,7 +165,7 @@ describe('FunctionTool', () => {
         }
         const context: ToolContext = { toolUse, invocationState: {} }
 
-        const { streamEvents, result } = await collectGeneratorEvents(
+        const { items: streamEvents, result } = await collectGenerator(
           tool.stream({ toolUse, invocationState: context.invocationState })
         )
 
@@ -225,7 +204,7 @@ describe('FunctionTool', () => {
           input: inputData,
         }
 
-        await collectGeneratorEvents(tool.stream({ toolUse, invocationState: {} }))
+        await collectGenerator(tool.stream({ toolUse, invocationState: {} }))
 
         expect(receivedInput).toEqual(inputData)
       })
@@ -238,7 +217,7 @@ describe('FunctionTool', () => {
           callback: (): null => null,
         })
 
-        const { result } = await collectGeneratorEvents(
+        const { result } = await collectGenerator(
           tool.stream({ toolUse: { name: 'nullTool', toolUseId: 'test-null', input: {} }, invocationState: {} })
         )
 
@@ -258,7 +237,7 @@ describe('FunctionTool', () => {
           callback: (): undefined => undefined,
         })
 
-        const { result } = await collectGeneratorEvents(
+        const { result } = await collectGenerator(
           tool.stream({
             toolUse: { name: 'undefinedTool', toolUseId: 'test-undefined', input: {} },
             invocationState: {},
@@ -280,7 +259,7 @@ describe('FunctionTool', () => {
           callback: (): boolean => true,
         })
 
-        const { result: trueResult } = await collectGeneratorEvents(
+        const { result: trueResult } = await collectGenerator(
           trueTool.stream({ toolUse: { name: 'trueTool', toolUseId: 'test-true', input: {} }, invocationState: {} })
         )
 
@@ -297,7 +276,7 @@ describe('FunctionTool', () => {
           callback: (): boolean => false,
         })
 
-        const { result: falseResult } = await collectGeneratorEvents(
+        const { result: falseResult } = await collectGenerator(
           falseTool.stream({ toolUse: { name: 'falseTool', toolUseId: 'test-false', input: {} }, invocationState: {} })
         )
 
@@ -316,7 +295,7 @@ describe('FunctionTool', () => {
           callback: (): number => 42,
         })
 
-        const { result } = await collectGeneratorEvents(
+        const { result } = await collectGenerator(
           tool.stream({ toolUse: { name: 'numberTool', toolUseId: 'test-number', input: {} }, invocationState: {} })
         )
 
@@ -334,7 +313,7 @@ describe('FunctionTool', () => {
           callback: (): number => -3.14,
         })
 
-        const { result: negativeResult } = await collectGeneratorEvents(
+        const { result: negativeResult } = await collectGenerator(
           negativeTool.stream({
             toolUse: { name: 'negativeTool', toolUseId: 'test-negative', input: {} },
             invocationState: {},
@@ -356,7 +335,7 @@ describe('FunctionTool', () => {
           callback: (): JSONValue[] => [1, 2, 3, { key: 'value' }],
         })
 
-        const { result } = await collectGeneratorEvents(
+        const { result } = await collectGenerator(
           tool.stream({ toolUse: { name: 'arrayTool', toolUseId: 'test-array', input: {} }, invocationState: {} })
         )
 
@@ -376,7 +355,7 @@ describe('FunctionTool', () => {
           callback: (): { nested: { value: string } } => original,
         })
 
-        const { result } = await collectGeneratorEvents(
+        const { result } = await collectGenerator(
           tool.stream({ toolUse: { name: 'copyTool', toolUseId: 'test-copy', input: {} }, invocationState: {} })
         )
 
@@ -400,7 +379,7 @@ describe('FunctionTool', () => {
           callback: (): JSONValue[] => original,
         })
 
-        const { result } = await collectGeneratorEvents(
+        const { result } = await collectGenerator(
           tool.stream({
             toolUse: { name: 'arrayCopyTool', toolUseId: 'test-array-copy', input: {} },
             invocationState: {},
@@ -438,7 +417,7 @@ describe('FunctionTool', () => {
         }
         const context: ToolContext = { toolUse, invocationState: {} }
 
-        const { streamEvents, result } = await collectGeneratorEvents(
+        const { items: streamEvents, result } = await collectGenerator(
           tool.stream({ toolUse, invocationState: context.invocationState })
         )
 
@@ -465,7 +444,7 @@ describe('FunctionTool', () => {
         }
         const context: ToolContext = { toolUse, invocationState: { userId: 'user-123' } }
 
-        const { streamEvents, result } = await collectGeneratorEvents(
+        const { items: streamEvents, result } = await collectGenerator(
           tool.stream({ toolUse, invocationState: context.invocationState })
         )
 
@@ -495,7 +474,7 @@ describe('FunctionTool', () => {
         }
         const context: ToolContext = { toolUse, invocationState: {} }
 
-        const { streamEvents, result } = await collectGeneratorEvents(
+        const { items: streamEvents, result } = await collectGenerator(
           tool.stream({ toolUse, invocationState: context.invocationState })
         )
 
@@ -542,7 +521,7 @@ describe('FunctionTool', () => {
         }
         const context: ToolContext = { toolUse, invocationState: {} }
 
-        const { streamEvents, result } = await collectGeneratorEvents(
+        const { items: streamEvents, result } = await collectGenerator(
           tool.stream({ toolUse, invocationState: context.invocationState })
         )
 
@@ -577,7 +556,7 @@ describe('FunctionTool', () => {
         }
         const context: ToolContext = { toolUse, invocationState: {} }
 
-        const { streamEvents, result } = await collectGeneratorEvents(
+        const { items: streamEvents, result } = await collectGenerator(
           tool.stream({ toolUse, invocationState: context.invocationState })
         )
 
@@ -605,7 +584,7 @@ describe('FunctionTool', () => {
         }
         const context: ToolContext = { toolUse, invocationState: {} }
 
-        const { streamEvents, result } = await collectGeneratorEvents(
+        const { items: streamEvents, result } = await collectGenerator(
           tool.stream({ toolUse, invocationState: context.invocationState })
         )
 
@@ -630,7 +609,7 @@ describe('FunctionTool', () => {
           input: {},
         }
 
-        const { result } = await collectGeneratorEvents(tool.stream({ toolUse, invocationState: {} }))
+        const { result } = await collectGenerator(tool.stream({ toolUse, invocationState: {} }))
 
         expect(result).toEqual({
           toolUseId: 'test-error-capture',
@@ -661,7 +640,7 @@ describe('FunctionTool', () => {
           input: {},
         }
 
-        const { result } = await collectGeneratorEvents(tool.stream({ toolUse, invocationState: {} }))
+        const { result } = await collectGenerator(tool.stream({ toolUse, invocationState: {} }))
 
         expect(result).toEqual({
           toolUseId: 'test-string-wrap',
@@ -704,7 +683,7 @@ describe('FunctionTool', () => {
           input: {},
         }
 
-        const { result } = await collectGeneratorEvents(tool.stream({ toolUse, invocationState: {} }))
+        const { result } = await collectGenerator(tool.stream({ toolUse, invocationState: {} }))
 
         expect(result).toEqual({
           toolUseId: 'test-custom-error',
@@ -736,7 +715,7 @@ describe('FunctionTool', () => {
           input: {},
         }
 
-        const { result } = await collectGeneratorEvents(tool.stream({ toolUse, invocationState: {} }))
+        const { result } = await collectGenerator(tool.stream({ toolUse, invocationState: {} }))
 
         expect(result).toEqual({
           toolUseId: 'test-stack-trace',
@@ -771,7 +750,7 @@ describe('FunctionTool', () => {
           input: {},
         }
 
-        const { streamEvents, result } = await collectGeneratorEvents(tool.stream({ toolUse, invocationState: {} }))
+        const { items: streamEvents, result } = await collectGenerator(tool.stream({ toolUse, invocationState: {} }))
 
         // Should have one stream event before the error
         expect(streamEvents.length).toBe(1)
@@ -809,7 +788,7 @@ describe('FunctionTool', () => {
         }
         const context: ToolContext = { toolUse, invocationState: {} }
 
-        const { streamEvents, result } = await collectGeneratorEvents(
+        const { items: streamEvents, result } = await collectGenerator(
           tool.stream({ toolUse, invocationState: context.invocationState })
         )
 
@@ -838,7 +817,7 @@ describe('FunctionTool', () => {
         }
         const context: ToolContext = { toolUse, invocationState: {} }
 
-        const { streamEvents, result } = await collectGeneratorEvents(
+        const { items: streamEvents, result } = await collectGenerator(
           tool.stream({ toolUse, invocationState: context.invocationState })
         )
 
@@ -853,14 +832,13 @@ describe('FunctionTool', () => {
           inputSchema: { type: 'object' },
           callback: (): JSONValue => {
             // Create circular reference
-
             const obj: any = { a: 1 }
             obj.self = obj
             return obj
           },
         })
 
-        const { result } = await collectGeneratorEvents(
+        const { result } = await collectGenerator(
           tool.stream({ toolUse: { name: 'circularTool', toolUseId: 'test-circular', input: {} }, invocationState: {} })
         )
 
@@ -887,7 +865,7 @@ describe('FunctionTool', () => {
           },
         })
 
-        const { result } = await collectGeneratorEvents(
+        const { result } = await collectGenerator(
           tool.stream({
             toolUse: { name: 'functionTool', toolUseId: 'test-function', input: {} },
             invocationState: {},
@@ -949,7 +927,7 @@ describe('Tool interface backwards compatibility', () => {
     expect(Symbol.asyncIterator in stream).toBe(true)
 
     // Consume the stream with helper
-    const { result } = await collectGeneratorEvents(stream)
+    const { result } = await collectGenerator(stream)
 
     expect(result).toBeDefined()
     expect(result.status).toBe('success')

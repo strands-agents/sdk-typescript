@@ -27,7 +27,7 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
       include: ['src/**/*'],
-      exclude: ['src/**/__tests__/**'],
+      exclude: ['src/**/__tests__/**', 'src/**/__fixtures__/**'],
       thresholds: {
         lines: 80,
         functions: 80,

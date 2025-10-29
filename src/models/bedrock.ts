@@ -28,7 +28,7 @@ import {
 } from '@aws-sdk/client-bedrock-runtime'
 import type { Model, BaseModelConfig, StreamOptions } from '../models/model'
 import type { Message, ContentBlock } from '../types/messages'
-import type { ModelStreamEvent, ReasoningDelta, Usage } from '../models/streaming'
+import type { ModelStreamEvent, ReasoningContentDelta, Usage } from '../models/streaming'
 import type { JSONValue } from '../types/json'
 import { ContextWindowOverflowError } from '../errors'
 import { ensureDefined } from '../types/validation'
@@ -188,7 +188,7 @@ export interface BedrockModelOptions extends BedrockModelConfig {
  * })
  *
  * const messages: Message[] = [
- *   { role: 'user', content: [{ type: 'textBlock', text: 'Hello!' }] }
+ *   { type: 'message', role: $1, content: [{ type: 'textBlock', text: 'Hello!' }] }
  * ]
  *
  * for await (const event of provider.stream(messages)) {
@@ -303,7 +303,7 @@ export class BedrockModel implements Model<BedrockModelConfig, BedrockRuntimeCli
    * @example
    * ```typescript
    * const messages: Message[] = [
-   *   { role: 'user', content: [{ type: 'textBlock', text: 'What is 2+2?' }] }
+   *   { type: 'message', role: $1, content: [{ type: 'textBlock', text: 'What is 2+2?' }] }
    * ]
    *
    * const options: StreamOptions = {
@@ -628,8 +628,8 @@ export class BedrockModel implements Model<BedrockModelConfig, BedrockRuntimeCli
           case 'reasoningContent': {
             const reasoning = ensureDefined(delta.reasoningContent, 'delta.reasoningContent')
 
-            const reasoningDelta: ReasoningDelta = {
-              type: 'reasoningDelta',
+            const reasoningDelta: ReasoningContentDelta = {
+              type: 'reasoningContentDelta',
             }
             if (reasoning.text) reasoningDelta.text = reasoning.text
             if (reasoning.signature) reasoningDelta.signature = reasoning.signature

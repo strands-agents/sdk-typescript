@@ -48,7 +48,6 @@ export interface StreamOptions {
  * @typeParam T - Model configuration type extending BaseModelConfig
  * @typeParam _C - Client configuration type for provider-specific client setup (used by implementations)
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export interface Model<T extends BaseModelConfig, _C = unknown> {
   /**
    * Updates the model configuration.

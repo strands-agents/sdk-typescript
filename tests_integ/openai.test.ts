@@ -3,18 +3,9 @@ import { OpenAIModel } from '@strands-agents/sdk'
 import { ContextWindowOverflowError } from '@strands-agents/sdk'
 import type { Message } from '@strands-agents/sdk'
 import type { ToolSpec } from '@strands-agents/sdk'
-import type { ModelStreamEvent } from '@strands-agents/sdk'
 
-/**
- * Helper function to collect all events from a stream.
- */
-async function collectEvents(stream: AsyncIterable<ModelStreamEvent>): Promise<ModelStreamEvent[]> {
-  const events: ModelStreamEvent[] = []
-  for await (const event of stream) {
-    events.push(event)
-  }
-  return events
-}
+// eslint-disable-next-line no-restricted-imports
+import { collectIterator } from '../src/__fixtures__/model-test-helpers'
 
 // Check for OpenAI API key at module level so skipIf can use it
 let hasApiKey = false
@@ -46,7 +37,7 @@ describe.skipIf(!hasApiKey)('OpenAIModel Integration Tests', () => {
         },
       ]
 
-      const events = await collectEvents(provider.stream(messages))
+      const events = await collectIterator(provider.stream(messages))
 
       // Verify we got the expected event sequence
       expect(events.length).toBeGreaterThan(0)
@@ -95,7 +86,7 @@ describe.skipIf(!hasApiKey)('OpenAIModel Integration Tests', () => {
 
       const systemPrompt = 'Always respond with exactly the word "TEST" and nothing else.'
 
-      const events = await collectEvents(provider.stream(messages, { systemPrompt }))
+      const events = await collectIterator(provider.stream(messages, { systemPrompt }))
 
       // Collect the text response
       let responseText = ''
@@ -148,7 +139,7 @@ describe.skipIf(!hasApiKey)('OpenAIModel Integration Tests', () => {
         },
       ]
 
-      const events = await collectEvents(provider.stream(messages, { toolSpecs: [calculatorTool] }))
+      const events = await collectIterator(provider.stream(messages, { toolSpecs: [calculatorTool] }))
 
       // Should have tool use in the response
       const toolUseStartEvents = events.filter(
@@ -195,7 +186,7 @@ describe.skipIf(!hasApiKey)('OpenAIModel Integration Tests', () => {
         },
       ]
 
-      const events1 = await collectEvents(provider.stream(messages1, { toolSpecs: [calculatorTool] }))
+      const events1 = await collectIterator(provider.stream(messages1, { toolSpecs: [calculatorTool] }))
 
       // Extract tool use information
       const toolUseStartEvent = events1.find(
@@ -253,7 +244,7 @@ describe.skipIf(!hasApiKey)('OpenAIModel Integration Tests', () => {
         },
       ]
 
-      const events2 = await collectEvents(provider.stream(messages2, { toolSpecs: [calculatorTool] }))
+      const events2 = await collectIterator(provider.stream(messages2, { toolSpecs: [calculatorTool] }))
 
       // Should process the tool result and generate a response
       const textDeltas = events2.filter((e) => e.type === 'modelContentBlockDeltaEvent' && e.delta.type === 'textDelta')
@@ -286,7 +277,7 @@ describe.skipIf(!hasApiKey)('OpenAIModel Integration Tests', () => {
         },
       ]
 
-      const events = await collectEvents(provider.stream(messages))
+      const events = await collectIterator(provider.stream(messages))
 
       // Check metadata for token usage
       const metadataEvent = events.find((e) => e.type === 'modelMetadataEvent')
@@ -311,8 +302,8 @@ describe.skipIf(!hasApiKey)('OpenAIModel Integration Tests', () => {
         },
       ]
 
-      const events1 = await collectEvents(provider.stream(messages))
-      const events2 = await collectEvents(provider.stream(messages))
+      const events1 = await collectIterator(provider.stream(messages))
+      const events2 = await collectIterator(provider.stream(messages))
 
       // Collect text from both runs
       let text1 = ''
@@ -405,7 +396,7 @@ describe.skipIf(!hasApiKey)('OpenAIModel Integration Tests', () => {
         },
       ]
 
-      const events = await collectEvents(provider.stream(messages))
+      const events = await collectIterator(provider.stream(messages))
 
       // Verify complete lifecycle: start -> delta(s) -> stop
       const startEvents = events.filter((e) => e.type === 'modelContentBlockStartEvent')
@@ -454,7 +445,7 @@ describe.skipIf(!hasApiKey)('OpenAIModel Integration Tests', () => {
         },
       ]
 
-      const events = await collectEvents(provider.stream(messages))
+      const events = await collectIterator(provider.stream(messages))
 
       // Collect response text
       let responseText = ''
@@ -483,7 +474,7 @@ describe.skipIf(!hasApiKey)('OpenAIModel Integration Tests', () => {
         },
       ]
 
-      const events = await collectEvents(provider.stream(messages))
+      const events = await collectIterator(provider.stream(messages))
 
       const messageStopEvent = events.find((e) => e.type === 'modelMessageStopEvent')
       expect(messageStopEvent).toBeDefined()
@@ -503,7 +494,7 @@ describe.skipIf(!hasApiKey)('OpenAIModel Integration Tests', () => {
         },
       ]
 
-      const events = await collectEvents(provider.stream(messages))
+      const events = await collectIterator(provider.stream(messages))
 
       const messageStopEvent = events.find((e) => e.type === 'modelMessageStopEvent')
       expect(messageStopEvent).toBeDefined()
@@ -535,7 +526,7 @@ describe.skipIf(!hasApiKey)('OpenAIModel Integration Tests', () => {
         },
       ]
 
-      const events = await collectEvents(provider.stream(messages, { toolSpecs: [calculatorTool] }))
+      const events = await collectIterator(provider.stream(messages, { toolSpecs: [calculatorTool] }))
 
       const messageStopEvent = events.find((e) => e.type === 'modelMessageStopEvent')
       expect(messageStopEvent).toBeDefined()

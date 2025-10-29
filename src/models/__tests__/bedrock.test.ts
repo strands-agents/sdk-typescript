@@ -2,9 +2,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { BedrockRuntimeClient } from '@aws-sdk/client-bedrock-runtime'
 import { BedrockModel } from '../bedrock'
 import { ContextWindowOverflowError } from '../../errors'
-import { collectEvents } from './test-utils'
 import type { Message } from '../../types/messages'
 import type { StreamOptions } from '../model'
+import { collectIterator } from '../../__fixtures__/model-test-helpers'
 
 /**
  * Helper function to setup mock send with custom stream generator.
@@ -194,7 +194,7 @@ describe('BedrockModel', () => {
         },
       })
 
-      const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
 
       const options: StreamOptions = {
         systemPrompt: 'You are a helpful assistant',
@@ -209,7 +209,7 @@ describe('BedrockModel', () => {
       }
 
       // Trigger the stream to make the request, but ignore the events for now
-      collectEvents(provider.stream(messages, options))
+      collectIterator(provider.stream(messages, options))
 
       // Verify ConverseStreamCommand was called with properly formatted request
       expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
@@ -252,6 +252,7 @@ describe('BedrockModel', () => {
       const provider = new BedrockModel()
       const messages: Message[] = [
         {
+          type: 'message',
           role: 'assistant',
           content: [
             {
@@ -265,7 +266,7 @@ describe('BedrockModel', () => {
       ]
 
       // Run the stream but ignore the output
-      collectEvents(provider.stream(messages))
+      collectIterator(provider.stream(messages))
 
       // Verify ConverseStreamCommand was called with properly formatted request
       expect(mockConverseStreamCommand).toHaveBeenLastCalledWith(
@@ -292,6 +293,7 @@ describe('BedrockModel', () => {
       const provider = new BedrockModel()
       const messages: Message[] = [
         {
+          type: 'message',
           role: 'user',
           content: [
             {
@@ -308,7 +310,7 @@ describe('BedrockModel', () => {
       ]
 
       // Start the stream
-      collectEvents(provider.stream(messages))
+      collectIterator(provider.stream(messages))
 
       // Verify ConverseStreamCommand was called with properly formatted request
       expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
@@ -343,6 +345,7 @@ describe('BedrockModel', () => {
       const provider = new BedrockModel()
       const messages: Message[] = [
         {
+          type: 'message',
           role: 'user',
           content: [
             {
@@ -359,7 +362,7 @@ describe('BedrockModel', () => {
       ]
 
       // Start the stream but don't await it
-      collectEvents(provider.stream(messages))
+      collectIterator(provider.stream(messages))
 
       // Verify ConverseStreamCommand was called with properly formatted request
       expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
@@ -391,6 +394,7 @@ describe('BedrockModel', () => {
       const provider = new BedrockModel()
       const messages: Message[] = [
         {
+          type: 'message',
           role: 'user',
           content: [
             { type: 'textBlock', text: 'Message with cache point' },
@@ -399,7 +403,7 @@ describe('BedrockModel', () => {
         },
       ]
 
-      collectEvents(provider.stream(messages))
+      collectIterator(provider.stream(messages))
 
       // Verify ConverseStreamCommand was called with properly formatted request
       expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
@@ -417,9 +421,9 @@ describe('BedrockModel', () => {
   describe('stream', () => {
     it('yields and validate events', async () => {
       const provider = new BedrockModel()
-      const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
 
-      const events = await collectEvents(provider.stream(messages))
+      const events = await collectIterator(provider.stream(messages))
 
       expect(events).toStrictEqual([
         {
@@ -463,11 +467,11 @@ describe('BedrockModel', () => {
       vi.mocked(BedrockRuntimeClient).mockImplementation(() => ({ send: mockSendError }) as never)
 
       const provider = new BedrockModel()
-      const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
 
       let eventCount = 0
       await expect(async () => {
-        await collectEvents(provider.stream(messages))
+        await collectIterator(provider.stream(messages))
       }).rejects.toThrow(ContextWindowOverflowError)
 
       // Verify no events were yielded before error was thrown
@@ -482,11 +486,11 @@ describe('BedrockModel', () => {
       vi.mocked(BedrockRuntimeClient).mockImplementation(() => ({ send: mockSendError }) as never)
 
       const provider = new BedrockModel()
-      const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
 
       let eventCount = 0
       await expect(async () => {
-        await collectEvents(provider.stream(messages))
+        await collectIterator(provider.stream(messages))
       }).rejects.toThrow(ValidationException)
 
       // Verify no events were yielded before error was thrown
@@ -506,9 +510,9 @@ describe('BedrockModel', () => {
       })
 
       const provider = new BedrockModel()
-      const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
 
-      const events = await collectEvents(provider.stream(messages))
+      const events = await collectIterator(provider.stream(messages))
 
       expect(events[2]).toStrictEqual({
         type: 'modelContentBlockDeltaEvent',
@@ -541,14 +545,14 @@ describe('BedrockModel', () => {
       })
 
       const provider = new BedrockModel()
-      const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
 
-      const events = await collectEvents(provider.stream(messages))
+      const events = await collectIterator(provider.stream(messages))
 
       expect(events[2]).toStrictEqual({
         type: 'modelContentBlockDeltaEvent',
         delta: {
-          type: 'reasoningDelta',
+          type: 'reasoningContentDelta',
           text: 'thinking...',
           signature: 'sig123',
         },
@@ -556,7 +560,7 @@ describe('BedrockModel', () => {
       expect(events[3]).toStrictEqual({
         type: 'modelContentBlockDeltaEvent',
         delta: {
-          type: 'reasoningDelta',
+          type: 'reasoningContentDelta',
           redactedContent: new Uint8Array(1),
         },
       })
@@ -585,15 +589,18 @@ describe('BedrockModel', () => {
       })
 
       const provider = new BedrockModel()
-      const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
 
-      const events = await collectEvents(provider.stream(messages))
+      const events = await collectIterator(provider.stream(messages))
 
       const reasoningDelta = events.find(
-        (e) => e.type === 'modelContentBlockDeltaEvent' && e.delta.type === 'reasoningDelta'
+        (e) => e.type === 'modelContentBlockDeltaEvent' && e.delta.type === 'reasoningContentDelta'
       )
       expect(reasoningDelta).toBeDefined()
-      if (reasoningDelta?.type === 'modelContentBlockDeltaEvent' && reasoningDelta.delta.type === 'reasoningDelta') {
+      if (
+        reasoningDelta?.type === 'modelContentBlockDeltaEvent' &&
+        reasoningDelta.delta.type === 'reasoningContentDelta'
+      ) {
         expect(reasoningDelta.delta.text).toBe('thinking...')
         expect(reasoningDelta.delta.signature).toBeUndefined()
       }
@@ -615,15 +622,18 @@ describe('BedrockModel', () => {
       })
 
       const provider = new BedrockModel()
-      const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
 
-      const events = await collectEvents(provider.stream(messages))
+      const events = await collectIterator(provider.stream(messages))
 
       const reasoningDelta = events.find(
-        (e) => e.type === 'modelContentBlockDeltaEvent' && e.delta.type === 'reasoningDelta'
+        (e) => e.type === 'modelContentBlockDeltaEvent' && e.delta.type === 'reasoningContentDelta'
       )
       expect(reasoningDelta).toBeDefined()
-      if (reasoningDelta?.type === 'modelContentBlockDeltaEvent' && reasoningDelta.delta.type === 'reasoningDelta') {
+      if (
+        reasoningDelta?.type === 'modelContentBlockDeltaEvent' &&
+        reasoningDelta.delta.type === 'reasoningContentDelta'
+      ) {
         expect(reasoningDelta.delta.text).toBeUndefined()
         expect(reasoningDelta.delta.signature).toBe('sig123')
       }
@@ -650,9 +660,9 @@ describe('BedrockModel', () => {
       })
 
       const provider = new BedrockModel()
-      const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
 
-      const events = await collectEvents(provider.stream(messages))
+      const events = await collectIterator(provider.stream(messages))
 
       const metadataEvent = events.find((e) => e.type === 'modelMetadataEvent')
       expect(metadataEvent).toBeDefined()
@@ -676,9 +686,9 @@ describe('BedrockModel', () => {
       })
 
       const provider = new BedrockModel()
-      const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
 
-      const events = await collectEvents(provider.stream(messages))
+      const events = await collectIterator(provider.stream(messages))
 
       const metadataEvent = events.find((e) => e.type === 'modelMetadataEvent')
       expect(metadataEvent).toBeDefined()
@@ -696,9 +706,9 @@ describe('BedrockModel', () => {
       })
 
       const provider = new BedrockModel()
-      const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
 
-      const events = await collectEvents(provider.stream(messages))
+      const events = await collectIterator(provider.stream(messages))
 
       const stopEvent = events.find((e) => e.type === 'modelMessageStopEvent')
       expect(stopEvent).toBeDefined()
@@ -727,7 +737,9 @@ describe('BedrockModel', () => {
           })
 
           const provider = new BedrockModel()
-          const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+          const messages: Message[] = [
+            { type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] },
+          ]
 
           const events = []
           for await (const event of provider.stream(messages)) {
@@ -752,12 +764,12 @@ describe('BedrockModel', () => {
 
     it('formats string system prompt with cachePrompt config', async () => {
       const provider = new BedrockModel({ cachePrompt: 'default' })
-      const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
       const options: StreamOptions = {
         systemPrompt: 'You are a helpful assistant',
       }
 
-      collectEvents(provider.stream(messages, options))
+      collectIterator(provider.stream(messages, options))
 
       expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
         modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
@@ -773,7 +785,7 @@ describe('BedrockModel', () => {
 
     it('formats array system prompt with text blocks only', async () => {
       const provider = new BedrockModel()
-      const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
       const options: StreamOptions = {
         systemPrompt: [
           { type: 'textBlock', text: 'You are a helpful assistant' },
@@ -781,7 +793,7 @@ describe('BedrockModel', () => {
         ],
       }
 
-      collectEvents(provider.stream(messages, options))
+      collectIterator(provider.stream(messages, options))
 
       expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
         modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
@@ -797,7 +809,7 @@ describe('BedrockModel', () => {
 
     it('formats array system prompt with cache points', async () => {
       const provider = new BedrockModel()
-      const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
       const options: StreamOptions = {
         systemPrompt: [
           { type: 'textBlock', text: 'You are a helpful assistant' },
@@ -806,7 +818,7 @@ describe('BedrockModel', () => {
         ],
       }
 
-      collectEvents(provider.stream(messages, options))
+      collectIterator(provider.stream(messages, options))
 
       expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
         modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
@@ -827,7 +839,7 @@ describe('BedrockModel', () => {
     it('warns when both array system prompt and cachePrompt config are provided', async () => {
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
       const provider = new BedrockModel({ cachePrompt: 'default' })
-      const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
       const options: StreamOptions = {
         systemPrompt: [
           { type: 'textBlock', text: 'You are a helpful assistant' },
@@ -835,7 +847,7 @@ describe('BedrockModel', () => {
         ],
       }
 
-      collectEvents(provider.stream(messages, options))
+      collectIterator(provider.stream(messages, options))
 
       // Verify warning was logged
       expect(warnSpy).toHaveBeenCalledWith(
@@ -859,12 +871,12 @@ describe('BedrockModel', () => {
 
     it('handles empty array system prompt', async () => {
       const provider = new BedrockModel()
-      const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
       const options: StreamOptions = {
         systemPrompt: [],
       }
 
-      collectEvents(provider.stream(messages, options))
+      collectIterator(provider.stream(messages, options))
 
       // Empty array should not set system field
       expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({

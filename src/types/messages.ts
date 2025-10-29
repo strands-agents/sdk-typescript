@@ -7,6 +7,11 @@ import type { ToolResultContent } from '../tools/types'
  */
 export interface Message {
   /**
+   * Discriminator for message type.
+   */
+  type: 'message'
+
+  /**
    * The role of the message sender.
    */
   role: Role

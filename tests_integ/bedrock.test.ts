@@ -1,22 +1,13 @@
 import { describe, it, expect } from 'vitest'
 import { fromNodeProviderChain } from '@aws-sdk/credential-providers'
-import { BedrockModel } from '../src/models/bedrock'
-import { ContextWindowOverflowError } from '../src/errors'
-import type { Message } from '../src/types/messages'
-import type { ToolSpec } from '../src/tools/types'
-import type { ModelStreamEvent } from '../src/models/streaming'
+import { BedrockModel } from '@strands-agents/sdk'
+import { ContextWindowOverflowError } from '@strands-agents/sdk'
+import type { Message } from '@strands-agents/sdk'
+import type { ToolSpec } from '@strands-agents/sdk'
 import { ValidationException } from '@aws-sdk/client-bedrock-runtime'
 
-/**
- * Helper function to collect all events from a stream.
- */
-async function collectEvents(stream: AsyncIterable<ModelStreamEvent>): Promise<ModelStreamEvent[]> {
-  const events: ModelStreamEvent[] = []
-  for await (const event of stream) {
-    events.push(event)
-  }
-  return events
-}
+// eslint-disable-next-line no-restricted-imports
+import { collectIterator } from '../src/__fixtures__/model-test-helpers'
 
 // Check credentials at module level so skipIf can use it
 let hasCredentials = false
@@ -39,12 +30,13 @@ describe.skipIf(!hasCredentials)('BedrockModel Integration Tests', () => {
 
       const messages: Message[] = [
         {
+          type: 'message',
           role: 'user',
           content: [{ type: 'textBlock', text: 'Say hello in one word.' }],
         },
       ]
 
-      const events = await collectEvents(provider.stream(messages))
+      const events = await collectIterator(provider.stream(messages))
 
       // Verify we got the expected event sequence
       expect(events.length).toBeGreaterThan(0)
@@ -77,6 +69,7 @@ describe.skipIf(!hasCredentials)('BedrockModel Integration Tests', () => {
 
       const messages: Message[] = [
         {
+          type: 'message',
           role: 'user',
           content: [{ type: 'textBlock', text: 'What should I say?' }],
         },
@@ -84,7 +77,7 @@ describe.skipIf(!hasCredentials)('BedrockModel Integration Tests', () => {
 
       const systemPrompt = 'Always respond with exactly the word "TEST" and nothing else.'
 
-      const events = await collectEvents(provider.stream(messages, { systemPrompt }))
+      const events = await collectIterator(provider.stream(messages, { systemPrompt }))
 
       // Collect the text response
       let responseText = ''
@@ -131,12 +124,13 @@ describe.skipIf(!hasCredentials)('BedrockModel Integration Tests', () => {
 
       const messages: Message[] = [
         {
+          type: 'message',
           role: 'user',
           content: [{ type: 'textBlock', text: 'What is 15 plus 27?' }],
         },
       ]
 
-      const events = await collectEvents(provider.stream(messages, { toolSpecs: [calculatorTool] }))
+      const events = await collectIterator(provider.stream(messages, { toolSpecs: [calculatorTool] }))
 
       // Should have tool use in the response
       const toolUseStartEvents = events.filter(
@@ -164,12 +158,13 @@ describe.skipIf(!hasCredentials)('BedrockModel Integration Tests', () => {
 
       const messages: Message[] = [
         {
+          type: 'message',
           role: 'user',
           content: [{ type: 'textBlock', text: 'Write a long story about dragons.' }],
         },
       ]
 
-      const events = await collectEvents(provider.stream(messages))
+      const events = await collectIterator(provider.stream(messages))
 
       // Check metadata for token usage
       const metadataEvent = events.find((e) => e.type === 'modelMetadataEvent')
@@ -194,19 +189,23 @@ describe.skipIf(!hasCredentials)('BedrockModel Integration Tests', () => {
       ]
 
       // First request - creates cache
-      const messages1: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Say hello' }] }]
-      const events1 = await collectEvents(provider.stream(messages1, { systemPrompt: cachedSystemPrompt }))
+      const messages1: Message[] = [
+        { type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Say hello' }] },
+      ]
+      const events1 = await collectIterator(provider.stream(messages1, { systemPrompt: cachedSystemPrompt }))
 
       // Verify first request creates cache (if caching is supported)
       const metadata1 = events1.find((e) => e.type === 'modelMetadataEvent')
       expect(metadata1?.usage?.inputTokens).toBeGreaterThan(0)
 
       // Verify cache creation
-      expect(metadata1.usage?.cacheWriteInputTokens).toBeGreaterThan(0)
+      expect(metadata1?.usage?.cacheWriteInputTokens).toBeGreaterThan(0)
 
       // Second request - should use cache
-      const messages2: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Say goodbye' }] }]
-      const events2 = await collectEvents(provider.stream(messages2, { systemPrompt: cachedSystemPrompt }))
+      const messages2: Message[] = [
+        { type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Say goodbye' }] },
+      ]
+      const events2 = await collectIterator(provider.stream(messages2, { systemPrompt: cachedSystemPrompt }))
 
       // Verify second request uses cache (if caching is supported)
       const metadata2 = events2.find((e) => e.type === 'modelMetadataEvent')
@@ -226,6 +225,7 @@ describe.skipIf(!hasCredentials)('BedrockModel Integration Tests', () => {
       // First request - creates cache
       const messages1: Message[] = [
         {
+          type: 'message',
           role: 'user',
           content: [
             { type: 'textBlock', text: largeContext },
@@ -236,18 +236,19 @@ describe.skipIf(!hasCredentials)('BedrockModel Integration Tests', () => {
       ]
 
       // First request - creates cache
-      const events1 = await collectEvents(provider.stream(messages1))
+      const events1 = await collectIterator(provider.stream(messages1))
 
       // Verify first request creates cache (if caching is supported)
       const metadata1 = events1.find((e) => e.type === 'modelMetadataEvent')
       expect(metadata1?.usage?.inputTokens).toBeGreaterThan(0)
 
       // Verify cache creation
-      expect(metadata1.usage?.cacheWriteInputTokens).toBeGreaterThan(0)
+      expect(metadata1?.usage?.cacheWriteInputTokens).toBeGreaterThan(0)
 
       // Second request - should use cache
       const messages2: Message[] = [
         {
+          type: 'message',
           role: 'user',
           content: [
             { type: 'textBlock', text: largeContext },
@@ -256,14 +257,14 @@ describe.skipIf(!hasCredentials)('BedrockModel Integration Tests', () => {
           ],
         },
       ]
-      const events2 = await collectEvents(provider.stream(messages2))
+      const events2 = await collectIterator(provider.stream(messages2))
 
       // Verify second request uses cache (if caching is supported)
       const metadata2 = events2.find((e) => e.type === 'modelMetadataEvent')
       expect(metadata2?.usage).toBeDefined()
 
       // Verify cache read
-      expect(metadata2.usage?.cacheReadInputTokens).toBeGreaterThan(0)
+      expect(metadata2?.usage?.cacheReadInputTokens).toBeGreaterThan(0)
     })
   })
 
@@ -275,6 +276,7 @@ describe.skipIf(!hasCredentials)('BedrockModel Integration Tests', () => {
 
       const messages: Message[] = [
         {
+          type: 'message',
           role: 'user',
           content: [{ type: 'textBlock', text: 'Hello' }],
         },
@@ -299,6 +301,7 @@ describe.skipIf(!hasCredentials)('BedrockModel Integration Tests', () => {
 
       const messages: Message[] = [
         {
+          type: 'message',
           role: 'user',
           content: [{ type: 'textBlock', text: longText }],
         },

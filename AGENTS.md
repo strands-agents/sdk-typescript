@@ -550,7 +550,7 @@ it('returns expected user object', () => {
 
 // ✅ Good: Verify entire array of objects
 it('yields expected stream events', async () => {
-  const events = await collectEvents(stream)
+  const events = await collectIterator(stream)
   expect(events).toEqual([
     { type: 'streamEvent', data: 'Starting...' },
     { type: 'streamEvent', data: 'Processing...' },
@@ -570,7 +570,7 @@ it('returns expected user object', () => {
 
 // ❌ Bad: Testing array elements individually in a loop
 it('yields expected stream events', async () => {
-  const events = await collectEvents(stream)
+  const events = await collectIterator(stream)
   for (const event of events) {
     expect(event.type).toBe('streamEvent')
     expect(event).toHaveProperty('data')
