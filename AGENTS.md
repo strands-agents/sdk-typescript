@@ -682,6 +682,16 @@ If TypeScript compilation fails:
 4. **Document as you go** with TSDoc comments
 5. **Run all checks** before committing (pre-commit hooks will enforce this)
 
+
+### Writing code
+- YOU MUST make the SMALLEST reasonable changes to achieve the desired outcome.
+- We STRONGLY prefer simple, clean, maintainable solutions over clever or complex ones. Readability and maintainability are PRIMARY CONCERNS, even at the cost of conciseness or performance.
+- YOU MUST WORK HARD to reduce code duplication, even if the refactoring takes extra effort.
+- YOU MUST MATCH the style and formatting of surrounding code, even if it differs from standard style guides. Consistency within a file trumps external standards.
+- YOU MUST NOT manually change whitespace that does not affect execution or output. Otherwise, use a formatting tool.
+- Fix broken things immediately when you find them. Don't ask permission to fix bugs.
+
+
 ### Code Review Considerations
 
 When responding to PR feedback:

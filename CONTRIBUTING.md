@@ -57,6 +57,9 @@ This will set up pre-commit hooks that automatically run tests, linting, formatt
 # Run unit tests only
 npm test
 
+# Run unit tests for a single file
+npm test -- src/models/__tests__/openai.test.ts
+
 # Run tests with coverage (required: 80%+)
 npm run test:coverage
 
@@ -65,6 +68,9 @@ npm run test:watch
 
 # Run only integration tests
 npm run test:integ
+
+# Run integ tests for a single file
+npm run test:integ -- tests_integ/openai.test.ts
 ```
 
 ### Test Requirements
