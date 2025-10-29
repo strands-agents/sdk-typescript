@@ -478,7 +478,7 @@ export class BedrockModel implements Model<BedrockModelConfig, BedrockRuntimeCli
     const shouldInclude = MODELS_INCLUDE_STATUS.some((pattern) => this._config.modelId?.includes(pattern))
 
     // Log debug message for auto-detection
-    console.log(`Auto-detected includeToolResultStatus=${shouldInclude} for model: ${this._config.modelId}`)
+    console.debug(`Auto-detected includeToolResultStatus=${shouldInclude} for model: ${this._config.modelId}`)
 
     return shouldInclude
   }

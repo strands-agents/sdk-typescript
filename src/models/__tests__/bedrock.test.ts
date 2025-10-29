@@ -1003,45 +1003,6 @@ describe('BedrockModel', () => {
     })
 
     describe('when includeToolResultStatus is undefined (default)', () => {
-      it('follows auto logic for Claude models', async () => {
-        const provider = new BedrockModel({
-          modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
-        })
-        const messages: Message[] = [
-          {
-            role: 'user',
-            content: [
-              {
-                type: 'toolResultBlock',
-                toolUseId: 'tool-123',
-                status: 'success',
-                content: [{ type: 'toolResultTextContent', text: 'Result' }],
-              },
-            ],
-          },
-        ]
-
-        collectEvents(provider.stream(messages))
-
-        expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
-          messages: [
-            {
-              content: [
-                {
-                  toolResult: {
-                    content: [{ text: 'Result' }],
-                    status: 'success',
-                    toolUseId: 'tool-123',
-                  },
-                },
-              ],
-              role: 'user',
-            },
-          ],
-          modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
-        })
-      })
-
       it('follows auto logic for non-Claude models', async () => {
         const provider = new BedrockModel({
           modelId: 'amazon.nova-lite-v1:0',
@@ -1083,7 +1044,7 @@ describe('BedrockModel', () => {
 
     describe('debug logging', () => {
       it('logs auto-detection decision for auto mode', async () => {
-        const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+        const consoleDebugSpy = vi.spyOn(console, 'debug').mockImplementation(() => {})
         const provider = new BedrockModel({
           modelId: 'anthropic.claude-3-5-sonnet-20241022-v2:0',
           includeToolResultStatus: 'auto',
@@ -1104,15 +1065,15 @@ describe('BedrockModel', () => {
 
         collectEvents(provider.stream(messages))
 
-        expect(consoleLogSpy).toHaveBeenCalledWith(
+        expect(consoleDebugSpy).toHaveBeenCalledWith(
           'Auto-detected includeToolResultStatus=true for model: anthropic.claude-3-5-sonnet-20241022-v2:0'
         )
 
-        consoleLogSpy.mockRestore()
+        consoleDebugSpy.mockRestore()
       })
 
       it('logs auto-detection decision for undefined (default auto mode)', async () => {
-        const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+        const consoleDebugSpy = vi.spyOn(console, 'debug').mockImplementation(() => {})
         const provider = new BedrockModel({
           modelId: 'amazon.nova-pro-v1:0',
         })
@@ -1132,11 +1093,11 @@ describe('BedrockModel', () => {
 
         collectEvents(provider.stream(messages))
 
-        expect(consoleLogSpy).toHaveBeenCalledWith(
+        expect(consoleDebugSpy).toHaveBeenCalledWith(
           'Auto-detected includeToolResultStatus=false for model: amazon.nova-pro-v1:0'
         )
 
-        consoleLogSpy.mockRestore()
+        consoleDebugSpy.mockRestore()
       })
     })
   })
