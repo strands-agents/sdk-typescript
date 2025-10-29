@@ -31,6 +31,9 @@ function createMockTool(name: string, description = 'Test tool description'): To
         ],
       }
     },
+    async invoke(): Promise<unknown> {
+      return 'test result'
+    },
   }
 }
 

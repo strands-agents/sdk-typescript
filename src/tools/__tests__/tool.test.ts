@@ -908,6 +908,109 @@ describe('FunctionTool', () => {
       })
     })
   })
+
+  describe('invoke', () => {
+    it('returns unwrapped result for synchronous callback', async () => {
+      const tool = new FunctionTool({
+        name: 'syncTool',
+        description: 'Synchronous tool',
+        inputSchema: { type: 'object' },
+        callback: (): string => 'sync result',
+      })
+
+      const result = await tool.invoke({})
+      expect(result).toBe('sync result')
+    })
+
+    it('returns unwrapped result for async callback', async () => {
+      const tool = new FunctionTool({
+        name: 'asyncTool',
+        description: 'Async tool',
+        inputSchema: { type: 'object' },
+        callback: async (): Promise<string> => 'async result',
+      })
+
+      const result = await tool.invoke({})
+      expect(result).toBe('async result')
+    })
+
+    it('returns final value from async generator', async () => {
+      const tool = new FunctionTool({
+        name: 'generatorTool',
+        description: 'Generator tool',
+        inputSchema: { type: 'object' },
+        callback: async function* (): AsyncGenerator<string, number, unknown> {
+          yield 'step 1'
+          yield 'step 2'
+          return 42
+        },
+      })
+
+      const result = await tool.invoke({})
+      expect(result).toBe(42)
+    })
+
+    it('passes input and context to callback', async () => {
+      let receivedInput: unknown
+      let receivedContext: ToolContext | undefined
+
+      const tool = new FunctionTool({
+        name: 'contextTool',
+        description: 'Tests context',
+        inputSchema: { type: 'object' },
+        callback: (input: unknown, context?: ToolContext): string => {
+          receivedInput = input
+          receivedContext = context
+          return 'ok'
+        },
+      })
+
+      const mockContext: ToolContext = {
+        toolUse: { name: 'contextTool', toolUseId: 'test-123', input: { test: 'value' } },
+        invocationState: { userId: 'user-123' },
+      }
+
+      await tool.invoke({ test: 'value' }, mockContext)
+
+      expect(receivedInput).toEqual({ test: 'value' })
+      expect(receivedContext).toBeDefined()
+      expect(receivedContext?.invocationState).toEqual({ userId: 'user-123' })
+    })
+
+    it('creates minimal context when not provided', async () => {
+      let receivedContext: ToolContext | undefined
+
+      const tool = new FunctionTool({
+        name: 'minimalContextTool',
+        description: 'Tests minimal context',
+        inputSchema: { type: 'object' },
+        callback: (_input: unknown, context?: ToolContext): string => {
+          receivedContext = context
+          return 'ok'
+        },
+      })
+
+      await tool.invoke({ test: 'value' })
+
+      expect(receivedContext).toBeDefined()
+      expect(receivedContext?.toolUse.name).toBe('minimalContextTool')
+      expect(receivedContext?.toolUse.toolUseId).toBe('direct-invocation')
+      expect(receivedContext?.invocationState).toEqual({})
+    })
+
+    it('lets errors throw naturally without wrapping', async () => {
+      const tool = new FunctionTool({
+        name: 'errorTool',
+        description: 'Throws error',
+        inputSchema: { type: 'object' },
+        callback: (): never => {
+          throw new Error('Test error')
+        },
+      })
+
+      await expect(tool.invoke({})).rejects.toThrow('Test error')
+    })
+  })
 })
 
 describe('Tool interface backwards compatibility', () => {

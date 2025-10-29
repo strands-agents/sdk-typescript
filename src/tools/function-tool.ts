@@ -183,6 +183,63 @@ export class FunctionTool implements Tool {
   }
 
   /**
+   * Invokes the tool directly with type-safe input and returns the unwrapped result.
+   * This is useful for testing and standalone tool execution.
+   *
+   * Unlike stream(), this method:
+   * - Returns the raw result (not wrapped in ToolResult)
+   * - Consumes async generators and returns only the final value
+   * - Lets errors throw naturally (not wrapped in error ToolResult)
+   *
+   * @param input - The input parameters for the tool
+   * @param context - Optional tool execution context
+   * @returns The unwrapped result
+   *
+   * @example
+   * ```typescript
+   * const tool = new FunctionTool({
+   *   name: 'calculator',
+   *   description: 'Does math',
+   *   inputSchema: { type: 'object', properties: { a: { type: 'number' }, b: { type: 'number' } } },
+   *   callback: (input: any) => (input as any).a + (input as any).b
+   * })
+   *
+   * const result = await tool.invoke({ a: 5, b: 3 })
+   * console.log(result) // 8
+   * ```
+   */
+  async invoke(input: unknown, context?: ToolContext): Promise<unknown> {
+    // Create a minimal context if not provided
+    const toolContext: ToolContext = context ?? {
+      toolUse: {
+        name: this.toolName,
+        toolUseId: 'direct-invocation',
+        input: input as JSONValue,
+      },
+      invocationState: {},
+    }
+
+    const result = this._callback(input, toolContext)
+
+    // Handle async generator - consume and return final value
+    if (result && typeof result === 'object' && Symbol.asyncIterator in result) {
+      const generator = result as AsyncGenerator<unknown, unknown, undefined>
+      let iterResult = await generator.next()
+
+      // Keep iterating until we reach the done state
+      while (!iterResult.done) {
+        iterResult = await generator.next()
+      }
+
+      // Return the final value (the return value of the generator)
+      return iterResult.value
+    }
+
+    // For promises and synchronous values, await/return directly
+    return await result
+  }
+
+  /**
    * Wraps a value in a ToolResult with success status.
    *
    * Due to AWS Bedrock limitations (only accepts objects as JSON content), the following

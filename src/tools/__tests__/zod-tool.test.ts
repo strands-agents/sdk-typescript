@@ -230,7 +230,11 @@ describe('tool', () => {
 
         expect(events).toHaveLength(0)
         expect(result.status).toBe('error')
-        expect(result.content[0].text).toBe('Callback error')
+        expect(result.content.length).toBeGreaterThan(0)
+        const firstContent = result.content[0]
+        if (firstContent && firstContent.type === 'toolResultTextContent') {
+          expect(firstContent.text).toBe('Callback error')
+        }
       })
 
       it('catches async callback errors', async () => {

@@ -28,7 +28,7 @@ export function createMockContext(input: unknown, invocationState: Record<string
     toolUse: {
       name: 'testTool',
       toolUseId: 'test-123',
-      input,
+      input: input as JSONValue,
     },
     invocationState,
   }

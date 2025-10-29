@@ -1,4 +1,5 @@
 import type { Tool, ToolContext, ToolSpec, ToolStreamEvent, ToolStreamGenerator } from './tool'
+import type { JSONSchema } from '../types/json'
 import { z } from 'zod'
 
 /**
@@ -78,7 +79,7 @@ export function tool<TInput extends z.ZodType>(config: ToolConfig<TInput>): Tool
   const toolSpec: ToolSpec = {
     name,
     description,
-    inputSchema: z.toJSONSchema(inputSchema),
+    inputSchema: z.toJSONSchema(inputSchema) as JSONSchema,
   }
 
   // Create a tool object that implements Tool interface
