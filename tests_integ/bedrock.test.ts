@@ -6,6 +6,7 @@ import type { Message } from '@strands-agents/sdk'
 import type { ToolSpec } from '@strands-agents/sdk'
 import type { ModelStreamEvent } from '@strands-agents/sdk'
 import { ValidationException } from '@aws-sdk/client-bedrock-runtime'
+import { fail } from 'assert/strict'
 
 /**
  * Helper function to collect all events from a stream.
@@ -29,6 +30,104 @@ try {
   hasCredentials = false
   console.log('⏭️  AWS credentials not available - integration tests will be skipped')
 }
+
+describe.skipIf(!hasCredentials)('BedrockModel Integration Tests (Non-Streaming)', () => {
+  it('gets a simple text response', async () => {
+    const provider = new BedrockModel({
+      stream: false,
+      maxTokens: 100,
+    })
+
+    const messages: Message[] = [
+      {
+        role: 'user',
+        content: [{ type: 'textBlock', text: 'Say hello in exactly one word.' }],
+      },
+    ]
+
+    const events = await collectEvents(provider.stream(messages))
+
+    expect(events[0]?.type).toBe('modelMessageStartEvent')
+    expect(events[1]?.type).toBe('modelContentBlockStartEvent')
+    expect(events[2]?.type).toBe('modelContentBlockDeltaEvent')
+    expect(events[3]?.type).toBe('modelContentBlockStopEvent')
+    expect(events[4]?.type).toBe('modelMessageStopEvent')
+    expect(events[5]?.type).toBe('modelMetadataEvent')
+
+    let responseText = ''
+    for (const event of events) {
+      if (event.type === 'modelContentBlockDeltaEvent' && event.delta.type === 'textDelta') {
+        responseText += event.delta.text
+      }
+    }
+    expect(responseText.trim().toUpperCase()).toContain('HELLO')
+
+    const stopEvent = events.find((e) => e.type === 'modelMessageStopEvent')
+    expect(stopEvent?.stopReason).toBe('endTurn')
+
+    const metadataEvent = events.find((e) => e.type === 'modelMetadataEvent')
+    if (metadataEvent?.type === 'modelMetadataEvent') {
+      expect(metadataEvent.usage?.outputTokens).toBeGreaterThan(0)
+    } else {
+      fail('Metadata event not found')
+    }
+  })
+
+  it('requests tool use when appropriate', async () => {
+    const provider = new BedrockModel({
+      stream: false,
+      maxTokens: 200,
+    })
+
+    const calculatorTool: ToolSpec = {
+      name: 'calculator',
+      description: 'Performs basic arithmetic operations',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          operation: { type: 'string', enum: ['add', 'subtract', 'multiply', 'divide'] },
+          a: { type: 'number' },
+          b: { type: 'number' },
+        },
+        required: ['operation', 'a', 'b'],
+      },
+    }
+
+    const messages: Message[] = [
+      {
+        role: 'user',
+        content: [{ type: 'textBlock', text: 'What is 15 plus 27?' }],
+      },
+    ]
+
+    const events = await collectEvents(provider.stream(messages, { toolSpecs: [calculatorTool] }))
+
+    const startEvent = events.find((e) => e.type === 'modelContentBlockStartEvent')
+    expect(startEvent).toBeDefined()
+
+    if (startEvent?.type === 'modelContentBlockStartEvent') {
+      expect(startEvent.start?.type).toBe('toolUseStart')
+      expect(startEvent.start?.name).toBe('calculator')
+    } else {
+      fail('Content block start event not found')
+    }
+
+    const deltaEvent = events.find((e) => e.type === 'modelContentBlockDeltaEvent')
+    expect(deltaEvent).toBeDefined()
+
+    if (deltaEvent?.type === 'modelContentBlockDeltaEvent' && deltaEvent.delta.type === 'toolUseInputDelta') {
+      const input = JSON.parse(deltaEvent.delta.input)
+      expect(input.operation).toBe('add')
+      expect(input.a).toBe(15)
+      expect(input.b).toBe(27)
+    } else {
+      fail('Tool use input delta event not found')
+    }
+
+    const stopEvent = events.find((e) => e.type === 'modelMessageStopEvent')
+    expect(stopEvent?.stopReason).toBe('toolUse')
+  })
+})
 
 describe.skipIf(!hasCredentials)('BedrockModel Integration Tests', () => {
   describe('Basic Streaming', () => {
