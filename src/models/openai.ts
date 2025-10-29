@@ -397,13 +397,40 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
       stream_options: { include_usage: true },
     }
 
-    // Add system prompt validation
-    // Remove redundant type assertion
-    if (options?.systemPrompt && options.systemPrompt.trim().length > 0) {
-      request.messages.push({
-        role: 'system',
-        content: options.systemPrompt,
-      })
+    // Handle system prompt (string or array format)
+    if (options?.systemPrompt !== undefined) {
+      if (typeof options.systemPrompt === 'string') {
+        // String path: validate and add as-is
+        if (options.systemPrompt.trim().length > 0) {
+          request.messages.push({
+            role: 'system',
+            content: options.systemPrompt,
+          })
+        }
+      } else if (options.systemPrompt.length > 0) {
+        // Array path: extract text blocks and warn about cache points
+        const textBlocks: string[] = []
+        let hasCachePoints = false
+
+        for (const block of options.systemPrompt) {
+          if (block.type === 'textBlock') {
+            textBlocks.push(block.text)
+          } else if (block.type === 'cachePointBlock') {
+            hasCachePoints = true
+          }
+        }
+
+        if (hasCachePoints) {
+          console.warn('Cache points are not supported in OpenAI system prompts and will be ignored.')
+        }
+
+        if (textBlocks.length > 0) {
+          request.messages.push({
+            role: 'system',
+            content: textBlocks.join('\n'),
+          })
+        }
+      }
     }
 
     // Add formatted messages

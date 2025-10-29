@@ -921,6 +921,154 @@ describe('OpenAIModel', () => {
     })
   })
 
+  describe('systemPrompt handling', () => {
+    it('formats array system prompt with text blocks only', async () => {
+      let capturedRequest: any = null
+
+      const mockClient = {
+        chat: {
+          completions: {
+            create: vi.fn(async (request: any) => {
+              capturedRequest = request
+              return (async function* () {
+                yield { choices: [{ delta: { role: 'assistant' }, index: 0 }] }
+                yield { choices: [{ finish_reason: 'stop', delta: {}, index: 0 }] }
+              })()
+            }),
+          },
+        },
+      } as any
+
+      const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
+      const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+
+      await collectEvents(
+        provider.stream(messages, {
+          systemPrompt: [
+            { type: 'textBlock', text: 'You are a helpful assistant' },
+            { type: 'textBlock', text: 'Additional context here' },
+          ],
+        })
+      )
+
+      expect(capturedRequest).toBeDefined()
+      expect(capturedRequest.messages).toEqual([
+        { role: 'system', content: 'You are a helpful assistant\nAdditional context here' },
+        { role: 'user', content: 'Hello' },
+      ])
+    })
+
+    it('formats array system prompt with cache points', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      let capturedRequest: any = null
+
+      const mockClient = {
+        chat: {
+          completions: {
+            create: vi.fn(async (request: any) => {
+              capturedRequest = request
+              return (async function* () {
+                yield { choices: [{ delta: { role: 'assistant' }, index: 0 }] }
+                yield { choices: [{ finish_reason: 'stop', delta: {}, index: 0 }] }
+              })()
+            }),
+          },
+        },
+      } as any
+
+      const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
+      const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+
+      collectEvents(
+        provider.stream(messages, {
+          systemPrompt: [
+            { type: 'textBlock', text: 'You are a helpful assistant' },
+            { type: 'textBlock', text: 'Large context document' },
+            { type: 'cachePointBlock', cacheType: 'default' },
+          ],
+        })
+      )
+
+      // Verify warning was logged
+      expect(warnSpy).toHaveBeenCalledWith(
+        'Cache points are not supported in OpenAI system prompts and will be ignored.'
+      )
+
+      // Verify system message contains only text (cache points ignored)
+      expect(capturedRequest).toBeDefined()
+      expect(capturedRequest.messages).toEqual([
+        { role: 'system', content: 'You are a helpful assistant\nLarge context document' },
+        { role: 'user', content: 'Hello' },
+      ])
+
+      warnSpy.mockRestore()
+    })
+
+    it('handles empty array system prompt', async () => {
+      let capturedRequest: any = null
+
+      const mockClient = {
+        chat: {
+          completions: {
+            create: vi.fn(async (request: any) => {
+              capturedRequest = request
+              return (async function* () {
+                yield { choices: [{ delta: { role: 'assistant' }, index: 0 }] }
+                yield { choices: [{ finish_reason: 'stop', delta: {}, index: 0 }] }
+              })()
+            }),
+          },
+        },
+      } as any
+
+      const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
+      const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+
+      await collectEvents(
+        provider.stream(messages, {
+          systemPrompt: [],
+        })
+      )
+
+      // Empty array should not add system message
+      expect(capturedRequest).toBeDefined()
+      expect(capturedRequest.messages).toEqual([{ role: 'user', content: 'Hello' }])
+    })
+
+    it('formats array system prompt with single text block', async () => {
+      let capturedRequest: any = null
+
+      const mockClient = {
+        chat: {
+          completions: {
+            create: vi.fn(async (request: any) => {
+              capturedRequest = request
+              return (async function* () {
+                yield { choices: [{ delta: { role: 'assistant' }, index: 0 }] }
+                yield { choices: [{ finish_reason: 'stop', delta: {}, index: 0 }] }
+              })()
+            }),
+          },
+        },
+      } as any
+
+      const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
+      const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+
+      await collectEvents(
+        provider.stream(messages, {
+          systemPrompt: [{ type: 'textBlock', text: 'You are a helpful assistant' }],
+        })
+      )
+
+      expect(capturedRequest).toBeDefined()
+      expect(capturedRequest.messages).toEqual([
+        { role: 'system', content: 'You are a helpful assistant' },
+        { role: 'user', content: 'Hello' },
+      ])
+    })
+  })
+
   describe('error handling', () => {
     it('throws ContextWindowOverflowError for structured error with code', async () => {
       const mockClient = {
