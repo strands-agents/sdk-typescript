@@ -14,7 +14,7 @@ import {
   type ConverseStreamCommandInput,
   type ConverseStreamOutput,
   type Message as BedrockMessage,
-  type ContentBlock as BedrockContentBlock,
+  ContentBlock as BedrockContentBlock,
   type InferenceConfiguration,
   type Tool,
   type MessageStartEvent as BedrockMessageStartEvent,
@@ -532,94 +532,110 @@ export class BedrockModel implements Model<BedrockModelConfig, BedrockRuntimeCli
     // Match on content blocks
     const content = ensureDefined(message.content, 'message.content')
     content.forEach((block, index) => {
-      if (block.text) {
-        events.push({
-          type: 'modelContentBlockStartEvent',
-        })
+      BedrockContentBlock.visit(block, {
+        text: (textBlock) => {
+          events.push({
+            type: 'modelContentBlockStartEvent',
+            contentBlockIndex: index,
+          })
 
-        events.push({
-          type: 'modelContentBlockDeltaEvent',
-          delta: {
-            type: 'textDelta',
-            text: block.text,
-          },
-        })
-
-        events.push({
-          type: 'modelContentBlockStopEvent',
-        })
-      } else if (block.toolUse) {
-        events.push({
-          type: 'modelContentBlockStartEvent',
-          contentBlockIndex: index,
-          start: {
-            type: 'toolUseStart',
-            name: ensureDefined(block.toolUse.name, 'toolUse.name'),
-            toolUseId: ensureDefined(block.toolUse.toolUseId, 'toolUse.toolUseId'),
-          },
-        })
-
-        events.push({
-          type: 'modelContentBlockDeltaEvent',
-          contentBlockIndex: index,
-          delta: {
-            type: 'toolUseInputDelta',
-            input: JSON.stringify(ensureDefined(block.toolUse.input, 'toolUse.input')),
-          },
-        })
-
-        events.push({
-          type: 'modelContentBlockStopEvent',
-          contentBlockIndex: index,
-        })
-      } else if (block.reasoningContent) {
-        const reasoningText = ensureDefined(block.reasoningContent.reasoningText, 'reasoningContent.reasoningText')
-        events.push({
-          type: 'modelContentBlockDeltaEvent',
-          contentBlockIndex: index,
-          delta: {
-            type: 'reasoningDelta',
-            text: ensureDefined(reasoningText.text, 'reasoningText.text'),
-          },
-        })
-
-        if (reasoningText.signature) {
           events.push({
             type: 'modelContentBlockDeltaEvent',
             contentBlockIndex: index,
             delta: {
-              type: 'reasoningDelta',
-              signature: reasoningText.signature,
+              type: 'textDelta',
+              text: textBlock,
             },
           })
-        }
 
-        events.push({
-          type: 'modelContentBlockStopEvent',
-          contentBlockIndex: index,
-        })
-      }
+          events.push({
+            type: 'modelContentBlockStopEvent',
+            contentBlockIndex: index,
+          })
+        },
+        toolUse: (block) => {
+          events.push({
+            type: 'modelContentBlockStartEvent',
+            contentBlockIndex: index,
+            start: {
+              type: 'toolUseStart',
+              name: ensureDefined(block.name, 'toolUse.name'),
+              toolUseId: ensureDefined(block.toolUseId, 'toolUse.toolUseId'),
+            },
+          })
+
+          events.push({
+            type: 'modelContentBlockDeltaEvent',
+            contentBlockIndex: index,
+            delta: {
+              type: 'toolUseInputDelta',
+              input: JSON.stringify(ensureDefined(block.input, 'toolUse.input')),
+            },
+          })
+
+          events.push({
+            type: 'modelContentBlockStopEvent',
+            contentBlockIndex: index,
+          })
+        },
+        reasoningContent: (block) => {
+          events.push({
+            type: 'modelContentBlockStartEvent',
+            contentBlockIndex: index,
+          })
+
+          if (block.reasoningText) {
+            const reasoningText = ensureDefined(block.reasoningText, 'reasoningContent.reasoningText')
+            events.push({
+              type: 'modelContentBlockDeltaEvent',
+              contentBlockIndex: index,
+              delta: {
+                type: 'reasoningDelta',
+                text: ensureDefined(reasoningText.text, 'reasoningText.text'),
+              },
+            })
+
+            if (reasoningText.signature) {
+              events.push({
+                type: 'modelContentBlockDeltaEvent',
+                contentBlockIndex: index,
+                delta: {
+                  type: 'reasoningDelta',
+                  signature: reasoningText.signature,
+                },
+              })
+            }
+          } else if (block.redactedContent) {
+            events.push({
+              type: 'modelContentBlockDeltaEvent',
+              contentBlockIndex: index,
+              delta: {
+                type: 'reasoningDelta',
+                redactedContent: block.redactedContent,
+              },
+            })
+          }
+
+          events.push({
+            type: 'modelContentBlockStopEvent',
+            contentBlockIndex: index,
+          })
+        },
+        image: (): void => {},
+        document: (): void => {},
+        video: (): void => {},
+        toolResult: (): void => {},
+        guardContent: (): void => {},
+        cachePoint: (): void => {},
+        citationsContent: (): void => {},
+        _: (): void => {},
+      })
     })
 
     const stopReasonRaw = ensureDefined(event.stopReason, 'event.stopReason') as string
-    let mappedStopReason: string
-
-    if (stopReasonRaw in STOP_REASON_MAP) {
-      mappedStopReason = STOP_REASON_MAP[stopReasonRaw as keyof typeof STOP_REASON_MAP]
-    } else {
-      console.warn(`Unknown stop reason: "${stopReasonRaw}". Converting to camelCase: "${snakeToCamel(stopReasonRaw)}"`)
-      mappedStopReason = snakeToCamel(stopReasonRaw) // Assumes snakeToCamel utility exists
-    }
-
-    // Adjust for tool_use, which is sometimes incorrectly reported as end_turn
-    if (mappedStopReason === 'endTurn' && event.output?.message?.content?.some((block) => 'toolUse' in block)) {
-      mappedStopReason = 'toolUse'
-      console.warn(`Adjusting stop reason from 'end_turn' to 'tool_use' due to tool use in content blocks.`)
-    }
-
     events.push({
       type: 'modelMessageStopEvent',
-      stopReason: mappedStopReason,
+      stopReason: this._transformStopReason(stopReasonRaw, event),
     })
 
     const usage = ensureDefined(event.usage, 'output.usage')
@@ -673,7 +689,7 @@ export class BedrockModel implements Model<BedrockModelConfig, BedrockRuntimeCli
           type: 'modelContentBlockStartEvent',
         }
 
-        if (data.contentBlockIndex) {
+        if (data.contentBlockIndex !== undefined) {
           event.contentBlockIndex = data.contentBlockIndex
         }
 
@@ -698,7 +714,7 @@ export class BedrockModel implements Model<BedrockModelConfig, BedrockRuntimeCli
           delta: { type: 'textDelta', text: '' },
         }
 
-        if (data.contentBlockIndex) {
+        if (data.contentBlockIndex !== undefined) {
           event.contentBlockIndex = data.contentBlockIndex
         }
 
@@ -754,7 +770,7 @@ export class BedrockModel implements Model<BedrockModelConfig, BedrockRuntimeCli
           type: 'modelContentBlockStopEvent',
         }
 
-        if (data.contentBlockIndex) {
+        if (data.contentBlockIndex !== undefined) {
           event.contentBlockIndex = data.contentBlockIndex
         }
 
@@ -769,16 +785,8 @@ export class BedrockModel implements Model<BedrockModelConfig, BedrockRuntimeCli
           type: 'modelMessageStopEvent',
         }
 
-        const stopReason = ensureDefined(data.stopReason, 'messageStop.stopReason') as string
-        let mappedStopReason: string
-        if (stopReason in STOP_REASON_MAP) {
-          mappedStopReason = STOP_REASON_MAP[stopReason as keyof typeof STOP_REASON_MAP]
-        } else {
-          console.warn(`Unknown stop reason: "${stopReason}". Converting to camelCase: "${snakeToCamel(stopReason)}"`)
-          mappedStopReason = snakeToCamel(stopReason)
-        }
-
-        event.stopReason = mappedStopReason
+        const stopReasonRaw = ensureDefined(data.stopReason, 'messageStop.stopReason') as string
+        event.stopReason = this._transformStopReason(stopReasonRaw, data)
 
         if (data.additionalModelResponseFields) {
           event.additionalModelResponseFields = data.additionalModelResponseFields
@@ -841,5 +849,37 @@ export class BedrockModel implements Model<BedrockModelConfig, BedrockRuntimeCli
     }
 
     return events
+  }
+
+  /**
+   * Transforms a Bedrock stop reason into the SDK's format.
+   *
+   * @param stopReasonRaw - The raw stop reason string from Bedrock.
+   * @param event - The full event output, used to check for tool_use adjustments.
+   * @returns The transformed stop reason string.
+   */
+  private _transformStopReason(stopReasonRaw: string, event?: ConverseCommandOutput | BedrockMessageStopEvent): string {
+    let mappedStopReason: string
+
+    if (stopReasonRaw in STOP_REASON_MAP) {
+      mappedStopReason = STOP_REASON_MAP[stopReasonRaw as keyof typeof STOP_REASON_MAP]
+    } else {
+      console.warn(`Unknown stop reason: "${stopReasonRaw}". Converting to camelCase: "${snakeToCamel(stopReasonRaw)}"`)
+      mappedStopReason = snakeToCamel(stopReasonRaw)
+    }
+
+    // Adjust for tool_use, which is sometimes incorrectly reported as end_turn
+    // This check is specific to the non-streaming ConverseCommandOutput
+    if (
+      mappedStopReason === 'endTurn' &&
+      event &&
+      'output' in event &&
+      event.output?.message?.content?.some((block) => 'toolUse' in block)
+    ) {
+      mappedStopReason = 'toolUse'
+      console.warn(`Adjusting stop reason from 'end_turn' to 'tool_use' due to tool use in content blocks.`)
+    }
+
+    return mappedStopReason
   }
 }
