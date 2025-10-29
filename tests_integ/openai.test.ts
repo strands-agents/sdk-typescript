@@ -19,7 +19,7 @@ async function collectEvents(stream: AsyncIterable<ModelStreamEvent>): Promise<M
 // Check for OpenAI API key at module level so skipIf can use it
 let hasApiKey = false
 try {
-  if (process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.startsWith('sk-')) {
+  if (process.env.OPENAI_API_KEY) {
     hasApiKey = true
     console.log('✅ OpenAI API key found for integration tests')
   } else {

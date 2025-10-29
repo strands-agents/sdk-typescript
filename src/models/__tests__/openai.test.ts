@@ -185,7 +185,7 @@ describe('OpenAIModel', () => {
       })
 
       it('validates system prompt is not empty', async () => {
-        const createMock = vi.fn(async function* () {
+        const mockClient = createMockClient(async function* () {
           yield {
             choices: [{ delta: { role: 'assistant', content: 'Hello' }, index: 0 }],
           }
@@ -193,13 +193,6 @@ describe('OpenAIModel', () => {
             choices: [{ finish_reason: 'stop', delta: {}, index: 0 }],
           }
         })
-        const mockClient = {
-          chat: {
-            completions: {
-              create: createMock,
-            },
-          },
-        } as any
         const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
         const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
 
@@ -259,7 +252,7 @@ describe('OpenAIModel', () => {
       })
 
       it('handles tool result with error status', async () => {
-        const createMock = vi.fn(async function* () {
+        const mockClient = createMockClient(async function* () {
           yield {
             choices: [{ delta: { role: 'assistant', content: 'Ok' }, index: 0 }],
           }
@@ -267,13 +260,6 @@ describe('OpenAIModel', () => {
             choices: [{ finish_reason: 'stop', delta: {}, index: 0 }],
           }
         })
-        const mockClient = {
-          chat: {
-            completions: {
-              create: createMock,
-            },
-          },
-        } as any
         const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
         const messages: Message[] = [
           { role: 'user', content: [{ type: 'textBlock', text: 'Run tool' }] },
@@ -869,12 +855,15 @@ describe('OpenAIModel', () => {
       const mockClient = {
         chat: {
           completions: {
-            create: async function* (request: any) {
+            create: vi.fn(async (request: any) => {
               capturedRequest = request
               callCount++
-              yield { choices: [{ delta: { role: 'assistant' }, index: 0 }] }
-              yield { choices: [{ finish_reason: 'stop', delta: {}, index: 0 }] }
-            },
+              // Return an async generator
+              return (async function* () {
+                yield { choices: [{ delta: { role: 'assistant' }, index: 0 }] }
+                yield { choices: [{ finish_reason: 'stop', delta: {}, index: 0 }] }
+              })()
+            }),
           },
         },
       } as any
