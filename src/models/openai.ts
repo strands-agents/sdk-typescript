@@ -704,12 +704,6 @@ export class OpenAIModel implements Model<OpenAIModelConfig, ClientOptions> {
           continue
         }
 
-        // Validate index is non-negative and reasonable
-        if (toolCall.index < 0 || toolCall.index > 100) {
-          console.warn(`Received tool call with out-of-range index: ${toolCall.index}`, toolCall)
-          continue
-        }
-
         // If tool call has id and name, it's the start of a new tool call
         if (toolCall.id && toolCall.function?.name) {
           events.push({
