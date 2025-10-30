@@ -99,7 +99,7 @@ def run_agent(query: str):
         
         # Create Bedrock model with inlined configuration
         additional_request_fields = {}
-        additional_request_fields["anthropic_beta"] = "interleaved-thinking-2025-05-14"
+        additional_request_fields["anthropic_beta"] = ["interleaved-thinking-2025-05-14"]
         
         additional_request_fields["thinking"] = {
             "type": "enabled",
