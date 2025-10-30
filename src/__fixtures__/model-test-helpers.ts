@@ -93,12 +93,7 @@ export async function collectGenerator<E, R>(
 export async function collectIterator<T>(stream: AsyncIterable<T>): Promise<T[]> {
   const items: T[] = []
   for await (const item of stream) {
-    // Serialize items that have a toJSON method for easier testing
-    if (item && typeof item === 'object' && 'toJSON' in item && typeof item.toJSON === 'function') {
-      items.push(item.toJSON() as T)
-    } else {
-      items.push(item)
-    }
+    items.push(item)
   }
   return items
 }

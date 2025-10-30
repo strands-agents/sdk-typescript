@@ -28,26 +28,6 @@ describe('ModelMessageStartEvent', () => {
     })
   })
 
-  describe('toJSON', () => {
-    it('returns correct plain object structure', () => {
-      const role: Role = 'assistant'
-      const event = new ModelMessageStartEvent({ role })
-
-      expect(event.toJSON()).toEqual({
-        type: 'modelMessageStartEvent',
-        role: 'assistant',
-      })
-    })
-
-    it('returns new object instance', () => {
-      const event = new ModelMessageStartEvent({ role: 'assistant' })
-      const json1 = event.toJSON()
-      const json2 = event.toJSON()
-
-      expect(json1).not.toBe(json2)
-    })
-  })
-
   describe('type discrimination', () => {
     it('can be used in discriminated union', () => {
       const event: ModelStreamEvent = new ModelMessageStartEvent({ role: 'assistant' })
@@ -88,40 +68,6 @@ describe('ModelContentBlockStartEvent', () => {
       expect(event.start).toBeUndefined()
     })
   })
-
-  describe('toJSON', () => {
-    it('returns correct structure with all fields', () => {
-      const start = new ToolUseStart({ name: 'calculator', toolUseId: 'tool_123' })
-      const event = new ModelContentBlockStartEvent({ contentBlockIndex: 0, start })
-
-      expect(event.toJSON()).toEqual({
-        type: 'modelContentBlockStartEvent',
-        contentBlockIndex: 0,
-        start: {
-          type: 'toolUseStart',
-          name: 'calculator',
-          toolUseId: 'tool_123',
-        },
-      })
-    })
-
-    it('excludes undefined optional fields', () => {
-      const event = new ModelContentBlockStartEvent({})
-
-      expect(event.toJSON()).toEqual({
-        type: 'modelContentBlockStartEvent',
-      })
-    })
-
-    it('includes only defined optional fields', () => {
-      const event = new ModelContentBlockStartEvent({ contentBlockIndex: 0 })
-
-      expect(event.toJSON()).toEqual({
-        type: 'modelContentBlockStartEvent',
-        contentBlockIndex: 0,
-      })
-    })
-  })
 })
 
 describe('ModelContentBlockDeltaEvent', () => {
@@ -153,35 +99,6 @@ describe('ModelContentBlockDeltaEvent', () => {
       expect(event.contentBlockIndex).toBeUndefined()
     })
   })
-
-  describe('toJSON', () => {
-    it('returns correct structure with all fields', () => {
-      const delta = new TextDelta({ text: 'hello' })
-      const event = new ModelContentBlockDeltaEvent({ delta, contentBlockIndex: 0 })
-
-      expect(event.toJSON()).toEqual({
-        type: 'modelContentBlockDeltaEvent',
-        delta: {
-          type: 'textDelta',
-          text: 'hello',
-        },
-        contentBlockIndex: 0,
-      })
-    })
-
-    it('excludes undefined contentBlockIndex', () => {
-      const delta = new TextDelta({ text: 'hello' })
-      const event = new ModelContentBlockDeltaEvent({ delta })
-
-      expect(event.toJSON()).toEqual({
-        type: 'modelContentBlockDeltaEvent',
-        delta: {
-          type: 'textDelta',
-          text: 'hello',
-        },
-      })
-    })
-  })
 })
 
 describe('ModelContentBlockStopEvent', () => {
@@ -198,25 +115,6 @@ describe('ModelContentBlockStopEvent', () => {
 
       expect(event.type).toBe('modelContentBlockStopEvent')
       expect(event.contentBlockIndex).toBeUndefined()
-    })
-  })
-
-  describe('toJSON', () => {
-    it('returns correct structure with contentBlockIndex', () => {
-      const event = new ModelContentBlockStopEvent({ contentBlockIndex: 0 })
-
-      expect(event.toJSON()).toEqual({
-        type: 'modelContentBlockStopEvent',
-        contentBlockIndex: 0,
-      })
-    })
-
-    it('excludes undefined contentBlockIndex', () => {
-      const event = new ModelContentBlockStopEvent({})
-
-      expect(event.toJSON()).toEqual({
-        type: 'modelContentBlockStopEvent',
-      })
     })
   })
 })
@@ -257,38 +155,6 @@ describe('ModelMessageStopEvent', () => {
       expect(event.type).toBe('modelMessageStopEvent')
       expect(event.stopReason).toBeUndefined()
       expect(event.additionalModelResponseFields).toBeUndefined()
-    })
-  })
-
-  describe('toJSON', () => {
-    it('returns correct structure with all fields', () => {
-      const event = new ModelMessageStopEvent({
-        stopReason: 'maxTokens',
-        additionalModelResponseFields: { key: 'value' },
-      })
-
-      expect(event.toJSON()).toEqual({
-        type: 'modelMessageStopEvent',
-        stopReason: 'maxTokens',
-        additionalModelResponseFields: { key: 'value' },
-      })
-    })
-
-    it('excludes undefined optional fields', () => {
-      const event = new ModelMessageStopEvent({})
-
-      expect(event.toJSON()).toEqual({
-        type: 'modelMessageStopEvent',
-      })
-    })
-
-    it('includes only stopReason when defined', () => {
-      const event = new ModelMessageStopEvent({ stopReason: 'endTurn' })
-
-      expect(event.toJSON()).toEqual({
-        type: 'modelMessageStopEvent',
-        stopReason: 'endTurn',
-      })
     })
   })
 })
@@ -346,41 +212,6 @@ describe('ModelMetadataEvent', () => {
       expect(event.trace).toBeUndefined()
     })
   })
-
-  describe('toJSON', () => {
-    it('returns correct structure with all fields', () => {
-      const usage: Usage = { inputTokens: 100, outputTokens: 50, totalTokens: 150 }
-      const metrics: Metrics = { latencyMs: 500 }
-      const trace = { traceId: 'abc123' }
-      const event = new ModelMetadataEvent({ usage, metrics, trace })
-
-      expect(event.toJSON()).toEqual({
-        type: 'modelMetadataEvent',
-        usage: { inputTokens: 100, outputTokens: 50, totalTokens: 150 },
-        metrics: { latencyMs: 500 },
-        trace: { traceId: 'abc123' },
-      })
-    })
-
-    it('excludes undefined optional fields', () => {
-      const event = new ModelMetadataEvent({})
-
-      expect(event.toJSON()).toEqual({
-        type: 'modelMetadataEvent',
-      })
-    })
-
-    it('includes only defined fields', () => {
-      const event = new ModelMetadataEvent({
-        usage: { inputTokens: 100, outputTokens: 50, totalTokens: 150 },
-      })
-
-      expect(event.toJSON()).toEqual({
-        type: 'modelMetadataEvent',
-        usage: { inputTokens: 100, outputTokens: 50, totalTokens: 150 },
-      })
-    })
-  })
 })
 
 describe('ToolUseStart', () => {
@@ -391,18 +222,6 @@ describe('ToolUseStart', () => {
       expect(start.type).toBe('toolUseStart')
       expect(start.name).toBe('calculator')
       expect(start.toolUseId).toBe('tool_123')
-    })
-  })
-
-  describe('toJSON', () => {
-    it('returns correct plain object structure', () => {
-      const start = new ToolUseStart({ name: 'calculator', toolUseId: 'tool_123' })
-
-      expect(start.toJSON()).toEqual({
-        type: 'toolUseStart',
-        name: 'calculator',
-        toolUseId: 'tool_123',
-      })
     })
   })
 })
@@ -416,17 +235,6 @@ describe('TextDelta', () => {
       expect(delta.text).toBe('Hello world')
     })
   })
-
-  describe('toJSON', () => {
-    it('returns correct plain object structure', () => {
-      const delta = new TextDelta({ text: 'Hello world' })
-
-      expect(delta.toJSON()).toEqual({
-        type: 'textDelta',
-        text: 'Hello world',
-      })
-    })
-  })
 })
 
 describe('ToolUseInputDelta', () => {
@@ -436,17 +244,6 @@ describe('ToolUseInputDelta', () => {
 
       expect(delta.type).toBe('toolUseInputDelta')
       expect(delta.input).toBe('{"operation":"add"')
-    })
-  })
-
-  describe('toJSON', () => {
-    it('returns correct plain object structure', () => {
-      const delta = new ToolUseInputDelta({ input: '{"operation":"add"' })
-
-      expect(delta.toJSON()).toEqual({
-        type: 'toolUseInputDelta',
-        input: '{"operation":"add"',
-      })
     })
   })
 })
@@ -502,41 +299,6 @@ describe('ReasoningContentDelta', () => {
       expect(delta.text).toBeUndefined()
       expect(delta.signature).toBeUndefined()
       expect(delta.redactedContent).toBeUndefined()
-    })
-  })
-
-  describe('toJSON', () => {
-    it('returns correct structure with all fields', () => {
-      const redactedContent = new Uint8Array([1, 2, 3])
-      const delta = new ReasoningContentDelta({
-        text: 'analyzing...',
-        signature: 'sig_data',
-        redactedContent,
-      })
-
-      expect(delta.toJSON()).toEqual({
-        type: 'reasoningContentDelta',
-        text: 'analyzing...',
-        signature: 'sig_data',
-        redactedContent: redactedContent,
-      })
-    })
-
-    it('excludes undefined optional fields', () => {
-      const delta = new ReasoningContentDelta({})
-
-      expect(delta.toJSON()).toEqual({
-        type: 'reasoningContentDelta',
-      })
-    })
-
-    it('includes only text when defined', () => {
-      const delta = new ReasoningContentDelta({ text: 'analyzing...' })
-
-      expect(delta.toJSON()).toEqual({
-        type: 'reasoningContentDelta',
-        text: 'analyzing...',
-      })
     })
   })
 })

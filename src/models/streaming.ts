@@ -16,7 +16,7 @@ export type ModelStreamEvent =
   | ModelMetadataEvent
 
 /**
- * Data interface for message start events without the type discriminator.
+ * Data interface for message start events.
  */
 export interface ModelMessageStartEventData {
   /**
@@ -44,25 +44,13 @@ export class ModelMessageStartEvent implements ModelMessageStartEventData {
    *
    * @param data - The event data
    */
-  constructor(data: ModelMessageStartEventData) {
-    this.role = data.role
-  }
-
-  /**
-   * Converts the event to a plain object for serialization.
-   *
-   * @returns Plain object representation
-   */
-  toJSON(): object {
-    return {
-      type: this.type,
-      role: this.role,
-    }
+  constructor({ role }: ModelMessageStartEventData) {
+    this.role = role
   }
 }
 
 /**
- * Data interface for content block start events without the type discriminator.
+ * Data interface for content block start events.
  */
 export interface ModelContentBlockStartEventData {
   /**
@@ -102,36 +90,18 @@ export class ModelContentBlockStartEvent implements ModelContentBlockStartEventD
    *
    * @param data - The event data
    */
-  constructor(data: ModelContentBlockStartEventData) {
-    if (data.contentBlockIndex !== undefined) {
-      this.contentBlockIndex = data.contentBlockIndex
+  constructor({ contentBlockIndex, start }: ModelContentBlockStartEventData) {
+    if (contentBlockIndex !== undefined) {
+      this.contentBlockIndex = contentBlockIndex
     }
-    if (data.start !== undefined) {
-      this.start = data.start
+    if (start !== undefined) {
+      this.start = start
     }
-  }
-
-  /**
-   * Converts the event to a plain object for serialization.
-   *
-   * @returns Plain object representation
-   */
-  toJSON(): object {
-    const result: Record<string, unknown> = {
-      type: this.type,
-    }
-    if (this.contentBlockIndex !== undefined) {
-      result.contentBlockIndex = this.contentBlockIndex
-    }
-    if (this.start !== undefined) {
-      result.start = this.start && typeof this.start === 'object' && 'toJSON' in this.start ? this.start.toJSON() : this.start
-    }
-    return result
   }
 }
 
 /**
- * Data interface for content block delta events without the type discriminator.
+ * Data interface for content block delta events.
  */
 export interface ModelContentBlockDeltaEventData {
   /**
@@ -169,32 +139,16 @@ export class ModelContentBlockDeltaEvent implements ModelContentBlockDeltaEventD
    *
    * @param data - The event data
    */
-  constructor(data: ModelContentBlockDeltaEventData) {
-    if (data.contentBlockIndex !== undefined) {
-      this.contentBlockIndex = data.contentBlockIndex
+  constructor({ contentBlockIndex, delta }: ModelContentBlockDeltaEventData) {
+    if (contentBlockIndex !== undefined) {
+      this.contentBlockIndex = contentBlockIndex
     }
-    this.delta = data.delta
-  }
-
-  /**
-   * Converts the event to a plain object for serialization.
-   *
-   * @returns Plain object representation
-   */
-  toJSON(): object {
-    const result: Record<string, unknown> = {
-      type: this.type,
-      delta: this.delta && typeof this.delta === 'object' && 'toJSON' in this.delta ? this.delta.toJSON() : this.delta,
-    }
-    if (this.contentBlockIndex !== undefined) {
-      result.contentBlockIndex = this.contentBlockIndex
-    }
-    return result
+    this.delta = delta
   }
 }
 
 /**
- * Data interface for content block stop events without the type discriminator.
+ * Data interface for content block stop events.
  */
 export interface ModelContentBlockStopEventData {
   /**
@@ -222,30 +176,15 @@ export class ModelContentBlockStopEvent implements ModelContentBlockStopEventDat
    *
    * @param data - The event data
    */
-  constructor(data: ModelContentBlockStopEventData) {
-    if (data.contentBlockIndex !== undefined) {
-      this.contentBlockIndex = data.contentBlockIndex
+  constructor({ contentBlockIndex }: ModelContentBlockStopEventData) {
+    if (contentBlockIndex !== undefined) {
+      this.contentBlockIndex = contentBlockIndex
     }
-  }
-
-  /**
-   * Converts the event to a plain object for serialization.
-   *
-   * @returns Plain object representation
-   */
-  toJSON(): object {
-    const result: Record<string, unknown> = {
-      type: this.type,
-    }
-    if (this.contentBlockIndex !== undefined) {
-      result.contentBlockIndex = this.contentBlockIndex
-    }
-    return result
   }
 }
 
 /**
- * Data interface for message stop events without the type discriminator.
+ * Data interface for message stop events.
  */
 export interface ModelMessageStopEventData {
   /**
@@ -283,36 +222,18 @@ export class ModelMessageStopEvent implements ModelMessageStopEventData {
    *
    * @param data - The event data
    */
-  constructor(data: ModelMessageStopEventData) {
-    if (data.stopReason !== undefined) {
-      this.stopReason = data.stopReason
+  constructor({ stopReason, additionalModelResponseFields }: ModelMessageStopEventData) {
+    if (stopReason !== undefined) {
+      this.stopReason = stopReason
     }
-    if (data.additionalModelResponseFields !== undefined) {
-      this.additionalModelResponseFields = data.additionalModelResponseFields
+    if (additionalModelResponseFields !== undefined) {
+      this.additionalModelResponseFields = additionalModelResponseFields
     }
-  }
-
-  /**
-   * Converts the event to a plain object for serialization.
-   *
-   * @returns Plain object representation
-   */
-  toJSON(): object {
-    const result: Record<string, unknown> = {
-      type: this.type,
-    }
-    if (this.stopReason !== undefined) {
-      result.stopReason = this.stopReason
-    }
-    if (this.additionalModelResponseFields !== undefined) {
-      result.additionalModelResponseFields = this.additionalModelResponseFields
-    }
-    return result
   }
 }
 
 /**
- * Data interface for metadata events without the type discriminator.
+ * Data interface for metadata events.
  */
 export interface ModelMetadataEventData {
   /**
@@ -361,37 +282,16 @@ export class ModelMetadataEvent implements ModelMetadataEventData {
    *
    * @param data - The event data
    */
-  constructor(data: ModelMetadataEventData) {
-    if (data.usage !== undefined) {
-      this.usage = data.usage
+  constructor({ usage, metrics, trace }: ModelMetadataEventData) {
+    if (usage !== undefined) {
+      this.usage = usage
     }
-    if (data.metrics !== undefined) {
-      this.metrics = data.metrics
+    if (metrics !== undefined) {
+      this.metrics = metrics
     }
-    if (data.trace !== undefined) {
-      this.trace = data.trace
+    if (trace !== undefined) {
+      this.trace = trace
     }
-  }
-
-  /**
-   * Converts the event to a plain object for serialization.
-   *
-   * @returns Plain object representation
-   */
-  toJSON(): object {
-    const result: Record<string, unknown> = {
-      type: this.type,
-    }
-    if (this.usage !== undefined) {
-      result.usage = this.usage
-    }
-    if (this.metrics !== undefined) {
-      result.metrics = this.metrics
-    }
-    if (this.trace !== undefined) {
-      result.trace = this.trace
-    }
-    return result
   }
 }
 
@@ -402,7 +302,7 @@ export class ModelMetadataEvent implements ModelMetadataEventData {
 export type ContentBlockStart = ToolUseStart
 
 /**
- * Data interface for tool use start without the type discriminator.
+ * Data interface for tool use start.
  */
 export interface ToolUseStartData {
   /**
@@ -440,22 +340,9 @@ export class ToolUseStart implements ToolUseStartData {
    *
    * @param data - The tool use start data
    */
-  constructor(data: ToolUseStartData) {
-    this.name = data.name
-    this.toolUseId = data.toolUseId
-  }
-
-  /**
-   * Converts the tool use start to a plain object for serialization.
-   *
-   * @returns Plain object representation
-   */
-  toJSON(): object {
-    return {
-      type: this.type,
-      name: this.name,
-      toolUseId: this.toolUseId,
-    }
+  constructor({ name, toolUseId }: ToolUseStartData) {
+    this.name = name
+    this.toolUseId = toolUseId
   }
 }
 
@@ -468,7 +355,7 @@ export class ToolUseStart implements ToolUseStartData {
 export type ContentBlockDelta = TextDelta | ToolUseInputDelta | ReasoningContentDelta
 
 /**
- * Data interface for text delta without the type discriminator.
+ * Data interface for text delta.
  */
 export interface TextDeltaData {
   /**
@@ -497,25 +384,13 @@ export class TextDelta implements TextDeltaData {
    *
    * @param data - The text delta data
    */
-  constructor(data: TextDeltaData) {
-    this.text = data.text
-  }
-
-  /**
-   * Converts the text delta to a plain object for serialization.
-   *
-   * @returns Plain object representation
-   */
-  toJSON(): object {
-    return {
-      type: this.type,
-      text: this.text,
-    }
+  constructor({ text }: TextDeltaData) {
+    this.text = text
   }
 }
 
 /**
- * Data interface for tool use input delta without the type discriminator.
+ * Data interface for tool use input delta.
  */
 export interface ToolUseInputDeltaData {
   /**
@@ -544,25 +419,13 @@ export class ToolUseInputDelta implements ToolUseInputDeltaData {
    *
    * @param data - The tool use input delta data
    */
-  constructor(data: ToolUseInputDeltaData) {
-    this.input = data.input
-  }
-
-  /**
-   * Converts the tool use input delta to a plain object for serialization.
-   *
-   * @returns Plain object representation
-   */
-  toJSON(): object {
-    return {
-      type: this.type,
-      input: this.input,
-    }
+  constructor({ input }: ToolUseInputDeltaData) {
+    this.input = input
   }
 }
 
 /**
- * Data interface for reasoning content delta without the type discriminator.
+ * Data interface for reasoning content delta.
  */
 export interface ReasoningContentDeltaData {
   /**
@@ -611,37 +474,16 @@ export class ReasoningContentDelta implements ReasoningContentDeltaData {
    *
    * @param data - The reasoning content delta data
    */
-  constructor(data: ReasoningContentDeltaData) {
-    if (data.text !== undefined) {
-      this.text = data.text
+  constructor({ text, signature, redactedContent }: ReasoningContentDeltaData) {
+    if (text !== undefined) {
+      this.text = text
     }
-    if (data.signature !== undefined) {
-      this.signature = data.signature
+    if (signature !== undefined) {
+      this.signature = signature
     }
-    if (data.redactedContent !== undefined) {
-      this.redactedContent = data.redactedContent
+    if (redactedContent !== undefined) {
+      this.redactedContent = redactedContent
     }
-  }
-
-  /**
-   * Converts the reasoning content delta to a plain object for serialization.
-   *
-   * @returns Plain object representation
-   */
-  toJSON(): object {
-    const result: Record<string, unknown> = {
-      type: this.type,
-    }
-    if (this.text !== undefined) {
-      result.text = this.text
-    }
-    if (this.signature !== undefined) {
-      result.signature = this.signature
-    }
-    if (this.redactedContent !== undefined) {
-      result.redactedContent = this.redactedContent
-    }
-    return result
   }
 }
 

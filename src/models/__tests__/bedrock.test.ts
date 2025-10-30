@@ -730,7 +730,11 @@ describe('BedrockModel', () => {
 
       const events = await collectIterator(provider.stream(messages))
 
+<<<<<<< HEAD
       expect(events).toContainEqual({
+=======
+      expect(events[2]).toMatchObject({
+>>>>>>> 471c8cd (refactor: address code review feedback)
         type: 'modelContentBlockDeltaEvent',
         contentBlockIndex: 0,
         delta: {
@@ -766,7 +770,11 @@ describe('BedrockModel', () => {
 
       const events = await collectIterator(provider.stream(messages))
 
+<<<<<<< HEAD
       expect(events).toContainEqual({
+=======
+      expect(events[2]).toMatchObject({
+>>>>>>> 471c8cd (refactor: address code review feedback)
         type: 'modelContentBlockDeltaEvent',
         contentBlockIndex: 0,
         delta: {
@@ -775,7 +783,11 @@ describe('BedrockModel', () => {
           signature: 'sig123',
         },
       })
+<<<<<<< HEAD
       expect(events).toContainEqual({
+=======
+      expect(events[3]).toMatchObject({
+>>>>>>> 471c8cd (refactor: address code review feedback)
         type: 'modelContentBlockDeltaEvent',
         contentBlockIndex: 0,
         delta: {
