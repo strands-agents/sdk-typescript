@@ -222,25 +222,11 @@ jobs:
         with:
           python-version: '3.13'
 
-      - name: Cache UV dependencies
-        uses: actions/cache@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
         with:
-          path: |
-            ~/.cache/uv
-          key: ${{ runner.os }}-python-uv-${{ hashFiles('.github/scripts/requirements.txt') }}-uv
-          restore-keys: |
-            ${{ runner.os }}-python-uv-
-
-      - name: Clean UV cache on failure
-        if: failure()
-        run: |
-          uv cache clean || true
-          rm -rf ~/.cache/uv/* || true
-
-      - name: Install UV
-        run: |
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+          enable-cache: true
+          cache-dependency-glob: '.github/scripts/requirements.txt'
 
       - name: Install Strands Agents
         run: |
@@ -282,8 +268,7 @@ jobs:
           S3_SESSION_BUCKET: ${{ secrets.TYPESCRIPT_SESSIONS_BUCKET }}
           SESSION_ID: ${{ steps.process.outputs.session_id }}
         run: |
-          cd .github/scripts
-          PYTHONPATH=".:$PYTHONPATH" uv run agent_runner.py "$INPUT_TASK"
+          uv run .github/scripts/agent_runner.py "$INPUT_TASK"
 
       - name: Remove strands-running label
         if: always()
