@@ -60,9 +60,9 @@ export interface BeforeToolsEvent {
   type: 'beforeToolsEvent'
 
   /**
-   * The tool use blocks that will be executed.
+   * The assistant message containing tool use blocks.
    */
-  toolUseBlocks: ContentBlock[]
+  message: Message
 }
 
 /**
@@ -75,28 +75,23 @@ export interface AfterToolsEvent {
   type: 'afterToolsEvent'
 
   /**
-   * The tool result blocks from tool execution.
+   * The user message containing tool results that will be added to the message array.
    */
-  toolResultBlocks: ContentBlock[]
+  message: Message
 }
 
 /**
- * Event emitted at the start of an agent loop iteration.
+ * Event emitted at the start of the agent loop (before any iterations).
  */
 export interface BeforeInvocationEvent {
   /**
    * Discriminator for before invocation events.
    */
   type: 'beforeInvocationEvent'
-
-  /**
-   * The current iteration number (starting from 0).
-   */
-  iteration: number
 }
 
 /**
- * Event emitted at the end of an agent loop iteration.
+ * Event emitted at the end of the agent loop (after all iterations complete).
  */
 export interface AfterInvocationEvent {
   /**
@@ -105,7 +100,8 @@ export interface AfterInvocationEvent {
   type: 'afterInvocationEvent'
 
   /**
-   * The current iteration number (starting from 0).
+   * Optional error that caused the loop to terminate.
+   * Present if the loop is completing due to an exception.
    */
-  iteration: number
+  error?: Error
 }

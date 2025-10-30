@@ -8,10 +8,7 @@ import type { ToolResult } from '../../tools/types'
 import { MaxTokensError } from '../../errors'
 
 // Helper to create a mock tool
-function createMockTool(
-  name: string,
-  resultFn: () => ToolResult | AsyncGenerator<never, ToolResult, never>
-): Tool {
+function createMockTool(name: string, resultFn: () => ToolResult | AsyncGenerator<never, ToolResult, never>): Tool {
   return {
     toolName: name,
     description: `Mock tool ${name}`,
@@ -70,13 +67,13 @@ describe('agent_loop', () => {
       const { items, result } = await collectGenerator(agent_loop(messages, registry, undefined, provider))
 
       // Verify agent events are present
-      expect(items).toContainEqual({ type: 'beforeInvocationEvent', iteration: 0 })
+      expect(items).toContainEqual({ type: 'beforeInvocationEvent' })
       expect(items).toContainEqual({ type: 'beforeModelEvent', messages: expect.any(Array) })
       expect(items).toContainEqual({
         type: 'afterModelEvent',
         message: expect.objectContaining({ role: 'assistant' }),
       })
-      expect(items).toContainEqual({ type: 'afterInvocationEvent', iteration: 0 })
+      expect(items).toContainEqual({ type: 'afterInvocationEvent' })
 
       // Verify model events are passed through
       expect(items).toContainEqual({ type: 'modelMessageStartEvent', role: 'assistant' })
@@ -148,16 +145,20 @@ describe('agent_loop', () => {
       // Verify tool execution events
       expect(items).toContainEqual({
         type: 'beforeToolsEvent',
-        toolUseBlocks: expect.any(Array),
+        message: expect.objectContaining({ role: 'assistant' }),
       })
       expect(items).toContainEqual({
         type: 'afterToolsEvent',
-        toolResultBlocks: expect.any(Array),
+        message: expect.objectContaining({ role: 'user' }),
       })
 
-      // Verify two iterations
-      expect(items).toContainEqual({ type: 'beforeInvocationEvent', iteration: 0 })
-      expect(items).toContainEqual({ type: 'beforeInvocationEvent', iteration: 1 })
+      // Verify only one beforeInvocationEvent
+      const beforeEvents = items.filter((e) => e.type === 'beforeInvocationEvent')
+      expect(beforeEvents).toHaveLength(1)
+
+      // Verify two iterations by counting beforeModelEvent
+      const modelEvents = items.filter((e) => e.type === 'beforeModelEvent')
+      expect(modelEvents.length).toBeGreaterThanOrEqual(2)
 
       // Verify final messages include tool use and result
       expect(result).toHaveLength(4) // user, assistant with tool use, user with tool result, assistant with final response
@@ -339,10 +340,13 @@ describe('agent_loop', () => {
 
       const { items, result } = await collectGenerator(agent_loop(messages, registry, undefined, provider))
 
-      // Verify three iterations
-      expect(items).toContainEqual({ type: 'beforeInvocationEvent', iteration: 0 })
-      expect(items).toContainEqual({ type: 'beforeInvocationEvent', iteration: 1 })
-      expect(items).toContainEqual({ type: 'beforeInvocationEvent', iteration: 2 })
+      // Verify only one beforeInvocationEvent
+      const beforeEvents = items.filter((e) => e.type === 'beforeInvocationEvent')
+      expect(beforeEvents).toHaveLength(1)
+
+      // Verify three iterations by counting beforeModelEvent
+      const modelEvents = items.filter((e) => e.type === 'beforeModelEvent')
+      expect(modelEvents).toHaveLength(3)
 
       // Verify final message count (1 user + 2 assistant tool use + 2 user tool results + 1 assistant final)
       expect(result).toHaveLength(6)
@@ -399,9 +403,9 @@ describe('agent_loop', () => {
       ]
 
       // Verify error is thrown
-      await expect(
-        collectGenerator(agent_loop(messages, registry, undefined, provider))
-      ).rejects.toThrow('Model error before any events')
+      await expect(collectGenerator(agent_loop(messages, registry, undefined, provider))).rejects.toThrow(
+        'Model error before any events'
+      )
     })
   })
 
@@ -422,9 +426,9 @@ describe('agent_loop', () => {
       ]
 
       // Verify error is thrown
-      await expect(
-        collectGenerator(agent_loop(messages, registry, undefined, provider))
-      ).rejects.toThrow('Error after first event')
+      await expect(collectGenerator(agent_loop(messages, registry, undefined, provider))).rejects.toThrow(
+        'Error after first event'
+      )
     })
   })
 
@@ -460,9 +464,9 @@ describe('agent_loop', () => {
         },
       ]
 
-      await expect(
-        collectGenerator(agent_loop(messages, registry, undefined, provider))
-      ).rejects.toThrow('Tool execution failed')
+      await expect(collectGenerator(agent_loop(messages, registry, undefined, provider))).rejects.toThrow(
+        'Tool execution failed'
+      )
     })
   })
 
@@ -488,9 +492,9 @@ describe('agent_loop', () => {
         },
       ]
 
-      await expect(
-        collectGenerator(agent_loop(messages, registry, undefined, provider))
-      ).rejects.toThrow(MaxTokensError)
+      await expect(collectGenerator(agent_loop(messages, registry, undefined, provider))).rejects.toThrow(
+        MaxTokensError
+      )
     })
   })
 
@@ -522,18 +526,10 @@ describe('agent_loop', () => {
       const eventTypes = items.map((item) => item.type)
 
       // Verify event order
-      expect(eventTypes.indexOf('beforeInvocationEvent')).toBeLessThan(
-        eventTypes.indexOf('beforeModelEvent')
-      )
-      expect(eventTypes.indexOf('beforeModelEvent')).toBeLessThan(
-        eventTypes.indexOf('modelMessageStartEvent')
-      )
-      expect(eventTypes.indexOf('modelMessageStopEvent')).toBeLessThan(
-        eventTypes.indexOf('afterModelEvent')
-      )
-      expect(eventTypes.indexOf('afterModelEvent')).toBeLessThan(
-        eventTypes.indexOf('afterInvocationEvent')
-      )
+      expect(eventTypes.indexOf('beforeInvocationEvent')).toBeLessThan(eventTypes.indexOf('beforeModelEvent'))
+      expect(eventTypes.indexOf('beforeModelEvent')).toBeLessThan(eventTypes.indexOf('modelMessageStartEvent'))
+      expect(eventTypes.indexOf('modelMessageStopEvent')).toBeLessThan(eventTypes.indexOf('afterModelEvent'))
+      expect(eventTypes.indexOf('afterModelEvent')).toBeLessThan(eventTypes.indexOf('afterInvocationEvent'))
     })
   })
 
