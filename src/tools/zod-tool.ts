@@ -106,17 +106,8 @@ export function tool<TInput extends z.ZodType, TReturn = unknown>(
     toolSpec: functionTool.toolSpec,
 
     // Delegate stream to FunctionTool
-    async *stream(toolContext: ToolContext): ToolStreamGenerator {
-      // Manually delegate to FunctionTool to preserve both yields and return value
-      const generator = functionTool.stream(toolContext)
-      let iterResult = await generator.next()
-
-      while (!iterResult.done) {
-        yield iterResult.value
-        iterResult = await generator.next()
-      }
-
-      return iterResult.value
+    stream(toolContext: ToolContext): ToolStreamGenerator {
+      return functionTool.stream(toolContext)
     },
 
     // Type-safe invoke method
