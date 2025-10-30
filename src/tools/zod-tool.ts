@@ -6,8 +6,9 @@ import { z } from 'zod'
  * Configuration for creating a Zod-based tool.
  *
  * @typeParam TInput - Zod schema type for input validation
+ * @typeParam TReturn - Return type of the callback function
  */
-export interface ToolConfig<TInput extends z.ZodType> {
+export interface ToolConfig<TInput extends z.ZodType, TReturn = unknown> {
   /** The name of the tool */
   name: string
 
@@ -27,7 +28,7 @@ export interface ToolConfig<TInput extends z.ZodType> {
   callback: (
     input: z.infer<TInput>,
     context?: ToolContext
-  ) => AsyncGenerator<unknown, unknown, never> | Promise<unknown> | unknown
+  ) => AsyncGenerator<unknown, TReturn, never> | Promise<TReturn> | TReturn
 }
 
 /**
@@ -69,10 +70,13 @@ export interface ToolConfig<TInput extends z.ZodType> {
  * ```
  *
  * @typeParam TInput - Zod schema type for input validation
+ * @typeParam TReturn - Return type of the callback function
  * @param config - Tool configuration
  * @returns An InvokableTool that implements the Tool interface with invoke() method
  */
-export function tool<TInput extends z.ZodType>(config: ToolConfig<TInput>): InvokableTool<z.infer<TInput>, unknown> {
+export function tool<TInput extends z.ZodType, TReturn = unknown>(
+  config: ToolConfig<TInput, TReturn>
+): InvokableTool<z.infer<TInput>, TReturn> {
   const { name, description, inputSchema, callback } = config
 
   // Build toolSpec with JSON schema from Zod v4
@@ -83,7 +87,7 @@ export function tool<TInput extends z.ZodType>(config: ToolConfig<TInput>): Invo
   }
 
   // Create an invokable tool object
-  const invokableTool: InvokableTool<z.infer<TInput>, unknown> = {
+  const invokableTool: InvokableTool<z.infer<TInput>, TReturn> = {
     toolName: name,
     description,
     toolSpec,
@@ -142,7 +146,7 @@ export function tool<TInput extends z.ZodType>(config: ToolConfig<TInput>): Invo
       }
     },
 
-    async invoke(input: z.infer<TInput>, context?: ToolContext): Promise<unknown> {
+    async invoke(input: z.infer<TInput>, context?: ToolContext): Promise<TReturn> {
       // Validate input using Zod schema (throws on validation error)
       const validatedInput = inputSchema.parse(input)
 
@@ -152,11 +156,14 @@ export function tool<TInput extends z.ZodType>(config: ToolConfig<TInput>): Invo
       // Handle different return types
       if (result && typeof result === 'object' && Symbol.asyncIterator in result) {
         // AsyncGenerator - consume and return final value
-        let finalValue: unknown = undefined
-        for await (const value of result as AsyncGenerator<unknown, unknown, undefined>) {
-          finalValue = value
+        // Note: for await loop gives us yielded values, not the return value
+        // We capture the last yielded value as the result
+        let finalValue: TReturn | undefined = undefined
+        for await (const value of result as AsyncGenerator<unknown, TReturn, undefined>) {
+          finalValue = value as TReturn
         }
-        return finalValue
+        // If no value was yielded, finalValue will be undefined
+        return finalValue as TReturn
       } else {
         // Regular value or Promise - return directly
         return await result

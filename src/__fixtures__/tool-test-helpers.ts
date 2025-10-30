@@ -1,19 +1,22 @@
-import type { ToolContext, ToolStreamEvent, ToolStreamGenerator } from '../tool'
-import type { ToolResult } from '../types'
-import type { JSONValue } from '../../types/json'
+/**
+ * Test fixtures and helpers for Tool testing.
+ * This module provides utilities for testing Tool implementations.
+ */
+
+import type { ToolContext, ToolStreamEvent, ToolStreamGenerator } from '../tools/tool'
+import type { ToolResult } from '../tools/types'
+import type { JSONValue } from '../types/json'
+import { collectGenerator, collectIterator } from './model-test-helpers'
 
 /**
  * Consumes an async generator and collects all yielded values.
+ * This is a convenience wrapper around collectIterator for tool events.
  *
  * @param generator - AsyncGenerator to consume
  * @returns Array of all yielded values
  */
 export async function collectGeneratorEvents<T>(generator: AsyncGenerator<T, unknown, undefined>): Promise<T[]> {
-  const events: T[] = []
-  for await (const event of generator) {
-    events.push(event)
-  }
-  return events
+  return collectIterator(generator)
 }
 
 /**
@@ -36,6 +39,7 @@ export function createMockContext(input: unknown, invocationState: Record<string
 
 /**
  * Collects stream events and extracts the final ToolResult return value.
+ * Uses collectGenerator from model-test-helpers for consistent behavior.
  *
  * @param generator - The tool's stream generator
  * @returns Object containing yielded events and the final result
@@ -43,18 +47,8 @@ export function createMockContext(input: unknown, invocationState: Record<string
 export async function collectStreamEventsAndResult(
   generator: ToolStreamGenerator
 ): Promise<{ events: ToolStreamEvent[]; result: ToolResult }> {
-  const events: ToolStreamEvent[] = []
-  let result: ToolResult | undefined
-
-  // Manually iterate to capture both yields and return value
-  let next = await generator.next()
-  while (!next.done) {
-    events.push(next.value)
-    next = await generator.next()
-  }
-  result = next.value
-
-  return { events, result }
+  const { items, result } = await collectGenerator(generator)
+  return { events: items, result }
 }
 
 /**

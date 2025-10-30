@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { z } from 'zod'
 import { tool } from '../zod-tool'
-import { createMockContext, collectStreamEventsAndResult, extractEventData } from './test-helpers'
+import { createMockContext, collectStreamEventsAndResult, extractEventData } from '../../__fixtures__/tool-test-helpers'
 
 describe('tool', () => {
   describe('tool creation and properties', () => {
