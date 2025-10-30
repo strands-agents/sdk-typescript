@@ -23,3 +23,23 @@ export class ContextWindowOverflowError extends Error {
     this.name = 'ContextWindowOverflowError'
   }
 }
+
+/**
+ * Error thrown when the model reaches its maximum token limit during generation.
+ *
+ * This error indicates that the model stopped generating content because it reached
+ * the maximum number of tokens allowed for the response. This is an unrecoverable
+ * state that requires intervention, such as reducing the input size or adjusting
+ * the max tokens parameter.
+ */
+export class MaxTokensError extends Error {
+  /**
+   * Creates a new MaxTokensError.
+   *
+   * @param message - Error message describing the max tokens condition
+   */
+  constructor(message: string) {
+    super(message)
+    this.name = 'MaxTokensError'
+  }
+}

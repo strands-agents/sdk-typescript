@@ -21,6 +21,12 @@ sdk-typescript/
 │   │   ├── errors.test.ts        # Tests for error classes
 │   │   └── index.test.ts         # Tests for main entry point
 │   │
+│   ├── agent/                    # Agent loop and streaming
+│   │   ├── __tests__/            # Unit tests for agent loop
+│   │   │   └── agent_loop.test.ts  # Tests for agent loop function
+│   │   ├── agent_loop.ts         # Core agent loop implementation
+│   │   └── streaming.ts          # Agent streaming event types
+│   │
 │   ├── models/                   # Model provider implementations
 │   │   ├── __tests__/            # Unit tests for model providers
 │   │   │   └── bedrock.test.ts   # Tests for Bedrock model provider
@@ -82,6 +88,7 @@ sdk-typescript/
 
 - **`src/`**: All production code lives here with co-located unit tests
 - **`src/__tests__/`**: Unit tests for root-level source files
+- **`src/agent/`**: Agent loop coordination and streaming event types
 - **`src/models/`**: Model provider implementations (Bedrock, future providers)
 - **`src/tools/`**: Tool definitions and types for agent tool use
 - **`src/types/`**: Core type definitions used across the SDK
