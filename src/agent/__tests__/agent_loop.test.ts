@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { agent_loop } from '../agent_loop'
+import { runAgentLoop } from '../agent_loop'
 import { TestModelProvider, collectGenerator } from '../../__fixtures__/model-test-helpers'
 import { ToolRegistry } from '../../tools/registry'
 import type { Tool } from '../../tools/tool'
@@ -40,7 +40,7 @@ function createMockTool(name: string, resultFn: () => ToolResult | AsyncGenerato
   }
 }
 
-describe('agent_loop', () => {
+describe('runAgentLoop', () => {
   describe('when handling simple completion without tools', () => {
     it('yields events and returns final messages array', async () => {
       const provider = new TestModelProvider(async function* () {
@@ -64,7 +64,7 @@ describe('agent_loop', () => {
         },
       ]
 
-      const { items, result } = await collectGenerator(agent_loop(provider, { messages, toolRegistry: registry }))
+      const { items, result } = await collectGenerator(runAgentLoop(provider, { messages, toolRegistry: registry }))
 
       // Verify agent events are present
       expect(items).toContainEqual({ type: 'beforeInvocationEvent' })
@@ -140,7 +140,7 @@ describe('agent_loop', () => {
         },
       ]
 
-      const { items, result } = await collectGenerator(agent_loop(provider, { messages, toolRegistry: registry }))
+      const { items, result } = await collectGenerator(runAgentLoop(provider, { messages, toolRegistry: registry }))
 
       // Verify tool execution events
       expect(items).toContainEqual({
@@ -250,7 +250,7 @@ describe('agent_loop', () => {
         },
       ]
 
-      const { result } = await collectGenerator(agent_loop(provider, { messages, toolRegistry: registry }))
+      const { result } = await collectGenerator(runAgentLoop(provider, { messages, toolRegistry: registry }))
 
       // Verify both tool results are present
       const toolResultMessage = result[2]
@@ -338,7 +338,7 @@ describe('agent_loop', () => {
         },
       ]
 
-      const { items, result } = await collectGenerator(agent_loop(provider, { messages, toolRegistry: registry }))
+      const { items, result } = await collectGenerator(runAgentLoop(provider, { messages, toolRegistry: registry }))
 
       // Verify only one beforeInvocationEvent
       const beforeEvents = items.filter((e) => e.type === 'beforeInvocationEvent')
@@ -375,7 +375,7 @@ describe('agent_loop', () => {
         },
       ]
 
-      const { result } = await collectGenerator(agent_loop(provider, { messages, toolRegistry: registry }))
+      const { result } = await collectGenerator(runAgentLoop(provider, { messages, toolRegistry: registry }))
 
       // Verify assistant message was added
       expect(result).toHaveLength(2)
@@ -403,7 +403,7 @@ describe('agent_loop', () => {
       ]
 
       // Verify error is thrown
-      await expect(collectGenerator(agent_loop(provider, { messages, toolRegistry: registry }))).rejects.toThrow(
+      await expect(collectGenerator(runAgentLoop(provider, { messages, toolRegistry: registry }))).rejects.toThrow(
         'Model error before any events'
       )
     })
@@ -426,14 +426,14 @@ describe('agent_loop', () => {
       ]
 
       // Verify error is thrown
-      await expect(collectGenerator(agent_loop(provider, { messages, toolRegistry: registry }))).rejects.toThrow(
+      await expect(collectGenerator(runAgentLoop(provider, { messages, toolRegistry: registry }))).rejects.toThrow(
         'Error after first event'
       )
     })
   })
 
   describe('when tool throws exception', () => {
-    it('re-raises the error', async () => {
+    it('propagates the error from the tool', async () => {
       const provider = new TestModelProvider(async function* () {
         yield { type: 'modelMessageStartEvent', role: 'assistant' }
         yield {
@@ -464,9 +464,68 @@ describe('agent_loop', () => {
         },
       ]
 
-      await expect(collectGenerator(agent_loop(provider, { messages, toolRegistry: registry }))).rejects.toThrow(
+      await expect(collectGenerator(runAgentLoop(provider, { messages, toolRegistry: registry }))).rejects.toThrow(
         'Tool execution failed'
       )
+    })
+  })
+
+  describe('when tool is not found in registry', () => {
+    it('returns error tool result and continues loop', async () => {
+      let callCount = 0
+      const provider = new TestModelProvider()
+      provider.setEventGenerator(async function* () {
+        if (callCount === 0) {
+          callCount++
+          yield { type: 'modelMessageStartEvent', role: 'assistant' }
+          yield {
+            type: 'modelContentBlockStartEvent',
+            start: { type: 'toolUseStart', name: 'nonexistent', toolUseId: 'id-1' },
+          }
+          yield {
+            type: 'modelContentBlockDeltaEvent',
+            delta: { type: 'toolUseInputDelta', input: '{}' },
+          }
+          yield { type: 'modelContentBlockStopEvent' }
+          yield { type: 'modelMessageStopEvent', stopReason: 'toolUse' }
+        } else {
+          // Model handles the error and responds
+          yield { type: 'modelMessageStartEvent', role: 'assistant' }
+          yield { type: 'modelContentBlockStartEvent' }
+          yield {
+            type: 'modelContentBlockDeltaEvent',
+            delta: { type: 'textDelta', text: 'Tool not available' },
+          }
+          yield { type: 'modelContentBlockStopEvent' }
+          yield { type: 'modelMessageStopEvent', stopReason: 'endTurn' }
+        }
+      })
+
+      const registry = new ToolRegistry()
+
+      const messages: Message[] = [
+        {
+          type: 'message',
+          role: 'user',
+          content: [{ type: 'textBlock', text: 'Test' }],
+        },
+      ]
+
+      const { result } = await collectGenerator(runAgentLoop(provider, { messages, toolRegistry: registry }))
+
+      // Verify error tool result was returned
+      const toolResultMessage = result[2]
+      if (!toolResultMessage || !toolResultMessage.content[0]) {
+        throw new Error('Expected tool result message at index 2')
+      }
+      expect(toolResultMessage.content[0]).toMatchObject({
+        type: 'toolResultBlock',
+        toolUseId: 'id-1',
+        status: 'error',
+      })
+
+      // Verify loop continued and completed
+      expect(result).toHaveLength(4) // user, assistant tool use, user error result, assistant final
     })
   })
 
@@ -492,7 +551,7 @@ describe('agent_loop', () => {
         },
       ]
 
-      await expect(collectGenerator(agent_loop(provider, { messages, toolRegistry: registry }))).rejects.toThrow(
+      await expect(collectGenerator(runAgentLoop(provider, { messages, toolRegistry: registry }))).rejects.toThrow(
         MaxTokensError
       )
     })
@@ -520,7 +579,7 @@ describe('agent_loop', () => {
         },
       ]
 
-      const { items } = await collectGenerator(agent_loop(provider, { messages, toolRegistry: registry }))
+      const { items } = await collectGenerator(runAgentLoop(provider, { messages, toolRegistry: registry }))
 
       // Extract event types in order
       const eventTypes = items.map((item) => item.type)
@@ -555,7 +614,7 @@ describe('agent_loop', () => {
         },
       ]
 
-      const { result } = await collectGenerator(agent_loop(provider, { messages, toolRegistry: registry }))
+      const { result } = await collectGenerator(runAgentLoop(provider, { messages, toolRegistry: registry }))
 
       if (!result[1] || !result[1].content[0]) {
         throw new Error('Expected content at index 1')
@@ -612,7 +671,7 @@ describe('agent_loop', () => {
         },
       ]
 
-      const { result } = await collectGenerator(agent_loop(provider, { messages, toolRegistry: registry }))
+      const { result } = await collectGenerator(runAgentLoop(provider, { messages, toolRegistry: registry }))
 
       const toolUseBlock = result[1]?.content[0]
       if (!toolUseBlock || toolUseBlock.type !== 'toolUseBlock') {
@@ -653,7 +712,7 @@ describe('agent_loop', () => {
         },
       ]
 
-      const { result } = await collectGenerator(agent_loop(provider, { messages, toolRegistry: registry }))
+      const { result } = await collectGenerator(runAgentLoop(provider, { messages, toolRegistry: registry }))
 
       if (!result[1] || !result[1].content[0]) {
         throw new Error('Expected content blocks at index 1')

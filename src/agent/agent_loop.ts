@@ -2,7 +2,6 @@ import type { Message, SystemPrompt, ToolUseBlock, ToolResultBlock } from '../ty
 import type { Model, BaseModelConfig, StreamOptions } from '../models/model'
 import type { ToolRegistry } from '../tools/registry'
 import type { AgentStreamEvent } from './streaming'
-import type { ToolResult } from '../tools/types'
 import { MaxTokensError } from '../errors'
 
 /**
@@ -48,13 +47,13 @@ export interface AgentLoopOptions {
  * const registry = new ToolRegistry()
  * const provider = new BedrockModel(config)
  *
- * for await (const event of agent_loop(provider, { messages, toolRegistry: registry })) {
+ * for await (const event of runAgentLoop(provider, { messages, toolRegistry: registry })) {
  *   console.log('Event:', event.type)
  * }
  * // Returns final messages array
  * ```
  */
-export async function* agent_loop(
+export async function* runAgentLoop(
   modelProvider: Model<BaseModelConfig>,
   options: AgentLoopOptions
 ): AsyncGenerator<AgentStreamEvent, Message[], never> {
@@ -87,19 +86,8 @@ export async function* agent_loop(
         return messages
       }
 
-      // Extract tool use blocks from assistant message
-      const toolUseBlocks = modelResult.message.content.filter(
-        (block): block is ToolUseBlock => block.type === 'toolUseBlock'
-      )
-
-      if (toolUseBlocks.length === 0) {
-        // No tool use blocks found even though stopReason is toolUse
-        // Treat this as a normal completion
-        return messages
-      }
-
       // Execute tools sequentially
-      const toolResultMessage = yield* executeTools(modelResult.message, toolUseBlocks, toolRegistry)
+      const toolResultMessage = yield* executeTools(modelResult.message, toolRegistry)
 
       messages.push(toolResultMessage)
 
@@ -171,71 +159,31 @@ async function* invokeModel(
  * Executes tools sequentially and streams all tool events.
  *
  * @param assistantMessage - The assistant message containing tool use blocks
- * @param toolUseBlocks - Tool use blocks to execute
  * @param toolRegistry - Registry containing available tools
  * @returns User message containing tool results
  */
 async function* executeTools(
   assistantMessage: Message,
-  toolUseBlocks: ToolUseBlock[],
   toolRegistry: ToolRegistry
 ): AsyncGenerator<AgentStreamEvent, Message, never> {
   yield { type: 'beforeToolsEvent', message: assistantMessage }
 
+  // Extract tool use blocks from assistant message
+  const toolUseBlocks = assistantMessage.content.filter(
+    (block): block is ToolUseBlock => block.type === 'toolUseBlock'
+  )
+
+  if (toolUseBlocks.length === 0) {
+    // No tool use blocks found even though stopReason is toolUse
+    throw new Error('Model indicated toolUse but no tool use blocks found in message')
+  }
+
   const toolResultBlocks: ToolResultBlock[] = []
 
   for (const toolUseBlock of toolUseBlocks) {
-    const tool = toolRegistry.get(toolUseBlock.name)
-
-    if (!tool) {
-      throw new Error(`Tool '${toolUseBlock.name}' not found in registry`)
-    }
-
-    // Execute tool and collect result
-    const toolContext = {
-      toolUse: {
-        name: toolUseBlock.name,
-        toolUseId: toolUseBlock.toolUseId,
-        input: toolUseBlock.input,
-      },
-      invocationState: {},
-    }
-
-    const toolGenerator = tool.stream(toolContext)
-
-    let toolResult: ToolResult | null = null
-    let done = false
-
-    // Manually iterate to capture both yields and return value
-    // Note: Cannot use yield* here because we need to capture the return value
-    // and also yield the ToolResultBlock separately after construction
-    while (!done) {
-      const { value, done: isDone } = await toolGenerator.next()
-      done = isDone ?? false
-
-      if (!done) {
-        // This is a yielded ToolStreamEvent
-        yield value as AgentStreamEvent
-      } else {
-        // This is the returned ToolResult
-        toolResult = value as ToolResult
-      }
-    }
-
-    if (!toolResult) {
-      throw new Error(`Tool '${toolUseBlock.name}' did not return a result`)
-    }
-
-    // Create ToolResultBlock from ToolResult
-    const toolResultBlock: ToolResultBlock = {
-      type: 'toolResultBlock',
-      toolUseId: toolResult.toolUseId,
-      status: toolResult.status,
-      content: toolResult.content,
-    }
-
+    const toolResultBlock = yield* executeTool(toolUseBlock, toolRegistry)
     toolResultBlocks.push(toolResultBlock)
-    
+
     // Yield the tool result block as it's created
     yield toolResultBlock as AgentStreamEvent
   }
@@ -250,4 +198,78 @@ async function* executeTools(
   yield { type: 'afterToolsEvent', message: toolResultMessage }
 
   return toolResultMessage
+}
+
+/**
+ * Executes a single tool and returns the result.
+ * If the tool is not found or fails to return a result, returns an error ToolResult
+ * instead of throwing an exception. This allows the agent loop to continue and
+ * let the model handle the error gracefully.
+ *
+ * @param toolUseBlock - Tool use block to execute
+ * @param toolRegistry - Registry containing available tools
+ * @returns Tool result block
+ */
+async function* executeTool(
+  toolUseBlock: ToolUseBlock,
+  toolRegistry: ToolRegistry
+): AsyncGenerator<AgentStreamEvent, ToolResultBlock, never> {
+  const tool = toolRegistry.get(toolUseBlock.name)
+
+  if (!tool) {
+    // Tool not found - return error result instead of throwing
+    const errorResult: ToolResultBlock = {
+      type: 'toolResultBlock',
+      toolUseId: toolUseBlock.toolUseId,
+      status: 'error',
+      content: [
+        {
+          type: 'toolResultTextContent',
+          text: `Tool '${toolUseBlock.name}' not found in registry`,
+        },
+      ],
+    }
+    return errorResult
+  }
+
+  // Execute tool and collect result
+  const toolContext = {
+    toolUse: {
+      name: toolUseBlock.name,
+      toolUseId: toolUseBlock.toolUseId,
+      input: toolUseBlock.input,
+    },
+    invocationState: {},
+  }
+
+  const toolGenerator = tool.stream(toolContext)
+
+  // Use yield* to delegate to the tool generator and capture the return value
+  const toolResult = yield* toolGenerator
+
+  if (!toolResult) {
+    // Tool didn't return a result - return error result instead of throwing
+    const errorResult: ToolResultBlock = {
+      type: 'toolResultBlock',
+      toolUseId: toolUseBlock.toolUseId,
+      status: 'error',
+      content: [
+        {
+          type: 'toolResultTextContent',
+          text: `Tool '${toolUseBlock.name}' did not return a result`,
+        },
+      ],
+    }
+    return errorResult
+  }
+
+  // Create ToolResultBlock from ToolResult
+  const toolResultBlock: ToolResultBlock = {
+    type: 'toolResultBlock',
+    toolUseId: toolResult.toolUseId,
+    status: toolResult.status,
+    content: toolResult.content,
+  }
+
+  return toolResultBlock
 }
