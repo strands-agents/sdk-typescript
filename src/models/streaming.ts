@@ -16,14 +16,9 @@ export type ModelStreamEvent =
   | ModelMetadataEvent
 
 /**
- * Event emitted when a new message starts in the stream.
+ * Data interface for message start events without the type discriminator.
  */
-export interface ModelMessageStartEvent {
-  /**
-   * Discriminator for message start events.
-   */
-  type: 'modelMessageStartEvent'
-
+export interface ModelMessageStartEventData {
   /**
    * The role of the message being started.
    */
@@ -31,14 +26,45 @@ export interface ModelMessageStartEvent {
 }
 
 /**
- * Event emitted when a new content block starts in the stream.
+ * Event emitted when a new message starts in the stream.
  */
-export interface ModelContentBlockStartEvent {
+export class ModelMessageStartEvent implements ModelMessageStartEventData {
   /**
-   * Discriminator for content block start events.
+   * Discriminator for message start events.
    */
-  type: 'modelContentBlockStartEvent'
+  readonly type = 'modelMessageStartEvent' as const
 
+  /**
+   * The role of the message being started.
+   */
+  readonly role: Role
+
+  /**
+   * Creates a new ModelMessageStartEvent.
+   *
+   * @param data - The event data
+   */
+  constructor(data: ModelMessageStartEventData) {
+    this.role = data.role
+  }
+
+  /**
+   * Converts the event to a plain object for serialization.
+   *
+   * @returns Plain object representation
+   */
+  toJSON(): object {
+    return {
+      type: this.type,
+      role: this.role,
+    }
+  }
+}
+
+/**
+ * Data interface for content block start events without the type discriminator.
+ */
+export interface ModelContentBlockStartEventData {
   /**
    * Index of this content block within the message.
    */
@@ -52,14 +78,62 @@ export interface ModelContentBlockStartEvent {
 }
 
 /**
- * Event emitted when there is new content in a content block.
+ * Event emitted when a new content block starts in the stream.
  */
-export interface ModelContentBlockDeltaEvent {
+export class ModelContentBlockStartEvent implements ModelContentBlockStartEventData {
   /**
-   * Discriminator for content block delta events.
+   * Discriminator for content block start events.
    */
-  type: 'modelContentBlockDeltaEvent'
+  readonly type = 'modelContentBlockStartEvent' as const
 
+  /**
+   * Index of this content block within the message.
+   */
+  readonly contentBlockIndex?: number
+
+  /**
+   * Information about the content block being started.
+   * Only present for tool use blocks.
+   */
+  readonly start?: ContentBlockStart
+
+  /**
+   * Creates a new ModelContentBlockStartEvent.
+   *
+   * @param data - The event data
+   */
+  constructor(data: ModelContentBlockStartEventData) {
+    if (data.contentBlockIndex !== undefined) {
+      this.contentBlockIndex = data.contentBlockIndex
+    }
+    if (data.start !== undefined) {
+      this.start = data.start
+    }
+  }
+
+  /**
+   * Converts the event to a plain object for serialization.
+   *
+   * @returns Plain object representation
+   */
+  toJSON(): object {
+    const result: Record<string, unknown> = {
+      type: this.type,
+    }
+    if (this.contentBlockIndex !== undefined) {
+      result.contentBlockIndex = this.contentBlockIndex
+    }
+    if (this.start !== undefined) {
+      result.start = this.start && typeof this.start === 'object' && 'toJSON' in this.start ? this.start.toJSON() : this.start
+    }
+    return result
+  }
+}
+
+/**
+ * Data interface for content block delta events without the type discriminator.
+ */
+export interface ModelContentBlockDeltaEventData {
   /**
    * Index of the content block being updated.
    */
@@ -72,14 +146,57 @@ export interface ModelContentBlockDeltaEvent {
 }
 
 /**
- * Event emitted when a content block completes.
+ * Event emitted when there is new content in a content block.
  */
-export interface ModelContentBlockStopEvent {
+export class ModelContentBlockDeltaEvent implements ModelContentBlockDeltaEventData {
   /**
-   * Discriminator for content block stop events.
+   * Discriminator for content block delta events.
    */
-  type: 'modelContentBlockStopEvent'
+  readonly type = 'modelContentBlockDeltaEvent' as const
 
+  /**
+   * Index of the content block being updated.
+   */
+  readonly contentBlockIndex?: number
+
+  /**
+   * The incremental content update.
+   */
+  readonly delta: ContentBlockDelta
+
+  /**
+   * Creates a new ModelContentBlockDeltaEvent.
+   *
+   * @param data - The event data
+   */
+  constructor(data: ModelContentBlockDeltaEventData) {
+    if (data.contentBlockIndex !== undefined) {
+      this.contentBlockIndex = data.contentBlockIndex
+    }
+    this.delta = data.delta
+  }
+
+  /**
+   * Converts the event to a plain object for serialization.
+   *
+   * @returns Plain object representation
+   */
+  toJSON(): object {
+    const result: Record<string, unknown> = {
+      type: this.type,
+      delta: this.delta && typeof this.delta === 'object' && 'toJSON' in this.delta ? this.delta.toJSON() : this.delta,
+    }
+    if (this.contentBlockIndex !== undefined) {
+      result.contentBlockIndex = this.contentBlockIndex
+    }
+    return result
+  }
+}
+
+/**
+ * Data interface for content block stop events without the type discriminator.
+ */
+export interface ModelContentBlockStopEventData {
   /**
    * Index of the content block that stopped.
    */
@@ -87,14 +204,50 @@ export interface ModelContentBlockStopEvent {
 }
 
 /**
- * Event emitted when the message completes.
+ * Event emitted when a content block completes.
  */
-export interface ModelMessageStopEvent {
+export class ModelContentBlockStopEvent implements ModelContentBlockStopEventData {
   /**
-   * Discriminator for message stop events.
+   * Discriminator for content block stop events.
    */
-  type: 'modelMessageStopEvent'
+  readonly type = 'modelContentBlockStopEvent' as const
 
+  /**
+   * Index of the content block that stopped.
+   */
+  readonly contentBlockIndex?: number
+
+  /**
+   * Creates a new ModelContentBlockStopEvent.
+   *
+   * @param data - The event data
+   */
+  constructor(data: ModelContentBlockStopEventData) {
+    if (data.contentBlockIndex !== undefined) {
+      this.contentBlockIndex = data.contentBlockIndex
+    }
+  }
+
+  /**
+   * Converts the event to a plain object for serialization.
+   *
+   * @returns Plain object representation
+   */
+  toJSON(): object {
+    const result: Record<string, unknown> = {
+      type: this.type,
+    }
+    if (this.contentBlockIndex !== undefined) {
+      result.contentBlockIndex = this.contentBlockIndex
+    }
+    return result
+  }
+}
+
+/**
+ * Data interface for message stop events without the type discriminator.
+ */
+export interface ModelMessageStopEventData {
   /**
    * Reason why generation stopped.
    */
@@ -107,15 +260,61 @@ export interface ModelMessageStopEvent {
 }
 
 /**
- * Event containing metadata about the stream.
- * Includes usage statistics, performance metrics, and trace information.
+ * Event emitted when the message completes.
  */
-export interface ModelMetadataEvent {
+export class ModelMessageStopEvent implements ModelMessageStopEventData {
   /**
-   * Discriminator for metadata events.
+   * Discriminator for message stop events.
    */
-  type: 'modelMetadataEvent'
+  readonly type = 'modelMessageStopEvent' as const
 
+  /**
+   * Reason why generation stopped.
+   */
+  readonly stopReason?: StopReason
+
+  /**
+   * Additional provider-specific response fields.
+   */
+  readonly additionalModelResponseFields?: JSONValue
+
+  /**
+   * Creates a new ModelMessageStopEvent.
+   *
+   * @param data - The event data
+   */
+  constructor(data: ModelMessageStopEventData) {
+    if (data.stopReason !== undefined) {
+      this.stopReason = data.stopReason
+    }
+    if (data.additionalModelResponseFields !== undefined) {
+      this.additionalModelResponseFields = data.additionalModelResponseFields
+    }
+  }
+
+  /**
+   * Converts the event to a plain object for serialization.
+   *
+   * @returns Plain object representation
+   */
+  toJSON(): object {
+    const result: Record<string, unknown> = {
+      type: this.type,
+    }
+    if (this.stopReason !== undefined) {
+      result.stopReason = this.stopReason
+    }
+    if (this.additionalModelResponseFields !== undefined) {
+      result.additionalModelResponseFields = this.additionalModelResponseFields
+    }
+    return result
+  }
+}
+
+/**
+ * Data interface for metadata events without the type discriminator.
+ */
+export interface ModelMetadataEventData {
   /**
    * Token usage information.
    */
@@ -133,20 +332,79 @@ export interface ModelMetadataEvent {
 }
 
 /**
+ * Event containing metadata about the stream.
+ * Includes usage statistics, performance metrics, and trace information.
+ */
+export class ModelMetadataEvent implements ModelMetadataEventData {
+  /**
+   * Discriminator for metadata events.
+   */
+  readonly type = 'modelMetadataEvent' as const
+
+  /**
+   * Token usage information.
+   */
+  readonly usage?: Usage
+
+  /**
+   * Performance metrics.
+   */
+  readonly metrics?: Metrics
+
+  /**
+   * Trace information for observability.
+   */
+  readonly trace?: unknown
+
+  /**
+   * Creates a new ModelMetadataEvent.
+   *
+   * @param data - The event data
+   */
+  constructor(data: ModelMetadataEventData) {
+    if (data.usage !== undefined) {
+      this.usage = data.usage
+    }
+    if (data.metrics !== undefined) {
+      this.metrics = data.metrics
+    }
+    if (data.trace !== undefined) {
+      this.trace = data.trace
+    }
+  }
+
+  /**
+   * Converts the event to a plain object for serialization.
+   *
+   * @returns Plain object representation
+   */
+  toJSON(): object {
+    const result: Record<string, unknown> = {
+      type: this.type,
+    }
+    if (this.usage !== undefined) {
+      result.usage = this.usage
+    }
+    if (this.metrics !== undefined) {
+      result.metrics = this.metrics
+    }
+    if (this.trace !== undefined) {
+      result.trace = this.trace
+    }
+    return result
+  }
+}
+
+/**
  * Information about a content block that is starting.
  * Currently only represents tool use starts.
  */
 export type ContentBlockStart = ToolUseStart
 
 /**
- * Information about a tool use that is starting.
+ * Data interface for tool use start without the type discriminator.
  */
-export interface ToolUseStart {
-  /**
-   * Discriminator for tool use start.
-   */
-  type: 'toolUseStart'
-
+export interface ToolUseStartData {
   /**
    * The name of the tool being used.
    */
@@ -159,6 +417,49 @@ export interface ToolUseStart {
 }
 
 /**
+ * Information about a tool use that is starting.
+ */
+export class ToolUseStart implements ToolUseStartData {
+  /**
+   * Discriminator for tool use start.
+   */
+  readonly type = 'toolUseStart' as const
+
+  /**
+   * The name of the tool being used.
+   */
+  readonly name: string
+
+  /**
+   * Unique identifier for this tool use.
+   */
+  readonly toolUseId: string
+
+  /**
+   * Creates a new ToolUseStart.
+   *
+   * @param data - The tool use start data
+   */
+  constructor(data: ToolUseStartData) {
+    this.name = data.name
+    this.toolUseId = data.toolUseId
+  }
+
+  /**
+   * Converts the tool use start to a plain object for serialization.
+   *
+   * @returns Plain object representation
+   */
+  toJSON(): object {
+    return {
+      type: this.type,
+      name: this.name,
+      toolUseId: this.toolUseId,
+    }
+  }
+}
+
+/**
  * A delta (incremental chunk) of content within a content block.
  * Can be text, tool use input, or reasoning content.
  *
@@ -167,15 +468,9 @@ export interface ToolUseStart {
 export type ContentBlockDelta = TextDelta | ToolUseInputDelta | ReasoningContentDelta
 
 /**
- * Text delta within a content block.
- * Represents incremental text content from the model.
+ * Data interface for text delta without the type discriminator.
  */
-export interface TextDelta {
-  /**
-   * Discriminator for text delta.
-   */
-  type: 'textDelta'
-
+export interface TextDeltaData {
   /**
    * Incremental text content.
    */
@@ -183,15 +478,46 @@ export interface TextDelta {
 }
 
 /**
- * Tool use input delta within a content block.
- * Represents incremental tool input being generated.
+ * Text delta within a content block.
+ * Represents incremental text content from the model.
  */
-export interface ToolUseInputDelta {
+export class TextDelta implements TextDeltaData {
   /**
-   * Discriminator for tool use input delta.
+   * Discriminator for text delta.
    */
-  type: 'toolUseInputDelta'
+  readonly type = 'textDelta' as const
 
+  /**
+   * Incremental text content.
+   */
+  readonly text: string
+
+  /**
+   * Creates a new TextDelta.
+   *
+   * @param data - The text delta data
+   */
+  constructor(data: TextDeltaData) {
+    this.text = data.text
+  }
+
+  /**
+   * Converts the text delta to a plain object for serialization.
+   *
+   * @returns Plain object representation
+   */
+  toJSON(): object {
+    return {
+      type: this.type,
+      text: this.text,
+    }
+  }
+}
+
+/**
+ * Data interface for tool use input delta without the type discriminator.
+ */
+export interface ToolUseInputDeltaData {
   /**
    * Partial JSON string representing the tool input.
    */
@@ -199,15 +525,46 @@ export interface ToolUseInputDelta {
 }
 
 /**
- * Reasoning content delta within a content block.
- * Represents incremental reasoning or thinking content.
+ * Tool use input delta within a content block.
+ * Represents incremental tool input being generated.
  */
-export interface ReasoningContentDelta {
+export class ToolUseInputDelta implements ToolUseInputDeltaData {
   /**
-   * Discriminator for reasoning delta.
+   * Discriminator for tool use input delta.
    */
-  type: 'reasoningContentDelta'
+  readonly type = 'toolUseInputDelta' as const
 
+  /**
+   * Partial JSON string representing the tool input.
+   */
+  readonly input: string
+
+  /**
+   * Creates a new ToolUseInputDelta.
+   *
+   * @param data - The tool use input delta data
+   */
+  constructor(data: ToolUseInputDeltaData) {
+    this.input = data.input
+  }
+
+  /**
+   * Converts the tool use input delta to a plain object for serialization.
+   *
+   * @returns Plain object representation
+   */
+  toJSON(): object {
+    return {
+      type: this.type,
+      input: this.input,
+    }
+  }
+}
+
+/**
+ * Data interface for reasoning content delta without the type discriminator.
+ */
+export interface ReasoningContentDeltaData {
   /**
    * Incremental reasoning text.
    */
@@ -222,6 +579,70 @@ export interface ReasoningContentDelta {
    * Incremental redacted content data.
    */
   redactedContent?: Uint8Array
+}
+
+/**
+ * Reasoning content delta within a content block.
+ * Represents incremental reasoning or thinking content.
+ */
+export class ReasoningContentDelta implements ReasoningContentDeltaData {
+  /**
+   * Discriminator for reasoning delta.
+   */
+  readonly type = 'reasoningContentDelta' as const
+
+  /**
+   * Incremental reasoning text.
+   */
+  readonly text?: string
+
+  /**
+   * Incremental signature data.
+   */
+  readonly signature?: string
+
+  /**
+   * Incremental redacted content data.
+   */
+  readonly redactedContent?: Uint8Array
+
+  /**
+   * Creates a new ReasoningContentDelta.
+   *
+   * @param data - The reasoning content delta data
+   */
+  constructor(data: ReasoningContentDeltaData) {
+    if (data.text !== undefined) {
+      this.text = data.text
+    }
+    if (data.signature !== undefined) {
+      this.signature = data.signature
+    }
+    if (data.redactedContent !== undefined) {
+      this.redactedContent = data.redactedContent
+    }
+  }
+
+  /**
+   * Converts the reasoning content delta to a plain object for serialization.
+   *
+   * @returns Plain object representation
+   */
+  toJSON(): object {
+    const result: Record<string, unknown> = {
+      type: this.type,
+    }
+    if (this.text !== undefined) {
+      result.text = this.text
+    }
+    if (this.signature !== undefined) {
+      result.signature = this.signature
+    }
+    if (this.redactedContent !== undefined) {
+      result.redactedContent = this.redactedContent
+    }
+    return result
+  }
 }
 
 /**

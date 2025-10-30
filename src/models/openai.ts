@@ -12,6 +12,17 @@ import { Model } from '../models/model'
 import type { BaseModelConfig, StreamOptions } from '../models/model'
 import type { Message } from '../types/messages'
 import type { ModelStreamEvent } from '../models/streaming'
+import {
+  ModelMessageStartEvent,
+  ModelContentBlockStartEvent,
+  ModelContentBlockDeltaEvent,
+  ModelContentBlockStopEvent,
+  ModelMessageStopEvent,
+  ModelMetadataEvent,
+  ToolUseStart,
+  TextDelta,
+  ToolUseInputDelta,
+} from '../models/streaming'
 import { ContextWindowOverflowError } from '../errors'
 
 /**
@@ -323,14 +334,7 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
       const activeToolCalls = new Map<number, boolean>()
 
       // Buffer usage to emit before message stop
-      let bufferedUsage: {
-        type: 'modelMetadataEvent'
-        usage: {
-          inputTokens: number
-          outputTokens: number
-          totalTokens: number
-        }
-      } | null = null
+      let bufferedUsage: ModelMetadataEvent | null = null
 
       // Process streaming response
       for await (const chunk of stream) {
@@ -338,14 +342,13 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
           // Handle usage chunk (no choices)
           // Buffer usage to emit before message stop
           if (chunk.usage) {
-            bufferedUsage = {
-              type: 'modelMetadataEvent',
+            bufferedUsage = new ModelMetadataEvent({
               usage: {
                 inputTokens: chunk.usage.prompt_tokens ?? 0,
                 outputTokens: chunk.usage.completion_tokens ?? 0,
                 totalTokens: chunk.usage.total_tokens ?? 0,
               },
-            }
+            })
           }
           continue
         }
@@ -696,10 +699,7 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
     // Handle message start (role appears) - update mutable state
     if (delta?.role && !streamState.messageStarted) {
       streamState.messageStarted = true
-      events.push({
-        type: 'modelMessageStartEvent',
-        role: delta.role as 'user' | 'assistant',
-      })
+      events.push(new ModelMessageStartEvent({ role: delta.role as 'user' | 'assistant' }))
     }
 
     // Handle text content delta with contentBlockIndex and start event
@@ -707,21 +707,22 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
       // Emit start event on first text delta
       if (!streamState.textContentBlockStarted) {
         streamState.textContentBlockStarted = true
-        events.push({
-          type: 'modelContentBlockStartEvent',
-          contentBlockIndex: TEXT_CONTENT_BLOCK_INDEX,
-        })
+        events.push(
+          new ModelContentBlockStartEvent({
+            contentBlockIndex: TEXT_CONTENT_BLOCK_INDEX,
+          })
+        )
       }
 
       // Include contentBlockIndex for text deltas
-      events.push({
-        type: 'modelContentBlockDeltaEvent',
-        contentBlockIndex: TEXT_CONTENT_BLOCK_INDEX,
-        delta: {
-          type: 'textDelta',
-          text: delta.content,
-        },
-      })
+      events.push(
+        new ModelContentBlockDeltaEvent({
+          contentBlockIndex: TEXT_CONTENT_BLOCK_INDEX,
+          delta: new TextDelta({
+            text: delta.content,
+          }),
+        })
+      )
     }
 
     // Handle tool calls
@@ -735,29 +736,29 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
 
         // If tool call has id and name, it's the start of a new tool call
         if (toolCall.id && toolCall.function?.name) {
-          events.push({
-            type: 'modelContentBlockStartEvent',
-            contentBlockIndex: toolCall.index,
-            start: {
-              type: 'toolUseStart',
-              name: toolCall.function.name,
-              toolUseId: toolCall.id,
-            },
-          })
+          events.push(
+            new ModelContentBlockStartEvent({
+              contentBlockIndex: toolCall.index,
+              start: new ToolUseStart({
+                name: toolCall.function.name,
+                toolUseId: toolCall.id,
+              }),
+            })
+          )
           // Track active tool calls
           activeToolCalls.set(toolCall.index, true)
         }
 
         // If tool call has arguments, it's a delta
         if (toolCall.function?.arguments) {
-          events.push({
-            type: 'modelContentBlockDeltaEvent',
-            contentBlockIndex: toolCall.index,
-            delta: {
-              type: 'toolUseInputDelta',
-              input: toolCall.function.arguments,
-            },
-          })
+          events.push(
+            new ModelContentBlockDeltaEvent({
+              contentBlockIndex: toolCall.index,
+              delta: new ToolUseInputDelta({
+                input: toolCall.function.arguments,
+              }),
+            })
+          )
         }
       }
     }
@@ -766,19 +767,21 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
     if (typedChoice.finish_reason) {
       // Emit stop event for text content if it was started
       if (streamState.textContentBlockStarted) {
-        events.push({
-          type: 'modelContentBlockStopEvent',
-          contentBlockIndex: TEXT_CONTENT_BLOCK_INDEX,
-        })
+        events.push(
+          new ModelContentBlockStopEvent({
+            contentBlockIndex: TEXT_CONTENT_BLOCK_INDEX,
+          })
+        )
         streamState.textContentBlockStarted = false
       }
 
       // Emit stop events for all active tool calls and delete during iteration
       for (const [index] of activeToolCalls) {
-        events.push({
-          type: 'modelContentBlockStopEvent',
-          contentBlockIndex: index,
-        })
+        events.push(
+          new ModelContentBlockStopEvent({
+            contentBlockIndex: index,
+          })
+        )
         activeToolCalls.delete(index)
       }
 
@@ -802,10 +805,7 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
         stopReason = fallbackReason
       }
 
-      events.push({
-        type: 'modelMessageStopEvent',
-        stopReason,
-      })
+      events.push(new ModelMessageStopEvent({ stopReason }))
     }
 
     return events

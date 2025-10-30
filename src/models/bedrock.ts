@@ -31,8 +31,20 @@ import {
   ReasoningContentBlock,
 } from '@aws-sdk/client-bedrock-runtime'
 import { Model, type BaseModelConfig, type StreamOptions } from '../models/model'
-import type { Message, ContentBlock, ToolUseBlock } from '../types/messages'
-import type { ModelStreamEvent, ReasoningContentDelta, Usage } from '../models/streaming'
+import type { Message, ContentBlock } from '../types/messages'
+import type { ModelStreamEvent, Usage } from '../models/streaming'
+import {
+  ModelMessageStartEvent,
+  ModelContentBlockStartEvent,
+  ModelContentBlockDeltaEvent,
+  ModelContentBlockStopEvent,
+  ModelMessageStopEvent,
+  ModelMetadataEvent,
+  ToolUseStart,
+  TextDelta,
+  ToolUseInputDelta,
+  ReasoningContentDelta,
+} from '../models/streaming'
 import type { JSONValue } from '../types/json'
 import { ContextWindowOverflowError } from '../errors'
 import { ensureDefined } from '../types/validation'
@@ -688,10 +700,11 @@ export class BedrockModel extends Model<BedrockModelConfig> {
     switch (eventType) {
       case 'messageStart': {
         const data = eventData as BedrockMessageStartEvent
-        events.push({
-          type: 'modelMessageStartEvent',
-          role: ensureDefined(data.role, 'messageStart.role'),
-        })
+        events.push(
+          new ModelMessageStartEvent({
+            role: ensureDefined(data.role, 'messageStart.role'),
+          })
+        )
         break
       }
 
@@ -705,14 +718,13 @@ export class BedrockModel extends Model<BedrockModelConfig> {
 
         if (data.start?.toolUse) {
           const toolUse = data.start.toolUse
-          event.start = {
-            type: 'toolUseStart',
+          startEventData.start = new ToolUseStart({
             name: ensureDefined(toolUse.name, 'toolUse.name'),
             toolUseId: ensureDefined(toolUse.toolUseId, 'toolUse.toolUseId'),
-          }
+          })
         }
 
-        events.push(event)
+        events.push(new ModelContentBlockStartEvent(startEventData))
         break
       }
 
@@ -785,16 +797,22 @@ export class BedrockModel extends Model<BedrockModelConfig> {
           event.additionalModelResponseFields = data.additionalModelResponseFields
         }
 
-        events.push(event)
+        if (data.additionalModelResponseFields !== undefined) {
+          stopEventData.additionalModelResponseFields = data.additionalModelResponseFields
+        }
+
+        events.push(new ModelMessageStopEvent(stopEventData))
         break
       }
 
       case 'metadata': {
         const data = eventData as BedrockConverseStreamMetadataEvent
 
-        const event: ModelStreamEvent = {
-          type: 'modelMetadataEvent',
-        }
+        const metadataEventData: {
+          usage?: Usage
+          metrics?: { latencyMs: number }
+          trace?: unknown
+        } = {}
 
         if (data.usage) {
           const usage = data.usage
@@ -812,20 +830,20 @@ export class BedrockModel extends Model<BedrockModelConfig> {
             usageInfo.cacheWriteInputTokens = usage.cacheWriteInputTokens
           }
 
-          event.usage = usageInfo
+          metadataEventData.usage = usageInfo
         }
 
         if (data.metrics) {
-          event.metrics = {
+          metadataEventData.metrics = {
             latencyMs: ensureDefined(data.metrics.latencyMs, 'metrics.latencyMs'),
           }
         }
 
         if (data.trace) {
-          event.trace = data.trace
+          metadataEventData.trace = data.trace
         }
 
-        events.push(event)
+        events.push(new ModelMetadataEvent(metadataEventData))
         break
       }
       case 'internalServerException':
