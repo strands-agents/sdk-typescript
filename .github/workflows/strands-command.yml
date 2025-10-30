@@ -281,7 +281,6 @@ jobs:
           STRANDS_ANTHROPIC_BETA: 'interleaved-thinking-2025-05-14'
 
           # Tool Configuration
-          STRANDS_TOOLS: 'str_replace_based_edit_tool,shell,http_request,create_issue,get_issue,update_issue,list_issues,add_issue_comment,get_issue_comments,create_pull_request,get_pull_request,update_pull_request,list_pull_requests,get_pr_review_and_comments,reply_to_review_comment,notebook,handoff_to_user'
           BYPASS_TOOL_CONSENT: 'true'
           STRANDS_TOOL_CONSOLE_MODE: 'enabled'
 
