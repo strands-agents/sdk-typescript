@@ -22,8 +22,12 @@ async function loadApiKeysFromSecretsManager(): Promise<void> {
 
       if (response.SecretString) {
         const secret = JSON.parse(response.SecretString)
+        // Only add API keys for currently supported providers
+        const supportedProviders = ['openai']
         Object.entries(secret).forEach(([key, value]) => {
-          process.env[`${key.toUpperCase()}_API_KEY`] = String(value)
+          if (supportedProviders.includes(key.toLowerCase())) {
+            process.env[`${key.toUpperCase()}_API_KEY`] = String(value)
+          }
         })
       }
     } catch (e) {
@@ -40,13 +44,7 @@ async function loadApiKeysFromSecretsManager(): Promise<void> {
     return
   }
 
-  const requiredProviders: Set<string> = new Set([
-    'ANTHROPIC_API_KEY',
-    'COHERE_API_KEY',
-    'MISTRAL_API_KEY',
-    'OPENAI_API_KEY',
-    'WRITER_API_KEY',
-  ])
+  const requiredProviders: Set<string> = new Set(['OPENAI_API_KEY'])
 
   for (const provider of requiredProviders) {
     if (!process.env[provider]) {
