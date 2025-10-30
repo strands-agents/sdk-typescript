@@ -1,5 +1,6 @@
-import type { InvokableTool, ToolContext, ToolSpec, ToolStreamEvent, ToolStreamGenerator } from './tool'
-import type { JSONSchema } from '../types/json'
+import type { InvokableTool, ToolContext, ToolStreamGenerator } from './tool'
+import type { JSONSchema, JSONValue } from '../types/json'
+import { FunctionTool } from './function-tool'
 import { z } from 'zod'
 
 /**
@@ -79,73 +80,46 @@ export function tool<TInput extends z.ZodType, TReturn = unknown>(
 ): InvokableTool<z.infer<TInput>, TReturn> {
   const { name, description, inputSchema, callback } = config
 
-  // Build toolSpec with JSON schema from Zod v4
-  const toolSpec: ToolSpec = {
+  // Create a FunctionTool with a validation wrapper
+  const functionTool = new FunctionTool({
     name,
     description,
     inputSchema: z.toJSONSchema(inputSchema) as JSONSchema,
-  }
+    callback: (input: unknown, toolContext: ToolContext):
+      | AsyncGenerator<JSONValue, JSONValue, never>
+      | Promise<JSONValue>
+      | JSONValue => {
+      // Validate input using Zod schema (throws on validation error)
+      const validatedInput = inputSchema.parse(input)
+      // Execute user callback with validated input
+      return callback(validatedInput, toolContext) as
+        | AsyncGenerator<JSONValue, JSONValue, never>
+        | Promise<JSONValue>
+        | JSONValue
+    },
+  })
 
-  // Create an invokable tool object
+  // Create an invokable tool that extends the FunctionTool
   const invokableTool: InvokableTool<z.infer<TInput>, TReturn> = {
-    toolName: name,
-    description,
-    toolSpec,
+    toolName: functionTool.toolName,
+    description: functionTool.description,
+    toolSpec: functionTool.toolSpec,
 
+    // Delegate stream to FunctionTool
     async *stream(toolContext: ToolContext): ToolStreamGenerator {
-      try {
-        // Validate input using Zod schema
-        const validatedInput = inputSchema.parse(toolContext.toolUse.input)
-
-        // Execute callback with validated input
-        const result = callback(validatedInput, toolContext)
-
-        // Handle different return types
-        if (result && typeof result === 'object' && Symbol.asyncIterator in result) {
-          // AsyncGenerator - yield stream events for each value
-          for await (const value of result as AsyncGenerator<unknown, unknown, undefined>) {
-            const streamEvent: ToolStreamEvent = {
-              type: 'toolStreamEvent',
-              data: value,
-            }
-            yield streamEvent
-          }
-          // Return success result after generator completes
-          return {
-            toolUseId: toolContext.toolUse.toolUseId,
-            status: 'success',
-            content: [],
-          }
-        } else {
-          // Regular value or Promise - return result
-          const resolvedResult = await result
-          return {
-            toolUseId: toolContext.toolUse.toolUseId,
-            status: 'success',
-            content: [
-              {
-                type: 'toolResultTextContent',
-                text: typeof resolvedResult === 'string' ? resolvedResult : JSON.stringify(resolvedResult),
-              },
-            ],
-          }
-        }
-      } catch (error) {
-        // Return error result
-        return {
-          toolUseId: toolContext.toolUse.toolUseId,
-          status: 'error',
-          content: [
-            {
-              type: 'toolResultTextContent',
-              text: error instanceof Error ? error.message : String(error),
-            },
-          ],
-          error: error instanceof Error ? error : new Error(String(error)),
-        }
+      // Manually delegate to FunctionTool to preserve both yields and return value
+      const generator = functionTool.stream(toolContext)
+      let iterResult = await generator.next()
+      
+      while (!iterResult.done) {
+        yield iterResult.value
+        iterResult = await generator.next()
       }
+      
+      return iterResult.value
     },
 
+    // Type-safe invoke method
     async invoke(input: z.infer<TInput>, context?: ToolContext): Promise<TReturn> {
       // Validate input using Zod schema (throws on validation error)
       const validatedInput = inputSchema.parse(input)

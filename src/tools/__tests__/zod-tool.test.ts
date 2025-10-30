@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from 'vitest'
 import { z } from 'zod'
 import { tool } from '../zod-tool'
-import { createMockContext, collectStreamEventsAndResult, extractEventData } from '../../__fixtures__/tool-test-helpers'
+import { createMockContext, extractEventData } from '../../__fixtures__/tool-test-helpers'
+import { collectGenerator } from '../../__fixtures__/model-test-helpers'
 
 describe('tool', () => {
   describe('tool creation and properties', () => {
@@ -127,7 +128,7 @@ describe('tool', () => {
         })
 
         const context = createMockContext({ value: 'hello' })
-        const { events, result } = await collectStreamEventsAndResult(myTool.stream(context))
+        const { items: events, result } = await collectGenerator(myTool.stream(context))
 
         expect(events).toHaveLength(0) // No stream events for sync
         expect(result.status).toBe('success')
@@ -144,7 +145,7 @@ describe('tool', () => {
         })
 
         const context = createMockContext({ value: 21 })
-        const { events, result } = await collectStreamEventsAndResult(myTool.stream(context))
+        const { items: events, result } = await collectGenerator(myTool.stream(context))
 
         expect(events).toHaveLength(0) // No stream events for promise
         expect(result.status).toBe('success')
@@ -165,7 +166,7 @@ describe('tool', () => {
         })
 
         const context = createMockContext({ count: 3 })
-        const { events, result } = await collectStreamEventsAndResult(myTool.stream(context))
+        const { items: events, result } = await collectGenerator(myTool.stream(context))
 
         expect(events).toHaveLength(3)
         const eventData = extractEventData(events)
@@ -184,7 +185,7 @@ describe('tool', () => {
         })
 
         const context = createMockContext({ age: -5 })
-        const { events, result } = await collectStreamEventsAndResult(myTool.stream(context))
+        const { items: events, result } = await collectGenerator(myTool.stream(context))
 
         expect(events).toHaveLength(0)
         expect(result.status).toBe('error')
@@ -207,7 +208,7 @@ describe('tool', () => {
         })
 
         const context = createMockContext({ name: 'test' })
-        const { events, result } = await collectStreamEventsAndResult(myTool.stream(context))
+        const { items: events, result } = await collectGenerator(myTool.stream(context))
 
         expect(events).toHaveLength(0)
         expect(result.status).toBe('error')
@@ -226,14 +227,14 @@ describe('tool', () => {
         })
 
         const context = createMockContext({ value: 'test' })
-        const { events, result } = await collectStreamEventsAndResult(myTool.stream(context))
+        const { items: events, result } = await collectGenerator(myTool.stream(context))
 
         expect(events).toHaveLength(0)
         expect(result.status).toBe('error')
         expect(result.content.length).toBeGreaterThan(0)
         const firstContent = result.content[0]
         if (firstContent && firstContent.type === 'toolResultTextContent') {
-          expect(firstContent.text).toBe('Callback error')
+          expect(firstContent.text).toBe('Error: Callback error')
         }
       })
 
@@ -248,14 +249,14 @@ describe('tool', () => {
         })
 
         const context = createMockContext({ value: 'test' })
-        const { events, result } = await collectStreamEventsAndResult(myTool.stream(context))
+        const { items: events, result } = await collectGenerator(myTool.stream(context))
 
         expect(events).toHaveLength(0)
         expect(result.status).toBe('error')
         expect(result.content.length).toBeGreaterThan(0)
         const firstContent = result.content[0]
         if (firstContent && firstContent.type === 'toolResultTextContent') {
-          expect(firstContent.text).toBe('Async error')
+          expect(firstContent.text).toBe('Error: Async error')
         }
       })
     })
