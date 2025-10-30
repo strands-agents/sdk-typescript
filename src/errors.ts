@@ -5,6 +5,8 @@
  * during agent execution and model provider interactions.
  */
 
+import type { Message } from './types/messages'
+
 /**
  * Error thrown when input exceeds the model's context window.
  *
@@ -34,12 +36,20 @@ export class ContextWindowOverflowError extends Error {
  */
 export class MaxTokensError extends Error {
   /**
+   * The partial assistant message that was generated before hitting the token limit.
+   * This can be useful for understanding what the model was trying to generate.
+   */
+  public readonly partialMessage: Message
+
+  /**
    * Creates a new MaxTokensError.
    *
    * @param message - Error message describing the max tokens condition
+   * @param partialMessage - The partial assistant message generated before the limit
    */
-  constructor(message: string) {
+  constructor(message: string, partialMessage: Message) {
     super(message)
     this.name = 'MaxTokensError'
+    this.partialMessage = partialMessage
   }
 }

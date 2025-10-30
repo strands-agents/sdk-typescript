@@ -150,6 +150,39 @@ src/
     └── module.test.ts     # Unit tests co-located
 ```
 
+**Function ordering within files**:
+- Order functions from most general to most specific (top-down reading)
+- Public/exported functions should come before private helper functions
+- Main entry point functions should be at the top of the file
+- Helper functions should follow in order of their usage
+
+**Example**:
+```typescript
+// ✅ Good: Main function first, helpers follow
+export async function* mainFunction() {
+  const result = await helperFunction1()
+  return helperFunction2(result)
+}
+
+async function helperFunction1() {
+  // Implementation
+}
+
+function helperFunction2(input: string) {
+  // Implementation
+}
+
+// ❌ Bad: Helpers before main function
+async function helperFunction1() {
+  // Implementation
+}
+
+export async function* mainFunction() {
+  const result = await helperFunction1()
+  return helperFunction2(result)
+}
+```
+
 **For integration tests**:
 ```
 tests_integ/
