@@ -66,7 +66,7 @@ jobs:
       contents: write
       issues: write
       pull-requests: write
-      id-token: write  # Required for OIDC
+      id-token: write # Required for OIDC
     runs-on: ubuntu-latest
     steps:
       - name: Add strands-running label
@@ -167,7 +167,7 @@ jobs:
         with:
           script: |
             const fs = require('fs');
-            
+
             try {
               const mode = '${{ steps.determine-context.outputs.mode }}';
               const targetIssueId = '${{ steps.determine-context.outputs.target_issue_id }}';
@@ -217,21 +217,87 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Execute strands command
-        uses: strands-agents/strands-action@main
-        timeout-minutes: 60
+      - name: Set up Python
+        uses: actions/setup-python@v4
         with:
-          aws_role_arn: ${{ secrets.AWS_ROLE_ARN }}
-          system_prompt: ${{ steps.process.outputs.system_prompt }}
-          session_id: ${{ steps.process.outputs.session_id }}
-          session_s3_bucket: ${{ secrets.TYPESCRIPT_SESSIONS_BUCKET }}
-          thinking_type: "enabled"
-          budget_tokens: "8000"
-          model: "global.anthropic.claude-sonnet-4-5-20250929-v1:0"
-          anthropic_beta: "interleaved-thinking-2025-05-14"
-          max_tokens: "64000"
-          tools: "str_replace_based_edit_tool,shell,http_request,create_issue,get_issue,update_issue,list_issues,add_issue_comment,get_issue_comments,create_pull_request,get_pull_request,update_pull_request,list_pull_requests,get_pr_review_and_comments,reply_to_review_comment,notebook,handoff_to_user"
-          task: ${{ steps.process.outputs.prompt }}
+          python-version: '3.13'
+
+      - name: Cache UV dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/uv
+          key: ${{ runner.os }}-python-uv-${{ hashFiles('.github/scripts/requirements.txt') }}-uv
+          restore-keys: |
+            ${{ runner.os }}-python-uv-
+
+      - name: Clean UV cache on failure
+        if: failure()
+        run: |
+          uv cache clean || true
+          rm -rf ~/.cache/uv/* || true
+
+      - name: Install UV
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      - name: Install Strands Agents
+        run: |
+          echo "📦 Installing from requirements.txt"
+          uv pip install --system -r .github/scripts/requirements.txt --quiet
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "Strands Agent"
+          git config --global user.email "217235299+strands-agent@users.noreply.github.com"
+          git config --global core.pager cat
+          PAGER=cat
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-session-name: GitHubActions-StrandsAgent-${{ github.run_id }}
+          aws-region: us-west-2
+          mask-aws-account-id: true
+
+      - name: Execute strands command
+        timeout-minutes: 60
+        env:
+          # GitHub Configuration
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_ACTOR: ${{ github.actor }}
+
+          # Model Configuration
+          STRANDS_PROVIDER: 'bedrock'
+          STRANDS_MODEL_ID: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0'
+          STRANDS_MAX_TOKENS: '64000'
+          STRANDS_TEMPERATURE: '1'
+          STRANDS_THINKING_TYPE: 'enabled'
+          STRANDS_BUDGET_TOKENS: '8000'
+          STRANDS_ANTHROPIC_BETA: 'interleaved-thinking-2025-05-14'
+
+          # Tool Configuration
+          STRANDS_TOOLS: 'str_replace_based_edit_tool,shell,http_request,create_issue,get_issue,update_issue,list_issues,add_issue_comment,get_issue_comments,create_pull_request,get_pull_request,update_pull_request,list_pull_requests,get_pr_review_and_comments,reply_to_review_comment,notebook,handoff_to_user'
+          BYPASS_TOOL_CONSENT: 'true'
+          STRANDS_TOOL_CONSOLE_MODE: 'enabled'
+
+          # Task Configuration
+          INPUT_TASK: ${{ steps.process.outputs.prompt }}
+          INPUT_SYSTEM_PROMPT: ${{ steps.process.outputs.system_prompt }}
+
+          # AWS Configuration
+          AWS_REGION: 'us-west-2'
+
+          # Session Manager
+          S3_SESSION_BUCKET: ${{ secrets.TYPESCRIPT_SESSIONS_BUCKET }}
+          SESSION_ID: ${{ steps.process.outputs.session_id }}
+        run: |
+          cd .github/scripts
+          PYTHONPATH=".:$PYTHONPATH" uv run agent_runner.py "$INPUT_TASK"
 
       - name: Remove strands-running label
         if: always()
@@ -248,4 +314,3 @@ jobs:
             } catch (error) {
               console.log('Label removal failed (may not exist):', error.message);
             }
-
