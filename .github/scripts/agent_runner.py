@@ -13,7 +13,8 @@ from typing import Any
 
 from strands import Agent
 from strands.session import S3SessionManager
-from strands_tools.utils.models.model import create_model
+from strands.models.bedrock import BedrockModel
+from botocore.config import Config
 
 from strands_tools import http_request, shell
 
@@ -38,9 +39,18 @@ from handoff_to_user import handoff_to_user
 from notebook import notebook
 from str_replace_based_edit_tool import str_replace_based_edit_tool
 
-os.environ["BYPASS_TOOL_CONSENT"] = "true"
-os.environ["STRANDS_TOOL_CONSOLE_MODE"] = "enabled"
+# Strands configuration constants
+STRANDS_MODEL_ID = "global.anthropic.claude-sonnet-4-5-20250929-v1:0"
+STRANDS_MAX_TOKENS = 64000
+STRANDS_BUDGET_TOKENS = 8000
+STRANDS_REGION = "us-west-2"
 
+# Default values for environment variables used only in this file
+DEFAULT_SYSTEM_PROMPT = "You are an autonomous GitHub agent powered by Strands Agents SDK."
+
+# Apply configuration defaults
+os.environ.setdefault("BYPASS_TOOL_CONSENT", "true")
+os.environ.setdefault("STRANDS_TOOL_CONSOLE_MODE",  "enabled")
 
 # Configure logging
 if os.getenv("STRANDS_DEBUG") == "1":
@@ -86,21 +96,42 @@ def run_agent(query: str):
     try:
         # Get tools and create model
         tools = _get_all_tools()
-        model = create_model()
-        system_prompt = os.getenv("INPUT_SYSTEM_PROMPT", "You are an autonomous GitHub agent powered by Strands Agents SDK.")
-        session_manager = None
+        
+        # Create Bedrock model with inlined configuration
+        additional_request_fields = {}
+        additional_request_fields["anthropic_beta"] = "interleaved-thinking-2025-05-14"
+        
+        additional_request_fields["thinking"] = {
+            "type": "enabled",
+            "budget_tokens": STRANDS_BUDGET_TOKENS
+        }
+        
+        model = BedrockModel(
+            model_id=STRANDS_MODEL_ID,
+            max_tokens=STRANDS_MAX_TOKENS,
+            region_name=STRANDS_REGION,
+            boto_client_config=Config(
+                read_timeout=900,
+                connect_timeout=900,
+                retries={"max_attempts": 3, "mode": "adaptive"},
+            ),
+            additional_request_fields=additional_request_fields,
+            cache_prompt="default",
+            cache_tools="default",
+        )
+        system_prompt = os.getenv("INPUT_SYSTEM_PROMPT", DEFAULT_SYSTEM_PROMPT)
         session_id = os.getenv("SESSION_ID")
         s3_bucket = os.getenv("S3_SESSION_BUCKET")
+
         if s3_bucket and session_id:
             print(f"🤖 Using session manager with session ID: {session_id}")
             session_manager = S3SessionManager(
                 session_id=session_id,
                 bucket=s3_bucket,
-                prefix=os.getenv("S3_SESSION_PREFIX", ""),
+                prefix="",
             )
-        
-        if (session_id and not s3_bucket) or (s3_bucket and not session_id):
-            raise ValueError("Both SESSION_ID and S3_SESSION_BUCKET must be set if using session manager.")
+        else:
+            raise ValueError("Both SESSION_ID and S3_SESSION_BUCKET must be set")
 
         # Create agent
         agent = Agent(
@@ -110,47 +141,8 @@ def run_agent(query: str):
             session_manager=session_manager,
         )
 
-        # Check for knowledge base integration
-        knowledge_base_id = os.getenv("STRANDS_KNOWLEDGE_BASE_ID")
-        if "retrieve" in tools and knowledge_base_id:
-            try:
-                agent.tool.retrieve(text=query, knowledgeBaseId=knowledge_base_id)
-            except Exception as e:
-                print(f"Warning: Could not retrieve from knowledge base: {e}")
-
-        # Check if the latest message is a handoff_to_user tool use
-        latest_message = agent.messages[-1] if len(agent.messages) > 0 else None
-
-        if latest_message and len(latest_message["content"]) == 1 \
-            and "toolUse" in latest_message["content"][0] \
-            and latest_message["content"][0]["toolUse"]["name"] == "handoff_to_user":
-                agent._append_message({
-                    "role": "user",
-                    "content": [{"toolResult": {
-                        "toolUseId": latest_message["content"][0]["toolUse"]["toolUseId"],
-                        "content": [{"text": query}],
-                        "status": "success"
-                    }}]
-                })
-                print("Resuming agent after handoff...")
-                result = agent()
-        else:
-            print("Processing user query...")
-            result = agent(query)
-
-        if "store_in_kb" in agent.tool_names and knowledge_base_id:
-            try:
-                # Create conversation content by combining user input and agent result
-                conversation_content = f"Input: {query}, Result: {result!s}"
-                # Create title with Strands prefix, current date, and user query
-                conversation_title = f"Strands GitHub Agent: {datetime.datetime.now().strftime('%Y-%m-%d')} | {query}"
-                agent.tool.store_in_kb(
-                    content=conversation_content,
-                    title=conversation_title,
-                    knowledge_base_id=knowledge_base_id,
-                )
-            except Exception as e:
-                print(f"Warning: Could not store in knowledge base: {e}")
+        print("Processing user query...")
+        result = agent(query)
 
         print(f"\n\nAgent Result 🤖\nStop Reason: {result.stop_reason}\nMessage: {json.dumps(result.message, indent=2)}")
     except Exception as e:

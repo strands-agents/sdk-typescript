@@ -271,19 +271,6 @@ jobs:
           GITHUB_EVENT_NAME: ${{ github.event_name }}
           GITHUB_ACTOR: ${{ github.actor }}
 
-          # Model Configuration
-          STRANDS_PROVIDER: 'bedrock'
-          STRANDS_MODEL_ID: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0'
-          STRANDS_MAX_TOKENS: '64000'
-          STRANDS_TEMPERATURE: '1'
-          STRANDS_THINKING_TYPE: 'enabled'
-          STRANDS_BUDGET_TOKENS: '8000'
-          STRANDS_ANTHROPIC_BETA: 'interleaved-thinking-2025-05-14'
-
-          # Tool Configuration
-          BYPASS_TOOL_CONSENT: 'true'
-          STRANDS_TOOL_CONSOLE_MODE: 'enabled'
-
           # Task Configuration
           INPUT_TASK: ${{ steps.process.outputs.prompt }}
           INPUT_SYSTEM_PROMPT: ${{ steps.process.outputs.system_prompt }}
