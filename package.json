@@ -35,7 +35,8 @@
     "lint:fix": "eslint src tests_integ --fix",
     "format": "prettier --write src tests_integ",
     "format:check": "prettier --check src tests_integ",
-    "type-check": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "typecheck:watch": "tsc --noEmit --watch",
     "prepare": "husky"
   },
   "keywords": [
