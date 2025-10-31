@@ -665,14 +665,14 @@ export class BedrockModel implements Model<BedrockModelConfig, BedrockRuntimeCli
         const contentBlockIndex = ensureDefined(data.contentBlockIndex, 'contentBlockDelta.contentBlockIndex')
         const delta = ensureDefined(data.delta, 'contentBlockDelta.delta')
         const deltaHandlers = {
-          text: (textValue: string) => {
+          text: (textValue: string): void => {
             events.push({
               type: 'modelContentBlockDeltaEvent',
               contentBlockIndex,
               delta: { type: 'textDelta', text: textValue },
             })
           },
-          toolUse: (toolUse: ToolUseBlockDelta) => {
+          toolUse: (toolUse: ToolUseBlockDelta): void => {
             if (!toolUse?.input) return
             events.push({
               type: 'modelContentBlockDeltaEvent',
@@ -680,7 +680,7 @@ export class BedrockModel implements Model<BedrockModelConfig, BedrockRuntimeCli
               delta: { type: 'toolUseInputDelta', input: toolUse.input },
             })
           },
-          reasoningContent: (reasoning: ReasoningContentBlockDelta) => {
+          reasoningContent: (reasoning: ReasoningContentBlockDelta): void => {
             if (!reasoning) return
             const reasoningDelta: ReasoningDelta = { type: 'reasoningDelta' }
             if (reasoning.text) reasoningDelta.text = reasoning.text
