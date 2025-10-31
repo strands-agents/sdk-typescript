@@ -14,14 +14,12 @@ describe('tool', () => {
         callback: (input) => input.value,
       })
 
-      // Multiple related assertions in one test since setup is complex
       expect(myTool.toolName).toBe('testTool')
       expect(myTool.description).toBe('Test description')
       expect(myTool.toolSpec).toEqual({
         name: 'testTool',
         description: 'Test description',
         inputSchema: {
-          $schema: 'https://json-schema.org/draft/2020-12/schema',
           type: 'object',
           properties: {
             value: { type: 'string' },
@@ -30,6 +28,17 @@ describe('tool', () => {
           additionalProperties: false,
         },
       })
+    })
+
+    it('handles optional description', () => {
+      const myTool = tool({
+        name: 'testTool',
+        inputSchema: z.object({ value: z.string() }),
+        callback: (input) => input.value,
+      })
+
+      expect(myTool.toolName).toBe('testTool')
+      expect(myTool.description).toBe('')
     })
   })
 

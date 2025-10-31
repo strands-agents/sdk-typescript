@@ -13,8 +13,8 @@ export interface ToolConfig<TInput extends z.ZodType, TReturn = unknown> {
   /** The name of the tool */
   name: string
 
-  /** A description of what the tool does */
-  description: string
+  /** A description of what the tool does (optional) */
+  description?: string
 
   /** Zod schema for input validation and JSON schema generation */
   inputSchema: TInput
@@ -78,13 +78,18 @@ export interface ToolConfig<TInput extends z.ZodType, TReturn = unknown> {
 export function tool<TInput extends z.ZodType, TReturn = unknown>(
   config: ToolConfig<TInput, TReturn>
 ): InvokableTool<z.infer<TInput>, TReturn> {
-  const { name, description, inputSchema, callback } = config
+  const { name, description = '', inputSchema, callback } = config
+
+  // Generate JSON Schema from Zod and strip $schema property to reduce token usage
+  const generatedSchema = z.toJSONSchema(inputSchema) as JSONSchema & { $schema?: string }
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { $schema, ...schemaWithoutMeta } = generatedSchema
 
   // Create a FunctionTool with a validation wrapper
   const functionTool = new FunctionTool({
     name,
     description,
-    inputSchema: z.toJSONSchema(inputSchema) as JSONSchema,
+    inputSchema: schemaWithoutMeta as JSONSchema,
     callback: (
       input: unknown,
       toolContext: ToolContext

@@ -13,12 +13,12 @@ import type { JSONValue } from '../types/json'
  * @param invocationState - Optional invocation state
  * @returns Mock ToolContext object
  */
-export function createMockContext(input: unknown, invocationState: Record<string, unknown> = {}): ToolContext {
+export function createMockContext(input: JSONValue, invocationState: Record<string, unknown> = {}): ToolContext {
   return {
     toolUse: {
       name: 'testTool',
       toolUseId: 'test-123',
-      input: input as JSONValue,
+      input: input,
     },
     invocationState,
   }
