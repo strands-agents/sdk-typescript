@@ -59,7 +59,6 @@ runs:
 
     - name: Execute strands command
       shell: bash
-      timeout-minutes: 60
       env:
         # GitHub Configuration
         GITHUB_TOKEN: ${{ inputs.github_token }}
