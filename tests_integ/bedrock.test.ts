@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { fromNodeProviderChain } from '@aws-sdk/credential-providers'
 import { BedrockModel, ContextWindowOverflowError, Message, ToolSpec, ModelStreamEvent } from '@strands-agents/sdk'
 
@@ -26,22 +26,7 @@ const shouldRunTests = await (async () => {
 })()
 
 describe.skipIf(!shouldRunTests)('BedrockModel Integration Tests', () => {
-  let hasCredentials = false
-
-  // Check credentials once before all tests
-  beforeAll(async () => {
-    try {
-      const credentialProvider = fromNodeProviderChain()
-      await credentialProvider()
-      hasCredentials = true
-      console.log('✅ AWS credentials found for integration tests')
-    } catch {
-      hasCredentials = false
-      console.log('⏭️ AWS credentials not available - integration tests will be skipped')
-    }
-  })
-
-  describe.skipIf(!hasCredentials)('Non-Streaming', () => {
+  describe('Non-Streaming', () => {
     it('gets a simple text response', async () => {
       const provider = new BedrockModel({
         stream: false,
@@ -120,7 +105,7 @@ describe.skipIf(!shouldRunTests)('BedrockModel Integration Tests', () => {
     })
   })
 
-  describe.skipIf(!hasCredentials)('Streaming', () => {
+  describe('Streaming', () => {
     describe('Basic Streaming', () => {
       it.concurrent('streams a simple text response', async () => {
         const provider = new BedrockModel({ maxTokens: 100 })
