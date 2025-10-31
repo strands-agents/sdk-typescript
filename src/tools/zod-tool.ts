@@ -9,7 +9,7 @@ import { z } from 'zod'
  * @typeParam TInput - Zod schema type for input validation
  * @typeParam TReturn - Return type of the callback function
  */
-export interface ToolConfig<TInput extends z.ZodType, TReturn = unknown> {
+export interface ToolConfig<TInput extends z.ZodType, TReturn extends JSONValue = JSONValue> {
   /** The name of the tool */
   name: string
 
@@ -75,7 +75,7 @@ export interface ToolConfig<TInput extends z.ZodType, TReturn = unknown> {
  * @param config - Tool configuration
  * @returns An InvokableTool that implements the Tool interface with invoke() method
  */
-export function tool<TInput extends z.ZodType, TReturn = unknown>(
+export function tool<TInput extends z.ZodType, TReturn extends JSONValue = JSONValue>(
   config: ToolConfig<TInput, TReturn>
 ): InvokableTool<z.infer<TInput>, TReturn> {
   const { name, description = '', inputSchema, callback } = config

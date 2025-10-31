@@ -77,6 +77,7 @@ describe('tool', () => {
             for (let i = 1; i <= input.count; i++) {
               yield i
             }
+            return 0
           },
         })
 
@@ -181,6 +182,7 @@ describe('tool', () => {
             for (let i = 1; i <= input.count; i++) {
               yield `Step ${i}`
             }
+            return 0
           },
         })
 
