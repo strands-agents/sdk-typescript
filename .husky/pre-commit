@@ -14,6 +14,6 @@ npm run format:check || { echo "Formatting check failed. Run 'npm run format' to
 
 # Type checking
 echo "Running type checks..."
-npm run typecheck || { echo "Type checking failed. Commit aborted."; exit 1; }
+npm run type-check || { echo "Type checking failed. Commit aborted."; exit 1; }
 
 echo "All pre-commit checks passed!"
