@@ -60,35 +60,35 @@ if os.getenv("STRANDS_DEBUG") == "1":
         handlers=[logging.StreamHandler()],
     )
 
-def _get_all_tools() -> dict[str, Any]:
-    return {
+def _get_all_tools() -> list[Any]:
+    return [
         # File editing
-        "str_replace_based_edit_tool": str_replace_based_edit_tool,
+        str_replace_based_edit_tool,
         
         # System tools
-        "shell": shell,
-        "http_request": http_request,
+        shell,
+        http_request,
         
         # GitHub issue tools
-        "create_issue": create_issue,
-        "get_issue": get_issue,
-        "update_issue": update_issue,
-        "list_issues": list_issues,
-        "add_issue_comment": add_issue_comment,
-        "get_issue_comments": get_issue_comments,
+        create_issue,
+        get_issue,
+        update_issue,
+        list_issues,
+        add_issue_comment,
+        get_issue_comments,
         
         # GitHub PR tools
-        "create_pull_request": create_pull_request,
-        "get_pull_request": get_pull_request,
-        "update_pull_request": update_pull_request,
-        "list_pull_requests": list_pull_requests,
-        "get_pr_review_and_comments": get_pr_review_and_comments,
-        "reply_to_review_comment": reply_to_review_comment,
+        create_pull_request,
+        get_pull_request,
+        update_pull_request,
+        list_pull_requests,
+        get_pr_review_and_comments,
+        reply_to_review_comment,
         
         # Agent tools
-        "notebook": notebook,
-        "handoff_to_user": handoff_to_user,
-    }
+        notebook,
+        handoff_to_user,
+    ]
 
 
 def run_agent(query: str):
@@ -137,7 +137,7 @@ def run_agent(query: str):
         agent = Agent(
             model=model,
             system_prompt=system_prompt,
-            tools=list(tools.values()),
+            tools=tools,
             session_manager=session_manager,
         )
 
