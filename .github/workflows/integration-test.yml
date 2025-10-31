@@ -41,7 +41,18 @@ jobs:
       - name: Pass Strands test API keys secret name
         id: pass-strands-test-secret
         run: |
+          echo "Debug: Checking if secret exists..."
+          if [ -z "${{ secrets.STRANDS_TEST_API_KEYS_SECRET_NAME }}" ]; then
+            echo "WARNING: STRANDS_TEST_API_KEYS_SECRET_NAME secret is empty or not set!"
+          else
+            echo "Secret exists (length: ${#SECRET_VALUE})"
+            echo "First 5 chars: ${SECRET_VALUE:0:5}..."
+          fi
           echo "secret-name=${{ secrets.STRANDS_TEST_API_KEYS_SECRET_NAME }}" >> $GITHUB_OUTPUT
+          echo "Debug: Output set to file"
+          cat $GITHUB_OUTPUT
+        env:
+          SECRET_VALUE: ${{ secrets.STRANDS_TEST_API_KEYS_SECRET_NAME }}
   check-access-and-checkout:
     runs-on: ubuntu-latest
     needs: authorization-check
@@ -52,6 +63,19 @@ jobs:
       contents: read
 
     steps:
+      - name: Debug secret value
+        run: |
+          echo "Debug: Checking received secret from job output..."
+          echo "Received value: '${{ needs.authorization-check.outputs.strands-test-api-keys-secret-name }}'"
+          if [ -z "${{ needs.authorization-check.outputs.strands-test-api-keys-secret-name }}" ]; then
+            echo "ERROR: Secret name is empty from job output!"
+          else
+            echo "Secret name received successfully"
+            echo "Length: ${#SECRET_NAME}"
+          fi
+        env:
+          SECRET_NAME: ${{ needs.authorization-check.outputs.strands-test-api-keys-secret-name }}
+
       - name: Configure Credentials
         uses: aws-actions/configure-aws-credentials@v5
         with:
@@ -79,4 +103,10 @@ jobs:
       - name: Run integration tests
         env:
           STRANDS_TEST_API_KEYS_SECRET_NAME: ${{ needs.authorization-check.outputs.strands-test-api-keys-secret-name }}
-        run: npm run test:integ
+        run: |
+          echo "Debug: About to run integration tests..."
+          echo "STRANDS_TEST_API_KEYS_SECRET_NAME env var: '$STRANDS_TEST_API_KEYS_SECRET_NAME'"
+          if [ -z "$STRANDS_TEST_API_KEYS_SECRET_NAME" ]; then
+            echo "ERROR: STRANDS_TEST_API_KEYS_SECRET_NAME is empty!"
+          fi
+          npm run test:integ
