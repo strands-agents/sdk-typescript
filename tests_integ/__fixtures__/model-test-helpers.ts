@@ -20,33 +20,33 @@ async function loadApiKeysFromSecretsManager(): Promise<void> {
   })
   console.log('Loading API keys from Secrets Manager')
 
-  if (process.env.STRANDS_TEST_API_KEYS_SECRET_NAME) {
-    try {
-      const secretName = process.env.STRANDS_TEST_API_KEYS_SECRET_NAME
-      const command = new GetSecretValueCommand({
-        SecretId: secretName,
-      })
-      const response = await client.send(command)
+  // if (process.env.STRANDS_TEST_API_KEYS_SECRET_NAME) {
+  try {
+    const secretName = 'model-provider-api-key'
+    const command = new GetSecretValueCommand({
+      SecretId: secretName,
+    })
+    const response = await client.send(command)
 
-      if (response.SecretString) {
-        const secret = JSON.parse(response.SecretString)
-        // Only add API keys for currently supported providers
-        const supportedProviders = ['openai']
-        Object.entries(secret).forEach(([key, value]) => {
-          if (supportedProviders.includes(key.toLowerCase())) {
-            process.env[`${key.toUpperCase()}_API_KEY`] = String(value)
-          }
-        })
-      }
-    } catch (e) {
-      console.warn('Error retrieving secret', e)
+    if (response.SecretString) {
+      const secret = JSON.parse(response.SecretString)
+      // Only add API keys for currently supported providers
+      const supportedProviders = ['openai']
+      Object.entries(secret).forEach(([key, value]) => {
+        if (supportedProviders.includes(key.toLowerCase())) {
+          process.env[`${key.toUpperCase()}_API_KEY`] = String(value)
+        }
+      })
     }
+  } catch (e) {
+    console.warn('Error retrieving secret', e)
   }
-  else {
-    console.log('==============================================================================================================================================================================================================================================================================')
-    console.log('No STRANDS_TEST_API_KEYS_SECRET_NAME environment variable found')
-    console.log('==============================================================================================================================================================================================================================================================================')
-  }
+}
+  // else {
+  //   console.log('==============================================================================================================================================================================================================================================================================')
+  //   console.log('No STRANDS_TEST_API_KEYS_SECRET_NAME environment variable found')
+  //   console.log('==============================================================================================================================================================================================================================================================================')
+  // }
 
   /*
    * Validate that required environment variables are set when running in GitHub Actions.
