@@ -13,7 +13,7 @@ inputs:
   aws_role_arn:
     description: 'AWS IAM role ARN for authentication'
     required: true
-  typescript_sessions_bucket:
+  sessions_bucket:
     description: 'S3 bucket for session storage'
     required: true
   github_token:
@@ -74,7 +74,7 @@ runs:
         AWS_REGION: 'us-west-2'
 
         # Session Manager
-        S3_SESSION_BUCKET: ${{ inputs.typescript_sessions_bucket }}
+        S3_SESSION_BUCKET: ${{ inputs.sessions_bucket }}
         SESSION_ID: ${{ inputs.session_id }}
       run: |
         uv run .github/scripts/agent_runner.py "$INPUT_TASK"
