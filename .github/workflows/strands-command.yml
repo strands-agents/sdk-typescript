@@ -218,14 +218,14 @@ jobs:
         run: npm install
 
       - name: Run Strands Agent
-        uses: ./.github/workflows/strands-agent-runner.yml
+        uses: ./.github/actions/strands-agent-runner
         with:
           system_prompt: ${{ steps.process.outputs.system_prompt }}
           session_id: ${{ steps.process.outputs.session_id }}
           task_prompt: ${{ steps.process.outputs.prompt }}
-        secrets:
-          AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
-          TYPESCRIPT_SESSIONS_BUCKET: ${{ secrets.TYPESCRIPT_SESSIONS_BUCKET }}
+          aws_role_arn: ${{ secrets.AWS_ROLE_ARN }}
+          typescript_sessions_bucket: ${{ secrets.TYPESCRIPT_SESSIONS_BUCKET }}
+          github_token: ${{ github.token }}
 
       - name: Remove strands-running label
         if: always()
