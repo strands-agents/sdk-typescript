@@ -468,6 +468,56 @@ describe('runAgentLoop', () => {
         'Tool execution failed'
       )
     })
+
+    it('does not add assistant message with tool uses when tool execution fails', async () => {
+      const provider = new TestModelProvider(async function* () {
+        yield { type: 'modelMessageStartEvent', role: 'assistant' }
+        yield {
+          type: 'modelContentBlockStartEvent',
+          start: { type: 'toolUseStart', name: 'badTool', toolUseId: 'id-1' },
+        }
+        yield {
+          type: 'modelContentBlockDeltaEvent',
+          delta: { type: 'toolUseInputDelta', input: '{}' },
+        }
+        yield { type: 'modelContentBlockStopEvent' }
+        yield { type: 'modelMessageStopEvent', stopReason: 'toolUse' }
+      })
+
+      // eslint-disable-next-line require-yield
+      const badTool = createMockTool('badTool', async function* () {
+        throw new Error('Tool execution failed')
+      })
+
+      const registry = new ToolRegistry()
+      registry.register(badTool)
+
+      const messages: Message[] = [
+        {
+          type: 'message',
+          role: 'user',
+          content: [{ type: 'textBlock', text: 'Test' }],
+        },
+      ]
+
+      try {
+        await collectGenerator(runAgentLoop(provider, { messages, toolRegistry: registry }))
+        throw new Error('Expected error to be thrown')
+      } catch (error) {
+        if (error instanceof Error && error.message === 'Tool execution failed') {
+          // Verify that messages array only contains the initial user message
+          // The assistant message with tool uses should NOT be present since tool execution failed
+          expect(messages).toHaveLength(1)
+          expect(messages[0]).toEqual({
+            type: 'message',
+            role: 'user',
+            content: [{ type: 'textBlock', text: 'Test' }],
+          })
+        } else {
+          throw error
+        }
+      }
+    })
   })
 
   describe('when tool is not found in registry', () => {
