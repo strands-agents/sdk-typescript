@@ -34,3 +34,19 @@ export type JSONValue = string | number | boolean | null | { [key: string]: JSON
  * ```
  */
 export type JSONSchema = JSONSchema7
+
+/**
+ * Creates a deep copy of a value using JSON serialization.
+ *
+ * @param value - The value to copy
+ * @returns A deep copy of the value
+ * @throws Error if the value cannot be JSON serialized
+ */
+export function deepCopy(value: unknown): JSONValue {
+  try {
+    return JSON.parse(JSON.stringify(value)) as JSONValue
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    throw new Error(`Unable to serialize tool result: ${errorMessage}`)
+  }
+}

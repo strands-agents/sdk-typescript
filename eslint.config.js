@@ -12,31 +12,24 @@ export default [
       parserOptions: {
         ecmaVersion: 2022,
         sourceType: 'module',
-        project: './tsconfig.json'
+        project: './tsconfig.json',
       },
       globals: {
-        console: 'readonly'
-      }
+        console: 'readonly',
+      },
     },
     plugins: {
       '@typescript-eslint': tseslint,
-      'tsdoc': tsdoc
+      tsdoc: tsdoc,
     },
     rules: {
       ...tseslint.configs.recommended.rules,
       '@typescript-eslint/no-explicit-any': 'error',
-      '@typescript-eslint/no-unused-vars': [
-        'error',
-        {
-          argsIgnorePattern: '^_', // Ignore unused arguments prefixed with _
-          varsIgnorePattern: '^_', // Ignore unused variables prefixed with _
-          caughtErrorsIgnorePattern: '^_' // Ignore unused catch block error variables prefixed with _
-        }
-      ],
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
       '@typescript-eslint/explicit-function-return-type': 'error',
       '@typescript-eslint/explicit-module-boundary-types': 'error',
-      'tsdoc/syntax': 'error'
-    }
+      'tsdoc/syntax': 'error',
+    },
   },
   {
     files: ['src/**/__tests__/**/*.ts', 'tests_integ/**/*.ts'],
@@ -44,20 +37,33 @@ export default [
       parser: tsparser,
       parserOptions: {
         ecmaVersion: 2022,
-        sourceType: 'module'
+        sourceType: 'module',
       },
       globals: {
         process: 'readonly',
-        console: 'readonly'
-      }
+        console: 'readonly',
+      },
     },
     plugins: {
-      '@typescript-eslint': tseslint
+      '@typescript-eslint': tseslint,
     },
     rules: {
       ...tseslint.configs.recommended.rules,
-      '@typescript-eslint/no-explicit-any': 'error',
-      '@typescript-eslint/no-unused-vars': 'error'
+      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+      '@typescript-eslint/explicit-function-return-type': 'off',
+      'quotes': ['error', 'single', { avoidEscape: true }]
+    }
+  },
+  {
+    files: ['tests_integ/**/*.ts'],
+    rules: {
+      'no-restricted-imports': ['error', {
+        patterns: [{
+          group: ['../src', '../src/**'],
+          message: 'Integration tests should import from @strands-agent/sdk instead of ../src'
+        }]
+      }]
     }
   }
 ]

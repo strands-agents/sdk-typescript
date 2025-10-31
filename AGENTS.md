@@ -29,6 +29,12 @@ sdk-typescript/
 │   │   └── streaming.ts          # Streaming event types
 │   │
 │   ├── tools/                    # Tool definitions and types
+│   │   ├── __tests__/            # Unit tests for tools
+│   │   │   ├── registry.test.ts  # Tests for ToolRegistry
+│   │   │   └── tool.test.ts      # Tests for FunctionTool
+│   │   ├── function-tool.ts      # FunctionTool implementation
+│   │   ├── registry.ts           # ToolRegistry implementation
+│   │   ├── tool.ts               # Tool interface
 │   │   └── types.ts              # Tool-related type definitions
 │   │
 │   ├── types/                    # Core type definitions
@@ -39,7 +45,8 @@ sdk-typescript/
 │   └── index.ts                  # Main SDK entry point (single export point)
 │
 ├── tests_integ/                  # Integration tests (separate from source)
-│   └── bedrock.test.ts           # Bedrock integration tests (requires AWS credentials)
+│   ├── bedrock.test.ts           # Bedrock integration tests (requires AWS credentials)
+│   └── registry.test.ts          # ToolRegistry integration tests
 │
 ├── .github/                      # GitHub Actions workflows
 │   ├── workflows/                # CI/CD workflows
@@ -410,6 +417,39 @@ export interface Message {  // Top-level should come first
 
 **Rationale**: This ordering makes files more readable by providing an overview first, then details.
 
+### Discriminated Union Naming Convention
+
+**When creating discriminated unions with a `type` field, the type value MUST match the interface name with the first letter lowercase.**
+
+```typescript
+// ✅ Correct - type matches interface name (first letter lowercase)
+export interface TextBlock {
+  type: 'textBlock'  // Matches 'TextBlock' interface name
+  text: string
+}
+
+export interface ToolUseBlock {
+  type: 'toolUseBlock'  // Matches 'ToolUseBlock' interface name
+  name: string
+  toolUseId: string
+}
+
+export interface CachePointBlock {
+  type: 'cachePointBlock'  // Matches 'CachePointBlock' interface name
+  cacheType: 'default'
+}
+
+export type ContentBlock = TextBlock | ToolUseBlock | CachePointBlock
+
+// ❌ Wrong - type doesn't match interface name
+export interface CachePointBlock {
+  type: 'cachePoint'  // Should be 'cachePointBlock'
+  cacheType: 'default'
+}
+```
+
+**Rationale**: This consistent naming makes discriminated unions predictable and improves code readability. Developers can easily understand the relationship between the type value and the interface.
+
 ### Error Handling
 
 ```typescript
@@ -510,7 +550,7 @@ it('returns expected user object', () => {
 
 // ✅ Good: Verify entire array of objects
 it('yields expected stream events', async () => {
-  const events = await collectEvents(stream)
+  const events = await collectIterator(stream)
   expect(events).toEqual([
     { type: 'streamEvent', data: 'Starting...' },
     { type: 'streamEvent', data: 'Processing...' },
@@ -530,7 +570,7 @@ it('returns expected user object', () => {
 
 // ❌ Bad: Testing array elements individually in a loop
 it('yields expected stream events', async () => {
-  const events = await collectEvents(stream)
+  const events = await collectIterator(stream)
   for (const event of events) {
     expect(event.type).toBe('streamEvent')
     expect(event).toHaveProperty('data')
@@ -648,6 +688,16 @@ If TypeScript compilation fails:
 3. **Use existing patterns** as reference
 4. **Document as you go** with TSDoc comments
 5. **Run all checks** before committing (pre-commit hooks will enforce this)
+
+
+### Writing code
+- YOU MUST make the SMALLEST reasonable changes to achieve the desired outcome.
+- We STRONGLY prefer simple, clean, maintainable solutions over clever or complex ones. Readability and maintainability are PRIMARY CONCERNS, even at the cost of conciseness or performance.
+- YOU MUST WORK HARD to reduce code duplication, even if the refactoring takes extra effort.
+- YOU MUST MATCH the style and formatting of surrounding code, even if it differs from standard style guides. Consistency within a file trumps external standards.
+- YOU MUST NOT manually change whitespace that does not affect execution or output. Otherwise, use a formatting tool.
+- Fix broken things immediately when you find them. Don't ask permission to fix bugs.
+
 
 ### Code Review Considerations
 

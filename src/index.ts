@@ -19,8 +19,11 @@ export type {
   ToolUseBlock,
   ToolResultBlock,
   ReasoningBlock,
+  CachePointBlock,
   ContentBlock,
   Message,
+  SystemPrompt,
+  SystemContentBlock,
 } from './types/messages'
 
 // Tool types
@@ -41,6 +44,9 @@ export type { Tool, ToolContext, ToolStreamEvent, ToolStreamGenerator } from './
 // FunctionTool implementation
 export { FunctionTool } from './tools/function-tool'
 
+// ToolRegistry implementation
+export { ToolRegistry } from './tools/registry'
+
 // Streaming event types
 export type {
   Usage,
@@ -51,7 +57,7 @@ export type {
   ModelContentBlockStartEvent,
   TextDelta,
   ToolUseInputDelta,
-  ReasoningDelta,
+  ReasoningContentDelta,
   ContentBlockDelta,
   ModelContentBlockDeltaEvent,
   ModelContentBlockStopEvent,

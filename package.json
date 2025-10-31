@@ -13,6 +13,14 @@
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
+    },
+    "./openai": {
+      "import": "./dist/models/openai.js",
+      "types": "./dist/models/openai.d.ts"
+    },
+    "./bedrock": {
+      "import": "./dist/models/bedrock.js",
+      "types": "./dist/models/bedrock.d.ts"
     }
   },
   "scripts": {

@@ -1,4 +1,4 @@
-import type { Message } from '../types/messages'
+import type { Message, ContentBlock, Role, SystemPrompt } from '../types/messages'
 import type { ToolSpec, ToolChoice } from '../tools/types'
 import type { ModelStreamEvent } from './streaming'
 
@@ -23,8 +23,9 @@ export interface BaseModelConfig {
 export interface StreamOptions {
   /**
    * System prompt to guide the model's behavior.
+   * Can be a simple string or an array of content blocks for advanced caching.
    */
-  systemPrompt?: string
+  systemPrompt?: SystemPrompt
 
   /**
    * Array of tool specifications that the model can use.
@@ -38,31 +39,29 @@ export interface StreamOptions {
 }
 
 /**
- * Base interface for model providers.
+ * Base abstract class for model providers.
  * Defines the contract that all model provider implementations must follow.
  *
  * Model providers handle communication with LLM APIs and implement streaming
  * responses using async iterables.
  *
  * @typeParam T - Model configuration type extending BaseModelConfig
- * @typeParam _C - Client configuration type for provider-specific client setup (used by implementations)
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export interface Model<T extends BaseModelConfig, _C = unknown> {
+export abstract class Model<T extends BaseModelConfig> {
   /**
    * Updates the model configuration.
    * Merges the provided configuration with existing settings.
    *
    * @param modelConfig - Configuration object with model-specific settings to update
    */
-  updateConfig(modelConfig: T): void
+  abstract updateConfig(modelConfig: T): void
 
   /**
    * Retrieves the current model configuration.
    *
    * @returns The current configuration object
    */
-  getConfig(): T
+  abstract getConfig(): T
 
   /**
    * Streams a conversation with the model.
@@ -72,5 +71,126 @@ export interface Model<T extends BaseModelConfig, _C = unknown> {
    * @param options - Optional streaming configuration
    * @returns Async iterable of streaming events
    */
-  stream(messages: Message[], options?: StreamOptions): AsyncIterable<ModelStreamEvent>
+  abstract stream(messages: Message[], options?: StreamOptions): AsyncIterable<ModelStreamEvent>
+
+  /**
+   * Streams a conversation with aggregated content blocks and messages.
+   * Returns an async generator that yields streaming events and content blocks, and returns the final message.
+   *
+   * This method enhances the basic stream() by collecting streaming events into complete
+   * ContentBlock and Message objects, which are needed by the agentic loop for tool execution
+   * and conversation management.
+   *
+   * The method yields:
+   * - ModelStreamEvent - Original streaming events (passed through)
+   * - ContentBlock - Complete content block (emitted when block completes)
+   *
+   * The method returns:
+   * - Message - Complete message (returned when message completes)
+   *
+   * @param messages - Array of conversation messages
+   * @param options - Optional streaming configuration
+   * @returns Async generator yielding ModelStreamEvent | ContentBlock and returning Message
+   */
+  async *streamAggregated(
+    messages: Message[],
+    options?: StreamOptions
+  ): AsyncGenerator<ModelStreamEvent | ContentBlock, Message, never> {
+    // State maintained in closure
+    let messageRole: Role | null = null
+    const contentBlocks: ContentBlock[] = []
+    let accumulatedText = ''
+    let accumulatedToolInput = ''
+    let toolName = ''
+    let toolUseId = ''
+    let accumulatedReasoning: {
+      text?: string
+      signature?: string
+      redactedContent?: Uint8Array
+    } = {}
+
+    for await (const event of this.stream(messages, options)) {
+      yield event // Pass through immediately
+
+      // Aggregation logic based on event type
+      switch (event.type) {
+        case 'modelMessageStartEvent':
+          messageRole = event.role
+          contentBlocks.length = 0 // Reset
+          break
+
+        case 'modelContentBlockStartEvent':
+          if (event.start?.type === 'toolUseStart') {
+            toolName = event.start.name
+            toolUseId = event.start.toolUseId
+          }
+          accumulatedToolInput = ''
+          accumulatedText = ''
+          accumulatedReasoning = {}
+          break
+
+        case 'modelContentBlockDeltaEvent':
+          switch (event.delta.type) {
+            case 'textDelta':
+              accumulatedText += event.delta.text
+              break
+            case 'toolUseInputDelta':
+              accumulatedToolInput += event.delta.input
+              break
+            case 'reasoningContentDelta':
+              if (event.delta.text) accumulatedReasoning.text = (accumulatedReasoning.text ?? '') + event.delta.text
+              if (event.delta.signature) accumulatedReasoning.signature = event.delta.signature
+              if (event.delta.redactedContent) accumulatedReasoning.redactedContent = event.delta.redactedContent
+              break
+          }
+          break
+
+        case 'modelContentBlockStopEvent': {
+          // Finalize and emit complete ContentBlock
+          let block: ContentBlock
+          if (toolUseId) {
+            block = {
+              type: 'toolUseBlock',
+              name: toolName,
+              toolUseId: toolUseId,
+              input: JSON.parse(accumulatedToolInput),
+            }
+            toolUseId = '' // Reset
+            toolName = ''
+          } else if (Object.keys(accumulatedReasoning).length > 0) {
+            block = {
+              type: 'reasoningBlock',
+              ...accumulatedReasoning,
+            }
+          } else {
+            block = {
+              type: 'textBlock',
+              text: accumulatedText,
+            }
+          }
+          contentBlocks.push(block)
+          yield block
+          break
+        }
+
+        case 'modelMessageStopEvent':
+          // Complete message - will be returned at the end
+          if (messageRole) {
+            const message: Message = {
+              type: 'message',
+              role: messageRole,
+              content: [...contentBlocks],
+            }
+            return message
+          }
+          break
+
+        default:
+          break
+      }
+    }
+
+    // If we exit the loop without returning a message, throw an error
+    throw new Error('Stream ended without completing a message')
+  }
 }

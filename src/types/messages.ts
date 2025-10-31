@@ -7,6 +7,11 @@ import type { ToolResultContent } from '../tools/types'
  */
 export interface Message {
   /**
+   * Discriminator for message type.
+   */
+  type: 'message'
+
+  /**
    * The role of the message sender.
    */
   role: Role
@@ -25,11 +30,11 @@ export type Role = 'user' | 'assistant'
 
 /**
  * A block of content within a message.
- * Content blocks can contain text, tool usage requests, tool results, or reasoning content.
+ * Content blocks can contain text, tool usage requests, tool results, reasoning content, or cache points.
  *
  * This is a discriminated union where the `type` field determines the content format.
  */
-export type ContentBlock = TextBlock | ToolUseBlock | ToolResultBlock | ReasoningBlock
+export type ContentBlock = TextBlock | ToolUseBlock | ToolResultBlock | ReasoningBlock | CachePointBlock
 
 /**
  * Text content block within a message.
@@ -123,6 +128,22 @@ export interface ReasoningBlock {
 }
 
 /**
+ * Cache point block for prompt caching.
+ * Marks a position in a message or system prompt where caching should occur.
+ */
+export interface CachePointBlock {
+  /**
+   * Discriminator for cache point.
+   */
+  type: 'cachePointBlock'
+
+  /**
+   * The cache type. Currently only 'default' is supported.
+   */
+  cacheType: 'default'
+}
+
+/**
  * Reason why the model stopped generating content.
  *
  * - `contentFiltered` - Content was filtered by safety mechanisms
@@ -141,3 +162,30 @@ export type StopReason =
   | 'toolUse'
   | 'modelContextWindowExceeded'
   | string
+
+/**
+ * System prompt for guiding model behavior.
+ * Can be a simple string or an array of content blocks for advanced caching.
+ *
+ * @example
+ * ```typescript
+ * // Simple string
+ * const prompt: SystemPrompt = 'You are a helpful assistant'
+ *
+ * // Array with cache points for advanced caching
+ * const prompt: SystemPrompt = [
+ *   { type: 'textBlock', text: 'You are a helpful assistant' },
+ *   { type: 'textBlock', text: largeContextDocument },
+ *   { type: 'cachePointBlock', cacheType: 'default' }
+ * ]
+ * ```
+ */
+export type SystemPrompt = string | SystemContentBlock[]
+
+/**
+ * A block of content within a system prompt.
+ * Supports text content and cache points for prompt caching.
+ *
+ * This is a discriminated union where the `type` field determines the block format.
+ */
+export type SystemContentBlock = TextBlock | CachePointBlock

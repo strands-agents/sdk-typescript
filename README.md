@@ -81,7 +81,7 @@ This TypeScript SDK is being developed with the following features (see [project
 
 - ✅ **Project Structure**: TypeScript configuration, testing framework, development infrastructure
 - 🚧 **Model Providers**: Amazon Bedrock, OpenAI, and custom provider support
-- 🚧 **Tool System**: Tool execution, registry, and decorator-based definitions
+- ✅ **Tool System**: Tool execution, registry, and decorator-based definitions
 - 🚧 **Agent Interface**: Core agent class with `invoke` and `stream` methods
 - 🚧 **Event Loop**: Async iterator-based agent loop for orchestration
 - 🚧 **Conversation Manager**: Context window overflow handling

@@ -164,7 +164,7 @@ export interface ToolUseStart {
  *
  * This is a discriminated union for type-safe delta handling.
  */
-export type ContentBlockDelta = TextDelta | ToolUseInputDelta | ReasoningDelta
+export type ContentBlockDelta = TextDelta | ToolUseInputDelta | ReasoningContentDelta
 
 /**
  * Text delta within a content block.
@@ -202,11 +202,11 @@ export interface ToolUseInputDelta {
  * Reasoning content delta within a content block.
  * Represents incremental reasoning or thinking content.
  */
-export interface ReasoningDelta {
+export interface ReasoningContentDelta {
   /**
    * Discriminator for reasoning delta.
    */
-  type: 'reasoningDelta'
+  type: 'reasoningContentDelta'
 
   /**
    * Incremental reasoning text.

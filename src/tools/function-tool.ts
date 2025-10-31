@@ -1,6 +1,7 @@
 import type { Tool, ToolContext, ToolStreamEvent } from './tool'
 import type { ToolSpec, ToolResult } from './types'
 import type { JSONSchema, JSONValue } from '../types/json'
+import { deepCopy } from '../types/json'
 
 /**
  * Callback function for FunctionTool implementations.
@@ -184,48 +185,111 @@ export class FunctionTool implements Tool {
   /**
    * Wraps a value in a ToolResult with success status.
    *
+   * Due to AWS Bedrock limitations (only accepts objects as JSON content), the following
+   * rules are applied:
+   * - Strings → toolResultTextContent
+   * - Numbers, Booleans → toolResultTextContent (converted to string)
+   * - null, undefined → toolResultTextContent (special string representation)
+   * - Objects → toolResultJsonContent (with deep copy)
+   * - Arrays → toolResultJsonContent wrapped in \{ $value: array \} (with deep copy)
+   *
    * @param value - The value to wrap (can be any type)
    * @param toolUseId - The tool use ID for the ToolResult
    * @returns A ToolResult containing the value
    */
   private _wrapInToolResult(value: unknown, toolUseId: string): ToolResult {
-    // Convert value to appropriate content format
-    let text: string
+    try {
+      // Handle null with special string representation as text content
+      if (value === null) {
+        return {
+          toolUseId,
+          status: 'success',
+          content: [
+            {
+              type: 'toolResultTextContent',
+              text: '<null>',
+            },
+          ],
+        }
+      }
 
-    if (value === null) {
-      text = '<null>'
-    } else if (value === undefined) {
-      text = '<undefined>'
-    } else if (typeof value === 'object') {
-      text = JSON.stringify(value, null, 2)
-    } else {
-      text = String(value)
-    }
+      // Handle undefined with special string representation as text content
+      if (value === undefined) {
+        return {
+          toolUseId,
+          status: 'success',
+          content: [
+            {
+              type: 'toolResultTextContent',
+              text: '<undefined>',
+            },
+          ],
+        }
+      }
 
-    return {
-      toolUseId,
-      status: 'success',
-      content: [
-        {
-          type: 'toolResultTextContent',
-          text,
-        },
-      ],
+      // Handle primitives (strings, numbers, booleans) as text content
+      // Bedrock doesn't accept primitives as JSON content, so we convert all to strings
+      if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+        return {
+          toolUseId,
+          status: 'success',
+          content: [
+            {
+              type: 'toolResultTextContent',
+              text: String(value),
+            },
+          ],
+        }
+      }
+
+      // Handle arrays by wrapping in object { $value: array }
+      if (Array.isArray(value)) {
+        const copiedValue = deepCopy(value)
+        return {
+          toolUseId,
+          status: 'success',
+          content: [
+            {
+              type: 'toolResultJsonContent',
+              json: { $value: copiedValue },
+            },
+          ],
+        }
+      }
+
+      // Handle objects as JSON content with deep copy
+      const copiedValue = deepCopy(value)
+      return {
+        toolUseId,
+        status: 'success',
+        content: [
+          {
+            type: 'toolResultJsonContent',
+            json: copiedValue,
+          },
+        ],
+      }
+    } catch (error) {
+      // If deep copy fails (circular references, non-serializable values), return error result
+      return this._createErrorResult(error, toolUseId)
     }
   }
 
   /**
    * Creates an error ToolResult from an error object.
+   * Ensures all errors are normalized to Error objects and includes the original error
+   * in the ToolResult for inspection by hooks, error handlers, and event loop.
    *
    * TODO: Implement consistent logging format as defined in #30
    * This error should be logged to the caller using the established logging pattern.
    *
-   * @param error - The error that occurred
+   * @param error - The error that occurred (can be Error object or any thrown value)
    * @param toolUseId - The tool use ID for the ToolResult
-   * @returns A ToolResult with error status
+   * @returns A ToolResult with error status, error message content, and original error object
    */
   private _createErrorResult(error: unknown, toolUseId: string): ToolResult {
-    const errorMessage = error instanceof Error ? error.message : String(error)
+    // Ensure error is an Error object (wrap non-Error values)
+    const errorObject = error instanceof Error ? error : new Error(String(error))
 
     return {
       toolUseId,
@@ -233,9 +297,10 @@ export class FunctionTool implements Tool {
       content: [
         {
           type: 'toolResultTextContent',
-          text: `Error: ${errorMessage}`,
+          text: `Error: ${errorObject.message}`,
         },
       ],
+      error: errorObject,
     }
   }
 }

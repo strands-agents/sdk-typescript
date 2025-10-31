@@ -30,9 +30,9 @@ import {
   ReasoningContentBlockDelta,
   ReasoningContentBlock,
 } from '@aws-sdk/client-bedrock-runtime'
-import type { Model, BaseModelConfig, StreamOptions } from '../models/model'
+import { Model, type BaseModelConfig, type StreamOptions } from '../models/model'
 import type { Message, ContentBlock, ToolUseBlock } from '../types/messages'
-import type { ModelStreamEvent, ReasoningDelta, Usage } from '../models/streaming'
+import type { ModelStreamEvent, ReasoningContentDelta, Usage } from '../models/streaming'
 import type { JSONValue } from '../types/json'
 import { ContextWindowOverflowError } from '../errors'
 import { ensureDefined } from '../types/validation'
@@ -42,6 +42,13 @@ import { ensureDefined } from '../types/validation'
  * Uses Claude Sonnet 4.5 with global inference profile for cross-region availability.
  */
 const DEFAULT_BEDROCK_MODEL_ID = 'global.anthropic.claude-sonnet-4-5-20250929-v1:0'
+
+/**
+ * Models that require the status field in tool results.
+ * According to AWS Bedrock API documentation, the status field is only supported by Anthropic Claude models.
+ * @see https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_ToolResultBlock.html
+ */
+const MODELS_INCLUDE_STATUS = ['anthropic.claude']
 
 /**
  * Error messages that indicate context window overflow.
@@ -150,6 +157,14 @@ export interface BedrockModelConfig extends BaseModelConfig {
    * @see https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_ConverseStream.html
    */
   stream?: boolean
+
+  /**
+   * Flag to include status field in tool results.
+   * - `true`: Always include status field
+   * - `false`: Never include status field
+   * - `'auto'`: Automatically determine based on model ID (default)
+   */
+  includeToolResultStatus?: 'auto' | boolean
 }
 
 /**
@@ -187,7 +202,7 @@ export interface BedrockModelOptions extends BedrockModelConfig {
  * })
  *
  * const messages: Message[] = [
- *   { role: 'user', content: [{ type: 'textBlock', text: 'Hello!' }] }
+ *   { type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello!' }] }
  * ]
  *
  * for await (const event of provider.stream(messages)) {
@@ -197,7 +212,7 @@ export interface BedrockModelOptions extends BedrockModelConfig {
  * }
  * ```
  */
-export class BedrockModel implements Model<BedrockModelConfig, BedrockRuntimeClientConfig> {
+export class BedrockModel extends Model<BedrockModelConfig> {
   private _config: BedrockModelConfig
   private _client: BedrockRuntimeClient
 
@@ -232,6 +247,7 @@ export class BedrockModel implements Model<BedrockModelConfig, BedrockRuntimeCli
    * ```
    */
   constructor(options?: BedrockModelOptions) {
+    super()
     const { region, clientConfig, ...modelConfig } = options ?? {}
 
     // Initialize model config with default model ID if not provided
@@ -302,7 +318,7 @@ export class BedrockModel implements Model<BedrockModelConfig, BedrockRuntimeCli
    * @example
    * ```typescript
    * const messages: Message[] = [
-   *   { role: 'user', content: [{ type: 'textBlock', text: 'What is 2+2?' }] }
+   *   { type: 'message', role: $1, content: [{ type: 'textBlock', text: 'What is 2+2?' }] }
    * ]
    *
    * const options: StreamOptions = {
@@ -371,18 +387,26 @@ export class BedrockModel implements Model<BedrockModelConfig, BedrockRuntimeCli
     }
 
     // Add system prompt with optional caching
-    if (options?.systemPrompt || this._config.cachePrompt) {
-      const system: BedrockContentBlock[] = []
+    if (options?.systemPrompt !== undefined) {
+      if (typeof options.systemPrompt === 'string') {
+        // String path: apply cachePrompt config if set
+        const system: BedrockContentBlock[] = [{ text: options.systemPrompt }]
 
-      if (options?.systemPrompt) {
-        system.push({ text: options.systemPrompt })
+        if (this._config.cachePrompt) {
+          system.push({ cachePoint: { type: this._config.cachePrompt as 'default' } })
+        }
+
+        request.system = system
+      } else if (options.systemPrompt.length > 0) {
+        // Array path: use as-is, but warn if cachePrompt config is also set
+        if (this._config.cachePrompt) {
+          console.warn(
+            'cachePrompt config is ignored when systemPrompt is an array. Use explicit cache points in the array instead.'
+          )
+        }
+
+        request.system = options.systemPrompt.map((block) => this._formatContentBlock(block))
       }
-
-      if (this._config.cachePrompt) {
-        system.push({ cachePoint: { type: this._config.cachePrompt as 'default' } })
-      }
-
-      request.system = system
     }
 
     // Add tool configuration
@@ -458,6 +482,31 @@ export class BedrockModel implements Model<BedrockModelConfig, BedrockRuntimeCli
   }
 
   /**
+   * Determines whether to include the status field in tool results.
+   *
+   * Uses the includeToolResultStatus config option:
+   * - If explicitly true, always include status
+   * - If explicitly false, never include status
+   * - If 'auto' (default), check if model ID matches known patterns
+   *
+   * @returns True if status field should be included, false otherwise
+   */
+  private _shouldIncludeToolResultStatus(): boolean {
+    const includeStatus = this._config.includeToolResultStatus ?? 'auto'
+
+    if (includeStatus === true) return true
+    if (includeStatus === false) return false
+
+    // Auto-detection mode: check if modelId contains any pattern
+    const shouldInclude = MODELS_INCLUDE_STATUS.some((pattern) => this._config.modelId?.includes(pattern))
+
+    // Log debug message for auto-detection
+    console.debug(`Auto-detected includeToolResultStatus=${shouldInclude} for model: ${this._config.modelId}`)
+
+    return shouldInclude
+  }
+
+  /**
    * Formats a content block for Bedrock API.
    *
    * @param block - SDK content block
@@ -491,7 +540,7 @@ export class BedrockModel implements Model<BedrockModelConfig, BedrockRuntimeCli
           toolResult: {
             toolUseId: block.toolUseId,
             content,
-            status: block.status,
+            ...(this._shouldIncludeToolResultStatus() && { status: block.status }),
           },
         }
       }
@@ -516,6 +565,9 @@ export class BedrockModel implements Model<BedrockModelConfig, BedrockRuntimeCli
           throw Error("reasoning content format incorrect. Either 'text' or 'redactedContent' must be set.")
         }
       }
+
+      case 'cachePointBlock':
+        return { cachePoint: { type: block.cacheType } }
     }
   }
 
@@ -562,16 +614,19 @@ export class BedrockModel implements Model<BedrockModelConfig, BedrockRuntimeCli
       reasoningContent: (block: ReasoningContentBlock, index: number): void => {
         if (!block) return
         events.push({ type: 'modelContentBlockStartEvent', contentBlockIndex: index })
-        const delta: ReasoningDelta = { type: 'reasoningDelta' }
+
+        const delta: ReasoningContentDelta = { type: 'reasoningContentDelta' }
         if (block.reasoningText) {
           delta.text = ensureDefined(block.reasoningText.text, 'reasoningText.text')
           if (block.reasoningText.signature) delta.signature = block.reasoningText.signature
         } else if (block.redactedContent) {
           delta.redactedContent = block.redactedContent
         }
+
         if (Object.keys(delta).length > 1) {
           events.push({ type: 'modelContentBlockDeltaEvent', contentBlockIndex: index, delta })
         }
+
         events.push({ type: 'modelContentBlockStopEvent', contentBlockIndex: index })
       },
     }
@@ -682,7 +737,7 @@ export class BedrockModel implements Model<BedrockModelConfig, BedrockRuntimeCli
           },
           reasoningContent: (reasoning: ReasoningContentBlockDelta): void => {
             if (!reasoning) return
-            const reasoningDelta: ReasoningDelta = { type: 'reasoningDelta' }
+            const reasoningDelta: ReasoningContentDelta = { type: 'reasoningContentDelta' }
             if (reasoning.text) reasoningDelta.text = reasoning.text
             if (reasoning.signature) reasoningDelta.signature = reasoning.signature
             if (reasoning.redactedContent) reasoningDelta.redactedContent = reasoning.redactedContent
