@@ -217,58 +217,15 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - name: Run Strands Agent
+        uses: ./.github/workflows/strands-agent-runner.yml
         with:
-          python-version: '3.13'
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v3
-        with:
-          enable-cache: true
-          cache-dependency-glob: '.github/scripts/requirements.txt'
-
-      - name: Install Strands Agents
-        run: |
-          echo "📦 Installing from requirements.txt"
-          uv pip install --system -r .github/scripts/requirements.txt --quiet
-
-      - name: Configure Git
-        run: |
-          git config --global user.name "Strands Agent"
-          git config --global user.email "217235299+strands-agent@users.noreply.github.com"
-          git config --global core.pager cat
-          PAGER=cat
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          role-session-name: GitHubActions-StrandsAgent-${{ github.run_id }}
-          aws-region: us-west-2
-          mask-aws-account-id: true
-
-      - name: Execute strands command
-        timeout-minutes: 60
-        env:
-          # GitHub Configuration
-          GITHUB_TOKEN: ${{ github.token }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          GITHUB_EVENT_NAME: ${{ github.event_name }}
-          GITHUB_ACTOR: ${{ github.actor }}
-
-          # Task Configuration
-          INPUT_TASK: ${{ steps.process.outputs.prompt }}
-          INPUT_SYSTEM_PROMPT: ${{ steps.process.outputs.system_prompt }}
-
-          # AWS Configuration
-          AWS_REGION: 'us-west-2'
-
-          # Session Manager
-          S3_SESSION_BUCKET: ${{ secrets.TYPESCRIPT_SESSIONS_BUCKET }}
-          SESSION_ID: ${{ steps.process.outputs.session_id }}
-        run: |
-          uv run .github/scripts/agent_runner.py "$INPUT_TASK"
+          system_prompt: ${{ steps.process.outputs.system_prompt }}
+          session_id: ${{ steps.process.outputs.session_id }}
+          task_prompt: ${{ steps.process.outputs.prompt }}
+        secrets:
+          AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+          TYPESCRIPT_SESSIONS_BUCKET: ${{ secrets.TYPESCRIPT_SESSIONS_BUCKET }}
 
       - name: Remove strands-running label
         if: always()
