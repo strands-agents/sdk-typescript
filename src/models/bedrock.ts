@@ -32,7 +32,7 @@ import {
 } from '@aws-sdk/client-bedrock-runtime'
 import { Model, type BaseModelConfig, type StreamOptions } from '../models/model'
 import type { Message, ContentBlock } from '../types/messages'
-import type { ModelStreamEvent, Usage } from '../models/streaming'
+import type { ModelStreamEvent, Usage, ModelContentBlockStart } from '../models/streaming'
 import {
   ModelMessageStartEvent,
   ModelContentBlockStartEvent,
@@ -718,13 +718,13 @@ export class BedrockModel extends Model<BedrockModelConfig> {
 
         if (data.start?.toolUse) {
           const toolUse = data.start.toolUse
-          startEventData.start = new ToolUseStart({
+          modelContentBlockStartEvent.start = new ToolUseStart({
             name: ensureDefined(toolUse.name, 'toolUse.name'),
             toolUseId: ensureDefined(toolUse.toolUseId, 'toolUse.toolUseId'),
           })
         }
 
-        events.push(new ModelContentBlockStartEvent(startEventData))
+        events.push(new ModelContentBlockStartEvent(modelContentBlockStartEvent))
         break
       }
 

@@ -10,7 +10,7 @@
 import OpenAI, { type ClientOptions } from 'openai'
 import { Model } from '../models/model'
 import type { BaseModelConfig, StreamOptions } from '../models/model'
-import type { Message } from '../types/messages'
+import type { Message, Role } from '../types/messages'
 import type { ModelStreamEvent } from '../models/streaming'
 import {
   ModelMessageStartEvent,
@@ -24,6 +24,7 @@ import {
   ToolUseInputDelta,
 } from '../models/streaming'
 import { ContextWindowOverflowError } from '../errors'
+import { ensureDefined } from '../types/validation'
 
 /**
  * Error message patterns that indicate context window overflow.
@@ -333,16 +334,16 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
       // Track active tool calls for stop events
       const activeToolCalls = new Map<number, boolean>()
 
-      // Buffer usage to emit before message stop
-      let bufferedUsage: ModelMetadataEvent | null = null
+      // Buffer metadata event to emit before message stop
+      let modelMetadataEvent: ModelMetadataEvent | null = null
 
       // Process streaming response
       for await (const chunk of stream) {
         if (!chunk.choices || chunk.choices.length === 0) {
           // Handle usage chunk (no choices)
-          // Buffer usage to emit before message stop
+          // Buffer metadata to emit before message stop
           if (chunk.usage) {
-            bufferedUsage = new ModelMetadataEvent({
+            modelMetadataEvent = new ModelMetadataEvent({
               usage: {
                 inputTokens: chunk.usage.prompt_tokens ?? 0,
                 outputTokens: chunk.usage.completion_tokens ?? 0,
@@ -356,19 +357,19 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
         // Map chunk to SDK events
         const events = this._mapOpenAIChunkToSDKEvents(chunk, streamState, activeToolCalls)
         for (const event of events) {
-          // Emit buffered usage before message stop
-          if (event.type === 'modelMessageStopEvent' && bufferedUsage) {
-            yield bufferedUsage
-            bufferedUsage = null
+          // Emit buffered metadata before message stop
+          if (event.type === 'modelMessageStopEvent' && modelMetadataEvent) {
+            yield modelMetadataEvent
+            modelMetadataEvent = null
           }
 
           yield event
         }
       }
 
-      // Emit any remaining buffered usage
-      if (bufferedUsage) {
-        yield bufferedUsage
+      // Emit any remaining buffered metadata
+      if (modelMetadataEvent) {
+        yield modelMetadataEvent
       }
     } catch (error) {
       const err = error as Error
@@ -671,9 +672,6 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
   ): ModelStreamEvent[] {
     const events: ModelStreamEvent[] = []
 
-    // Use named constant for text content block index
-    const TEXT_CONTENT_BLOCK_INDEX = 0
-
     // Validate choices array has at least one element
     if (!chunk.choices || chunk.choices.length === 0) {
       return events
@@ -699,7 +697,7 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
     // Handle message start (role appears) - update mutable state
     if (delta?.role && !streamState.messageStarted) {
       streamState.messageStarted = true
-      events.push(new ModelMessageStartEvent({ role: delta.role as 'user' | 'assistant' }))
+      events.push(new ModelMessageStartEvent({ role: ensureDefined(delta.role, 'delta.role') as Role }))
     }
 
     // Handle text content delta with contentBlockIndex and start event
@@ -707,17 +705,12 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
       // Emit start event on first text delta
       if (!streamState.textContentBlockStarted) {
         streamState.textContentBlockStarted = true
-        events.push(
-          new ModelContentBlockStartEvent({
-            contentBlockIndex: TEXT_CONTENT_BLOCK_INDEX,
-          })
-        )
+        events.push(new ModelContentBlockStartEvent({}))
       }
 
       // Include contentBlockIndex for text deltas
       events.push(
         new ModelContentBlockDeltaEvent({
-          contentBlockIndex: TEXT_CONTENT_BLOCK_INDEX,
           delta: new TextDelta({
             text: delta.content,
           }),
@@ -738,7 +731,6 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
         if (toolCall.id && toolCall.function?.name) {
           events.push(
             new ModelContentBlockStartEvent({
-              contentBlockIndex: toolCall.index,
               start: new ToolUseStart({
                 name: toolCall.function.name,
                 toolUseId: toolCall.id,
@@ -753,7 +745,6 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
         if (toolCall.function?.arguments) {
           events.push(
             new ModelContentBlockDeltaEvent({
-              contentBlockIndex: toolCall.index,
               delta: new ToolUseInputDelta({
                 input: toolCall.function.arguments,
               }),
@@ -767,21 +758,13 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
     if (typedChoice.finish_reason) {
       // Emit stop event for text content if it was started
       if (streamState.textContentBlockStarted) {
-        events.push(
-          new ModelContentBlockStopEvent({
-            contentBlockIndex: TEXT_CONTENT_BLOCK_INDEX,
-          })
-        )
+        events.push(new ModelContentBlockStopEvent({}))
         streamState.textContentBlockStarted = false
       }
 
       // Emit stop events for all active tool calls and delete during iteration
       for (const [index] of activeToolCalls) {
-        events.push(
-          new ModelContentBlockStopEvent({
-            contentBlockIndex: index,
-          })
-        )
+        events.push(new ModelContentBlockStopEvent({}))
         activeToolCalls.delete(index)
       }
 

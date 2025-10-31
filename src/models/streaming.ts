@@ -18,7 +18,7 @@ export type ModelStreamEvent =
 /**
  * Data interface for message start events.
  */
-export interface ModelMessageStartEventData {
+export interface ModelMessageStart {
   /**
    * The role of the message being started.
    */
@@ -28,7 +28,7 @@ export interface ModelMessageStartEventData {
 /**
  * Event emitted when a new message starts in the stream.
  */
-export class ModelMessageStartEvent implements ModelMessageStartEventData {
+export class ModelMessageStartEvent implements ModelMessageStart {
   /**
    * Discriminator for message start events.
    */
@@ -44,7 +44,7 @@ export class ModelMessageStartEvent implements ModelMessageStartEventData {
    *
    * @param data - The event data
    */
-  constructor({ role }: ModelMessageStartEventData) {
+  constructor({ role }: ModelMessageStart) {
     this.role = role
   }
 }
@@ -52,7 +52,7 @@ export class ModelMessageStartEvent implements ModelMessageStartEventData {
 /**
  * Data interface for content block start events.
  */
-export interface ModelContentBlockStartEventData {
+export interface ModelContentBlockStart {
   /**
    * Index of this content block within the message.
    */
@@ -68,7 +68,7 @@ export interface ModelContentBlockStartEventData {
 /**
  * Event emitted when a new content block starts in the stream.
  */
-export class ModelContentBlockStartEvent implements ModelContentBlockStartEventData {
+export class ModelContentBlockStartEvent implements ModelContentBlockStart {
   /**
    * Discriminator for content block start events.
    */
@@ -90,7 +90,7 @@ export class ModelContentBlockStartEvent implements ModelContentBlockStartEventD
    *
    * @param data - The event data
    */
-  constructor({ contentBlockIndex, start }: ModelContentBlockStartEventData) {
+  constructor({ contentBlockIndex, start }: ModelContentBlockStart) {
     if (contentBlockIndex !== undefined) {
       this.contentBlockIndex = contentBlockIndex
     }
@@ -103,7 +103,7 @@ export class ModelContentBlockStartEvent implements ModelContentBlockStartEventD
 /**
  * Data interface for content block delta events.
  */
-export interface ModelContentBlockDeltaEventData {
+export interface ModelContentBlockDelta {
   /**
    * Index of the content block being updated.
    */
@@ -118,7 +118,7 @@ export interface ModelContentBlockDeltaEventData {
 /**
  * Event emitted when there is new content in a content block.
  */
-export class ModelContentBlockDeltaEvent implements ModelContentBlockDeltaEventData {
+export class ModelContentBlockDeltaEvent implements ModelContentBlockDelta {
   /**
    * Discriminator for content block delta events.
    */
@@ -139,7 +139,7 @@ export class ModelContentBlockDeltaEvent implements ModelContentBlockDeltaEventD
    *
    * @param data - The event data
    */
-  constructor({ contentBlockIndex, delta }: ModelContentBlockDeltaEventData) {
+  constructor({ contentBlockIndex, delta }: ModelContentBlockDelta) {
     if (contentBlockIndex !== undefined) {
       this.contentBlockIndex = contentBlockIndex
     }
@@ -150,7 +150,7 @@ export class ModelContentBlockDeltaEvent implements ModelContentBlockDeltaEventD
 /**
  * Data interface for content block stop events.
  */
-export interface ModelContentBlockStopEventData {
+export interface ModelContentBlockStop {
   /**
    * Index of the content block that stopped.
    */
@@ -160,7 +160,7 @@ export interface ModelContentBlockStopEventData {
 /**
  * Event emitted when a content block completes.
  */
-export class ModelContentBlockStopEvent implements ModelContentBlockStopEventData {
+export class ModelContentBlockStopEvent implements ModelContentBlockStop {
   /**
    * Discriminator for content block stop events.
    */
@@ -176,7 +176,7 @@ export class ModelContentBlockStopEvent implements ModelContentBlockStopEventDat
    *
    * @param data - The event data
    */
-  constructor({ contentBlockIndex }: ModelContentBlockStopEventData) {
+  constructor({ contentBlockIndex }: ModelContentBlockStop) {
     if (contentBlockIndex !== undefined) {
       this.contentBlockIndex = contentBlockIndex
     }
@@ -186,7 +186,7 @@ export class ModelContentBlockStopEvent implements ModelContentBlockStopEventDat
 /**
  * Data interface for message stop events.
  */
-export interface ModelMessageStopEventData {
+export interface ModelMessageStop {
   /**
    * Reason why generation stopped.
    */
@@ -201,7 +201,7 @@ export interface ModelMessageStopEventData {
 /**
  * Event emitted when the message completes.
  */
-export class ModelMessageStopEvent implements ModelMessageStopEventData {
+export class ModelMessageStopEvent implements ModelMessageStop {
   /**
    * Discriminator for message stop events.
    */
@@ -222,7 +222,7 @@ export class ModelMessageStopEvent implements ModelMessageStopEventData {
    *
    * @param data - The event data
    */
-  constructor({ stopReason, additionalModelResponseFields }: ModelMessageStopEventData) {
+  constructor({ stopReason, additionalModelResponseFields }: ModelMessageStop) {
     if (stopReason !== undefined) {
       this.stopReason = stopReason
     }
@@ -235,7 +235,7 @@ export class ModelMessageStopEvent implements ModelMessageStopEventData {
 /**
  * Data interface for metadata events.
  */
-export interface ModelMetadataEventData {
+export interface ModelMetadata {
   /**
    * Token usage information.
    */
@@ -256,7 +256,7 @@ export interface ModelMetadataEventData {
  * Event containing metadata about the stream.
  * Includes usage statistics, performance metrics, and trace information.
  */
-export class ModelMetadataEvent implements ModelMetadataEventData {
+export class ModelMetadataEvent implements ModelMetadata {
   /**
    * Discriminator for metadata events.
    */
@@ -282,7 +282,7 @@ export class ModelMetadataEvent implements ModelMetadataEventData {
    *
    * @param data - The event data
    */
-  constructor({ usage, metrics, trace }: ModelMetadataEventData) {
+  constructor({ usage, metrics, trace }: ModelMetadata) {
     if (usage !== undefined) {
       this.usage = usage
     }
@@ -304,7 +304,7 @@ export type ContentBlockStart = ToolUseStart
 /**
  * Data interface for tool use start.
  */
-export interface ToolUseStartData {
+export interface ToolUse {
   /**
    * The name of the tool being used.
    */
@@ -319,7 +319,7 @@ export interface ToolUseStartData {
 /**
  * Information about a tool use that is starting.
  */
-export class ToolUseStart implements ToolUseStartData {
+export class ToolUseStart implements ToolUse {
   /**
    * Discriminator for tool use start.
    */
@@ -340,7 +340,7 @@ export class ToolUseStart implements ToolUseStartData {
    *
    * @param data - The tool use start data
    */
-  constructor({ name, toolUseId }: ToolUseStartData) {
+  constructor({ name, toolUseId }: ToolUse) {
     this.name = name
     this.toolUseId = toolUseId
   }
@@ -357,7 +357,7 @@ export type ContentBlockDelta = TextDelta | ToolUseInputDelta | ReasoningContent
 /**
  * Data interface for text delta.
  */
-export interface TextDeltaData {
+export interface Text {
   /**
    * Incremental text content.
    */
@@ -368,7 +368,7 @@ export interface TextDeltaData {
  * Text delta within a content block.
  * Represents incremental text content from the model.
  */
-export class TextDelta implements TextDeltaData {
+export class TextDelta implements Text {
   /**
    * Discriminator for text delta.
    */
@@ -384,7 +384,7 @@ export class TextDelta implements TextDeltaData {
    *
    * @param data - The text delta data
    */
-  constructor({ text }: TextDeltaData) {
+  constructor({ text }: Text) {
     this.text = text
   }
 }
@@ -392,7 +392,7 @@ export class TextDelta implements TextDeltaData {
 /**
  * Data interface for tool use input delta.
  */
-export interface ToolUseInputDeltaData {
+export interface ToolUseInput {
   /**
    * Partial JSON string representing the tool input.
    */
@@ -403,7 +403,7 @@ export interface ToolUseInputDeltaData {
  * Tool use input delta within a content block.
  * Represents incremental tool input being generated.
  */
-export class ToolUseInputDelta implements ToolUseInputDeltaData {
+export class ToolUseInputDelta implements ToolUseInput {
   /**
    * Discriminator for tool use input delta.
    */
@@ -419,7 +419,7 @@ export class ToolUseInputDelta implements ToolUseInputDeltaData {
    *
    * @param data - The tool use input delta data
    */
-  constructor({ input }: ToolUseInputDeltaData) {
+  constructor({ input }: ToolUseInput) {
     this.input = input
   }
 }
@@ -427,7 +427,7 @@ export class ToolUseInputDelta implements ToolUseInputDeltaData {
 /**
  * Data interface for reasoning content delta.
  */
-export interface ReasoningContentDeltaData {
+export interface ReasoningContent {
   /**
    * Incremental reasoning text.
    */
@@ -448,7 +448,7 @@ export interface ReasoningContentDeltaData {
  * Reasoning content delta within a content block.
  * Represents incremental reasoning or thinking content.
  */
-export class ReasoningContentDelta implements ReasoningContentDeltaData {
+export class ReasoningContentDelta implements ReasoningContent {
   /**
    * Discriminator for reasoning delta.
    */
@@ -474,7 +474,7 @@ export class ReasoningContentDelta implements ReasoningContentDeltaData {
    *
    * @param data - The reasoning content delta data
    */
-  constructor({ text, signature, redactedContent }: ReasoningContentDeltaData) {
+  constructor({ text, signature, redactedContent }: ReasoningContent) {
     if (text !== undefined) {
       this.text = text
     }

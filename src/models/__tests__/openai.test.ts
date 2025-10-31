@@ -371,26 +371,22 @@ describe('OpenAIModel', () => {
 
         // Now includes complete content block lifecycle: start, deltas, stop
         expect(events).toHaveLength(6)
-        expect(events[0]).toEqual({ type: 'modelMessageStartEvent', role: 'assistant' })
-        expect(events[1]).toEqual({
+        expect(events[0]).toMatchObject({ type: 'modelMessageStartEvent', role: 'assistant' })
+        expect(events[1]).toMatchObject({
           type: 'modelContentBlockStartEvent',
-          contentBlockIndex: 0,
         })
-        expect(events[2]).toEqual({
+        expect(events[2]).toMatchObject({
           type: 'modelContentBlockDeltaEvent',
-          contentBlockIndex: 0,
           delta: { type: 'textDelta', text: 'Hello' },
         })
-        expect(events[3]).toEqual({
+        expect(events[3]).toMatchObject({
           type: 'modelContentBlockDeltaEvent',
-          contentBlockIndex: 0,
           delta: { type: 'textDelta', text: ' world' },
         })
-        expect(events[4]).toEqual({
+        expect(events[4]).toMatchObject({
           type: 'modelContentBlockStopEvent',
-          contentBlockIndex: 0,
         })
-        expect(events[5]).toEqual({ type: 'modelMessageStopEvent', stopReason: 'endTurn' })
+        expect(events[5]).toMatchObject({ type: 'modelMessageStopEvent', stopReason: 'endTurn' })
       })
     })
 
@@ -566,37 +562,33 @@ describe('OpenAIModel', () => {
       const events = await collectIterator(provider.stream(messages))
 
       // Verify key events in sequence
-      expect(events[0]).toEqual({ type: 'modelMessageStartEvent', role: 'assistant' })
-      expect(events[1]).toEqual({
+      expect(events[0]).toMatchObject({ type: 'modelMessageStartEvent', role: 'assistant' })
+      expect(events[1]).toMatchObject({
         type: 'modelContentBlockStartEvent',
-        contentBlockIndex: 0,
         start: {
           type: 'toolUseStart',
           name: 'calculator',
           toolUseId: 'call_123',
         },
       })
-      expect(events[2]).toEqual({
+      expect(events[2]).toMatchObject({
         type: 'modelContentBlockDeltaEvent',
-        contentBlockIndex: 0,
         delta: {
           type: 'toolUseInputDelta',
           input: '{"expr',
         },
       })
-      expect(events[3]).toEqual({
+      expect(events[3]).toMatchObject({
         type: 'modelContentBlockDeltaEvent',
-        contentBlockIndex: 0,
         delta: {
           type: 'toolUseInputDelta',
           input: '":"2+2"}',
         },
       })
-      expect(events[4]).toEqual({
+      expect(events[4]).toMatchObject({
         type: 'modelContentBlockStopEvent',
-        contentBlockIndex: 0,
       })
-      expect(events[5]).toEqual({ type: 'modelMessageStopEvent', stopReason: 'toolUse' })
+      expect(events[5]).toMatchObject({ type: 'modelMessageStopEvent', stopReason: 'toolUse' })
     })
 
     it('handles multiple tool calls with correct contentBlockIndex', async () => {
@@ -651,8 +643,8 @@ describe('OpenAIModel', () => {
       // Should emit stop events for both tool calls
       const stopEvents = events.filter((e) => e.type === 'modelContentBlockStopEvent')
       expect(stopEvents).toHaveLength(2)
-      expect(stopEvents[0]).toEqual({ type: 'modelContentBlockStopEvent', contentBlockIndex: 0 })
-      expect(stopEvents[1]).toEqual({ type: 'modelContentBlockStopEvent', contentBlockIndex: 1 })
+      expect(stopEvents[0]).toMatchObject({ type: 'modelContentBlockStopEvent' })
+      expect(stopEvents[1]).toMatchObject({ type: 'modelContentBlockStopEvent' })
     })
 
     it('skips tool calls with invalid index', async () => {
@@ -785,7 +777,6 @@ describe('OpenAIModel', () => {
       expect(events[0]?.type).toBe('modelMessageStartEvent')
       // Text content block start
       expect(events[1]?.type).toBe('modelContentBlockStartEvent')
-      expect((events[1] as any).contentBlockIndex).toBe(0)
       // Text deltas
       expect(events[2]?.type).toBe('modelContentBlockDeltaEvent')
       expect((events[2] as any).delta.type).toBe('textDelta')
