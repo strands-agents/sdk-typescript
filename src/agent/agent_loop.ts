@@ -5,27 +5,6 @@ import type { AgentStreamEvent } from './streaming'
 import { MaxTokensError } from '../errors'
 
 /**
- * Configuration for the agent loop.
- * @internal
- */
-interface AgentLike {
-  /**
-   * Array of conversation messages (will be mutated as the loop progresses).
-   */
-  messages: Message[]
-
-  /**
-   * Registry containing available tools.
-   */
-  toolRegistry: ToolRegistry
-
-  /**
-   * Optional system prompt to guide model behavior.
-   */
-  systemPrompt?: SystemPrompt
-}
-
-/**
  * Options for configuring the agent loop.
  */
 export interface AgentLoopOptions {
@@ -82,19 +61,13 @@ export async function* runAgentLoop(
   modelProvider: Model<BaseModelConfig>,
   options: AgentLoopOptions
 ): AsyncGenerator<AgentStreamEvent, Message[], never> {
-  const agent: AgentLike = {
-    messages: options.messages,
-    toolRegistry: options.toolRegistry,
-    ...(options.systemPrompt !== undefined && { systemPrompt: options.systemPrompt }),
-  }
-
   // Emit event before the loop starts
   yield { type: 'beforeInvocationEvent' }
 
   try {
     // Main agent loop - continues until model stops without requesting tools
     while (true) {
-      const modelResult = yield* invokeModel(modelProvider, agent)
+      const modelResult = yield* invokeModel(modelProvider, options)
 
       // Handle stop reason
       if (modelResult.stopReason === 'maxTokens') {
@@ -107,17 +80,17 @@ export async function* runAgentLoop(
       if (modelResult.stopReason !== 'toolUse') {
         // Loop terminates - no tool use requested
         // Add assistant message now that we're returning
-        agent.messages.push(modelResult.message)
-        return agent.messages
+        options.messages.push(modelResult.message)
+        return options.messages
       }
 
       // Execute tools sequentially
-      const toolResultMessage = yield* executeTools(modelResult.message, agent.toolRegistry)
+      const toolResultMessage = yield* executeTools(modelResult.message, options.toolRegistry)
 
       // Add assistant message with tool uses right before adding tool results
       // This ensures we don't have dangling tool use messages if tool execution fails
-      agent.messages.push(modelResult.message)
-      agent.messages.push(toolResultMessage)
+      options.messages.push(modelResult.message)
+      options.messages.push(toolResultMessage)
 
       // Continue loop
     }
@@ -131,23 +104,23 @@ export async function* runAgentLoop(
  * Invokes the model provider and streams all events.
  *
  * @param modelProvider - Model provider instance
- * @param agent - Agent configuration containing messages, toolRegistry, and systemPrompt
+ * @param options - Agent configuration containing messages, toolRegistry, and systemPrompt
  * @returns Object containing the assistant message and stop reason
  */
 async function* invokeModel(
   modelProvider: Model<BaseModelConfig>,
-  agent: AgentLike
+  options: AgentLoopOptions
 ): AsyncGenerator<AgentStreamEvent, { message: Message; stopReason: string | undefined }, never> {
   // Emit event before invoking model
-  yield { type: 'beforeModelEvent', messages: [...agent.messages] }
+  yield { type: 'beforeModelEvent', messages: [...options.messages] }
 
-  const toolSpecs = agent.toolRegistry.list().map((tool) => tool.toolSpec)
-  const options: StreamOptions = { toolSpecs }
-  if (agent.systemPrompt !== undefined) {
-    options.systemPrompt = agent.systemPrompt
+  const toolSpecs = options.toolRegistry.list().map((tool) => tool.toolSpec)
+  const streamOptions: StreamOptions = { toolSpecs }
+  if (options.systemPrompt !== undefined) {
+    streamOptions.systemPrompt = options.systemPrompt
   }
 
-  const streamAggregated = modelProvider.streamAggregated(agent.messages, options)
+  const streamAggregated = modelProvider.streamAggregated(options.messages, streamOptions)
 
   let assistantMessage: Message | null = null
   let stopReason: string | undefined
