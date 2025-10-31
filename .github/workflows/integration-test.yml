@@ -53,6 +53,12 @@ jobs:
          aws-region: us-east-1
          mask-aws-account-id: true
 
+      - name: Get Current Role Info
+        run: |
+          echo "Current IAM Principal:"
+          aws sts get-caller-identity
+          echo "---"
+
       - name: Checkout head commit
         uses: actions/checkout@v5
         with:
