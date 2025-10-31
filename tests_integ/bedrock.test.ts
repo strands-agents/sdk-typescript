@@ -5,7 +5,27 @@ import { BedrockModel, ContextWindowOverflowError, Message, ToolSpec, ModelStrea
 // eslint-disable-next-line no-restricted-imports
 import { collectIterator, collectGenerator } from '../src/__fixtures__/model-test-helpers'
 
-describe('BedrockModel Integration Tests', () => {
+const shouldRunTests = await (async () => {
+  // In a CI environment, we ALWAYS expect credentials to be configured.
+  // A failure is better than a skip.
+  if (process.env.CI) {
+    console.log('✅ Running in CI environment, integration tests will run.')
+    return true
+  }
+
+  // In a local environment, we check for credentials as a convenience.
+  try {
+    const credentialProvider = fromNodeProviderChain()
+    await credentialProvider()
+    console.log('✅ AWS credentials found locally, integration tests will run.')
+    return true
+  } catch {
+    console.log('⏭️ AWS credentials not available locally, integration tests will be skipped.')
+    return false
+  }
+})()
+
+describe.skipIf(!shouldRunTests)('BedrockModel Integration Tests', () => {
   let hasCredentials = false
 
   // Check credentials once before all tests
