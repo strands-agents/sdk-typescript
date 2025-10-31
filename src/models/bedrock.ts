@@ -23,13 +23,15 @@ import {
   type ContentBlockStopEvent as BedrockContentBlockStopEvent,
   type MessageStopEvent as BedrockMessageStopEvent,
   type ConverseStreamMetadataEvent as BedrockConverseStreamMetadataEvent,
-  ContentBlockDelta,
   type ToolConfiguration,
   ConverseCommand,
   type ConverseCommandOutput,
+  type ToolUseBlockDelta,
+  ReasoningContentBlockDelta,
+  ReasoningContentBlock,
 } from '@aws-sdk/client-bedrock-runtime'
 import type { Model, BaseModelConfig, StreamOptions } from '../models/model'
-import type { Message, ContentBlock } from '../types/messages'
+import type { Message, ContentBlock, ToolUseBlock } from '../types/messages'
 import type { ModelStreamEvent, ReasoningDelta, Usage } from '../models/streaming'
 import type { JSONValue } from '../types/json'
 import { ContextWindowOverflowError } from '../errors'
@@ -530,106 +532,61 @@ export class BedrockModel implements Model<BedrockModelConfig, BedrockRuntimeCli
     })
 
     // Match on content blocks
+    const blockHandlers = {
+      text: (textBlock: string, index: number): void => {
+        events.push({ type: 'modelContentBlockStartEvent', contentBlockIndex: index })
+        events.push({
+          type: 'modelContentBlockDeltaEvent',
+          contentBlockIndex: index,
+          delta: { type: 'textDelta', text: textBlock },
+        })
+        events.push({ type: 'modelContentBlockStopEvent', contentBlockIndex: index })
+      },
+      toolUse: (block: ToolUseBlock, index: number): void => {
+        events.push({
+          type: 'modelContentBlockStartEvent',
+          contentBlockIndex: index,
+          start: {
+            type: 'toolUseStart',
+            name: ensureDefined(block.name, 'toolUse.name'),
+            toolUseId: ensureDefined(block.toolUseId, 'toolUse.toolUseId'),
+          },
+        })
+        events.push({
+          type: 'modelContentBlockDeltaEvent',
+          contentBlockIndex: index,
+          delta: { type: 'toolUseInputDelta', input: JSON.stringify(ensureDefined(block.input, 'toolUse.input')) },
+        })
+        events.push({ type: 'modelContentBlockStopEvent', contentBlockIndex: index })
+      },
+      reasoningContent: (block: ReasoningContentBlock, index: number): void => {
+        if (!block) return
+        events.push({ type: 'modelContentBlockStartEvent', contentBlockIndex: index })
+        const delta: ReasoningDelta = { type: 'reasoningDelta' }
+        if (block.reasoningText) {
+          delta.text = ensureDefined(block.reasoningText.text, 'reasoningText.text')
+          if (block.reasoningText.signature) delta.signature = block.reasoningText.signature
+        } else if (block.redactedContent) {
+          delta.redactedContent = block.redactedContent
+        }
+        if (Object.keys(delta).length > 1) {
+          events.push({ type: 'modelContentBlockDeltaEvent', contentBlockIndex: index, delta })
+        }
+        events.push({ type: 'modelContentBlockStopEvent', contentBlockIndex: index })
+      },
+    }
+
     const content = ensureDefined(message.content, 'message.content')
     content.forEach((block, index) => {
-      BedrockContentBlock.visit(block, {
-        text: (textBlock) => {
-          events.push({
-            type: 'modelContentBlockStartEvent',
-            contentBlockIndex: index,
-          })
-
-          events.push({
-            type: 'modelContentBlockDeltaEvent',
-            contentBlockIndex: index,
-            delta: {
-              type: 'textDelta',
-              text: textBlock,
-            },
-          })
-
-          events.push({
-            type: 'modelContentBlockStopEvent',
-            contentBlockIndex: index,
-          })
-        },
-        toolUse: (block) => {
-          events.push({
-            type: 'modelContentBlockStartEvent',
-            contentBlockIndex: index,
-            start: {
-              type: 'toolUseStart',
-              name: ensureDefined(block.name, 'toolUse.name'),
-              toolUseId: ensureDefined(block.toolUseId, 'toolUse.toolUseId'),
-            },
-          })
-
-          events.push({
-            type: 'modelContentBlockDeltaEvent',
-            contentBlockIndex: index,
-            delta: {
-              type: 'toolUseInputDelta',
-              input: JSON.stringify(ensureDefined(block.input, 'toolUse.input')),
-            },
-          })
-
-          events.push({
-            type: 'modelContentBlockStopEvent',
-            contentBlockIndex: index,
-          })
-        },
-        reasoningContent: (block) => {
-          events.push({
-            type: 'modelContentBlockStartEvent',
-            contentBlockIndex: index,
-          })
-
-          if (block.reasoningText) {
-            const reasoningText = ensureDefined(block.reasoningText, 'reasoningContent.reasoningText')
-            events.push({
-              type: 'modelContentBlockDeltaEvent',
-              contentBlockIndex: index,
-              delta: {
-                type: 'reasoningDelta',
-                text: ensureDefined(reasoningText.text, 'reasoningText.text'),
-              },
-            })
-
-            if (reasoningText.signature) {
-              events.push({
-                type: 'modelContentBlockDeltaEvent',
-                contentBlockIndex: index,
-                delta: {
-                  type: 'reasoningDelta',
-                  signature: reasoningText.signature,
-                },
-              })
-            }
-          } else if (block.redactedContent) {
-            events.push({
-              type: 'modelContentBlockDeltaEvent',
-              contentBlockIndex: index,
-              delta: {
-                type: 'reasoningDelta',
-                redactedContent: block.redactedContent,
-              },
-            })
-          }
-
-          events.push({
-            type: 'modelContentBlockStopEvent',
-            contentBlockIndex: index,
-          })
-        },
-        image: (): void => {},
-        document: (): void => {},
-        video: (): void => {},
-        toolResult: (): void => {},
-        guardContent: (): void => {},
-        cachePoint: (): void => {},
-        citationsContent: (): void => {},
-        _: (): void => {},
-      })
+      for (const key in block) {
+        if (key in blockHandlers) {
+          const handlerKey = key as keyof typeof blockHandlers
+          // @ts-expect-error - We know the value type corresponds to the handler key.
+          blockHandlers[handlerKey](block[handlerKey], index)
+        } else {
+          console.warn(`Skipping unsupported block key: ${key}`)
+        }
+      }
     })
 
     const stopReasonRaw = ensureDefined(event.stopReason, 'event.stopReason') as string
@@ -687,13 +644,10 @@ export class BedrockModel implements Model<BedrockModelConfig, BedrockRuntimeCli
 
         const event: ModelStreamEvent = {
           type: 'modelContentBlockStartEvent',
+          contentBlockIndex: ensureDefined(data.contentBlockIndex, 'contentBlockStart.contentBlockIndex'),
         }
 
-        if (data.contentBlockIndex !== undefined) {
-          event.contentBlockIndex = data.contentBlockIndex
-        }
-
-        if (data.start && data.start.toolUse) {
+        if (data.start?.toolUse) {
           const toolUse = data.start.toolUse
           event.start = {
             type: 'toolUseStart',
@@ -708,73 +662,56 @@ export class BedrockModel implements Model<BedrockModelConfig, BedrockRuntimeCli
 
       case 'contentBlockDelta': {
         const data = eventData as BedrockContentBlockDeltaEvent
+        const contentBlockIndex = ensureDefined(data.contentBlockIndex, 'contentBlockDelta.contentBlockIndex')
         const delta = ensureDefined(data.delta, 'contentBlockDelta.delta')
-        let event: ModelStreamEvent | undefined = {
-          type: 'modelContentBlockDeltaEvent',
-          delta: { type: 'textDelta', text: '' },
-        }
-
-        if (data.contentBlockIndex !== undefined) {
-          event.contentBlockIndex = data.contentBlockIndex
-        }
-
-        const deltaKey = ensureDefined(Object.keys(delta)[0], 'delta key') as keyof ContentBlockDelta
-
-        switch (deltaKey) {
-          case 'text': {
-            event.delta = {
-              type: 'textDelta',
-              text: ensureDefined(delta.text, 'delta.text'),
-            }
-            break
-          }
-          case 'toolUse': {
-            const toolUse = ensureDefined(delta.toolUse, 'delta.toolUse')
-            event.delta = {
-              type: 'toolUseInputDelta',
-              input: ensureDefined(toolUse.input, 'toolUse.input'),
-            }
-            break
-          }
-          case 'reasoningContent': {
-            const reasoning = ensureDefined(delta.reasoningContent, 'delta.reasoningContent')
-
-            const reasoningDelta: ReasoningDelta = {
-              type: 'reasoningDelta',
-            }
+        const deltaHandlers = {
+          text: (textValue: string) => {
+            events.push({
+              type: 'modelContentBlockDeltaEvent',
+              contentBlockIndex,
+              delta: { type: 'textDelta', text: textValue },
+            })
+          },
+          toolUse: (toolUse: ToolUseBlockDelta) => {
+            if (!toolUse?.input) return
+            events.push({
+              type: 'modelContentBlockDeltaEvent',
+              contentBlockIndex,
+              delta: { type: 'toolUseInputDelta', input: toolUse.input },
+            })
+          },
+          reasoningContent: (reasoning: ReasoningContentBlockDelta) => {
+            if (!reasoning) return
+            const reasoningDelta: ReasoningDelta = { type: 'reasoningDelta' }
             if (reasoning.text) reasoningDelta.text = reasoning.text
             if (reasoning.signature) reasoningDelta.signature = reasoning.signature
             if (reasoning.redactedContent) reasoningDelta.redactedContent = reasoning.redactedContent
 
-            event.delta = reasoningDelta
-            break
-          }
+            if (Object.keys(reasoningDelta).length > 1) {
+              events.push({ type: 'modelContentBlockDeltaEvent', contentBlockIndex, delta: reasoningDelta })
+            }
+          },
+        }
 
-          default: {
-            console.warn(`Unsupported delta format: ${JSON.stringify(delta)}`)
-            event = undefined
-            break
+        for (const key in delta) {
+          if (key in deltaHandlers) {
+            const handlerKey = key as keyof typeof deltaHandlers
+            // @ts-expect-error - We know the value type corresponds to the handler key.
+            deltaHandlers[handlerKey](delta[handlerKey])
+          } else {
+            console.warn(`Skipping unsupported delta key: ${key}`)
           }
         }
 
-        if (event !== undefined) {
-          events.push(event)
-        }
         break
       }
 
       case 'contentBlockStop': {
         const data = eventData as BedrockContentBlockStopEvent
-
-        const event: ModelStreamEvent = {
+        events.push({
           type: 'modelContentBlockStopEvent',
-        }
-
-        if (data.contentBlockIndex !== undefined) {
-          event.contentBlockIndex = data.contentBlockIndex
-        }
-
-        events.push(event)
+          contentBlockIndex: ensureDefined(data.contentBlockIndex, 'contentBlockStop.contentBlockIndex'),
+        })
         break
       }
 

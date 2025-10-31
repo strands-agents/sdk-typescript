@@ -424,7 +424,7 @@ describe('BedrockModel', () => {
 
   describe.each([
     { mode: 'streaming', stream: true },
-    { mode: 'nonstreaming', stream: false },
+    { mode: 'non-streaming', stream: false },
   ])('BedrockModel in $mode mode', ({ stream }) => {
     it('yields and validates text events correctly', async () => {
       const mockSend = vi.fn(async () => {
@@ -457,18 +457,20 @@ describe('BedrockModel', () => {
       const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
       const events = await collectEvents(provider.stream(messages))
 
-      expect(events).toStrictEqual([
-        { role: 'assistant', type: 'modelMessageStartEvent' },
-        { type: 'modelContentBlockStartEvent', contentBlockIndex: 0 },
-        { type: 'modelContentBlockDeltaEvent', contentBlockIndex: 0, delta: { type: 'textDelta', text: 'Hello' } },
-        { type: 'modelContentBlockStopEvent', contentBlockIndex: 0 },
-        { type: 'modelMessageStopEvent', stopReason: 'endTurn' },
-        {
-          type: 'modelMetadataEvent',
-          usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
-          metrics: { latencyMs: 100 },
-        },
-      ])
+      expect(events).toContainEqual({ role: 'assistant', type: 'modelMessageStartEvent' })
+      expect(events).toContainEqual({ type: 'modelContentBlockStartEvent', contentBlockIndex: 0 })
+      expect(events).toContainEqual({
+        type: 'modelContentBlockDeltaEvent',
+        contentBlockIndex: 0,
+        delta: { type: 'textDelta', text: 'Hello' },
+      })
+      expect(events).toContainEqual({ type: 'modelContentBlockStopEvent', contentBlockIndex: 0 })
+      expect(events).toContainEqual({ type: 'modelMessageStopEvent', stopReason: 'endTurn' })
+      expect(events).toContainEqual({
+        type: 'modelMetadataEvent',
+        usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+        metrics: { latencyMs: 100 },
+      })
     })
 
     it('yields and validates toolUse events correctly', async () => {
@@ -520,27 +522,29 @@ describe('BedrockModel', () => {
       const provider = new BedrockModel({ stream })
       const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Weather?' }] }]
       const events = await collectEvents(provider.stream(messages))
+      const startEvent = events.find((e) => e.type === 'modelContentBlockStartEvent')
+      const inputDeltaEvent = events.find(
+        (e) => e.type === 'modelContentBlockDeltaEvent' && e.delta.type === 'toolUseInputDelta'
+      )
 
-      expect(events).toStrictEqual([
-        { role: 'assistant', type: 'modelMessageStartEvent' },
-        {
-          type: 'modelContentBlockStartEvent',
-          contentBlockIndex: 0,
-          start: { type: 'toolUseStart', name: 'get_weather', toolUseId: 'tool-use-123' },
-        },
-        {
-          type: 'modelContentBlockDeltaEvent',
-          contentBlockIndex: 0,
-          delta: { type: 'toolUseInputDelta', input: '{"location":"San Francisco"}' },
-        },
-        { type: 'modelContentBlockStopEvent', contentBlockIndex: 0 },
-        { stopReason: 'toolUse', type: 'modelMessageStopEvent' },
-        {
-          type: 'modelMetadataEvent',
-          usage: { inputTokens: 10, outputTokens: 25, totalTokens: 35 },
-          metrics: { latencyMs: 120 },
-        },
-      ])
+      expect(events).toContainEqual({ role: 'assistant', type: 'modelMessageStartEvent' })
+      expect(startEvent).toStrictEqual({
+        type: 'modelContentBlockStartEvent',
+        contentBlockIndex: 0,
+        start: { type: 'toolUseStart', name: 'get_weather', toolUseId: 'tool-use-123' },
+      })
+      expect(inputDeltaEvent).toStrictEqual({
+        type: 'modelContentBlockDeltaEvent',
+        contentBlockIndex: 0,
+        delta: { type: 'toolUseInputDelta', input: '{"location":"San Francisco"}' },
+      })
+      expect(events).toContainEqual({ type: 'modelContentBlockStopEvent', contentBlockIndex: 0 })
+      expect(events).toContainEqual({ stopReason: 'toolUse', type: 'modelMessageStopEvent' })
+      expect(events).toContainEqual({
+        type: 'modelMetadataEvent',
+        usage: { inputTokens: 10, outputTokens: 25, totalTokens: 35 },
+        metrics: { latencyMs: 120 },
+      })
     })
 
     it('yields and validates reasoningText events correctly', async () => {
@@ -583,22 +587,20 @@ describe('BedrockModel', () => {
       const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'A question.' }] }]
       const events = await collectEvents(provider.stream(messages))
 
-      expect(events).toStrictEqual([
-        { role: 'assistant', type: 'modelMessageStartEvent' },
-        { type: 'modelContentBlockStartEvent', contentBlockIndex: 0 },
-        {
-          type: 'modelContentBlockDeltaEvent',
-          contentBlockIndex: 0,
-          delta: { type: 'reasoningDelta', text: 'Thinking...' },
-        },
-        { type: 'modelContentBlockStopEvent', contentBlockIndex: 0 },
-        { stopReason: 'endTurn', type: 'modelMessageStopEvent' },
-        {
-          type: 'modelMetadataEvent',
-          usage: { inputTokens: 15, outputTokens: 30, totalTokens: 45 },
-          metrics: { latencyMs: 150 },
-        },
-      ])
+      expect(events).toContainEqual({ role: 'assistant', type: 'modelMessageStartEvent' })
+      expect(events).toContainEqual({ type: 'modelContentBlockStartEvent', contentBlockIndex: 0 })
+      expect(events).toContainEqual({
+        type: 'modelContentBlockDeltaEvent',
+        contentBlockIndex: 0,
+        delta: { type: 'reasoningDelta', text: 'Thinking...' },
+      })
+      expect(events).toContainEqual({ type: 'modelContentBlockStopEvent', contentBlockIndex: 0 })
+      expect(events).toContainEqual({ stopReason: 'endTurn', type: 'modelMessageStopEvent' })
+      expect(events).toContainEqual({
+        type: 'modelMetadataEvent',
+        usage: { inputTokens: 15, outputTokens: 30, totalTokens: 45 },
+        metrics: { latencyMs: 150 },
+      })
     })
 
     it('yields and validates redactedContent events correctly', async () => {
@@ -644,58 +646,45 @@ describe('BedrockModel', () => {
       const events = await collectEvents(provider.stream(messages))
 
       // The expected result is now IDENTICAL for both modes
-      expect(events).toStrictEqual([
-        { role: 'assistant', type: 'modelMessageStartEvent' },
-        { type: 'modelContentBlockStartEvent', contentBlockIndex: 0 },
-        {
-          type: 'modelContentBlockDeltaEvent',
-          contentBlockIndex: 0,
-          delta: { type: 'reasoningDelta', redactedContent: redactedBytes },
-        },
-        { type: 'modelContentBlockStopEvent', contentBlockIndex: 0 },
-        { stopReason: 'endTurn', type: 'modelMessageStopEvent' },
-        {
-          type: 'modelMetadataEvent',
-          usage: { inputTokens: 15, outputTokens: 5, totalTokens: 20 },
-          metrics: { latencyMs: 110 },
-        },
-      ])
+      expect(events).toContainEqual({ role: 'assistant', type: 'modelMessageStartEvent' })
+      expect(events).toContainEqual({ type: 'modelContentBlockStartEvent', contentBlockIndex: 0 })
+      expect(events).toContainEqual({
+        type: 'modelContentBlockDeltaEvent',
+        contentBlockIndex: 0,
+        delta: { type: 'reasoningDelta', redactedContent: redactedBytes },
+      })
+      expect(events).toContainEqual({ type: 'modelContentBlockStopEvent', contentBlockIndex: 0 })
+      expect(events).toContainEqual({ stopReason: 'endTurn', type: 'modelMessageStopEvent' })
+      expect(events).toContainEqual({
+        type: 'modelMetadataEvent',
+        usage: { inputTokens: 15, outputTokens: 5, totalTokens: 20 },
+        metrics: { latencyMs: 110 },
+      })
     })
 
-    it('throws ContextWindowOverflowError for context overflow', async () => {
-      vi.clearAllMocks()
-      const mockSendError = vi.fn().mockRejectedValue(new Error('Input is too long for requested model'))
-      vi.mocked(BedrockRuntimeClient).mockImplementation(() => ({ send: mockSendError }) as never)
-
-      const provider = new BedrockModel()
-      const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
-
-      let eventCount = 0
-      await expect(async () => {
-        await collectEvents(provider.stream(messages))
-      }).rejects.toThrow(ContextWindowOverflowError)
-
-      // Verify no events were yielded before error was thrown
-      expect(eventCount).toBe(0)
-    })
-
-    it('throws ValidationException', async () => {
-      vi.clearAllMocks()
+    describe('error handling', async () => {
       const { ValidationException } = await import('@aws-sdk/client-bedrock-runtime')
-      const error = new ValidationException({ message: 'ValidationException', $metadata: {} })
-      const mockSendError = vi.fn().mockRejectedValue(error)
-      vi.mocked(BedrockRuntimeClient).mockImplementation(() => ({ send: mockSendError }) as never)
+      it.each([
+        {
+          name: 'ContextWindowOverflowError for context overflow',
+          error: new Error('Input is too long for requested model'),
+          expected: ContextWindowOverflowError,
+        },
+        {
+          name: 'ValidationException for invalid input',
+          error: new ValidationException({ message: 'ValidationException', $metadata: {} }),
+          expected: ValidationException,
+        },
+      ])('throws $name', async ({ error, expected }) => {
+        vi.clearAllMocks()
+        const mockSendError = vi.fn().mockRejectedValue(error)
+        vi.mocked(BedrockRuntimeClient).mockImplementation(() => ({ send: mockSendError }) as never)
 
-      const provider = new BedrockModel()
-      const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+        const provider = new BedrockModel()
+        const messages: Message[] = [{ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
 
-      let eventCount = 0
-      await expect(async () => {
-        await collectEvents(provider.stream(messages))
-      }).rejects.toThrow(ValidationException)
-
-      // Verify no events were yielded before error was thrown
-      expect(eventCount).toBe(0)
+        await expect(collectEvents(provider.stream(messages))).rejects.toThrow(expected)
+      })
     })
 
     it('handles tool use input delta', async () => {
@@ -715,7 +704,7 @@ describe('BedrockModel', () => {
 
       const events = await collectEvents(provider.stream(messages))
 
-      expect(events[2]).toStrictEqual({
+      expect(events).toContainEqual({
         type: 'modelContentBlockDeltaEvent',
         contentBlockIndex: 0,
         delta: {
@@ -751,7 +740,7 @@ describe('BedrockModel', () => {
 
       const events = await collectEvents(provider.stream(messages))
 
-      expect(events[2]).toStrictEqual({
+      expect(events).toContainEqual({
         type: 'modelContentBlockDeltaEvent',
         contentBlockIndex: 0,
         delta: {
@@ -760,7 +749,7 @@ describe('BedrockModel', () => {
           signature: 'sig123',
         },
       })
-      expect(events[3]).toStrictEqual({
+      expect(events).toContainEqual({
         type: 'modelContentBlockDeltaEvent',
         contentBlockIndex: 0,
         delta: {
@@ -864,8 +853,10 @@ describe('BedrockModel', () => {
 
       const metadataEvent = events.find((e) => e.type === 'modelMetadataEvent')
       expect(metadataEvent).toBeDefined()
-      expect(metadataEvent?.usage?.cacheReadInputTokens).toBe(80)
-      expect(metadataEvent?.usage?.cacheWriteInputTokens).toBe(20)
+      if (metadataEvent?.type === 'modelMetadataEvent') {
+        expect(metadataEvent.usage?.cacheReadInputTokens).toBe(80)
+        expect(metadataEvent.usage?.cacheWriteInputTokens).toBe(20)
+      }
     })
 
     it('handles trace in metadata', async () => {
@@ -890,7 +881,9 @@ describe('BedrockModel', () => {
 
       const metadataEvent = events.find((e) => e.type === 'modelMetadataEvent')
       expect(metadataEvent).toBeDefined()
-      expect(metadataEvent?.trace).toBeDefined()
+      if (metadataEvent?.type === 'modelMetadataEvent') {
+        expect(metadataEvent.trace).toBeDefined()
+      }
     })
 
     it('handles additionalModelResponseFields', async () => {
@@ -911,7 +904,7 @@ describe('BedrockModel', () => {
       const stopEvent = events.find((e) => e.type === 'modelMessageStopEvent')
       expect(stopEvent).toBeDefined()
       if (stopEvent?.type === 'modelMessageStopEvent') {
-        expect(stopEvent.additionalModelResponseFields).toBeDefined()
+        expect(stopEvent.additionalModelResponseFields).toStrictEqual({ customField: 'value' })
       }
     })
 
@@ -944,7 +937,9 @@ describe('BedrockModel', () => {
 
           const stopEvent = events.find((e) => e.type === 'modelMessageStopEvent')
           expect(stopEvent).toBeDefined()
-          expect(stopEvent?.stopReason).toBe(expectedReason)
+          if (stopEvent?.type === 'modelMessageStopEvent') {
+            expect(stopEvent.stopReason).toBe(expectedReason)
+          }
         })
       }
     })

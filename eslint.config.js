@@ -25,7 +25,14 @@ export default [
     rules: {
       ...tseslint.configs.recommended.rules,
       '@typescript-eslint/no-explicit-any': 'error',
-      '@typescript-eslint/no-unused-vars': 'error',
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        {
+          argsIgnorePattern: '^_', // Ignore unused arguments prefixed with _
+          varsIgnorePattern: '^_', // Ignore unused variables prefixed with _
+          caughtErrorsIgnorePattern: '^_' // Ignore unused catch block error variables prefixed with _
+        }
+      ],
       '@typescript-eslint/explicit-function-return-type': 'error',
       '@typescript-eslint/explicit-module-boundary-types': 'error',
       'tsdoc/syntax': 'error'
