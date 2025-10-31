@@ -670,7 +670,6 @@ describe('BedrockModel', () => {
       ]
       const events = await collectIterator(provider.stream(messages))
 
-      // The expected result is now IDENTICAL for both modes
       expect(events).toContainEqual({ role: 'assistant', type: 'modelMessageStartEvent' })
       expect(events).toContainEqual({ type: 'modelContentBlockStartEvent', contentBlockIndex: 0 })
       expect(events).toContainEqual({

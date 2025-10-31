@@ -248,6 +248,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
    */
   constructor(options?: BedrockModelOptions) {
     super()
+
     const { region, clientConfig, ...modelConfig } = options ?? {}
 
     // Initialize model config with default model ID if not provided
