@@ -225,7 +225,7 @@ jobs:
           session_id: ${{ steps.process.outputs.session_id }}
           task_prompt: ${{ steps.process.outputs.prompt }}
           aws_role_arn: ${{ secrets.AWS_ROLE_ARN }}
-          sessions_bucket: ${{ secrets.SESSIONS_BUCKET }}
+          sessions_bucket: ${{ secrets.TYPESCRIPT_SESSIONS_BUCKET }}
           github_token: ${{ github.token }}
 
       - name: Remove strands-running label
