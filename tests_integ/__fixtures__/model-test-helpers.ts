@@ -7,6 +7,14 @@ import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-sec
 
 async function loadApiKeysFromSecretsManager(): Promise<void> {
   // Load API keys as environment variables from AWS Secrets Manager
+  // TEST
+  console.log("All Environment Variables:");
+  for (const key in process.env) {
+    if (Object.prototype.hasOwnProperty.call(process.env, key)) {
+      console.log(`${key}`);
+    }
+  }
+  // END_TEST
   const client = new SecretsManagerClient({
     region: process.env.AWS_REGION || 'us-east-1',
   })
