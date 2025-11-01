@@ -39,10 +39,13 @@ export type {
 } from './tools/types'
 
 // Tool interface and related types
-export type { Tool, ToolContext, ToolStreamEvent, ToolStreamGenerator } from './tools/tool'
+export type { Tool, InvokableTool, ToolContext, ToolStreamEvent, ToolStreamGenerator } from './tools/tool'
 
 // FunctionTool implementation
 export { FunctionTool } from './tools/function-tool'
+
+// Tool factory function
+export { tool } from './tools/zod-tool'
 
 // ToolRegistry implementation
 export { ToolRegistry } from './tools/registry'

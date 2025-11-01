@@ -7,6 +7,10 @@ export default defineConfig({
         test: {
           include: ['src/**/__tests__/**/*.test.ts'],
           name: { label: 'unit', color: 'green' },
+          typecheck: {
+            enabled: true,
+            include: ['src/**/__tests__**/*.test-d.ts'],
+          },
         },
       },
       {

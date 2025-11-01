@@ -208,6 +208,43 @@ describe('ClassName', () => {
 - Use descriptive test names without "should" prefix
 - Group tests by functionality or scenario
 
+### Test Batching Strategy
+
+**Rule**: When test setup cost exceeds test logic cost, you MUST batch related assertions into a single test.
+
+**You MUST batch when**:
+- Setup complexity > test logic complexity
+- Multiple assertions verify the same object state
+- Related behaviors share expensive context
+
+**You SHOULD keep separate tests for**:
+- Distinct behaviors or execution paths
+- Error conditions
+- Different input scenarios
+
+**Bad - Redundant setup**:
+```typescript
+it('has correct tool name', () => {
+  const tool = createComplexTool({ /* expensive setup */ })
+  expect(tool.toolName).toBe('testTool')
+})
+
+it('has correct description', () => {
+  const tool = createComplexTool({ /* same expensive setup */ })
+  expect(tool.description).toBe('Test description')
+})
+```
+
+**Good - Batched properties**:
+```typescript
+it('creates tool with correct properties', () => {
+  const tool = createComplexTool({ /* setup once */ })
+  expect(tool.toolName).toBe('testTool')
+  expect(tool.description).toBe('Test description')
+  expect(tool.toolSpec.name).toBe('testTool')
+})
+```
+
 ### TypeScript Type Safety
 
 **Strict requirements**:

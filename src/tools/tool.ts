@@ -1,5 +1,7 @@
 import type { ToolSpec, ToolUse, ToolResult } from './types'
 
+export type { ToolSpec } from './types'
+
 /**
  * Context provided to tool implementations during execution.
  * Contains framework-level state and information from the agent invocation.
@@ -139,4 +141,27 @@ export interface Tool {
    * ```
    */
   stream(toolContext: ToolContext): ToolStreamGenerator
+}
+
+/**
+ * Extended tool interface that supports direct invocation with type-safe input and output.
+ * This interface is useful for testing and standalone tool execution.
+ *
+ * @typeParam TInput - Type for the tool's input parameters
+ * @typeParam TReturn - Type for the tool's return value
+ */
+export interface InvokableTool<TInput, TReturn> extends Tool {
+  /**
+   * Invokes the tool directly with type-safe input and returns the unwrapped result.
+   *
+   * Unlike stream(), this method:
+   * - Returns the raw result (not wrapped in ToolResult)
+   * - Consumes async generators and returns only the final value
+   * - Lets errors throw naturally (not wrapped in error ToolResult)
+   *
+   * @param input - The input parameters for the tool
+   * @param context - Optional tool execution context
+   * @returns The unwrapped result
+   */
+  invoke(input: TInput, context?: ToolContext): Promise<TReturn>
 }

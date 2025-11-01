@@ -25,17 +25,19 @@
   },
   "scripts": {
     "build": "tsc",
-    "check": "npm run lint && npm run format && npm run type-check && npm run test:coverage",
+    "check": "npm run lint && npm run format && npm run typecheck && npm run test:coverage && npm run test:types",
     "clean": "rm -rf node_modules dist package-lock.json",
     "test": "vitest run --project unit",
     "test:watch": "vitest --project unit",
     "test:coverage": "vitest run --coverage --project unit",
+    "test:types": "vitest run --project types",
     "test:integ": "vitest run --project integ",
     "lint": "eslint src tests_integ",
     "lint:fix": "eslint src tests_integ --fix",
     "format": "prettier --write src tests_integ",
     "format:check": "prettier --check src tests_integ",
     "type-check": "tsc --noEmit",
+    "type-check:watch": "tsc --noEmit --watch",
     "prepare": "husky"
   },
   "keywords": [
@@ -73,9 +75,10 @@
   },
   "homepage": "https://github.com/strands-agents/sdk-typescript#readme",
   "dependencies": {
-    "@aws-sdk/client-bedrock-runtime": "^3.911.0"
+    "@aws-sdk/client-bedrock-runtime": "^3.911.0",
+    "zod": "^4.1.12"
   },
   "optionalDependencies": {
-    "openai": "^4.77.3"
+    "openai": "^6.7.0"
   }
 }
