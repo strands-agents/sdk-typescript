@@ -5,6 +5,10 @@ import { ContextWindowOverflowError } from '../../errors'
 import { collectIterator } from '../../__fixtures__/model-test-helpers'
 import type { Message } from '../../types/messages'
 
+// Skip all OpenAI tests in browser environment (requires Node.js APIs)
+const isNode = typeof process !== 'undefined' && typeof process.versions !== 'undefined' && !!process.versions.node
+const describeNode = isNode ? describe : describe.skip
+
 /**
  * Helper to create a mock OpenAI client with streaming support
  */
@@ -26,7 +30,7 @@ vi.mock('openai', () => {
   }
 })
 
-describe('OpenAIModel', () => {
+describeNode('OpenAIModel', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.restoreAllMocks()

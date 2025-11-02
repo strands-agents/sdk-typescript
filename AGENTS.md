@@ -680,7 +680,9 @@ For detailed command usage, see [CONTRIBUTING.md - Testing Instructions](CONTRIB
 
 Quick reference:
 ```bash
-npm test              # Run unit tests
+npm test              # Run unit tests in Node.js
+npm run test:browser  # Run unit tests in browser (Chromium via Playwright)
+npm run test:all      # Run all tests in all environments
 npm run test:integ    # Run integration tests  
 npm run test:coverage # Run tests with coverage report
 npm run lint          # Check code quality
@@ -688,6 +690,128 @@ npm run format        # Auto-fix formatting
 npm run type-check    # Verify TypeScript types
 npm run build         # Compile TypeScript
 ```
+
+## Multi-Environment Testing
+
+The SDK is designed to work seamlessly in both Node.js and browser environments. Our test suite validates this by running tests in both environments using Vitest's browser mode with Playwright.
+
+### Test Projects
+
+The test suite is organized into three projects:
+
+1. **unit-node** (green): Unit tests running in Node.js environment
+2. **unit-browser** (cyan): Same unit tests running in Chromium browser
+3. **integ** (magenta): Integration tests running in Node.js
+
+### Running Tests in Different Environments
+
+```bash
+# Run Node.js tests only (default, backward compatible)
+npm test
+
+# Run browser tests only
+npm run test:browser
+
+# Run all tests in all environments
+npm run test:all
+
+# Run integration tests
+npm run test:integ
+```
+
+### Environment-Specific Test Patterns
+
+Some tests require Node.js-specific features (like process.env, AWS SDK) and should be skipped in browser environments:
+
+```typescript
+import { describe, it, expect } from 'vitest'
+
+// Detect Node.js environment
+const isNode = typeof process !== 'undefined' && 
+               typeof process.versions !== 'undefined' && 
+               !!process.versions.node
+
+// Use conditional describe
+const describeNode = isNode ? describe : describe.skip
+
+// Tests will run in Node.js, skip in browser
+describeNode('Node.js specific features', () => {
+  it('uses environment variables', () => {
+    // This test accesses process.env
+    expect(process.env.NODE_ENV).toBeDefined()
+  })
+})
+```
+
+### Writing Environment-Agnostic Tests
+
+Most tests should work in both environments without modification:
+
+```typescript
+describe('FunctionTool', () => {
+  it('creates tool with correct properties', () => {
+    const tool = new FunctionTool({
+      name: 'testTool',
+      description: 'Test description',
+      inputSchema: { type: 'object' },
+      callback: (): string => 'result',
+    })
+    
+    // These assertions work in both Node.js and browser
+    expect(tool.toolName).toBe('testTool')
+    expect(tool.description).toBe('Test description')
+  })
+})
+```
+
+### Environment Detection in Tests
+
+When you need to conditionally test environment-specific features:
+
+```typescript
+describe('environment compatibility', () => {
+  it('correctly identifies the runtime environment', () => {
+    const isBrowser = typeof window !== 'undefined'
+    const isNode = typeof process !== 'undefined' && 
+                   typeof process.versions !== 'undefined' && 
+                   !!process.versions.node
+
+    if (isBrowser) {
+      // Browser-specific assertions
+      expect(typeof window).toBe('object')
+      expect(window.navigator).toBeDefined()
+    }
+    
+    if (isNode) {
+      // Node.js-specific assertions
+      expect(typeof process).toBe('object')
+      expect(process.version).toBeDefined()
+    }
+  })
+})
+```
+
+### Browser Testing Considerations
+
+**Performance:**
+- Browser tests are slower than Node.js tests due to browser initialization
+- First run downloads Chromium browser (~100MB)
+- Consider running browser tests separately in development
+
+**Coverage:**
+- Coverage is measured separately for Node.js and browser environments
+- The 80% coverage threshold applies to each environment
+- Use `npm run test:coverage` for Node.js coverage reports
+
+**CI/CD Integration:**
+- `npm test` runs Node.js tests (backward compatible)
+- Pre-commit hooks use `npm test` for fast feedback
+- CI workflows can run `npm run test:all` for comprehensive validation
+
+**Skipped Tests:**
+- Tests using Node.js-specific APIs (process.env, AWS SDK, etc.) skip in browser
+- This is expected behavior and does not indicate a problem
+- The core SDK functionality is validated in both environments
 
 ## Troubleshooting Common Issues
 
