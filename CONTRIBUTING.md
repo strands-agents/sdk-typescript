@@ -54,7 +54,7 @@ This will set up pre-commit hooks that automatically run tests, linting, formatt
 ### Running Tests
 
 ```bash
-# Run unit tests only
+# Run unit tests only (Node.js environment)
 npm test
 
 # Run unit tests for a single file
@@ -71,7 +71,71 @@ npm run test:integ
 
 # Run integ tests for a single file
 npm run test:integ -- tests_integ/openai.test.ts
+
+# Run browser tests (Chromium)
+npm run test:browser
+
+# Run tests in all environments (Node.js + Browser)
+npm run test:all
+
+# Run tests in all environments with coverage
+npm run test:all:coverage
 ```
+
+### Browser Testing
+
+The SDK includes browser environment testing using Vitest's browser mode with Playwright/Chromium to ensure cross-platform compatibility.
+
+**Running Browser Tests:**
+
+```bash
+# First time setup - install Playwright browsers (one-time, ~100MB)
+npx playwright install chromium
+
+# Run all tests in browser environment
+npm run test:browser
+
+# Run all tests in both Node.js and browser environments
+npm run test:all
+```
+
+**What Browser Tests Validate:**
+- SDK works in browser environments without Node.js-specific APIs
+- Model providers (OpenAI, Bedrock) function correctly in browsers
+- Tool registration and execution work client-side
+- Type definitions are browser-compatible
+- Environment-specific code paths are properly handled
+
+**Browser Testing Considerations:**
+- Browser tests are slower than Node.js tests (~30s for browser initialization)
+- First run requires downloading Chromium browser (~100MB)
+- Most tests run in both environments; a few are Node-specific (e.g., environment variable mocking)
+- Use `npm test` for fast feedback during development
+- Run `npm run test:all` before submitting PRs to validate both environments
+
+**Environment-Specific Test Patterns:**
+
+```typescript
+// Test that runs in all environments
+describe('Tool Registration', () => {
+  it('should register and execute tools', async () => {
+    // Works in both Node.js and browser
+  })
+})
+
+// Node-only test (environment variable handling)
+describe('Environment Variables', () => {
+  it('should use env vars as fallback', async () => {
+    if (typeof process === 'undefined') {
+      // Skip in browser environment
+      return
+    }
+    // Node.js-specific test
+  })
+})
+```
+
+For detailed browser testing patterns, see [AGENTS.md - Multi-Environment Testing](AGENTS.md#multi-environment-testing).
 
 ### Test Requirements
 
