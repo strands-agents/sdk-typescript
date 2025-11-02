@@ -6,9 +6,8 @@ import type { Message } from '../../types/messages'
 import type { StreamOptions } from '../model'
 import { collectIterator } from '../../__fixtures__/model-test-helpers'
 
-// Skip all Bedrock tests in browser environment (requires Node.js APIs)
+// Environment detection
 const isNode = typeof process !== 'undefined' && typeof process.versions !== 'undefined' && !!process.versions.node
-const describeNode = isNode ? describe : describe.skip
 
 /**
  * Helper function to setup mock send with custom stream generator.
@@ -89,10 +88,13 @@ vi.mock('@aws-sdk/client-bedrock-runtime', async (importOriginal) => {
   }
 })
 
-describeNode('BedrockModel', () => {
+describe('BedrockModel', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    delete process.env.AWS_REGION
+    // Clean up AWS_REGION env var in Node.js only
+    if (isNode && process.env) {
+      delete process.env.AWS_REGION
+    }
   })
 
   afterEach(() => {

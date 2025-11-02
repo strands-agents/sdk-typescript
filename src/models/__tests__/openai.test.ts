@@ -5,9 +5,8 @@ import { ContextWindowOverflowError } from '../../errors'
 import { collectIterator } from '../../__fixtures__/model-test-helpers'
 import type { Message } from '../../types/messages'
 
-// Skip all OpenAI tests in browser environment (requires Node.js APIs)
+// Environment detection
 const isNode = typeof process !== 'undefined' && typeof process.versions !== 'undefined' && !!process.versions.node
-const describeNode = isNode ? describe : describe.skip
 
 /**
  * Helper to create a mock OpenAI client with streaming support
@@ -30,18 +29,22 @@ vi.mock('openai', () => {
   }
 })
 
-describeNode('OpenAIModel', () => {
+describe('OpenAIModel', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.restoreAllMocks()
-    // Set default env var for most tests using Vitest's stubEnv
-    vi.stubEnv('OPENAI_API_KEY', 'sk-test-env')
+    // Set default env var for most tests using Vitest's stubEnv (Node.js only)
+    if (isNode) {
+      vi.stubEnv('OPENAI_API_KEY', 'sk-test-env')
+    }
   })
 
   afterEach(() => {
     vi.clearAllMocks()
-    // Restore all environment variables to their original state
-    vi.unstubAllEnvs()
+    // Restore all environment variables to their original state (Node.js only)
+    if (isNode) {
+      vi.unstubAllEnvs()
+    }
   })
 
   describe('constructor', () => {
@@ -69,15 +72,20 @@ describeNode('OpenAIModel', () => {
       )
     })
 
-    it('uses API key from environment variable', () => {
-      vi.stubEnv('OPENAI_API_KEY', 'sk-from-env')
-      new OpenAIModel({ modelId: 'gpt-4o' })
-      // OpenAI client should be called without explicit apiKey (uses env var internally)
-      expect(OpenAI).toHaveBeenCalled()
-    })
+    // Node.js-specific test: environment variable usage
+    if (isNode) {
+      it('uses API key from environment variable', () => {
+        vi.stubEnv('OPENAI_API_KEY', 'sk-from-env')
+        new OpenAIModel({ modelId: 'gpt-4o' })
+        // OpenAI client should be called without explicit apiKey (uses env var internally)
+        expect(OpenAI).toHaveBeenCalled()
+      })
+    }
 
     it('explicit API key takes precedence over environment variable', () => {
-      vi.stubEnv('OPENAI_API_KEY', 'sk-from-env')
+      if (isNode) {
+        vi.stubEnv('OPENAI_API_KEY', 'sk-from-env')
+      }
       const explicitKey = 'sk-explicit'
       new OpenAIModel({ modelId: 'gpt-4o', apiKey: explicitKey })
       expect(OpenAI).toHaveBeenCalledWith(
@@ -88,7 +96,9 @@ describeNode('OpenAIModel', () => {
     })
 
     it('throws error when no API key is available', () => {
-      vi.stubEnv('OPENAI_API_KEY', '')
+      if (isNode) {
+        vi.stubEnv('OPENAI_API_KEY', '')
+      }
       expect(() => new OpenAIModel({ modelId: 'gpt-4o' })).toThrow(
         "OpenAI API key is required. Provide it via the 'apiKey' option or set the OPENAI_API_KEY environment variable."
       )
@@ -128,7 +138,9 @@ describeNode('OpenAIModel', () => {
 
     it('does not require API key when client is provided', () => {
       vi.clearAllMocks()
-      vi.stubEnv('OPENAI_API_KEY', '')
+      if (isNode) {
+        vi.stubEnv('OPENAI_API_KEY', '')
+      }
       const mockClient = {} as OpenAI
       expect(() => new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })).not.toThrow()
     })

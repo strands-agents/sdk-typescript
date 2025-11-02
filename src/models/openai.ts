@@ -211,8 +211,11 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
       this._client = client
     } else {
       // Check if API key is available when creating a new client
-      // eslint-disable-next-line no-undef
-      if (!apiKey && !process.env.OPENAI_API_KEY) {
+      // In browsers, apiKey must be provided directly
+      // In Node.js, can use OPENAI_API_KEY environment variable as fallback
+      const hasEnvKey =
+        typeof process !== 'undefined' && typeof process.env !== 'undefined' && process.env.OPENAI_API_KEY
+      if (!apiKey && !hasEnvKey) {
         throw new Error(
           "OpenAI API key is required. Provide it via the 'apiKey' option or set the OPENAI_API_KEY environment variable."
         )
