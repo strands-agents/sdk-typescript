@@ -34,6 +34,7 @@
     "test:integ": "vitest run --project integ",
     "test:browser": "vitest run --project unit-browser",
     "test:all": "vitest run",
+    "test:all:coverage": "vitest run --coverage",
     "lint": "eslint src tests_integ",
     "lint:fix": "eslint src tests_integ --fix",
     "format": "prettier --write src tests_integ",
