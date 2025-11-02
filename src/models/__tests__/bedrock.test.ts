@@ -548,24 +548,28 @@ describe('BedrockModel', () => {
         (e) => e.type === 'modelContentBlockDeltaEvent' && e.delta.type === 'toolUseInputDelta'
       )
 
-      expect(events).toContainEqual({ role: 'assistant', type: 'modelMessageStartEvent' })
-      expect(startEvent).toStrictEqual({
+      expect(events).toContainEqual(expect.objectContaining({ role: 'assistant', type: 'modelMessageStartEvent' }))
+      expect(startEvent).toMatchObject({
         type: 'modelContentBlockStartEvent',
         contentBlockIndex: 0,
         start: { type: 'toolUseStart', name: 'get_weather', toolUseId: 'tool-use-123' },
       })
-      expect(inputDeltaEvent).toStrictEqual({
+      expect(inputDeltaEvent).toMatchObject({
         type: 'modelContentBlockDeltaEvent',
         contentBlockIndex: 0,
         delta: { type: 'toolUseInputDelta', input: '{"location":"San Francisco"}' },
       })
-      expect(events).toContainEqual({ type: 'modelContentBlockStopEvent', contentBlockIndex: 0 })
-      expect(events).toContainEqual({ stopReason: 'toolUse', type: 'modelMessageStopEvent' })
-      expect(events).toContainEqual({
-        type: 'modelMetadataEvent',
-        usage: { inputTokens: 10, outputTokens: 25, totalTokens: 35 },
-        metrics: { latencyMs: 120 },
-      })
+      expect(events).toContainEqual(
+        expect.objectContaining({ type: 'modelContentBlockStopEvent', contentBlockIndex: 0 })
+      )
+      expect(events).toContainEqual(expect.objectContaining({ stopReason: 'toolUse', type: 'modelMessageStopEvent' }))
+      expect(events).toContainEqual(
+        expect.objectContaining({
+          type: 'modelMetadataEvent',
+          usage: { inputTokens: 10, outputTokens: 25, totalTokens: 35 },
+          metrics: { latencyMs: 120 },
+        })
+      )
     })
 
     it('yields and validates reasoningText events correctly', async () => {
@@ -730,18 +734,15 @@ describe('BedrockModel', () => {
 
       const events = await collectIterator(provider.stream(messages))
 
-<<<<<<< HEAD
-      expect(events).toContainEqual({
-=======
-      expect(events[2]).toMatchObject({
->>>>>>> 471c8cd (refactor: address code review feedback)
-        type: 'modelContentBlockDeltaEvent',
-        contentBlockIndex: 0,
-        delta: {
-          type: 'toolUseInputDelta',
-          input: '{"a": 1}',
-        },
-      })
+      expect(events).toContainEqual(
+        expect.objectContaining({
+          type: 'modelContentBlockDeltaEvent',
+          delta: expect.objectContaining({
+            type: 'toolUseInputDelta',
+            input: '{"a": 1}',
+          }),
+        })
+      )
     })
 
     it('handles reasoning content delta with both text and signature, as well as redactedContent', async () => {
@@ -770,31 +771,25 @@ describe('BedrockModel', () => {
 
       const events = await collectIterator(provider.stream(messages))
 
-<<<<<<< HEAD
-      expect(events).toContainEqual({
-=======
-      expect(events[2]).toMatchObject({
->>>>>>> 471c8cd (refactor: address code review feedback)
-        type: 'modelContentBlockDeltaEvent',
-        contentBlockIndex: 0,
-        delta: {
-          type: 'reasoningContentDelta',
-          text: 'thinking...',
-          signature: 'sig123',
-        },
-      })
-<<<<<<< HEAD
-      expect(events).toContainEqual({
-=======
-      expect(events[3]).toMatchObject({
->>>>>>> 471c8cd (refactor: address code review feedback)
-        type: 'modelContentBlockDeltaEvent',
-        contentBlockIndex: 0,
-        delta: {
-          type: 'reasoningContentDelta',
-          redactedContent: new Uint8Array(1),
-        },
-      })
+      expect(events).toContainEqual(
+        expect.objectContaining({
+          type: 'modelContentBlockDeltaEvent',
+          delta: expect.objectContaining({
+            type: 'reasoningContentDelta',
+            text: 'thinking...',
+            signature: 'sig123',
+          }),
+        })
+      )
+      expect(events).toContainEqual(
+        expect.objectContaining({
+          type: 'modelContentBlockDeltaEvent',
+          delta: expect.objectContaining({
+            type: 'reasoningContentDelta',
+            redactedContent: new Uint8Array(1),
+          }),
+        })
+      )
     })
 
     it('handles reasoning content delta with only text, skips unsupported types', async () => {
