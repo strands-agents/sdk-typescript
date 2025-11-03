@@ -19,8 +19,12 @@ export default defineConfig({
           name: { label: 'unit-browser', color: 'cyan' },
           browser: {
             enabled: true,
-            name: 'chromium',
             provider: 'playwright',
+            instances: [
+              {
+                browser: 'chromium',
+              },
+            ],
           },
         },
       },

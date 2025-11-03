@@ -86,17 +86,26 @@ npm run test:all:coverage
 
 The SDK includes browser environment testing using Vitest's browser mode with Playwright/Chromium to ensure cross-platform compatibility.
 
+**First-Time Setup:**
+
+Before running browser tests for the first time, you need to install Playwright browsers:
+
+```bash
+# Install Playwright browsers (one-time, ~100MB download)
+npm run test:browser:install
+```
+
 **Running Browser Tests:**
 
 ```bash
-# First time setup - install Playwright browsers (one-time, ~100MB)
-npx playwright install chromium
-
 # Run all tests in browser environment
 npm run test:browser
 
 # Run all tests in both Node.js and browser environments
 npm run test:all
+
+# Run all tests with coverage
+npm run test:all:coverage
 ```
 
 **What Browser Tests Validate:**
