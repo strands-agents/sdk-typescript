@@ -50,6 +50,7 @@
   "author": "Strands Agents",
   "license": "Apache-2.0",
   "devDependencies": {
+    "@aws-sdk/client-secrets-manager": "^3.921.0",
     "@aws-sdk/credential-providers": "^3.913.0",
     "@types/json-schema": "^7.0.15",
     "@types/node": "^24.6.0",
