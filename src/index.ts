@@ -75,3 +75,6 @@ export type { BaseModelConfig, StreamOptions, Model } from './models/model'
 // Bedrock model provider
 export { BedrockModel as BedrockModel } from './models/bedrock'
 export type { BedrockModelConfig, BedrockModelOptions } from './models/bedrock'
+
+// Environment detection utilities
+export { isNode, isBrowser } from './__fixtures__/environment'

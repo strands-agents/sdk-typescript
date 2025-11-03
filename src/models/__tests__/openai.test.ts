@@ -1,12 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import OpenAI from 'openai'
+import { isNode } from '../../__fixtures__/environment'
 import { OpenAIModel } from '../openai'
 import { ContextWindowOverflowError } from '../../errors'
 import { collectIterator } from '../../__fixtures__/model-test-helpers'
 import type { Message } from '../../types/messages'
-
-// Environment detection
-const isNode = typeof process !== 'undefined' && typeof process.versions !== 'undefined' && !!process.versions.node
 
 /**
  * Helper to create a mock OpenAI client with streaming support
