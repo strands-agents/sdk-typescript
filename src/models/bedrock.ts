@@ -36,12 +36,12 @@ import type { Message, ContentBlock } from '../types/messages'
 import type {
   ModelStreamEvent,
   Usage,
-  ModelContentBlockStart,
-  ModelMessageStop,
-  ModelContentBlockStop,
-  ModelContentBlockDelta,
-  ModelMetadata,
-  ReasoningContent,
+  ModelContentBlockStartEventData,
+  ModelMessageStopEventData,
+  ModelContentBlockStopEventData,
+  ModelContentBlockDeltaEventData,
+  ModelMetadataEventData,
+  ReasoningContentData,
 } from '../models/streaming'
 import {
   ModelMessageStartEvent,
@@ -637,7 +637,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
         if (!block) return
         events.push(new ModelContentBlockStartEvent({ contentBlockIndex: index }))
 
-        const reasoningData: ReasoningContent = {}
+        const reasoningData: ReasoningContentData = {}
         if (block.reasoningText) {
           reasoningData.text = ensureDefined(block.reasoningText.text, 'reasoningText.text')
           if (block.reasoningText.signature !== undefined) {
@@ -674,13 +674,13 @@ export class BedrockModel extends Model<BedrockModelConfig> {
     })
 
     const stopReasonRaw = ensureDefined(event.stopReason, 'event.stopReason') as string
-    const modelMessageStop: ModelMessageStop = {
+    const modelMessageStop: ModelMessageStopEventData = {
       stopReason: this._transformStopReason(stopReasonRaw, event),
     }
     events.push(new ModelMessageStopEvent(modelMessageStop))
 
     const usage = ensureDefined(event.usage, 'output.usage')
-    const modelMetadata: ModelMetadata = {
+    const modelMetadata: ModelMetadataEventData = {
       usage: {
         inputTokens: ensureDefined(usage.inputTokens, 'usage.inputTokens'),
         outputTokens: ensureDefined(usage.outputTokens, 'usage.outputTokens'),
@@ -726,7 +726,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
       case 'contentBlockStart': {
         const data = eventData as BedrockContentBlockStartEvent
 
-        const modelContentBlockStartEvent: ModelContentBlockStart = {}
+        const modelContentBlockStartEvent: ModelContentBlockStartEventData = {}
 
         if (data.contentBlockIndex !== undefined) {
           modelContentBlockStartEvent.contentBlockIndex = data.contentBlockIndex
@@ -750,7 +750,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
         const delta = ensureDefined(data.delta, 'contentBlockDelta.delta')
         const deltaHandlers = {
           text: (textValue: string): void => {
-            const modelContentBlockDelta: ModelContentBlockDelta = {
+            const modelContentBlockDelta: ModelContentBlockDeltaEventData = {
               delta: new TextDelta({ text: textValue }),
             }
             if (contentBlockIndex !== undefined) {
@@ -760,7 +760,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
           },
           toolUse: (toolUse: ToolUseBlockDelta): void => {
             if (!toolUse?.input) return
-            const modelContentBlockDelta: ModelContentBlockDelta = {
+            const modelContentBlockDelta: ModelContentBlockDeltaEventData = {
               delta: new ToolUseInputDelta({ input: toolUse.input }),
             }
             if (contentBlockIndex !== undefined) {
@@ -770,13 +770,13 @@ export class BedrockModel extends Model<BedrockModelConfig> {
           },
           reasoningContent: (reasoning: ReasoningContentBlockDelta): void => {
             if (!reasoning) return
-            const reasoningData: ReasoningContent = {}
+            const reasoningData: ReasoningContentData = {}
             if (reasoning.text !== undefined) reasoningData.text = reasoning.text
             if (reasoning.signature !== undefined) reasoningData.signature = reasoning.signature
             if (reasoning.redactedContent !== undefined) reasoningData.redactedContent = reasoning.redactedContent
 
             if (Object.keys(reasoningData).length > 0) {
-              const modelContentBlockDelta: ModelContentBlockDelta = {
+              const modelContentBlockDelta: ModelContentBlockDeltaEventData = {
                 delta: new ReasoningContentDelta(reasoningData),
               }
               if (contentBlockIndex !== undefined) {
@@ -802,7 +802,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
 
       case 'contentBlockStop': {
         const data = eventData as BedrockContentBlockStopEvent
-        const modelContentBlockStop: ModelContentBlockStop = {}
+        const modelContentBlockStop: ModelContentBlockStopEventData = {}
         if (data.contentBlockIndex !== undefined) {
           modelContentBlockStop.contentBlockIndex = data.contentBlockIndex
         }
@@ -814,7 +814,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
         const data = eventData as BedrockMessageStopEvent
 
         const stopReasonRaw = ensureDefined(data.stopReason, 'messageStop.stopReason') as string
-        const modelMessageStop: ModelMessageStop = {
+        const modelMessageStop: ModelMessageStopEventData = {
           stopReason: this._transformStopReason(stopReasonRaw, data),
         }
 
