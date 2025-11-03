@@ -26,9 +26,19 @@ interface AgentLike {
 }
 
 /**
- * Options for configuring the agent loop.
+ * Result returned by the agent loop.
  */
-export type AgentLoopOptions = AgentLike
+export interface AgentResult {
+  /**
+   * The stop reason from the final model response.
+   */
+  stopReason: string | undefined
+
+  /**
+   * The last message added to the messages array.
+   */
+  lastMessage: Message
+}
 
 /**
  * Async generator that coordinates execution between model providers and tools.
@@ -47,12 +57,12 @@ export type AgentLoopOptions = AgentLike
  * array when we're certain we can complete tool execution or are returning. This prevents
  * dangling tool use messages if an error occurs during tool execution.
  *
- * The messages array passed in options is mutated in place, so callers can access the
+ * The messages array passed in agent is mutated in place, so callers can access the
  * updated messages directly from the original array after the loop completes.
  *
- * @param modelProvider - Model provider instance for generating responses
- * @param options - Configuration options including messages, toolRegistry, and systemPrompt
- * @returns Async generator that yields AgentStreamEvent objects
+ * @param model - Model provider instance for generating responses
+ * @param agent - Configuration including messages, toolRegistry, and systemPrompt
+ * @returns Async generator that yields AgentStreamEvent objects and returns AgentResult
  *
  * @example
  * ```typescript
@@ -67,16 +77,16 @@ export type AgentLoopOptions = AgentLike
  * ```
  */
 export async function* runAgentLoop(
-  modelProvider: Model<BaseModelConfig>,
-  options: AgentLike
-): AsyncGenerator<AgentStreamEvent, void, never> {
+  model: Model<BaseModelConfig>,
+  agent: AgentLike
+): AsyncGenerator<AgentStreamEvent, AgentResult, never> {
   // Emit event before the loop starts
   yield { type: 'beforeInvocationEvent' }
 
   try {
     // Main agent loop - continues until model stops without requesting tools
     while (true) {
-      const modelResult = yield* invokeModel(modelProvider, options)
+      const modelResult = yield* invokeModel(model, agent)
 
       // Handle stop reason
       if (modelResult.stopReason === 'maxTokens') {
@@ -89,17 +99,20 @@ export async function* runAgentLoop(
       if (modelResult.stopReason !== 'toolUse') {
         // Loop terminates - no tool use requested
         // Add assistant message now that we're returning
-        options.messages.push(modelResult.message)
-        return
+        agent.messages.push(modelResult.message)
+        return {
+          stopReason: modelResult.stopReason,
+          lastMessage: modelResult.message,
+        }
       }
 
       // Execute tools sequentially
-      const toolResultMessage = yield* executeTools(modelResult.message, options.toolRegistry)
+      const toolResultMessage = yield* executeTools(modelResult.message, agent.toolRegistry)
 
       // Add assistant message with tool uses right before adding tool results
       // This ensures we don't have dangling tool use messages if tool execution fails
-      options.messages.push(modelResult.message)
-      options.messages.push(toolResultMessage)
+      agent.messages.push(modelResult.message)
+      agent.messages.push(toolResultMessage)
 
       // Continue loop
     }
@@ -112,24 +125,24 @@ export async function* runAgentLoop(
 /**
  * Invokes the model provider and streams all events.
  *
- * @param modelProvider - Model provider instance
- * @param options - Agent configuration containing messages, toolRegistry, and systemPrompt
+ * @param model - Model provider instance
+ * @param agent - Agent configuration containing messages, toolRegistry, and systemPrompt
  * @returns Object containing the assistant message and stop reason
  */
 async function* invokeModel(
-  modelProvider: Model<BaseModelConfig>,
-  options: AgentLike
+  model: Model<BaseModelConfig>,
+  agent: AgentLike
 ): AsyncGenerator<AgentStreamEvent, { message: Message; stopReason: string | undefined }, never> {
   // Emit event before invoking model
-  yield { type: 'beforeModelEvent', messages: [...options.messages] }
+  yield { type: 'beforeModelEvent', messages: [...agent.messages] }
 
-  const toolSpecs = options.toolRegistry.list().map((tool) => tool.toolSpec)
+  const toolSpecs = agent.toolRegistry.list().map((tool) => tool.toolSpec)
   const streamOptions: StreamOptions = { toolSpecs }
-  if (options.systemPrompt !== undefined) {
-    streamOptions.systemPrompt = options.systemPrompt
+  if (agent.systemPrompt !== undefined) {
+    streamOptions.systemPrompt = agent.systemPrompt
   }
 
-  const streamAggregated = modelProvider.streamAggregated(options.messages, streamOptions)
+  const streamAggregated = model.streamAggregated(agent.messages, streamOptions)
 
   let assistantMessage: Message | null = null
   let stopReason: string | undefined
@@ -146,7 +159,7 @@ async function* invokeModel(
       yield value as AgentStreamEvent
 
       // Capture stop reason from modelMessageStopEvent
-      if ('type' in value && value.type === 'modelMessageStopEvent') {
+      if (value.type === 'modelMessageStopEvent') {
         stopReason = value.stopReason
       }
     } else {
@@ -178,9 +191,7 @@ async function* executeTools(
   yield { type: 'beforeToolsEvent', message: assistantMessage }
 
   // Extract tool use blocks from assistant message
-  const toolUseBlocks = assistantMessage.content.filter(
-    (block): block is ToolUseBlock => block.type === 'toolUseBlock'
-  )
+  const toolUseBlocks = assistantMessage.content.filter((block): block is ToolUseBlock => block.type === 'toolUseBlock')
 
   if (toolUseBlocks.length === 0) {
     // No tool use blocks found even though stopReason is toolUse

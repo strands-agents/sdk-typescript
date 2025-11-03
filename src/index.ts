@@ -87,6 +87,5 @@ export type {
   AfterInvocationEvent,
 } from './agent/streaming'
 
-// Agent loop function and options
-export { runAgentLoop } from './agent/agent_loop'
-export type { AgentLoopOptions } from './agent/agent_loop'
+// Agent result type
+export type { AgentResult } from './agent/agent_loop'
