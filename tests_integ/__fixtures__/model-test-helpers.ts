@@ -7,20 +7,11 @@ import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-sec
 
 async function loadApiKeysFromSecretsManager(): Promise<void> {
   // Load API keys as environment variables from AWS Secrets Manager
-  // TEST
-  console.log("All Environment Variables:");
-  for (const key in process.env) {
-    if (Object.prototype.hasOwnProperty.call(process.env, key)) {
-      console.log(`${key}`);
-    }
-  }
-  // END_TEST
   const client = new SecretsManagerClient({
     region: process.env.AWS_REGION || 'us-east-1',
   })
   console.log('Loading API keys from Secrets Manager')
 
-  // if (process.env.STRANDS_TEST_API_KEYS_SECRET_NAME) {
   try {
     const secretName = 'model-provider-api-key'
     const command = new GetSecretValueCommand({
@@ -41,11 +32,6 @@ async function loadApiKeysFromSecretsManager(): Promise<void> {
   } catch (e) {
     console.warn('Error retrieving secret', e)
   }
-  // else {
-  //   console.log('==============================================================================================================================================================================================================================================================================')
-  //   console.log('No STRANDS_TEST_API_KEYS_SECRET_NAME environment variable found')
-  //   console.log('==============================================================================================================================================================================================================================================================================')
-  // }
 
   /*
    * Validate that required environment variables are set when running in GitHub Actions.

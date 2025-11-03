@@ -80,6 +80,44 @@ jobs:
               labels: ['strands-running']
             });
 
+      - name: Configure Credentials
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+         role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+         aws-region: us-east-1
+         mask-aws-account-id: true
+
+      - name: Assume Cross-Account Role and Fetch Secrets
+        id: fetch-secrets
+        run: |
+          echo "Assuming cross-account role for Secrets Manager access..."
+          
+          # Assume the cross-account role
+          CREDS=$(aws sts assume-role \
+            --role-arn "arn:aws:iam::430853190378:role/ApiKeySecretReader" \
+            --role-session-name "GitHubActionsSecretsAccess" \
+            --duration-seconds 3600)
+          
+          # Extract credentials
+          export AWS_ACCESS_KEY_ID=$(echo $CREDS | jq -r '.Credentials.AccessKeyId')
+          export AWS_SECRET_ACCESS_KEY=$(echo $CREDS | jq -r '.Credentials.SecretAccessKey')
+          export AWS_SESSION_TOKEN=$(echo $CREDS | jq -r '.Credentials.SessionToken')
+          
+          echo "Successfully assumed cross-account role"
+          
+          # Fetch the secret
+          echo "Fetching API keys from Secrets Manager..."
+          SECRET_VALUE=$(aws secretsmanager get-secret-value \
+            --secret-id "model-provider-api-key" \
+            --region us-east-1 \
+            --query 'SecretString' \
+            --output text)
+          
+          # Parse and export API keys
+          echo "OPENAI_API_KEY=$(echo $SECRET_VALUE | jq -r '.openai // empty')" >> $GITHUB_ENV
+          
+          echo "Successfully loaded API keys"
+
       - name: Determine PR context
         id: determine-context
         uses: actions/github-script@v7
