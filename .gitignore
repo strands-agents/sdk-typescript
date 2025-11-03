@@ -9,6 +9,7 @@ yarn-error.log*
 dist/
 build/
 *.tsbuildinfo
+__pycache__
 
 # Coverage reports
 coverage/

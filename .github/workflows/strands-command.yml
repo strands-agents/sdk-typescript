@@ -66,8 +66,9 @@ jobs:
       contents: write
       issues: write
       pull-requests: write
-      id-token: write  # Required for OIDC
+      id-token: write # Required for OIDC
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - name: Add strands-running label
         uses: actions/github-script@v8
@@ -167,7 +168,7 @@ jobs:
         with:
           script: |
             const fs = require('fs');
-            
+
             try {
               const mode = '${{ steps.determine-context.outputs.mode }}';
               const targetIssueId = '${{ steps.determine-context.outputs.target_issue_id }}';
@@ -217,21 +218,15 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Execute strands command
-        uses: strands-agents/strands-action@main
-        timeout-minutes: 60
+      - name: Run Strands Agent
+        uses: ./.github/actions/strands-agent-runner
         with:
-          aws_role_arn: ${{ secrets.AWS_ROLE_ARN }}
           system_prompt: ${{ steps.process.outputs.system_prompt }}
           session_id: ${{ steps.process.outputs.session_id }}
-          session_s3_bucket: ${{ secrets.TYPESCRIPT_SESSIONS_BUCKET }}
-          thinking_type: "enabled"
-          budget_tokens: "8000"
-          model: "global.anthropic.claude-sonnet-4-5-20250929-v1:0"
-          anthropic_beta: "interleaved-thinking-2025-05-14"
-          max_tokens: "64000"
-          tools: "str_replace_based_edit_tool,shell,http_request,create_issue,get_issue,update_issue,list_issues,add_issue_comment,get_issue_comments,create_pull_request,get_pull_request,update_pull_request,list_pull_requests,get_pr_review_and_comments,reply_to_review_comment,notebook,handoff_to_user"
-          task: ${{ steps.process.outputs.prompt }}
+          task_prompt: ${{ steps.process.outputs.prompt }}
+          aws_role_arn: ${{ secrets.AWS_ROLE_ARN }}
+          sessions_bucket: ${{ secrets.TYPESCRIPT_SESSIONS_BUCKET }}
+          github_token: ${{ github.token }}
 
       - name: Remove strands-running label
         if: always()
@@ -248,4 +243,3 @@ jobs:
             } catch (error) {
               console.log('Label removal failed (may not exist):', error.message);
             }
-
