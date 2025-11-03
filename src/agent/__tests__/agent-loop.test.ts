@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { runAgentLoop } from '../agent_loop'
+import { runAgentLoop } from '../agent-loop'
 import { TestModelProvider, collectGenerator } from '../../__fixtures__/model-test-helpers'
 import { createMockTool } from '../../__fixtures__/tool-helpers'
 import { ToolRegistry } from '../../tools/registry'

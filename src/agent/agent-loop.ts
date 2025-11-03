@@ -1,8 +1,9 @@
-import type { Message, SystemPrompt, ToolUseBlock, ToolResultBlock } from '../types/messages'
-import type { Model, BaseModelConfig, StreamOptions } from '../models/model'
+import type { Message, SystemPrompt, ToolResultBlock, ToolUseBlock } from '../types/messages'
+import type { BaseModelConfig, Model, StreamOptions } from '../models/model'
 import type { ToolRegistry } from '../tools/registry'
 import type { AgentStreamEvent } from './streaming'
 import { MaxTokensError } from '../errors'
+import type { AgentResult } from '../types/agent'
 
 /**
  * Internal configuration for the agent loop.
@@ -26,21 +27,6 @@ interface AgentLike {
 }
 
 /**
- * Result returned by the agent loop.
- */
-export interface AgentResult {
-  /**
-   * The stop reason from the final model response.
-   */
-  stopReason: string | undefined
-
-  /**
-   * The last message added to the messages array.
-   */
-  lastMessage: Message
-}
-
-/**
  * Async generator that coordinates execution between model providers and tools.
  *
  * The agent loop manages the conversation flow by:
@@ -48,17 +34,10 @@ export interface AgentResult {
  * 2. Executing tools when the model requests them
  * 3. Continuing the loop until the model completes without tool use
  *
- * This implements a transactional message handling pattern where messages are only
- * added to the array after the model provider returns its first event. This ensures
- * that if the model provider throws an error before yielding any events, the messages
- * array remains unchanged.
- *
- * Additionally, assistant messages containing tool uses are only committed to the messages
- * array when we're certain we can complete tool execution or are returning. This prevents
- * dangling tool use messages if an error occurs during tool execution.
- *
- * The messages array passed in agent is mutated in place, so callers can access the
- * updated messages directly from the original array after the loop completes.
+ * An explicit goal of this method is to always leave the message array in a way that
+ * the agent can be reinvoked with a user prompt after this method completes. To that end
+ * assistant messages containing tool uses are only added after tool execution succeeds
+ * with valid toolResponses
  *
  * @param model - Model provider instance for generating responses
  * @param agent - Configuration including messages, toolRegistry, and systemPrompt
@@ -238,7 +217,7 @@ async function* executeTool(
 
   if (!tool) {
     // Tool not found - return error result instead of throwing
-    const errorResult: ToolResultBlock = {
+    return {
       type: 'toolResultBlock',
       toolUseId: toolUseBlock.toolUseId,
       status: 'error',
@@ -249,7 +228,6 @@ async function* executeTool(
         },
       ],
     }
-    return errorResult
   }
 
   // Execute tool and collect result
@@ -269,7 +247,7 @@ async function* executeTool(
 
   if (!toolResult) {
     // Tool didn't return a result - return error result instead of throwing
-    const errorResult: ToolResultBlock = {
+    return {
       type: 'toolResultBlock',
       toolUseId: toolUseBlock.toolUseId,
       status: 'error',
@@ -280,16 +258,13 @@ async function* executeTool(
         },
       ],
     }
-    return errorResult
   }
 
   // Create ToolResultBlock from ToolResult
-  const toolResultBlock: ToolResultBlock = {
+  return {
     type: 'toolResultBlock',
     toolUseId: toolResult.toolUseId,
     status: toolResult.status,
     content: toolResult.content,
   }
-
-  return toolResultBlock
 }

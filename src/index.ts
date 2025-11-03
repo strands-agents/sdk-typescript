@@ -88,4 +88,5 @@ export type {
 } from './agent/streaming'
 
 // Agent result type
-export type { AgentResult } from './agent/agent_loop'
+
+export type { AgentResult } from './types/agent'
