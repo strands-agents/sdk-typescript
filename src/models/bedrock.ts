@@ -41,7 +41,7 @@ import type {
   ModelContentBlockStopEventData,
   ModelContentBlockDeltaEventData,
   ModelMetadataEventData,
-  ReasoningContentData,
+  ReasoningContentDeltaData,
 } from '../models/streaming'
 import {
   ModelMessageStartEvent,
@@ -637,7 +637,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
         if (!block) return
         events.push(new ModelContentBlockStartEvent({ contentBlockIndex: index }))
 
-        const reasoningData: ReasoningContentData = {}
+        const reasoningData: ReasoningContentDeltaData = {}
         if (block.reasoningText) {
           reasoningData.text = ensureDefined(block.reasoningText.text, 'reasoningText.text')
           if (block.reasoningText.signature !== undefined) {
@@ -770,7 +770,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
           },
           reasoningContent: (reasoning: ReasoningContentBlockDelta): void => {
             if (!reasoning) return
-            const reasoningData: ReasoningContentData = {}
+            const reasoningData: ReasoningContentDeltaData = {}
             if (reasoning.text !== undefined) reasoningData.text = reasoning.text
             if (reasoning.signature !== undefined) reasoningData.signature = reasoning.signature
             if (reasoning.redactedContent !== undefined) reasoningData.redactedContent = reasoning.redactedContent

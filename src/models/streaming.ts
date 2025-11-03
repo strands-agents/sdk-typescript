@@ -304,7 +304,7 @@ export type ContentBlockStart = ToolUseStart
 /**
  * Data interface for tool use start.
  */
-export interface ToolUseData {
+export interface ToolUseStartData {
   /**
    * The name of the tool being used.
    */
@@ -319,7 +319,7 @@ export interface ToolUseData {
 /**
  * Information about a tool use that is starting.
  */
-export class ToolUseStart implements ToolUseData {
+export class ToolUseStart implements ToolUseStartData {
   /**
    * Discriminator for tool use start.
    */
@@ -340,7 +340,7 @@ export class ToolUseStart implements ToolUseData {
    *
    * @param data - The tool use start data
    */
-  constructor({ name, toolUseId }: ToolUseData) {
+  constructor({ name, toolUseId }: ToolUseStartData) {
     this.name = name
     this.toolUseId = toolUseId
   }
@@ -357,7 +357,7 @@ export type ContentBlockDelta = TextDelta | ToolUseInputDelta | ReasoningContent
 /**
  * Data interface for text delta.
  */
-export interface TextData {
+export interface TextDeltaData {
   /**
    * Incremental text content.
    */
@@ -368,7 +368,7 @@ export interface TextData {
  * Text delta within a content block.
  * Represents incremental text content from the model.
  */
-export class TextDelta implements TextData {
+export class TextDelta implements TextDeltaData {
   /**
    * Discriminator for text delta.
    */
@@ -384,7 +384,7 @@ export class TextDelta implements TextData {
    *
    * @param data - The text delta data
    */
-  constructor({ text }: TextData) {
+  constructor({ text }: TextDeltaData) {
     this.text = text
   }
 }
@@ -392,7 +392,7 @@ export class TextDelta implements TextData {
 /**
  * Data interface for tool use input delta.
  */
-export interface ToolUseInputData {
+export interface ToolUseInputDeltaData {
   /**
    * Partial JSON string representing the tool input.
    */
@@ -403,7 +403,7 @@ export interface ToolUseInputData {
  * Tool use input delta within a content block.
  * Represents incremental tool input being generated.
  */
-export class ToolUseInputDelta implements ToolUseInputData {
+export class ToolUseInputDelta implements ToolUseInputDeltaData {
   /**
    * Discriminator for tool use input delta.
    */
@@ -419,7 +419,7 @@ export class ToolUseInputDelta implements ToolUseInputData {
    *
    * @param data - The tool use input delta data
    */
-  constructor({ input }: ToolUseInputData) {
+  constructor({ input }: ToolUseInputDeltaData) {
     this.input = input
   }
 }
@@ -427,7 +427,7 @@ export class ToolUseInputDelta implements ToolUseInputData {
 /**
  * Data interface for reasoning content delta.
  */
-export interface ReasoningContentData {
+export interface ReasoningContentDeltaData {
   /**
    * Incremental reasoning text.
    */
@@ -448,7 +448,7 @@ export interface ReasoningContentData {
  * Reasoning content delta within a content block.
  * Represents incremental reasoning or thinking content.
  */
-export class ReasoningContentDelta implements ReasoningContentData {
+export class ReasoningContentDelta implements ReasoningContentDeltaData {
   /**
    * Discriminator for reasoning delta.
    */
@@ -474,7 +474,7 @@ export class ReasoningContentDelta implements ReasoningContentData {
    *
    * @param data - The reasoning content delta data
    */
-  constructor({ text, signature, redactedContent }: ReasoningContentData) {
+  constructor({ text, signature, redactedContent }: ReasoningContentDeltaData) {
     if (text !== undefined) {
       this.text = text
     }
