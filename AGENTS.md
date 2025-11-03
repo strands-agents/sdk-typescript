@@ -151,10 +151,10 @@ src/
 ```
 
 **Function ordering within files**:
-- Order functions from most general to most specific (top-down reading)
-- Public/exported functions should come before private helper functions
-- Main entry point functions should be at the top of the file
-- Helper functions should follow in order of their usage
+- Functions MUST be ordered from most general to most specific (top-down reading)
+- Public/exported functions MUST appear before private helper functions
+- Main entry point functions MUST be at the top of the file
+- Helper functions SHOULD follow in order of their usage
 
 **Example**:
 ```typescript

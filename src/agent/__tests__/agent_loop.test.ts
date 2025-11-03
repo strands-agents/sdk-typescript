@@ -64,7 +64,7 @@ describe('runAgentLoop', () => {
         },
       ]
 
-      const { items, result } = await collectGenerator(runAgentLoop(provider, { messages, toolRegistry: registry }))
+      const { items } = await collectGenerator(runAgentLoop(provider, { messages, toolRegistry: registry }))
 
       // Verify agent events are present
       expect(items).toContainEqual({ type: 'beforeInvocationEvent' })
@@ -79,8 +79,8 @@ describe('runAgentLoop', () => {
       expect(items).toContainEqual({ type: 'modelMessageStartEvent', role: 'assistant' })
 
       // Verify final messages array contains assistant response
-      expect(result).toHaveLength(2)
-      expect(result[1]).toEqual({
+      expect(messages).toHaveLength(2)
+      expect(messages[1]).toEqual({
         type: 'message',
         role: 'assistant',
         content: [{ type: 'textBlock', text: 'Hello, how can I help?' }],
@@ -140,7 +140,7 @@ describe('runAgentLoop', () => {
         },
       ]
 
-      const { items, result } = await collectGenerator(runAgentLoop(provider, { messages, toolRegistry: registry }))
+      const { items } = await collectGenerator(runAgentLoop(provider, { messages, toolRegistry: registry }))
 
       // Verify tool execution events
       expect(items).toContainEqual({
@@ -161,19 +161,19 @@ describe('runAgentLoop', () => {
       expect(modelEvents.length).toBeGreaterThanOrEqual(2)
 
       // Verify final messages include tool use and result
-      expect(result).toHaveLength(4) // user, assistant with tool use, user with tool result, assistant with final response
-      if (!result[1] || !result[1].content[0]) {
+      expect(messages).toHaveLength(4) // user, assistant with tool use, user with tool result, assistant with final response
+      if (!messages[1] || !messages[1].content[0]) {
         throw new Error('Expected content at index 1')
       }
-      expect(result[1].content[0]).toMatchObject({
+      expect(messages[1].content[0]).toMatchObject({
         type: 'toolUseBlock',
         name: 'calculator',
         toolUseId: 'tool-1',
       })
-      if (!result[2] || !result[2].content[0]) {
+      if (!messages[2] || !messages[2].content[0]) {
         throw new Error('Expected content at index 2')
       }
-      expect(result[2].content[0]).toMatchObject({
+      expect(messages[2].content[0]).toMatchObject({
         type: 'toolResultBlock',
         toolUseId: 'tool-1',
         status: 'success',
@@ -250,10 +250,10 @@ describe('runAgentLoop', () => {
         },
       ]
 
-      const { result } = await collectGenerator(runAgentLoop(provider, { messages, toolRegistry: registry }))
+      await collectGenerator(runAgentLoop(provider, { messages, toolRegistry: registry }))
 
       // Verify both tool results are present
-      const toolResultMessage = result[2]
+      const toolResultMessage = messages[2]
       if (!toolResultMessage) {
         throw new Error('Expected tool result message at index 2')
       }
@@ -338,7 +338,7 @@ describe('runAgentLoop', () => {
         },
       ]
 
-      const { items, result } = await collectGenerator(runAgentLoop(provider, { messages, toolRegistry: registry }))
+      const { items } = await collectGenerator(runAgentLoop(provider, { messages, toolRegistry: registry }))
 
       // Verify only one beforeInvocationEvent
       const beforeEvents = items.filter((e) => e.type === 'beforeInvocationEvent')
@@ -349,7 +349,7 @@ describe('runAgentLoop', () => {
       expect(modelEvents).toHaveLength(3)
 
       // Verify final message count (1 user + 2 assistant tool use + 2 user tool results + 1 assistant final)
-      expect(result).toHaveLength(6)
+      expect(messages).toHaveLength(6)
     })
   })
 
@@ -375,14 +375,14 @@ describe('runAgentLoop', () => {
         },
       ]
 
-      const { result } = await collectGenerator(runAgentLoop(provider, { messages, toolRegistry: registry }))
+      await collectGenerator(runAgentLoop(provider, { messages, toolRegistry: registry }))
 
       // Verify assistant message was added
-      expect(result).toHaveLength(2)
-      if (!result[1]) {
+      expect(messages).toHaveLength(2)
+      if (!messages[1]) {
         throw new Error('Expected assistant message at index 1')
       }
-      expect(result[1].role).toBe('assistant')
+      expect(messages[1].role).toBe('assistant')
     })
   })
 
@@ -561,10 +561,10 @@ describe('runAgentLoop', () => {
         },
       ]
 
-      const { result } = await collectGenerator(runAgentLoop(provider, { messages, toolRegistry: registry }))
+      await collectGenerator(runAgentLoop(provider, { messages, toolRegistry: registry }))
 
       // Verify error tool result was returned
-      const toolResultMessage = result[2]
+      const toolResultMessage = messages[2]
       if (!toolResultMessage || !toolResultMessage.content[0]) {
         throw new Error('Expected tool result message at index 2')
       }
@@ -575,7 +575,7 @@ describe('runAgentLoop', () => {
       })
 
       // Verify loop continued and completed
-      expect(result).toHaveLength(4) // user, assistant tool use, user error result, assistant final
+      expect(messages).toHaveLength(4) // user, assistant tool use, user error result, assistant final
     })
   })
 
@@ -664,12 +664,12 @@ describe('runAgentLoop', () => {
         },
       ]
 
-      const { result } = await collectGenerator(runAgentLoop(provider, { messages, toolRegistry: registry }))
+      await collectGenerator(runAgentLoop(provider, { messages, toolRegistry: registry }))
 
-      if (!result[1] || !result[1].content[0]) {
+      if (!messages[1] || !messages[1].content[0]) {
         throw new Error('Expected content at index 1')
       }
-      expect(result[1].content[0]).toEqual({
+      expect(messages[1].content[0]).toEqual({
         type: 'textBlock',
         text: 'Hello',
       })
@@ -721,11 +721,11 @@ describe('runAgentLoop', () => {
         },
       ]
 
-      const { result } = await collectGenerator(runAgentLoop(provider, { messages, toolRegistry: registry }))
+      await collectGenerator(runAgentLoop(provider, { messages, toolRegistry: registry }))
 
-      const toolUseBlock = result[1]?.content[0]
+      const toolUseBlock = messages[1]?.content[0]
       if (!toolUseBlock || toolUseBlock.type !== 'toolUseBlock') {
-        throw new Error('Expected tool use block at result[1].content[0]')
+        throw new Error('Expected tool use block at messages[1].content[0]')
       }
       expect(toolUseBlock).toEqual({
         type: 'toolUseBlock',
@@ -762,19 +762,19 @@ describe('runAgentLoop', () => {
         },
       ]
 
-      const { result } = await collectGenerator(runAgentLoop(provider, { messages, toolRegistry: registry }))
+      await collectGenerator(runAgentLoop(provider, { messages, toolRegistry: registry }))
 
-      if (!result[1] || !result[1].content[0]) {
+      if (!messages[1] || !messages[1].content[0]) {
         throw new Error('Expected content blocks at index 1')
       }
-      expect(result[1].content[0]).toEqual({
+      expect(messages[1].content[0]).toEqual({
         type: 'reasoningBlock',
         text: 'thinking...',
       })
-      if (!result[1].content[1]) {
+      if (!messages[1].content[1]) {
         throw new Error('Expected second content block at index 1')
       }
-      expect(result[1].content[1]).toEqual({
+      expect(messages[1].content[1]).toEqual({
         type: 'textBlock',
         text: 'Response',
       })

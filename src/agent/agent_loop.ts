@@ -5,9 +5,10 @@ import type { AgentStreamEvent } from './streaming'
 import { MaxTokensError } from '../errors'
 
 /**
- * Options for configuring the agent loop.
+ * Internal configuration for the agent loop.
+ * @internal
  */
-export interface AgentLoopOptions {
+interface AgentLike {
   /**
    * Array of conversation messages (will be mutated as the loop progresses).
    */
@@ -23,6 +24,11 @@ export interface AgentLoopOptions {
    */
   systemPrompt?: SystemPrompt
 }
+
+/**
+ * Options for configuring the agent loop.
+ */
+export type AgentLoopOptions = AgentLike
 
 /**
  * Async generator that coordinates execution between model providers and tools.
@@ -41,9 +47,12 @@ export interface AgentLoopOptions {
  * array when we're certain we can complete tool execution or are returning. This prevents
  * dangling tool use messages if an error occurs during tool execution.
  *
+ * The messages array passed in options is mutated in place, so callers can access the
+ * updated messages directly from the original array after the loop completes.
+ *
  * @param modelProvider - Model provider instance for generating responses
  * @param options - Configuration options including messages, toolRegistry, and systemPrompt
- * @returns Async generator that yields AgentStreamEvent objects and returns the final messages array
+ * @returns Async generator that yields AgentStreamEvent objects
  *
  * @example
  * ```typescript
@@ -54,13 +63,13 @@ export interface AgentLoopOptions {
  * for await (const event of runAgentLoop(provider, { messages, toolRegistry: registry })) {
  *   console.log('Event:', event.type)
  * }
- * // Returns final messages array
+ * // Messages array is mutated in place and contains the full conversation
  * ```
  */
 export async function* runAgentLoop(
   modelProvider: Model<BaseModelConfig>,
-  options: AgentLoopOptions
-): AsyncGenerator<AgentStreamEvent, Message[], never> {
+  options: AgentLike
+): AsyncGenerator<AgentStreamEvent, void, never> {
   // Emit event before the loop starts
   yield { type: 'beforeInvocationEvent' }
 
@@ -81,7 +90,7 @@ export async function* runAgentLoop(
         // Loop terminates - no tool use requested
         // Add assistant message now that we're returning
         options.messages.push(modelResult.message)
-        return options.messages
+        return
       }
 
       // Execute tools sequentially
@@ -109,7 +118,7 @@ export async function* runAgentLoop(
  */
 async function* invokeModel(
   modelProvider: Model<BaseModelConfig>,
-  options: AgentLoopOptions
+  options: AgentLike
 ): AsyncGenerator<AgentStreamEvent, { message: Message; stopReason: string | undefined }, never> {
   // Emit event before invoking model
   yield { type: 'beforeModelEvent', messages: [...options.messages] }
