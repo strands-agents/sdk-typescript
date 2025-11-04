@@ -181,7 +181,7 @@ export abstract class Model<T extends BaseModelConfig> {
               role: messageRole,
               content: [...contentBlocks],
             }
-            return { message, stopReason: event.stopReason ?? 'unknown' }
+            return { message, stopReason: event.stopReason! }
           }
           break
 
