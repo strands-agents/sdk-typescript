@@ -38,6 +38,7 @@ describe('runAgentLoop', () => {
       expect(items).toContainEqual({
         type: 'afterModelEvent',
         message: expect.objectContaining({ role: 'assistant' }),
+        stopReason: expect.any(String),
       })
       expect(items).toContainEqual({ type: 'afterInvocationEvent' })
 

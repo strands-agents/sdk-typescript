@@ -122,7 +122,7 @@ async function* invokeModel(
 
   const { message, stopReason } = yield* agent.model.streamAggregated(agent.messages, streamOptions)
 
-  yield { type: 'afterModelEvent', message }
+  yield { type: 'afterModelEvent', message, stopReason }
 
   return { message, stopReason }
 }

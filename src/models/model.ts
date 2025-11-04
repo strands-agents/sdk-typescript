@@ -103,7 +103,6 @@ export abstract class Model<T extends BaseModelConfig> {
     let accumulatedToolInput = ''
     let toolName = ''
     let toolUseId = ''
-    let stopReason: string | undefined
     let accumulatedReasoning: {
       text?: string
       signature?: string
@@ -175,15 +174,14 @@ export abstract class Model<T extends BaseModelConfig> {
         }
 
         case 'modelMessageStopEvent':
-          // Capture stop reason and complete message
-          stopReason = event.stopReason
+          // Complete message and return with stop reason
           if (messageRole) {
             const message: Message = {
               type: 'message',
               role: messageRole,
               content: [...contentBlocks],
             }
-            return { message, stopReason: stopReason ?? 'unknown' }
+            return { message, stopReason: event.stopReason ?? 'unknown' }
           }
           break
 

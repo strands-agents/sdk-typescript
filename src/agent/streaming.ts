@@ -48,6 +48,11 @@ export interface AfterModelEvent {
    * The assistant message returned by the model.
    */
   message: Message
+
+  /**
+   * The stop reason from the model response.
+   */
+  stopReason: string
 }
 
 /**
