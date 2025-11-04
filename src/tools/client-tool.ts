@@ -1,7 +1,13 @@
-import type { Tool, ToolContext, ToolStreamEvent } from './tool'
-import type { ToolSpec, ToolResult } from './types'
+import type { ToolContext, ToolStreamEvent } from './tool'
+import type { ToolResult } from './types'
 import type { JSONSchema, JSONValue } from '../types/json'
 import { deepCopy } from '../types/json'
+
+/**
+ * Type alias for the async generator returned by tool stream methods.
+ * Yields ToolStreamEvents during execution and returns a ToolResult.
+ */
+export type ToolStreamGenerator = AsyncGenerator<ToolStreamEvent, ToolResult, never>
 
 /**
  * Callback function for FunctionTool implementations.
@@ -37,7 +43,7 @@ import { deepCopy } from '../types/json'
  * }
  * ```
  */
-export type FunctionToolCallback = (
+export type ClientToolCallback = (
   input: unknown,
   toolContext: ToolContext
 ) => AsyncGenerator<JSONValue, JSONValue, never> | Promise<JSONValue> | JSONValue
@@ -45,7 +51,7 @@ export type FunctionToolCallback = (
 /**
  * Configuration options for creating a FunctionTool.
  */
-export interface FunctionToolConfig {
+export interface ClientToolConfig {
   /** The unique name of the tool */
   name: string
   /** Human-readable description of the tool's purpose */
@@ -53,7 +59,7 @@ export interface FunctionToolConfig {
   /** JSON Schema defining the expected input structure */
   inputSchema: JSONSchema
   /** Function that implements the tool logic */
-  callback: FunctionToolCallback
+  callback: ClientToolCallback
 }
 
 /**
@@ -85,26 +91,11 @@ export interface FunctionToolConfig {
  * })
  * ```
  */
-export class FunctionTool implements Tool {
-  /**
-   * The unique name of the tool.
-   */
-  readonly name: string
-
-  /**
-   * Human-readable description of what the tool does.
-   */
-  readonly description: string
-
-  /**
-   * OpenAPI JSON specification for the tool.
-   */
-  readonly toolSpec: ToolSpec
-
+export class ClientTool {
   /**
    * The callback function that implements the tool's logic.
    */
-  private readonly _callback: FunctionToolCallback
+  private readonly _callback: ClientToolCallback
 
   /**
    * Creates a new FunctionTool instance.
@@ -125,25 +116,45 @@ export class FunctionTool implements Tool {
    * })
    * ```
    */
-  constructor(config: FunctionToolConfig) {
-    this.name = config.name
-    this.description = config.description
-    this.toolSpec = {
-      name: config.name,
-      description: config.description,
-      inputSchema: config.inputSchema,
-    }
+  constructor(config: ClientToolConfig) {
     this._callback = config.callback
   }
 
   /**
    * Executes the tool with streaming support.
-   * Handles all callback patterns (async generator, promise, sync) and converts results to ToolResult.
+   * Yields zero or more ToolStreamEvents during execution, then returns
+   * exactly one ToolResult as the final value.
    *
    * @param toolContext - Context information including the tool use request and invocation state
    * @returns Async generator that yields ToolStreamEvents and returns a ToolResult
+   *
+   * @example
+   * ```typescript
+   * const context = {
+   *   toolUse: {
+   *     name: 'calculator',
+   *     toolUseId: 'calc-123',
+   *     input: { operation: 'add', a: 5, b: 3 }
+   *   },
+   *   invocationState: {}
+   * }
+   *
+   * // The return value is only accessible via explicit .next() calls
+   * const generator = tool.stream(context)
+   * for await (const event of generator) {
+   *   // Only yields are captured here
+   *   console.log('Progress:', event.data)
+   * }
+   * // Or manually handle the return value:
+   * let result = await generator.next()
+   * while (!result.done) {
+   *   console.log('Progress:', result.value.data)
+   *   result = await generator.next()
+   * }
+   * console.log('Final result:', result.value.status)
+   * ```
    */
-  async *stream(toolContext: ToolContext): AsyncGenerator<ToolStreamEvent, ToolResult, unknown> {
+  async *stream(toolContext: ToolContext): ToolStreamGenerator {
     const { toolUse } = toolContext
 
     try {

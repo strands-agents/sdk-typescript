@@ -1,5 +1,5 @@
 import type { Message, ContentBlock, Role, SystemPrompt } from '../types/messages'
-import type { ToolSpec, ToolChoice } from '../tools/types'
+import type { ToolChoice, ToolSpec } from '../tools/types'
 import type { ModelStreamEvent } from './streaming'
 
 /**

@@ -5,6 +5,9 @@
  * public APIs and functionality.
  */
 
+// Agent class
+export { Agent } from './agent'
+
 // Error types
 export { ContextWindowOverflowError } from './errors'
 
@@ -46,9 +49,6 @@ export { FunctionTool } from './tools/function-tool'
 
 // Tool factory function
 export { tool } from './tools/zod-tool'
-
-// ToolRegistry implementation
-export { ToolRegistry } from './tools/registry'
 
 // Streaming event types
 export type {

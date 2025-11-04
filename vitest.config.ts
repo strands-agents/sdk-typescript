@@ -5,6 +5,16 @@ export default defineConfig({
     projects: [
       {
         test: {
+          includeSource: ['src/**/*.{js,ts}'],
+          name: { label: 'source', color: 'blue' },
+          typecheck: {
+            enabled: true,
+            include: ['src/**/*.d.ts'],
+          },
+        },
+      },
+      {
+        test: {
           include: ['src/**/__tests__/**/*.test.ts'],
           name: { label: 'unit', color: 'green' },
           typecheck: {
@@ -40,5 +50,8 @@ export default defineConfig({
       },
     },
     environment: 'node',
+  },
+  define: {
+    'import.meta.vitest': 'undefined',
   },
 })

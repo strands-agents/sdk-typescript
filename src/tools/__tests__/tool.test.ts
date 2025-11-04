@@ -14,10 +14,10 @@ describe('FunctionTool', () => {
         inputSchema: { type: 'object' },
         callback: (): string => 'result',
       })
-      expect(tool.toolName).toBeTruthy()
-      expect(typeof tool.toolName).toBe('string')
-      expect(tool.toolName.length).toBeGreaterThan(0)
-      expect(tool.toolName).toBe('testTool')
+      expect(tool.name).toBeTruthy()
+      expect(typeof tool.name).toBe('string')
+      expect(tool.name.length).toBeGreaterThan(0)
+      expect(tool.name).toBe('testTool')
     })
 
     it('has a non-empty description', () => {
@@ -62,7 +62,7 @@ describe('FunctionTool', () => {
         inputSchema: { type: 'object' },
         callback: (): string => 'result',
       })
-      expect(tool.toolName).toBe(tool.toolSpec.name)
+      expect(tool.name).toBe(tool.toolSpec.name)
     })
 
     it('has matching description and toolSpec.description', () => {
