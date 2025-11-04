@@ -7,7 +7,7 @@ export interface AgentResult {
   /**
    * The stop reason from the final model response.
    */
-  stopReason: string | undefined
+  stopReason: string
 
   /**
    * The last message added to the messages array.

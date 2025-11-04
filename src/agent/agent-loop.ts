@@ -11,6 +11,11 @@ import type { AgentResult } from '../types/agent'
  */
 interface AgentLike {
   /**
+   * Model provider instance for generating responses.
+   */
+  model: Model<BaseModelConfig>
+
+  /**
    * Array of conversation messages (will be mutated as the loop progresses).
    */
   messages: Message[]
@@ -39,8 +44,7 @@ interface AgentLike {
  * assistant messages containing tool uses are only added after tool execution succeeds
  * with valid toolResponses
  *
- * @param model - Model provider instance for generating responses
- * @param agent - Configuration including messages, toolRegistry, and systemPrompt
+ * @param agent - Configuration including model, messages, toolRegistry, and systemPrompt
  * @returns Async generator that yields AgentStreamEvent objects and returns AgentResult
  *
  * @example
@@ -49,23 +53,20 @@ interface AgentLike {
  * const registry = new ToolRegistry()
  * const provider = new BedrockModel(config)
  *
- * for await (const event of runAgentLoop(provider, { messages, toolRegistry: registry })) {
+ * for await (const event of runAgentLoop({ model: provider, messages, toolRegistry: registry })) {
  *   console.log('Event:', event.type)
  * }
  * // Messages array is mutated in place and contains the full conversation
  * ```
  */
-export async function* runAgentLoop(
-  model: Model<BaseModelConfig>,
-  agent: AgentLike
-): AsyncGenerator<AgentStreamEvent, AgentResult, never> {
+export async function* runAgentLoop(agent: AgentLike): AsyncGenerator<AgentStreamEvent, AgentResult, never> {
   // Emit event before the loop starts
   yield { type: 'beforeInvocationEvent' }
 
   try {
     // Main agent loop - continues until model stops without requesting tools
     while (true) {
-      const modelResult = yield* invokeModel(model, agent)
+      const modelResult = yield* invokeModel(agent)
 
       // Handle stop reason
       if (modelResult.stopReason === 'maxTokens') {
@@ -104,14 +105,12 @@ export async function* runAgentLoop(
 /**
  * Invokes the model provider and streams all events.
  *
- * @param model - Model provider instance
- * @param agent - Agent configuration containing messages, toolRegistry, and systemPrompt
+ * @param agent - Agent configuration containing model, messages, toolRegistry, and systemPrompt
  * @returns Object containing the assistant message and stop reason
  */
 async function* invokeModel(
-  model: Model<BaseModelConfig>,
   agent: AgentLike
-): AsyncGenerator<AgentStreamEvent, { message: Message; stopReason: string | undefined }, never> {
+): AsyncGenerator<AgentStreamEvent, { message: Message; stopReason: string }, never> {
   // Emit event before invoking model
   yield { type: 'beforeModelEvent', messages: [...agent.messages] }
 
@@ -121,39 +120,11 @@ async function* invokeModel(
     streamOptions.systemPrompt = agent.systemPrompt
   }
 
-  const streamAggregated = model.streamAggregated(agent.messages, streamOptions)
+  const { message, stopReason } = yield* agent.model.streamAggregated(agent.messages, streamOptions)
 
-  let assistantMessage: Message | null = null
-  let stopReason: string | undefined
+  yield { type: 'afterModelEvent', message }
 
-  // Stream model events and collect the assistant message
-  // We need to manually iterate to capture both yields and the return value
-  let done = false
-  while (!done) {
-    const { value, done: isDone } = await streamAggregated.next()
-    done = isDone ?? false
-
-    if (!done) {
-      // Yield all events (ModelStreamEvent or ContentBlock)
-      yield value as AgentStreamEvent
-
-      // Capture stop reason from modelMessageStopEvent
-      if (value.type === 'modelMessageStopEvent') {
-        stopReason = value.stopReason
-      }
-    } else {
-      // This is the returned Message
-      assistantMessage = value as Message
-    }
-  }
-
-  if (!assistantMessage) {
-    throw new Error('Model stream ended without returning a message')
-  }
-
-  yield { type: 'afterModelEvent', message: assistantMessage }
-
-  return { message: assistantMessage, stopReason }
+  return { message, stopReason }
 }
 
 /**
