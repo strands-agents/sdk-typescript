@@ -793,6 +793,14 @@ If TypeScript compilation fails:
 - Fix broken things immediately when you find them. Don't ask permission to fix bugs.
 
 
+#### Code Comments
+ - NEVER add comments explaining that something is "improved", "better", "new", "enhanced", or referencing what it used to be
+ - Comments should explain WHAT the code does or WHY it exists, not how it's better than something else
+ - YOU MUST NEVER add comments about what used to be there or how something has changed. 
+ - YOU MUST NEVER refer to temporal context in comments (like "recently refactored" "moved") or code. Comments should be evergreen and describe the code as it is.
+ - YOU MUST NEVER write overly verbose comments. Use concise language.
+
+
 ### Code Review Considerations
 
 When responding to PR feedback:
