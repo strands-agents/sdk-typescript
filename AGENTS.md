@@ -689,6 +689,56 @@ describe('BedrockModel', () => {
 })
 ```
 
+### Test Model Providers
+
+**When to use each test provider:**
+- **`TestMessageModelProvider`**: For agent loop tests and high-level flows where you care about complete messages
+- **`TestModelProvider`**: For low-level event streaming tests where you need precise control over individual events
+
+#### TestMessageModelProvider - Message-Level Testing
+
+For agent loop tests that need complete messages, use `TestMessageModelProvider` to avoid manually constructing events:
+
+```typescript
+import { TestMessageModelProvider } from '../__fixtures__/test-message-model'
+
+// ✅ Good - Simple and readable
+const provider = new TestMessageModelProvider({
+  type: 'message',
+  role: 'assistant',
+  content: [{ type: 'textBlock', text: 'Hello' }]
+})
+
+// ✅ Good - Multi-turn with builder pattern
+const provider = new TestMessageModelProvider()
+  .addTurn(toolUseMessage)  // stopReason auto-derived as 'toolUse'
+  .addTurn(finalMessage)     // stopReason auto-derived as 'endTurn'
+
+// ✅ Good - Explicit stopReason when needed
+const provider = new TestMessageModelProvider()
+  .addTurn(partialMessage, 'maxTokens')
+
+// ✅ Good - Error handling
+const provider = new TestMessageModelProvider()
+  .addTurn(successMessage)
+  .addTurn(new Error('Model failed'))
+
+// ❌ Bad - Manual event generation (verbose and error-prone)
+const provider = new TestModelProvider(async function* () {
+  yield { type: 'modelMessageStartEvent', role: 'assistant' }
+  yield { type: 'modelContentBlockStartEvent', contentBlockIndex: 0 }
+  yield { type: 'modelContentBlockDeltaEvent', delta: { type: 'textDelta', text: 'Hello' }, contentBlockIndex: 0 }
+  yield { type: 'modelContentBlockStopEvent', contentBlockIndex: 0 }
+  yield { type: 'modelMessageStopEvent', stopReason: 'endTurn' }
+})
+```
+
+**Key features:**
+- **Auto-derive stopReason**: Automatically determines `'toolUse'` vs `'endTurn'` based on message content
+- **Multi-turn support**: Single turn reuses indefinitely, multiple turns advance sequentially
+- **Builder pattern**: Fluent API with method chaining
+- **Error support**: Test error scenarios by passing Error objects
+
 ## Things to Do
 
 ✅ **Do**:
