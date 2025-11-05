@@ -9,7 +9,7 @@
 export { Agent } from './agent'
 
 // Error types
-export { ContextWindowOverflowError } from './errors'
+export { ContextWindowOverflowError, MaxTokensError } from './errors'
 
 // JSON types
 export type { JSONSchema, JSONValue } from './types/json'
@@ -75,3 +75,18 @@ export type { BaseModelConfig, StreamOptions, Model } from './models/model'
 // Bedrock model provider
 export { BedrockModel as BedrockModel } from './models/bedrock'
 export type { BedrockModelConfig, BedrockModelOptions } from './models/bedrock'
+
+// Agent streaming event types
+export type {
+  AgentStreamEvent,
+  BeforeModelEvent,
+  AfterModelEvent,
+  BeforeToolsEvent,
+  AfterToolsEvent,
+  BeforeInvocationEvent,
+  AfterInvocationEvent,
+} from './agent/streaming'
+
+// Agent result type
+
+export type { AgentResult } from './types/agent'

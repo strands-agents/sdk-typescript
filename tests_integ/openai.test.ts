@@ -578,13 +578,16 @@ describe.skipIf(!hasApiKey)('OpenAIModel Integration Tests', () => {
 
       // Verify the complete message structure is returned
       expect(result).toMatchObject({
-        type: 'message',
-        role: 'assistant',
-        content: expect.arrayContaining([
-          expect.objectContaining({
-            type: 'textBlock',
-          }),
-        ]),
+        stopReason: 'endTurn',
+        message: {
+          type: 'message',
+          role: 'assistant',
+          content: expect.arrayContaining([
+            expect.objectContaining({
+              type: 'textBlock',
+            }),
+          ]),
+        },
       })
     })
   })

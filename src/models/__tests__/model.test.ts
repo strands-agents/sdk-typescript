@@ -40,11 +40,14 @@ describe('Model', () => {
           { type: 'modelMessageStopEvent', stopReason: 'endTurn' },
         ])
 
-        // Verify the returned message
+        // Verify the returned result
         expect(result).toEqual({
-          type: 'message',
-          role: 'assistant',
-          content: [{ type: 'textBlock', text: 'Hello' }],
+          message: {
+            type: 'message',
+            role: 'assistant',
+            content: [{ type: 'textBlock', text: 'Hello' }],
+          },
+          stopReason: 'endTurn',
         })
       })
     })
@@ -82,12 +85,15 @@ describe('Model', () => {
         expect(items).toContainEqual({ type: 'textBlock', text: 'Second' })
 
         expect(result).toEqual({
-          type: 'message',
-          role: 'assistant',
-          content: [
-            { type: 'textBlock', text: 'First' },
-            { type: 'textBlock', text: 'Second' },
-          ],
+          message: {
+            type: 'message',
+            role: 'assistant',
+            content: [
+              { type: 'textBlock', text: 'First' },
+              { type: 'textBlock', text: 'Second' },
+            ],
+          },
+          stopReason: 'endTurn',
         })
       })
     })
@@ -131,16 +137,19 @@ describe('Model', () => {
         })
 
         expect(result).toEqual({
-          type: 'message',
-          role: 'assistant',
-          content: [
-            {
-              type: 'toolUseBlock',
-              toolUseId: 'tool1',
-              name: 'get_weather',
-              input: { location: 'Paris' },
-            },
-          ],
+          message: {
+            type: 'message',
+            role: 'assistant',
+            content: [
+              {
+                type: 'toolUseBlock',
+                toolUseId: 'tool1',
+                name: 'get_weather',
+                input: { location: 'Paris' },
+              },
+            ],
+          },
+          stopReason: 'toolUse',
         })
       })
     })
@@ -179,15 +188,18 @@ describe('Model', () => {
         })
 
         expect(result).toEqual({
-          type: 'message',
-          role: 'assistant',
-          content: [
-            {
-              type: 'reasoningBlock',
-              text: 'Thinking about the problem',
-              signature: 'sig1',
-            },
-          ],
+          message: {
+            type: 'message',
+            role: 'assistant',
+            content: [
+              {
+                type: 'reasoningBlock',
+                text: 'Thinking about the problem',
+                signature: 'sig1',
+              },
+            ],
+          },
+          stopReason: 'endTurn',
         })
       })
 
@@ -218,14 +230,17 @@ describe('Model', () => {
         })
 
         expect(result).toEqual({
-          type: 'message',
-          role: 'assistant',
-          content: [
-            {
-              type: 'reasoningBlock',
-              redactedContent: new Uint8Array(0),
-            },
-          ],
+          message: {
+            type: 'message',
+            role: 'assistant',
+            content: [
+              {
+                type: 'reasoningBlock',
+                redactedContent: new Uint8Array(0),
+              },
+            ],
+          },
+          stopReason: 'endTurn',
         })
       })
 
@@ -256,14 +271,17 @@ describe('Model', () => {
         })
 
         expect(result).toEqual({
-          type: 'message',
-          role: 'assistant',
-          content: [
-            {
-              type: 'reasoningBlock',
-              text: 'Thinking',
-            },
-          ],
+          message: {
+            type: 'message',
+            role: 'assistant',
+            content: [
+              {
+                type: 'reasoningBlock',
+                text: 'Thinking',
+              },
+            ],
+          },
+          stopReason: 'endTurn',
         })
       })
     })
@@ -318,13 +336,16 @@ describe('Model', () => {
         expect(items).toContainEqual({ type: 'reasoningBlock', text: 'Reasoning', signature: 'sig1' })
 
         expect(result).toEqual({
-          type: 'message',
-          role: 'assistant',
-          content: [
-            { type: 'textBlock', text: 'Hello' },
-            { type: 'toolUseBlock', toolUseId: 'tool1', name: 'get_weather', input: { city: 'Paris' } },
-            { type: 'reasoningBlock', text: 'Reasoning', signature: 'sig1' },
-          ],
+          message: {
+            type: 'message',
+            role: 'assistant',
+            content: [
+              { type: 'textBlock', text: 'Hello' },
+              { type: 'toolUseBlock', toolUseId: 'tool1', name: 'get_weather', input: { city: 'Paris' } },
+              { type: 'reasoningBlock', text: 'Reasoning', signature: 'sig1' },
+            ],
+          },
+          stopReason: 'endTurn',
         })
       })
     })
