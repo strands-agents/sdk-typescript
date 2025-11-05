@@ -177,9 +177,9 @@ export interface ImageBlock {
 
 /**
  * Source of image data.
- * Can be either inline bytes or an S3 location.
+ * Can be either inline bytes or a URL (S3, HTTP, or file path).
  */
-export type ImageSource = ImageSourceBytes | ImageSourceS3
+export type ImageSource = ImageSourceBytes | ImageSourceUrl
 
 /**
  * Image data provided as inline bytes.
@@ -188,7 +188,7 @@ export interface ImageSourceBytes {
   /**
    * Discriminator for bytes source.
    */
-  type: 'bytes'
+  type: 'imageSourceBytes'
 
   /**
    * Binary image data.
@@ -197,23 +197,28 @@ export interface ImageSourceBytes {
 }
 
 /**
- * Image data referenced by S3 location.
+ * Image data referenced by URL.
+ * Supports S3 URIs (s3://), HTTP URLs (http://, https://), and file paths (file://).
+ * Currently only S3 URIs are supported; other URL types will throw an error.
  *
  * @see https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_S3Location.html
  */
-export interface ImageSourceS3 {
+export interface ImageSourceUrl {
   /**
-   * Discriminator for S3 location source.
+   * Discriminator for URL source.
    */
-  type: 's3Location'
+  type: 'imageSourceUrl'
 
   /**
-   * S3 URI to the image file.
+   * URL to the image file. Supported formats:
+   * - S3: s3://bucket-name/key
+   * - HTTP: http://example.com/image.png (not yet supported)
+   * - File: file:///path/to/image.png (not yet supported)
    */
-  uri: string
+  url: string
 
   /**
-   * AWS account ID of the S3 bucket owner.
+   * AWS account ID of the S3 bucket owner (S3 URLs only).
    */
   bucketOwner?: string
 }
@@ -243,9 +248,9 @@ export interface VideoBlock {
 
 /**
  * Source of video data.
- * Can be either inline bytes or an S3 location.
+ * Can be either inline bytes or a URL (S3, HTTP, or file path).
  */
-export type VideoSource = VideoSourceBytes | VideoSourceS3
+export type VideoSource = VideoSourceBytes | VideoSourceUrl
 
 /**
  * Video data provided as inline bytes.
@@ -254,7 +259,7 @@ export interface VideoSourceBytes {
   /**
    * Discriminator for bytes source.
    */
-  type: 'bytes'
+  type: 'videoSourceBytes'
 
   /**
    * Binary video data.
@@ -263,23 +268,28 @@ export interface VideoSourceBytes {
 }
 
 /**
- * Video data referenced by S3 location.
+ * Video data referenced by URL.
+ * Supports S3 URIs (s3://), HTTP URLs (http://, https://), and file paths (file://).
+ * Currently only S3 URIs are supported; other URL types will throw an error.
  *
  * @see https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_S3Location.html
  */
-export interface VideoSourceS3 {
+export interface VideoSourceUrl {
   /**
-   * Discriminator for S3 location source.
+   * Discriminator for URL source.
    */
-  type: 's3Location'
+  type: 'videoSourceUrl'
 
   /**
-   * S3 URI to the video file.
+   * URL to the video file. Supported formats:
+   * - S3: s3://bucket-name/key
+   * - HTTP: http://example.com/video.mp4 (not yet supported)
+   * - File: file:///path/to/video.mp4 (not yet supported)
    */
-  uri: string
+  url: string
 
   /**
-   * AWS account ID of the S3 bucket owner.
+   * AWS account ID of the S3 bucket owner (S3 URLs only).
    */
   bucketOwner?: string
 }
@@ -324,9 +334,9 @@ export interface DocumentBlock {
 
 /**
  * Source of document data.
- * Can be inline bytes, structured content, S3 location, or plain text.
+ * Can be inline bytes, structured content, URL, or plain text.
  */
-export type DocumentSource = DocumentSourceBytes | DocumentSourceContent | DocumentSourceS3 | DocumentSourceText
+export type DocumentSource = DocumentSourceBytes | DocumentSourceContent | DocumentSourceUrl | DocumentSourceText
 
 /**
  * Document data provided as inline bytes.
@@ -335,7 +345,7 @@ export interface DocumentSourceBytes {
   /**
    * Discriminator for bytes source.
    */
-  type: 'bytes'
+  type: 'documentSourceBytes'
 
   /**
    * Binary document data.
@@ -350,7 +360,7 @@ export interface DocumentSourceContent {
   /**
    * Discriminator for content source.
    */
-  type: 'content'
+  type: 'documentSourceContent'
 
   /**
    * Array of content blocks that make up the document.
@@ -369,23 +379,28 @@ export interface DocumentContentBlock {
 }
 
 /**
- * Document data referenced by S3 location.
+ * Document data referenced by URL.
+ * Supports S3 URIs (s3://), HTTP URLs (http://, https://), and file paths (file://).
+ * Currently only S3 URIs are supported; other URL types will throw an error.
  *
  * @see https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_S3Location.html
  */
-export interface DocumentSourceS3 {
+export interface DocumentSourceUrl {
   /**
-   * Discriminator for S3 location source.
+   * Discriminator for URL source.
    */
-  type: 's3Location'
+  type: 'documentSourceUrl'
 
   /**
-   * S3 URI to the document file.
+   * URL to the document file. Supported formats:
+   * - S3: s3://bucket-name/key
+   * - HTTP: http://example.com/document.pdf (not yet supported)
+   * - File: file:///path/to/document.pdf (not yet supported)
    */
-  uri: string
+  url: string
 
   /**
-   * AWS account ID of the S3 bucket owner.
+   * AWS account ID of the S3 bucket owner (S3 URLs only).
    */
   bucketOwner?: string
 }
@@ -397,7 +412,7 @@ export interface DocumentSourceText {
   /**
    * Discriminator for text source.
    */
-  type: 'text'
+  type: 'documentSourceText'
 
   /**
    * Plain text content of the document.

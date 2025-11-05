@@ -573,13 +573,18 @@ export class BedrockModel extends Model<BedrockModelConfig> {
       case 'imageBlock': {
         // Format image source
         let imageSource
-        if (block.source.type === 'bytes') {
+        if (block.source.type === 'imageSourceBytes') {
           imageSource = { bytes: block.source.bytes }
         } else {
-          // s3Location
+          // imageSourceUrl - validate S3 URL
+          if (!block.source.url.startsWith('s3://')) {
+            throw new Error(
+              `Only S3 URLs are currently supported for image sources. Got: ${block.source.url.substring(0, 20)}...`
+            )
+          }
           imageSource = {
             s3Location: {
-              uri: block.source.uri,
+              uri: block.source.url,
               ...(block.source.bucketOwner && { bucketOwner: block.source.bucketOwner }),
             },
           }
@@ -596,13 +601,18 @@ export class BedrockModel extends Model<BedrockModelConfig> {
       case 'videoBlock': {
         // Format video source
         let videoSource
-        if (block.source.type === 'bytes') {
+        if (block.source.type === 'videoSourceBytes') {
           videoSource = { bytes: block.source.bytes }
         } else {
-          // s3Location
+          // videoSourceUrl - validate S3 URL
+          if (!block.source.url.startsWith('s3://')) {
+            throw new Error(
+              `Only S3 URLs are currently supported for video sources. Got: ${block.source.url.substring(0, 20)}...`
+            )
+          }
           videoSource = {
             s3Location: {
-              uri: block.source.uri,
+              uri: block.source.url,
               ...(block.source.bucketOwner && { bucketOwner: block.source.bucketOwner }),
             },
           }
@@ -620,21 +630,27 @@ export class BedrockModel extends Model<BedrockModelConfig> {
         // Format document source
         let documentSource
         switch (block.source.type) {
-          case 'bytes':
+          case 'documentSourceBytes':
             documentSource = { bytes: block.source.bytes }
             break
-          case 'content':
+          case 'documentSourceContent':
             documentSource = { content: block.source.content }
             break
-          case 's3Location':
+          case 'documentSourceUrl':
+            // Validate S3 URL
+            if (!block.source.url.startsWith('s3://')) {
+              throw new Error(
+                `Only S3 URLs are currently supported for document sources. Got: ${block.source.url.substring(0, 20)}...`
+              )
+            }
             documentSource = {
               s3Location: {
-                uri: block.source.uri,
+                uri: block.source.url,
                 ...(block.source.bucketOwner && { bucketOwner: block.source.bucketOwner }),
               },
             }
             break
-          case 'text':
+          case 'documentSourceText':
             documentSource = { text: block.source.text }
             break
         }

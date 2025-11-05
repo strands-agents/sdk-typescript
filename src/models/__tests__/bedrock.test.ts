@@ -1301,7 +1301,7 @@ describe('BedrockModel', () => {
                 type: 'imageBlock',
                 format: 'png',
                 source: {
-                  type: 'bytes',
+                  type: 'imageSourceBytes',
                   bytes: imageData,
                 },
               },
@@ -1331,7 +1331,7 @@ describe('BedrockModel', () => {
         })
       })
 
-      it('formats imageBlock with s3Location source including bucketOwner', async () => {
+      it('formats imageBlock with URL source (S3) including bucketOwner', async () => {
         const provider = new BedrockModel()
         const messages: Message[] = [
           {
@@ -1342,8 +1342,8 @@ describe('BedrockModel', () => {
                 type: 'imageBlock',
                 format: 'jpeg',
                 source: {
-                  type: 's3Location',
-                  uri: 's3://my-bucket/image.jpg',
+                  type: 'imageSourceUrl',
+                  url: 's3://my-bucket/image.jpg',
                   bucketOwner: '123456789012',
                 },
               },
@@ -1376,7 +1376,7 @@ describe('BedrockModel', () => {
         })
       })
 
-      it('formats imageBlock with s3Location source without bucketOwner', async () => {
+      it('formats imageBlock with URL source (S3) without bucketOwner', async () => {
         const provider = new BedrockModel()
         const messages: Message[] = [
           {
@@ -1387,8 +1387,8 @@ describe('BedrockModel', () => {
                 type: 'imageBlock',
                 format: 'webp',
                 source: {
-                  type: 's3Location',
-                  uri: 's3://my-bucket/image.webp',
+                  type: 'imageSourceUrl',
+                  url: 's3://my-bucket/image.webp',
                 },
               },
             ],
@@ -1419,6 +1419,30 @@ describe('BedrockModel', () => {
         })
       })
 
+      it('throws error for non-S3 image URL', async () => {
+        const provider = new BedrockModel()
+        const messages: Message[] = [
+          {
+            type: 'message',
+            role: 'user',
+            content: [
+              {
+                type: 'imageBlock',
+                format: 'png',
+                source: {
+                  type: 'imageSourceUrl',
+                  url: 'https://example.com/image.png',
+                },
+              },
+            ],
+          },
+        ]
+
+        await expect(() => collectIterator(provider.stream(messages))).rejects.toThrow(
+          'Only S3 URLs are currently supported for image sources'
+        )
+      })
+
       it('formats imageBlock with all supported formats', async () => {
         const provider = new BedrockModel()
         const formats = ['png', 'jpeg', 'gif', 'webp'] as const
@@ -1433,7 +1457,7 @@ describe('BedrockModel', () => {
                   type: 'imageBlock',
                   format,
                   source: {
-                    type: 'bytes',
+                    type: 'imageSourceBytes',
                     bytes: new Uint8Array([1, 2, 3]),
                   },
                 },
@@ -1479,7 +1503,7 @@ describe('BedrockModel', () => {
                 type: 'videoBlock',
                 format: 'mp4',
                 source: {
-                  type: 'bytes',
+                  type: 'videoSourceBytes',
                   bytes: videoData,
                 },
               },
@@ -1509,7 +1533,7 @@ describe('BedrockModel', () => {
         })
       })
 
-      it('formats videoBlock with s3Location source including bucketOwner', async () => {
+      it('formats videoBlock with URL source (S3) including bucketOwner', async () => {
         const provider = new BedrockModel()
         const messages: Message[] = [
           {
@@ -1520,8 +1544,8 @@ describe('BedrockModel', () => {
                 type: 'videoBlock',
                 format: 'mkv',
                 source: {
-                  type: 's3Location',
-                  uri: 's3://my-bucket/video.mkv',
+                  type: 'videoSourceUrl',
+                  url: 's3://my-bucket/video.mkv',
                   bucketOwner: '123456789012',
                 },
               },
@@ -1554,7 +1578,7 @@ describe('BedrockModel', () => {
         })
       })
 
-      it('formats videoBlock with s3Location source without bucketOwner', async () => {
+      it('formats videoBlock with URL source (S3) without bucketOwner', async () => {
         const provider = new BedrockModel()
         const messages: Message[] = [
           {
@@ -1565,8 +1589,8 @@ describe('BedrockModel', () => {
                 type: 'videoBlock',
                 format: 'webm',
                 source: {
-                  type: 's3Location',
-                  uri: 's3://my-bucket/video.webm',
+                  type: 'videoSourceUrl',
+                  url: 's3://my-bucket/video.webm',
                 },
               },
             ],
@@ -1597,6 +1621,30 @@ describe('BedrockModel', () => {
         })
       })
 
+      it('throws error for non-S3 video URL', async () => {
+        const provider = new BedrockModel()
+        const messages: Message[] = [
+          {
+            type: 'message',
+            role: 'user',
+            content: [
+              {
+                type: 'videoBlock',
+                format: 'mp4',
+                source: {
+                  type: 'videoSourceUrl',
+                  url: 'https://example.com/video.mp4',
+                },
+              },
+            ],
+          },
+        ]
+
+        await expect(() => collectIterator(provider.stream(messages))).rejects.toThrow(
+          'Only S3 URLs are currently supported for video sources'
+        )
+      })
+
       it('formats videoBlock with multiple supported formats', async () => {
         const provider = new BedrockModel()
         const formats = ['mp4', 'mkv', 'webm'] as const
@@ -1611,7 +1659,7 @@ describe('BedrockModel', () => {
                   type: 'videoBlock',
                   format,
                   source: {
-                    type: 'bytes',
+                    type: 'videoSourceBytes',
                     bytes: new Uint8Array([1, 2, 3]),
                   },
                 },
@@ -1657,7 +1705,7 @@ describe('BedrockModel', () => {
                 type: 'documentBlock',
                 name: 'test-document.pdf',
                 source: {
-                  type: 'bytes',
+                  type: 'documentSourceBytes',
                   bytes: documentData,
                 },
               },
@@ -1698,7 +1746,7 @@ describe('BedrockModel', () => {
                 type: 'documentBlock',
                 name: 'test-document',
                 source: {
-                  type: 'content',
+                  type: 'documentSourceContent',
                   content: [{ text: 'First paragraph' }, { text: 'Second paragraph' }],
                 },
               },
@@ -1728,7 +1776,7 @@ describe('BedrockModel', () => {
         })
       })
 
-      it('formats documentBlock with s3Location source', async () => {
+      it('formats documentBlock with URL source (S3)', async () => {
         const provider = new BedrockModel()
         const messages: Message[] = [
           {
@@ -1739,8 +1787,8 @@ describe('BedrockModel', () => {
                 type: 'documentBlock',
                 name: 'test-document.pdf',
                 source: {
-                  type: 's3Location',
-                  uri: 's3://my-bucket/document.pdf',
+                  type: 'documentSourceUrl',
+                  url: 's3://my-bucket/document.pdf',
                   bucketOwner: '123456789012',
                 },
               },
@@ -1773,6 +1821,30 @@ describe('BedrockModel', () => {
         })
       })
 
+      it('throws error for non-S3 document URL', async () => {
+        const provider = new BedrockModel()
+        const messages: Message[] = [
+          {
+            type: 'message',
+            role: 'user',
+            content: [
+              {
+                type: 'documentBlock',
+                name: 'test-document.pdf',
+                source: {
+                  type: 'documentSourceUrl',
+                  url: 'https://example.com/document.pdf',
+                },
+              },
+            ],
+          },
+        ]
+
+        await expect(() => collectIterator(provider.stream(messages))).rejects.toThrow(
+          'Only S3 URLs are currently supported for document sources'
+        )
+      })
+
       it('formats documentBlock with text source', async () => {
         const provider = new BedrockModel()
         const messages: Message[] = [
@@ -1784,7 +1856,7 @@ describe('BedrockModel', () => {
                 type: 'documentBlock',
                 name: 'test-document.txt',
                 source: {
-                  type: 'text',
+                  type: 'documentSourceText',
                   text: 'This is the document content',
                 },
               },
@@ -1828,7 +1900,7 @@ describe('BedrockModel', () => {
                 context: 'This is a test document',
                 citations: { enabled: true },
                 source: {
-                  type: 'text',
+                  type: 'documentSourceText',
                   text: 'Document content',
                 },
               },
@@ -1872,7 +1944,7 @@ describe('BedrockModel', () => {
                 type: 'documentBlock',
                 name: 'minimal-document',
                 source: {
-                  type: 'text',
+                  type: 'documentSourceText',
                   text: 'Minimal content',
                 },
               },

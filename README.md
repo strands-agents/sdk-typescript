@@ -39,6 +39,7 @@ Strands Agents is a simple yet powerful SDK that takes a model-driven approach t
 - **Lightweight & Flexible**: Simple agent loop that works seamlessly in Node.js and browsers
 - **Model Agnostic**: Support for Amazon Bedrock, OpenAI, and custom model providers
 - **Tool System**: Decorator-based tool definition with automatic registry management
+- **Multimodal Content**: Send images, videos, and documents to supported models (AWS Bedrock)
 
 ## Quick Start (Coming Soon)
 
@@ -51,6 +52,52 @@ import { calculator } from '@strands-agents/tools'
 const agent = new Agent({ tools: [calculator] })
 const response = await agent.invoke('What is the square root of 1764?')
 console.log(response)
+```
+
+### Multimodal Content (AWS Bedrock)
+
+Send images, videos, and documents to AWS Bedrock models:
+
+```typescript
+import { BedrockModel } from '@strands-agents/sdk'
+import { readFileSync } from 'fs'
+
+const model = new BedrockModel({
+  modelId: 'anthropic.claude-3-5-sonnet-20241022-v2:0'
+})
+
+// Send an image
+const imageData = readFileSync('image.png')
+const messages = [{
+  type: 'message',
+  role: 'user',
+  content: [
+    { type: 'textBlock', text: 'What do you see in this image?' },
+    {
+      type: 'imageBlock',
+      format: 'png',
+      source: { type: 'imageSourceBytes', bytes: new Uint8Array(imageData) }
+    }
+  ]
+}]
+
+for await (const event of model.stream(messages)) {
+  // Process response
+}
+
+// Or use S3 URLs for larger files
+const docMessages = [{
+  type: 'message',
+  role: 'user',
+  content: [
+    { type: 'textBlock', text: 'Summarize this document' },
+    {
+      type: 'documentBlock',
+      name: 'report.pdf',
+      source: { type: 'documentSourceUrl', url: 's3://my-bucket/report.pdf' }
+    }
+  ]
+}]
 ```
 
 ## Installation (Coming Soon)
