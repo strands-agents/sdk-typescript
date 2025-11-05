@@ -28,41 +28,14 @@ type Turn = { type: 'content'; content: ContentBlock[]; stopReason: string } | {
  * - Multi-turn support with single-turn reuse and multi-turn exhaustion
  * - Error handling support for testing error scenarios
  * - Default role is 'assistant' (model responses)
- *
- * @example
- * ```typescript
- * // Simple single-turn test with one text block
- * const provider = new TestMessageModelProvider()
- *   .addTurn({ type: 'textBlock', text: 'Hello' })
- *
- * // Multiple content blocks in one turn
- * const provider = new TestMessageModelProvider().addTurn([
- *   { type: 'textBlock', text: 'Let me check' },
- *   { type: 'toolUseBlock', name: 'calc', toolUseId: 'id-1', input: {} }
- * ])
- *
- * // Multi-turn with builder pattern
- * const provider = new TestMessageModelProvider()
- *   .addTurn({ type: 'toolUseBlock', ... })  // Auto-derives 'toolUse'
- *   .addTurn({ type: 'textBlock', text: 'Done' })  // Auto-derives 'endTurn'
- *
- * // With explicit stopReason
- * const provider = new TestMessageModelProvider()
- *   .addTurn({ type: 'textBlock', text: 'Partial' }, 'maxTokens')
- *
- * // With error handling
- * const provider = new TestMessageModelProvider()
- *   .addTurn({ type: 'textBlock', text: 'Success' })
- *   .addTurn(new Error('Model failed'))
- * ```
  */
-export class TestMessageModelProvider extends Model<BaseModelConfig> {
+export class MockMessageModel extends Model<BaseModelConfig> {
   private _turns: Turn[]
   private _currentTurnIndex: number
   private _config: BaseModelConfig
 
   /**
-   * Creates a new TestMessageModelProvider.
+   * Creates a new MockMessageModel.
    */
   constructor() {
     super()

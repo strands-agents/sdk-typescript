@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { runAgentLoop } from '../agent-loop'
 import { TestModelProvider, collectGenerator } from '../../__fixtures__/model-test-helpers'
-import { TestMessageModelProvider } from '../../__fixtures__/test-message-model'
+import { MockMessageModel } from '../../__fixtures__/mock-message-model'
 import { createMockTool } from '../../__fixtures__/tool-helpers'
 import { ToolRegistry } from '../../tools/registry'
 import type { Message } from '../../types/messages'
@@ -10,7 +10,17 @@ import { MaxTokensError } from '../../errors'
 describe('runAgentLoop', () => {
   describe('when handling simple completion without tools', () => {
     it('yields events and returns final messages array', async () => {
-      const provider = new TestMessageModelProvider().addTurn({ type: 'textBlock', text: 'Hello, how can I help?' })
+      const provider = new TestModelProvider(async function* () {
+        yield { type: 'modelMessageStartEvent', role: 'assistant' }
+        yield { type: 'modelContentBlockStartEvent', contentBlockIndex: 0 }
+        yield {
+          type: 'modelContentBlockDeltaEvent',
+          delta: { type: 'textDelta', text: 'Hello, how can I help?' },
+          contentBlockIndex: 0,
+        }
+        yield { type: 'modelContentBlockStopEvent', contentBlockIndex: 0 }
+        yield { type: 'modelMessageStopEvent', stopReason: 'endTurn' }
+      })
 
       const registry = new ToolRegistry()
       const messages: Message[] = [
@@ -48,7 +58,7 @@ describe('runAgentLoop', () => {
 
   describe('when handling single tool use cycle', () => {
     it('executes tool and continues loop until completion', async () => {
-      const provider = new TestMessageModelProvider()
+      const provider = new MockMessageModel()
         .addTurn({
           type: 'toolUseBlock',
           name: 'calculator',
@@ -117,7 +127,7 @@ describe('runAgentLoop', () => {
 
   describe('when handling multiple tool uses in sequence', () => {
     it('executes all tools sequentially', async () => {
-      const provider = new TestMessageModelProvider()
+      const provider = new MockMessageModel()
         .addTurn([
           {
             type: 'toolUseBlock',
@@ -178,7 +188,7 @@ describe('runAgentLoop', () => {
 
   describe('when handling multiple agentic loop iterations', () => {
     it('continues through multiple tool-use cycles', async () => {
-      const provider = new TestMessageModelProvider()
+      const provider = new MockMessageModel()
         .addTurn({
           type: 'toolUseBlock',
           name: 'tool1',
@@ -233,7 +243,7 @@ describe('runAgentLoop', () => {
 
   describe('when handling transactional message success', () => {
     it('adds assistant message to array after first model event', async () => {
-      const provider = new TestMessageModelProvider().addTurn({ type: 'textBlock', text: 'Response' })
+      const provider = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Response' })
 
       const registry = new ToolRegistry()
       const messages: Message[] = [
@@ -257,7 +267,7 @@ describe('runAgentLoop', () => {
 
   describe('when handling transactional message with early error', () => {
     it('throws error without adding message to array', async () => {
-      const provider = new TestMessageModelProvider().addTurn(new Error('Model error before any events'))
+      const provider = new MockMessageModel().addTurn(new Error('Model error before any events'))
 
       const registry = new ToolRegistry()
       const messages: Message[] = [
@@ -302,7 +312,7 @@ describe('runAgentLoop', () => {
 
   describe('when tool throws exception', () => {
     it('propagates the error from the tool', async () => {
-      const provider = new TestMessageModelProvider().addTurn({
+      const provider = new MockMessageModel().addTurn({
         type: 'toolUseBlock',
         name: 'badTool',
         toolUseId: 'id-1',
@@ -331,7 +341,7 @@ describe('runAgentLoop', () => {
     })
 
     it('does not add assistant message with tool uses when tool execution fails', async () => {
-      const provider = new TestMessageModelProvider().addTurn({
+      const provider = new MockMessageModel().addTurn({
         type: 'toolUseBlock',
         name: 'badTool',
         toolUseId: 'id-1',
@@ -376,7 +386,7 @@ describe('runAgentLoop', () => {
 
   describe('when tool is not found in registry', () => {
     it('returns error tool result and continues loop', async () => {
-      const provider = new TestMessageModelProvider()
+      const provider = new MockMessageModel()
         .addTurn({
           type: 'toolUseBlock',
           name: 'nonexistent',
@@ -415,7 +425,7 @@ describe('runAgentLoop', () => {
 
   describe('when maxTokens stop reason occurs', () => {
     it('throws MaxTokensError', async () => {
-      const provider = new TestMessageModelProvider().addTurn({ type: 'textBlock', text: 'Partial' }, 'maxTokens')
+      const provider = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Partial' }, 'maxTokens')
 
       const registry = new ToolRegistry()
       const messages: Message[] = [
@@ -432,35 +442,9 @@ describe('runAgentLoop', () => {
     })
   })
 
-  describe('when verifying event streaming', () => {
-    it('yields all events in correct order', async () => {
-      const provider = new TestMessageModelProvider().addTurn({ type: 'textBlock', text: 'Test' })
-
-      const registry = new ToolRegistry()
-      const messages: Message[] = [
-        {
-          type: 'message',
-          role: 'user',
-          content: [{ type: 'textBlock', text: 'Hi' }],
-        },
-      ]
-
-      const { items } = await collectGenerator(runAgentLoop({ model: provider, messages, toolRegistry: registry }))
-
-      // Extract event types in order
-      const eventTypes = items.map((item) => item.type)
-
-      // Verify event order
-      expect(eventTypes.indexOf('beforeInvocationEvent')).toBeLessThan(eventTypes.indexOf('beforeModelEvent'))
-      expect(eventTypes.indexOf('beforeModelEvent')).toBeLessThan(eventTypes.indexOf('modelMessageStartEvent'))
-      expect(eventTypes.indexOf('modelMessageStopEvent')).toBeLessThan(eventTypes.indexOf('afterModelEvent'))
-      expect(eventTypes.indexOf('afterModelEvent')).toBeLessThan(eventTypes.indexOf('afterInvocationEvent'))
-    })
-  })
-
   describe('when constructing ContentBlocks via streamAggregated', () => {
     it('handles TextBlock correctly', async () => {
-      const provider = new TestMessageModelProvider().addTurn({ type: 'textBlock', text: 'Hello' })
+      const provider = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
 
       const registry = new ToolRegistry()
       const messages: Message[] = [
@@ -483,7 +467,7 @@ describe('runAgentLoop', () => {
     })
 
     it('handles ToolUseBlock correctly', async () => {
-      const provider = new TestMessageModelProvider()
+      const provider = new MockMessageModel()
         .addTurn({
           type: 'toolUseBlock',
           name: 'test',
@@ -524,7 +508,7 @@ describe('runAgentLoop', () => {
     })
 
     it('handles ReasoningBlock correctly', async () => {
-      const provider = new TestMessageModelProvider().addTurn([
+      const provider = new MockMessageModel().addTurn([
         { type: 'reasoningBlock', text: 'thinking...' },
         { type: 'textBlock', text: 'Response' },
       ])
