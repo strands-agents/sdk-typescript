@@ -5,6 +5,7 @@ This document provides guidance specifically for AI agents working on the Strand
 ## Purpose and Scope
 
 **AGENTS.md** contains agent-specific repository information including:
+
 - Directory structure with summaries of what is included in each directory
 - Development workflow instructions for agents to follow when developing features
 - Coding patterns and testing patterns to follow when writing code
@@ -103,6 +104,7 @@ sdk-typescript/
 ### 1. Environment Setup
 
 See [CONTRIBUTING.md - Development Environment](CONTRIBUTING.md#development-environment) for:
+
 - Prerequisites (Node.js 20+, npm)
 - Installation steps
 - Verification commands
@@ -118,6 +120,7 @@ See [CONTRIBUTING.md - Development Environment](CONTRIBUTING.md#development-envi
 ### 3. Quality Gates
 
 Pre-commit hooks automatically run:
+
 - Unit tests (via npm test)
 - Linting (via npm run lint)
 - Format checking (via npm run format:check)
@@ -143,6 +146,7 @@ import { something } from 'external-package'
 ### File Organization Pattern
 
 **For source files**:
+
 ```
 src/
 ├── module.ts              # Source file
@@ -151,12 +155,14 @@ src/
 ```
 
 **Function ordering within files**:
+
 - Functions MUST be ordered from most general to most specific (top-down reading)
 - Public/exported functions MUST appear before private helper functions
 - Main entry point functions MUST be at the top of the file
 - Helper functions SHOULD follow in order of their usage
 
 **Example**:
+
 ```typescript
 // ✅ Good: Main function first, helpers follow
 export async function* mainFunction() {
@@ -184,6 +190,7 @@ export async function* mainFunction() {
 ```
 
 **For integration tests**:
+
 ```
 tests_integ/
 └── feature.test.ts        # Tests public API
@@ -194,6 +201,7 @@ tests_integ/
 Follow this nested describe pattern for consistency:
 
 **For functions**:
+
 ```typescript
 import { describe, it, expect } from 'vitest'
 import { functionName } from '../module'
@@ -216,6 +224,7 @@ describe('functionName', () => {
 ```
 
 **For classes**:
+
 ```typescript
 import { describe, it, expect } from 'vitest'
 import { ClassName } from '../module'
@@ -243,6 +252,7 @@ describe('ClassName', () => {
 ```
 
 **Key principles**:
+
 - Top-level `describe` uses the function/class name
 - Nested `describe` blocks group related test scenarios
 - Use descriptive test names without "should" prefix
@@ -253,32 +263,42 @@ describe('ClassName', () => {
 **Rule**: When test setup cost exceeds test logic cost, you MUST batch related assertions into a single test.
 
 **You MUST batch when**:
+
 - Setup complexity > test logic complexity
 - Multiple assertions verify the same object state
 - Related behaviors share expensive context
 
 **You SHOULD keep separate tests for**:
+
 - Distinct behaviors or execution paths
 - Error conditions
 - Different input scenarios
 
 **Bad - Redundant setup**:
+
 ```typescript
 it('has correct tool name', () => {
-  const tool = createComplexTool({ /* expensive setup */ })
+  const tool = createComplexTool({
+    /* expensive setup */
+  })
   expect(tool.toolName).toBe('testTool')
 })
 
 it('has correct description', () => {
-  const tool = createComplexTool({ /* same expensive setup */ })
+  const tool = createComplexTool({
+    /* same expensive setup */
+  })
   expect(tool.description).toBe('Test description')
 })
 ```
 
 **Good - Batched properties**:
+
 ```typescript
 it('creates tool with correct properties', () => {
-  const tool = createComplexTool({ /* setup once */ })
+  const tool = createComplexTool({
+    /* setup once */
+  })
   expect(tool.toolName).toBe('testTool')
   expect(tool.description).toBe('Test description')
   expect(tool.toolSpec.name).toBe('testTool')
@@ -288,6 +308,7 @@ it('creates tool with correct properties', () => {
 ### TypeScript Type Safety
 
 **Strict requirements**:
+
 ```typescript
 // Good: Explicit return types
 export function process(input: string): string {
@@ -311,6 +332,7 @@ export function getData(): any {
 ```
 
 **Rules**:
+
 - Always provide explicit return types
 - Never use `any` type (enforced by ESLint)
 - Use TypeScript strict mode features
@@ -338,7 +360,7 @@ export class Example {
 
 // ❌ Bad: No underscore for private fields
 export class Example {
-  private readonly config: Config  // Missing underscore
+  private readonly config: Config // Missing underscore
 
   constructor(config: Config) {
     this.config = config
@@ -347,6 +369,7 @@ export class Example {
 ```
 
 **Rules**:
+
 - Private fields MUST use underscore prefix (e.g., `_field`)
 - Public fields MUST NOT use underscore prefix
 - This convention improves code readability and makes the distinction between public and private members immediately visible
@@ -355,14 +378,14 @@ export class Example {
 
 **TSDoc format** (required for all exported functions):
 
-```typescript
+````typescript
 /**
  * Brief description of what the function does.
- * 
+ *
  * @param paramName - Description of the parameter
  * @param optionalParam - Description of optional parameter
  * @returns Description of what is returned
- * 
+ *
  * @example
  * ```typescript
  * const result = functionName('input')
@@ -372,7 +395,7 @@ export class Example {
 export function functionName(paramName: string, optionalParam?: number): string {
   // Implementation
 }
-```
+````
 
 **Interface property documentation**:
 
@@ -395,6 +418,7 @@ export interface MyConfig {
 ```
 
 **Requirements**:
+
 - All exported functions, classes, and interfaces must have TSDoc
 - Include `@param` for all parameters
 - Include `@returns` for return values
@@ -407,6 +431,7 @@ export interface MyConfig {
 ### Code Style Guidelines
 
 **Formatting** (enforced by Prettier):
+
 - No semicolons
 - Single quotes
 - Line length: 120 characters
@@ -414,6 +439,7 @@ export interface MyConfig {
 - Trailing commas in ES5 style
 
 **Example**:
+
 ```typescript
 export function example(name: string, options?: Options): Result {
   const config = {
@@ -432,6 +458,7 @@ export function example(name: string, options?: Options): Result {
 ### Import Organization
 
 Organize imports in this order:
+
 ```typescript
 // 1. External dependencies
 import { something } from 'external-package'
@@ -486,7 +513,8 @@ export interface TextBlock {
   text: string
 }
 
-export interface Message {  // Top-level should come first
+export interface Message {
+  // Top-level should come first
   role: Role
   content: ContentBlock[]
 }
@@ -501,18 +529,18 @@ export interface Message {  // Top-level should come first
 ```typescript
 // ✅ Correct - type matches interface name (first letter lowercase)
 export interface TextBlock {
-  type: 'textBlock'  // Matches 'TextBlock' interface name
+  type: 'textBlock' // Matches 'TextBlock' interface name
   text: string
 }
 
 export interface ToolUseBlock {
-  type: 'toolUseBlock'  // Matches 'ToolUseBlock' interface name
+  type: 'toolUseBlock' // Matches 'ToolUseBlock' interface name
   name: string
   toolUseId: string
 }
 
 export interface CachePointBlock {
-  type: 'cachePointBlock'  // Matches 'CachePointBlock' interface name
+  type: 'cachePointBlock' // Matches 'CachePointBlock' interface name
   cacheType: 'default'
 }
 
@@ -520,7 +548,7 @@ export type ContentBlock = TextBlock | ToolUseBlock | CachePointBlock
 
 // ❌ Wrong - type doesn't match interface name
 export interface CachePointBlock {
-  type: 'cachePoint'  // Should be 'cachePointBlock'
+  type: 'cachePoint' // Should be 'cachePointBlock'
   cacheType: 'default'
 }
 ```
@@ -621,7 +649,7 @@ it('returns expected user object', () => {
     id: '123',
     name: 'John Doe',
     email: 'john@example.com',
-    isActive: true
+    isActive: true,
   })
 })
 
@@ -656,12 +684,14 @@ it('yields expected stream events', async () => {
 ```
 
 **Benefits of testing entire objects**:
+
 - **More concise**: Single assertion instead of multiple
 - **Better test coverage**: Catches unexpected additional or missing properties
 - **More readable**: Clear expectation of the entire structure
 - **Easier to maintain**: Changes to the object require updating one place
 
 **Use cases**:
+
 - Always use `toEqual()` for object and array comparisons
 - Use `toBe()` only for primitive values and reference equality
 - When testing error objects, verify the entire structure including message and type
@@ -669,17 +699,19 @@ it('yields expected stream events', async () => {
 ### Testing Guidelines
 
 **Testing Approach:**
+
 - You **MUST** write tests for implementations (functions, classes, methods)
 - You **SHOULD NOT** write tests for interfaces since TypeScript compiler already enforces type correctness
 - You **SHOULD** write Vitest type tests (`*.test-d.ts`) for complex types to ensure backwards compatibility
 
 **Example Implementation Test:**
+
 ```typescript
 describe('BedrockModel', () => {
   it('streams messages correctly', async () => {
     const provider = new BedrockModel(config)
     const stream = provider.stream(messages)
-    
+
     for await (const event of stream) {
       if (event.type === 'modelMessageStartEvent') {
         expect(event.role).toBe('assistant')
@@ -692,38 +724,46 @@ describe('BedrockModel', () => {
 ### Test Model Providers
 
 **When to use each test provider:**
-- **`TestMessageModelProvider`**: For agent loop tests and high-level flows where you care about complete messages
+
+- **`TestMessageModelProvider`**: For agent loop tests and high-level flows - focused on content blocks
 - **`TestModelProvider`**: For low-level event streaming tests where you need precise control over individual events
 
-#### TestMessageModelProvider - Message-Level Testing
+#### TestMessageModelProvider - Content-Focused Testing
 
-For agent loop tests that need complete messages, use `TestMessageModelProvider` to avoid manually constructing events:
+For agent loop tests, use `TestMessageModelProvider` with a content-focused API that eliminates boilerplate:
 
 ```typescript
 import { TestMessageModelProvider } from '../__fixtures__/test-message-model'
 
-// ✅ Good - Simple and readable
-const provider = new TestMessageModelProvider({
-  type: 'message',
-  role: 'assistant',
-  content: [{ type: 'textBlock', text: 'Hello' }]
-})
+// ✅ Excellent - Single content block (most common)
+const provider = new TestMessageModelProvider({ type: 'textBlock', text: 'Hello' })
 
-// ✅ Good - Multi-turn with builder pattern
+// ✅ Excellent - Array of content blocks
+const provider = new TestMessageModelProvider([
+  { type: 'textBlock', text: 'Let me help' },
+  { type: 'toolUseBlock', name: 'calc', toolUseId: 'id-1', input: {} },
+])
+
+// ✅ Excellent - Multi-turn with builder pattern
 const provider = new TestMessageModelProvider()
-  .addTurn(toolUseMessage)  // stopReason auto-derived as 'toolUse'
-  .addTurn(finalMessage)     // stopReason auto-derived as 'endTurn'
+  .addTurn({ type: 'toolUseBlock', name: 'calc', toolUseId: 'id-1', input: {} }) // Auto-derives 'toolUse'
+  .addTurn({ type: 'textBlock', text: 'The answer is 42' }) // Auto-derives 'endTurn'
+
+// ✅ Good - Multiple turns via constructor
+const provider = new TestMessageModelProvider(
+  { type: 'toolUseBlock', name: 'calc', toolUseId: 'id-1', input: {} },
+  { type: 'textBlock', text: 'Done' }
+)
 
 // ✅ Good - Explicit stopReason when needed
-const provider = new TestMessageModelProvider()
-  .addTurn(partialMessage, 'maxTokens')
+const provider = new TestMessageModelProvider().addTurn({ type: 'textBlock', text: 'Partial response' }, 'maxTokens')
 
 // ✅ Good - Error handling
 const provider = new TestMessageModelProvider()
-  .addTurn(successMessage)
+  .addTurn({ type: 'textBlock', text: 'Success' })
   .addTurn(new Error('Model failed'))
 
-// ❌ Bad - Manual event generation (verbose and error-prone)
+// ❌ Bad - Old verbose approach (don't use)
 const provider = new TestModelProvider(async function* () {
   yield { type: 'modelMessageStartEvent', role: 'assistant' }
   yield { type: 'modelContentBlockStartEvent', contentBlockIndex: 0 }
@@ -734,14 +774,19 @@ const provider = new TestModelProvider(async function* () {
 ```
 
 **Key features:**
-- **Auto-derive stopReason**: Automatically determines `'toolUse'` vs `'endTurn'` based on message content
+
+- **Content-focused**: Just specify ContentBlock(s), not full Message structure
+- **Auto-derive stopReason**: Automatically determines `'toolUse'` vs `'endTurn'` based on content
+- **Flexible API**: Single block, array of blocks, or varargs for multiple turns
 - **Multi-turn support**: Single turn reuses indefinitely, multiple turns advance sequentially
 - **Builder pattern**: Fluent API with method chaining
 - **Error support**: Test error scenarios by passing Error objects
+- **Default role**: All responses are assistant role (model responses)
 
 ## Things to Do
 
 ✅ **Do**:
+
 - Use relative imports for internal modules
 - Co-locate unit tests with source under `__tests__` directories
 - Follow nested describe pattern for test organization
@@ -755,6 +800,7 @@ const provider = new TestModelProvider(async function* () {
 ## Things NOT to Do
 
 ❌ **Don't**:
+
 - Use `any` type (enforced by ESLint)
 - Put unit tests in separate `tests/` directory (use `src/**/__tests__/**`)
 - Skip documentation for exported functions
@@ -769,11 +815,12 @@ const provider = new TestModelProvider(async function* () {
 For detailed command usage, see [CONTRIBUTING.md - Testing Instructions](CONTRIBUTING.md#testing-instructions-and-best-practices).
 
 Quick reference:
+
 ```bash
 npm test              # Run unit tests in Node.js
 npm run test:browser  # Run unit tests in browser (Chromium via Playwright)
 npm run test:all      # Run all tests in all environments
-npm run test:integ    # Run integration tests  
+npm run test:integ    # Run integration tests
 npm run test:coverage # Run tests with coverage report
 npm run lint          # Check code quality
 npm run format        # Auto-fix formatting
@@ -814,7 +861,26 @@ describe.skipIf(!isNode)("Node.js specific features", () => {
 
 ## Troubleshooting Common Issues
 
+### Tests Not Found
+
+If tests aren't discovered:
+
+1. Ensure unit tests are in `src/__tests__/*.test.ts`
+2. Ensure integration tests are in `tests_integ/*.test.ts`
+3. Check `vitest.config.ts` configuration
+
+### Pre-commit Hooks Failing
+
+If hooks fail:
+
+1. Run the failing command manually to see details
+2. Fix the issues (tests, linting, formatting, or type errors)
+3. Try committing again
+
+### Type Errors
+
 If TypeScript compilation fails:
+
 1. Run `npm run type-check` to see all type errors
 2. Ensure all functions have explicit return types
 3. Verify no `any` types are used
@@ -833,8 +899,8 @@ If TypeScript compilation fails:
 4. **Document as you go** with TSDoc comments
 5. **Run all checks** before committing (pre-commit hooks will enforce this)
 
-
 ### Writing code
+
 - YOU MUST make the SMALLEST reasonable changes to achieve the desired outcome.
 - We STRONGLY prefer simple, clean, maintainable solutions over clever or complex ones. Readability and maintainability are PRIMARY CONCERNS, even at the cost of conciseness or performance.
 - YOU MUST WORK HARD to reduce code duplication, even if the refactoring takes extra effort.
@@ -842,10 +908,10 @@ If TypeScript compilation fails:
 - YOU MUST NOT manually change whitespace that does not affect execution or output. Otherwise, use a formatting tool.
 - Fix broken things immediately when you find them. Don't ask permission to fix bugs.
 
-
 ### Code Review Considerations
 
 When responding to PR feedback:
+
 - Address all review comments
 - Test changes thoroughly
 - Update documentation if behavior changes

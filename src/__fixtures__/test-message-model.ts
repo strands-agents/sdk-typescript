@@ -1,7 +1,7 @@
 /**
  * Test message model provider for simplified agent testing.
- * This module provides a message-level test model that generates appropriate
- * ModelStreamEvents from Message objects, eliminating the need to manually
+ * This module provides a content-focused test model that generates appropriate
+ * ModelStreamEvents from ContentBlock objects, eliminating the need to manually
  * construct events in tests.
  */
 
@@ -12,42 +12,48 @@ import type { BaseModelConfig, StreamOptions } from '../models/model'
 
 /**
  * Represents a single turn in the test sequence.
- * Can be either a Message with stopReason, or an Error to throw.
+ * Can be either content blocks with stopReason, or an Error to throw.
  */
-type Turn = { type: 'message'; message: Message; stopReason: string } | { type: 'error'; error: Error }
+type Turn = { type: 'content'; content: ContentBlock[]; stopReason: string } | { type: 'error'; error: Error }
 
 /**
- * Test model provider that operates at the message level.
- * Simplifies agent loop tests by allowing specification of complete messages
+ * Test model provider that operates at the content block level.
+ * Simplifies agent loop tests by allowing specification of content blocks
  * instead of manually yielding individual ModelStreamEvents.
  *
  * Features:
- * - Builder pattern API with constructor and addTurn() method
- * - Auto-derives stopReason from message content (toolUse vs endTurn)
+ * - Content-focused API - just specify the blocks you want
+ * - Builder pattern with constructor and addTurn() method
+ * - Auto-derives stopReason from content (toolUse vs endTurn)
  * - Multi-turn support with single-turn reuse and multi-turn exhaustion
  * - Error handling support for testing error scenarios
+ * - Default role is 'assistant' (model responses)
  *
  * @example
  * ```typescript
- * // Simple single-turn test
- * const provider = new TestMessageModelProvider({
- *   type: 'message',
- *   role: 'assistant',
- *   content: [{ type: 'textBlock', text: 'Hello' }]
- * })
+ * // Simple single-turn test with one text block
+ * const provider = new TestMessageModelProvider(
+ *   { type: 'textBlock', text: 'Hello' }
+ * )
+ *
+ * // Multiple content blocks in one turn
+ * const provider = new TestMessageModelProvider([
+ *   { type: 'textBlock', text: 'Let me check' },
+ *   { type: 'toolUseBlock', name: 'calc', toolUseId: 'id-1', input: {} }
+ * ])
  *
  * // Multi-turn with builder pattern
  * const provider = new TestMessageModelProvider()
- *   .addTurn(toolUseMessage)  // Auto-derives 'toolUse'
- *   .addTurn(finalMessage)     // Auto-derives 'endTurn'
+ *   .addTurn({ type: 'toolUseBlock', ... })  // Auto-derives 'toolUse'
+ *   .addTurn({ type: 'textBlock', text: 'Done' })  // Auto-derives 'endTurn'
  *
  * // With explicit stopReason
  * const provider = new TestMessageModelProvider()
- *   .addTurn(message, 'maxTokens')
+ *   .addTurn({ type: 'textBlock', text: 'Partial' }, 'maxTokens')
  *
  * // With error handling
  * const provider = new TestMessageModelProvider()
- *   .addTurn(successMessage)
+ *   .addTurn({ type: 'textBlock', text: 'Success' })
  *   .addTurn(new Error('Model failed'))
  * ```
  */
@@ -59,24 +65,36 @@ export class TestMessageModelProvider extends Model<BaseModelConfig> {
   /**
    * Creates a new TestMessageModelProvider.
    *
-   * @param turns - Variable number of Message or Error objects representing turns
+   * @param turns - Variable number of ContentBlock, ContentBlock[], or Error objects representing turns
    *
    * @example
    * ```typescript
    * // No arguments - use addTurn() to add turns
    * new TestMessageModelProvider()
    *
-   * // Single message - stopReason auto-derived
-   * new TestMessageModelProvider(message)
+   * // Single content block - stopReason auto-derived
+   * new TestMessageModelProvider({ type: 'textBlock', text: 'Hello' })
    *
-   * // Multiple messages
-   * new TestMessageModelProvider(message1, message2)
+   * // Multiple content blocks in one turn
+   * new TestMessageModelProvider([
+   *   { type: 'textBlock', text: 'First' },
+   *   { type: 'textBlock', text: 'Second' }
+   * ])
+   *
+   * // Multiple turns
+   * new TestMessageModelProvider(
+   *   { type: 'toolUseBlock', name: 'calc', toolUseId: 'id-1', input: {} },
+   *   { type: 'textBlock', text: 'Done' }
+   * )
    *
    * // With errors
-   * new TestMessageModelProvider(message, new Error('Failed'))
+   * new TestMessageModelProvider(
+   *   { type: 'textBlock', text: 'Success' },
+   *   new Error('Failed')
+   * )
    * ```
    */
-  constructor(...turns: (Message | Error)[]) {
+  constructor(...turns: (ContentBlock | ContentBlock[] | Error)[]) {
     super()
     this._config = { modelId: 'test-model' }
     this._currentTurnIndex = 0
@@ -87,19 +105,20 @@ export class TestMessageModelProvider extends Model<BaseModelConfig> {
    * Adds a turn to the test sequence.
    * Returns this for method chaining.
    *
-   * @param turn - Message or Error to add
+   * @param turn - ContentBlock, ContentBlock[], or Error to add
    * @param stopReason - Optional explicit stopReason (overrides auto-derivation)
    * @returns This provider for chaining
    *
    * @example
    * ```typescript
    * provider
-   *   .addTurn(assistantMessage)  // Auto-derive stopReason
-   *   .addTurn(assistantMessage, 'maxTokens')  // Explicit stopReason
+   *   .addTurn({ type: 'textBlock', text: 'Hello' })  // Single block
+   *   .addTurn([{ type: 'toolUseBlock', ... }])  // Array of blocks
+   *   .addTurn({ type: 'textBlock', text: 'Done' }, 'maxTokens')  // Explicit stopReason
    *   .addTurn(new Error('Failed'))  // Error turn
    * ```
    */
-  addTurn(turn: Message | Error, stopReason?: string): this {
+  addTurn(turn: ContentBlock | ContentBlock[] | Error, stopReason?: string): this {
     this._turns.push(this._createTurn(turn, stopReason))
     return this
   }
@@ -124,7 +143,7 @@ export class TestMessageModelProvider extends Model<BaseModelConfig> {
 
   /**
    * Streams a conversation with the model.
-   * Generates appropriate ModelStreamEvents from the Message objects.
+   * Generates appropriate ModelStreamEvents from the content blocks.
    *
    * Single-turn behavior: Reuses the same turn indefinitely
    * Multi-turn behavior: Advances through turns and throws when exhausted
@@ -157,30 +176,55 @@ export class TestMessageModelProvider extends Model<BaseModelConfig> {
       throw turn.error
     }
 
-    // Generate events for message turn
-    yield* this._generateEventsForMessage(turn.message, turn.stopReason)
+    // Generate events for content turn
+    yield* this._generateEventsForContent(turn.content, turn.stopReason)
   }
 
   /**
-   * Creates a Turn object from a Message or Error.
+   * Generates appropriate ModelStreamEvents for content blocks.
+   * All messages have role 'assistant' since this is for testing model responses.
    */
-  private _createTurn(turn: Message | Error, explicitStopReason?: string): Turn {
+  private async *_generateEventsForContent(
+    content: ContentBlock[],
+    stopReason: string
+  ): AsyncGenerator<ModelStreamEvent> {
+    // Yield message start event (always assistant role)
+    yield { type: 'modelMessageStartEvent', role: 'assistant' }
+
+    // Yield events for each content block
+    for (let i = 0; i < content.length; i++) {
+      const block = content[i]!
+      yield* this._generateEventsForBlock(block, i)
+    }
+
+    // Yield message stop event
+    yield { type: 'modelMessageStopEvent', stopReason }
+  }
+
+  /**
+   * Creates a Turn object from ContentBlock(s) or Error.
+   */
+  private _createTurn(turn: ContentBlock | ContentBlock[] | Error, explicitStopReason?: string): Turn {
     if (turn instanceof Error) {
       return { type: 'error', error: turn }
     }
+
+    // Normalize to array
+    const content = Array.isArray(turn) ? turn : [turn]
+
     return {
-      type: 'message',
-      message: turn,
-      stopReason: explicitStopReason ?? this._deriveStopReason(turn),
+      type: 'content',
+      content,
+      stopReason: explicitStopReason ?? this._deriveStopReason(content),
     }
   }
 
   /**
-   * Auto-derives stopReason from message content.
-   * Returns 'toolUse' if message contains any ToolUseBlock, otherwise 'endTurn'.
+   * Auto-derives stopReason from content blocks.
+   * Returns 'toolUse' if content contains any ToolUseBlock, otherwise 'endTurn'.
    */
-  private _deriveStopReason(message: Message): string {
-    const hasToolUse = message.content.some((block) => block.type === 'toolUseBlock')
+  private _deriveStopReason(content: ContentBlock[]): string {
+    const hasToolUse = content.some((block) => block.type === 'toolUseBlock')
     return hasToolUse ? 'toolUse' : 'endTurn'
   }
 

@@ -10,11 +10,7 @@ import { MaxTokensError } from '../../errors'
 describe('runAgentLoop', () => {
   describe('when handling simple completion without tools', () => {
     it('yields events and returns final messages array', async () => {
-      const provider = new TestMessageModelProvider({
-        type: 'message',
-        role: 'assistant',
-        content: [{ type: 'textBlock', text: 'Hello, how can I help?' }],
-      })
+      const provider = new TestMessageModelProvider({ type: 'textBlock', text: 'Hello, how can I help?' })
 
       const registry = new ToolRegistry()
       const messages: Message[] = [
@@ -54,22 +50,12 @@ describe('runAgentLoop', () => {
     it('executes tool and continues loop until completion', async () => {
       const provider = new TestMessageModelProvider(
         {
-          type: 'message',
-          role: 'assistant',
-          content: [
-            {
-              type: 'toolUseBlock',
-              name: 'calculator',
-              toolUseId: 'tool-1',
-              input: { operation: 'add', a: 5, b: 3 },
-            },
-          ],
+          type: 'toolUseBlock',
+          name: 'calculator',
+          toolUseId: 'tool-1',
+          input: { operation: 'add', a: 5, b: 3 },
         },
-        {
-          type: 'message',
-          role: 'assistant',
-          content: [{ type: 'textBlock', text: 'The result is 8' }],
-        }
+        { type: 'textBlock', text: 'The result is 8' }
       )
 
       const mockTool = createMockTool('calculator', () => ({
@@ -133,29 +119,21 @@ describe('runAgentLoop', () => {
   describe('when handling multiple tool uses in sequence', () => {
     it('executes all tools sequentially', async () => {
       const provider = new TestMessageModelProvider(
-        {
-          type: 'message',
-          role: 'assistant',
-          content: [
-            {
-              type: 'toolUseBlock',
-              name: 'tool1',
-              toolUseId: 'id-1',
-              input: {},
-            },
-            {
-              type: 'toolUseBlock',
-              name: 'tool2',
-              toolUseId: 'id-2',
-              input: {},
-            },
-          ],
-        },
-        {
-          type: 'message',
-          role: 'assistant',
-          content: [{ type: 'textBlock', text: 'Done' }],
-        }
+        [
+          {
+            type: 'toolUseBlock',
+            name: 'tool1',
+            toolUseId: 'id-1',
+            input: {},
+          },
+          {
+            type: 'toolUseBlock',
+            name: 'tool2',
+            toolUseId: 'id-2',
+            input: {},
+          },
+        ],
+        { type: 'textBlock', text: 'Done' }
       )
 
       const tool1 = createMockTool('tool1', () => ({
@@ -204,34 +182,18 @@ describe('runAgentLoop', () => {
     it('continues through multiple tool-use cycles', async () => {
       const provider = new TestMessageModelProvider(
         {
-          type: 'message',
-          role: 'assistant',
-          content: [
-            {
-              type: 'toolUseBlock',
-              name: 'tool1',
-              toolUseId: 'id-1',
-              input: {},
-            },
-          ],
+          type: 'toolUseBlock',
+          name: 'tool1',
+          toolUseId: 'id-1',
+          input: {},
         },
         {
-          type: 'message',
-          role: 'assistant',
-          content: [
-            {
-              type: 'toolUseBlock',
-              name: 'tool2',
-              toolUseId: 'id-2',
-              input: {},
-            },
-          ],
+          type: 'toolUseBlock',
+          name: 'tool2',
+          toolUseId: 'id-2',
+          input: {},
         },
-        {
-          type: 'message',
-          role: 'assistant',
-          content: [{ type: 'textBlock', text: 'Complete' }],
-        }
+        { type: 'textBlock', text: 'Complete' }
       )
 
       const tool1 = createMockTool('tool1', () => ({
@@ -274,11 +236,7 @@ describe('runAgentLoop', () => {
 
   describe('when handling transactional message success', () => {
     it('adds assistant message to array after first model event', async () => {
-      const provider = new TestMessageModelProvider({
-        type: 'message',
-        role: 'assistant',
-        content: [{ type: 'textBlock', text: 'Response' }],
-      })
+      const provider = new TestMessageModelProvider({ type: 'textBlock', text: 'Response' })
 
       const registry = new ToolRegistry()
       const messages: Message[] = [
@@ -348,16 +306,10 @@ describe('runAgentLoop', () => {
   describe('when tool throws exception', () => {
     it('propagates the error from the tool', async () => {
       const provider = new TestMessageModelProvider({
-        type: 'message',
-        role: 'assistant',
-        content: [
-          {
-            type: 'toolUseBlock',
-            name: 'badTool',
-            toolUseId: 'id-1',
-            input: {},
-          },
-        ],
+        type: 'toolUseBlock',
+        name: 'badTool',
+        toolUseId: 'id-1',
+        input: {},
       })
 
       // eslint-disable-next-line require-yield
@@ -383,16 +335,10 @@ describe('runAgentLoop', () => {
 
     it('does not add assistant message with tool uses when tool execution fails', async () => {
       const provider = new TestMessageModelProvider({
-        type: 'message',
-        role: 'assistant',
-        content: [
-          {
-            type: 'toolUseBlock',
-            name: 'badTool',
-            toolUseId: 'id-1',
-            input: {},
-          },
-        ],
+        type: 'toolUseBlock',
+        name: 'badTool',
+        toolUseId: 'id-1',
+        input: {},
       })
 
       // eslint-disable-next-line require-yield
@@ -435,22 +381,12 @@ describe('runAgentLoop', () => {
     it('returns error tool result and continues loop', async () => {
       const provider = new TestMessageModelProvider(
         {
-          type: 'message',
-          role: 'assistant',
-          content: [
-            {
-              type: 'toolUseBlock',
-              name: 'nonexistent',
-              toolUseId: 'id-1',
-              input: {},
-            },
-          ],
+          type: 'toolUseBlock',
+          name: 'nonexistent',
+          toolUseId: 'id-1',
+          input: {},
         },
-        {
-          type: 'message',
-          role: 'assistant',
-          content: [{ type: 'textBlock', text: 'Tool not available' }],
-        }
+        { type: 'textBlock', text: 'Tool not available' }
       )
 
       const registry = new ToolRegistry()
@@ -483,14 +419,7 @@ describe('runAgentLoop', () => {
 
   describe('when maxTokens stop reason occurs', () => {
     it('throws MaxTokensError', async () => {
-      const provider = new TestMessageModelProvider().addTurn(
-        {
-          type: 'message',
-          role: 'assistant',
-          content: [{ type: 'textBlock', text: 'Partial' }],
-        },
-        'maxTokens'
-      )
+      const provider = new TestMessageModelProvider().addTurn({ type: 'textBlock', text: 'Partial' }, 'maxTokens')
 
       const registry = new ToolRegistry()
       const messages: Message[] = [
@@ -509,11 +438,7 @@ describe('runAgentLoop', () => {
 
   describe('when verifying event streaming', () => {
     it('yields all events in correct order', async () => {
-      const provider = new TestMessageModelProvider({
-        type: 'message',
-        role: 'assistant',
-        content: [{ type: 'textBlock', text: 'Test' }],
-      })
+      const provider = new TestMessageModelProvider({ type: 'textBlock', text: 'Test' })
 
       const registry = new ToolRegistry()
       const messages: Message[] = [
@@ -539,11 +464,7 @@ describe('runAgentLoop', () => {
 
   describe('when constructing ContentBlocks via streamAggregated', () => {
     it('handles TextBlock correctly', async () => {
-      const provider = new TestMessageModelProvider({
-        type: 'message',
-        role: 'assistant',
-        content: [{ type: 'textBlock', text: 'Hello' }],
-      })
+      const provider = new TestMessageModelProvider({ type: 'textBlock', text: 'Hello' })
 
       const registry = new ToolRegistry()
       const messages: Message[] = [
@@ -568,22 +489,12 @@ describe('runAgentLoop', () => {
     it('handles ToolUseBlock correctly', async () => {
       const provider = new TestMessageModelProvider(
         {
-          type: 'message',
-          role: 'assistant',
-          content: [
-            {
-              type: 'toolUseBlock',
-              name: 'test',
-              toolUseId: 'id-1',
-              input: { key: 'value' },
-            },
-          ],
+          type: 'toolUseBlock',
+          name: 'test',
+          toolUseId: 'id-1',
+          input: { key: 'value' },
         },
-        {
-          type: 'message',
-          role: 'assistant',
-          content: [{ type: 'textBlock', text: 'Done' }],
-        }
+        { type: 'textBlock', text: 'Done' }
       )
 
       const tool = createMockTool('test', () => ({
@@ -618,14 +529,10 @@ describe('runAgentLoop', () => {
     })
 
     it('handles ReasoningBlock correctly', async () => {
-      const provider = new TestMessageModelProvider({
-        type: 'message',
-        role: 'assistant',
-        content: [
-          { type: 'reasoningBlock', text: 'thinking...' },
-          { type: 'textBlock', text: 'Response' },
-        ],
-      })
+      const provider = new TestMessageModelProvider([
+        { type: 'reasoningBlock', text: 'thinking...' },
+        { type: 'textBlock', text: 'Response' },
+      ])
 
       const registry = new ToolRegistry()
       const messages: Message[] = [
