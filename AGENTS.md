@@ -801,22 +801,6 @@ describe.skipIf(!isNode)("Node.js specific features", () => {
 
 ## Troubleshooting Common Issues
 
-### Tests Not Found
-
-If tests aren't discovered:
-1. Ensure unit tests are in `src/__tests__/*.test.ts`
-2. Ensure integration tests are in `tests_integ/*.test.ts`
-3. Check `vitest.config.ts` configuration
-
-### Pre-commit Hooks Failing
-
-If hooks fail:
-1. Run the failing command manually to see details
-2. Fix the issues (tests, linting, formatting, or type errors)
-3. Try committing again
-
-### Type Errors
-
 If TypeScript compilation fails:
 1. Run `npm run type-check` to see all type errors
 2. Ensure all functions have explicit return types
