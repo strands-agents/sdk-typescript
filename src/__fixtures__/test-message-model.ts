@@ -32,12 +32,11 @@ type Turn = { type: 'content'; content: ContentBlock[]; stopReason: string } | {
  * @example
  * ```typescript
  * // Simple single-turn test with one text block
- * const provider = new TestMessageModelProvider(
- *   { type: 'textBlock', text: 'Hello' }
- * )
+ * const provider = new TestMessageModelProvider()
+ *   .addTurn({ type: 'textBlock', text: 'Hello' })
  *
  * // Multiple content blocks in one turn
- * const provider = new TestMessageModelProvider([
+ * const provider = new TestMessageModelProvider().addTurn([
  *   { type: 'textBlock', text: 'Let me check' },
  *   { type: 'toolUseBlock', name: 'calc', toolUseId: 'id-1', input: {} }
  * ])
@@ -64,41 +63,12 @@ export class TestMessageModelProvider extends Model<BaseModelConfig> {
 
   /**
    * Creates a new TestMessageModelProvider.
-   *
-   * @param turns - Variable number of ContentBlock, ContentBlock[], or Error objects representing turns
-   *
-   * @example
-   * ```typescript
-   * // No arguments - use addTurn() to add turns
-   * new TestMessageModelProvider()
-   *
-   * // Single content block - stopReason auto-derived
-   * new TestMessageModelProvider({ type: 'textBlock', text: 'Hello' })
-   *
-   * // Multiple content blocks in one turn
-   * new TestMessageModelProvider([
-   *   { type: 'textBlock', text: 'First' },
-   *   { type: 'textBlock', text: 'Second' }
-   * ])
-   *
-   * // Multiple turns
-   * new TestMessageModelProvider(
-   *   { type: 'toolUseBlock', name: 'calc', toolUseId: 'id-1', input: {} },
-   *   { type: 'textBlock', text: 'Done' }
-   * )
-   *
-   * // With errors
-   * new TestMessageModelProvider(
-   *   { type: 'textBlock', text: 'Success' },
-   *   new Error('Failed')
-   * )
-   * ```
    */
-  constructor(...turns: (ContentBlock | ContentBlock[] | Error)[]) {
+  constructor() {
     super()
     this._config = { modelId: 'test-model' }
     this._currentTurnIndex = 0
-    this._turns = turns.map((turn) => this._createTurn(turn))
+    this._turns = []
   }
 
   /**

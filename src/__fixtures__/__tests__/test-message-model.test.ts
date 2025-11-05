@@ -11,12 +11,12 @@ describe('TestMessageModelProvider', () => {
     })
 
     it('creates provider with single content block', () => {
-      const provider = new TestMessageModelProvider({ type: 'textBlock', text: 'Hello' })
+      const provider = new TestMessageModelProvider().addTurn({ type: 'textBlock', text: 'Hello' })
       expect(provider).toBeDefined()
     })
 
     it('creates provider with array of content blocks', () => {
-      const provider = new TestMessageModelProvider([
+      const provider = new TestMessageModelProvider().addTurn([
         { type: 'textBlock', text: 'First' },
         { type: 'textBlock', text: 'Second' },
       ])
@@ -24,21 +24,22 @@ describe('TestMessageModelProvider', () => {
     })
 
     it('creates provider with multiple turns', () => {
-      const provider = new TestMessageModelProvider(
-        { type: 'textBlock', text: 'First' },
-        { type: 'textBlock', text: 'Second' }
-      )
+      const provider = new TestMessageModelProvider()
+        .addTurn({ type: 'textBlock', text: 'First' })
+        .addTurn({ type: 'textBlock', text: 'Second' })
       expect(provider).toBeDefined()
     })
 
     it('creates provider with Error object', () => {
       const error = new Error('Test error')
-      const provider = new TestMessageModelProvider(error)
+      const provider = new TestMessageModelProvider().addTurn(error)
       expect(provider).toBeDefined()
     })
 
     it('creates provider with mixed content and errors', () => {
-      const provider = new TestMessageModelProvider({ type: 'textBlock', text: 'Hello' }, new Error('Test error'))
+      const provider = new TestMessageModelProvider()
+        .addTurn({ type: 'textBlock', text: 'Hello' })
+        .addTurn(new Error('Test error'))
       expect(provider).toBeDefined()
     })
   })
@@ -74,7 +75,7 @@ describe('TestMessageModelProvider', () => {
 
   describe('stopReason auto-derivation', () => {
     it('derives toolUse for content with ToolUseBlock', async () => {
-      const provider = new TestMessageModelProvider({
+      const provider = new TestMessageModelProvider().addTurn({
         type: 'toolUseBlock',
         name: 'calculator',
         toolUseId: 'test-1',
@@ -85,19 +86,19 @@ describe('TestMessageModelProvider', () => {
     })
 
     it('derives endTurn for content with TextBlock only', async () => {
-      const provider = new TestMessageModelProvider({ type: 'textBlock', text: 'Hello' })
+      const provider = new TestMessageModelProvider().addTurn({ type: 'textBlock', text: 'Hello' })
       const { result } = await collectGenerator(provider.streamAggregated([]))
       expect(result.stopReason).toBe('endTurn')
     })
 
     it('derives endTurn for content with ReasoningBlock', async () => {
-      const provider = new TestMessageModelProvider({ type: 'reasoningBlock', text: 'thinking...' })
+      const provider = new TestMessageModelProvider().addTurn({ type: 'reasoningBlock', text: 'thinking...' })
       const { result } = await collectGenerator(provider.streamAggregated([]))
       expect(result.stopReason).toBe('endTurn')
     })
 
     it('derives toolUse for mixed content including ToolUse', async () => {
-      const provider = new TestMessageModelProvider([
+      const provider = new TestMessageModelProvider().addTurn([
         { type: 'textBlock', text: 'Let me check' },
         {
           type: 'toolUseBlock',
@@ -119,7 +120,7 @@ describe('TestMessageModelProvider', () => {
 
   describe('turn management', () => {
     it('reuses single turn indefinitely', async () => {
-      const provider = new TestMessageModelProvider({ type: 'textBlock', text: 'Hello' })
+      const provider = new TestMessageModelProvider().addTurn({ type: 'textBlock', text: 'Hello' })
 
       // First call
       const { result: result1 } = await collectGenerator(provider.streamAggregated([]))
@@ -135,10 +136,9 @@ describe('TestMessageModelProvider', () => {
     })
 
     it('advances through multiple turns correctly', async () => {
-      const provider = new TestMessageModelProvider(
-        { type: 'textBlock', text: 'First' },
-        { type: 'textBlock', text: 'Second' }
-      )
+      const provider = new TestMessageModelProvider()
+        .addTurn({ type: 'textBlock', text: 'First' })
+        .addTurn({ type: 'textBlock', text: 'Second' })
 
       // First call
       const { result: result1 } = await collectGenerator(provider.streamAggregated([]))
@@ -150,10 +150,9 @@ describe('TestMessageModelProvider', () => {
     })
 
     it('throws error when turns exhausted', async () => {
-      const provider = new TestMessageModelProvider(
-        { type: 'textBlock', text: 'First' },
-        { type: 'textBlock', text: 'Second' }
-      )
+      const provider = new TestMessageModelProvider()
+        .addTurn({ type: 'textBlock', text: 'First' })
+        .addTurn({ type: 'textBlock', text: 'Second' })
 
       // First and second calls succeed
       await collectGenerator(provider.streamAggregated([]))
@@ -165,14 +164,14 @@ describe('TestMessageModelProvider', () => {
 
     it('throws error when Error turn is reached', async () => {
       const error = new Error('Test error')
-      const provider = new TestMessageModelProvider(error)
+      const provider = new TestMessageModelProvider().addTurn(error)
 
       await expect(collectGenerator(provider.streamAggregated([]))).rejects.toThrow('Test error')
     })
 
     it('throws error on correct turn in multi-turn scenario', async () => {
       const error = new Error('Second turn error')
-      const provider = new TestMessageModelProvider({ type: 'textBlock', text: 'First' }, error)
+      const provider = new TestMessageModelProvider().addTurn({ type: 'textBlock', text: 'First' }).addTurn(error)
 
       // First call succeeds
       const { result } = await collectGenerator(provider.streamAggregated([]))
@@ -185,7 +184,7 @@ describe('TestMessageModelProvider', () => {
 
   describe('event generation', () => {
     it('generates correct events for TextBlock', async () => {
-      const provider = new TestMessageModelProvider({ type: 'textBlock', text: 'Hello, world!' })
+      const provider = new TestMessageModelProvider().addTurn({ type: 'textBlock', text: 'Hello, world!' })
       const events = await collectIterator(provider.stream([]))
 
       expect(events).toEqual([
@@ -202,7 +201,7 @@ describe('TestMessageModelProvider', () => {
     })
 
     it('generates correct events for ToolUseBlock', async () => {
-      const provider = new TestMessageModelProvider({
+      const provider = new TestMessageModelProvider().addTurn({
         type: 'toolUseBlock',
         name: 'calculator',
         toolUseId: 'test-1',
@@ -228,7 +227,7 @@ describe('TestMessageModelProvider', () => {
     })
 
     it('generates correct events for ReasoningBlock', async () => {
-      const provider = new TestMessageModelProvider({ type: 'reasoningBlock', text: 'thinking...' })
+      const provider = new TestMessageModelProvider().addTurn({ type: 'reasoningBlock', text: 'thinking...' })
       const events = await collectIterator(provider.stream([]))
 
       expect(events).toEqual([
@@ -245,7 +244,7 @@ describe('TestMessageModelProvider', () => {
     })
 
     it('generates correct events for CachePointBlock', async () => {
-      const provider = new TestMessageModelProvider([
+      const provider = new TestMessageModelProvider().addTurn([
         { type: 'textBlock', text: 'Hello' },
         { type: 'cachePointBlock', cacheType: 'default' },
       ])
@@ -257,7 +256,7 @@ describe('TestMessageModelProvider', () => {
     })
 
     it('generates correct events for multiple ContentBlocks', async () => {
-      const provider = new TestMessageModelProvider([
+      const provider = new TestMessageModelProvider().addTurn([
         { type: 'textBlock', text: 'First' },
         { type: 'textBlock', text: 'Second' },
         { type: 'textBlock', text: 'Third' },
@@ -270,7 +269,7 @@ describe('TestMessageModelProvider', () => {
     })
 
     it('handles empty content array', async () => {
-      const provider = new TestMessageModelProvider([])
+      const provider = new TestMessageModelProvider().addTurn([])
       const events = await collectIterator(provider.stream([]))
 
       expect(events).toEqual([
@@ -282,7 +281,7 @@ describe('TestMessageModelProvider', () => {
 
   describe('integration with streamAggregated', () => {
     it('returns correct message from streamAggregated', async () => {
-      const provider = new TestMessageModelProvider({ type: 'textBlock', text: 'Hello' })
+      const provider = new TestMessageModelProvider().addTurn({ type: 'textBlock', text: 'Hello' })
       const { result } = await collectGenerator(provider.streamAggregated([]))
 
       expect(result.message).toEqual({
@@ -300,7 +299,7 @@ describe('TestMessageModelProvider', () => {
     })
 
     it('yields all events correctly', async () => {
-      const provider = new TestMessageModelProvider({ type: 'textBlock', text: 'Hello' })
+      const provider = new TestMessageModelProvider().addTurn({ type: 'textBlock', text: 'Hello' })
       const { items } = await collectGenerator(provider.streamAggregated([]))
 
       // Should include all ModelStreamEvents and the final ContentBlock
@@ -310,7 +309,7 @@ describe('TestMessageModelProvider', () => {
     })
 
     it('reconstructs ContentBlocks correctly', async () => {
-      const provider = new TestMessageModelProvider([
+      const provider = new TestMessageModelProvider().addTurn([
         { type: 'textBlock', text: 'Hello' },
         {
           type: 'toolUseBlock',
