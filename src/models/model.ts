@@ -75,7 +75,7 @@ export abstract class Model<T extends BaseModelConfig> {
 
   /**
    * Streams a conversation with aggregated content blocks and messages.
-   * Returns an async generator that yields streaming events and content blocks, and returns the final message.
+   * Returns an async generator that yields streaming events and content blocks, and returns the final message with stop reason.
    *
    * This method enhances the basic stream() by collecting streaming events into complete
    * ContentBlock and Message objects, which are needed by the agentic loop for tool execution
@@ -86,16 +86,16 @@ export abstract class Model<T extends BaseModelConfig> {
    * - ContentBlock - Complete content block (emitted when block completes)
    *
    * The method returns:
-   * - Message - Complete message (returned when message completes)
+   * - Object containing the complete message and stop reason
    *
    * @param messages - Array of conversation messages
    * @param options - Optional streaming configuration
-   * @returns Async generator yielding ModelStreamEvent | ContentBlock and returning Message
+   * @returns Async generator yielding ModelStreamEvent | ContentBlock and returning an object with message and stopReason
    */
   async *streamAggregated(
     messages: Message[],
     options?: StreamOptions
-  ): AsyncGenerator<ModelStreamEvent | ContentBlock, Message, never> {
+  ): AsyncGenerator<ModelStreamEvent | ContentBlock, { message: Message; stopReason: string }, never> {
     // State maintained in closure
     let messageRole: Role | null = null
     const contentBlocks: ContentBlock[] = []
@@ -174,14 +174,14 @@ export abstract class Model<T extends BaseModelConfig> {
         }
 
         case 'modelMessageStopEvent':
-          // Complete message - will be returned at the end
+          // Complete message and return with stop reason
           if (messageRole) {
             const message: Message = {
               type: 'message',
               role: messageRole,
               content: [...contentBlocks],
             }
-            return message
+            return { message, stopReason: event.stopReason! }
           }
           break
 

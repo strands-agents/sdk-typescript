@@ -21,6 +21,12 @@ sdk-typescript/
 │   │   ├── errors.test.ts        # Tests for error classes
 │   │   └── index.test.ts         # Tests for main entry point
 │   │
+│   ├── agent/                    # Agent loop and streaming
+│   │   ├── __tests__/            # Unit tests for agent loop
+│   │   │   └── agent-loop.test.ts  # Tests for agent loop function
+│   │   ├── agent-loop.ts         # Core agent loop implementation
+│   │   └── streaming.ts          # Agent streaming event types
+│   │
 │   ├── models/                   # Model provider implementations
 │   │   ├── __tests__/            # Unit tests for model providers
 │   │   │   └── bedrock.test.ts   # Tests for Bedrock model provider
@@ -82,6 +88,7 @@ sdk-typescript/
 
 - **`src/`**: All production code lives here with co-located unit tests
 - **`src/__tests__/`**: Unit tests for root-level source files
+- **`src/agent/`**: Agent loop coordination and streaming event types
 - **`src/models/`**: Model provider implementations (Bedrock, future providers)
 - **`src/tools/`**: Tool definitions and types for agent tool use
 - **`src/types/`**: Core type definitions used across the SDK
@@ -141,6 +148,39 @@ src/
 ├── module.ts              # Source file
 └── __tests__/
     └── module.test.ts     # Unit tests co-located
+```
+
+**Function ordering within files**:
+- Functions MUST be ordered from most general to most specific (top-down reading)
+- Public/exported functions MUST appear before private helper functions
+- Main entry point functions MUST be at the top of the file
+- Helper functions SHOULD follow in order of their usage
+
+**Example**:
+```typescript
+// ✅ Good: Main function first, helpers follow
+export async function* mainFunction() {
+  const result = await helperFunction1()
+  return helperFunction2(result)
+}
+
+async function helperFunction1() {
+  // Implementation
+}
+
+function helperFunction2(input: string) {
+  // Implementation
+}
+
+// ❌ Bad: Helpers before main function
+async function helperFunction1() {
+  // Implementation
+}
+
+export async function* mainFunction() {
+  const result = await helperFunction1()
+  return helperFunction2(result)
+}
 ```
 
 **For integration tests**:

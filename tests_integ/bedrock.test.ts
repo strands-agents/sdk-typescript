@@ -306,8 +306,11 @@ describe.skipIf(!shouldRunTests)('BedrockModel Integration Tests', () => {
         expect(streamEventCount).toBeGreaterThan(0)
         expect(contentBlockCount).toBe(1)
         expect(result).toMatchObject({
-          role: 'assistant',
-          content: [expect.objectContaining({ type: 'textBlock', text: expect.any(String) })],
+          stopReason: 'endTurn',
+          message: {
+            role: 'assistant',
+            content: [expect.objectContaining({ type: 'textBlock', text: expect.any(String) })],
+          },
         })
       })
     })
