@@ -20,14 +20,6 @@ type Turn = { type: 'content'; content: ContentBlock[]; stopReason: string } | {
  * Test model provider that operates at the content block level.
  * Simplifies agent loop tests by allowing specification of content blocks
  * instead of manually yielding individual ModelStreamEvents.
- *
- * Features:
- * - Content-focused API - just specify the blocks you want
- * - Builder pattern with constructor and addTurn() method
- * - Auto-derives stopReason from content (toolUse vs endTurn)
- * - Multi-turn support with single-turn reuse and multi-turn exhaustion
- * - Error handling support for testing error scenarios
- * - Default role is 'assistant' (model responses)
  */
 export class MockMessageModel extends Model<BaseModelConfig> {
   private _turns: Turn[]
@@ -42,6 +34,13 @@ export class MockMessageModel extends Model<BaseModelConfig> {
     this._config = { modelId: 'test-model' }
     this._currentTurnIndex = 0
     this._turns = []
+  }
+
+  /**
+   * The number of turns that have been invoked thus far.
+   */
+  get callCount(): number {
+    return this._currentTurnIndex
   }
 
   /**
