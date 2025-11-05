@@ -40,11 +40,6 @@ export interface ModelContentBlockStartEvent {
   type: 'modelContentBlockStartEvent'
 
   /**
-   * Index of this content block within the message.
-   */
-  contentBlockIndex?: number
-
-  /**
    * Information about the content block being started.
    * Only present for tool use blocks.
    */
@@ -61,11 +56,6 @@ export interface ModelContentBlockDeltaEvent {
   type: 'modelContentBlockDeltaEvent'
 
   /**
-   * Index of the content block being updated.
-   */
-  contentBlockIndex?: number
-
-  /**
    * The incremental content update.
    */
   delta: ContentBlockDelta
@@ -79,11 +69,6 @@ export interface ModelContentBlockStopEvent {
    * Discriminator for content block stop events.
    */
   type: 'modelContentBlockStopEvent'
-
-  /**
-   * Index of the content block that stopped.
-   */
-  contentBlockIndex?: number
 }
 
 /**

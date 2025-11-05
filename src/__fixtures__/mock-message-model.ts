@@ -136,7 +136,7 @@ export class MockMessageModel extends Model<BaseModelConfig> {
     // Yield events for each content block
     for (let i = 0; i < content.length; i++) {
       const block = content[i]!
-      yield* this._generateEventsForBlock(block, i)
+      yield* this._generateEventsForBlock(block)
     }
 
     // Yield message stop event
@@ -180,7 +180,7 @@ export class MockMessageModel extends Model<BaseModelConfig> {
     // Yield events for each content block
     for (let i = 0; i < message.content.length; i++) {
       const block = message.content[i]!
-      yield* this._generateEventsForBlock(block, i)
+      yield* this._generateEventsForBlock(block)
     }
 
     // Yield message stop event
@@ -190,37 +190,31 @@ export class MockMessageModel extends Model<BaseModelConfig> {
   /**
    * Generates appropriate ModelStreamEvents for a content block.
    */
-  private async *_generateEventsForBlock(
-    block: ContentBlock,
-    contentBlockIndex: number
-  ): AsyncGenerator<ModelStreamEvent> {
+  private async *_generateEventsForBlock(block: ContentBlock): AsyncGenerator<ModelStreamEvent> {
     switch (block.type) {
       case 'textBlock':
-        yield { type: 'modelContentBlockStartEvent', contentBlockIndex }
+        yield { type: 'modelContentBlockStartEvent' }
         yield {
           type: 'modelContentBlockDeltaEvent',
           delta: { type: 'textDelta', text: block.text },
-          contentBlockIndex,
         }
-        yield { type: 'modelContentBlockStopEvent', contentBlockIndex }
+        yield { type: 'modelContentBlockStopEvent' }
         break
 
       case 'toolUseBlock':
         yield {
           type: 'modelContentBlockStartEvent',
-          contentBlockIndex,
           start: { type: 'toolUseStart', name: block.name, toolUseId: block.toolUseId },
         }
         yield {
           type: 'modelContentBlockDeltaEvent',
           delta: { type: 'toolUseInputDelta', input: JSON.stringify(block.input) },
-          contentBlockIndex,
         }
-        yield { type: 'modelContentBlockStopEvent', contentBlockIndex }
+        yield { type: 'modelContentBlockStopEvent' }
         break
 
       case 'reasoningBlock': {
-        yield { type: 'modelContentBlockStartEvent', contentBlockIndex }
+        yield { type: 'modelContentBlockStartEvent' }
         // Build delta object with only defined properties
         const delta: {
           type: 'reasoningContentDelta'
@@ -242,16 +236,15 @@ export class MockMessageModel extends Model<BaseModelConfig> {
         yield {
           type: 'modelContentBlockDeltaEvent',
           delta,
-          contentBlockIndex,
         }
-        yield { type: 'modelContentBlockStopEvent', contentBlockIndex }
+        yield { type: 'modelContentBlockStopEvent' }
         break
       }
 
       case 'cachePointBlock':
         // CachePointBlock doesn't generate delta events
-        yield { type: 'modelContentBlockStartEvent', contentBlockIndex }
-        yield { type: 'modelContentBlockStopEvent', contentBlockIndex }
+        yield { type: 'modelContentBlockStartEvent' }
+        yield { type: 'modelContentBlockStopEvent' }
         break
 
       case 'toolResultBlock':

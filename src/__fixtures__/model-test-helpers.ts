@@ -18,9 +18,9 @@ import type { BaseModelConfig, StreamOptions } from '../models/model.js'
  * ```typescript
  * const provider = new TestModelProvider(async function* () {
  *   yield { type: 'modelMessageStartEvent', role: 'assistant' }
- *   yield { type: 'modelContentBlockStartEvent', contentBlockIndex: 0 }
- *   yield { type: 'modelContentBlockDeltaEvent', delta: { type: 'textDelta', text: 'Hello' }, contentBlockIndex: 0 }
- *   yield { type: 'modelContentBlockStopEvent', contentBlockIndex: 0 }
+ *   yield { type: 'modelContentBlockStartEvent' }
+ *   yield { type: 'modelContentBlockDeltaEvent', delta: { type: 'textDelta', text: 'Hello' } }
+ *   yield { type: 'modelContentBlockStopEvent' }
  *   yield { type: 'modelMessageStopEvent', stopReason: 'endTurn' }
  * })
  *

@@ -388,21 +388,17 @@ describe('OpenAIModel', () => {
         expect(events[0]).toEqual({ type: 'modelMessageStartEvent', role: 'assistant' })
         expect(events[1]).toEqual({
           type: 'modelContentBlockStartEvent',
-          contentBlockIndex: 0,
         })
         expect(events[2]).toEqual({
           type: 'modelContentBlockDeltaEvent',
-          contentBlockIndex: 0,
           delta: { type: 'textDelta', text: 'Hello' },
         })
         expect(events[3]).toEqual({
           type: 'modelContentBlockDeltaEvent',
-          contentBlockIndex: 0,
           delta: { type: 'textDelta', text: ' world' },
         })
         expect(events[4]).toEqual({
           type: 'modelContentBlockStopEvent',
-          contentBlockIndex: 0,
         })
         expect(events[5]).toEqual({ type: 'modelMessageStopEvent', stopReason: 'endTurn' })
       })
@@ -583,7 +579,6 @@ describe('OpenAIModel', () => {
       expect(events[0]).toEqual({ type: 'modelMessageStartEvent', role: 'assistant' })
       expect(events[1]).toEqual({
         type: 'modelContentBlockStartEvent',
-        contentBlockIndex: 0,
         start: {
           type: 'toolUseStart',
           name: 'calculator',
@@ -592,7 +587,6 @@ describe('OpenAIModel', () => {
       })
       expect(events[2]).toEqual({
         type: 'modelContentBlockDeltaEvent',
-        contentBlockIndex: 0,
         delta: {
           type: 'toolUseInputDelta',
           input: '{"expr',
@@ -600,7 +594,6 @@ describe('OpenAIModel', () => {
       })
       expect(events[3]).toEqual({
         type: 'modelContentBlockDeltaEvent',
-        contentBlockIndex: 0,
         delta: {
           type: 'toolUseInputDelta',
           input: '":"2+2"}',
@@ -608,12 +601,11 @@ describe('OpenAIModel', () => {
       })
       expect(events[4]).toEqual({
         type: 'modelContentBlockStopEvent',
-        contentBlockIndex: 0,
       })
       expect(events[5]).toEqual({ type: 'modelMessageStopEvent', stopReason: 'toolUse' })
     })
 
-    it('handles multiple tool calls with correct contentBlockIndex', async () => {
+    it('handles multiple tool calls', async () => {
       const mockClient = createMockClient(async function* () {
         yield {
           choices: [{ delta: { role: 'assistant' }, index: 0 }],
@@ -665,8 +657,8 @@ describe('OpenAIModel', () => {
       // Should emit stop events for both tool calls
       const stopEvents = events.filter((e) => e.type === 'modelContentBlockStopEvent')
       expect(stopEvents).toHaveLength(2)
-      expect(stopEvents[0]).toEqual({ type: 'modelContentBlockStopEvent', contentBlockIndex: 0 })
-      expect(stopEvents[1]).toEqual({ type: 'modelContentBlockStopEvent', contentBlockIndex: 1 })
+      expect(stopEvents[0]).toEqual({ type: 'modelContentBlockStopEvent' })
+      expect(stopEvents[1]).toEqual({ type: 'modelContentBlockStopEvent' })
     })
 
     it('skips tool calls with invalid index', async () => {
@@ -799,7 +791,6 @@ describe('OpenAIModel', () => {
       expect(events[0]?.type).toBe('modelMessageStartEvent')
       // Text content block start
       expect(events[1]?.type).toBe('modelContentBlockStartEvent')
-      expect((events[1] as any).contentBlockIndex).toBe(0)
       // Text deltas
       expect(events[2]?.type).toBe('modelContentBlockDeltaEvent')
       expect((events[2] as any).delta.type).toBe('textDelta')
