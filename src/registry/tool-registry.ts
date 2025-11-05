@@ -1,7 +1,14 @@
-import { v4 as uuidv4 } from 'uuid'
 import { Registry, ValidationError } from './registry'
-import type { ToolIdentifier } from '../agent'
 import type { Tool, ToolStreamGenerator } from '../tools/tool'
+import { randomUUID } from 'crypto'
+
+/**
+ * A unique, structured identifier for a Tool instance.
+ */
+export type ToolIdentifier = {
+  readonly type: 'toolIdentifier'
+  readonly id: string
+}
 
 /**
  * A concrete implementation of the Registry for managing Tool instances.
@@ -14,7 +21,7 @@ export class ToolRegistry extends Registry<Tool, ToolIdentifier> {
    * @returns A new ToolIdentifier object with a UUID.
    */
   protected generateId(): ToolIdentifier {
-    return { type: 'toolIdentifier', id: uuidv4() }
+    return { type: 'toolIdentifier', id: randomUUID() }
   }
 
   /**
@@ -52,6 +59,24 @@ export class ToolRegistry extends Registry<Tool, ToolIdentifier> {
       throw new ValidationError(`Tool with name '${tool.name}' already registered`)
     }
   }
+
+  /**
+   * Retrieves the first tool that matches the given name.
+   * @param name - The name of the tool to retrieve.
+   * @returns The tool if found, otherwise undefined.
+   */
+  public getByName(name: string): Tool | undefined {
+    return this.values().find((tool) => tool.name === name)
+  }
+
+  /**
+   * Finds and removes the first tool that matches the given name.
+   * If multiple tools have the same name, only the first one found is removed.
+   * @param name - The name of the tool to remove.
+   */
+  public removeByName(name: string): void {
+    this.findRemove((tool) => tool.name === name)
+  }
 }
 
 // Unit tests
@@ -84,7 +109,7 @@ if (import.meta.vitest) {
 
     it('should register a valid tool successfully', () => {
       const tool = createMockTool()
-      expect(() => registry.register(tool)).not.toThrow()
+      expect(() => registry.add(tool)).not.toThrow()
       expect(registry.values()).toHaveLength(1)
       expect(registry.values()[0]?.name).toBe('valid-tool')
     })
@@ -92,16 +117,16 @@ if (import.meta.vitest) {
     it('should throw ValidationError for a duplicate tool name', () => {
       const tool1 = createMockTool({ name: 'duplicate-name' })
       const tool2 = createMockTool({ name: 'duplicate-name' })
-      registry.register(tool1)
+      registry.add(tool1)
 
-      expect(() => registry.register(tool2)).toThrow(ValidationError)
-      expect(() => registry.register(tool2)).toThrow("Tool with name 'duplicate-name' already registered")
+      expect(() => registry.add(tool2)).toThrow(ValidationError)
+      expect(() => registry.add(tool2)).toThrow("Tool with name 'duplicate-name' already registered")
     })
 
     it('should throw ValidationError for an invalid tool name pattern', () => {
       const tool = createMockTool({ name: 'invalid name!' })
-      expect(() => registry.register(tool)).toThrow(ValidationError)
-      expect(() => registry.register(tool)).toThrow(
+      expect(() => registry.add(tool)).toThrow(ValidationError)
+      expect(() => registry.add(tool)).toThrow(
         'Tool name must contain only alphanumeric characters, hyphens, and underscores'
       )
     })
@@ -109,15 +134,15 @@ if (import.meta.vitest) {
     it('should throw ValidationError for a tool name that is too long', () => {
       const longName = 'a'.repeat(65)
       const tool = createMockTool({ name: longName })
-      expect(() => registry.register(tool)).toThrow(ValidationError)
-      expect(() => registry.register(tool)).toThrow('Tool name must be between 1 and 64 characters')
+      expect(() => registry.add(tool)).toThrow(ValidationError)
+      expect(() => registry.add(tool)).toThrow('Tool name must be between 1 and 64 characters')
     })
 
     it('should throw ValidationError for an invalid description', () => {
       // @ts-expect-error - Testing invalid type for description
       const tool = createMockTool({ description: 123 })
-      expect(() => registry.register(tool)).toThrow(ValidationError)
-      expect(() => registry.register(tool)).toThrow('Tool description must be a non-empty string')
+      expect(() => registry.add(tool)).toThrow(ValidationError)
+      expect(() => registry.add(tool)).toThrow('Tool description must be a non-empty string')
     })
   })
 }

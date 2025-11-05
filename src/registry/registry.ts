@@ -109,13 +109,13 @@ export abstract class Registry<T, I> {
   }
 
   /**
-   * Validates and registers a new item, assigning it a generated ID.
-   * @param item - The item to register.
+   * Validates and adds a new item, assigning it a generated ID.
+   * @param item - The item to add.
    * @returns The newly generated ID for the item.
    * @throws DuplicateItemError If the generated ID already exists.
    * @throws ValidationError If the item fails the validation check.
    */
-  public register(item: T): I {
+  public add(item: T): I {
     this.validate(item)
 
     const id = this.generateId()
@@ -128,12 +128,12 @@ export abstract class Registry<T, I> {
   }
 
   /**
-   * Registers an array of items.
-   * @param items - An array of items to register.
-   * @returns An array of the new IDs for the registered items.
+   * Adds an array of items.
+   * @param items - An array of items to add.
+   * @returns An array of the new IDs for the added items.
    */
-  public registerAll(items: T[]): I[] {
-    return items.map((item) => this.register(item))
+  public addAll(items: T[]): I[] {
+    return items.map((item) => this.add(item))
   }
 
   /**
@@ -142,7 +142,7 @@ export abstract class Registry<T, I> {
    * @returns The removed item.
    * @throws ItemNotFoundError If no item with the given ID is found.
    */
-  public deregister(id: I): T {
+  public remove(id: I): T {
     const item = this._items.get(id)
     if (item === undefined) {
       throw new ItemNotFoundError(id)
@@ -152,11 +152,20 @@ export abstract class Registry<T, I> {
   }
 
   /**
+   * Removes multiple items from the registry by their IDs.
+   * @param ids - An array of IDs of the items to remove.
+   * @returns An array of the removed items.
+   */
+  public removeAll(ids: I[]): T[] {
+    return ids.map((id) => this.remove(id))
+  }
+
+  /**
    * Finds the first item matching the predicate, removes it, and returns it.
    * @param predicate - A function to test each item.
    * @returns The removed item if found, otherwise undefined.
    */
-  public findDeregister(predicate: (item: T) => boolean): T | undefined {
+  public findRemove(predicate: (item: T) => boolean): T | undefined {
     for (const [id, item] of this._items.entries()) {
       if (predicate(item)) {
         this._items.delete(id)
@@ -165,15 +174,6 @@ export abstract class Registry<T, I> {
     }
 
     return undefined
-  }
-
-  /**
-   * Removes multiple items from the registry by their IDs.
-   * @param ids - An array of IDs of the items to remove.
-   * @returns An array of the removed items.
-   */
-  public deregisterAll(ids: I[]): T[] {
-    return ids.map((id) => this.deregister(id))
   }
 }
 
@@ -224,7 +224,7 @@ if (import.meta.vitest) {
     })
 
     it('should register an item and return a new ID', () => {
-      const id = registry.register('test-item')
+      const id = registry.add('test-item')
       expect(id).toBe(1)
       expect(registry.get(1)).toBe('test-item')
     })
@@ -232,24 +232,24 @@ if (import.meta.vitest) {
     it('should throw DuplicateItemError when registering with an existing ID', () => {
       // @ts-expect-error - Spying on protected 'generateId' to test duplicate handling.
       const generateIdSpy = vi.spyOn(registry, 'generateId').mockReturnValue(1)
-      registry.register('test-item') // This will register with ID 1.
-      expect(() => registry.register('another-item')).toThrow(DuplicateItemError)
+      registry.add('test-item') // This will register with ID 1.
+      expect(() => registry.add('another-item')).toThrow(DuplicateItemError)
       generateIdSpy.mockRestore()
     })
 
     it('should deregister an item and return it', () => {
-      const id = registry.register('test-item')
-      const deregisteredItem = registry.deregister(id)
+      const id = registry.add('test-item')
+      const deregisteredItem = registry.remove(id)
       expect(deregisteredItem).toBe('test-item')
       expect(registry.get(id)).toBeUndefined()
     })
 
     it('should throw ItemNotFoundError when deregistering a non-existent item', () => {
-      expect(() => registry.deregister(999)).toThrow(ItemNotFoundError)
+      expect(() => registry.remove(999)).toThrow(ItemNotFoundError)
     })
 
     it('should get an item by its ID', () => {
-      const id = registry.register('test-item')
+      const id = registry.add('test-item')
       const foundItem = registry.get(id)
       expect(foundItem).toBe('test-item')
     })
@@ -260,33 +260,33 @@ if (import.meta.vitest) {
     })
 
     it('should find an item using a predicate', () => {
-      registry.register('item-a')
-      registry.register('item-b')
+      registry.add('item-a')
+      registry.add('item-b')
       const foundItem = registry.find((item) => item.includes('b'))
       expect(foundItem).toBe('item-b')
     })
 
     it('should return undefined when no item matches the predicate', () => {
-      registry.register('item-a')
+      registry.add('item-a')
       const foundItem = registry.find((item) => item.includes('c'))
       expect(foundItem).toBeUndefined()
     })
 
     it('should return all keys', () => {
-      registry.register('item-1')
-      registry.register('item-2')
+      registry.add('item-1')
+      registry.add('item-2')
       expect(registry.keys()).toEqual([1, 2])
     })
 
     it('should return all values', () => {
-      registry.register('item-1')
-      registry.register('item-2')
+      registry.add('item-1')
+      registry.add('item-2')
       expect(registry.values()).toEqual(['item-1', 'item-2'])
     })
 
     it('should return all key-value pairs', () => {
-      registry.register('item-1')
-      registry.register('item-2')
+      registry.add('item-1')
+      registry.add('item-2')
       expect(registry.pairs()).toEqual([
         [1, 'item-1'],
         [2, 'item-2'],
@@ -294,36 +294,36 @@ if (import.meta.vitest) {
     })
 
     it('should clear all items from the registry', () => {
-      registry.register('item-1')
+      registry.add('item-1')
       registry.clear()
       expect(registry.keys()).toEqual([])
       expect(registry.values()).toEqual([])
     })
 
     it('should register multiple items', () => {
-      const ids = registry.registerAll(['item-a', 'item-b'])
+      const ids = registry.addAll(['item-a', 'item-b'])
       expect(ids).toEqual([1, 2])
       expect(registry.values()).toEqual(['item-a', 'item-b'])
     })
 
     it('should deregister multiple items', () => {
-      const ids = registry.registerAll(['item-a', 'item-b', 'item-c'])
-      const deregisteredItems = registry.deregisterAll([ids[0]!, ids[2]!])
+      const ids = registry.addAll(['item-a', 'item-b', 'item-c'])
+      const deregisteredItems = registry.removeAll([ids[0]!, ids[2]!])
       expect(deregisteredItems).toEqual(['item-a', 'item-c'])
       expect(registry.values()).toEqual(['item-b'])
     })
 
     it('should find and deregister an item', () => {
-      registry.register('item-a')
-      registry.register('item-b')
-      const deregisteredItem = registry.findDeregister((item) => item.includes('a'))
+      registry.add('item-a')
+      registry.add('item-b')
+      const deregisteredItem = registry.findRemove((item) => item.includes('a'))
       expect(deregisteredItem).toBe('item-a')
       expect(registry.values()).toEqual(['item-b'])
     })
 
     it('should return undefined from findDeregister if no item matches', () => {
-      registry.register('item-a')
-      const deregisteredItem = registry.findDeregister((item) => item.includes('c'))
+      registry.add('item-a')
+      const deregisteredItem = registry.findRemove((item) => item.includes('c'))
       expect(deregisteredItem).toBeUndefined()
       expect(registry.values()).toEqual(['item-a'])
     })
@@ -331,13 +331,13 @@ if (import.meta.vitest) {
     it('should call the validate method on register', () => {
       // @ts-expect-error - Spying on protected 'validate' to confirm it is called.
       const validateSpy = vi.spyOn(registry, 'validate')
-      registry.register('a-valid-item')
+      registry.add('a-valid-item')
       expect(validateSpy).toHaveBeenCalledWith('a-valid-item')
       validateSpy.mockRestore()
     })
 
     it('should throw a validation error for an invalid item', () => {
-      expect(() => registry.register('')).toThrow(ValidationError)
+      expect(() => registry.add('')).toThrow(ValidationError)
     })
   })
 }

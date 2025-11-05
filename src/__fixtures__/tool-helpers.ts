@@ -38,7 +38,7 @@ export function createMockTool(
   resultFn: () => ToolResult | AsyncGenerator<never, ToolResult, never>
 ): Tool {
   return {
-    toolName: name,
+    name,
     description: `Mock tool ${name}`,
     toolSpec: {
       name,

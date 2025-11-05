@@ -6,7 +6,7 @@
  */
 
 // Agent class
-export { Agent } from './agent'
+export { Agent } from './agent/agent'
 
 // Error types
 export { ContextWindowOverflowError, MaxTokensError } from './errors'
