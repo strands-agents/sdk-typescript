@@ -36,6 +36,15 @@ export type {
   ToolResultStatus,
   ToolResult,
   ToolChoice,
+  HttpMethod,
+  HttpAuthConfig,
+  HttpBearerAuthConfig,
+  HttpTokenAuthConfig,
+  HttpBasicAuthConfig,
+  HttpCustomAuthConfig,
+  HttpApiKeyAuthConfig,
+  HttpRequestInput,
+  HttpResponse,
 } from './tools/types'
 
 // Tool interface and related types
@@ -43,6 +52,9 @@ export type { Tool, InvokableTool, ToolContext, ToolStreamEvent, ToolStreamGener
 
 // FunctionTool implementation
 export { FunctionTool } from './tools/function-tool'
+
+// Built-in tools
+export { httpRequest } from './tools/http-request'
 
 // Tool factory function
 export { tool } from './tools/zod-tool'
