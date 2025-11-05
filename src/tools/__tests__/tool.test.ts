@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { FunctionTool } from '../function-tool'
-import type { ToolContext } from '../tool'
-import type { JSONValue } from '../../types/json'
+import { FunctionTool } from '../function-tool.js'
+import type { ToolContext } from '../tool.js'
+import type { JSONValue } from '../../types/json.js'
 
-import { collectGenerator } from '../../__fixtures__/model-test-helpers'
+import { collectGenerator } from '../../__fixtures__/model-test-helpers.js'
 
 describe('FunctionTool', () => {
   describe('properties', () => {

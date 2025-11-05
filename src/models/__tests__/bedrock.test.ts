@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { BedrockRuntimeClient } from '@aws-sdk/client-bedrock-runtime'
-import { isNode } from '../../__fixtures__/environment'
-import { BedrockModel } from '../bedrock'
-import { ContextWindowOverflowError } from '../../errors'
-import type { Message } from '../../types/messages'
-import type { StreamOptions } from '../model'
-import { collectIterator } from '../../__fixtures__/model-test-helpers'
+import { isNode } from '../../__fixtures__/environment.js'
+import { BedrockModel } from '../bedrock.js'
+import { ContextWindowOverflowError } from '../../errors.js'
+import type { Message } from '../../types/messages.js'
+import type { StreamOptions } from '../model.js'
+import { collectIterator } from '../../__fixtures__/model-test-helpers.js'
 
 /**
  * Helper function to setup mock send with custom stream generator.

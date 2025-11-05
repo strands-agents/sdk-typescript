@@ -30,12 +30,12 @@ import {
   ReasoningContentBlockDelta,
   ReasoningContentBlock,
 } from '@aws-sdk/client-bedrock-runtime'
-import { Model, type BaseModelConfig, type StreamOptions } from '../models/model'
-import type { Message, ContentBlock, ToolUseBlock } from '../types/messages'
-import type { ModelStreamEvent, ReasoningContentDelta, Usage } from '../models/streaming'
-import type { JSONValue } from '../types/json'
-import { ContextWindowOverflowError } from '../errors'
-import { ensureDefined } from '../types/validation'
+import { Model, type BaseModelConfig, type StreamOptions } from '../models/model.js'
+import type { Message, ContentBlock, ToolUseBlock } from '../types/messages.js'
+import type { ModelStreamEvent, ReasoningContentDelta, Usage } from '../models/streaming.js'
+import type { JSONValue } from '../types/json.js'
+import { ContextWindowOverflowError } from '../errors.js'
+import { ensureDefined } from '../types/validation.js'
 
 /**
  * Default Bedrock model ID.

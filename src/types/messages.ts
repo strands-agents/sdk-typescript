@@ -1,5 +1,5 @@
-import type { JSONValue } from './json'
-import type { ToolResultContent } from '../tools/types'
+import type { JSONValue } from './json.js'
+import type { ToolResultContent } from '../tools/types.js'
 
 /**
  * A message in a conversation between user and assistant.

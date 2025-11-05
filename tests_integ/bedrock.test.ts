@@ -3,7 +3,7 @@ import { fromNodeProviderChain } from '@aws-sdk/credential-providers'
 import { BedrockModel, ContextWindowOverflowError, Message, ToolSpec, ModelStreamEvent } from '@strands-agents/sdk'
 
 // eslint-disable-next-line no-restricted-imports
-import { collectIterator, collectGenerator } from '../src/__fixtures__/model-test-helpers'
+import { collectIterator, collectGenerator } from '../src/__fixtures__/model-test-helpers.js'
 
 const shouldRunTests = await (async () => {
   // In a CI environment, we ALWAYS expect credentials to be configured.

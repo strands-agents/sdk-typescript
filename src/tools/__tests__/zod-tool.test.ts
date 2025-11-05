@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from 'vitest'
 import { z } from 'zod'
-import { tool } from '../zod-tool'
-import { createMockContext } from '../../__fixtures__/tool-helpers'
-import { collectGenerator } from '../../__fixtures__/model-test-helpers'
+import { tool } from '../zod-tool.js'
+import { createMockContext } from '../../__fixtures__/tool-helpers.js'
+import { collectGenerator } from '../../__fixtures__/model-test-helpers.js'
 
 describe('tool', () => {
   describe('tool creation and properties', () => {

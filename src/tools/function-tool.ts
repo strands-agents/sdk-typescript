@@ -1,7 +1,7 @@
-import type { Tool, ToolContext, ToolStreamEvent } from './tool'
-import type { ToolSpec, ToolResult } from './types'
-import type { JSONSchema, JSONValue } from '../types/json'
-import { deepCopy } from '../types/json'
+import type { Tool, ToolContext, ToolStreamEvent } from './tool.js'
+import type { ToolSpec, ToolResult } from './types.js'
+import type { JSONSchema, JSONValue } from '../types/json.js'
+import { deepCopy } from '../types/json.js'
 
 /**
  * Callback function for FunctionTool implementations.

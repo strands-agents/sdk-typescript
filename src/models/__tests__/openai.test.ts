@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import OpenAI from 'openai'
-import { isNode } from '../../__fixtures__/environment'
-import { OpenAIModel } from '../openai'
-import { ContextWindowOverflowError } from '../../errors'
-import { collectIterator } from '../../__fixtures__/model-test-helpers'
-import type { Message } from '../../types/messages'
+import { isNode } from '../../__fixtures__/environment.js'
+import { OpenAIModel } from '../openai.js'
+import { ContextWindowOverflowError } from '../../errors.js'
+import { collectIterator } from '../../__fixtures__/model-test-helpers.js'
+import type { Message } from '../../types/messages.js'
 
 /**
  * Helper to create a mock OpenAI client with streaming support

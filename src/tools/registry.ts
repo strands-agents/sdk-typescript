@@ -1,4 +1,4 @@
-import type { Tool } from './tool'
+import type { Tool } from './tool.js'
 
 /**
  * Registry for managing Tool instances.

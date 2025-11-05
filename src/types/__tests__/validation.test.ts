@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { ensureDefined } from '../validation'
+import { ensureDefined } from '../validation.js'
 
 describe('ensureDefined', () => {
   describe('when value is defined', () => {

@@ -8,11 +8,11 @@
  */
 
 import OpenAI, { type ClientOptions } from 'openai'
-import { Model } from '../models/model'
-import type { BaseModelConfig, StreamOptions } from '../models/model'
-import type { Message } from '../types/messages'
-import type { ModelStreamEvent } from '../models/streaming'
-import { ContextWindowOverflowError } from '../errors'
+import { Model } from '../models/model.js'
+import type { BaseModelConfig, StreamOptions } from '../models/model.js'
+import type { Message } from '../types/messages.js'
+import type { ModelStreamEvent } from '../models/streaming.js'
+import { ContextWindowOverflowError } from '../errors.js'
 
 /**
  * Error message patterns that indicate context window overflow.

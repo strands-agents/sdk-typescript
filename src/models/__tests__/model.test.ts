@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import type { Message } from '../../types/messages'
-import { TestModelProvider, collectGenerator } from '../../__fixtures__/model-test-helpers'
+import type { Message } from '../../types/messages.js'
+import { TestModelProvider, collectGenerator } from '../../__fixtures__/model-test-helpers.js'
 
 describe('Model', () => {
   describe('streamAggregated', () => {

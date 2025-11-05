@@ -5,7 +5,7 @@ import type { Message } from '@strands-agents/sdk'
 import type { ToolSpec } from '@strands-agents/sdk'
 
 // eslint-disable-next-line no-restricted-imports
-import { collectGenerator, collectIterator } from '../src/__fixtures__/model-test-helpers'
+import { collectGenerator, collectIterator } from '../src/__fixtures__/model-test-helpers.js'
 
 // Check for OpenAI API key at module level so skipIf can use it
 let hasApiKey = false

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import * as SDK from '../index'
+import * as SDK from '../index.js'
 
 describe('index', () => {
   describe('when importing from main entry point', () => {

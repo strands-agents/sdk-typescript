@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { runAgentLoop } from '../agent-loop'
-import { TestModelProvider, collectGenerator } from '../../__fixtures__/model-test-helpers'
-import { MockMessageModel } from '../../__fixtures__/mock-message-model'
-import { createMockTool } from '../../__fixtures__/tool-helpers'
-import { ToolRegistry } from '../../tools/registry'
-import type { Message } from '../../types/messages'
-import { MaxTokensError } from '../../errors'
+import { runAgentLoop } from '../agent-loop.js'
+import { TestModelProvider, collectGenerator } from '../../__fixtures__/model-test-helpers.js'
+import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
+import { createMockTool } from '../../__fixtures__/tool-helpers.js'
+import { ToolRegistry } from '../../tools/registry.js'
+import type { Message } from '../../types/messages.js'
+import { MaxTokensError } from '../../errors.js'
 
 describe('runAgentLoop', () => {
   describe('when handling simple completion without tools', () => {

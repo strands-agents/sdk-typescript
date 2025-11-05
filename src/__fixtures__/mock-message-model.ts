@@ -5,10 +5,10 @@
  * construct events in tests.
  */
 
-import { Model } from '../models/model'
-import type { Message, ContentBlock } from '../types/messages'
-import type { ModelStreamEvent } from '../models/streaming'
-import type { BaseModelConfig, StreamOptions } from '../models/model'
+import { Model } from '../models/model.js'
+import type { Message, ContentBlock } from '../types/messages.js'
+import type { ModelStreamEvent } from '../models/streaming.js'
+import type { BaseModelConfig, StreamOptions } from '../models/model.js'
 
 /**
  * Represents a single turn in the test sequence.

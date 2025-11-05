@@ -1,9 +1,9 @@
-import type { Message, SystemPrompt, ToolResultBlock, ToolUseBlock } from '../types/messages'
-import type { BaseModelConfig, Model, StreamOptions } from '../models/model'
-import type { ToolRegistry } from '../tools/registry'
-import type { AgentStreamEvent } from './streaming'
-import { MaxTokensError } from '../errors'
-import type { AgentResult } from '../types/agent'
+import type { Message, SystemPrompt, ToolResultBlock, ToolUseBlock } from '../types/messages.js'
+import type { BaseModelConfig, Model, StreamOptions } from '../models/model.js'
+import type { ToolRegistry } from '../tools/registry.js'
+import type { AgentStreamEvent } from './streaming.js'
+import { MaxTokensError } from '../errors.js'
+import type { AgentResult } from '../types/agent.js'
 
 /**
  * Internal configuration for the agent loop.
