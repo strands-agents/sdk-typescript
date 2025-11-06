@@ -1,6 +1,22 @@
-import type { Message, ContentBlock, Role, SystemPrompt } from '../types/messages.js'
+import {
+  Message,
+  ReasoningBlock,
+  TextBlock,
+  ToolUseBlock,
+  type ContentBlock,
+  type Role,
+  type SystemPrompt,
+} from '../types/messages.js'
 import type { ToolSpec, ToolChoice } from '../tools/types.js'
-import type { ModelStreamEvent } from './streaming.js'
+import {
+  ModelContentBlockDeltaEvent,
+  ModelContentBlockStartEvent,
+  ModelContentBlockStopEvent,
+  ModelMessageStartEvent,
+  ModelMessageStopEvent,
+  ModelMetadataEvent,
+  type ModelStreamEvent,
+} from './streaming.js'
 
 /**
  * Base configuration interface for all model providers.
@@ -74,6 +90,31 @@ export abstract class Model<T extends BaseModelConfig> {
   abstract stream(messages: Message[], options?: StreamOptions): AsyncIterable<ModelStreamEvent>
 
   /**
+   * Converts event data to event class representation
+   *
+   * @param event_data - Interface representation of event
+   * @returns Class representation of event
+   */
+  private _convert_to_class_event(event_data: ModelStreamEvent): ModelStreamEvent {
+    switch (event_data.type) {
+      case 'modelMessageStartEvent':
+        return new ModelMessageStartEvent(event_data)
+      case 'modelContentBlockStartEvent':
+        return new ModelContentBlockStartEvent(event_data)
+      case 'modelContentBlockDeltaEvent':
+        return new ModelContentBlockDeltaEvent(event_data)
+      case 'modelContentBlockStopEvent':
+        return new ModelContentBlockStopEvent(event_data)
+      case 'modelMessageStopEvent':
+        return new ModelMessageStopEvent(event_data)
+      case 'modelMetadataEvent':
+        return new ModelMetadataEvent(event_data)
+      default:
+        throw new Error(`Unsupported event type: ${event_data}`)
+    }
+  }
+
+  /**
    * Streams a conversation with aggregated content blocks and messages.
    * Returns an async generator that yields streaming events and content blocks, and returns the final message with stop reason.
    *
@@ -109,7 +150,8 @@ export abstract class Model<T extends BaseModelConfig> {
       redactedContent?: Uint8Array
     } = {}
 
-    for await (const event of this.stream(messages, options)) {
+    for await (const event_data of this.stream(messages, options)) {
+      const event = this._convert_to_class_event(event_data)
       yield event // Pass through immediately
 
       // Aggregation logic based on event type
@@ -149,24 +191,19 @@ export abstract class Model<T extends BaseModelConfig> {
           // Finalize and emit complete ContentBlock
           let block: ContentBlock
           if (toolUseId) {
-            block = {
-              type: 'toolUseBlock',
+            block = new ToolUseBlock({
               name: toolName,
               toolUseId: toolUseId,
               input: JSON.parse(accumulatedToolInput),
-            }
+            })
             toolUseId = '' // Reset
             toolName = ''
           } else if (Object.keys(accumulatedReasoning).length > 0) {
-            block = {
-              type: 'reasoningBlock',
+            block = new ReasoningBlock({
               ...accumulatedReasoning,
-            }
+            })
           } else {
-            block = {
-              type: 'textBlock',
-              text: accumulatedText,
-            }
+            block = new TextBlock(accumulatedText)
           }
           contentBlocks.push(block)
           yield block
@@ -176,13 +213,16 @@ export abstract class Model<T extends BaseModelConfig> {
         case 'modelMessageStopEvent':
           // Complete message and return with stop reason
           if (messageRole) {
-            const message: Message = {
-              type: 'message',
+            const message: Message = new Message({
               role: messageRole,
               content: [...contentBlocks],
-            }
+            })
             return { message, stopReason: event.stopReason! }
           }
+          break
+
+        case 'modelMetadataEvent':
+          // TODO: Implement metadata events: https://github.com/strands-agents/sdk-typescript/issues/70
           break
 
         default:

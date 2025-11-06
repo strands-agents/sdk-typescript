@@ -516,16 +516,6 @@ export class TextBlock {
   constructor(data: { text: string }) { this.text = data.text }
 }
 
-export class ToolUseBlock {
-  readonly type = 'toolUseBlock' as const  // Matches 'ToolUseBlock' class name
-  readonly name: string
-  readonly toolUseId: string
-  constructor(data: { name: string; toolUseId: string }) {
-    this.name = data.name
-    this.toolUseId = data.toolUseId
-  }
-}
-
 export class CachePointBlock {
   readonly type = 'cachePointBlock' as const  // Matches 'CachePointBlock' class name
   readonly cacheType: 'default'
