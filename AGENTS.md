@@ -62,7 +62,6 @@ sdk-typescript/
 │
 ├── tests_integ/                  # Integration tests (separate from source)
 │   ├── bedrock.test.ts           # Bedrock integration tests (requires AWS credentials)
-│   ├── http-request.test.ts      # HTTP request integration tests
 │   └── registry.test.ts          # ToolRegistry integration tests
 │
 ├── .github/                      # GitHub Actions workflows
