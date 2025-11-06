@@ -14,6 +14,11 @@ on:
         required: false
         type: string
         default: ''
+      session_id:
+        description: 'Optional session ID to use'
+        required: false
+        type: string
+        default: ''
 
 jobs:
   authorization-check:
@@ -81,11 +86,16 @@ jobs:
               labels: ['strands-running']
             });
 
-      - name: Determine PR context
-        id: determine-context
-        uses: actions/github-script@v7
+      # Check out main first so we only get committed code
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Process input
+        id: process
+        uses: actions/github-script@v8
         with:
           script: |
+            const fs = require('fs');
             try {
               const issueId = context.eventName === 'workflow_dispatch' 
                 ? '${{ inputs.issue_id }}'
@@ -101,58 +111,81 @@ jobs:
                 repo: context.repo.repo,
                 issue_number: issueId
               });
-              const isPrContext = !!issue.data.pull_request;
-              const mode = (isPrContext || command.startsWith('implement')) ? 'implementer' : 'reviewer';
+              const isPullRequest = !!issue.data.pull_request;
+              const mode = (isPullRequest || command.startsWith('implement')) ? 'implementer' : 'refiner';
 
-              console.log(`Is PR: ${isPrContext}, Mode: ${mode}`);
+              console.log(`Is PR: ${isPullRequest}, Mode: ${mode}`);
 
-              let targetIssueId;
-              if (!isPrContext) {
-                targetIssueId = issueId;
-                console.log(`Target issue ID: ${targetIssueId} (same as issue)`);
-              } else {
-                const closingIssuesData = await github.graphql(`
-                  query($owner: String!, $repo: String!, $number: Int!) {
-                    repository(owner: $owner, name: $repo) {
-                      pullRequest(number: $number) {
-                        closingIssuesReferences(first: 10) {
-                          nodes { number }
-                        }
-                      }
-                    }
-                  }
-                `, {
+              // Determine branch/ref to checkout
+              let branchName = 'main';
+
+              // If this is a non pr issue, and the command is implement, create a branch
+              if (mode === 'implementer' && !isPullRequest) {
+                branchName = `agent-tasks/${issueId}`;
+                
+                // Create branch from main
+                const mainRef = await github.rest.git.getRef({
                   owner: context.repo.owner,
                   repo: context.repo.repo,
-                  number: parseInt(issueId)
+                  ref: 'heads/main'
                 });
-                const issues = closingIssuesData?.repository?.pullRequest?.closingIssuesReferences?.nodes || [];
                 
-                console.log(`Found ${issues.length} closing issue(s)`);
-                
-                if (issues.length !== 1) {
-                  const errorMsg = issues.length > 1 
-                    ? `Pull request has ${issues.length} closing issues. Only one closing issue is allowed.`
-                    : 'Pull request must have exactly one closing issue.';
-                  console.error(errorMsg);
-                  core.setFailed(errorMsg);
-                  return;
+                try {
+                  await github.rest.git.createRef({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    ref: `refs/heads/${branchName}`,
+                    sha: mainRef.data.object.sha
+                  });
+                  console.log(`Created branch ${branchName}`);
+                } catch (error) {
+                  if (error.status === 422 || error.message?.includes('already exists')) {
+                    console.log(`Branch ${branchName} already exists`);
+                  } else {
+                    throw error;
+                  }
                 }
-                
-                targetIssueId = issues[0].number.toString();
-                console.log(`Target issue ID: ${targetIssueId} (from closing issues)`);
+              } else if (isPullRequest) {
+                const pr = await github.rest.pulls.get({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: issueId
+                });
+                branchName = pr.data.head.ref;
               }
 
-              console.log(`Setting outputs - issue_id: ${issueId}, target_issue_id: ${targetIssueId}, pr_id: ${isPrContext ? issueId : ''}, mode: ${mode}`);
+              console.log(`Building prompts - mode: ${mode}, issue: ${issueId}, is PR: ${isPullRequest}`);
+              
+              const sessionId = '${{ inputs.session_id }}' || (mode === 'implementer' 
+                ? `${mode}-${branchName}`.replace(/[\/\\]/g, '-')
+                : `${mode}-${issueId}`);
+              console.log(`Session ID: ${sessionId}`);
 
-              core.setOutput('issue_id', issueId);
-              core.setOutput('target_issue_id', targetIssueId);
-              core.setOutput('pr_id', isPrContext ? issueId : '');
-              core.setOutput('mode', mode);
-              core.setOutput('command', command);
+              const scriptFile = mode === 'implementer' 
+                ? '.github/agent-sops/task-implementer.sop.md'
+                : '.github/agent-sops/task-refiner.sop.md';
+              console.log(`Reading script file: ${scriptFile}`);
+              let systemPrompt = fs.readFileSync(scriptFile, 'utf8');
+              
+              const first20Lines = systemPrompt.split('\n').slice(0, 20).join('\n');
+              console.log(`System prompt (first 20 lines):\n${first20Lines}`);
+              
+              let prompt = (isPullRequest) 
+                ? 'The pull request id is:'
+                : 'The issue id is:';
+              prompt += `${issueId}\n`
+              prompt += `${command}\n`;
+              prompt += 'review and continue';
+              
+              console.log(`Task prompt: "${prompt}"`);
+
+              core.setOutput('branch_name', branchName);
+              core.setOutput('session_id', sessionId);
+              core.setOutput('system_prompt', systemPrompt);
+              core.setOutput('prompt', prompt);
 
             } catch (error) {
-              const errorMsg = `Failed to determine context: ${error.message}`;
+              const errorMsg = `Failed: ${error.message}`;
               console.error(errorMsg);
               core.setFailed(errorMsg);
             }
@@ -160,55 +193,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: ${{ steps.determine-context.outputs.pr_id && format('refs/pull/{0}/head', steps.determine-context.outputs.pr_id) || 'main' }}
-
-      - name: Build prompts
-        id: process
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-
-            try {
-              const mode = '${{ steps.determine-context.outputs.mode }}';
-              const targetIssueId = '${{ steps.determine-context.outputs.target_issue_id }}';
-              const issueId = '${{ steps.determine-context.outputs.issue_id }}';
-              const command = '${{ steps.determine-context.outputs.command }}';
-              const isPrContext = '${{ steps.determine-context.outputs.pr_id }}' !== '';
-              
-              console.log(`Building prompts - mode: ${mode}, target issue: ${targetIssueId}, is PR: ${isPrContext}`);
-              
-              const sessionId = `${mode}-${targetIssueId}`;
-              console.log(`Session ID: ${sessionId}`);
-
-              const scriptFile = mode === 'implementer' 
-                ? '.github/agent-scripts/task-implementer.script.md'
-                : '.github/agent-scripts/task-reviewer.script.md';
-              console.log(`Reading script file: ${scriptFile}`);
-              let systemPrompt = fs.readFileSync(scriptFile, 'utf8');
-              
-              systemPrompt = systemPrompt
-                .replace(/\{\{ISSUE_NUMBER\}\}/g, targetIssueId);
-              
-              const first20Lines = systemPrompt.split('\n').slice(0, 20).join('\n');
-              console.log(`System prompt (first 20 lines):\n${first20Lines}`);
-              
-              let prompt = '';
-              if (isPrContext) prompt += `The pull request id is: ${issueId}\n`;
-              prompt += `${command}\n`;
-              prompt += 'review and continue';
-              
-              console.log(`Task prompt: "${prompt}"`);
-
-              core.setOutput('session_id', sessionId);
-              core.setOutput('system_prompt', systemPrompt);
-              core.setOutput('prompt', prompt);
-
-            } catch (error) {
-              const errorMsg = `Failed to build prompts: ${error.message}`;
-              console.error(errorMsg);
-              core.setFailed(errorMsg);
-            }
+          ref: ${{ steps.process.outputs.branch_name }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v6

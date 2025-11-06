@@ -59,7 +59,7 @@ sdk-typescript/
 │   │   ├── pr-and-push.yml       # Triggers test/lint on PR and push
 │   │   ├── test-lint.yml         # Unit tests and linting
 │   │   └── integration-test.yml  # Secure integration tests with AWS
-│   └── agent-scripts/            # Agent system prompts and configs
+│   └── agent-sops/               # Agent system prompts
 │
 ├── .project/                     # Project management (tasks, tracking)
 │   ├── tasks/                    # Active tasks
@@ -109,11 +109,11 @@ See [CONTRIBUTING.md - Development Environment](CONTRIBUTING.md#development-envi
 
 ### 2. Making Changes
 
-1. **Create feature branch**: `git checkout -b agent-tasks/{TASK_NUMBER}`
+1. **Create feature branch**: `git checkout -b agent-tasks/{ISSUE_NUMBER}`
 2. **Implement changes** following the patterns below
 3. **Run quality checks** before committing (pre-commit hooks will run automatically)
 4. **Commit with conventional commits**: `feat:`, `fix:`, `refactor:`, `docs:`, etc.
-5. **Push to remote**: `git push origin agent-tasks/{TASK_NUMBER}`
+5. **Push to remote**: `git push origin agent-tasks/{ISSUE_NUMBER}`
 
 ### 3. Quality Gates
 
