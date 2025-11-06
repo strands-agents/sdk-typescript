@@ -34,6 +34,10 @@ export type AgentConfig = {
    * A system prompt which guides model behavior.
    */
   systemPrompt?: SystemPrompt
+  /**
+   * Initial invocation state.
+   */
+  invocationState?: Record<string, unknown>
 }
 
 /**
@@ -53,6 +57,7 @@ export class Agent {
   private _toolRegistry: ToolRegistry
   private _systemPrompt?: SystemPrompt
   private _messages: Message[]
+  private _invocationState: Record<string, unknown>
 
   /**
    * Creates an instance of the Agent.
@@ -69,6 +74,8 @@ export class Agent {
     this._messages = (config?.messages ?? []).map((msg) =>
       msg instanceof Message ? msg : Message.fromMessageData(msg)
     )
+
+    this._invocationState = config?.invocationState ?? {}
   }
 
   /**
@@ -239,6 +246,22 @@ export class Agent {
   }
 
   /**
+   * Gets the current invocation state.
+   * This state persists across tool invocations within the same agent instance.
+   */
+  get invocationState(): Record<string, unknown> {
+    return this._invocationState
+  }
+
+  /**
+   * Sets the invocation state.
+   * This can be used to restore state from a previous agent session.
+   */
+  set invocationState(state: Record<string, unknown>) {
+    this._invocationState = state
+  }
+
+  /**
    * Executes a single tool and returns the result.
    * If the tool is not found or fails to return a result, returns an error ToolResult
    * instead of throwing an exception. This allows the agent loop to continue and
@@ -263,14 +286,14 @@ export class Agent {
       })
     }
 
-    // Execute tool and collect result
+    // Execute tool and collect result - pass persistent invocation state
     const toolContext = {
       toolUse: {
         name: toolUseBlock.name,
         toolUseId: toolUseBlock.toolUseId,
         input: toolUseBlock.input,
       },
-      invocationState: {},
+      invocationState: this._invocationState,
     }
 
     const toolGenerator = tool.stream(toolContext)

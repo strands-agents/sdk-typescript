@@ -4,56 +4,32 @@ import type { NotebookState } from './types.js'
 
 /**
  * Zod schema for notebook input validation.
- * Uses discriminated union on the 'mode' field for type-safe operation handling.
+ * Uses a flat object schema for Bedrock compatibility while maintaining type safety.
  */
-const notebookInputSchema = z.discriminatedUnion('mode', [
-  // Create operation
-  z.object({
-    mode: z.literal('create'),
+const notebookInputSchema = z
+  .object({
+    mode: z.enum(['create', 'list', 'read', 'write', 'clear']),
     name: z.string().optional(),
     newStr: z.string().optional(),
-  }),
-
-  // List operation
-  z.object({
-    mode: z.literal('list'),
-  }),
-
-  // Read operation
-  z.object({
-    mode: z.literal('read'),
-    name: z.string().optional(),
     readRange: z.tuple([z.number(), z.number()]).optional(),
-  }),
-
-  // Write operation (either string replacement or line insertion)
-  z
-    .object({
-      mode: z.literal('write'),
-      name: z.string().optional(),
-      oldStr: z.string().optional(),
-      newStr: z.string().optional(),
-      insertLine: z.union([z.string(), z.number()]).optional(),
-    })
-    .refine(
-      (data) => {
-        // Must have either (oldStr + newStr) or (insertLine + newStr)
+    oldStr: z.string().optional(),
+    insertLine: z.union([z.string(), z.number()]).optional(),
+  })
+  .refine(
+    (data) => {
+      // Validate write mode requirements
+      if (data.mode === 'write') {
         const hasReplacement = data.oldStr !== undefined && data.newStr !== undefined
         const hasInsertion = data.insertLine !== undefined && data.newStr !== undefined
         return hasReplacement || hasInsertion
-      },
-      {
-        message:
-          'Write operation requires either (oldStr + newStr) for replacement or (insertLine + newStr) for insertion',
       }
-    ),
-
-  // Clear operation
-  z.object({
-    mode: z.literal('clear'),
-    name: z.string().optional(),
-  }),
-])
+      return true
+    },
+    {
+      message:
+        'Write operation requires either (oldStr + newStr) for replacement or (insertLine + newStr) for insertion',
+    }
+  )
 
 /**
  * Notebook tool for managing text notebooks.
@@ -127,12 +103,8 @@ export const notebook = tool({
       case 'clear':
         return handleClear(notebooks, input.name ?? 'default')
 
-      default: {
-        // This should never happen due to discriminated union, but TypeScript needs it
-        // Using never type for exhaustiveness checking
-        const _exhaustiveCheck: never = input
-        throw new Error(`Unknown mode: ${(_exhaustiveCheck as { mode: string }).mode}`)
-      }
+      default:
+        throw new Error(`Unknown mode: ${input.mode}`)
     }
   },
 })
