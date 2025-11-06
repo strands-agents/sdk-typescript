@@ -414,9 +414,9 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
         for (const block of options.systemPrompt) {
           if (typeof block === 'string') {
             textBlocks.push(block)
-          } else if (block.type === 'textBlock') {
-            textBlocks.push(block.text)
-          } else if (block.type === 'cachePointBlock') {
+          } else if ('textBlock' in block) {
+            textBlocks.push(block.textBlock.text)
+          } else if ('cachePointBlock' in block) {
             hasCachePoints = true
           }
         }

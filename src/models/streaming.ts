@@ -132,11 +132,19 @@ export class ModelContentBlockDeltaEvent implements ModelContentBlockDeltaEventD
   readonly type = 'modelContentBlockDeltaEvent' as const
 
   /**
+   * Index of the content block being updated.
+   */
+  readonly contentBlockIndex?: number
+
+  /**
    * The incremental content update.
    */
   readonly delta: ContentBlockDelta
 
   constructor(data: ModelContentBlockDeltaEventData) {
+    if (data.contentBlockIndex !== undefined) {
+      this.contentBlockIndex = data.contentBlockIndex
+    }
     this.delta = data.delta
   }
 }

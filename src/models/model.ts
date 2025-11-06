@@ -191,18 +191,21 @@ export abstract class Model<T extends BaseModelConfig> {
             // Finalize and emit complete ContentBlock
             let block: ContentBlock
             if (toolUseId) {
-              block = new ToolUseBlock({
+              const toolUseBlock = new ToolUseBlock({
                 name: toolName,
                 toolUseId: toolUseId,
                 input: JSON.parse(accumulatedToolInput),
               })
+              block = { toolUseBlock }
 
               toolUseId = '' // Reset
               toolName = ''
             } else if (Object.keys(accumulatedReasoning).length > 0) {
-              block = new ReasoningBlock(accumulatedReasoning)
+              const reasoningBlock = new ReasoningBlock(accumulatedReasoning)
+              block = { reasoningBlock }
             } else {
-              block = new TextBlock({ text: accumulatedText })
+              const textBlock = new TextBlock({ text: accumulatedText })
+              block = { textBlock }
             }
             contentBlocks.push(block)
             yield block

@@ -45,14 +45,16 @@ describe('runAgentLoop', () => {
       expect(items).toContainEqual({ type: 'afterInvocationEvent' })
 
       // Verify model events are passed through
-      expect(items).toContainEqual({ modelMessageStartEvent: { role: 'assistant' } })
+      expect(items).toContainEqual(
+        expect.objectContaining({ type: 'modelMessageStartEvent', role: 'assistant' })
+      )
 
       // Verify final messages array contains assistant response
       expect(messages).toHaveLength(2)
       expect(messages[1]).toEqual({
         type: 'message',
         role: 'assistant',
-        content: [{ type: 'textBlock', text: 'Hello, how can I help?' }],
+        content: [{ textBlock: expect.objectContaining({ type: 'textBlock', text: 'Hello, how can I help?' }) }],
       })
     })
   })
@@ -98,7 +100,7 @@ describe('runAgentLoop', () => {
       })
 
       // Verify only one beforeInvocationEvent
-      const beforeEvents = items.filter((e) => e.type !== 'beforeInvocationEvent')
+      const beforeEvents = items.filter((e) => e.type === 'beforeInvocationEvent')
       expect(beforeEvents).toHaveLength(1)
 
       // Verify two iterations using callCount
