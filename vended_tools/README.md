@@ -7,47 +7,35 @@ This directory contains optional tools that are provided as part of the Strands 
 Vended tools are pre-built, production-ready tools that developers can optionally include in their agent applications. Unlike the core SDK functionality (models, agent loop, tool registry), these tools are:
 
 - **Optional**: Not required to use the SDK
-- **Self-contained**: Have minimal dependencies
 - **Production-ready**: Fully tested and documented
-- **Independently importable**: Can be imported individually without loading the entire SDK
 
 ## Available Tools
 
-### HTTP Request Tool
+### Notebook
 
-Make HTTP/HTTPS requests to external APIs and services.
+A comprehensive tool for managing text notebooks within agent invocations. Supports creating, reading, writing, listing, and clearing notebooks with full state persistence.
 
-**Location**: `vended_tools/http-request/`
+**Location**: `vended_tools/notebook/`
 
-**Features**:
+**Key Features**:
 
-- All standard HTTP methods (GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS)
-- Multiple authentication types (Bearer, Token, Basic, Custom, API Key)
-- Environment variable support for tokens
-- User consent for modifying operations
-- Custom headers and request bodies
+- Multiple named notebooks
+- String replacement and line insertion
+- Line range reading with negative index support
+- State persistence within agent invocations
+- Universal browser and server support
 
 **Usage**:
 
 ```typescript
-import { httpRequest } from '@strands-agents/sdk/vended_tools/http-request'
+import { notebook } from '@strands-agents/sdk/vended_tools/notebook'
+import { ToolRegistry } from '@strands-agents/sdk'
 
-const result = await httpRequest.stream({
-  toolUse: {
-    name: 'httpRequest',
-    toolUseId: 'req-1',
-    input: {
-      method: 'GET',
-      url: 'https://api.example.com/data',
-      auth: {
-        type: 'bearer',
-        envVar: 'API_TOKEN',
-      },
-    },
-  },
-  invocationState: {},
-})
+const registry = new ToolRegistry()
+registry.register(notebook)
 ```
+
+See [notebook/README.md](./notebook/README.md) for complete documentation.
 
 ## Contributing
 
@@ -65,10 +53,10 @@ When adding new vended tools:
 ```
 vended_tools/
 ├── README.md                    # This file
-└── http-request/                # HTTP request tool
+└── you-new-tool/                # tool
     ├── __tests__/
-    │   └── http-request.test.ts # Unit tests
-    ├── http-request.ts          # Implementation
+    │   └── you-new-tool.test.ts # Unit tests
+    ├── you-new-tool.ts          # Implementation
     ├── types.ts                 # Type definitions
     └── index.ts                 # Public exports
 ```
