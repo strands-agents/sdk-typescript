@@ -110,7 +110,6 @@ describe.skipIf(!shouldRunAWSTests)('Notebook Tool Integration', () => {
   it('should handle errors gracefully', async () => {
     const agent = new Agent({
       model: new BedrockModel({
-        modelId: 'anthropic.claude-3-haiku-20240307-v1:0',
         region: 'us-east-1',
       }),
       tools: [notebook],
