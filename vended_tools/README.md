@@ -4,10 +4,7 @@ This directory contains optional tools that are provided as part of the Strands 
 
 ## What are Vended Tools?
 
-Vended tools are pre-built, production-ready tools that developers can optionally include in their agent applications. Unlike the core SDK functionality (models, agent loop, tool registry), these tools are:
-
-- **Optional**: Not required to use the SDK
-- **Production-ready**: Fully tested and documented
+Vended tools are pre-built, production-ready tools that developers can optionally use with their agents.
 
 ## Available Tools
 
@@ -22,7 +19,7 @@ A comprehensive tool for managing text notebooks within agent invocations. Suppo
 - Multiple named notebooks
 - String replacement and line insertion
 - Line range reading with negative index support
-- State persistence within agent invocations
+- State persistence across agent invocations
 - Universal browser and server support
 
 **Usage**:
