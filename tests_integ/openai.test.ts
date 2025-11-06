@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { OpenAIModel } from '@strands-agents/sdk/openai'
-import { ContextWindowOverflowError } from '@strands-agents/sdk'
+import { ContextWindowOverflowError, ToolResultBlock } from '@strands-agents/sdk'
 import { Message } from '@strands-agents/sdk'
 import type { ToolSpec } from '@strands-agents/sdk'
 
@@ -234,12 +234,11 @@ describe.skipIf(!hasApiKey)('OpenAIModel Integration Tests', () => {
         new Message({
           role: 'user',
           content: [
-            {
-              type: 'toolResultBlock',
+            new ToolResultBlock({
               toolUseId: toolUseId!,
               content: [{ type: 'textBlock', text: '42' }],
               status: 'success',
-            },
+            }),
           ],
         }),
       ]

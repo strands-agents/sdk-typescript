@@ -1,4 +1,15 @@
 /**
+ * A generic, polymorphic resource registry for managing runtime resources.
+ *
+ * This abstract class provides methods to register, deregister, retrieve,
+ * and find items based on unique identifiers. Subclasses must implement
+ * methods for generating unique IDs and validating items before insertion.
+ *
+ * @typeParam T - The type of the items being stored.
+ * @typeParam I - The type of the identifier for the items.
+ */
+
+/**
  * Thrown when an item with a specific ID cannot be found.
  * @typeParam I - The type of the item's identifier.
  */
@@ -43,7 +54,7 @@ export abstract class Registry<T, I> {
    * Subclasses must provide their own implementation (e.g., UUID, auto-increment).
    * @returns A new, unique identifier.
    */
-  protected abstract generateId(): I
+  protected abstract generateId(item: T): I
 
   /**
    * Abstract validation hook called before an item is added.
@@ -125,7 +136,7 @@ export abstract class Registry<T, I> {
   public add(item: T): I {
     this.validate(item)
 
-    const id = this.generateId()
+    const id = this.generateId(item)
     if (this._items.has(id)) {
       throw new DuplicateItemError(id)
     }

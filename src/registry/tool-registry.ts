@@ -1,27 +1,18 @@
-import { v4 as uuidv4 } from 'uuid'
 import { Registry, ValidationError } from './registry.js'
 import type { Tool, ToolStreamGenerator } from '../tools/tool.js'
-
-/**
- * A unique, structured identifier for a Tool instance.
- */
-export type ToolIdentifier = {
-  readonly type: 'toolIdentifier'
-  readonly id: string
-}
 
 /**
  * A concrete implementation of the Registry for managing Tool instances.
  * It adds validation for tool properties and ensures unique tool names.
  */
-export class ToolRegistry extends Registry<Tool, ToolIdentifier> {
+export class ToolRegistry extends Registry<Tool, Tool> {
   /**
    * Generates a unique identifier for a Tool.
    * @override
-   * @returns A new ToolIdentifier object with a UUID.
+   * @returns The tool itself as the identifier.
    */
-  protected generateId(): ToolIdentifier {
-    return { type: 'toolIdentifier', id: uuidv4() }
+  protected generateId(tool: Tool): Tool {
+    return tool
   }
 
   /**
@@ -196,11 +187,9 @@ if (import.meta.vitest) {
     })
 
     it('should generate a valid ToolIdentifier', () => {
-      const id = registry['generateId']()
-      expect(id).toHaveProperty('type', 'toolIdentifier')
-      expect(id).toHaveProperty('id')
-      expect(typeof id.id).toBe('string')
-      expect(id.id).toHaveLength(36) // UUID length
+      const tool = createMockTool()
+      const id = registry['generateId'](tool)
+      expect(id).toBe(tool)
     })
 
     it('should register a tool with a name at the maximum length', () => {

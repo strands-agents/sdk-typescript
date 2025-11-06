@@ -3,11 +3,13 @@ import {
   MaxTokensError,
   type AgentResult,
   type AgentStreamEvent,
-  type Message,
+  Message,
+  ToolResultBlock,
   type SystemPrompt,
   type Tool,
-  type ToolResultBlock,
   type ToolUseBlock,
+  type MessageData,
+  TextBlock,
 } from '../index.js'
 import type { BaseModelConfig, Model, StreamOptions } from '../models/model.js'
 import { ToolRegistry } from '../registry/tool-registry.js'
@@ -23,7 +25,7 @@ export type AgentConfig = {
   /**
    * An initial set of messages to seed the agent's conversation history.
    */
-  messages?: Message[]
+  messages?: Message[] | MessageData[]
   /**
    * An initial set of tools to register with the agent.
    */
@@ -49,8 +51,8 @@ export type InvokeArgs = string
 export class Agent {
   private _model: Model<BaseModelConfig>
   private _toolRegistry: ToolRegistry
+  private _systemPrompt?: SystemPrompt
   private _messages: Message[]
-  private _systemPrompt: SystemPrompt | undefined
 
   /**
    * Creates an instance of the Agent.
@@ -59,8 +61,14 @@ export class Agent {
   constructor(config?: AgentConfig) {
     this._model = config?.model ?? new BedrockModel()
     this._toolRegistry = new ToolRegistry(config?.tools)
-    this._messages = config?.messages ?? []
-    this._systemPrompt = config?.systemPrompt
+
+    if (config?.systemPrompt !== undefined) {
+      this._systemPrompt = config.systemPrompt
+    }
+
+    this._messages = (config?.messages ?? []).map((msg) =>
+      msg instanceof Message ? msg : Message.fromMessageData(msg)
+    )
   }
 
   /**
@@ -105,15 +113,17 @@ export class Agent {
    * // Messages array is mutated in place and contains the full conversation
    * ```
    */
-  public async *invoke(args?: InvokeArgs): AsyncGenerator<AgentStreamEvent, AgentResult, never> {
+  public async *invoke(args: InvokeArgs): AsyncGenerator<AgentStreamEvent, AgentResult, never> {
+    let currentArgs: InvokeArgs | undefined = args
+
     // Emit event before the loop starts
     yield { type: 'beforeInvocationEvent' }
 
     try {
       // Main agent loop - continues until model stops without requesting tools
       while (true) {
-        const modelResult = yield* this.invokeModel(args)
-        args = undefined // Only pass args on first invocation
+        const modelResult = yield* this.invokeModel(currentArgs)
+        currentArgs = undefined // Only pass args on first invocation
 
         // Handle stop reason
         if (modelResult.stopReason === 'maxTokens') {
@@ -169,11 +179,12 @@ export class Agent {
 
     if (args !== undefined && typeof args === 'string') {
       // Add user message from args
-      this._messages.push({
-        type: 'message',
-        role: 'user',
-        content: [{ type: 'textBlock', text: args }],
-      })
+      this._messages.push(
+        new Message({
+          role: 'user',
+          content: [{ type: 'textBlock', text: args }],
+        })
+      )
     }
 
     const { message, stopReason } = yield* this._model.streamAggregated(this._messages, streamOptions)
@@ -217,11 +228,10 @@ export class Agent {
     }
 
     // Create user message with tool results
-    const toolResultMessage: Message = {
-      type: 'message',
+    const toolResultMessage: Message = new Message({
       role: 'user',
       content: toolResultBlocks,
-    }
+    })
 
     yield { type: 'afterToolsEvent', message: toolResultMessage }
 
@@ -246,17 +256,11 @@ export class Agent {
 
     if (!tool) {
       // Tool not found - return error result instead of throwing
-      return {
-        type: 'toolResultBlock',
+      return new ToolResultBlock({
         toolUseId: toolUseBlock.toolUseId,
         status: 'error',
-        content: [
-          {
-            type: 'textBlock',
-            text: `Tool '${toolUseBlock.name}' not found in registry`,
-          },
-        ],
-      }
+        content: [new TextBlock(`Tool '${toolUseBlock.name}' not found in registry`)],
+      })
     }
 
     // Execute tool and collect result
@@ -276,25 +280,18 @@ export class Agent {
 
     if (!toolResult) {
       // Tool didn't return a result - return error result instead of throwing
-      return {
-        type: 'toolResultBlock',
+      return new ToolResultBlock({
         toolUseId: toolUseBlock.toolUseId,
         status: 'error',
-        content: [
-          {
-            type: 'textBlock',
-            text: `Tool '${toolUseBlock.name}' did not return a result`,
-          },
-        ],
-      }
+        content: [new TextBlock(`Tool '${toolUseBlock.name}' did not return a result`)],
+      })
     }
 
     // Create ToolResultBlock from ToolResult
-    return {
-      type: 'toolResultBlock',
+    return new ToolResultBlock({
       toolUseId: toolResult.toolUseId,
       status: toolResult.status,
       content: toolResult.content,
-    }
+    })
   }
 }

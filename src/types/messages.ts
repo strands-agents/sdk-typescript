@@ -47,6 +47,44 @@ export class Message {
     this.role = data.role
     this.content = data.content
   }
+
+  /**
+   * Creates a Message instance from MessageData.
+   */
+  public static fromMessageData(data: MessageData): Message {
+    const contentBlocks: ContentBlock[] = data.content.map((block) => {
+      if ('text' in block) {
+        return new TextBlock(block.text)
+      } else if ('toolUse' in block) {
+        return new ToolUseBlock(block.toolUse)
+      } else if ('toolResult' in block) {
+        return new ToolResultBlock({
+          toolUseId: block.toolResult.toolUseId,
+          status: block.toolResult.status,
+          content: block.toolResult.content.map((contentItem) => {
+            if ('text' in contentItem) {
+              return new TextBlock(contentItem.text)
+            } else if ('json' in contentItem) {
+              return new JsonBlock(contentItem)
+            } else {
+              throw new Error('Unknown ToolResultContentData type')
+            }
+          }),
+        })
+      } else if ('reasoning' in block) {
+        return new ReasoningBlock(block.reasoning)
+      } else if ('cachePoint' in block) {
+        return new CachePointBlock(block.cachePoint)
+      } else {
+        throw new Error('Unknown ContentBlockData type')
+      }
+    })
+
+    return new Message({
+      role: data.role,
+      content: contentBlocks,
+    })
+  }
 }
 
 /**
