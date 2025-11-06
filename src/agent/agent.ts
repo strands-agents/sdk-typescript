@@ -9,9 +9,7 @@ import {
   type ToolResultBlock,
   type ToolUseBlock,
 } from '../index.js'
-import type { McpClient } from '../mcp-client.js'
 import type { BaseModelConfig, Model, StreamOptions } from '../models/model.js'
-import { McpClientRegistry } from '../registry/mcp-client-registry.js'
 import { ToolRegistry } from '../registry/tool-registry.js'
 
 /**
@@ -26,10 +24,6 @@ export type AgentConfig = {
    * An initial set of tools to register with the agent.
    */
   tools?: Tool[]
-  /**
-   * An initial set of MCP clients to register with the agent.
-   */
-  mcpClients?: McpClient[]
   /**
    * A system prompt which guides model behavior.
    */
@@ -51,7 +45,6 @@ export type InvokeArgs = string
 export class Agent {
   private _model: Model<BaseModelConfig>
   private _toolRegistry: ToolRegistry
-  private _mcpClientRegistry: McpClientRegistry
   private _messages: Message[]
   private _systemPrompt: SystemPrompt | undefined
 
@@ -62,7 +55,6 @@ export class Agent {
   constructor(config?: AgentConfig) {
     this._model = config?.model ?? new BedrockModel()
     this._toolRegistry = new ToolRegistry(config?.tools)
-    this._mcpClientRegistry = new McpClientRegistry(config?.mcpClients)
     this._messages = []
     this._systemPrompt = config?.systemPrompt
   }
@@ -79,20 +71,6 @@ export class Agent {
    */
   get toolRegistry(): ToolRegistry {
     return this._toolRegistry
-  }
-
-  /**
-   * The MCP clients this agent has access to.
-   */
-  get mcpClients(): McpClient[] {
-    return this._mcpClientRegistry.values()
-  }
-
-  /**
-   * The MCP client registry for managing the agent's MCP clients.
-   */
-  get mcpClientRegistry(): McpClientRegistry {
-    return this._mcpClientRegistry
   }
 
   /**
