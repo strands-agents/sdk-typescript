@@ -1,6 +1,6 @@
+import { v4 as uuidv4 } from 'uuid'
 import { Registry, ValidationError } from './registry.js'
 import type { Tool, ToolStreamGenerator } from '../tools/tool.js'
-import { randomUUID } from 'crypto'
 
 /**
  * A unique, structured identifier for a Tool instance.
@@ -21,7 +21,7 @@ export class ToolRegistry extends Registry<Tool, ToolIdentifier> {
    * @returns A new ToolIdentifier object with a UUID.
    */
   protected generateId(): ToolIdentifier {
-    return { type: 'toolIdentifier', id: randomUUID() }
+    return { type: 'toolIdentifier', id: uuidv4() }
   }
 
   /**
