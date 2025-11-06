@@ -12,12 +12,13 @@ export interface NotebookState {
 
 /**
  * Input parameters for create operation.
+ * - mode: Operation mode, must be 'create'
+ * - name: Name of the notebook to create
+ * - newStr: Optional initial content for the notebook
  */
 export interface CreateInput {
   mode: 'create'
-  /** Name of the notebook to create */
   name?: string
-  /** Optional initial content for the notebook */
   newStr?: string
 }
 
@@ -30,47 +31,51 @@ export interface ListInput {
 
 /**
  * Input parameters for read operation.
+ * - mode: Operation mode, must be 'read'
+ * - name: Name of the notebook to read
+ * - readRange: Optional line range [start, end] to read. Supports negative indices.
  */
 export interface ReadInput {
   mode: 'read'
-  /** Name of the notebook to read */
   name?: string
-  /** Optional line range [start, end] to read. Supports negative indices. */
   readRange?: [number, number]
 }
 
 /**
  * Input parameters for write operation (string replacement).
+ * - mode: Operation mode, must be 'write'
+ * - name: Name of the notebook to write to
+ * - oldStr: String to find and replace
+ * - newStr: Replacement string
  */
 export interface WriteReplaceInput {
   mode: 'write'
-  /** Name of the notebook to write to */
   name?: string
-  /** String to find and replace */
   oldStr: string
-  /** Replacement string */
   newStr: string
 }
 
 /**
  * Input parameters for write operation (line insertion).
+ * - mode: Operation mode, must be 'write'
+ * - name: Name of the notebook to write to
+ * - insertLine: Line number (supports negative indices) or search text for insertion point
+ * - newStr: Text to insert
  */
 export interface WriteInsertInput {
   mode: 'write'
-  /** Name of the notebook to write to */
   name?: string
-  /** Line number (supports negative indices) or search text for insertion point */
   insertLine: string | number
-  /** Text to insert */
   newStr: string
 }
 
 /**
  * Input parameters for clear operation.
+ * - mode: Operation mode, must be 'clear'
+ * - name: Name of the notebook to clear
  */
 export interface ClearInput {
   mode: 'clear'
-  /** Name of the notebook to clear */
   name?: string
 }
 
