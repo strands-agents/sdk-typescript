@@ -459,30 +459,40 @@ export type Role = 'user' | 'assistant'
 
 export type ContentBlock = TextBlock | ToolUseBlock | ToolResultBlock
 
-export interface TextBlock {
-  type: 'text'
-  text: string
+export class TextBlock {
+  readonly type = 'textBlock' as const
+  readonly text: string
+  constructor(data: { text: string }) { this.text = data.text }
 }
 
-export interface ToolUseBlock {
-  type: 'toolUse'
-  name: string
-  toolUseId: string
-  input: JSONValue
+export class ToolUseBlock {
+  readonly type = 'toolUseBlock' as const
+  readonly name: string
+  readonly toolUseId: string
+  readonly input: JSONValue
+  constructor(data: { name: string; toolUseId: string; input: JSONValue }) {
+    this.name = data.name
+    this.toolUseId = data.toolUseId
+    this.input = data.input
+  }
 }
 
-export interface ToolResultBlock {
-  type: 'toolResult'
-  toolUseId: string
-  status: 'success' | 'error'
-  content: ToolResultContent[]
+export class ToolResultBlock {
+  readonly type = 'toolResultBlock' as const
+  readonly toolUseId: string
+  readonly status: 'success' | 'error'
+  readonly content: ToolResultContent[]
+  constructor(data: { toolUseId: string; status: 'success' | 'error'; content: ToolResultContent[] }) {
+    this.toolUseId = data.toolUseId
+    this.status = data.status
+    this.content = data.content
+  }
 }
 
 // ❌ Wrong - Dependencies before top-level
 export type Role = 'user' | 'assistant'
 
-export interface TextBlock {
-  type: 'text'
+export interface TextBlockData {
   text: string
 }
 
@@ -499,33 +509,39 @@ export interface Message {  // Top-level should come first
 **When creating discriminated unions with a `type` field, the type value MUST match the interface name with the first letter lowercase.**
 
 ```typescript
-// ✅ Correct - type matches interface name (first letter lowercase)
-export interface TextBlock {
-  type: 'textBlock'  // Matches 'TextBlock' interface name
-  text: string
+// ✅ Correct - type matches class name (first letter lowercase)
+export class TextBlock {
+  readonly type = 'textBlock' as const  // Matches 'TextBlock' class name
+  readonly text: string
+  constructor(data: { text: string }) { this.text = data.text }
 }
 
-export interface ToolUseBlock {
-  type: 'toolUseBlock'  // Matches 'ToolUseBlock' interface name
-  name: string
-  toolUseId: string
+export class ToolUseBlock {
+  readonly type = 'toolUseBlock' as const  // Matches 'ToolUseBlock' class name
+  readonly name: string
+  readonly toolUseId: string
+  constructor(data: { name: string; toolUseId: string }) {
+    this.name = data.name
+    this.toolUseId = data.toolUseId
+  }
 }
 
-export interface CachePointBlock {
-  type: 'cachePointBlock'  // Matches 'CachePointBlock' interface name
-  cacheType: 'default'
+export class CachePointBlock {
+  readonly type = 'cachePointBlock' as const  // Matches 'CachePointBlock' class name
+  readonly cacheType: 'default'
+  constructor(data: { cacheType: 'default' }) { this.cacheType = data.cacheType }
 }
 
 export type ContentBlock = TextBlock | ToolUseBlock | CachePointBlock
 
-// ❌ Wrong - type doesn't match interface name
-export interface CachePointBlock {
-  type: 'cachePoint'  // Should be 'cachePointBlock'
-  cacheType: 'default'
+// ❌ Wrong - type doesn't match class name
+export class CachePointBlock {
+  readonly type = 'cachePoint' as const  // Should be 'cachePointBlock'
+  readonly cacheType: 'default'
 }
 ```
 
-**Rationale**: This consistent naming makes discriminated unions predictable and improves code readability. Developers can easily understand the relationship between the type value and the interface.
+**Rationale**: This consistent naming makes discriminated unions predictable and improves code readability. Developers can easily understand the relationship between the type value and the class.
 
 ### Error Handling
 
@@ -689,6 +705,43 @@ describe('BedrockModel', () => {
 })
 ```
 
+### Test Model Providers
+
+**When to use each test provider:**
+
+- **`MockMessageModel`**: For agent loop tests and high-level flows - focused on content blocks
+- **`TestModelProvider`**: For low-level event streaming tests where you need precise control over individual events
+
+#### MockMessageModel - Content-Focused Testing
+
+For tests focused on messages, you SHOULD use `MockMessageModel` with a content-focused API that eliminates boilerplate:
+
+```typescript
+import { MockMessageModel } from '../__fixtures__/mock-message-model'
+
+// ✅ RECOMMENDED - Single content block (most common)
+const provider = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
+
+// ✅ RECOMMENDED - Array of content blocks
+const provider = new MockMessageModel().addTurn([
+  { type: 'textBlock', text: 'Let me help' },
+  { type: 'toolUseBlock', name: 'calc', toolUseId: 'id-1', input: {} },
+])
+
+// ✅ RECOMMENDED - Multi-turn with builder pattern
+const provider = new MockMessageModel()
+  .addTurn({ type: 'toolUseBlock', name: 'calc', toolUseId: 'id-1', input: {} }) // Auto-derives 'toolUse'
+  .addTurn({ type: 'textBlock', text: 'The answer is 42' }) // Auto-derives 'endTurn'
+
+// ✅ OPTIONAL - Explicit stopReason when needed
+const provider = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Partial response' }, 'maxTokens')
+
+// ✅ OPTIONAL - Error handling
+const provider = new MockMessageModel()
+  .addTurn({ type: 'textBlock', text: 'Success' })
+  .addTurn(new Error('Model failed'))
+```
+
 ## Things to Do
 
 ✅ **Do**:
@@ -720,7 +773,9 @@ For detailed command usage, see [CONTRIBUTING.md - Testing Instructions](CONTRIB
 
 Quick reference:
 ```bash
-npm test              # Run unit tests
+npm test              # Run unit tests in Node.js
+npm run test:browser  # Run unit tests in browser (Chromium via Playwright)
+npm run test:all      # Run all tests in all environments
 npm run test:integ    # Run integration tests  
 npm run test:coverage # Run tests with coverage report
 npm run lint          # Check code quality
@@ -729,23 +784,38 @@ npm run type-check    # Verify TypeScript types
 npm run build         # Compile TypeScript
 ```
 
+## Multi-Environment Testing
+
+The SDK is designed to work seamlessly in both Node.js and browser environments. Our test suite validates this by running tests in both environments using Vitest's browser mode with Playwright.
+
+### Test Projects
+
+The test suite is organized into three projects:
+
+1. **unit-node** (green): Unit tests running in Node.js environment
+2. **unit-browser** (cyan): Same unit tests running in Chromium browser
+3. **integ** (magenta): Integration tests running in Node.js
+
+### Environment-Specific Test Patterns
+
+- You MUST write tests that are environment-agnostic unless they depend on Node.js features like filesystem or env-vars
+
+Some tests require Node.js-specific features (like process.env, AWS SDK) and should be skipped in browser environments:
+
+```typescript
+import { describe, it, expect } from 'vitest'
+import { isNode } from '../__fixtures__/environment'
+
+// Tests will run in Node.js, skip in browser
+describe.skipIf(!isNode)("Node.js specific features", () => {
+  it("uses environment variables", () => {
+    // This test accesses process.env
+    expect(process.env.NODE_ENV).toBeDefined()
+  })
+})
+```
+
 ## Troubleshooting Common Issues
-
-### Tests Not Found
-
-If tests aren't discovered:
-1. Ensure unit tests are in `src/__tests__/*.test.ts`
-2. Ensure integration tests are in `tests_integ/*.test.ts`
-3. Check `vitest.config.ts` configuration
-
-### Pre-commit Hooks Failing
-
-If hooks fail:
-1. Run the failing command manually to see details
-2. Fix the issues (tests, linting, formatting, or type errors)
-3. Try committing again
-
-### Type Errors
 
 If TypeScript compilation fails:
 1. Run `npm run type-check` to see all type errors
@@ -774,6 +844,14 @@ If TypeScript compilation fails:
 - YOU MUST MATCH the style and formatting of surrounding code, even if it differs from standard style guides. Consistency within a file trumps external standards.
 - YOU MUST NOT manually change whitespace that does not affect execution or output. Otherwise, use a formatting tool.
 - Fix broken things immediately when you find them. Don't ask permission to fix bugs.
+
+
+#### Code Comments
+ - NEVER add comments explaining that something is "improved", "better", "new", "enhanced", or referencing what it used to be
+ - Comments should explain WHAT the code does or WHY it exists, not how it's better than something else
+ - YOU MUST NEVER add comments about what used to be there or how something has changed. 
+ - YOU MUST NEVER refer to temporal context in comments (like "recently refactored" "moved") or code. Comments should be evergreen and describe the code as it is.
+ - YOU MUST NEVER write overly verbose comments. Use concise language.
 
 
 ### Code Review Considerations

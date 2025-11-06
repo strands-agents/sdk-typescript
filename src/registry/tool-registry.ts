@@ -1,5 +1,5 @@
-import { Registry, ValidationError } from './registry'
-import type { Tool, ToolStreamGenerator } from '../tools/tool'
+import { Registry, ValidationError } from './registry.js'
+import type { Tool, ToolStreamGenerator } from '../tools/tool.js'
 import { randomUUID } from 'crypto'
 
 /**
@@ -138,11 +138,79 @@ if (import.meta.vitest) {
       expect(() => registry.add(tool)).toThrow('Tool name must be between 1 and 64 characters')
     })
 
+    it('should throw ValidationError for a tool name that is too short', () => {
+      const tool = createMockTool({ name: '' })
+      expect(() => registry.add(tool)).toThrow(ValidationError)
+      expect(() => registry.add(tool)).toThrow('Tool name must be between 1 and 64 characters')
+    })
+
     it('should throw ValidationError for an invalid description', () => {
       // @ts-expect-error - Testing invalid type for description
       const tool = createMockTool({ description: 123 })
       expect(() => registry.add(tool)).toThrow(ValidationError)
       expect(() => registry.add(tool)).toThrow('Tool description must be a non-empty string')
+    })
+
+    it('should throw ValidationError for an empty string description', () => {
+      const tool = createMockTool({ description: '' })
+      expect(() => registry.add(tool)).toThrow(ValidationError)
+      expect(() => registry.add(tool)).toThrow('Tool description must be a non-empty string')
+    })
+
+    it('should allow a tool with a null or undefined description', () => {
+      const tool1 = createMockTool()
+      // @ts-expect-error - Testing explicit undefined description
+      tool1.description = undefined
+      const tool2 = createMockTool()
+      // @ts-expect-error - Testing explicit null description
+      tool2.description = null
+      expect(() => registry.add(tool1)).not.toThrow()
+      expect(() => registry.add(tool2)).not.toThrow()
+    })
+
+    it('should retrieve a tool by its name', () => {
+      const tool = createMockTool({ name: 'find-me' })
+      registry.add(tool)
+      const foundTool = registry.getByName('find-me')
+      expect(foundTool).toBe(tool)
+    })
+
+    it('should return undefined when getting a tool by a name that does not exist', () => {
+      const foundTool = registry.getByName('non-existent')
+      expect(foundTool).toBeUndefined()
+    })
+
+    it('should remove a tool by its name', () => {
+      const tool = createMockTool({ name: 'remove-me' })
+      registry.add(tool)
+      expect(registry.getByName('remove-me')).toBeDefined()
+      registry.removeByName('remove-me')
+      expect(registry.getByName('remove-me')).toBeUndefined()
+    })
+
+    it('should not throw when removing a tool by a name that does not exist', () => {
+      expect(() => registry.removeByName('non-existent')).not.toThrow()
+    })
+
+    it('should generate a valid ToolIdentifier', () => {
+      const id = registry['generateId']()
+      expect(id).toHaveProperty('type', 'toolIdentifier')
+      expect(id).toHaveProperty('id')
+      expect(typeof id.id).toBe('string')
+      expect(id.id).toHaveLength(36) // UUID length
+    })
+
+    it('should register a tool with a name at the maximum length', () => {
+      const longName = 'a'.repeat(64)
+      const tool = createMockTool({ name: longName })
+      expect(() => registry.add(tool)).not.toThrow()
+    })
+
+    it('should throw ValidationError for a non-string tool name', () => {
+      // @ts-expect-error - Testing invalid type for name
+      const tool = createMockTool({ name: 123 })
+      expect(() => registry.add(tool)).toThrow(ValidationError)
+      expect(() => registry.add(tool)).toThrow('Tool name must be a string')
     })
   })
 }

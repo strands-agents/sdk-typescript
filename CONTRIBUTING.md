@@ -34,7 +34,12 @@ When proposing solutions or reviewing code, we reference these principles to gui
    npm install
    ```
 
-2. Verify your setup by running the test suite:
+2. Install Playwright browsers for browser testing:
+   ```bash
+   npm run test:browser:install
+   ```
+
+3. Verify your setup by running the test suite:
    ```bash
    npm test
    npm run lint
@@ -42,7 +47,7 @@ When proposing solutions or reviewing code, we reference these principles to gui
    npm run type-check
    ```
 
-3. Install git hooks for automatic quality checks:
+4. Install git hooks for automatic quality checks:
    ```bash
    npm run prepare
    ```
@@ -54,7 +59,7 @@ This will set up pre-commit hooks that automatically run tests, linting, formatt
 ### Running Tests
 
 ```bash
-# Run unit tests only
+# Run unit tests only (Node.js environment)
 npm test
 
 # Run unit tests for a single file
@@ -71,6 +76,15 @@ npm run test:integ
 
 # Run integ tests for a single file
 npm run test:integ -- tests_integ/openai.test.ts
+
+# Run browser tests (Chromium)
+npm run test:browser
+
+# Run tests in all environments (Node.js + Browser)
+npm run test:all
+
+# Run tests in all environments with coverage
+npm run test:all:coverage
 ```
 
 ### Test Requirements

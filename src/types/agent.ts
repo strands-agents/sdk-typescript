@@ -1,4 +1,4 @@
-import type { Message } from './messages'
+import type { Message } from './messages.js'
 
 /**
  * Result returned by the agent loop.

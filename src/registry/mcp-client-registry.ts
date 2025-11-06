@@ -1,5 +1,5 @@
-import { Registry } from './registry'
-import type { McpClient } from '../mcp-client'
+import { Registry } from './registry.js'
+import type { McpClient } from '../mcp-client.js'
 import { randomUUID } from 'crypto'
 
 /**

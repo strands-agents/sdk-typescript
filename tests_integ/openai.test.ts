@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import { OpenAIModel } from '@strands-agents/sdk/openai'
 import { ContextWindowOverflowError } from '@strands-agents/sdk'
-import type { Message } from '@strands-agents/sdk'
+import { Message } from '@strands-agents/sdk'
 import type { ToolSpec } from '@strands-agents/sdk'
 
 // eslint-disable-next-line no-restricted-imports
-import { collectGenerator, collectIterator } from '../src/__fixtures__/model-test-helpers'
+import { collectGenerator, collectIterator } from '../src/__fixtures__/model-test-helpers.js'
 
 // Check for OpenAI API key at module level so skipIf can use it
 let hasApiKey = false
@@ -31,10 +31,10 @@ describe.skipIf(!hasApiKey)('OpenAIModel Integration Tests', () => {
       })
 
       const messages: Message[] = [
-        {
+        new Message({
           role: 'user',
           content: [{ type: 'textBlock', text: 'Say hello in one word.' }],
-        },
+        }),
       ]
 
       const events = await collectIterator(provider.stream(messages))
@@ -78,10 +78,10 @@ describe.skipIf(!hasApiKey)('OpenAIModel Integration Tests', () => {
       })
 
       const messages: Message[] = [
-        {
+        new Message({
           role: 'user',
           content: [{ type: 'textBlock', text: 'What should I say?' }],
-        },
+        }),
       ]
 
       const systemPrompt = 'Always respond with exactly the word "TEST" and nothing else.'
@@ -133,10 +133,10 @@ describe.skipIf(!hasApiKey)('OpenAIModel Integration Tests', () => {
       }
 
       const messages: Message[] = [
-        {
+        new Message({
           role: 'user',
           content: [{ type: 'textBlock', text: 'What is 15 plus 27?' }],
-        },
+        }),
       ]
 
       const events = await collectIterator(provider.stream(messages, { toolSpecs: [calculatorTool] }))
@@ -180,10 +180,10 @@ describe.skipIf(!hasApiKey)('OpenAIModel Integration Tests', () => {
 
       // First request: User asks a question
       const messages1: Message[] = [
-        {
+        new Message({
           role: 'user',
           content: [{ type: 'textBlock', text: 'What is 15 plus 27?' }],
-        },
+        }),
       ]
 
       const events1 = await collectIterator(provider.stream(messages1, { toolSpecs: [calculatorTool] }))
@@ -216,11 +216,11 @@ describe.skipIf(!hasApiKey)('OpenAIModel Integration Tests', () => {
 
       // Second request: Return tool result
       const messages2: Message[] = [
-        {
+        new Message({
           role: 'user',
           content: [{ type: 'textBlock', text: 'What is 15 plus 27?' }],
-        },
-        {
+        }),
+        new Message({
           role: 'assistant',
           content: [
             {
@@ -230,18 +230,18 @@ describe.skipIf(!hasApiKey)('OpenAIModel Integration Tests', () => {
               input: { operation: 'add', a: 15, b: 27 },
             },
           ],
-        },
-        {
+        }),
+        new Message({
           role: 'user',
           content: [
             {
               type: 'toolResultBlock',
               toolUseId: toolUseId!,
-              content: [{ type: 'toolResultTextContent', text: '42' }],
+              content: [{ type: 'textBlock', text: '42' }],
               status: 'success',
             },
           ],
-        },
+        }),
       ]
 
       const events2 = await collectIterator(provider.stream(messages2, { toolSpecs: [calculatorTool] }))
@@ -271,10 +271,10 @@ describe.skipIf(!hasApiKey)('OpenAIModel Integration Tests', () => {
       })
 
       const messages: Message[] = [
-        {
+        new Message({
           role: 'user',
           content: [{ type: 'textBlock', text: 'Write a long story about dragons.' }],
-        },
+        }),
       ]
 
       const events = await collectIterator(provider.stream(messages))
@@ -296,10 +296,10 @@ describe.skipIf(!hasApiKey)('OpenAIModel Integration Tests', () => {
       })
 
       const messages: Message[] = [
-        {
+        new Message({
           role: 'user',
           content: [{ type: 'textBlock', text: 'Say "hello world" exactly.' }],
-        },
+        }),
       ]
 
       const events1 = await collectIterator(provider.stream(messages))
@@ -337,10 +337,10 @@ describe.skipIf(!hasApiKey)('OpenAIModel Integration Tests', () => {
       })
 
       const messages: Message[] = [
-        {
+        new Message({
           role: 'user',
           content: [{ type: 'textBlock', text: 'Hello' }],
-        },
+        }),
       ]
 
       // Should throw an error (OpenAI will reject the invalid model)
@@ -365,10 +365,10 @@ describe.skipIf(!hasApiKey)('OpenAIModel Integration Tests', () => {
         const longText = 'Too much text! '.repeat(40000) // ~600k characters
 
         const messages: Message[] = [
-          {
+          new Message({
             role: 'user',
             content: [{ type: 'textBlock', text: longText }],
-          },
+          }),
         ]
 
         // Should throw ContextWindowOverflowError
@@ -390,10 +390,10 @@ describe.skipIf(!hasApiKey)('OpenAIModel Integration Tests', () => {
       })
 
       const messages: Message[] = [
-        {
+        new Message({
           role: 'user',
           content: [{ type: 'textBlock', text: 'Say hello.' }],
-        },
+        }),
       ]
 
       const events = await collectIterator(provider.stream(messages))
@@ -431,18 +431,18 @@ describe.skipIf(!hasApiKey)('OpenAIModel Integration Tests', () => {
 
       // Turn 1: User asks a question
       const messages: Message[] = [
-        {
+        new Message({
           role: 'user',
           content: [{ type: 'textBlock', text: 'My name is Alice. Remember this.' }],
-        },
-        {
+        }),
+        new Message({
           role: 'assistant',
           content: [{ type: 'textBlock', text: 'I will remember that your name is Alice.' }],
-        },
-        {
+        }),
+        new Message({
           role: 'user',
           content: [{ type: 'textBlock', text: 'What is my name?' }],
-        },
+        }),
       ]
 
       const events = await collectIterator(provider.stream(messages))
@@ -468,10 +468,10 @@ describe.skipIf(!hasApiKey)('OpenAIModel Integration Tests', () => {
       })
 
       const messages: Message[] = [
-        {
+        new Message({
           role: 'user',
           content: [{ type: 'textBlock', text: 'Say hi.' }],
-        },
+        }),
       ]
 
       const events = await collectIterator(provider.stream(messages))
@@ -488,10 +488,10 @@ describe.skipIf(!hasApiKey)('OpenAIModel Integration Tests', () => {
       })
 
       const messages: Message[] = [
-        {
+        new Message({
           role: 'user',
           content: [{ type: 'textBlock', text: 'Write a very long story about dragons.' }],
-        },
+        }),
       ]
 
       const events = await collectIterator(provider.stream(messages))
@@ -520,10 +520,10 @@ describe.skipIf(!hasApiKey)('OpenAIModel Integration Tests', () => {
       }
 
       const messages: Message[] = [
-        {
+        new Message({
           role: 'user',
           content: [{ type: 'textBlock', text: 'Calculate 42 times 7 please.' }],
-        },
+        }),
       ]
 
       const events = await collectIterator(provider.stream(messages, { toolSpecs: [calculatorTool] }))

@@ -2,7 +2,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport, type StdioServerParameters } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { WebSocketClientTransport } from '@modelcontextprotocol/sdk/client/websocket.js'
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
-import type { JSONValue } from './types/json'
+import type { JSONValue } from './types/json.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { type CallToolResult, type ListToolsResult, type Tool } from '@modelcontextprotocol/sdk/types.js'
 

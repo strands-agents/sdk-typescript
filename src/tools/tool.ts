@@ -1,6 +1,6 @@
-import type { ToolSpec, ToolUse, ToolResult } from './types'
+import type { ToolSpec, ToolUse, ToolResult } from './types.js'
 
-export type { ToolSpec } from './types'
+export type { ToolSpec } from './types.js'
 
 /**
  * Context provided to tool implementations during execution.

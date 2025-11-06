@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { FunctionTool } from '../function-tool'
-import type { ToolContext } from '../tool'
-import type { JSONValue } from '../../types/json'
+import { FunctionTool } from '../function-tool.js'
+import type { ToolContext } from '../tool.js'
+import type { JSONValue } from '../../types/json.js'
 
-import { collectGenerator } from '../../__fixtures__/model-test-helpers'
+import { collectGenerator } from '../../__fixtures__/model-test-helpers.js'
 
 describe('FunctionTool', () => {
   describe('properties', () => {
@@ -108,10 +108,10 @@ describe('FunctionTool', () => {
           toolUseId: 'test-sync-1',
           status: 'success',
           content: [
-            {
-              type: 'toolResultTextContent',
+            expect.objectContaining({
+              type: 'textBlock',
               text: '10', // 5 * 2 = 10 (converted to string)
-            },
+            }),
           ],
         })
       })
@@ -142,10 +142,10 @@ describe('FunctionTool', () => {
           toolUseId: 'test-string',
           status: 'success',
           content: [
-            {
-              type: 'toolResultTextContent',
+            expect.objectContaining({
+              type: 'textBlock',
               text: 'Hello, World!',
-            },
+            }),
           ],
         })
       })
@@ -176,10 +176,10 @@ describe('FunctionTool', () => {
           toolUseId: 'test-object',
           status: 'success',
           content: [
-            {
-              type: 'toolResultJsonContent',
+            expect.objectContaining({
+              type: 'jsonBlock',
               json: { key: 'value', count: 42 },
-            },
+            }),
           ],
         })
       })
@@ -224,7 +224,12 @@ describe('FunctionTool', () => {
         expect(result).toEqual({
           toolUseId: 'test-null',
           status: 'success',
-          content: [{ type: 'toolResultTextContent', text: '<null>' }],
+          content: [
+            expect.objectContaining({
+              type: 'textBlock',
+              text: '<null>',
+            }),
+          ],
         })
       })
 
@@ -247,7 +252,12 @@ describe('FunctionTool', () => {
         expect(result).toEqual({
           toolUseId: 'test-undefined',
           status: 'success',
-          content: [{ type: 'toolResultTextContent', text: '<undefined>' }],
+          content: [
+            expect.objectContaining({
+              type: 'textBlock',
+              text: '<undefined>',
+            }),
+          ],
         })
       })
 
@@ -266,7 +276,12 @@ describe('FunctionTool', () => {
         expect(trueResult).toEqual({
           toolUseId: 'test-true',
           status: 'success',
-          content: [{ type: 'toolResultTextContent', text: 'true' }],
+          content: [
+            expect.objectContaining({
+              type: 'textBlock',
+              text: 'true',
+            }),
+          ],
         })
 
         const falseTool = new FunctionTool({
@@ -283,7 +298,12 @@ describe('FunctionTool', () => {
         expect(falseResult).toEqual({
           toolUseId: 'test-false',
           status: 'success',
-          content: [{ type: 'toolResultTextContent', text: 'false' }],
+          content: [
+            expect.objectContaining({
+              type: 'textBlock',
+              text: 'false',
+            }),
+          ],
         })
       })
 
@@ -302,7 +322,12 @@ describe('FunctionTool', () => {
         expect(result).toEqual({
           toolUseId: 'test-number',
           status: 'success',
-          content: [{ type: 'toolResultTextContent', text: '42' }],
+          content: [
+            expect.objectContaining({
+              type: 'textBlock',
+              text: '42',
+            }),
+          ],
         })
 
         // Test negative number
@@ -323,7 +348,12 @@ describe('FunctionTool', () => {
         expect(negativeResult).toEqual({
           toolUseId: 'test-negative',
           status: 'success',
-          content: [{ type: 'toolResultTextContent', text: '-3.14' }],
+          content: [
+            expect.objectContaining({
+              type: 'textBlock',
+              text: '-3.14',
+            }),
+          ],
         })
       })
 
@@ -342,7 +372,12 @@ describe('FunctionTool', () => {
         expect(result).toEqual({
           toolUseId: 'test-array',
           status: 'success',
-          content: [{ type: 'toolResultJsonContent', json: { $value: [1, 2, 3, { key: 'value' }] } }],
+          content: [
+            expect.objectContaining({
+              type: 'jsonBlock',
+              json: { $value: [1, 2, 3, { key: 'value' }] },
+            }),
+          ],
         })
       })
 
@@ -366,7 +401,12 @@ describe('FunctionTool', () => {
         expect(result).toEqual({
           toolUseId: 'test-copy',
           status: 'success',
-          content: [{ type: 'toolResultJsonContent', json: { nested: { value: 'original' } } }],
+          content: [
+            expect.objectContaining({
+              type: 'jsonBlock',
+              json: { nested: { value: 'original' } },
+            }),
+          ],
         })
       })
 
@@ -393,7 +433,12 @@ describe('FunctionTool', () => {
         expect(result).toEqual({
           toolUseId: 'test-array-copy',
           status: 'success',
-          content: [{ type: 'toolResultJsonContent', json: { $value: [{ value: 'original' }] } }],
+          content: [
+            expect.objectContaining({
+              type: 'jsonBlock',
+              json: { $value: [{ value: 'original' }] },
+            }),
+          ],
         })
       })
     })
@@ -493,10 +538,10 @@ describe('FunctionTool', () => {
           toolUseId: 'test-gen-1',
           status: 'success',
           content: [
-            {
-              type: 'toolResultTextContent',
+            expect.objectContaining({
+              type: 'textBlock',
               text: 'Final result',
-            },
+            }),
           ],
         })
       })
@@ -564,7 +609,7 @@ describe('FunctionTool', () => {
         expect(result.toolUseId).toBe('test-error-1')
         expect(result.status).toBe('error')
         expect(result.content.length).toBeGreaterThan(0)
-        expect(result.content[0]).toHaveProperty('type', 'toolResultTextContent')
+        expect(result.content[0]?.type).toBe('textBlock')
       })
 
       it('catches promise rejections', async () => {
@@ -615,10 +660,10 @@ describe('FunctionTool', () => {
           toolUseId: 'test-error-capture',
           status: 'error',
           content: [
-            {
-              type: 'toolResultTextContent',
+            expect.objectContaining({
+              type: 'textBlock',
               text: 'Error: Test error message',
-            },
+            }),
           ],
           error: testError,
         })
@@ -646,10 +691,10 @@ describe('FunctionTool', () => {
           toolUseId: 'test-string-wrap',
           status: 'error',
           content: [
-            {
-              type: 'toolResultTextContent',
+            expect.objectContaining({
+              type: 'textBlock',
               text: 'Error: string error',
-            },
+            }),
           ],
           error: expect.any(Error),
         })
@@ -689,10 +734,10 @@ describe('FunctionTool', () => {
           toolUseId: 'test-custom-error',
           status: 'error',
           content: [
-            {
-              type: 'toolResultTextContent',
+            expect.objectContaining({
+              type: 'textBlock',
               text: 'Error: Custom error message',
-            },
+            }),
           ],
           error: customError,
         })
@@ -721,10 +766,10 @@ describe('FunctionTool', () => {
           toolUseId: 'test-stack-trace',
           status: 'error',
           content: [
-            {
-              type: 'toolResultTextContent',
+            expect.objectContaining({
+              type: 'textBlock',
               text: 'Error: Error with stack',
-            },
+            }),
           ],
           error: expect.any(Error),
         })
@@ -761,10 +806,10 @@ describe('FunctionTool', () => {
           toolUseId: 'test-async-gen-error',
           status: 'error',
           content: [
-            {
-              type: 'toolResultTextContent',
+            expect.objectContaining({
+              type: 'textBlock',
               text: 'Error: Async generator error',
-            },
+            }),
           ],
           error: testError,
         })
@@ -847,10 +892,10 @@ describe('FunctionTool', () => {
           status: 'error',
           error: expect.any(Error),
           content: [
-            {
-              type: 'toolResultTextContent',
+            expect.objectContaining({
+              type: 'textBlock',
               text: expect.stringContaining('Error:'),
-            },
+            }),
           ],
         })
       })
@@ -877,10 +922,10 @@ describe('FunctionTool', () => {
           toolUseId: 'test-function',
           status: 'success',
           content: [
-            {
-              type: 'toolResultJsonContent',
+            expect.objectContaining({
+              type: 'jsonBlock',
               json: {},
-            },
+            }),
           ],
         })
       })
@@ -898,7 +943,7 @@ describe('Tool interface backwards compatibility', () => {
     })
 
     // Verify interface properties exist
-    expect(tool).toHaveProperty('toolName')
+    expect(tool).toHaveProperty('name')
     expect(tool).toHaveProperty('description')
     expect(tool).toHaveProperty('toolSpec')
     expect(tool).toHaveProperty('stream')

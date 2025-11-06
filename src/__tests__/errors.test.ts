@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { ContextWindowOverflowError } from '../errors'
+import { ContextWindowOverflowError } from '../errors.js'
 
 describe('ContextWindowOverflowError', () => {
   describe('when instantiated with a message', () => {

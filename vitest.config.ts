@@ -16,10 +16,25 @@ export default defineConfig({
       {
         test: {
           include: ['src/**/__tests__/**/*.test.ts'],
-          name: { label: 'unit', color: 'green' },
+          name: { label: 'unit-node', color: 'green' },
           typecheck: {
             enabled: true,
             include: ['src/**/__tests__**/*.test-d.ts'],
+          },
+        },
+      },
+      {
+        test: {
+          include: ['src/**/__tests__/**/*.test.ts'],
+          name: { label: 'unit-browser', color: 'cyan' },
+          browser: {
+            enabled: true,
+            provider: 'playwright',
+            instances: [
+              {
+                browser: 'chromium',
+              },
+            ],
           },
         },
       },

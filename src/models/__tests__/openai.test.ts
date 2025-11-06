@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import OpenAI from 'openai'
-import { OpenAIModel } from '../openai'
-import { ContextWindowOverflowError } from '../../errors'
-import { collectIterator } from '../../__fixtures__/model-test-helpers'
-import type { Message } from '../../types/messages'
+import { isNode } from '../../__fixtures__/environment.js'
+import { OpenAIModel } from '../openai.js'
+import { ContextWindowOverflowError } from '../../errors.js'
+import { collectIterator } from '../../__fixtures__/model-test-helpers.js'
+import type { Message } from '../../types/messages.js'
 
 /**
  * Helper to create a mock OpenAI client with streaming support
@@ -30,14 +31,18 @@ describe('OpenAIModel', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.restoreAllMocks()
-    // Set default env var for most tests using Vitest's stubEnv
-    vi.stubEnv('OPENAI_API_KEY', 'sk-test-env')
+    // Set default env var for most tests using Vitest's stubEnv (Node.js only)
+    if (isNode) {
+      vi.stubEnv('OPENAI_API_KEY', 'sk-test-env')
+    }
   })
 
   afterEach(() => {
     vi.clearAllMocks()
-    // Restore all environment variables to their original state
-    vi.unstubAllEnvs()
+    // Restore all environment variables to their original state (Node.js only)
+    if (isNode) {
+      vi.unstubAllEnvs()
+    }
   })
 
   describe('constructor', () => {
@@ -65,15 +70,20 @@ describe('OpenAIModel', () => {
       )
     })
 
-    it('uses API key from environment variable', () => {
-      vi.stubEnv('OPENAI_API_KEY', 'sk-from-env')
-      new OpenAIModel({ modelId: 'gpt-4o' })
-      // OpenAI client should be called without explicit apiKey (uses env var internally)
-      expect(OpenAI).toHaveBeenCalled()
-    })
+    // Node.js-specific test: environment variable usage
+    if (isNode) {
+      it('uses API key from environment variable', () => {
+        vi.stubEnv('OPENAI_API_KEY', 'sk-from-env')
+        new OpenAIModel({ modelId: 'gpt-4o' })
+        // OpenAI client should be called without explicit apiKey (uses env var internally)
+        expect(OpenAI).toHaveBeenCalled()
+      })
+    }
 
     it('explicit API key takes precedence over environment variable', () => {
-      vi.stubEnv('OPENAI_API_KEY', 'sk-from-env')
+      if (isNode) {
+        vi.stubEnv('OPENAI_API_KEY', 'sk-from-env')
+      }
       const explicitKey = 'sk-explicit'
       new OpenAIModel({ modelId: 'gpt-4o', apiKey: explicitKey })
       expect(OpenAI).toHaveBeenCalledWith(
@@ -84,7 +94,9 @@ describe('OpenAIModel', () => {
     })
 
     it('throws error when no API key is available', () => {
-      vi.stubEnv('OPENAI_API_KEY', '')
+      if (isNode) {
+        vi.stubEnv('OPENAI_API_KEY', '')
+      }
       expect(() => new OpenAIModel({ modelId: 'gpt-4o' })).toThrow(
         "OpenAI API key is required. Provide it via the 'apiKey' option or set the OPENAI_API_KEY environment variable."
       )
@@ -124,7 +136,9 @@ describe('OpenAIModel', () => {
 
     it('does not require API key when client is provided', () => {
       vi.clearAllMocks()
-      vi.stubEnv('OPENAI_API_KEY', '')
+      if (isNode) {
+        vi.stubEnv('OPENAI_API_KEY', '')
+      }
       const mockClient = {} as OpenAI
       expect(() => new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })).not.toThrow()
     })
@@ -284,7 +298,7 @@ describe('OpenAIModel', () => {
                 type: 'toolResultBlock',
                 toolUseId: 'tool-123',
                 status: 'error',
-                content: [{ type: 'toolResultTextContent', text: 'Division by zero' }],
+                content: [{ type: 'textBlock', text: 'Division by zero' }],
               },
             ],
           },
@@ -374,21 +388,17 @@ describe('OpenAIModel', () => {
         expect(events[0]).toEqual({ type: 'modelMessageStartEvent', role: 'assistant' })
         expect(events[1]).toEqual({
           type: 'modelContentBlockStartEvent',
-          contentBlockIndex: 0,
         })
         expect(events[2]).toEqual({
           type: 'modelContentBlockDeltaEvent',
-          contentBlockIndex: 0,
           delta: { type: 'textDelta', text: 'Hello' },
         })
         expect(events[3]).toEqual({
           type: 'modelContentBlockDeltaEvent',
-          contentBlockIndex: 0,
           delta: { type: 'textDelta', text: ' world' },
         })
         expect(events[4]).toEqual({
           type: 'modelContentBlockStopEvent',
-          contentBlockIndex: 0,
         })
         expect(events[5]).toEqual({ type: 'modelMessageStopEvent', stopReason: 'endTurn' })
       })
@@ -569,7 +579,6 @@ describe('OpenAIModel', () => {
       expect(events[0]).toEqual({ type: 'modelMessageStartEvent', role: 'assistant' })
       expect(events[1]).toEqual({
         type: 'modelContentBlockStartEvent',
-        contentBlockIndex: 0,
         start: {
           type: 'toolUseStart',
           name: 'calculator',
@@ -578,7 +587,6 @@ describe('OpenAIModel', () => {
       })
       expect(events[2]).toEqual({
         type: 'modelContentBlockDeltaEvent',
-        contentBlockIndex: 0,
         delta: {
           type: 'toolUseInputDelta',
           input: '{"expr',
@@ -586,7 +594,6 @@ describe('OpenAIModel', () => {
       })
       expect(events[3]).toEqual({
         type: 'modelContentBlockDeltaEvent',
-        contentBlockIndex: 0,
         delta: {
           type: 'toolUseInputDelta',
           input: '":"2+2"}',
@@ -594,12 +601,11 @@ describe('OpenAIModel', () => {
       })
       expect(events[4]).toEqual({
         type: 'modelContentBlockStopEvent',
-        contentBlockIndex: 0,
       })
       expect(events[5]).toEqual({ type: 'modelMessageStopEvent', stopReason: 'toolUse' })
     })
 
-    it('handles multiple tool calls with correct contentBlockIndex', async () => {
+    it('handles multiple tool calls', async () => {
       const mockClient = createMockClient(async function* () {
         yield {
           choices: [{ delta: { role: 'assistant' }, index: 0 }],
@@ -651,8 +657,8 @@ describe('OpenAIModel', () => {
       // Should emit stop events for both tool calls
       const stopEvents = events.filter((e) => e.type === 'modelContentBlockStopEvent')
       expect(stopEvents).toHaveLength(2)
-      expect(stopEvents[0]).toEqual({ type: 'modelContentBlockStopEvent', contentBlockIndex: 0 })
-      expect(stopEvents[1]).toEqual({ type: 'modelContentBlockStopEvent', contentBlockIndex: 1 })
+      expect(stopEvents[0]).toEqual({ type: 'modelContentBlockStopEvent' })
+      expect(stopEvents[1]).toEqual({ type: 'modelContentBlockStopEvent' })
     })
 
     it('skips tool calls with invalid index', async () => {
@@ -785,7 +791,6 @@ describe('OpenAIModel', () => {
       expect(events[0]?.type).toBe('modelMessageStartEvent')
       // Text content block start
       expect(events[1]?.type).toBe('modelContentBlockStartEvent')
-      expect((events[1] as any).contentBlockIndex).toBe(0)
       // Text deltas
       expect(events[2]?.type).toBe('modelContentBlockDeltaEvent')
       expect((events[2] as any).delta.type).toBe('textDelta')

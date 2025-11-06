@@ -6,49 +6,46 @@
  */
 
 // Agent class
-export { Agent } from './agent/agent'
+export { Agent } from './agent/agent.js'
 
 // Error types
-export { ContextWindowOverflowError, MaxTokensError } from './errors'
+export { ContextWindowOverflowError, MaxTokensError } from './errors.js'
 
 // JSON types
-export type { JSONSchema, JSONValue } from './types/json'
+export type { JSONSchema, JSONValue } from './types/json.js'
 
 // Message types
 export type {
   Role,
   StopReason,
-  TextBlock,
-  ToolUseBlock,
-  ToolResultBlock,
-  ReasoningBlock,
-  CachePointBlock,
+  TextBlockData,
+  ToolUseBlockData,
+  ToolResultBlockData,
+  ReasoningBlockData,
+  CachePointBlockData,
   ContentBlock,
-  Message,
+  ContentBlockData,
+  MessageData,
   SystemPrompt,
   SystemContentBlock,
-} from './types/messages'
+  JsonBlock,
+  ToolResultContent,
+} from './types/messages.js'
+
+// Message classes
+export { TextBlock, ToolUseBlock, ToolResultBlock, ReasoningBlock, CachePointBlock, Message } from './types/messages.js'
 
 // Tool types
-export type {
-  ToolSpec,
-  ToolUse,
-  ToolResultTextContent,
-  ToolResultJsonContent,
-  ToolResultContent,
-  ToolResultStatus,
-  ToolResult,
-  ToolChoice,
-} from './tools/types'
+export type { ToolSpec, ToolUse, ToolResultStatus, ToolResult, ToolChoice } from './tools/types.js'
 
 // Tool interface and related types
-export type { Tool, InvokableTool, ToolContext, ToolStreamEvent, ToolStreamGenerator } from './tools/tool'
+export type { Tool, InvokableTool, ToolContext, ToolStreamEvent, ToolStreamGenerator } from './tools/tool.js'
 
 // FunctionTool implementation
-export { FunctionTool } from './tools/function-tool'
+export { FunctionTool } from './tools/function-tool.js'
 
 // Tool factory function
-export { tool } from './tools/zod-tool'
+export { tool } from './tools/zod-tool.js'
 
 // Streaming event types
 export type {
@@ -67,14 +64,14 @@ export type {
   ModelMessageStopEvent,
   ModelMetadataEvent,
   ModelStreamEvent,
-} from './models/streaming'
+} from './models/streaming.js'
 
 // Model provider types
-export type { BaseModelConfig, StreamOptions, Model } from './models/model'
+export type { BaseModelConfig, StreamOptions, Model } from './models/model.js'
 
 // Bedrock model provider
-export { BedrockModel as BedrockModel } from './models/bedrock'
-export type { BedrockModelConfig, BedrockModelOptions } from './models/bedrock'
+export { BedrockModel as BedrockModel } from './models/bedrock.js'
+export type { BedrockModelConfig, BedrockModelOptions } from './models/bedrock.js'
 
 // Agent streaming event types
 export type {
@@ -85,8 +82,8 @@ export type {
   AfterToolsEvent,
   BeforeInvocationEvent,
   AfterInvocationEvent,
-} from './agent/streaming'
+} from './agent/streaming.js'
 
 // Agent result type
 
-export type { AgentResult } from './types/agent'
+export type { AgentResult } from './types/agent.js'

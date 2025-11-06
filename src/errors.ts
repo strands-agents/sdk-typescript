@@ -5,7 +5,7 @@
  * during agent execution and model provider interactions.
  */
 
-import type { Message } from './types/messages'
+import type { Message } from './types/messages.js'
 
 /**
  * Error thrown when input exceeds the model's context window.

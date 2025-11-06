@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { BedrockRuntimeClient } from '@aws-sdk/client-bedrock-runtime'
-import { BedrockModel } from '../bedrock'
-import { ContextWindowOverflowError } from '../../errors'
-import type { Message } from '../../types/messages'
-import type { StreamOptions } from '../model'
-import { collectIterator } from '../../__fixtures__/model-test-helpers'
+import { isNode } from '../../__fixtures__/environment.js'
+import { BedrockModel } from '../bedrock.js'
+import { ContextWindowOverflowError } from '../../errors.js'
+import type { Message } from '../../types/messages.js'
+import type { StreamOptions } from '../model.js'
+import { collectIterator } from '../../__fixtures__/model-test-helpers.js'
 
 /**
  * Helper function to setup mock send with custom stream generator.
@@ -34,9 +35,9 @@ vi.mock('@aws-sdk/client-bedrock-runtime', async (importOriginal) => {
       return {
         stream: (async function* (): AsyncGenerator<unknown> {
           yield { messageStart: { role: 'assistant' } }
-          yield { contentBlockStart: { contentBlockIndex: 0 } }
-          yield { contentBlockDelta: { delta: { text: 'Hello' }, contentBlockIndex: 0 } }
-          yield { contentBlockStop: { contentBlockIndex: 0 } }
+          yield { contentBlockStart: {} }
+          yield { contentBlockDelta: { delta: { text: 'Hello' } } }
+          yield { contentBlockStop: {} }
           yield { messageStop: { stopReason: 'end_turn' } }
           yield {
             metadata: {
@@ -88,7 +89,10 @@ vi.mock('@aws-sdk/client-bedrock-runtime', async (importOriginal) => {
 describe('BedrockModel', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    delete process.env.AWS_REGION
+    // Clean up AWS_REGION env var in Node.js only
+    if (isNode && process.env) {
+      delete process.env.AWS_REGION
+    }
   })
 
   afterEach(() => {
@@ -324,8 +328,8 @@ describe('BedrockModel', () => {
               toolUseId: 'tool-123',
               status: 'success',
               content: [
-                { type: 'toolResultTextContent', text: 'Result: 8' },
-                { type: 'toolResultJsonContent', json: { hello: 'world' } },
+                { type: 'textBlock', text: 'Result: 8' },
+                { type: 'jsonBlock', json: { hello: 'world' } },
               ],
             },
           ],
@@ -451,9 +455,9 @@ describe('BedrockModel', () => {
           return {
             stream: (async function* (): AsyncGenerator<unknown> {
               yield { messageStart: { role: 'assistant' } }
-              yield { contentBlockStart: { contentBlockIndex: 0 } }
-              yield { contentBlockDelta: { delta: { text: 'Hello' }, contentBlockIndex: 0 } }
-              yield { contentBlockStop: { contentBlockIndex: 0 } }
+              yield { contentBlockStart: {} }
+              yield { contentBlockDelta: { delta: { text: 'Hello' } } }
+              yield { contentBlockStop: {} }
               yield { messageStop: { stopReason: 'end_turn' } }
               yield {
                 metadata: { usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 }, metrics: { latencyMs: 100 } },
@@ -477,13 +481,12 @@ describe('BedrockModel', () => {
       const events = await collectIterator(provider.stream(messages))
 
       expect(events).toContainEqual({ role: 'assistant', type: 'modelMessageStartEvent' })
-      expect(events).toContainEqual({ type: 'modelContentBlockStartEvent', contentBlockIndex: 0 })
+      expect(events).toContainEqual({ type: 'modelContentBlockStartEvent' })
       expect(events).toContainEqual({
         type: 'modelContentBlockDeltaEvent',
-        contentBlockIndex: 0,
         delta: { type: 'textDelta', text: 'Hello' },
       })
-      expect(events).toContainEqual({ type: 'modelContentBlockStopEvent', contentBlockIndex: 0 })
+      expect(events).toContainEqual({ type: 'modelContentBlockStopEvent' })
       expect(events).toContainEqual({ type: 'modelMessageStopEvent', stopReason: 'endTurn' })
       expect(events).toContainEqual({
         type: 'modelMetadataEvent',
@@ -500,17 +503,15 @@ describe('BedrockModel', () => {
               yield { messageStart: { role: 'assistant' } }
               yield {
                 contentBlockStart: {
-                  contentBlockIndex: 0,
                   start: { toolUse: { toolUseId: 'tool-use-123', name: 'get_weather' } },
                 },
               }
               yield {
                 contentBlockDelta: {
-                  contentBlockIndex: 0,
                   delta: { toolUse: { input: '{"location":"San Francisco"}' } },
                 },
               }
-              yield { contentBlockStop: { contentBlockIndex: 0 } }
+              yield { contentBlockStop: {} }
               yield { messageStop: { stopReason: 'tool_use' } }
               yield {
                 metadata: {
@@ -551,15 +552,13 @@ describe('BedrockModel', () => {
       expect(events).toContainEqual({ role: 'assistant', type: 'modelMessageStartEvent' })
       expect(startEvent).toStrictEqual({
         type: 'modelContentBlockStartEvent',
-        contentBlockIndex: 0,
         start: { type: 'toolUseStart', name: 'get_weather', toolUseId: 'tool-use-123' },
       })
       expect(inputDeltaEvent).toStrictEqual({
         type: 'modelContentBlockDeltaEvent',
-        contentBlockIndex: 0,
         delta: { type: 'toolUseInputDelta', input: '{"location":"San Francisco"}' },
       })
-      expect(events).toContainEqual({ type: 'modelContentBlockStopEvent', contentBlockIndex: 0 })
+      expect(events).toContainEqual({ type: 'modelContentBlockStopEvent' })
       expect(events).toContainEqual({ stopReason: 'toolUse', type: 'modelMessageStopEvent' })
       expect(events).toContainEqual({
         type: 'modelMetadataEvent',
@@ -574,11 +573,11 @@ describe('BedrockModel', () => {
           return {
             stream: (async function* (): AsyncGenerator<unknown> {
               yield { messageStart: { role: 'assistant' } }
-              yield { contentBlockStart: { contentBlockIndex: 0 } }
+              yield { contentBlockStart: {} }
               yield {
-                contentBlockDelta: { contentBlockIndex: 0, delta: { reasoningContent: { text: 'Thinking...' } } },
+                contentBlockDelta: { delta: { reasoningContent: { text: 'Thinking...' } } },
               }
-              yield { contentBlockStop: { contentBlockIndex: 0 } }
+              yield { contentBlockStop: {} }
               yield { messageStop: { stopReason: 'end_turn' } }
               yield {
                 metadata: {
@@ -611,13 +610,12 @@ describe('BedrockModel', () => {
       const events = await collectIterator(provider.stream(messages))
 
       expect(events).toContainEqual({ role: 'assistant', type: 'modelMessageStartEvent' })
-      expect(events).toContainEqual({ type: 'modelContentBlockStartEvent', contentBlockIndex: 0 })
+      expect(events).toContainEqual({ type: 'modelContentBlockStartEvent' })
       expect(events).toContainEqual({
         type: 'modelContentBlockDeltaEvent',
-        contentBlockIndex: 0,
         delta: { type: 'reasoningContentDelta', text: 'Thinking...' },
       })
-      expect(events).toContainEqual({ type: 'modelContentBlockStopEvent', contentBlockIndex: 0 })
+      expect(events).toContainEqual({ type: 'modelContentBlockStopEvent' })
       expect(events).toContainEqual({ stopReason: 'endTurn', type: 'modelMessageStopEvent' })
       expect(events).toContainEqual({
         type: 'modelMetadataEvent',
@@ -634,14 +632,13 @@ describe('BedrockModel', () => {
           return {
             stream: (async function* (): AsyncGenerator<unknown> {
               yield { messageStart: { role: 'assistant' } }
-              yield { contentBlockStart: { contentBlockIndex: 0 } }
+              yield { contentBlockStart: {} }
               yield {
                 contentBlockDelta: {
-                  contentBlockIndex: 0,
                   delta: { reasoningContent: { redactedContent: redactedBytes } },
                 },
               }
-              yield { contentBlockStop: { contentBlockIndex: 0 } }
+              yield { contentBlockStop: {} }
               yield { messageStop: { stopReason: 'end_turn' } }
               yield {
                 metadata: { usage: { inputTokens: 15, outputTokens: 5, totalTokens: 20 }, metrics: { latencyMs: 110 } },
@@ -671,13 +668,12 @@ describe('BedrockModel', () => {
       const events = await collectIterator(provider.stream(messages))
 
       expect(events).toContainEqual({ role: 'assistant', type: 'modelMessageStartEvent' })
-      expect(events).toContainEqual({ type: 'modelContentBlockStartEvent', contentBlockIndex: 0 })
+      expect(events).toContainEqual({ type: 'modelContentBlockStartEvent' })
       expect(events).toContainEqual({
         type: 'modelContentBlockDeltaEvent',
-        contentBlockIndex: 0,
         delta: { type: 'reasoningContentDelta', redactedContent: redactedBytes },
       })
-      expect(events).toContainEqual({ type: 'modelContentBlockStopEvent', contentBlockIndex: 0 })
+      expect(events).toContainEqual({ type: 'modelContentBlockStopEvent' })
       expect(events).toContainEqual({ stopReason: 'endTurn', type: 'modelMessageStopEvent' })
       expect(events).toContainEqual({
         type: 'modelMetadataEvent',
@@ -717,10 +713,10 @@ describe('BedrockModel', () => {
       setupMockSend(async function* () {
         yield { messageStart: { role: 'assistant' } }
         yield {
-          contentBlockStart: { contentBlockIndex: 0, start: { toolUse: { name: 'calc', toolUseId: 'id' } } },
+          contentBlockStart: { start: { toolUse: { name: 'calc', toolUseId: 'id' } } },
         }
-        yield { contentBlockDelta: { delta: { toolUse: { input: '{"a": 1}' } }, contentBlockIndex: 0 } }
-        yield { contentBlockStop: { contentBlockIndex: 0 } }
+        yield { contentBlockDelta: { delta: { toolUse: { input: '{"a": 1}' } } } }
+        yield { contentBlockStop: {} }
         yield { messageStop: { stopReason: 'tool_use' } }
         yield { metadata: { usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } } }
       })
@@ -732,7 +728,6 @@ describe('BedrockModel', () => {
 
       expect(events).toContainEqual({
         type: 'modelContentBlockDeltaEvent',
-        contentBlockIndex: 0,
         delta: {
           type: 'toolUseInputDelta',
           input: '{"a": 1}',
@@ -743,20 +738,18 @@ describe('BedrockModel', () => {
     it('handles reasoning content delta with both text and signature, as well as redactedContent', async () => {
       setupMockSend(async function* () {
         yield { messageStart: { role: 'assistant' } }
-        yield { contentBlockStart: { contentBlockIndex: 0 } }
+        yield { contentBlockStart: {} }
         yield {
           contentBlockDelta: {
             delta: { reasoningContent: { text: 'thinking...', signature: 'sig123' } },
-            contentBlockIndex: 0,
           },
         }
         yield {
           contentBlockDelta: {
             delta: { reasoningContent: { redactedContent: new Uint8Array(1) } },
-            contentBlockIndex: 0,
           },
         }
-        yield { contentBlockStop: { contentBlockIndex: 0 } }
+        yield { contentBlockStop: {} }
         yield { messageStop: { stopReason: 'end_turn' } }
         yield { metadata: { usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } } }
       })
@@ -768,7 +761,6 @@ describe('BedrockModel', () => {
 
       expect(events).toContainEqual({
         type: 'modelContentBlockDeltaEvent',
-        contentBlockIndex: 0,
         delta: {
           type: 'reasoningContentDelta',
           text: 'thinking...',
@@ -777,7 +769,6 @@ describe('BedrockModel', () => {
       })
       expect(events).toContainEqual({
         type: 'modelContentBlockDeltaEvent',
-        contentBlockIndex: 0,
         delta: {
           type: 'reasoningContentDelta',
           redactedContent: new Uint8Array(1),
@@ -788,20 +779,18 @@ describe('BedrockModel', () => {
     it('handles reasoning content delta with only text, skips unsupported types', async () => {
       setupMockSend(async function* () {
         yield { messageStart: { role: 'assistant' } }
-        yield { contentBlockStart: { contentBlockIndex: 0 } }
+        yield { contentBlockStart: {} }
         yield {
           contentBlockDelta: {
             delta: { reasoningContent: { text: 'thinking...' } },
-            contentBlockIndex: 0,
           },
         }
         yield {
           contentBlockDelta: {
             delta: { unknown: 'type' },
-            contentBlockIndex: 0,
           },
         }
-        yield { contentBlockStop: { contentBlockIndex: 0 } }
+        yield { contentBlockStop: {} }
         yield { messageStop: { stopReason: 'end_turn' } }
         yield { metadata: { usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } } }
         yield { unknown: 'type' }
@@ -828,14 +817,13 @@ describe('BedrockModel', () => {
     it('handles reasoning content delta with only signature', async () => {
       setupMockSend(async function* () {
         yield { messageStart: { role: 'assistant' } }
-        yield { contentBlockStart: { contentBlockIndex: 0 } }
+        yield { contentBlockStart: {} }
         yield {
           contentBlockDelta: {
             delta: { reasoningContent: { signature: 'sig123' } },
-            contentBlockIndex: 0,
           },
         }
-        yield { contentBlockStop: { contentBlockIndex: 0 } }
+        yield { contentBlockStop: {} }
         yield { messageStop: { stopReason: 'end_turn' } }
         yield { metadata: { usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } } }
       })
@@ -861,9 +849,9 @@ describe('BedrockModel', () => {
     it('handles cache usage metrics', async () => {
       setupMockSend(async function* () {
         yield { messageStart: { role: 'assistant' } }
-        yield { contentBlockStart: { contentBlockIndex: 0 } }
-        yield { contentBlockDelta: { delta: { text: 'Hello' }, contentBlockIndex: 0 } }
-        yield { contentBlockStop: { contentBlockIndex: 0 } }
+        yield { contentBlockStart: {} }
+        yield { contentBlockDelta: { delta: { text: 'Hello' } } }
+        yield { contentBlockStop: {} }
         yield { messageStop: { stopReason: 'end_turn' } }
         yield {
           metadata: {
@@ -894,9 +882,9 @@ describe('BedrockModel', () => {
     it('handles trace in metadata', async () => {
       setupMockSend(async function* () {
         yield { messageStart: { role: 'assistant' } }
-        yield { contentBlockStart: { contentBlockIndex: 0 } }
-        yield { contentBlockDelta: { delta: { text: 'Hello' }, contentBlockIndex: 0 } }
-        yield { contentBlockStop: { contentBlockIndex: 0 } }
+        yield { contentBlockStart: {} }
+        yield { contentBlockDelta: { delta: { text: 'Hello' } } }
+        yield { contentBlockStop: {} }
         yield { messageStop: { stopReason: 'end_turn' } }
         yield {
           metadata: {
@@ -921,9 +909,9 @@ describe('BedrockModel', () => {
     it('handles additionalModelResponseFields', async () => {
       setupMockSend(async function* () {
         yield { messageStart: { role: 'assistant' } }
-        yield { contentBlockStart: { contentBlockIndex: 0 } }
-        yield { contentBlockDelta: { delta: { text: 'Hello' }, contentBlockIndex: 0 } }
-        yield { contentBlockStop: { contentBlockIndex: 0 } }
+        yield { contentBlockStart: {} }
+        yield { contentBlockDelta: { delta: { text: 'Hello' } } }
+        yield { contentBlockStop: {} }
         yield { messageStop: { stopReason: 'end_turn', additionalModelResponseFields: { customField: 'value' } } }
         yield { metadata: { usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } } }
       })
@@ -1132,7 +1120,7 @@ describe('BedrockModel', () => {
                 type: 'toolResultBlock',
                 toolUseId: 'tool-123',
                 status: 'success',
-                content: [{ type: 'toolResultTextContent', text: 'Result' }],
+                content: [{ type: 'textBlock', text: 'Result' }],
               },
             ],
           },
@@ -1172,7 +1160,7 @@ describe('BedrockModel', () => {
                 type: 'toolResultBlock',
                 toolUseId: 'tool-123',
                 status: 'success',
-                content: [{ type: 'toolResultTextContent', text: 'Result' }],
+                content: [{ type: 'textBlock', text: 'Result' }],
               },
             ],
           },
@@ -1214,7 +1202,7 @@ describe('BedrockModel', () => {
                 type: 'toolResultBlock',
                 toolUseId: 'tool-123',
                 status: 'success',
-                content: [{ type: 'toolResultTextContent', text: 'Result' }],
+                content: [{ type: 'textBlock', text: 'Result' }],
               },
             ],
           },
@@ -1256,7 +1244,7 @@ describe('BedrockModel', () => {
                 type: 'toolResultBlock',
                 toolUseId: 'tool-123',
                 status: 'success',
-                content: [{ type: 'toolResultTextContent', text: 'Result' }],
+                content: [{ type: 'textBlock', text: 'Result' }],
               },
             ],
           },

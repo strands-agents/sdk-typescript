@@ -3,10 +3,10 @@
  * This module provides utilities for testing Tool implementations.
  */
 
-import type { Tool } from '../tools/tool'
-import type { ToolContext } from '../tools/tool'
-import type { ToolResult } from '../tools/types'
-import type { JSONValue } from '../types/json'
+import type { Tool } from '../tools/tool.js'
+import type { ToolContext } from '../tools/tool.js'
+import type { ToolResult } from '../tools/types.js'
+import type { JSONValue } from '../types/json.js'
 
 /**
  * Helper to create a mock ToolContext for testing.

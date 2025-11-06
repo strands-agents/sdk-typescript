@@ -9,10 +9,10 @@ import {
   type ToolResultBlock,
   type ToolUseBlock,
 } from '..'
-import type { McpClient } from '../mcp-client'
-import type { BaseModelConfig, Model, StreamOptions } from '../models/model'
-import { McpClientRegistry } from '../registry/mcp-client-registry'
-import { ToolRegistry } from '../registry/tool-registry'
+import type { McpClient } from '../mcp-client.js'
+import type { BaseModelConfig, Model, StreamOptions } from '../models/model.js'
+import { McpClientRegistry } from '../registry/mcp-client-registry.js'
+import { ToolRegistry } from '../registry/tool-registry.js'
 
 /**
  * Configuration object for creating a new Agent.
