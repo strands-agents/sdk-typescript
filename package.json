@@ -43,7 +43,7 @@
     "format:check": "prettier --check src tests_integ",
     "type-check": "tsc --noEmit",
     "type-check:watch": "tsc --noEmit --watch",
-    "prepare": "husky"
+    "prepare": "npm run build && husky"
   },
   "keywords": [
     "agents",
