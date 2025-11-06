@@ -1,6 +1,6 @@
-import { tool } from '../../src/tools/zod-tool'
+import { tool } from '../../src/tools/zod-tool.js'
 import { z } from 'zod'
-import type { NotebookState } from './types'
+import type { NotebookState } from './types.js'
 
 /**
  * Zod schema for notebook input validation.
@@ -126,6 +126,13 @@ export const notebook = tool({
 
       case 'clear':
         return handleClear(notebooks, input.name ?? 'default')
+
+      default: {
+        // This should never happen due to discriminated union, but TypeScript needs it
+        // Using never type for exhaustiveness checking
+        const _exhaustiveCheck: never = input
+        throw new Error(`Unknown mode: ${(_exhaustiveCheck as { mode: string }).mode}`)
+      }
     }
   },
 })

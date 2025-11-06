@@ -1,6 +1,6 @@
 import { describe, it, expectTypeOf } from 'vitest'
 import { z } from 'zod'
-import { tool } from '../zod-tool'
+import { tool } from '../zod-tool.js'
 
 describe('zod-tool type tests', () => {
   describe('invoke return type matches callback return type', () => {

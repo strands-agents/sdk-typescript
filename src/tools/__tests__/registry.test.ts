@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { ToolRegistry } from '../registry'
-import type { Tool, ToolStreamEvent } from '../tool'
-import type { ToolResult, ToolSpec } from '../types'
+import { ToolRegistry } from '../registry.js'
+import type { Tool, ToolStreamEvent } from '../tool.js'
+import type { ToolResult, ToolSpec } from '../types.js'
+import { TextBlock } from '../../types/messages.js'
 
 /**
  * Helper function to create a mock Tool for testing.
@@ -23,12 +24,7 @@ function createMockTool(name: string, description = 'Test tool description'): To
       return {
         toolUseId: 'test-id',
         status: 'success',
-        content: [
-          {
-            type: 'toolResultTextContent',
-            text: 'test result',
-          },
-        ],
+        content: [new TextBlock('test result')],
       }
     },
   }

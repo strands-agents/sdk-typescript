@@ -1,6 +1,6 @@
-import type { ModelStreamEvent } from '../models/streaming'
-import type { ToolStreamEvent } from '../tools/tool'
-import type { ContentBlock, Message } from '../types/messages'
+import type { ModelStreamEvent } from '../models/streaming.js'
+import type { ToolStreamEvent } from '../tools/tool.js'
+import type { ContentBlock, Message } from '../types/messages.js'
 
 /**
  * Union type representing all possible streaming events from an agent.

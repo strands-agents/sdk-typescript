@@ -1,16 +1,17 @@
-import type { JSONValue } from './json'
-import type { ToolResultContent } from '../tools/types'
+import type { JSONValue } from './json.js'
 
 /**
- * A message in a conversation between user and assistant.
- * Each message has a role (user or assistant) and an array of content blocks.
+ * Message types and content blocks for conversational AI interactions.
+ *
+ * This module follows a pattern where <name>Data interfaces define the structure
+ * for objects, while corresponding classes extend those interfaces with additional
+ * functionality and type discrimination.
  */
-export interface Message {
-  /**
-   * Discriminator for message type.
-   */
-  type: 'message'
 
+/**
+ * Data for a message.
+ */
+export interface MessageData {
   /**
    * The role of the message sender.
    */
@@ -19,7 +20,33 @@ export interface Message {
   /**
    * Array of content blocks that make up this message.
    */
-  content: ContentBlock[]
+  content: ContentBlockData[]
+}
+
+/**
+ * A message in a conversation between user and assistant.
+ * Each message has a role (user or assistant) and an array of content blocks.
+ */
+export class Message {
+  /**
+   * Discriminator for message type.
+   */
+  readonly type = 'message' as const
+
+  /**
+   * The role of the message sender.
+   */
+  readonly role: Role
+
+  /**
+   * Array of content blocks that make up this message.
+   */
+  readonly content: ContentBlock[]
+
+  constructor(data: { role: Role; content: ContentBlock[] }) {
+    this.role = data.role
+    this.content = data.content
+  }
 }
 
 /**
@@ -32,19 +59,28 @@ export type Role = 'user' | 'assistant'
  * A block of content within a message.
  * Content blocks can contain text, tool usage requests, tool results, reasoning content, or cache points.
  *
- * This is a discriminated union where the `type` field determines the content format.
+ * This is a discriminated union where the object key determines the content format.
+ *
+ * @example
+ * ```typescript
+ * if ('text' in block) {
+ *   console.log(block.text.text)
+ * }
+ * ```
  */
+export type ContentBlockData =
+  | TextBlockData
+  | { toolUse: ToolUseBlockData }
+  | { toolResult: ToolResultBlockData }
+  | { reasoning: ReasoningBlockData }
+  | { cachePoint: CachePointBlockData }
+
 export type ContentBlock = TextBlock | ToolUseBlock | ToolResultBlock | ReasoningBlock | CachePointBlock
 
 /**
- * Text content block within a message.
+ * Data for a text block.
  */
-export interface TextBlock {
-  /**
-   * Discriminator for text content.
-   */
-  type: 'textBlock'
-
+export interface TextBlockData {
   /**
    * Plain text content.
    */
@@ -52,14 +88,28 @@ export interface TextBlock {
 }
 
 /**
- * Tool use content block within a message.
+ * Text content block within a message.
  */
-export interface ToolUseBlock {
+export class TextBlock implements TextBlockData {
   /**
-   * Discriminator for tool use content.
+   * Discriminator for text content.
    */
-  type: 'toolUseBlock'
+  readonly type = 'textBlock' as const
 
+  /**
+   * Plain text content.
+   */
+  readonly text: string
+
+  constructor(data: string) {
+    this.text = data
+  }
+}
+
+/**
+ * Data for a tool use block.
+ */
+export interface ToolUseBlockData {
   /**
    * The name of the tool to execute.
    */
@@ -78,14 +128,51 @@ export interface ToolUseBlock {
 }
 
 /**
- * Tool result content block within a message.
+ * Tool use content block.
  */
-export interface ToolResultBlock {
+export class ToolUseBlock implements ToolUseBlockData {
   /**
-   * Discriminator for tool result content.
+   * Discriminator for tool use content.
    */
-  type: 'toolResultBlock'
+  readonly type = 'toolUseBlock' as const
 
+  /**
+   * The name of the tool to execute.
+   */
+  readonly name: string
+
+  /**
+   * Unique identifier for this tool use instance.
+   */
+  readonly toolUseId: string
+
+  /**
+   * The input parameters for the tool.
+   * This can be any JSON-serializable value.
+   */
+  readonly input: JSONValue
+
+  constructor(data: ToolUseBlockData) {
+    this.name = data.name
+    this.toolUseId = data.toolUseId
+    this.input = data.input
+  }
+}
+
+/**
+ * Content within a tool result.
+ * Can be either text or structured JSON data.
+ *
+ * This is a discriminated union where the object key determines the content format.
+ */
+export type ToolResultContentData = TextBlockData | JsonBlockData
+
+export type ToolResultContent = TextBlock | JsonBlock
+
+/**
+ * Data for a tool result block.
+ */
+export interface ToolResultBlockData {
   /**
    * The ID of the tool use that this result corresponds to.
    */
@@ -99,18 +186,44 @@ export interface ToolResultBlock {
   /**
    * The content returned by the tool.
    */
-  content: ToolResultContent[]
+  content: ToolResultContentData[]
 }
 
 /**
- * Reasoning content block within a message.
+ * Tool result content block.
  */
-export interface ReasoningBlock {
+export class ToolResultBlock implements ToolResultBlockData {
   /**
-   * Discriminator for reasoning content.
+   * Discriminator for tool result content.
    */
-  type: 'reasoningBlock'
+  readonly type = 'toolResultBlock' as const
 
+  /**
+   * The ID of the tool use that this result corresponds to.
+   */
+  readonly toolUseId: string
+
+  /**
+   * Status of the tool execution.
+   */
+  readonly status: 'success' | 'error'
+
+  /**
+   * The content returned by the tool.
+   */
+  readonly content: ToolResultContent[]
+
+  constructor(data: { toolUseId: string; status: 'success' | 'error'; content: ToolResultContent[] }) {
+    this.toolUseId = data.toolUseId
+    this.status = data.status
+    this.content = data.content
+  }
+}
+
+/**
+ * Data for a reasoning block.
+ */
+export interface ReasoningBlockData {
   /**
    * The text content of the reasoning process.
    */
@@ -128,19 +241,100 @@ export interface ReasoningBlock {
 }
 
 /**
- * Cache point block for prompt caching.
- * Marks a position in a message or system prompt where caching should occur.
+ * Reasoning content block within a message.
  */
-export interface CachePointBlock {
+export class ReasoningBlock implements ReasoningBlockData {
   /**
-   * Discriminator for cache point.
+   * Discriminator for reasoning content.
    */
-  type: 'cachePointBlock'
+  readonly type = 'reasoningBlock' as const
 
+  /**
+   * The text content of the reasoning process.
+   */
+  readonly text?: string
+
+  /**
+   * A cryptographic signature for verification purposes.
+   */
+  readonly signature?: string
+
+  /**
+   * The redacted content of the reasoning process.
+   */
+  readonly redactedContent?: Uint8Array
+
+  constructor(data: ReasoningBlockData) {
+    if (data.text !== undefined) {
+      this.text = data.text
+    }
+    if (data.signature !== undefined) {
+      this.signature = data.signature
+    }
+    if (data.redactedContent !== undefined) {
+      this.redactedContent = data.redactedContent
+    }
+  }
+}
+
+/**
+ * Data for a cache point block.
+ */
+export interface CachePointBlockData {
   /**
    * The cache type. Currently only 'default' is supported.
    */
   cacheType: 'default'
+}
+
+/**
+ * Cache point block for prompt caching.
+ * Marks a position in a message or system prompt where caching should occur.
+ */
+export class CachePointBlock implements CachePointBlockData {
+  /**
+   * Discriminator for cache point.
+   */
+  readonly type = 'cachePointBlock' as const
+
+  /**
+   * The cache type. Currently only 'default' is supported.
+   */
+  readonly cacheType: 'default'
+
+  constructor(data: CachePointBlockData) {
+    this.cacheType = data.cacheType
+  }
+}
+
+/**
+ * Data for a JSON block.
+ */
+export interface JsonBlockData {
+  /**
+   * Structured JSON data.
+   */
+  json: JSONValue
+}
+
+/**
+ * JSON content block within a message.
+ * Used for structured data returned from tools or model responses.
+ */
+export class JsonBlock implements JsonBlockData {
+  /**
+   * Discriminator for JSON content.
+   */
+  readonly type = 'jsonBlock' as const
+
+  /**
+   * Structured JSON data.
+   */
+  readonly json: JSONValue
+
+  constructor(data: JsonBlockData) {
+    this.json = data.json
+  }
 }
 
 /**
@@ -174,9 +368,9 @@ export type StopReason =
  *
  * // Array with cache points for advanced caching
  * const prompt: SystemPrompt = [
- *   { type: 'textBlock', text: 'You are a helpful assistant' },
- *   { type: 'textBlock', text: largeContextDocument },
- *   { type: 'cachePointBlock', cacheType: 'default' }
+ *   { textBlock: new TextBlock('You are a helpful assistant') },
+ *   { textBlock: new TextBlock(largeContextDocument) },
+ *   { cachePointBlock: new CachePointBlock({ cacheType: 'default' }) }
  * ]
  * ```
  */
@@ -186,6 +380,8 @@ export type SystemPrompt = string | SystemContentBlock[]
  * A block of content within a system prompt.
  * Supports text content and cache points for prompt caching.
  *
- * This is a discriminated union where the `type` field determines the block format.
+ * This is a discriminated union where the object key determines the block format.
  */
+export type SystemContentBlockData = TextBlockData | { cachePoint: CachePointBlockData }
+
 export type SystemContentBlock = TextBlock | CachePointBlock

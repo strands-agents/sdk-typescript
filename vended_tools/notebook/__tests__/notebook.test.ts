@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { notebook } from '../notebook'
-import type { NotebookState } from '../types'
-import type { ToolContext } from '../../../src/tools/tool'
+import { notebook } from '../notebook.js'
+import type { NotebookState } from '../types.js'
+import type { ToolContext } from '../../../src/tools/tool.js'
 
 describe('notebook tool', () => {
   // Helper to create fresh state and context for each test
@@ -18,7 +18,7 @@ describe('notebook tool', () => {
     return { state, context }
   }
 
-  describe('create operation', () => {
+  describe('create oper ation', () => {
     it('creates an empty notebook with default name', async () => {
       const { state, context } = createFreshContext()
       const result = await notebook.invoke({ mode: 'create' }, context)

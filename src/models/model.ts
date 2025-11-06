@@ -1,6 +1,6 @@
-import type { Message, ContentBlock, Role, SystemPrompt } from '../types/messages'
-import type { ToolSpec, ToolChoice } from '../tools/types'
-import type { ModelStreamEvent } from './streaming'
+import type { Message, ContentBlock, Role, SystemPrompt } from '../types/messages.js'
+import type { ToolSpec, ToolChoice } from '../tools/types.js'
+import type { ModelStreamEvent } from './streaming.js'
 
 /**
  * Base configuration interface for all model providers.

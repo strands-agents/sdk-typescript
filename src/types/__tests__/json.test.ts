@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { deepCopy } from '../json'
+import { deepCopy } from '../json.js'
 
 describe('deepCopy', () => {
   describe('primitive values', () => {

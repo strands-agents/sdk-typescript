@@ -470,30 +470,40 @@ export type Role = 'user' | 'assistant'
 
 export type ContentBlock = TextBlock | ToolUseBlock | ToolResultBlock
 
-export interface TextBlock {
-  type: 'text'
-  text: string
+export class TextBlock {
+  readonly type = 'textBlock' as const
+  readonly text: string
+  constructor(data: { text: string }) { this.text = data.text }
 }
 
-export interface ToolUseBlock {
-  type: 'toolUse'
-  name: string
-  toolUseId: string
-  input: JSONValue
+export class ToolUseBlock {
+  readonly type = 'toolUseBlock' as const
+  readonly name: string
+  readonly toolUseId: string
+  readonly input: JSONValue
+  constructor(data: { name: string; toolUseId: string; input: JSONValue }) {
+    this.name = data.name
+    this.toolUseId = data.toolUseId
+    this.input = data.input
+  }
 }
 
-export interface ToolResultBlock {
-  type: 'toolResult'
-  toolUseId: string
-  status: 'success' | 'error'
-  content: ToolResultContent[]
+export class ToolResultBlock {
+  readonly type = 'toolResultBlock' as const
+  readonly toolUseId: string
+  readonly status: 'success' | 'error'
+  readonly content: ToolResultContent[]
+  constructor(data: { toolUseId: string; status: 'success' | 'error'; content: ToolResultContent[] }) {
+    this.toolUseId = data.toolUseId
+    this.status = data.status
+    this.content = data.content
+  }
 }
 
 // ❌ Wrong - Dependencies before top-level
 export type Role = 'user' | 'assistant'
 
-export interface TextBlock {
-  type: 'text'
+export interface TextBlockData {
   text: string
 }
 
@@ -510,33 +520,39 @@ export interface Message {  // Top-level should come first
 **When creating discriminated unions with a `type` field, the type value MUST match the interface name with the first letter lowercase.**
 
 ```typescript
-// ✅ Correct - type matches interface name (first letter lowercase)
-export interface TextBlock {
-  type: 'textBlock'  // Matches 'TextBlock' interface name
-  text: string
+// ✅ Correct - type matches class name (first letter lowercase)
+export class TextBlock {
+  readonly type = 'textBlock' as const  // Matches 'TextBlock' class name
+  readonly text: string
+  constructor(data: { text: string }) { this.text = data.text }
 }
 
-export interface ToolUseBlock {
-  type: 'toolUseBlock'  // Matches 'ToolUseBlock' interface name
-  name: string
-  toolUseId: string
+export class ToolUseBlock {
+  readonly type = 'toolUseBlock' as const  // Matches 'ToolUseBlock' class name
+  readonly name: string
+  readonly toolUseId: string
+  constructor(data: { name: string; toolUseId: string }) {
+    this.name = data.name
+    this.toolUseId = data.toolUseId
+  }
 }
 
-export interface CachePointBlock {
-  type: 'cachePointBlock'  // Matches 'CachePointBlock' interface name
-  cacheType: 'default'
+export class CachePointBlock {
+  readonly type = 'cachePointBlock' as const  // Matches 'CachePointBlock' class name
+  readonly cacheType: 'default'
+  constructor(data: { cacheType: 'default' }) { this.cacheType = data.cacheType }
 }
 
 export type ContentBlock = TextBlock | ToolUseBlock | CachePointBlock
 
-// ❌ Wrong - type doesn't match interface name
-export interface CachePointBlock {
-  type: 'cachePoint'  // Should be 'cachePointBlock'
-  cacheType: 'default'
+// ❌ Wrong - type doesn't match class name
+export class CachePointBlock {
+  readonly type = 'cachePoint' as const  // Should be 'cachePointBlock'
+  readonly cacheType: 'default'
 }
 ```
 
-**Rationale**: This consistent naming makes discriminated unions predictable and improves code readability. Developers can easily understand the relationship between the type value and the interface.
+**Rationale**: This consistent naming makes discriminated unions predictable and improves code readability. Developers can easily understand the relationship between the type value and the class.
 
 ### Error Handling
 
@@ -700,6 +716,43 @@ describe('BedrockModel', () => {
 })
 ```
 
+### Test Model Providers
+
+**When to use each test provider:**
+
+- **`MockMessageModel`**: For agent loop tests and high-level flows - focused on content blocks
+- **`TestModelProvider`**: For low-level event streaming tests where you need precise control over individual events
+
+#### MockMessageModel - Content-Focused Testing
+
+For tests focused on messages, you SHOULD use `MockMessageModel` with a content-focused API that eliminates boilerplate:
+
+```typescript
+import { MockMessageModel } from '../__fixtures__/mock-message-model'
+
+// ✅ RECOMMENDED - Single content block (most common)
+const provider = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
+
+// ✅ RECOMMENDED - Array of content blocks
+const provider = new MockMessageModel().addTurn([
+  { type: 'textBlock', text: 'Let me help' },
+  { type: 'toolUseBlock', name: 'calc', toolUseId: 'id-1', input: {} },
+])
+
+// ✅ RECOMMENDED - Multi-turn with builder pattern
+const provider = new MockMessageModel()
+  .addTurn({ type: 'toolUseBlock', name: 'calc', toolUseId: 'id-1', input: {} }) // Auto-derives 'toolUse'
+  .addTurn({ type: 'textBlock', text: 'The answer is 42' }) // Auto-derives 'endTurn'
+
+// ✅ OPTIONAL - Explicit stopReason when needed
+const provider = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Partial response' }, 'maxTokens')
+
+// ✅ OPTIONAL - Error handling
+const provider = new MockMessageModel()
+  .addTurn({ type: 'textBlock', text: 'Success' })
+  .addTurn(new Error('Model failed'))
+```
+
 ## Things to Do
 
 ✅ **Do**:
@@ -802,6 +855,14 @@ If TypeScript compilation fails:
 - YOU MUST MATCH the style and formatting of surrounding code, even if it differs from standard style guides. Consistency within a file trumps external standards.
 - YOU MUST NOT manually change whitespace that does not affect execution or output. Otherwise, use a formatting tool.
 - Fix broken things immediately when you find them. Don't ask permission to fix bugs.
+
+
+#### Code Comments
+ - NEVER add comments explaining that something is "improved", "better", "new", "enhanced", or referencing what it used to be
+ - Comments should explain WHAT the code does or WHY it exists, not how it's better than something else
+ - YOU MUST NEVER add comments about what used to be there or how something has changed. 
+ - YOU MUST NEVER refer to temporal context in comments (like "recently refactored" "moved") or code. Comments should be evergreen and describe the code as it is.
+ - YOU MUST NEVER write overly verbose comments. Use concise language.
 
 
 ### Code Review Considerations

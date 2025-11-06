@@ -8,11 +8,11 @@
  */
 
 import OpenAI, { type ClientOptions } from 'openai'
-import { Model } from '../models/model'
-import type { BaseModelConfig, StreamOptions } from '../models/model'
-import type { Message } from '../types/messages'
-import type { ModelStreamEvent } from '../models/streaming'
-import { ContextWindowOverflowError } from '../errors'
+import { Model } from '../models/model.js'
+import type { BaseModelConfig, StreamOptions } from '../models/model.js'
+import type { Message } from '../types/messages.js'
+import type { ModelStreamEvent } from '../models/streaming.js'
+import { ContextWindowOverflowError } from '../errors.js'
 
 /**
  * Error message patterns that indicate context window overflow.
@@ -551,9 +551,9 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
             // Note: OpenAI tool messages only accept string content (not structured JSON)
             const contentText = toolResult.content
               .map((c) => {
-                if (c.type === 'toolResultTextContent') {
+                if (c.type === 'textBlock') {
                   return c.text
-                } else if (c.type === 'toolResultJsonContent') {
+                } else if (c.type === 'jsonBlock') {
                   try {
                     return JSON.stringify(c.json)
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -671,9 +671,6 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
   ): ModelStreamEvent[] {
     const events: ModelStreamEvent[] = []
 
-    // Use named constant for text content block index
-    const TEXT_CONTENT_BLOCK_INDEX = 0
-
     // Validate choices array has at least one element
     if (!chunk.choices || chunk.choices.length === 0) {
       return events
@@ -705,21 +702,18 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
       })
     }
 
-    // Handle text content delta with contentBlockIndex and start event
+    // Handle text content delta and start event
     if (delta?.content && delta.content.length > 0) {
       // Emit start event on first text delta
       if (!streamState.textContentBlockStarted) {
         streamState.textContentBlockStarted = true
         events.push({
           type: 'modelContentBlockStartEvent',
-          contentBlockIndex: TEXT_CONTENT_BLOCK_INDEX,
         })
       }
 
-      // Include contentBlockIndex for text deltas
       events.push({
         type: 'modelContentBlockDeltaEvent',
-        contentBlockIndex: TEXT_CONTENT_BLOCK_INDEX,
         delta: {
           type: 'textDelta',
           text: delta.content,
@@ -740,7 +734,6 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
         if (toolCall.id && toolCall.function?.name) {
           events.push({
             type: 'modelContentBlockStartEvent',
-            contentBlockIndex: toolCall.index,
             start: {
               type: 'toolUseStart',
               name: toolCall.function.name,
@@ -755,7 +748,6 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
         if (toolCall.function?.arguments) {
           events.push({
             type: 'modelContentBlockDeltaEvent',
-            contentBlockIndex: toolCall.index,
             delta: {
               type: 'toolUseInputDelta',
               input: toolCall.function.arguments,
@@ -771,7 +763,6 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
       if (streamState.textContentBlockStarted) {
         events.push({
           type: 'modelContentBlockStopEvent',
-          contentBlockIndex: TEXT_CONTENT_BLOCK_INDEX,
         })
         streamState.textContentBlockStarted = false
       }
@@ -780,7 +771,6 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
       for (const [index] of activeToolCalls) {
         events.push({
           type: 'modelContentBlockStopEvent',
-          contentBlockIndex: index,
         })
         activeToolCalls.delete(index)
       }

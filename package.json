@@ -29,7 +29,7 @@
   },
   "scripts": {
     "build": "tsc",
-    "check": "npm run lint && npm run format && npm run typecheck && npm run test:coverage && npm run test:types",
+    "check": "npm run lint && npm run format && npm run typecheck && npm run test:coverage && npm run test:types && npm run test:package",
     "clean": "rm -rf node_modules dist package-lock.json",
     "test": "vitest run --project unit-node",
     "test:watch": "vitest --project unit-node",
@@ -40,6 +40,7 @@
     "test:browser:install": "npx playwright install --with-deps chromium",
     "test:all": "vitest run --project unit-node --project unit-browser",
     "test:all:coverage": "vitest run --coverage --project unit-node --project unit-browser",
+    "test:package": "npm run build && cd test-package && npm install && node verify.js",
     "lint": "eslint src tests_integ vended_tools",
     "lint:fix": "eslint src tests_integ vended_tools --fix",
     "format": "prettier --write src tests_integ vended_tools",
