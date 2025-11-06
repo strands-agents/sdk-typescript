@@ -1,4 +1,5 @@
 import type { JSONSchema, JSONValue } from '../types/json.js'
+import type { ToolResultContent } from '../types/messages.js'
 
 /**
  * Result of a tool execution.
@@ -33,44 +34,6 @@ export interface ToolResult {
  * Indicates whether the tool executed successfully or encountered an error.
  */
 export type ToolResultStatus = 'success' | 'error'
-
-/**
- * Content returned from a tool execution.
- * Can be either text or structured JSON data.
- *
- * This is a discriminated union where the `type` field determines the content format.
- */
-export type ToolResultContent = ToolResultTextContent | ToolResultJsonContent
-
-/**
- * Text content returned from a tool execution.
- */
-export interface ToolResultTextContent {
-  /**
-   * Discriminator for text content.
-   */
-  type: 'toolResultTextContent'
-
-  /**
-   * Plain text result from the tool.
-   */
-  text: string
-}
-
-/**
- * JSON content returned from a tool execution.
- */
-export interface ToolResultJsonContent {
-  /**
-   * Discriminator for JSON content.
-   */
-  type: 'toolResultJsonContent'
-
-  /**
-   * Structured JSON result from the tool.
-   */
-  json: JSONValue
-}
 
 /**
  * Specification for a tool that can be used by the model.

@@ -4,7 +4,7 @@ import { TestModelProvider, collectGenerator } from '../../__fixtures__/model-te
 import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
 import { createMockTool } from '../../__fixtures__/tool-helpers.js'
 import { ToolRegistry } from '../../tools/registry.js'
-import type { Message } from '../../types/messages.js'
+import { Message, TextBlock } from '../../types/messages.js'
 import { MaxTokensError } from '../../errors.js'
 
 describe('runAgentLoop', () => {
@@ -24,11 +24,10 @@ describe('runAgentLoop', () => {
 
       const registry = new ToolRegistry()
       const messages: Message[] = [
-        {
-          type: 'message',
+        new Message({
           role: 'user',
-          content: [{ type: 'textBlock', text: 'Hi' }],
-        },
+          content: [new TextBlock('Hi')],
+        }),
       ]
 
       const { items } = await collectGenerator(runAgentLoop({ model: provider, messages, toolRegistry: registry }))
@@ -70,18 +69,17 @@ describe('runAgentLoop', () => {
       const mockTool = createMockTool('calculator', () => ({
         toolUseId: 'tool-1',
         status: 'success',
-        content: [{ type: 'toolResultTextContent', text: '8' }],
+        content: [{ type: 'textBlock', text: '8' }],
       }))
 
       const registry = new ToolRegistry()
       registry.register(mockTool)
 
       const messages: Message[] = [
-        {
-          type: 'message',
+        new Message({
           role: 'user',
           content: [{ type: 'textBlock', text: 'What is 5+3?' }],
-        },
+        }),
       ]
 
       const { items } = await collectGenerator(runAgentLoop({ model: provider, messages, toolRegistry: registry }))
@@ -146,24 +144,23 @@ describe('runAgentLoop', () => {
       const tool1 = createMockTool('tool1', () => ({
         toolUseId: 'id-1',
         status: 'success',
-        content: [{ type: 'toolResultTextContent', text: 'result1' }],
+        content: [{ type: 'textBlock', text: 'result1' }],
       }))
 
       const tool2 = createMockTool('tool2', () => ({
         toolUseId: 'id-2',
         status: 'success',
-        content: [{ type: 'toolResultTextContent', text: 'result2' }],
+        content: [{ type: 'textBlock', text: 'result2' }],
       }))
 
       const registry = new ToolRegistry()
       registry.register([tool1, tool2])
 
       const messages: Message[] = [
-        {
-          type: 'message',
+        new Message({
           role: 'user',
-          content: [{ type: 'textBlock', text: 'Test' }],
-        },
+          content: [new TextBlock('Test')],
+        }),
       ]
 
       await collectGenerator(runAgentLoop({ model: provider, messages, toolRegistry: registry }))
@@ -205,24 +202,23 @@ describe('runAgentLoop', () => {
       const tool1 = createMockTool('tool1', () => ({
         toolUseId: 'id-1',
         status: 'success',
-        content: [{ type: 'toolResultTextContent', text: 'r1' }],
+        content: [{ type: 'textBlock', text: 'r1' }],
       }))
 
       const tool2 = createMockTool('tool2', () => ({
         toolUseId: 'id-2',
         status: 'success',
-        content: [{ type: 'toolResultTextContent', text: 'r2' }],
+        content: [{ type: 'textBlock', text: 'r2' }],
       }))
 
       const registry = new ToolRegistry()
       registry.register([tool1, tool2])
 
       const messages: Message[] = [
-        {
-          type: 'message',
+        new Message({
           role: 'user',
-          content: [{ type: 'textBlock', text: 'Test' }],
-        },
+          content: [new TextBlock('Test')],
+        }),
       ]
 
       const { items } = await collectGenerator(runAgentLoop({ model: provider, messages, toolRegistry: registry }))
@@ -245,11 +241,10 @@ describe('runAgentLoop', () => {
 
       const registry = new ToolRegistry()
       const messages: Message[] = [
-        {
-          type: 'message',
+        new Message({
           role: 'user',
-          content: [{ type: 'textBlock', text: 'Test' }],
-        },
+          content: [new TextBlock('Test')],
+        }),
       ]
 
       await collectGenerator(runAgentLoop({ model: provider, messages, toolRegistry: registry }))
@@ -269,11 +264,10 @@ describe('runAgentLoop', () => {
 
       const registry = new ToolRegistry()
       const messages: Message[] = [
-        {
-          type: 'message',
+        new Message({
           role: 'user',
-          content: [{ type: 'textBlock', text: 'Test' }],
-        },
+          content: [new TextBlock('Test')],
+        }),
       ]
 
       // Verify error is thrown
@@ -294,11 +288,10 @@ describe('runAgentLoop', () => {
 
       const registry = new ToolRegistry()
       const messages: Message[] = [
-        {
-          type: 'message',
+        new Message({
           role: 'user',
-          content: [{ type: 'textBlock', text: 'Test' }],
-        },
+          content: [new TextBlock('Test')],
+        }),
       ]
 
       // Verify error is thrown
@@ -326,11 +319,10 @@ describe('runAgentLoop', () => {
       registry.register(badTool)
 
       const messages: Message[] = [
-        {
-          type: 'message',
+        new Message({
           role: 'user',
-          content: [{ type: 'textBlock', text: 'Test' }],
-        },
+          content: [new TextBlock('Test')],
+        }),
       ]
 
       await expect(
@@ -355,11 +347,10 @@ describe('runAgentLoop', () => {
       registry.register(badTool)
 
       const messages: Message[] = [
-        {
-          type: 'message',
+        new Message({
           role: 'user',
-          content: [{ type: 'textBlock', text: 'Test' }],
-        },
+          content: [new TextBlock('Test')],
+        }),
       ]
 
       try {
@@ -396,11 +387,10 @@ describe('runAgentLoop', () => {
       const registry = new ToolRegistry()
 
       const messages: Message[] = [
-        {
-          type: 'message',
+        new Message({
           role: 'user',
-          content: [{ type: 'textBlock', text: 'Test' }],
-        },
+          content: [new TextBlock('Test')],
+        }),
       ]
 
       await collectGenerator(runAgentLoop({ model: provider, messages, toolRegistry: registry }))
@@ -427,11 +417,10 @@ describe('runAgentLoop', () => {
 
       const registry = new ToolRegistry()
       const messages: Message[] = [
-        {
-          type: 'message',
+        new Message({
           role: 'user',
-          content: [{ type: 'textBlock', text: 'Test' }],
-        },
+          content: [new TextBlock('Test')],
+        }),
       ]
 
       await expect(
@@ -446,11 +435,10 @@ describe('runAgentLoop', () => {
 
       const registry = new ToolRegistry()
       const messages: Message[] = [
-        {
-          type: 'message',
+        new Message({
           role: 'user',
-          content: [{ type: 'textBlock', text: 'Hi' }],
-        },
+          content: [new TextBlock('Hi')],
+        }),
       ]
 
       await collectGenerator(runAgentLoop({ model: provider, messages, toolRegistry: registry }))
@@ -477,18 +465,17 @@ describe('runAgentLoop', () => {
       const tool = createMockTool('test', () => ({
         toolUseId: 'id-1',
         status: 'success',
-        content: [{ type: 'toolResultTextContent', text: 'ok' }],
+        content: [{ type: 'textBlock', text: 'ok' }],
       }))
 
       const registry = new ToolRegistry()
       registry.register(tool)
 
       const messages: Message[] = [
-        {
-          type: 'message',
+        new Message({
           role: 'user',
-          content: [{ type: 'textBlock', text: 'Hi' }],
-        },
+          content: [new TextBlock('Hi')],
+        }),
       ]
 
       await collectGenerator(runAgentLoop({ model: provider, messages, toolRegistry: registry }))
@@ -513,13 +500,11 @@ describe('runAgentLoop', () => {
 
       const registry = new ToolRegistry()
       const messages: Message[] = [
-        {
-          type: 'message',
+        new Message({
           role: 'user',
-          content: [{ type: 'textBlock', text: 'Hi' }],
-        },
+          content: [new TextBlock('Hi')],
+        }),
       ]
-
       await collectGenerator(runAgentLoop({ model: provider, messages, toolRegistry: registry }))
 
       if (!messages[1] || !messages[1].content[0]) {

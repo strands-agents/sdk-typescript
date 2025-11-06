@@ -551,9 +551,9 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
             // Note: OpenAI tool messages only accept string content (not structured JSON)
             const contentText = toolResult.content
               .map((c) => {
-                if (c.type === 'toolResultTextContent') {
+                if (c.type === 'textBlock') {
                   return c.text
-                } else if (c.type === 'toolResultJsonContent') {
+                } else if (c.type === 'jsonBlock') {
                   try {
                     return JSON.stringify(c.json)
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
