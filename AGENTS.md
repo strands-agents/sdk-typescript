@@ -51,13 +51,13 @@ sdk-typescript/
 │   └── index.ts                  # Main SDK entry point (single export point)
 │
 ├── vended_tools/                  # Optional vended tools (not part of core SDK)
-│   ├── http-request/             # HTTP request tool
-│   │   ├── __tests__/            # Unit tests for HTTP request tool
-│   │   │   └── http-request.test.ts
-│   │   ├── http-request.ts       # HTTP request implementation
-│   │   ├── types.ts              # HTTP request type definitions
-│   │   ├── index.ts              # Public exports for HTTP request tool
-│   │   └── README.md             # HTTP request tool documentation
+│   ├── notebook/                 # Notebook tool for managing text notebooks
+│   │   ├── __tests__/            # Unit tests for notebook tool
+│   │   │   └── notebook.test.ts
+│   │   ├── notebook.ts           # Notebook implementation
+│   │   ├── types.ts              # Notebook type definitions
+│   │   ├── index.ts              # Public exports for notebook tool
+│   │   └── README.md             # Notebook tool documentation
 │   └── README.md                 # Vended tools overview
 │
 ├── tests_integ/                  # Integration tests (separate from source)
