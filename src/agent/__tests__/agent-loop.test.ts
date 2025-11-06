@@ -70,7 +70,7 @@ describe('runAgentLoop', () => {
       const mockTool = createMockTool('calculator', () => ({
         toolUseId: 'tool-1',
         status: 'success',
-        content: [{ type: 'toolResultTextContent', text: '8' }],
+        content: [{ type: 'textBlock', text: '8' }],
       }))
 
       const registry = new ToolRegistry()
@@ -146,13 +146,13 @@ describe('runAgentLoop', () => {
       const tool1 = createMockTool('tool1', () => ({
         toolUseId: 'id-1',
         status: 'success',
-        content: [{ type: 'toolResultTextContent', text: 'result1' }],
+        content: [{ type: 'textBlock', text: 'result1' }],
       }))
 
       const tool2 = createMockTool('tool2', () => ({
         toolUseId: 'id-2',
         status: 'success',
-        content: [{ type: 'toolResultTextContent', text: 'result2' }],
+        content: [{ type: 'textBlock', text: 'result2' }],
       }))
 
       const registry = new ToolRegistry()
@@ -205,13 +205,13 @@ describe('runAgentLoop', () => {
       const tool1 = createMockTool('tool1', () => ({
         toolUseId: 'id-1',
         status: 'success',
-        content: [{ type: 'toolResultTextContent', text: 'r1' }],
+        content: [{ type: 'textBlock', text: 'r1' }],
       }))
 
       const tool2 = createMockTool('tool2', () => ({
         toolUseId: 'id-2',
         status: 'success',
-        content: [{ type: 'toolResultTextContent', text: 'r2' }],
+        content: [{ type: 'textBlock', text: 'r2' }],
       }))
 
       const registry = new ToolRegistry()
@@ -477,7 +477,7 @@ describe('runAgentLoop', () => {
       const tool = createMockTool('test', () => ({
         toolUseId: 'id-1',
         status: 'success',
-        content: [{ type: 'toolResultTextContent', text: 'ok' }],
+        content: [{ type: 'textBlock', text: 'ok' }],
       }))
 
       const registry = new ToolRegistry()

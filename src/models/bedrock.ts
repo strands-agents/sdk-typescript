@@ -529,9 +529,9 @@ export class BedrockModel extends Model<BedrockModelConfig> {
       case 'toolResultBlock': {
         const content = block.content.map((content) => {
           switch (content.type) {
-            case 'toolResultTextContent':
+            case 'textBlock':
               return { text: content.text }
-            case 'toolResultJsonContent':
+            case 'jsonBlock':
               return { json: content.json }
           }
         })

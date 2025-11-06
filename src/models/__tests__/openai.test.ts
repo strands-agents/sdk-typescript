@@ -298,7 +298,7 @@ describe('OpenAIModel', () => {
                 type: 'toolResultBlock',
                 toolUseId: 'tool-123',
                 status: 'error',
-                content: [{ type: 'toolResultTextContent', text: 'Division by zero' }],
+                content: [{ type: 'textBlock', text: 'Division by zero' }],
               },
             ],
           },

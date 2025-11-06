@@ -15,28 +15,25 @@ export type { JSONSchema, JSONValue } from './types/json.js'
 export type {
   Role,
   StopReason,
-  TextBlock,
-  ToolUseBlock,
-  ToolResultBlock,
-  ReasoningBlock,
-  CachePointBlock,
+  TextBlockData,
+  ToolUseBlockData,
+  ToolResultBlockData,
+  ReasoningBlockData,
+  CachePointBlockData,
   ContentBlock,
-  Message,
+  ContentBlockData,
+  MessageData,
   SystemPrompt,
   SystemContentBlock,
+  JsonBlock,
+  ToolResultContent,
 } from './types/messages.js'
 
+// Message classes
+export { TextBlock, ToolUseBlock, ToolResultBlock, ReasoningBlock, CachePointBlock, Message } from './types/messages.js'
+
 // Tool types
-export type {
-  ToolSpec,
-  ToolUse,
-  ToolResultTextContent,
-  ToolResultJsonContent,
-  ToolResultContent,
-  ToolResultStatus,
-  ToolResult,
-  ToolChoice,
-} from './tools/types.js'
+export type { ToolSpec, ToolUse, ToolResultStatus, ToolResult, ToolChoice } from './tools/types.js'
 
 // Tool interface and related types
 export type { Tool, InvokableTool, ToolContext, ToolStreamEvent, ToolStreamGenerator } from './tools/tool.js'

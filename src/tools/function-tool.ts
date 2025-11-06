@@ -2,6 +2,7 @@ import type { Tool, ToolContext, ToolStreamEvent } from './tool.js'
 import type { ToolSpec, ToolResult } from './types.js'
 import type { JSONSchema, JSONValue } from '../types/json.js'
 import { deepCopy } from '../types/json.js'
+import { JsonBlock, TextBlock } from '../types/messages.js'
 
 /**
  * Callback function for FunctionTool implementations.
@@ -187,11 +188,11 @@ export class FunctionTool implements Tool {
    *
    * Due to AWS Bedrock limitations (only accepts objects as JSON content), the following
    * rules are applied:
-   * - Strings → toolResultTextContent
-   * - Numbers, Booleans → toolResultTextContent (converted to string)
-   * - null, undefined → toolResultTextContent (special string representation)
-   * - Objects → toolResultJsonContent (with deep copy)
-   * - Arrays → toolResultJsonContent wrapped in \{ $value: array \} (with deep copy)
+   * - Strings → TextBlock
+   * - Numbers, Booleans → TextBlock (converted to string)
+   * - null, undefined → TextBlock (special string representation)
+   * - Objects → JsonBlock (with deep copy)
+   * - Arrays → JsonBlock wrapped in \{ $value: array \} (with deep copy)
    *
    * @param value - The value to wrap (can be any type)
    * @param toolUseId - The tool use ID for the ToolResult
@@ -204,12 +205,7 @@ export class FunctionTool implements Tool {
         return {
           toolUseId,
           status: 'success',
-          content: [
-            {
-              type: 'toolResultTextContent',
-              text: '<null>',
-            },
-          ],
+          content: [new TextBlock({ text: '<null>' })],
         }
       }
 
@@ -218,12 +214,7 @@ export class FunctionTool implements Tool {
         return {
           toolUseId,
           status: 'success',
-          content: [
-            {
-              type: 'toolResultTextContent',
-              text: '<undefined>',
-            },
-          ],
+          content: [new TextBlock({ text: '<undefined>' })],
         }
       }
 
@@ -233,12 +224,7 @@ export class FunctionTool implements Tool {
         return {
           toolUseId,
           status: 'success',
-          content: [
-            {
-              type: 'toolResultTextContent',
-              text: String(value),
-            },
-          ],
+          content: [new TextBlock({ text: String(value) })],
         }
       }
 
@@ -248,12 +234,7 @@ export class FunctionTool implements Tool {
         return {
           toolUseId,
           status: 'success',
-          content: [
-            {
-              type: 'toolResultJsonContent',
-              json: { $value: copiedValue },
-            },
-          ],
+          content: [new JsonBlock({ json: { $value: copiedValue } })],
         }
       }
 
@@ -262,12 +243,7 @@ export class FunctionTool implements Tool {
       return {
         toolUseId,
         status: 'success',
-        content: [
-          {
-            type: 'toolResultJsonContent',
-            json: copiedValue,
-          },
-        ],
+        content: [new JsonBlock({ json: copiedValue })],
       }
     } catch (error) {
       // If deep copy fails (circular references, non-serializable values), return error result
@@ -294,12 +270,7 @@ export class FunctionTool implements Tool {
     return {
       toolUseId,
       status: 'error',
-      content: [
-        {
-          type: 'toolResultTextContent',
-          text: `Error: ${errorObject.message}`,
-        },
-      ],
+      content: [new TextBlock({ text: `Error: ${errorObject.message}` })],
       error: errorObject,
     }
   }

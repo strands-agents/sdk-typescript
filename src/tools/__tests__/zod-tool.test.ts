@@ -153,7 +153,7 @@ describe('tool', () => {
         expect(events).toHaveLength(0) // No stream events for sync
         expect(result.status).toBe('success')
         expect(result.content).toHaveLength(1)
-        expect(result.content[0]).toEqual({ type: 'toolResultTextContent', text: 'hello' })
+        expect(result.content[0]).toEqual(expect.objectContaining({ type: 'textBlock', text: 'hello' }))
       })
 
       it('streams promise callback result', async () => {
@@ -170,7 +170,7 @@ describe('tool', () => {
         expect(events).toHaveLength(0) // No stream events for promise
         expect(result.status).toBe('success')
         expect(result.content).toHaveLength(1)
-        expect(result.content[0]).toEqual({ type: 'toolResultTextContent', text: '42' })
+        expect(result.content[0]).toEqual(expect.objectContaining({ type: 'textBlock', text: '42' }))
       })
 
       it('streams async generator callback results', async () => {
@@ -212,7 +212,7 @@ describe('tool', () => {
         expect(result.status).toBe('error')
         expect(result.content.length).toBeGreaterThan(0)
         const firstContent = result.content[0]
-        if (firstContent && firstContent.type === 'toolResultTextContent') {
+        if (firstContent && firstContent.type == 'textBlock') {
           expect(firstContent.text).toContain('age')
         }
       })
@@ -254,7 +254,7 @@ describe('tool', () => {
         expect(result.status).toBe('error')
         expect(result.content.length).toBeGreaterThan(0)
         const firstContent = result.content[0]
-        if (firstContent && firstContent.type === 'toolResultTextContent') {
+        if (firstContent && firstContent.type == 'textBlock') {
           expect(firstContent.text).toBe('Error: Callback error')
         }
       })
@@ -276,7 +276,7 @@ describe('tool', () => {
         expect(result.status).toBe('error')
         expect(result.content.length).toBeGreaterThan(0)
         const firstContent = result.content[0]
-        if (firstContent && firstContent.type === 'toolResultTextContent') {
+        if (firstContent && firstContent.type == 'textBlock') {
           expect(firstContent.text).toBe('Error: Async error')
         }
       })

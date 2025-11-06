@@ -194,7 +194,7 @@ async function* executeTool(
       status: 'error',
       content: [
         {
-          type: 'toolResultTextContent',
+          type: 'textBlock',
           text: `Tool '${toolUseBlock.name}' not found in registry`,
         },
       ],
@@ -224,7 +224,7 @@ async function* executeTool(
       status: 'error',
       content: [
         {
-          type: 'toolResultTextContent',
+          type: 'textBlock',
           text: `Tool '${toolUseBlock.name}' did not return a result`,
         },
       ],
