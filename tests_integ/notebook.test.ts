@@ -31,7 +31,6 @@ describe.skipIf(!shouldRunAWSTests)('Notebook Tool Integration', () => {
     // Create agent with notebook tool
     const agent = new Agent({
       model: new BedrockModel({
-        modelId: 'anthropic.claude-3-haiku-20240307-v1:0',
         region: 'us-east-1',
       }),
       tools: [notebook],
@@ -73,7 +72,6 @@ describe.skipIf(!shouldRunAWSTests)('Notebook Tool Integration', () => {
     // Create first agent and add content
     const agent1 = new Agent({
       model: new BedrockModel({
-        modelId: 'anthropic.claude-3-haiku-20240307-v1:0',
         region: 'us-east-1',
       }),
       tools: [notebook],
@@ -94,7 +92,6 @@ describe.skipIf(!shouldRunAWSTests)('Notebook Tool Integration', () => {
     // Create second agent with restored state
     const agent2 = new Agent({
       model: new BedrockModel({
-        modelId: 'anthropic.claude-3-haiku-20240307-v1:0',
         region: 'us-east-1',
       }),
       tools: [notebook],
