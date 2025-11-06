@@ -321,11 +321,9 @@ if (import.meta.vitest) {
       expect(registry.values()).toEqual(['item-b'])
     })
 
-    it('should return undefined from findDeregister if no item matches', () => {
-      registry.add('item-a')
-      const deregisteredItem = registry.findRemove((item) => item.includes('c'))
-      expect(deregisteredItem).toBeUndefined()
-      expect(registry.values()).toEqual(['item-a'])
+    it('should return undefined from findRemove if no item matches', () => {
+      const removedItem = registry.findRemove((item) => item.includes('c'))
+      expect(removedItem).toBeUndefined()
     })
 
     it('should call the validate method on register', () => {

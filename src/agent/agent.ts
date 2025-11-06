@@ -8,7 +8,7 @@ import {
   type Tool,
   type ToolResultBlock,
   type ToolUseBlock,
-} from '..'
+} from '../index.js'
 import type { McpClient } from '../mcp-client.js'
 import type { BaseModelConfig, Model, StreamOptions } from '../models/model.js'
 import { McpClientRegistry } from '../registry/mcp-client-registry.js'
@@ -269,7 +269,7 @@ export class Agent {
         status: 'error',
         content: [
           {
-            type: 'toolResultTextContent',
+            type: 'textBlock',
             text: `Tool '${toolUseBlock.name}' not found in registry`,
           },
         ],
@@ -299,7 +299,7 @@ export class Agent {
         status: 'error',
         content: [
           {
-            type: 'toolResultTextContent',
+            type: 'textBlock',
             text: `Tool '${toolUseBlock.name}' did not return a result`,
           },
         ],

@@ -161,9 +161,12 @@ if (import.meta.vitest) {
       const tool1 = createMockTool()
       // @ts-expect-error - Testing explicit undefined description
       tool1.description = undefined
+
       const tool2 = createMockTool()
+      tool2.name = 'another-valid-tool'
       // @ts-expect-error - Testing explicit null description
       tool2.description = null
+
       expect(() => registry.add(tool1)).not.toThrow()
       expect(() => registry.add(tool2)).not.toThrow()
     })

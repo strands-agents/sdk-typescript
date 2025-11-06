@@ -5,17 +5,8 @@ export default defineConfig({
     projects: [
       {
         test: {
-          includeSource: ['src/**/*.{js,ts}'],
-          name: { label: 'source', color: 'blue' },
-          typecheck: {
-            enabled: true,
-            include: ['src/**/*.d.ts'],
-          },
-        },
-      },
-      {
-        test: {
           include: ['src/**/__tests__/**/*.test.ts'],
+          includeSource: ['src/**/*.{js,ts}'],
           name: { label: 'unit-node', color: 'green' },
           typecheck: {
             enabled: true,
@@ -47,9 +38,6 @@ export default defineConfig({
         },
       },
     ],
-    sequence: {
-      concurrent: true,
-    },
     typecheck: {
       enabled: true,
     },
