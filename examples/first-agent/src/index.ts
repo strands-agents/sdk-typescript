@@ -1,4 +1,6 @@
 import { type Tool, type ToolResult, type ToolContext, Agent, BedrockModel } from '@strands-agents/sdk'
+import OpenAI from 'openai'
+import { OpenAIModel } from '../../../dist/models/openai.js'
 
 // Define the shape of the expected input
 type WeatherToolInput = {
@@ -52,7 +54,7 @@ class WeatherTool implements Tool {
     return {
       toolUseId: context.toolUse.toolUseId,
       status: 'success' as const,
-      content: [{ type: 'toolResultTextContent', text: resultText }],
+      content: [{ type: 'textBlock', text: resultText }],
     }
   }
 }
@@ -69,27 +71,12 @@ async function run(title: string, agent: Agent, prompt: string) {
   console.log(`User: ${prompt}`)
 
   const responseStream = agent.invoke(prompt)
-  let finalResponse = ''
 
-  process.stdout.write('Agent: ')
+  console.log('Agent response stream:')
   let result = await responseStream.next()
   while (!result.done) {
     const event = result.value
-    // Log the agent's "thought process" when using tools
-    if (event.type === 'beforeToolsEvent') {
-      console.log('\n[Agent] Model requested a tool. Preparing to execute...')
-    }
-    if (event.type === 'afterToolsEvent') {
-      console.log('[Agent] Tools executed. Sending results back to model...')
-      process.stdout.write('Agent: ') // Re-add prefix for the final text response
-    }
-
-    // Stream the text delta to the console in real-time
-    if (event.type === 'modelContentBlockDeltaEvent' && event.delta.type === 'textDelta') {
-      finalResponse += event.delta.text
-      process.stdout.write(event.delta.text)
-    }
-
+    console.log('[Event]', event)
     result = await responseStream.next()
   }
 
@@ -99,21 +86,23 @@ async function run(title: string, agent: Agent, prompt: string) {
 
 async function main() {
   // 1. Initialize the components
-  const model = new BedrockModel()
+  const model = new OpenAIModel({
+    modelId: 'gpt-4o',
+  })
   const weatherTool = new WeatherTool()
 
   // 2. Create agents
   const defaultAgent = new Agent()
   const agentWithoutTools = new Agent({ model })
   const agentWithTools = new Agent({
+    systemPrompt: 'You are a helpful assistant that provides weather information using the get_weather tool.',
     model,
     tools: [weatherTool],
   })
 
   await run('0: Invocation with default agent (no model or tools)', defaultAgent, 'Hello!')
   await run('1: Invocation with a model but no tools', agentWithoutTools, 'Hello!')
-  await run('2: Invocation with tools available (but not used)', agentWithTools, 'Hello!')
-  await run('3: Invocation that uses a tool', agentWithTools, 'What is the weather in Toronto?')
+  await run('2: Invocation that uses a tool', agentWithTools, 'What is the weather in Toronto? Use the weather tool.')
 }
 
 main().catch(console.error)

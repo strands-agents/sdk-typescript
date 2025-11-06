@@ -36,7 +36,7 @@ export class ValidationError extends Error {
  * @typeParam I - The type of the identifier for the items.
  */
 export abstract class Registry<T, I> {
-  protected _items: Map<I, T> = new Map()
+  protected _items: Map<I, T>
 
   /**
    * Abstract method for generating a new, unique identifier.
@@ -52,6 +52,13 @@ export abstract class Registry<T, I> {
    * @throws ValidationError If the item is invalid.
    */
   protected abstract validate(item: T): void
+
+  constructor(items?: T[]) {
+    this._items = new Map()
+    if (items) {
+      this.addAll(items)
+    }
+  }
 
   /**
    * Retrieves an item by its ID.

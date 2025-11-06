@@ -61,8 +61,8 @@ export class Agent {
    */
   constructor(config?: AgentConfig) {
     this._model = config?.model ?? new BedrockModel()
-    this._toolRegistry = new ToolRegistry()
-    this._mcpClientRegistry = new McpClientRegistry()
+    this._toolRegistry = new ToolRegistry(config?.tools)
+    this._mcpClientRegistry = new McpClientRegistry(config?.mcpClients)
     this._messages = []
     this._systemPrompt = config?.systemPrompt
   }
@@ -131,6 +131,7 @@ export class Agent {
       // Main agent loop - continues until model stops without requesting tools
       while (true) {
         const modelResult = yield* this.invokeModel(args)
+        args = undefined // Only pass args on first invocation
 
         // Handle stop reason
         if (modelResult.stopReason === 'maxTokens') {
