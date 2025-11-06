@@ -205,7 +205,7 @@ export class FunctionTool implements Tool {
         return {
           toolUseId,
           status: 'success',
-          content: [new TextBlock({ text: '<null>' })],
+          content: [new TextBlock('<null>')],
         }
       }
 
@@ -214,7 +214,7 @@ export class FunctionTool implements Tool {
         return {
           toolUseId,
           status: 'success',
-          content: [new TextBlock({ text: '<undefined>' })],
+          content: [new TextBlock('<undefined>')],
         }
       }
 
@@ -224,7 +224,7 @@ export class FunctionTool implements Tool {
         return {
           toolUseId,
           status: 'success',
-          content: [new TextBlock({ text: String(value) })],
+          content: [new TextBlock(String(value))],
         }
       }
 
@@ -270,7 +270,7 @@ export class FunctionTool implements Tool {
     return {
       toolUseId,
       status: 'error',
-      content: [new TextBlock({ text: `Error: ${errorObject.message}` })],
+      content: [new TextBlock(`Error: ${errorObject.message}`)],
       error: errorObject,
     }
   }

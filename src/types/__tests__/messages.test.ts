@@ -11,7 +11,7 @@ import {
 
 describe('Message', () => {
   test('creates message with role and content', () => {
-    const content = [new TextBlock({ text: 'test' })]
+    const content = [new TextBlock('test')]
     const message = new Message({ role: 'user', content })
 
     expect(message).toEqual({
@@ -24,7 +24,7 @@ describe('Message', () => {
 
 describe('TextBlock', () => {
   test('creates text block with text', () => {
-    const block = new TextBlock({ text: 'hello' })
+    const block = new TextBlock('hello')
 
     expect(block).toEqual({
       type: 'textBlock',

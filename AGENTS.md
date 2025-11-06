@@ -492,8 +492,7 @@ export class ToolResultBlock {
 // ❌ Wrong - Dependencies before top-level
 export type Role = 'user' | 'assistant'
 
-export interface TextBlock {
-  type: 'textBlock'
+export interface TextBlockData {
   text: string
 }
 

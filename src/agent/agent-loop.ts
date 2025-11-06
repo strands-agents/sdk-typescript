@@ -1,4 +1,4 @@
-import type { Message, SystemPrompt, ToolResultBlock, ToolUseBlock } from '../types/messages.js'
+import { Message, TextBlock, ToolResultBlock, type SystemPrompt, type ToolUseBlock } from '../types/messages.js'
 import type { BaseModelConfig, Model, StreamOptions } from '../models/model.js'
 import type { ToolRegistry } from '../tools/registry.js'
 import type { AgentStreamEvent } from './streaming.js'
@@ -159,11 +159,10 @@ async function* executeTools(
   }
 
   // Create user message with tool results
-  const toolResultMessage: Message = {
-    type: 'message',
+  const toolResultMessage: Message = new Message({
     role: 'user',
     content: toolResultBlocks,
-  }
+  })
 
   yield { type: 'afterToolsEvent', message: toolResultMessage }
 
@@ -188,17 +187,11 @@ async function* executeTool(
 
   if (!tool) {
     // Tool not found - return error result instead of throwing
-    return {
-      type: 'toolResultBlock',
+    return new ToolResultBlock({
       toolUseId: toolUseBlock.toolUseId,
       status: 'error',
-      content: [
-        {
-          type: 'textBlock',
-          text: `Tool '${toolUseBlock.name}' not found in registry`,
-        },
-      ],
-    }
+      content: [new TextBlock(`Tool '${toolUseBlock.name}' not found in registry`)],
+    })
   }
 
   // Execute tool and collect result
@@ -218,24 +211,17 @@ async function* executeTool(
 
   if (!toolResult) {
     // Tool didn't return a result - return error result instead of throwing
-    return {
-      type: 'toolResultBlock',
+    return new ToolResultBlock({
       toolUseId: toolUseBlock.toolUseId,
       status: 'error',
-      content: [
-        {
-          type: 'textBlock',
-          text: `Tool '${toolUseBlock.name}' did not return a result`,
-        },
-      ],
-    }
+      content: [new TextBlock(`Tool '${toolUseBlock.name}' did not return a result`)],
+    })
   }
 
   // Create ToolResultBlock from ToolResult
-  return {
-    type: 'toolResultBlock',
+  return new ToolResultBlock({
     toolUseId: toolResult.toolUseId,
     status: toolResult.status,
     content: toolResult.content,
-  }
+  })
 }

@@ -1,6 +1,14 @@
 import type { JSONValue } from './json.js'
 
 /**
+ * Message types and content blocks for conversational AI interactions.
+ *
+ * This module follows a pattern where <name>Data interfaces define the structure
+ * for objects, while corresponding classes extend those interfaces with additional
+ * functionality and type discrimination.
+ */
+
+/**
  * Data for a message.
  */
 export interface MessageData {
@@ -93,8 +101,8 @@ export class TextBlock implements TextBlockData {
    */
   readonly text: string
 
-  constructor(data: TextBlockData) {
-    this.text = data.text
+  constructor(data: string) {
+    this.text = data
   }
 }
 
@@ -360,8 +368,8 @@ export type StopReason =
  *
  * // Array with cache points for advanced caching
  * const prompt: SystemPrompt = [
- *   { textBlock: new TextBlock({ text: 'You are a helpful assistant' }) },
- *   { textBlock: new TextBlock({ text: largeContextDocument }) },
+ *   { textBlock: new TextBlock('You are a helpful assistant') },
+ *   { textBlock: new TextBlock(largeContextDocument) },
  *   { cachePointBlock: new CachePointBlock({ cacheType: 'default' }) }
  * ]
  * ```

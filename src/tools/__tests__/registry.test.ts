@@ -24,7 +24,7 @@ function createMockTool(name: string, description = 'Test tool description'): To
       return {
         toolUseId: 'test-id',
         status: 'success',
-        content: [new TextBlock({ text: 'test result' })],
+        content: [new TextBlock('test result')],
       }
     },
   }
