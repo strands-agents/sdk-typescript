@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { httpRequest } from '../http-request'
-import type { ToolContext } from '../tool'
-import { collectGenerator } from '../../__fixtures__/model-test-helpers'
-import { isNode } from '../../__fixtures__/environment'
+import type { ToolContext } from '../../../src/tools/tool'
+import { collectGenerator } from '../../../src/__fixtures__/model-test-helpers'
+import { isNode } from '../../../src/__fixtures__/environment'
 
 // Mock fetch globally
 const mockFetch = vi.fn()

@@ -6,7 +6,7 @@ import tsdoc from 'eslint-plugin-tsdoc'
 export default [
   eslint.configs.recommended,
   {
-    files: ['src/**/*.ts'],
+    files: ['src/**/*.ts', 'vendedTools/**/*.ts'],
     languageOptions: {
       parser: tsparser,
       parserOptions: {
@@ -33,7 +33,7 @@ export default [
     },
   },
   {
-    files: ['src/**/__tests__/**/*.ts', 'tests_integ/**/*.ts'],
+    files: ['src/**/__tests__/**/*.ts', 'tests_integ/**/*.ts', 'vendedTools/**/__tests__/**/*.ts'],
     languageOptions: {
       parser: tsparser,
       parserOptions: {
@@ -56,8 +56,8 @@ export default [
       '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
       '@typescript-eslint/explicit-function-return-type': 'off',
-      'quotes': ['error', 'single', { avoidEscape: true }]
-    }
+      'quotes': ['error', 'single', { avoidEscape: true }],
+    },
   },
   {
     files: ['tests_integ/**/*.ts'],

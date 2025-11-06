@@ -1,6 +1,6 @@
-import { FunctionTool } from './function-tool'
-import type { ToolContext } from './tool'
-import type { JSONValue } from '../types/json'
+import { FunctionTool } from '../../src/tools/function-tool'
+import type { ToolContext } from '../../src/tools/tool'
+import type { JSONValue } from '../../src/types/json'
 import type { HttpRequestInput, HttpResponse, HttpAuthConfig, HttpMethod } from './types'
 
 // Type declarations for browser/Node.js globals

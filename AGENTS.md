@@ -50,8 +50,19 @@ sdk-typescript/
 │   ├── errors.ts                 # Custom error classes
 │   └── index.ts                  # Main SDK entry point (single export point)
 │
+├── vendedTools/                  # Optional vended tools (not part of core SDK)
+│   ├── http-request/             # HTTP request tool
+│   │   ├── __tests__/            # Unit tests for HTTP request tool
+│   │   │   └── http-request.test.ts
+│   │   ├── http-request.ts       # HTTP request implementation
+│   │   ├── types.ts              # HTTP request type definitions
+│   │   ├── index.ts              # Public exports for HTTP request tool
+│   │   └── README.md             # HTTP request tool documentation
+│   └── README.md                 # Vended tools overview
+│
 ├── tests_integ/                  # Integration tests (separate from source)
 │   ├── bedrock.test.ts           # Bedrock integration tests (requires AWS credentials)
+│   ├── http-request.test.ts      # HTTP request integration tests
 │   └── registry.test.ts          # ToolRegistry integration tests
 │
 ├── .github/                      # GitHub Actions workflows
@@ -92,6 +103,7 @@ sdk-typescript/
 - **`src/models/`**: Model provider implementations (Bedrock, future providers)
 - **`src/tools/`**: Tool definitions and types for agent tool use
 - **`src/types/`**: Core type definitions used across the SDK
+- **`vendedTools/`**: Optional vended tools (not part of core SDK, independently importable)
 - **`tests_integ/`**: Integration tests (tests public API and external integrations)
 - **`.github/workflows/`**: CI/CD automation and quality gates
 - **`.project/`**: Task management and project tracking
