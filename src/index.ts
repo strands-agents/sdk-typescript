@@ -5,6 +5,9 @@
  * public APIs and functionality.
  */
 
+// Agent class
+export { Agent } from './agent/agent.js'
+
 // Error types
 export { ContextWindowOverflowError, MaxTokensError } from './errors.js'
 
@@ -43,9 +46,6 @@ export { FunctionTool } from './tools/function-tool.js'
 
 // Tool factory function
 export { tool } from './tools/zod-tool.js'
-
-// ToolRegistry implementation
-export { ToolRegistry } from './tools/registry.js'
 
 // Streaming event types
 export type {

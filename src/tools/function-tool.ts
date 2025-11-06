@@ -90,7 +90,7 @@ export class FunctionTool implements Tool {
   /**
    * The unique name of the tool.
    */
-  readonly toolName: string
+  readonly name: string
 
   /**
    * Human-readable description of what the tool does.
@@ -127,7 +127,7 @@ export class FunctionTool implements Tool {
    * ```
    */
   constructor(config: FunctionToolConfig) {
-    this.toolName = config.name
+    this.name = config.name
     this.description = config.description
     this.toolSpec = {
       name: config.name,

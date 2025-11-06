@@ -90,7 +90,7 @@ export interface Tool {
    * The unique name of the tool.
    * This MUST match the name in the toolSpec.
    */
-  toolName: string
+  name: string
 
   /**
    * Human-readable description of what the tool does.

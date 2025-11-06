@@ -47,7 +47,7 @@
     "format:check": "prettier --check src tests_integ vended_tools",
     "type-check": "tsc --noEmit",
     "type-check:watch": "tsc --noEmit --watch",
-    "prepare": "husky"
+    "prepare": "npm run build && husky"
   },
   "keywords": [
     "agents",
@@ -88,6 +88,8 @@
   "homepage": "https://github.com/strands-agents/sdk-typescript#readme",
   "dependencies": {
     "@aws-sdk/client-bedrock-runtime": "^3.911.0",
+    "@modelcontextprotocol/sdk": "^1.20.2",
+    "uuid": "^13.0.0",
     "zod": "^4.1.12"
   },
   "optionalDependencies": {

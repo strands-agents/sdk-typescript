@@ -85,6 +85,6 @@ export interface ToolUse {
  *
  * - `{ auto: {} }` - Let the model decide whether to use a tool
  * - `{ any: {} }` - Force the model to use one of the available tools
- * - `{ tool: { name: 'toolName' } }` - Force the model to use a specific tool
+ * - `{ tool: { name: 'name' } }` - Force the model to use a specific tool
  */
 export type ToolChoice = { auto: Record<string, never> } | { any: Record<string, never> } | { tool: { name: string } }

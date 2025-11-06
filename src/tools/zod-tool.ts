@@ -106,7 +106,7 @@ export function tool<TInput extends z.ZodType, TReturn extends JSONValue = JSONV
 
   // Create an invokable tool that extends the FunctionTool
   const invokableTool: InvokableTool<z.infer<TInput>, TReturn> = {
-    toolName: functionTool.toolName,
+    name: functionTool.name,
     description: functionTool.description,
     toolSpec: functionTool.toolSpec,
 

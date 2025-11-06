@@ -14,7 +14,7 @@ describe('tool', () => {
         callback: (input) => input.value,
       })
 
-      expect(myTool.toolName).toBe('testTool')
+      expect(myTool.name).toBe('testTool')
       expect(myTool.description).toBe('Test description')
       expect(myTool.toolSpec).toEqual({
         name: 'testTool',
@@ -37,7 +37,7 @@ describe('tool', () => {
         callback: (input) => input.value,
       })
 
-      expect(myTool.toolName).toBe('testTool')
+      expect(myTool.name).toBe('testTool')
       expect(myTool.description).toBe('')
     })
   })

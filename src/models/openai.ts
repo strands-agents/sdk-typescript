@@ -14,6 +14,8 @@ import type { Message } from '../types/messages.js'
 import type { ModelStreamEvent } from '../models/streaming.js'
 import { ContextWindowOverflowError } from '../errors.js'
 
+const DEFAULT_OPENAI_MODEL_ID = 'gpt-4o'
+
 /**
  * Error message patterns that indicate context window overflow.
  * Used to detect when input exceeds the model's context window.
@@ -68,7 +70,7 @@ export interface OpenAIModelConfig extends BaseModelConfig {
   /**
    * OpenAI model identifier (e.g., gpt-4o, gpt-3.5-turbo).
    */
-  modelId: string
+  modelId?: string
 
   /**
    * Controls randomness in generation (0 to 2).
@@ -396,7 +398,7 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
   ): OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming {
     // Start with required fields
     const request: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming = {
-      model: this._config.modelId,
+      model: this._config.modelId ?? DEFAULT_OPENAI_MODEL_ID,
       messages: [] as OpenAI.Chat.Completions.ChatCompletionMessageParam[],
       stream: true,
       stream_options: { include_usage: true },

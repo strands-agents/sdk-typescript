@@ -6,6 +6,7 @@ export default defineConfig({
       {
         test: {
           include: ['src/**/__tests__/**/*.test.ts', 'vended_tools/**/__tests__/**/*.test.ts'],
+          includeSource: ['src/**/*.{js,ts}'],
           name: { label: 'unit-node', color: 'green' },
           typecheck: {
             enabled: true,
@@ -34,12 +35,12 @@ export default defineConfig({
           name: { label: 'integ', color: 'magenta' },
           testTimeout: 30000,
           globalSetup: './tests_integ/integ-setup.ts',
+          sequence: {
+            concurrent: true,
+          },
         },
       },
     ],
-    sequence: {
-      concurrent: true,
-    },
     typecheck: {
       enabled: true,
     },
@@ -56,5 +57,8 @@ export default defineConfig({
       },
     },
     environment: 'node',
+  },
+  define: {
+    'import.meta.vitest': 'undefined',
   },
 })
