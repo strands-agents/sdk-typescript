@@ -1,11 +1,9 @@
+/* eslint-disable no-restricted-imports */
 import { describe, it, expect } from 'vitest'
 import { fromNodeProviderChain } from '@aws-sdk/credential-providers'
-// eslint-disable-next-line no-restricted-imports
 import { Agent, BedrockModel } from '../src/index.js'
-// eslint-disable-next-line no-restricted-imports
 import type { AgentStreamEvent, AgentResult } from '../src/index.js'
 import { notebook } from '../vended_tools/notebook/index.js'
-// eslint-disable-next-line no-restricted-imports
 import { collectGenerator } from '../src/__fixtures__/model-test-helpers.js'
 
 // Check if we should run AWS-dependent tests
