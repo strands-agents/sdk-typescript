@@ -31,37 +31,23 @@ const notebookInputSchema = z
   )
 
 /**
- * Notebook tool for managing text notebooks.
+ * Notebook tool for managing persistent text notebooks.
  *
- * This tool provides comprehensive notebook operations for creating, reading, writing,
- * listing, and clearing text notebooks. Notebooks are stored in the invocationState
- * and work seamlessly in both browser and server environments.
- *
- * State Management:
- * - Notebooks are stored in `invocationState.notebooks` as a Record\<string, string\>
- * - A 'default' notebook is automatically created if no notebooks exist
- * - All notebooks persist within a single agent invocation
- * - Callers must handle persistence between sessions
+ * Notebooks are stored in `invocationState.notebooks` and persist within an agent session.
+ * Supports create, list, read, write (replace/insert), and clear operations.
  *
  * @example
  * ```typescript
- * import { notebook } from '@strands-agents/sdk/vended_tools/notebook'
- * import { ToolRegistry } from '@strands-agents/sdk'
+ * // With agent
+ * const agent = new Agent({ tools: [notebook] })
+ * await agent.invoke('Create a notebook called "notes"')
+ * await agent.invoke('Add "- Task 1" to notes')
  *
- * const registry = new ToolRegistry()
- * registry.register(notebook)
- *
- * // Initialize state
- * const state = { notebooks: {} }
- *
- * // Create a notebook
- * await notebook.invoke({ mode: 'create', name: 'notes', newStr: '# My Notes' }, { invocationState: state })
- *
- * // Write to notebook
- * await notebook.invoke({ mode: 'write', name: 'notes', insertLine: -1, newStr: '- New item' }, { invocationState: state })
- *
- * // Read notebook
- * const content = await notebook.invoke({ mode: 'read', name: 'notes' }, { invocationState: state })
+ * // Direct usage
+ * await notebook.invoke(
+ *   { mode: 'create', name: 'notes', newStr: '# Notes' },
+ *   { invocationState: state }
+ * )
  * ```
  */
 export const notebook = tool({
