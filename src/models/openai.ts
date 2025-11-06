@@ -68,7 +68,7 @@ export interface OpenAIModelConfig extends BaseModelConfig {
   /**
    * OpenAI model identifier (e.g., gpt-4o, gpt-3.5-turbo).
    */
-  modelId: string
+  modelId?: string
 
   /**
    * Controls randomness in generation (0 to 2).
@@ -396,7 +396,7 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
   ): OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming {
     // Start with required fields
     const request: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming = {
-      model: this._config.modelId,
+      model: this._config.modelId ?? 'gpt-4o',
       messages: [] as OpenAI.Chat.Completions.ChatCompletionMessageParam[],
       stream: true,
       stream_options: { include_usage: true },

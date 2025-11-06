@@ -21,6 +21,10 @@ export type AgentConfig = {
    */
   model?: Model<BaseModelConfig>
   /**
+   * An initial set of messages to seed the agent's conversation history.
+   */
+  messages?: Message[]
+  /**
    * An initial set of tools to register with the agent.
    */
   tools?: Tool[]
@@ -55,7 +59,7 @@ export class Agent {
   constructor(config?: AgentConfig) {
     this._model = config?.model ?? new BedrockModel()
     this._toolRegistry = new ToolRegistry(config?.tools)
-    this._messages = []
+    this._messages = config?.messages ?? []
     this._systemPrompt = config?.systemPrompt
   }
 
