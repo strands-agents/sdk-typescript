@@ -22,9 +22,9 @@
       "import": "./dist/models/bedrock.js",
       "types": "./dist/models/bedrock.d.ts"
     },
-    "./vendedTools/http-request": {
-      "import": "./dist/vendedTools/http-request/index.js",
-      "types": "./dist/vendedTools/http-request/index.d.ts"
+    "./vended_tools/http-request": {
+      "import": "./dist/vended_tools/http-request/index.js",
+      "types": "./dist/vended_tools/http-request/index.d.ts"
     }
   },
   "scripts": {
@@ -40,10 +40,10 @@
     "test:browser:install": "npx playwright install --with-deps chromium",
     "test:all": "vitest run --project unit-node --project unit-browser",
     "test:all:coverage": "vitest run --coverage --project unit-node --project unit-browser",
-    "lint": "eslint src tests_integ vendedTools",
-    "lint:fix": "eslint src tests_integ vendedTools --fix",
-    "format": "prettier --write src tests_integ vendedTools",
-    "format:check": "prettier --check src tests_integ vendedTools",
+    "lint": "eslint src tests_integ vended_tools",
+    "lint:fix": "eslint src tests_integ vended_tools --fix",
+    "format": "prettier --write src tests_integ vended_tools",
+    "format:check": "prettier --check src tests_integ vended_tools",
     "type-check": "tsc --noEmit",
     "type-check:watch": "tsc --noEmit --watch",
     "prepare": "husky"

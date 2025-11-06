@@ -27,6 +27,6 @@
     "sourceMap": true,
     "removeComments": false
   },
-  "include": ["src/**/*", "vendedTools/**/*"],
+  "include": ["src/**/*", "vended_tools/**/*"],
   "exclude": ["node_modules", "dist"]
 }

@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 
-// Import from vendedTools, not from main SDK
+// Import from vended_tools, not from main SDK
 // eslint-disable-next-line no-restricted-imports
-import { httpRequest } from '../vendedTools/http-request'
+import { httpRequest } from '../vended_tools/http-request'
 // eslint-disable-next-line no-restricted-imports
 import type { ToolContext } from '../src/tools/tool'
 // eslint-disable-next-line no-restricted-imports

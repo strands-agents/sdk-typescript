@@ -6,7 +6,7 @@
  *
  * @example
  * ```typescript
- * import { httpRequest } from '@strands-agents/sdk/vendedTools/http-request'
+ * import { httpRequest } from '@strands-agents/sdk/vended_tools/http-request'
  *
  * const result = await httpRequest.stream({
  *   toolUse: {

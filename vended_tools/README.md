@@ -17,7 +17,7 @@ Vended tools are pre-built, production-ready tools that developers can optionall
 
 Make HTTP/HTTPS requests to external APIs and services.
 
-**Location**: `vendedTools/http-request/`
+**Location**: `vended_tools/http-request/`
 
 **Features**:
 
@@ -30,7 +30,7 @@ Make HTTP/HTTPS requests to external APIs and services.
 **Usage**:
 
 ```typescript
-import { httpRequest } from '@strands-agents/sdk/vendedTools/http-request'
+import { httpRequest } from '@strands-agents/sdk/vended_tools/http-request'
 
 const result = await httpRequest.stream({
   toolUse: {
@@ -53,7 +53,7 @@ const result = await httpRequest.stream({
 
 When adding new vended tools:
 
-1. Create a new directory under `vendedTools/`
+1. Create a new directory under `vended_tools/`
 2. Include implementation, types, and tests
 3. Add a README.md in the tool's directory
 4. Update this README to list the new tool
@@ -63,7 +63,7 @@ When adding new vended tools:
 ## Directory Structure
 
 ```
-vendedTools/
+vended_tools/
 ├── README.md                    # This file
 └── http-request/                # HTTP request tool
     ├── __tests__/

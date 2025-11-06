@@ -50,7 +50,7 @@ sdk-typescript/
 │   ├── errors.ts                 # Custom error classes
 │   └── index.ts                  # Main SDK entry point (single export point)
 │
-├── vendedTools/                  # Optional vended tools (not part of core SDK)
+├── vended_tools/                  # Optional vended tools (not part of core SDK)
 │   ├── http-request/             # HTTP request tool
 │   │   ├── __tests__/            # Unit tests for HTTP request tool
 │   │   │   └── http-request.test.ts
@@ -103,7 +103,7 @@ sdk-typescript/
 - **`src/models/`**: Model provider implementations (Bedrock, future providers)
 - **`src/tools/`**: Tool definitions and types for agent tool use
 - **`src/types/`**: Core type definitions used across the SDK
-- **`vendedTools/`**: Optional vended tools (not part of core SDK, independently importable)
+- **`vended_tools/`**: Optional vended tools (not part of core SDK, independently importable)
 - **`tests_integ/`**: Integration tests (tests public API and external integrations)
 - **`.github/workflows/`**: CI/CD automation and quality gates
 - **`.project/`**: Task management and project tracking

@@ -29,7 +29,7 @@ npm install @strands-agents/sdk
 ### Basic GET Request
 
 ```typescript
-import { httpRequest } from '@strands-agents/sdk/vendedTools/http-request'
+import { httpRequest } from '@strands-agents/sdk/vended_tools/http-request'
 
 const result = await httpRequest.stream({
   toolUse: {
@@ -47,7 +47,7 @@ const result = await httpRequest.stream({
 ### POST Request with Authentication
 
 ```typescript
-import { httpRequest } from '@strands-agents/sdk/vendedTools/http-request'
+import { httpRequest } from '@strands-agents/sdk/vended_tools/http-request'
 
 const result = await httpRequest.stream({
   toolUse: {
@@ -74,7 +74,7 @@ const result = await httpRequest.stream({
 
 ```typescript
 import { Agent } from '@strands-agents/sdk'
-import { httpRequest } from '@strands-agents/sdk/vendedTools/http-request'
+import { httpRequest } from '@strands-agents/sdk/vended_tools/http-request'
 
 const agent = new Agent({
   tools: [httpRequest],
@@ -199,7 +199,7 @@ The tool includes comprehensive tests:
 Run tests:
 
 ```bash
-npm test -- vendedTools/http-request/__tests__/http-request.test.ts
+npm test -- vended_tools/http-request/__tests__/http-request.test.ts
 ```
 
 ## API Reference
