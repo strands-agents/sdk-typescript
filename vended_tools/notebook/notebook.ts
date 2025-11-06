@@ -4,7 +4,6 @@ import type { NotebookState } from './types.js'
 
 /**
  * Zod schema for notebook input validation.
- * Uses a flat object schema for Bedrock compatibility while maintaining type safety.
  */
 const notebookInputSchema = z
   .object({
