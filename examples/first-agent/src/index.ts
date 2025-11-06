@@ -1,6 +1,4 @@
 import { type Tool, type ToolResult, type ToolContext, Agent, BedrockModel } from '@strands-agents/sdk'
-import OpenAI from 'openai'
-import { OpenAIModel } from '../../../dist/models/openai.js'
 
 // Define the shape of the expected input
 type WeatherToolInput = {
@@ -86,9 +84,7 @@ async function run(title: string, agent: Agent, prompt: string) {
 
 async function main() {
   // 1. Initialize the components
-  const model = new OpenAIModel({
-    modelId: 'gpt-4o',
-  })
+  const model = new BedrockModel()
   const weatherTool = new WeatherTool()
 
   // 2. Create agents
