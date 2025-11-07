@@ -43,7 +43,7 @@ const notebookInputSchema = z
 /**
  * Notebook tool for managing persistent text notebooks.
  *
- * Notebooks are stored in `invocationState.notebooks` and persist within an agent session.
+ * Notebooks are stored in agent state under the 'notebooks' key and persist within an agent session.
  * Supports create, list, read, write (replace/insert), and clear operations.
  *
  * @example
@@ -56,7 +56,7 @@ const notebookInputSchema = z
  * // Direct usage
  * await notebook.invoke(
  *   { mode: 'create', name: 'notes', newStr: '# Notes' },
- *   { invocationState: state }
+ *   { agent: agent, toolUse: { name: 'notebook', toolUseId: 'test', input: {} } }
  * )
  * ```
  */
@@ -70,37 +70,49 @@ export const notebook = tool({
       throw new Error('Tool context is required for notebook operations')
     }
 
-    // Initialize notebooks if not present or empty
-    if (!context.invocationState.notebooks) {
-      context.invocationState.notebooks = {}
-    }
+    // Get notebooks from state, or initialize if not present
+    let notebooks = context.agent.state.get('notebooks') as NotebookState['notebooks'] | undefined
 
-    const notebooks = context.invocationState.notebooks as NotebookState['notebooks']
+    if (!notebooks) {
+      notebooks = {}
+    }
 
     // Ensure default notebook exists
     if (Object.keys(notebooks).length === 0) {
       notebooks.default = ''
     }
 
+    let result: string
+
     switch (input.mode) {
       case 'create':
-        return handleCreate(notebooks, input.name ?? 'default', input.newStr)
+        result = handleCreate(notebooks, input.name ?? 'default', input.newStr)
+        break
 
       case 'list':
-        return handleList(notebooks)
+        result = handleList(notebooks)
+        break
 
       case 'read':
-        return handleRead(notebooks, input.name ?? 'default', input.readRange)
+        result = handleRead(notebooks, input.name ?? 'default', input.readRange)
+        break
 
       case 'write':
-        return handleWrite(notebooks, input.name ?? 'default', input.oldStr, input.newStr, input.insertLine)
+        result = handleWrite(notebooks, input.name ?? 'default', input.oldStr, input.newStr, input.insertLine)
+        break
 
       case 'clear':
-        return handleClear(notebooks, input.name ?? 'default')
+        result = handleClear(notebooks, input.name ?? 'default')
+        break
 
       default:
         throw new Error(`Unknown mode: ${input.mode}`)
     }
+
+    // Persist notebooks back to state
+    context.agent.state.set('notebooks', notebooks)
+
+    return result
   },
 })
 

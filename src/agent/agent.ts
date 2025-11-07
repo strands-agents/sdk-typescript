@@ -255,22 +255,6 @@ export class Agent implements AgentData {
   }
 
   /**
-   * Gets the current invocation state.
-   * This state persists across tool invocations within the same agent instance.
-   */
-  get invocationState(): Record<string, unknown> {
-    return this._invocationState
-  }
-
-  /**
-   * Sets the invocation state.
-   * This can be used to restore state from a previous agent session.
-   */
-  set invocationState(state: Record<string, unknown>) {
-    this._invocationState = state
-  }
-
-  /**
    * Executes a single tool and returns the result.
    * If the tool is not found or fails to return a result, returns an error ToolResult
    * instead of throwing an exception. This allows the agent loop to continue and

@@ -43,7 +43,7 @@ await agent.invoke('Add "- [ ] Review code" to the todo notebook')
 await agent.invoke('Add "- [ ] Write tests" to the todo notebook')
 
 // State is accessible via the agent
-console.log(agent.invocationState.notebooks)
+console.log(agent.state.get('notebooks'))
 // Output: { todo: '# Tasks\n- [ ] Review code\n- [ ] Write tests' }
 ```
 
@@ -53,7 +53,7 @@ Save notebook state across application restarts:
 
 ```typescript
 // Save the current state
-const savedState = agent.invocationState
+const savedState = agent.state.getAll()
 
 // Later, create a new agent with the saved state
 const restoredAgent = new Agent({
@@ -61,7 +61,7 @@ const restoredAgent = new Agent({
     region: 'us-east-1',
   }),
   tools: [notebook],
-  invocationState: savedState, // Restore previous notebooks
+  state: savedState, // Restore previous notebooks
 })
 
 // All notebooks are immediately available
@@ -106,7 +106,7 @@ await agent.invoke('Replace "- [ ] Morning standup" with "- [x] Morning standup"
 const result = await agent.invoke('Read the tasks notebook')
 
 // Save state for tomorrow
-const taskState = agent.invocationState
+const taskState = agent.state.getAll()
 // Store taskState in your database/file system
 ```
 
@@ -116,10 +116,12 @@ You can also use the notebook tool directly without an agent:
 
 ```typescript
 import { notebook } from '@strands-agents/sdk/vended_tools/notebook'
+import { AgentState } from '@strands-agents/sdk'
 
-const state = { notebooks: {} }
+const state = new AgentState({ notebooks: {} })
+const agent = { state }
 const context = {
-  invocationState: state,
+  agent,
   toolUse: { name: 'notebook', toolUseId: 'test', input: {} },
 }
 

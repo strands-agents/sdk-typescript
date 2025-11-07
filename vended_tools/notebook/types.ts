@@ -1,6 +1,6 @@
 /**
  * State structure for notebook storage.
- * This should be stored in the ToolContext.invocationState by the caller.
+ * Notebooks are stored in agent state under the 'notebooks' key.
  */
 export interface NotebookState {
   /**

@@ -43,15 +43,17 @@ describe.skipIf(!shouldRunAWSTests)('Notebook Tool Integration', () => {
     )
 
     // Verify notebook was created
-    expect(agent.invocationState).toHaveProperty('notebooks')
-    expect(agent.invocationState.notebooks).toHaveProperty('test')
-    expect((agent.invocationState.notebooks as any).test).toContain('# Test Notebook')
+    const notebooks1 = agent.state.get('notebooks') as any
+    expect(notebooks1).toBeTruthy()
+    expect(notebooks1).toHaveProperty('test')
+    expect(notebooks1.test).toContain('# Test Notebook')
 
     // Step 2: Add content to the notebook
     const { items: _events2 } = await collectGenerator(agent.invoke('Add "- First item" to the test notebook'))
 
     // Verify content was added
-    expect((agent.invocationState.notebooks as any).test).toContain('- First item')
+    const notebooks2 = agent.state.get('notebooks') as any
+    expect(notebooks2.test).toContain('- First item')
 
     // Step 3: Read the notebook
     const { items: events3 } = await collectGenerator<AgentStreamEvent, AgentResult>(
@@ -63,8 +65,9 @@ describe.skipIf(!shouldRunAWSTests)('Notebook Tool Integration', () => {
     expect(textBlocks.length).toBeGreaterThan(0)
 
     // The notebook should still contain both pieces of content
-    expect((agent.invocationState.notebooks as any).test).toContain('# Test Notebook')
-    expect((agent.invocationState.notebooks as any).test).toContain('- First item')
+    const notebooks3 = agent.state.get('notebooks') as any
+    expect(notebooks3.test).toContain('# Test Notebook')
+    expect(notebooks3.test).toContain('- First item')
   }, 30000) // 30 second timeout for network calls
 
   it('should restore state across agent instances', async () => {
@@ -75,27 +78,30 @@ describe.skipIf(!shouldRunAWSTests)('Notebook Tool Integration', () => {
     await collectGenerator(agent1.invoke('Create a notebook called "persist" with "Persistent content"'))
 
     // Verify notebook was created
-    expect(agent1.invocationState).toHaveProperty('notebooks')
-    expect((agent1.invocationState.notebooks as any).persist).toContain('Persistent content')
+    const notebooks1 = agent1.state.get('notebooks') as any
+    expect(notebooks1).toBeTruthy()
+    expect(notebooks1.persist).toContain('Persistent content')
 
     // Save state
-    const savedState = JSON.parse(JSON.stringify(agent1.invocationState))
+    const savedState = agent1.state.getAll()
 
     // Create second agent with restored state
     const agent2 = new Agent({
       ...agentParams,
-      invocationState: savedState, // Pass state in constructor
+      state: savedState, // Pass state in constructor
     })
 
     // Verify notebooks were restored
-    expect(agent2.invocationState).toHaveProperty('notebooks')
-    expect((agent2.invocationState.notebooks as any).persist).toContain('Persistent content')
+    const notebooks2 = agent2.state.get('notebooks') as any
+    expect(notebooks2).toBeTruthy()
+    expect(notebooks2.persist).toContain('Persistent content')
 
     // Use the restored notebook - just read it
     await collectGenerator(agent2.invoke('Read the persist notebook'))
 
     // Verify content still exists
-    expect((agent2.invocationState.notebooks as any).persist).toContain('Persistent content')
+    const notebooks3 = agent2.state.get('notebooks') as any
+    expect(notebooks3.persist).toContain('Persistent content')
   }, 30000)
 
   it('should handle errors gracefully', async () => {
