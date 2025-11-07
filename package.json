@@ -90,5 +90,8 @@
   },
   "optionalDependencies": {
     "openai": "^6.7.0"
+  },
+  "overrides": {
+    "rollup": "4.52.5"
   }
 }
