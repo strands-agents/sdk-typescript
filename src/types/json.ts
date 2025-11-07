@@ -1,4 +1,5 @@
 import type { JSONSchema7 } from 'json-schema'
+import { ValidationError } from '../errors.js'
 
 /**
  * Represents any valid JSON value.
@@ -58,7 +59,7 @@ export function deepCopy(value: unknown): JSONValue {
  * @param value - The value to copy
  * @param contextPath - Context path for error messages (e.g., 'initialState', 'value for key "config"')
  * @returns A deep copy of the value
- * @throws Error if value contains functions, symbols, or undefined values
+ * @throws ValidationError if value contains functions, symbols, or undefined values
  */
 export function deepCopyWithValidation(value: unknown, contextPath: string = 'value'): JSONValue {
   const pathStack: string[] = []
@@ -78,15 +79,15 @@ export function deepCopyWithValidation(value: unknown, contextPath: string = 'va
 
     // Check for non-serializable types
     if (typeof val === 'function') {
-      throw new Error(`${currentPath} contains a function which cannot be serialized`)
+      throw new ValidationError(`${currentPath} contains a function which cannot be serialized`)
     }
 
     if (typeof val === 'symbol') {
-      throw new Error(`${currentPath} contains a symbol which cannot be serialized`)
+      throw new ValidationError(`${currentPath} contains a symbol which cannot be serialized`)
     }
 
     if (val === undefined) {
-      throw new Error(`${currentPath} is undefined which cannot be serialized`)
+      throw new ValidationError(`${currentPath} is undefined which cannot be serialized`)
     }
 
     // Track path for nested objects/arrays
@@ -99,11 +100,10 @@ export function deepCopyWithValidation(value: unknown, contextPath: string = 'va
 
   try {
     const serialized = JSON.stringify(value, replacer)
-    pathStack.length = 0 // Clean up
     return JSON.parse(serialized) as JSONValue
   } catch (error) {
     // If it's our validation error, re-throw it
-    if (error instanceof Error && error.message.includes('cannot be serialized')) {
+    if (error instanceof ValidationError) {
       throw error
     }
     // Otherwise, wrap it

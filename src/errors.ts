@@ -53,3 +53,21 @@ export class MaxTokensError extends Error {
     this.partialMessage = partialMessage
   }
 }
+
+/**
+ * Error thrown when attempting to serialize a value that is not JSON-serializable.
+ *
+ * This error indicates that a value contains non-serializable types such as functions,
+ * symbols, or undefined values that cannot be converted to JSON.
+ */
+export class ValidationError extends Error {
+  /**
+   * Creates a new ValidationError.
+   *
+   * @param message - Error message describing the validation failure
+   */
+  constructor(message: string) {
+    super(message)
+    this.name = 'ValidationError'
+  }
+}
