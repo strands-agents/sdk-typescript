@@ -25,17 +25,20 @@ const shouldRunAWSTests = await (async () => {
 })()
 
 describe.skipIf(!shouldRunAWSTests)('Notebook Tool Integration', () => {
+  // Shared agent configuration for all tests
+  const agentParams = {
+    model: new BedrockModel({
+      region: 'us-east-1',
+    }),
+    tools: [notebook],
+  }
+
   it('should persist notebook state across tool invocations', async () => {
     // Create agent with notebook tool
-    const agent = new Agent({
-      model: new BedrockModel({
-        region: 'us-east-1',
-      }),
-      tools: [notebook],
-    })
+    const agent = new Agent(agentParams)
 
     // Step 1: Create a notebook
-    const { items: _events1 } = await collectGenerator<AgentStreamEvent, AgentResult>(
+    const { items: _events1 } = await collectGenerator(
       agent.invoke('Create a notebook called "test" with content "# Test Notebook"')
     )
 
@@ -45,9 +48,7 @@ describe.skipIf(!shouldRunAWSTests)('Notebook Tool Integration', () => {
     expect((agent.invocationState.notebooks as any).test).toContain('# Test Notebook')
 
     // Step 2: Add content to the notebook
-    const { items: _events2 } = await collectGenerator<AgentStreamEvent, AgentResult>(
-      agent.invoke('Add "- First item" to the test notebook')
-    )
+    const { items: _events2 } = await collectGenerator(agent.invoke('Add "- First item" to the test notebook'))
 
     // Verify content was added
     expect((agent.invocationState.notebooks as any).test).toContain('- First item')
@@ -68,17 +69,10 @@ describe.skipIf(!shouldRunAWSTests)('Notebook Tool Integration', () => {
 
   it('should restore state across agent instances', async () => {
     // Create first agent and add content
-    const agent1 = new Agent({
-      model: new BedrockModel({
-        region: 'us-east-1',
-      }),
-      tools: [notebook],
-    })
+    const agent1 = new Agent(agentParams)
 
     // Create notebook with first agent
-    await collectGenerator<AgentStreamEvent, AgentResult>(
-      agent1.invoke('Create a notebook called "persist" with "Persistent content"')
-    )
+    await collectGenerator(agent1.invoke('Create a notebook called "persist" with "Persistent content"'))
 
     // Verify notebook was created
     expect(agent1.invocationState).toHaveProperty('notebooks')
@@ -89,10 +83,7 @@ describe.skipIf(!shouldRunAWSTests)('Notebook Tool Integration', () => {
 
     // Create second agent with restored state
     const agent2 = new Agent({
-      model: new BedrockModel({
-        region: 'us-east-1',
-      }),
-      tools: [notebook],
+      ...agentParams,
       invocationState: savedState, // Pass state in constructor
     })
 
@@ -101,24 +92,17 @@ describe.skipIf(!shouldRunAWSTests)('Notebook Tool Integration', () => {
     expect((agent2.invocationState.notebooks as any).persist).toContain('Persistent content')
 
     // Use the restored notebook - just read it
-    await collectGenerator<AgentStreamEvent, AgentResult>(agent2.invoke('Read the persist notebook'))
+    await collectGenerator(agent2.invoke('Read the persist notebook'))
 
     // Verify content still exists
     expect((agent2.invocationState.notebooks as any).persist).toContain('Persistent content')
   }, 30000)
 
   it('should handle errors gracefully', async () => {
-    const agent = new Agent({
-      model: new BedrockModel({
-        region: 'us-east-1',
-      }),
-      tools: [notebook],
-    })
+    const agent = new Agent(agentParams)
 
     // Try to read non-existent notebook
-    const { items: events } = await collectGenerator<AgentStreamEvent, AgentResult>(
-      agent.invoke('Read a notebook called "nonexistent"')
-    )
+    const { items: events } = await collectGenerator(agent.invoke('Read a notebook called "nonexistent"'))
 
     // The agent should handle the error and provide a reasonable response
     // Check that we got tool result blocks (indicating tool was called)
