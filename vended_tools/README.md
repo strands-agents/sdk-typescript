@@ -28,8 +28,15 @@ A comprehensive tool for managing text notebooks within agent invocations. Suppo
 import { notebook } from '@strands-agents/sdk/vended_tools/notebook'
 import { ToolRegistry } from '@strands-agents/sdk'
 
-const registry = new ToolRegistry()
-registry.register(notebook)
+const agent = new Agent({
+  model: new BedrockModel({
+    region: 'us-east-1',
+  }),
+  tools: [notebook],
+})
+
+// Create a task list
+await agent.invoke('Create a notebook called "tasks" with 1 "Write code" task')
 ```
 
 See [notebook/README.md](./notebook/README.md) for complete documentation.
