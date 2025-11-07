@@ -7,12 +7,22 @@ import type { NotebookState } from './types.js'
  */
 const notebookInputSchema = z
   .object({
-    mode: z.enum(['create', 'list', 'read', 'write', 'clear']),
-    name: z.string().optional(),
-    newStr: z.string().optional(),
-    readRange: z.tuple([z.number(), z.number()]).optional(),
-    oldStr: z.string().optional(),
-    insertLine: z.union([z.string(), z.number()]).optional(),
+    mode: z
+      .enum(['create', 'list', 'read', 'write', 'clear'])
+      .describe('The operation to perform: `create`, `list`, `read`, `write`, `clear`.'),
+    name: z.string().optional().describe('Name of the notebook to operate on. Defaults to "default".'),
+    newStr: z.string().optional().describe('New string for replacement or insertion operations.'),
+    readRange: z
+      .tuple([z.number(), z.number()])
+      .optional()
+      .describe('Optional parameter of `view` command. Line range to show [start, end]. Supports negative indices.'),
+    oldStr: z.string().optional().describe('String to replace in write mode when doing text replacement.'),
+    insertLine: z
+      .union([z.string(), z.number()])
+      .optional()
+      .describe(
+        'Line number (int) or search text (str) for insertion point in write mode.\nSupports negative indices.'
+      ),
   })
   .refine(
     (data) => {
