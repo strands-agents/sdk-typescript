@@ -25,11 +25,11 @@ describe('AgentState', () => {
       expect(state.get('nested')).toEqual({ value: 'test' })
     })
 
-    it('throws error when initial state is not JSON serializable', () => {
-      const invalidState = { func: () => 'test' }
-      expect(() => new AgentState(invalidState as never)).toThrow(
-        /Cannot initialize state with non-JSON-serializable value/
-      )
+    it('silently drops functions in initial state', () => {
+      const invalidState = { func: () => 'test', value: 'keep' }
+      const state = new AgentState(invalidState as never)
+      expect(state.get('func')).toBeUndefined()
+      expect(state.get('value')).toBe('keep')
     })
   })
 
@@ -116,24 +116,36 @@ describe('AgentState', () => {
       expect(state.get('key1')).toEqual({ nested: { value: 'test' } })
     })
 
-    it('throws error for function values', () => {
-      const state = new AgentState()
-      expect(() => state.set('key1', () => 'test')).toThrow(/Cannot store non-JSON-serializable value/)
+    it('silently drops function properties in objects', () => {
+      const state = new AgentState({ existing: 'value' })
+      const obj = { func: () => 'test', value: 'keep' }
+      state.set('key1', obj)
+      const result = state.get('key1') as Record<string, unknown>
+      expect(result.func).toBeUndefined()
+      expect(result.value).toBe('keep')
+      expect(state.get('existing')).toBe('value')
     })
 
-    it('throws error for symbol values', () => {
+    it('throws error for top-level symbol values', () => {
       const state = new AgentState()
-      expect(() => state.set('key1', Symbol('test'))).toThrow(/Cannot store non-JSON-serializable value/)
+      expect(() => state.set('key1', Symbol('test'))).toThrow()
     })
 
-    it('throws error for undefined values', () => {
+    it('throws error for top-level undefined values', () => {
       const state = new AgentState()
-      expect(() => state.set('key1', undefined)).toThrow(/Cannot store non-JSON-serializable value/)
+      expect(() => state.set('key1', undefined)).toThrow()
     })
 
-    it('throws error with descriptive message', () => {
+    it('silently drops non-serializable properties in nested objects', () => {
       const state = new AgentState()
-      expect(() => state.set('key1', () => 'test')).toThrow(/Functions and Symbols are not supported/)
+      const obj = { func: () => 'test', value: 'keep', nested: { data: 42, func2: () => 'test2' } }
+      state.set('key1', obj)
+      const result = state.get('key1') as Record<string, unknown>
+      expect(result.func).toBeUndefined()
+      expect(result.value).toBe('keep')
+      const nested = result.nested as Record<string, unknown>
+      expect(nested.data).toBe(42)
+      expect(nested.func2).toBeUndefined()
     })
   })
 

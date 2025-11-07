@@ -1,54 +1,6 @@
 import { deepCopy, type JSONValue } from '../types/json.js'
 
 /**
- * Validates that a value is JSON serializable by checking for functions and symbols.
- *
- * @param value - The value to validate
- * @throws Error if value contains functions or symbols
- */
-function validateJSONSerializable(value: unknown): void {
-  const seen = new Set<unknown>()
-
-  function check(val: unknown): void {
-    // Avoid infinite recursion
-    if (val === null || val === undefined) {
-      return
-    }
-
-    if (typeof val === 'object' && seen.has(val)) {
-      return
-    }
-
-    if (typeof val === 'function') {
-      throw new Error('Functions are not JSON serializable')
-    }
-
-    if (typeof val === 'symbol') {
-      throw new Error('Symbols are not JSON serializable')
-    }
-
-    if (typeof val === 'undefined') {
-      throw new Error('undefined is not JSON serializable')
-    }
-
-    if (typeof val === 'object') {
-      seen.add(val)
-      if (Array.isArray(val)) {
-        for (const item of val) {
-          check(item)
-        }
-      } else {
-        for (const key in val) {
-          check((val as Record<string, unknown>)[key])
-        }
-      }
-    }
-  }
-
-  check(value)
-}
-
-/**
  * Agent state provides key-value storage outside conversation context.
  * State is not passed to the model during inference but is accessible
  * by tools (via ToolContext) and application logic.
@@ -76,16 +28,7 @@ export class AgentState<TState extends Record<string, JSONValue> = Record<string
    */
   constructor(initialState?: TState) {
     if (initialState !== undefined) {
-      // Validate and deep copy initial state
-      try {
-        validateJSONSerializable(initialState)
-        this._state = deepCopy(initialState) as Record<string, JSONValue>
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error)
-        throw new Error(
-          `Cannot initialize state with non-JSON-serializable value. ${errorMessage}. Functions and Symbols are not supported.`
-        )
-      }
+      this._state = deepCopy(initialState) as Record<string, JSONValue>
     } else {
       this._state = {}
     }
@@ -121,16 +64,7 @@ export class AgentState<TState extends Record<string, JSONValue> = Record<string
    * @throws Error if value is not JSON serializable
    */
   set(key: string, value: unknown): void {
-    // Validate and deep copy value
-    try {
-      validateJSONSerializable(value)
-      this._state[key] = deepCopy(value)
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      throw new Error(
-        `Cannot store non-JSON-serializable value. ${errorMessage}. Functions and Symbols are not supported.`
-      )
-    }
+    this._state[key] = deepCopy(value)
   }
 
   /**

@@ -36,6 +36,28 @@ export function createMockContext(
 }
 
 /**
+ * Helper to create a mock ToolContext with custom toolUse for testing.
+ *
+ * @param toolUse - The tool use request
+ * @param invocationState - Optional invocation state
+ * @param agentState - Optional initial agent state
+ * @returns Mock ToolContext object
+ */
+export function createMockContextWithToolUse(
+  toolUse: { name: string; toolUseId: string; input: JSONValue },
+  invocationState: Record<string, unknown> = {},
+  agentState?: Record<string, JSONValue>
+): ToolContext {
+  return {
+    toolUse,
+    invocationState,
+    agent: {
+      state: new AgentState(agentState),
+    },
+  }
+}
+
+/**
  * Helper to create a mock tool for testing.
  *
  * @param name - The name of the mock tool
