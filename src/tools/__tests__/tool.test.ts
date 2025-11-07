@@ -331,9 +331,7 @@ describe('FunctionTool', () => {
         })
 
         const { result: negativeResult } = await collectGenerator(
-          negativeTool.stream(
-            createMockContext({ name: 'negativeTool', toolUseId: 'test-negative', input: {} })
-          )
+          negativeTool.stream(createMockContext({ name: 'negativeTool', toolUseId: 'test-negative', input: {} }))
         )
 
         expect(negativeResult).toEqual({
@@ -771,9 +769,8 @@ describe('FunctionTool', () => {
           input: {},
         }
 
-        const { items: streamEvents, result } = await collectGenerator(
-          tool.stream(createMockContext(toolUse))
-        )
+        const context = tool.stream(createMockContext(toolUse))
+        const { items: streamEvents, result } = await collectGenerator(context)
 
         // Should have one stream event before the error
         expect(streamEvents.length).toBe(1)

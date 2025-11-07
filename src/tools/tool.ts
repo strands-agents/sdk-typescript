@@ -40,8 +40,8 @@ export type { ToolSpec } from './types.js'
  * ```
  */
 export interface ToolContext<
-  TInvocationState extends Record<string, unknown> = Record<string, unknown>,
   TAgentState extends Record<string, JSONValue> = Record<string, JSONValue>,
+  TInvocationState extends Record<string, unknown> = Record<string, unknown>,
 > {
   /**
    * The tool use request that triggered this tool execution.
@@ -50,16 +50,16 @@ export interface ToolContext<
   toolUse: ToolUse
 
   /**
-   * Caller-provided state from agent invocation.
-   * This allows passing context from the agent level down to tool execution.
-   */
-  invocationState: TInvocationState
-
-  /**
    * The agent instance that is executing this tool.
    * Provides access to agent state and other agent-level information.
    */
   agent: AgentData<TAgentState>
+
+  /**
+   * Caller-provided state from agent invocation.
+   * This allows passing context from the agent level down to tool execution.
+   */
+  invocationState: TInvocationState
 }
 
 /**
