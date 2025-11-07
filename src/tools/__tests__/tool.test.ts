@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { FunctionTool } from '../function-tool.js'
 import type { ToolContext } from '../tool.js'
 import type { JSONValue } from '../../types/json.js'
-import { createMockContextWithToolUse } from '../../__fixtures__/tool-helpers.js'
+import { createMockContext } from '../../__fixtures__/tool-helpers.js'
 
 import { collectGenerator } from '../../__fixtures__/model-test-helpers.js'
 
@@ -95,7 +95,7 @@ describe('FunctionTool', () => {
           toolUseId: 'test-sync-1',
           input: { value: 5 },
         }
-        const context = createMockContextWithToolUse(toolUse)
+        const context = createMockContext(toolUse)
 
         const { items: streamEvents, result } = await collectGenerator(tool.stream(context))
 
@@ -128,7 +128,7 @@ describe('FunctionTool', () => {
           toolUseId: 'test-string',
           input: {},
         }
-        const context = createMockContextWithToolUse(toolUse)
+        const context = createMockContext(toolUse)
 
         const { items: streamEvents, result } = await collectGenerator(tool.stream(context))
 
@@ -160,7 +160,7 @@ describe('FunctionTool', () => {
           toolUseId: 'test-object',
           input: {},
         }
-        const context = createMockContextWithToolUse(toolUse)
+        const context = createMockContext(toolUse)
 
         const { items: streamEvents, result } = await collectGenerator(tool.stream(context))
 
@@ -199,7 +199,7 @@ describe('FunctionTool', () => {
           input: inputData,
         }
 
-        await collectGenerator(tool.stream(createMockContextWithToolUse(toolUse)))
+        await collectGenerator(tool.stream(createMockContext(toolUse)))
 
         expect(receivedInput).toEqual(inputData)
       })
@@ -213,7 +213,7 @@ describe('FunctionTool', () => {
         })
 
         const { result } = await collectGenerator(
-          tool.stream(createMockContextWithToolUse({ name: 'nullTool', toolUseId: 'test-null', input: {} }))
+          tool.stream(createMockContext({ name: 'nullTool', toolUseId: 'test-null', input: {} }))
         )
 
         expect(result).toEqual({
@@ -238,7 +238,7 @@ describe('FunctionTool', () => {
         })
 
         const { result } = await collectGenerator(
-          tool.stream(createMockContextWithToolUse({ name: 'undefinedTool', toolUseId: 'test-undefined', input: {} }))
+          tool.stream(createMockContext({ name: 'undefinedTool', toolUseId: 'test-undefined', input: {} }))
         )
 
         expect(result).toEqual({
@@ -262,7 +262,7 @@ describe('FunctionTool', () => {
         })
 
         const { result: trueResult } = await collectGenerator(
-          trueTool.stream(createMockContextWithToolUse({ name: 'trueTool', toolUseId: 'test-true', input: {} }))
+          trueTool.stream(createMockContext({ name: 'trueTool', toolUseId: 'test-true', input: {} }))
         )
 
         expect(trueResult).toEqual({
@@ -284,7 +284,7 @@ describe('FunctionTool', () => {
         })
 
         const { result: falseResult } = await collectGenerator(
-          falseTool.stream(createMockContextWithToolUse({ name: 'falseTool', toolUseId: 'test-false', input: {} }))
+          falseTool.stream(createMockContext({ name: 'falseTool', toolUseId: 'test-false', input: {} }))
         )
 
         expect(falseResult).toEqual({
@@ -308,7 +308,7 @@ describe('FunctionTool', () => {
         })
 
         const { result } = await collectGenerator(
-          tool.stream(createMockContextWithToolUse({ name: 'numberTool', toolUseId: 'test-number', input: {} }))
+          tool.stream(createMockContext({ name: 'numberTool', toolUseId: 'test-number', input: {} }))
         )
 
         expect(result).toEqual({
@@ -332,7 +332,7 @@ describe('FunctionTool', () => {
 
         const { result: negativeResult } = await collectGenerator(
           negativeTool.stream(
-            createMockContextWithToolUse({ name: 'negativeTool', toolUseId: 'test-negative', input: {} })
+            createMockContext({ name: 'negativeTool', toolUseId: 'test-negative', input: {} })
           )
         )
 
@@ -357,7 +357,7 @@ describe('FunctionTool', () => {
         })
 
         const { result } = await collectGenerator(
-          tool.stream(createMockContextWithToolUse({ name: 'arrayTool', toolUseId: 'test-array', input: {} }))
+          tool.stream(createMockContext({ name: 'arrayTool', toolUseId: 'test-array', input: {} }))
         )
 
         expect(result).toEqual({
@@ -382,7 +382,7 @@ describe('FunctionTool', () => {
         })
 
         const { result } = await collectGenerator(
-          tool.stream(createMockContextWithToolUse({ name: 'copyTool', toolUseId: 'test-copy', input: {} }))
+          tool.stream(createMockContext({ name: 'copyTool', toolUseId: 'test-copy', input: {} }))
         )
 
         // Mutate the original object
@@ -411,7 +411,7 @@ describe('FunctionTool', () => {
         })
 
         const { result } = await collectGenerator(
-          tool.stream(createMockContextWithToolUse({ name: 'arrayCopyTool', toolUseId: 'test-array-copy', input: {} }))
+          tool.stream(createMockContext({ name: 'arrayCopyTool', toolUseId: 'test-array-copy', input: {} }))
         )
 
         // Mutate the original array
@@ -448,7 +448,7 @@ describe('FunctionTool', () => {
           toolUseId: 'test-promise-1',
           input: { value: 5 },
         }
-        const context = createMockContextWithToolUse(toolUse)
+        const context = createMockContext(toolUse)
 
         const { items: streamEvents, result } = await collectGenerator(tool.stream(context))
 
@@ -473,7 +473,7 @@ describe('FunctionTool', () => {
           toolUseId: 'test-context',
           input: {},
         }
-        const context = createMockContextWithToolUse(toolUse, { userId: 'user-123' })
+        const context = createMockContext(toolUse, { userId: 'user-123' })
 
         const { items: streamEvents, result } = await collectGenerator(tool.stream(context))
 
@@ -501,7 +501,7 @@ describe('FunctionTool', () => {
           toolUseId: 'test-gen-1',
           input: {},
         }
-        const context = createMockContextWithToolUse(toolUse)
+        const context = createMockContext(toolUse)
 
         const { items: streamEvents, result } = await collectGenerator(tool.stream(context))
 
@@ -546,7 +546,7 @@ describe('FunctionTool', () => {
           toolUseId: 'test-obj-gen',
           input: {},
         }
-        const context = createMockContextWithToolUse(toolUse)
+        const context = createMockContext(toolUse)
 
         const { items: streamEvents, result } = await collectGenerator(tool.stream(context))
 
@@ -579,7 +579,7 @@ describe('FunctionTool', () => {
           toolUseId: 'test-error-1',
           input: {},
         }
-        const context = createMockContextWithToolUse(toolUse)
+        const context = createMockContext(toolUse)
 
         const { items: streamEvents, result } = await collectGenerator(tool.stream(context))
 
@@ -605,7 +605,7 @@ describe('FunctionTool', () => {
           toolUseId: 'test-error-2',
           input: {},
         }
-        const context = createMockContextWithToolUse(toolUse)
+        const context = createMockContext(toolUse)
 
         const { items: streamEvents, result } = await collectGenerator(tool.stream(context))
 
@@ -630,7 +630,7 @@ describe('FunctionTool', () => {
           input: {},
         }
 
-        const { result } = await collectGenerator(tool.stream(createMockContextWithToolUse(toolUse)))
+        const { result } = await collectGenerator(tool.stream(createMockContext(toolUse)))
 
         expect(result).toEqual({
           toolUseId: 'test-error-capture',
@@ -661,7 +661,7 @@ describe('FunctionTool', () => {
           input: {},
         }
 
-        const { result } = await collectGenerator(tool.stream(createMockContextWithToolUse(toolUse)))
+        const { result } = await collectGenerator(tool.stream(createMockContext(toolUse)))
 
         expect(result).toEqual({
           toolUseId: 'test-string-wrap',
@@ -704,7 +704,7 @@ describe('FunctionTool', () => {
           input: {},
         }
 
-        const { result } = await collectGenerator(tool.stream(createMockContextWithToolUse(toolUse)))
+        const { result } = await collectGenerator(tool.stream(createMockContext(toolUse)))
 
         expect(result).toEqual({
           toolUseId: 'test-custom-error',
@@ -736,7 +736,7 @@ describe('FunctionTool', () => {
           input: {},
         }
 
-        const { result } = await collectGenerator(tool.stream(createMockContextWithToolUse(toolUse)))
+        const { result } = await collectGenerator(tool.stream(createMockContext(toolUse)))
 
         expect(result).toEqual({
           toolUseId: 'test-stack-trace',
@@ -772,7 +772,7 @@ describe('FunctionTool', () => {
         }
 
         const { items: streamEvents, result } = await collectGenerator(
-          tool.stream(createMockContextWithToolUse(toolUse))
+          tool.stream(createMockContext(toolUse))
         )
 
         // Should have one stream event before the error
@@ -809,7 +809,7 @@ describe('FunctionTool', () => {
           toolUseId: 'test-error-3',
           input: {},
         }
-        const context = createMockContextWithToolUse(toolUse)
+        const context = createMockContext(toolUse)
 
         const { items: streamEvents, result } = await collectGenerator(tool.stream(context))
 
@@ -836,7 +836,7 @@ describe('FunctionTool', () => {
           toolUseId: 'test-error-4',
           input: {},
         }
-        const context = createMockContextWithToolUse(toolUse)
+        const context = createMockContext(toolUse)
 
         const { items: streamEvents, result } = await collectGenerator(tool.stream(context))
 
@@ -858,7 +858,7 @@ describe('FunctionTool', () => {
         })
 
         const { result } = await collectGenerator(
-          tool.stream(createMockContextWithToolUse({ name: 'circularTool', toolUseId: 'test-circular', input: {} }))
+          tool.stream(createMockContext({ name: 'circularTool', toolUseId: 'test-circular', input: {} }))
         )
 
         expect(result).toEqual({
@@ -885,7 +885,7 @@ describe('FunctionTool', () => {
         })
 
         const { result } = await collectGenerator(
-          tool.stream(createMockContextWithToolUse({ name: 'functionTool', toolUseId: 'test-function', input: {} }))
+          tool.stream(createMockContext({ name: 'functionTool', toolUseId: 'test-function', input: {} }))
         )
 
         // Functions are silently dropped during JSON serialization
@@ -935,7 +935,7 @@ describe('Tool interface backwards compatibility', () => {
       toolUseId: 'test-types',
       input: { value: 123 },
     }
-    const context = createMockContextWithToolUse(toolUse)
+    const context = createMockContext(toolUse)
 
     // This should compile and execute without type errors
     const stream = tool.stream({ ...context, toolUse })

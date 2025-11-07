@@ -1,8 +1,24 @@
 import { describe, it, expect, vi } from 'vitest'
 import { z } from 'zod'
 import { tool } from '../zod-tool.js'
-import { createMockContext } from '../../__fixtures__/tool-helpers.js'
+import { createMockContext as createMockContextBase } from '../../__fixtures__/tool-helpers.js'
 import { collectGenerator } from '../../__fixtures__/model-test-helpers.js'
+import type { JSONValue } from '../../types/json.js'
+import type { ToolContext } from '../tool.js'
+
+/**
+ * Helper to create a mock ToolContext with just input for zod tool tests.
+ */
+function createMockContext(input: JSONValue, invocationState: Record<string, unknown> = {}): ToolContext {
+  return createMockContextBase(
+    {
+      name: 'testTool',
+      toolUseId: 'test-123',
+      input,
+    },
+    invocationState
+  )
+}
 
 describe('tool', () => {
   describe('tool creation and properties', () => {

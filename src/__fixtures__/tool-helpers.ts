@@ -12,38 +12,12 @@ import { AgentState } from '../agent/state.js'
 /**
  * Helper to create a mock ToolContext for testing.
  *
- * @param input - The input data for the tool
- * @param invocationState - Optional invocation state
- * @param agentState - Optional initial agent state
- * @returns Mock ToolContext object
- */
-export function createMockContext(
-  input: JSONValue,
-  invocationState: Record<string, unknown> = {},
-  agentState?: Record<string, JSONValue>
-): ToolContext {
-  return {
-    toolUse: {
-      name: 'testTool',
-      toolUseId: 'test-123',
-      input: input,
-    },
-    invocationState,
-    agent: {
-      state: new AgentState(agentState),
-    },
-  }
-}
-
-/**
- * Helper to create a mock ToolContext with custom toolUse for testing.
- *
  * @param toolUse - The tool use request
  * @param invocationState - Optional invocation state
  * @param agentState - Optional initial agent state
  * @returns Mock ToolContext object
  */
-export function createMockContextWithToolUse(
+export function createMockContext(
   toolUse: { name: string; toolUseId: string; input: JSONValue },
   invocationState: Record<string, unknown> = {},
   agentState?: Record<string, JSONValue>
