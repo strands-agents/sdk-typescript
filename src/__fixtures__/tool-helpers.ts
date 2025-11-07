@@ -3,8 +3,7 @@
  * This module provides utilities for testing Tool implementations.
  */
 
-import type { Tool } from '../tools/tool.js'
-import type { ToolContext } from '../tools/tool.js'
+import type { Tool, ToolContext } from '../tools/tool.js'
 import type { ToolResult } from '../tools/types.js'
 import type { JSONValue } from '../types/json.js'
 import { AgentState } from '../agent/state.js'
@@ -13,18 +12,15 @@ import { AgentState } from '../agent/state.js'
  * Helper to create a mock ToolContext for testing.
  *
  * @param toolUse - The tool use request
- * @param invocationState - Optional invocation state
  * @param agentState - Optional initial agent state
  * @returns Mock ToolContext object
  */
 export function createMockContext(
   toolUse: { name: string; toolUseId: string; input: JSONValue },
-  invocationState: Record<string, unknown> = {},
   agentState?: Record<string, JSONValue>
 ): ToolContext {
   return {
     toolUse,
-    invocationState,
     agent: {
       state: new AgentState(agentState),
     },

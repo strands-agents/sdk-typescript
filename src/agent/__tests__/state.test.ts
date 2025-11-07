@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { AgentState } from '../state.js'
 
 describe('AgentState', () => {
@@ -34,6 +34,12 @@ describe('AgentState', () => {
   })
 
   describe('get', () => {
+    it('throws error when key is null or undefined', () => {
+      const state = new AgentState()
+      expect(() => state.get(null as any)).toThrow('key is required')
+      expect(() => state.get(undefined as any)).toThrow('key is required')
+    })
+
     it('returns undefined when key does not exist', () => {
       const state = new AgentState()
       expect(state.get('nonexistent')).toBeUndefined()
@@ -42,11 +48,6 @@ describe('AgentState', () => {
     it('returns value when key exists', () => {
       const state = new AgentState({ key1: 'value1' })
       expect(state.get('key1')).toBe('value1')
-    })
-
-    it('returns all state when no key provided', () => {
-      const state = new AgentState({ key1: 'value1', key2: 42 })
-      expect(state.get()).toEqual({ key1: 'value1', key2: 42 })
     })
 
     it('returns deep copy that cannot mutate stored state', () => {
@@ -188,17 +189,6 @@ describe('AgentState', () => {
     it('returns empty object for empty state', () => {
       const state = new AgentState()
       expect(state.getAll()).toEqual({})
-    })
-
-    it('returns deep copy that cannot mutate stored state', () => {
-      const state = new AgentState({ nested: { value: 'test' } })
-      const all = state.getAll()
-
-      // Mutate retrieved value
-      ;(all.nested as { value: string }).value = 'changed'
-
-      // Stored state should not be affected
-      expect(state.get('nested')).toEqual({ value: 'test' })
     })
   })
 

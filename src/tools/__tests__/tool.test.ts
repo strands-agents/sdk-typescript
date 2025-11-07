@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { FunctionTool } from '../function-tool.js'
 import type { ToolContext } from '../tool.js'
 import type { JSONValue } from '../../types/json.js'
@@ -462,7 +462,7 @@ describe('FunctionTool', () => {
           description: 'Uses context',
           inputSchema: { type: 'object' },
           callback: async (_input: unknown, context: ToolContext): Promise<JSONValue> => {
-            return context.invocationState as JSONValue
+            return context.agent.state.getAll()
           },
         })
 

@@ -41,10 +41,9 @@ export class AgentState<TState extends Record<string, JSONValue> = Record<string
    * @param key - Optional key to retrieve specific value
    * @returns The value for the key, all state if no key provided, or undefined if key doesn't exist
    */
-  get(key?: string): JSONValue | Record<string, JSONValue> | undefined {
-    if (key === undefined) {
-      // Return deep copy of all state
-      return deepCopy(this._state)
+  get(key: string): JSONValue | Record<string, JSONValue> | undefined {
+    if (key == null) {
+      throw new Error('key is required')
     }
 
     const value = this._state[key]

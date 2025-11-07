@@ -1,16 +1,17 @@
 import {
-  BedrockModel,
-  MaxTokensError,
   type AgentResult,
   type AgentStreamEvent,
-  Message,
-  ToolResultBlock,
-  type SystemPrompt,
-  type Tool,
-  type ToolUseBlock,
-  type MessageData,
-  TextBlock,
+  BedrockModel,
   type JSONValue,
+  MaxTokensError,
+  Message,
+  type MessageData,
+  type SystemPrompt,
+  TextBlock,
+  type Tool,
+  type ToolContext,
+  ToolResultBlock,
+  type ToolUseBlock,
 } from '../index.js'
 import type { BaseModelConfig, Model, StreamOptions } from '../models/model.js'
 import { ToolRegistry } from '../registry/tool-registry.js'
@@ -279,13 +280,12 @@ export class Agent implements AgentData {
     }
 
     // Execute tool and collect result
-    const toolContext = {
+    const toolContext: ToolContext = {
       toolUse: {
         name: toolUseBlock.name,
         toolUseId: toolUseBlock.toolUseId,
         input: toolUseBlock.input,
       },
-      invocationState: {},
       agent: this,
     }
 

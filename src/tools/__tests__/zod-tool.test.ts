@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { tool } from '../zod-tool.js'
 import { createMockContext } from '../../__fixtures__/tool-helpers.js'
@@ -9,15 +9,12 @@ import type { ToolContext } from '../tool.js'
 /**
  * Helper to create a mock ToolContext with just input for zod tool tests.
  */
-function createContext(input: JSONValue, invocationState: Record<string, unknown> = {}): ToolContext {
-  return createMockContext(
-    {
-      name: 'testTool',
-      toolUseId: 'test-123',
-      input,
-    },
-    invocationState
-  )
+function createContext(input: JSONValue): ToolContext {
+  return createMockContext({
+    name: 'testTool',
+    toolUseId: 'test-123',
+    input,
+  })
 }
 
 describe('tool', () => {
@@ -135,7 +132,6 @@ describe('tool', () => {
       it('passes context to callback', async () => {
         const callback = vi.fn((input, context) => {
           expect(context).toBeDefined()
-          expect(context?.invocationState).toBeDefined()
           return input.value
         })
 
@@ -146,7 +142,7 @@ describe('tool', () => {
           callback,
         })
 
-        const mockContext = createContext({ value: 'test' }, { userId: 'user-123' })
+        const mockContext = createContext({ value: 'test' })
         await myTool.invoke({ value: 'test' }, mockContext)
         expect(callback).toHaveBeenCalled()
       })
