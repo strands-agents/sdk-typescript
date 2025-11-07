@@ -24,7 +24,7 @@ export type { ToolSpec } from './types.js'
  *   sessionId: string
  * }
  *
- * const context: ToolContext<MyInvocationState, MyAgentState> = {
+ * const context: ToolContext<MyAgentState, InvocationS > = {
  *   toolUse: {
  *     name: 'testTool',
  *     toolUseId: 'test-123',
