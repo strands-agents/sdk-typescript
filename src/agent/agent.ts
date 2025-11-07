@@ -169,7 +169,7 @@ export class Agent {
     args?: InvokeArgs
   ): AsyncGenerator<AgentStreamEvent, { message: Message; stopReason: string }, never> {
     // Emit event before invoking model
-    yield { type: 'beforeModelEvent', messages: [...this._messages] }
+    yield { type: 'beforeModelCallEvent', messages: [...this._messages] }
 
     const toolSpecs = this._toolRegistry.values().map((tool) => tool.toolSpec)
     const streamOptions: StreamOptions = { toolSpecs }
@@ -189,7 +189,7 @@ export class Agent {
 
     const { message, stopReason } = yield* this._model.streamAggregated(this._messages, streamOptions)
 
-    yield { type: 'afterModelEvent', message, stopReason }
+    yield { type: 'afterModelCallEvent', message, stopReason }
 
     return { message, stopReason }
   }
@@ -205,7 +205,7 @@ export class Agent {
     assistantMessage: Message,
     toolRegistry: ToolRegistry
   ): AsyncGenerator<AgentStreamEvent, Message, never> {
-    yield { type: 'beforeToolsEvent', message: assistantMessage }
+    yield { type: 'beforeToolCallsEvent', message: assistantMessage }
 
     // Extract tool use blocks from assistant message
     const toolUseBlocks = assistantMessage.content.filter(
@@ -233,7 +233,7 @@ export class Agent {
       content: toolResultBlocks,
     })
 
-    yield { type: 'afterToolsEvent', message: toolResultMessage }
+    yield { type: 'afterToolCallsEvent', message: toolResultMessage }
 
     return toolResultMessage
   }

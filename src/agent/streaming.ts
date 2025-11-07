@@ -13,8 +13,8 @@ export type AgentStreamEvent =
   | ModelStreamEvent
   | ContentBlock
   | ToolStreamEvent
-  | BeforeModelEvent
-  | AfterModelEvent
+  | BeforeModelCallEvent
+  | AfterModelCallEvent
   | BeforeToolsEvent
   | AfterToolsEvent
   | BeforeInvocationEvent
@@ -23,11 +23,11 @@ export type AgentStreamEvent =
 /**
  * Event emitted before invoking the model provider.
  */
-export interface BeforeModelEvent {
+export interface BeforeModelCallEvent {
   /**
    * Discriminator for before model events.
    */
-  type: 'beforeModelEvent'
+  type: 'beforeModelCallEvent'
 
   /**
    * The messages that will be sent to the model.
@@ -38,11 +38,11 @@ export interface BeforeModelEvent {
 /**
  * Event emitted after the model provider completes.
  */
-export interface AfterModelEvent {
+export interface AfterModelCallEvent {
   /**
    * Discriminator for after model events.
    */
-  type: 'afterModelEvent'
+  type: 'afterModelCallEvent'
 
   /**
    * The assistant message returned by the model.
@@ -62,7 +62,7 @@ export interface BeforeToolsEvent {
   /**
    * Discriminator for before tools events.
    */
-  type: 'beforeToolsEvent'
+  type: 'beforeToolCallsEvent'
 
   /**
    * The assistant message containing tool use blocks.
@@ -77,7 +77,7 @@ export interface AfterToolsEvent {
   /**
    * Discriminator for after tools events.
    */
-  type: 'afterToolsEvent'
+  type: 'afterToolCallsEvent'
 
   /**
    * The user message containing tool results that will be added to the message array.

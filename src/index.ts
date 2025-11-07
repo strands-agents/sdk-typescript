@@ -47,6 +47,9 @@ export { FunctionTool } from './tools/function-tool.js'
 // Tool factory function
 export { tool } from './tools/zod-tool.js'
 
+// ToolRegistry implementation
+export { ToolRegistry } from './tools/registry.js'
+
 // Streaming event types
 export type {
   Usage,
@@ -76,8 +79,8 @@ export type { BedrockModelConfig, BedrockModelOptions } from './models/bedrock.j
 // Agent streaming event types
 export type {
   AgentStreamEvent,
-  BeforeModelEvent,
-  AfterModelEvent,
+  BeforeModelCallEvent,
+  AfterModelCallEvent,
   BeforeToolsEvent,
   AfterToolsEvent,
   BeforeInvocationEvent,
