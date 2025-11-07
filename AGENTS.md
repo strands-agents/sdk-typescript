@@ -23,8 +23,10 @@ sdk-typescript/
 │   │
 │   ├── agent/                    # Agent loop and streaming
 │   │   ├── __tests__/            # Unit tests for agent loop
-│   │   │   └── agent-loop.test.ts  # Tests for agent loop function
+│   │   │   ├── agent-loop.test.ts  # Tests for agent loop function
+│   │   │   └── state.test.ts     # Tests for agent state
 │   │   ├── agent-loop.ts         # Core agent loop implementation
+│   │   ├── state.ts              # Agent state implementation
 │   │   └── streaming.ts          # Agent streaming event types
 │   │
 │   ├── models/                   # Model provider implementations

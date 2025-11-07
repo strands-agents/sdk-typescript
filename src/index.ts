@@ -8,6 +8,12 @@
 // Agent class
 export { Agent } from './agent/agent.js'
 
+// Agent state type (not constructor - internal implementation)
+export type { AgentState } from './agent/state.js'
+
+// Agent types
+export type { AgentData, AgentResult } from './types/agent.js'
+
 // Error types
 export { ContextWindowOverflowError, MaxTokensError } from './errors.js'
 
@@ -88,7 +94,3 @@ export type {
   BeforeInvocationEvent,
   AfterInvocationEvent,
 } from './agent/streaming.js'
-
-// Agent result type
-
-export type { AgentResult } from './types/agent.js'

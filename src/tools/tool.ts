@@ -1,4 +1,6 @@
 import type { ToolSpec, ToolUse, ToolResult } from './types.js'
+import type { AgentData } from '../types/agent.js'
+import type { JSONValue } from '../types/json.js'
 
 export type { ToolSpec } from './types.js'
 
@@ -6,26 +8,41 @@ export type { ToolSpec } from './types.js'
  * Context provided to tool implementations during execution.
  * Contains framework-level state and information from the agent invocation.
  *
- * @typeParam T - Optional type for strongly typing invocationState. Callers can pass any object
+ * @typeParam TInvocationState - Optional type for strongly typing invocationState. Callers can pass any object
  *               as invocationState (including references), but it must be a dictionary/object.
- *               T allows strong typing when desired, while Record\<string, unknown\> accepts any object.
+ *               TInvocationState allows strong typing when desired, while Record\<string, unknown\> accepts any object.
+ * @typeParam TAgentState - Optional type for strongly typing agent state keys and values
  *
  * @example
  * ```typescript
- * interface MyState {
+ * interface MyInvocationState {
+ *   requestId: string
+ * }
+ *
+ * interface MyAgentState {
  *   userId: string
  *   sessionId: string
  * }
  *
- * const context: ToolContext<MyState> = {
+ * const context: ToolContext<MyInvocationState, MyAgentState> = {
+ *   toolUse: {
+ *     name: 'testTool',
+ *     toolUseId: 'test-123',
+ *     input: {}
+ *   },
  *   invocationState: {
- *     userId: 'user-123',
- *     sessionId: 'session-456'
+ *     requestId: 'req-123'
+ *   },
+ *   agent: {
+ *     state: new AgentState({ userId: 'user-123', sessionId: 'session-456' })
  *   }
  * }
  * ```
  */
-export interface ToolContext<T extends Record<string, unknown> = Record<string, unknown>> {
+export interface ToolContext<
+  TInvocationState extends Record<string, unknown> = Record<string, unknown>,
+  TAgentState extends Record<string, JSONValue> = Record<string, JSONValue>,
+> {
   /**
    * The tool use request that triggered this tool execution.
    * Contains the tool name, toolUseId, and input parameters.
@@ -36,7 +53,13 @@ export interface ToolContext<T extends Record<string, unknown> = Record<string, 
    * Caller-provided state from agent invocation.
    * This allows passing context from the agent level down to tool execution.
    */
-  invocationState: T
+  invocationState: TInvocationState
+
+  /**
+   * The agent instance that is executing this tool.
+   * Provides access to agent state and other agent-level information.
+   */
+  agent: AgentData<TAgentState>
 }
 
 /**

@@ -1,0 +1,169 @@
+import { deepCopy, type JSONValue } from '../types/json.js'
+
+/**
+ * Validates that a value is JSON serializable by checking for functions and symbols.
+ *
+ * @param value - The value to validate
+ * @throws Error if value contains functions or symbols
+ */
+function validateJSONSerializable(value: unknown): void {
+  const seen = new Set<unknown>()
+
+  function check(val: unknown): void {
+    // Avoid infinite recursion
+    if (val === null || val === undefined) {
+      return
+    }
+
+    if (typeof val === 'object' && seen.has(val)) {
+      return
+    }
+
+    if (typeof val === 'function') {
+      throw new Error('Functions are not JSON serializable')
+    }
+
+    if (typeof val === 'symbol') {
+      throw new Error('Symbols are not JSON serializable')
+    }
+
+    if (typeof val === 'undefined') {
+      throw new Error('undefined is not JSON serializable')
+    }
+
+    if (typeof val === 'object') {
+      seen.add(val)
+      if (Array.isArray(val)) {
+        for (const item of val) {
+          check(item)
+        }
+      } else {
+        for (const key in val) {
+          check((val as Record<string, unknown>)[key])
+        }
+      }
+    }
+  }
+
+  check(value)
+}
+
+/**
+ * Agent state provides key-value storage outside conversation context.
+ * State is not passed to the model during inference but is accessible
+ * by tools (via ToolContext) and application logic.
+ *
+ * All values are deep copied on get/set operations to prevent reference mutations.
+ * Values must be JSON serializable.
+ *
+ * @typeParam TState - Optional type for strongly typing state keys and values
+ *
+ * @example
+ * ```typescript
+ * const state = new AgentState({ userId: 'user-123' })
+ * state.set('sessionId', 'session-456')
+ * const userId = state.get('userId') // 'user-123'
+ * ```
+ */
+export class AgentState<TState extends Record<string, JSONValue> = Record<string, JSONValue>> {
+  private _state: Record<string, JSONValue>
+
+  /**
+   * Creates a new AgentState instance.
+   *
+   * @param initialState - Optional initial state values
+   * @throws Error if initialState is not JSON serializable
+   */
+  constructor(initialState?: TState) {
+    if (initialState !== undefined) {
+      // Validate and deep copy initial state
+      try {
+        validateJSONSerializable(initialState)
+        this._state = deepCopy(initialState) as Record<string, JSONValue>
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error)
+        throw new Error(
+          `Cannot initialize state with non-JSON-serializable value. ${errorMessage}. Functions and Symbols are not supported.`
+        )
+      }
+    } else {
+      this._state = {}
+    }
+  }
+
+  /**
+   * Get a state value by key, or all state if no key provided.
+   * Returns a deep copy to prevent mutations.
+   *
+   * @param key - Optional key to retrieve specific value
+   * @returns The value for the key, all state if no key provided, or undefined if key doesn't exist
+   */
+  get(key?: string): JSONValue | Record<string, JSONValue> | undefined {
+    if (key === undefined) {
+      // Return deep copy of all state
+      return deepCopy(this._state)
+    }
+
+    const value = this._state[key]
+    if (value === undefined) {
+      return undefined
+    }
+
+    // Return deep copy to prevent mutations
+    return deepCopy(value)
+  }
+
+  /**
+   * Set a state value. Validates JSON serializability and stores a deep copy.
+   *
+   * @param key - The key to set
+   * @param value - The value to store (must be JSON serializable)
+   * @throws Error if value is not JSON serializable
+   */
+  set(key: string, value: unknown): void {
+    // Validate and deep copy value
+    try {
+      validateJSONSerializable(value)
+      this._state[key] = deepCopy(value)
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      throw new Error(
+        `Cannot store non-JSON-serializable value. ${errorMessage}. Functions and Symbols are not supported.`
+      )
+    }
+  }
+
+  /**
+   * Delete a state value by key.
+   *
+   * @param key - The key to delete
+   */
+  delete(key: string): void {
+    delete this._state[key]
+  }
+
+  /**
+   * Clear all state values.
+   */
+  clear(): void {
+    this._state = {}
+  }
+
+  /**
+   * Get a copy of all state as an object.
+   *
+   * @returns Deep copy of all state
+   */
+  getAll(): Record<string, JSONValue> {
+    return deepCopy(this._state) as Record<string, JSONValue>
+  }
+
+  /**
+   * Get all state keys.
+   *
+   * @returns Array of state keys
+   */
+  keys(): string[] {
+    return Object.keys(this._state)
+  }
+}

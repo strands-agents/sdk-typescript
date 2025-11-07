@@ -10,9 +10,12 @@ import {
   type ToolUseBlock,
   type MessageData,
   TextBlock,
+  type JSONValue,
 } from '../index.js'
 import type { BaseModelConfig, Model, StreamOptions } from '../models/model.js'
 import { ToolRegistry } from '../registry/tool-registry.js'
+import { AgentState } from './state.js'
+import type { AgentData } from '../types/agent.js'
 
 /**
  * Configuration object for creating a new Agent.
@@ -34,6 +37,10 @@ export type AgentConfig = {
    * A system prompt which guides model behavior.
    */
   systemPrompt?: SystemPrompt
+  /**
+   * Optional initial state values for the agent.
+   */
+  state?: Record<string, JSONValue>
 }
 
 /**
@@ -48,11 +55,17 @@ export type InvokeArgs = string
  * The Agent is responsible for managing the lifecycle of tools and clients
  * and invoking the core decision-making loop.
  */
-export class Agent {
+export class Agent implements AgentData {
   private _model: Model<BaseModelConfig>
   private _toolRegistry: ToolRegistry
   private _systemPrompt?: SystemPrompt
   private _messages: Message[]
+
+  /**
+   * Agent state storage accessible to tools and application logic.
+   * State is not passed to the model during inference.
+   */
+  public readonly state: AgentState
 
   /**
    * Creates an instance of the Agent.
@@ -69,6 +82,8 @@ export class Agent {
     this._messages = (config?.messages ?? []).map((msg) =>
       msg instanceof Message ? msg : Message.fromMessageData(msg)
     )
+
+    this.state = new AgentState(config?.state)
   }
 
   /**
@@ -271,6 +286,7 @@ export class Agent {
         input: toolUseBlock.input,
       },
       invocationState: {},
+      agent: this,
     }
 
     const toolGenerator = tool.stream(toolContext)

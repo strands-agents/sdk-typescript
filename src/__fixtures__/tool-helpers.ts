@@ -7,15 +7,21 @@ import type { Tool } from '../tools/tool.js'
 import type { ToolContext } from '../tools/tool.js'
 import type { ToolResult } from '../tools/types.js'
 import type { JSONValue } from '../types/json.js'
+import { AgentState } from '../agent/state.js'
 
 /**
  * Helper to create a mock ToolContext for testing.
  *
  * @param input - The input data for the tool
  * @param invocationState - Optional invocation state
+ * @param agentState - Optional initial agent state
  * @returns Mock ToolContext object
  */
-export function createMockContext(input: JSONValue, invocationState: Record<string, unknown> = {}): ToolContext {
+export function createMockContext(
+  input: JSONValue,
+  invocationState: Record<string, unknown> = {},
+  agentState?: Record<string, JSONValue>
+): ToolContext {
   return {
     toolUse: {
       name: 'testTool',
@@ -23,6 +29,9 @@ export function createMockContext(input: JSONValue, invocationState: Record<stri
       input: input,
     },
     invocationState,
+    agent: {
+      state: new AgentState(agentState),
+    },
   }
 }
 
