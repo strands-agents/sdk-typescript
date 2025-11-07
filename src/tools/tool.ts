@@ -1,4 +1,6 @@
-import type { ToolSpec, ToolUse, ToolResult } from './types.js'
+import type { ToolResult, ToolSpec, ToolUse } from './types.js'
+import type { AgentData } from '../types/agent.js'
+import type { JSONValue } from '../types/json.js'
 
 export type { ToolSpec } from './types.js'
 
@@ -6,26 +8,25 @@ export type { ToolSpec } from './types.js'
  * Context provided to tool implementations during execution.
  * Contains framework-level state and information from the agent invocation.
  *
- * @typeParam T - Optional type for strongly typing invocationState. Callers can pass any object
- *               as invocationState (including references), but it must be a dictionary/object.
- *               T allows strong typing when desired, while Record\<string, unknown\> accepts any object.
+ * @typeParam TAgentState - Optional type for strongly typing agent state keys and values
  *
  * @example
  * ```typescript
- * interface MyState {
+ * interface MyAgentState {
  *   userId: string
  *   sessionId: string
  * }
  *
- * const context: ToolContext<MyState> = {
- *   invocationState: {
- *     userId: 'user-123',
- *     sessionId: 'session-456'
- *   }
- * }
+ * const context: ToolContext<MyAgentState> = {
+ *   toolUse: {
+ *     name: 'testTool',
+ *     toolUseId: 'test-123',
+ *     input: {}
+ *   },
+ *   agent: agent
  * ```
  */
-export interface ToolContext<T extends Record<string, unknown> = Record<string, unknown>> {
+export interface ToolContext<TAgentState extends Record<string, JSONValue> = Record<string, JSONValue>> {
   /**
    * The tool use request that triggered this tool execution.
    * Contains the tool name, toolUseId, and input parameters.
@@ -33,10 +34,10 @@ export interface ToolContext<T extends Record<string, unknown> = Record<string, 
   toolUse: ToolUse
 
   /**
-   * Caller-provided state from agent invocation.
-   * This allows passing context from the agent level down to tool execution.
+   * The agent instance that is executing this tool.
+   * Provides access to agent state and other agent-level information.
    */
-  invocationState: T
+  agent: AgentData<TAgentState>
 }
 
 /**
@@ -122,7 +123,6 @@ export interface Tool {
    *     toolUseId: 'calc-123',
    *     input: { operation: 'add', a: 5, b: 3 }
    *   },
-   *   invocationState: {}
    * }
    *
    * // The return value is only accessible via explicit .next() calls

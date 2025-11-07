@@ -764,12 +764,11 @@ export class BedrockModel extends Model<BedrockModelConfig> {
       case 'messageStop': {
         const data = eventData as BedrockMessageStopEvent
 
+        const stopReasonRaw = ensureDefined(data.stopReason, 'messageStop.stopReason') as string
         const event: ModelStreamEvent = {
           type: 'modelMessageStopEvent',
+          stopReason: this._transformStopReason(stopReasonRaw, data),
         }
-
-        const stopReasonRaw = ensureDefined(data.stopReason, 'messageStop.stopReason') as string
-        event.stopReason = this._transformStopReason(stopReasonRaw, data)
 
         if (data.additionalModelResponseFields) {
           event.additionalModelResponseFields = data.additionalModelResponseFields

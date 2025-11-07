@@ -1,18 +1,22 @@
 import {
-  BedrockModel,
-  MaxTokensError,
   type AgentResult,
   type AgentStreamEvent,
+  BedrockModel,
+  type JSONValue,
+  MaxTokensError,
   Message,
-  ToolResultBlock,
-  type SystemPrompt,
-  type Tool,
-  type ToolUseBlock,
   type MessageData,
+  type SystemPrompt,
   TextBlock,
+  type Tool,
+  type ToolContext,
+  ToolResultBlock,
+  type ToolUseBlock,
 } from '../index.js'
 import type { BaseModelConfig, Model, StreamOptions } from '../models/model.js'
 import { ToolRegistry } from '../registry/tool-registry.js'
+import { AgentState } from './state.js'
+import type { AgentData } from '../types/agent.js'
 
 /**
  * Configuration object for creating a new Agent.
@@ -35,9 +39,9 @@ export type AgentConfig = {
    */
   systemPrompt?: SystemPrompt
   /**
-   * Initial invocation state.
+   * Optional initial state values for the agent.
    */
-  invocationState?: Record<string, unknown>
+  state?: Record<string, JSONValue>
 }
 
 /**
@@ -52,12 +56,17 @@ export type InvokeArgs = string
  * The Agent is responsible for managing the lifecycle of tools and clients
  * and invoking the core decision-making loop.
  */
-export class Agent {
+export class Agent implements AgentData {
   private _model: Model<BaseModelConfig>
   private _toolRegistry: ToolRegistry
   private _systemPrompt?: SystemPrompt
   private _messages: Message[]
-  private _invocationState: Record<string, unknown>
+
+  /**
+   * Agent state storage accessible to tools and application logic.
+   * State is not passed to the model during inference.
+   */
+  public readonly state: AgentState
 
   /**
    * Creates an instance of the Agent.
@@ -75,7 +84,7 @@ export class Agent {
       msg instanceof Message ? msg : Message.fromMessageData(msg)
     )
 
-    this._invocationState = config?.invocationState ?? {}
+    this.state = new AgentState(config?.state)
   }
 
   /**
@@ -286,14 +295,14 @@ export class Agent {
       })
     }
 
-    // Execute tool and collect result - pass persistent invocation state
-    const toolContext = {
+    // Execute tool and collect result
+    const toolContext: ToolContext = {
       toolUse: {
         name: toolUseBlock.name,
         toolUseId: toolUseBlock.toolUseId,
         input: toolUseBlock.input,
       },
-      invocationState: this._invocationState,
+      agent: this,
     }
 
     const toolGenerator = tool.stream(toolContext)

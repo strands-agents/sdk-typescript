@@ -8,6 +8,12 @@
 // Agent class
 export { Agent } from './agent/agent.js'
 
+// Agent state type (not constructor - internal implementation)
+export type { AgentState } from './agent/state.js'
+
+// Agent types
+export type { AgentData, AgentResult } from './types/agent.js'
+
 // Error types
 export { ContextWindowOverflowError, MaxTokensError } from './errors.js'
 
@@ -51,17 +57,22 @@ export { tool } from './tools/zod-tool.js'
 export type {
   Usage,
   Metrics,
+  ModelMessageStartEventData,
   ModelMessageStartEvent,
   ToolUseStart,
   ContentBlockStart,
+  ModelContentBlockStartEventData,
   ModelContentBlockStartEvent,
   TextDelta,
   ToolUseInputDelta,
   ReasoningContentDelta,
   ContentBlockDelta,
+  ModelContentBlockDeltaEventData,
   ModelContentBlockDeltaEvent,
   ModelContentBlockStopEvent,
+  ModelMessageStopEventData,
   ModelMessageStopEvent,
+  ModelMetadataEventData,
   ModelMetadataEvent,
   ModelStreamEvent,
 } from './models/streaming.js'
@@ -83,7 +94,3 @@ export type {
   BeforeInvocationEvent,
   AfterInvocationEvent,
 } from './agent/streaming.js'
-
-// Agent result type
-
-export type { AgentResult } from './types/agent.js'
