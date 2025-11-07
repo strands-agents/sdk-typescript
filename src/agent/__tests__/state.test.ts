@@ -25,11 +25,40 @@ describe('AgentState', () => {
       expect(state.get('nested')).toEqual({ value: 'test' })
     })
 
-    it('silently drops functions in initial state', () => {
+    it('throws error for function in initial state', () => {
       const invalidState = { func: () => 'test', value: 'keep' }
-      const state = new AgentState(invalidState as never)
-      expect(state.get('func')).toBeUndefined()
-      expect(state.get('value')).toBe('keep')
+      expect(() => new AgentState(invalidState as never)).toThrow(
+        'initialState.func contains a function which cannot be serialized'
+      )
+    })
+
+    it('throws error for symbol in initial state', () => {
+      const sym = Symbol('test')
+      const invalidState = { sym, value: 'keep' }
+      expect(() => new AgentState(invalidState as never)).toThrow(
+        'initialState.sym contains a symbol which cannot be serialized'
+      )
+    })
+
+    it('throws error for undefined in initial state', () => {
+      const invalidState = { undef: undefined, value: 'keep' }
+      expect(() => new AgentState(invalidState as never)).toThrow(
+        'initialState.undef is undefined which cannot be serialized'
+      )
+    })
+
+    it('throws error for nested function in initial state', () => {
+      const invalidState = { nested: { func: () => 'test' } }
+      expect(() => new AgentState(invalidState as never)).toThrow(
+        'initialState.nested.func contains a function which cannot be serialized'
+      )
+    })
+
+    it('throws error for function in array in initial state', () => {
+      const invalidState = { arr: [1, () => 'test', 3] }
+      expect(() => new AgentState(invalidState as never)).toThrow(
+        'initialState.arr[1] contains a function which cannot be serialized'
+      )
     })
   })
 
@@ -117,36 +146,50 @@ describe('AgentState', () => {
       expect(state.get('key1')).toEqual({ nested: { value: 'test' } })
     })
 
-    it('silently drops function properties in objects', () => {
+    it('throws error for function in value', () => {
       const state = new AgentState({ existing: 'value' })
       const obj = { func: () => 'test', value: 'keep' }
-      state.set('key1', obj)
-      const result = state.get('key1') as Record<string, unknown>
-      expect(result.func).toBeUndefined()
-      expect(result.value).toBe('keep')
-      expect(state.get('existing')).toBe('value')
+      expect(() => state.set('key1', obj)).toThrow(
+        'value for key "key1".func contains a function which cannot be serialized'
+      )
+    })
+
+    it('throws error for symbol in value', () => {
+      const state = new AgentState()
+      const sym = Symbol('test')
+      expect(() => state.set('key1', { sym } as never)).toThrow(
+        'value for key "key1".sym contains a symbol which cannot be serialized'
+      )
+    })
+
+    it('throws error for nested function in value', () => {
+      const state = new AgentState()
+      const obj = { nested: { func: () => 'test' } }
+      expect(() => state.set('key1', obj)).toThrow(
+        'value for key "key1".nested.func contains a function which cannot be serialized'
+      )
+    })
+
+    it('throws error for function in array', () => {
+      const state = new AgentState()
+      const arr = [1, () => 'test', 3]
+      expect(() => state.set('key1', arr)).toThrow(
+        'value for key "key1"[1] contains a function which cannot be serialized'
+      )
     })
 
     it('throws error for top-level symbol values', () => {
       const state = new AgentState()
-      expect(() => state.set('key1', Symbol('test'))).toThrow()
+      expect(() => state.set('key1', Symbol('test'))).toThrow(
+        'value for key "key1" contains a symbol which cannot be serialized'
+      )
     })
 
     it('throws error for top-level undefined values', () => {
       const state = new AgentState()
-      expect(() => state.set('key1', undefined)).toThrow()
-    })
-
-    it('silently drops non-serializable properties in nested objects', () => {
-      const state = new AgentState()
-      const obj = { func: () => 'test', value: 'keep', nested: { data: 42, func2: () => 'test2' } }
-      state.set('key1', obj)
-      const result = state.get('key1') as Record<string, unknown>
-      expect(result.func).toBeUndefined()
-      expect(result.value).toBe('keep')
-      const nested = result.nested as Record<string, unknown>
-      expect(nested.data).toBe(42)
-      expect(nested.func2).toBeUndefined()
+      expect(() => state.set('key1', undefined)).toThrow(
+        'value for key "key1" is undefined which cannot be serialized'
+      )
     })
   })
 
