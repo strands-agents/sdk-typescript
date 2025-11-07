@@ -48,10 +48,21 @@ Once the SDK is complete, usage will look something like this:
 import { Agent } from '@strands-agents/sdk'
 import { calculator } from '@strands-agents/tools'
 
+// Simple invoke pattern - recommended for most use cases
 const agent = new Agent({ tools: [calculator] })
-const response = await agent.invoke('What is the square root of 1764?')
-console.log(response)
+const result = await agent.invoke('What is the square root of 1764?')
+console.log(result.lastMessage) // Agent's response with the answer
+
+// Streaming pattern - use when you need access to intermediate events
+for await (const event of agent.stream('What is 42 squared?')) {
+  console.log('Event:', event.type)
+}
 ```
+
+### When to use invoke() vs stream()
+
+- **Use `invoke()`** for simple request/response workflows where you only need the final result
+- **Use `stream()`** when you need access to intermediate events (e.g., for real-time UI updates, logging, or debugging)
 
 ## Installation (Coming Soon)
 
