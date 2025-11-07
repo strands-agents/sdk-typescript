@@ -815,46 +815,6 @@ If TypeScript compilation fails:
 3. Verify no `any` types are used
 4. Check that all imports are correctly typed
 
-## Agent API Usage Patterns
-
-### invoke() vs stream()
-
-The Agent class provides two methods for executing agent workflows:
-
-**`invoke(args)`** - Returns `Promise<AgentResult>`
-- Recommended for most use cases
-- Simple await-based API
-- Returns only the final result
-- All intermediate events are consumed internally
-
-```typescript
-const agent = new Agent({ model, tools })
-const result = await agent.invoke('What is 2 + 2?')
-console.log(result.lastMessage) // Final agent response
-```
-
-**`stream(args)`** - Returns `AsyncGenerator<AgentStreamEvent, AgentResult, never>`
-- Use when you need access to intermediate events
-- Yields events during execution (beforeModelEvent, afterModelEvent, tool events, etc.)
-- Returns final AgentResult as the generator's return value
-- Useful for real-time UI updates, logging, or debugging
-
-```typescript
-const agent = new Agent({ model, tools })
-for await (const event of agent.stream('Calculate 2 + 2')) {
-  console.log('Event:', event.type)
-  // Handle events in real-time
-}
-```
-
-**When to use each:**
-- **Use invoke()** when you only care about the final result
-- **Use stream()** when you need to:
-  - Show real-time progress to users
-  - Log intermediate steps
-  - Debug the agent's decision-making process
-  - Implement custom event handling
-
 ## Agent-Specific Notes
 
 ### When Implementing Features

@@ -64,7 +64,7 @@ class WeatherTool implements Tool {
  * @param agent The agent instance to use.
  * @param prompt The user prompt to invoke the agent with.
  */
-async function runSimple(title: string, agent: Agent, prompt: string) {
+async function runInvoke(title: string, agent: Agent, prompt: string) {
   console.log(`--- ${title} ---`)
   console.log(`User: ${prompt}`)
 
@@ -112,9 +112,9 @@ async function main() {
 
   // Demonstrate the simple invoke() pattern (recommended for most use cases)
   console.log('=== Simple invoke() pattern ===\n')
-  await runSimple('0: Invocation with default agent (no model or tools)', defaultAgent, 'Hello!')
-  await runSimple('1: Invocation with a model but no tools', agentWithoutTools, 'Hello!')
-  await runSimple('2: Invocation that uses a tool', agentWithTools, 'What is the weather in Toronto? Use the weather tool.')
+  await runInvoke('0: Invocation with default agent (no model or tools)', defaultAgent, 'Hello!')
+  await runInvoke('1: Invocation with a model but no tools', agentWithoutTools, 'Hello!')
+  await runInvoke('2: Invocation that uses a tool', agentWithTools, 'What is the weather in Toronto? Use the weather tool.')
 
   // Demonstrate the stream() pattern (for when you need intermediate events)
   console.log('\n=== Streaming pattern (advanced) ===\n')
