@@ -187,9 +187,7 @@ describe('AgentState', () => {
 
     it('throws error for top-level undefined values', () => {
       const state = new AgentState()
-      expect(() => state.set('key1', undefined)).toThrow(
-        'value for key "key1" is undefined which cannot be serialized'
-      )
+      expect(() => state.set('key1', undefined)).toThrow('value for key "key1" is undefined which cannot be serialized')
     })
   })
 

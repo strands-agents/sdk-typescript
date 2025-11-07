@@ -1,40 +1,4 @@
-import { deepCopy, type JSONValue } from '../types/json.js'
-
-/**
- * Validates that a value is JSON serializable without data loss.
- * Throws an error if the value contains non-serializable types or would lose data.
- *
- * @param value - The value to validate
- * @param path - The path to the value (for error messages)
- * @throws Error if value contains non-serializable types or would lose data
- */
-function validateJSONSerializable(value: unknown, path: string = 'value'): void {
-  // Check for non-serializable primitive types
-  if (typeof value === 'function') {
-    throw new Error(`${path} contains a function which cannot be serialized`)
-  }
-
-  if (typeof value === 'symbol') {
-    throw new Error(`${path} contains a symbol which cannot be serialized`)
-  }
-
-  if (typeof value === 'undefined') {
-    throw new Error(`${path} is undefined which cannot be serialized`)
-  }
-
-  // For objects and arrays, check recursively
-  if (value !== null && typeof value === 'object') {
-    if (Array.isArray(value)) {
-      for (let i = 0; i < value.length; i++) {
-        validateJSONSerializable(value[i], `${path}[${i}]`)
-      }
-    } else {
-      for (const [key, val] of Object.entries(value)) {
-        validateJSONSerializable(val, `${path}.${key}`)
-      }
-    }
-  }
-}
+import { deepCopy, deepCopyWithValidation, type JSONValue } from '../types/json.js'
 
 /**
  * Agent state provides key-value storage outside conversation context.
@@ -64,8 +28,7 @@ export class AgentState<TState extends Record<string, JSONValue> = Record<string
    */
   constructor(initialState?: TState) {
     if (initialState !== undefined) {
-      validateJSONSerializable(initialState, 'initialState')
-      this._state = deepCopy(initialState) as Record<string, JSONValue>
+      this._state = deepCopyWithValidation(initialState, 'initialState') as Record<string, JSONValue>
     } else {
       this._state = {}
     }
@@ -100,8 +63,7 @@ export class AgentState<TState extends Record<string, JSONValue> = Record<string
    * @throws Error if value is not JSON serializable
    */
   set(key: string, value: unknown): void {
-    validateJSONSerializable(value, `value for key "${key}"`)
-    this._state[key] = deepCopy(value)
+    this._state[key] = deepCopyWithValidation(value, `value for key "${key}"`)
   }
 
   /**
