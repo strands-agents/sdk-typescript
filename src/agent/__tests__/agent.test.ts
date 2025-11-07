@@ -25,8 +25,7 @@ describe('Agent', () => {
         const { items } = await collectGenerator(agent.stream('Test prompt'))
 
         expect(items.length).toBeGreaterThan(0)
-        expect(items[0]).toHaveProperty('type')
-        expect(items[0]?.type).toBe('beforeInvocationEvent')
+        expect(items[0]).toEqual({ type: 'beforeInvocationEvent' })
       })
 
       it('returns AgentResult as generator return value', async () => {
@@ -89,8 +88,29 @@ describe('Agent', () => {
         const beforeTools = items.find((e) => e.type === 'beforeToolsEvent')
         const afterTools = items.find((e) => e.type === 'afterToolsEvent')
 
-        expect(beforeTools).toBeDefined()
-        expect(afterTools).toBeDefined()
+        expect(beforeTools).toEqual({
+          type: 'beforeToolsEvent',
+          message: {
+            type: 'message',
+            role: 'assistant',
+            content: [{ type: 'toolUseBlock', name: 'testTool', toolUseId: 'tool-1', input: {} }],
+          },
+        })
+        expect(afterTools).toEqual({
+          type: 'afterToolsEvent',
+          message: {
+            type: 'message',
+            role: 'user',
+            content: [
+              {
+                type: 'toolResultBlock',
+                toolUseId: 'tool-1',
+                status: 'success',
+                content: [{ type: 'textBlock', text: 'Success' }],
+              },
+            ],
+          },
+        })
       })
     })
 
@@ -128,10 +148,11 @@ describe('Agent', () => {
 
         expect(result).toEqual({
           stopReason: 'endTurn',
-          lastMessage: expect.objectContaining({
+          lastMessage: {
+            type: 'message',
             role: 'assistant',
-            content: expect.arrayContaining([expect.objectContaining({ type: 'textBlock', text: 'Response text' })]),
-          }),
+            content: [{ type: 'textBlock', text: 'Response text' }],
+          },
         })
       })
 
@@ -139,13 +160,17 @@ describe('Agent', () => {
         const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
         const agent = new Agent({ model })
 
-        // invoke() should return only the final result, not yield events
         const result = await agent.invoke('Test')
 
-        // Result should be the AgentResult, not an event
-        expect(result.stopReason).toBeDefined()
-        expect(result.lastMessage).toBeDefined()
-        expect(result).not.toHaveProperty('type') // Events have 'type', results don't
+        expect(result).toEqual({
+          stopReason: 'endTurn',
+          lastMessage: {
+            type: 'message',
+            role: 'assistant',
+            content: [{ type: 'textBlock', text: 'Hello' }],
+          },
+        })
+        expect(result).not.toHaveProperty('type')
       })
     })
 
@@ -165,10 +190,14 @@ describe('Agent', () => {
 
         const result = await agent.invoke('What is 1 + 2?')
 
-        expect(result.stopReason).toBe('endTurn')
-        expect(result.lastMessage.content).toEqual(
-          expect.arrayContaining([expect.objectContaining({ type: 'textBlock', text: 'The answer is 3' })])
-        )
+        expect(result).toEqual({
+          stopReason: 'endTurn',
+          lastMessage: {
+            type: 'message',
+            role: 'assistant',
+            content: [{ type: 'textBlock', text: 'The answer is 3' }],
+          },
+        })
       })
     })
 
@@ -221,8 +250,7 @@ describe('Agent', () => {
       const invokeResult = await agent1.invoke('Use tool')
       const { result: streamResult } = await collectGenerator(agent2.stream('Use tool'))
 
-      expect(invokeResult.stopReason).toBe(streamResult.stopReason)
-      expect(invokeResult.lastMessage.content).toEqual(streamResult.lastMessage.content)
+      expect(invokeResult).toEqual(streamResult)
     })
   })
 })
