@@ -1,30 +1,12 @@
 /* eslint-disable no-restricted-imports */
 import { describe, it, expect } from 'vitest'
-import { fromNodeProviderChain } from '@aws-sdk/credential-providers'
 import { Agent, BedrockModel } from '../src/index.js'
 import type { AgentStreamEvent, AgentResult } from '../src/index.js'
 import { notebook } from '../vended_tools/notebook/index.js'
 import { collectGenerator } from '../src/__fixtures__/model-test-helpers.js'
+import { shouldRunTests } from './__fixtures__/model-test-helpers.js'
 
-// Check if we should run AWS-dependent tests
-const shouldRunAWSTests = await (async () => {
-  if (process.env.CI) {
-    console.log('✅ Running in CI environment, Bedrock integration tests will run.')
-    return true
-  }
-
-  try {
-    const credentialProvider = fromNodeProviderChain()
-    await credentialProvider()
-    console.log('✅ AWS credentials found locally, Bedrock integration tests will run.')
-    return true
-  } catch {
-    console.log('⚠️ No AWS credentials found. Skipping Bedrock integration tests.')
-    return false
-  }
-})()
-
-describe.skipIf(!shouldRunAWSTests)('Notebook Tool Integration', () => {
+describe.skipIf(!(await shouldRunTests()))('Notebook Tool Integration', () => {
   // Shared agent configuration for all tests
   const agentParams = {
     model: new BedrockModel({
