@@ -30,7 +30,7 @@ interface ToolContext {
 describe.skipIf(!isNode)('bash tool integration', () => {
   // Helper to create fresh context
   const createFreshContext = (): { state: AgentState; context: ToolContext } => {
-    const state = new AgentState<Record<string, unknown>>({})
+    const state = new AgentState()
     const context: ToolContext = {
       toolUse: {
         name: 'bash',

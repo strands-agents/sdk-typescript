@@ -59,10 +59,6 @@ class _BashSession {
         this._process = null
         this._started = false
       })
-
-      this._process.on('error', (err) => {
-        throw new BashSessionError(`Bash process error: ${err.message}`)
-      })
     } catch (err) {
       throw new BashSessionError(`Failed to start bash session: ${(err as Error).message}`)
     }
@@ -131,6 +127,12 @@ class _BashSession {
         }
       }
 
+      // Handler for process errors
+      const onError = (err: Error): void => {
+        cleanup()
+        reject(new BashSessionError(`Bash process error: ${err.message}`))
+      }
+
       // Cleanup function
       const cleanup = (): void => {
         if (timeoutHandle !== null) {
@@ -141,6 +143,7 @@ class _BashSession {
         stdout.off('data', onStdoutData)
         stderr.off('data', onStderrData)
         this._process!.off('close', onClose)
+        this._process!.off('error', onError)
       }
 
       // Set up timeout
@@ -157,6 +160,7 @@ class _BashSession {
       stdout.on('data', onStdoutData)
       stderr.on('data', onStderrData)
       this._process!.on('close', onClose)
+      this._process!.on('error', onError)
 
       // Send command with sentinel
       try {
