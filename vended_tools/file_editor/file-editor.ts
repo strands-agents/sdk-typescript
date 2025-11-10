@@ -7,6 +7,7 @@ import * as path from 'path'
 const SNIPPET_LINES = 4
 const DEFAULT_MAX_FILE_SIZE = 1048576 // 1MB
 const DEFAULT_MAX_HISTORY_SIZE = 10
+const MAX_DIRECTORY_DEPTH = 2
 
 /**
  * Zod schema for file editor input validation.
@@ -24,7 +25,10 @@ const fileEditorInputSchema = z
       .describe('Line range to view [start, end]. 1-indexed. End can be -1 for end of file.'),
     old_str: z.string().optional().describe('Exact string to find and replace (required for str_replace command).'),
     new_str: z.string().optional().describe('Replacement string (for str_replace and insert commands).'),
-    insert_line: z.number().optional().describe('Line number where text should be inserted (0-indexed, required for insert command).'),
+    insert_line: z
+      .number()
+      .optional()
+      .describe('Line number where text should be inserted (0-indexed, required for insert command).'),
   })
   .refine(
     (data) => {
@@ -65,15 +69,6 @@ const fileEditorInputSchema = z
  * Reads files as UTF-8 encoded text.
  */
 class TextFileReader implements IFileReader {
-  async canRead(filePath: string): Promise<boolean> {
-    try {
-      const stats = await fs.stat(filePath)
-      return stats.isFile()
-    } catch {
-      return false
-    }
-  }
-
   async read(filePath: string): Promise<string> {
     return await fs.readFile(filePath, 'utf-8')
   }
@@ -166,7 +161,7 @@ function validatePath(command: string, filePath: string): void {
   // Check for directory traversal by resolving path and comparing
   const resolved = path.resolve(filePath)
   const normalized = path.normalize(filePath)
-  
+
   // If normalized path differs significantly from resolved, it may indicate traversal
   if (resolved !== normalized && filePath.includes('..')) {
     throw new Error(`Invalid path: path traversal is not allowed`)
@@ -204,9 +199,7 @@ async function checkFileSize(filePath: string, maxSize: number = DEFAULT_MAX_FIL
   try {
     const stats = await fs.stat(filePath)
     if (stats.size > maxSize) {
-      throw new Error(
-        `File size (${stats.size} bytes) exceeds maximum allowed size (${maxSize} bytes)`
-      )
+      throw new Error(`File size (${stats.size} bytes) exceeds maximum allowed size (${maxSize} bytes)`)
     }
   } catch (_error) {
     const error = _error as Error
@@ -223,7 +216,7 @@ async function checkFileSize(filePath: string, maxSize: number = DEFAULT_MAX_FIL
 function makeOutput(fileContent: string, fileDescriptor: string, initLine: number = 1): string {
   // Expand tabs to spaces in content
   const expandedContent = fileContent.replace(/\t/g, '        ')
-  
+
   const numberedLines = expandedContent.split('\n').map((line, index) => {
     const lineNum = index + initLine
     // Use two spaces instead of tab to avoid any tabs in output
@@ -242,7 +235,7 @@ async function listDirectory(dirPath: string): Promise<string> {
   async function walk(currentPath: string, depth: number): Promise<void> {
     try {
       const entries = await fs.readdir(currentPath, { withFileTypes: true })
-      
+
       for (const entry of entries) {
         // Skip hidden files/directories
         if (entry.name.startsWith('.')) continue
@@ -251,8 +244,8 @@ async function listDirectory(dirPath: string): Promise<string> {
         const relativePath = path.relative(dirPath, fullPath)
         items.push(relativePath || entry.name)
 
-        // Continue walking if we haven't reached 2 levels deep yet
-        if (entry.isDirectory() && depth < 2) {
+        // Continue walking if we haven't reached max depth yet
+        if (entry.isDirectory() && depth < MAX_DIRECTORY_DEPTH) {
           await walk(fullPath, depth + 1)
         }
       }
@@ -262,7 +255,7 @@ async function listDirectory(dirPath: string): Promise<string> {
   }
 
   await walk(dirPath, 0)
-  
+
   const result = items.sort().join('\n')
   return `Here's the files and directories up to 2 levels deep in ${dirPath}, excluding hidden items:\n${result}\n`
 }
@@ -338,11 +331,7 @@ async function handleView(
 /**
  * Handles the create command.
  */
-async function handleCreate(
-  filePath: string,
-  fileText: string,
-  history: Record<string, string[]>
-): Promise<string> {
+async function handleCreate(filePath: string, fileText: string, history: Record<string, string[]>): Promise<string> {
   validatePath('create', filePath)
 
   const exists = await fileExists(filePath)
@@ -392,7 +381,7 @@ async function handleStrReplace(
 
   // Read file content
   let fileContent = await fileReader.read(filePath)
-  
+
   // Expand tabs in content and search string
   fileContent = fileContent.replace(/\t/g, '        ')
   const expandedOldStr = oldStr.replace(/\t/g, '        ')
@@ -420,7 +409,7 @@ async function handleStrReplace(
     history[filePath] = []
   }
   history[filePath].push(fileContent)
-  
+
   // Limit history size
   if (history[filePath].length > DEFAULT_MAX_HISTORY_SIZE) {
     history[filePath].shift()
@@ -437,7 +426,7 @@ async function handleStrReplace(
   const insertedLines = expandedNewStr.split('\n').length
   const originalLines = expandedOldStr.split('\n').length
   const lineDifference = insertedLines - originalLines
-  
+
   const lines = newFileContent.split('\n')
   const startLine = Math.max(0, replacementLine - SNIPPET_LINES)
   const endLine = Math.min(lines.length, replacementLine + SNIPPET_LINES + lineDifference + 1)
@@ -475,7 +464,7 @@ async function handleInsert(
 
   // Read file content
   let fileText = await fileReader.read(filePath)
-  
+
   // Expand tabs
   fileText = fileText.replace(/\t/g, '        ')
   const expandedNewStr = newStr.replace(/\t/g, '        ')
@@ -495,7 +484,7 @@ async function handleInsert(
     history[filePath] = []
   }
   history[filePath].push(fileText)
-  
+
   // Limit history size
   if (history[filePath].length > DEFAULT_MAX_HISTORY_SIZE) {
     history[filePath].shift()
@@ -503,17 +492,13 @@ async function handleInsert(
 
   // Perform insertion
   const newStrLines = expandedNewStr.split('\n')
-  
+
   // Handle empty file case
   let newFileTextLines: string[]
   if (fileText === '') {
     newFileTextLines = newStrLines
   } else {
-    newFileTextLines = [
-      ...fileTextLines.slice(0, insertLine),
-      ...newStrLines,
-      ...fileTextLines.slice(insertLine),
-    ]
+    newFileTextLines = [...fileTextLines.slice(0, insertLine), ...newStrLines, ...fileTextLines.slice(insertLine)]
   }
 
   const newFileText = newFileTextLines.join('\n')

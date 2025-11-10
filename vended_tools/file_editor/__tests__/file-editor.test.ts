@@ -168,23 +168,23 @@ describe('fileEditor tool', () => {
 
       it('throws when view_range has invalid start line', async () => {
         const filePath = await createTestFile('test.txt', 'Line 1\nLine 2\nLine 3')
-        await expect(fileEditor.invoke({ command: 'view', path: filePath, view_range: [0, 2] }, context)).rejects.toThrow(
-          'view_range'
-        )
+        await expect(
+          fileEditor.invoke({ command: 'view', path: filePath, view_range: [0, 2] }, context)
+        ).rejects.toThrow('view_range')
       })
 
       it('throws when view_range end is beyond file length', async () => {
         const filePath = await createTestFile('test.txt', 'Line 1\nLine 2\nLine 3')
-        await expect(fileEditor.invoke({ command: 'view', path: filePath, view_range: [1, 10] }, context)).rejects.toThrow(
-          'view_range'
-        )
+        await expect(
+          fileEditor.invoke({ command: 'view', path: filePath, view_range: [1, 10] }, context)
+        ).rejects.toThrow('view_range')
       })
 
       it('throws when view_range end is before start', async () => {
         const filePath = await createTestFile('test.txt', 'Line 1\nLine 2\nLine 3')
-        await expect(fileEditor.invoke({ command: 'view', path: filePath, view_range: [3, 1] }, context)).rejects.toThrow(
-          'view_range'
-        )
+        await expect(
+          fileEditor.invoke({ command: 'view', path: filePath, view_range: [3, 1] }, context)
+        ).rejects.toThrow('view_range')
       })
 
       it('throws when view_range is provided for directory', async () => {
@@ -530,7 +530,10 @@ describe('fileEditor tool', () => {
       const originalContent = 'Line 1\nLine 2'
       const filePath = await createTestFile('test.txt', originalContent)
 
-      await fileEditor.invoke({ command: 'str_replace', path: filePath, old_str: 'Line 1', new_str: 'Modified' }, context)
+      await fileEditor.invoke(
+        { command: 'str_replace', path: filePath, old_str: 'Line 1', new_str: 'Modified' },
+        context
+      )
       const result = await fileEditor.invoke({ command: 'undo_edit', path: filePath }, context)
 
       expect(result).toContain('Line 1')
@@ -556,7 +559,10 @@ describe('fileEditor tool', () => {
         const filePath = await createTestFile('test.txt', 'Original')
 
         // Make one change
-        await fileEditor.invoke({ command: 'str_replace', path: filePath, old_str: 'Original', new_str: 'Changed' }, context)
+        await fileEditor.invoke(
+          { command: 'str_replace', path: filePath, old_str: 'Original', new_str: 'Changed' },
+          context
+        )
 
         // Undo once (should work)
         await fileEditor.invoke({ command: 'undo_edit', path: filePath }, context)
@@ -603,8 +609,14 @@ describe('fileEditor tool', () => {
       const file1 = await createTestFile('file1.txt', 'File 1')
       const file2 = await createTestFile('file2.txt', 'File 2')
 
-      await fileEditor.invoke({ command: 'str_replace', path: file1, old_str: 'File 1', new_str: 'Modified 1' }, context)
-      await fileEditor.invoke({ command: 'str_replace', path: file2, old_str: 'File 2', new_str: 'Modified 2' }, context)
+      await fileEditor.invoke(
+        { command: 'str_replace', path: file1, old_str: 'File 1', new_str: 'Modified 1' },
+        context
+      )
+      await fileEditor.invoke(
+        { command: 'str_replace', path: file2, old_str: 'File 2', new_str: 'Modified 2' },
+        context
+      )
 
       const history = state.get('fileEditorHistory') as FileEditorState['fileEditorHistory']
       expect(history[file1]).toEqual(['File 1'])
@@ -616,12 +628,15 @@ describe('fileEditor tool', () => {
 
       // Make 12 edits
       for (let i = 1; i <= 12; i++) {
-        await fileEditor.invoke({
-          command: 'str_replace',
-          path: filePath,
-          old_str: i === 1 ? 'Initial' : `Edit ${i - 1}`,
-          new_str: `Edit ${i}`,
-        }, context)
+        await fileEditor.invoke(
+          {
+            command: 'str_replace',
+            path: filePath,
+            old_str: i === 1 ? 'Initial' : `Edit ${i - 1}`,
+            new_str: `Edit ${i}`,
+          },
+          context
+        )
       }
 
       const history = state.get('fileEditorHistory') as FileEditorState['fileEditorHistory']

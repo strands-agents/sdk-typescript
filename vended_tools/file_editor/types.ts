@@ -88,14 +88,6 @@ export type FileEditorInput = ViewInput | CreateInput | StrReplaceInput | Insert
  */
 export interface IFileReader {
   /**
-   * Checks if this reader can read the specified file.
-   *
-   * @param path - Absolute path to the file
-   * @returns True if this reader can handle the file
-   */
-  canRead(path: string): Promise<boolean>
-
-  /**
    * Reads the file content and returns it as a string.
    *
    * @param path - Absolute path to the file
