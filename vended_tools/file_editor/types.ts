@@ -23,12 +23,6 @@ export interface FileEditorOptions {
    * Maximum number of history versions to keep per file (default: 10).
    */
   maxHistorySize?: number
-
-  /**
-   * Working directory path for file operations.
-   * Files must be within this directory or subdirectories (default: process.cwd()).
-   */
-  workingDirectory?: string
 }
 
 /**

@@ -12,57 +12,23 @@ const MAX_DIRECTORY_DEPTH = 2
 /**
  * Zod schema for file editor input validation.
  */
-const fileEditorInputSchema = z
-  .object({
-    command: z
-      .enum(['view', 'create', 'str_replace', 'insert', 'undo_edit'])
-      .describe('The operation to perform: `view`, `create`, `str_replace`, `insert`, `undo_edit`.'),
-    path: z.string().describe('Absolute path to the file or directory.'),
-    file_text: z.string().optional().describe('Content for new file (required for create command).'),
-    view_range: z
-      .tuple([z.number(), z.number()])
-      .optional()
-      .describe('Line range to view [start, end]. 1-indexed. End can be -1 for end of file.'),
-    old_str: z.string().optional().describe('Exact string to find and replace (required for str_replace command).'),
-    new_str: z.string().optional().describe('Replacement string (for str_replace and insert commands).'),
-    insert_line: z
-      .number()
-      .optional()
-      .describe('Line number where text should be inserted (0-indexed, required for insert command).'),
-  })
-  .refine(
-    (data) => {
-      if (data.command === 'create') {
-        return data.file_text !== undefined
-      }
-      return true
-    },
-    {
-      message: 'Parameter `file_text` is required for command: create',
-    }
-  )
-  .refine(
-    (data) => {
-      if (data.command === 'str_replace') {
-        return data.old_str !== undefined
-      }
-      return true
-    },
-    {
-      message: 'Parameter `old_str` is required for command: str_replace',
-    }
-  )
-  .refine(
-    (data) => {
-      if (data.command === 'insert') {
-        return data.insert_line !== undefined && data.new_str !== undefined
-      }
-      return true
-    },
-    {
-      message: 'Parameters `insert_line` and `new_str` are required for command: insert',
-    }
-  )
+const fileEditorInputSchema = z.object({
+  command: z
+    .enum(['view', 'create', 'str_replace', 'insert', 'undo_edit'])
+    .describe('The operation to perform: `view`, `create`, `str_replace`, `insert`, `undo_edit`.'),
+  path: z.string().describe('Absolute path to the file or directory.'),
+  file_text: z.string().optional().describe('Content for new file (required for create command).'),
+  view_range: z
+    .tuple([z.number(), z.number()])
+    .optional()
+    .describe('Line range to view [start, end]. 1-indexed. End can be -1 for end of file.'),
+  old_str: z.string().optional().describe('Exact string to find and replace (required for str_replace command).'),
+  new_str: z.string().optional().describe('Replacement string (for str_replace and insert commands).'),
+  insert_line: z
+    .number()
+    .optional()
+    .describe('Line number where text should be inserted (0-indexed, required for insert command).'),
+})
 
 /**
  * Text file reader implementation.
@@ -106,11 +72,8 @@ export const fileEditor = tool({
     }
 
     const fileReader = new TextFileReader()
-    let history = context.agent.state.get('fileEditorHistory') as FileEditorState['fileEditorHistory'] | undefined
-
-    if (!history) {
-      history = {}
-    }
+    let history =
+      (context.agent.state.get('fileEditorHistory') as FileEditorState['fileEditorHistory'] | undefined) ?? {}
 
     let result: string
 
@@ -193,17 +156,12 @@ async function isDirectory(filePath: string): Promise<boolean> {
  * Checks file size against limit.
  */
 async function checkFileSize(filePath: string, maxSize: number = DEFAULT_MAX_FILE_SIZE): Promise<void> {
-  try {
-    const stats = await fs.stat(filePath)
-    if (stats.size > maxSize) {
-      throw new Error(`File size (${stats.size} bytes) exceeds maximum allowed size (${maxSize} bytes)`)
-    }
-  } catch (_error) {
-    const error = _error as Error
-    if (error.message.includes('exceeds')) {
-      throw error
-    }
-    throw new Error(`Failed to check file size: ${error}`)
+  const stats = await fs.stat(filePath).catch((err) => {
+    throw new Error(`Failed to check file size: ${err}`)
+  })
+
+  if (stats.size > maxSize) {
+    throw new Error(`File size (${stats.size} bytes) exceeds maximum allowed size (${maxSize} bytes)`)
   }
 }
 
@@ -329,6 +287,10 @@ async function handleView(
  * Handles the create command.
  */
 async function handleCreate(filePath: string, fileText: string, history: Record<string, string[]>): Promise<string> {
+  if (fileText === undefined) {
+    throw new Error('Parameter `file_text` is required for command: create')
+  }
+
   validatePath('create', filePath)
 
   const exists = await fileExists(filePath)
@@ -362,6 +324,10 @@ async function handleStrReplace(
   history: Record<string, string[]>,
   fileReader: IFileReader
 ): Promise<string> {
+  if (oldStr === undefined) {
+    throw new Error('Parameter `old_str` is required for command: str_replace')
+  }
+
   validatePath('str_replace', filePath)
 
   const exists = await fileExists(filePath)
@@ -445,6 +411,10 @@ async function handleInsert(
   history: Record<string, string[]>,
   fileReader: IFileReader
 ): Promise<string> {
+  if (insertLine === undefined || newStr === undefined) {
+    throw new Error('Parameters `insert_line` and `new_str` are required for command: insert')
+  }
+
   validatePath('insert', filePath)
 
   const exists = await fileExists(filePath)
