@@ -1,4 +1,5 @@
-import type { ToolResult, ToolSpec, ToolUse } from './types.js'
+import type { ToolSpec, ToolUse } from './types.js'
+import type { ToolResultBlock } from '../types/messages.js'
 import type { AgentData } from '../types/agent.js'
 import type { JSONValue } from '../types/json.js'
 
@@ -96,9 +97,9 @@ export class ToolStreamEvent implements ToolStreamEventData {
 
 /**
  * Type alias for the async generator returned by tool stream methods.
- * Yields ToolStreamEvents during execution and returns a ToolResult.
+ * Yields ToolStreamEvents during execution and returns a ToolResultBlock.
  */
-export type ToolStreamGenerator = AsyncGenerator<ToolStreamEvent, ToolResult, never>
+export type ToolStreamGenerator = AsyncGenerator<ToolStreamEvent, ToolResultBlock, never>
 
 /**
  * Interface for tool implementations.
@@ -133,10 +134,10 @@ export interface Tool {
   /**
    * Executes the tool with streaming support.
    * Yields zero or more ToolStreamEvents during execution, then returns
-   * exactly one ToolResult as the final value.
+   * exactly one ToolResultBlock as the final value.
    *
    * @param toolContext - Context information including the tool use request and invocation state
-   * @returns Async generator that yields ToolStreamEvents and returns a ToolResult
+   * @returns Async generator that yields ToolStreamEvents and returns a ToolResultBlock
    *
    * @example
    * ```typescript

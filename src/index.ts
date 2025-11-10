@@ -42,7 +42,7 @@ export type {
 export { TextBlock, ToolUseBlock, ToolResultBlock, ReasoningBlock, CachePointBlock, Message } from './types/messages.js'
 
 // Tool types
-export type { ToolSpec, ToolUse, ToolResultStatus, ToolResultData, ToolResult, ToolChoice } from './tools/types.js'
+export type { ToolSpec, ToolUse, ToolResultStatus, ToolChoice } from './tools/types.js'
 
 // Tool interface and related types
 export type {
