@@ -2,8 +2,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { Agent, BedrockModel } from '../src/index.js'
 import { fileEditor } from '../vended_tools/file_editor/index.js'
-import { collectGenerator } from '../src/__fixtures__/model-test-helpers.js'
-import { shouldRunTests } from './__fixtures__/model-test-helpers.js'
+import { shouldRunTests, extractToolResults } from './__fixtures__/model-test-helpers.js'
 import { promises as fs } from 'fs'
 import * as path from 'path'
 import { tmpdir } from 'os'
@@ -48,11 +47,18 @@ describe.skipIf(!(await shouldRunTests()))('FileEditor Tool Integration', () => 
     expect(fileContent).toBe('Hello World')
 
     // View the file
-    const { items: events } = await collectGenerator(agent.stream(`View the file at ${testFile}`))
+    const result = await agent.invoke(`View the file at ${testFile}`)
 
-    // The agent should have received the file content
-    const textBlocks = events.filter((e: any) => e.type === 'textBlock')
-    expect(textBlocks.length).toBeGreaterThan(0)
+    // Verify that tools were called successfully
+    const allToolResults = extractToolResults(agent)
+    expect(allToolResults.length).toBeGreaterThan(0)
+
+    // Verify the agent received and understood the file content
+    const responseText = result.lastMessage.content
+      .filter((block) => block.type === 'textBlock')
+      .map((block) => block.text)
+      .join(' ')
+    expect(responseText).toContain('Hello World')
   }, 60000)
 
   it('should edit a file using str_replace', async () => {
@@ -119,14 +125,14 @@ describe.skipIf(!(await shouldRunTests()))('FileEditor Tool Integration', () => 
     const nonExistentFile = path.join(testDir, 'does-not-exist.txt')
 
     // Try to view non-existent file
-    const { items: events } = await collectGenerator(agent.stream(`View the file at ${nonExistentFile}`))
+    const result = await agent.invoke(`View the file at ${nonExistentFile}`)
 
-    // The agent should handle the error and provide a reasonable response
-    const toolResults = events.filter((e: any) => e.type === 'toolResultBlock')
-    expect(toolResults.length).toBeGreaterThan(0)
+    // Verify that tool was called and returned a result (even if it was an error)
+    const allToolResults = extractToolResults(agent)
+    expect(allToolResults.length).toBeGreaterThan(0)
 
-    // The model should have handled the error gracefully
-    const textBlocks = events.filter((e: any) => e.type === 'textBlock')
+    // The model should have handled the error gracefully and provided a response
+    const textBlocks = result.lastMessage.content.filter((block) => block.type === 'textBlock')
     expect(textBlocks.length).toBeGreaterThan(0)
   }, 60000)
 
@@ -140,11 +146,19 @@ describe.skipIf(!(await shouldRunTests()))('FileEditor Tool Integration', () => 
     await fs.writeFile(path.join(testDir, 'subdir', 'file3.txt'), 'content3', 'utf-8')
 
     // View the directory
-    const { items: events } = await collectGenerator(agent.stream(`List the files in directory ${testDir}`))
+    const result = await agent.invoke(`List the files in directory ${testDir}`)
 
-    // The agent should have received the directory listing
-    const textBlocks = events.filter((e: any) => e.type === 'textBlock')
-    expect(textBlocks.length).toBeGreaterThan(0)
+    // Verify that tools were called successfully
+    const allToolResults = extractToolResults(agent)
+    expect(allToolResults.length).toBeGreaterThan(0)
+
+    // Verify the agent received and processed the directory listing
+    const responseText = result.lastMessage.content
+      .filter((block) => block.type === 'textBlock')
+      .map((block) => block.text)
+      .join(' ')
+    expect(responseText).toContain('file1.txt')
+    expect(responseText).toContain('file2.txt')
   }, 60000)
 
   it('should handle multi-line file content', async () => {
@@ -184,10 +198,19 @@ Line 3" with "Replaced Lines"`)
     await agent.invoke(`Create a file at ${testFile} with content "${content}"`)
 
     // View specific line range
-    const { items: events } = await collectGenerator(agent.stream(`View lines 2 to 4 of file ${testFile}`))
+    const result = await agent.invoke(`View lines 2 to 4 of file ${testFile}`)
 
-    // The agent should have used view_range parameter
-    const toolResults = events.filter((e: any) => e.type === 'toolResultBlock')
-    expect(toolResults.length).toBeGreaterThan(0)
+    // Verify that tools were called successfully
+    const allToolResults = extractToolResults(agent)
+    expect(allToolResults.length).toBeGreaterThan(0)
+
+    // Verify the agent received and understood the requested line range
+    const responseText = result.lastMessage.content
+      .filter((block) => block.type === 'textBlock')
+      .map((block) => block.text)
+      .join(' ')
+    expect(responseText).toContain('Line 2')
+    expect(responseText).toContain('Line 3')
+    expect(responseText).toContain('Line 4')
   }, 60000)
 })

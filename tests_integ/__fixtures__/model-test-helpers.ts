@@ -1,4 +1,5 @@
 import { fromNodeProviderChain } from '@aws-sdk/credential-providers'
+import type { Agent, ToolResultBlock } from '../../src/index.js'
 
 /**
  * Determines whether AWS integration tests should run based on environment and credentials.
@@ -26,4 +27,20 @@ export async function shouldRunTests(): Promise<boolean> {
     console.log('⏭️ AWS credentials not available locally, integration tests will be skipped.')
     return false
   }
+}
+
+/**
+ * Extracts all tool result blocks from an agent's message history.
+ *
+ * Tool results are contained in user messages (messages with role='user') that the agent
+ * sends back to the model after executing tools.
+ *
+ * @param agent - The agent to extract tool results from
+ * @returns Array of all ToolResultBlock objects from the agent's conversation history
+ */
+export function extractToolResults(agent: Agent): ToolResultBlock[] {
+  const toolResultMessages = agent['_messages'].filter((msg) => msg.role === 'user')
+  return toolResultMessages.flatMap((msg) =>
+    msg.content.filter((block): block is ToolResultBlock => block.type === 'toolResultBlock')
+  )
 }
