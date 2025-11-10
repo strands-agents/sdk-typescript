@@ -1,4 +1,5 @@
-import type { Tool, ToolContext, ToolStreamEvent } from './tool.js'
+import type { Tool, ToolContext } from './tool.js'
+import { ToolStreamEvent } from './tool.js'
 import type { ToolSpec, ToolResult } from './types.js'
 import type { JSONSchema, JSONValue } from '../types/json.js'
 import { deepCopy } from '../types/json.js'
@@ -160,10 +161,10 @@ export class FunctionTool implements Tool {
 
         while (!iterResult.done) {
           // Each yielded value becomes a ToolStreamEvent
-          yield {
+          yield new ToolStreamEvent({
             type: 'toolStreamEvent',
             data: iterResult.value,
-          }
+          })
           iterResult = await generator.next()
         }
 

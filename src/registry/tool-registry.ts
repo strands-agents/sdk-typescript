@@ -1,5 +1,6 @@
 import { Registry, ValidationError } from './registry.js'
 import type { Tool, ToolStreamGenerator } from '../tools/tool.js'
+import { ToolStreamEvent } from '../tools/tool.js'
 
 /**
  * A concrete implementation of the Registry for managing Tool instances.
@@ -85,7 +86,7 @@ if (import.meta.vitest) {
     },
     stream: async function* (): ToolStreamGenerator {
       // Mock stream implementation
-      yield { type: 'toolStreamEvent' as const, data: 'mock data' }
+      yield new ToolStreamEvent({ type: 'toolStreamEvent', data: 'mock data' })
       return { toolUseId: '', status: 'success' as const, content: [] }
     },
     ...overrides,
