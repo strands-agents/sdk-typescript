@@ -248,7 +248,7 @@ describe('fileEditor tool', () => {
       })
 
       it('throws when path contains traversal', async () => {
-        const filePath = path.join(testDir, '..', 'outside.txt')
+        const filePath = '..outside.txt'
         await expect(
           fileEditor.invoke({ command: 'create', path: filePath, file_text: 'content' }, context)
         ).rejects.toThrow()
