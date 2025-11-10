@@ -102,34 +102,35 @@ export class Agent implements AgentData {
   }
 
   /**
-   * Async generator that coordinates execution between model providers and tools.
+   * Streams the agent execution, yielding events and returning the final result.
    *
    * The agent loop manages the conversation flow by:
    * 1. Streaming model responses and yielding all events
    * 2. Executing tools when the model requests them
    * 3. Continuing the loop until the model completes without tool use
    *
+   * Use this method when you need access to intermediate streaming events.
+   * For simple request/response without streaming, use invoke() instead.
+   *
    * An explicit goal of this method is to always leave the message array in a way that
    * the agent can be reinvoked with a user prompt after this method completes. To that end
    * assistant messages containing tool uses are only added after tool execution succeeds
    * with valid toolResponses
    *
-   * @param agent - Configuration including model, messages, toolRegistry, and systemPrompt
+   * @param args - Arguments for invoking the agent
    * @returns Async generator that yields AgentStreamEvent objects and returns AgentResult
    *
    * @example
    * ```typescript
-   * const messages = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
-   * const registry = new ToolRegistry()
-   * const provider = new BedrockModel(config)
+   * const agent = new Agent({ model, tools })
    *
-   * for await (const event of runAgentLoop({ model: provider, messages, toolRegistry: registry })) {
+   * for await (const event of agent.stream('Hello')) {
    *   console.log('Event:', event.type)
    * }
    * // Messages array is mutated in place and contains the full conversation
    * ```
    */
-  public async *invoke(args: InvokeArgs): AsyncGenerator<AgentStreamEvent, AgentResult, never> {
+  public async *stream(args: InvokeArgs): AsyncGenerator<AgentStreamEvent, AgentResult, never> {
     let currentArgs: InvokeArgs | undefined = args
 
     // Emit event before the loop starts
@@ -173,6 +174,32 @@ export class Agent implements AgentData {
       // Always emit final event
       yield { type: 'afterInvocationEvent' }
     }
+  }
+
+  /**
+   * Invokes the agent and returns the final result.
+   *
+   * This is a convenience method that consumes the stream() method and returns
+   * only the final AgentResult. Use stream() if you need access to intermediate
+   * streaming events.
+   *
+   * @param args - Arguments for invoking the agent
+   * @returns Promise that resolves to the final AgentResult
+   *
+   * @example
+   * ```typescript
+   * const agent = new Agent({ model, tools })
+   * const result = await agent.invoke('What is 2 + 2?')
+   * console.log(result.lastMessage) // Agent's response
+   * ```
+   */
+  public async invoke(args: InvokeArgs): Promise<AgentResult> {
+    const gen = this.stream(args)
+    let result = await gen.next()
+    while (!result.done) {
+      result = await gen.next()
+    }
+    return result.value
   }
 
   /**

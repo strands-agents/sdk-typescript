@@ -48,9 +48,15 @@ Once the SDK is complete, usage will look something like this:
 import { Agent } from '@strands-agents/sdk'
 import { calculator } from '@strands-agents/tools'
 
+// Invoke the agent and get response
 const agent = new Agent({ tools: [calculator] })
-const response = await agent.invoke('What is the square root of 1764?')
-console.log(response)
+const result = await agent.invoke('What is the square root of 1764?')
+console.log(result.lastMessage) // Agent's response with the answer
+
+// Stream the response as it's generated from the agent:
+for await (const event of agent.stream('What is 42 squared?')) {
+  console.log('Event:', event.type)
+}
 ```
 
 ## Installation (Coming Soon)
