@@ -158,12 +158,9 @@ function validatePath(command: string, filePath: string): void {
     )
   }
 
-  // Check for directory traversal by resolving path and comparing
-  const resolved = path.resolve(filePath)
+  // Check for directory traversal - reject paths containing '..' segments
   const normalized = path.normalize(filePath)
-
-  // If normalized path differs significantly from resolved, it may indicate traversal
-  if (resolved !== normalized && filePath.includes('..')) {
+  if (normalized.includes('..')) {
     throw new Error(`Invalid path: path traversal is not allowed`)
   }
 }
