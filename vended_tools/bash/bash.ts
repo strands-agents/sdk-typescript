@@ -55,10 +55,9 @@ class _BashSession {
       this._started = true
 
       // Handle unexpected process exits
-      this._process.on('close', (code) => {
-        if (code !== null && code !== 0) {
-          this._started = false
-        }
+      this._process.on('close', () => {
+        this._process = null
+        this._started = false
       })
 
       this._process.on('error', (err) => {
@@ -126,9 +125,9 @@ class _BashSession {
 
       // Handler for process close
       const onClose = (code: number | null): void => {
-        if (!isTimedOut && code !== null && code !== 0) {
+        if (!isTimedOut) {
           cleanup()
-          reject(new BashSessionError(`Bash process exited with code ${code}`))
+          reject(new BashSessionError(`Bash process exited unexpectedly with code ${code ?? 'unknown'}`))
         }
       }
 

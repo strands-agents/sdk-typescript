@@ -123,18 +123,18 @@ console.log(result.output) // "" (empty - variable doesn't exist)
 #### Execute Mode
 
 ```typescript
-{
+interface ExecuteInput {
   mode: 'execute'
-  command: string      // The bash command to execute
-  timeout?: number     // Optional timeout in seconds (default: 120)
+  command: string
+  timeout?: number // Optional timeout in seconds (default: 120)
 }
 ```
 
 #### Restart Mode
 
 ```typescript
-{
-  mode: 'restart' // Restart the bash session
+interface RestartInput {
+  mode: 'restart'
 }
 ```
 
@@ -145,7 +145,7 @@ console.log(result.output) // "" (empty - variable doesn't exist)
 Returns an object with separate stdout and stderr:
 
 ```typescript
-{
+interface BashOutput {
   output: string // Standard output (stdout)
   error: string // Standard error (stderr) - empty string if no errors
 }
