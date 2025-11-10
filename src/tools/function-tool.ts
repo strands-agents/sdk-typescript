@@ -1,6 +1,7 @@
 import type { Tool, ToolContext } from './tool.js'
 import { ToolStreamEvent } from './tool.js'
-import type { ToolSpec, ToolResult } from './types.js'
+import type { ToolSpec } from './types.js'
+import { ToolResult } from './types.js'
 import type { JSONSchema, JSONValue } from '../types/json.js'
 import { deepCopy } from '../types/json.js'
 import { JsonBlock, TextBlock } from '../types/messages.js'
@@ -202,49 +203,49 @@ export class FunctionTool implements Tool {
     try {
       // Handle null with special string representation as text content
       if (value === null) {
-        return {
+        return new ToolResult({
           toolUseId,
           status: 'success',
           content: [new TextBlock('<null>')],
-        }
+        })
       }
 
       // Handle undefined with special string representation as text content
       if (value === undefined) {
-        return {
+        return new ToolResult({
           toolUseId,
           status: 'success',
           content: [new TextBlock('<undefined>')],
-        }
+        })
       }
 
       // Handle primitives (strings, numbers, booleans) as text content
       // Bedrock doesn't accept primitives as JSON content, so we convert all to strings
       if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-        return {
+        return new ToolResult({
           toolUseId,
           status: 'success',
           content: [new TextBlock(String(value))],
-        }
+        })
       }
 
       // Handle arrays by wrapping in object { $value: array }
       if (Array.isArray(value)) {
         const copiedValue = deepCopy(value)
-        return {
+        return new ToolResult({
           toolUseId,
           status: 'success',
           content: [new JsonBlock({ json: { $value: copiedValue } })],
-        }
+        })
       }
 
       // Handle objects as JSON content with deep copy
       const copiedValue = deepCopy(value)
-      return {
+      return new ToolResult({
         toolUseId,
         status: 'success',
         content: [new JsonBlock({ json: copiedValue })],
-      }
+      })
     } catch (error) {
       // If deep copy fails (circular references, non-serializable values), return error result
       return this._createErrorResult(error, toolUseId)
@@ -267,11 +268,11 @@ export class FunctionTool implements Tool {
     // Ensure error is an Error object (wrap non-Error values)
     const errorObject = error instanceof Error ? error : new Error(String(error))
 
-    return {
+    return new ToolResult({
       toolUseId,
       status: 'error',
       content: [new TextBlock(`Error: ${errorObject.message}`)],
       error: errorObject,
-    }
+    })
   }
 }
