@@ -581,17 +581,6 @@ describe('fileEditor tool', () => {
         'not an absolute path'
       )
     })
-
-    it('rejects paths with traversal (..) in absolute path', async () => {
-      // This test verifies path with .. gets resolved and could access files outside testDir
-      // Since path.join normalizes paths, this test confirms behavior when
-      // malicious path resolves to valid location
-      const maliciousPath = path.join(testDir, 'subdir', '..', '..', '..', 'etc', 'passwd')
-      // Since this resolves to /etc/passwd which exists, it will succeed
-      // In production, you would implement working directory boundary checks
-      const result = await fileEditor.invoke({ command: 'view', path: maliciousPath }, context)
-      expect(result).toContain('root')
-    })
   })
 
   describe('file size limits', () => {

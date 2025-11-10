@@ -2,6 +2,16 @@
 
 A filesystem editor tool for viewing, creating, and editing files programmatically. Provides string replacement, line insertion, undo functionality, and directory viewing with security validation.
 
+## Features
+
+- **View files** with line numbers and optional line range support
+- **Create files** with initial content
+- **String-based find and replace** with uniqueness validation
+- **Line-based text insertion** at any position
+- **Undo edit history** for reverting changes
+- **Directory viewing** up to 2 levels deep (configurable)
+- **Configurable file size limits** (default 1MB)
+
 ## Installation
 
 ```typescript
