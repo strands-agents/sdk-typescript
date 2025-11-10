@@ -50,8 +50,7 @@ describe.skipIf(!(await shouldRunTests()))('FileEditor Tool Integration', () => 
     const result = await agent.invoke(`View the file at ${testFile}`)
 
     // Verify that tools were called successfully
-    const allToolResults = extractToolResults(agent)
-    expect(allToolResults.length).toBeGreaterThan(0)
+    expect(extractToolResults(agent).length).toBeGreaterThan(0)
 
     // Verify the agent received and understood the file content
     const responseText = result.lastMessage.content
@@ -128,8 +127,7 @@ describe.skipIf(!(await shouldRunTests()))('FileEditor Tool Integration', () => 
     const result = await agent.invoke(`View the file at ${nonExistentFile}`)
 
     // Verify that tool was called and returned a result (even if it was an error)
-    const allToolResults = extractToolResults(agent)
-    expect(allToolResults.length).toBeGreaterThan(0)
+    expect(extractToolResults.length).toBeGreaterThan(0)
 
     // The model should have handled the error gracefully and provided a response
     const textBlocks = result.lastMessage.content.filter((block) => block.type === 'textBlock')
@@ -149,8 +147,7 @@ describe.skipIf(!(await shouldRunTests()))('FileEditor Tool Integration', () => 
     const result = await agent.invoke(`List the files in directory ${testDir}`)
 
     // Verify that tools were called successfully
-    const allToolResults = extractToolResults(agent)
-    expect(allToolResults.length).toBeGreaterThan(0)
+    expect(extractToolResults.length).toBeGreaterThan(0)
 
     // Verify the agent received and processed the directory listing
     const responseText = result.lastMessage.content
@@ -201,8 +198,7 @@ Line 3" with "Replaced Lines"`)
     const result = await agent.invoke(`View lines 2 to 4 of file ${testFile}`)
 
     // Verify that tools were called successfully
-    const allToolResults = extractToolResults(agent)
-    expect(allToolResults.length).toBeGreaterThan(0)
+    expect(extractToolResults(agent).length).toBeGreaterThan(0)
 
     // Verify the agent received and understood the requested line range
     const responseText = result.lastMessage.content

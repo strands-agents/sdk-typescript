@@ -39,8 +39,7 @@ export async function shouldRunTests(): Promise<boolean> {
  * @returns Array of all ToolResultBlock objects from the agent's conversation history
  */
 export function extractToolResults(agent: Agent): ToolResultBlock[] {
-  const toolResultMessages = agent['_messages'].filter((msg) => msg.role === 'user')
-  return toolResultMessages.flatMap((msg) =>
-    msg.content.filter((block): block is ToolResultBlock => block.type === 'toolResultBlock')
-  )
+  return agent['_messages']
+    .filter((msg) => msg.role === 'user')
+    .flatMap((msg) => msg.content.filter((block): block is ToolResultBlock => block.type === 'toolResultBlock'))
 }
