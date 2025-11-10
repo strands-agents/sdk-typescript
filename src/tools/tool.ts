@@ -41,24 +41,9 @@ export interface ToolContext<TAgentState extends Record<string, JSONValue> = Rec
 }
 
 /**
- * Event yielded during tool execution to report streaming progress.
- * Tools can yield zero or more of these events before returning the final ToolResult.
- *
- * @example
- * ```typescript
- * const streamEvent: ToolStreamEvent = {
- *   type: 'toolStreamEvent',
- *   data: 'Processing step 1...'
- * }
- *
- * // Or with structured data
- * const streamEvent: ToolStreamEvent = {
- *   type: 'toolStreamEvent',
- *   data: { progress: 50, message: 'Halfway complete' }
- * }
- * ```
+ * Data for a tool stream event.
  */
-export interface ToolStreamEvent {
+export interface ToolStreamEventData {
   /**
    * Discriminator for tool stream events.
    */
@@ -69,6 +54,43 @@ export interface ToolStreamEvent {
    * Can be any type of data the tool wants to report.
    */
   data?: unknown
+}
+
+/**
+ * Event yielded during tool execution to report streaming progress.
+ * Tools can yield zero or more of these events before returning the final ToolResult.
+ *
+ * @example
+ * ```typescript
+ * const streamEvent = new ToolStreamEvent({
+ *   type: 'toolStreamEvent',
+ *   data: 'Processing step 1...'
+ * })
+ *
+ * // Or with structured data
+ * const streamEvent = new ToolStreamEvent({
+ *   type: 'toolStreamEvent',
+ *   data: { progress: 50, message: 'Halfway complete' }
+ * })
+ * ```
+ */
+export class ToolStreamEvent implements ToolStreamEventData {
+  /**
+   * Discriminator for tool stream events.
+   */
+  readonly type = 'toolStreamEvent' as const
+
+  /**
+   * Caller-provided data for the progress update.
+   * Can be any type of data the tool wants to report.
+   */
+  readonly data?: unknown
+
+  constructor(eventData: ToolStreamEventData) {
+    if (eventData.data !== undefined) {
+      this.data = eventData.data
+    }
+  }
 }
 
 /**

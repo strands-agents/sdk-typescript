@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { FunctionTool } from '../function-tool.js'
+import { ToolStreamEvent } from '../tool.js'
 import type { ToolContext } from '../tool.js'
 import type { JSONValue } from '../../types/json.js'
 import { createMockContext } from '../../__fixtures__/tool-helpers.js'
@@ -944,5 +945,57 @@ describe('Tool interface backwards compatibility', () => {
 
     expect(result).toBeDefined()
     expect(result.status).toBe('success')
+  })
+})
+
+describe('ToolStreamEvent', () => {
+  describe('instantiation', () => {
+    it('creates instance with data', () => {
+      const event = new ToolStreamEvent({
+        type: 'toolStreamEvent',
+        data: 'test data',
+      })
+
+      expect(event).toEqual({
+        type: 'toolStreamEvent',
+        data: 'test data',
+      })
+    })
+
+    it('creates instance without data', () => {
+      const event = new ToolStreamEvent({
+        type: 'toolStreamEvent',
+      })
+
+      expect(event).toEqual({
+        type: 'toolStreamEvent',
+      })
+    })
+
+    it('creates instance with structured data', () => {
+      const structuredData = {
+        progress: 50,
+        message: 'halfway complete',
+      }
+
+      const event = new ToolStreamEvent({
+        type: 'toolStreamEvent',
+        data: structuredData,
+      })
+
+      expect(event).toEqual({
+        type: 'toolStreamEvent',
+        data: structuredData,
+      })
+    })
+
+    it('has correct type discriminator', () => {
+      const event = new ToolStreamEvent({
+        type: 'toolStreamEvent',
+        data: 'test',
+      })
+
+      expect(event.type).toBe('toolStreamEvent')
+    })
   })
 })
