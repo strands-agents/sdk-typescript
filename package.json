@@ -25,6 +25,10 @@
     "./vended_tools/notebook": {
       "import": "./dist/vended_tools/notebook/index.js",
       "types": "./dist/vended_tools/notebook/index.d.ts"
+    },
+    "./vended_tools/file_editor": {
+      "import": "./dist/vended_tools/file_editor/index.js",
+      "types": "./dist/vended_tools/file_editor/index.d.ts"
     }
   },
   "scripts": {

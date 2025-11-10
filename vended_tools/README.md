@@ -41,6 +41,39 @@ await agent.invoke('Create a notebook called "tasks" with 1 "Write code" task')
 
 See [notebook/README.md](./notebook/README.md) for complete documentation.
 
+### File Editor
+
+A filesystem editor tool for viewing, creating, and editing files programmatically. Supports string replacement, line insertion, and undo functionality.
+
+**Location**: `vended_tools/file_editor/`
+
+**Key Features**:
+
+- View files with line numbers and line range support
+- Create new files with content
+- String-based find and replace
+- Line-based text insertion
+- Undo edit history
+- Directory viewing
+- Path security validation
+- Configurable file size limits
+
+**Usage**:
+
+```typescript
+import { fileEditor } from '@strands-agents/sdk/vended_tools/file_editor'
+
+const agent = new Agent({
+  model: new BedrockModel({ region: 'us-east-1' }),
+  tools: [fileEditor],
+})
+
+await agent.invoke('Create a new file called /tmp/test.txt with "Hello World"')
+await agent.invoke('Replace "Hello" with "Hi" in /tmp/test.txt')
+```
+
+See [file_editor/README.md](./file_editor/README.md) for complete documentation.
+
 ## Contributing
 
 When adding new vended tools:
