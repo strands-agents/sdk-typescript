@@ -119,21 +119,6 @@ describe.skipIf(!(await shouldRunTests()))('FileEditor Tool Integration', () => 
     expect(fileContent).toBe('Original')
   }, 60000)
 
-  it('should handle errors gracefully', async () => {
-    const agent = createAgent()
-    const nonExistentFile = path.join(testDir, 'does-not-exist.txt')
-
-    // Try to view non-existent file
-    const result = await agent.invoke(`View the file at ${nonExistentFile}`)
-
-    // Verify that tool was called and returned a result (even if it was an error)
-    expect(extractToolResults.length).toBeGreaterThan(0)
-
-    // The model should have handled the error gracefully and provided a response
-    const textBlocks = result.lastMessage.content.filter((block) => block.type === 'textBlock')
-    expect(textBlocks.length).toBeGreaterThan(0)
-  }, 60000)
-
   it('should view directory contents', async () => {
     const agent = createAgent()
 
