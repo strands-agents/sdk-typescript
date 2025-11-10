@@ -41,7 +41,7 @@ describe.skipIf(!(await shouldRunTests()))('FileEditor Tool Integration', () => 
     const testFile = path.join(testDir, 'test.txt')
 
     // Create a file
-    await collectGenerator(agent.stream(`Create a file at ${testFile} with content "Hello World"`))
+    await agent.invoke(`Create a file at ${testFile} with content "Hello World"`)
 
     // Verify file was created on disk
     const fileContent = await fs.readFile(testFile, 'utf-8')
@@ -60,10 +60,10 @@ describe.skipIf(!(await shouldRunTests()))('FileEditor Tool Integration', () => 
     const testFile = path.join(testDir, 'edit-test.txt')
 
     // Create initial file
-    await collectGenerator(agent.stream(`Create a file at ${testFile} with content "Hello OLD World"`))
+    await agent.invoke(`Create a file at ${testFile} with content "Hello OLD World"`)
 
     // Replace text
-    await collectGenerator(agent.stream(`In the file ${testFile}, replace "OLD" with "NEW"`))
+    await agent.invoke(`In the file ${testFile}, replace "OLD" with "NEW"`)
 
     // Verify the replacement on disk
     const fileContent = await fs.readFile(testFile, 'utf-8')
@@ -76,10 +76,10 @@ describe.skipIf(!(await shouldRunTests()))('FileEditor Tool Integration', () => 
 
     // Create file with multiple lines
     const initialContent = 'Line 1\nLine 2\nLine 3'
-    await collectGenerator(agent.stream(`Create a file at ${testFile} with content "${initialContent}"`))
+    await agent.invoke(`Create a file at ${testFile} with content "${initialContent}"`)
 
     // Insert text at line 2
-    await collectGenerator(agent.stream(`In the file ${testFile}, insert "Inserted Line" at line 2`))
+    await agent.invoke(`In the file ${testFile}, insert "Inserted Line" at line 2`)
 
     // Verify the insertion on disk
     const fileContent = await fs.readFile(testFile, 'utf-8')
@@ -91,10 +91,10 @@ describe.skipIf(!(await shouldRunTests()))('FileEditor Tool Integration', () => 
     const testFile = path.join(testDir, 'undo-test.txt')
 
     // Create initial file
-    await collectGenerator(agent.stream(`Create a file at ${testFile} with content "Original"`))
+    await agent.invoke(`Create a file at ${testFile} with content "Original"`)
 
     // Make an edit
-    await collectGenerator(agent.stream(`In the file ${testFile}, replace "Original" with "Modified"`))
+    await agent.invoke(`In the file ${testFile}, replace "Original" with "Modified"`)
 
     // Verify edit was applied
     let fileContent = await fs.readFile(testFile, 'utf-8')
@@ -107,7 +107,7 @@ describe.skipIf(!(await shouldRunTests()))('FileEditor Tool Integration', () => 
     expect(history[testFile].length).toBeGreaterThan(0)
 
     // Undo the edit
-    await collectGenerator(agent.stream(`Undo the last edit to ${testFile}`))
+    await agent.invoke(`Undo the last edit to ${testFile}`)
 
     // Verify file was restored
     fileContent = await fs.readFile(testFile, 'utf-8')
@@ -157,10 +157,8 @@ Line 2
 Line 3
 Line 4`
 
-    await collectGenerator(
-      agent.stream(`Create a file at ${testFile} with this content:
+    await agent.invoke(`Create a file at ${testFile} with this content:
 ${multilineContent}`)
-    )
 
     // Verify file was created correctly
     const fileContent = await fs.readFile(testFile, 'utf-8')
@@ -168,10 +166,8 @@ ${multilineContent}`)
     expect(fileContent).toContain('Line 4')
 
     // Replace multi-line content
-    await collectGenerator(
-      agent.stream(`In the file ${testFile}, replace "Line 2
+    await agent.invoke(`In the file ${testFile}, replace "Line 2
 Line 3" with "Replaced Lines"`)
-    )
 
     // Verify replacement
     const updatedContent = await fs.readFile(testFile, 'utf-8')
@@ -185,7 +181,7 @@ Line 3" with "Replaced Lines"`)
 
     // Create file with multiple lines
     const content = 'Line 1\nLine 2\nLine 3\nLine 4\nLine 5'
-    await collectGenerator(agent.stream(`Create a file at ${testFile} with content "${content}"`))
+    await agent.invoke(`Create a file at ${testFile} with content "${content}"`)
 
     // View specific line range
     const { items: events } = await collectGenerator(agent.stream(`View lines 2 to 4 of file ${testFile}`))
