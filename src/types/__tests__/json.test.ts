@@ -233,7 +233,7 @@ describe('deepCopyWithValidation', () => {
   describe('validation errors', () => {
     it('throws JsonValidationError for functions at top level', () => {
       const func = (): string => 'test'
-      
+
       expect(() => deepCopyWithValidation(func, 'testValue')).toThrow(JsonValidationError)
       expect(() => deepCopyWithValidation(func, 'testValue')).toThrow(
         'testValue contains a function which cannot be serialized'
