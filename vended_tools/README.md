@@ -43,7 +43,7 @@ See [notebook/README.md](./notebook/README.md) for complete documentation.
 
 ### File Editor
 
-A filesystem editor tool for viewing, creating, and editing files programmatically. Supports string replacement, line insertion, and undo functionality.
+A filesystem editor tool for viewing, creating, and editing files programmatically. Supports string replacement and line insertion.
 
 **Location**: `vended_tools/file_editor/`
 
@@ -53,7 +53,6 @@ A filesystem editor tool for viewing, creating, and editing files programmatical
 - Create new files with content
 - String-based find and replace
 - Line-based text insertion
-- Undo edit history
 - Directory viewing
 - Path security validation
 - Configurable file size limits

@@ -1,6 +1,6 @@
 # File Editor Tool
 
-A filesystem editor tool for viewing, creating, and editing files programmatically. Provides string replacement, line insertion, undo functionality, and directory viewing with security validation.
+A filesystem editor tool for viewing, creating, and editing files programmatically. Provides string replacement, line insertion, and directory viewing with security validation.
 
 ## Features
 
@@ -8,7 +8,6 @@ A filesystem editor tool for viewing, creating, and editing files programmatical
 - **Create files** with initial content
 - **String-based find and replace** with uniqueness validation
 - **Line-based text insertion** at any position
-- **Undo edit history** for reverting changes
 - **Directory viewing** up to 2 levels deep (configurable)
 - **Configurable file size limits** (default 1MB)
 
@@ -65,14 +64,6 @@ Insert text at a specific line number (0-indexed).
 - `path` (string, required): Absolute path to file
 - `insert_line` (number, required): Line number for insertion (0 = beginning)
 - `new_str` (string, required): Text to insert
-
-### `undo_edit`
-
-Revert the last edit operation. Maintains up to 10 versions per file.
-
-**Parameters:**
-
-- `path` (string, required): Absolute path to file
 
 ## Example Usage
 
