@@ -162,7 +162,6 @@ export class FunctionTool implements Tool {
         while (!iterResult.done) {
           // Each yielded value becomes a ToolStreamEvent
           yield new ToolStreamEvent({
-            type: 'toolStreamEvent',
             data: iterResult.value,
           })
           iterResult = await generator.next()

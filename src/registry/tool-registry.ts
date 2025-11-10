@@ -86,7 +86,7 @@ if (import.meta.vitest) {
     },
     stream: async function* (): ToolStreamGenerator {
       // Mock stream implementation
-      yield new ToolStreamEvent({ type: 'toolStreamEvent', data: 'mock data' })
+      yield new ToolStreamEvent({ data: 'mock data' })
       return { toolUseId: '', status: 'success' as const, content: [] }
     },
     ...overrides,

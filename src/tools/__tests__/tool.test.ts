@@ -952,7 +952,6 @@ describe('ToolStreamEvent', () => {
   describe('instantiation', () => {
     it('creates instance with data', () => {
       const event = new ToolStreamEvent({
-        type: 'toolStreamEvent',
         data: 'test data',
       })
 
@@ -963,9 +962,7 @@ describe('ToolStreamEvent', () => {
     })
 
     it('creates instance without data', () => {
-      const event = new ToolStreamEvent({
-        type: 'toolStreamEvent',
-      })
+      const event = new ToolStreamEvent({})
 
       expect(event).toEqual({
         type: 'toolStreamEvent',
@@ -979,7 +976,6 @@ describe('ToolStreamEvent', () => {
       }
 
       const event = new ToolStreamEvent({
-        type: 'toolStreamEvent',
         data: structuredData,
       })
 
@@ -991,7 +987,6 @@ describe('ToolStreamEvent', () => {
 
     it('has correct type discriminator', () => {
       const event = new ToolStreamEvent({
-        type: 'toolStreamEvent',
         data: 'test',
       })
 

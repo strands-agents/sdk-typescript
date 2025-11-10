@@ -63,15 +63,16 @@ export interface ToolStreamEventData {
  * @example
  * ```typescript
  * const streamEvent = new ToolStreamEvent({
- *   type: 'toolStreamEvent',
  *   data: 'Processing step 1...'
  * })
  *
  * // Or with structured data
  * const streamEvent = new ToolStreamEvent({
- *   type: 'toolStreamEvent',
  *   data: { progress: 50, message: 'Halfway complete' }
  * })
+ *
+ * // Or with no data
+ * const streamEvent = new ToolStreamEvent({})
  * ```
  */
 export class ToolStreamEvent implements ToolStreamEventData {
@@ -86,7 +87,7 @@ export class ToolStreamEvent implements ToolStreamEventData {
    */
   readonly data?: unknown
 
-  constructor(eventData: ToolStreamEventData) {
+  constructor(eventData: { data?: unknown }) {
     if (eventData.data !== undefined) {
       this.data = eventData.data
     }
