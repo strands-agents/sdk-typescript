@@ -60,14 +60,14 @@ export class MaxTokensError extends Error {
  * This error indicates that a value contains non-serializable types such as functions,
  * symbols, or undefined values that cannot be converted to JSON.
  */
-export class ValidationError extends Error {
+export class JsonValidationError extends Error {
   /**
-   * Creates a new ValidationError.
+   * Creates a new JsonValidationError.
    *
    * @param message - Error message describing the validation failure
    */
   constructor(message: string) {
     super(message)
-    this.name = 'ValidationError'
+    this.name = 'JsonValidationError'
   }
 }

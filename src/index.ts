@@ -15,7 +15,7 @@ export type { AgentState } from './agent/state.js'
 export type { AgentData, AgentResult } from './types/agent.js'
 
 // Error types
-export { ContextWindowOverflowError, MaxTokensError, ValidationError } from './errors.js'
+export { ContextWindowOverflowError, MaxTokensError, JsonValidationError } from './errors.js'
 
 // JSON types
 export type { JSONSchema, JSONValue } from './types/json.js'

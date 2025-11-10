@@ -1,5 +1,5 @@
 import type { JSONSchema7 } from 'json-schema'
-import { ValidationError } from '../errors.js'
+import { JsonValidationError } from '../errors.js'
 
 /**
  * Represents any valid JSON value.
@@ -59,7 +59,7 @@ export function deepCopy(value: unknown): JSONValue {
  * @param value - The value to copy
  * @param contextPath - Context path for error messages (e.g., 'initialState', 'value for key "config"')
  * @returns A deep copy of the value
- * @throws ValidationError if value contains functions, symbols, or undefined values
+ * @throws JsonValidationError if value contains functions, symbols, or undefined values
  */
 export function deepCopyWithValidation(value: unknown, contextPath: string = 'value'): JSONValue {
   const pathStack: string[] = []
@@ -79,15 +79,15 @@ export function deepCopyWithValidation(value: unknown, contextPath: string = 'va
 
     // Check for non-serializable types
     if (typeof val === 'function') {
-      throw new ValidationError(`${currentPath} contains a function which cannot be serialized`)
+      throw new JsonValidationError(`${currentPath} contains a function which cannot be serialized`)
     }
 
     if (typeof val === 'symbol') {
-      throw new ValidationError(`${currentPath} contains a symbol which cannot be serialized`)
+      throw new JsonValidationError(`${currentPath} contains a symbol which cannot be serialized`)
     }
 
     if (val === undefined) {
-      throw new ValidationError(`${currentPath} is undefined which cannot be serialized`)
+      throw new JsonValidationError(`${currentPath} is undefined which cannot be serialized`)
     }
 
     // Track path for nested objects/arrays
@@ -103,7 +103,7 @@ export function deepCopyWithValidation(value: unknown, contextPath: string = 'va
     return JSON.parse(serialized) as JSONValue
   } catch (error) {
     // If it's our validation error, re-throw it
-    if (error instanceof ValidationError) {
+    if (error instanceof JsonValidationError) {
       throw error
     }
     // Otherwise, wrap it
