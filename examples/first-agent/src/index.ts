@@ -1,4 +1,4 @@
-import { type Tool, type ToolResult, type ToolContext, Agent, BedrockModel } from '@strands-agents/sdk'
+import { type Tool, ToolResultBlock, type ToolContext, Agent, BedrockModel } from '@strands-agents/sdk'
 
 // Define the shape of the expected input
 type WeatherToolInput = {
@@ -29,7 +29,7 @@ class WeatherTool implements Tool {
     },
   }
 
-  async *stream(context: ToolContext): AsyncGenerator<never, ToolResult, unknown> {
+  async *stream(context: ToolContext): AsyncGenerator<never, ToolResultBlock, unknown> {
     const input = context.toolUse.input
 
     // Use the type guard for validation
@@ -49,11 +49,11 @@ class WeatherTool implements Tool {
 
     const resultText = `The weather in ${location} is ${fakeWeatherData.temperature} and ${fakeWeatherData.conditions}.`
 
-    return {
+    return new ToolResultBlock({
       toolUseId: context.toolUse.toolUseId,
       status: 'success' as const,
       content: [{ type: 'textBlock', text: resultText }],
-    }
+    })
   }
 }
 
@@ -89,8 +89,11 @@ async function runStreaming(title: string, agent: Agent, prompt: string) {
   console.log(`User: ${prompt}`)
 
   console.log('Agent response stream:')
-  for await (const event of agent.stream(prompt)) {
-    console.log('[Event]', event.type)
+  const generator = agent.stream(prompt)
+  let result = await generator.next()
+  while (!result.done) {
+    console.log('[Event]', result.value.type)
+    result = await generator.next()
   }
 
   console.log('\nStreaming complete.\n')
