@@ -51,6 +51,7 @@ describe('Agent', () => {
           .addTurn({ type: 'textBlock', text: 'Tool result processed' })
 
         const tool = createMockTool('testTool', () => ({
+          type: 'toolResultBlock',
           toolUseId: 'tool-1',
           status: 'success' as const,
           content: [new TextBlock('Tool executed')],
@@ -76,6 +77,7 @@ describe('Agent', () => {
           .addTurn({ type: 'textBlock', text: 'Done' })
 
         const tool = createMockTool('testTool', () => ({
+          type: 'toolResultBlock',
           toolUseId: 'tool-1',
           status: 'success' as const,
           content: [new TextBlock('Success')],
@@ -181,6 +183,7 @@ describe('Agent', () => {
           .addTurn({ type: 'textBlock', text: 'The answer is 3' })
 
         const tool = createMockTool('calc', () => ({
+          type: 'toolResultBlock',
           toolUseId: 'tool-1',
           status: 'success' as const,
           content: [new TextBlock('3')],
@@ -233,6 +236,7 @@ describe('Agent', () => {
           .addTurn({ type: 'textBlock', text: 'Final' })
 
         const tool = createMockTool('testTool', () => ({
+          type: 'toolResultBlock',
           toolUseId: 'id',
           status: 'success' as const,
           content: [new TextBlock('Tool ran')],

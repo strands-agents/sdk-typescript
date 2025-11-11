@@ -21,7 +21,7 @@ describe.skipIf(!(await shouldRunTests()))('Notebook Tool Integration', () => {
 
     // Step 1: Create a notebook
     const { items: _events1 } = await collectGenerator(
-      agent.invoke('Create a notebook called "test" with content "# Test Notebook"')
+      agent.stream('Create a notebook called "test" with content "# Test Notebook"')
     )
 
     // Verify notebook was created
@@ -31,7 +31,7 @@ describe.skipIf(!(await shouldRunTests()))('Notebook Tool Integration', () => {
     expect(notebooks1.test).toContain('# Test Notebook')
 
     // Step 2: Add content to the notebook
-    const { items: _events2 } = await collectGenerator(agent.invoke('Add "- First item" to the test notebook'))
+    const { items: _events2 } = await collectGenerator(agent.stream('Add "- First item" to the test notebook'))
 
     // Verify content was added
     const notebooks2 = agent.state.get('notebooks') as any
@@ -39,7 +39,7 @@ describe.skipIf(!(await shouldRunTests()))('Notebook Tool Integration', () => {
 
     // Step 3: Read the notebook
     const { items: events3 } = await collectGenerator<AgentStreamEvent, AgentResult>(
-      agent.invoke('Read the test notebook')
+      agent.stream('Read the test notebook')
     )
 
     // Find the last text block in events to get agent's response
@@ -57,7 +57,7 @@ describe.skipIf(!(await shouldRunTests()))('Notebook Tool Integration', () => {
     const agent1 = new Agent(agentParams)
 
     // Create notebook with first agent
-    await collectGenerator(agent1.invoke('Create a notebook called "persist" with "Persistent content"'))
+    await collectGenerator(agent1.stream('Create a notebook called "persist" with "Persistent content"'))
 
     // Verify notebook was created
     const notebooks1 = agent1.state.get('notebooks') as any
@@ -79,7 +79,7 @@ describe.skipIf(!(await shouldRunTests()))('Notebook Tool Integration', () => {
     expect(notebooks2.persist).toContain('Persistent content')
 
     // Use the restored notebook - just read it
-    await collectGenerator(agent2.invoke('Read the persist notebook'))
+    await collectGenerator(agent2.stream('Read the persist notebook'))
 
     // Verify content still exists
     const notebooks3 = agent2.state.get('notebooks') as any
@@ -90,7 +90,7 @@ describe.skipIf(!(await shouldRunTests()))('Notebook Tool Integration', () => {
     const agent = new Agent(agentParams)
 
     // Try to read non-existent notebook
-    const { items: events } = await collectGenerator(agent.invoke('Read a notebook called "nonexistent"'))
+    const { items: events } = await collectGenerator(agent.stream('Read a notebook called "nonexistent"'))
 
     // The agent should handle the error and provide a reasonable response
     // Check that we got tool result blocks (indicating tool was called)
