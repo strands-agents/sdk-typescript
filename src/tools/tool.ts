@@ -96,7 +96,7 @@ export class ToolStreamEvent implements ToolStreamEventData {
  * Type alias for the async generator returned by tool stream methods.
  * Yields ToolStreamEvents during execution and returns a ToolResultBlock.
  */
-export type ToolStreamGenerator = AsyncGenerator<ToolStreamEvent, ToolResultBlock, never>
+export type ToolStreamGenerator = AsyncGenerator<ToolStreamEvent, ToolResultBlock, undefined>
 
 /**
  * Interface for tool implementations.
