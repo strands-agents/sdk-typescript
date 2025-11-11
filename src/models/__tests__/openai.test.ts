@@ -21,7 +21,9 @@ function createMockClient(streamGenerator: () => AsyncGenerator<any>): OpenAI {
 
 // Mock the OpenAI SDK
 vi.mock('openai', () => {
-  const mockConstructor = vi.fn().mockImplementation(() => ({}))
+  const mockConstructor = vi.fn(function (this: any) {
+    return {}
+  })
   return {
     default: mockConstructor,
   }
