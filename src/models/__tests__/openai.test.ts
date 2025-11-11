@@ -1042,6 +1042,114 @@ describe('OpenAIModel', () => {
         { role: 'user', content: 'Hello' },
       ])
     })
+
+    it('warns and filters guard content from system prompt', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const captured: { request: any } = { request: null }
+      const mockClient = createMockClientWithCapture(captured)
+      const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
+      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+
+      await collectIterator(
+        provider.stream(messages, {
+          systemPrompt: [
+            { type: 'textBlock', text: 'You are a helpful assistant' },
+            {
+              type: 'guardContentBlock',
+              text: {
+                qualifiers: ['grounding_source'],
+                text: 'Guard content',
+              },
+            },
+          ],
+        })
+      )
+
+      // Verify warning was logged
+      expect(warnSpy).toHaveBeenCalledWith(
+        'OpenAI does not support guard content in system prompts. Removing guard content block.'
+      )
+
+      // Verify guard content is filtered out
+      expect(captured.request).toBeDefined()
+      expect(captured.request!.messages).toEqual([
+        { role: 'system', content: 'You are a helpful assistant' },
+        { role: 'user', content: 'Hello' },
+      ])
+
+      warnSpy.mockRestore()
+    })
+
+    it('preserves text blocks when filtering guard content', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const captured: { request: any } = { request: null }
+      const mockClient = createMockClientWithCapture(captured)
+      const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
+      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+
+      await collectIterator(
+        provider.stream(messages, {
+          systemPrompt: [
+            { type: 'textBlock', text: 'First text' },
+            {
+              type: 'guardContentBlock',
+              text: {
+                qualifiers: ['query'],
+                text: 'Guard content',
+              },
+            },
+            { type: 'textBlock', text: 'Second text' },
+          ],
+        })
+      )
+
+      // Verify warning was logged
+      expect(warnSpy).toHaveBeenCalledWith(
+        'OpenAI does not support guard content in system prompts. Removing guard content block.'
+      )
+
+      // Verify both text blocks preserved, guard content removed
+      expect(captured.request).toBeDefined()
+      expect(captured.request!.messages).toEqual([
+        { role: 'system', content: 'First textSecond text' },
+        { role: 'user', content: 'Hello' },
+      ])
+
+      warnSpy.mockRestore()
+    })
+
+    it('handles system prompt with only guard content', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const captured: { request: any } = { request: null }
+      const mockClient = createMockClientWithCapture(captured)
+      const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
+      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+
+      await collectIterator(
+        provider.stream(messages, {
+          systemPrompt: [
+            {
+              type: 'guardContentBlock',
+              text: {
+                qualifiers: ['guard_content'],
+                text: 'Only guard content',
+              },
+            },
+          ],
+        })
+      )
+
+      // Verify warning was logged
+      expect(warnSpy).toHaveBeenCalledWith(
+        'OpenAI does not support guard content in system prompts. Removing guard content block.'
+      )
+
+      // Verify no system message added (only guard content)
+      expect(captured.request).toBeDefined()
+      expect(captured.request!.messages).toEqual([{ role: 'user', content: 'Hello' }])
+
+      warnSpy.mockRestore()
+    })
   })
 
   describe('error handling', () => {

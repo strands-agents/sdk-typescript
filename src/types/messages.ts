@@ -433,10 +433,68 @@ export type SystemPrompt = string | SystemContentBlock[]
 
 /**
  * A block of content within a system prompt.
- * Supports text content and cache points for prompt caching.
+ * Supports text content, cache points, and guard content for prompt caching and guardrail evaluation.
  *
  * This is a discriminated union where the object key determines the block format.
  */
-export type SystemContentBlockData = TextBlockData | { cachePoint: CachePointBlockData }
+export type SystemContentBlockData =
+  | TextBlockData
+  | { cachePoint: CachePointBlockData }
+  | { guardContent: GuardContentBlockData }
 
-export type SystemContentBlock = TextBlock | CachePointBlock
+export type SystemContentBlock = TextBlock | CachePointBlock | GuardContentBlock
+
+/**
+ * Qualifier for guard content.
+ * Specifies how the content should be evaluated by guardrails.
+ *
+ * - `grounding_source` - Content to check for grounding/factuality
+ * - `query` - User query to evaluate
+ * - `guard_content` - General content for guardrail evaluation
+ */
+export type GuardQualifier = 'grounding_source' | 'query' | 'guard_content'
+
+/**
+ * Text content to be evaluated by guardrails.
+ */
+export interface GuardContentText {
+  /**
+   * Qualifiers that specify how this content should be evaluated.
+   */
+  qualifiers: GuardQualifier[]
+
+  /**
+   * The text content to be evaluated.
+   */
+  text: string
+}
+
+/**
+ * Data for a guard content block.
+ */
+export interface GuardContentBlockData {
+  /**
+   * Text content with evaluation qualifiers.
+   */
+  text: GuardContentText
+}
+
+/**
+ * Guard content block for guardrail evaluation in system prompts.
+ * Marks content that should be evaluated by guardrails for safety, grounding, or other policies.
+ */
+export class GuardContentBlock implements GuardContentBlockData {
+  /**
+   * Discriminator for guard content.
+   */
+  readonly type = 'guardContentBlock' as const
+
+  /**
+   * Text content with evaluation qualifiers.
+   */
+  readonly text: GuardContentText
+
+  constructor(data: GuardContentBlockData) {
+    this.text = data.text
+  }
+}

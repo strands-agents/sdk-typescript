@@ -1102,6 +1102,128 @@ describe('BedrockModel', () => {
         ],
       })
     })
+
+    it('formats array system prompt with guard content', async () => {
+      const provider = new BedrockModel()
+      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+      const options: StreamOptions = {
+        systemPrompt: [
+          { type: 'textBlock', text: 'You are a helpful assistant' },
+          {
+            type: 'guardContentBlock',
+            text: {
+              qualifiers: ['grounding_source'],
+              text: 'This content should be evaluated for grounding.',
+            },
+          },
+        ],
+      }
+
+      collectIterator(provider.stream(messages, options))
+
+      expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
+        modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
+        messages: [
+          {
+            role: 'user',
+            content: [{ text: 'Hello' }],
+          },
+        ],
+        system: [
+          { text: 'You are a helpful assistant' },
+          {
+            guardContent: {
+              text: {
+                text: 'This content should be evaluated for grounding.',
+                qualifiers: ['grounding_source'],
+              },
+            },
+          },
+        ],
+      })
+    })
+
+    it('formats mixed system prompt with text, guard content, and cache points', async () => {
+      const provider = new BedrockModel()
+      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+      const options: StreamOptions = {
+        systemPrompt: [
+          { type: 'textBlock', text: 'You are a helpful assistant' },
+          {
+            type: 'guardContentBlock',
+            text: {
+              qualifiers: ['grounding_source', 'query'],
+              text: 'Guard content',
+            },
+          },
+          { type: 'textBlock', text: 'Additional context' },
+          { type: 'cachePointBlock', cacheType: 'default' },
+        ],
+      }
+
+      collectIterator(provider.stream(messages, options))
+
+      expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
+        modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
+        messages: [
+          {
+            role: 'user',
+            content: [{ text: 'Hello' }],
+          },
+        ],
+        system: [
+          { text: 'You are a helpful assistant' },
+          {
+            guardContent: {
+              text: {
+                text: 'Guard content',
+                qualifiers: ['grounding_source', 'query'],
+              },
+            },
+          },
+          { text: 'Additional context' },
+          { cachePoint: { type: 'default' } },
+        ],
+      })
+    })
+
+    it('formats guard content with all qualifier types', async () => {
+      const provider = new BedrockModel()
+      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+      const options: StreamOptions = {
+        systemPrompt: [
+          {
+            type: 'guardContentBlock',
+            text: {
+              qualifiers: ['grounding_source', 'query', 'guard_content'],
+              text: 'Multi-qualifier guard content',
+            },
+          },
+        ],
+      }
+
+      collectIterator(provider.stream(messages, options))
+
+      expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
+        modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
+        messages: [
+          {
+            role: 'user',
+            content: [{ text: 'Hello' }],
+          },
+        ],
+        system: [
+          {
+            guardContent: {
+              text: {
+                text: 'Multi-qualifier guard content',
+                qualifiers: ['grounding_source', 'query', 'guard_content'],
+              },
+            },
+          },
+        ],
+      })
+    })
   })
 
   describe('includeToolResultStatus configuration', async () => {

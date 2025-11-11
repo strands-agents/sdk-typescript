@@ -7,6 +7,7 @@ import {
   ReasoningBlock,
   CachePointBlock,
   JsonBlock,
+  GuardContentBlock,
 } from '../messages.js'
 
 describe('Message', () => {
@@ -96,6 +97,59 @@ describe('JsonBlock', () => {
     expect(block).toEqual({
       type: 'jsonBlock',
       json: { key: 'value' },
+    })
+  })
+})
+
+describe('GuardContentBlock', () => {
+  test('creates guard content block with single qualifier', () => {
+    const block = new GuardContentBlock({
+      text: {
+        qualifiers: ['grounding_source'],
+        text: 'This content should be evaluated for grounding.',
+      },
+    })
+
+    expect(block).toEqual({
+      type: 'guardContentBlock',
+      text: {
+        qualifiers: ['grounding_source'],
+        text: 'This content should be evaluated for grounding.',
+      },
+    })
+  })
+
+  test('creates guard content block with multiple qualifiers', () => {
+    const block = new GuardContentBlock({
+      text: {
+        qualifiers: ['grounding_source', 'query'],
+        text: 'Test content',
+      },
+    })
+
+    expect(block).toEqual({
+      type: 'guardContentBlock',
+      text: {
+        qualifiers: ['grounding_source', 'query'],
+        text: 'Test content',
+      },
+    })
+  })
+
+  test('creates guard content block with all qualifier types', () => {
+    const block = new GuardContentBlock({
+      text: {
+        qualifiers: ['grounding_source', 'query', 'guard_content'],
+        text: 'Test content',
+      },
+    })
+
+    expect(block).toEqual({
+      type: 'guardContentBlock',
+      text: {
+        qualifiers: ['grounding_source', 'query', 'guard_content'],
+        text: 'Test content',
+      },
     })
   })
 })

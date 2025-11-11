@@ -30,7 +30,7 @@ import {
   ReasoningContentBlock,
 } from '@aws-sdk/client-bedrock-runtime'
 import { Model, type BaseModelConfig, type StreamOptions } from '../models/model.js'
-import type { Message, ContentBlock, ToolUseBlock } from '../types/messages.js'
+import type { Message, ContentBlock, SystemContentBlock, ToolUseBlock } from '../types/messages.js'
 import type { ModelStreamEvent, ReasoningContentDelta, Usage } from '../models/streaming.js'
 import type { JSONValue } from '../types/json.js'
 import { ContextWindowOverflowError } from '../errors.js'
@@ -512,7 +512,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
    * @param block - SDK content block
    * @returns Bedrock-formatted content block
    */
-  private _formatContentBlock(block: ContentBlock): BedrockContentBlock {
+  private _formatContentBlock(block: ContentBlock | SystemContentBlock): BedrockContentBlock {
     switch (block.type) {
       case 'textBlock':
         return { text: block.text }
@@ -568,6 +568,16 @@ export class BedrockModel extends Model<BedrockModelConfig> {
 
       case 'cachePointBlock':
         return { cachePoint: { type: block.cacheType } }
+
+      case 'guardContentBlock':
+        return {
+          guardContent: {
+            text: {
+              text: block.text.text,
+              qualifiers: block.text.qualifiers,
+            },
+          },
+        }
     }
   }
 
