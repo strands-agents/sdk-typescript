@@ -17,7 +17,7 @@ import type { BaseModelConfig, Model, StreamOptions } from '../models/model.js'
 import { ToolRegistry } from '../registry/tool-registry.js'
 import { AgentState } from './state.js'
 import type { AgentData } from '../types/agent.js'
-import { AgentPrinter, getDefaultAppender, type Printer } from './outputter.js'
+import { AgentPrinter, getDefaultAppender, type Printer } from './printer.js'
 
 /**
  * Configuration object for creating a new Agent.
@@ -170,7 +170,7 @@ export class Agent implements AgentData {
     let currentArgs: InvokeArgs | undefined = args
 
     // Emit event before the loop starts
-    yield { type: 'beforeInvocationEvent' } as AgentStreamEvent
+    yield { type: 'beforeInvocationEvent' }
 
     try {
       // Main agent loop - continues until model stops without requesting tools
@@ -208,7 +208,7 @@ export class Agent implements AgentData {
       }
     } finally {
       // Always emit final event
-      yield { type: 'afterInvocationEvent' } as AgentStreamEvent
+      yield { type: 'afterInvocationEvent' }
     }
   }
 
@@ -248,7 +248,7 @@ export class Agent implements AgentData {
     args?: InvokeArgs
   ): AsyncGenerator<AgentStreamEvent, { message: Message; stopReason: string }, undefined> {
     // Emit event before invoking model
-    yield { type: 'beforeModelEvent', messages: [...this._messages] } as AgentStreamEvent
+    yield { type: 'beforeModelEvent', messages: [...this._messages] }
 
     const toolSpecs = this._toolRegistry.values().map((tool) => tool.toolSpec)
     const streamOptions: StreamOptions = { toolSpecs }
@@ -266,17 +266,9 @@ export class Agent implements AgentData {
       )
     }
 
-    // Stream model events - printer processing happens in public stream method
-    const streamGenerator = this._model.streamAggregated(this._messages, streamOptions)
-    let result = await streamGenerator.next()
-    while (!result.done) {
-      yield result.value
-      result = await streamGenerator.next()
-    }
+    const { message, stopReason } = yield* this._model.streamAggregated(this._messages, streamOptions)
 
-    const { message, stopReason } = result.value
-
-    yield { type: 'afterModelEvent', message, stopReason } as AgentStreamEvent
+    yield { type: 'afterModelEvent', message, stopReason }
 
     return { message, stopReason }
   }
@@ -292,7 +284,7 @@ export class Agent implements AgentData {
     assistantMessage: Message,
     toolRegistry: ToolRegistry
   ): AsyncGenerator<AgentStreamEvent, Message, undefined> {
-    yield { type: 'beforeToolsEvent', message: assistantMessage } as AgentStreamEvent
+    yield { type: 'beforeToolsEvent', message: assistantMessage }
 
     // Extract tool use blocks from assistant message
     const toolUseBlocks = assistantMessage.content.filter(
@@ -311,7 +303,7 @@ export class Agent implements AgentData {
       toolResultBlocks.push(toolResultBlock)
 
       // Yield the tool result block as it's created
-      yield toolResultBlock as AgentStreamEvent
+      yield toolResultBlock
     }
 
     // Create user message with tool results
@@ -320,7 +312,7 @@ export class Agent implements AgentData {
       content: toolResultBlocks,
     })
 
-    yield { type: 'afterToolsEvent', message: toolResultMessage } as AgentStreamEvent
+    yield { type: 'afterToolsEvent', message: toolResultMessage }
 
     return toolResultMessage
   }

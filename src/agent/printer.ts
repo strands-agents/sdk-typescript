@@ -98,7 +98,12 @@ export class AgentPrinter implements Printer {
         this.write(delta.text)
       }
     } else if (delta.type === 'reasoningContentDelta') {
-      // Output reasoning text (already inside <reason> tags)
+      // Start reasoning block if not already in one
+      if (!this._inReasoningBlock) {
+        this._inReasoningBlock = true
+        this.write('<reason>')
+      }
+      // Output reasoning text
       if (delta.text && delta.text.length > 0) {
         this.write(delta.text)
       }
@@ -108,18 +113,15 @@ export class AgentPrinter implements Printer {
 
   /**
    * Handle content block start events.
-   * Detects reasoning blocks and tool use starts.
+   * Detects tool use starts.
    */
   private handleContentBlockStart(event: { start?: { type: string; name?: string; toolUseId?: string } }): void {
     if (event.start?.type === 'toolUseStart') {
       // Tool execution starting
       this._toolCount++
       this.write(`\n🔧 Tool #${this._toolCount}: ${event.start.name}\n`)
-    } else {
-      // Assume this is a reasoning block starting
-      this._inReasoningBlock = true
-      this.write('<reason>')
     }
+    // Don't assume reasoning blocks on contentBlockStart - wait for reasoningContentDelta
   }
 
   /**

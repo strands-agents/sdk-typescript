@@ -4,7 +4,7 @@ import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
 import { collectGenerator } from '../../__fixtures__/model-test-helpers.js'
 import { createMockTool } from '../../__fixtures__/tool-helpers.js'
 import { TextBlock, MaxTokensError } from '../../index.js'
-import { AgentPrinter } from '../outputter.js'
+import { AgentPrinter } from '../printer.js'
 
 describe('Agent', () => {
   describe('stream', () => {
@@ -309,9 +309,9 @@ describe('Agent', () => {
       expect(result).toBeDefined()
       expect(result.lastMessage.content).toEqual([{ type: 'textBlock', text: 'Response text' }])
 
-      // Validate that the response was printed
+      // Validate exact output
       const allOutput = outputs.join('')
-      expect(allOutput).toContain('Response text')
+      expect(allOutput).toBe('Response text')
     })
 
     it('agent works correctly with printer disabled', async () => {
