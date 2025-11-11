@@ -130,7 +130,7 @@ export class Agent implements AgentData {
    * // Messages array is mutated in place and contains the full conversation
    * ```
    */
-  public async *stream(args: InvokeArgs): AsyncGenerator<AgentStreamEvent, AgentResult, never> {
+  public async *stream(args: InvokeArgs): AsyncGenerator<AgentStreamEvent, AgentResult, undefined> {
     let currentArgs: InvokeArgs | undefined = args
 
     // Emit event before the loop starts
@@ -210,7 +210,7 @@ export class Agent implements AgentData {
    */
   private async *invokeModel(
     args?: InvokeArgs
-  ): AsyncGenerator<AgentStreamEvent, { message: Message; stopReason: string }, never> {
+  ): AsyncGenerator<AgentStreamEvent, { message: Message; stopReason: string }, undefined> {
     // Emit event before invoking model
     yield { type: 'beforeModelEvent', messages: [...this._messages] }
 
@@ -247,7 +247,7 @@ export class Agent implements AgentData {
   private async *executeTools(
     assistantMessage: Message,
     toolRegistry: ToolRegistry
-  ): AsyncGenerator<AgentStreamEvent, Message, never> {
+  ): AsyncGenerator<AgentStreamEvent, Message, undefined> {
     yield { type: 'beforeToolsEvent', message: assistantMessage }
 
     // Extract tool use blocks from assistant message
@@ -294,7 +294,7 @@ export class Agent implements AgentData {
   private async *executeTool(
     toolUseBlock: ToolUseBlock,
     toolRegistry: ToolRegistry
-  ): AsyncGenerator<AgentStreamEvent, ToolResultBlock, never> {
+  ): AsyncGenerator<AgentStreamEvent, ToolResultBlock, undefined> {
     const tool = toolRegistry.find((t) => t.name === toolUseBlock.name)
 
     if (!tool) {

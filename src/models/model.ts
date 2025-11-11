@@ -1,13 +1,13 @@
 import {
+  type ContentBlock,
   Message,
   ReasoningBlock,
-  TextBlock,
-  ToolUseBlock,
-  type ContentBlock,
   type Role,
   type SystemPrompt,
+  TextBlock,
+  ToolUseBlock,
 } from '../types/messages.js'
-import type { ToolSpec, ToolChoice } from '../tools/types.js'
+import type { ToolChoice, ToolSpec } from '../tools/types.js'
 import {
   ModelContentBlockDeltaEvent,
   ModelContentBlockStartEvent,
@@ -136,7 +136,7 @@ export abstract class Model<T extends BaseModelConfig> {
   async *streamAggregated(
     messages: Message[],
     options?: StreamOptions
-  ): AsyncGenerator<ModelStreamEvent | ContentBlock, { message: Message; stopReason: string }, never> {
+  ): AsyncGenerator<ModelStreamEvent | ContentBlock, { message: Message; stopReason: string }, undefined> {
     // State maintained in closure
     let messageRole: Role | null = null
     const contentBlocks: ContentBlock[] = []

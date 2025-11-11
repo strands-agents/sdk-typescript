@@ -33,7 +33,7 @@
   },
   "scripts": {
     "build": "tsc",
-    "check": "npm run lint && npm run format && npm run typecheck && npm run test:coverage && npm run test:types && npm run test:package",
+    "check": "npm run lint && npm run format && npm run type-check && npm run test:coverage && npm run test:package",
     "clean": "rm -rf node_modules dist package-lock.json",
     "test": "vitest run --project unit-node",
     "test:watch": "vitest --project unit-node",
