@@ -102,6 +102,14 @@ export class Agent implements AgentData {
   }
 
   /**
+   * The conversation history of messages between user and assistant.
+   * Returns a defensive copy of the messages array to prevent external mutation.
+   */
+  get messages(): Message[] {
+    return [...this._messages]
+  }
+
+  /**
    * Streams the agent execution, yielding events and returning the final result.
    *
    * The agent loop manages the conversation flow by:
