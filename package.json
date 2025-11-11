@@ -2,25 +2,25 @@
   "name": "@strands-agents/sdk",
   "version": "0.1.0",
   "description": "TypeScript SDK for Strands Agents framework",
-  "main": "dist/index.js",
-  "module": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "dist/src/index.js",
+  "module": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
   "type": "module",
   "files": [
     "dist"
   ],
   "exports": {
     ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "import": "./dist/src/index.js",
+      "types": "./dist/src/index.d.ts"
     },
     "./openai": {
-      "import": "./dist/models/openai.js",
-      "types": "./dist/models/openai.d.ts"
+      "import": "./dist/src/models/openai.js",
+      "types": "./dist/src/models/openai.d.ts"
     },
     "./bedrock": {
-      "import": "./dist/models/bedrock.js",
-      "types": "./dist/models/bedrock.d.ts"
+      "import": "./dist/src/models/bedrock.js",
+      "types": "./dist/src/models/bedrock.d.ts"
     },
     "./vended_tools/notebook": {
       "import": "./dist/vended_tools/notebook/index.js",
