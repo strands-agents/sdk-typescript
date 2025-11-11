@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest'
-import { BedrockModel, ContextWindowOverflowError, Message, ToolSpec, ModelStreamEvent } from '@strands-agents/sdk'
+import {
+  Agent,
+  BedrockModel,
+  ContextWindowOverflowError,
+  Message,
+  ToolSpec,
+  ModelStreamEvent,
+} from '@strands-agents/sdk'
 
 // eslint-disable-next-line no-restricted-imports
 import { collectIterator, collectGenerator } from '../src/__fixtures__/model-test-helpers.js'
@@ -297,29 +304,21 @@ describe.skipIf(!(await shouldRunTests()))('BedrockModel Integration Tests', () 
 
     describe('Guardrails', () => {
       it.concurrent('handles guard content with text in system prompt', async () => {
-        const provider = new BedrockModel({ maxTokens: 100 })
-        const messages: Message[] = [
-          {
-            type: 'message',
-            role: 'user',
-            content: [{ type: 'textBlock', text: 'Can you verify this information?' }],
-          },
-        ]
-
-        const events = await collectIterator(
-          provider.stream(messages, {
-            systemPrompt: [
-              { type: 'textBlock', text: 'You are a helpful assistant.' },
-              {
-                type: 'guardContentBlock',
-                text: {
-                  qualifiers: ['grounding_source'],
-                  text: 'The Eiffel Tower is located in Paris, France.',
-                },
+        const agent = new Agent({
+          model: new BedrockModel({ maxTokens: 100 }),
+          systemPrompt: [
+            { type: 'textBlock', text: 'You are a helpful assistant.' },
+            {
+              type: 'guardContentBlock',
+              text: {
+                qualifiers: ['grounding_source'],
+                text: 'The Eiffel Tower is located in Paris, France.',
               },
-            ],
-          })
-        )
+            },
+          ],
+        })
+
+        const { items: events } = await collectGenerator(agent.stream('Can you verify this information?'))
 
         const responseText = events.reduce((acc, event) => {
           if (event.type === 'modelContentBlockDeltaEvent' && event.delta.type === 'textDelta') {
@@ -336,7 +335,10 @@ describe.skipIf(!(await shouldRunTests()))('BedrockModel Integration Tests', () 
       })
 
       it.concurrent('handles guard content with text in message', async () => {
-        const provider = new BedrockModel({ maxTokens: 100 })
+        const agent = new Agent({
+          model: new BedrockModel({ maxTokens: 100 }),
+        })
+
         const messages: Message[] = [
           {
             type: 'message',
@@ -354,7 +356,7 @@ describe.skipIf(!(await shouldRunTests()))('BedrockModel Integration Tests', () 
           },
         ]
 
-        const events = await collectIterator(provider.stream(messages))
+        const { items: events } = await collectGenerator(agent.stream(messages))
 
         const responseText = events.reduce((acc, event) => {
           if (event.type === 'modelContentBlockDeltaEvent' && event.delta.type === 'textDelta') {
