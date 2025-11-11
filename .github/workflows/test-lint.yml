@@ -51,3 +51,6 @@ jobs:
 
       - name: Build package
         run: npm run build
+
+      - name: Test packaging
+        run: npm run test:package
