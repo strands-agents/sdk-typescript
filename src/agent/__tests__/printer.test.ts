@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { AgentPrinter } from '../printer.js'
 import { Agent } from '../agent.js'
 import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
@@ -62,6 +62,7 @@ describe('AgentPrinter', () => {
         .addTurn({ type: 'textBlock', text: 'Result: 4' })
 
       const tool = createMockTool('calc', () => ({
+        type: 'toolResultBlock',
         toolUseId: 'tool-1',
         status: 'success' as const,
         content: [new TextBlock('4')],
@@ -85,6 +86,7 @@ describe('AgentPrinter', () => {
         .addTurn({ type: 'textBlock', text: 'Error handled' })
 
       const tool = createMockTool('bad_tool', () => ({
+        type: 'toolResultBlock',
         toolUseId: 'tool-1',
         status: 'error' as const,
         content: [new TextBlock('Failed')],
@@ -120,12 +122,14 @@ describe('AgentPrinter', () => {
         ])
 
       const calcTool = createMockTool('calculator', () => ({
+        type: 'toolResultBlock',
         toolUseId: 'tool-1',
         status: 'success' as const,
         content: [new TextBlock('4')],
       }))
 
       const validatorTool = createMockTool('validator', () => ({
+        type: 'toolResultBlock',
         toolUseId: 'tool-2',
         status: 'error' as const,
         content: [new TextBlock('Validation failed')],
