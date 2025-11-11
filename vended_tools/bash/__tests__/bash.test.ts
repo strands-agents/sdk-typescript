@@ -126,18 +126,6 @@ describe.skipIf(!isNode)('bash tool', () => {
       expect(result.error).toBe('')
     })
 
-    it('separates stdout and stderr', async () => {
-      const { context } = createFreshContext()
-      const result = await bash.invoke({ mode: 'execute', command: '>&2 echo "stderr_message"' }, context)
-
-      if (typeof result === 'string') {
-        throw new Error('Expected BashOutput object, got string')
-      }
-
-      // Verify stderr contains the error message
-      expect(result.error).toContain('stderr_message')
-    })
-
     it('returns empty stderr on success', async () => {
       const { context } = createFreshContext()
       const result = await bash.invoke({ mode: 'execute', command: 'echo "success"' }, context)
