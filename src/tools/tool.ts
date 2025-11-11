@@ -1,4 +1,5 @@
-import type { ToolResult, ToolSpec, ToolUse } from './types.js'
+import type { ToolSpec, ToolUse } from './types.js'
+import type { ToolResultBlock } from '../types/messages.js'
 import type { AgentData } from '../types/agent.js'
 import type { JSONValue } from '../types/json.js'
 
@@ -41,24 +42,9 @@ export interface ToolContext<TAgentState extends Record<string, JSONValue> = Rec
 }
 
 /**
- * Event yielded during tool execution to report streaming progress.
- * Tools can yield zero or more of these events before returning the final ToolResult.
- *
- * @example
- * ```typescript
- * const streamEvent: ToolStreamEvent = {
- *   type: 'toolStreamEvent',
- *   data: 'Processing step 1...'
- * }
- *
- * // Or with structured data
- * const streamEvent: ToolStreamEvent = {
- *   type: 'toolStreamEvent',
- *   data: { progress: 50, message: 'Halfway complete' }
- * }
- * ```
+ * Data for a tool stream event.
  */
-export interface ToolStreamEvent {
+export interface ToolStreamEventData {
   /**
    * Discriminator for tool stream events.
    */
@@ -72,10 +58,45 @@ export interface ToolStreamEvent {
 }
 
 /**
- * Type alias for the async generator returned by tool stream methods.
- * Yields ToolStreamEvents during execution and returns a ToolResult.
+ * Event yielded during tool execution to report streaming progress.
+ * Tools can yield zero or more of these events before returning the final ToolResult.
+ *
+ * @example
+ * ```typescript
+ * const streamEvent = new ToolStreamEvent({
+ *   data: 'Processing step 1...'
+ * })
+ *
+ * // Or with structured data
+ * const streamEvent = new ToolStreamEvent({
+ *   data: { progress: 50, message: 'Halfway complete' }
+ * })
+ * ```
  */
-export type ToolStreamGenerator = AsyncGenerator<ToolStreamEvent, ToolResult, never>
+export class ToolStreamEvent implements ToolStreamEventData {
+  /**
+   * Discriminator for tool stream events.
+   */
+  readonly type = 'toolStreamEvent' as const
+
+  /**
+   * Caller-provided data for the progress update.
+   * Can be any type of data the tool wants to report.
+   */
+  readonly data?: unknown
+
+  constructor(eventData: { data?: unknown }) {
+    if (eventData.data !== undefined) {
+      this.data = eventData.data
+    }
+  }
+}
+
+/**
+ * Type alias for the async generator returned by tool stream methods.
+ * Yields ToolStreamEvents during execution and returns a ToolResultBlock.
+ */
+export type ToolStreamGenerator = AsyncGenerator<ToolStreamEvent, ToolResultBlock, never>
 
 /**
  * Interface for tool implementations.
@@ -110,10 +131,10 @@ export interface Tool {
   /**
    * Executes the tool with streaming support.
    * Yields zero or more ToolStreamEvents during execution, then returns
-   * exactly one ToolResult as the final value.
+   * exactly one ToolResultBlock as the final value.
    *
    * @param toolContext - Context information including the tool use request and invocation state
-   * @returns Async generator that yields ToolStreamEvents and returns a ToolResult
+   * @returns Async generator that yields ToolStreamEvents and returns a ToolResultBlock
    *
    * @example
    * ```typescript

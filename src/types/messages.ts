@@ -225,6 +225,13 @@ export interface ToolResultBlockData {
    * The content returned by the tool.
    */
   content: ToolResultContentData[]
+
+  /**
+   * The original error object when status is 'error'.
+   * Available for inspection by hooks, error handlers, and event loop.
+   * Tools must wrap non-Error thrown values into Error objects.
+   */
+  error?: Error
 }
 
 /**
@@ -251,10 +258,20 @@ export class ToolResultBlock implements ToolResultBlockData {
    */
   readonly content: ToolResultContent[]
 
-  constructor(data: { toolUseId: string; status: 'success' | 'error'; content: ToolResultContent[] }) {
+  /**
+   * The original error object when status is 'error'.
+   * Available for inspection by hooks, error handlers, and event loop.
+   * Tools must wrap non-Error thrown values into Error objects.
+   */
+  readonly error?: Error
+
+  constructor(data: { toolUseId: string; status: 'success' | 'error'; content: ToolResultContent[]; error?: Error }) {
     this.toolUseId = data.toolUseId
     this.status = data.status
     this.content = data.content
+    if (data.error !== undefined) {
+      this.error = data.error
+    }
   }
 }
 

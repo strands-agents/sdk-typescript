@@ -1,20 +1,21 @@
-import type { Tool, ToolContext, ToolStreamEvent } from './tool.js'
-import type { ToolSpec, ToolResult } from './types.js'
+import type { Tool, ToolContext } from './tool.js'
+import { ToolStreamEvent } from './tool.js'
+import type { ToolSpec } from './types.js'
 import type { JSONSchema, JSONValue } from '../types/json.js'
 import { deepCopy } from '../types/json.js'
-import { JsonBlock, TextBlock } from '../types/messages.js'
+import { JsonBlock, TextBlock, ToolResultBlock } from '../types/messages.js'
 
 /**
  * Callback function for FunctionTool implementations.
- * The callback can return values in multiple ways, and FunctionTool handles the conversion to ToolResult.
+ * The callback can return values in multiple ways, and FunctionTool handles the conversion to ToolResultBlock.
  *
  * @param input - The input parameters conforming to the tool's inputSchema
  * @param toolContext - The tool execution context with invocation state
  * @returns Can return:
- *   - AsyncGenerator: Each yielded value becomes a ToolStreamEvent, final value wrapped in ToolResult
- *   - Promise: Resolved value is wrapped in ToolResult
- *   - Synchronous value: Value is wrapped in ToolResult
- *   - If an error is thrown, it's handled and returned as an error ToolResult
+ *   - AsyncGenerator: Each yielded value becomes a ToolStreamEvent, final value wrapped in ToolResultBlock
+ *   - Promise: Resolved value is wrapped in ToolResultBlock
+ *   - Synchronous value: Value is wrapped in ToolResultBlock
+ *   - If an error is thrown, it's handled and returned as an error ToolResultBlock
  *
  * @example
  * ```typescript
@@ -58,16 +59,16 @@ export interface FunctionToolConfig {
 }
 
 /**
- * A Tool implementation that wraps a callback function and handles all ToolResult conversion.
+ * A Tool implementation that wraps a callback function and handles all ToolResultBlock conversion.
  *
  * FunctionTool allows creating tools from existing functions without needing to manually
- * handle ToolResult formatting or error handling. It supports multiple callback patterns:
+ * handle ToolResultBlock formatting or error handling. It supports multiple callback patterns:
  * - Async generators for streaming responses
  * - Promises for async operations
  * - Synchronous functions for immediate results
  *
- * All return values are automatically wrapped in ToolResult, and errors are caught and
- * returned as error ToolResults.
+ * All return values are automatically wrapped in ToolResultBlock, and errors are caught and
+ * returned as error ToolResultBlocks.
  *
  * @example
  * ```typescript
@@ -139,12 +140,12 @@ export class FunctionTool implements Tool {
 
   /**
    * Executes the tool with streaming support.
-   * Handles all callback patterns (async generator, promise, sync) and converts results to ToolResult.
+   * Handles all callback patterns (async generator, promise, sync) and converts results to ToolResultBlock.
    *
    * @param toolContext - Context information including the tool use request and invocation state
-   * @returns Async generator that yields ToolStreamEvents and returns a ToolResult
+   * @returns Async generator that yields ToolStreamEvents and returns a ToolResultBlock
    */
-  async *stream(toolContext: ToolContext): AsyncGenerator<ToolStreamEvent, ToolResult, unknown> {
+  async *stream(toolContext: ToolContext): AsyncGenerator<ToolStreamEvent, ToolResultBlock, unknown> {
     const { toolUse } = toolContext
 
     try {
@@ -152,7 +153,7 @@ export class FunctionTool implements Tool {
 
       // Check if result is an async generator
       if (result && typeof result === 'object' && Symbol.asyncIterator in result) {
-        // Handle async generator: yield each value as ToolStreamEvent, wrap final value in ToolResult
+        // Handle async generator: yield each value as ToolStreamEvent, wrap final value in ToolResultBlock
         const generator = result as AsyncGenerator<unknown, unknown, unknown>
 
         // Iterate through all yielded values
@@ -160,31 +161,30 @@ export class FunctionTool implements Tool {
 
         while (!iterResult.done) {
           // Each yielded value becomes a ToolStreamEvent
-          yield {
-            type: 'toolStreamEvent',
+          yield new ToolStreamEvent({
             data: iterResult.value,
-          }
+          })
           iterResult = await generator.next()
         }
 
-        // The generator's return value (when done = true) is wrapped in ToolResult
+        // The generator's return value (when done = true) is wrapped in ToolResultBlock
         return this._wrapInToolResult(iterResult.value, toolUse.toolUseId)
       } else if (result instanceof Promise) {
-        // Handle promise: await and wrap in ToolResult
+        // Handle promise: await and wrap in ToolResultBlock
         const value = await result
         return this._wrapInToolResult(value, toolUse.toolUseId)
       } else {
-        // Handle synchronous value: wrap in ToolResult
+        // Handle synchronous value: wrap in ToolResultBlock
         return this._wrapInToolResult(result, toolUse.toolUseId)
       }
     } catch (error) {
-      // Handle any errors and yield as error ToolResult
+      // Handle any errors and yield as error ToolResultBlock
       return this._createErrorResult(error, toolUse.toolUseId)
     }
   }
 
   /**
-   * Wraps a value in a ToolResult with success status.
+   * Wraps a value in a ToolResultBlock with success status.
    *
    * Due to AWS Bedrock limitations (only accepts objects as JSON content), the following
    * rules are applied:
@@ -195,56 +195,56 @@ export class FunctionTool implements Tool {
    * - Arrays → JsonBlock wrapped in \{ $value: array \} (with deep copy)
    *
    * @param value - The value to wrap (can be any type)
-   * @param toolUseId - The tool use ID for the ToolResult
-   * @returns A ToolResult containing the value
+   * @param toolUseId - The tool use ID for the ToolResultBlock
+   * @returns A ToolResultBlock containing the value
    */
-  private _wrapInToolResult(value: unknown, toolUseId: string): ToolResult {
+  private _wrapInToolResult(value: unknown, toolUseId: string): ToolResultBlock {
     try {
       // Handle null with special string representation as text content
       if (value === null) {
-        return {
+        return new ToolResultBlock({
           toolUseId,
           status: 'success',
           content: [new TextBlock('<null>')],
-        }
+        })
       }
 
       // Handle undefined with special string representation as text content
       if (value === undefined) {
-        return {
+        return new ToolResultBlock({
           toolUseId,
           status: 'success',
           content: [new TextBlock('<undefined>')],
-        }
+        })
       }
 
       // Handle primitives (strings, numbers, booleans) as text content
       // Bedrock doesn't accept primitives as JSON content, so we convert all to strings
       if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-        return {
+        return new ToolResultBlock({
           toolUseId,
           status: 'success',
           content: [new TextBlock(String(value))],
-        }
+        })
       }
 
       // Handle arrays by wrapping in object { $value: array }
       if (Array.isArray(value)) {
         const copiedValue = deepCopy(value)
-        return {
+        return new ToolResultBlock({
           toolUseId,
           status: 'success',
           content: [new JsonBlock({ json: { $value: copiedValue } })],
-        }
+        })
       }
 
       // Handle objects as JSON content with deep copy
       const copiedValue = deepCopy(value)
-      return {
+      return new ToolResultBlock({
         toolUseId,
         status: 'success',
         content: [new JsonBlock({ json: copiedValue })],
-      }
+      })
     } catch (error) {
       // If deep copy fails (circular references, non-serializable values), return error result
       return this._createErrorResult(error, toolUseId)
@@ -252,26 +252,26 @@ export class FunctionTool implements Tool {
   }
 
   /**
-   * Creates an error ToolResult from an error object.
+   * Creates an error ToolResultBlock from an error object.
    * Ensures all errors are normalized to Error objects and includes the original error
-   * in the ToolResult for inspection by hooks, error handlers, and event loop.
+   * in the ToolResultBlock for inspection by hooks, error handlers, and event loop.
    *
    * TODO: Implement consistent logging format as defined in #30
    * This error should be logged to the caller using the established logging pattern.
    *
    * @param error - The error that occurred (can be Error object or any thrown value)
-   * @param toolUseId - The tool use ID for the ToolResult
-   * @returns A ToolResult with error status, error message content, and original error object
+   * @param toolUseId - The tool use ID for the ToolResultBlock
+   * @returns A ToolResultBlock with error status, error message content, and original error object
    */
-  private _createErrorResult(error: unknown, toolUseId: string): ToolResult {
+  private _createErrorResult(error: unknown, toolUseId: string): ToolResultBlock {
     // Ensure error is an Error object (wrap non-Error values)
     const errorObject = error instanceof Error ? error : new Error(String(error))
 
-    return {
+    return new ToolResultBlock({
       toolUseId,
       status: 'error',
       content: [new TextBlock(`Error: ${errorObject.message}`)],
       error: errorObject,
-    }
+    })
   }
 }

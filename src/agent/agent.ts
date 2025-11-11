@@ -330,11 +330,7 @@ export class Agent implements AgentData {
       })
     }
 
-    // Create ToolResultBlock from ToolResult
-    return new ToolResultBlock({
-      toolUseId: toolResult.toolUseId,
-      status: toolResult.status,
-      content: toolResult.content,
-    })
+    // Tool already returns ToolResultBlock directly
+    return toolResult
   }
 }

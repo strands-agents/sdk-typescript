@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { FunctionTool } from '../function-tool.js'
+import { ToolStreamEvent } from '../tool.js'
 import type { ToolContext } from '../tool.js'
 import type { JSONValue } from '../../types/json.js'
 import { createMockContext } from '../../__fixtures__/tool-helpers.js'
@@ -104,6 +105,7 @@ describe('FunctionTool', () => {
 
         // Verify entire result with actual calculated value
         expect(result).toEqual({
+          type: 'toolResultBlock',
           toolUseId: 'test-sync-1',
           status: 'success',
           content: [
@@ -136,6 +138,7 @@ describe('FunctionTool', () => {
 
         // Verify entire result object
         expect(result).toEqual({
+          type: 'toolResultBlock',
           toolUseId: 'test-string',
           status: 'success',
           content: [
@@ -168,6 +171,7 @@ describe('FunctionTool', () => {
 
         // Verify entire result object
         expect(result).toEqual({
+          type: 'toolResultBlock',
           toolUseId: 'test-object',
           status: 'success',
           content: [
@@ -217,6 +221,7 @@ describe('FunctionTool', () => {
         )
 
         expect(result).toEqual({
+          type: 'toolResultBlock',
           toolUseId: 'test-null',
           status: 'success',
           content: [
@@ -242,6 +247,7 @@ describe('FunctionTool', () => {
         )
 
         expect(result).toEqual({
+          type: 'toolResultBlock',
           toolUseId: 'test-undefined',
           status: 'success',
           content: [
@@ -266,6 +272,7 @@ describe('FunctionTool', () => {
         )
 
         expect(trueResult).toEqual({
+          type: 'toolResultBlock',
           toolUseId: 'test-true',
           status: 'success',
           content: [
@@ -288,6 +295,7 @@ describe('FunctionTool', () => {
         )
 
         expect(falseResult).toEqual({
+          type: 'toolResultBlock',
           toolUseId: 'test-false',
           status: 'success',
           content: [
@@ -312,6 +320,7 @@ describe('FunctionTool', () => {
         )
 
         expect(result).toEqual({
+          type: 'toolResultBlock',
           toolUseId: 'test-number',
           status: 'success',
           content: [
@@ -335,6 +344,7 @@ describe('FunctionTool', () => {
         )
 
         expect(negativeResult).toEqual({
+          type: 'toolResultBlock',
           toolUseId: 'test-negative',
           status: 'success',
           content: [
@@ -359,6 +369,7 @@ describe('FunctionTool', () => {
         )
 
         expect(result).toEqual({
+          type: 'toolResultBlock',
           toolUseId: 'test-array',
           status: 'success',
           content: [
@@ -388,6 +399,7 @@ describe('FunctionTool', () => {
 
         // Verify the result still has the original value
         expect(result).toEqual({
+          type: 'toolResultBlock',
           toolUseId: 'test-copy',
           status: 'success',
           content: [
@@ -417,6 +429,7 @@ describe('FunctionTool', () => {
 
         // Verify the result still has the original value (wrapped in $value)
         expect(result).toEqual({
+          type: 'toolResultBlock',
           toolUseId: 'test-array-copy',
           status: 'success',
           content: [
@@ -515,6 +528,7 @@ describe('FunctionTool', () => {
 
         // Verify entire result object
         expect(result).toEqual({
+          type: 'toolResultBlock',
           toolUseId: 'test-gen-1',
           status: 'success',
           content: [
@@ -631,6 +645,7 @@ describe('FunctionTool', () => {
         const { result } = await collectGenerator(tool.stream(createMockContext(toolUse)))
 
         expect(result).toEqual({
+          type: 'toolResultBlock',
           toolUseId: 'test-error-capture',
           status: 'error',
           content: [
@@ -662,6 +677,7 @@ describe('FunctionTool', () => {
         const { result } = await collectGenerator(tool.stream(createMockContext(toolUse)))
 
         expect(result).toEqual({
+          type: 'toolResultBlock',
           toolUseId: 'test-string-wrap',
           status: 'error',
           content: [
@@ -705,6 +721,7 @@ describe('FunctionTool', () => {
         const { result } = await collectGenerator(tool.stream(createMockContext(toolUse)))
 
         expect(result).toEqual({
+          type: 'toolResultBlock',
           toolUseId: 'test-custom-error',
           status: 'error',
           content: [
@@ -737,6 +754,7 @@ describe('FunctionTool', () => {
         const { result } = await collectGenerator(tool.stream(createMockContext(toolUse)))
 
         expect(result).toEqual({
+          type: 'toolResultBlock',
           toolUseId: 'test-stack-trace',
           status: 'error',
           content: [
@@ -778,6 +796,7 @@ describe('FunctionTool', () => {
 
         // Final result should have error object
         expect(result).toEqual({
+          type: 'toolResultBlock',
           toolUseId: 'test-async-gen-error',
           status: 'error',
           content: [
@@ -859,6 +878,7 @@ describe('FunctionTool', () => {
         )
 
         expect(result).toEqual({
+          type: 'toolResultBlock',
           toolUseId: 'test-circular',
           status: 'error',
           error: expect.any(Error),
@@ -887,6 +907,7 @@ describe('FunctionTool', () => {
 
         // Functions are silently dropped during JSON serialization
         expect(result).toEqual({
+          type: 'toolResultBlock',
           toolUseId: 'test-function',
           status: 'success',
           content: [
@@ -944,5 +965,44 @@ describe('Tool interface backwards compatibility', () => {
 
     expect(result).toBeDefined()
     expect(result.status).toBe('success')
+  })
+})
+
+describe('ToolStreamEvent', () => {
+  describe('instantiation', () => {
+    it('creates instance with data', () => {
+      const event = new ToolStreamEvent({
+        data: 'test data',
+      })
+
+      expect(event).toEqual({
+        type: 'toolStreamEvent',
+        data: 'test data',
+      })
+    })
+
+    it('creates instance without data', () => {
+      const event = new ToolStreamEvent({})
+
+      expect(event).toEqual({
+        type: 'toolStreamEvent',
+      })
+    })
+
+    it('creates instance with structured data', () => {
+      const structuredData = {
+        progress: 50,
+        message: 'halfway complete',
+      }
+
+      const event = new ToolStreamEvent({
+        data: structuredData,
+      })
+
+      expect(event).toEqual({
+        type: 'toolStreamEvent',
+        data: structuredData,
+      })
+    })
   })
 })

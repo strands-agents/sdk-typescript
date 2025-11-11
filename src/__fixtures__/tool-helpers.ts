@@ -4,7 +4,7 @@
  */
 
 import type { Tool, ToolContext } from '../tools/tool.js'
-import type { ToolResult } from '../tools/types.js'
+import type { ToolResultBlock } from '../types/messages.js'
 import type { JSONValue } from '../types/json.js'
 import { AgentState } from '../agent/state.js'
 
@@ -31,12 +31,12 @@ export function createMockContext(
  * Helper to create a mock tool for testing.
  *
  * @param name - The name of the mock tool
- * @param resultFn - Function that returns a ToolResult or an AsyncGenerator that yields nothing and returns a ToolResult
+ * @param resultFn - Function that returns a ToolResultBlock or an AsyncGenerator that yields nothing and returns a ToolResultBlock
  * @returns Mock Tool object
  */
 export function createMockTool(
   name: string,
-  resultFn: () => ToolResult | AsyncGenerator<never, ToolResult, never>
+  resultFn: () => ToolResultBlock | AsyncGenerator<never, ToolResultBlock, never>
 ): Tool {
   return {
     name,
@@ -47,11 +47,11 @@ export function createMockTool(
       inputSchema: { type: 'object', properties: {} },
     },
     // eslint-disable-next-line require-yield
-    async *stream(_context): AsyncGenerator<never, ToolResult, never> {
+    async *stream(_context): AsyncGenerator<never, ToolResultBlock, never> {
       const result = resultFn()
       if (typeof result === 'object' && result !== null && Symbol.asyncIterator in result) {
         // For generators that throw errors
-        const gen = result as AsyncGenerator<never, ToolResult, never>
+        const gen = result as AsyncGenerator<never, ToolResultBlock, never>
         let done = false
         while (!done) {
           const { value, done: isDone } = await gen.next()
@@ -63,7 +63,7 @@ export function createMockTool(
         // This should never be reached but TypeScript needs a return
         throw new Error('Generator ended unexpectedly')
       } else {
-        return result as ToolResult
+        return result as ToolResultBlock
       }
     },
   }

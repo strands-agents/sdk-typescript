@@ -1,4 +1,4 @@
-import { deepCopy, type JSONValue } from '../types/json.js'
+import { deepCopy, deepCopyWithValidation, type JSONValue } from '../types/json.js'
 
 /**
  * Agent state provides key-value storage outside conversation context.
@@ -28,7 +28,7 @@ export class AgentState<TState extends Record<string, JSONValue> = Record<string
    */
   constructor(initialState?: TState) {
     if (initialState !== undefined) {
-      this._state = deepCopy(initialState) as Record<string, JSONValue>
+      this._state = deepCopyWithValidation(initialState, 'initialState') as Record<string, JSONValue>
     } else {
       this._state = {}
     }
@@ -63,7 +63,7 @@ export class AgentState<TState extends Record<string, JSONValue> = Record<string
    * @throws Error if value is not JSON serializable
    */
   set(key: string, value: unknown): void {
-    this._state[key] = deepCopy(value)
+    this._state[key] = deepCopyWithValidation(value, `value for key "${key}"`)
   }
 
   /**
