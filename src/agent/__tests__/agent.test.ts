@@ -3,7 +3,7 @@ import { Agent } from '../agent.js'
 import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
 import { collectGenerator } from '../../__fixtures__/model-test-helpers.js'
 import { createMockTool } from '../../__fixtures__/tool-helpers.js'
-import { TextBlock, MaxTokensError, ToolResultBlock } from '../../index.js'
+import { TextBlock, MaxTokensError } from '../../index.js'
 
 describe('Agent', () => {
   describe('stream', () => {
@@ -50,15 +50,12 @@ describe('Agent', () => {
           .addTurn({ type: 'toolUseBlock', name: 'testTool', toolUseId: 'tool-1', input: {} })
           .addTurn({ type: 'textBlock', text: 'Tool result processed' })
 
-        const tool = createMockTool(
-          'testTool',
-          () =>
-            new ToolResultBlock({
-              toolUseId: 'tool-1',
-              status: 'success' as const,
-              content: [new TextBlock('Tool executed')],
-            })
-        )
+        const tool = createMockTool('testTool', () => ({
+          type: 'toolResultBlock',
+          toolUseId: 'tool-1',
+          status: 'success' as const,
+          content: [new TextBlock('Tool executed')],
+        }))
 
         const agent = new Agent({ model, tools: [tool] })
 
@@ -79,15 +76,12 @@ describe('Agent', () => {
           .addTurn({ type: 'toolUseBlock', name: 'testTool', toolUseId: 'tool-1', input: {} })
           .addTurn({ type: 'textBlock', text: 'Done' })
 
-        const tool = createMockTool(
-          'testTool',
-          () =>
-            new ToolResultBlock({
-              toolUseId: 'tool-1',
-              status: 'success' as const,
-              content: [new TextBlock('Success')],
-            })
-        )
+        const tool = createMockTool('testTool', () => ({
+          type: 'toolResultBlock',
+          toolUseId: 'tool-1',
+          status: 'success' as const,
+          content: [new TextBlock('Success')],
+        }))
 
         const agent = new Agent({ model, tools: [tool] })
 
@@ -188,15 +182,12 @@ describe('Agent', () => {
           .addTurn({ type: 'toolUseBlock', name: 'calc', toolUseId: 'tool-1', input: { a: 1, b: 2 } })
           .addTurn({ type: 'textBlock', text: 'The answer is 3' })
 
-        const tool = createMockTool(
-          'calc',
-          () =>
-            new ToolResultBlock({
-              toolUseId: 'tool-1',
-              status: 'success' as const,
-              content: [new TextBlock('3')],
-            })
-        )
+        const tool = createMockTool('calc', () => ({
+          type: 'toolResultBlock',
+          toolUseId: 'tool-1',
+          status: 'success' as const,
+          content: [new TextBlock('3')],
+        }))
 
         const agent = new Agent({ model, tools: [tool] })
 
@@ -244,15 +235,12 @@ describe('Agent', () => {
           .addTurn({ type: 'toolUseBlock', name: 'testTool', toolUseId: 'id', input: {} })
           .addTurn({ type: 'textBlock', text: 'Final' })
 
-        const tool = createMockTool(
-          'testTool',
-          () =>
-            new ToolResultBlock({
-              toolUseId: 'id',
-              status: 'success' as const,
-              content: [new TextBlock('Tool ran')],
-            })
-        )
+        const tool = createMockTool('testTool', () => ({
+          type: 'toolResultBlock',
+          toolUseId: 'id',
+          status: 'success' as const,
+          content: [new TextBlock('Tool ran')],
+        }))
 
         return { model, tool }
       }
