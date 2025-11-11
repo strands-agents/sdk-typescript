@@ -76,27 +76,46 @@ console.log(result.error) // "" (empty if no errors)
 Variables, functions, and working directory persist across commands in the same session:
 
 ```typescript
-// Set a variable
-await bash.invoke({ mode: 'execute', command: 'MY_VAR="hello"' }, context)
+import { Agent } from '@strands-agents/sdk'
+import { BedrockModel } from '@strands-agents/sdk'
+import { bash } from '@strands-agents/sdk/vended_tools/bash'
 
-// Use the variable in a later command
-const result = await bash.invoke({ mode: 'execute', command: 'echo $MY_VAR' }, context)
+const model = new BedrockModel({
+  region: 'us-east-1',
+})
 
-console.log(result.output) // "hello"
+const agent = new Agent({
+  model,
+  tools: [bash],
+})
+
+let res
+res = await agent.invoke('run export "MY_VAR=hello"')
+console.log(res.lastMessage)
+
+res = await agent.invoke('run "echo $MY_VAR"')
+console.log(res.lastMessage) // Will show "hello"
 ```
 
 ### Custom Timeout
 
 ```typescript
+import { Agent } from '@strands-agents/sdk'
+import { BedrockModel } from '@strands-agents/sdk'
+import { bash } from '@strands-agents/sdk/vended_tools/bash'
+
+const model = new BedrockModel({
+  region: 'us-east-1',
+})
+
+const agent = new Agent({
+  model,
+  tools: [bash],
+})
+
 // Execute with a 300 second timeout
-const result = await bash.invoke(
-  {
-    mode: 'execute',
-    command: 'long_running_process',
-    timeout: 300, // seconds
-  },
-  context
-)
+const res = await agent.invoke('run "long_running_process" with a timeout of 300 seconds')
+console.log(res.lastMessage)
 ```
 
 ### Restart Session
@@ -104,16 +123,28 @@ const result = await bash.invoke(
 Clear all session state and start fresh:
 
 ```typescript
+import { Agent } from '@strands-agents/sdk'
+import { BedrockModel } from '@strands-agents/sdk'
+import { bash } from '@strands-agents/sdk/vended_tools/bash'
+
+const model = new BedrockModel({
+  region: 'us-east-1',
+})
+
+const agent = new Agent({
+  model,
+  tools: [bash],
+})
+
 // Set a variable
-await bash.invoke({ mode: 'execute', command: 'TEMP_VAR="exists"' }, context)
+let res = await agent.invoke('run export "TEMP_VAR=exists"')
 
 // Restart the session
-await bash.invoke({ mode: 'restart' }, context)
+res = await agent.invoke('restart the bash session')
 
 // Variable is now gone
-const result = await bash.invoke({ mode: 'execute', command: 'echo $TEMP_VAR' }, context)
-
-console.log(result.output) // "" (empty - variable doesn't exist)
+res = await agent.invoke('run "echo $TEMP_VAR"')
+console.log(res.lastMessage) // Variable will be empty/undefined
 ```
 
 ## API Reference
@@ -214,54 +245,96 @@ try {
 ### File Operations
 
 ```typescript
+import { Agent } from '@strands-agents/sdk'
+import { BedrockModel } from '@strands-agents/sdk'
+import { bash } from '@strands-agents/sdk/vended_tools/bash'
+
+const model = new BedrockModel({
+  region: 'us-east-1',
+})
+
+const agent = new Agent({
+  model,
+  tools: [bash],
+})
+
 // Create a file
-await bash.invoke({ mode: 'execute', command: 'echo "content" > myfile.txt' }, context)
+let res = await agent.invoke('create a file called myfile.txt with content "Hello World"')
 
 // Read the file
-const result = await bash.invoke({ mode: 'execute', command: 'cat myfile.txt' }, context)
-
-console.log(result.output) // "content"
+res = await agent.invoke('read the contents of myfile.txt')
+console.log(res.lastMessage) // Will show the file contents
 ```
 
 ### Command Piping
 
 ```typescript
-const result = await bash.invoke(
-  {
-    mode: 'execute',
-    command: 'ls -la | grep ".ts" | wc -l',
-  },
-  context
-)
+import { Agent } from '@strands-agents/sdk'
+import { BedrockModel } from '@strands-agents/sdk'
+import { bash } from '@strands-agents/sdk/vended_tools/bash'
 
-console.log(result.output) // Number of .ts files
+const model = new BedrockModel({
+  region: 'us-east-1',
+})
+
+const agent = new Agent({
+  model,
+  tools: [bash],
+})
+
+const res = await agent.invoke('count how many .ts files are in the current directory')
+console.log(res.lastMessage) // Number of .ts files
 ```
 
-### Error Handling
+### Command Errors
 
 ```typescript
-// Command that doesn't exist
-const result = await bash.invoke({ mode: 'execute', command: 'nonexistent_command' }, context)
+import { Agent } from '@strands-agents/sdk'
+import { BedrockModel } from '@strands-agents/sdk'
+import { bash } from '@strands-agents/sdk/vended_tools/bash'
 
-console.log(result.error) // "bash: nonexistent_command: command not found"
+const model = new BedrockModel({
+  region: 'us-east-1',
+})
+
+const agent = new Agent({
+  model,
+  tools: [bash],
+})
+
+// Command that doesn't exist
+const res = await agent.invoke('run "nonexistent_command"')
+console.log(res.lastMessage) // Agent will report the error
 ```
 
 ### Multi-Step Operations
 
 ```typescript
+import { Agent } from '@strands-agents/sdk'
+import { BedrockModel } from '@strands-agents/sdk'
+import { bash } from '@strands-agents/sdk/vended_tools/bash'
+
+const model = new BedrockModel({
+  region: 'us-east-1',
+})
+
+const agent = new Agent({
+  model,
+  tools: [bash],
+})
+
 // Create a directory
-await bash.invoke({ mode: 'execute', command: 'mkdir -p temp_workspace' }, context)
+let res = await agent.invoke('create a directory called temp_workspace')
 
 // Change into it
-await bash.invoke({ mode: 'execute', command: 'cd temp_workspace' }, context)
+res = await agent.invoke('change directory to temp_workspace')
 
 // Create files (in the new directory)
-await bash.invoke({ mode: 'execute', command: 'touch file1.txt file2.txt' }, context)
+res = await agent.invoke('create two empty files: file1.txt and file2.txt')
 
 // Verify
-const result = await bash.invoke({ mode: 'execute', command: 'pwd && ls' }, context)
-
-console.log(result.output) // Shows current directory and files
+res = await agent.invoke('show current directory and list all files')
+console.log(res.lastMessage) // Shows current directory and files
 ```
 
 ## Limitations
@@ -298,6 +371,26 @@ If session state isn't persisting:
 
 - Verify you're using the same context/agent instance
 - Check that you haven't restarted the session unintentionally
+- Remember that each agent instance has its own isolated session
+
+### Permission Errors
+
+If you encounter permission errors:
+
+- The tool runs with the same permissions as the Node.js process
+- Check file/directory permissions
+- Consider running the Node.js process with appropriate permissions
+
+## Contributing
+
+When contributing to this tool:
+
+- Ensure 80%+ test coverage
+- Add tests for new features
+- Update this README with new functionality
+- Follow the existing code patterns
+- Test in both unit and integration test suites
+  nally
 - Remember that each agent instance has its own isolated session
 
 ### Permission Errors
