@@ -1,8 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { bash } from '../vended_tools/bash/bash.js'
-
-// Environment detection - using typeof check since we can't import from fixtures in integ tests
-const isNode = typeof process !== 'undefined' && typeof process.versions !== 'undefined' && !!process.versions.node
+import { shouldRunTests } from './__fixtures__/model-test-helpers.js'
 
 // Simple AgentState and ToolContext definition for integration tests
 class AgentState {
@@ -26,8 +24,7 @@ interface ToolContext {
   agent: { state: AgentState }
 }
 
-// Skip all tests if not in Node.js environment
-describe.skipIf(!isNode)('bash tool integration', () => {
+describe.skipIf(!(await shouldRunTests()))('bash tool integration', () => {
   // Helper to create fresh context
   const createFreshContext = (): { state: AgentState; context: ToolContext } => {
     const state = new AgentState()

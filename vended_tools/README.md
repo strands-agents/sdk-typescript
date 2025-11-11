@@ -39,7 +39,7 @@ const agent = new Agent({
 })
 
 // Execute commands
-await agent.invoke('List all TypeScript files in the current directory')
+await agent.invoke('List all files in the current directory')
 ```
 
 See [bash/README.md](./bash/README.md) for complete documentation.
