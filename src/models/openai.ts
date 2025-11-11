@@ -538,6 +538,9 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
                 throw new Error(
                   'Reasoning blocks are not supported by OpenAI. ' + 'This feature is specific to AWS Bedrock models.'
                 )
+              } else if (block.type === 'guardContentBlock') {
+                console.warn('OpenAI does not support guard content in messages. Removing guard content block.')
+                return ''
               }
               return ''
             })
@@ -623,6 +626,8 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
             throw new Error(
               'Reasoning blocks are not supported by OpenAI. ' + 'This feature is specific to AWS Bedrock models.'
             )
+          } else if (block.type === 'guardContentBlock') {
+            console.warn('OpenAI does not support guard content in messages. Removing guard content block.')
           }
         }
 

@@ -1224,6 +1224,139 @@ describe('BedrockModel', () => {
         ],
       })
     })
+
+    it('formats guard content with image in system prompt', async () => {
+      const provider = new BedrockModel()
+      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+      const imageBytes = new Uint8Array([1, 2, 3, 4])
+      const options: StreamOptions = {
+        systemPrompt: [
+          {
+            type: 'guardContentBlock',
+            image: {
+              format: 'jpeg',
+              source: { bytes: imageBytes },
+            },
+          },
+        ],
+      }
+
+      collectIterator(provider.stream(messages, options))
+
+      expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
+        modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
+        messages: [
+          {
+            role: 'user',
+            content: [{ text: 'Hello' }],
+          },
+        ],
+        system: [
+          {
+            guardContent: {
+              image: {
+                format: 'jpeg',
+                source: { bytes: imageBytes },
+              },
+            },
+          },
+        ],
+      })
+    })
+  })
+
+  describe('guard content in messages', async () => {
+    const { ConverseStreamCommand } = await import('@aws-sdk/client-bedrock-runtime')
+    const mockConverseStreamCommand = vi.mocked(ConverseStreamCommand)
+
+    beforeEach(() => {
+      vi.clearAllMocks()
+    })
+
+    it('formats guard content with text in message', async () => {
+      const provider = new BedrockModel()
+      const messages: Message[] = [
+        {
+          type: 'message',
+          role: 'user',
+          content: [
+            { type: 'textBlock', text: 'Verify this information:' },
+            {
+              type: 'guardContentBlock',
+              text: {
+                qualifiers: ['grounding_source'],
+                text: 'The capital of France is Paris.',
+              },
+            },
+          ],
+        },
+      ]
+
+      collectIterator(provider.stream(messages))
+
+      expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
+        modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { text: 'Verify this information:' },
+              {
+                guardContent: {
+                  text: {
+                    text: 'The capital of France is Paris.',
+                    qualifiers: ['grounding_source'],
+                  },
+                },
+              },
+            ],
+          },
+        ],
+      })
+    })
+
+    it('formats guard content with image in message', async () => {
+      const provider = new BedrockModel()
+      const imageBytes = new Uint8Array([1, 2, 3, 4])
+      const messages: Message[] = [
+        {
+          type: 'message',
+          role: 'user',
+          content: [
+            { type: 'textBlock', text: 'Is this image safe?' },
+            {
+              type: 'guardContentBlock',
+              image: {
+                format: 'jpeg',
+                source: { bytes: imageBytes },
+              },
+            },
+          ],
+        },
+      ]
+
+      collectIterator(provider.stream(messages))
+
+      expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
+        modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { text: 'Is this image safe?' },
+              {
+                guardContent: {
+                  image: {
+                    format: 'jpeg',
+                    source: { bytes: imageBytes },
+                  },
+                },
+              },
+            ],
+          },
+        ],
+      })
+    })
   })
 
   describe('includeToolResultStatus configuration', async () => {

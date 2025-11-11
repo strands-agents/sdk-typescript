@@ -569,15 +569,29 @@ export class BedrockModel extends Model<BedrockModelConfig> {
       case 'cachePointBlock':
         return { cachePoint: { type: block.cacheType } }
 
-      case 'guardContentBlock':
-        return {
-          guardContent: {
-            text: {
-              text: block.text.text,
-              qualifiers: block.text.qualifiers,
+      case 'guardContentBlock': {
+        if (block.text) {
+          return {
+            guardContent: {
+              text: {
+                text: block.text.text,
+                qualifiers: block.text.qualifiers,
+              },
             },
-          },
+          }
+        } else if (block.image) {
+          return {
+            guardContent: {
+              image: {
+                format: block.image.format,
+                source: { bytes: block.image.source.bytes },
+              },
+            },
+          }
+        } else {
+          throw new Error('GuardContentBlock must have either text or image content')
         }
+      }
     }
   }
 

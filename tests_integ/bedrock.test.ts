@@ -294,5 +294,81 @@ describe.skipIf(!(await shouldRunTests()))('BedrockModel Integration Tests', () 
         })
       })
     })
+
+    describe('Guardrails', () => {
+      it.concurrent('handles guard content with text in system prompt', async () => {
+        const provider = new BedrockModel({ maxTokens: 100 })
+        const messages: Message[] = [
+          {
+            type: 'message',
+            role: 'user',
+            content: [{ type: 'textBlock', text: 'Can you verify this information?' }],
+          },
+        ]
+
+        const events = await collectIterator(
+          provider.stream(messages, {
+            systemPrompt: [
+              { type: 'textBlock', text: 'You are a helpful assistant.' },
+              {
+                type: 'guardContentBlock',
+                text: {
+                  qualifiers: ['grounding_source'],
+                  text: 'The Eiffel Tower is located in Paris, France.',
+                },
+              },
+            ],
+          })
+        )
+
+        const responseText = events.reduce((acc, event) => {
+          if (event.type === 'modelContentBlockDeltaEvent' && event.delta.type === 'textDelta') {
+            return acc + event.delta.text
+          }
+          return acc
+        }, '')
+
+        expect(responseText.length).toBeGreaterThan(0)
+
+        const stopEvent = events.find((e) => e.type === 'modelMessageStopEvent')
+        expect(stopEvent).toBeDefined()
+        expect(['endTurn', 'guardrailIntervened']).toContain(stopEvent?.stopReason)
+      })
+
+      it.concurrent('handles guard content with text in message', async () => {
+        const provider = new BedrockModel({ maxTokens: 100 })
+        const messages: Message[] = [
+          {
+            type: 'message',
+            role: 'user',
+            content: [
+              { type: 'textBlock', text: 'Is this statement accurate:' },
+              {
+                type: 'guardContentBlock',
+                text: {
+                  qualifiers: ['grounding_source'],
+                  text: 'The Earth is the third planet from the Sun.',
+                },
+              },
+            ],
+          },
+        ]
+
+        const events = await collectIterator(provider.stream(messages))
+
+        const responseText = events.reduce((acc, event) => {
+          if (event.type === 'modelContentBlockDeltaEvent' && event.delta.type === 'textDelta') {
+            return acc + event.delta.text
+          }
+          return acc
+        }, '')
+
+        expect(responseText.length).toBeGreaterThan(0)
+
+        const stopEvent = events.find((e) => e.type === 'modelMessageStopEvent')
+        expect(stopEvent).toBeDefined()
+        expect(['endTurn', 'guardrailIntervened']).toContain(stopEvent?.stopReason)
+      })
+    })
   })
 })
