@@ -3,7 +3,8 @@
  * This script runs in a pure Node.js ES module environment.
  */
 
-import { BedrockModel, ToolRegistry, FunctionTool } from '@strands-agents/sdk'
+import { Agent, BedrockModel, tool } from '@strands-agents/sdk'
+import { z } from 'zod'
 
 console.log('✓ Import from main entry point successful')
 
@@ -18,37 +19,37 @@ if (!config) {
 }
 console.log('✓ BedrockModel configuration retrieval successful')
 
-// Verify ToolRegistry can be instantiated
-const registry = new ToolRegistry()
-console.log('✓ ToolRegistry instantiation successful')
-
-// Verify FunctionTool can be created
-const testTool = new FunctionTool({
-  name: 'testTool',
-  description: 'A test tool',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      value: { type: 'string' },
-    },
-    required: ['value'],
-  },
+// Define a tool
+const example_tool = tool({
+  name: 'get_weather',
+  description: 'Get the current weather for a specific location.',
+  inputSchema: z.object({
+    location: z.string().describe('The city and state, e.g., San Francisco, CA'),
+  }),
   callback: (input) => {
-    return { result: input.value }
+    console.log(`\n[WeatherTool] Getting weather for ${input.location}...`)
+
+    const fakeWeatherData = {
+      temperature: '72°F',
+      conditions: 'sunny',
+    }
+
+    return `The weather in ${input.location} is ${fakeWeatherData.temperature} and ${fakeWeatherData.conditions}.`
   },
 })
-console.log('✓ FunctionTool creation successful')
+console.log('✓ Tool created successful')
 
-// Verify tool can be added to registry
-registry.register(testTool)
-console.log('✓ Tool registration successful')
-
-// Verify tool can be retrieved
-const retrievedTool = registry.get('testTool')
-if (!retrievedTool) {
-  throw new Error('Tool not found in registry')
+// Verify tool can be called
+const response = await example_tool.invoke({ location: 'New York' })
+if (response !== `The weather in New York is 72°F and sunny.`) {
+  throw new Error('Tool returned invalid response')
 }
-console.log('✓ Tool retrieval successful')
 
-console.log('\n✅ All verification checks passed!')
-console.log('The package works correctly without a bundler.')
+// Verify Agent can be instantiated
+const agent = new Agent({
+  tools: [example_tool],
+})
+
+if (agent.tools.length == 0) {
+  throw new Error('Tool was not correctly added to the agent')
+}
