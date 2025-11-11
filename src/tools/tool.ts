@@ -71,9 +71,6 @@ export interface ToolStreamEventData {
  * const streamEvent = new ToolStreamEvent({
  *   data: { progress: 50, message: 'Halfway complete' }
  * })
- *
- * // Or with no data
- * const streamEvent = new ToolStreamEvent({})
  * ```
  */
 export class ToolStreamEvent implements ToolStreamEventData {

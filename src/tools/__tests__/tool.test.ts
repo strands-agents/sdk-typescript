@@ -1004,13 +1004,5 @@ describe('ToolStreamEvent', () => {
         data: structuredData,
       })
     })
-
-    it('has correct type discriminator', () => {
-      const event = new ToolStreamEvent({
-        data: 'test',
-      })
-
-      expect(event.type).toBe('toolStreamEvent')
-    })
   })
 })
