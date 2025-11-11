@@ -53,24 +53,6 @@ await agent.invoke('List all files in the current directory')
 await agent.invoke('Create a new file called notes.txt with "Hello World"')
 ```
 
-### Direct Invocation
-
-```typescript
-import { bash } from '@strands-agents/sdk/vended_tools/bash'
-
-// Execute a command
-const result = await bash.invoke(
-  {
-    mode: 'execute',
-    command: 'echo "Hello from bash"',
-  },
-  context
-)
-
-console.log(result.output) // "Hello from bash"
-console.log(result.error) // "" (empty if no errors)
-```
-
 ### Session Persistence
 
 Variables, functions, and working directory persist across commands in the same session:
@@ -95,27 +77,6 @@ console.log(res.lastMessage)
 
 res = await agent.invoke('run "echo $MY_VAR"')
 console.log(res.lastMessage) // Will show "hello"
-```
-
-### Custom Timeout
-
-```typescript
-import { Agent } from '@strands-agents/sdk'
-import { BedrockModel } from '@strands-agents/sdk'
-import { bash } from '@strands-agents/sdk/vended_tools/bash'
-
-const model = new BedrockModel({
-  region: 'us-east-1',
-})
-
-const agent = new Agent({
-  model,
-  tools: [bash],
-})
-
-// Execute with a 300 second timeout
-const res = await agent.invoke('run "long_running_process" with a timeout of 300 seconds')
-console.log(res.lastMessage)
 ```
 
 ### Restart Session
@@ -182,14 +143,6 @@ interface BashOutput {
 }
 ```
 
-#### Restart Mode
-
-Returns a confirmation string:
-
-```typescript
-'Bash session restarted'
-```
-
 ### Error Handling
 
 The tool throws custom errors for specific failure scenarios:
@@ -217,7 +170,6 @@ try {
 
 - Each agent instance gets its own isolated bash session
 - Sessions are stored in a WeakMap keyed by agent instance
-- Sessions are lazily initialized on first command execution
 - Sessions automatically clean up when the agent is garbage collected
 
 ### Working Directory
@@ -225,7 +177,6 @@ try {
 - The bash process starts in the directory returned by `process.cwd()`
 - You can change directories using `cd` commands
 - Directory changes persist within the session
-- Restart mode resets to the original `process.cwd()`
 
 ### Timeout Behavior
 
@@ -234,116 +185,11 @@ try {
 - On timeout, the bash process is killed immediately
 - A `BashTimeoutError` is thrown
 
-### Environment Variables
-
-- The bash process inherits environment variables from the parent Node.js process
-- You can set session-specific variables using bash syntax: `VARNAME="value"`
-- Variables persist within the session until explicitly unset or the session is restarted
-
-## Examples
-
-### File Operations
-
-```typescript
-import { Agent } from '@strands-agents/sdk'
-import { BedrockModel } from '@strands-agents/sdk'
-import { bash } from '@strands-agents/sdk/vended_tools/bash'
-
-const model = new BedrockModel({
-  region: 'us-east-1',
-})
-
-const agent = new Agent({
-  model,
-  tools: [bash],
-})
-
-// Create a file
-let res = await agent.invoke('create a file called myfile.txt with content "Hello World"')
-
-// Read the file
-res = await agent.invoke('read the contents of myfile.txt')
-console.log(res.lastMessage) // Will show the file contents
-```
-
-### Command Piping
-
-```typescript
-import { Agent } from '@strands-agents/sdk'
-import { BedrockModel } from '@strands-agents/sdk'
-import { bash } from '@strands-agents/sdk/vended_tools/bash'
-
-const model = new BedrockModel({
-  region: 'us-east-1',
-})
-
-const agent = new Agent({
-  model,
-  tools: [bash],
-})
-
-const res = await agent.invoke('count how many .ts files are in the current directory')
-console.log(res.lastMessage) // Number of .ts files
-```
-
-### Command Errors
-
-```typescript
-import { Agent } from '@strands-agents/sdk'
-import { BedrockModel } from '@strands-agents/sdk'
-import { bash } from '@strands-agents/sdk/vended_tools/bash'
-
-const model = new BedrockModel({
-  region: 'us-east-1',
-})
-
-const agent = new Agent({
-  model,
-  tools: [bash],
-})
-
-// Command that doesn't exist
-const res = await agent.invoke('run "nonexistent_command"')
-console.log(res.lastMessage) // Agent will report the error
-```
-
-### Multi-Step Operations
-
-```typescript
-import { Agent } from '@strands-agents/sdk'
-import { BedrockModel } from '@strands-agents/sdk'
-import { bash } from '@strands-agents/sdk/vended_tools/bash'
-
-const model = new BedrockModel({
-  region: 'us-east-1',
-})
-
-const agent = new Agent({
-  model,
-  tools: [bash],
-})
-
-// Create a directory
-let res = await agent.invoke('create a directory called temp_workspace')
-
-// Change into it
-res = await agent.invoke('change directory to temp_workspace')
-
-// Create files (in the new directory)
-res = await agent.invoke('create two empty files: file1.txt and file2.txt')
-
-// Verify
-res = await agent.invoke('show current directory and list all files')
-console.log(res.lastMessage) // Shows current directory and files
-```
-
 ## Limitations
 
-- **Node.js only**: Requires the `child_process` module
 - **No browser support**: Cannot run in browser environments
 - **Process permissions**: Commands run with the same permissions as the Node.js process
 - **No sandboxing**: Commands execute without isolation or restrictions
-- **Session cleanup**: Sessions persist until the agent is garbage collected or explicitly restarted
 
 ## Best Practices
 
@@ -351,62 +197,4 @@ console.log(res.lastMessage) // Shows current directory and files
 2. **Use timeouts**: Set appropriate timeouts for long-running commands
 3. **Check stderr**: Always check the `error` field in the return value
 4. **Handle errors**: Wrap tool invocations in try-catch blocks
-5. **Sandbox in production**: Run in containers or VMs for production deployments
-6. **Restart when needed**: Use restart mode to clear session state between unrelated tasks
-7. **Quote arguments**: Use proper shell quoting for arguments containing spaces or special characters
-
-## Troubleshooting
-
-### Commands Hanging
-
-If commands hang indefinitely:
-
-- Check if the command is waiting for input
-- Verify the command doesn't have syntax errors that cause bash to wait for more input
-- Set a shorter timeout for testing
-
-### Session State Issues
-
-If session state isn't persisting:
-
-- Verify you're using the same context/agent instance
-- Check that you haven't restarted the session unintentionally
-- Remember that each agent instance has its own isolated session
-
-### Permission Errors
-
-If you encounter permission errors:
-
-- The tool runs with the same permissions as the Node.js process
-- Check file/directory permissions
-- Consider running the Node.js process with appropriate permissions
-
-## Contributing
-
-When contributing to this tool:
-
-- Ensure 80%+ test coverage
-- Add tests for new features
-- Update this README with new functionality
-- Follow the existing code patterns
-- Test in both unit and integration test suites
-  nally
-- Remember that each agent instance has its own isolated session
-
-### Permission Errors
-
-If you encounter permission errors:
-
-- The tool runs with the same permissions as the Node.js process
-- Check file/directory permissions
-- Consider running the Node.js process with appropriate permissions
-
-## Contributing
-
-When contributing to this tool:
-
-- Ensure 80%+ test coverage
-- Add tests for new features
-- Update this README with new functionality
-- Follow the existing code patterns
-- Test in both unit and integration test suites
+5. **Quote arguments**: Use proper shell quoting for arguments containing spaces or special characters

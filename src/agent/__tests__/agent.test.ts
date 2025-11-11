@@ -100,18 +100,18 @@ describe('Agent', () => {
         })
         expect(afterTools).toEqual({
           type: 'afterToolsEvent',
-          message: expect.objectContaining({
+          message: {
             type: 'message',
             role: 'user',
-            content: expect.arrayContaining([
-              expect.objectContaining({
+            content: [
+              {
                 type: 'toolResultBlock',
                 toolUseId: 'tool-1',
                 status: 'success',
-                content: expect.arrayContaining([expect.objectContaining({ type: 'textBlock', text: 'Success' })]),
-              }),
-            ]),
-          }),
+                content: [{ type: 'textBlock', text: 'Success' }],
+              },
+            ],
+          },
         })
       })
     })
