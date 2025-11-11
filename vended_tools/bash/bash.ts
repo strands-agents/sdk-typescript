@@ -22,7 +22,7 @@ const bashInputSchema = z.object({
 /**
  * Internal class for managing a bash session.
  */
-class _BashSession {
+class BashSession {
   private _process: ChildProcess | null = null
   private _started = false
   private readonly _timeout: number
@@ -186,12 +186,12 @@ class _BashSession {
  * WeakMap to store bash sessions per agent instance.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const sessions = new WeakMap<any, _BashSession>()
+const sessions = new WeakMap<any, BashSession>()
 
 /**
  * Track all active sessions for cleanup on process exit.
  */
-const activeSessions = new Set<_BashSession>()
+const activeSessions = new Set<BashSession>()
 
 /**
  * Clean up all active bash sessions.
@@ -272,7 +272,7 @@ export const bash = tool({
         sessions.delete(agent)
       }
       // Create new session
-      const newSession = new _BashSession(120)
+      const newSession = new BashSession(120)
       sessions.set(agent, newSession)
       activeSessions.add(newSession)
       return 'Bash session restarted'
@@ -283,7 +283,7 @@ export const bash = tool({
       // Get or create session
       let session = sessions.get(agent)
       if (!session) {
-        session = new _BashSession(input.timeout ?? 120)
+        session = new BashSession(input.timeout ?? 120)
         sessions.set(agent, session)
         activeSessions.add(session)
       }

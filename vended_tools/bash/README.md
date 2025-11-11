@@ -17,6 +17,8 @@ A robust tool for executing bash shell commands in Node.js environments with per
 
 **Node.js Only**: This tool requires Node.js and uses the `child_process` module. It will not work in browser environments.
 
+**Unix/Linux/macOS Only**: This tool uses the `bash` shell and is designed for Unix-like systems. It does not currently support Windows environments.
+
 ## Features
 
 - **Persistent Sessions**: Commands execute in a persistent bash session, maintaining state (variables, working directory, etc.) across multiple invocations

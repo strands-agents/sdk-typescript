@@ -4,7 +4,7 @@ import { Agent, BedrockModel } from '../src/index.js'
 import { bash } from '../vended_tools/bash/index.js'
 import { getMessageText, shouldRunTests } from './__fixtures__/model-test-helpers.js'
 
-describe.skipIf(!(await shouldRunTests()))('Bash Tool Integration', () => {
+describe.skipIf(!(await shouldRunTests()))('Bash Tool Integration', { timeout: 60000 }, () => {
   // Shared agent configuration for all tests
   const createAgent = () =>
     new Agent({
@@ -19,13 +19,13 @@ describe.skipIf(!(await shouldRunTests()))('Bash Tool Integration', () => {
       const agent = createAgent()
       const stdoutResult = await agent.invoke('Use bash to echo "Hello from bash"')
       expect(getMessageText(stdoutResult.lastMessage)).toContain('Hello from bash')
-    }, 60000)
+    })
 
     it('captures stderr streams correctly', async () => {
       const agent = createAgent()
       const stderrResult = await agent.invoke('Use bash to run: echo "error" >&2')
       expect(getMessageText(stderrResult.lastMessage)).toContain('error')
-    }, 60000)
+    })
 
     it('handles complex command patterns', async () => {
       const agent = createAgent()
@@ -33,7 +33,7 @@ describe.skipIf(!(await shouldRunTests()))('Bash Tool Integration', () => {
       // Test command sequencing
       const seqResult = await agent.invoke('Use bash to: create a variable TEST=hello, then echo it')
       expect(getMessageText(seqResult.lastMessage).toLowerCase()).toContain('hello')
-    }, 60000)
+    })
   })
 
   describe('error handling', () => {
@@ -44,7 +44,7 @@ describe.skipIf(!(await shouldRunTests()))('Bash Tool Integration', () => {
       // Should indicate command not found or error
       const lastMessage = getMessageText(result.lastMessage).toLowerCase()
       expect(lastMessage).toMatch(/not found|error|command/)
-    }, 60000)
+    })
   })
 
   describe('isolated sessions', () => {
@@ -69,6 +69,6 @@ describe.skipIf(!(await shouldRunTests()))('Bash Tool Integration', () => {
       // Verify isolation - agent1 should not have agent2's variable
       const crossCheck = await agent1.invoke('Use bash to echo $AGENT2_VAR')
       expect(getMessageText(crossCheck.lastMessage)).not.toContain('unique_value_2')
-    }, 60000)
+    })
   })
 })

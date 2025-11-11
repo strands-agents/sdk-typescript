@@ -38,11 +38,13 @@ export async function shouldRunTests(): Promise<boolean> {
  * @param message - The message to extract text from. Message object with content blocks
  * @returns The extracted text content as a string, or empty string if no content is found
  */
-export const getMessageText = (message: any): string => {
+export const getMessageText = (message: { content?: Array<{ type: string; text?: string }> }): string => {
   if (!message.content) return ''
 
   return message.content
-    .filter((block: any) => block.type === 'textBlock')
-    .map((block: any) => block.text)
+    .filter(
+      (block): block is { type: 'textBlock'; text: string } => block.type === 'textBlock' && block.text !== undefined
+    )
+    .map((block) => block.text)
     .join('\n')
 }
