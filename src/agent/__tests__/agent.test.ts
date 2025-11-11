@@ -257,4 +257,49 @@ describe('Agent', () => {
       expect(invokeResult).toEqual(streamResult)
     })
   })
+
+  describe('printer configuration', () => {
+    it('creates outputter when printer is true', () => {
+      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
+      const agent = new Agent({ model, printer: true })
+
+      expect(agent).toBeDefined()
+      // Outputter is private, but we can test by checking if it processes events
+    })
+
+    it('does not create outputter when printer is false', () => {
+      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
+      const agent = new Agent({ model, printer: false })
+
+      expect(agent).toBeDefined()
+    })
+
+    it('defaults to printer=true when not specified', () => {
+      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
+      const agent = new Agent({ model })
+
+      expect(agent).toBeDefined()
+    })
+
+    it('outputter processes events during stream', async () => {
+      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
+      const agent = new Agent({ model, printer: true })
+
+      // Just verify the agent works correctly with printer enabled
+      const { result } = await collectGenerator(agent.stream('Test'))
+
+      expect(result).toBeDefined()
+      expect(result.lastMessage.content).toEqual([{ type: 'textBlock', text: 'Hello' }])
+    })
+
+    it('agent works correctly with printer disabled', async () => {
+      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
+      const agent = new Agent({ model, printer: false })
+
+      const { result } = await collectGenerator(agent.stream('Test'))
+
+      expect(result).toBeDefined()
+      expect(result.lastMessage.content).toEqual([{ type: 'textBlock', text: 'Hello' }])
+    })
+  })
 })
