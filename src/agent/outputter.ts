@@ -15,10 +15,10 @@ export function getDefaultAppender(): (text: string) => void {
 }
 
 /**
- * Interface for outputting agent activity to a destination.
+ * Interface for printing agent activity to a destination.
  * Implementations can output to stdout, console, HTML elements, etc.
  */
-export interface Outputter {
+export interface Printer {
   /**
    * Write content to the output destination.
    * @param content - The content to write
@@ -33,16 +33,16 @@ export interface Outputter {
 }
 
 /**
- * Default implementation of the Outputter interface.
+ * Default implementation of the Printer interface.
  * Outputs text, reasoning, and tool execution activity to the configured appender.
  */
-export class DefaultOutputter implements Outputter {
+export class AgentPrinter implements Printer {
   private readonly _appender: (text: string) => void
   private _inReasoningBlock: boolean = false
   private _toolCount: number = 0
 
   /**
-   * Creates a new DefaultOutputter.
+   * Creates a new AgentPrinter.
    * @param appender - Function that writes text to the output destination
    */
   constructor(appender: (text: string) => void) {

@@ -4,6 +4,7 @@ import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
 import { collectGenerator } from '../../__fixtures__/model-test-helpers.js'
 import { createMockTool } from '../../__fixtures__/tool-helpers.js'
 import { TextBlock, MaxTokensError } from '../../index.js'
+import { AgentPrinter } from '../outputter.js'
 
 describe('Agent', () => {
   describe('stream', () => {
@@ -259,19 +260,30 @@ describe('Agent', () => {
   })
 
   describe('printer configuration', () => {
-    it('creates outputter when printer is true', () => {
-      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
-      const agent = new Agent({ model, printer: true })
+    it('validates output when printer is enabled', async () => {
+      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello world' })
 
-      expect(agent).toBeDefined()
-      // Outputter is private, but we can test by checking if it processes events
+      // Capture output
+      const outputs: string[] = []
+      const mockAppender = (text: string) => outputs.push(text)
+
+      // Create agent with custom printer for testing
+      const agent = new Agent({ model, printer: false })
+      ;(agent as any)._printer = new AgentPrinter(mockAppender)
+
+      await collectGenerator(agent.stream('Test'))
+
+      // Validate that text was output
+      const allOutput = outputs.join('')
+      expect(allOutput).toContain('Hello world')
     })
 
-    it('does not create outputter when printer is false', () => {
+    it('does not create printer when printer is false', () => {
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
       const agent = new Agent({ model, printer: false })
 
       expect(agent).toBeDefined()
+      expect((agent as any)._printer).toBeUndefined()
     })
 
     it('defaults to printer=true when not specified', () => {
@@ -279,17 +291,27 @@ describe('Agent', () => {
       const agent = new Agent({ model })
 
       expect(agent).toBeDefined()
+      expect((agent as any)._printer).toBeDefined()
     })
 
-    it('outputter processes events during stream', async () => {
-      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
-      const agent = new Agent({ model, printer: true })
+    it('validates output during stream', async () => {
+      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Response text' })
 
-      // Just verify the agent works correctly with printer enabled
+      // Capture output
+      const outputs: string[] = []
+      const mockAppender = (text: string) => outputs.push(text)
+
+      const agent = new Agent({ model, printer: false })
+      ;(agent as any)._printer = new AgentPrinter(mockAppender)
+
       const { result } = await collectGenerator(agent.stream('Test'))
 
       expect(result).toBeDefined()
-      expect(result.lastMessage.content).toEqual([{ type: 'textBlock', text: 'Hello' }])
+      expect(result.lastMessage.content).toEqual([{ type: 'textBlock', text: 'Response text' }])
+
+      // Validate that the response was printed
+      const allOutput = outputs.join('')
+      expect(allOutput).toContain('Response text')
     })
 
     it('agent works correctly with printer disabled', async () => {

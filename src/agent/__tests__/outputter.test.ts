@@ -1,22 +1,22 @@
 import { describe, it, expect, vi } from 'vitest'
-import { DefaultOutputter } from '../outputter.js'
+import { AgentPrinter } from '../outputter.js'
 import type { AgentStreamEvent } from '../streaming.js'
 
-describe('DefaultOutputter', () => {
+describe('AgentPrinter', () => {
   describe('constructor', () => {
     it('creates instance with appender function', () => {
       const appender = vi.fn()
-      const outputter = new DefaultOutputter(appender)
-      expect(outputter).toBeDefined()
+      const printer = new AgentPrinter(appender)
+      expect(printer).toBeDefined()
     })
   })
 
   describe('write', () => {
     it('calls appender with content', () => {
       const appender = vi.fn()
-      const outputter = new DefaultOutputter(appender)
+      const printer = new AgentPrinter(appender)
 
-      outputter.write('test content')
+      printer.write('test content')
 
       expect(appender).toHaveBeenCalledWith('test content')
       expect(appender).toHaveBeenCalledTimes(1)
@@ -24,10 +24,10 @@ describe('DefaultOutputter', () => {
 
     it('calls appender multiple times for multiple writes', () => {
       const appender = vi.fn()
-      const outputter = new DefaultOutputter(appender)
+      const printer = new AgentPrinter(appender)
 
-      outputter.write('first')
-      outputter.write('second')
+      printer.write('first')
+      printer.write('second')
 
       expect(appender).toHaveBeenCalledTimes(2)
       expect(appender).toHaveBeenNthCalledWith(1, 'first')
@@ -39,7 +39,7 @@ describe('DefaultOutputter', () => {
     describe('text delta events', () => {
       it('outputs text delta immediately', () => {
         const appender = vi.fn()
-        const outputter = new DefaultOutputter(appender)
+        const printer = new AgentPrinter(appender)
 
         const event: AgentStreamEvent = {
           type: 'modelContentBlockDeltaEvent',
@@ -49,20 +49,20 @@ describe('DefaultOutputter', () => {
           },
         }
 
-        outputter.processEvent(event)
+        printer.processEvent(event)
 
         expect(appender).toHaveBeenCalledWith('Hello world')
       })
 
       it('streams multiple text deltas', () => {
         const appender = vi.fn()
-        const outputter = new DefaultOutputter(appender)
+        const printer = new AgentPrinter(appender)
 
-        outputter.processEvent({
+        printer.processEvent({
           type: 'modelContentBlockDeltaEvent',
           delta: { type: 'textDelta', text: 'Hello ' },
         })
-        outputter.processEvent({
+        printer.processEvent({
           type: 'modelContentBlockDeltaEvent',
           delta: { type: 'textDelta', text: 'world' },
         })
@@ -74,9 +74,9 @@ describe('DefaultOutputter', () => {
 
       it('handles empty text delta', () => {
         const appender = vi.fn()
-        const outputter = new DefaultOutputter(appender)
+        const printer = new AgentPrinter(appender)
 
-        outputter.processEvent({
+        printer.processEvent({
           type: 'modelContentBlockDeltaEvent',
           delta: { type: 'textDelta', text: '' },
         })
@@ -88,15 +88,15 @@ describe('DefaultOutputter', () => {
     describe('reasoning delta events', () => {
       it('wraps reasoning content in tags', () => {
         const appender = vi.fn()
-        const outputter = new DefaultOutputter(appender)
+        const printer = new AgentPrinter(appender)
 
         // Start reasoning block
-        outputter.processEvent({
+        printer.processEvent({
           type: 'modelContentBlockStartEvent',
         })
 
         // Reasoning delta
-        outputter.processEvent({
+        printer.processEvent({
           type: 'modelContentBlockDeltaEvent',
           delta: {
             type: 'reasoningContentDelta',
@@ -105,7 +105,7 @@ describe('DefaultOutputter', () => {
         })
 
         // End reasoning block
-        outputter.processEvent({
+        printer.processEvent({
           type: 'modelContentBlockStopEvent',
         })
 
@@ -117,22 +117,22 @@ describe('DefaultOutputter', () => {
 
       it('streams multiple reasoning deltas', () => {
         const appender = vi.fn()
-        const outputter = new DefaultOutputter(appender)
+        const printer = new AgentPrinter(appender)
 
-        outputter.processEvent({
+        printer.processEvent({
           type: 'modelContentBlockStartEvent',
         })
 
-        outputter.processEvent({
+        printer.processEvent({
           type: 'modelContentBlockDeltaEvent',
           delta: { type: 'reasoningContentDelta', text: 'First ' },
         })
-        outputter.processEvent({
+        printer.processEvent({
           type: 'modelContentBlockDeltaEvent',
           delta: { type: 'reasoningContentDelta', text: 'thought' },
         })
 
-        outputter.processEvent({
+        printer.processEvent({
           type: 'modelContentBlockStopEvent',
         })
 
@@ -145,18 +145,18 @@ describe('DefaultOutputter', () => {
 
       it('handles reasoning delta without text field', () => {
         const appender = vi.fn()
-        const outputter = new DefaultOutputter(appender)
+        const printer = new AgentPrinter(appender)
 
-        outputter.processEvent({
+        printer.processEvent({
           type: 'modelContentBlockStartEvent',
         })
 
-        outputter.processEvent({
+        printer.processEvent({
           type: 'modelContentBlockDeltaEvent',
           delta: { type: 'reasoningContentDelta' },
         })
 
-        outputter.processEvent({
+        printer.processEvent({
           type: 'modelContentBlockStopEvent',
         })
 
@@ -168,18 +168,18 @@ describe('DefaultOutputter', () => {
 
       it('handles empty reasoning text', () => {
         const appender = vi.fn()
-        const outputter = new DefaultOutputter(appender)
+        const printer = new AgentPrinter(appender)
 
-        outputter.processEvent({
+        printer.processEvent({
           type: 'modelContentBlockStartEvent',
         })
 
-        outputter.processEvent({
+        printer.processEvent({
           type: 'modelContentBlockDeltaEvent',
           delta: { type: 'reasoningContentDelta', text: '' },
         })
 
-        outputter.processEvent({
+        printer.processEvent({
           type: 'modelContentBlockStopEvent',
         })
 
@@ -192,9 +192,9 @@ describe('DefaultOutputter', () => {
     describe('tool execution events', () => {
       it('outputs tool start message', () => {
         const appender = vi.fn()
-        const outputter = new DefaultOutputter(appender)
+        const printer = new AgentPrinter(appender)
 
-        outputter.processEvent({
+        printer.processEvent({
           type: 'modelContentBlockStartEvent',
           start: {
             type: 'toolUseStart',
@@ -208,9 +208,9 @@ describe('DefaultOutputter', () => {
 
       it('increments tool count for multiple tools', () => {
         const appender = vi.fn()
-        const outputter = new DefaultOutputter(appender)
+        const printer = new AgentPrinter(appender)
 
-        outputter.processEvent({
+        printer.processEvent({
           type: 'modelContentBlockStartEvent',
           start: {
             type: 'toolUseStart',
@@ -219,7 +219,7 @@ describe('DefaultOutputter', () => {
           },
         })
 
-        outputter.processEvent({
+        printer.processEvent({
           type: 'modelContentBlockStartEvent',
           start: {
             type: 'toolUseStart',
@@ -235,9 +235,9 @@ describe('DefaultOutputter', () => {
 
       it('outputs tool completion message', () => {
         const appender = vi.fn()
-        const outputter = new DefaultOutputter(appender)
+        const printer = new AgentPrinter(appender)
 
-        outputter.processEvent({
+        printer.processEvent({
           type: 'toolResultBlock',
           toolUseId: 'tool-1',
           status: 'success',
@@ -249,9 +249,9 @@ describe('DefaultOutputter', () => {
 
       it('outputs error status for failed tool', () => {
         const appender = vi.fn()
-        const outputter = new DefaultOutputter(appender)
+        const printer = new AgentPrinter(appender)
 
-        outputter.processEvent({
+        printer.processEvent({
           type: 'toolResultBlock',
           toolUseId: 'tool-1',
           status: 'error',
@@ -265,9 +265,9 @@ describe('DefaultOutputter', () => {
     describe('other event types', () => {
       it('ignores beforeModelEvent', () => {
         const appender = vi.fn()
-        const outputter = new DefaultOutputter(appender)
+        const printer = new AgentPrinter(appender)
 
-        outputter.processEvent({
+        printer.processEvent({
           type: 'beforeModelEvent',
           messages: [],
         })
@@ -277,9 +277,9 @@ describe('DefaultOutputter', () => {
 
       it('ignores afterModelEvent', () => {
         const appender = vi.fn()
-        const outputter = new DefaultOutputter(appender)
+        const printer = new AgentPrinter(appender)
 
-        outputter.processEvent({
+        printer.processEvent({
           type: 'afterModelEvent',
           message: {} as any,
           stopReason: 'endTurn',
@@ -290,9 +290,9 @@ describe('DefaultOutputter', () => {
 
       it('ignores modelMessageStartEvent', () => {
         const appender = vi.fn()
-        const outputter = new DefaultOutputter(appender)
+        const printer = new AgentPrinter(appender)
 
-        outputter.processEvent({
+        printer.processEvent({
           type: 'modelMessageStartEvent',
           role: 'assistant',
         })
@@ -302,9 +302,9 @@ describe('DefaultOutputter', () => {
 
       it('ignores toolUseInputDelta', () => {
         const appender = vi.fn()
-        const outputter = new DefaultOutputter(appender)
+        const printer = new AgentPrinter(appender)
 
-        outputter.processEvent({
+        printer.processEvent({
           type: 'modelContentBlockDeltaEvent',
           delta: {
             type: 'toolUseInputDelta',
@@ -319,37 +319,37 @@ describe('DefaultOutputter', () => {
     describe('state tracking', () => {
       it('tracks reasoning block state correctly', () => {
         const appender = vi.fn()
-        const outputter = new DefaultOutputter(appender)
+        const printer = new AgentPrinter(appender)
 
         // Start reasoning block
-        outputter.processEvent({
+        printer.processEvent({
           type: 'modelContentBlockStartEvent',
         })
 
         // Reasoning content
-        outputter.processEvent({
+        printer.processEvent({
           type: 'modelContentBlockDeltaEvent',
           delta: { type: 'reasoningContentDelta', text: 'thinking' },
         })
 
         // End reasoning block
-        outputter.processEvent({
+        printer.processEvent({
           type: 'modelContentBlockStopEvent',
         })
 
         // Start new reasoning block
-        outputter.processEvent({
+        printer.processEvent({
           type: 'modelContentBlockStartEvent',
         })
 
         // New reasoning content
-        outputter.processEvent({
+        printer.processEvent({
           type: 'modelContentBlockDeltaEvent',
           delta: { type: 'reasoningContentDelta', text: 'more thinking' },
         })
 
         // End new reasoning block
-        outputter.processEvent({
+        printer.processEvent({
           type: 'modelContentBlockStopEvent',
         })
 
@@ -364,11 +364,11 @@ describe('DefaultOutputter', () => {
 
       it('maintains tool count across multiple invocations', () => {
         const appender = vi.fn()
-        const outputter = new DefaultOutputter(appender)
+        const printer = new AgentPrinter(appender)
 
         // Use three tools
         for (let i = 1; i <= 3; i++) {
-          outputter.processEvent({
+          printer.processEvent({
             type: 'modelContentBlockStartEvent',
             start: {
               type: 'toolUseStart',
@@ -388,28 +388,28 @@ describe('DefaultOutputter', () => {
     describe('complex scenarios', () => {
       it('handles mixed text and reasoning in sequence', () => {
         const appender = vi.fn()
-        const outputter = new DefaultOutputter(appender)
+        const printer = new AgentPrinter(appender)
 
         // Text
-        outputter.processEvent({
+        printer.processEvent({
           type: 'modelContentBlockDeltaEvent',
           delta: { type: 'textDelta', text: 'Hello' },
         })
 
         // Reasoning block
-        outputter.processEvent({
+        printer.processEvent({
           type: 'modelContentBlockStartEvent',
         })
-        outputter.processEvent({
+        printer.processEvent({
           type: 'modelContentBlockDeltaEvent',
           delta: { type: 'reasoningContentDelta', text: 'thinking' },
         })
-        outputter.processEvent({
+        printer.processEvent({
           type: 'modelContentBlockStopEvent',
         })
 
         // More text
-        outputter.processEvent({
+        printer.processEvent({
           type: 'modelContentBlockDeltaEvent',
           delta: { type: 'textDelta', text: 'World' },
         })
@@ -424,10 +424,10 @@ describe('DefaultOutputter', () => {
 
       it('handles tool use with text output', () => {
         const appender = vi.fn()
-        const outputter = new DefaultOutputter(appender)
+        const printer = new AgentPrinter(appender)
 
         // Tool start
-        outputter.processEvent({
+        printer.processEvent({
           type: 'modelContentBlockStartEvent',
           start: {
             type: 'toolUseStart',
@@ -437,7 +437,7 @@ describe('DefaultOutputter', () => {
         })
 
         // Tool result
-        outputter.processEvent({
+        printer.processEvent({
           type: 'toolResultBlock',
           toolUseId: 'tool-1',
           status: 'success',
@@ -445,7 +445,7 @@ describe('DefaultOutputter', () => {
         })
 
         // Text response
-        outputter.processEvent({
+        printer.processEvent({
           type: 'modelContentBlockDeltaEvent',
           delta: { type: 'textDelta', text: 'The answer is 42' },
         })
