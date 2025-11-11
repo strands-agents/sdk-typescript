@@ -294,26 +294,6 @@ describe('Agent', () => {
       expect((agent as any)._printer).toBeDefined()
     })
 
-    it('validates output during stream', async () => {
-      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Response text' })
-
-      // Capture output
-      const outputs: string[] = []
-      const mockAppender = (text: string) => outputs.push(text)
-
-      const agent = new Agent({ model, printer: false })
-      ;(agent as any)._printer = new AgentPrinter(mockAppender)
-
-      const { result } = await collectGenerator(agent.stream('Test'))
-
-      expect(result).toBeDefined()
-      expect(result.lastMessage.content).toEqual([{ type: 'textBlock', text: 'Response text' }])
-
-      // Validate exact output
-      const allOutput = outputs.join('')
-      expect(allOutput).toBe('Response text')
-    })
-
     it('agent works correctly with printer disabled', async () => {
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
       const agent = new Agent({ model, printer: false })

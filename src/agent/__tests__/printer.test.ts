@@ -101,5 +101,54 @@ describe('AgentPrinter', () => {
       const allOutput = outputs.join('')
       expect(allOutput).toBe('\n🔧 Tool #1: bad_tool\n✗ Tool failed\nError handled')
     })
+
+    it('prints comprehensive scenario with all output types', async () => {
+      const model = new MockMessageModel()
+        .addTurn([
+          { type: 'textBlock', text: 'Let me help you. ' },
+          { type: 'reasoningBlock', text: 'I need to use the calculator' },
+          { type: 'toolUseBlock', name: 'calculator', toolUseId: 'tool-1', input: { expr: '2+2' } },
+        ])
+        .addTurn([
+          { type: 'textBlock', text: 'The calculation succeeded. ' },
+          { type: 'reasoningBlock', text: 'Now trying validation' },
+          { type: 'toolUseBlock', name: 'validator', toolUseId: 'tool-2', input: { value: 'test' } },
+        ])
+        .addTurn([
+          { type: 'textBlock', text: 'All done. ' },
+          { type: 'reasoningBlock', text: 'Task completed successfully' },
+        ])
+
+      const calcTool = createMockTool('calculator', () => ({
+        toolUseId: 'tool-1',
+        status: 'success' as const,
+        content: [new TextBlock('4')],
+      }))
+
+      const validatorTool = createMockTool('validator', () => ({
+        toolUseId: 'tool-2',
+        status: 'error' as const,
+        content: [new TextBlock('Validation failed')],
+      }))
+
+      const outputs: string[] = []
+      const mockAppender = (text: string) => outputs.push(text)
+
+      const agent = new Agent({ model, tools: [calcTool, validatorTool], printer: false })
+      ;(agent as any)._printer = new AgentPrinter(mockAppender)
+
+      await collectGenerator(agent.stream('Test'))
+
+      const allOutput = outputs.join('')
+      const expected = `Let me help you. <reason>I need to use the calculator</reason>
+🔧 Tool #1: calculator
+✓ Tool completed
+The calculation succeeded. <reason>Now trying validation</reason>
+🔧 Tool #2: validator
+✗ Tool failed
+All done. <reason>Task completed successfully</reason>`
+
+      expect(allOutput).toBe(expected)
+    })
   })
 })
