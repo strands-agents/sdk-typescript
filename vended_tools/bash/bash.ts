@@ -8,17 +8,16 @@ import { BashTimeoutError, BashSessionError } from './types.js'
 
 /**
  * Zod schema for bash input validation.
+ *
+ * Note: Uses a single object schema instead of discriminated union for AWS Bedrock compatibility.
  */
-const bashInputSchema = z.discriminatedUnion('mode', [
-  z.object({
-    mode: z.literal('execute').describe('Execute a bash command'),
-    command: z.string().describe('The bash command to execute'),
-    timeout: z.number().positive().optional().describe('Timeout in seconds (default: 120)'),
-  }),
-  z.object({
-    mode: z.literal('restart').describe('Restart the bash session'),
-  }),
-])
+const bashInputSchema = z.object({
+  mode: z
+    .enum(['execute', 'restart'])
+    .describe('Operation mode: "execute" to run a command, "restart" to restart the session'),
+  command: z.string().optional().describe('The bash command to execute (required when mode is "execute")'),
+  timeout: z.number().positive().optional().describe('Timeout in seconds (default: 120, applies only to execute mode)'),
+})
 
 /**
  * Internal class for managing a bash session.
@@ -142,8 +141,15 @@ class _BashSession {
         }
         stdout.off('data', onStdoutData)
         stderr.off('data', onStderrData)
-        this._process!.off('close', onClose)
-        this._process!.off('error', onError)
+        // Check if process still exists before removing listeners
+        if (this._process) {
+          this._process.off('close', onClose)
+          this._process.off('error', onError)
+        }
+        // Kill the process after command completes to allow clean exit
+        // This is important for one-shot scripts that need to terminate
+        this.stop()
+        activeSessions.delete(this)
       }
 
       // Set up timeout
@@ -151,7 +157,10 @@ class _BashSession {
       timeoutHandle = setTimeout(() => {
         isTimedOut = true
         cleanup()
-        this._process!.kill()
+        // Check if process still exists before killing
+        if (this._process) {
+          this._process.kill()
+        }
         this._started = false
         reject(new BashTimeoutError(`Command timed out after ${effectiveTimeout} seconds`))
       }, effectiveTimeout * 1000)
@@ -178,6 +187,37 @@ class _BashSession {
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const sessions = new WeakMap<any, _BashSession>()
+
+/**
+ * Track all active sessions for cleanup on process exit.
+ */
+const activeSessions = new Set<_BashSession>()
+
+/**
+ * Clean up all active bash sessions.
+ */
+function cleanupAllSessions(): void {
+  for (const session of activeSessions) {
+    session.stop()
+  }
+  activeSessions.clear()
+}
+
+// Register cleanup handlers for process exit
+process.on('beforeExit', () => {
+  // beforeExit fires when event loop is empty but process is still alive
+  // This is our chance to clean up bash processes before they prevent exit
+  cleanupAllSessions()
+})
+process.on('exit', cleanupAllSessions)
+process.on('SIGINT', () => {
+  cleanupAllSessions()
+  process.exit(0)
+})
+process.on('SIGTERM', () => {
+  cleanupAllSessions()
+  process.exit(0)
+})
 
 /**
  * Bash tool for executing shell commands in Node.js environments.
@@ -218,16 +258,23 @@ export const bash = tool({
 
     const agent = context.agent
 
+    // Validate execute mode has command
+    if (input.mode === 'execute' && !input.command) {
+      throw new Error('command is required when mode is "execute"')
+    }
+
     // Handle restart mode
     if (input.mode === 'restart') {
       const existingSession = sessions.get(agent)
       if (existingSession) {
         existingSession.stop()
+        activeSessions.delete(existingSession)
         sessions.delete(agent)
       }
       // Create new session
       const newSession = new _BashSession(120)
       sessions.set(agent, newSession)
+      activeSessions.add(newSession)
       return 'Bash session restarted'
     }
 
@@ -238,10 +285,11 @@ export const bash = tool({
       if (!session) {
         session = new _BashSession(input.timeout ?? 120)
         sessions.set(agent, session)
+        activeSessions.add(session)
       }
 
       // Execute command
-      const result = await session.run(input.command, input.timeout)
+      const result = await session.run(input.command!, input.timeout)
       return result
     }
 

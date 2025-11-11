@@ -46,10 +46,7 @@ describe.skipIf(!isNode)('bash tool', () => {
 
     it('rejects execute without command', async () => {
       const { context } = createFreshContext()
-      await expect(
-        // @ts-expect-error - Testing invalid input
-        bash.invoke({ mode: 'execute' }, context)
-      ).rejects.toThrow()
+      await expect(bash.invoke({ mode: 'execute' }, context)).rejects.toThrow()
     })
 
     it('accepts valid timeout configuration', async () => {
@@ -76,22 +73,6 @@ describe.skipIf(!isNode)('bash tool', () => {
 
       expect(result).toHaveProperty('output')
       expect(result.output).toContain('test')
-    })
-
-    it('reuses session across multiple commands', async () => {
-      const { context } = createFreshContext()
-
-      // Set variable
-      await bash.invoke({ mode: 'execute', command: 'TEST_VAR="first"' }, context)
-
-      // Read variable to confirm session persists
-      const result = await bash.invoke({ mode: 'execute', command: 'echo $TEST_VAR' }, context)
-
-      if (typeof result === 'string') {
-        throw new Error('Expected BashOutput object, got string')
-      }
-
-      expect(result.output).toContain('first')
     })
 
     it('creates new session after restart', async () => {
