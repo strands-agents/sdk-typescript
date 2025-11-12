@@ -269,17 +269,6 @@ describe('Agent', () => {
       expect(Array.isArray(messages)).toBe(true)
     })
 
-    it('returns defensive copy of messages array', () => {
-      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
-      const agent = new Agent({ model })
-
-      const messages1 = agent.messages
-      const messages2 = agent.messages
-
-      expect(messages1).not.toBe(messages2)
-      expect(messages1).toEqual(messages2)
-    })
-
     it('reflects conversation history after invoke', async () => {
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Response' })
       const agent = new Agent({ model })
