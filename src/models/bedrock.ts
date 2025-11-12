@@ -9,28 +9,28 @@
 
 import {
   BedrockRuntimeClient,
-  ConverseStreamCommand,
   type BedrockRuntimeClientConfig,
-  type ConverseStreamCommandInput,
-  type ConverseStreamOutput,
-  type Message as BedrockMessage,
-  ContentBlock as BedrockContentBlock,
-  type InferenceConfiguration,
-  type Tool,
-  type MessageStartEvent as BedrockMessageStartEvent,
-  type ContentBlockStartEvent as BedrockContentBlockStartEvent,
+  type ContentBlock as BedrockContentBlock,
   type ContentBlockDeltaEvent as BedrockContentBlockDeltaEvent,
-  type MessageStopEvent as BedrockMessageStopEvent,
-  type ConverseStreamMetadataEvent as BedrockConverseStreamMetadataEvent,
-  type ToolConfiguration,
+  type ContentBlockStartEvent as BedrockContentBlockStartEvent,
   ConverseCommand,
   type ConverseCommandOutput,
+  ConverseStreamCommand,
+  type ConverseStreamCommandInput,
+  type ConverseStreamMetadataEvent as BedrockConverseStreamMetadataEvent,
+  type ConverseStreamOutput,
+  type InferenceConfiguration,
+  type Message as BedrockMessage,
+  type MessageStartEvent as BedrockMessageStartEvent,
+  type MessageStopEvent as BedrockMessageStopEvent,
+  type ReasoningContentBlock,
+  type ReasoningContentBlockDelta,
+  type Tool,
+  type ToolConfiguration,
   type ToolUseBlockDelta,
-  ReasoningContentBlockDelta,
-  ReasoningContentBlock,
 } from '@aws-sdk/client-bedrock-runtime'
-import { Model, type BaseModelConfig, type StreamOptions } from '../models/model.js'
-import type { Message, ContentBlock, ToolUseBlock } from '../types/messages.js'
+import { type BaseModelConfig, Model, type StreamOptions } from '../models/model.js'
+import type { ContentBlock, Message, ToolUseBlock } from '../types/messages.js'
 import type { ModelStreamEvent, ReasoningContentDelta, Usage } from '../models/streaming.js'
 import type { JSONValue } from '../types/json.js'
 import { ContextWindowOverflowError } from '../errors.js'
