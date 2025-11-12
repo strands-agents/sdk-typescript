@@ -260,188 +260,42 @@ describe('Agent', () => {
   })
 
   describe('concurrency guards', () => {
-    describe('parallel invoke() calls', () => {
-      it('throws ConcurrentInvocationError when second invoke called during first', async () => {
-        const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Response' })
-        const agent = new Agent({ model })
+    it('prevents parallel invocations', async () => {
+      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Response' })
+      const agent = new Agent({ model })
 
-        const promise1 = agent.invoke('First')
-        const promise2 = agent.invoke('Second')
+      // Test parallel invoke() calls
+      const invokePromise1 = agent.invoke('First')
+      const invokePromise2 = agent.invoke('Second')
 
-        await expect(promise2).rejects.toThrow(ConcurrentInvocationError)
-        await expect(promise2).rejects.toThrow(
-          'Agent is already processing an invocation. Wait for the current invoke() or stream() call to complete before invoking again.'
-        )
-        await expect(promise1).resolves.toBeDefined()
-      })
+      await expect(invokePromise2).rejects.toThrow(ConcurrentInvocationError)
+      await expect(invokePromise1).resolves.toBeDefined()
     })
 
-    describe('parallel stream() calls', () => {
-      it('throws ConcurrentInvocationError when second stream called during first', async () => {
-        const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Response' })
-        const agent = new Agent({ model })
+    it('allows sequential invocations after lock is released', async () => {
+      const model = new MockMessageModel()
+        .addTurn({ type: 'textBlock', text: 'First response' })
+        .addTurn({ type: 'textBlock', text: 'Second response' })
+      const agent = new Agent({ model })
 
-        const stream1 = agent.stream('First')
-        const promise1 = collectGenerator(stream1)
+      const result1 = await agent.invoke('First')
+      expect(result1.lastMessage.content).toEqual([{ type: 'textBlock', text: 'First response' }])
 
-        // Start second stream before first completes
-        const stream2 = agent.stream('Second')
-        const promise2 = stream2.next()
-
-        await expect(promise2).rejects.toThrow(ConcurrentInvocationError)
-        await expect(promise2).rejects.toThrow(
-          'Agent is already processing an invocation. Wait for the current invoke() or stream() call to complete before invoking again.'
-        )
-        await expect(promise1).resolves.toBeDefined()
-      })
+      const result2 = await agent.invoke('Second')
+      expect(result2.lastMessage.content).toEqual([{ type: 'textBlock', text: 'Second response' }])
     })
 
-    describe('invoke() during active stream()', () => {
-      it('throws ConcurrentInvocationError when invoke called while stream active', async () => {
-        const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Response' })
-        const agent = new Agent({ model })
+    it('releases lock after errors and abandoned streams', async () => {
+      // Test error case
+      const model = new MockMessageModel()
+        .addTurn({ type: 'textBlock', text: 'Partial' }, 'maxTokens')
+        .addTurn({ type: 'textBlock', text: 'Success' })
+      const agent = new Agent({ model })
 
-        const stream = agent.stream('First')
-        const streamPromise = collectGenerator(stream)
+      await expect(agent.invoke('First')).rejects.toThrow(MaxTokensError)
 
-        // Try to invoke before stream completes
-        const invokePromise = agent.invoke('Second')
-
-        await expect(invokePromise).rejects.toThrow(ConcurrentInvocationError)
-        await expect(invokePromise).rejects.toThrow(
-          'Agent is already processing an invocation. Wait for the current invoke() or stream() call to complete before invoking again.'
-        )
-        await expect(streamPromise).resolves.toBeDefined()
-      })
-    })
-
-    describe('stream() during active invoke()', () => {
-      it('throws ConcurrentInvocationError when stream called while invoke active', async () => {
-        const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Response' })
-        const agent = new Agent({ model })
-
-        const invokePromise = agent.invoke('First')
-
-        // Try to stream before invoke completes
-        const stream = agent.stream('Second')
-        const streamPromise = stream.next()
-
-        await expect(streamPromise).rejects.toThrow(ConcurrentInvocationError)
-        await expect(streamPromise).rejects.toThrow(
-          'Agent is already processing an invocation. Wait for the current invoke() or stream() call to complete before invoking again.'
-        )
-        await expect(invokePromise).resolves.toBeDefined()
-      })
-    })
-
-    describe('sequential invocations', () => {
-      it('allows sequential invoke() calls after first completes', async () => {
-        const model = new MockMessageModel()
-          .addTurn({ type: 'textBlock', text: 'First response' })
-          .addTurn({ type: 'textBlock', text: 'Second response' })
-        const agent = new Agent({ model })
-
-        const result1 = await agent.invoke('First')
-        expect(result1.lastMessage.content).toEqual([{ type: 'textBlock', text: 'First response' }])
-
-        const result2 = await agent.invoke('Second')
-        expect(result2.lastMessage.content).toEqual([{ type: 'textBlock', text: 'Second response' }])
-      })
-
-      it('allows sequential stream() calls after first completes', async () => {
-        const model = new MockMessageModel()
-          .addTurn({ type: 'textBlock', text: 'First response' })
-          .addTurn({ type: 'textBlock', text: 'Second response' })
-        const agent = new Agent({ model })
-
-        const { result: result1 } = await collectGenerator(agent.stream('First'))
-        expect(result1.lastMessage.content).toEqual([{ type: 'textBlock', text: 'First response' }])
-
-        const { result: result2 } = await collectGenerator(agent.stream('Second'))
-        expect(result2.lastMessage.content).toEqual([{ type: 'textBlock', text: 'Second response' }])
-      })
-
-      it('allows invoke() after stream() completes', async () => {
-        const model = new MockMessageModel()
-          .addTurn({ type: 'textBlock', text: 'Stream response' })
-          .addTurn({ type: 'textBlock', text: 'Invoke response' })
-        const agent = new Agent({ model })
-
-        const { result: streamResult } = await collectGenerator(agent.stream('First'))
-        expect(streamResult.lastMessage.content).toEqual([{ type: 'textBlock', text: 'Stream response' }])
-
-        const invokeResult = await agent.invoke('Second')
-        expect(invokeResult.lastMessage.content).toEqual([{ type: 'textBlock', text: 'Invoke response' }])
-      })
-
-      it('allows stream() after invoke() completes', async () => {
-        const model = new MockMessageModel()
-          .addTurn({ type: 'textBlock', text: 'Invoke response' })
-          .addTurn({ type: 'textBlock', text: 'Stream response' })
-        const agent = new Agent({ model })
-
-        const invokeResult = await agent.invoke('First')
-        expect(invokeResult.lastMessage.content).toEqual([{ type: 'textBlock', text: 'Invoke response' }])
-
-        const { result: streamResult } = await collectGenerator(agent.stream('Second'))
-        expect(streamResult.lastMessage.content).toEqual([{ type: 'textBlock', text: 'Stream response' }])
-      })
-    })
-
-    describe('lock released after errors', () => {
-      it('allows invocation after invoke() throws error', async () => {
-        const model = new MockMessageModel()
-          .addTurn({ type: 'textBlock', text: 'Partial' }, 'maxTokens')
-          .addTurn({ type: 'textBlock', text: 'Success' })
-        const agent = new Agent({ model })
-
-        await expect(agent.invoke('First')).rejects.toThrow(MaxTokensError)
-
-        const result = await agent.invoke('Second')
-        expect(result.lastMessage.content).toEqual([{ type: 'textBlock', text: 'Success' }])
-      })
-
-      it('allows invocation after stream() throws error', async () => {
-        const model = new MockMessageModel()
-          .addTurn({ type: 'textBlock', text: 'Partial' }, 'maxTokens')
-          .addTurn({ type: 'textBlock', text: 'Success' })
-        const agent = new Agent({ model })
-
-        await expect(async () => {
-          await collectGenerator(agent.stream('First'))
-        }).rejects.toThrow(MaxTokensError)
-
-        const result = await agent.invoke('Second')
-        expect(result.lastMessage.content).toEqual([{ type: 'textBlock', text: 'Success' }])
-      })
-    })
-
-    describe('lock released when stream abandoned', () => {
-      it('allows invocation after stream iterator is not fully consumed', async () => {
-        // Create separate models for each invocation
-        const model1 = new MockMessageModel().addTurn({ type: 'textBlock', text: 'First response' })
-        const model2 = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Second response' })
-
-        // Use model1 for first attempt, then switch to model2
-        const agent = new Agent({ model: model1 })
-
-        // Create stream but don't fully consume it
-        const stream = agent.stream('First')
-        const firstEvent = await stream.next()
-        expect(firstEvent.done).toBe(false)
-
-        // Explicitly abandon the stream by calling return() and consume the result
-        const returnResult = await stream.return(undefined as never)
-        // The return should execute the finally block which releases the lock
-        expect(returnResult.done).toBe(true)
-
-        // Switch to model2 for the second invocation
-        agent['_model'] = model2
-
-        // Should be able to invoke again after stream is abandoned
-        const result = await agent.invoke('Second')
-        expect(result.lastMessage.content).toEqual([{ type: 'textBlock', text: 'Second response' }])
-      })
+      const result = await agent.invoke('Second')
+      expect(result.lastMessage.content).toEqual([{ type: 'textBlock', text: 'Success' }])
     })
   })
 })

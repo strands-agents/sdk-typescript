@@ -91,22 +91,21 @@ export class Agent implements AgentData {
 
   /**
    * Acquires a lock to prevent concurrent invocations.
-   * Throws an error if an invocation is already in progress.
+   * Returns a Disposable that releases the lock when disposed.
    */
-  private acquireLock(): void {
+  private acquireLock(): { [Symbol.dispose]: () => void } {
     if (this._isInvoking) {
       throw new ConcurrentInvocationError(
         'Agent is already processing an invocation. Wait for the current invoke() or stream() call to complete before invoking again.'
       )
     }
     this._isInvoking = true
-  }
 
-  /**
-   * Releases the lock to allow future invocations.
-   */
-  private releaseLock(): void {
-    this._isInvoking = false
+    return {
+      [Symbol.dispose]: (): void => {
+        this._isInvoking = false
+      },
+    }
   }
 
   /**
@@ -153,13 +152,13 @@ export class Agent implements AgentData {
    * ```
    */
   public async *stream(args: InvokeArgs): AsyncGenerator<AgentStreamEvent, AgentResult, undefined> {
-    this.acquireLock()
+    using _lock = this.acquireLock()
     let currentArgs: InvokeArgs | undefined = args
 
-    try {
-      // Emit event before the loop starts
-      yield { type: 'beforeInvocationEvent' }
+    // Emit event before the loop starts
+    yield { type: 'beforeInvocationEvent' }
 
+    try {
       // Main agent loop - continues until model stops without requesting tools
       while (true) {
         const modelResult = yield* this.invokeModel(currentArgs)
@@ -178,9 +177,6 @@ export class Agent implements AgentData {
           // Add assistant message now that we're returning
           this._messages.push(modelResult.message)
 
-          // Emit final event before returning
-          yield { type: 'afterInvocationEvent' }
-
           return {
             stopReason: modelResult.stopReason,
             lastMessage: modelResult.message,
@@ -198,8 +194,8 @@ export class Agent implements AgentData {
         // Continue loop
       }
     } finally {
-      // Always release lock
-      this.releaseLock()
+      // Always emit final event (lock is released by using declaration)
+      yield { type: 'afterInvocationEvent' }
     }
   }
 
