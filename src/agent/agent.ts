@@ -17,6 +17,7 @@ import type { BaseModelConfig, Model, StreamOptions } from '../models/model.js'
 import { ToolRegistry } from '../registry/tool-registry.js'
 import { AgentState } from './state.js'
 import type { AgentData } from '../types/agent.js'
+import { AgentPrinter, getDefaultAppender, type Printer } from './printer.js'
 
 /**
  * Configuration object for creating a new Agent.
@@ -42,6 +43,12 @@ export type AgentConfig = {
    * Optional initial state values for the agent.
    */
   state?: Record<string, JSONValue>
+  /**
+   * Enable automatic printing of agent output to console.
+   * When true, prints text generation, reasoning, and tool usage as they occur.
+   * Defaults to true.
+   */
+  printer?: boolean
 }
 
 /**
@@ -60,7 +67,12 @@ export class Agent implements AgentData {
   private _model: Model<BaseModelConfig>
   private _toolRegistry: ToolRegistry
   private _systemPrompt?: SystemPrompt
-  private _messages: Message[]
+
+  /**
+   * The conversation history of messages between user and assistant.
+   */
+  public readonly messages: Message[]
+  private _printer?: Printer
 
   /**
    * Agent state storage accessible to tools and application logic.
@@ -80,11 +92,15 @@ export class Agent implements AgentData {
       this._systemPrompt = config.systemPrompt
     }
 
-    this._messages = (config?.messages ?? []).map((msg) =>
-      msg instanceof Message ? msg : Message.fromMessageData(msg)
-    )
+    this.messages = (config?.messages ?? []).map((msg) => (msg instanceof Message ? msg : Message.fromMessageData(msg)))
 
     this.state = new AgentState(config?.state)
+
+    // Create printer if printer is enabled (default: true)
+    const printer = config?.printer ?? true
+    if (printer) {
+      this._printer = new AgentPrinter(getDefaultAppender())
+    }
   }
 
   /**
@@ -131,6 +147,28 @@ export class Agent implements AgentData {
    * ```
    */
   public async *stream(args: InvokeArgs): AsyncGenerator<AgentStreamEvent, AgentResult, undefined> {
+    // Delegate to _stream and process events through printer
+    const streamGenerator = this._stream(args)
+    let result = await streamGenerator.next()
+
+    while (!result.done) {
+      const event = result.value
+      this._printer?.processEvent(event)
+      yield event
+      result = await streamGenerator.next()
+    }
+
+    return result.value
+  }
+
+  /**
+   * Internal implementation of the agent streaming logic.
+   * Separated to centralize printer event processing in the public stream method.
+   *
+   * @param args - Arguments for invoking the agent
+   * @returns Async generator that yields AgentStreamEvent objects and returns AgentResult
+   */
+  private async *_stream(args: InvokeArgs): AsyncGenerator<AgentStreamEvent, AgentResult, undefined> {
     let currentArgs: InvokeArgs | undefined = args
 
     // Emit event before the loop starts
@@ -153,7 +191,7 @@ export class Agent implements AgentData {
         if (modelResult.stopReason !== 'toolUse') {
           // Loop terminates - no tool use requested
           // Add assistant message now that we're returning
-          this._messages.push(modelResult.message)
+          this.messages.push(modelResult.message)
           return {
             stopReason: modelResult.stopReason,
             lastMessage: modelResult.message,
@@ -165,8 +203,8 @@ export class Agent implements AgentData {
 
         // Add assistant message with tool uses right before adding tool results
         // This ensures we don't have dangling tool use messages if tool execution fails
-        this._messages.push(modelResult.message)
-        this._messages.push(toolResultMessage)
+        this.messages.push(modelResult.message)
+        this.messages.push(toolResultMessage)
 
         // Continue loop
       }
@@ -212,7 +250,7 @@ export class Agent implements AgentData {
     args?: InvokeArgs
   ): AsyncGenerator<AgentStreamEvent, { message: Message; stopReason: string }, undefined> {
     // Emit event before invoking model
-    yield { type: 'beforeModelEvent', messages: [...this._messages] }
+    yield { type: 'beforeModelEvent', messages: [...this.messages] }
 
     const toolSpecs = this._toolRegistry.values().map((tool) => tool.toolSpec)
     const streamOptions: StreamOptions = { toolSpecs }
@@ -222,7 +260,7 @@ export class Agent implements AgentData {
 
     if (args !== undefined && typeof args === 'string') {
       // Add user message from args
-      this._messages.push(
+      this.messages.push(
         new Message({
           role: 'user',
           content: [{ type: 'textBlock', text: args }],
@@ -230,7 +268,7 @@ export class Agent implements AgentData {
       )
     }
 
-    const { message, stopReason } = yield* this._model.streamAggregated(this._messages, streamOptions)
+    const { message, stopReason } = yield* this._model.streamAggregated(this.messages, streamOptions)
 
     yield { type: 'afterModelEvent', message, stopReason }
 
@@ -267,7 +305,7 @@ export class Agent implements AgentData {
       toolResultBlocks.push(toolResultBlock)
 
       // Yield the tool result block as it's created
-      yield toolResultBlock as AgentStreamEvent
+      yield toolResultBlock
     }
 
     // Create user message with tool results
