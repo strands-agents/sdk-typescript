@@ -1,33 +1,14 @@
 import type { ToolSpec, ToolUse } from './types.js'
 import type { ToolResultBlock } from '../types/messages.js'
 import type { AgentData } from '../types/agent.js'
-import type { JSONValue } from '../types/json.js'
 
 export type { ToolSpec } from './types.js'
 
 /**
  * Context provided to tool implementations during execution.
  * Contains framework-level state and information from the agent invocation.
- *
- * @typeParam TAgentState - Optional type for strongly typing agent state keys and values
- *
- * @example
- * ```typescript
- * interface MyAgentState {
- *   userId: string
- *   sessionId: string
- * }
- *
- * const context: ToolContext<MyAgentState> = {
- *   toolUse: {
- *     name: 'testTool',
- *     toolUseId: 'test-123',
- *     input: {}
- *   },
- *   agent: agent
- * ```
  */
-export interface ToolContext<TAgentState extends Record<string, JSONValue> = Record<string, JSONValue>> {
+export interface ToolContext {
   /**
    * The tool use request that triggered this tool execution.
    * Contains the tool name, toolUseId, and input parameters.
@@ -38,7 +19,7 @@ export interface ToolContext<TAgentState extends Record<string, JSONValue> = Rec
    * The agent instance that is executing this tool.
    * Provides access to agent state and other agent-level information.
    */
-  agent: AgentData<TAgentState>
+  agent: AgentData
 }
 
 /**

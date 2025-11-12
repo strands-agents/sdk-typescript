@@ -8,8 +8,6 @@ import { deepCopy, deepCopyWithValidation, type JSONValue } from '../types/json.
  * All values are deep copied on get/set operations to prevent reference mutations.
  * Values must be JSON serializable.
  *
- * @typeParam TState - Optional type for strongly typing state keys and values
- *
  * @example
  * ```typescript
  * const state = new AgentState({ userId: 'user-123' })
@@ -17,7 +15,7 @@ import { deepCopy, deepCopyWithValidation, type JSONValue } from '../types/json.
  * const userId = state.get('userId') // 'user-123'
  * ```
  */
-export class AgentState<TState extends Record<string, JSONValue> = Record<string, JSONValue>> {
+export class AgentState {
   private _state: Record<string, JSONValue>
 
   /**
@@ -26,7 +24,7 @@ export class AgentState<TState extends Record<string, JSONValue> = Record<string
    * @param initialState - Optional initial state values
    * @throws Error if initialState is not JSON serializable
    */
-  constructor(initialState?: TState) {
+  constructor(initialState?: Record<string, JSONValue>) {
     if (initialState !== undefined) {
       this._state = deepCopyWithValidation(initialState, 'initialState') as Record<string, JSONValue>
     } else {
