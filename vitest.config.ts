@@ -1,6 +1,17 @@
 import { defineConfig } from 'vitest/config'
 import { playwright } from '@vitest/browser-playwright'
 
+// Conditionally exclude bash tool from coverage on Windows
+// since tests are skipped on Windows (bash not available)
+const coverageExclude = [
+  'src/**/__tests__/**',
+  'src/**/__fixtures__/**',
+  'vended_tools/**/__tests__/**',
+]
+if (process.platform === 'win32') {
+  coverageExclude.push('vended_tools/bash/**')
+}
+
 export default defineConfig({
   test: {
     projects: [
@@ -50,12 +61,7 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
       include: ['src/**/*', 'vended_tools/**/*'],
-      exclude: [
-        'src/**/__tests__/**',
-        'src/**/__fixtures__/**',
-        'vended_tools/**/__tests__/**',
-        'vended_tools/bash/**',
-      ],
+      exclude: coverageExclude,
       thresholds: {
         lines: 80,
         functions: 80,
