@@ -40,6 +40,7 @@ export class AgentPrinter implements Printer {
   private readonly _appender: (text: string) => void
   private _inReasoningBlock: boolean = false
   private _toolCount: number = 0
+  private _reasoningBuffer: string = ''
 
   /**
    * Creates a new AgentPrinter.
@@ -101,11 +102,11 @@ export class AgentPrinter implements Printer {
       // Start reasoning block if not already in one
       if (!this._inReasoningBlock) {
         this._inReasoningBlock = true
-        this.write('<reason>')
+        this._reasoningBuffer = ''
       }
-      // Output reasoning text
+      // Buffer reasoning text
       if (delta.text && delta.text.length > 0) {
-        this.write(delta.text)
+        this._reasoningBuffer += delta.text
       }
     }
     // Ignore toolUseInputDelta and other delta types
@@ -130,8 +131,28 @@ export class AgentPrinter implements Printer {
    */
   private handleContentBlockStop(): void {
     if (this._inReasoningBlock) {
-      this.write('</reason>')
+      this.flushReasoningBlock()
       this._inReasoningBlock = false
+      this._reasoningBuffer = ''
+    }
+  }
+
+  /**
+   * Flush the reasoning buffer with proper formatting.
+   * Outputs reasoning as a block with emoji header and indented content.
+   */
+  private flushReasoningBlock(): void {
+    if (this._reasoningBuffer.length === 0) {
+      return
+    }
+
+    // Start with newline and header
+    this.write('\n💭 Reasoning:\n')
+
+    // Indent each line of reasoning text
+    const lines = this._reasoningBuffer.split('\n')
+    for (const line of lines) {
+      this.write(`   ${line}\n`)
     }
   }
 

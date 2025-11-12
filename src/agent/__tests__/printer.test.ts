@@ -35,7 +35,7 @@ describe('AgentPrinter', () => {
       await collectGenerator(agent.stream('Test'))
 
       const allOutput = outputs.join('')
-      expect(allOutput).toBe('<reason>Let me think</reason>')
+      expect(allOutput).toBe('\n💭 Reasoning:\n   Let me think\n')
     })
 
     it('prints text and reasoning together', async () => {
@@ -53,7 +53,31 @@ describe('AgentPrinter', () => {
       await collectGenerator(agent.stream('Test'))
 
       const allOutput = outputs.join('')
-      expect(allOutput).toBe('Answer: <reason>thinking</reason>')
+      expect(allOutput).toBe('Answer: \n💭 Reasoning:\n   thinking\n')
+    })
+
+    it('handles newlines in reasoning content', async () => {
+      const model = new MockMessageModel().addTurn({
+        type: 'reasoningBlock',
+        text: 'First line\nSecond line\nThird line',
+      })
+
+      const outputs: string[] = []
+      const mockAppender = (text: string) => outputs.push(text)
+
+      const agent = new Agent({ model, printer: false })
+      ;(agent as any)._printer = new AgentPrinter(mockAppender)
+
+      await collectGenerator(agent.stream('Test'))
+
+      const allOutput = outputs.join('')
+      const expected = `
+💭 Reasoning:
+   First line
+   Second line
+   Third line
+`
+      expect(allOutput).toBe(expected)
     })
 
     it('prints tool execution', async () => {
@@ -144,13 +168,22 @@ describe('AgentPrinter', () => {
       await collectGenerator(agent.stream('Test'))
 
       const allOutput = outputs.join('')
-      const expected = `Let me help you. <reason>I need to use the calculator</reason>
+      const expected = `Let me help you. 
+💭 Reasoning:
+   I need to use the calculator
+
 🔧 Tool #1: calculator
 ✓ Tool completed
-The calculation succeeded. <reason>Now trying validation</reason>
+The calculation succeeded. 
+💭 Reasoning:
+   Now trying validation
+
 🔧 Tool #2: validator
 ✗ Tool failed
-All done. <reason>Task completed successfully</reason>`
+All done. 
+💭 Reasoning:
+   Task completed successfully
+`
 
       expect(allOutput).toBe(expected)
     })
