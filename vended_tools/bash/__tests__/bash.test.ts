@@ -6,7 +6,7 @@ import { AgentState } from '../../../src/agent/state.js'
 import { isNode } from '../../../src/__fixtures__/environment.js'
 
 // Skip all tests if not in Node.js environment
-describe.skipIf(!isNode)('bash tool', () => {
+describe.skipIf(!isNode || process.platform === 'win32')('bash tool', () => {
   // Helper to create fresh context
   const createFreshContext = (): { state: AgentState; context: ToolContext } => {
     const state = new AgentState({})
