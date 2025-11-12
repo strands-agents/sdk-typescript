@@ -119,24 +119,24 @@ export class AgentPrinter implements Printer {
    */
   private writeReasoningText(text: string): void {
     let output = ''
-    
+
     for (let i = 0; i < text.length; i++) {
       const char = text[i]
-      
+
       // Add indentation if needed (at start or after newline)
       if (this._needReasoningIndent && char !== '\n') {
         output += '   '
         this._needReasoningIndent = false
       }
-      
+
       output += char
-      
+
       // Mark that we need indentation after a newline
       if (char === '\n') {
         this._needReasoningIndent = true
       }
     }
-    
+
     this.write(output)
   }
 
