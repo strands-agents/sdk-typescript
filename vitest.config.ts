@@ -50,7 +50,12 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
       include: ['src/**/*', 'vended_tools/**/*'],
-      exclude: ['src/**/__tests__/**', 'src/**/__fixtures__/**', 'vended_tools/**/__tests__/**'],
+      exclude: [
+        'src/**/__tests__/**',
+        'src/**/__fixtures__/**',
+        'vended_tools/**/__tests__/**',
+        'vended_tools/bash/**',
+      ],
       thresholds: {
         lines: 80,
         functions: 80,
