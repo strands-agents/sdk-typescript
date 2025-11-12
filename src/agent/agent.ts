@@ -2,6 +2,7 @@ import {
   type AgentResult,
   type AgentStreamEvent,
   BedrockModel,
+  ConcurrentInvocationError,
   type JSONValue,
   MaxTokensError,
   Message,
@@ -61,6 +62,7 @@ export class Agent implements AgentData {
   private _toolRegistry: ToolRegistry
   private _systemPrompt?: SystemPrompt
   private _messages: Message[]
+  private _isInvoking: boolean = false
 
   /**
    * Agent state storage accessible to tools and application logic.
@@ -85,6 +87,26 @@ export class Agent implements AgentData {
     )
 
     this.state = new AgentState(config?.state)
+  }
+
+  /**
+   * Acquires a lock to prevent concurrent invocations.
+   * Throws an error if an invocation is already in progress.
+   */
+  private acquireLock(): void {
+    if (this._isInvoking) {
+      throw new ConcurrentInvocationError(
+        'Agent is already processing an invocation. Wait for the current invoke() or stream() call to complete before invoking again.'
+      )
+    }
+    this._isInvoking = true
+  }
+
+  /**
+   * Releases the lock to allow future invocations.
+   */
+  private releaseLock(): void {
+    this._isInvoking = false
   }
 
   /**
@@ -131,12 +153,13 @@ export class Agent implements AgentData {
    * ```
    */
   public async *stream(args: InvokeArgs): AsyncGenerator<AgentStreamEvent, AgentResult, undefined> {
+    this.acquireLock()
     let currentArgs: InvokeArgs | undefined = args
 
-    // Emit event before the loop starts
-    yield { type: 'beforeInvocationEvent' }
-
     try {
+      // Emit event before the loop starts
+      yield { type: 'beforeInvocationEvent' }
+
       // Main agent loop - continues until model stops without requesting tools
       while (true) {
         const modelResult = yield* this.invokeModel(currentArgs)
@@ -154,6 +177,10 @@ export class Agent implements AgentData {
           // Loop terminates - no tool use requested
           // Add assistant message now that we're returning
           this._messages.push(modelResult.message)
+
+          // Emit final event before returning
+          yield { type: 'afterInvocationEvent' }
+
           return {
             stopReason: modelResult.stopReason,
             lastMessage: modelResult.message,
@@ -171,8 +198,8 @@ export class Agent implements AgentData {
         // Continue loop
       }
     } finally {
-      // Always emit final event
-      yield { type: 'afterInvocationEvent' }
+      // Always release lock
+      this.releaseLock()
     }
   }
 
