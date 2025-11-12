@@ -4,6 +4,7 @@ import { isNode } from '../../__fixtures__/environment.js'
 import { BedrockModel } from '../bedrock.js'
 import { ContextWindowOverflowError } from '../../errors.js'
 import type { Message } from '../../types/messages.js'
+import { TextBlock, GuardContentBlock, CachePointBlock } from '../../types/messages.js'
 import type { StreamOptions } from '../model.js'
 import { collectIterator } from '../../__fixtures__/model-test-helpers.js'
 
@@ -1108,14 +1109,13 @@ describe('BedrockModel', () => {
       const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
       const options: StreamOptions = {
         systemPrompt: [
-          { type: 'textBlock', text: 'You are a helpful assistant' },
-          {
-            type: 'guardContentBlock',
+          new TextBlock('You are a helpful assistant'),
+          new GuardContentBlock({
             text: {
               qualifiers: ['grounding_source'],
               text: 'This content should be evaluated for grounding.',
             },
-          },
+          }),
         ],
       }
 
@@ -1148,16 +1148,15 @@ describe('BedrockModel', () => {
       const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
       const options: StreamOptions = {
         systemPrompt: [
-          { type: 'textBlock', text: 'You are a helpful assistant' },
-          {
-            type: 'guardContentBlock',
+          new TextBlock('You are a helpful assistant'),
+          new GuardContentBlock({
             text: {
               qualifiers: ['grounding_source', 'query'],
               text: 'Guard content',
             },
-          },
-          { type: 'textBlock', text: 'Additional context' },
-          { type: 'cachePointBlock', cacheType: 'default' },
+          }),
+          new TextBlock('Additional context'),
+          new CachePointBlock({ cacheType: 'default' }),
         ],
       }
 
@@ -1192,13 +1191,12 @@ describe('BedrockModel', () => {
       const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
       const options: StreamOptions = {
         systemPrompt: [
-          {
-            type: 'guardContentBlock',
+          new GuardContentBlock({
             text: {
               qualifiers: ['grounding_source', 'query', 'guard_content'],
               text: 'Multi-qualifier guard content',
             },
-          },
+          }),
         ],
       }
 
@@ -1231,13 +1229,12 @@ describe('BedrockModel', () => {
       const imageBytes = new Uint8Array([1, 2, 3, 4])
       const options: StreamOptions = {
         systemPrompt: [
-          {
-            type: 'guardContentBlock',
+          new GuardContentBlock({
             image: {
               format: 'jpeg',
               source: { bytes: imageBytes },
             },
-          },
+          }),
         ],
       }
 
@@ -1280,14 +1277,13 @@ describe('BedrockModel', () => {
           type: 'message',
           role: 'user',
           content: [
-            { type: 'textBlock', text: 'Verify this information:' },
-            {
-              type: 'guardContentBlock',
+            new TextBlock('Verify this information:'),
+            new GuardContentBlock({
               text: {
                 qualifiers: ['grounding_source'],
                 text: 'The capital of France is Paris.',
               },
-            },
+            }),
           ],
         },
       ]
@@ -1323,14 +1319,13 @@ describe('BedrockModel', () => {
           type: 'message',
           role: 'user',
           content: [
-            { type: 'textBlock', text: 'Is this image safe?' },
-            {
-              type: 'guardContentBlock',
+            new TextBlock('Is this image safe?'),
+            new GuardContentBlock({
               image: {
                 format: 'jpeg',
                 source: { bytes: imageBytes },
               },
-            },
+            }),
           ],
         },
       ]

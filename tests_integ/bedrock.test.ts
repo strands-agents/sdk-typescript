@@ -318,20 +318,14 @@ describe.skipIf(!(await shouldRunTests()))('BedrockModel Integration Tests', () 
           ],
         })
 
-        const { items: events } = await collectGenerator(agent.stream('Can you verify this information?'))
+        const result = await agent.invoke('Can you verify this information?')
 
-        const responseText = events.reduce((acc, event) => {
-          if (event.type === 'modelContentBlockDeltaEvent' && event.delta.type === 'textDelta') {
-            return acc + event.delta.text
-          }
-          return acc
-        }, '')
-
-        expect(responseText.length).toBeGreaterThan(0)
-
-        const stopEvent = events.find((e) => e.type === 'modelMessageStopEvent')
-        expect(stopEvent).toBeDefined()
-        expect(['endTurn', 'guardrailIntervened']).toContain(stopEvent?.stopReason)
+        expect(result.message.content).toHaveLength(1)
+        expect(result.message.content[0].type).toBe('textBlock')
+        if (result.message.content[0].type === 'textBlock') {
+          expect(result.message.content[0].text.length).toBeGreaterThan(0)
+        }
+        expect(['endTurn', 'guardrailIntervened']).toContain(result.stopReason)
       })
 
       it.concurrent('handles guard content with text in message', async () => {
@@ -356,20 +350,14 @@ describe.skipIf(!(await shouldRunTests()))('BedrockModel Integration Tests', () 
           },
         ]
 
-        const { items: events } = await collectGenerator(agent.stream(messages))
+        const result = await agent.invoke(messages)
 
-        const responseText = events.reduce((acc, event) => {
-          if (event.type === 'modelContentBlockDeltaEvent' && event.delta.type === 'textDelta') {
-            return acc + event.delta.text
-          }
-          return acc
-        }, '')
-
-        expect(responseText.length).toBeGreaterThan(0)
-
-        const stopEvent = events.find((e) => e.type === 'modelMessageStopEvent')
-        expect(stopEvent).toBeDefined()
-        expect(['endTurn', 'guardrailIntervened']).toContain(stopEvent?.stopReason)
+        expect(result.message.content).toHaveLength(1)
+        expect(result.message.content[0].type).toBe('textBlock')
+        if (result.message.content[0].type === 'textBlock') {
+          expect(result.message.content[0].text.length).toBeGreaterThan(0)
+        }
+        expect(['endTurn', 'guardrailIntervened']).toContain(result.stopReason)
       })
     })
   })
