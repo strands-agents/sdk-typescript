@@ -24,8 +24,10 @@ sdk-typescript/
 │   ├── agent/                    # Agent loop and streaming
 │   │   ├── __tests__/            # Unit tests for agent loop
 │   │   │   ├── agent-loop.test.ts  # Tests for agent loop function
-│   │   │   └── state.test.ts     # Tests for agent state
+│   │   │   ├── state.test.ts     # Tests for agent state
+│   │   │   └── outputter.test.ts # Tests for outputter
 │   │   ├── agent-loop.ts         # Core agent loop implementation
+│   │   ├── outputter.ts          # Agent output printing
 │   │   ├── state.ts              # Agent state implementation
 │   │   └── streaming.ts          # Agent streaming event types
 │   │
@@ -100,7 +102,7 @@ sdk-typescript/
 
 - **`src/`**: All production code lives here with co-located unit tests
 - **`src/__tests__/`**: Unit tests for root-level source files
-- **`src/agent/`**: Agent loop coordination and streaming event types
+- **`src/agent/`**: Agent loop coordination, streaming event types, and output printing
 - **`src/models/`**: Model provider implementations (Bedrock, future providers)
 - **`src/tools/`**: Tool definitions and types for agent tool use
 - **`src/types/`**: Core type definitions used across the SDK

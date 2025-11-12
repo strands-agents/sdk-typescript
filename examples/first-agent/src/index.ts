@@ -8,8 +8,6 @@ const weatherTool = tool({
     location: z.string().describe('The city and state, e.g., San Francisco, CA'),
   }),
   callback: (input) => {
-    console.log(`\n[WeatherTool] Getting weather for ${input.location}...`)
-
     const fakeWeatherData = {
       temperature: '72°F',
       conditions: 'sunny',
@@ -32,11 +30,7 @@ async function runInvoke(title: string, agent: Agent, prompt: string) {
 
   const result = await agent.invoke(prompt)
 
-  console.log('Agent response:')
-  console.log('Stop Reason:', result.stopReason)
-  console.log('Last Message:', result.lastMessage)
-
-  console.log('\nInvocation complete.\n')
+  console.log(`\n::Invocation complete; stop reason was ${result.stopReason}\n`)
 }
 
 /**
@@ -66,7 +60,8 @@ async function main() {
   const defaultAgent = new Agent()
   const agentWithoutTools = new Agent({ model })
   const agentWithTools = new Agent({
-    systemPrompt: 'You are a helpful assistant that provides weather information using the get_weather tool.',
+    systemPrompt:
+      'You are a helpful assistant that provides weather information using the get_weather tool. Always Inform the user if you run tools.',
     model,
     tools: [weatherTool],
   })
@@ -81,9 +76,16 @@ async function main() {
     'What is the weather in Toronto? Use the weather tool.'
   )
 
+  const streamingAgentWithTools = new Agent({
+    systemPrompt: 'You are a helpful assistant that provides weather information using the get_weather tool.',
+    model,
+    tools: [weatherTool],
+    printer: false,
+  })
+
   // Demonstrate the stream() pattern (for when you need intermediate events)
   console.log('\n=== Streaming pattern (advanced) ===\n')
-  await runStreaming('3: Streaming invocation with events', agentWithTools, 'What is the weather in Seattle?')
+  await runStreaming('3: Streaming invocation with events', streamingAgentWithTools, 'What is the weather in Seattle?')
 }
 
 main().catch(console.error)

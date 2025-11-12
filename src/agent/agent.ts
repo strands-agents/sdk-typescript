@@ -18,6 +18,7 @@ import type { BaseModelConfig, Model, StreamOptions } from '../models/model.js'
 import { ToolRegistry } from '../registry/tool-registry.js'
 import { AgentState } from './state.js'
 import type { AgentData } from '../types/agent.js'
+import { AgentPrinter, getDefaultAppender, type Printer } from './printer.js'
 
 /**
  * Configuration object for creating a new Agent.
@@ -43,6 +44,12 @@ export type AgentConfig = {
    * Optional initial state values for the agent.
    */
   state?: Record<string, JSONValue>
+  /**
+   * Enable automatic printing of agent output to console.
+   * When true, prints text generation, reasoning, and tool usage as they occur.
+   * Defaults to true.
+   */
+  printer?: boolean
 }
 
 /**
@@ -67,6 +74,7 @@ export class Agent implements AgentData {
    */
   public readonly messages: Message[]
   private _isInvoking: boolean = false
+  private _printer?: Printer
 
   /**
    * Agent state storage accessible to tools and application logic.
@@ -89,6 +97,12 @@ export class Agent implements AgentData {
     this.messages = (config?.messages ?? []).map((msg) => (msg instanceof Message ? msg : Message.fromMessageData(msg)))
 
     this.state = new AgentState(config?.state)
+
+    // Create printer if printer is enabled (default: true)
+    const printer = config?.printer ?? true
+    if (printer) {
+      this._printer = new AgentPrinter(getDefaultAppender())
+    }
   }
 
   /**
@@ -155,6 +169,29 @@ export class Agent implements AgentData {
    */
   public async *stream(args: InvokeArgs): AsyncGenerator<AgentStreamEvent, AgentResult, undefined> {
     using _lock = this.acquireLock()
+
+    // Delegate to _stream and process events through printer
+    const streamGenerator = this._stream(args)
+    let result = await streamGenerator.next()
+
+    while (!result.done) {
+      const event = result.value
+      this._printer?.processEvent(event)
+      yield event
+      result = await streamGenerator.next()
+    }
+
+    return result.value
+  }
+
+  /**
+   * Internal implementation of the agent streaming logic.
+   * Separated to centralize printer event processing in the public stream method.
+   *
+   * @param args - Arguments for invoking the agent
+   * @returns Async generator that yields AgentStreamEvent objects and returns AgentResult
+   */
+  private async *_stream(args: InvokeArgs): AsyncGenerator<AgentStreamEvent, AgentResult, undefined> {
     let currentArgs: InvokeArgs | undefined = args
 
     // Emit event before the loop starts
@@ -291,7 +328,7 @@ export class Agent implements AgentData {
       toolResultBlocks.push(toolResultBlock)
 
       // Yield the tool result block as it's created
-      yield toolResultBlock as AgentStreamEvent
+      yield toolResultBlock
     }
 
     // Create user message with tool results
