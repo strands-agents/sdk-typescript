@@ -1,9 +1,9 @@
-import { describe, it, expect } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { Agent } from '../agent.js'
 import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
 import { collectGenerator } from '../../__fixtures__/model-test-helpers.js'
 import { createMockTool } from '../../__fixtures__/tool-helpers.js'
-import { TextBlock, MaxTokensError } from '../../index.js'
+import { MaxTokensError, TextBlock } from '../../index.js'
 import { AgentPrinter } from '../printer.js'
 
 describe('Agent', () => {
@@ -17,6 +17,16 @@ describe('Agent', () => {
 
         expect(result).toBeDefined()
         expect(typeof result[Symbol.asyncIterator]).toBe('function')
+      })
+
+      it('returns AsyncGenerator that can be iterated without type errors', async () => {
+        const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
+        const agent = new Agent({ model })
+
+        // Ensures that the signature of agent.stream is correct
+        for await (const _ of agent.stream('Test prompt')) {
+          /* intentionally empty */
+        }
       })
 
       it('yields AgentStreamEvent objects', async () => {
