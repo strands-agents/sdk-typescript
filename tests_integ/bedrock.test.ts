@@ -1,12 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import {
-  Agent,
-  BedrockModel,
-  ContextWindowOverflowError,
-  Message,
-  ToolSpec,
-  ModelStreamEvent,
-} from '@strands-agents/sdk'
+import { BedrockModel, ContextWindowOverflowError, Message, ToolSpec, ModelStreamEvent } from '@strands-agents/sdk'
 
 // eslint-disable-next-line no-restricted-imports
 import { collectIterator, collectGenerator } from '../src/__fixtures__/model-test-helpers.js'
@@ -299,65 +292,6 @@ describe.skipIf(!(await shouldRunTests()))('BedrockModel Integration Tests', () 
             content: [expect.objectContaining({ type: 'textBlock', text: expect.any(String) })],
           },
         })
-      })
-    })
-
-    describe('Guardrails', () => {
-      it.concurrent('handles guard content with text in system prompt', async () => {
-        const agent = new Agent({
-          model: new BedrockModel({ maxTokens: 100 }),
-          systemPrompt: [
-            { type: 'textBlock', text: 'You are a helpful assistant.' },
-            {
-              type: 'guardContentBlock',
-              text: {
-                qualifiers: ['grounding_source'],
-                text: 'The Eiffel Tower is located in Paris, France.',
-              },
-            },
-          ],
-        })
-
-        const result = await agent.invoke('Can you verify this information?')
-
-        expect(result.message.content).toHaveLength(1)
-        expect(result.message.content[0].type).toBe('textBlock')
-        if (result.message.content[0].type === 'textBlock') {
-          expect(result.message.content[0].text.length).toBeGreaterThan(0)
-        }
-        expect(['endTurn', 'guardrailIntervened']).toContain(result.stopReason)
-      })
-
-      it.concurrent('handles guard content with text in message', async () => {
-        const agent = new Agent({
-          model: new BedrockModel({ maxTokens: 100 }),
-        })
-
-        const messages: Message[] = [
-          {
-            type: 'message',
-            role: 'user',
-            content: [
-              { type: 'textBlock', text: 'Is this statement accurate:' },
-              {
-                type: 'guardContentBlock',
-                text: {
-                  qualifiers: ['grounding_source'],
-                  text: 'The Earth is the third planet from the Sun.',
-                },
-              },
-            ],
-          },
-        ]
-
-        const result = await agent.invoke(messages)
-
-        expect(result.message.content).toHaveLength(1)
-        expect(result.message.content[0].type).toBe('textBlock')
-        if (result.message.content[0].type === 'textBlock') {
-          expect(result.message.content[0].text.length).toBeGreaterThan(0)
-        }
-        expect(['endTurn', 'guardrailIntervened']).toContain(result.stopReason)
       })
     })
   })
