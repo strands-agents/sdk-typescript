@@ -195,7 +195,7 @@ export class Agent implements AgentData {
         // Continue loop
       }
     } finally {
-      // Always emit final event (lock is released by using declaration)
+      // Always emit final event
       yield { type: 'afterInvocationEvent' }
     }
   }
