@@ -2,6 +2,7 @@ import {
   type AgentResult,
   type AgentStreamEvent,
   BedrockModel,
+  ContextWindowOverflowError,
   type JSONValue,
   MaxTokensError,
   Message,
@@ -18,6 +19,8 @@ import { ToolRegistry } from '../registry/tool-registry.js'
 import { AgentState } from './state.js'
 import type { AgentData } from '../types/agent.js'
 import { AgentPrinter, getDefaultAppender, type Printer } from './printer.js'
+import type { ConversationManager } from './conversation-manager/conversation-manager.js'
+import { SlidingWindowConversationManager } from './conversation-manager/sliding-window-conversation-manager.js'
 
 /**
  * Configuration object for creating a new Agent.
@@ -49,6 +52,11 @@ export type AgentConfig = {
    * Defaults to true.
    */
   printer?: boolean
+  /**
+   * Conversation manager for handling message history and context overflow.
+   * Defaults to SlidingWindowConversationManager with windowSize of 40.
+   */
+  conversationManager?: ConversationManager
 }
 
 /**
@@ -67,6 +75,7 @@ export class Agent implements AgentData {
   private _model: Model<BaseModelConfig>
   private _toolRegistry: ToolRegistry
   private _systemPrompt?: SystemPrompt
+  private _conversationManager: ConversationManager
 
   /**
    * The conversation history of messages between user and assistant.
@@ -95,6 +104,9 @@ export class Agent implements AgentData {
     this.messages = (config?.messages ?? []).map((msg) => (msg instanceof Message ? msg : Message.fromMessageData(msg)))
 
     this.state = new AgentState(config?.state)
+
+    // Initialize conversation manager (default: SlidingWindowConversationManager with windowSize of 40)
+    this._conversationManager = config?.conversationManager ?? new SlidingWindowConversationManager({ windowSize: 40 })
 
     // Create printer if printer is enabled (default: true)
     const printer = config?.printer ?? true
@@ -209,6 +221,9 @@ export class Agent implements AgentData {
         // Continue loop
       }
     } finally {
+      // Apply conversation management after event loop completes
+      this._conversationManager.applyManagement(this)
+
       // Always emit final event
       yield { type: 'afterInvocationEvent' }
     }
@@ -268,11 +283,23 @@ export class Agent implements AgentData {
       )
     }
 
-    const { message, stopReason } = yield* this._model.streamAggregated(this.messages, streamOptions)
+    try {
+      const { message, stopReason } = yield* this._model.streamAggregated(this.messages, streamOptions)
 
-    yield { type: 'afterModelEvent', message, stopReason }
+      yield { type: 'afterModelEvent', message, stopReason }
 
-    return { message, stopReason }
+      return { message, stopReason }
+    } catch (error) {
+      if (error instanceof ContextWindowOverflowError) {
+        // Reduce context and retry recursively
+        this._conversationManager.reduceContext(this, error)
+
+        // Recursively retry model invocation
+        return yield* this.invokeModel(args)
+      }
+      // Re-throw other errors
+      throw error
+    }
   }
 
   /**

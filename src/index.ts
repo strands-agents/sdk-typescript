@@ -101,3 +101,11 @@ export type {
   BeforeInvocationEvent,
   AfterInvocationEvent,
 } from './agent/streaming.js'
+
+// Conversation Manager
+export { ConversationManager } from './agent/conversation-manager/conversation-manager.js'
+export { NullConversationManager } from './agent/conversation-manager/null-conversation-manager.js'
+export {
+  SlidingWindowConversationManager,
+  type SlidingWindowConfig,
+} from './agent/conversation-manager/sliding-window-conversation-manager.js'

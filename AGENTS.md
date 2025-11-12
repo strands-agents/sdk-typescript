@@ -23,11 +23,20 @@ sdk-typescript/
 │   │
 │   ├── agent/                    # Agent loop and streaming
 │   │   ├── __tests__/            # Unit tests for agent loop
-│   │   │   ├── agent-loop.test.ts  # Tests for agent loop function
+│   │   │   ├── agent.test.ts     # Tests for agent implementation
 │   │   │   ├── state.test.ts     # Tests for agent state
-│   │   │   └── outputter.test.ts # Tests for outputter
-│   │   ├── agent-loop.ts         # Core agent loop implementation
-│   │   ├── outputter.ts          # Agent output printing
+│   │   │   └── printer.test.ts   # Tests for printer
+│   │   ├── conversation-manager/ # Conversation management implementations
+│   │   │   ├── __tests__/        # Unit tests for conversation managers
+│   │   │   │   ├── conversation-manager.test.ts
+│   │   │   │   ├── null-conversation-manager.test.ts
+│   │   │   │   └── sliding-window-conversation-manager.test.ts
+│   │   │   ├── conversation-manager.ts        # Abstract base class
+│   │   │   ├── null-conversation-manager.ts   # No-op implementation
+│   │   │   ├── sliding-window-conversation-manager.ts  # Sliding window strategy
+│   │   │   └── index.ts          # Public exports
+│   │   ├── agent.ts              # Core agent implementation
+│   │   ├── printer.ts            # Agent output printing
 │   │   ├── state.ts              # Agent state implementation
 │   │   └── streaming.ts          # Agent streaming event types
 │   │
@@ -102,8 +111,9 @@ sdk-typescript/
 
 - **`src/`**: All production code lives here with co-located unit tests
 - **`src/__tests__/`**: Unit tests for root-level source files
-- **`src/agent/`**: Agent loop coordination, streaming event types, and output printing
-- **`src/models/`**: Model provider implementations (Bedrock, future providers)
+- **`src/agent/`**: Agent loop coordination, streaming event types, output printing, and conversation management
+- **`src/agent/conversation-manager/`**: Conversation history management strategies
+- **`src/models/`**: Model provider implementations (Bedrock, OpenAI, future providers)
 - **`src/tools/`**: Tool definitions and types for agent tool use
 - **`src/types/`**: Core type definitions used across the SDK
 - **`vended_tools/`**: Optional vended tools (not part of core SDK, independently importable)
