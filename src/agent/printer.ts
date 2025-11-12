@@ -40,7 +40,7 @@ export class AgentPrinter implements Printer {
   private readonly _appender: (text: string) => void
   private _inReasoningBlock: boolean = false
   private _toolCount: number = 0
-  private _reasoningBuffer: string = ''
+  private _needReasoningIndent: boolean = false
 
   /**
    * Creates a new AgentPrinter.
@@ -102,14 +102,42 @@ export class AgentPrinter implements Printer {
       // Start reasoning block if not already in one
       if (!this._inReasoningBlock) {
         this._inReasoningBlock = true
-        this._reasoningBuffer = ''
+        this._needReasoningIndent = true
+        this.write('\n💭 Reasoning:\n')
       }
-      // Buffer reasoning text
+
+      // Stream reasoning text with proper indentation
       if (delta.text && delta.text.length > 0) {
-        this._reasoningBuffer += delta.text
+        this.writeReasoningText(delta.text)
       }
     }
     // Ignore toolUseInputDelta and other delta types
+  }
+
+  /**
+   * Write reasoning text with proper indentation after newlines.
+   */
+  private writeReasoningText(text: string): void {
+    let output = ''
+    
+    for (let i = 0; i < text.length; i++) {
+      const char = text[i]
+      
+      // Add indentation if needed (at start or after newline)
+      if (this._needReasoningIndent && char !== '\n') {
+        output += '   '
+        this._needReasoningIndent = false
+      }
+      
+      output += char
+      
+      // Mark that we need indentation after a newline
+      if (char === '\n') {
+        this._needReasoningIndent = true
+      }
+    }
+    
+    this.write(output)
   }
 
   /**
@@ -131,28 +159,12 @@ export class AgentPrinter implements Printer {
    */
   private handleContentBlockStop(): void {
     if (this._inReasoningBlock) {
-      this.flushReasoningBlock()
+      // End reasoning block with a newline if we didn't just write one
+      if (!this._needReasoningIndent) {
+        this.write('\n')
+      }
       this._inReasoningBlock = false
-      this._reasoningBuffer = ''
-    }
-  }
-
-  /**
-   * Flush the reasoning buffer with proper formatting.
-   * Outputs reasoning as a block with emoji header and indented content.
-   */
-  private flushReasoningBlock(): void {
-    if (this._reasoningBuffer.length === 0) {
-      return
-    }
-
-    // Start with newline and header
-    this.write('\n💭 Reasoning:\n')
-
-    // Indent each line of reasoning text
-    const lines = this._reasoningBuffer.split('\n')
-    for (const line of lines) {
-      this.write(`   ${line}\n`)
+      this._needReasoningIndent = false
     }
   }
 
