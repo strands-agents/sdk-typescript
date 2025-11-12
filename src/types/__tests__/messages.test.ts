@@ -119,23 +119,6 @@ describe('GuardContentBlock', () => {
     })
   })
 
-  test('creates guard content block with multiple qualifiers', () => {
-    const block = new GuardContentBlock({
-      text: {
-        qualifiers: ['grounding_source', 'query'],
-        text: 'Test content',
-      },
-    })
-
-    expect(block).toEqual({
-      type: 'guardContentBlock',
-      text: {
-        qualifiers: ['grounding_source', 'query'],
-        text: 'Test content',
-      },
-    })
-  })
-
   test('creates guard content block with all qualifier types', () => {
     const block = new GuardContentBlock({
       text: {
