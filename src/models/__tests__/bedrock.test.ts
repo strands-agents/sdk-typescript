@@ -17,7 +17,7 @@ function setupMockSend(streamGenerator: () => AsyncGenerator<unknown>): void {
       stream: streamGenerator(),
     })
   )
-  vi.mocked(BedrockRuntimeClient).mockImplementation(function (this: any) {
+  vi.mocked(BedrockRuntimeClient).mockImplementation(function () {
     return { send: mockSend } as never
   })
 }
@@ -79,7 +79,7 @@ vi.mock('@aws-sdk/client-bedrock-runtime', async (importOriginal) => {
 
   return {
     ...originalModule,
-    BedrockRuntimeClient: vi.fn(function (this: any) {
+    BedrockRuntimeClient: vi.fn(function () {
       return {
         send: mockSend,
       }
@@ -478,7 +478,7 @@ describe('BedrockModel', () => {
         }
       })
 
-      vi.mocked(BedrockRuntimeClient).mockImplementation(function (this: any) {
+      vi.mocked(BedrockRuntimeClient).mockImplementation(function () {
         return { send: mockSend } as never
       })
 
@@ -543,7 +543,7 @@ describe('BedrockModel', () => {
           }
         }
       })
-      vi.mocked(BedrockRuntimeClient).mockImplementation(function (this: any) {
+      vi.mocked(BedrockRuntimeClient).mockImplementation(function () {
         return { send: mockSend } as never
       })
 
@@ -609,7 +609,7 @@ describe('BedrockModel', () => {
           }
         }
       })
-      vi.mocked(BedrockRuntimeClient).mockImplementation(function (this: any) {
+      vi.mocked(BedrockRuntimeClient).mockImplementation(function () {
         return { send: mockSend } as never
       })
 
@@ -669,7 +669,7 @@ describe('BedrockModel', () => {
           }
         }
       })
-      vi.mocked(BedrockRuntimeClient).mockImplementation(function (this: any) {
+      vi.mocked(BedrockRuntimeClient).mockImplementation(function () {
         return { send: mockSend } as never
       })
 
@@ -710,7 +710,7 @@ describe('BedrockModel', () => {
       ])('throws $name', async ({ error, expected }) => {
         vi.clearAllMocks()
         const mockSendError = vi.fn().mockRejectedValue(error)
-        vi.mocked(BedrockRuntimeClient).mockImplementation(function (this: any) {
+        vi.mocked(BedrockRuntimeClient).mockImplementation(function () {
           return { send: mockSendError } as never
         })
 
