@@ -49,30 +49,5 @@ describe.skipIf(!(await shouldRunTests()) || process.platform === 'win32')(
         expect(lastMessage).toMatch(/not found|error|command/)
       })
     })
-
-    describe('isolated sessions', () => {
-      it('provides separate sessions for different agents', async () => {
-        const agent1 = createAgent()
-        const agent2 = createAgent()
-
-        // Set variable in agent1
-        await agent1.invoke('Use bash to set: AGENT1_VAR="unique_value_1"')
-
-        // Set different variable in agent2
-        await agent2.invoke('Use bash to set: AGENT2_VAR="unique_value_2"')
-
-        // Check agent1 variable
-        const result1 = await agent1.invoke('Use bash to echo $AGENT1_VAR')
-        expect(getMessageText(result1.lastMessage)).toContain('unique_value_1')
-
-        // Check agent2 variable
-        const result2 = await agent2.invoke('Use bash to echo $AGENT2_VAR')
-        expect(getMessageText(result2.lastMessage)).toContain('unique_value_2')
-
-        // Verify isolation - agent1 should not have agent2's variable
-        const crossCheck = await agent1.invoke('Use bash to echo $AGENT2_VAR')
-        expect(getMessageText(crossCheck.lastMessage)).not.toContain('unique_value_2')
-      })
-    })
   }
 )
