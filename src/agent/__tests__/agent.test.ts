@@ -269,6 +269,33 @@ describe('Agent', () => {
     })
   })
 
+  describe('messages', () => {
+    it('returns array of messages', () => {
+      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
+      const agent = new Agent({ model })
+
+      const messages = agent.messages
+
+      expect(messages).toBeDefined()
+      expect(Array.isArray(messages)).toBe(true)
+    })
+
+    it('reflects conversation history after invoke', async () => {
+      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Response' })
+      const agent = new Agent({ model })
+
+      await agent.invoke('Hello')
+
+      const messages = agent.messages
+      expect(messages.length).toBeGreaterThan(0)
+      expect(messages.length).toBe(2)
+      expect(messages[0]?.role).toBe('user')
+      expect(messages[0]?.content).toEqual([{ type: 'textBlock', text: 'Hello' }])
+      expect(messages[1]?.role).toBe('assistant')
+      expect(messages[1]?.content).toEqual([{ type: 'textBlock', text: 'Response' }])
+    })
+  })
+
   describe('printer configuration', () => {
     it('validates output when printer is enabled', async () => {
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello world' })

@@ -17,7 +17,7 @@ export default defineConfig({
       {
         test: {
           include: ['src/**/__tests__/**/*.test.ts', 'vended_tools/**/__tests__/**/*.test.ts'],
-          exclude: ['vended_tools/file_editor/**/*.test.ts'],
+          exclude: ['vended_tools/file_editor/**/*.test.ts', 'vended_tools/bash/**/*.test.ts'],
           name: { label: 'unit-browser', color: 'cyan' },
           browser: {
             enabled: true,

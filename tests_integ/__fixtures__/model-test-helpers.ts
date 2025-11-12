@@ -1,4 +1,5 @@
 import { fromNodeProviderChain } from '@aws-sdk/credential-providers'
+import type { Message, ContentBlock } from '../../src/types/messages.js'
 
 /**
  * Determines whether AWS integration tests should run based on environment and credentials.
@@ -26,4 +27,23 @@ export async function shouldRunTests(): Promise<boolean> {
     console.log('⏭️ AWS credentials not available locally, integration tests will be skipped.')
     return false
   }
+}
+
+/**
+ * Extracts plain text content from a Message object.
+ *
+ * This helper function handles different message formats by:
+ * - Extracting text from Message objects by filtering for textBlock content blocks
+ * - Joining multiple text blocks with newlines
+ *
+ * @param message - The message to extract text from. Message object with content blocks
+ * @returns The extracted text content as a string, or empty string if no content is found
+ */
+export const getMessageText = (message: Message): string => {
+  if (!message.content) return ''
+
+  return message.content
+    .filter((block: ContentBlock) => block.type === 'textBlock')
+    .map((block) => block.text)
+    .join('\n')
 }

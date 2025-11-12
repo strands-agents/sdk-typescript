@@ -8,6 +8,42 @@ Vended tools are pre-built, production-ready tools that developers can optionall
 
 ## Available Tools
 
+### Bash
+
+A robust tool for executing bash shell commands in Node.js environments with persistent session support.
+
+**Location**: `vended_tools/bash/`
+
+**Key Features**:
+
+- Persistent bash sessions with state management
+- Separate stdout and stderr capture
+- Configurable command timeouts (default: 120 seconds)
+- Session restart capability
+- Isolated sessions per agent instance
+- Node.js only (requires `child_process` module)
+
+**Security Warning**: Executes arbitrary commands without sandboxing. Only use with trusted input and consider sandboxing for production.
+
+**Usage**:
+
+```typescript
+import { bash } from '@strands-agents/sdk/vended_tools/bash'
+import { Agent, BedrockModel } from '@strands-agents/sdk'
+
+const agent = new Agent({
+  model: new BedrockModel({
+    region: 'us-east-1',
+  }),
+  tools: [bash],
+})
+
+// Execute commands
+await agent.invoke('List all files in the current directory')
+```
+
+See [bash/README.md](./bash/README.md) for complete documentation.
+
 ### Notebook
 
 A comprehensive tool for managing text notebooks within agent invocations. Supports creating, reading, writing, listing, and clearing notebooks with full state persistence.
@@ -89,10 +125,25 @@ When adding new vended tools:
 ```
 vended_tools/
 ├── README.md                    # This file
-└── you-new-tool/                # tool
+├── bash/                        # Bash command execution tool
+│   ├── __tests__/
+│   │   └── bash.test.ts         # Unit tests
+│   ├── bash.ts                  # Implementation
+│   ├── types.ts                 # Type definitions
+│   ├── index.ts                 # Public exports
+│   └── README.md                # Documentation
+├── notebook/                    # Text notebook management tool
+│   ├── __tests__/
+│   │   └── notebook.test.ts     # Unit tests
+│   ├── notebook.ts              # Implementation
+│   ├── types.ts                 # Type definitions
+│   ├── index.ts                 # Public exports
+│   └── README.md                # Documentation
+└── you-new-tool/                # Your new tool
     ├── __tests__/
     │   └── you-new-tool.test.ts # Unit tests
     ├── you-new-tool.ts          # Implementation
     ├── types.ts                 # Type definitions
-    └── index.ts                 # Public exports
+    ├── index.ts                 # Public exports
+    └── README.md                # Documentation
 ```
