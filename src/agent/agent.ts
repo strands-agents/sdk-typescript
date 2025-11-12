@@ -75,12 +75,17 @@ export class Agent implements AgentData {
   private _model: Model<BaseModelConfig>
   private _toolRegistry: ToolRegistry
   private _systemPrompt?: SystemPrompt
-  private _conversationManager: ConversationManager
 
   /**
    * The conversation history of messages between user and assistant.
    */
   public readonly messages: Message[]
+
+  /**
+   * Conversation manager for handling message history and context overflow.
+   */
+  public readonly conversationManager: ConversationManager
+
   private _printer?: Printer
 
   /**
@@ -106,7 +111,7 @@ export class Agent implements AgentData {
     this.state = new AgentState(config?.state)
 
     // Initialize conversation manager (default: SlidingWindowConversationManager with windowSize of 40)
-    this._conversationManager = config?.conversationManager ?? new SlidingWindowConversationManager({ windowSize: 40 })
+    this.conversationManager = config?.conversationManager ?? new SlidingWindowConversationManager({ windowSize: 40 })
 
     // Create printer if printer is enabled (default: true)
     const printer = config?.printer ?? true
@@ -222,7 +227,7 @@ export class Agent implements AgentData {
       }
     } finally {
       // Apply conversation management after event loop completes
-      this._conversationManager.applyManagement(this)
+      this.conversationManager.applyManagement(this)
 
       // Always emit final event
       yield { type: 'afterInvocationEvent' }
@@ -292,7 +297,7 @@ export class Agent implements AgentData {
     } catch (error) {
       if (error instanceof ContextWindowOverflowError) {
         // Reduce context and retry recursively
-        this._conversationManager.reduceContext(this, error)
+        this.conversationManager.reduceContext(this, error)
 
         // Recursively retry model invocation
         return yield* this.invokeModel(args)
