@@ -61,7 +61,11 @@ export class Agent implements AgentData {
   private _model: Model<BaseModelConfig>
   private _toolRegistry: ToolRegistry
   private _systemPrompt?: SystemPrompt
-  private _messages: Message[]
+
+  /**
+   * The conversation history of messages between user and assistant.
+   */
+  public readonly messages: Message[]
   private _isInvoking: boolean = false
 
   /**
@@ -82,9 +86,7 @@ export class Agent implements AgentData {
       this._systemPrompt = config.systemPrompt
     }
 
-    this._messages = (config?.messages ?? []).map((msg) =>
-      msg instanceof Message ? msg : Message.fromMessageData(msg)
-    )
+    this.messages = (config?.messages ?? []).map((msg) => (msg instanceof Message ? msg : Message.fromMessageData(msg)))
 
     this.state = new AgentState(config?.state)
   }
@@ -175,8 +177,7 @@ export class Agent implements AgentData {
         if (modelResult.stopReason !== 'toolUse') {
           // Loop terminates - no tool use requested
           // Add assistant message now that we're returning
-          this._messages.push(modelResult.message)
-
+          this.messages.push(modelResult.message)
           return {
             stopReason: modelResult.stopReason,
             lastMessage: modelResult.message,
@@ -188,8 +189,8 @@ export class Agent implements AgentData {
 
         // Add assistant message with tool uses right before adding tool results
         // This ensures we don't have dangling tool use messages if tool execution fails
-        this._messages.push(modelResult.message)
-        this._messages.push(toolResultMessage)
+        this.messages.push(modelResult.message)
+        this.messages.push(toolResultMessage)
 
         // Continue loop
       }
@@ -235,7 +236,7 @@ export class Agent implements AgentData {
     args?: InvokeArgs
   ): AsyncGenerator<AgentStreamEvent, { message: Message; stopReason: string }, undefined> {
     // Emit event before invoking model
-    yield { type: 'beforeModelEvent', messages: [...this._messages] }
+    yield { type: 'beforeModelEvent', messages: [...this.messages] }
 
     const toolSpecs = this._toolRegistry.values().map((tool) => tool.toolSpec)
     const streamOptions: StreamOptions = { toolSpecs }
@@ -245,7 +246,7 @@ export class Agent implements AgentData {
 
     if (args !== undefined && typeof args === 'string') {
       // Add user message from args
-      this._messages.push(
+      this.messages.push(
         new Message({
           role: 'user',
           content: [{ type: 'textBlock', text: args }],
@@ -253,7 +254,7 @@ export class Agent implements AgentData {
       )
     }
 
-    const { message, stopReason } = yield* this._model.streamAggregated(this._messages, streamOptions)
+    const { message, stopReason } = yield* this._model.streamAggregated(this.messages, streamOptions)
 
     yield { type: 'afterModelEvent', message, stopReason }
 
