@@ -3,7 +3,11 @@ name: Secure Integration test
 on:
   pull_request_target:
     branches: main
-
+  pull_request:
+    branches: [ main ]
+    types: [opened, synchronize, reopened, ready_for_review]
+  merge_group: # Run tests in merge queue
+    types: [checks_requested]
 jobs:
   authorization-check:
     permissions: read-all
