@@ -103,6 +103,127 @@ describe('JsonBlock', () => {
 })
 
 describe('Message.fromMessageData', () => {
+  it('converts text block data to TextBlock', () => {
+    const messageData: MessageData = {
+      role: 'user',
+      content: [{ text: 'hello world' }],
+    }
+    const message = Message.fromMessageData(messageData)
+    expect(message.content).toHaveLength(1)
+    expect(message.content[0]).toBeInstanceOf(TextBlock)
+    expect(message.content[0]!.type).toBe('textBlock')
+    expect((message.content[0] as TextBlock).text).toBe('hello world')
+  })
+
+  it('converts tool use block data to ToolUseBlock', () => {
+    const messageData: MessageData = {
+      role: 'assistant',
+      content: [
+        {
+          toolUse: {
+            toolUseId: 'tool-123',
+            name: 'test-tool',
+            input: { key: 'value' },
+          },
+        },
+      ],
+    }
+    const message = Message.fromMessageData(messageData)
+    expect(message.content).toHaveLength(1)
+    expect(message.content[0]).toBeInstanceOf(ToolUseBlock)
+    expect(message.content[0]!.type).toBe('toolUseBlock')
+  })
+
+  it('converts tool result block data to ToolResultBlock with text content', () => {
+    const messageData: MessageData = {
+      role: 'user',
+      content: [
+        {
+          toolResult: {
+            toolUseId: 'tool-123',
+            status: 'success',
+            content: [{ text: 'result text' }],
+          },
+        },
+      ],
+    }
+    const message = Message.fromMessageData(messageData)
+    expect(message.content).toHaveLength(1)
+    expect(message.content[0]).toBeInstanceOf(ToolResultBlock)
+    const toolResultBlock = message.content[0] as ToolResultBlock
+    expect(toolResultBlock.content).toHaveLength(1)
+    expect(toolResultBlock.content[0]).toBeInstanceOf(TextBlock)
+  })
+
+  it('converts tool result block data to ToolResultBlock with json content', () => {
+    const messageData: MessageData = {
+      role: 'user',
+      content: [
+        {
+          toolResult: {
+            toolUseId: 'tool-123',
+            status: 'success',
+            content: [{ json: { result: 'value' } }],
+          },
+        },
+      ],
+    }
+    const message = Message.fromMessageData(messageData)
+    expect(message.content).toHaveLength(1)
+    const toolResultBlock = message.content[0] as ToolResultBlock
+    expect(toolResultBlock.content).toHaveLength(1)
+    expect(toolResultBlock.content[0]).toBeInstanceOf(JsonBlock)
+  })
+
+  it('converts reasoning block data to ReasoningBlock', () => {
+    const messageData: MessageData = {
+      role: 'assistant',
+      content: [
+        {
+          reasoning: { text: 'thinking about it...' },
+        },
+      ],
+    }
+    const message = Message.fromMessageData(messageData)
+    expect(message.content).toHaveLength(1)
+    expect(message.content[0]).toBeInstanceOf(ReasoningBlock)
+    expect(message.content[0]!.type).toBe('reasoningBlock')
+  })
+
+  it('converts cache point block data to CachePointBlock', () => {
+    const messageData: MessageData = {
+      role: 'user',
+      content: [
+        {
+          cachePoint: { cacheType: 'default' },
+        },
+      ],
+    }
+    const message = Message.fromMessageData(messageData)
+    expect(message.content).toHaveLength(1)
+    expect(message.content[0]).toBeInstanceOf(CachePointBlock)
+    expect(message.content[0]!.type).toBe('cachePointBlock')
+  })
+
+  it('converts guard content block data to GuardContentBlock', () => {
+    const messageData: MessageData = {
+      role: 'user',
+      content: [
+        {
+          guardContent: {
+            text: {
+              text: 'guard this content',
+              qualifiers: ['guard_content'],
+            },
+          },
+        },
+      ],
+    }
+    const message = Message.fromMessageData(messageData)
+    expect(message.content).toHaveLength(1)
+    expect(message.content[0]!.type).toBe('guardContentBlock')
+  })
+
   it('converts image block data to ImageBlock', () => {
     const messageData: MessageData = {
       role: 'user',
@@ -156,6 +277,22 @@ describe('Message.fromMessageData', () => {
     expect(message.content).toHaveLength(1)
     expect(message.content[0]).toBeInstanceOf(DocumentBlock)
     expect(message.content[0]!.type).toBe('documentBlock')
+  })
+
+  it('converts multiple content blocks', () => {
+    const messageData: MessageData = {
+      role: 'user',
+      content: [
+        { text: 'first block' },
+        { image: { format: 'png', source: { bytes: new Uint8Array([1, 2, 3]) } } },
+        { text: 'second block' },
+      ],
+    }
+    const message = Message.fromMessageData(messageData)
+    expect(message.content).toHaveLength(3)
+    expect(message.content[0]).toBeInstanceOf(TextBlock)
+    expect(message.content[1]).toBeInstanceOf(ImageBlock)
+    expect(message.content[2]).toBeInstanceOf(TextBlock)
   })
 
   it('throws error for unknown content block type', () => {
