@@ -257,6 +257,12 @@ export class MockMessageModel extends Model<BaseModelConfig> {
         // This is typically used in system prompts or message content for guardrail evaluation
         break
 
+      case 'imageBlock':
+      case 'videoBlock':
+      case 'documentBlock':
+        // These blocks don't generate events in mock - just skip them
+        break
+
       default: {
         // Exhaustive check
         const _exhaustive: never = block
