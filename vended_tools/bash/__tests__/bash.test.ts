@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { bash } from '../bash.js'
-import { BashTimeoutError } from '../types.js'
+import { bash } from '../index.js'
+import { BashTimeoutError, BashSessionError } from '../index.js'
 import type { ToolContext } from '../../../src/tools/tool.js'
 import { AgentState } from '../../../src/agent/state.js'
 import { isNode } from '../../../src/__fixtures__/environment.js'
@@ -211,6 +211,34 @@ describe.skipIf(!isNode || process.platform === 'win32')('bash tool', () => {
     it('has toolSpec', () => {
       expect(bash.toolSpec).toBeDefined()
       expect(bash.toolSpec.name).toBe('bash')
+    })
+  })
+
+  describe('error classes', () => {
+    it('BashTimeoutError has correct properties', () => {
+      const error = new BashTimeoutError('timeout message')
+      expect(error.name).toBe('BashTimeoutError')
+      expect(error.message).toBe('timeout message')
+      expect(error instanceof Error).toBe(true)
+    })
+
+    it('BashSessionError has correct properties', () => {
+      const error = new BashSessionError('session error message')
+      expect(error.name).toBe('BashSessionError')
+      expect(error.message).toBe('session error message')
+      expect(error instanceof Error).toBe(true)
+    })
+  })
+
+  describe('module exports', () => {
+    it('exports bash tool from index', () => {
+      expect(bash).toBeDefined()
+      expect(bash.name).toBe('bash')
+    })
+
+    it('exports error classes from index', () => {
+      expect(BashTimeoutError).toBeDefined()
+      expect(BashSessionError).toBeDefined()
     })
   })
 })

@@ -212,12 +212,15 @@ process.on('beforeExit', () => {
 process.on('exit', cleanupAllSessions)
 process.on('SIGINT', () => {
   cleanupAllSessions()
+  /* c8 ignore next */
   process.exit(0)
 })
+/* c8 ignore start */
 process.on('SIGTERM', () => {
   cleanupAllSessions()
   process.exit(0)
 })
+/* c8 ignore stop */
 
 /**
  * Bash tool for executing shell commands in Node.js environments.
@@ -279,20 +282,16 @@ export const bash = tool({
     }
 
     // Handle execute mode
-    if (input.mode === 'execute') {
-      // Get or create session
-      let session = sessions.get(agent)
-      if (!session) {
-        session = new BashSession(input.timeout ?? 120)
-        sessions.set(agent, session)
-        activeSessions.add(session)
-      }
-
-      // Execute command
-      const result = await session.run(input.command!, input.timeout)
-      return result
+    // Get or create session
+    let session = sessions.get(agent)
+    if (!session) {
+      session = new BashSession(input.timeout ?? 120)
+      sessions.set(agent, session)
+      activeSessions.add(session)
     }
 
-    throw new Error(`Unknown mode: ${(input as { mode: string }).mode}`)
+    // Execute command
+    const result = await session.run(input.command!, input.timeout)
+    return result
   },
 })
