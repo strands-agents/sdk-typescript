@@ -22,6 +22,9 @@ import type { AgentData } from '../types/agent.js'
 import { AgentPrinter, getDefaultAppender, type Printer } from './printer.js'
 import type { ConversationManager } from '../conversation-manager/conversation-manager.js'
 import { SlidingWindowConversationManager } from '../conversation-manager/sliding-window-conversation-manager.js'
+import { HookRegistry } from '../hooks/registry.js'
+import type { HookProvider } from '../hooks/types.js'
+import { BeforeInvocationEvent, AfterInvocationEvent } from '../hooks/events.js'
 
 /**
  * Configuration object for creating a new Agent.
@@ -58,6 +61,11 @@ export type AgentConfig = {
    * Defaults to SlidingWindowConversationManager with windowSize of 40.
    */
   conversationManager?: ConversationManager
+  /**
+   * Hook providers to register with the agent.
+   * Hooks enable observing and extending agent behavior.
+   */
+  hooks?: HookProvider[]
 }
 
 /**
@@ -97,6 +105,12 @@ export class Agent implements AgentData {
   public readonly state: AgentState
 
   /**
+   * Hook registry for managing event callbacks.
+   * Hooks enable observing and extending agent behavior.
+   */
+  public readonly hooks: HookRegistry
+
+  /**
    * Creates an instance of the Agent.
    * @param config - The configuration for the agent.
    */
@@ -113,6 +127,14 @@ export class Agent implements AgentData {
     this.state = new AgentState(config?.state)
 
     this.conversationManager = config?.conversationManager ?? new SlidingWindowConversationManager({ windowSize: 40 })
+
+    // Initialize hooks
+    this.hooks = new HookRegistry()
+    if (config?.hooks) {
+      for (const hook of config.hooks) {
+        this.hooks.addHook(hook)
+      }
+    }
 
     // Create printer if printer is enabled (default: true)
     const printer = config?.printer ?? true
@@ -210,6 +232,9 @@ export class Agent implements AgentData {
   private async *_stream(args: InvokeArgs): AsyncGenerator<AgentStreamEvent, AgentResult, undefined> {
     let currentArgs: InvokeArgs | undefined = args
 
+    // Invoke BeforeInvocationEvent hook
+    await this.hooks.invokeCallbacks(new BeforeInvocationEvent({ agent: this }))
+
     // Emit event before the loop starts
     yield { type: 'beforeInvocationEvent' }
 
@@ -249,6 +274,9 @@ export class Agent implements AgentData {
       }
     } finally {
       this.conversationManager.applyManagement(this)
+
+      // Invoke AfterInvocationEvent hook
+      await this.hooks.invokeCallbacks(new AfterInvocationEvent({ agent: this }))
 
       // Always emit final event
       yield { type: 'afterInvocationEvent' }

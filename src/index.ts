@@ -98,9 +98,13 @@ export type {
   AfterModelEvent,
   BeforeToolsEvent,
   AfterToolsEvent,
-  BeforeInvocationEvent,
-  AfterInvocationEvent,
+  BeforeInvocationEvent as BeforeInvocationStreamEvent,
+  AfterInvocationEvent as AfterInvocationStreamEvent,
 } from './agent/streaming.js'
+
+// Hooks system
+export { HookRegistry, HookEvent, BeforeInvocationEvent, AfterInvocationEvent } from './hooks/index.js'
+export type { HookCallback, HookProvider } from './hooks/index.js'
 
 // Conversation Manager
 export { ConversationManager } from './conversation-manager/conversation-manager.js'

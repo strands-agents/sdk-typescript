@@ -41,6 +41,15 @@ sdk-typescript/
 │   │   ├── sliding-window-conversation-manager.ts  # Sliding window strategy
 │   │   └── index.ts          # Public exports
 │   │
+│   ├── hooks/                    # Hooks system for extensibility
+│   │   ├── __tests__/            # Unit tests for hooks
+│   │   │   ├── events.test.ts    # Tests for hook events
+│   │   │   └── registry.test.ts  # Tests for HookRegistry
+│   │   ├── events.ts             # HookEvent base class and concrete events
+│   │   ├── registry.ts           # HookRegistry implementation
+│   │   ├── types.ts              # Hook-related type definitions
+│   │   └── index.ts              # Public exports for hooks
+│   │
 │   ├── models/                   # Model provider implementations
 │   │   ├── __tests__/            # Unit tests for model providers
 │   │   │   └── bedrock.test.ts   # Tests for Bedrock model provider
@@ -76,6 +85,7 @@ sdk-typescript/
 │
 ├── tests_integ/                  # Integration tests (separate from source)
 │   ├── bedrock.test.ts           # Bedrock integration tests (requires AWS credentials)
+│   ├── hooks.test.ts             # Hooks integration tests
 │   └── registry.test.ts          # ToolRegistry integration tests
 │
 ├── .github/                      # GitHub Actions workflows
@@ -114,6 +124,7 @@ sdk-typescript/
 - **`src/__tests__/`**: Unit tests for root-level source files
 - **`src/agent/`**: Agent loop coordination, streaming event types, output printing, and conversation management
 - **`src/agent/conversation-manager/`**: Conversation history management strategies
+- **`src/hooks/`**: Hooks system for event-driven extensibility
 - **`src/models/`**: Model provider implementations (Bedrock, OpenAI, future providers)
 - **`src/tools/`**: Tool definitions and types for agent tool use
 - **`src/types/`**: Core type definitions used across the SDK
