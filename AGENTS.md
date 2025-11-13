@@ -26,19 +26,20 @@ sdk-typescript/
 │   │   │   ├── agent.test.ts     # Tests for agent implementation
 │   │   │   ├── state.test.ts     # Tests for agent state
 │   │   │   └── printer.test.ts   # Tests for printer
-│   │   ├── conversation-manager/ # Conversation management implementations
-│   │   │   ├── __tests__/        # Unit tests for conversation managers
-│   │   │   │   ├── conversation-manager.test.ts
-│   │   │   │   ├── null-conversation-manager.test.ts
-│   │   │   │   └── sliding-window-conversation-manager.test.ts
-│   │   │   ├── conversation-manager.ts        # Abstract base class
-│   │   │   ├── null-conversation-manager.ts   # No-op implementation
-│   │   │   ├── sliding-window-conversation-manager.ts  # Sliding window strategy
-│   │   │   └── index.ts          # Public exports
 │   │   ├── agent.ts              # Core agent implementation
 │   │   ├── printer.ts            # Agent output printing
 │   │   ├── state.ts              # Agent state implementation
 │   │   └── streaming.ts          # Agent streaming event types
+│   │
+│   ├── conversation-manager/ # Conversation management implementations
+│   │   ├── __tests__/        # Unit tests for conversation managers
+│   │   │   ├── conversation-manager.test.ts
+│   │   │   ├── null-conversation-manager.test.ts
+│   │   │   └── sliding-window-conversation-manager.test.ts
+│   │   ├── conversation-manager.ts        # Abstract base class
+│   │   ├── null-conversation-manager.ts   # No-op implementation
+│   │   ├── sliding-window-conversation-manager.ts  # Sliding window strategy
+│   │   └── index.ts          # Public exports
 │   │
 │   ├── models/                   # Model provider implementations
 │   │   ├── __tests__/            # Unit tests for model providers
