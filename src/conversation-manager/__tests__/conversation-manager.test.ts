@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { ConversationManager } from '../conversation-manager.js'
-import type { Agent } from '../../agent.js'
+import type { Agent } from '../../agent/agent.js'
 
 describe('ConversationManager', () => {
   describe('properties', () => {

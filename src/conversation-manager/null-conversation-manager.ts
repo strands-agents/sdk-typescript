@@ -6,8 +6,8 @@
  * management is handled externally.
  */
 
-import { ContextWindowOverflowError } from '../../errors.js'
-import type { Agent } from '../agent.js'
+import { ContextWindowOverflowError } from '../errors.js'
+import type { Agent } from '../agent/agent.js'
 import { ConversationManager } from './conversation-manager.js'
 
 /**

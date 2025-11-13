@@ -6,7 +6,7 @@
  * length, and maintain relevant conversation state.
  */
 
-import type { Agent } from '../agent.js'
+import type { Agent } from '../agent/agent.js'
 
 /**
  * Abstract base class for managing conversation history.

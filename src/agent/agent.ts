@@ -20,8 +20,8 @@ import { ToolRegistry } from '../registry/tool-registry.js'
 import { AgentState } from './state.js'
 import type { AgentData } from '../types/agent.js'
 import { AgentPrinter, getDefaultAppender, type Printer } from './printer.js'
-import type { ConversationManager } from './conversation-manager/conversation-manager.js'
-import { SlidingWindowConversationManager } from './conversation-manager/sliding-window-conversation-manager.js'
+import type { ConversationManager } from '../conversation-manager/conversation-manager.js'
+import { SlidingWindowConversationManager } from '../conversation-manager/sliding-window-conversation-manager.js'
 
 /**
  * Configuration object for creating a new Agent.

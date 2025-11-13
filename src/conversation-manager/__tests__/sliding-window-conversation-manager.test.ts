@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { SlidingWindowConversationManager } from '../sliding-window-conversation-manager.js'
-import { ContextWindowOverflowError, Message, TextBlock, ToolUseBlock, ToolResultBlock } from '../../../index.js'
-import type { Agent } from '../../agent.js'
+import { ContextWindowOverflowError, Message, TextBlock, ToolUseBlock, ToolResultBlock } from '../../index.js'
+import type { Agent } from '../../agent/agent.js'
 
 describe('SlidingWindowConversationManager', () => {
   describe('constructor', () => {

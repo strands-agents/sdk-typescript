@@ -103,9 +103,9 @@ export type {
 } from './agent/streaming.js'
 
 // Conversation Manager
-export { ConversationManager } from './agent/conversation-manager/conversation-manager.js'
-export { NullConversationManager } from './agent/conversation-manager/null-conversation-manager.js'
+export { ConversationManager } from './conversation-manager/conversation-manager.js'
+export { NullConversationManager } from './conversation-manager/null-conversation-manager.js'
 export {
   SlidingWindowConversationManager,
   type SlidingWindowConfig,
-} from './agent/conversation-manager/sliding-window-conversation-manager.js'
+} from './conversation-manager/sliding-window-conversation-manager.js'

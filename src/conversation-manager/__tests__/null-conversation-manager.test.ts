@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { NullConversationManager } from '../null-conversation-manager.js'
-import { ContextWindowOverflowError, Message, TextBlock } from '../../../index.js'
-import type { Agent } from '../../agent.js'
+import { ContextWindowOverflowError, Message, TextBlock } from '../../index.js'
+import type { Agent } from '../../agent/agent.js'
 
 describe('NullConversationManager', () => {
   describe('applyManagement', () => {
