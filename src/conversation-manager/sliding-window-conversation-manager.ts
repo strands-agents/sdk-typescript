@@ -7,15 +7,14 @@
 
 import { ContextWindowOverflowError } from '../errors.js'
 import { Message, TextBlock, ToolResultBlock } from '../types/messages.js'
-import type { Agent } from '../agent/agent.js'
-import { ConversationManager } from './conversation-manager.js'
+import { ConversationManager, type ConversationContext } from './conversation-manager.js'
 
 /**
  * Configuration for the sliding window conversation manager.
  */
-export type SlidingWindowConfig = {
+export type SlidingWindowConversationManagerConfig = {
   /**
-   * Maximum number of messages to keep in the agent's history.
+   * Maximum number of messages to keep in the conversation history.
    * Defaults to 40 messages.
    */
   windowSize?: number
@@ -44,29 +43,29 @@ export class SlidingWindowConversationManager extends ConversationManager {
    *
    * @param config - Configuration options for the sliding window manager.
    */
-  constructor(config?: SlidingWindowConfig) {
+  constructor(config?: SlidingWindowConversationManagerConfig) {
     super()
     this._windowSize = config?.windowSize ?? 40
     this._shouldTruncateResults = config?.shouldTruncateResults ?? true
   }
 
   /**
-   * Apply the sliding window to the agent's messages array to maintain a manageable history size.
+   * Apply the sliding window to the conversation context's messages array to maintain a manageable history size.
    *
    * This method is called after every event loop cycle to apply a sliding window if the message
    * count exceeds the window size. If the number of messages is within the window size, no action
    * is taken.
    *
-   * @param agent - The agent whose messages will be managed. This list is modified in-place.
+   * @param context - The conversation context whose messages will be managed. The messages array is modified in-place.
    */
-  public applyManagement(agent: Agent): void {
-    const messages = agent.messages
+  public applyManagement(context: ConversationContext): void {
+    const messages = context.messages
 
     if (messages.length <= this._windowSize) {
       return
     }
 
-    this.reduceContext(agent)
+    this.reduceContext(context)
   }
 
   /**
@@ -81,14 +80,14 @@ export class SlidingWindowConversationManager extends ConversationManager {
    * 2. If truncation is not possible or doesn't help, trim oldest messages
    * 3. When trimming, skip invalid trim points (toolResult at start, or toolUse without following toolResult)
    *
-   * @param agent - The agent whose messages will be reduced. This list is modified in-place.
+   * @param context - The conversation context whose messages will be reduced. The messages array is modified in-place.
    * @param _error - The error that triggered the context reduction, if any.
    *
    * @throws ContextWindowOverflowError If the context cannot be reduced further,
    *         such as when the conversation is already minimal or when no valid trim point exists.
    */
-  public reduceContext(agent: Agent, _error?: Error): void {
-    const messages = agent.messages
+  public reduceContext(context: ConversationContext, _error?: Error): void {
+    const messages = context.messages
 
     // Try to truncate the tool result first
     const lastMessageIdxWithToolResults = this.findLastMessageWithToolResults(messages)
@@ -140,7 +139,7 @@ export class SlidingWindowConversationManager extends ConversationManager {
       throw new ContextWindowOverflowError('Unable to trim conversation context!')
     }
 
-    // trimIndex represents the number of messages being removed from the agents messages array
+    // trimIndex represents the number of messages being removed from the messages array
     this.removedMessageCount += trimIndex
 
     // Overwrite message history
@@ -226,10 +225,7 @@ export class SlidingWindowConversationManager extends ConversationManager {
   private findLastMessageWithToolResults(messages: Message[]): number | undefined {
     // Iterate backwards through all messages (from newest to oldest)
     for (let idx = messages.length - 1; idx >= 0; idx--) {
-      const currentMessage = messages[idx]
-      if (!currentMessage) {
-        continue
-      }
+      const currentMessage = messages[idx]!
 
       const hasToolResult = currentMessage.content.some((block) => block.type === 'toolResultBlock')
 

@@ -7,8 +7,7 @@
  */
 
 import { ContextWindowOverflowError } from '../errors.js'
-import type { Agent } from '../agent/agent.js'
-import { ConversationManager } from './conversation-manager.js'
+import { ConversationManager, type ConversationContext } from './conversation-manager.js'
 
 /**
  * A no-op conversation manager that does not modify the conversation history.
@@ -18,9 +17,9 @@ export class NullConversationManager extends ConversationManager {
   /**
    * Does nothing to the conversation history.
    *
-   * @param _agent - The agent whose conversation history will remain unmodified.
+   * @param _context - The conversation context whose message history will remain unmodified.
    */
-  public applyManagement(_agent: Agent): void {
+  public applyManagement(_context: ConversationContext): void {
     // No-op
   }
 
@@ -31,13 +30,13 @@ export class NullConversationManager extends ConversationManager {
    * ContextWindowOverflowError indicating that the context window has
    * overflowed and cannot be reduced.
    *
-   * @param _agent - The agent whose conversation history will remain unmodified.
+   * @param _context - The conversation context whose message history will remain unmodified.
    * @param error - The error that triggered the context reduction, if any.
    *
    * @throws Error The provided error if one was given.
    * @throws ContextWindowOverflowError If no error was provided.
    */
-  public reduceContext(_agent: Agent, error?: Error): void {
+  public reduceContext(_context: ConversationContext, error?: Error): void {
     if (error) {
       throw error
     } else {

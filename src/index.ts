@@ -107,5 +107,5 @@ export { ConversationManager } from './conversation-manager/conversation-manager
 export { NullConversationManager } from './conversation-manager/null-conversation-manager.js'
 export {
   SlidingWindowConversationManager,
-  type SlidingWindowConfig,
+  type SlidingWindowConversationManagerConfig,
 } from './conversation-manager/sliding-window-conversation-manager.js'
