@@ -35,18 +35,9 @@ export interface ConversationContext {
  */
 export abstract class ConversationManager {
   /**
-   * The number of messages that have been removed from the context's messages array.
-   * These represent messages provided by the user or model that have been removed,
-   * not messages included by the conversation manager through something like summarization.
-   */
-  public removedMessageCount: number
-
-  /**
    * Creates a new ConversationManager instance.
    */
-  constructor() {
-    this.removedMessageCount = 0
-  }
+  constructor() {}
 
   /**
    * Applies management strategy to the provided conversation context.

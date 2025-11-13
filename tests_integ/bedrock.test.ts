@@ -324,9 +324,6 @@ describe.skipIf(!(await shouldRunTests()))('BedrockModel Integration Tests', () 
 
       // Should maintain window size of 4 messages
       expect(agent.messages).toHaveLength(4)
-
-      // Verify oldest messages were removed
-      expect(agent.conversationManager.removedMessageCount).toBeGreaterThan(0)
     }, 30000)
 
     it('throws ContextWindowOverflowError with NullConversationManager', async () => {
@@ -340,9 +337,6 @@ describe.skipIf(!(await shouldRunTests()))('BedrockModel Integration Tests', () 
 
       // This should throw since NullConversationManager doesn't handle overflow
       await expect(agent.invoke(longPrompt)).rejects.toThrow()
-
-      // Verify no messages were removed
-      expect(agent.conversationManager.removedMessageCount).toBe(0)
     }, 30000)
   })
 })

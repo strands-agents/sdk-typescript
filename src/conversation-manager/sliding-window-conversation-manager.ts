@@ -139,9 +139,6 @@ export class SlidingWindowConversationManager extends ConversationManager {
       throw new ContextWindowOverflowError('Unable to trim conversation context!')
     }
 
-    // trimIndex represents the number of messages being removed from the messages array
-    this.removedMessageCount += trimIndex
-
     // Overwrite message history
     messages.splice(0, trimIndex)
   }

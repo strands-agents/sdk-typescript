@@ -67,7 +67,6 @@ describe('SlidingWindowConversationManager', () => {
 
       // Should have trimmed to window size
       expect(mockAgent.messages).toHaveLength(2)
-      expect(manager.removedMessageCount).toBe(1)
     })
   })
 
@@ -158,7 +157,6 @@ describe('SlidingWindowConversationManager', () => {
 
       // Should not have removed any messages, only truncated tool result
       expect(mockAgent.messages).toHaveLength(3)
-      expect(manager.removedMessageCount).toBe(0)
     })
 
     it('skips truncation when shouldTruncateResults is false', () => {
@@ -183,7 +181,6 @@ describe('SlidingWindowConversationManager', () => {
 
       // Should have trimmed messages instead of truncating tool result
       expect(mockAgent.messages).toHaveLength(2)
-      expect(manager.removedMessageCount).toBe(1)
 
       // Tool result should not be truncated - it's now at index 1 after trimming
       const toolResult = mockAgent.messages[1]!.content[0]! as ToolResultBlock
@@ -264,7 +261,6 @@ describe('SlidingWindowConversationManager', () => {
       manager.reduceContext(mockAgent)
 
       // Should remove 2 messages (4 - 2 = 2)
-      expect(manager.removedMessageCount).toBe(2)
       expect(mockAgent.messages).toHaveLength(2)
     })
 
@@ -280,36 +276,7 @@ describe('SlidingWindowConversationManager', () => {
       manager.reduceContext(mockAgent)
 
       // Should remove 2 messages (default when count <= windowSize)
-      expect(manager.removedMessageCount).toBe(2)
       expect(mockAgent.messages).toHaveLength(1)
-    })
-
-    it('updates removedMessageCount by trim index', () => {
-      const manager = new SlidingWindowConversationManager({ windowSize: 2 })
-      const messages = [
-        new Message({ role: 'user', content: [new TextBlock('Message 1')] }),
-        new Message({ role: 'assistant', content: [new TextBlock('Response 1')] }),
-        new Message({ role: 'user', content: [new TextBlock('Message 2')] }),
-        new Message({ role: 'assistant', content: [new TextBlock('Response 2')] }),
-        new Message({ role: 'user', content: [new TextBlock('Message 3')] }),
-      ]
-      const mockAgent = { messages } as Agent
-
-      expect(manager.removedMessageCount).toBe(0)
-
-      manager.reduceContext(mockAgent)
-
-      // Should have removed 3 messages (5 - 2 = 3)
-      expect(manager.removedMessageCount).toBe(3)
-
-      // Call again
-      messages.push(new Message({ role: 'assistant', content: [new TextBlock('Response 3')] }))
-      messages.push(new Message({ role: 'user', content: [new TextBlock('Message 4')] }))
-
-      manager.reduceContext(mockAgent)
-
-      // Should have removed 2 more messages (cumulative: 3 + 2 = 5)
-      expect(manager.removedMessageCount).toBe(5)
     })
 
     it('removes messages from start of array using splice', () => {

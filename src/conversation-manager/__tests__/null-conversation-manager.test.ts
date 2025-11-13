@@ -50,25 +50,4 @@ describe('NullConversationManager', () => {
       }).toThrow('Context window overflowed!')
     })
   })
-
-  describe('removedMessageCount', () => {
-    it('remains 0 after operations', () => {
-      const manager = new NullConversationManager()
-      const messages = [
-        new Message({ role: 'user', content: [new TextBlock('Hello')] }),
-        new Message({ role: 'assistant', content: [new TextBlock('Hi')] }),
-      ]
-      const mockAgent = { messages } as unknown as Agent
-
-      manager.applyManagement(mockAgent)
-      expect(manager.removedMessageCount).toBe(0)
-
-      try {
-        manager.reduceContext(mockAgent)
-      } catch {
-        // Expected to throw
-      }
-      expect(manager.removedMessageCount).toBe(0)
-    })
-  })
 })
