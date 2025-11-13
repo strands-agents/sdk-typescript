@@ -30,7 +30,7 @@ import {
   type ToolUseBlockDelta,
 } from '@aws-sdk/client-bedrock-runtime'
 import { type BaseModelConfig, Model, type StreamOptions } from '../models/model.js'
-import type { ContentBlock, Message, ToolUseBlock } from '../types/messages.js'
+import type { ContentBlock, Message, SystemContentBlock, ToolUseBlock } from '../types/messages.js'
 import type { ModelStreamEvent, ReasoningContentDelta, Usage } from '../models/streaming.js'
 import type { JSONValue } from '../types/json.js'
 import { ContextWindowOverflowError } from '../errors.js'
@@ -512,7 +512,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
    * @param block - SDK content block
    * @returns Bedrock-formatted content block
    */
-  private _formatContentBlock(block: ContentBlock): BedrockContentBlock {
+  private _formatContentBlock(block: ContentBlock | SystemContentBlock): BedrockContentBlock {
     switch (block.type) {
       case 'textBlock':
         return { text: block.text }
@@ -568,6 +568,30 @@ export class BedrockModel extends Model<BedrockModelConfig> {
 
       case 'cachePointBlock':
         return { cachePoint: { type: block.cacheType } }
+
+      case 'guardContentBlock': {
+        if (block.text) {
+          return {
+            guardContent: {
+              text: {
+                text: block.text.text,
+                qualifiers: block.text.qualifiers,
+              },
+            },
+          }
+        } else if (block.image) {
+          return {
+            guardContent: {
+              image: {
+                format: block.image.format,
+                source: { bytes: block.image.source.bytes },
+              },
+            },
+          }
+        } else {
+          throw new Error('GuardContentBlock must have either text or image content')
+        }
+      }
     }
   }
 

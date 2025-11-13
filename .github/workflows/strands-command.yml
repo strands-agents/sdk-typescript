@@ -202,6 +202,7 @@ jobs:
 
       - name: Install dependencies
         run: npm install
+        continue-on-error: true # This step's failure will not stop the workflow
 
       - name: Run Strands Agent
         uses: ./.github/actions/strands-agent-runner

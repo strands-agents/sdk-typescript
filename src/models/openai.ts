@@ -418,17 +418,24 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
         // Array path: extract text blocks and warn about cache points
         const textBlocks: string[] = []
         let hasCachePoints = false
+        let hasGuardContent = false
 
         for (const block of options.systemPrompt) {
           if (block.type === 'textBlock') {
             textBlocks.push(block.text)
           } else if (block.type === 'cachePointBlock') {
             hasCachePoints = true
+          } else if (block.type === 'guardContentBlock') {
+            hasGuardContent = true
           }
         }
 
         if (hasCachePoints) {
           console.warn('Cache points are not supported in OpenAI system prompts and will be ignored.')
+        }
+
+        if (hasGuardContent) {
+          console.warn('OpenAI does not support guard content in system prompts. Removing guard content block.')
         }
 
         if (textBlocks.length > 0) {
@@ -531,6 +538,9 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
                 throw new Error(
                   'Reasoning blocks are not supported by OpenAI. ' + 'This feature is specific to AWS Bedrock models.'
                 )
+              } else if (block.type === 'guardContentBlock') {
+                console.warn('OpenAI does not support guard content in messages. Removing guard content block.')
+                return ''
               }
               return ''
             })
@@ -616,6 +626,8 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
             throw new Error(
               'Reasoning blocks are not supported by OpenAI. ' + 'This feature is specific to AWS Bedrock models.'
             )
+          } else if (block.type === 'guardContentBlock') {
+            console.warn('OpenAI does not support guard content in messages. Removing guard content block.')
           }
         }
 

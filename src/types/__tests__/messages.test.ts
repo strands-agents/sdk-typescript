@@ -7,6 +7,7 @@ import {
   ReasoningBlock,
   CachePointBlock,
   JsonBlock,
+  GuardContentBlock,
 } from '../messages.js'
 
 describe('Message', () => {
@@ -97,5 +98,80 @@ describe('JsonBlock', () => {
       type: 'jsonBlock',
       json: { key: 'value' },
     })
+  })
+})
+
+describe('GuardContentBlock', () => {
+  test('creates guard content block with single qualifier', () => {
+    const block = new GuardContentBlock({
+      text: {
+        qualifiers: ['grounding_source'],
+        text: 'This content should be evaluated for grounding.',
+      },
+    })
+
+    expect(block).toEqual({
+      type: 'guardContentBlock',
+      text: {
+        qualifiers: ['grounding_source'],
+        text: 'This content should be evaluated for grounding.',
+      },
+    })
+  })
+
+  test('creates guard content block with all qualifier types', () => {
+    const block = new GuardContentBlock({
+      text: {
+        qualifiers: ['grounding_source', 'query', 'guard_content'],
+        text: 'Test content',
+      },
+    })
+
+    expect(block).toEqual({
+      type: 'guardContentBlock',
+      text: {
+        qualifiers: ['grounding_source', 'query', 'guard_content'],
+        text: 'Test content',
+      },
+    })
+  })
+
+  test('creates guard content block with image (bytes)', () => {
+    const imageBytes = new Uint8Array([1, 2, 3, 4])
+    const block = new GuardContentBlock({
+      image: {
+        format: 'jpeg',
+        source: { bytes: imageBytes },
+      },
+    })
+
+    expect(block).toEqual({
+      type: 'guardContentBlock',
+      image: {
+        format: 'jpeg',
+        source: { bytes: imageBytes },
+      },
+    })
+  })
+
+  test('throws error when neither text nor image is provided', () => {
+    expect(() => new GuardContentBlock({} as any)).toThrow('GuardContentBlock must have either text or image content')
+  })
+
+  test('throws error when both text and image are provided', () => {
+    const imageBytes = new Uint8Array([1, 2, 3, 4])
+    expect(
+      () =>
+        new GuardContentBlock({
+          text: {
+            qualifiers: ['grounding_source'],
+            text: 'Test',
+          },
+          image: {
+            format: 'jpeg',
+            source: { bytes: imageBytes },
+          },
+        })
+    ).toThrow('GuardContentBlock cannot have both text and image content')
   })
 })

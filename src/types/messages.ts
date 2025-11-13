@@ -75,6 +75,8 @@ export class Message {
         return new ReasoningBlock(block.reasoning)
       } else if ('cachePoint' in block) {
         return new CachePointBlock(block.cachePoint)
+      } else if ('guardContent' in block) {
+        return new GuardContentBlock(block.guardContent)
       } else {
         throw new Error('Unknown ContentBlockData type')
       }
@@ -95,7 +97,7 @@ export type Role = 'user' | 'assistant'
 
 /**
  * A block of content within a message.
- * Content blocks can contain text, tool usage requests, tool results, reasoning content, or cache points.
+ * Content blocks can contain text, tool usage requests, tool results, reasoning content, cache points, or guard content.
  *
  * This is a discriminated union where the object key determines the content format.
  *
@@ -112,8 +114,15 @@ export type ContentBlockData =
   | { toolResult: ToolResultBlockData }
   | { reasoning: ReasoningBlockData }
   | { cachePoint: CachePointBlockData }
+  | { guardContent: GuardContentBlockData }
 
-export type ContentBlock = TextBlock | ToolUseBlock | ToolResultBlock | ReasoningBlock | CachePointBlock
+export type ContentBlock =
+  | TextBlock
+  | ToolUseBlock
+  | ToolResultBlock
+  | ReasoningBlock
+  | CachePointBlock
+  | GuardContentBlock
 
 /**
  * Data for a text block.
@@ -433,10 +442,118 @@ export type SystemPrompt = string | SystemContentBlock[]
 
 /**
  * A block of content within a system prompt.
- * Supports text content and cache points for prompt caching.
+ * Supports text content, cache points, and guard content for prompt caching and guardrail evaluation.
  *
  * This is a discriminated union where the object key determines the block format.
  */
-export type SystemContentBlockData = TextBlockData | { cachePoint: CachePointBlockData }
+export type SystemContentBlockData =
+  | TextBlockData
+  | { cachePoint: CachePointBlockData }
+  | { guardContent: GuardContentBlockData }
 
-export type SystemContentBlock = TextBlock | CachePointBlock
+export type SystemContentBlock = TextBlock | CachePointBlock | GuardContentBlock
+
+/**
+ * Qualifier for guard content.
+ * Specifies how the content should be evaluated by guardrails.
+ *
+ * - `grounding_source` - Content to check for grounding/factuality
+ * - `query` - User query to evaluate
+ * - `guard_content` - General content for guardrail evaluation
+ */
+export type GuardQualifier = 'grounding_source' | 'query' | 'guard_content'
+
+/**
+ * Image format for guard content.
+ * Only formats supported by Bedrock guardrails.
+ */
+export type GuardImageFormat = 'png' | 'jpeg'
+
+/**
+ * Source for guard content image.
+ * Only supports raw bytes.
+ */
+export type GuardImageSource = { bytes: Uint8Array }
+
+/**
+ * Text content to be evaluated by guardrails.
+ */
+export interface GuardContentText {
+  /**
+   * Qualifiers that specify how this content should be evaluated.
+   */
+  qualifiers: GuardQualifier[]
+
+  /**
+   * The text content to be evaluated.
+   */
+  text: string
+}
+
+/**
+ * Image content to be evaluated by guardrails.
+ */
+export interface GuardContentImage {
+  /**
+   * Image format.
+   */
+  format: GuardImageFormat
+
+  /**
+   * Image source (bytes only).
+   */
+  source: GuardImageSource
+}
+
+/**
+ * Data for a guard content block.
+ * Can contain either text or image content for guardrail evaluation.
+ */
+export interface GuardContentBlockData {
+  /**
+   * Text content with evaluation qualifiers.
+   */
+  text?: GuardContentText
+
+  /**
+   * Image content with evaluation qualifiers.
+   */
+  image?: GuardContentImage
+}
+
+/**
+ * Guard content block for guardrail evaluation.
+ * Marks content that should be evaluated by guardrails for safety, grounding, or other policies.
+ * Can be used in both message content and system prompts.
+ */
+export class GuardContentBlock implements GuardContentBlockData {
+  /**
+   * Discriminator for guard content.
+   */
+  readonly type = 'guardContentBlock' as const
+
+  /**
+   * Text content with evaluation qualifiers.
+   */
+  readonly text?: GuardContentText
+
+  /**
+   * Image content with evaluation qualifiers.
+   */
+  readonly image?: GuardContentImage
+
+  constructor(data: GuardContentBlockData) {
+    if (!data.text && !data.image) {
+      throw new Error('GuardContentBlock must have either text or image content')
+    }
+    if (data.text && data.image) {
+      throw new Error('GuardContentBlock cannot have both text and image content')
+    }
+    if (data.text) {
+      this.text = data.text
+    }
+    if (data.image) {
+      this.image = data.image
+    }
+  }
+}

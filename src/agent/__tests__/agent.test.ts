@@ -3,6 +3,7 @@ import { Agent } from '../agent.js'
 import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
 import { collectGenerator } from '../../__fixtures__/model-test-helpers.js'
 import { createMockTool } from '../../__fixtures__/tool-helpers.js'
+import { ConcurrentInvocationError } from '../../errors.js'
 import { MaxTokensError, TextBlock } from '../../index.js'
 import { AgentPrinter } from '../printer.js'
 
@@ -339,6 +340,46 @@ describe('Agent', () => {
 
       expect(result).toBeDefined()
       expect(result.lastMessage.content).toEqual([{ type: 'textBlock', text: 'Hello' }])
+    })
+  })
+
+  describe('concurrency guards', () => {
+    it('prevents parallel invocations', async () => {
+      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Response' })
+      const agent = new Agent({ model })
+
+      // Test parallel invoke() calls
+      const invokePromise1 = agent.invoke('First')
+      const invokePromise2 = agent.invoke('Second')
+
+      await expect(invokePromise2).rejects.toThrow(ConcurrentInvocationError)
+      await expect(invokePromise1).resolves.toBeDefined()
+    })
+
+    it('allows sequential invocations after lock is released', async () => {
+      const model = new MockMessageModel()
+        .addTurn({ type: 'textBlock', text: 'First response' })
+        .addTurn({ type: 'textBlock', text: 'Second response' })
+      const agent = new Agent({ model })
+
+      const result1 = await agent.invoke('First')
+      expect(result1.lastMessage.content).toEqual([{ type: 'textBlock', text: 'First response' }])
+
+      const result2 = await agent.invoke('Second')
+      expect(result2.lastMessage.content).toEqual([{ type: 'textBlock', text: 'Second response' }])
+    })
+
+    it('releases lock after errors and abandoned streams', async () => {
+      // Test error case
+      const model = new MockMessageModel()
+        .addTurn({ type: 'textBlock', text: 'Partial' }, 'maxTokens')
+        .addTurn({ type: 'textBlock', text: 'Success' })
+      const agent = new Agent({ model })
+
+      await expect(agent.invoke('First')).rejects.toThrow(MaxTokensError)
+
+      const result = await agent.invoke('Second')
+      expect(result.lastMessage.content).toEqual([{ type: 'textBlock', text: 'Success' }])
     })
   })
 })

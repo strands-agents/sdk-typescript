@@ -7,7 +7,7 @@ import { AgentState } from '../../../src/agent/state.js'
 describe('notebook tool', () => {
   // Helper to create fresh state and context for each test
   const createFreshContext = (): { state: AgentState; context: ToolContext } => {
-    const state = new AgentState<{ notebooks: NotebookState['notebooks'] }>({ notebooks: {} })
+    const state = new AgentState({ notebooks: {} })
     const context: ToolContext = {
       toolUse: {
         name: 'notebook',

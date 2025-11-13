@@ -3,7 +3,8 @@ name: Secure Integration test
 on:
   pull_request_target:
     branches: main
-
+  merge_group: # Run tests in merge queue
+    types: [checks_requested]
 jobs:
   authorization-check:
     permissions: read-all
@@ -12,6 +13,7 @@ jobs:
       approval-env: ${{ steps.collab-check.outputs.result }}
     steps:
       - name: Collaborator Check
+        if: github.event_name != 'merge_group'
         uses: actions/github-script@v8
         id: collab-check
         with:
@@ -36,6 +38,15 @@ jobs:
               console.log(`${context.payload.pull_request.user.login} does not have write access. Requiring Manual Approval to run PR Checks.`)
               return "manual-approval"
             }
+      - name: Auto-approve for merge queue
+        if: github.event_name == 'merge_group'
+        id: auto-approve
+        uses: actions/github-script@v8
+        with:
+          result-encoding: string
+          script: |
+            return "auto-approve"
+
   check-access-and-checkout:
     runs-on: ubuntu-latest
     needs: authorization-check

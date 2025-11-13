@@ -2,6 +2,7 @@ import {
   type AgentResult,
   type AgentStreamEvent,
   BedrockModel,
+  ConcurrentInvocationError,
   ContextWindowOverflowError,
   type JSONValue,
   MaxTokensError,
@@ -86,6 +87,7 @@ export class Agent implements AgentData {
    */
   public readonly conversationManager: ConversationManager
 
+  private _isInvoking: boolean = false
   private _printer?: Printer
 
   /**
@@ -117,6 +119,25 @@ export class Agent implements AgentData {
     const printer = config?.printer ?? true
     if (printer) {
       this._printer = new AgentPrinter(getDefaultAppender())
+    }
+  }
+
+  /**
+   * Acquires a lock to prevent concurrent invocations.
+   * Returns a Disposable that releases the lock when disposed.
+   */
+  private acquireLock(): { [Symbol.dispose]: () => void } {
+    if (this._isInvoking) {
+      throw new ConcurrentInvocationError(
+        'Agent is already processing an invocation. Wait for the current invoke() or stream() call to complete before invoking again.'
+      )
+    }
+    this._isInvoking = true
+
+    return {
+      [Symbol.dispose]: (): void => {
+        this._isInvoking = false
+      },
     }
   }
 
@@ -164,6 +185,8 @@ export class Agent implements AgentData {
    * ```
    */
   public async *stream(args: InvokeArgs): AsyncGenerator<AgentStreamEvent, AgentResult, undefined> {
+    using _lock = this.acquireLock()
+
     // Delegate to _stream and process events through printer
     const streamGenerator = this._stream(args)
     let result = await streamGenerator.next()
