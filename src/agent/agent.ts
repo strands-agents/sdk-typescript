@@ -112,7 +112,6 @@ export class Agent implements AgentData {
 
     this.state = new AgentState(config?.state)
 
-    // Initialize conversation manager (default: SlidingWindowConversationManager with windowSize of 40)
     this.conversationManager = config?.conversationManager ?? new SlidingWindowConversationManager({ windowSize: 40 })
 
     // Create printer if printer is enabled (default: true)
@@ -249,7 +248,6 @@ export class Agent implements AgentData {
         // Continue loop
       }
     } finally {
-      // Apply conversation management after event loop completes
       this.conversationManager.applyManagement(this)
 
       // Always emit final event
@@ -319,10 +317,8 @@ export class Agent implements AgentData {
       return { message, stopReason }
     } catch (error) {
       if (error instanceof ContextWindowOverflowError) {
-        // Reduce context and retry recursively
+        // Reduce context and retry
         this.conversationManager.reduceContext(this, error)
-
-        // Recursively retry model invocation
         return yield* this.invokeModel(args)
       }
       // Re-throw other errors

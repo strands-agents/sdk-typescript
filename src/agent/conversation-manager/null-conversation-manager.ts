@@ -13,10 +13,6 @@ import { ConversationManager } from './conversation-manager.js'
 /**
  * A no-op conversation manager that does not modify the conversation history.
  *
- * Useful for:
- * - Testing scenarios where conversation management should be disabled
- * - Cases where conversation history is managed externally
- * - Situations where the full conversation history should be preserved
  */
 export class NullConversationManager extends ConversationManager {
   /**

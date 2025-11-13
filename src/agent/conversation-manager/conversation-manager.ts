@@ -41,9 +41,6 @@ export abstract class ConversationManager {
    * summarization, or other size management techniques to keep the conversation
    * context within desired bounds.
    *
-   * This method is typically called after each agent invocation (in the finally
-   * block of the stream method) to ensure the message history stays within bounds.
-   *
    * @param agent - The agent whose conversation history will be managed.
    *                This list is modified in-place.
    */
