@@ -2,8 +2,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { Agent, BedrockModel } from '../src/index.js'
 import { fileEditor } from '../vended_tools/file_editor/index.js'
-import { collectGenerator } from '../src/__fixtures__/model-test-helpers.js'
-import { shouldRunTests } from './__fixtures__/model-test-helpers.js'
+import { shouldRunTests, extractToolResults } from './__fixtures__/model-test-helpers.js'
 import { promises as fs } from 'fs'
 import * as path from 'path'
 import { tmpdir } from 'os'
@@ -48,11 +47,17 @@ describe.skipIf(!(await shouldRunTests()))('FileEditor Tool Integration', () => 
     expect(fileContent).toBe('Hello World')
 
     // View the file
-    const { items: events } = await collectGenerator(agent.stream(`View the file at ${testFile}`))
+    const result = await agent.invoke(`View the file at ${testFile}`)
 
-    // The agent should have received the file content
-    const textBlocks = events.filter((e: any) => e.type === 'textBlock')
-    expect(textBlocks.length).toBeGreaterThan(0)
+    // Verify that tools were called successfully
+    expect(extractToolResults(agent).length).toBeGreaterThan(0)
+
+    // Verify the agent received and understood the file content
+    const responseText = result.lastMessage.content
+      .filter((block) => block.type === 'textBlock')
+      .map((block) => block.text)
+      .join(' ')
+    expect(responseText).toContain('Hello World')
   }, 60000)
 
   it('should edit a file using str_replace', async () => {
@@ -86,20 +91,32 @@ describe.skipIf(!(await shouldRunTests()))('FileEditor Tool Integration', () => 
     expect(fileContent).toBe('Line 1\nLine 2\nInserted Line\nLine 3')
   }, 60000)
 
-  it('should handle errors gracefully', async () => {
+  it('should maintain edit history and support undo', async () => {
     const agent = createAgent()
-    const nonExistentFile = path.join(testDir, 'does-not-exist.txt')
+    const testFile = path.join(testDir, 'undo-test.txt')
 
-    // Try to view non-existent file
-    const { items: events } = await collectGenerator(agent.stream(`View the file at ${nonExistentFile}`))
+    // Create initial file
+    await agent.invoke(`Create a file at ${testFile} with content "Original"`)
 
-    // The agent should handle the error and provide a reasonable response
-    const toolResults = events.filter((e: any) => e.type === 'toolResultBlock')
-    expect(toolResults.length).toBeGreaterThan(0)
+    // Make an edit
+    await agent.invoke(`In the file ${testFile}, replace "Original" with "Modified"`)
 
-    // The model should have handled the error gracefully
-    const textBlocks = events.filter((e: any) => e.type === 'textBlock')
-    expect(textBlocks.length).toBeGreaterThan(0)
+    // Verify edit was applied
+    let fileContent = await fs.readFile(testFile, 'utf-8')
+    expect(fileContent).toBe('Modified')
+
+    // Verify history is maintained in state
+    const history = agent.state.get('fileEditorHistory') as any
+    expect(history).toBeTruthy()
+    expect(history[testFile]).toBeDefined()
+    expect(history[testFile].length).toBeGreaterThan(0)
+
+    // Undo the edit
+    await agent.invoke(`Undo the last edit to ${testFile}`)
+
+    // Verify file was restored
+    fileContent = await fs.readFile(testFile, 'utf-8')
+    expect(fileContent).toBe('Original')
   }, 60000)
 
   it('should view directory contents', async () => {
@@ -112,11 +129,18 @@ describe.skipIf(!(await shouldRunTests()))('FileEditor Tool Integration', () => 
     await fs.writeFile(path.join(testDir, 'subdir', 'file3.txt'), 'content3', 'utf-8')
 
     // View the directory
-    const { items: events } = await collectGenerator(agent.stream(`List the files in directory ${testDir}`))
+    const result = await agent.invoke(`List the files in directory ${testDir}`)
 
-    // The agent should have received the directory listing
-    const textBlocks = events.filter((e: any) => e.type === 'textBlock')
-    expect(textBlocks.length).toBeGreaterThan(0)
+    // Verify that tools were called successfully
+    expect(extractToolResults(agent).length).toBeGreaterThan(0)
+
+    // Verify the agent received and processed the directory listing
+    const responseText = result.lastMessage.content
+      .filter((block) => block.type === 'textBlock')
+      .map((block) => block.text)
+      .join(' ')
+    expect(responseText).toContain('file1.txt')
+    expect(responseText).toContain('file2.txt')
   }, 60000)
 
   it('should handle multi-line file content', async () => {
@@ -156,10 +180,18 @@ Line 3" with "Replaced Lines"`)
     await agent.invoke(`Create a file at ${testFile} with content "${content}"`)
 
     // View specific line range
-    const { items: events } = await collectGenerator(agent.stream(`View lines 2 to 4 of file ${testFile}`))
+    const result = await agent.invoke(`View lines 2 to 4 of file ${testFile}`)
 
-    // The agent should have used view_range parameter
-    const toolResults = events.filter((e: any) => e.type === 'toolResultBlock')
-    expect(toolResults.length).toBeGreaterThan(0)
+    // Verify that tools were called successfully
+    expect(extractToolResults(agent).length).toBeGreaterThan(0)
+
+    // Verify the agent received and understood the requested line range
+    const responseText = result.lastMessage.content
+      .filter((block) => block.type === 'textBlock')
+      .map((block) => block.text)
+      .join(' ')
+    expect(responseText).toContain('Line 2')
+    expect(responseText).toContain('Line 3')
+    expect(responseText).toContain('Line 4')
   }, 60000)
 })
