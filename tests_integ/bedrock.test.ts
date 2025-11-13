@@ -5,14 +5,27 @@ import {
   Message,
   ToolSpec,
   ModelStreamEvent,
+<<<<<<< HEAD
   Agent,
   NullConversationManager,
   SlidingWindowConversationManager,
 } from '@strands-agents/sdk'
+=======
+  ImageBlock,
+  DocumentBlock,
+} from '@strands-agents/sdk'
+import { readFileSync } from 'node:fs'
+import { join, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
+>>>>>>> c30e012 (feat: add media blocks (image, video, document) with guard content support)
 
 // eslint-disable-next-line no-restricted-imports
 import { collectIterator, collectGenerator } from '../src/__fixtures__/model-test-helpers.js'
 import { shouldRunTests } from './__fixtures__/model-test-helpers.js'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+const fixturesDir = join(__dirname, 'fixtures')
 
 describe.skipIf(!(await shouldRunTests()))('BedrockModel Integration Tests', () => {
   describe('Non-Streaming', () => {
@@ -338,5 +351,170 @@ describe.skipIf(!(await shouldRunTests()))('BedrockModel Integration Tests', () 
       // This should throw since NullConversationManager doesn't handle overflow
       await expect(agent.invoke(longPrompt)).rejects.toThrow()
     }, 30000)
+  })
+
+  describe('Media Blocks', () => {
+    describe('Image Blocks', () => {
+      it.concurrent.skip('processes image with bytes source', async () => {
+        const provider = new BedrockModel({ maxTokens: 100 })
+
+        // Create a simple 20x20 red PNG image
+        const pngBytes = new Uint8Array([
+          137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 20, 0, 0, 0, 20, 8, 2, 0, 0, 0, 2, 235,
+          138, 90, 0, 0, 0, 27, 73, 68, 65, 84, 120, 156, 99, 252, 207, 64, 62, 96, 162, 64, 239, 168, 230, 81, 205,
+          163, 154, 71, 53, 83, 65, 51, 0, 34, 156, 1, 39, 53, 132, 208, 158, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96,
+          130,
+        ])
+
+        const imageBlock = new ImageBlock({
+          format: 'png',
+          source: { bytes: pngBytes },
+        })
+
+        const messages: Message[] = [
+          {
+            type: 'message',
+            role: 'user',
+            content: [imageBlock, { type: 'textBlock', text: 'What color is this image? Answer in one word.' }],
+          },
+        ]
+
+        const events = await collectIterator(provider.stream(messages))
+
+        // Verify we got a response
+        const responseText = events.reduce((acc, event) => {
+          if (event.type === 'modelContentBlockDeltaEvent' && event.delta.type === 'textDelta') {
+            return acc + event.delta.text
+          }
+          return acc
+        }, '')
+
+        expect(responseText).toBeTruthy()
+        expect(responseText.length).toBeGreaterThan(0)
+
+        // Verify the stop event
+        const stopEvent = events.find((e) => e.type === 'modelMessageStopEvent')
+        expect(stopEvent?.stopReason).toBe('endTurn')
+      })
+    })
+
+    describe('Document Blocks', () => {
+      it.concurrent('processes document with text source', async () => {
+        const provider = new BedrockModel({ maxTokens: 150 })
+
+        const documentBlock = new DocumentBlock({
+          name: 'sample-txt',
+          format: 'txt',
+          source: { text: 'The quick brown fox jumps over the lazy dog.' },
+        })
+
+        const messages: Message[] = [
+          {
+            type: 'message',
+            role: 'user',
+            content: [
+              documentBlock,
+              { type: 'textBlock', text: 'What animal is mentioned in this document? Answer in one word.' },
+            ],
+          },
+        ]
+
+        const events = await collectIterator(provider.stream(messages))
+
+        // Verify we got a response
+        const responseText = events.reduce((acc, event) => {
+          if (event.type === 'modelContentBlockDeltaEvent' && event.delta.type === 'textDelta') {
+            return acc + event.delta.text
+          }
+          return acc
+        }, '')
+
+        expect(responseText).toBeTruthy()
+        expect(responseText.toUpperCase()).toMatch(/FOX|DOG/)
+
+        // Verify the stop event
+        const stopEvent = events.find((e) => e.type === 'modelMessageStopEvent')
+        expect(stopEvent?.stopReason).toBe('endTurn')
+      })
+
+      it.concurrent('processes document with bytes source', async () => {
+        const provider = new BedrockModel({ maxTokens: 150 })
+
+        const textContent = 'Integration test document content.'
+        // eslint-disable-next-line no-undef
+        const textBytes = new TextEncoder().encode(textContent)
+
+        const documentBlock = new DocumentBlock({
+          name: 'test-document',
+          format: 'txt',
+          source: { bytes: textBytes },
+        })
+
+        const messages: Message[] = [
+          {
+            type: 'message',
+            role: 'user',
+            content: [
+              documentBlock,
+              { type: 'textBlock', text: 'What type of content is in this document? Answer in one word.' },
+            ],
+          },
+        ]
+
+        const events = await collectIterator(provider.stream(messages))
+
+        // Verify we got a response
+        const responseText = events.reduce((acc, event) => {
+          if (event.type === 'modelContentBlockDeltaEvent' && event.delta.type === 'textDelta') {
+            return acc + event.delta.text
+          }
+          return acc
+        }, '')
+
+        expect(responseText).toBeTruthy()
+        expect(responseText.length).toBeGreaterThan(0)
+
+        // Verify the stop event
+        const stopEvent = events.find((e) => e.type === 'modelMessageStopEvent')
+        expect(stopEvent?.stopReason).toBe('endTurn')
+      })
+
+      it.concurrent('processes PDF document with bytes source', async () => {
+        const provider = new BedrockModel({ maxTokens: 200 })
+
+        // Load real PDF test file from fixtures
+        const pdfBytes = new Uint8Array(readFileSync(join(fixturesDir, 'letter.pdf')))
+        const documentBlock = new DocumentBlock({
+          name: 'letter',
+          format: 'pdf',
+          source: { bytes: pdfBytes },
+        })
+
+        const messages: Message[] = [
+          {
+            type: 'message',
+            role: 'user',
+            content: [documentBlock, { type: 'textBlock', text: 'What is the name in this letter? Answer briefly.' }],
+          },
+        ]
+
+        const events = await collectIterator(provider.stream(messages))
+
+        // Verify we got a response
+        const responseText = events.reduce((acc, event) => {
+          if (event.type === 'modelContentBlockDeltaEvent' && event.delta.type === 'textDelta') {
+            return acc + event.delta.text
+          }
+          return acc
+        }, '')
+
+        expect(responseText).toBeTruthy()
+        expect(responseText.length).toBeGreaterThan(0)
+
+        // Verify the stop event
+        const stopEvent = events.find((e) => e.type === 'modelMessageStopEvent')
+        expect(stopEvent?.stopReason).toBe('endTurn')
+      })
+    })
   })
 })

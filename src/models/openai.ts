@@ -11,6 +11,7 @@ import OpenAI, { type ClientOptions } from 'openai'
 import { Model } from '../models/model.js'
 import type { BaseModelConfig, StreamOptions } from '../models/model.js'
 import type { Message } from '../types/messages.js'
+import type { ImageBlock, DocumentBlock } from '../types/media.js'
 import type { ModelStreamEvent } from '../models/streaming.js'
 import { ContextWindowOverflowError } from '../errors.js'
 
@@ -530,28 +531,93 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
 
         // Add non-tool-result content as user message
         if (otherContent.length > 0) {
-          const contentText = otherContent
-            .map((block) => {
-              if (block.type === 'textBlock') {
-                return block.text
-              } else if (block.type === 'reasoningBlock') {
-                throw new Error(
-                  'Reasoning blocks are not supported by OpenAI. ' + 'This feature is specific to AWS Bedrock models.'
+          const contentParts: (string | OpenAI.Chat.Completions.ChatCompletionContentPart)[] = []
+
+          for (const block of otherContent) {
+            if (block.type === 'textBlock') {
+              contentParts.push(block.text)
+            } else if (block.type === 'imageBlock') {
+              const imageBlock = block as ImageBlock
+              if ('url' in imageBlock.source) {
+                contentParts.push({
+                  type: 'image_url',
+                  image_url: {
+                    url: imageBlock.source.url,
+                  },
+                })
+              } else if ('bytes' in imageBlock.source) {
+                const base64 = globalThis.Buffer.from(imageBlock.source.bytes).toString('base64')
+                const mimeType = `image/${imageBlock.format}`
+                contentParts.push({
+                  type: 'image_url',
+                  image_url: {
+                    url: `data:${mimeType};base64,${base64}`,
+                  },
+                })
+              } else if ('s3Location' in imageBlock.source) {
+                console.warn(
+                  'OpenAI ChatCompletions API does not support S3 locations for images. Skipping image block.'
                 )
-              } else if (block.type === 'guardContentBlock') {
-                console.warn('OpenAI does not support guard content in messages. Removing guard content block.')
-                return ''
               }
-              return ''
-            })
-            .join('')
+            } else if (block.type === 'videoBlock') {
+              console.warn('OpenAI ChatCompletions API does not support video content. Skipping video block.')
+            } else if (block.type === 'documentBlock') {
+              const docBlock = block as DocumentBlock
+              if ('fileId' in docBlock.source) {
+                console.warn(
+                  'OpenAI ChatCompletions API does not support document file references in user messages. Skipping document block.'
+                )
+              } else if ('bytes' in docBlock.source) {
+                // Convert bytes to text representation
+                const decoder = new TextDecoder()
+                try {
+                  const textContent = decoder.decode(docBlock.source.bytes)
+                  contentParts.push(textContent)
+                } catch {
+                  console.warn(
+                    'Failed to decode document bytes as text for OpenAI ChatCompletions API. Skipping document block.'
+                  )
+                }
+              } else if ('text' in docBlock.source) {
+                // Text documents can be added directly
+                contentParts.push(docBlock.source.text)
+              } else {
+                console.warn(
+                  'OpenAI ChatCompletions API only supports text content in user messages. Skipping document block.'
+                )
+              }
+            } else if (block.type === 'reasoningBlock') {
+              throw new Error(
+                'Reasoning blocks are not supported by OpenAI. ' + 'This feature is specific to AWS Bedrock models.'
+              )
+            } else if (block.type === 'guardContentBlock') {
+              console.warn('OpenAI does not support guard content in messages. Removing guard content block.')
+            }
+          }
 
           // Validate content is not empty before adding
-          if (contentText.trim().length > 0) {
-            openAIMessages.push({
-              role: 'user',
-              content: contentText,
-            })
+          if (contentParts.length > 0) {
+            // If all content is text, join it
+            if (contentParts.every((part) => typeof part === 'string')) {
+              const contentText = contentParts.join('')
+              if (contentText.trim().length > 0) {
+                openAIMessages.push({
+                  role: 'user',
+                  content: contentText,
+                })
+              }
+            } else {
+              // Mixed content - use array format and filter out strings
+              const formattedParts = contentParts.map((part) =>
+                typeof part === 'string'
+                  ? ({ type: 'text' as const, text: part } as OpenAI.Chat.Completions.ChatCompletionContentPartText)
+                  : part
+              )
+              openAIMessages.push({
+                role: 'user',
+                content: formattedParts,
+              })
+            }
           }
         }
 
@@ -626,8 +692,18 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
             throw new Error(
               'Reasoning blocks are not supported by OpenAI. ' + 'This feature is specific to AWS Bedrock models.'
             )
-          } else if (block.type === 'guardContentBlock') {
-            console.warn('OpenAI does not support guard content in messages. Removing guard content block.')
+          } else if (block.type === 'imageBlock') {
+            console.warn(
+              'OpenAI ChatCompletions API does not support image content in assistant messages. Skipping image block.'
+            )
+          } else if (block.type === 'videoBlock') {
+            console.warn(
+              'OpenAI ChatCompletions API does not support video content in assistant messages. Skipping video block.'
+            )
+          } else if (block.type === 'documentBlock') {
+            console.warn(
+              'OpenAI ChatCompletions API does not support document content in assistant messages. Skipping document block.'
+            )
           }
         }
 

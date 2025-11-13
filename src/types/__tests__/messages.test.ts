@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest'
+import { describe, expect, test, it } from 'vitest'
 import {
   Message,
   TextBlock,
@@ -7,8 +7,9 @@ import {
   ReasoningBlock,
   CachePointBlock,
   JsonBlock,
-  GuardContentBlock,
+  type MessageData,
 } from '../messages.js'
+import { ImageBlock, VideoBlock, DocumentBlock } from '../media.js'
 
 describe('Message', () => {
   test('creates message with role and content', () => {
@@ -101,77 +102,67 @@ describe('JsonBlock', () => {
   })
 })
 
-describe('GuardContentBlock', () => {
-  test('creates guard content block with single qualifier', () => {
-    const block = new GuardContentBlock({
-      text: {
-        qualifiers: ['grounding_source'],
-        text: 'This content should be evaluated for grounding.',
-      },
-    })
-
-    expect(block).toEqual({
-      type: 'guardContentBlock',
-      text: {
-        qualifiers: ['grounding_source'],
-        text: 'This content should be evaluated for grounding.',
-      },
-    })
-  })
-
-  test('creates guard content block with all qualifier types', () => {
-    const block = new GuardContentBlock({
-      text: {
-        qualifiers: ['grounding_source', 'query', 'guard_content'],
-        text: 'Test content',
-      },
-    })
-
-    expect(block).toEqual({
-      type: 'guardContentBlock',
-      text: {
-        qualifiers: ['grounding_source', 'query', 'guard_content'],
-        text: 'Test content',
-      },
-    })
-  })
-
-  test('creates guard content block with image (bytes)', () => {
-    const imageBytes = new Uint8Array([1, 2, 3, 4])
-    const block = new GuardContentBlock({
-      image: {
-        format: 'jpeg',
-        source: { bytes: imageBytes },
-      },
-    })
-
-    expect(block).toEqual({
-      type: 'guardContentBlock',
-      image: {
-        format: 'jpeg',
-        source: { bytes: imageBytes },
-      },
-    })
-  })
-
-  test('throws error when neither text nor image is provided', () => {
-    expect(() => new GuardContentBlock({} as any)).toThrow('GuardContentBlock must have either text or image content')
-  })
-
-  test('throws error when both text and image are provided', () => {
-    const imageBytes = new Uint8Array([1, 2, 3, 4])
-    expect(
-      () =>
-        new GuardContentBlock({
-          text: {
-            qualifiers: ['grounding_source'],
-            text: 'Test',
-          },
+describe('Message.fromMessageData', () => {
+  it('converts image block data to ImageBlock', () => {
+    const messageData: MessageData = {
+      role: 'user',
+      content: [
+        {
           image: {
             format: 'jpeg',
-            source: { bytes: imageBytes },
+            source: { bytes: new Uint8Array([1, 2, 3]) },
           },
-        })
-    ).toThrow('GuardContentBlock cannot have both text and image content')
+        },
+      ],
+    }
+    const message = Message.fromMessageData(messageData)
+    expect(message.content).toHaveLength(1)
+    expect(message.content[0]).toBeInstanceOf(ImageBlock)
+    expect(message.content[0]!.type).toBe('imageBlock')
+  })
+
+  it('converts video block data to VideoBlock', () => {
+    const messageData: MessageData = {
+      role: 'user',
+      content: [
+        {
+          video: {
+            format: 'mp4',
+            source: { bytes: new Uint8Array([1, 2, 3]) },
+          },
+        },
+      ],
+    }
+    const message = Message.fromMessageData(messageData)
+    expect(message.content).toHaveLength(1)
+    expect(message.content[0]).toBeInstanceOf(VideoBlock)
+    expect(message.content[0]!.type).toBe('videoBlock')
+  })
+
+  it('converts document block data to DocumentBlock', () => {
+    const messageData: MessageData = {
+      role: 'user',
+      content: [
+        {
+          document: {
+            name: 'test.pdf',
+            format: 'pdf',
+            source: { bytes: new Uint8Array([1, 2, 3]) },
+          },
+        },
+      ],
+    }
+    const message = Message.fromMessageData(messageData)
+    expect(message.content).toHaveLength(1)
+    expect(message.content[0]).toBeInstanceOf(DocumentBlock)
+    expect(message.content[0]!.type).toBe('documentBlock')
+  })
+
+  it('throws error for unknown content block type', () => {
+    const messageData = {
+      role: 'user',
+      content: [{ unknownType: { data: 'value' } }],
+    } as unknown as MessageData
+    expect(() => Message.fromMessageData(messageData)).toThrow('Unknown ContentBlockData type')
   })
 })
