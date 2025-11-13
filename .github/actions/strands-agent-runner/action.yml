@@ -16,14 +16,15 @@ inputs:
   sessions_bucket:
     description: 'S3 bucket for session storage'
     required: true
-  github_token:
-    description: 'GitHub token for authentication'
+  write_permission:
+    description: 'If this action runs with write permission. If this is false, you should run the `strands-write-executor` action after this one with write permission.'
     required: true
-    default: ${{ github.token }}
+    default: 'false'
 
 runs:
   using: 'composite'
   steps:
+
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
@@ -60,11 +61,12 @@ runs:
     - name: Execute strands command
       shell: bash
       env:
+        # Write Permission
+        GITHUB_WRITE: ${{ inputs.write_permission }}
+
         # GitHub Configuration
-        GITHUB_TOKEN: ${{ inputs.github_token }}
+        GITHUB_TOKEN: ${{ github.token }}
         GITHUB_REPOSITORY: ${{ github.repository }}
-        GITHUB_EVENT_NAME: ${{ github.event_name }}
-        GITHUB_ACTOR: ${{ github.actor }}
 
         # Task Configuration
         INPUT_TASK: ${{ inputs.task_prompt }}
@@ -76,5 +78,36 @@ runs:
         # Session Manager
         S3_SESSION_BUCKET: ${{ inputs.sessions_bucket }}
         SESSION_ID: ${{ inputs.session_id }}
+
+        # Strands Env Vars
+        STRANDS_TOOL_CONSOLE_MODE: 'enabled'
+        BYPASS_TOOL_CONSENT: 'true'
       run: |
         uv run .github/scripts/agent_runner.py "$INPUT_TASK"
+
+    - name: Capture repository state
+      shell: bash
+      run: |
+        mkdir -p .artifact
+        if git diff --quiet HEAD@{upstream} && git diff --quiet --cached; then
+          echo "📭 No changes to capture"
+        else
+          echo "📝 Capturing entire repository state"
+          tar -czf .artifact/repository_state.tar.gz --exclude='.artifact' .
+        fi
+
+    - name: Upload repository state artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: repository-state
+        path: .artifact/repository_state.tar.gz
+        retention-days: 1
+        if-no-files-found: ignore
+
+    - name: Upload artifact for write operations
+      uses: actions/upload-artifact@v4
+      with:
+        name: write-operations
+        path: .artifact/write_operations.jsonl
+        retention-days: 1
+        if-no-files-found: ignore
