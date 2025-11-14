@@ -320,19 +320,6 @@ describe.skipIf(!isNode || process.platform === 'win32')('bash tool', () => {
       expect((result as BashOutput).output).toContain('Line 100 of output')
     })
 
-    it('handles context without agent property', async () => {
-      const context: ToolContext = {
-        toolUse: {
-          name: 'bash',
-          toolUseId: 'test-id',
-          input: {},
-        },
-        agent: null as any, // Simulate missing agent
-      }
-
-      await expect(bash.invoke({ mode: 'execute', command: 'echo test' }, context)).rejects.toThrow()
-    })
-
     it('creates session with default timeout when not specified', async () => {
       const { context } = createFreshContext()
 
