@@ -1,4 +1,5 @@
-import type { Tool, ToolContext } from './tool.js'
+import { Tool } from './tool.js'
+import type { ToolContext } from './tool.js'
 import { ToolStreamEvent } from './tool.js'
 import type { ToolSpec } from './types.js'
 import type { JSONSchema, JSONValue } from '../types/json.js'
@@ -87,7 +88,7 @@ export interface FunctionToolConfig {
  * })
  * ```
  */
-export class FunctionTool implements Tool {
+export class FunctionTool extends Tool {
   /**
    * The unique name of the tool.
    */
@@ -128,6 +129,7 @@ export class FunctionTool implements Tool {
    * ```
    */
   constructor(config: FunctionToolConfig) {
+    super()
     this.name = config.name
     this.description = config.description
     this.toolSpec = {

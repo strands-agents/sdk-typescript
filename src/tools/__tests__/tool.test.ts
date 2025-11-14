@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { FunctionTool } from '../function-tool.js'
-import { ToolStreamEvent } from '../tool.js'
+import { Tool, ToolStreamEvent } from '../tool.js'
 import type { ToolContext } from '../tool.js'
 import type { JSONValue } from '../../types/json.js'
 import { createMockContext } from '../../__fixtures__/tool-helpers.js'
@@ -1003,6 +1003,39 @@ describe('ToolStreamEvent', () => {
         type: 'toolStreamEvent',
         data: structuredData,
       })
+    })
+  })
+})
+
+describe('instanceof checks', () => {
+  describe('FunctionTool', () => {
+    it('passes instanceof Tool check', () => {
+      const tool = new FunctionTool({
+        name: 'testTool',
+        description: 'Test description',
+        inputSchema: { type: 'object' },
+        callback: (): string => 'result',
+      })
+
+      expect(tool instanceof Tool).toBe(true)
+    })
+
+    it('can be used as type guard', () => {
+      const tool = new FunctionTool({
+        name: 'testTool',
+        description: 'Test description',
+        inputSchema: { type: 'object' },
+        callback: (): string => 'result',
+      })
+
+      // Type guard function
+      function isTool(value: unknown): value is Tool {
+        return value instanceof Tool
+      }
+
+      expect(isTool(tool)).toBe(true)
+      expect(isTool({})).toBe(false)
+      expect(isTool(null)).toBe(false)
     })
   })
 })

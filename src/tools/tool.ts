@@ -88,12 +88,12 @@ export type ToolStreamGenerator = AsyncGenerator<ToolStreamEvent, ToolResultBloc
  *
  * Most implementations should use FunctionTool rather than implementing this interface directly.
  */
-export interface Tool {
+export abstract class Tool {
   /**
    * The unique name of the tool.
    * This MUST match the name in the toolSpec.
    */
-  name: string
+  abstract name: string
 
   /**
    * Human-readable description of what the tool does.
@@ -101,13 +101,13 @@ export interface Tool {
    *
    * This MUST match the description in the toolSpec.description.
    */
-  description: string
+  abstract description: string
 
   /**
    * OpenAPI JSON specification for the tool.
    * Defines the tool's name, description, and input schema.
    */
-  toolSpec: ToolSpec
+  abstract toolSpec: ToolSpec
 
   /**
    * Executes the tool with streaming support.
@@ -142,7 +142,7 @@ export interface Tool {
    * console.log('Final result:', result.value.status)
    * ```
    */
-  stream(toolContext: ToolContext): ToolStreamGenerator
+  abstract stream(toolContext: ToolContext): ToolStreamGenerator
 }
 
 /**

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { tool } from '../zod-tool.js'
+import { Tool } from '../tool.js'
 import { createMockContext } from '../../__fixtures__/tool-helpers.js'
 import { collectGenerator } from '../../__fixtures__/model-test-helpers.js'
 import type { JSONValue } from '../../types/json.js'
@@ -396,6 +397,49 @@ describe('tool', () => {
       expect(schema.required).toContain('name')
       expect(schema.required).toContain('age')
       expect(schema.required).toContain('email')
+    })
+  })
+
+  describe('instanceof checks', () => {
+    it('passes instanceof Tool check', () => {
+      const myTool = tool({
+        name: 'testTool',
+        description: 'Test description',
+        inputSchema: z.object({ value: z.string() }),
+        callback: (input) => input.value,
+      })
+
+      expect(myTool instanceof Tool).toBe(true)
+    })
+
+    it('can be used as type guard', () => {
+      const myTool = tool({
+        name: 'testTool',
+        description: 'Test description',
+        inputSchema: z.object({ value: z.string() }),
+        callback: (input) => input.value,
+      })
+
+      function isTool(value: unknown): value is Tool {
+        return value instanceof Tool
+      }
+
+      expect(isTool(myTool)).toBe(true)
+      expect(isTool({})).toBe(false)
+      expect(isTool(null)).toBe(false)
+    })
+
+    it('has InvokableTool interface methods', () => {
+      const myTool = tool({
+        name: 'testTool',
+        description: 'Test description',
+        inputSchema: z.object({ value: z.string() }),
+        callback: (input) => input.value,
+      })
+
+      expect(myTool instanceof Tool).toBe(true)
+      expect(typeof myTool.invoke).toBe('function')
+      expect(typeof myTool.stream).toBe('function')
     })
   })
 })
