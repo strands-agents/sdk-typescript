@@ -401,7 +401,7 @@ describe('tool', () => {
   })
 
   describe('instanceof checks', () => {
-    it('passes instanceof Tool check', () => {
+    it('passes instanceof Tool check and has InvokableTool methods', () => {
       const myTool = tool({
         name: 'testTool',
         description: 'Test description',
@@ -409,17 +409,14 @@ describe('tool', () => {
         callback: (input) => input.value,
       })
 
+      // Verify instanceof Tool
       expect(myTool instanceof Tool).toBe(true)
-    })
 
-    it('can be used as type guard', () => {
-      const myTool = tool({
-        name: 'testTool',
-        description: 'Test description',
-        inputSchema: z.object({ value: z.string() }),
-        callback: (input) => input.value,
-      })
+      // Verify InvokableTool interface methods are present
+      expect(typeof myTool.invoke).toBe('function')
+      expect(typeof myTool.stream).toBe('function')
 
+      // Verify can be used as type guard
       function isTool(value: unknown): value is Tool {
         return value instanceof Tool
       }
@@ -427,19 +424,6 @@ describe('tool', () => {
       expect(isTool(myTool)).toBe(true)
       expect(isTool({})).toBe(false)
       expect(isTool(null)).toBe(false)
-    })
-
-    it('has InvokableTool interface methods', () => {
-      const myTool = tool({
-        name: 'testTool',
-        description: 'Test description',
-        inputSchema: z.object({ value: z.string() }),
-        callback: (input) => input.value,
-      })
-
-      expect(myTool instanceof Tool).toBe(true)
-      expect(typeof myTool.invoke).toBe('function')
-      expect(typeof myTool.stream).toBe('function')
     })
   })
 })

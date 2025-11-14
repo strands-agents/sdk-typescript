@@ -1,5 +1,6 @@
 import type { InvokableTool, ToolContext, ToolStreamGenerator } from './tool.js'
 import { Tool } from './tool.js'
+import type { ToolSpec } from './types.js'
 import type { JSONSchema, JSONValue } from '../types/json.js'
 import { FunctionTool } from './function-tool.js'
 import { z } from 'zod'
@@ -42,25 +43,6 @@ class ZodTool<TInput extends z.ZodType, TReturn extends JSONValue = JSONValue>
   implements InvokableTool<z.infer<TInput>, TReturn>
 {
   /**
-   * The unique name of the tool.
-   */
-  readonly name: string
-
-  /**
-   * Human-readable description of what the tool does.
-   */
-  readonly description: string
-
-  /**
-   * OpenAPI JSON specification for the tool.
-   */
-  readonly toolSpec: {
-    name: string
-    description: string
-    inputSchema: JSONSchema
-  }
-
-  /**
    * Internal FunctionTool for delegating stream operations.
    */
   private readonly _functionTool: FunctionTool
@@ -82,8 +64,6 @@ class ZodTool<TInput extends z.ZodType, TReturn extends JSONValue = JSONValue>
     super()
     const { name, description = '', inputSchema, callback } = config
 
-    this.name = name
-    this.description = description
     this._inputSchema = inputSchema
     this._callback = callback
 
@@ -91,12 +71,6 @@ class ZodTool<TInput extends z.ZodType, TReturn extends JSONValue = JSONValue>
     const generatedSchema = z.toJSONSchema(inputSchema) as JSONSchema & { $schema?: string }
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { $schema, ...schemaWithoutMeta } = generatedSchema
-
-    this.toolSpec = {
-      name,
-      description,
-      inputSchema: schemaWithoutMeta as JSONSchema,
-    }
 
     // Create a FunctionTool with a validation wrapper
     this._functionTool = new FunctionTool({
@@ -116,6 +90,27 @@ class ZodTool<TInput extends z.ZodType, TReturn extends JSONValue = JSONValue>
           | JSONValue
       },
     })
+  }
+
+  /**
+   * The unique name of the tool.
+   */
+  get name(): string {
+    return this._functionTool.name
+  }
+
+  /**
+   * Human-readable description of what the tool does.
+   */
+  get description(): string {
+    return this._functionTool.description
+  }
+
+  /**
+   * OpenAPI JSON specification for the tool.
+   */
+  get toolSpec(): ToolSpec {
+    return this._functionTool.toolSpec
   }
 
   /**
