@@ -26,7 +26,7 @@
  * ```
  */
 
-export { httpRequest } from './http-request'
+export { httpRequest } from './http-request.js'
 export type {
   HttpMethod,
   HttpAuthConfig,
@@ -37,4 +37,4 @@ export type {
   HttpApiKeyAuthConfig,
   HttpRequestInput,
   HttpResponse,
-} from './types'
+} from './types.js'

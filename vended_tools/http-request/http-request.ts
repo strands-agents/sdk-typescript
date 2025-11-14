@@ -1,7 +1,7 @@
-import { FunctionTool } from '../../src/tools/function-tool'
-import type { ToolContext } from '../../src/tools/tool'
-import type { JSONValue } from '../../src/types/json'
-import type { HttpRequestInput, HttpResponse, HttpAuthConfig, HttpMethod } from './types'
+import { FunctionTool } from '../../src/tools/function-tool.js'
+import type { ToolContext } from '../../src/tools/tool.js'
+import type { JSONValue } from '../../src/types/json.js'
+import type { HttpRequestInput, HttpResponse, HttpAuthConfig, HttpMethod } from './types.js'
 
 // Type declarations for browser/Node.js globals
 declare const Buffer: typeof import('buffer').Buffer
@@ -156,7 +156,7 @@ function buildAuthHeader(authConfig?: HttpAuthConfig): string | undefined {
 
     default: {
       // TypeScript ensures this is never reached if all cases are handled
-      const exhaustiveCheck: never = authConfig
+      const exhaustiveCheck: never = authConfig as never
       throw new Error(`Unknown auth type: ${JSON.stringify(exhaustiveCheck)}`)
     }
   }

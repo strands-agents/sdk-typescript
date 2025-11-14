@@ -3,26 +3,27 @@
  * This module provides utilities for testing Tool implementations.
  */
 
-import type { Tool } from '../tools/tool'
-import type { ToolContext } from '../tools/tool'
-import type { ToolResult } from '../tools/types'
-import type { JSONValue } from '../types/json'
+import type { Tool, ToolContext } from '../tools/tool.js'
+import type { ToolResultBlock } from '../types/messages.js'
+import type { JSONValue } from '../types/json.js'
+import { AgentState } from '../agent/state.js'
 
 /**
  * Helper to create a mock ToolContext for testing.
  *
- * @param input - The input data for the tool
- * @param invocationState - Optional invocation state
+ * @param toolUse - The tool use request
+ * @param agentState - Optional initial agent state
  * @returns Mock ToolContext object
  */
-export function createMockContext(input: JSONValue, invocationState: Record<string, unknown> = {}): ToolContext {
+export function createMockContext(
+  toolUse: { name: string; toolUseId: string; input: JSONValue },
+  agentState?: Record<string, JSONValue>
+): ToolContext {
   return {
-    toolUse: {
-      name: 'testTool',
-      toolUseId: 'test-123',
-      input: input,
+    toolUse,
+    agent: {
+      state: new AgentState(agentState),
     },
-    invocationState,
   }
 }
 
@@ -30,15 +31,15 @@ export function createMockContext(input: JSONValue, invocationState: Record<stri
  * Helper to create a mock tool for testing.
  *
  * @param name - The name of the mock tool
- * @param resultFn - Function that returns a ToolResult or an AsyncGenerator that yields nothing and returns a ToolResult
+ * @param resultFn - Function that returns a ToolResultBlock or an AsyncGenerator that yields nothing and returns a ToolResultBlock
  * @returns Mock Tool object
  */
 export function createMockTool(
   name: string,
-  resultFn: () => ToolResult | AsyncGenerator<never, ToolResult, never>
+  resultFn: () => ToolResultBlock | AsyncGenerator<never, ToolResultBlock, never>
 ): Tool {
   return {
-    toolName: name,
+    name,
     description: `Mock tool ${name}`,
     toolSpec: {
       name,
@@ -46,11 +47,11 @@ export function createMockTool(
       inputSchema: { type: 'object', properties: {} },
     },
     // eslint-disable-next-line require-yield
-    async *stream(_context): AsyncGenerator<never, ToolResult, never> {
+    async *stream(_context): AsyncGenerator<never, ToolResultBlock, never> {
       const result = resultFn()
       if (typeof result === 'object' && result !== null && Symbol.asyncIterator in result) {
         // For generators that throw errors
-        const gen = result as AsyncGenerator<never, ToolResult, never>
+        const gen = result as AsyncGenerator<never, ToolResultBlock, never>
         let done = false
         while (!done) {
           const { value, done: isDone } = await gen.next()
@@ -62,7 +63,7 @@ export function createMockTool(
         // This should never be reached but TypeScript needs a return
         throw new Error('Generator ended unexpectedly')
       } else {
-        return result as ToolResult
+        return result as ToolResultBlock
       }
     },
   }

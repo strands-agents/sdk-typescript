@@ -1,6 +1,6 @@
-import type { InvokableTool, ToolContext, ToolStreamGenerator } from './tool'
-import type { JSONSchema, JSONValue } from '../types/json'
-import { FunctionTool } from './function-tool'
+import type { InvokableTool, ToolContext, ToolStreamGenerator } from './tool.js'
+import type { JSONSchema, JSONValue } from '../types/json.js'
+import { FunctionTool } from './function-tool.js'
 import { z } from 'zod'
 
 /**
@@ -106,7 +106,7 @@ export function tool<TInput extends z.ZodType, TReturn extends JSONValue = JSONV
 
   // Create an invokable tool that extends the FunctionTool
   const invokableTool: InvokableTool<z.infer<TInput>, TReturn> = {
-    toolName: functionTool.toolName,
+    name: functionTool.name,
     description: functionTool.description,
     toolSpec: functionTool.toolSpec,
 

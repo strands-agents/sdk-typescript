@@ -1,12 +1,26 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { httpRequest } from '../http-request'
-import type { ToolContext } from '../../../src/tools/tool'
-import { collectGenerator } from '../../../src/__fixtures__/model-test-helpers'
-import { isNode } from '../../../src/__fixtures__/environment'
+import { httpRequest } from '../http-request.js'
+import type { ToolContext } from '../../../src/tools/tool.js'
+import { collectGenerator } from '../../../src/__fixtures__/model-test-helpers.js'
+import { isNode } from '../../../src/__fixtures__/environment.js'
+import { AgentState } from '../../../src/agent/state.js'
 
 // Mock fetch globally
 const mockFetch = vi.fn()
 globalThis.fetch = mockFetch as typeof globalThis.fetch
+
+// Helper to create fresh context
+const createContext = (toolUseInput: Record<string, unknown>): ToolContext => {
+  const state = new AgentState({})
+  return {
+    toolUse: {
+      name: 'httpRequest',
+      toolUseId: 'test-id',
+      input: toolUseInput as never,
+    },
+    agent: { state },
+  }
+}
 
 describe('httpRequest', () => {
   beforeEach(() => {
@@ -37,12 +51,7 @@ describe('httpRequest', () => {
           method: 'GET' as const,
           url: 'https://api.example.com/data',
         }
-        const toolUse = {
-          name: 'httpRequest',
-          toolUseId: 'test-get-1',
-          input,
-        }
-        const context: ToolContext = { toolUse, invocationState: {} }
+        const context = createContext(input)
 
         const { result } = await collectGenerator(httpRequest.stream(context))
 
@@ -78,12 +87,7 @@ describe('httpRequest', () => {
           body: '{"name": "test"}',
           headers: { 'Content-Type': 'application/json' },
         }
-        const toolUse = {
-          name: 'httpRequest',
-          toolUseId: 'test-post-1',
-          input,
-        }
-        const context: ToolContext = { toolUse, invocationState: {} }
+        const context = createContext(input)
 
         const { result } = await collectGenerator(httpRequest.stream(context))
 
@@ -128,12 +132,7 @@ describe('httpRequest', () => {
           url: 'https://api.example.com/items/123',
           body: '{"name": "updated"}',
         }
-        const toolUse = {
-          name: 'httpRequest',
-          toolUseId: 'test-put-1',
-          input,
-        }
-        const context: ToolContext = { toolUse, invocationState: {} }
+        const context = createContext(input)
 
         const { result } = await collectGenerator(httpRequest.stream(context))
 
@@ -174,12 +173,7 @@ describe('httpRequest', () => {
           method: 'DELETE' as const,
           url: 'https://api.example.com/items/123',
         }
-        const toolUse = {
-          name: 'httpRequest',
-          toolUseId: 'test-delete-1',
-          input,
-        }
-        const context: ToolContext = { toolUse, invocationState: {} }
+        const context = createContext(input)
 
         const { result } = await collectGenerator(httpRequest.stream(context))
 
@@ -220,12 +214,7 @@ describe('httpRequest', () => {
           url: 'https://api.example.com/items/123',
           body: '{"status": "active"}',
         }
-        const toolUse = {
-          name: 'httpRequest',
-          toolUseId: 'test-patch-1',
-          input,
-        }
-        const context: ToolContext = { toolUse, invocationState: {} }
+        const context = createContext(input)
 
         const { result } = await collectGenerator(httpRequest.stream(context))
 
@@ -265,12 +254,7 @@ describe('httpRequest', () => {
           method: 'HEAD' as const,
           url: 'https://api.example.com/data',
         }
-        const toolUse = {
-          name: 'httpRequest',
-          toolUseId: 'test-head-1',
-          input,
-        }
-        const context: ToolContext = { toolUse, invocationState: {} }
+        const context = createContext(input)
 
         const { result } = await collectGenerator(httpRequest.stream(context))
 
@@ -302,12 +286,7 @@ describe('httpRequest', () => {
           method: 'OPTIONS' as const,
           url: 'https://api.example.com/data',
         }
-        const toolUse = {
-          name: 'httpRequest',
-          toolUseId: 'test-options-1',
-          input,
-        }
-        const context: ToolContext = { toolUse, invocationState: {} }
+        const context = createContext(input)
 
         const { result } = await collectGenerator(httpRequest.stream(context))
 
@@ -342,12 +321,7 @@ describe('httpRequest', () => {
             token: 'my-secret-token',
           },
         }
-        const toolUse = {
-          name: 'httpRequest',
-          toolUseId: 'test-bearer-1',
-          input,
-        }
-        const context: ToolContext = { toolUse, invocationState: {} }
+        const context = createContext(input)
 
         const { result } = await collectGenerator(httpRequest.stream(context))
 
@@ -389,12 +363,7 @@ describe('httpRequest', () => {
             envVar: 'TEST_TOKEN',
           },
         }
-        const toolUse = {
-          name: 'httpRequest',
-          toolUseId: 'test-bearer-env-1',
-          input,
-        }
-        const context: ToolContext = { toolUse, invocationState: {} }
+        const context = createContext(input)
 
         const { result } = await collectGenerator(httpRequest.stream(context))
 
@@ -436,12 +405,7 @@ describe('httpRequest', () => {
             token: 'ghp_token123',
           },
         }
-        const toolUse = {
-          name: 'httpRequest',
-          toolUseId: 'test-token-1',
-          input,
-        }
-        const context: ToolContext = { toolUse, invocationState: {} }
+        const context = createContext(input)
 
         const { result } = await collectGenerator(httpRequest.stream(context))
 
@@ -477,12 +441,7 @@ describe('httpRequest', () => {
             password: 'pass',
           },
         }
-        const toolUse = {
-          name: 'httpRequest',
-          toolUseId: 'test-basic-1',
-          input,
-        }
-        const context: ToolContext = { toolUse, invocationState: {} }
+        const context = createContext(input)
 
         const { result } = await collectGenerator(httpRequest.stream(context))
 
@@ -518,12 +477,7 @@ describe('httpRequest', () => {
             value: 'CustomScheme abc123',
           },
         }
-        const toolUse = {
-          name: 'httpRequest',
-          toolUseId: 'test-custom-1',
-          input,
-        }
-        const context: ToolContext = { toolUse, invocationState: {} }
+        const context = createContext(input)
 
         const { result } = await collectGenerator(httpRequest.stream(context))
 
@@ -558,12 +512,7 @@ describe('httpRequest', () => {
             key: 'api-key-123',
           },
         }
-        const toolUse = {
-          name: 'httpRequest',
-          toolUseId: 'test-apikey-1',
-          input,
-        }
-        const context: ToolContext = { toolUse, invocationState: {} }
+        const context = createContext(input)
 
         const { result } = await collectGenerator(httpRequest.stream(context))
 
@@ -600,12 +549,7 @@ describe('httpRequest', () => {
           url: 'https://api.example.com/items',
           body: '{"test": true}',
         }
-        const toolUse = {
-          name: 'httpRequest',
-          toolUseId: 'test-consent-bypass',
-          input,
-        }
-        const context: ToolContext = { toolUse, invocationState: {} }
+        const context = createContext(input)
 
         const { result } = await collectGenerator(httpRequest.stream(context))
 
@@ -634,12 +578,7 @@ describe('httpRequest', () => {
           method: 'GET' as const,
           url: 'https://api.example.com/data',
         }
-        const toolUse = {
-          name: 'httpRequest',
-          toolUseId: 'test-no-consent',
-          input,
-        }
-        const context: ToolContext = { toolUse, invocationState: {} }
+        const context = createContext(input)
 
         const { result } = await collectGenerator(httpRequest.stream(context))
 
@@ -664,20 +603,15 @@ describe('httpRequest', () => {
         method: 'GET' as const,
         url: 'https://api.example.com/data',
       }
-      const toolUse = {
-        name: 'httpRequest',
-        toolUseId: 'test-status',
-        input,
-      }
-      const context: ToolContext = { toolUse, invocationState: {} }
+      const context = createContext(input)
 
       const { result } = await collectGenerator(httpRequest.stream(context))
 
       expect(result.status).toBe('success')
       expect(result.content).toBeDefined()
       expect(result.content.length).toBeGreaterThan(0)
-      expect(result.content[0]).toHaveProperty('type', 'toolResultJsonContent')
-      if (result.content[0] && result.content[0].type === 'toolResultJsonContent') {
+      expect(result.content[0]).toHaveProperty('type', 'jsonBlock')
+      if (result.content[0] && result.content[0].type === 'jsonBlock') {
         expect(result.content[0].json).toHaveProperty('status', 200)
       }
     })
@@ -699,20 +633,15 @@ describe('httpRequest', () => {
         method: 'GET' as const,
         url: 'https://api.example.com/data',
       }
-      const toolUse = {
-        name: 'httpRequest',
-        toolUseId: 'test-headers',
-        input,
-      }
-      const context: ToolContext = { toolUse, invocationState: {} }
+      const context = createContext(input)
 
       const { result } = await collectGenerator(httpRequest.stream(context))
 
       expect(result.status).toBe('success')
       expect(result.content).toBeDefined()
       expect(result.content.length).toBeGreaterThan(0)
-      expect(result.content[0]).toHaveProperty('type', 'toolResultJsonContent')
-      if (result.content[0] && result.content[0].type === 'toolResultJsonContent') {
+      expect(result.content[0]).toHaveProperty('type', 'jsonBlock')
+      if (result.content[0] && result.content[0].type === 'jsonBlock') {
         expect(result.content[0].json).toHaveProperty('headers')
         const json = result.content[0].json as { headers: Record<string, string> }
         expect(json.headers).toHaveProperty('content-type', 'application/json')
@@ -734,20 +663,15 @@ describe('httpRequest', () => {
         method: 'GET' as const,
         url: 'https://api.example.com/data',
       }
-      const toolUse = {
-        name: 'httpRequest',
-        toolUseId: 'test-body',
-        input,
-      }
-      const context: ToolContext = { toolUse, invocationState: {} }
+      const context = createContext(input)
 
       const { result } = await collectGenerator(httpRequest.stream(context))
 
       expect(result.status).toBe('success')
       expect(result.content).toBeDefined()
       expect(result.content.length).toBeGreaterThan(0)
-      expect(result.content[0]).toHaveProperty('type', 'toolResultJsonContent')
-      if (result.content[0] && result.content[0].type === 'toolResultJsonContent') {
+      expect(result.content[0]).toHaveProperty('type', 'jsonBlock')
+      if (result.content[0] && result.content[0].type === 'jsonBlock') {
         expect(result.content[0].json).toHaveProperty('body', '{"result": "success"}')
       }
     })
@@ -759,20 +683,15 @@ describe('httpRequest', () => {
         method: 'GET' as const,
         url: 'https://api.example.com/data',
       }
-      const toolUse = {
-        name: 'httpRequest',
-        toolUseId: 'test-error',
-        input,
-      }
-      const context: ToolContext = { toolUse, invocationState: {} }
+      const context = createContext(input)
 
       const { result } = await collectGenerator(httpRequest.stream(context))
 
       expect(result.status).toBe('error')
       expect(result.content).toBeDefined()
       expect(result.content.length).toBeGreaterThan(0)
-      expect(result.content[0]).toHaveProperty('type', 'toolResultTextContent')
-      if (result.content[0] && result.content[0].type === 'toolResultTextContent') {
+      expect(result.content[0]).toHaveProperty('type', 'textBlock')
+      if (result.content[0] && result.content[0].type === 'textBlock') {
         expect(result.content[0].text).toContain('Network error')
       }
     })
@@ -791,12 +710,7 @@ describe('httpRequest', () => {
         method: 'GET' as const,
         url: 'https://api.example.com/notfound',
       }
-      const toolUse = {
-        name: 'httpRequest',
-        toolUseId: 'test-404',
-        input,
-      }
-      const context: ToolContext = { toolUse, invocationState: {} }
+      const context = createContext(input)
 
       const { result } = await collectGenerator(httpRequest.stream(context))
 
@@ -804,8 +718,8 @@ describe('httpRequest', () => {
       expect(result.status).toBe('success')
       expect(result.content).toBeDefined()
       expect(result.content.length).toBeGreaterThan(0)
-      expect(result.content[0]).toHaveProperty('type', 'toolResultJsonContent')
-      if (result.content[0] && result.content[0].type === 'toolResultJsonContent') {
+      expect(result.content[0]).toHaveProperty('type', 'jsonBlock')
+      if (result.content[0] && result.content[0].type === 'jsonBlock') {
         expect(result.content[0].json).toHaveProperty('status', 404)
       }
     })
@@ -826,12 +740,7 @@ describe('httpRequest', () => {
         method: 'GET' as const,
         url: 'https://api.example.com/data',
       }
-      const toolUse = {
-        name: 'httpRequest',
-        toolUseId: 'test-ssl-default',
-        input,
-      }
-      const context: ToolContext = { toolUse, invocationState: {} }
+      const context = createContext(input)
 
       await collectGenerator(httpRequest.stream(context))
 
@@ -855,12 +764,7 @@ describe('httpRequest', () => {
         url: 'https://api.example.com/data',
         verifySSL: false,
       }
-      const toolUse = {
-        name: 'httpRequest',
-        toolUseId: 'test-ssl-false',
-        input,
-      }
-      const context: ToolContext = { toolUse, invocationState: {} }
+      const context = createContext(input)
 
       await collectGenerator(httpRequest.stream(context))
 

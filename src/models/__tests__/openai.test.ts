@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import OpenAI from 'openai'
-import { isNode } from '../../__fixtures__/environment'
-import { OpenAIModel } from '../openai'
-import { ContextWindowOverflowError } from '../../errors'
-import { collectIterator } from '../../__fixtures__/model-test-helpers'
-import type { Message } from '../../types/messages'
+import { isNode } from '../../__fixtures__/environment.js'
+import { OpenAIModel } from '../openai.js'
+import { ContextWindowOverflowError } from '../../errors.js'
+import { collectIterator } from '../../__fixtures__/model-test-helpers.js'
+import type { Message } from '../../types/messages.js'
 
 /**
  * Helper to create a mock OpenAI client with streaming support
@@ -21,7 +21,9 @@ function createMockClient(streamGenerator: () => AsyncGenerator<any>): OpenAI {
 
 // Mock the OpenAI SDK
 vi.mock('openai', () => {
-  const mockConstructor = vi.fn().mockImplementation(() => ({}))
+  const mockConstructor = vi.fn(function (this: any) {
+    return {}
+  })
   return {
     default: mockConstructor,
   }
@@ -298,7 +300,7 @@ describe('OpenAIModel', () => {
                 type: 'toolResultBlock',
                 toolUseId: 'tool-123',
                 status: 'error',
-                content: [{ type: 'toolResultTextContent', text: 'Division by zero' }],
+                content: [{ type: 'textBlock', text: 'Division by zero' }],
               },
             ],
           },
@@ -388,21 +390,17 @@ describe('OpenAIModel', () => {
         expect(events[0]).toEqual({ type: 'modelMessageStartEvent', role: 'assistant' })
         expect(events[1]).toEqual({
           type: 'modelContentBlockStartEvent',
-          contentBlockIndex: 0,
         })
         expect(events[2]).toEqual({
           type: 'modelContentBlockDeltaEvent',
-          contentBlockIndex: 0,
           delta: { type: 'textDelta', text: 'Hello' },
         })
         expect(events[3]).toEqual({
           type: 'modelContentBlockDeltaEvent',
-          contentBlockIndex: 0,
           delta: { type: 'textDelta', text: ' world' },
         })
         expect(events[4]).toEqual({
           type: 'modelContentBlockStopEvent',
-          contentBlockIndex: 0,
         })
         expect(events[5]).toEqual({ type: 'modelMessageStopEvent', stopReason: 'endTurn' })
       })
@@ -583,7 +581,6 @@ describe('OpenAIModel', () => {
       expect(events[0]).toEqual({ type: 'modelMessageStartEvent', role: 'assistant' })
       expect(events[1]).toEqual({
         type: 'modelContentBlockStartEvent',
-        contentBlockIndex: 0,
         start: {
           type: 'toolUseStart',
           name: 'calculator',
@@ -592,7 +589,6 @@ describe('OpenAIModel', () => {
       })
       expect(events[2]).toEqual({
         type: 'modelContentBlockDeltaEvent',
-        contentBlockIndex: 0,
         delta: {
           type: 'toolUseInputDelta',
           input: '{"expr',
@@ -600,7 +596,6 @@ describe('OpenAIModel', () => {
       })
       expect(events[3]).toEqual({
         type: 'modelContentBlockDeltaEvent',
-        contentBlockIndex: 0,
         delta: {
           type: 'toolUseInputDelta',
           input: '":"2+2"}',
@@ -608,12 +603,11 @@ describe('OpenAIModel', () => {
       })
       expect(events[4]).toEqual({
         type: 'modelContentBlockStopEvent',
-        contentBlockIndex: 0,
       })
       expect(events[5]).toEqual({ type: 'modelMessageStopEvent', stopReason: 'toolUse' })
     })
 
-    it('handles multiple tool calls with correct contentBlockIndex', async () => {
+    it('handles multiple tool calls', async () => {
       const mockClient = createMockClient(async function* () {
         yield {
           choices: [{ delta: { role: 'assistant' }, index: 0 }],
@@ -665,8 +659,8 @@ describe('OpenAIModel', () => {
       // Should emit stop events for both tool calls
       const stopEvents = events.filter((e) => e.type === 'modelContentBlockStopEvent')
       expect(stopEvents).toHaveLength(2)
-      expect(stopEvents[0]).toEqual({ type: 'modelContentBlockStopEvent', contentBlockIndex: 0 })
-      expect(stopEvents[1]).toEqual({ type: 'modelContentBlockStopEvent', contentBlockIndex: 1 })
+      expect(stopEvents[0]).toEqual({ type: 'modelContentBlockStopEvent' })
+      expect(stopEvents[1]).toEqual({ type: 'modelContentBlockStopEvent' })
     })
 
     it('skips tool calls with invalid index', async () => {
@@ -799,7 +793,6 @@ describe('OpenAIModel', () => {
       expect(events[0]?.type).toBe('modelMessageStartEvent')
       // Text content block start
       expect(events[1]?.type).toBe('modelContentBlockStartEvent')
-      expect((events[1] as any).contentBlockIndex).toBe(0)
       // Text deltas
       expect(events[2]?.type).toBe('modelContentBlockDeltaEvent')
       expect((events[2] as any).delta.type).toBe('textDelta')
@@ -1050,6 +1043,242 @@ describe('OpenAIModel', () => {
         { role: 'system', content: 'You are a helpful assistant' },
         { role: 'user', content: 'Hello' },
       ])
+    })
+
+    it('warns and filters guard content from system prompt', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const captured: { request: any } = { request: null }
+      const mockClient = createMockClientWithCapture(captured)
+      const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
+      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+
+      await collectIterator(
+        provider.stream(messages, {
+          systemPrompt: [
+            { type: 'textBlock', text: 'You are a helpful assistant' },
+            {
+              type: 'guardContentBlock',
+              text: {
+                qualifiers: ['grounding_source'],
+                text: 'Guard content',
+              },
+            },
+          ],
+        })
+      )
+
+      // Verify warning was logged
+      expect(warnSpy).toHaveBeenCalledWith(
+        'OpenAI does not support guard content in system prompts. Removing guard content block.'
+      )
+
+      // Verify guard content is filtered out
+      expect(captured.request).toBeDefined()
+      expect(captured.request!.messages).toEqual([
+        { role: 'system', content: 'You are a helpful assistant' },
+        { role: 'user', content: 'Hello' },
+      ])
+
+      warnSpy.mockRestore()
+    })
+
+    it('preserves text blocks when filtering guard content', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const captured: { request: any } = { request: null }
+      const mockClient = createMockClientWithCapture(captured)
+      const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
+      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+
+      await collectIterator(
+        provider.stream(messages, {
+          systemPrompt: [
+            { type: 'textBlock', text: 'First text' },
+            {
+              type: 'guardContentBlock',
+              text: {
+                qualifiers: ['query'],
+                text: 'Guard content',
+              },
+            },
+            { type: 'textBlock', text: 'Second text' },
+          ],
+        })
+      )
+
+      // Verify warning was logged
+      expect(warnSpy).toHaveBeenCalledWith(
+        'OpenAI does not support guard content in system prompts. Removing guard content block.'
+      )
+
+      // Verify both text blocks preserved, guard content removed
+      expect(captured.request).toBeDefined()
+      expect(captured.request!.messages).toEqual([
+        { role: 'system', content: 'First textSecond text' },
+        { role: 'user', content: 'Hello' },
+      ])
+
+      warnSpy.mockRestore()
+    })
+
+    it('handles system prompt with only guard content', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const captured: { request: any } = { request: null }
+      const mockClient = createMockClientWithCapture(captured)
+      const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
+      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+
+      await collectIterator(
+        provider.stream(messages, {
+          systemPrompt: [
+            {
+              type: 'guardContentBlock',
+              text: {
+                qualifiers: ['guard_content'],
+                text: 'Only guard content',
+              },
+            },
+          ],
+        })
+      )
+
+      // Verify warning was logged
+      expect(warnSpy).toHaveBeenCalledWith(
+        'OpenAI does not support guard content in system prompts. Removing guard content block.'
+      )
+
+      // Verify no system message added (only guard content)
+      expect(captured.request).toBeDefined()
+      expect(captured.request!.messages).toEqual([{ role: 'user', content: 'Hello' }])
+
+      warnSpy.mockRestore()
+    })
+  })
+
+  describe('guard content in messages', () => {
+    // Create mock client factory that captures request in provided container
+    const createMockClientWithCapture = (captureContainer: { request: any }): any => {
+      return {
+        chat: {
+          completions: {
+            create: vi.fn(async (request: any) => {
+              captureContainer.request = request
+              return (async function* () {
+                yield { choices: [{ delta: { role: 'assistant' }, index: 0 }] }
+                yield { choices: [{ finish_reason: 'stop', delta: {}, index: 0 }] }
+              })()
+            }),
+          },
+        },
+      } as any
+    }
+
+    it('warns and filters guard content from user messages', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const captured: { request: any } = { request: null }
+      const mockClient = createMockClientWithCapture(captured)
+      const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
+      const messages: Message[] = [
+        {
+          type: 'message',
+          role: 'user',
+          content: [
+            { type: 'textBlock', text: 'Verify this:' },
+            {
+              type: 'guardContentBlock',
+              text: {
+                qualifiers: ['grounding_source'],
+                text: 'Guard content',
+              },
+            },
+            { type: 'textBlock', text: 'Is it correct?' },
+          ],
+        },
+      ]
+
+      await collectIterator(provider.stream(messages))
+
+      // Verify warning was logged
+      expect(warnSpy).toHaveBeenCalledWith(
+        'OpenAI does not support guard content in messages. Removing guard content block.'
+      )
+
+      // Verify guard content filtered out
+      expect(captured.request).toBeDefined()
+      expect(captured.request!.messages).toEqual([{ role: 'user', content: 'Verify this:Is it correct?' }])
+
+      warnSpy.mockRestore()
+    })
+
+    it('warns and filters guard content with image from user messages', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const captured: { request: any } = { request: null }
+      const mockClient = createMockClientWithCapture(captured)
+      const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
+      const imageBytes = new Uint8Array([1, 2, 3, 4])
+      const messages: Message[] = [
+        {
+          type: 'message',
+          role: 'user',
+          content: [
+            { type: 'textBlock', text: 'Check this image:' },
+            {
+              type: 'guardContentBlock',
+              image: {
+                format: 'jpeg',
+                source: { bytes: imageBytes },
+              },
+            },
+          ],
+        },
+      ]
+
+      await collectIterator(provider.stream(messages))
+
+      // Verify warning was logged
+      expect(warnSpy).toHaveBeenCalledWith(
+        'OpenAI does not support guard content in messages. Removing guard content block.'
+      )
+
+      // Verify guard content filtered out
+      expect(captured.request).toBeDefined()
+      expect(captured.request!.messages).toEqual([{ role: 'user', content: 'Check this image:' }])
+
+      warnSpy.mockRestore()
+    })
+
+    it('handles message with only guard content', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const captured: { request: any } = { request: null }
+      const mockClient = createMockClientWithCapture(captured)
+      const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
+      const messages: Message[] = [
+        {
+          type: 'message',
+          role: 'user',
+          content: [
+            {
+              type: 'guardContentBlock',
+              text: {
+                qualifiers: ['guard_content'],
+                text: 'Only guard content',
+              },
+            },
+          ],
+        },
+      ]
+
+      await collectIterator(provider.stream(messages))
+
+      // Verify warning was logged
+      expect(warnSpy).toHaveBeenCalledWith(
+        'OpenAI does not support guard content in messages. Removing guard content block.'
+      )
+
+      // Verify no user message added (only guard content)
+      expect(captured.request).toBeDefined()
+      expect(captured.request!.messages).toEqual([])
+
+      warnSpy.mockRestore()
     })
   })
 

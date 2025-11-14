@@ -5,7 +5,7 @@
  * during agent execution and model provider interactions.
  */
 
-import type { Message } from './types/messages'
+import type { Message } from './types/messages.js'
 
 /**
  * Error thrown when input exceeds the model's context window.
@@ -51,5 +51,41 @@ export class MaxTokensError extends Error {
     super(message)
     this.name = 'MaxTokensError'
     this.partialMessage = partialMessage
+  }
+}
+
+/**
+ * Error thrown when attempting to serialize a value that is not JSON-serializable.
+ *
+ * This error indicates that a value contains non-serializable types such as functions,
+ * symbols, or undefined values that cannot be converted to JSON.
+ */
+export class JsonValidationError extends Error {
+  /**
+   * Creates a new JsonValidationError.
+   *
+   * @param message - Error message describing the validation failure
+   */
+  constructor(message: string) {
+    super(message)
+    this.name = 'JsonValidationError'
+  }
+}
+
+/**
+ * Error thrown when attempting to invoke an agent that is already processing an invocation.
+ *
+ * This error indicates that invoke() or stream() was called while the agent is already
+ * executing. Agents can only process one invocation at a time to prevent state corruption.
+ */
+export class ConcurrentInvocationError extends Error {
+  /**
+   * Creates a new ConcurrentInvocationError.
+   *
+   * @param message - Error message describing the concurrent invocation attempt
+   */
+  constructor(message: string) {
+    super(message)
+    this.name = 'ConcurrentInvocationError'
   }
 }

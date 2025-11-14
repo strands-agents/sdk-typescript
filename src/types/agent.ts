@@ -1,4 +1,16 @@
-import type { Message } from './messages'
+import type { AgentState } from '../agent/state.js'
+import type { Message } from './messages.js'
+
+/**
+ * Interface for objects that provide agent state.
+ * Allows ToolContext to work with different agent types.
+ */
+export interface AgentData {
+  /**
+   * Agent state storage accessible to tools and application logic.
+   */
+  state: AgentState
+}
 
 /**
  * Result returned by the agent loop.

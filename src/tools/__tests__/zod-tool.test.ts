@@ -1,8 +1,21 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { tool } from '../zod-tool'
-import { createMockContext } from '../../__fixtures__/tool-helpers'
-import { collectGenerator } from '../../__fixtures__/model-test-helpers'
+import { tool } from '../zod-tool.js'
+import { createMockContext } from '../../__fixtures__/tool-helpers.js'
+import { collectGenerator } from '../../__fixtures__/model-test-helpers.js'
+import type { JSONValue } from '../../types/json.js'
+import type { ToolContext } from '../tool.js'
+
+/**
+ * Helper to create a mock ToolContext with just input for zod tool tests.
+ */
+function createContext(input: JSONValue): ToolContext {
+  return createMockContext({
+    name: 'testTool',
+    toolUseId: 'test-123',
+    input,
+  })
+}
 
 describe('tool', () => {
   describe('tool creation and properties', () => {
@@ -14,7 +27,7 @@ describe('tool', () => {
         callback: (input) => input.value,
       })
 
-      expect(myTool.toolName).toBe('testTool')
+      expect(myTool.name).toBe('testTool')
       expect(myTool.description).toBe('Test description')
       expect(myTool.toolSpec).toEqual({
         name: 'testTool',
@@ -37,7 +50,7 @@ describe('tool', () => {
         callback: (input) => input.value,
       })
 
-      expect(myTool.toolName).toBe('testTool')
+      expect(myTool.name).toBe('testTool')
       expect(myTool.description).toBe('')
     })
   })
@@ -119,7 +132,6 @@ describe('tool', () => {
       it('passes context to callback', async () => {
         const callback = vi.fn((input, context) => {
           expect(context).toBeDefined()
-          expect(context?.invocationState).toBeDefined()
           return input.value
         })
 
@@ -130,7 +142,7 @@ describe('tool', () => {
           callback,
         })
 
-        const mockContext = createMockContext({ value: 'test' }, { userId: 'user-123' })
+        const mockContext = createContext({ value: 'test' })
         await myTool.invoke({ value: 'test' }, mockContext)
         expect(callback).toHaveBeenCalled()
       })
@@ -147,13 +159,13 @@ describe('tool', () => {
           callback: (input) => input.value,
         })
 
-        const context = createMockContext({ value: 'hello' })
+        const context = createContext({ value: 'hello' })
         const { items: events, result } = await collectGenerator(myTool.stream(context))
 
         expect(events).toHaveLength(0) // No stream events for sync
         expect(result.status).toBe('success')
         expect(result.content).toHaveLength(1)
-        expect(result.content[0]).toEqual({ type: 'toolResultTextContent', text: 'hello' })
+        expect(result.content[0]).toEqual(expect.objectContaining({ type: 'textBlock', text: 'hello' }))
       })
 
       it('streams promise callback result', async () => {
@@ -164,13 +176,13 @@ describe('tool', () => {
           callback: async (input) => input.value * 2,
         })
 
-        const context = createMockContext({ value: 21 })
+        const context = createContext({ value: 21 })
         const { items: events, result } = await collectGenerator(myTool.stream(context))
 
         expect(events).toHaveLength(0) // No stream events for promise
         expect(result.status).toBe('success')
         expect(result.content).toHaveLength(1)
-        expect(result.content[0]).toEqual({ type: 'toolResultTextContent', text: '42' })
+        expect(result.content[0]).toEqual(expect.objectContaining({ type: 'textBlock', text: '42' }))
       })
 
       it('streams async generator callback results', async () => {
@@ -186,7 +198,7 @@ describe('tool', () => {
           },
         })
 
-        const context = createMockContext({ count: 3 })
+        const context = createContext({ count: 3 })
         const { items: events, result } = await collectGenerator(myTool.stream(context))
 
         expect(events).toHaveLength(3)
@@ -205,14 +217,14 @@ describe('tool', () => {
           callback: (input) => input.age,
         })
 
-        const context = createMockContext({ age: -5 })
+        const context = createContext({ age: -5 })
         const { items: events, result } = await collectGenerator(myTool.stream(context))
 
         expect(events).toHaveLength(0)
         expect(result.status).toBe('error')
         expect(result.content.length).toBeGreaterThan(0)
         const firstContent = result.content[0]
-        if (firstContent && firstContent.type === 'toolResultTextContent') {
+        if (firstContent && firstContent.type == 'textBlock') {
           expect(firstContent.text).toContain('age')
         }
       })
@@ -228,7 +240,7 @@ describe('tool', () => {
           callback: (input) => `${input.name}: ${input.value}`,
         })
 
-        const context = createMockContext({ name: 'test' })
+        const context = createContext({ name: 'test' })
         const { items: events, result } = await collectGenerator(myTool.stream(context))
 
         expect(events).toHaveLength(0)
@@ -247,14 +259,14 @@ describe('tool', () => {
           },
         })
 
-        const context = createMockContext({ value: 'test' })
+        const context = createContext({ value: 'test' })
         const { items: events, result } = await collectGenerator(myTool.stream(context))
 
         expect(events).toHaveLength(0)
         expect(result.status).toBe('error')
         expect(result.content.length).toBeGreaterThan(0)
         const firstContent = result.content[0]
-        if (firstContent && firstContent.type === 'toolResultTextContent') {
+        if (firstContent && firstContent.type == 'textBlock') {
           expect(firstContent.text).toBe('Error: Callback error')
         }
       })
@@ -269,14 +281,14 @@ describe('tool', () => {
           },
         })
 
-        const context = createMockContext({ value: 'test' })
+        const context = createContext({ value: 'test' })
         const { items: events, result } = await collectGenerator(myTool.stream(context))
 
         expect(events).toHaveLength(0)
         expect(result.status).toBe('error')
         expect(result.content.length).toBeGreaterThan(0)
         const firstContent = result.content[0]
-        if (firstContent && firstContent.type === 'toolResultTextContent') {
+        if (firstContent && firstContent.type == 'textBlock') {
           expect(firstContent.text).toBe('Error: Async error')
         }
       })

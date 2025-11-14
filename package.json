@@ -2,25 +2,33 @@
   "name": "@strands-agents/sdk",
   "version": "0.1.0",
   "description": "TypeScript SDK for Strands Agents framework",
-  "main": "dist/index.js",
-  "module": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "dist/src/index.js",
+  "module": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
   "type": "module",
   "files": [
     "dist"
   ],
   "exports": {
     ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "import": "./dist/src/index.js",
+      "types": "./dist/src/index.d.ts"
     },
     "./openai": {
-      "import": "./dist/models/openai.js",
-      "types": "./dist/models/openai.d.ts"
+      "import": "./dist/src/models/openai.js",
+      "types": "./dist/src/models/openai.d.ts"
     },
     "./bedrock": {
-      "import": "./dist/models/bedrock.js",
-      "types": "./dist/models/bedrock.d.ts"
+      "import": "./dist/src/models/bedrock.js",
+      "types": "./dist/src/models/bedrock.d.ts"
+    },
+    "./vended_tools/notebook": {
+      "import": "./dist/vended_tools/notebook/index.js",
+      "types": "./dist/vended_tools/notebook/index.d.ts"
+    },
+    "./vended_tools/file_editor": {
+      "import": "./dist/vended_tools/file_editor/index.js",
+      "types": "./dist/vended_tools/file_editor/index.d.ts"
     },
     "./vended_tools/http-request": {
       "import": "./dist/vended_tools/http-request/index.js",
@@ -29,7 +37,7 @@
   },
   "scripts": {
     "build": "tsc",
-    "check": "npm run lint && npm run format && npm run typecheck && npm run test:coverage && npm run test:types",
+    "check": "npm run lint && npm run format && npm run type-check && npm run test:coverage && npm run test:package",
     "clean": "rm -rf node_modules dist package-lock.json",
     "test": "vitest run --project unit-node",
     "test:watch": "vitest --project unit-node",
@@ -40,13 +48,14 @@
     "test:browser:install": "npx playwright install --with-deps chromium",
     "test:all": "vitest run --project unit-node --project unit-browser",
     "test:all:coverage": "vitest run --coverage --project unit-node --project unit-browser",
+    "test:package": "npm run build && cd test-package && npm install && node verify.js",
     "lint": "eslint src tests_integ vended_tools",
     "lint:fix": "eslint src tests_integ vended_tools --fix",
     "format": "prettier --write src tests_integ vended_tools",
     "format:check": "prettier --check src tests_integ vended_tools",
     "type-check": "tsc --noEmit",
     "type-check:watch": "tsc --noEmit --watch",
-    "prepare": "husky"
+    "prepare": "npm run build && husky"
   },
   "keywords": [
     "agents",
@@ -64,15 +73,16 @@
     "@types/node": "^24.6.0",
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",
-    "@vitest/browser": "^3.2.4",
-    "@vitest/coverage-v8": "^3.2.4",
+    "@vitest/browser": "^4.0.8",
+    "@vitest/browser-playwright": "^4.0.8",
+    "@vitest/coverage-v8": "^4.0.8",
     "eslint": "^9.0.0",
-    "eslint-plugin-tsdoc": "^0.3.0",
+    "eslint-plugin-tsdoc": "^0.5.0",
     "husky": "^9.1.7",
     "playwright": "^1.56.1",
     "prettier": "^3.0.0",
     "typescript": "^5.5.0",
-    "vitest": "^3.2.4"
+    "vitest": "^4.0.8"
   },
   "engines": {
     "node": ">=20.0.0"
@@ -87,9 +97,14 @@
   "homepage": "https://github.com/strands-agents/sdk-typescript#readme",
   "dependencies": {
     "@aws-sdk/client-bedrock-runtime": "^3.911.0",
+    "@modelcontextprotocol/sdk": "^1.20.2",
+    "uuid": "^13.0.0",
     "zod": "^4.1.12"
   },
   "optionalDependencies": {
     "openai": "^6.7.0"
+  },
+  "overrides": {
+    "rollup": "4.52.5"
   }
 }

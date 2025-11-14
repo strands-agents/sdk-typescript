@@ -1,35 +1,23 @@
 import { describe, it, expect } from 'vitest'
-import { fromNodeProviderChain } from '@aws-sdk/credential-providers'
-import { BedrockModel, ContextWindowOverflowError, Message, ToolSpec, ModelStreamEvent } from '@strands-agents/sdk'
+import {
+  BedrockModel,
+  ContextWindowOverflowError,
+  Message,
+  ToolSpec,
+  ModelStreamEvent,
+  Agent,
+  NullConversationManager,
+  SlidingWindowConversationManager,
+} from '@strands-agents/sdk'
 
 // eslint-disable-next-line no-restricted-imports
-import { collectIterator, collectGenerator } from '../src/__fixtures__/model-test-helpers'
+import { collectIterator, collectGenerator } from '../src/__fixtures__/model-test-helpers.js'
+import { shouldRunTests } from './__fixtures__/model-test-helpers.js'
 
-const shouldRunTests = await (async () => {
-  // In a CI environment, we ALWAYS expect credentials to be configured.
-  // A failure is better than a skip.
-  if (process.env.CI) {
-    console.log('✅ Running in CI environment, integration tests will run.')
-    return true
-  }
-
-  // In a local environment, we check for credentials as a convenience.
-  try {
-    const credentialProvider = fromNodeProviderChain()
-    await credentialProvider()
-    console.log('✅ AWS credentials found locally, integration tests will run.')
-    return true
-  } catch {
-    console.log('⏭️ AWS credentials not available locally, integration tests will be skipped.')
-    return false
-  }
-})()
-
-describe.skipIf(!shouldRunTests)('BedrockModel Integration Tests', () => {
+describe.skipIf(!(await shouldRunTests()))('BedrockModel Integration Tests', () => {
   describe('Non-Streaming', () => {
     it('gets a simple text response', async () => {
       const provider = new BedrockModel({
-        stream: false,
         maxTokens: 100,
       })
       const messages: Message[] = [
@@ -62,7 +50,6 @@ describe.skipIf(!shouldRunTests)('BedrockModel Integration Tests', () => {
 
     it('requests tool use when appropriate', async () => {
       const provider = new BedrockModel({
-        stream: false,
         maxTokens: 200,
       })
       const calculatorTool: ToolSpec = {
@@ -88,15 +75,16 @@ describe.skipIf(!shouldRunTests)('BedrockModel Integration Tests', () => {
 
       const events = await collectIterator(provider.stream(messages, { toolSpecs: [calculatorTool] }))
 
-      // Check for the tool use input
-      const deltaEvent = events.find(
+      // Accumulate all tool use input deltas to get the complete JSON
+      const toolInputDeltas = events.filter(
         (e): e is ModelStreamEvent & { type: 'modelContentBlockDeltaEvent'; delta: { type: 'toolUseInputDelta' } } =>
           e.type === 'modelContentBlockDeltaEvent' && e.delta.type === 'toolUseInputDelta'
       )
-      expect(deltaEvent).toBeDefined()
+      expect(toolInputDeltas.length).toBeGreaterThan(0)
 
-      // The `find` with a type guard ensures deltaEvent is correctly typed
-      const input = JSON.parse(deltaEvent!.delta.input)
+      // Concatenate all input deltas to get the complete JSON string
+      const completeInput = toolInputDeltas.reduce((acc, event) => acc + event.delta.input, '')
+      const input = JSON.parse(completeInput)
       expect(input).toEqual({ operation: 'add', a: 15, b: 27 })
 
       // Verify the stop reason was tool use
@@ -314,5 +302,41 @@ describe.skipIf(!shouldRunTests)('BedrockModel Integration Tests', () => {
         })
       })
     })
+  })
+
+  describe('Agent with Conversation Manager', () => {
+    it('manages conversation history with SlidingWindowConversationManager', async () => {
+      const agent = new Agent({
+        model: new BedrockModel({ maxTokens: 100 }),
+        conversationManager: new SlidingWindowConversationManager({ windowSize: 4 }),
+      })
+
+      // First exchange
+      await agent.invoke('Count from 1 to 1.')
+      expect(agent.messages).toHaveLength(2) // user + assistant
+
+      // Second exchange
+      await agent.invoke('Count from 2 to 2.')
+      expect(agent.messages).toHaveLength(4) // 2 user + 2 assistant
+
+      // Third exchange - should trigger sliding window
+      await agent.invoke('Count from 3 to 3.')
+
+      // Should maintain window size of 4 messages
+      expect(agent.messages).toHaveLength(4)
+    }, 30000)
+
+    it('throws ContextWindowOverflowError with NullConversationManager', async () => {
+      const agent = new Agent({
+        model: new BedrockModel({ maxTokens: 50 }),
+        conversationManager: new NullConversationManager(),
+      })
+
+      // Generate a message that would require context management
+      const longPrompt = 'Please write a very detailed explanation of ' + 'many topics '.repeat(50)
+
+      // This should throw since NullConversationManager doesn't handle overflow
+      await expect(agent.invoke(longPrompt)).rejects.toThrow()
+    }, 30000)
   })
 })

@@ -4,10 +4,10 @@
  * requiring actual API clients.
  */
 
-import { Model } from '../models/model'
-import type { Message } from '../types/messages'
-import type { ModelStreamEvent } from '../models/streaming'
-import type { BaseModelConfig, StreamOptions } from '../models/model'
+import { Model } from '../models/model.js'
+import type { Message } from '../types/messages.js'
+import type { ModelStreamEvent } from '../models/streaming.js'
+import type { BaseModelConfig, StreamOptions } from '../models/model.js'
 
 /**
  * Test model provider that returns a predefined stream of events.
@@ -18,9 +18,9 @@ import type { BaseModelConfig, StreamOptions } from '../models/model'
  * ```typescript
  * const provider = new TestModelProvider(async function* () {
  *   yield { type: 'modelMessageStartEvent', role: 'assistant' }
- *   yield { type: 'modelContentBlockStartEvent', contentBlockIndex: 0 }
- *   yield { type: 'modelContentBlockDeltaEvent', delta: { type: 'textDelta', text: 'Hello' }, contentBlockIndex: 0 }
- *   yield { type: 'modelContentBlockStopEvent', contentBlockIndex: 0 }
+ *   yield { type: 'modelContentBlockStartEvent' }
+ *   yield { type: 'modelContentBlockDeltaEvent', delta: { type: 'textDelta', text: 'Hello' } }
+ *   yield { type: 'modelContentBlockStopEvent' }
  *   yield { type: 'modelMessageStopEvent', stopReason: 'endTurn' }
  * })
  *

@@ -1,76 +1,10 @@
-import type { JSONSchema, JSONValue } from '../types/json'
-
-/**
- * Result of a tool execution.
- * Contains the outcome and any data returned by the tool.
- */
-export interface ToolResult {
-  /**
-   * The ID of the tool use that this result corresponds to.
-   */
-  toolUseId: string
-
-  /**
-   * Status indicating success or error.
-   */
-  status: ToolResultStatus
-
-  /**
-   * Array of content blocks containing the tool's output.
-   */
-  content: ToolResultContent[]
-
-  /**
-   * The original error object when status is 'error'.
-   * Available for inspection by hooks, error handlers, and event loop.
-   * Tools must wrap non-Error thrown values into Error objects.
-   */
-  error?: Error
-}
+import type { JSONSchema, JSONValue } from '../types/json.js'
 
 /**
  * Status of a tool execution.
  * Indicates whether the tool executed successfully or encountered an error.
  */
 export type ToolResultStatus = 'success' | 'error'
-
-/**
- * Content returned from a tool execution.
- * Can be either text or structured JSON data.
- *
- * This is a discriminated union where the `type` field determines the content format.
- */
-export type ToolResultContent = ToolResultTextContent | ToolResultJsonContent
-
-/**
- * Text content returned from a tool execution.
- */
-export interface ToolResultTextContent {
-  /**
-   * Discriminator for text content.
-   */
-  type: 'toolResultTextContent'
-
-  /**
-   * Plain text result from the tool.
-   */
-  text: string
-}
-
-/**
- * JSON content returned from a tool execution.
- */
-export interface ToolResultJsonContent {
-  /**
-   * Discriminator for JSON content.
-   */
-  type: 'toolResultJsonContent'
-
-  /**
-   * Structured JSON result from the tool.
-   */
-  json: JSONValue
-}
 
 /**
  * Specification for a tool that can be used by the model.
@@ -122,6 +56,6 @@ export interface ToolUse {
  *
  * - `{ auto: {} }` - Let the model decide whether to use a tool
  * - `{ any: {} }` - Force the model to use one of the available tools
- * - `{ tool: { name: 'toolName' } }` - Force the model to use a specific tool
+ * - `{ tool: { name: 'name' } }` - Force the model to use a specific tool
  */
 export type ToolChoice = { auto: Record<string, never> } | { any: Record<string, never> } | { tool: { name: string } }

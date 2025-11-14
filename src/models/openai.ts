@@ -8,11 +8,13 @@
  */
 
 import OpenAI, { type ClientOptions } from 'openai'
-import { Model } from '../models/model'
-import type { BaseModelConfig, StreamOptions } from '../models/model'
-import type { Message } from '../types/messages'
-import type { ModelStreamEvent } from '../models/streaming'
-import { ContextWindowOverflowError } from '../errors'
+import { Model } from '../models/model.js'
+import type { BaseModelConfig, StreamOptions } from '../models/model.js'
+import type { Message } from '../types/messages.js'
+import type { ModelStreamEvent } from '../models/streaming.js'
+import { ContextWindowOverflowError } from '../errors.js'
+
+const DEFAULT_OPENAI_MODEL_ID = 'gpt-4o'
 
 /**
  * Error message patterns that indicate context window overflow.
@@ -68,7 +70,7 @@ export interface OpenAIModelConfig extends BaseModelConfig {
   /**
    * OpenAI model identifier (e.g., gpt-4o, gpt-3.5-turbo).
    */
-  modelId: string
+  modelId?: string
 
   /**
    * Controls randomness in generation (0 to 2).
@@ -396,7 +398,7 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
   ): OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming {
     // Start with required fields
     const request: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming = {
-      model: this._config.modelId,
+      model: this._config.modelId ?? DEFAULT_OPENAI_MODEL_ID,
       messages: [] as OpenAI.Chat.Completions.ChatCompletionMessageParam[],
       stream: true,
       stream_options: { include_usage: true },
@@ -416,17 +418,24 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
         // Array path: extract text blocks and warn about cache points
         const textBlocks: string[] = []
         let hasCachePoints = false
+        let hasGuardContent = false
 
         for (const block of options.systemPrompt) {
           if (block.type === 'textBlock') {
             textBlocks.push(block.text)
           } else if (block.type === 'cachePointBlock') {
             hasCachePoints = true
+          } else if (block.type === 'guardContentBlock') {
+            hasGuardContent = true
           }
         }
 
         if (hasCachePoints) {
           console.warn('Cache points are not supported in OpenAI system prompts and will be ignored.')
+        }
+
+        if (hasGuardContent) {
+          console.warn('OpenAI does not support guard content in system prompts. Removing guard content block.')
         }
 
         if (textBlocks.length > 0) {
@@ -529,6 +538,9 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
                 throw new Error(
                   'Reasoning blocks are not supported by OpenAI. ' + 'This feature is specific to AWS Bedrock models.'
                 )
+              } else if (block.type === 'guardContentBlock') {
+                console.warn('OpenAI does not support guard content in messages. Removing guard content block.')
+                return ''
               }
               return ''
             })
@@ -551,9 +563,9 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
             // Note: OpenAI tool messages only accept string content (not structured JSON)
             const contentText = toolResult.content
               .map((c) => {
-                if (c.type === 'toolResultTextContent') {
+                if (c.type === 'textBlock') {
                   return c.text
-                } else if (c.type === 'toolResultJsonContent') {
+                } else if (c.type === 'jsonBlock') {
                   try {
                     return JSON.stringify(c.json)
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -614,6 +626,8 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
             throw new Error(
               'Reasoning blocks are not supported by OpenAI. ' + 'This feature is specific to AWS Bedrock models.'
             )
+          } else if (block.type === 'guardContentBlock') {
+            console.warn('OpenAI does not support guard content in messages. Removing guard content block.')
           }
         }
 
@@ -671,9 +685,6 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
   ): ModelStreamEvent[] {
     const events: ModelStreamEvent[] = []
 
-    // Use named constant for text content block index
-    const TEXT_CONTENT_BLOCK_INDEX = 0
-
     // Validate choices array has at least one element
     if (!chunk.choices || chunk.choices.length === 0) {
       return events
@@ -705,21 +716,18 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
       })
     }
 
-    // Handle text content delta with contentBlockIndex and start event
+    // Handle text content delta and start event
     if (delta?.content && delta.content.length > 0) {
       // Emit start event on first text delta
       if (!streamState.textContentBlockStarted) {
         streamState.textContentBlockStarted = true
         events.push({
           type: 'modelContentBlockStartEvent',
-          contentBlockIndex: TEXT_CONTENT_BLOCK_INDEX,
         })
       }
 
-      // Include contentBlockIndex for text deltas
       events.push({
         type: 'modelContentBlockDeltaEvent',
-        contentBlockIndex: TEXT_CONTENT_BLOCK_INDEX,
         delta: {
           type: 'textDelta',
           text: delta.content,
@@ -740,7 +748,6 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
         if (toolCall.id && toolCall.function?.name) {
           events.push({
             type: 'modelContentBlockStartEvent',
-            contentBlockIndex: toolCall.index,
             start: {
               type: 'toolUseStart',
               name: toolCall.function.name,
@@ -755,7 +762,6 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
         if (toolCall.function?.arguments) {
           events.push({
             type: 'modelContentBlockDeltaEvent',
-            contentBlockIndex: toolCall.index,
             delta: {
               type: 'toolUseInputDelta',
               input: toolCall.function.arguments,
@@ -771,7 +777,6 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
       if (streamState.textContentBlockStarted) {
         events.push({
           type: 'modelContentBlockStopEvent',
-          contentBlockIndex: TEXT_CONTENT_BLOCK_INDEX,
         })
         streamState.textContentBlockStarted = false
       }
@@ -780,7 +785,6 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
       for (const [index] of activeToolCalls) {
         events.push({
           type: 'modelContentBlockStopEvent',
-          contentBlockIndex: index,
         })
         activeToolCalls.delete(index)
       }

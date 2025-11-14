@@ -87,25 +87,6 @@ npm run test:all
 npm run test:all:coverage
 ```
 
-### Browser Testing
-
-The SDK includes browser environment testing using Vitest's browser mode with Playwright/Chromium to ensure cross-platform compatibility.
-
-**Running Browser Tests:**
-
-```bash
-# Run all tests in browser environment
-npm run test:browser
-
-# Run all tests in both Node.js and browser environments
-npm run test:all
-
-# Run all tests with coverage
-npm run test:all:coverage
-```
-
-For detailed browser testing patterns, see [AGENTS.md - Multi-Environment Testing](AGENTS.md#multi-environment-testing).
-
 ### Test Requirements
 
 - **80%+ Coverage**: All code should have at least 80% test coverage

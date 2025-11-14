@@ -9,33 +9,32 @@
 
 import {
   BedrockRuntimeClient,
-  ConverseStreamCommand,
   type BedrockRuntimeClientConfig,
-  type ConverseStreamCommandInput,
-  type ConverseStreamOutput,
-  type Message as BedrockMessage,
-  ContentBlock as BedrockContentBlock,
-  type InferenceConfiguration,
-  type Tool,
-  type MessageStartEvent as BedrockMessageStartEvent,
-  type ContentBlockStartEvent as BedrockContentBlockStartEvent,
+  type ContentBlock as BedrockContentBlock,
   type ContentBlockDeltaEvent as BedrockContentBlockDeltaEvent,
-  type ContentBlockStopEvent as BedrockContentBlockStopEvent,
-  type MessageStopEvent as BedrockMessageStopEvent,
-  type ConverseStreamMetadataEvent as BedrockConverseStreamMetadataEvent,
-  type ToolConfiguration,
+  type ContentBlockStartEvent as BedrockContentBlockStartEvent,
   ConverseCommand,
   type ConverseCommandOutput,
+  ConverseStreamCommand,
+  type ConverseStreamCommandInput,
+  type ConverseStreamMetadataEvent as BedrockConverseStreamMetadataEvent,
+  type ConverseStreamOutput,
+  type InferenceConfiguration,
+  type Message as BedrockMessage,
+  type MessageStartEvent as BedrockMessageStartEvent,
+  type MessageStopEvent as BedrockMessageStopEvent,
+  type ReasoningContentBlock,
+  type ReasoningContentBlockDelta,
+  type Tool,
+  type ToolConfiguration,
   type ToolUseBlockDelta,
-  ReasoningContentBlockDelta,
-  ReasoningContentBlock,
 } from '@aws-sdk/client-bedrock-runtime'
-import { Model, type BaseModelConfig, type StreamOptions } from '../models/model'
-import type { Message, ContentBlock, ToolUseBlock } from '../types/messages'
-import type { ModelStreamEvent, ReasoningContentDelta, Usage } from '../models/streaming'
-import type { JSONValue } from '../types/json'
-import { ContextWindowOverflowError } from '../errors'
-import { ensureDefined } from '../types/validation'
+import { type BaseModelConfig, Model, type StreamOptions } from '../models/model.js'
+import type { ContentBlock, Message, SystemContentBlock, ToolUseBlock } from '../types/messages.js'
+import type { ModelStreamEvent, ReasoningContentDelta, Usage } from '../models/streaming.js'
+import type { JSONValue } from '../types/json.js'
+import { ContextWindowOverflowError } from '../errors.js'
+import { ensureDefined } from '../types/validation.js'
 
 /**
  * Default Bedrock model ID.
@@ -513,7 +512,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
    * @param block - SDK content block
    * @returns Bedrock-formatted content block
    */
-  private _formatContentBlock(block: ContentBlock): BedrockContentBlock {
+  private _formatContentBlock(block: ContentBlock | SystemContentBlock): BedrockContentBlock {
     switch (block.type) {
       case 'textBlock':
         return { text: block.text }
@@ -530,9 +529,9 @@ export class BedrockModel extends Model<BedrockModelConfig> {
       case 'toolResultBlock': {
         const content = block.content.map((content) => {
           switch (content.type) {
-            case 'toolResultTextContent':
+            case 'textBlock':
               return { text: content.text }
-            case 'toolResultJsonContent':
+            case 'jsonBlock':
               return { json: content.json }
           }
         })
@@ -569,6 +568,30 @@ export class BedrockModel extends Model<BedrockModelConfig> {
 
       case 'cachePointBlock':
         return { cachePoint: { type: block.cacheType } }
+
+      case 'guardContentBlock': {
+        if (block.text) {
+          return {
+            guardContent: {
+              text: {
+                text: block.text.text,
+                qualifiers: block.text.qualifiers,
+              },
+            },
+          }
+        } else if (block.image) {
+          return {
+            guardContent: {
+              image: {
+                format: block.image.format,
+                source: { bytes: block.image.source.bytes },
+              },
+            },
+          }
+        } else {
+          throw new Error('GuardContentBlock must have either text or image content')
+        }
+      }
     }
   }
 
@@ -586,19 +609,17 @@ export class BedrockModel extends Model<BedrockModelConfig> {
 
     // Match on content blocks
     const blockHandlers = {
-      text: (textBlock: string, index: number): void => {
-        events.push({ type: 'modelContentBlockStartEvent', contentBlockIndex: index })
+      text: (textBlock: string): void => {
+        events.push({ type: 'modelContentBlockStartEvent' })
         events.push({
           type: 'modelContentBlockDeltaEvent',
-          contentBlockIndex: index,
           delta: { type: 'textDelta', text: textBlock },
         })
-        events.push({ type: 'modelContentBlockStopEvent', contentBlockIndex: index })
+        events.push({ type: 'modelContentBlockStopEvent' })
       },
-      toolUse: (block: ToolUseBlock, index: number): void => {
+      toolUse: (block: ToolUseBlock): void => {
         events.push({
           type: 'modelContentBlockStartEvent',
-          contentBlockIndex: index,
           start: {
             type: 'toolUseStart',
             name: ensureDefined(block.name, 'toolUse.name'),
@@ -607,14 +628,13 @@ export class BedrockModel extends Model<BedrockModelConfig> {
         })
         events.push({
           type: 'modelContentBlockDeltaEvent',
-          contentBlockIndex: index,
           delta: { type: 'toolUseInputDelta', input: JSON.stringify(ensureDefined(block.input, 'toolUse.input')) },
         })
-        events.push({ type: 'modelContentBlockStopEvent', contentBlockIndex: index })
+        events.push({ type: 'modelContentBlockStopEvent' })
       },
-      reasoningContent: (block: ReasoningContentBlock, index: number): void => {
+      reasoningContent: (block: ReasoningContentBlock): void => {
         if (!block) return
-        events.push({ type: 'modelContentBlockStartEvent', contentBlockIndex: index })
+        events.push({ type: 'modelContentBlockStartEvent' })
 
         const delta: ReasoningContentDelta = { type: 'reasoningContentDelta' }
         if (block.reasoningText) {
@@ -625,20 +645,20 @@ export class BedrockModel extends Model<BedrockModelConfig> {
         }
 
         if (Object.keys(delta).length > 1) {
-          events.push({ type: 'modelContentBlockDeltaEvent', contentBlockIndex: index, delta })
+          events.push({ type: 'modelContentBlockDeltaEvent', delta })
         }
 
-        events.push({ type: 'modelContentBlockStopEvent', contentBlockIndex: index })
+        events.push({ type: 'modelContentBlockStopEvent' })
       },
     }
 
     const content = ensureDefined(message.content, 'message.content')
-    content.forEach((block, index) => {
+    content.forEach((block) => {
       for (const key in block) {
         if (key in blockHandlers) {
           const handlerKey = key as keyof typeof blockHandlers
           // @ts-expect-error - We know the value type corresponds to the handler key.
-          blockHandlers[handlerKey](block[handlerKey], index)
+          blockHandlers[handlerKey](block[handlerKey])
         } else {
           console.warn(`Skipping unsupported block key: ${key}`)
         }
@@ -700,7 +720,6 @@ export class BedrockModel extends Model<BedrockModelConfig> {
 
         const event: ModelStreamEvent = {
           type: 'modelContentBlockStartEvent',
-          contentBlockIndex: ensureDefined(data.contentBlockIndex, 'contentBlockStart.contentBlockIndex'),
         }
 
         if (data.start?.toolUse) {
@@ -718,13 +737,11 @@ export class BedrockModel extends Model<BedrockModelConfig> {
 
       case 'contentBlockDelta': {
         const data = eventData as BedrockContentBlockDeltaEvent
-        const contentBlockIndex = ensureDefined(data.contentBlockIndex, 'contentBlockDelta.contentBlockIndex')
         const delta = ensureDefined(data.delta, 'contentBlockDelta.delta')
         const deltaHandlers = {
           text: (textValue: string): void => {
             events.push({
               type: 'modelContentBlockDeltaEvent',
-              contentBlockIndex,
               delta: { type: 'textDelta', text: textValue },
             })
           },
@@ -732,7 +749,6 @@ export class BedrockModel extends Model<BedrockModelConfig> {
             if (!toolUse?.input) return
             events.push({
               type: 'modelContentBlockDeltaEvent',
-              contentBlockIndex,
               delta: { type: 'toolUseInputDelta', input: toolUse.input },
             })
           },
@@ -744,7 +760,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
             if (reasoning.redactedContent) reasoningDelta.redactedContent = reasoning.redactedContent
 
             if (Object.keys(reasoningDelta).length > 1) {
-              events.push({ type: 'modelContentBlockDeltaEvent', contentBlockIndex, delta: reasoningDelta })
+              events.push({ type: 'modelContentBlockDeltaEvent', delta: reasoningDelta })
             }
           },
         }
@@ -763,10 +779,8 @@ export class BedrockModel extends Model<BedrockModelConfig> {
       }
 
       case 'contentBlockStop': {
-        const data = eventData as BedrockContentBlockStopEvent
         events.push({
           type: 'modelContentBlockStopEvent',
-          contentBlockIndex: ensureDefined(data.contentBlockIndex, 'contentBlockStop.contentBlockIndex'),
         })
         break
       }
@@ -774,12 +788,11 @@ export class BedrockModel extends Model<BedrockModelConfig> {
       case 'messageStop': {
         const data = eventData as BedrockMessageStopEvent
 
+        const stopReasonRaw = ensureDefined(data.stopReason, 'messageStop.stopReason') as string
         const event: ModelStreamEvent = {
           type: 'modelMessageStopEvent',
+          stopReason: this._transformStopReason(stopReasonRaw, data),
         }
-
-        const stopReasonRaw = ensureDefined(data.stopReason, 'messageStop.stopReason') as string
-        event.stopReason = this._transformStopReason(stopReasonRaw, data)
 
         if (data.additionalModelResponseFields) {
           event.additionalModelResponseFields = data.additionalModelResponseFields
