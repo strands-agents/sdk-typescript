@@ -22,7 +22,7 @@ import type { AgentData } from '../types/agent.js'
 import { AgentPrinter, getDefaultAppender, type Printer } from './printer.js'
 import type { ConversationManager } from '../conversation-manager/conversation-manager.js'
 import { SlidingWindowConversationManager } from '../conversation-manager/sliding-window-conversation-manager.js'
-import { HookRegistry } from '../hooks/registry.js'
+import { HookRegistryImplementation, type HookRegistry } from '../hooks/registry.js'
 import type { HookProvider } from '../hooks/types.js'
 import { BeforeInvocationEvent, AfterInvocationEvent } from '../hooks/events.js'
 
@@ -129,7 +129,7 @@ export class Agent implements AgentData {
     this.conversationManager = config?.conversationManager ?? new SlidingWindowConversationManager({ windowSize: 40 })
 
     // Initialize hooks
-    this.hooks = new HookRegistry()
+    this.hooks = new HookRegistryImplementation()
     if (config?.hooks) {
       for (const hook of config.hooks) {
         this.hooks.addHook(hook)

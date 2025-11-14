@@ -21,7 +21,7 @@ export type HookCallback<T extends HookEvent> = (event: T) => void | Promise<voi
  * @example
  * ```typescript
  * class MyHooks implements HookProvider {
- *   registerHooks(registry: HookRegistry): void {
+ *   registerCallbacks(registry: HookRegistry): void {
  *     registry.addCallback(BeforeInvocationEvent, this.onStart)
  *     registry.addCallback(AfterInvocationEvent, this.onEnd)
  *   }
@@ -42,5 +42,5 @@ export interface HookProvider {
    *
    * @param registry - The hook registry to register callbacks with
    */
-  registerHooks(registry: HookRegistry): void
+  registerCallbacks(registry: HookRegistry): void
 }

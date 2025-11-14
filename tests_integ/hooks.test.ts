@@ -5,10 +5,12 @@ import {
   AfterInvocationEvent,
   type HookEvent,
   type HookProvider,
-  HookRegistry,
+  type HookRegistry,
 } from '@strands-agents/sdk'
 // eslint-disable-next-line no-restricted-imports
 import { MockMessageModel } from '../src/__fixtures__/mock-message-model.js'
+// eslint-disable-next-line no-restricted-imports
+import { collectIterator } from '../src/__fixtures__/model-test-helpers.js'
 
 /**
  * Mock hook provider that records all hook invocations for testing.
@@ -17,7 +19,7 @@ import { MockMessageModel } from '../src/__fixtures__/mock-message-model.js'
 export class MockHookProvider implements HookProvider {
   invocations: HookEvent[] = []
 
-  registerHooks(registry: HookRegistry): void {
+  registerCallbacks(registry: HookRegistry): void {
     registry.addCallback(BeforeInvocationEvent, (e) => this.invocations.push(e))
     registry.addCallback(AfterInvocationEvent, (e) => this.invocations.push(e))
   }
@@ -42,22 +44,31 @@ describe('Hooks Integration', () => {
       await agent.invoke('Hi')
 
       expect(mockProvider.invocations).toHaveLength(2)
-      expect(mockProvider.invocations[0]).toBeInstanceOf(BeforeInvocationEvent)
-      expect(mockProvider.invocations[1]).toBeInstanceOf(AfterInvocationEvent)
+      expect(mockProvider.invocations[0]).toEqual({
+        agent,
+        type: 'beforeInvocationEvent',
+      })
+      expect(mockProvider.invocations[1]).toEqual({
+        agent,
+        type: 'afterInvocationEvent',
+      })
     })
 
     it('fires BeforeInvocationEvent and AfterInvocationEvent during stream', async () => {
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
       const agent = new Agent({ model, hooks: [mockProvider] })
 
-      const events = []
-      for await (const event of agent.stream('Hi')) {
-        events.push(event)
-      }
+      await collectIterator(agent.stream('Hi'))
 
       expect(mockProvider.invocations).toHaveLength(2)
-      expect(mockProvider.invocations[0]).toBeInstanceOf(BeforeInvocationEvent)
-      expect(mockProvider.invocations[1]).toBeInstanceOf(AfterInvocationEvent)
+      expect(mockProvider.invocations[0]).toEqual({
+        agent,
+        type: 'beforeInvocationEvent',
+      })
+      expect(mockProvider.invocations[1]).toEqual({
+        agent,
+        type: 'afterInvocationEvent',
+      })
     })
 
     it('provides agent reference in hook events', async () => {
@@ -76,14 +87,14 @@ describe('Hooks Integration', () => {
       const callOrder: string[] = []
 
       const hook1: HookProvider = {
-        registerHooks: (registry: HookRegistry): void => {
+        registerCallbacks: (registry: HookRegistry): void => {
           registry.addCallback(BeforeInvocationEvent, () => callOrder.push('hook1-before'))
           registry.addCallback(AfterInvocationEvent, () => callOrder.push('hook1-after'))
         },
       }
 
       const hook2: HookProvider = {
-        registerHooks: (registry: HookRegistry): void => {
+        registerCallbacks: (registry: HookRegistry): void => {
           registry.addCallback(BeforeInvocationEvent, () => callOrder.push('hook2-before'))
           registry.addCallback(AfterInvocationEvent, () => callOrder.push('hook2-after'))
         },
@@ -102,7 +113,7 @@ describe('Hooks Integration', () => {
   describe('hook error propagation', () => {
     it('propagates errors from hooks', async () => {
       const errorHook: HookProvider = {
-        registerHooks: (registry: HookRegistry): void => {
+        registerCallbacks: (registry: HookRegistry): void => {
           registry.addCallback(BeforeInvocationEvent, () => {
             throw new Error('Hook error')
           })
@@ -119,7 +130,7 @@ describe('Hooks Integration', () => {
       let secondHookCalled = false
 
       const errorHook: HookProvider = {
-        registerHooks: (registry: HookRegistry): void => {
+        registerCallbacks: (registry: HookRegistry): void => {
           registry.addCallback(BeforeInvocationEvent, () => {
             throw new Error('Hook error')
           })
@@ -127,7 +138,7 @@ describe('Hooks Integration', () => {
       }
 
       const secondHook: HookProvider = {
-        registerHooks: (registry: HookRegistry): void => {
+        registerCallbacks: (registry: HookRegistry): void => {
           registry.addCallback(BeforeInvocationEvent, () => {
             secondHookCalled = true
           })
@@ -147,7 +158,7 @@ describe('Hooks Integration', () => {
       let asyncCompleted = false
 
       const asyncHook: HookProvider = {
-        registerHooks: (registry: HookRegistry): void => {
+        registerCallbacks: (registry: HookRegistry): void => {
           registry.addCallback(BeforeInvocationEvent, async () => {
             await new Promise((resolve) => globalThis.setTimeout(resolve, 10))
             asyncCompleted = true
@@ -167,7 +178,7 @@ describe('Hooks Integration', () => {
       const callOrder: string[] = []
 
       const mixedHook: HookProvider = {
-        registerHooks: (registry: HookRegistry): void => {
+        registerCallbacks: (registry: HookRegistry): void => {
           registry.addCallback(BeforeInvocationEvent, () => callOrder.push('sync'))
           registry.addCallback(BeforeInvocationEvent, async () => {
             await new Promise((resolve) => globalThis.setTimeout(resolve, 10))
@@ -205,7 +216,7 @@ describe('Hooks Integration', () => {
       const callOrder: number[] = []
 
       const hook: HookProvider = {
-        registerHooks: (registry: HookRegistry): void => {
+        registerCallbacks: (registry: HookRegistry): void => {
           registry.addCallback(AfterInvocationEvent, () => callOrder.push(1))
           registry.addCallback(AfterInvocationEvent, () => callOrder.push(2))
           registry.addCallback(AfterInvocationEvent, () => callOrder.push(3))

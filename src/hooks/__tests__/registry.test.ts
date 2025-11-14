@@ -1,65 +1,85 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { HookRegistry } from '../registry.js'
+import { HookRegistryImplementation, type HookRegistry } from '../registry.js'
 import { BeforeInvocationEvent, AfterInvocationEvent } from '../events.js'
 import type { HookProvider } from '../types.js'
 import { Agent } from '../../agent/agent.js'
 
-describe('HookRegistry', () => {
+describe('HookRegistryImplementation', () => {
   let registry: HookRegistry
   let mockAgent: Agent
 
   beforeEach(() => {
-    registry = new HookRegistry()
+    registry = new HookRegistryImplementation()
     mockAgent = new Agent()
   })
 
   describe('addCallback', () => {
-    it('registers callback for event type', () => {
-      const callback = (): void => {}
+    it('registers callback for event type', async () => {
+      let called = false
+      const callback = (): void => {
+        called = true
+      }
       registry.addCallback(BeforeInvocationEvent, callback)
 
-      const callbacks = registry.getCallbacksFor(new BeforeInvocationEvent({ agent: mockAgent }))
-      expect(callbacks).toHaveLength(1)
-      expect(callbacks[0]).toBe(callback)
+      await registry.invokeCallbacks(new BeforeInvocationEvent({ agent: mockAgent }))
+
+      expect(called).toBe(true)
     })
 
-    it('registers multiple callbacks for same event type', () => {
-      const callback1 = (): void => {}
-      const callback2 = (): void => {}
+    it('registers multiple callbacks for same event type', async () => {
+      const callOrder: number[] = []
+      const callback1 = (): void => {
+        callOrder.push(1)
+      }
+      const callback2 = (): void => {
+        callOrder.push(2)
+      }
 
       registry.addCallback(BeforeInvocationEvent, callback1)
       registry.addCallback(BeforeInvocationEvent, callback2)
 
-      const callbacks = registry.getCallbacksFor(new BeforeInvocationEvent({ agent: mockAgent }))
-      expect(callbacks).toHaveLength(2)
-      expect(callbacks[0]).toBe(callback1)
-      expect(callbacks[1]).toBe(callback2)
+      await registry.invokeCallbacks(new BeforeInvocationEvent({ agent: mockAgent }))
+
+      expect(callOrder).toEqual([1, 2])
     })
 
-    it('registers callbacks for different event types separately', () => {
-      const beforeCallback = (): void => {}
-      const afterCallback = (): void => {}
+    it('registers callbacks for different event types separately', async () => {
+      let beforeCalled = false
+      let afterCalled = false
+      const beforeCallback = (): void => {
+        beforeCalled = true
+      }
+      const afterCallback = (): void => {
+        afterCalled = true
+      }
 
       registry.addCallback(BeforeInvocationEvent, beforeCallback)
       registry.addCallback(AfterInvocationEvent, afterCallback)
 
-      const beforeCallbacks = registry.getCallbacksFor(new BeforeInvocationEvent({ agent: mockAgent }))
-      const afterCallbacks = registry.getCallbacksFor(new AfterInvocationEvent({ agent: mockAgent }))
+      await registry.invokeCallbacks(new BeforeInvocationEvent({ agent: mockAgent }))
 
-      expect(beforeCallbacks).toHaveLength(1)
-      expect(beforeCallbacks[0]).toBe(beforeCallback)
-      expect(afterCallbacks).toHaveLength(1)
-      expect(afterCallbacks[0]).toBe(afterCallback)
+      expect(beforeCalled).toBe(true)
+      expect(afterCalled).toBe(false)
+
+      await registry.invokeCallbacks(new AfterInvocationEvent({ agent: mockAgent }))
+
+      expect(afterCalled).toBe(true)
     })
   })
 
   describe('addHook', () => {
-    it('registers all callbacks from provider', () => {
-      const beforeCallback = (): void => {}
-      const afterCallback = (): void => {}
+    it('registers all callbacks from provider', async () => {
+      let beforeCalled = false
+      let afterCalled = false
+      const beforeCallback = (): void => {
+        beforeCalled = true
+      }
+      const afterCallback = (): void => {
+        afterCalled = true
+      }
 
       const provider: HookProvider = {
-        registerHooks: (reg: HookRegistry): void => {
+        registerCallbacks: (reg: HookRegistry): void => {
           reg.addCallback(BeforeInvocationEvent, beforeCallback)
           reg.addCallback(AfterInvocationEvent, afterCallback)
         },
@@ -67,13 +87,11 @@ describe('HookRegistry', () => {
 
       registry.addHook(provider)
 
-      const beforeCallbacks = registry.getCallbacksFor(new BeforeInvocationEvent({ agent: mockAgent }))
-      const afterCallbacks = registry.getCallbacksFor(new AfterInvocationEvent({ agent: mockAgent }))
+      await registry.invokeCallbacks(new BeforeInvocationEvent({ agent: mockAgent }))
+      expect(beforeCalled).toBe(true)
 
-      expect(beforeCallbacks).toHaveLength(1)
-      expect(beforeCallbacks[0]).toBe(beforeCallback)
-      expect(afterCallbacks).toHaveLength(1)
-      expect(afterCallbacks[0]).toBe(afterCallback)
+      await registry.invokeCallbacks(new AfterInvocationEvent({ agent: mockAgent }))
+      expect(afterCalled).toBe(true)
     })
   })
 
@@ -179,46 +197,6 @@ describe('HookRegistry', () => {
       const event = new BeforeInvocationEvent({ agent: mockAgent })
       const result = await registry.invokeCallbacks(event)
       expect(result).toBe(event)
-    })
-  })
-
-  describe('hasCallbacks', () => {
-    it('returns false when no callbacks registered', () => {
-      expect(registry.hasCallbacks()).toBe(false)
-    })
-
-    it('returns true when callbacks are registered', () => {
-      registry.addCallback(BeforeInvocationEvent, (): void => {})
-      expect(registry.hasCallbacks()).toBe(true)
-    })
-  })
-
-  describe('getCallbacksFor', () => {
-    it('returns empty array for unregistered event types', () => {
-      const callbacks = registry.getCallbacksFor(new BeforeInvocationEvent({ agent: mockAgent }))
-      expect(callbacks).toEqual([])
-    })
-
-    it('returns callbacks in registration order for Before events', () => {
-      const callback1 = (): void => {}
-      const callback2 = (): void => {}
-
-      registry.addCallback(BeforeInvocationEvent, callback1)
-      registry.addCallback(BeforeInvocationEvent, callback2)
-
-      const callbacks = registry.getCallbacksFor(new BeforeInvocationEvent({ agent: mockAgent }))
-      expect(callbacks).toEqual([callback1, callback2])
-    })
-
-    it('returns callbacks in reverse order for After events', () => {
-      const callback1 = (): void => {}
-      const callback2 = (): void => {}
-
-      registry.addCallback(AfterInvocationEvent, callback1)
-      registry.addCallback(AfterInvocationEvent, callback2)
-
-      const callbacks = registry.getCallbacksFor(new AfterInvocationEvent({ agent: mockAgent }))
-      expect(callbacks).toEqual([callback2, callback1])
     })
   })
 })

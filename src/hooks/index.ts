@@ -9,7 +9,7 @@
 export { HookEvent, BeforeInvocationEvent, AfterInvocationEvent } from './events.js'
 
 // Registry
-export { HookRegistry } from './registry.js'
+export { HookRegistryImplementation as HookRegistry } from './registry.js'
 
 // Types
 export type { HookCallback, HookProvider } from './types.js'
