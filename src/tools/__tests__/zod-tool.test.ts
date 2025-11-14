@@ -416,14 +416,11 @@ describe('tool', () => {
       expect(typeof myTool.invoke).toBe('function')
       expect(typeof myTool.stream).toBe('function')
 
-      // Verify can be used as type guard
-      function isTool(value: unknown): value is Tool {
-        return value instanceof Tool
-      }
-
-      expect(isTool(myTool)).toBe(true)
-      expect(isTool({})).toBe(false)
-      expect(isTool(null)).toBe(false)
+      // Verify can be used as type guard (various types)
+      expect(myTool instanceof Tool).toBe(true)
+      expect({} instanceof Tool).toBe(false)
+      // TypeScript doesn't allow null/undefined in instanceof, verify they're not Tool instances differently
+      expect((null as unknown) instanceof Tool).toBe(false)
     })
   })
 })
