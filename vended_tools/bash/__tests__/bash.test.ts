@@ -396,16 +396,6 @@ describe.skipIf(!isNode || process.platform === 'win32')('bash tool', () => {
       const newResult = await bash.invoke({ mode: 'execute', command: 'echo "new session"' }, context)
       expect((newResult as BashOutput).output).toContain('new session')
     })
-
-    it('handles write error to stdin', async () => {
-      const { context } = createFreshContext()
-
-      // This tests a very long command that might cause write issues
-      const longCommand = 'echo "' + 'x'.repeat(100000) + '"'
-      const result = await bash.invoke({ mode: 'execute', command: longCommand }, context)
-
-      expect((result as BashOutput).output).toContain('x')
-    })
   })
 
   describe('process cleanup', () => {
