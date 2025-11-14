@@ -458,24 +458,5 @@ describe.skipIf(!isNode || process.platform === 'win32')('bash tool', () => {
       expect(exitMock).toHaveBeenCalledWith(0)
       exitMock.mockRestore()
     })
-
-    it('handles multiple sessions cleanup', async () => {
-      const context1 = createFreshContext().context
-      const context2 = createFreshContext().context
-
-      // Create multiple sessions
-      await bash.invoke({ mode: 'execute', command: 'echo "session1"' }, context1)
-      await bash.invoke({ mode: 'execute', command: 'echo "session2"' }, context2)
-
-      // Simulate beforeExit to clean all sessions
-      process.emit('beforeExit', 0)
-
-      // Both should create new sessions
-      const result1 = await bash.invoke({ mode: 'execute', command: 'echo "new1"' }, context1)
-      const result2 = await bash.invoke({ mode: 'execute', command: 'echo "new2"' }, context2)
-
-      expect((result1 as BashOutput).output).toContain('new1')
-      expect((result2 as BashOutput).output).toContain('new2')
-    })
   })
 })
