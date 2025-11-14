@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { HookRegistryImplementation, type HookRegistry } from '../registry.js'
+import { HookRegistryImplementation } from '../registry.js'
 import { BeforeInvocationEvent, AfterInvocationEvent } from '../events.js'
 import type { HookProvider } from '../types.js'
 import { Agent } from '../../agent/agent.js'
 
 describe('HookRegistryImplementation', () => {
-  let registry: HookRegistry
+  let registry: HookRegistryImplementation
   let mockAgent: Agent
 
   beforeEach(() => {
@@ -79,10 +79,10 @@ describe('HookRegistryImplementation', () => {
       }
 
       const provider: HookProvider = {
-        registerCallbacks: (reg: HookRegistry): void => {
-          reg.addCallback(BeforeInvocationEvent, beforeCallback)
-          reg.addCallback(AfterInvocationEvent, afterCallback)
-        },
+        getHooks: () => [
+          { event: BeforeInvocationEvent, callback: beforeCallback },
+          { event: AfterInvocationEvent, callback: afterCallback },
+        ],
       }
 
       registry.addHook(provider)

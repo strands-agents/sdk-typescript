@@ -1,11 +1,5 @@
 import type { HookEvent } from './events.js'
-import type { HookCallback, HookProvider } from './types.js'
-import type { Agent } from '../agent/agent.js'
-
-/**
- * Type for a constructor function that creates HookEvent instances.
- */
-type HookEventConstructor<T extends HookEvent = HookEvent> = new (data: { agent: Agent }) => T
+import type { HookCallback, HookProvider, HookEventConstructor } from './types.js'
 
 /**
  * Interface for hook registry operations.
@@ -26,15 +20,6 @@ export interface HookRegistry {
    * @param provider - The hook provider to register
    */
   addHook(provider: HookProvider): void
-
-  /**
-   * Invoke all registered callbacks for the given event.
-   * Awaits each callback, supporting both sync and async.
-   *
-   * @param event - The event to invoke callbacks for
-   * @returns The event after all callbacks have been invoked
-   */
-  invokeCallbacks<T extends HookEvent>(event: T): Promise<T>
 }
 
 /**
@@ -66,7 +51,10 @@ export class HookRegistryImplementation implements HookRegistry {
    * @param provider - The hook provider to register
    */
   addHook(provider: HookProvider): void {
-    provider.registerCallbacks(this)
+    const registrations = provider.getHooks()
+    for (const registration of registrations) {
+      this.addCallback(registration.event, registration.callback)
+    }
   }
 
   /**

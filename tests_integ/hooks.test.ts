@@ -19,9 +19,11 @@ import { collectIterator } from '../src/__fixtures__/model-test-helpers.js'
 export class MockHookProvider implements HookProvider {
   invocations: HookEvent[] = []
 
-  registerCallbacks(registry: HookRegistry): void {
-    registry.addCallback(BeforeInvocationEvent, (e) => this.invocations.push(e))
-    registry.addCallback(AfterInvocationEvent, (e) => this.invocations.push(e))
+  getHooks() {
+    return [
+      { event: BeforeInvocationEvent, callback: (e: BeforeInvocationEvent) => this.invocations.push(e) },
+      { event: AfterInvocationEvent, callback: (e: AfterInvocationEvent) => this.invocations.push(e) },
+    ]
   }
 
   reset(): void {
@@ -87,17 +89,17 @@ describe('Hooks Integration', () => {
       const callOrder: string[] = []
 
       const hook1: HookProvider = {
-        registerCallbacks: (registry: HookRegistry): void => {
-          registry.addCallback(BeforeInvocationEvent, () => callOrder.push('hook1-before'))
-          registry.addCallback(AfterInvocationEvent, () => callOrder.push('hook1-after'))
-        },
+        getHooks: () => [
+          { event: BeforeInvocationEvent, callback: () => callOrder.push('hook1-before') },
+          { event: AfterInvocationEvent, callback: () => callOrder.push('hook1-after') },
+        ],
       }
 
       const hook2: HookProvider = {
-        registerCallbacks: (registry: HookRegistry): void => {
-          registry.addCallback(BeforeInvocationEvent, () => callOrder.push('hook2-before'))
-          registry.addCallback(AfterInvocationEvent, () => callOrder.push('hook2-after'))
-        },
+        getHooks: () => [
+          { event: BeforeInvocationEvent, callback: () => callOrder.push('hook2-before') },
+          { event: AfterInvocationEvent, callback: () => callOrder.push('hook2-after') },
+        ],
       }
 
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
@@ -113,11 +115,14 @@ describe('Hooks Integration', () => {
   describe('hook error propagation', () => {
     it('propagates errors from hooks', async () => {
       const errorHook: HookProvider = {
-        registerCallbacks: (registry: HookRegistry): void => {
-          registry.addCallback(BeforeInvocationEvent, () => {
-            throw new Error('Hook error')
-          })
-        },
+        getHooks: () => [
+          {
+            event: BeforeInvocationEvent,
+            callback: () => {
+              throw new Error('Hook error')
+            },
+          },
+        ],
       }
 
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
@@ -130,19 +135,25 @@ describe('Hooks Integration', () => {
       let secondHookCalled = false
 
       const errorHook: HookProvider = {
-        registerCallbacks: (registry: HookRegistry): void => {
-          registry.addCallback(BeforeInvocationEvent, () => {
-            throw new Error('Hook error')
-          })
-        },
+        getHooks: () => [
+          {
+            event: BeforeInvocationEvent,
+            callback: () => {
+              throw new Error('Hook error')
+            },
+          },
+        ],
       }
 
       const secondHook: HookProvider = {
-        registerCallbacks: (registry: HookRegistry): void => {
-          registry.addCallback(BeforeInvocationEvent, () => {
-            secondHookCalled = true
-          })
-        },
+        getHooks: () => [
+          {
+            event: BeforeInvocationEvent,
+            callback: () => {
+              secondHookCalled = true
+            },
+          },
+        ],
       }
 
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
@@ -158,12 +169,15 @@ describe('Hooks Integration', () => {
       let asyncCompleted = false
 
       const asyncHook: HookProvider = {
-        registerCallbacks: (registry: HookRegistry): void => {
-          registry.addCallback(BeforeInvocationEvent, async () => {
-            await new Promise((resolve) => globalThis.setTimeout(resolve, 10))
-            asyncCompleted = true
-          })
-        },
+        getHooks: () => [
+          {
+            event: BeforeInvocationEvent,
+            callback: async () => {
+              await new Promise((resolve) => globalThis.setTimeout(resolve, 10))
+              asyncCompleted = true
+            },
+          },
+        ],
       }
 
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
@@ -178,14 +192,17 @@ describe('Hooks Integration', () => {
       const callOrder: string[] = []
 
       const mixedHook: HookProvider = {
-        registerCallbacks: (registry: HookRegistry): void => {
-          registry.addCallback(BeforeInvocationEvent, () => callOrder.push('sync'))
-          registry.addCallback(BeforeInvocationEvent, async () => {
-            await new Promise((resolve) => globalThis.setTimeout(resolve, 10))
-            callOrder.push('async')
-          })
-          registry.addCallback(BeforeInvocationEvent, () => callOrder.push('sync2'))
-        },
+        getHooks: () => [
+          { event: BeforeInvocationEvent, callback: () => callOrder.push('sync') },
+          {
+            event: BeforeInvocationEvent,
+            callback: async () => {
+              await new Promise((resolve) => globalThis.setTimeout(resolve, 10))
+              callOrder.push('async')
+            },
+          },
+          { event: BeforeInvocationEvent, callback: () => callOrder.push('sync2') },
+        ],
       }
 
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
@@ -216,11 +233,11 @@ describe('Hooks Integration', () => {
       const callOrder: number[] = []
 
       const hook: HookProvider = {
-        registerCallbacks: (registry: HookRegistry): void => {
-          registry.addCallback(AfterInvocationEvent, () => callOrder.push(1))
-          registry.addCallback(AfterInvocationEvent, () => callOrder.push(2))
-          registry.addCallback(AfterInvocationEvent, () => callOrder.push(3))
-        },
+        getHooks: () => [
+          { event: AfterInvocationEvent, callback: () => callOrder.push(1) },
+          { event: AfterInvocationEvent, callback: () => callOrder.push(2) },
+          { event: AfterInvocationEvent, callback: () => callOrder.push(3) },
+        ],
       }
 
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })

@@ -108,7 +108,7 @@ export class Agent implements AgentData {
    * Hook registry for managing event callbacks.
    * Hooks enable observing and extending agent behavior.
    */
-  public readonly hooks: HookRegistry
+  public readonly hooks: HookRegistryImplementation
 
   /**
    * Creates an instance of the Agent.

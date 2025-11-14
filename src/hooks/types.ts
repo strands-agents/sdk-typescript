@@ -1,5 +1,10 @@
 import type { HookEvent } from './events.js'
-import type { HookRegistry } from './registry.js'
+import type { Agent } from '../agent/agent.js'
+
+/**
+ * Type for a constructor function that creates HookEvent instances.
+ */
+export type HookEventConstructor<T extends HookEvent = HookEvent> = new (data: { agent: Agent }) => T
 
 /**
  * Type for callback functions that handle hook events.
@@ -15,15 +20,25 @@ import type { HookRegistry } from './registry.js'
 export type HookCallback<T extends HookEvent> = (event: T) => void | Promise<void>
 
 /**
+ * Represents a single hook registration binding an event type to a callback.
+ */
+export interface HookRegistration<T extends HookEvent = HookEvent> {
+  event: HookEventConstructor<T>
+  callback: HookCallback<T>
+}
+
+/**
  * Protocol for objects that provide hook callbacks to an agent.
  * Enables composable extension of agent functionality.
  *
  * @example
  * ```typescript
  * class MyHooks implements HookProvider {
- *   registerCallbacks(registry: HookRegistry): void {
- *     registry.addCallback(BeforeInvocationEvent, this.onStart)
- *     registry.addCallback(AfterInvocationEvent, this.onEnd)
+ *   getHooks(): HookRegistration[] {
+ *     return [
+ *       { event: BeforeInvocationEvent, callback: this.onStart },
+ *       { event: AfterInvocationEvent, callback: this.onEnd }
+ *     ]
  *   }
  *
  *   private onStart = (event: BeforeInvocationEvent): void => {
@@ -38,9 +53,9 @@ export type HookCallback<T extends HookEvent> = (event: T) => void | Promise<voi
  */
 export interface HookProvider {
   /**
-   * Register callback functions for specific event types.
+   * Get all hook registrations provided by this provider.
    *
-   * @param registry - The hook registry to register callbacks with
+   * @returns Array of hook registrations
    */
-  registerCallbacks(registry: HookRegistry): void
+  getHooks(): HookRegistration[]
 }
