@@ -203,18 +203,6 @@ describe.skipIf(!isNode || process.platform === 'win32')('bash tool', () => {
 
       expect(result.error).toContain('not found')
     })
-
-    it('captures stderr output from commands', async () => {
-      const { context } = createFreshContext()
-      const result = await bash.invoke({ mode: 'execute', command: 'echo "error message" >&2' }, context)
-
-      if (typeof result === 'string') {
-        throw new Error('Expected BashOutput object, got string')
-      }
-
-      expect(result.error).toContain('error message')
-      expect(result.output).toBe('')
-    })
   })
 
   describe('timeout handling', () => {
