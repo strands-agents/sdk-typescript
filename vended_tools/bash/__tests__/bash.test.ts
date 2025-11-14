@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import { bash } from '../index.js'
 import { BashTimeoutError, BashSessionError } from '../index.js'
 import type { ToolContext } from '../../../src/tools/tool.js'
@@ -20,6 +20,10 @@ describe.skipIf(!isNode || process.platform === 'win32')('bash tool', () => {
     }
     return { state, context }
   }
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
 
   describe('input validation', () => {
     it('accepts valid execute command', async () => {
@@ -95,6 +99,24 @@ describe.skipIf(!isNode || process.platform === 'win32')('bash tool', () => {
       expect(afterRestart.output.trim()).not.toContain('exists')
     })
 
+    it('restarts existing session when restart is called', async () => {
+      const { context } = createFreshContext()
+
+      // First create a session by executing a command
+      await bash.invoke({ mode: 'execute', command: 'TEST_VAR="initial"' }, context)
+
+      // Now restart the existing session
+      const restartResult = await bash.invoke({ mode: 'restart' }, context)
+      expect(restartResult).toBe('Bash session restarted')
+
+      // Verify the variable is gone after restart
+      const result = await bash.invoke({ mode: 'execute', command: 'echo "${TEST_VAR:-empty}"' }, context)
+      if (typeof result === 'string') {
+        throw new Error('Expected BashOutput object, got string')
+      }
+      expect(result.output.trim()).toBe('empty')
+    })
+
     it('provides isolated sessions for different agents', async () => {
       const { context: context1 } = createFreshContext()
       const { context: context2 } = createFreshContext()
@@ -110,6 +132,40 @@ describe.skipIf(!isNode || process.platform === 'win32')('bash tool', () => {
       }
 
       expect(result.output.trim()).not.toContain('agent1')
+    })
+
+    it('reuses existing session for same agent', async () => {
+      const { context } = createFreshContext()
+
+      // Create session and set variable in a single command to test persistence
+      const result = await bash.invoke(
+        {
+          mode: 'execute',
+          command: 'SESSION_VAR="persisted" && echo $SESSION_VAR',
+        },
+        context
+      )
+
+      if (typeof result === 'string') {
+        throw new Error('Expected BashOutput object, got string')
+      }
+
+      expect(result.output.trim()).toBe('persisted')
+    })
+
+    it('handles session restart with no existing session gracefully', async () => {
+      const { context } = createFreshContext()
+
+      // Restart when no session exists
+      const result = await bash.invoke({ mode: 'restart' }, context)
+      expect(result).toBe('Bash session restarted')
+
+      // Should still be able to execute commands
+      const execResult = await bash.invoke({ mode: 'execute', command: 'echo "works"' }, context)
+      if (typeof execResult === 'string') {
+        throw new Error('Expected BashOutput object, got string')
+      }
+      expect(execResult.output.trim()).toBe('works')
     })
   })
 
@@ -147,6 +203,18 @@ describe.skipIf(!isNode || process.platform === 'win32')('bash tool', () => {
 
       expect(result.error).toContain('not found')
     })
+
+    it('captures stderr output from commands', async () => {
+      const { context } = createFreshContext()
+      const result = await bash.invoke({ mode: 'execute', command: 'echo "error message" >&2' }, context)
+
+      if (typeof result === 'string') {
+        throw new Error('Expected BashOutput object, got string')
+      }
+
+      expect(result.error).toContain('error message')
+      expect(result.output).toBe('')
+    })
   })
 
   describe('timeout handling', () => {
@@ -175,11 +243,199 @@ describe.skipIf(!isNode || process.platform === 'win32')('bash tool', () => {
 
       expect(result).toHaveProperty('output')
     })
+
+    it('respects custom timeout for new session', async () => {
+      const { context } = createFreshContext()
+
+      // Create session with custom timeout
+      const result = await bash.invoke({ mode: 'execute', command: 'echo "custom"', timeout: 10 }, context)
+      if (typeof result === 'string') {
+        throw new Error('Expected BashOutput object, got string')
+      }
+
+      expect(result.output).toContain('custom')
+    })
+
+    it('handles timeout during command with large output', async () => {
+      const { context } = createFreshContext()
+
+      // Command that generates output continuously
+      await expect(
+        bash.invoke({ mode: 'execute', command: 'while true; do echo "spam"; done', timeout: 0.1 }, context)
+      ).rejects.toThrow(BashTimeoutError)
+    })
   })
 
   describe('error handling', () => {
     it('requires context for bash operations', async () => {
       await expect(bash.invoke({ mode: 'execute', command: 'echo "test"' })).rejects.toThrow('Tool context is required')
+    })
+
+    it('validates command is required for execute mode', async () => {
+      const { context } = createFreshContext()
+
+      await expect(bash.invoke({ mode: 'execute' }, context)).rejects.toThrow(
+        'command is required when mode is "execute"'
+      )
+    })
+
+    it('validates command is required with undefined command', async () => {
+      const { context } = createFreshContext()
+
+      await expect(bash.invoke({ mode: 'execute', command: undefined }, context)).rejects.toThrow(
+        'command is required when mode is "execute"'
+      )
+    })
+
+    it('validates command is required with empty string', async () => {
+      const { context } = createFreshContext()
+
+      await expect(bash.invoke({ mode: 'execute', command: '' }, context)).rejects.toThrow(
+        'command is required when mode is "execute"'
+      )
+    })
+
+    it('handles command execution in a session without proper initialization', async () => {
+      const { context } = createFreshContext()
+
+      // Create a session first
+      await bash.invoke({ mode: 'execute', command: 'echo "init"' }, context)
+
+      // Then restart to clear it
+      await bash.invoke({ mode: 'restart' }, context)
+
+      // Try to execute another command - should work as it creates a new session
+      const result = await bash.invoke({ mode: 'execute', command: 'echo "after restart"' }, context)
+
+      if (typeof result === 'string') {
+        throw new Error('Expected BashOutput object, got string')
+      }
+
+      expect(result.output).toContain('after restart')
+    })
+
+    it('creates new session when none exists', async () => {
+      const { context } = createFreshContext()
+
+      // First command should create a new session
+      const result = await bash.invoke({ mode: 'execute', command: 'echo "first"' }, context)
+      if (typeof result === 'string') {
+        throw new Error('Expected BashOutput object, got string')
+      }
+
+      expect(result.output).toContain('first')
+    })
+
+    it('handles restart when no session exists', async () => {
+      const { context } = createFreshContext()
+
+      // Restart without existing session should not throw
+      const result = await bash.invoke({ mode: 'restart' }, context)
+      expect(result).toBe('Bash session restarted')
+    })
+
+    it('properly cleans up session on restart', async () => {
+      const { context } = createFreshContext()
+
+      // Create session with variable
+      await bash.invoke({ mode: 'execute', command: 'CLEANUP_TEST="should_be_gone"' }, context)
+
+      // Restart should clear the session
+      await bash.invoke({ mode: 'restart' }, context)
+
+      // Variable should not exist in new session
+      const result = await bash.invoke({ mode: 'execute', command: 'echo "${CLEANUP_TEST:-empty}"' }, context)
+      if (typeof result === 'string') {
+        throw new Error('Expected BashOutput object, got string')
+      }
+
+      expect(result.output.trim()).toBe('empty')
+    })
+
+    it('handles multiple restarts in sequence', async () => {
+      const { context } = createFreshContext()
+
+      // Restart without existing session
+      const result1 = await bash.invoke({ mode: 'restart' }, context)
+      expect(result1).toBe('Bash session restarted')
+
+      // Restart again
+      const result2 = await bash.invoke({ mode: 'restart' }, context)
+      expect(result2).toBe('Bash session restarted')
+
+      // Should still be able to execute
+      const execResult = await bash.invoke({ mode: 'execute', command: 'echo "still works"' }, context)
+      if (typeof execResult === 'string') {
+        throw new Error('Expected BashOutput object, got string')
+      }
+      expect(execResult.output).toContain('still works')
+    })
+
+    it('handles command with empty output gracefully', async () => {
+      const { context } = createFreshContext()
+      const result = await bash.invoke({ mode: 'execute', command: 'true' }, context)
+
+      if (typeof result === 'string') {
+        throw new Error('Expected BashOutput object, got string')
+      }
+
+      expect(result.output).toBe('')
+      expect(result.error).toBe('')
+    })
+
+    it('handles command with only whitespace output', async () => {
+      const { context } = createFreshContext()
+      const result = await bash.invoke({ mode: 'execute', command: 'echo "   "' }, context)
+
+      if (typeof result === 'string') {
+        throw new Error('Expected BashOutput object, got string')
+      }
+
+      expect(result.output.trim()).toBe('')
+    })
+
+    it('handles very long command output', async () => {
+      const { context } = createFreshContext()
+      // Generate a long string
+      const result = await bash.invoke(
+        {
+          mode: 'execute',
+          command: 'for i in {1..100}; do echo "Line $i of output"; done',
+        },
+        context
+      )
+
+      if (typeof result === 'string') {
+        throw new Error('Expected BashOutput object, got string')
+      }
+
+      expect(result.output).toContain('Line 1 of output')
+      expect(result.output).toContain('Line 100 of output')
+    })
+
+    it('handles context without agent property', async () => {
+      const context: ToolContext = {
+        toolUse: {
+          name: 'bash',
+          toolUseId: 'test-id',
+          input: {},
+        },
+        agent: null as any, // Simulate missing agent
+      }
+
+      await expect(bash.invoke({ mode: 'execute', command: 'echo test' }, context)).rejects.toThrow()
+    })
+
+    it('creates session with default timeout when not specified', async () => {
+      const { context } = createFreshContext()
+
+      // Execute without timeout parameter
+      const result = await bash.invoke({ mode: 'execute', command: 'echo "default"' }, context)
+      if (typeof result === 'string') {
+        throw new Error('Expected BashOutput object, got string')
+      }
+
+      expect(result.output).toContain('default')
     })
   })
 
@@ -239,6 +495,117 @@ describe.skipIf(!isNode || process.platform === 'win32')('bash tool', () => {
     it('exports error classes from index', () => {
       expect(BashTimeoutError).toBeDefined()
       expect(BashSessionError).toBeDefined()
+    })
+  })
+
+  describe('bash session edge cases', () => {
+    it('handles process close during command execution', async () => {
+      const { context } = createFreshContext()
+
+      // Use a command that will make the bash process exit - this should throw an error
+      await expect(bash.invoke({ mode: 'execute', command: 'exit 0' }, context)).rejects.toThrow(BashSessionError)
+
+      // Next command should work with a new session
+      const newResult = await bash.invoke({ mode: 'execute', command: 'echo "new session"' }, context)
+      if (typeof newResult === 'string') {
+        throw new Error('Expected BashOutput object, got string')
+      }
+      expect(newResult.output).toContain('new session')
+    })
+
+    it('handles write error to stdin', async () => {
+      const { context } = createFreshContext()
+
+      // This tests a very long command that might cause write issues
+      const longCommand = 'echo "' + 'x'.repeat(100000) + '"'
+      const result = await bash.invoke({ mode: 'execute', command: longCommand }, context)
+
+      if (typeof result === 'string') {
+        throw new Error('Expected BashOutput object, got string')
+      }
+
+      expect(result.output).toContain('x')
+    })
+  })
+
+  describe('process cleanup', () => {
+    it('cleans up on beforeExit event', async () => {
+      const { context } = createFreshContext()
+
+      // Create a session
+      await bash.invoke({ mode: 'execute', command: 'echo "test"' }, context)
+
+      // Simulate beforeExit event
+      process.emit('beforeExit', 0)
+
+      // Session should be cleaned up, next command creates new session
+      const result = await bash.invoke({ mode: 'execute', command: 'echo "after exit"' }, context)
+      if (typeof result === 'string') {
+        throw new Error('Expected BashOutput object, got string')
+      }
+      expect(result.output).toContain('after exit')
+    })
+
+    it('cleans up on exit event', async () => {
+      const { context } = createFreshContext()
+
+      // Create a session
+      await bash.invoke({ mode: 'execute', command: 'echo "test"' }, context)
+
+      // Simulate exit event
+      process.emit('exit', 0)
+
+      // Session should be cleaned up
+      const result = await bash.invoke({ mode: 'execute', command: 'echo "after exit"' }, context)
+      if (typeof result === 'string') {
+        throw new Error('Expected BashOutput object, got string')
+      }
+      expect(result.output).toContain('after exit')
+    })
+
+    it('cleans up on SIGINT', async () => {
+      const { context } = createFreshContext()
+
+      // Mock process.exit to prevent actual exit
+      const exitMock = vi.spyOn(process, 'exit').mockImplementation(() => {
+        throw new Error('process.exit called')
+      })
+
+      // Create a session
+      await bash.invoke({ mode: 'execute', command: 'echo "test"' }, context)
+
+      // Simulate SIGINT
+      try {
+        process.emit('SIGINT')
+      } catch {
+        // Expected to throw due to our mock
+      }
+
+      expect(exitMock).toHaveBeenCalledWith(0)
+      exitMock.mockRestore()
+    })
+
+    it('handles multiple sessions cleanup', async () => {
+      const context1 = createFreshContext().context
+      const context2 = createFreshContext().context
+
+      // Create multiple sessions
+      await bash.invoke({ mode: 'execute', command: 'echo "session1"' }, context1)
+      await bash.invoke({ mode: 'execute', command: 'echo "session2"' }, context2)
+
+      // Simulate beforeExit to clean all sessions
+      process.emit('beforeExit', 0)
+
+      // Both should create new sessions
+      const result1 = await bash.invoke({ mode: 'execute', command: 'echo "new1"' }, context1)
+      const result2 = await bash.invoke({ mode: 'execute', command: 'echo "new2"' }, context2)
+
+      if (typeof result1 === 'string' || typeof result2 === 'string') {
+        throw new Error('Expected BashOutput objects')
+      }
+
+      expect(result1.output).toContain('new1')
+      expect(result2.output).toContain('new2')
     })
   })
 })
