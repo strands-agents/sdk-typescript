@@ -382,4 +382,230 @@ describe('Agent', () => {
       expect(result.lastMessage.content).toEqual([{ type: 'textBlock', text: 'Success' }])
     })
   })
+
+  describe('nested tool arrays', () => {
+    describe('backwards compatibility', () => {
+      it('accepts flat array of tools', () => {
+        const tool1 = createMockTool('tool1', () => ({
+          type: 'toolResultBlock',
+          toolUseId: 'id-1',
+          status: 'success' as const,
+          content: [],
+        }))
+        const tool2 = createMockTool('tool2', () => ({
+          type: 'toolResultBlock',
+          toolUseId: 'id-2',
+          status: 'success' as const,
+          content: [],
+        }))
+
+        const agent = new Agent({ tools: [tool1, tool2] })
+
+        expect(agent.tools).toHaveLength(2)
+        expect(agent.tools[0]?.name).toBe('tool1')
+        expect(agent.tools[1]?.name).toBe('tool2')
+      })
+
+      it('accepts single tool in array', () => {
+        const tool = createMockTool('singleTool', () => ({
+          type: 'toolResultBlock',
+          toolUseId: 'id',
+          status: 'success' as const,
+          content: [],
+        }))
+
+        const agent = new Agent({ tools: [tool] })
+
+        expect(agent.tools).toHaveLength(1)
+        expect(agent.tools[0]?.name).toBe('singleTool')
+      })
+
+      it('accepts empty array', () => {
+        const agent = new Agent({ tools: [] })
+
+        expect(agent.tools).toHaveLength(0)
+      })
+
+      it('accepts undefined tools', () => {
+        const agent = new Agent({ tools: undefined })
+
+        expect(agent.tools).toHaveLength(0)
+      })
+    })
+
+    describe('single level nesting', () => {
+      it('flattens single level nested arrays', () => {
+        const tool1 = createMockTool('tool1', () => ({
+          type: 'toolResultBlock',
+          toolUseId: 'id-1',
+          status: 'success' as const,
+          content: [],
+        }))
+        const tool2 = createMockTool('tool2', () => ({
+          type: 'toolResultBlock',
+          toolUseId: 'id-2',
+          status: 'success' as const,
+          content: [],
+        }))
+        const tool3 = createMockTool('tool3', () => ({
+          type: 'toolResultBlock',
+          toolUseId: 'id-3',
+          status: 'success' as const,
+          content: [],
+        }))
+
+        const agent = new Agent({ tools: [[tool1, tool2], tool3] })
+
+        expect(agent.tools).toHaveLength(3)
+        expect(agent.tools[0]?.name).toBe('tool1')
+        expect(agent.tools[1]?.name).toBe('tool2')
+        expect(agent.tools[2]?.name).toBe('tool3')
+      })
+
+      it('handles empty nested arrays', () => {
+        const tool = createMockTool('tool', () => ({
+          type: 'toolResultBlock',
+          toolUseId: 'id',
+          status: 'success' as const,
+          content: [],
+        }))
+
+        const agent = new Agent({ tools: [[], tool, []] })
+
+        expect(agent.tools).toHaveLength(1)
+        expect(agent.tools[0]?.name).toBe('tool')
+      })
+    })
+
+    describe('multiple level nesting', () => {
+      it('flattens deeply nested arrays', () => {
+        const tool1 = createMockTool('tool1', () => ({
+          type: 'toolResultBlock',
+          toolUseId: 'id-1',
+          status: 'success' as const,
+          content: [],
+        }))
+        const tool2 = createMockTool('tool2', () => ({
+          type: 'toolResultBlock',
+          toolUseId: 'id-2',
+          status: 'success' as const,
+          content: [],
+        }))
+        const tool3 = createMockTool('tool3', () => ({
+          type: 'toolResultBlock',
+          toolUseId: 'id-3',
+          status: 'success' as const,
+          content: [],
+        }))
+
+        const agent = new Agent({ tools: [[[tool1]], [tool2], tool3] })
+
+        expect(agent.tools).toHaveLength(3)
+        expect(agent.tools[0]?.name).toBe('tool1')
+        expect(agent.tools[1]?.name).toBe('tool2')
+        expect(agent.tools[2]?.name).toBe('tool3')
+      })
+
+      it('flattens mixed nesting patterns', () => {
+        const tool1 = createMockTool('tool1', () => ({
+          type: 'toolResultBlock',
+          toolUseId: 'id-1',
+          status: 'success' as const,
+          content: [],
+        }))
+        const tool2 = createMockTool('tool2', () => ({
+          type: 'toolResultBlock',
+          toolUseId: 'id-2',
+          status: 'success' as const,
+          content: [],
+        }))
+        const tool3 = createMockTool('tool3', () => ({
+          type: 'toolResultBlock',
+          toolUseId: 'id-3',
+          status: 'success' as const,
+          content: [],
+        }))
+
+        const agent = new Agent({ tools: [[tool1, [tool2]], tool3] })
+
+        expect(agent.tools).toHaveLength(3)
+        expect(agent.tools[0]?.name).toBe('tool1')
+        expect(agent.tools[1]?.name).toBe('tool2')
+        expect(agent.tools[2]?.name).toBe('tool3')
+      })
+
+      it('flattens very deep nesting', () => {
+        const tool = createMockTool('deepTool', () => ({
+          type: 'toolResultBlock',
+          toolUseId: 'id',
+          status: 'success' as const,
+          content: [],
+        }))
+
+        const agent = new Agent({ tools: [[[[tool]]]] })
+
+        expect(agent.tools).toHaveLength(1)
+        expect(agent.tools[0]?.name).toBe('deepTool')
+      })
+    })
+
+    describe('tool registration and execution', () => {
+      it('registers all tools from nested arrays', () => {
+        const tool1 = createMockTool('tool1', () => ({
+          type: 'toolResultBlock',
+          toolUseId: 'id-1',
+          status: 'success' as const,
+          content: [],
+        }))
+        const tool2 = createMockTool('tool2', () => ({
+          type: 'toolResultBlock',
+          toolUseId: 'id-2',
+          status: 'success' as const,
+          content: [],
+        }))
+
+        const agent = new Agent({ tools: [[tool1], [tool2]] })
+
+        expect(agent.toolRegistry.getByName('tool1')).toBe(tool1)
+        expect(agent.toolRegistry.getByName('tool2')).toBe(tool2)
+      })
+
+      it('executes tools from nested arrays correctly', async () => {
+        const model = new MockMessageModel()
+          .addTurn({ type: 'toolUseBlock', name: 'nestedTool', toolUseId: 'tool-1', input: {} })
+          .addTurn({ type: 'textBlock', text: 'Result from nested tool' })
+
+        const nestedTool = createMockTool('nestedTool', () => ({
+          type: 'toolResultBlock',
+          toolUseId: 'tool-1',
+          status: 'success' as const,
+          content: [new TextBlock('Nested tool executed')],
+        }))
+
+        const agent = new Agent({ model, tools: [[nestedTool]] })
+
+        const result = await agent.invoke('Use nested tool')
+
+        expect(result.stopReason).toBe('endTurn')
+        expect(result.lastMessage.content).toEqual([{ type: 'textBlock', text: 'Result from nested tool' }])
+      })
+
+      it('catches duplicate tool names across nested arrays', () => {
+        const tool1 = createMockTool('duplicate', () => ({
+          type: 'toolResultBlock',
+          toolUseId: 'id-1',
+          status: 'success' as const,
+          content: [],
+        }))
+        const tool2 = createMockTool('duplicate', () => ({
+          type: 'toolResultBlock',
+          toolUseId: 'id-2',
+          status: 'success' as const,
+          content: [],
+        }))
+
+        expect(() => new Agent({ tools: [[tool1], [tool2]] })).toThrow("Tool with name 'duplicate' already registered")
+      })
+    })
+  })
 })

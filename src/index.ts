@@ -13,6 +13,7 @@ export type { AgentState } from './agent/state.js'
 
 // Agent types
 export type { AgentData, AgentResult } from './types/agent.js'
+export type { AgentConfig, ToolList } from './agent/agent.js'
 
 // Error types
 export { ContextWindowOverflowError, MaxTokensError, JsonValidationError, ConcurrentInvocationError } from './errors.js'
