@@ -79,10 +79,10 @@ describe('HookRegistryImplementation', () => {
       }
 
       const provider: HookProvider = {
-        getHooks: () => [
-          { event: BeforeInvocationEvent, callback: beforeCallback },
-          { event: AfterInvocationEvent, callback: afterCallback },
-        ],
+        registerCallbacks: (reg) => {
+          reg.addCallback(BeforeInvocationEvent, beforeCallback)
+          reg.addCallback(AfterInvocationEvent, afterCallback)
+        },
       }
 
       registry.addHook(provider)

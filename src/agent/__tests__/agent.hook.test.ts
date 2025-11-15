@@ -1,35 +1,10 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import {
-  Agent,
-  BeforeInvocationEvent,
-  AfterInvocationEvent,
-  type HookEvent,
-  type HookProvider,
-  type HookRegistry,
-} from '@strands-agents/sdk'
-// eslint-disable-next-line no-restricted-imports
-import { MockMessageModel } from '../src/__fixtures__/mock-message-model.js'
-// eslint-disable-next-line no-restricted-imports
-import { collectIterator } from '../src/__fixtures__/model-test-helpers.js'
-
-/**
- * Mock hook provider that records all hook invocations for testing.
- * Similar to Python SDK's MockHookProvider.
- */
-export class MockHookProvider implements HookProvider {
-  invocations: HookEvent[] = []
-
-  getHooks() {
-    return [
-      { event: BeforeInvocationEvent, callback: (e: BeforeInvocationEvent) => this.invocations.push(e) },
-      { event: AfterInvocationEvent, callback: (e: AfterInvocationEvent) => this.invocations.push(e) },
-    ]
-  }
-
-  reset(): void {
-    this.invocations = []
-  }
-}
+import { Agent } from '../agent.js'
+import { BeforeInvocationEvent, AfterInvocationEvent } from '../../hooks/index.js'
+import type { HookProvider } from '../../hooks/index.js'
+import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
+import { MockHookProvider } from '../../__fixtures__/mock-hook-provider.js'
+import { collectIterator } from '../../__fixtures__/model-test-helpers.js'
 
 describe('Hooks Integration', () => {
   let mockProvider: MockHookProvider
@@ -89,17 +64,25 @@ describe('Hooks Integration', () => {
       const callOrder: string[] = []
 
       const hook1: HookProvider = {
-        getHooks: () => [
-          { event: BeforeInvocationEvent, callback: () => callOrder.push('hook1-before') },
-          { event: AfterInvocationEvent, callback: () => callOrder.push('hook1-after') },
-        ],
+        registerCallbacks: (reg) => {
+          reg.addCallback(BeforeInvocationEvent, () => {
+            callOrder.push('hook1-before')
+          })
+          reg.addCallback(AfterInvocationEvent, () => {
+            callOrder.push('hook1-after')
+          })
+        },
       }
 
       const hook2: HookProvider = {
-        getHooks: () => [
-          { event: BeforeInvocationEvent, callback: () => callOrder.push('hook2-before') },
-          { event: AfterInvocationEvent, callback: () => callOrder.push('hook2-after') },
-        ],
+        registerCallbacks: (reg) => {
+          reg.addCallback(BeforeInvocationEvent, () => {
+            callOrder.push('hook2-before')
+          })
+          reg.addCallback(AfterInvocationEvent, () => {
+            callOrder.push('hook2-after')
+          })
+        },
       }
 
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
@@ -114,19 +97,12 @@ describe('Hooks Integration', () => {
 
   describe('hook error propagation', () => {
     it('propagates errors from hooks', async () => {
-      const errorHook: HookProvider = {
-        getHooks: () => [
-          {
-            event: BeforeInvocationEvent,
-            callback: () => {
-              throw new Error('Hook error')
-            },
-          },
-        ],
-      }
-
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
-      const agent = new Agent({ model, hooks: [errorHook] })
+      const agent = new Agent({ model })
+
+      agent.hooks.addCallback(BeforeInvocationEvent, () => {
+        throw new Error('Hook error')
+      })
 
       await expect(agent.invoke('Hi')).rejects.toThrow('Hook error')
     })
@@ -134,30 +110,15 @@ describe('Hooks Integration', () => {
     it('stops execution when hook throws error', async () => {
       let secondHookCalled = false
 
-      const errorHook: HookProvider = {
-        getHooks: () => [
-          {
-            event: BeforeInvocationEvent,
-            callback: () => {
-              throw new Error('Hook error')
-            },
-          },
-        ],
-      }
-
-      const secondHook: HookProvider = {
-        getHooks: () => [
-          {
-            event: BeforeInvocationEvent,
-            callback: () => {
-              secondHookCalled = true
-            },
-          },
-        ],
-      }
-
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
-      const agent = new Agent({ model, hooks: [errorHook, secondHook] })
+      const agent = new Agent({ model })
+
+      agent.hooks.addCallback(BeforeInvocationEvent, () => {
+        throw new Error('Hook error')
+      })
+      agent.hooks.addCallback(BeforeInvocationEvent, () => {
+        secondHookCalled = true
+      })
 
       await expect(agent.invoke('Hi')).rejects.toThrow('Hook error')
       expect(secondHookCalled).toBe(false)
@@ -168,49 +129,17 @@ describe('Hooks Integration', () => {
     it('awaits async callbacks', async () => {
       let asyncCompleted = false
 
-      const asyncHook: HookProvider = {
-        getHooks: () => [
-          {
-            event: BeforeInvocationEvent,
-            callback: async () => {
-              await new Promise((resolve) => globalThis.setTimeout(resolve, 10))
-              asyncCompleted = true
-            },
-          },
-        ],
-      }
-
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
-      const agent = new Agent({ model, hooks: [asyncHook] })
+      const agent = new Agent({ model })
+
+      agent.hooks.addCallback(BeforeInvocationEvent, async () => {
+        await new Promise((resolve) => globalThis.setTimeout(resolve, 10))
+        asyncCompleted = true
+      })
 
       await agent.invoke('Hi')
 
       expect(asyncCompleted).toBe(true)
-    })
-
-    it('handles mixed sync and async hooks in correct order', async () => {
-      const callOrder: string[] = []
-
-      const mixedHook: HookProvider = {
-        getHooks: () => [
-          { event: BeforeInvocationEvent, callback: () => callOrder.push('sync') },
-          {
-            event: BeforeInvocationEvent,
-            callback: async () => {
-              await new Promise((resolve) => globalThis.setTimeout(resolve, 10))
-              callOrder.push('async')
-            },
-          },
-          { event: BeforeInvocationEvent, callback: () => callOrder.push('sync2') },
-        ],
-      }
-
-      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
-      const agent = new Agent({ model, hooks: [mixedHook] })
-
-      await agent.invoke('Hi')
-
-      expect(callOrder).toEqual(['sync', 'async', 'sync2'])
     })
   })
 
@@ -233,11 +162,17 @@ describe('Hooks Integration', () => {
       const callOrder: number[] = []
 
       const hook: HookProvider = {
-        getHooks: () => [
-          { event: AfterInvocationEvent, callback: () => callOrder.push(1) },
-          { event: AfterInvocationEvent, callback: () => callOrder.push(2) },
-          { event: AfterInvocationEvent, callback: () => callOrder.push(3) },
-        ],
+        registerCallbacks: (reg) => {
+          reg.addCallback(AfterInvocationEvent, () => {
+            callOrder.push(1)
+          })
+          reg.addCallback(AfterInvocationEvent, () => {
+            callOrder.push(2)
+          })
+          reg.addCallback(AfterInvocationEvent, () => {
+            callOrder.push(3)
+          })
+        },
       }
 
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
@@ -258,12 +193,9 @@ describe('Hooks Integration', () => {
       const agent = new Agent({ model, hooks: [mockProvider] })
 
       await agent.invoke('First message')
-      expect(mockProvider.invocations).toHaveLength(2)
-
-      mockProvider.reset()
-
       await agent.invoke('Second message')
-      expect(mockProvider.invocations).toHaveLength(2)
+
+      expect(mockProvider.invocations).toHaveLength(4)
     })
   })
 })

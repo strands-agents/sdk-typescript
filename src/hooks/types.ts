@@ -1,10 +1,11 @@
 import type { HookEvent } from './events.js'
-import type { Agent } from '../agent/agent.js'
+import type { HookRegistry } from './registry.js'
+import type { AgentData } from '../types/agent.js'
 
 /**
  * Type for a constructor function that creates HookEvent instances.
  */
-export type HookEventConstructor<T extends HookEvent = HookEvent> = new (data: { agent: Agent }) => T
+export type HookEventConstructor<T extends HookEvent = HookEvent> = new (data: { agent: AgentData }) => T
 
 /**
  * Type for callback functions that handle hook events.
@@ -20,25 +21,15 @@ export type HookEventConstructor<T extends HookEvent = HookEvent> = new (data: {
 export type HookCallback<T extends HookEvent> = (event: T) => void | Promise<void>
 
 /**
- * Represents a single hook registration binding an event type to a callback.
- */
-export interface HookRegistration<T extends HookEvent = HookEvent> {
-  event: HookEventConstructor<T>
-  callback: HookCallback<T>
-}
-
-/**
  * Protocol for objects that provide hook callbacks to an agent.
  * Enables composable extension of agent functionality.
  *
  * @example
  * ```typescript
  * class MyHooks implements HookProvider {
- *   getHooks(): HookRegistration[] {
- *     return [
- *       { event: BeforeInvocationEvent, callback: this.onStart },
- *       { event: AfterInvocationEvent, callback: this.onEnd }
- *     ]
+ *   registerCallbacks(registry: HookRegistry): void {
+ *     registry.addCallback(BeforeInvocationEvent, this.onStart)
+ *     registry.addCallback(AfterInvocationEvent, this.onEnd)
  *   }
  *
  *   private onStart = (event: BeforeInvocationEvent): void => {
@@ -53,9 +44,9 @@ export interface HookRegistration<T extends HookEvent = HookEvent> {
  */
 export interface HookProvider {
   /**
-   * Get all hook registrations provided by this provider.
+   * Register callback functions for specific event types.
    *
-   * @returns Array of hook registrations
+   * @param registry - The hook registry to register callbacks with
    */
-  getHooks(): HookRegistration[]
+  registerCallbacks(registry: HookRegistry): void
 }

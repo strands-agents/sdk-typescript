@@ -51,9 +51,17 @@ export class HookRegistryImplementation implements HookRegistry {
    * @param provider - The hook provider to register
    */
   addHook(provider: HookProvider): void {
-    const registrations = provider.getHooks()
-    for (const registration of registrations) {
-      this.addCallback(registration.event, registration.callback)
+    provider.registerCallbacks(this)
+  }
+
+  /**
+   * Register all callbacks from multiple hook providers.
+   *
+   * @param providers - Array of hook providers to register
+   */
+  addAllHooks(providers: HookProvider[]): void {
+    for (const provider of providers) {
+      this.addHook(provider)
     }
   }
 
@@ -74,13 +82,13 @@ export class HookRegistryImplementation implements HookRegistry {
 
   /**
    * Get callbacks for a specific event with proper ordering.
-   * Returns callbacks in reverse order if event.shouldReverseCallbacks is true.
+   * Returns callbacks in reverse order if event should reverse callbacks.
    *
    * @param event - The event to get callbacks for
    * @returns Array of callbacks for the event
    */
   private getCallbacksFor<T extends HookEvent>(event: T): HookCallback<T>[] {
     const callbacks = this._callbacks.get(event.constructor as HookEventConstructor<T>) ?? []
-    return (event.shouldReverseCallbacks ? [...callbacks].reverse() : callbacks) as HookCallback<T>[]
+    return (event._shouldReverseCallbacks() ? [...callbacks].reverse() : callbacks) as HookCallback<T>[]
   }
 }

@@ -1,4 +1,4 @@
-import type { Agent } from '../agent/agent.js'
+import type { AgentData } from '../types/agent.js'
 
 /**
  * Base class for all hook events.
@@ -8,17 +8,26 @@ export abstract class HookEvent {
   /**
    * The agent instance that triggered this event.
    */
-  readonly agent: Agent
+  readonly agent: AgentData
 
   /**
    * Whether callbacks for this event should be invoked in reverse order.
    * Returns true for cleanup/teardown events (e.g., AfterInvocationEvent).
    */
-  get shouldReverseCallbacks(): boolean {
+  protected get shouldReverseCallbacks(): boolean {
     return false
   }
 
-  constructor(data: { agent: Agent }) {
+  /**
+   * @internal
+   * Check if callbacks should be reversed for this event.
+   * Used by HookRegistry for callback ordering.
+   */
+  _shouldReverseCallbacks(): boolean {
+    return this.shouldReverseCallbacks
+  }
+
+  constructor(data: { agent: AgentData }) {
     this.agent = data.agent
   }
 }
@@ -39,7 +48,7 @@ export class BeforeInvocationEvent extends HookEvent {
 export class AfterInvocationEvent extends HookEvent {
   readonly type = 'afterInvocationEvent' as const
 
-  override get shouldReverseCallbacks(): boolean {
+  protected override get shouldReverseCallbacks(): boolean {
     return true
   }
 }

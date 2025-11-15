@@ -130,11 +130,7 @@ export class Agent implements AgentData {
 
     // Initialize hooks
     this.hooks = new HookRegistryImplementation()
-    if (config?.hooks) {
-      for (const hook of config.hooks) {
-        this.hooks.addHook(hook)
-      }
-    }
+    this.hooks.addAllHooks(config?.hooks ?? [])
 
     // Create printer if printer is enabled (default: true)
     const printer = config?.printer ?? true
