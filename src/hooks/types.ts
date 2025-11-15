@@ -1,11 +1,10 @@
 import type { HookEvent } from './events.js'
 import type { HookRegistry } from './registry.js'
-import type { AgentData } from '../types/agent.js'
 
 /**
  * Type for a constructor function that creates HookEvent instances.
  */
-export type HookEventConstructor<T extends HookEvent = HookEvent> = new (data: { agent: AgentData }) => T
+export type HookEventConstructor<T extends HookEvent = HookEvent> = new (...args: any[]) => T
 
 /**
  * Type for callback functions that handle hook events.
