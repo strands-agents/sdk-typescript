@@ -68,3 +68,32 @@ export function createMockTool(
     },
   }
 }
+
+/**
+ * Helper to create a simple mock tool with minimal configuration for testing.
+ * This is a lighter-weight version of createMockTool for scenarios where the tool's
+ * execution behavior is not relevant to the test.
+ *
+ * @param name - The name of the mock tool
+ * @returns Mock Tool object
+ */
+export function createRandomTool(name: string): Tool {
+  return {
+    name,
+    description: `Mock tool ${name}`,
+    toolSpec: {
+      name,
+      description: `Mock tool ${name}`,
+      inputSchema: { type: 'object', properties: {} },
+    },
+    // eslint-disable-next-line require-yield
+    async *stream(_context): AsyncGenerator<never, ToolResultBlock, never> {
+      return {
+        type: 'toolResultBlock',
+        toolUseId: 'test-id',
+        status: 'success' as const,
+        content: [],
+      }
+    },
+  }
+}

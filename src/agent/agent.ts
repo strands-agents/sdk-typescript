@@ -45,7 +45,7 @@ export type AgentConfig = {
    * An initial set of tools to register with the agent.
    * Accepts nested arrays of tools at any depth, which will be flattened automatically.
    */
-  tools?: ToolList | undefined
+  tools?: ToolList
   /**
    * A system prompt which guides model behavior.
    */
