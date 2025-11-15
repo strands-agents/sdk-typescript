@@ -4,6 +4,7 @@ import type { HookRegistry } from './registry.js'
 /**
  * Type for a constructor function that creates HookEvent instances.
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type HookEventConstructor<T extends HookEvent = HookEvent> = new (...args: any[]) => T
 
 /**
