@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { Agent } from '../agent.js'
+import { Agent, type ToolList } from '../agent.js'
 import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
 import { collectGenerator } from '../../__fixtures__/model-test-helpers.js'
 import { createMockTool, createRandomTool } from '../../__fixtures__/tool-helpers.js'
 import { ConcurrentInvocationError } from '../../errors.js'
-import { MaxTokensError, TextBlock } from '../../index.js'
+import { MaxTokensError, TextBlock, type Tool } from '../../index.js'
 import { AgentPrinter } from '../printer.js'
 
 describe('Agent', () => {
@@ -384,92 +384,39 @@ describe('Agent', () => {
   })
 
   describe('nested tool arrays', () => {
-    describe('backwards compatibility', () => {
-      it('accepts flat array of tools', () => {
-        const tool1 = createRandomTool('tool1')
-        const tool2 = createRandomTool('tool2')
+    it('flattens nested arrays at any depth', () => {
+      const tool1 = createRandomTool()
+      const tool2 = createRandomTool()
+      const tool3 = createRandomTool()
 
-        const agent = new Agent({ tools: [tool1, tool2] })
+      const cases: Array<{ description: string; input: unknown; expected: Tool[] }> = [
+        { description: 'flat array', input: [tool1, tool2, tool3], expected: [tool1, tool2, tool3] },
+        { description: 'single tool', input: [tool1], expected: [tool1] },
+        { description: 'empty array', input: [], expected: [] },
+        { description: 'single level nesting', input: [[tool1, tool2], tool3], expected: [tool1, tool2, tool3] },
+        { description: 'empty nested arrays', input: [[], tool1, []], expected: [tool1] },
+        { description: 'deeply nested', input: [[[tool1]], [tool2], tool3], expected: [tool1, tool2, tool3] },
+        { description: 'mixed nesting', input: [[tool1, [tool2]], tool3], expected: [tool1, tool2, tool3] },
+        { description: 'very deep nesting', input: [[[[tool1]]]], expected: [tool1] },
+      ]
 
-        expect(agent.tools).toEqual([tool1, tool2])
-      })
-
-      it('accepts single tool in array', () => {
-        const tool = createRandomTool('singleTool')
-
-        const agent = new Agent({ tools: [tool] })
-
-        expect(agent.tools).toEqual([tool])
-      })
-
-      it('accepts empty array', () => {
-        const agent = new Agent({ tools: [] })
-
-        expect(agent.tools).toEqual([])
-      })
-
-      it('accepts undefined tools', () => {
-        const agent = new Agent({})
-
-        expect(agent.tools).toEqual([])
-      })
+      for (const testCase of cases) {
+        const agent = new Agent({ tools: testCase.input as ToolList })
+        expect(agent.tools).toEqual(testCase.expected)
+      }
     })
 
-    describe('single level nesting', () => {
-      it('flattens single level nested arrays', () => {
-        const tool1 = createRandomTool('tool1')
-        const tool2 = createRandomTool('tool2')
-        const tool3 = createRandomTool('tool3')
+    it('accepts undefined tools', () => {
+      const agent = new Agent({})
 
-        const agent = new Agent({ tools: [[tool1, tool2], tool3] })
-
-        expect(agent.tools).toEqual([tool1, tool2, tool3])
-      })
-
-      it('handles empty nested arrays', () => {
-        const tool = createRandomTool('tool')
-
-        const agent = new Agent({ tools: [[], tool, []] })
-
-        expect(agent.tools).toEqual([tool])
-      })
+      expect(agent.tools).toEqual([])
     })
 
-    describe('multiple level nesting', () => {
-      it('flattens deeply nested arrays', () => {
-        const tool1 = createRandomTool('tool1')
-        const tool2 = createRandomTool('tool2')
-        const tool3 = createRandomTool('tool3')
+    it('catches duplicate tool names across nested arrays', () => {
+      const tool1 = createRandomTool('duplicate')
+      const tool2 = createRandomTool('duplicate')
 
-        const agent = new Agent({ tools: [[[tool1]], [tool2], tool3] })
-
-        expect(agent.tools).toEqual([tool1, tool2, tool3])
-      })
-
-      it('flattens mixed nesting patterns', () => {
-        const tool1 = createRandomTool('tool1')
-        const tool2 = createRandomTool('tool2')
-        const tool3 = createRandomTool('tool3')
-
-        const agent = new Agent({ tools: [[tool1, [tool2]], tool3] })
-
-        expect(agent.tools).toEqual([tool1, tool2, tool3])
-      })
-
-      it('flattens very deep nesting', () => {
-        const tool = createRandomTool('deepTool')
-
-        const agent = new Agent({ tools: [[[[tool]]]] })
-
-        expect(agent.tools).toEqual([tool])
-      })
-
-      it('catches duplicate tool names across nested arrays', () => {
-        const tool1 = createRandomTool('duplicate')
-        const tool2 = createRandomTool('duplicate')
-
-        expect(() => new Agent({ tools: [[tool1], [tool2]] })).toThrow("Tool with name 'duplicate' already registered")
-      })
+      expect(() => new Agent({ tools: [[tool1], [tool2]] })).toThrow("Tool with name 'duplicate' already registered")
     })
   })
 })

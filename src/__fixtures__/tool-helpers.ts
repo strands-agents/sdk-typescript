@@ -3,6 +3,7 @@
  * This module provides utilities for testing Tool implementations.
  */
 
+import { randomUUID } from 'node:crypto'
 import type { Tool, ToolContext } from '../tools/tool.js'
 import type { ToolResultBlock } from '../types/messages.js'
 import type { JSONValue } from '../types/json.js'
@@ -74,26 +75,15 @@ export function createMockTool(
  * This is a lighter-weight version of createMockTool for scenarios where the tool's
  * execution behavior is not relevant to the test.
  *
- * @param name - The name of the mock tool
+ * @param name - Optional name of the mock tool (defaults to a random UUID)
  * @returns Mock Tool object
  */
-export function createRandomTool(name: string): Tool {
-  return {
-    name,
-    description: `Mock tool ${name}`,
-    toolSpec: {
-      name,
-      description: `Mock tool ${name}`,
-      inputSchema: { type: 'object', properties: {} },
-    },
-    // eslint-disable-next-line require-yield
-    async *stream(_context): AsyncGenerator<never, ToolResultBlock, never> {
-      return {
-        type: 'toolResultBlock',
-        toolUseId: 'test-id',
-        status: 'success' as const,
-        content: [],
-      }
-    },
-  }
+export function createRandomTool(name?: string): Tool {
+  const toolName = name ?? randomUUID()
+  return createMockTool(toolName, () => ({
+    type: 'toolResultBlock',
+    toolUseId: 'test-id',
+    status: 'success' as const,
+    content: [],
+  }))
 }
