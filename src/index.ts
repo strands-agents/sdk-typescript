@@ -14,6 +14,17 @@ export type { AgentState } from './agent/state.js'
 // Agent types
 export type { AgentData, AgentResult } from './types/agent.js'
 
+// Metrics types
+export type {
+  Metrics as AgentMetrics,
+  EventLoopMetrics,
+  ModelMetrics,
+  ModelInvocationMetrics,
+  ToolMetrics,
+  ToolExecutionMetrics,
+  Trace,
+} from './types/metrics.js'
+
 // Error types
 export { ContextWindowOverflowError, MaxTokensError, JsonValidationError, ConcurrentInvocationError } from './errors.js'
 

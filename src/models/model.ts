@@ -149,6 +149,8 @@ export abstract class Model<T extends BaseModelConfig> {
       signature?: string
       redactedContent?: Uint8Array
     } = {}
+    let _usage: unknown = null
+    let _metrics: unknown = null
 
     for await (const event_data of this.stream(messages, options)) {
       const event = this._convert_to_class_event(event_data)
@@ -222,7 +224,13 @@ export abstract class Model<T extends BaseModelConfig> {
           break
 
         case 'modelMetadataEvent':
-          // TODO: Implement metadata events: https://github.com/strands-agents/sdk-typescript/issues/70
+          // Store usage and metrics from metadata event
+          if (event.usage) {
+            _usage = event.usage
+          }
+          if (event.metrics) {
+            _metrics = event.metrics
+          }
           break
 
         default:

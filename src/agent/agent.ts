@@ -22,6 +22,8 @@ import type { AgentData } from '../types/agent.js'
 import { AgentPrinter, getDefaultAppender, type Printer } from './printer.js'
 import type { ConversationManager } from '../conversation-manager/conversation-manager.js'
 import { SlidingWindowConversationManager } from '../conversation-manager/sliding-window-conversation-manager.js'
+import { MetricsCollector } from './metrics-collector.js'
+import type { Trace } from '../types/metrics.js'
 
 /**
  * Configuration object for creating a new Agent.
@@ -58,6 +60,17 @@ export type AgentConfig = {
    * Defaults to SlidingWindowConversationManager with windowSize of 40.
    */
   conversationManager?: ConversationManager
+  /**
+   * Enable metrics collection during agent execution.
+   * When true, collects execution metrics including event loop cycles, model invocations, and tool executions.
+   * Defaults to true.
+   */
+  enableMetrics?: boolean
+  /**
+   * Optional OpenTelemetry MeterProvider for real-time metric emission.
+   * When provided, metrics are streamed to the OTel backend as they are collected.
+   */
+  otelMeterProvider?: unknown
 }
 
 /**
@@ -89,6 +102,8 @@ export class Agent implements AgentData {
 
   private _isInvoking: boolean = false
   private _printer?: Printer
+  private _metricsCollector?: MetricsCollector
+  private _currentCycleTrace?: Trace
 
   /**
    * Agent state storage accessible to tools and application logic.
@@ -118,6 +133,12 @@ export class Agent implements AgentData {
     const printer = config?.printer ?? true
     if (printer) {
       this._printer = new AgentPrinter(getDefaultAppender())
+    }
+
+    // Create metrics collector if metrics are enabled (default: true)
+    const enableMetrics = config?.enableMetrics ?? true
+    if (enableMetrics) {
+      this._metricsCollector = new MetricsCollector(config?.otelMeterProvider)
     }
   }
 
@@ -216,11 +237,21 @@ export class Agent implements AgentData {
     try {
       // Main agent loop - continues until model stops without requesting tools
       while (true) {
+        // Start cycle metrics tracking
+        const cycleState = this._metricsCollector?.startCycle()
+        if (cycleState) {
+          this._currentCycleTrace = cycleState.trace
+        }
+
         const modelResult = yield* this.invokeModel(currentArgs)
         currentArgs = undefined // Only pass args on first invocation
 
         // Handle stop reason
         if (modelResult.stopReason === 'maxTokens') {
+          // End cycle before throwing
+          if (cycleState) {
+            this._metricsCollector?.endCycle(cycleState.startTime, cycleState.trace)
+          }
           throw new MaxTokensError(
             'Model reached maximum token limit. This is an unrecoverable state that requires intervention.',
             modelResult.message
@@ -229,16 +260,30 @@ export class Agent implements AgentData {
 
         if (modelResult.stopReason !== 'toolUse') {
           // Loop terminates - no tool use requested
+          // End cycle metrics tracking
+          if (cycleState) {
+            this._metricsCollector?.endCycle(cycleState.startTime, cycleState.trace)
+          }
+
           // Add assistant message now that we're returning
           this.messages.push(modelResult.message)
-          return {
+          const result: AgentResult = {
             stopReason: modelResult.stopReason,
             lastMessage: modelResult.message,
           }
+          if (this._metricsCollector) {
+            result.metrics = this._metricsCollector.getMetrics()
+          }
+          return result
         }
 
         // Execute tools sequentially
         const toolResultMessage = yield* this.executeTools(modelResult.message, this._toolRegistry)
+
+        // End cycle metrics tracking
+        if (cycleState) {
+          this._metricsCollector?.endCycle(cycleState.startTime, cycleState.trace)
+        }
 
         // Add assistant message with tool uses right before adding tool results
         // This ensures we don't have dangling tool use messages if tool execution fails
@@ -309,8 +354,23 @@ export class Agent implements AgentData {
       )
     }
 
+    const modelStartTime = performance.now()
+
     try {
       const { message, stopReason } = yield* this._model.streamAggregated(this.messages, streamOptions)
+
+      // Record model invocation metrics
+      if (this._metricsCollector) {
+        const latency = globalThis.performance.now() - modelStartTime
+        // For now, record basic metrics without usage details
+        // Usage will be captured from ModelMetadataEvent in Phase 7
+        const placeholderUsage = {
+          inputTokens: 0,
+          outputTokens: 0,
+          totalTokens: 0,
+        }
+        this._metricsCollector.recordModelInvocation(latency, placeholderUsage)
+      }
 
       yield { type: 'afterModelEvent', message, stopReason }
 
@@ -395,6 +455,9 @@ export class Agent implements AgentData {
       })
     }
 
+    // Start tool execution metrics tracking
+    const toolState = this._metricsCollector?.startToolExecution(toolUseBlock.name, this._currentCycleTrace!)
+
     // Execute tool and collect result
     const toolContext: ToolContext = {
       toolUse: {
@@ -405,21 +468,32 @@ export class Agent implements AgentData {
       agent: this,
     }
 
-    const toolGenerator = tool.stream(toolContext)
+    let success = false
+    let toolResult: ToolResultBlock | undefined
 
-    // Use yield* to delegate to the tool generator and capture the return value
-    const toolResult = yield* toolGenerator
+    try {
+      const toolGenerator = tool.stream(toolContext)
 
-    if (!toolResult) {
-      // Tool didn't return a result - return error result instead of throwing
-      return new ToolResultBlock({
-        toolUseId: toolUseBlock.toolUseId,
-        status: 'error',
-        content: [new TextBlock(`Tool '${toolUseBlock.name}' did not return a result`)],
-      })
+      // Use yield* to delegate to the tool generator and capture the return value
+      toolResult = yield* toolGenerator
+
+      if (!toolResult) {
+        // Tool didn't return a result - return error result instead of throwing
+        toolResult = new ToolResultBlock({
+          toolUseId: toolUseBlock.toolUseId,
+          status: 'error',
+          content: [new TextBlock(`Tool '${toolUseBlock.name}' did not return a result`)],
+        })
+      } else {
+        success = toolResult.status === 'success'
+      }
+
+      return toolResult
+    } finally {
+      // End tool execution metrics tracking
+      if (toolState) {
+        this._metricsCollector?.endToolExecution(toolUseBlock.name, toolState.startTime, success, toolState.trace)
+      }
     }
-
-    // Tool already returns ToolResultBlock directly
-    return toolResult
   }
 }

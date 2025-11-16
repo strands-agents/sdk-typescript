@@ -42,7 +42,7 @@ describe('Agent', () => {
 
       it('returns AgentResult as generator return value', async () => {
         const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
-        const agent = new Agent({ model })
+        const agent = new Agent({ model, enableMetrics: false })
 
         const { result } = await collectGenerator(agent.stream('Test prompt'))
 
@@ -156,7 +156,7 @@ describe('Agent', () => {
 
       it('returns correct stopReason and lastMessage', async () => {
         const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Response text' })
-        const agent = new Agent({ model })
+        const agent = new Agent({ model, enableMetrics: false })
 
         const result = await agent.invoke('Test prompt')
 
@@ -172,7 +172,7 @@ describe('Agent', () => {
 
       it('consumes stream events internally', async () => {
         const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
-        const agent = new Agent({ model })
+        const agent = new Agent({ model, enableMetrics: false })
 
         const result = await agent.invoke('Test')
 
@@ -201,7 +201,7 @@ describe('Agent', () => {
           content: [new TextBlock('3')],
         }))
 
-        const agent = new Agent({ model, tools: [tool] })
+        const agent = new Agent({ model, tools: [tool], enableMetrics: false })
 
         const result = await agent.invoke('What is 1 + 2?')
 
@@ -260,8 +260,8 @@ describe('Agent', () => {
       const { model: model1, tool: tool1 } = createToolAndModels()
       const { model: model2, tool: tool2 } = createToolAndModels()
 
-      const agent1 = new Agent({ model: model1, tools: [tool1] })
-      const agent2 = new Agent({ model: model2, tools: [tool2] })
+      const agent1 = new Agent({ model: model1, tools: [tool1], enableMetrics: false })
+      const agent2 = new Agent({ model: model2, tools: [tool2], enableMetrics: false })
 
       const invokeResult = await agent1.invoke('Use tool')
       const { result: streamResult } = await collectGenerator(agent2.stream('Use tool'))

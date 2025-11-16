@@ -1,5 +1,6 @@
 import type { AgentState } from '../agent/state.js'
 import type { Message } from './messages.js'
+import type { Metrics } from './metrics.js'
 
 /**
  * Interface for objects that provide agent state.
@@ -25,4 +26,10 @@ export interface AgentResult {
    * The last message added to the messages array.
    */
   lastMessage: Message
+
+  /**
+   * Execution metrics collected during agent invocation.
+   * Only present when metrics collection is enabled.
+   */
+  metrics?: Metrics
 }
