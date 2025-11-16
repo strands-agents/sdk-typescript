@@ -3,7 +3,6 @@
  * This module provides utilities for testing Tool implementations.
  */
 
-import { randomUUID } from 'node:crypto'
 import type { Tool, ToolContext } from '../tools/tool.js'
 import type { ToolResultBlock } from '../types/messages.js'
 import type { JSONValue } from '../types/json.js'
@@ -79,7 +78,7 @@ export function createMockTool(
  * @returns Mock Tool object
  */
 export function createRandomTool(name?: string): Tool {
-  const toolName = name ?? randomUUID()
+  const toolName = name ?? globalThis.crypto.randomUUID()
   return createMockTool(toolName, () => ({
     type: 'toolResultBlock',
     toolUseId: 'test-id',

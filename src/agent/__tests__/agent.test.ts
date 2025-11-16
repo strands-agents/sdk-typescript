@@ -4,7 +4,7 @@ import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
 import { collectGenerator } from '../../__fixtures__/model-test-helpers.js'
 import { createMockTool, createRandomTool } from '../../__fixtures__/tool-helpers.js'
 import { ConcurrentInvocationError } from '../../errors.js'
-import { MaxTokensError, TextBlock, type Tool } from '../../index.js'
+import { MaxTokensError, TextBlock } from '../../index.js'
 import { AgentPrinter } from '../printer.js'
 
 describe('Agent', () => {
@@ -384,26 +384,24 @@ describe('Agent', () => {
   })
 
   describe('nested tool arrays', () => {
-    it('flattens nested arrays at any depth', () => {
+    describe('flattens nested arrays at any depth', () => {
       const tool1 = createRandomTool()
       const tool2 = createRandomTool()
       const tool3 = createRandomTool()
 
-      const cases: Array<{ description: string; input: unknown; expected: Tool[] }> = [
-        { description: 'flat array', input: [tool1, tool2, tool3], expected: [tool1, tool2, tool3] },
-        { description: 'single tool', input: [tool1], expected: [tool1] },
-        { description: 'empty array', input: [], expected: [] },
-        { description: 'single level nesting', input: [[tool1, tool2], tool3], expected: [tool1, tool2, tool3] },
-        { description: 'empty nested arrays', input: [[], tool1, []], expected: [tool1] },
-        { description: 'deeply nested', input: [[[tool1]], [tool2], tool3], expected: [tool1, tool2, tool3] },
-        { description: 'mixed nesting', input: [[tool1, [tool2]], tool3], expected: [tool1, tool2, tool3] },
-        { description: 'very deep nesting', input: [[[[tool1]]]], expected: [tool1] },
-      ]
-
-      for (const testCase of cases) {
-        const agent = new Agent({ tools: testCase.input as ToolList })
-        expect(agent.tools).toEqual(testCase.expected)
-      }
+      it.for([
+        ['flat array', [tool1, tool2, tool3], [tool1, tool2, tool3]],
+        ['single tool', [tool1], [tool1]],
+        ['empty array', [], []],
+        ['single level nesting', [[tool1, tool2], tool3], [tool1, tool2, tool3]],
+        ['empty nested arrays', [[], tool1, []], [tool1]],
+        ['deeply nested', [[[tool1]], [tool2], tool3], [tool1, tool2, tool3]],
+        ['mixed nesting', [[tool1, [tool2]], tool3], [tool1, tool2, tool3]],
+        ['very deep nesting', [[[[tool1]]]], [tool1]],
+      ])('%i', ([, input, expected]) => {
+        const agent = new Agent({ tools: input as ToolList })
+        expect(agent.tools).toEqual(expected)
+      })
     })
 
     it('accepts undefined tools', () => {

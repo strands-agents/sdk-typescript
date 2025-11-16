@@ -94,7 +94,6 @@
   "dependencies": {
     "@aws-sdk/client-bedrock-runtime": "^3.911.0",
     "@modelcontextprotocol/sdk": "^1.20.2",
-    "uuid": "^13.0.0",
     "zod": "^4.1.12"
   },
   "optionalDependencies": {
