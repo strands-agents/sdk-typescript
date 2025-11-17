@@ -260,6 +260,20 @@ describe('AgentState', () => {
       const state = new AgentState()
       expect(() => state.delete('nonexistent')).not.toThrow()
     })
+
+    it('supports typed usage with generic state interface', () => {
+      interface TestState {
+        user: { name: string }
+        count: number
+      }
+
+      const state = new AgentState({ user: { name: 'Alice' }, count: 5 })
+
+      // Typed delete
+      state.delete<TestState>('user')
+      expect(state.get('user')).toBeUndefined()
+      expect(state.get('count')).toBe(5)
+    })
   })
 
   describe('clear', () => {

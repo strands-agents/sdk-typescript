@@ -43,17 +43,11 @@ export class AgentState {
    *
    * @example
    * ```typescript
-   * interface AppState {
-   *   user: { name: string; age: number }
-   *   sessionId: string
-   * }
-   *
-   * // Typed usage with automatic type inference
-   * const user = state.get<AppState>('user')           // { name: string; age: number } | undefined
-   * const session = state.get<AppState>('sessionId')   // string | undefined
-   *
-   * // Untyped usage (backward compatible)
-   * const value = state.get('someKey')                 // JSONValue | undefined
+   * // Typed usage
+   * const user = state.get<AppState>('user')      // { name: string; age: number } | undefined
+   * 
+   * // Untyped usage
+   * const value = state.get('someKey')            // JSONValue | undefined
    * ```
    */
   get<TState, K extends keyof TState = keyof TState>(key: K): TState[K] | undefined
@@ -84,17 +78,11 @@ export class AgentState {
    *
    * @example
    * ```typescript
-   * interface AppState {
-   *   user: { name: string; age: number }
-   *   sessionId: string
-   * }
-   *
-   * // Typed usage with automatic type validation
-   * state.set<AppState>('user', { name: 'Alice', age: 25 })      // ✓ Type-safe
-   * state.set<AppState>('sessionId', 'abc-123')                   // ✓ Type-safe
-   *
-   * // Untyped usage (backward compatible)
-   * state.set('someKey', { any: 'value' })                        // ✓ Still works
+   * // Typed usage
+   * state.set<AppState>('user', { name: 'Alice', age: 25 })
+   * 
+   * // Untyped usage
+   * state.set('someKey', { any: 'value' })
    * ```
    */
   set<TState, K extends keyof TState = keyof TState>(key: K, value: TState[K]): void
@@ -104,10 +92,23 @@ export class AgentState {
   }
 
   /**
-   * Delete a state value by key.
+   * Delete a state value by key with optional type-safe property validation.
    *
+   * @typeParam TState - The complete state interface type
+   * @typeParam K - The property key (inferred from argument)
    * @param key - The key to delete
+   *
+   * @example
+   * ```typescript
+   * // Typed usage
+   * state.delete<AppState>('user')
+   * 
+   * // Untyped usage
+   * state.delete('someKey')
+   * ```
    */
+  delete<TState, K extends keyof TState = keyof TState>(key: K): void
+  delete(key: string): void
   delete(key: string): void {
     delete this._state[key]
   }
