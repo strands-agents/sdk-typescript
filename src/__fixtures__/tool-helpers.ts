@@ -4,7 +4,7 @@
  */
 
 import type { Tool, ToolContext } from '../tools/tool.js'
-import type { ToolResultBlock } from '../types/messages.js'
+import { ToolResultBlock } from '../types/messages.js'
 import type { JSONValue } from '../types/json.js'
 import { AgentState } from '../agent/state.js'
 
@@ -79,10 +79,13 @@ export function createMockTool(
  */
 export function createRandomTool(name?: string): Tool {
   const toolName = name ?? globalThis.crypto.randomUUID()
-  return createMockTool(toolName, () => ({
-    type: 'toolResultBlock',
-    toolUseId: 'test-id',
-    status: 'success' as const,
-    content: [],
-  }))
+  return createMockTool(
+    toolName,
+    () =>
+      new ToolResultBlock({
+        toolUseId: 'test-id',
+        status: 'success' as const,
+        content: [],
+      })
+  )
 }
