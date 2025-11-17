@@ -55,24 +55,26 @@ describe('MetricsCollector', () => {
     it('tracks single cycle with duration', () => {
       const collector = new MetricsCollector()
 
-      const { startTime, trace } = collector.startCycle()
-      expect(trace.name).toMatch(/Cycle/)
-      expect(trace.startTime).toBe(startTime)
+      const startPerf = globalThis.performance.now()
+      const cycle = collector.startCycle()
+      expect(cycle.trace.name).toMatch(/Cycle/)
+      expect(cycle.trace.startTime).toBeGreaterThanOrEqual(startPerf)
 
       // Simulate some work
       const workDuration = 10
-      const endTime = startTime + workDuration
+      const endTime = cycle.trace.startTime + workDuration
       vi.spyOn(performance, 'now').mockReturnValue(endTime)
 
-      collector.endCycle(startTime, trace)
+      // Manually dispose to end cycle
+      cycle[Symbol.dispose]()
 
       const metrics = collector.getMetrics()
       expect(metrics.eventLoop.cycleCount).toBe(1)
       expect(metrics.eventLoop.totalDurationMs).toBeCloseTo(workDuration, 0)
       expect(metrics.eventLoop.cycleDurationsMs).toHaveLength(1)
       expect(metrics.eventLoop.cycleDurationsMs[0]).toBeCloseTo(workDuration, 0)
-      expect(trace.endTime).toBe(endTime)
-      expect(trace.durationMs).toBeCloseTo(workDuration, 0)
+      expect(cycle.trace.endTime).toBe(endTime)
+      expect(cycle.trace.durationMs).toBeCloseTo(workDuration, 0)
 
       vi.restoreAllMocks()
     })
@@ -82,16 +84,16 @@ describe('MetricsCollector', () => {
 
       // Cycle 1
       const cycle1 = collector.startCycle()
-      const cycle1End = cycle1.startTime + 10
+      const cycle1End = cycle1.trace.startTime + 10
       vi.spyOn(performance, 'now').mockReturnValue(cycle1End)
-      collector.endCycle(cycle1.startTime, cycle1.trace)
+      cycle1[Symbol.dispose]()
 
       // Cycle 2
       vi.spyOn(performance, 'now').mockReturnValue(cycle1End + 5)
       const cycle2 = collector.startCycle()
-      const cycle2End = cycle2.startTime + 20
+      const cycle2End = cycle2.trace.startTime + 20
       vi.spyOn(performance, 'now').mockReturnValue(cycle2End)
-      collector.endCycle(cycle2.startTime, cycle2.trace)
+      cycle2[Symbol.dispose]()
 
       const metrics = collector.getMetrics()
       expect(metrics.eventLoop.cycleCount).toBe(2)
@@ -105,12 +107,15 @@ describe('MetricsCollector', () => {
     it('creates trace with unique ID', () => {
       const collector = new MetricsCollector()
 
-      const { trace: trace1 } = collector.startCycle()
-      const { trace: trace2 } = collector.startCycle()
+      const cycle1 = collector.startCycle()
+      const cycle2 = collector.startCycle()
 
-      expect(trace1.id).toBeDefined()
-      expect(trace2.id).toBeDefined()
-      expect(trace1.id).not.toBe(trace2.id)
+      expect(cycle1.trace.id).toBeDefined()
+      expect(cycle2.trace.id).toBeDefined()
+      expect(cycle1.trace.id).not.toBe(cycle2.trace.id)
+
+      cycle1[Symbol.dispose]()
+      cycle2[Symbol.dispose]()
     })
   })
 
@@ -213,21 +218,21 @@ describe('MetricsCollector', () => {
 
   describe('tool execution tracking', () => {
     let collector: MetricsCollector
-    let parentTrace: any
 
     beforeEach(() => {
       collector = new MetricsCollector()
-      const cycle = collector.startCycle()
-      parentTrace = cycle.trace
+      // Start a cycle to have a parent trace available
+      collector.startCycle()
     })
 
     it('tracks single successful tool execution', () => {
-      const { startTime, trace } = collector.startToolExecution('testTool', parentTrace)
+      const toolExecution = collector.startToolExecution('testTool')
 
-      const endTime = startTime + 100
+      const endTime = toolExecution.trace.startTime + 100
       vi.spyOn(performance, 'now').mockReturnValue(endTime)
 
-      collector.endToolExecution('testTool', startTime, true, trace)
+      toolExecution.markSuccess()
+      toolExecution[Symbol.dispose]()
 
       const metrics = collector.getMetrics()
       expect(metrics.tools.testTool).toEqual({
@@ -243,12 +248,13 @@ describe('MetricsCollector', () => {
     })
 
     it('tracks single failed tool execution', () => {
-      const { startTime, trace } = collector.startToolExecution('testTool', parentTrace)
+      const toolExecution = collector.startToolExecution('testTool')
 
-      const endTime = startTime + 100
+      const endTime = toolExecution.trace.startTime + 100
       vi.spyOn(performance, 'now').mockReturnValue(endTime)
 
-      collector.endToolExecution('testTool', startTime, false, trace)
+      // Don't call markSuccess() - should be tracked as error
+      toolExecution[Symbol.dispose]()
 
       const metrics = collector.getMetrics()
       expect(metrics.tools.testTool?.callCount).toBe(1)
@@ -259,14 +265,16 @@ describe('MetricsCollector', () => {
     })
 
     it('aggregates multiple executions of same tool', () => {
-      const { startTime: start1, trace: trace1 } = collector.startToolExecution('testTool', parentTrace)
-      vi.spyOn(performance, 'now').mockReturnValue(start1 + 100)
-      collector.endToolExecution('testTool', start1, true, trace1)
+      const tool1 = collector.startToolExecution('testTool')
+      vi.spyOn(performance, 'now').mockReturnValue(tool1.trace.startTime + 100)
+      tool1.markSuccess()
+      tool1[Symbol.dispose]()
 
-      vi.spyOn(performance, 'now').mockReturnValue(start1 + 200)
-      const { startTime: start2, trace: trace2 } = collector.startToolExecution('testTool', parentTrace)
-      vi.spyOn(performance, 'now').mockReturnValue(start2 + 200)
-      collector.endToolExecution('testTool', start2, true, trace2)
+      vi.spyOn(performance, 'now').mockReturnValue(tool1.trace.startTime + 200)
+      const tool2 = collector.startToolExecution('testTool')
+      vi.spyOn(performance, 'now').mockReturnValue(tool2.trace.startTime + 200)
+      tool2.markSuccess()
+      tool2[Symbol.dispose]()
 
       const metrics = collector.getMetrics()
       expect(metrics.tools.testTool?.callCount).toBe(2)
@@ -278,14 +286,16 @@ describe('MetricsCollector', () => {
     })
 
     it('tracks multiple different tools separately', () => {
-      const { startTime: start1, trace: trace1 } = collector.startToolExecution('tool1', parentTrace)
-      vi.spyOn(performance, 'now').mockReturnValue(start1 + 100)
-      collector.endToolExecution('tool1', start1, true, trace1)
+      const tool1 = collector.startToolExecution('tool1')
+      vi.spyOn(performance, 'now').mockReturnValue(tool1.trace.startTime + 100)
+      tool1.markSuccess()
+      tool1[Symbol.dispose]()
 
-      vi.spyOn(performance, 'now').mockReturnValue(start1 + 200)
-      const { startTime: start2, trace: trace2 } = collector.startToolExecution('tool2', parentTrace)
-      vi.spyOn(performance, 'now').mockReturnValue(start2 + 200)
-      collector.endToolExecution('tool2', start2, false, trace2)
+      vi.spyOn(performance, 'now').mockReturnValue(tool1.trace.startTime + 200)
+      const tool2 = collector.startToolExecution('tool2')
+      vi.spyOn(performance, 'now').mockReturnValue(tool2.trace.startTime + 200)
+      // Don't mark success on tool2
+      tool2[Symbol.dispose]()
 
       const metrics = collector.getMetrics()
       expect(metrics.tools.tool1).toBeDefined()
@@ -299,25 +309,30 @@ describe('MetricsCollector', () => {
     })
 
     it('creates tool trace as child of parent trace', () => {
-      const { trace: toolTrace } = collector.startToolExecution('testTool', parentTrace)
+      const cycle = collector.startCycle()
+      const toolExecution = collector.startToolExecution('testTool')
 
-      expect(toolTrace.parentId).toBe(parentTrace.id)
-      expect(toolTrace.name).toBe('testTool')
-      expect(toolTrace.metadata).toEqual({ toolName: 'testTool' })
-      expect(parentTrace.children).toContain(toolTrace)
+      expect(toolExecution.trace.parentId).toBe(cycle.trace.id)
+      expect(toolExecution.trace.name).toBe('testTool')
+      expect(toolExecution.trace.metadata).toEqual({ toolName: 'testTool' })
+      expect(cycle.trace.children).toContain(toolExecution.trace)
+
+      toolExecution[Symbol.dispose]()
+      cycle[Symbol.dispose]()
     })
 
     it('updates trace metadata with success status', () => {
-      const { startTime, trace } = collector.startToolExecution('testTool', parentTrace)
+      const toolExecution = collector.startToolExecution('testTool')
 
-      const endTime = startTime + 100
+      const endTime = toolExecution.trace.startTime + 100
       vi.spyOn(performance, 'now').mockReturnValue(endTime)
 
-      collector.endToolExecution('testTool', startTime, true, trace)
+      toolExecution.markSuccess()
+      toolExecution[Symbol.dispose]()
 
-      expect(trace.metadata?.success).toBe(true)
-      expect(trace.endTime).toBe(endTime)
-      expect(trace.durationMs).toBeCloseTo(100, 0)
+      expect(toolExecution.trace.metadata?.success).toBe(true)
+      expect(toolExecution.trace.endTime).toBe(endTime)
+      expect(toolExecution.trace.durationMs).toBeCloseTo(100, 0)
 
       vi.restoreAllMocks()
     })
@@ -327,26 +342,28 @@ describe('MetricsCollector', () => {
     it('builds trace tree with single cycle', () => {
       const collector = new MetricsCollector()
 
-      const { trace } = collector.startCycle()
-      collector.endCycle(trace.startTime, trace)
+      const cycle = collector.startCycle()
+      cycle[Symbol.dispose]()
 
       const metrics = collector.getMetrics()
       expect(metrics.traces).toHaveLength(1)
-      expect(metrics.traces[0]?.id).toBe(trace.id)
+      expect(metrics.traces[0]?.id).toBe(cycle.trace.id)
       expect(metrics.traces[0]?.children).toEqual([])
     })
 
     it('builds trace tree with nested tool executions', () => {
       const collector = new MetricsCollector()
 
-      const { trace: cycleTrace } = collector.startCycle()
-      const { trace: tool1Trace } = collector.startToolExecution('tool1', cycleTrace)
-      collector.endToolExecution('tool1', tool1Trace.startTime, true, tool1Trace)
+      const cycle = collector.startCycle()
+      const tool1 = collector.startToolExecution('tool1')
+      tool1.markSuccess()
+      tool1[Symbol.dispose]()
 
-      const { trace: tool2Trace } = collector.startToolExecution('tool2', cycleTrace)
-      collector.endToolExecution('tool2', tool2Trace.startTime, true, tool2Trace)
+      const tool2 = collector.startToolExecution('tool2')
+      tool2.markSuccess()
+      tool2[Symbol.dispose]()
 
-      collector.endCycle(cycleTrace.startTime, cycleTrace)
+      cycle[Symbol.dispose]()
 
       const metrics = collector.getMetrics()
       expect(metrics.traces).toHaveLength(1)
@@ -358,11 +375,14 @@ describe('MetricsCollector', () => {
     it('verifies parent-child relationships', () => {
       const collector = new MetricsCollector()
 
-      const { trace: cycleTrace } = collector.startCycle()
-      const { trace: toolTrace } = collector.startToolExecution('testTool', cycleTrace)
+      const cycle = collector.startCycle()
+      const toolExecution = collector.startToolExecution('testTool')
 
-      expect(toolTrace.parentId).toBe(cycleTrace.id)
-      expect(cycleTrace.children).toContain(toolTrace)
+      expect(toolExecution.trace.parentId).toBe(cycle.trace.id)
+      expect(cycle.trace.children).toContain(toolExecution.trace)
+
+      toolExecution[Symbol.dispose]()
+      cycle[Symbol.dispose]()
     })
   })
 
@@ -370,8 +390,8 @@ describe('MetricsCollector', () => {
     it('returns complete metrics snapshot', () => {
       const collector = new MetricsCollector()
 
-      const { startTime, trace } = collector.startCycle()
-      collector.endCycle(startTime, trace)
+      const cycle = collector.startCycle()
+      cycle[Symbol.dispose]()
 
       const usage: Usage = {
         inputTokens: 100,
@@ -391,8 +411,8 @@ describe('MetricsCollector', () => {
     it('returns deep copy that does not affect internal state', () => {
       const collector = new MetricsCollector()
 
-      const { startTime, trace } = collector.startCycle()
-      collector.endCycle(startTime, trace)
+      const cycle = collector.startCycle()
+      cycle[Symbol.dispose]()
 
       const metrics1 = collector.getMetrics()
       metrics1.eventLoop.cycleCount = 999
@@ -450,11 +470,11 @@ describe('MetricsCollector', () => {
       const collector = new MetricsCollector(mockMeterProvider as any)
 
       // Test cycle emission
-      const { startTime, trace } = collector.startCycle()
+      const cycle = collector.startCycle()
       expect(mockCounterAdd).toHaveBeenCalledWith(1)
 
-      vi.spyOn(performance, 'now').mockReturnValue(startTime + 100)
-      collector.endCycle(startTime, trace)
+      vi.spyOn(performance, 'now').mockReturnValue(cycle.trace.startTime + 100)
+      cycle[Symbol.dispose]()
       expect(mockHistogramRecord).toHaveBeenCalledWith(expect.any(Number))
 
       // Test model emission
@@ -484,11 +504,12 @@ describe('MetricsCollector', () => {
       }
 
       const collector = new MetricsCollector(mockMeterProvider as any)
-      const { trace: cycleTrace } = collector.startCycle()
+      collector.startCycle()
 
-      const { startTime, trace } = collector.startToolExecution('testTool', cycleTrace)
-      vi.spyOn(performance, 'now').mockReturnValue(startTime + 100)
-      collector.endToolExecution('testTool', startTime, true, trace)
+      const toolExecution = collector.startToolExecution('testTool')
+      vi.spyOn(performance, 'now').mockReturnValue(toolExecution.trace.startTime + 100)
+      toolExecution.markSuccess()
+      toolExecution[Symbol.dispose]()
 
       expect(mockCounterAdd).toHaveBeenCalledWith(1, { tool_name: 'testTool' })
       expect(mockHistogramRecord).toHaveBeenCalledWith(expect.any(Number), { tool_name: 'testTool' })
@@ -500,8 +521,8 @@ describe('MetricsCollector', () => {
       const collector = new MetricsCollector()
 
       // These operations should not throw
-      const { startTime, trace } = collector.startCycle()
-      collector.endCycle(startTime, trace)
+      const cycle = collector.startCycle()
+      cycle[Symbol.dispose]()
 
       const usage: Usage = {
         inputTokens: 100,

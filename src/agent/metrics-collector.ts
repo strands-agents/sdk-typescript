@@ -52,6 +52,7 @@ export class MetricsCollector {
   private _modelMetrics: ModelMetrics
   private _toolMetrics: ToolMetrics
   private _traces: Trace[]
+  private _currentCycleTrace?: Trace
 
   private _otelMeter?: Meter
   private _otelInstruments?: OTelInstruments
@@ -61,7 +62,7 @@ export class MetricsCollector {
    *
    * @param otelMeterProvider - Optional OpenTelemetry MeterProvider for real-time metric emission
    */
-  constructor(otelMeterProvider?: MeterProvider) {
+  constructor(otelMeterProvider?: unknown) {
     this._eventLoopMetrics = {
       cycleCount: 0,
       totalDurationMs: 0,
@@ -83,7 +84,8 @@ export class MetricsCollector {
     this._traces = []
 
     if (otelMeterProvider) {
-      this._otelMeter = otelMeterProvider.getMeter('strands-agents-sdk')
+      const provider = otelMeterProvider as MeterProvider
+      this._otelMeter = provider.getMeter('strands-agents-sdk')
       this._initializeOTelInstruments()
     }
   }
@@ -117,41 +119,49 @@ export class MetricsCollector {
    *
    * @returns Object containing start time and trace node
    */
-  startCycle(): { startTime: number; trace: Trace } {
-    const startTime = performance.now()
+  /**
+   * Starts tracking an event loop cycle and returns a disposable context manager.
+   * The cycle is automatically ended when the returned object is disposed.
+   *
+   * @returns Disposable context manager that tracks the cycle
+   *
+   * @example
+   * ```typescript
+   * using cycle = metricsCollector.startCycle()
+   * // Cycle automatically ended when scope exits
+   * ```
+   */
+  startCycle(): { trace: Trace; [Symbol.dispose]: () => void } {
+    const startTime = globalThis.performance.now()
     const trace: Trace = {
-      id: crypto.randomUUID(),
+      id: globalThis.crypto.randomUUID(),
       name: `Cycle ${this._eventLoopMetrics.cycleCount + 1}`,
       startTime,
       children: [],
     }
     this._traces.push(trace)
+    this._currentCycleTrace = trace
 
     // Emit to OTel in real-time
     this._otelInstruments?.eventLoopCycleCount.add(1)
 
-    return { startTime, trace }
-  }
+    return {
+      trace,
+      [Symbol.dispose]: () => {
+        const endTime = globalThis.performance.now()
+        const durationMs = endTime - startTime
 
-  /**
-   * Ends an event loop cycle and records its duration.
-   *
-   * @param startTime - Start time from startCycle()
-   * @param trace - Trace node from startCycle()
-   */
-  endCycle(startTime: number, trace: Trace): void {
-    const endTime = globalThis.performance.now()
-    const durationMs = endTime - startTime
+        trace.endTime = endTime
+        trace.durationMs = durationMs
 
-    trace.endTime = endTime
-    trace.durationMs = durationMs
+        this._eventLoopMetrics.cycleCount++
+        this._eventLoopMetrics.totalDurationMs += durationMs
+        this._eventLoopMetrics.cycleDurationsMs.push(durationMs)
 
-    this._eventLoopMetrics.cycleCount++
-    this._eventLoopMetrics.totalDurationMs += durationMs
-    this._eventLoopMetrics.cycleDurationsMs.push(durationMs)
-
-    // Emit to OTel in real-time
-    this._otelInstruments?.eventLoopCycleDuration.record(durationMs)
+        // Emit to OTel in real-time
+        this._otelInstruments?.eventLoopCycleDuration.record(durationMs)
+      },
+    }
   }
 
   /**
@@ -204,14 +214,31 @@ export class MetricsCollector {
   }
 
   /**
-   * Starts tracking a tool execution and creates a trace for it.
+   * Starts tracking a tool execution and returns a disposable context manager.
+   * The tool execution is automatically ended when the returned object is disposed.
    *
    * @param toolName - Name of the tool being executed
-   * @param parentTrace - Parent trace node (typically a cycle trace)
-   * @returns Object containing start time and trace node
+   * @returns Disposable context manager that tracks the tool execution
+   *
+   * @example
+   * ```typescript
+   * using toolExecution = metricsCollector.startToolExecution('myTool')
+   * try {
+   *   // Execute tool
+   *   toolExecution.markSuccess()
+   * } catch (error) {
+   *   // Error is automatically recorded if markSuccess() not called
+   * }
+   * // Tool execution automatically ended when scope exits
+   * ```
    */
-  startToolExecution(toolName: string, parentTrace: Trace): { startTime: number; trace: Trace } {
+  startToolExecution(toolName: string): { trace: Trace; markSuccess: () => void; [Symbol.dispose]: () => void } {
     const startTime = globalThis.performance.now()
+    const parentTrace = this._currentCycleTrace
+    if (!parentTrace) {
+      throw new Error('Cannot start tool execution without an active cycle')
+    }
+
     const trace: Trace = {
       id: globalThis.crypto.randomUUID(),
       name: toolName,
@@ -221,57 +248,56 @@ export class MetricsCollector {
       metadata: { toolName },
     }
     parentTrace.children.push(trace)
-    return { startTime, trace }
-  }
 
-  /**
-   * Ends tool execution and records its duration and success status.
-   *
-   * @param toolName - Name of the tool that was executed
-   * @param startTime - Start time from startToolExecution()
-   * @param success - Whether the tool execution succeeded
-   * @param trace - Trace node from startToolExecution()
-   */
-  endToolExecution(toolName: string, startTime: number, success: boolean, trace: Trace): void {
-    const endTime = globalThis.performance.now()
-    const durationMs = endTime - startTime
+    let success = false
 
-    trace.endTime = endTime
-    trace.durationMs = durationMs
-    trace.metadata = { ...trace.metadata, success }
+    return {
+      trace,
+      markSuccess: () => {
+        success = true
+      },
+      [Symbol.dispose]: () => {
+        const endTime = globalThis.performance.now()
+        const durationMs = endTime - startTime
 
-    // Initialize or update tool metrics
-    if (!this._toolMetrics[toolName]) {
-      this._toolMetrics[toolName] = {
-        callCount: 0,
-        successCount: 0,
-        errorCount: 0,
-        totalDurationMs: 0,
-        averageDurationMs: 0,
-      }
-    }
+        trace.endTime = endTime
+        trace.durationMs = durationMs
+        trace.metadata = { ...trace.metadata, success }
 
-    const toolMetric = this._toolMetrics[toolName]
-    toolMetric.callCount++
-    toolMetric.totalDurationMs += durationMs
-    toolMetric.averageDurationMs = toolMetric.totalDurationMs / toolMetric.callCount
+        // Initialize or update tool metrics
+        if (!this._toolMetrics[toolName]) {
+          this._toolMetrics[toolName] = {
+            callCount: 0,
+            successCount: 0,
+            errorCount: 0,
+            totalDurationMs: 0,
+            averageDurationMs: 0,
+          }
+        }
 
-    if (success) {
-      toolMetric.successCount++
-    } else {
-      toolMetric.errorCount++
-    }
+        const toolMetric = this._toolMetrics[toolName]
+        toolMetric.callCount++
+        toolMetric.totalDurationMs += durationMs
+        toolMetric.averageDurationMs = toolMetric.totalDurationMs / toolMetric.callCount
 
-    // Emit to OTel in real-time
-    if (this._otelInstruments) {
-      const attributes = { tool_name: toolName }
-      this._otelInstruments.toolCallCount.add(1, attributes)
-      this._otelInstruments.toolDuration.record(durationMs, attributes)
-      if (success) {
-        this._otelInstruments.toolSuccessCount.add(1, attributes)
-      } else {
-        this._otelInstruments.toolErrorCount.add(1, attributes)
-      }
+        if (success) {
+          toolMetric.successCount++
+        } else {
+          toolMetric.errorCount++
+        }
+
+        // Emit to OTel in real-time
+        if (this._otelInstruments) {
+          const attributes = { tool_name: toolName }
+          this._otelInstruments.toolCallCount.add(1, attributes)
+          this._otelInstruments.toolDuration.record(durationMs, attributes)
+          if (success) {
+            this._otelInstruments.toolSuccessCount.add(1, attributes)
+          } else {
+            this._otelInstruments.toolErrorCount.add(1, attributes)
+          }
+        }
+      },
     }
   }
 

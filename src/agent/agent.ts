@@ -237,10 +237,10 @@ export class Agent implements AgentData {
     try {
       // Main agent loop - continues until model stops without requesting tools
       while (true) {
-        // Start cycle metrics tracking
-        const cycleState = this._metricsCollector?.startCycle()
-        if (cycleState) {
-          this._currentCycleTrace = cycleState.trace
+        // Start cycle metrics tracking with automatic cleanup
+        using _cycle = this._metricsCollector?.startCycle()
+        if (_cycle) {
+          this._currentCycleTrace = _cycle.trace
         }
 
         const modelResult = yield* this.invokeModel(currentArgs)
@@ -248,10 +248,6 @@ export class Agent implements AgentData {
 
         // Handle stop reason
         if (modelResult.stopReason === 'maxTokens') {
-          // End cycle before throwing
-          if (cycleState) {
-            this._metricsCollector?.endCycle(cycleState.startTime, cycleState.trace)
-          }
           throw new MaxTokensError(
             'Model reached maximum token limit. This is an unrecoverable state that requires intervention.',
             modelResult.message
@@ -260,11 +256,6 @@ export class Agent implements AgentData {
 
         if (modelResult.stopReason !== 'toolUse') {
           // Loop terminates - no tool use requested
-          // End cycle metrics tracking
-          if (cycleState) {
-            this._metricsCollector?.endCycle(cycleState.startTime, cycleState.trace)
-          }
-
           // Add assistant message now that we're returning
           this.messages.push(modelResult.message)
           const result: AgentResult = {
@@ -280,17 +271,12 @@ export class Agent implements AgentData {
         // Execute tools sequentially
         const toolResultMessage = yield* this.executeTools(modelResult.message, this._toolRegistry)
 
-        // End cycle metrics tracking
-        if (cycleState) {
-          this._metricsCollector?.endCycle(cycleState.startTime, cycleState.trace)
-        }
-
         // Add assistant message with tool uses right before adding tool results
         // This ensures we don't have dangling tool use messages if tool execution fails
         this.messages.push(modelResult.message)
         this.messages.push(toolResultMessage)
 
-        // Continue loop
+        // Continue loop (cycle automatically ended via dispose)
       }
     } finally {
       this.conversationManager.applyManagement(this)
@@ -455,8 +441,8 @@ export class Agent implements AgentData {
       })
     }
 
-    // Start tool execution metrics tracking
-    const toolState = this._metricsCollector?.startToolExecution(toolUseBlock.name, this._currentCycleTrace!)
+    // Start tool execution metrics tracking with automatic cleanup
+    using _toolExecution = this._metricsCollector?.startToolExecution(toolUseBlock.name)
 
     // Execute tool and collect result
     const toolContext: ToolContext = {
@@ -468,32 +454,26 @@ export class Agent implements AgentData {
       agent: this,
     }
 
-    let success = false
-    let toolResult: ToolResultBlock | undefined
+    const toolGenerator = tool.stream(toolContext)
 
-    try {
-      const toolGenerator = tool.stream(toolContext)
+    // Use yield* to delegate to the tool generator and capture the return value
+    const toolResult = yield* toolGenerator
 
-      // Use yield* to delegate to the tool generator and capture the return value
-      toolResult = yield* toolGenerator
-
-      if (!toolResult) {
-        // Tool didn't return a result - return error result instead of throwing
-        toolResult = new ToolResultBlock({
-          toolUseId: toolUseBlock.toolUseId,
-          status: 'error',
-          content: [new TextBlock(`Tool '${toolUseBlock.name}' did not return a result`)],
-        })
-      } else {
-        success = toolResult.status === 'success'
-      }
-
-      return toolResult
-    } finally {
-      // End tool execution metrics tracking
-      if (toolState) {
-        this._metricsCollector?.endToolExecution(toolUseBlock.name, toolState.startTime, success, toolState.trace)
-      }
+    if (!toolResult) {
+      // Tool didn't return a result - return error result instead of throwing
+      return new ToolResultBlock({
+        toolUseId: toolUseBlock.toolUseId,
+        status: 'error',
+        content: [new TextBlock(`Tool '${toolUseBlock.name}' did not return a result`)],
+      })
     }
+
+    // Mark success if tool execution succeeded
+    if (toolResult.status === 'success' && _toolExecution) {
+      _toolExecution.markSuccess()
+    }
+
+    // Tool already returns ToolResultBlock directly
+    return toolResult
   }
 }
