@@ -81,13 +81,62 @@ describe('AgentState', () => {
 
     it('returns deep copy that cannot mutate stored state', () => {
       const state = new AgentState({ nested: { value: 'test' } })
-      const retrieved = state.get('nested') as { value: string }
+      const retrieved = state.get<{ nested: { value: string } }>('nested')
 
       // Mutate retrieved value
-      retrieved.value = 'changed'
+      if (retrieved) {
+        retrieved.value = 'changed'
+      }
 
       // Stored state should not be affected
       expect(state.get('nested')).toEqual({ value: 'test' })
+    })
+
+    it('infers correct type with generic state interface', () => {
+      interface TestState {
+        user: { name: string; age: number }
+        count: number
+        items: string[]
+      }
+
+      const state = new AgentState({ user: { name: 'John', age: 30 }, count: 5, items: ['a', 'b'] })
+
+      // Type inference tests
+      const user = state.get<TestState>('user')
+      const count = state.get<TestState>('count')
+      const items = state.get<TestState>('items')
+
+      expect(user).toEqual({ name: 'John', age: 30 })
+      expect(count).toBe(5)
+      expect(items).toEqual(['a', 'b'])
+    })
+
+    it('returns undefined for non-existent key with typed interface', () => {
+      interface TestState {
+        existing: string
+      }
+
+      const state = new AgentState({ existing: 'value' })
+      const result = state.get<TestState>('existing')
+
+      expect(result).toBe('value')
+
+      // Non-existent key
+      const state2 = new AgentState()
+      const missing = state2.get<TestState>('existing')
+
+      expect(missing).toBeUndefined()
+    })
+
+    it('maintains backward compatibility without generic parameter', () => {
+      const state = new AgentState({ key1: 'value1', nested: { data: 'test' } })
+
+      // Untyped usage should still work
+      const value1 = state.get('key1')
+      const value2 = state.get('nested')
+
+      expect(value1).toBe('value1')
+      expect(value2).toEqual({ data: 'test' })
     })
   })
 
@@ -188,6 +237,32 @@ describe('AgentState', () => {
     it('throws error for top-level undefined values', () => {
       const state = new AgentState()
       expect(() => state.set('key1', undefined)).toThrow('value for key "key1" is undefined which cannot be serialized')
+    })
+
+    it('accepts typed value with generic state interface', () => {
+      interface TestState {
+        user: { name: string; age: number }
+        count: number
+      }
+
+      const state = new AgentState()
+
+      state.set<TestState>('user', { name: 'Alice', age: 25 })
+      state.set<TestState>('count', 10)
+
+      expect(state.get('user')).toEqual({ name: 'Alice', age: 25 })
+      expect(state.get('count')).toBe(10)
+    })
+
+    it('maintains backward compatibility for set without generic parameter', () => {
+      const state = new AgentState()
+
+      // Untyped usage should still work
+      state.set('key1', 'value1')
+      state.set('key2', { nested: 'data' })
+
+      expect(state.get('key1')).toBe('value1')
+      expect(state.get('key2')).toEqual({ nested: 'data' })
     })
   })
 

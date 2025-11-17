@@ -71,7 +71,7 @@ export const notebook = tool({
     }
 
     // Get notebooks from state, or initialize if not present
-    let notebooks = context.agent.state.get('notebooks') as NotebookState['notebooks'] | undefined
+    let notebooks = context.agent.state.get<NotebookState>('notebooks')
 
     if (!notebooks) {
       notebooks = {}

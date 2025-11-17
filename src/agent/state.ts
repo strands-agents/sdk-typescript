@@ -33,12 +33,31 @@ export class AgentState {
   }
 
   /**
-   * Get a state value by key, or all state if no key provided.
+   * Get a state value by key with optional type-safe property lookup.
    * Returns a deep copy to prevent mutations.
    *
-   * @param key - Optional key to retrieve specific value
-   * @returns The value for the key, all state if no key provided, or undefined if key doesn't exist
+   * @typeParam TState - The complete state interface type
+   * @typeParam K - The property key (inferred from argument)
+   * @param key - Key to retrieve specific value
+   * @returns The value for the key, or undefined if key doesn't exist
+   *
+   * @example
+   * ```typescript
+   * interface AppState {
+   *   user: { name: string; age: number }
+   *   sessionId: string
+   * }
+   *
+   * // Typed usage with automatic type inference
+   * const user = state.get<AppState>('user')           // { name: string; age: number } | undefined
+   * const session = state.get<AppState>('sessionId')   // string | undefined
+   *
+   * // Untyped usage (backward compatible)
+   * const value = state.get('someKey')                 // JSONValue | undefined
+   * ```
    */
+  get<TState, K extends keyof TState = keyof TState>(key: K): TState[K] | undefined
+  get(key: string): JSONValue | undefined
   get(key: string): JSONValue | Record<string, JSONValue> | undefined {
     if (key == null) {
       throw new Error('key is required')
@@ -54,12 +73,32 @@ export class AgentState {
   }
 
   /**
-   * Set a state value. Validates JSON serializability and stores a deep copy.
+   * Set a state value with optional type-safe property validation.
+   * Validates JSON serializability and stores a deep copy.
    *
+   * @typeParam TState - The complete state interface type
+   * @typeParam K - The property key (inferred from argument)
    * @param key - The key to set
    * @param value - The value to store (must be JSON serializable)
    * @throws Error if value is not JSON serializable
+   *
+   * @example
+   * ```typescript
+   * interface AppState {
+   *   user: { name: string; age: number }
+   *   sessionId: string
+   * }
+   *
+   * // Typed usage with automatic type validation
+   * state.set<AppState>('user', { name: 'Alice', age: 25 })      // ✓ Type-safe
+   * state.set<AppState>('sessionId', 'abc-123')                   // ✓ Type-safe
+   *
+   * // Untyped usage (backward compatible)
+   * state.set('someKey', { any: 'value' })                        // ✓ Still works
+   * ```
    */
+  set<TState, K extends keyof TState = keyof TState>(key: K, value: TState[K]): void
+  set(key: string, value: unknown): void
   set(key: string, value: unknown): void {
     this._state[key] = deepCopyWithValidation(value, `value for key "${key}"`)
   }
