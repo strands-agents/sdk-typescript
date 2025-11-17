@@ -24,105 +24,101 @@ describe('Agent Hooks Integration', () => {
 
   describe('invocation lifecycle', () => {
     it('fires hooks during invoke', async () => {
+      const lifecycleProvider = new MockHookProvider({ includeModelEvents: false })
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
-      const agent = new Agent({ model, hooks: [mockProvider] })
+      const agent = new Agent({ model, hooks: [lifecycleProvider] })
 
       await agent.invoke('Hi')
 
-      // Verify exact sequence: BeforeInvocation, BeforeModelCall, ModelStreamEventHook(s), AfterModelCall, MessageAdded, AfterInvocation
-      expect(mockProvider.invocations.length).toBeGreaterThan(5)
+      // Verify exact sequence: BeforeInvocation, BeforeModelCall, AfterModelCall, MessageAdded, AfterInvocation
+      expect(lifecycleProvider.invocations).toHaveLength(5)
 
       // First event: BeforeInvocationEvent
-      expect(mockProvider.invocations[0]).toBeInstanceOf(BeforeInvocationEvent)
-      expect(mockProvider.invocations[0]).toMatchObject({
+      expect(lifecycleProvider.invocations[0]).toBeInstanceOf(BeforeInvocationEvent)
+      expect(lifecycleProvider.invocations[0]).toMatchObject({
         agent,
         type: 'beforeInvocationEvent',
       })
 
       // Second event: BeforeModelCallEvent
-      expect(mockProvider.invocations[1]).toBeInstanceOf(BeforeModelCallEvent)
-      expect(mockProvider.invocations[1]).toMatchObject({
+      expect(lifecycleProvider.invocations[1]).toBeInstanceOf(BeforeModelCallEvent)
+      expect(lifecycleProvider.invocations[1]).toMatchObject({
         agent,
         type: 'beforeModelCallEvent',
       })
 
-      // Middle events: ModelStreamEventHook(s)
-      const streamHooks = mockProvider.invocations.filter((e) => e instanceof ModelStreamEventHook)
-      expect(streamHooks.length).toBeGreaterThan(0)
+      // Third event: AfterModelCallEvent
+      expect(lifecycleProvider.invocations[2]).toBeInstanceOf(AfterModelCallEvent)
+      expect((lifecycleProvider.invocations[2] as AfterModelCallEvent).stopReason).toBe('endTurn')
 
-      // Second to last event: AfterModelCallEvent
-      expect(mockProvider.invocations[mockProvider.invocations.length - 3]).toBeInstanceOf(AfterModelCallEvent)
-      expect((mockProvider.invocations[mockProvider.invocations.length - 3] as AfterModelCallEvent).stopReason).toBe(
-        'endTurn'
-      )
+      // Fourth event: MessageAddedEvent
+      expect(lifecycleProvider.invocations[3]).toBeInstanceOf(MessageAddedEvent)
+      expect((lifecycleProvider.invocations[3] as MessageAddedEvent).message.role).toBe('assistant')
 
-      // Third to last event: MessageAddedEvent
-      expect(mockProvider.invocations[mockProvider.invocations.length - 2]).toBeInstanceOf(MessageAddedEvent)
-      expect((mockProvider.invocations[mockProvider.invocations.length - 2] as MessageAddedEvent).message.role).toBe(
-        'assistant'
-      )
-
-      // Last event: AfterInvocationEvent
-      expect(mockProvider.invocations[mockProvider.invocations.length - 1]).toBeInstanceOf(AfterInvocationEvent)
-      expect(mockProvider.invocations[mockProvider.invocations.length - 1]).toMatchObject({
+      // Fifth event: AfterInvocationEvent
+      expect(lifecycleProvider.invocations[4]).toBeInstanceOf(AfterInvocationEvent)
+      expect(lifecycleProvider.invocations[4]).toMatchObject({
         agent,
         type: 'afterInvocationEvent',
       })
     })
 
     it('fires hooks during stream', async () => {
+      const lifecycleProvider = new MockHookProvider({ includeModelEvents: false })
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
-      const agent = new Agent({ model, hooks: [mockProvider] })
+      const agent = new Agent({ model, hooks: [lifecycleProvider] })
 
       await collectIterator(agent.stream('Hi'))
 
       // Should have same sequence as invoke
-      expect(mockProvider.invocations.length).toBeGreaterThan(5)
+      expect(lifecycleProvider.invocations).toHaveLength(5)
 
       // First event: BeforeInvocationEvent
-      expect(mockProvider.invocations[0]).toBeInstanceOf(BeforeInvocationEvent)
+      expect(lifecycleProvider.invocations[0]).toBeInstanceOf(BeforeInvocationEvent)
 
       // Last event: AfterInvocationEvent
-      expect(mockProvider.invocations[mockProvider.invocations.length - 1]).toBeInstanceOf(AfterInvocationEvent)
+      expect(lifecycleProvider.invocations[4]).toBeInstanceOf(AfterInvocationEvent)
     })
   })
 
   describe('runtime hook registration', () => {
     it('allows adding hooks after agent creation', async () => {
+      const lifecycleProvider = new MockHookProvider({ includeModelEvents: false })
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
       const agent = new Agent({ model })
 
-      agent.hooks.addHook(mockProvider)
+      agent.hooks.addHook(lifecycleProvider)
 
       await agent.invoke('Hi')
 
-      // Should have all events
-      expect(mockProvider.invocations.length).toBeGreaterThan(5)
-      expect(mockProvider.invocations[0]).toBeInstanceOf(BeforeInvocationEvent)
-      expect(mockProvider.invocations[mockProvider.invocations.length - 1]).toBeInstanceOf(AfterInvocationEvent)
+      // Should have all lifecycle events
+      expect(lifecycleProvider.invocations).toHaveLength(5)
+      expect(lifecycleProvider.invocations[0]).toBeInstanceOf(BeforeInvocationEvent)
+      expect(lifecycleProvider.invocations[4]).toBeInstanceOf(AfterInvocationEvent)
     })
   })
 
   describe('multi-turn conversations', () => {
     it('fires hooks for each invoke call', async () => {
+      const lifecycleProvider = new MockHookProvider({ includeModelEvents: false })
       const model = new MockMessageModel()
         .addTurn({ type: 'textBlock', text: 'First response' })
         .addTurn({ type: 'textBlock', text: 'Second response' })
 
-      const agent = new Agent({ model, hooks: [mockProvider] })
+      const agent = new Agent({ model, hooks: [lifecycleProvider] })
 
       await agent.invoke('First message')
 
-      const firstTurnInvocations = mockProvider.invocations.length
-      expect(firstTurnInvocations).toBeGreaterThan(5)
+      // First turn should have: BeforeInvocation, BeforeModelCall, AfterModelCall, MessageAdded, AfterInvocation
+      expect(lifecycleProvider.invocations).toHaveLength(5)
 
       await agent.invoke('Second message')
 
-      // Should have hooks for both turns
-      expect(mockProvider.invocations.length).toBeGreaterThan(firstTurnInvocations)
+      // Should have 10 events total (5 for each turn)
+      expect(lifecycleProvider.invocations).toHaveLength(10)
 
       // Filter for just Invocation events to verify they fire for each turn
-      const invocationEvents = mockProvider.invocations.filter(
+      const invocationEvents = lifecycleProvider.invocations.filter(
         (e) => e instanceof BeforeInvocationEvent || e instanceof AfterInvocationEvent
       )
       expect(invocationEvents).toHaveLength(4) // 2 for each turn
@@ -283,18 +279,21 @@ describe('Agent Hooks Integration', () => {
         hooks: [mockProvider],
       })
 
-      await agent.invoke('Test')
+      // Collect all stream events
+      const allStreamEvents = []
+      for await (const event of agent.stream('Test')) {
+        allStreamEvents.push(event)
+      }
 
       const streamEventHooks = mockProvider.invocations.filter((e) => e instanceof ModelStreamEventHook)
 
-      // Should have multiple streaming events (message start, content block start, delta, stop, message stop)
+      // Should have events
       expect(streamEventHooks.length).toBeGreaterThan(0)
 
-      // Each event should have a streamEvent property
-      for (const hook of streamEventHooks) {
-        expect(hook).toHaveProperty('streamEvent')
-        const streamEvent = (hook as ModelStreamEventHook).streamEvent
-        expect(streamEvent).toHaveProperty('type')
+      // Verify each hook event matches a stream event
+      for (const hookEvent of streamEventHooks) {
+        const streamEvent = (hookEvent as ModelStreamEventHook).streamEvent
+        expect(allStreamEvents).toContain(streamEvent)
       }
     })
   })

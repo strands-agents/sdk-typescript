@@ -16,9 +16,14 @@ import type { HookEventConstructor } from '../hooks/types.js'
  */
 export class MockHookProvider implements HookProvider {
   invocations: HookEvent[] = []
+  private includeModelEvents: boolean
+
+  constructor(options: { includeModelEvents?: boolean } = {}) {
+    this.includeModelEvents = options.includeModelEvents ?? true
+  }
 
   registerCallbacks(registry: HookRegistry): void {
-    const eventTypes: HookEventConstructor[] = [
+    const lifecycleEvents: HookEventConstructor[] = [
       BeforeInvocationEvent,
       AfterInvocationEvent,
       MessageAddedEvent,
@@ -26,8 +31,11 @@ export class MockHookProvider implements HookProvider {
       AfterToolCallEvent,
       BeforeModelCallEvent,
       AfterModelCallEvent,
-      ModelStreamEventHook,
     ]
+
+    const modelEvents: HookEventConstructor[] = [ModelStreamEventHook]
+
+    const eventTypes = this.includeModelEvents ? [...lifecycleEvents, ...modelEvents] : lifecycleEvents
 
     for (const eventType of eventTypes) {
       registry.addCallback(eventType, (e) => {
