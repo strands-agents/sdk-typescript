@@ -45,7 +45,7 @@ export class AgentState {
    * ```typescript
    * // Typed usage
    * const user = state.get<AppState>('user')      // { name: string; age: number } | undefined
-   * 
+   *
    * // Untyped usage
    * const value = state.get('someKey')            // JSONValue | undefined
    * ```
@@ -80,7 +80,7 @@ export class AgentState {
    * ```typescript
    * // Typed usage
    * state.set<AppState>('user', { name: 'Alice', age: 25 })
-   * 
+   *
    * // Untyped usage
    * state.set('someKey', { any: 'value' })
    * ```
@@ -102,7 +102,7 @@ export class AgentState {
    * ```typescript
    * // Typed usage
    * state.delete<AppState>('user')
-   * 
+   *
    * // Untyped usage
    * state.delete('someKey')
    * ```
