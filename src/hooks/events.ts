@@ -141,12 +141,10 @@ export class AfterToolCallEvent extends HookEvent {
 export class BeforeModelCallEvent extends HookEvent {
   readonly type = 'beforeModelCallEvent' as const
   readonly agent: AgentData
-  readonly messages: Message[]
 
-  constructor(data: { agent: AgentData; messages: Message[] }) {
+  constructor(data: { agent: AgentData }) {
     super()
     this.agent = data.agent
-    this.messages = data.messages
   }
 }
 

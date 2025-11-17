@@ -354,29 +354,10 @@ export class Agent implements AgentData {
     }
 
     // Invoke BeforeModelCallEvent hook
-    await this.hooks.invokeCallbacks(new BeforeModelCallEvent({ agent: this, messages: [...this.messages] }))
+    await this.hooks.invokeCallbacks(new BeforeModelCallEvent({ agent: this }))
 
     try {
-      // Manually iterate through streaming events to fire ModelStreamEventHook
-      const streamGenerator = this._model.streamAggregated(this.messages, streamOptions)
-      let result = await streamGenerator.next()
-
-      while (!result.done) {
-        const event = result.value
-
-        // Fire hook for streaming events (ModelStreamEvent types only)
-        if ('type' in event && typeof event.type === 'string' && event.type.startsWith('model')) {
-          await this.hooks.invokeCallbacks(
-            new ModelStreamEventHook({ agent: this, streamEvent: event as ModelStreamEvent })
-          )
-        }
-
-        yield event
-        result = await streamGenerator.next()
-      }
-
-      // result.done is true, result.value contains the return value
-      const { message, stopReason } = result.value
+      const { message, stopReason } = yield* this._streamFromModel(this.messages, streamOptions)
 
       // Invoke AfterModelCallEvent hook
       await this.hooks.invokeCallbacks(new AfterModelCallEvent({ agent: this, message, stopReason }))
@@ -393,6 +374,36 @@ export class Agent implements AgentData {
       // Re-throw other errors
       throw error
     }
+  }
+
+  /**
+   * Streams events from the model and fires ModelStreamEventHook for each event.
+   *
+   * @param messages - Messages to send to the model
+   * @param streamOptions - Options for streaming
+   * @returns Object containing the assistant message and stop reason
+   */
+  private async *_streamFromModel(
+    messages: Message[],
+    streamOptions: StreamOptions
+  ): AsyncGenerator<AgentStreamEvent, { message: Message; stopReason: string }, undefined> {
+    const streamGenerator = this._model.streamAggregated(messages, streamOptions)
+    let result = await streamGenerator.next()
+
+    while (!result.done) {
+      const event = result.value
+
+      // Fire hook for all events from the model
+      await this.hooks.invokeCallbacks(
+        new ModelStreamEventHook({ agent: this, streamEvent: event as ModelStreamEvent })
+      )
+
+      yield event
+      result = await streamGenerator.next()
+    }
+
+    // result.done is true, result.value contains the return value
+    return result.value
   }
 
   /**
@@ -529,8 +540,7 @@ export class Agent implements AgentData {
         new AfterToolCallEvent({ agent: this, toolUse, tool, result: errorResult, error: toolError })
       )
 
-      // Re-throw to maintain existing error handling behavior
-      throw error
+      return errorResult
     }
   }
 }

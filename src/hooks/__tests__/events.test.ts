@@ -192,21 +192,17 @@ describe('AfterToolCallEvent', () => {
 describe('BeforeModelCallEvent', () => {
   it('creates instance with correct properties', () => {
     const agent = new Agent()
-    const messages = [new Message({ role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] })]
-    const event = new BeforeModelCallEvent({ agent, messages })
+    const event = new BeforeModelCallEvent({ agent })
 
     expect(event.agent).toBe(agent)
-    expect(event.messages).toEqual(messages)
     expect(event.type).toBe('beforeModelCallEvent')
     // @ts-expect-error verifying that property is readonly
     event.agent = new Agent()
-    // @ts-expect-error verifying that property is readonly
-    event.messages = messages
   })
 
   it('returns false for _shouldReverseCallbacks', () => {
     const agent = new Agent()
-    const event = new BeforeModelCallEvent({ agent, messages: [] })
+    const event = new BeforeModelCallEvent({ agent })
     expect(event._shouldReverseCallbacks()).toBe(false)
   })
 })
