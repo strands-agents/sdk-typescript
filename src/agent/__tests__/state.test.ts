@@ -84,9 +84,7 @@ describe('AgentState', () => {
       const retrieved = state.get<{ nested: { value: string } }>('nested')
 
       // Mutate retrieved value
-      if (retrieved) {
-        retrieved.value = 'changed'
-      }
+      retrieved!.value = 'changed'
 
       // Stored state should not be affected
       expect(state.get('nested')).toEqual({ value: 'test' })
@@ -126,17 +124,9 @@ describe('AgentState', () => {
       const missing = state2.get<TestState>('existing')
 
       expect(missing).toBeUndefined()
-    })
 
-    it('maintains backward compatibility without generic parameter', () => {
-      const state = new AgentState({ key1: 'value1', nested: { data: 'test' } })
-
-      // Untyped usage should still work
-      const value1 = state.get('key1')
-      const value2 = state.get('nested')
-
-      expect(value1).toBe('value1')
-      expect(value2).toEqual({ data: 'test' })
+      // @ts-expect-error properties not on the TestsState are an error
+      state2.get<TestState>('not-really')
     })
   })
 
@@ -252,17 +242,9 @@ describe('AgentState', () => {
 
       expect(state.get('user')).toEqual({ name: 'Alice', age: 25 })
       expect(state.get('count')).toBe(10)
-    })
 
-    it('maintains backward compatibility for set without generic parameter', () => {
-      const state = new AgentState()
-
-      // Untyped usage should still work
-      state.set('key1', 'value1')
-      state.set('key2', { nested: 'data' })
-
-      expect(state.get('key1')).toBe('value1')
-      expect(state.get('key2')).toEqual({ nested: 'data' })
+      // @ts-expect-error properties not on the TestsState are an error
+      state.set<TestState>('not-really', 'nope')
     })
   })
 
