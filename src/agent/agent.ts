@@ -24,7 +24,17 @@ import type { ConversationManager } from '../conversation-manager/conversation-m
 import { SlidingWindowConversationManager } from '../conversation-manager/sliding-window-conversation-manager.js'
 import { HookRegistryImplementation } from '../hooks/registry.js'
 import type { HookProvider } from '../hooks/types.js'
-import { BeforeInvocationEvent, AfterInvocationEvent } from '../hooks/events.js'
+import {
+  BeforeInvocationEvent,
+  AfterInvocationEvent,
+  MessageAddedEvent,
+  BeforeToolCallEvent,
+  AfterToolCallEvent,
+  BeforeModelCallEvent,
+  AfterModelCallEvent,
+  ModelStreamEventHook,
+} from '../hooks/events.js'
+import type { ModelStreamEvent } from '../models/streaming.js'
 
 /**
  * Recursive type definition for nested tool arrays.
@@ -259,6 +269,7 @@ export class Agent implements AgentData {
           // Loop terminates - no tool use requested
           // Add assistant message now that we're returning
           this.messages.push(modelResult.message)
+          await this.hooks.invokeCallbacks(new MessageAddedEvent({ agent: this, message: modelResult.message }))
           return {
             stopReason: modelResult.stopReason,
             lastMessage: modelResult.message,
@@ -271,7 +282,9 @@ export class Agent implements AgentData {
         // Add assistant message with tool uses right before adding tool results
         // This ensures we don't have dangling tool use messages if tool execution fails
         this.messages.push(modelResult.message)
+        await this.hooks.invokeCallbacks(new MessageAddedEvent({ agent: this, message: modelResult.message }))
         this.messages.push(toolResultMessage)
+        await this.hooks.invokeCallbacks(new MessageAddedEvent({ agent: this, message: toolResultMessage }))
 
         // Continue loop
       }
@@ -340,8 +353,33 @@ export class Agent implements AgentData {
       )
     }
 
+    // Invoke BeforeModelCallEvent hook
+    await this.hooks.invokeCallbacks(new BeforeModelCallEvent({ agent: this, messages: [...this.messages] }))
+
     try {
-      const { message, stopReason } = yield* this._model.streamAggregated(this.messages, streamOptions)
+      // Manually iterate through streaming events to fire ModelStreamEventHook
+      const streamGenerator = this._model.streamAggregated(this.messages, streamOptions)
+      let result = await streamGenerator.next()
+
+      while (!result.done) {
+        const event = result.value
+
+        // Fire hook for streaming events (ModelStreamEvent types only)
+        if ('type' in event && typeof event.type === 'string' && event.type.startsWith('model')) {
+          await this.hooks.invokeCallbacks(
+            new ModelStreamEventHook({ agent: this, streamEvent: event as ModelStreamEvent })
+          )
+        }
+
+        yield event
+        result = await streamGenerator.next()
+      }
+
+      // result.done is true, result.value contains the return value
+      const { message, stopReason } = result.value
+
+      // Invoke AfterModelCallEvent hook
+      await this.hooks.invokeCallbacks(new AfterModelCallEvent({ agent: this, message, stopReason }))
 
       yield { type: 'afterModelEvent', message, stopReason }
 
@@ -417,13 +455,28 @@ export class Agent implements AgentData {
   ): AsyncGenerator<AgentStreamEvent, ToolResultBlock, undefined> {
     const tool = toolRegistry.find((t) => t.name === toolUseBlock.name)
 
+    // Create toolUse object for hook events
+    const toolUse = {
+      name: toolUseBlock.name,
+      toolUseId: toolUseBlock.toolUseId,
+      input: toolUseBlock.input,
+    }
+
+    // Invoke BeforeToolCallEvent hook
+    await this.hooks.invokeCallbacks(new BeforeToolCallEvent({ agent: this, toolUse, tool }))
+
     if (!tool) {
       // Tool not found - return error result instead of throwing
-      return new ToolResultBlock({
+      const errorResult = new ToolResultBlock({
         toolUseId: toolUseBlock.toolUseId,
         status: 'error',
         content: [new TextBlock(`Tool '${toolUseBlock.name}' not found in registry`)],
       })
+
+      // Invoke AfterToolCallEvent hook for tool not found
+      await this.hooks.invokeCallbacks(new AfterToolCallEvent({ agent: this, toolUse, tool, result: errorResult }))
+
+      return errorResult
     }
 
     // Execute tool and collect result
@@ -436,22 +489,49 @@ export class Agent implements AgentData {
       agent: this,
     }
 
-    const toolGenerator = tool.stream(toolContext)
+    try {
+      const toolGenerator = tool.stream(toolContext)
 
-    // Use yield* to delegate to the tool generator and capture the return value
-    const toolResult = yield* toolGenerator
+      // Use yield* to delegate to the tool generator and capture the return value
+      const toolResult = yield* toolGenerator
 
-    if (!toolResult) {
-      // Tool didn't return a result - return error result instead of throwing
-      return new ToolResultBlock({
+      if (!toolResult) {
+        // Tool didn't return a result - return error result instead of throwing
+        const errorResult = new ToolResultBlock({
+          toolUseId: toolUseBlock.toolUseId,
+          status: 'error',
+          content: [new TextBlock(`Tool '${toolUseBlock.name}' did not return a result`)],
+        })
+
+        // Invoke AfterToolCallEvent hook for no result
+        await this.hooks.invokeCallbacks(new AfterToolCallEvent({ agent: this, toolUse, tool, result: errorResult }))
+
+        return errorResult
+      }
+
+      // Invoke AfterToolCallEvent hook for success
+      await this.hooks.invokeCallbacks(new AfterToolCallEvent({ agent: this, toolUse, tool, result: toolResult }))
+
+      // Tool already returns ToolResultBlock directly
+      return toolResult
+    } catch (error) {
+      // Tool execution failed with error
+      const toolError = error instanceof Error ? error : new Error(String(error))
+      const errorResult = new ToolResultBlock({
         toolUseId: toolUseBlock.toolUseId,
         status: 'error',
-        content: [new TextBlock(`Tool '${toolUseBlock.name}' did not return a result`)],
+        content: [new TextBlock(toolError.message)],
+        error: toolError,
       })
-    }
 
-    // Tool already returns ToolResultBlock directly
-    return toolResult
+      // Invoke AfterToolCallEvent hook for error
+      await this.hooks.invokeCallbacks(
+        new AfterToolCallEvent({ agent: this, toolUse, tool, result: errorResult, error: toolError })
+      )
+
+      // Re-throw to maintain existing error handling behavior
+      throw error
+    }
   }
 }
 

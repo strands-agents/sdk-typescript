@@ -1,4 +1,4 @@
-import type { HookEvent, HookProvider, HookRegistry } from '../hooks/index.js'
+import type { HookEvent, HookProvider, HookRegistry } from '@strands-agents/sdk'
 import {
   BeforeInvocationEvent,
   AfterInvocationEvent,
@@ -8,7 +8,7 @@ import {
   BeforeModelCallEvent,
   AfterModelCallEvent,
   ModelStreamEventHook,
-} from '../hooks/index.js'
+} from '@strands-agents/sdk'
 
 /**
  * Mock hook provider that records all hook invocations for testing.

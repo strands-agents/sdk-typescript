@@ -6,7 +6,17 @@
  */
 
 // Event classes
-export { HookEvent, BeforeInvocationEvent, AfterInvocationEvent } from './events.js'
+export {
+  HookEvent,
+  BeforeInvocationEvent,
+  AfterInvocationEvent,
+  MessageAddedEvent,
+  BeforeToolCallEvent,
+  AfterToolCallEvent,
+  BeforeModelCallEvent,
+  AfterModelCallEvent,
+  ModelStreamEventHook,
+} from './events.js'
 
 // Registry
 export { HookRegistryImplementation as HookRegistry } from './registry.js'

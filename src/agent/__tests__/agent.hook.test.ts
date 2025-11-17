@@ -19,15 +19,26 @@ describe('Agent Hooks Integration', () => {
 
       await agent.invoke('Hi')
 
-      expect(mockProvider.invocations).toHaveLength(2)
+      // Should have multiple events including: BeforeInvocation, BeforeModelCall, ModelStreamEventHook(s), AfterModelCall, MessageAdded, AfterInvocation
+      expect(mockProvider.invocations.length).toBeGreaterThan(2)
+
+      // First event should be BeforeInvocationEvent
       expect(mockProvider.invocations[0]).toEqual({
         agent,
         type: 'beforeInvocationEvent',
       })
-      expect(mockProvider.invocations[1]).toEqual({
+
+      // Last event should be AfterInvocationEvent
+      expect(mockProvider.invocations[mockProvider.invocations.length - 1]).toEqual({
         agent,
         type: 'afterInvocationEvent',
       })
+
+      // Should include BeforeModelCallEvent, AfterModelCallEvent, and MessageAddedEvent
+      const eventTypes = mockProvider.invocations.map((e) => (e as any).type as string)
+      expect(eventTypes).toContain('beforeModelCallEvent')
+      expect(eventTypes).toContain('afterModelCallEvent')
+      expect(eventTypes).toContain('messageAddedEvent')
     })
 
     it('fires hooks during stream', async () => {
@@ -36,9 +47,17 @@ describe('Agent Hooks Integration', () => {
 
       await collectIterator(agent.stream('Hi'))
 
-      expect(mockProvider.invocations).toHaveLength(2)
+      // Should have multiple events
+      expect(mockProvider.invocations.length).toBeGreaterThan(2)
+
+      // First event should be BeforeInvocationEvent
       expect((mockProvider.invocations[0] as BeforeInvocationEvent).agent).toBe(agent)
-      expect((mockProvider.invocations[1] as AfterInvocationEvent).agent).toBe(agent)
+      expect((mockProvider.invocations[0] as BeforeInvocationEvent).type).toBe('beforeInvocationEvent')
+
+      // Last event should be AfterInvocationEvent
+      const lastEvent = mockProvider.invocations[mockProvider.invocations.length - 1]
+      expect((lastEvent as AfterInvocationEvent).agent).toBe(agent)
+      expect((lastEvent as AfterInvocationEvent).type).toBe('afterInvocationEvent')
     })
   })
 
@@ -51,7 +70,13 @@ describe('Agent Hooks Integration', () => {
 
       await agent.invoke('Hi')
 
-      expect(mockProvider.invocations).toHaveLength(2)
+      // Should have multiple events
+      expect(mockProvider.invocations.length).toBeGreaterThan(2)
+
+      // First and last should be Invocation events
+      expect((mockProvider.invocations[0] as BeforeInvocationEvent).type).toBe('beforeInvocationEvent')
+      const lastEvent = mockProvider.invocations[mockProvider.invocations.length - 1]
+      expect((lastEvent as AfterInvocationEvent).type).toBe('afterInvocationEvent')
     })
   })
 
@@ -66,7 +91,15 @@ describe('Agent Hooks Integration', () => {
       await agent.invoke('First message')
       await agent.invoke('Second message')
 
-      expect(mockProvider.invocations).toHaveLength(4)
+      // Should have multiple events (more than just 4 Invocation events)
+      expect(mockProvider.invocations.length).toBeGreaterThan(4)
+
+      // Filter for just Invocation events to verify they fire for each turn
+      const invocationEvents = mockProvider.invocations.filter((e) => {
+        const event = e as BeforeInvocationEvent | AfterInvocationEvent
+        return event.type === 'beforeInvocationEvent' || event.type === 'afterInvocationEvent'
+      })
+      expect(invocationEvents).toHaveLength(4) // 2 for each turn
     })
   })
 })
