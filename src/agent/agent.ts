@@ -24,6 +24,12 @@ import type { ConversationManager } from '../conversation-manager/conversation-m
 import { SlidingWindowConversationManager } from '../conversation-manager/sliding-window-conversation-manager.js'
 
 /**
+ * Recursive type definition for nested tool arrays.
+ * Allows tools to be organized in nested arrays of any depth.
+ */
+export type ToolList = (Tool | ToolList)[]
+
+/**
  * Configuration object for creating a new Agent.
  */
 export type AgentConfig = {
@@ -37,8 +43,9 @@ export type AgentConfig = {
   messages?: Message[] | MessageData[]
   /**
    * An initial set of tools to register with the agent.
+   * Accepts nested arrays of tools at any depth, which will be flattened automatically.
    */
-  tools?: Tool[]
+  tools?: ToolList
   /**
    * A system prompt which guides model behavior.
    */
@@ -102,7 +109,7 @@ export class Agent implements AgentData {
    */
   constructor(config?: AgentConfig) {
     this._model = config?.model ?? new BedrockModel()
-    this._toolRegistry = new ToolRegistry(config?.tools)
+    this._toolRegistry = new ToolRegistry(flattenTools(config?.tools ?? []))
 
     if (config?.systemPrompt !== undefined) {
       this._systemPrompt = config.systemPrompt
@@ -422,4 +429,21 @@ export class Agent implements AgentData {
     // Tool already returns ToolResultBlock directly
     return toolResult
   }
+}
+
+/**
+ * Recursively flattens nested arrays of tools into a single flat array.
+ * @param tools - Tools or nested arrays of tools
+ * @returns Flat array of tools
+ */
+function flattenTools(tools: ToolList): Tool[] {
+  const result: Tool[] = []
+  for (const item of tools) {
+    if (Array.isArray(item)) {
+      result.push(...flattenTools(item))
+    } else {
+      result.push(item)
+    }
+  }
+  return result
 }

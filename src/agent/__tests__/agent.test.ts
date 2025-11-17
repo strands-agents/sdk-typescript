@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { Agent } from '../agent.js'
+import { Agent, type ToolList } from '../agent.js'
 import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
 import { collectGenerator } from '../../__fixtures__/model-test-helpers.js'
-import { createMockTool } from '../../__fixtures__/tool-helpers.js'
+import { createMockTool, createRandomTool } from '../../__fixtures__/tool-helpers.js'
 import { ConcurrentInvocationError } from '../../errors.js'
 import { MaxTokensError, TextBlock } from '../../index.js'
 import { AgentPrinter } from '../printer.js'
@@ -380,6 +380,41 @@ describe('Agent', () => {
 
       const result = await agent.invoke('Second')
       expect(result.lastMessage.content).toEqual([{ type: 'textBlock', text: 'Success' }])
+    })
+  })
+
+  describe('nested tool arrays', () => {
+    describe('flattens nested arrays at any depth', () => {
+      const tool1 = createRandomTool()
+      const tool2 = createRandomTool()
+      const tool3 = createRandomTool()
+
+      it.for([
+        ['flat array', [tool1, tool2, tool3], [tool1, tool2, tool3]],
+        ['single tool', [tool1], [tool1]],
+        ['empty array', [], []],
+        ['single level nesting', [[tool1, tool2], tool3], [tool1, tool2, tool3]],
+        ['empty nested arrays', [[], tool1, []], [tool1]],
+        ['deeply nested', [[[tool1]], [tool2], tool3], [tool1, tool2, tool3]],
+        ['mixed nesting', [[tool1, [tool2]], tool3], [tool1, tool2, tool3]],
+        ['very deep nesting', [[[[tool1]]]], [tool1]],
+      ])('%i', ([, input, expected]) => {
+        const agent = new Agent({ tools: input as ToolList })
+        expect(agent.tools).toEqual(expected)
+      })
+    })
+
+    it('accepts undefined tools', () => {
+      const agent = new Agent({})
+
+      expect(agent.tools).toEqual([])
+    })
+
+    it('catches duplicate tool names across nested arrays', () => {
+      const tool1 = createRandomTool('duplicate')
+      const tool2 = createRandomTool('duplicate')
+
+      expect(() => new Agent({ tools: [[tool1], [tool2]] })).toThrow("Tool with name 'duplicate' already registered")
     })
   })
 })

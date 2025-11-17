@@ -4,7 +4,7 @@
  */
 
 import type { Tool, ToolContext } from '../tools/tool.js'
-import type { ToolResultBlock } from '../types/messages.js'
+import { ToolResultBlock } from '../types/messages.js'
 import type { JSONValue } from '../types/json.js'
 import { AgentState } from '../agent/state.js'
 
@@ -67,4 +67,25 @@ export function createMockTool(
       }
     },
   }
+}
+
+/**
+ * Helper to create a simple mock tool with minimal configuration for testing.
+ * This is a lighter-weight version of createMockTool for scenarios where the tool's
+ * execution behavior is not relevant to the test.
+ *
+ * @param name - Optional name of the mock tool (defaults to a random UUID)
+ * @returns Mock Tool object
+ */
+export function createRandomTool(name?: string): Tool {
+  const toolName = name ?? globalThis.crypto.randomUUID()
+  return createMockTool(
+    toolName,
+    () =>
+      new ToolResultBlock({
+        toolUseId: 'test-id',
+        status: 'success' as const,
+        content: [],
+      })
+  )
 }
