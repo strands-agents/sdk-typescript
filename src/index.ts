@@ -104,8 +104,19 @@ export type {
 } from './agent/streaming.js'
 
 // Hooks system
-export { HookRegistry, HookEvent, BeforeInvocationEvent, AfterInvocationEvent } from './hooks/index.js'
-export type { HookCallback, HookProvider, HookEventConstructor } from './hooks/index.js'
+export {
+  HookRegistry,
+  HookEvent,
+  BeforeInvocationEvent,
+  AfterInvocationEvent,
+  MessageAddedEvent,
+  BeforeToolCallEvent,
+  AfterToolCallEvent,
+  BeforeModelCallEvent,
+  AfterModelCallEvent,
+  ModelStreamEventHook,
+} from './hooks/index.js'
+export type { HookCallback, HookProvider, HookEventConstructor, ModelStopResponse } from './hooks/index.js'
 
 // Conversation Manager
 export { ConversationManager } from './conversation-manager/conversation-manager.js'
