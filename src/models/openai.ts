@@ -8,6 +8,7 @@
  */
 
 import OpenAI, { type ClientOptions } from 'openai'
+import { Buffer } from 'buffer'
 import { Model } from '../models/model.js'
 import type { BaseModelConfig, StreamOptions } from '../models/model.js'
 import type { Message } from '../types/messages.js'
@@ -534,64 +535,81 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
           const contentParts: (string | OpenAI.Chat.Completions.ChatCompletionContentPart)[] = []
 
           for (const block of otherContent) {
-            if (block.type === 'textBlock') {
-              contentParts.push(block.text)
-            } else if (block.type === 'imageBlock') {
-              const imageBlock = block as ImageBlock
-              if ('url' in imageBlock.source) {
-                contentParts.push({
-                  type: 'image_url',
-                  image_url: {
-                    url: imageBlock.source.url,
-                  },
-                })
-              } else if ('bytes' in imageBlock.source) {
-                const base64 = globalThis.Buffer.from(imageBlock.source.bytes).toString('base64')
-                const mimeType = `image/${imageBlock.format}`
-                contentParts.push({
-                  type: 'image_url',
-                  image_url: {
-                    url: `data:${mimeType};base64,${base64}`,
-                  },
-                })
-              } else if ('s3Location' in imageBlock.source) {
-                console.warn(
-                  'OpenAI ChatCompletions API does not support S3 locations for images. Skipping image block.'
-                )
+            switch (block.type) {
+              case 'textBlock': {
+                contentParts.push(block.text)
+                break
               }
-            } else if (block.type === 'videoBlock') {
-              console.warn('OpenAI ChatCompletions API does not support video content. Skipping video block.')
-            } else if (block.type === 'documentBlock') {
-              const docBlock = block as DocumentBlock
-              if ('fileId' in docBlock.source) {
-                console.warn(
-                  'OpenAI ChatCompletions API does not support document file references in user messages. Skipping document block.'
-                )
-              } else if ('bytes' in docBlock.source) {
-                // Convert bytes to text representation
-                const decoder = new TextDecoder()
-                try {
-                  const textContent = decoder.decode(docBlock.source.bytes)
-                  contentParts.push(textContent)
-                } catch {
-                  console.warn(
-                    'Failed to decode document bytes as text for OpenAI ChatCompletions API. Skipping document block.'
-                  )
+              case 'imageBlock': {
+                const imageBlock = block as ImageBlock
+                switch (imageBlock.source.type) {
+                  case 'imageSourceUrl': {
+                    contentParts.push({
+                      type: 'image_url',
+                      image_url: {
+                        url: imageBlock.source.url,
+                      },
+                    })
+                    break
+                  }
+                  case 'imageSourceBytes': {
+                    const base64 = globalThis.Buffer.from(imageBlock.source.bytes).toString('base64')
+                    const mimeType = `image/${imageBlock.format}`
+                    contentParts.push({
+                      type: 'image_url',
+                      image_url: {
+                        url: `data:${mimeType};base64,${base64}`,
+                      },
+                    })
+                    break
+                  }
+                  default: {
+                    console.warn(
+                      `OpenAI ChatCompletions API does not support image block type: ${imageBlock.source.type}.`
+                    )
+                    break
+                  }
                 }
-              } else if ('text' in docBlock.source) {
-                // Text documents can be added directly
-                contentParts.push(docBlock.source.text)
-              } else {
-                console.warn(
-                  'OpenAI ChatCompletions API only supports text content in user messages. Skipping document block.'
-                )
+                break
               }
-            } else if (block.type === 'reasoningBlock') {
-              throw new Error(
-                'Reasoning blocks are not supported by OpenAI. ' + 'This feature is specific to AWS Bedrock models.'
-              )
-            } else if (block.type === 'guardContentBlock') {
-              console.warn('OpenAI does not support guard content in messages. Removing guard content block.')
+              case 'documentBlock': {
+                const docBlock = block as DocumentBlock
+                switch (docBlock.source.type) {
+                  case 'documentSourceBytes': {
+                    const file: OpenAI.Chat.Completions.ChatCompletionContentPart.File = {
+                      type: 'file',
+                      file: {
+                        // Convert bytes to text representation
+                        file_data: Buffer.from(String.fromCharCode(...docBlock.source.bytes)).toString('base64'),
+                        filename: docBlock.source.filename!,
+                      },
+                    }
+                    contentParts.push(file)
+                    break
+                  }
+                  case 'documentSourceText': {
+                    // Text documents can be added directly
+                    contentParts.push(docBlock.source.text)
+                    break
+                  }
+                  case 'documentSourceContentBlock': {
+                    // Push each content block as a content part
+                    contentParts.push(...docBlock.source.content.map((block) => block.text))
+                    break
+                  }
+                  default: {
+                    console.warn(
+                      `OpenAI ChatCompletions API only supports text content in user messages. Skipping document block type: ${docBlock.source.type}.`
+                    )
+                    break
+                  }
+                }
+                break
+              }
+              default: {
+                console.warn(`OpenAI ChatCompletions API does not support content type: ${block.type}.`)
+                break
+              }
             }
           }
 

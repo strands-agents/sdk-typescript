@@ -42,9 +42,11 @@ describe('ImageBlock', () => {
       source: { bytes },
     }
     const block = new ImageBlock(data)
-    expect(block.type).toBe('imageBlock')
-    expect(block.format).toBe('jpeg')
-    expect(block.source).toEqual({ bytes })
+    expect(block).toBe({
+      type: 'imageBlock',
+      format: 'jpeg',
+      source: bytes,
+    })
   })
 
   it('creates instance with S3 location source', () => {
@@ -159,10 +161,12 @@ describe('DocumentBlock', () => {
       source: { text: 'Hello world' },
     }
     const block = new DocumentBlock(data)
-    expect(block.type).toBe('documentBlock')
-    expect(block.name).toBe('note.txt')
-    expect(block.format).toBe('txt')
-    expect(block.source).toEqual({ text: 'Hello world' })
+    expect(block).toEqual({
+      type: 'documentBlock',
+      format: 'txt',
+      name: 'note.txt',
+      source: { type: 'documentSourceText', text: 'Hello world' },
+    })
   })
 
   it('creates instance with content source', () => {
@@ -201,25 +205,12 @@ describe('DocumentBlock', () => {
     const block = new DocumentBlock(data)
     expect(block.type).toBe('documentBlock')
     expect(block.source).toEqual({
-      s3Location: expect.any(S3Location),
+      type: 'documentSourceS3Location',
+      s3Location: {
+        uri: 's3://my-bucket/report.pdf',
+        bucketOwner: '123456789012',
+      },
     })
-    // Verify S3Location was converted to class
-    if ('s3Location' in block.source) {
-      expect(block.source.s3Location).toBeInstanceOf(S3Location)
-      expect(block.source.s3Location.uri).toBe('s3://my-bucket/report.pdf')
-      expect(block.source.s3Location.bucketOwner).toBe('123456789012')
-    }
-  })
-
-  it('creates instance with fileId source', () => {
-    const data: DocumentBlockData = {
-      name: 'file.pdf',
-      format: 'pdf',
-      source: { fileId: 'file-abc123', filename: 'original.pdf' },
-    }
-    const block = new DocumentBlock(data)
-    expect(block.type).toBe('documentBlock')
-    expect(block.source).toEqual({ fileId: 'file-abc123', filename: 'original.pdf' })
   })
 
   it('creates instance with bytes and filename', () => {
@@ -231,18 +222,22 @@ describe('DocumentBlock', () => {
     }
     const block = new DocumentBlock(data)
     expect(block.type).toBe('documentBlock')
-    expect(block.source).toEqual({ bytes, filename: 'original-name.pdf' })
+    expect(block.source).toEqual({ type: 'documentSourceBytes', bytes, filename: 'original-name.pdf' })
   })
 
   it('creates instance with text and filename', () => {
     const data: DocumentBlockData = {
       name: 'note.txt',
       format: 'txt',
-      source: { text: 'Hello world', filename: 'greeting.txt' },
+      source: { text: 'Hello world' },
     }
     const block = new DocumentBlock(data)
-    expect(block.type).toBe('documentBlock')
-    expect(block.source).toEqual({ text: 'Hello world', filename: 'greeting.txt' })
+    expect(block).toEqual({
+      type: 'documentBlock',
+      format: 'txt',
+      name: 'note.txt',
+      source: { type: 'documentSourceText', text: 'Hello world' },
+    })
   })
 
   it('creates instance with citations and context', () => {
@@ -259,7 +254,10 @@ describe('DocumentBlock', () => {
       type: 'documentBlock',
       name: 'research.pdf',
       format: 'pdf',
-      source: { bytes },
+      source: {
+        type: 'documentSourceBytes',
+        bytes,
+      },
       citations: { enabled: true },
       context: 'Research paper about AI',
     })

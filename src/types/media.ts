@@ -56,7 +56,10 @@ export type ImageSourceData =
 /**
  * Source for an image (Class version).
  */
-export type ImageSource = { bytes: Uint8Array } | { s3Location: S3Location } | { url: string }
+export type ImageSource =
+  | { type: 'imageSourceBytes'; bytes: Uint8Array }
+  | { type: 'imageSourceS3Location'; s3Location: S3Location }
+  | { type: 'imageSourceUrl'; url: string }
 
 /**
  * Data for an image block.
@@ -98,11 +101,23 @@ export class ImageBlock implements ImageBlockData {
   }
 
   private _convertSource(source: ImageSourceData): ImageSource {
-    if ('bytes' in source || 'url' in source) {
-      return source
+    if ('bytes' in source) {
+      return {
+        type: 'imageSourceBytes',
+        bytes: source.bytes,
+      }
+    }
+    if ('url' in source) {
+      return {
+        type: 'imageSourceUrl',
+        url: source.url,
+      }
     }
     if ('s3Location' in source) {
-      return { s3Location: new S3Location(source.s3Location) }
+      return {
+        type: 'imageSourceS3Location',
+        s3Location: new S3Location(source.s3Location),
+      }
     }
     throw new Error('Invalid image source')
   }
@@ -116,14 +131,14 @@ export type VideoFormat = 'mkv' | 'mov' | 'mp4' | 'webm' | 'flv' | 'mpeg' | 'mpg
 /**
  * Source for a video (Data version).
  */
-export type VideoSourceData =
-  | { bytes: Uint8Array } // Bedrock: up to 25MB when base64-encoded
-  | { s3Location: S3LocationData } // Bedrock: up to 1GB
+export type VideoSourceData = { bytes: Uint8Array } | { s3Location: S3LocationData } // Bedrock: up to 1GB
 
 /**
  * Source for a video (Class version).
  */
-export type VideoSource = { bytes: Uint8Array } | { s3Location: S3Location }
+export type VideoSource =
+  | { type: 'videoSourceBytes'; bytes: Uint8Array }
+  | { type: 'videoSourceS3Location'; s3Location: S3Location }
 
 /**
  * Data for a video block.
@@ -166,10 +181,13 @@ export class VideoBlock implements VideoBlockData {
 
   private _convertSource(source: VideoSourceData): VideoSource {
     if ('bytes' in source) {
-      return source
+      return {
+        type: 'videoSourceBytes',
+        bytes: source.bytes,
+      }
     }
     if ('s3Location' in source) {
-      return { s3Location: new S3Location(source.s3Location) }
+      return { type: 'videoSourceS3Location', s3Location: new S3Location(source.s3Location) }
     }
     throw new Error('Invalid video source')
   }
@@ -192,23 +210,19 @@ export type DocumentContentBlock = TextBlock
  * Supports multiple formats including structured content.
  */
 export type DocumentSourceData =
-  | { bytes: Uint8Array } // raw binary data
+  | { bytes: Uint8Array; filename?: string } // raw binary data
   | { text: string } // plain text
   | { content: DocumentContentBlockData[] } // structured content
   | { s3Location: S3LocationData } // S3 reference
-  | { fileId: string; filename?: string } // OpenAI: uploaded file reference
-  | { fileData: string; filename?: string } // OpenAI: base64 data
 
 /**
  * Source for a document (Class version).
  */
 export type DocumentSource =
-  | { bytes: Uint8Array }
-  | { text: string }
-  | { content: DocumentContentBlock[] }
-  | { s3Location: S3Location }
-  | { fileId: string; filename?: string }
-  | { fileData: string; filename?: string }
+  | { type: 'documentSourceBytes'; bytes: Uint8Array; filename?: string }
+  | { type: 'documentSourceText'; text: string }
+  | { type: 'documentSourceContentBlock'; content: DocumentContentBlock[] }
+  | { type: 'documentSourceS3Location'; s3Location: S3Location }
 
 /**
  * Data for a document block.
@@ -287,21 +301,29 @@ export class DocumentBlock implements DocumentBlockData {
   }
 
   private _convertSource(source: DocumentSourceData): DocumentSource {
-    if ('bytes' in source || 'text' in source) {
-      return source
+    if ('bytes' in source) {
+      return {
+        type: 'documentSourceBytes',
+        bytes: source.bytes,
+        ...(source.filename === undefined ? {} : { filename: source.filename }),
+      }
+    }
+    if ('text' in source) {
+      return {
+        type: 'documentSourceText',
+        text: source.text,
+      }
     }
     if ('content' in source) {
       return {
+        type: 'documentSourceContentBlock',
         content: source.content.map((block) => new TextBlock(block.text)),
       }
     }
     if ('s3Location' in source) {
-      return { s3Location: new S3Location(source.s3Location) }
-    }
-    if ('fileId' in source) {
       return {
-        fileId: source.fileId,
-        ...(source.filename && { filename: source.filename }),
+        type: 'documentSourceS3Location',
+        s3Location: new S3Location(source.s3Location),
       }
     }
     throw new Error('Invalid document source')
