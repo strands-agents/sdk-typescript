@@ -152,6 +152,8 @@ export class BeforeModelCallEvent extends HookEvent {
  * Event triggered after the model invocation completes.
  * Fired after the model finishes generating a response, whether successful or failed.
  * Uses reverse callback ordering for proper cleanup semantics.
+ *
+ * Note: message and stopReason may be undefined if an error occurs before the model completes.
  */
 export class AfterModelCallEvent extends HookEvent {
   readonly type = 'afterModelCallEvent' as const
@@ -160,11 +162,15 @@ export class AfterModelCallEvent extends HookEvent {
   readonly stopReason?: string
   readonly error?: Error
 
-  constructor(data: { agent: AgentData; message: Message; stopReason: string; error?: Error }) {
+  constructor(data: { agent: AgentData; message?: Message; stopReason?: string; error?: Error }) {
     super()
     this.agent = data.agent
-    this.message = data.message
-    this.stopReason = data.stopReason
+    if (data.message !== undefined) {
+      this.message = data.message
+    }
+    if (data.stopReason !== undefined) {
+      this.stopReason = data.stopReason
+    }
     if (data.error !== undefined) {
       this.error = data.error
     }

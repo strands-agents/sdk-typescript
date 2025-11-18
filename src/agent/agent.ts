@@ -16,6 +16,7 @@ import {
   type ToolUseBlock,
 } from '../index.js'
 import type { BaseModelConfig, Model, StreamOptions } from '../models/model.js'
+import type { ModelStreamEvent } from '../models/streaming.js'
 import { ToolRegistry } from '../registry/tool-registry.js'
 import { AgentState } from './state.js'
 import type { AgentData } from '../types/agent.js'
@@ -267,8 +268,7 @@ export class Agent implements AgentData {
         if (modelResult.stopReason !== 'toolUse') {
           // Loop terminates - no tool use requested
           // Add assistant message now that we're returning
-          this.messages.push(modelResult.message)
-          await this.hooks.invokeCallbacks(new MessageAddedEvent({ agent: this, message: modelResult.message }))
+          await this._appendMessage(modelResult.message)
           return {
             stopReason: modelResult.stopReason,
             lastMessage: modelResult.message,
@@ -280,10 +280,8 @@ export class Agent implements AgentData {
 
         // Add assistant message with tool uses right before adding tool results
         // This ensures we don't have dangling tool use messages if tool execution fails
-        this.messages.push(modelResult.message)
-        await this.hooks.invokeCallbacks(new MessageAddedEvent({ agent: this, message: modelResult.message }))
-        this.messages.push(toolResultMessage)
-        await this.hooks.invokeCallbacks(new MessageAddedEvent({ agent: this, message: toolResultMessage }))
+        await this._appendMessage(modelResult.message)
+        await this._appendMessage(toolResultMessage)
 
         // Continue loop
       }
@@ -360,7 +358,9 @@ export class Agent implements AgentData {
     let modelError: Error | undefined
 
     try {
-      const { message, stopReason } = yield* this._streamFromModel(this.messages, streamOptions)
+      const result = yield* this._streamFromModel(this.messages, streamOptions)
+      message = result.message
+      stopReason = result.stopReason
 
       // Invoke AfterModelCallEvent hook on success
       await this.hooks.invokeCallbacks(new AfterModelCallEvent({ agent: this, message, stopReason }))
@@ -371,12 +371,18 @@ export class Agent implements AgentData {
     } catch (error) {
       modelError = error instanceof Error ? error : new Error(String(error))
 
-      // Invoke AfterModelCallEvent hook even on error
-      if (message && stopReason) {
-        await this.hooks.invokeCallbacks(
-          new AfterModelCallEvent({ agent: this, message, stopReason, error: modelError })
-        )
+      // Invoke AfterModelCallEvent hook even on error (message and stopReason may be undefined)
+      const eventData: { agent: AgentData; message?: Message; stopReason?: string; error: Error } = {
+        agent: this,
+        error: modelError,
       }
+      if (message !== undefined) {
+        eventData.message = message
+      }
+      if (stopReason !== undefined) {
+        eventData.stopReason = stopReason
+      }
+      await this.hooks.invokeCallbacks(new AfterModelCallEvent(eventData))
 
       if (error instanceof ContextWindowOverflowError) {
         // Reduce context and retry
@@ -386,6 +392,23 @@ export class Agent implements AgentData {
       // Re-throw other errors
       throw error
     }
+  }
+
+  /**
+   * Appends a message to the conversation history and fires the MessageAddedEvent hook.
+   *
+   * @param message - The message to append
+   */
+  private async _appendMessage(message: Message): Promise<void> {
+    this.messages.push(message)
+    await this.hooks.invokeCallbacks(new MessageAddedEvent({ agent: this, message }))
+  }
+
+  /**
+   * Type guard to check if an event is a ModelStreamEvent
+   */
+  private _isModelStreamEvent(event: AgentStreamEvent): event is ModelStreamEvent {
+    return 'type' in event && typeof event.type === 'string' && event.type.startsWith('model')
   }
 
   /**
@@ -405,7 +428,10 @@ export class Agent implements AgentData {
     while (!result.done) {
       const event = result.value
 
-      await this.hooks.invokeCallbacks(new ModelStreamEventHook({ agent: this, event }))
+      // Fire hook only for ModelStreamEvents (not ContentBlock)
+      if (this._isModelStreamEvent(event)) {
+        await this.hooks.invokeCallbacks(new ModelStreamEventHook({ agent: this, event }))
+      }
 
       yield event
       result = await streamGenerator.next()
