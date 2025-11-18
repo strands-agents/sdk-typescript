@@ -16,7 +16,6 @@ import {
   type ToolUseBlock,
 } from '../index.js'
 import type { BaseModelConfig, Model, StreamOptions } from '../models/model.js'
-import type { ModelStreamEvent } from '../models/streaming.js'
 import { ToolRegistry } from '../registry/tool-registry.js'
 import { AgentState } from './state.js'
 import type { AgentData } from '../types/agent.js'
@@ -342,7 +341,7 @@ export class Agent implements AgentData {
 
     if (args !== undefined && typeof args === 'string') {
       // Add user message from args
-      this.messages.push(
+      await this._appendMessage(
         new Message({
           role: 'user',
           content: [{ type: 'textBlock', text: args }],
@@ -350,7 +349,6 @@ export class Agent implements AgentData {
       )
     }
 
-    // Invoke BeforeModelCallEvent hook
     await this.hooks.invokeCallbacks(new BeforeModelCallEvent({ agent: this }))
 
     let message: Message | undefined
@@ -395,23 +393,6 @@ export class Agent implements AgentData {
   }
 
   /**
-   * Appends a message to the conversation history and fires the MessageAddedEvent hook.
-   *
-   * @param message - The message to append
-   */
-  private async _appendMessage(message: Message): Promise<void> {
-    this.messages.push(message)
-    await this.hooks.invokeCallbacks(new MessageAddedEvent({ agent: this, message }))
-  }
-
-  /**
-   * Type guard to check if an event is a ModelStreamEvent
-   */
-  private _isModelStreamEvent(event: AgentStreamEvent): event is ModelStreamEvent {
-    return 'type' in event && typeof event.type === 'string' && event.type.startsWith('model')
-  }
-
-  /**
    * Streams events from the model and fires ModelStreamEventHook for each event.
    *
    * @param messages - Messages to send to the model
@@ -428,10 +409,7 @@ export class Agent implements AgentData {
     while (!result.done) {
       const event = result.value
 
-      // Fire hook only for ModelStreamEvents (not ContentBlock)
-      if (this._isModelStreamEvent(event)) {
-        await this.hooks.invokeCallbacks(new ModelStreamEventHook({ agent: this, event }))
-      }
+      await this.hooks.invokeCallbacks(new ModelStreamEventHook({ agent: this, event }))
 
       yield event
       result = await streamGenerator.next()
@@ -577,6 +555,16 @@ export class Agent implements AgentData {
 
       return errorResult
     }
+  }
+
+  /**
+   * Appends a message to the conversation history and fires the MessageAddedEvent hook.
+   *
+   * @param message - The message to append
+   */
+  private async _appendMessage(message: Message): Promise<void> {
+    this.messages.push(message)
+    await this.hooks.invokeCallbacks(new MessageAddedEvent({ agent: this, message }))
   }
 }
 
