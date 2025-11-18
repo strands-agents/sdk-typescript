@@ -70,8 +70,7 @@ describe('ImageBlock', () => {
       },
     })
     // Assert S3Location was converted to class
-    expect('s3Location' in block.source).toBe(true)
-    const s3Source = block.source as { s3Location: S3Location }
+    const s3Source = block.source as { type: 'imageSourceS3Location'; s3Location: S3Location }
     expect(s3Source.s3Location).toBeInstanceOf(S3Location)
     expect(s3Source.s3Location.uri).toBe('s3://my-bucket/image.png')
     expect(s3Source.s3Location.bucketOwner).toBe('123456789012')
@@ -133,8 +132,7 @@ describe('VideoBlock', () => {
       },
     })
     // Assert S3Location was converted to class
-    expect('s3Location' in block.source).toBe(true)
-    const s3Source = block.source as { s3Location: S3Location }
+    const s3Source = block.source as { type: 'videoSourceS3Location'; s3Location: S3Location }
     expect(s3Source.s3Location).toBeInstanceOf(S3Location)
     expect(s3Source.s3Location.uri).toBe('s3://my-bucket/video.webm')
   })
@@ -199,8 +197,7 @@ describe('DocumentBlock', () => {
       },
     })
     // Assert content blocks were converted to TextBlock instances
-    expect('content' in block.source).toBe(true)
-    const contentSource = block.source as { content: TextBlock[] }
+    const contentSource = block.source as { type: 'documentSourceContentBlock'; content: TextBlock[] }
     expect(contentSource.content).toHaveLength(2)
     expect(contentSource.content[0]).toBeInstanceOf(TextBlock)
     expect(contentSource.content[0]!.text).toBe('Introduction')
