@@ -18,8 +18,10 @@ describe('BeforeInvocationEvent', () => {
     const agent = new Agent()
     const event = new BeforeInvocationEvent({ agent })
 
-    expect(event.agent).toBe(agent)
-    expect(event.type).toBe('beforeInvocationEvent')
+    expect(event).toEqual({
+      type: 'beforeInvocationEvent',
+      agent: agent,
+    })
     // @ts-expect-error verifying that property is readonly
     event.agent = new Agent()
   })
@@ -36,8 +38,10 @@ describe('AfterInvocationEvent', () => {
     const agent = new Agent()
     const event = new AfterInvocationEvent({ agent })
 
-    expect(event.agent).toBe(agent)
-    expect(event.type).toBe('afterInvocationEvent')
+    expect(event).toEqual({
+      type: 'afterInvocationEvent',
+      agent: agent,
+    })
     // @ts-expect-error verifying that property is readonly
     event.agent = new Agent()
   })
@@ -55,9 +59,11 @@ describe('MessageAddedEvent', () => {
     const message = new Message({ role: 'assistant', content: [{ type: 'textBlock', text: 'Hello' }] })
     const event = new MessageAddedEvent({ agent, message })
 
-    expect(event.agent).toBe(agent)
-    expect(event.message).toBe(message)
-    expect(event.type).toBe('messageAddedEvent')
+    expect(event).toEqual({
+      type: 'messageAddedEvent',
+      agent: agent,
+      message: message,
+    })
     // @ts-expect-error verifying that property is readonly
     event.agent = new Agent()
     // @ts-expect-error verifying that property is readonly
@@ -88,10 +94,12 @@ describe('BeforeToolCallEvent', () => {
     }
     const event = new BeforeToolCallEvent({ agent, toolUse, tool })
 
-    expect(event.agent).toBe(agent)
-    expect(event.toolUse).toEqual(toolUse)
-    expect(event.tool).toBe(tool)
-    expect(event.type).toBe('beforeToolCallEvent')
+    expect(event).toEqual({
+      type: 'beforeToolCallEvent',
+      agent: agent,
+      toolUse: toolUse,
+      tool: tool,
+    })
     // @ts-expect-error verifying that property is readonly
     event.agent = new Agent()
     // @ts-expect-error verifying that property is readonly
@@ -109,10 +117,12 @@ describe('BeforeToolCallEvent', () => {
     }
     const event = new BeforeToolCallEvent({ agent, toolUse, tool: undefined })
 
-    expect(event.agent).toBe(agent)
-    expect(event.toolUse).toEqual(toolUse)
-    expect(event.tool).toBeUndefined()
-    expect(event.type).toBe('beforeToolCallEvent')
+    expect(event).toEqual({
+      type: 'beforeToolCallEvent',
+      agent: agent,
+      toolUse: toolUse,
+      tool: undefined,
+    })
   })
 
   it('returns false for _shouldReverseCallbacks', () => {
@@ -144,12 +154,14 @@ describe('AfterToolCallEvent', () => {
     })
     const event = new AfterToolCallEvent({ agent, toolUse, tool, result })
 
-    expect(event.agent).toBe(agent)
-    expect(event.toolUse).toEqual(toolUse)
-    expect(event.tool).toBe(tool)
-    expect(event.result).toBe(result)
-    expect(event.error).toBeUndefined()
-    expect(event.type).toBe('afterToolCallEvent')
+    expect(event).toEqual({
+      type: 'afterToolCallEvent',
+      agent: agent,
+      toolUse: toolUse,
+      tool: tool,
+      result: result,
+      error: undefined,
+    })
     // @ts-expect-error verifying that property is readonly
     event.agent = new Agent()
     // @ts-expect-error verifying that property is readonly
@@ -171,9 +183,14 @@ describe('AfterToolCallEvent', () => {
     const error = new Error('Tool failed')
     const event = new AfterToolCallEvent({ agent, toolUse, tool: undefined, result, error })
 
-    expect(event.agent).toBe(agent)
-    expect(event.error).toBe(error)
-    expect(event.result.status).toBe('error')
+    expect(event).toEqual({
+      type: 'afterToolCallEvent',
+      agent: agent,
+      toolUse: toolUse,
+      tool: undefined,
+      result: result,
+      error: error,
+    })
   })
 
   it('returns true for _shouldReverseCallbacks', () => {
@@ -194,8 +211,10 @@ describe('BeforeModelCallEvent', () => {
     const agent = new Agent()
     const event = new BeforeModelCallEvent({ agent })
 
-    expect(event.agent).toBe(agent)
-    expect(event.type).toBe('beforeModelCallEvent')
+    expect(event).toEqual({
+      type: 'beforeModelCallEvent',
+      agent: agent,
+    })
     // @ts-expect-error verifying that property is readonly
     event.agent = new Agent()
   })
@@ -215,12 +234,12 @@ describe('AfterModelCallEvent', () => {
     const response = { message, stopReason }
     const event = new AfterModelCallEvent({ agent, stopData: response })
 
-    expect(event.agent).toBe(agent)
-    expect(event.stopData).toEqual(response)
-    expect(event.stopData?.message).toBe(message)
-    expect(event.stopData?.stopReason).toBe(stopReason)
-    expect(event.error).toBeUndefined()
-    expect(event.type).toBe('afterModelCallEvent')
+    expect(event).toEqual({
+      type: 'afterModelCallEvent',
+      agent: agent,
+      stopData: response,
+      error: undefined,
+    })
     // @ts-expect-error verifying that property is readonly
     event.agent = new Agent()
     // @ts-expect-error verifying that property is readonly
@@ -234,9 +253,12 @@ describe('AfterModelCallEvent', () => {
     const response = { message, stopReason: 'error' }
     const event = new AfterModelCallEvent({ agent, stopData: response, error })
 
-    expect(event.agent).toBe(agent)
-    expect(event.error).toBe(error)
-    expect(event.stopData?.stopReason).toBe('error')
+    expect(event).toEqual({
+      type: 'afterModelCallEvent',
+      agent: agent,
+      stopData: response,
+      error: error,
+    })
   })
 
   it('returns true for _shouldReverseCallbacks', () => {
@@ -257,9 +279,11 @@ describe('ModelStreamEventHook', () => {
     }
     const hookEvent = new ModelStreamEventHook({ agent, event: streamEvent })
 
-    expect(hookEvent.agent).toBe(agent)
-    expect(hookEvent.event).toEqual(streamEvent)
-    expect(hookEvent.type).toBe('modelStreamEventHook')
+    expect(hookEvent).toEqual({
+      type: 'modelStreamEventHook',
+      agent: agent,
+      event: streamEvent,
+    })
     // @ts-expect-error verifying that property is readonly
     hookEvent.agent = new Agent()
     // @ts-expect-error verifying that property is readonly
