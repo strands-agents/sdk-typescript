@@ -47,8 +47,4 @@ export class MockHookProvider implements HookProvider {
   reset(): void {
     this.invocations = []
   }
-
-  getEventTypes(): string[] {
-    return this.invocations.map((e) => (e as HookEvent & { type: string }).type)
-  }
 }

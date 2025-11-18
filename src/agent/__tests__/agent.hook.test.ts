@@ -3,7 +3,6 @@ import { Agent } from '../agent.js'
 import {
   BeforeInvocationEvent,
   AfterInvocationEvent,
-  BeforeModelCallEvent,
   AfterModelCallEvent,
   MessageAddedEvent,
   BeforeToolCallEvent,
@@ -34,33 +33,46 @@ describe('Agent Hooks Integration', () => {
       expect(lifecycleProvider.invocations).toHaveLength(5)
 
       // First event: BeforeInvocationEvent
-      expect(lifecycleProvider.invocations[0]).toBeInstanceOf(BeforeInvocationEvent)
-      expect(lifecycleProvider.invocations[0]).toMatchObject({
-        agent,
-        type: 'beforeInvocationEvent',
-      })
+      expect(lifecycleProvider.invocations[0]).toEqual(
+        expect.objectContaining({
+          type: 'beforeInvocationEvent',
+          agent,
+        })
+      )
 
       // Second event: BeforeModelCallEvent
-      expect(lifecycleProvider.invocations[1]).toBeInstanceOf(BeforeModelCallEvent)
-      expect(lifecycleProvider.invocations[1]).toMatchObject({
-        agent,
-        type: 'beforeModelCallEvent',
-      })
+      expect(lifecycleProvider.invocations[1]).toEqual(
+        expect.objectContaining({
+          type: 'beforeModelCallEvent',
+          agent,
+        })
+      )
 
       // Third event: AfterModelCallEvent
-      expect(lifecycleProvider.invocations[2]).toBeInstanceOf(AfterModelCallEvent)
-      expect((lifecycleProvider.invocations[2] as AfterModelCallEvent).stopReason).toBe('endTurn')
+      expect(lifecycleProvider.invocations[2]).toEqual(
+        expect.objectContaining({
+          type: 'afterModelCallEvent',
+          agent,
+          stopReason: 'endTurn',
+        })
+      )
 
       // Fourth event: MessageAddedEvent
-      expect(lifecycleProvider.invocations[3]).toBeInstanceOf(MessageAddedEvent)
-      expect((lifecycleProvider.invocations[3] as MessageAddedEvent).message.role).toBe('assistant')
+      expect(lifecycleProvider.invocations[3]).toEqual(
+        expect.objectContaining({
+          type: 'messageAddedEvent',
+          agent,
+          message: expect.objectContaining({ role: 'assistant' }),
+        })
+      )
 
       // Fifth event: AfterInvocationEvent
-      expect(lifecycleProvider.invocations[4]).toBeInstanceOf(AfterInvocationEvent)
-      expect(lifecycleProvider.invocations[4]).toMatchObject({
-        agent,
-        type: 'afterInvocationEvent',
-      })
+      expect(lifecycleProvider.invocations[4]).toEqual(
+        expect.objectContaining({
+          type: 'afterInvocationEvent',
+          agent,
+        })
+      )
     })
 
     it('fires hooks during stream', async () => {
@@ -74,10 +86,18 @@ describe('Agent Hooks Integration', () => {
       expect(lifecycleProvider.invocations).toHaveLength(5)
 
       // First event: BeforeInvocationEvent
-      expect(lifecycleProvider.invocations[0]).toBeInstanceOf(BeforeInvocationEvent)
+      expect(lifecycleProvider.invocations[0]).toEqual(
+        expect.objectContaining({
+          type: 'beforeInvocationEvent',
+        })
+      )
 
       // Last event: AfterInvocationEvent
-      expect(lifecycleProvider.invocations[4]).toBeInstanceOf(AfterInvocationEvent)
+      expect(lifecycleProvider.invocations[4]).toEqual(
+        expect.objectContaining({
+          type: 'afterInvocationEvent',
+        })
+      )
     })
   })
 
@@ -93,8 +113,16 @@ describe('Agent Hooks Integration', () => {
 
       // Should have all lifecycle events
       expect(lifecycleProvider.invocations).toHaveLength(5)
-      expect(lifecycleProvider.invocations[0]).toBeInstanceOf(BeforeInvocationEvent)
-      expect(lifecycleProvider.invocations[4]).toBeInstanceOf(AfterInvocationEvent)
+      expect(lifecycleProvider.invocations[0]).toEqual(
+        expect.objectContaining({
+          type: 'beforeInvocationEvent',
+        })
+      )
+      expect(lifecycleProvider.invocations[4]).toEqual(
+        expect.objectContaining({
+          type: 'afterInvocationEvent',
+        })
+      )
     })
   })
 
@@ -292,8 +320,8 @@ describe('Agent Hooks Integration', () => {
 
       // Verify each hook event matches a stream event
       for (const hookEvent of streamEventHooks) {
-        const streamEvent = (hookEvent as ModelStreamEventHook).streamEvent
-        expect(allStreamEvents).toContain(streamEvent)
+        const event = (hookEvent as ModelStreamEventHook).event
+        expect(allStreamEvents).toContain(event)
       }
     })
   })

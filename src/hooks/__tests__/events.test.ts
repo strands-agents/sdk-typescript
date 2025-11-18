@@ -253,15 +253,15 @@ describe('ModelStreamEventHook', () => {
       type: 'modelMessageStartEvent' as const,
       role: 'assistant' as const,
     }
-    const event = new ModelStreamEventHook({ agent, streamEvent })
+    const hookEvent = new ModelStreamEventHook({ agent, event: streamEvent })
 
-    expect(event.agent).toBe(agent)
-    expect(event.streamEvent).toEqual(streamEvent)
-    expect(event.type).toBe('modelStreamEventHook')
+    expect(hookEvent.agent).toBe(agent)
+    expect(hookEvent.event).toEqual(streamEvent)
+    expect(hookEvent.type).toBe('modelStreamEventHook')
     // @ts-expect-error verifying that property is readonly
-    event.agent = new Agent()
+    hookEvent.agent = new Agent()
     // @ts-expect-error verifying that property is readonly
-    event.streamEvent = streamEvent
+    hookEvent.event = streamEvent
   })
 
   it('returns false for _shouldReverseCallbacks', () => {
@@ -270,7 +270,7 @@ describe('ModelStreamEventHook', () => {
       type: 'modelMessageStartEvent' as const,
       role: 'assistant' as const,
     }
-    const event = new ModelStreamEventHook({ agent, streamEvent })
-    expect(event._shouldReverseCallbacks()).toBe(false)
+    const hookEvent = new ModelStreamEventHook({ agent, event: streamEvent })
+    expect(hookEvent._shouldReverseCallbacks()).toBe(false)
   })
 })

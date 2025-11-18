@@ -16,6 +16,7 @@ import {
   type ToolUseBlock,
 } from '../index.js'
 import type { BaseModelConfig, Model, StreamOptions } from '../models/model.js'
+import type { ModelStreamEvent } from '../models/streaming.js'
 import { ToolRegistry } from '../registry/tool-registry.js'
 import { AgentState } from './state.js'
 import type { AgentData } from '../types/agent.js'
@@ -34,7 +35,6 @@ import {
   AfterModelCallEvent,
   ModelStreamEventHook,
 } from '../hooks/events.js'
-import type { ModelStreamEvent } from '../models/streaming.js'
 
 /**
  * Recursive type definition for nested tool arrays.
@@ -356,16 +356,31 @@ export class Agent implements AgentData {
     // Invoke BeforeModelCallEvent hook
     await this.hooks.invokeCallbacks(new BeforeModelCallEvent({ agent: this }))
 
-    try {
-      const { message, stopReason } = yield* this._streamFromModel(this.messages, streamOptions)
+    let message: Message | undefined
+    let stopReason: string | undefined
+    let modelError: Error | undefined
 
-      // Invoke AfterModelCallEvent hook
+    try {
+      const result = yield* this._streamFromModel(this.messages, streamOptions)
+      message = result.message
+      stopReason = result.stopReason
+
+      // Invoke AfterModelCallEvent hook on success
       await this.hooks.invokeCallbacks(new AfterModelCallEvent({ agent: this, message, stopReason }))
 
       yield { type: 'afterModelEvent', message, stopReason }
 
       return { message, stopReason }
     } catch (error) {
+      modelError = error instanceof Error ? error : new Error(String(error))
+
+      // Invoke AfterModelCallEvent hook even on error
+      if (message && stopReason) {
+        await this.hooks.invokeCallbacks(
+          new AfterModelCallEvent({ agent: this, message, stopReason, error: modelError })
+        )
+      }
+
       if (error instanceof ContextWindowOverflowError) {
         // Reduce context and retry
         this.conversationManager.reduceContext(this, error)
@@ -374,6 +389,13 @@ export class Agent implements AgentData {
       // Re-throw other errors
       throw error
     }
+  }
+
+  /**
+   * Type guard to check if an event is a ModelStreamEvent
+   */
+  private _isModelStreamEvent(event: AgentStreamEvent): event is ModelStreamEvent {
+    return 'type' in event && typeof event.type === 'string' && event.type.startsWith('model')
   }
 
   /**
@@ -393,10 +415,10 @@ export class Agent implements AgentData {
     while (!result.done) {
       const event = result.value
 
-      // Fire hook for all events from the model
-      await this.hooks.invokeCallbacks(
-        new ModelStreamEventHook({ agent: this, streamEvent: event as ModelStreamEvent })
-      )
+      // Fire hook only for ModelStreamEvents (not ContentBlock)
+      if (this._isModelStreamEvent(event)) {
+        await this.hooks.invokeCallbacks(new ModelStreamEventHook({ agent: this, event }))
+      }
 
       yield event
       result = await streamGenerator.next()

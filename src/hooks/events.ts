@@ -183,11 +183,11 @@ export class AfterModelCallEvent extends HookEvent {
 export class ModelStreamEventHook extends HookEvent {
   readonly type = 'modelStreamEventHook' as const
   readonly agent: AgentData
-  readonly streamEvent: ModelStreamEvent
+  readonly event: ModelStreamEvent
 
-  constructor(data: { agent: AgentData; streamEvent: ModelStreamEvent }) {
+  constructor(data: { agent: AgentData; event: ModelStreamEvent }) {
     super()
     this.agent = data.agent
-    this.streamEvent = data.streamEvent
+    this.event = data.event
   }
 }
