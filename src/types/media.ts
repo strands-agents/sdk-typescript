@@ -8,6 +8,17 @@
 import { TextBlock, type TextBlockData } from './messages.js'
 
 /**
+ * Cross-platform base64 encoding function that works in both browser and Node.js environments.
+ */
+export function encodeBase64(str: string): string {
+  if (typeof globalThis.btoa === 'function') {
+    return globalThis.btoa(str)
+  }
+  // Node.js environment
+  return globalThis.Buffer.from(str, 'binary').toString('base64')
+}
+
+/**
  * Data for an S3 location.
  * Used by Bedrock for referencing media and documents stored in S3.
  */
@@ -210,7 +221,7 @@ export type DocumentContentBlock = TextBlock
  * Supports multiple formats including structured content.
  */
 export type DocumentSourceData =
-  | { bytes: Uint8Array; filename?: string } // raw binary data
+  | { bytes: Uint8Array } // raw binary data
   | { text: string } // plain text
   | { content: DocumentContentBlockData[] } // structured content
   | { s3Location: S3LocationData } // S3 reference
@@ -219,7 +230,7 @@ export type DocumentSourceData =
  * Source for a document (Class version).
  */
 export type DocumentSource =
-  | { type: 'documentSourceBytes'; bytes: Uint8Array; filename?: string }
+  | { type: 'documentSourceBytes'; bytes: Uint8Array }
   | { type: 'documentSourceText'; text: string }
   | { type: 'documentSourceContentBlock'; content: DocumentContentBlock[] }
   | { type: 'documentSourceS3Location'; s3Location: S3Location }
@@ -305,7 +316,6 @@ export class DocumentBlock implements DocumentBlockData {
       return {
         type: 'documentSourceBytes',
         bytes: source.bytes,
-        ...(source.filename === undefined ? {} : { filename: source.filename }),
       }
     }
     if ('text' in source) {

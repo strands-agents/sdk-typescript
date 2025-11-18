@@ -8,11 +8,12 @@
  */
 
 import OpenAI, { type ClientOptions } from 'openai'
-import { Buffer } from 'buffer'
+import { lookup } from 'mime-types'
 import { Model } from '../models/model.js'
 import type { BaseModelConfig, StreamOptions } from '../models/model.js'
 import type { Message } from '../types/messages.js'
 import type { ImageBlock, DocumentBlock } from '../types/media.js'
+import { encodeBase64 } from '../types/media.js'
 import type { ModelStreamEvent } from '../models/streaming.js'
 import { ContextWindowOverflowError } from '../errors.js'
 
@@ -553,8 +554,8 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
                     break
                   }
                   case 'imageSourceBytes': {
-                    const base64 = globalThis.Buffer.from(imageBlock.source.bytes).toString('base64')
-                    const mimeType = `image/${imageBlock.format}`
+                    const base64 = encodeBase64(String.fromCharCode(...imageBlock.source.bytes))
+                    const mimeType = lookup(imageBlock.format) || `image/${imageBlock.format}`
                     contentParts.push({
                       type: 'image_url',
                       image_url: {
@@ -576,12 +577,13 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
                 const docBlock = block as DocumentBlock
                 switch (docBlock.source.type) {
                   case 'documentSourceBytes': {
+                    const mimeType = lookup(docBlock.format) || `application/${docBlock.format}`
+                    const base64 = encodeBase64(String.fromCharCode(...docBlock.source.bytes))
                     const file: OpenAI.Chat.Completions.ChatCompletionContentPart.File = {
                       type: 'file',
                       file: {
-                        // Convert bytes to text representation
-                        file_data: Buffer.from(String.fromCharCode(...docBlock.source.bytes)).toString('base64'),
-                        filename: docBlock.source.filename!,
+                        file_data: `data:${mimeType};base64,${base64}`,
+                        filename: docBlock.name,
                       },
                     }
                     contentParts.push(file)
@@ -589,6 +591,9 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
                   }
                   case 'documentSourceText': {
                     // Text documents can be added directly
+                    console.warn(
+                      'OpenAI does not support text document sources directly. Converting this text document to string content.'
+                    )
                     contentParts.push(docBlock.source.text)
                     break
                   }
