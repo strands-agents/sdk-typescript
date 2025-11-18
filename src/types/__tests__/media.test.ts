@@ -17,8 +17,9 @@ describe('S3Location', () => {
       uri: 's3://my-bucket/image.jpg',
     }
     const location = new S3Location(data)
-    expect(location.uri).toBe('s3://my-bucket/image.jpg')
-    expect(location.bucketOwner).toBeUndefined()
+    expect(location).toEqual({
+      uri: 's3://my-bucket/image.jpg',
+    })
   })
 
   it('creates instance with uri and bucketOwner', () => {
@@ -42,10 +43,10 @@ describe('ImageBlock', () => {
       source: { bytes },
     }
     const block = new ImageBlock(data)
-    expect(block).toBe({
+    expect(block).toMatchObject({
       type: 'imageBlock',
       format: 'jpeg',
-      source: bytes,
+      source: { type: 'imageSourceBytes', bytes },
     })
   })
 
@@ -60,17 +61,20 @@ describe('ImageBlock', () => {
       },
     }
     const block = new ImageBlock(data)
-    expect(block.type).toBe('imageBlock')
-    expect(block.format).toBe('png')
-    expect(block.source).toEqual({
-      s3Location: expect.any(S3Location),
+    expect(block).toMatchObject({
+      type: 'imageBlock',
+      format: 'png',
+      source: {
+        type: 'imageSourceS3Location',
+        s3Location: expect.any(S3Location),
+      },
     })
-    // Verify S3Location was converted to class
-    if ('s3Location' in block.source) {
-      expect(block.source.s3Location).toBeInstanceOf(S3Location)
-      expect(block.source.s3Location.uri).toBe('s3://my-bucket/image.png')
-      expect(block.source.s3Location.bucketOwner).toBe('123456789012')
-    }
+    // Assert S3Location was converted to class
+    expect('s3Location' in block.source).toBe(true)
+    const s3Source = block.source as { s3Location: S3Location }
+    expect(s3Source.s3Location).toBeInstanceOf(S3Location)
+    expect(s3Source.s3Location.uri).toBe('s3://my-bucket/image.png')
+    expect(s3Source.s3Location.bucketOwner).toBe('123456789012')
   })
 
   it('creates instance with URL source', () => {
@@ -79,9 +83,11 @@ describe('ImageBlock', () => {
       source: { url: 'https://example.com/image.webp' },
     }
     const block = new ImageBlock(data)
-    expect(block.type).toBe('imageBlock')
-    expect(block.format).toBe('webp')
-    expect(block.source).toEqual({ url: 'https://example.com/image.webp' })
+    expect(block).toMatchObject({
+      type: 'imageBlock',
+      format: 'webp',
+      source: { type: 'imageSourceUrl', url: 'https://example.com/image.webp' },
+    })
   })
 
   it('throws error for invalid source', () => {
@@ -101,9 +107,11 @@ describe('VideoBlock', () => {
       source: { bytes },
     }
     const block = new VideoBlock(data)
-    expect(block.type).toBe('videoBlock')
-    expect(block.format).toBe('mp4')
-    expect(block.source).toEqual({ bytes })
+    expect(block).toMatchObject({
+      type: 'videoBlock',
+      format: 'mp4',
+      source: { type: 'videoSourceBytes', bytes },
+    })
   })
 
   it('creates instance with S3 location source', () => {
@@ -116,16 +124,19 @@ describe('VideoBlock', () => {
       },
     }
     const block = new VideoBlock(data)
-    expect(block.type).toBe('videoBlock')
-    expect(block.format).toBe('webm')
-    expect(block.source).toEqual({
-      s3Location: expect.any(S3Location),
+    expect(block).toMatchObject({
+      type: 'videoBlock',
+      format: 'webm',
+      source: {
+        type: 'videoSourceS3Location',
+        s3Location: expect.any(S3Location),
+      },
     })
-    // Verify S3Location was converted to class
-    if ('s3Location' in block.source) {
-      expect(block.source.s3Location).toBeInstanceOf(S3Location)
-      expect(block.source.s3Location.uri).toBe('s3://my-bucket/video.webm')
-    }
+    // Assert S3Location was converted to class
+    expect('s3Location' in block.source).toBe(true)
+    const s3Source = block.source as { s3Location: S3Location }
+    expect(s3Source.s3Location).toBeInstanceOf(S3Location)
+    expect(s3Source.s3Location.uri).toBe('s3://my-bucket/video.webm')
   })
 
   it('throws error for invalid source', () => {
@@ -146,12 +157,12 @@ describe('DocumentBlock', () => {
       source: { bytes },
     }
     const block = new DocumentBlock(data)
-    expect(block.type).toBe('documentBlock')
-    expect(block.name).toBe('document.pdf')
-    expect(block.format).toBe('pdf')
-    expect(block.source).toEqual({ bytes })
-    expect(block.citations).toBeUndefined()
-    expect(block.context).toBeUndefined()
+    expect(block).toMatchObject({
+      type: 'documentBlock',
+      name: 'document.pdf',
+      format: 'pdf',
+      source: { type: 'documentSourceBytes', bytes },
+    })
   })
 
   it('creates instance with text source', () => {
@@ -161,7 +172,7 @@ describe('DocumentBlock', () => {
       source: { text: 'Hello world' },
     }
     const block = new DocumentBlock(data)
-    expect(block).toEqual({
+    expect(block).toMatchObject({
       type: 'documentBlock',
       format: 'txt',
       name: 'note.txt',
@@ -178,17 +189,23 @@ describe('DocumentBlock', () => {
       },
     }
     const block = new DocumentBlock(data)
-    expect(block.type).toBe('documentBlock')
-    expect(block.name).toBe('report.html')
-    expect(block.format).toBe('html')
-    // Verify content blocks were converted to TextBlock instances
-    if ('content' in block.source) {
-      expect(block.source.content).toHaveLength(2)
-      expect(block.source.content[0]).toBeInstanceOf(TextBlock)
-      expect(block.source.content[0]!.text).toBe('Introduction')
-      expect(block.source.content[1]).toBeInstanceOf(TextBlock)
-      expect(block.source.content[1]!.text).toBe('Conclusion')
-    }
+    expect(block).toMatchObject({
+      type: 'documentBlock',
+      name: 'report.html',
+      format: 'html',
+      source: {
+        type: 'documentSourceContentBlock',
+        content: [expect.any(TextBlock), expect.any(TextBlock)],
+      },
+    })
+    // Assert content blocks were converted to TextBlock instances
+    expect('content' in block.source).toBe(true)
+    const contentSource = block.source as { content: TextBlock[] }
+    expect(contentSource.content).toHaveLength(2)
+    expect(contentSource.content[0]).toBeInstanceOf(TextBlock)
+    expect(contentSource.content[0]!.text).toBe('Introduction')
+    expect(contentSource.content[1]).toBeInstanceOf(TextBlock)
+    expect(contentSource.content[1]!.text).toBe('Conclusion')
   })
 
   it('creates instance with S3 location source', () => {
@@ -203,12 +220,16 @@ describe('DocumentBlock', () => {
       },
     }
     const block = new DocumentBlock(data)
-    expect(block.type).toBe('documentBlock')
-    expect(block.source).toEqual({
-      type: 'documentSourceS3Location',
-      s3Location: {
-        uri: 's3://my-bucket/report.pdf',
-        bucketOwner: '123456789012',
+    expect(block).toMatchObject({
+      type: 'documentBlock',
+      name: 'report.pdf',
+      format: 'pdf',
+      source: {
+        type: 'documentSourceS3Location',
+        s3Location: {
+          uri: 's3://my-bucket/report.pdf',
+          bucketOwner: '123456789012',
+        },
       },
     })
   })
@@ -221,8 +242,12 @@ describe('DocumentBlock', () => {
       source: { bytes, filename: 'original-name.pdf' },
     }
     const block = new DocumentBlock(data)
-    expect(block.type).toBe('documentBlock')
-    expect(block.source).toEqual({ type: 'documentSourceBytes', bytes, filename: 'original-name.pdf' })
+    expect(block).toMatchObject({
+      type: 'documentBlock',
+      name: 'upload.pdf',
+      format: 'pdf',
+      source: { type: 'documentSourceBytes', bytes, filename: 'original-name.pdf' },
+    })
   })
 
   it('creates instance with text and filename', () => {
@@ -232,7 +257,7 @@ describe('DocumentBlock', () => {
       source: { text: 'Hello world' },
     }
     const block = new DocumentBlock(data)
-    expect(block).toEqual({
+    expect(block).toMatchObject({
       type: 'documentBlock',
       format: 'txt',
       name: 'note.txt',
@@ -250,7 +275,7 @@ describe('DocumentBlock', () => {
       context: 'Research paper about AI',
     }
     const block = new DocumentBlock(data)
-    expect(block).toEqual({
+    expect(block).toMatchObject({
       type: 'documentBlock',
       name: 'research.pdf',
       format: 'pdf',

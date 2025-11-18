@@ -13,16 +13,17 @@ import {
 } from '@strands-agents/sdk'
 
 import { readFileSync } from 'node:fs'
-import { join, dirname } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { resolve } from 'node:path'
 
 // eslint-disable-next-line no-restricted-imports
 import { collectIterator, collectGenerator } from '../src/__fixtures__/model-test-helpers.js'
 import { shouldRunTests } from './__fixtures__/model-test-helpers.js'
 
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = dirname(__filename)
-const fixturesDir = join(__dirname, 'fixtures')
+// Helper to load fixture files
+const loadFixture = (filename: string) => {
+  const fixturePath = resolve(import.meta.dirname, 'fixtures', filename)
+  return new Uint8Array(readFileSync(fixturePath))
+}
 
 describe.skipIf(!(await shouldRunTests()))('BedrockModel Integration Tests', () => {
   describe('Non-Streaming', () => {
@@ -355,7 +356,7 @@ describe.skipIf(!(await shouldRunTests()))('BedrockModel Integration Tests', () 
       const provider = new BedrockModel({ maxTokens: 300 })
 
       // Load image from fixture
-      const imageBytes = new Uint8Array(readFileSync(join(fixturesDir, 'yellow.png')))
+      const imageBytes = loadFixture('yellow.png')
       const imageBlock = new ImageBlock({
         format: 'png',
         source: { bytes: imageBytes },
@@ -378,7 +379,7 @@ describe.skipIf(!(await shouldRunTests()))('BedrockModel Integration Tests', () 
       })
 
       // PDF document
-      const pdfBytes = new Uint8Array(readFileSync(join(fixturesDir, 'letter.pdf')))
+      const pdfBytes = loadFixture('letter.pdf')
       const pdfDocBlock = new DocumentBlock({
         name: 'letter',
         format: 'pdf',
