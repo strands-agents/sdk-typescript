@@ -63,21 +63,24 @@ jobs:
           result-encoding: string
           script: |
             return "auto-approve"
-
-  execute:
+  
+  setup-and-process:
     needs: [authorization-check]
     environment: ${{ needs.authorization-check.outputs.approval-env }}
     permissions:
       contents: write
       issues: write
-      pull-requests: write
-      id-token: write # Required for OIDC
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    outputs:
+      branch: ${{ steps.process.outputs.branch_name }}
+      session_id: ${{ steps.process.outputs.session_id }}
+      system_prompt: ${{ steps.process.outputs.system_prompt }}
+      prompt: ${{ steps.process.outputs.prompt }}
     steps:
       - name: Add strands-running label
         uses: actions/github-script@v8
         with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             await github.rest.issues.addLabels({
               owner: context.repo.owner,
@@ -190,10 +193,20 @@ jobs:
               core.setFailed(errorMsg);
             }
 
+  execute-readonly:
+    needs: [setup-and-process]
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
+      id-token: write # Required for OIDC
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
       - name: Checkout repository
         uses: actions/checkout@v5
         with:
-          ref: ${{ steps.process.outputs.branch_name }}
+          ref: ${{ needs.setup-and-process.outputs.branch }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -205,17 +218,43 @@ jobs:
         continue-on-error: true # This step's failure will not stop the workflow
 
       - name: Run Strands Agent
+        id: agent-runner
         uses: ./.github/actions/strands-agent-runner
         with:
-          system_prompt: ${{ steps.process.outputs.system_prompt }}
-          session_id: ${{ steps.process.outputs.session_id }}
-          task_prompt: ${{ steps.process.outputs.prompt }}
+          system_prompt: ${{ needs.setup-and-process.outputs.system_prompt }}
+          session_id: ${{ needs.setup-and-process.outputs.session_id }}
+          task_prompt: ${{ needs.setup-and-process.outputs.prompt }}
           aws_role_arn: ${{ secrets.AWS_ROLE_ARN }}
           sessions_bucket: ${{ secrets.TYPESCRIPT_SESSIONS_BUCKET }}
-          github_token: ${{ github.token }}
+          write_permission: 'false'
 
+  execute-write:
+    needs: [setup-and-process, execute-readonly]
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+      id-token: write # Required for OIDC
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Execute write operations
+        # Some github action shenanigans: https://github.com/actions/runner/issues/3358
+        # Basically since we are downloading the repo artifact from the previous step here, that would
+        # cause issues with the github workflow cleanup step if we don't reference the action like this.
+        uses: strands-agents/sdk-typescript/.github/actions/strands-write-executor@main
+        with:
+          ref: ${{ needs.setup-and-process.outputs.branch }}
+
+
+  cleanup:
+    needs: [authorization-check, setup-and-process, execute-readonly, execute-write]
+    if: always()
+    permissions:
+      issues: write
+    runs-on: ubuntu-latest
+    steps:
       - name: Remove strands-running label
-        if: always()
         uses: actions/github-script@v8
         with:
           script: |
