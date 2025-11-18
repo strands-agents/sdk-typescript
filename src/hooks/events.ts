@@ -1,5 +1,5 @@
 import type { AgentData } from '../types/agent.js'
-import type { Message, ToolResultBlock } from '../types/messages.js'
+import type { ContentBlock, Message, ToolResultBlock } from '../types/messages.js'
 import type { Tool } from '../tools/tool.js'
 import type { JSONValue } from '../types/json.js'
 import type { ModelStreamEvent } from '../models/streaming.js'
@@ -156,8 +156,8 @@ export class BeforeModelCallEvent extends HookEvent {
 export class AfterModelCallEvent extends HookEvent {
   readonly type = 'afterModelCallEvent' as const
   readonly agent: AgentData
-  readonly message: Message
-  readonly stopReason: string
+  readonly message?: Message
+  readonly stopReason?: string
   readonly error?: Error
 
   constructor(data: { agent: AgentData; message: Message; stopReason: string; error?: Error }) {
@@ -183,9 +183,9 @@ export class AfterModelCallEvent extends HookEvent {
 export class ModelStreamEventHook extends HookEvent {
   readonly type = 'modelStreamEventHook' as const
   readonly agent: AgentData
-  readonly event: ModelStreamEvent
+  readonly event: ModelStreamEvent | ContentBlock
 
-  constructor(data: { agent: AgentData; event: ModelStreamEvent }) {
+  constructor(data: { agent: AgentData; event: ModelStreamEvent | ContentBlock }) {
     super()
     this.agent = data.agent
     this.event = data.event

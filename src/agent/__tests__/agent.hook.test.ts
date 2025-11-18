@@ -1,18 +1,20 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import { Agent } from '../agent.js'
 import {
-  BeforeInvocationEvent,
   AfterInvocationEvent,
   AfterModelCallEvent,
-  MessageAddedEvent,
-  BeforeToolCallEvent,
   AfterToolCallEvent,
+  BeforeInvocationEvent,
+  BeforeModelCallEvent,
+  BeforeToolCallEvent,
+  MessageAddedEvent,
   ModelStreamEventHook,
 } from '../../hooks/index.js'
 import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
 import { MockHookProvider } from '../../__fixtures__/mock-hook-provider.js'
 import { collectIterator } from '../../__fixtures__/model-test-helpers.js'
 import { FunctionTool } from '../../tools/function-tool.js'
+import { Message, TextBlock, ToolResultBlock } from '../../types/messages.js'
 
 describe('Agent Hooks Integration', () => {
   let mockProvider: MockHookProvider
@@ -32,47 +34,26 @@ describe('Agent Hooks Integration', () => {
       // Verify exact sequence: BeforeInvocation, BeforeModelCall, AfterModelCall, MessageAdded, AfterInvocation
       expect(lifecycleProvider.invocations).toHaveLength(5)
 
-      // First event: BeforeInvocationEvent
-      expect(lifecycleProvider.invocations[0]).toEqual(
-        expect.objectContaining({
-          type: 'beforeInvocationEvent',
-          agent,
-        })
-      )
-
-      // Second event: BeforeModelCallEvent
-      expect(lifecycleProvider.invocations[1]).toEqual(
-        expect.objectContaining({
-          type: 'beforeModelCallEvent',
-          agent,
-        })
-      )
-
-      // Third event: AfterModelCallEvent
+      expect(lifecycleProvider.invocations[0]).toEqual(new BeforeInvocationEvent({ agent: agent }))
+      expect(lifecycleProvider.invocations[1]).toEqual(new BeforeModelCallEvent({ agent: agent }))
       expect(lifecycleProvider.invocations[2]).toEqual(
-        expect.objectContaining({
-          type: 'afterModelCallEvent',
+        new AfterModelCallEvent({
           agent,
           stopReason: 'endTurn',
+          message: new Message({ role: 'assistant', content: [new TextBlock('Hello')] }),
         })
       )
 
       // Fourth event: MessageAddedEvent
       expect(lifecycleProvider.invocations[3]).toEqual(
-        expect.objectContaining({
-          type: 'messageAddedEvent',
+        new MessageAddedEvent({
           agent,
-          message: expect.objectContaining({ role: 'assistant' }),
+          message: new Message({ role: 'assistant', content: [new TextBlock('Hello')] }),
         })
       )
 
       // Fifth event: AfterInvocationEvent
-      expect(lifecycleProvider.invocations[4]).toEqual(
-        expect.objectContaining({
-          type: 'afterInvocationEvent',
-          agent,
-        })
-      )
+      expect(lifecycleProvider.invocations[4]).toEqual(new AfterInvocationEvent({ agent }))
     })
 
     it('fires hooks during stream', async () => {
@@ -86,18 +67,10 @@ describe('Agent Hooks Integration', () => {
       expect(lifecycleProvider.invocations).toHaveLength(5)
 
       // First event: BeforeInvocationEvent
-      expect(lifecycleProvider.invocations[0]).toEqual(
-        expect.objectContaining({
-          type: 'beforeInvocationEvent',
-        })
-      )
+      expect(lifecycleProvider.invocations[0]).toEqual(new BeforeInvocationEvent({ agent }))
 
       // Last event: AfterInvocationEvent
-      expect(lifecycleProvider.invocations[4]).toEqual(
-        expect.objectContaining({
-          type: 'afterInvocationEvent',
-        })
-      )
+      expect(lifecycleProvider.invocations[4]).toEqual(new AfterInvocationEvent({ agent }))
     })
   })
 
@@ -113,16 +86,8 @@ describe('Agent Hooks Integration', () => {
 
       // Should have all lifecycle events
       expect(lifecycleProvider.invocations).toHaveLength(5)
-      expect(lifecycleProvider.invocations[0]).toEqual(
-        expect.objectContaining({
-          type: 'beforeInvocationEvent',
-        })
-      )
-      expect(lifecycleProvider.invocations[4]).toEqual(
-        expect.objectContaining({
-          type: 'afterInvocationEvent',
-        })
-      )
+      expect(lifecycleProvider.invocations[0]).toEqual(new BeforeInvocationEvent({ agent }))
+      expect(lifecycleProvider.invocations[4]).toEqual(new AfterInvocationEvent({ agent }))
     })
   })
 
@@ -186,17 +151,30 @@ describe('Agent Hooks Integration', () => {
       // Verify 3 MessageAdded events: assistant with tool use, tool result, final assistant
       expect(messageAddedEvents.length).toBe(3)
 
-      // Verify BeforeToolCallEvent properties
+      // Verify BeforeToolCallEvent
       const beforeToolCall = beforeToolCallEvents[0] as BeforeToolCallEvent
-      expect(beforeToolCall.toolUse.name).toBe('testTool')
-      expect(beforeToolCall.tool).toBe(tool)
+      expect(beforeToolCall).toEqual(
+        new BeforeToolCallEvent({
+          agent,
+          toolUse: { name: 'testTool', toolUseId: 'tool-1', input: {} },
+          tool,
+        })
+      )
 
-      // Verify AfterToolCallEvent properties
+      // Verify AfterToolCallEvent
       const afterToolCall = afterToolCallEvents[0] as AfterToolCallEvent
-      expect(afterToolCall.toolUse.name).toBe('testTool')
-      expect(afterToolCall.tool).toBe(tool)
-      expect(afterToolCall.result.status).toBe('success')
-      expect(afterToolCall.error).toBeUndefined()
+      expect(afterToolCall).toEqual(
+        new AfterToolCallEvent({
+          agent,
+          toolUse: { name: 'testTool', toolUseId: 'tool-1', input: {} },
+          tool,
+          result: new ToolResultBlock({
+            toolUseId: 'tool-1',
+            status: 'success',
+            content: [new TextBlock('Tool result')],
+          }),
+        })
+      )
     })
 
     it('fires AfterToolCallEvent with error when tool fails', async () => {
@@ -228,9 +206,19 @@ describe('Agent Hooks Integration', () => {
       expect(afterToolCallEvents.length).toBe(1)
 
       const afterToolCall = afterToolCallEvents[0] as AfterToolCallEvent
-      expect(afterToolCall.result.status).toBe('error')
-      // FunctionTool catches the error internally, so we don't have it in the event
-      expect(afterToolCall.error).toBeUndefined()
+      expect(afterToolCall).toEqual(
+        new AfterToolCallEvent({
+          agent,
+          toolUse: { name: 'failingTool', toolUseId: 'tool-1', input: {} },
+          tool,
+          result: new ToolResultBlock({
+            error: new Error('Tool execution failed'),
+            toolUseId: 'tool-1',
+            status: 'error',
+            content: [new TextBlock('Error: Tool execution failed')],
+          }),
+        })
+      )
     })
   })
 
@@ -343,10 +331,12 @@ describe('Agent Hooks Integration', () => {
       const messageAddedEvents = mockProvider.invocations.filter((e) => e instanceof MessageAddedEvent)
 
       // Should only have 1 MessageAdded event (for the assistant response)
-      expect(messageAddedEvents.length).toBe(1)
-
-      const event = messageAddedEvents[0] as MessageAddedEvent
-      expect(event.message.role).toBe('assistant')
+      expect(messageAddedEvents).toEqual([
+        new MessageAddedEvent({
+          agent,
+          message: new Message({ role: 'assistant', content: [new TextBlock('Response')] }),
+        }),
+      ])
     })
 
     it('does not fire for user input messages', async () => {
@@ -362,10 +352,12 @@ describe('Agent Hooks Integration', () => {
       const messageAddedEvents = mockProvider.invocations.filter((e) => e instanceof MessageAddedEvent)
 
       // Should only have 1 MessageAdded event (for the assistant response)
-      expect(messageAddedEvents.length).toBe(1)
-
-      const event = messageAddedEvents[0] as MessageAddedEvent
-      expect(event.message.role).toBe('assistant')
+      expect(messageAddedEvents).toEqual([
+        new MessageAddedEvent({
+          agent,
+          message: new Message({ role: 'assistant', content: [new TextBlock('Response')] }),
+        }),
+      ])
     })
   })
 })

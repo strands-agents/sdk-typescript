@@ -16,7 +16,6 @@ import {
   type ToolUseBlock,
 } from '../index.js'
 import type { BaseModelConfig, Model, StreamOptions } from '../models/model.js'
-import type { ModelStreamEvent } from '../models/streaming.js'
 import { ToolRegistry } from '../registry/tool-registry.js'
 import { AgentState } from './state.js'
 import type { AgentData } from '../types/agent.js'
@@ -26,13 +25,13 @@ import { SlidingWindowConversationManager } from '../conversation-manager/slidin
 import { HookRegistryImplementation } from '../hooks/registry.js'
 import type { HookProvider } from '../hooks/types.js'
 import {
-  BeforeInvocationEvent,
   AfterInvocationEvent,
-  MessageAddedEvent,
-  BeforeToolCallEvent,
-  AfterToolCallEvent,
-  BeforeModelCallEvent,
   AfterModelCallEvent,
+  AfterToolCallEvent,
+  BeforeInvocationEvent,
+  BeforeModelCallEvent,
+  BeforeToolCallEvent,
+  MessageAddedEvent,
   ModelStreamEventHook,
 } from '../hooks/events.js'
 
@@ -361,9 +360,7 @@ export class Agent implements AgentData {
     let modelError: Error | undefined
 
     try {
-      const result = yield* this._streamFromModel(this.messages, streamOptions)
-      message = result.message
-      stopReason = result.stopReason
+      const { message, stopReason } = yield* this._streamFromModel(this.messages, streamOptions)
 
       // Invoke AfterModelCallEvent hook on success
       await this.hooks.invokeCallbacks(new AfterModelCallEvent({ agent: this, message, stopReason }))
@@ -392,13 +389,6 @@ export class Agent implements AgentData {
   }
 
   /**
-   * Type guard to check if an event is a ModelStreamEvent
-   */
-  private _isModelStreamEvent(event: AgentStreamEvent): event is ModelStreamEvent {
-    return 'type' in event && typeof event.type === 'string' && event.type.startsWith('model')
-  }
-
-  /**
    * Streams events from the model and fires ModelStreamEventHook for each event.
    *
    * @param messages - Messages to send to the model
@@ -415,10 +405,7 @@ export class Agent implements AgentData {
     while (!result.done) {
       const event = result.value
 
-      // Fire hook only for ModelStreamEvents (not ContentBlock)
-      if (this._isModelStreamEvent(event)) {
-        await this.hooks.invokeCallbacks(new ModelStreamEventHook({ agent: this, event }))
-      }
+      await this.hooks.invokeCallbacks(new ModelStreamEventHook({ agent: this, event }))
 
       yield event
       result = await streamGenerator.next()
