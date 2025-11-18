@@ -89,109 +89,24 @@ jobs:
               labels: ['strands-running']
             });
 
-      # Check out main first so we only get committed code
       - name: Checkout repository
         uses: actions/checkout@v5
+        with:
+          sparse-checkout: |
+            .github
 
+      # Outputs: branch_name, session_id, system_prompt, prompt
       - name: Process input
         id: process
         uses: actions/github-script@v8
         with:
           script: |
-            const fs = require('fs');
-            try {
-              const issueId = context.eventName === 'workflow_dispatch' 
-                ? '${{ inputs.issue_id }}'
-                : context.payload.issue.number.toString();
-              const command = context.eventName === 'workflow_dispatch'
-                ? '${{ inputs.command }}'
-                : (context.payload.comment.body.match(/^\/strands\s*(.*)$/)?.[1]?.trim() || '');
-
-              console.log(`Event: ${context.eventName}, Issue ID: ${issueId}, Command: "${command}"`);
-
-              const issue = await github.rest.issues.get({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: issueId
-              });
-              const isPullRequest = !!issue.data.pull_request;
-              const mode = (isPullRequest || command.startsWith('implement')) ? 'implementer' : 'refiner';
-
-              console.log(`Is PR: ${isPullRequest}, Mode: ${mode}`);
-
-              // Determine branch/ref to checkout
-              let branchName = 'main';
-
-              // If this is a non pr issue, and the command is implement, create a branch
-              if (mode === 'implementer' && !isPullRequest) {
-                branchName = `agent-tasks/${issueId}`;
-                
-                // Create branch from main
-                const mainRef = await github.rest.git.getRef({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  ref: 'heads/main'
-                });
-                
-                try {
-                  await github.rest.git.createRef({
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    ref: `refs/heads/${branchName}`,
-                    sha: mainRef.data.object.sha
-                  });
-                  console.log(`Created branch ${branchName}`);
-                } catch (error) {
-                  if (error.status === 422 || error.message?.includes('already exists')) {
-                    console.log(`Branch ${branchName} already exists`);
-                  } else {
-                    throw error;
-                  }
-                }
-              } else if (isPullRequest) {
-                const pr = await github.rest.pulls.get({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  pull_number: issueId
-                });
-                branchName = pr.data.head.ref;
-              }
-
-              console.log(`Building prompts - mode: ${mode}, issue: ${issueId}, is PR: ${isPullRequest}`);
-              
-              const sessionId = '${{ inputs.session_id }}' || (mode === 'implementer' 
-                ? `${mode}-${branchName}`.replace(/[\/\\]/g, '-')
-                : `${mode}-${issueId}`);
-              console.log(`Session ID: ${sessionId}`);
-
-              const scriptFile = mode === 'implementer' 
-                ? '.github/agent-sops/task-implementer.sop.md'
-                : '.github/agent-sops/task-refiner.sop.md';
-              console.log(`Reading script file: ${scriptFile}`);
-              let systemPrompt = fs.readFileSync(scriptFile, 'utf8');
-              
-              const first20Lines = systemPrompt.split('\n').slice(0, 20).join('\n');
-              console.log(`System prompt (first 20 lines):\n${first20Lines}`);
-              
-              let prompt = (isPullRequest) 
-                ? 'The pull request id is:'
-                : 'The issue id is:';
-              prompt += `${issueId}\n`
-              prompt += `${command}\n`;
-              prompt += 'review and continue';
-              
-              console.log(`Task prompt: "${prompt}"`);
-
-              core.setOutput('branch_name', branchName);
-              core.setOutput('session_id', sessionId);
-              core.setOutput('system_prompt', systemPrompt);
-              core.setOutput('prompt', prompt);
-
-            } catch (error) {
-              const errorMsg = `Failed: ${error.message}`;
-              console.error(errorMsg);
-              core.setFailed(errorMsg);
-            }
+            const processInput = require('./.github/scripts/javascript/process-input.cjs');
+            await processInput(context, github, core, {
+              issue_id: '${{ inputs.issue_id }}',
+              command: '${{ inputs.command }}',
+              session_id: '${{ inputs.session_id }}'
+            });
 
   execute-readonly:
     needs: [setup-and-process]
@@ -200,22 +115,14 @@ jobs:
       issues: read
       pull-requests: read
       id-token: write # Required for OIDC
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest 
     timeout-minutes: 60
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
         with:
-          ref: ${{ needs.setup-and-process.outputs.branch }}
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: '20'
-
-      - name: Install dependencies
-        run: npm install
-        continue-on-error: true # This step's failure will not stop the workflow
+          sparse-checkout: |
+            .github
 
       - name: Run Strands Agent
         id: agent-runner
@@ -235,14 +142,17 @@ jobs:
       issues: write
       pull-requests: write
       id-token: write # Required for OIDC
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest 
     timeout-minutes: 30
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          sparse-checkout: |
+            .github
+
       - name: Execute write operations
-        # Some github action shenanigans: https://github.com/actions/runner/issues/3358
-        # Basically since we are downloading the repo artifact from the previous step here, that would
-        # cause issues with the github workflow cleanup step if we don't reference the action like this.
-        uses: strands-agents/sdk-typescript/.github/actions/strands-write-executor@main
+        uses: ./.github/actions/strands-write-executor
         with:
           ref: ${{ needs.setup-and-process.outputs.branch }}
 
@@ -252,7 +162,7 @@ jobs:
     if: always()
     permissions:
       issues: write
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest 
     steps:
       - name: Remove strands-running label
         uses: actions/github-script@v8
