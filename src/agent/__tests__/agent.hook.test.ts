@@ -31,7 +31,6 @@ describe('Agent Hooks Integration', () => {
 
       await agent.invoke('Hi')
 
-      // Verify exact sequence: BeforeInvocation, BeforeModelCall, AfterModelCall, MessageAdded, AfterInvocation
       expect(lifecycleProvider.invocations).toHaveLength(5)
 
       expect(lifecycleProvider.invocations[0]).toEqual(new BeforeInvocationEvent({ agent: agent }))
@@ -43,16 +42,12 @@ describe('Agent Hooks Integration', () => {
           message: new Message({ role: 'assistant', content: [new TextBlock('Hello')] }),
         })
       )
-
-      // Fourth event: MessageAddedEvent
       expect(lifecycleProvider.invocations[3]).toEqual(
         new MessageAddedEvent({
           agent,
           message: new Message({ role: 'assistant', content: [new TextBlock('Hello')] }),
         })
       )
-
-      // Fifth event: AfterInvocationEvent
       expect(lifecycleProvider.invocations[4]).toEqual(new AfterInvocationEvent({ agent }))
     })
 
@@ -63,13 +58,23 @@ describe('Agent Hooks Integration', () => {
 
       await collectIterator(agent.stream('Hi'))
 
-      // Should have same sequence as invoke
       expect(lifecycleProvider.invocations).toHaveLength(5)
 
-      // First event: BeforeInvocationEvent
-      expect(lifecycleProvider.invocations[0]).toEqual(new BeforeInvocationEvent({ agent }))
-
-      // Last event: AfterInvocationEvent
+      expect(lifecycleProvider.invocations[0]).toEqual(new BeforeInvocationEvent({ agent: agent }))
+      expect(lifecycleProvider.invocations[1]).toEqual(new BeforeModelCallEvent({ agent: agent }))
+      expect(lifecycleProvider.invocations[2]).toEqual(
+        new AfterModelCallEvent({
+          agent,
+          stopReason: 'endTurn',
+          message: new Message({ role: 'assistant', content: [new TextBlock('Hello')] }),
+        })
+      )
+      expect(lifecycleProvider.invocations[3]).toEqual(
+        new MessageAddedEvent({
+          agent,
+          message: new Message({ role: 'assistant', content: [new TextBlock('Hello')] }),
+        })
+      )
       expect(lifecycleProvider.invocations[4]).toEqual(new AfterInvocationEvent({ agent }))
     })
   })
