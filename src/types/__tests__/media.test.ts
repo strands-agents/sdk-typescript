@@ -236,14 +236,14 @@ describe('DocumentBlock', () => {
     const data: DocumentBlockData = {
       name: 'upload.pdf',
       format: 'pdf',
-      source: { bytes, filename: 'original-name.pdf' },
+      source: { bytes },
     }
     const block = new DocumentBlock(data)
     expect(block).toMatchObject({
       type: 'documentBlock',
       name: 'upload.pdf',
       format: 'pdf',
-      source: { type: 'documentSourceBytes', bytes, filename: 'original-name.pdf' },
+      source: { type: 'documentSourceBytes', bytes },
     })
   })
 

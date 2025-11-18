@@ -602,7 +602,7 @@ describe.skipIf(!hasApiKey)('OpenAIModel Integration Tests', () => {
         const documentBlock = new DocumentBlock({
           name: 'sample.txt',
           format: 'txt',
-          source: { text: 'The quick brown fox jumps over the lazy dog.', filename: 'text-sample.txt' },
+          source: { text: 'The quick brown fox jumps over the lazy dog.' },
         })
 
         const messages: Message[] = [
@@ -640,13 +640,11 @@ describe.skipIf(!hasApiKey)('OpenAIModel Integration Tests', () => {
         })
 
         const textContent = 'Integration test document content with important keywords.'
-        // eslint-disable-next-line no-undef
-        const textBytes = new TextEncoder().encode(textContent)
 
         const documentBlock = new DocumentBlock({
           name: 'test.txt',
           format: 'txt',
-          source: { bytes: textBytes, filename: 'bytes-test.txt' },
+          source: { text: textContent },
         })
 
         const messages: Message[] = [

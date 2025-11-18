@@ -343,24 +343,6 @@ describe('OpenAIModel', () => {
           }
         }).rejects.toThrow('Failed to serialize tool input')
       })
-
-      it('throws error for reasoning blocks (OpenAI does not support them)', async () => {
-        const mockClient = createMockClient(async function* () {})
-        const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
-        const messages: Message[] = [
-          {
-            type: 'message',
-            role: 'user',
-            content: [{ type: 'reasoningBlock', reasoning: 'Some reasoning' }] as any,
-          },
-        ]
-
-        await expect(async () => {
-          for await (const _ of provider.stream(messages)) {
-            // Should not reach here
-          }
-        }).rejects.toThrow('Reasoning blocks are not supported by OpenAI')
-      })
     })
 
     describe('basic streaming', () => {
@@ -1199,7 +1181,7 @@ describe('OpenAIModel', () => {
 
       // Verify warning was logged
       expect(warnSpy).toHaveBeenCalledWith(
-        'OpenAI does not support guard content in messages. Removing guard content block.'
+        'OpenAI ChatCompletions API does not support content type: guardContentBlock.'
       )
 
       // Verify guard content filtered out
@@ -1236,7 +1218,7 @@ describe('OpenAIModel', () => {
 
       // Verify warning was logged
       expect(warnSpy).toHaveBeenCalledWith(
-        'OpenAI does not support guard content in messages. Removing guard content block.'
+        'OpenAI ChatCompletions API does not support content type: guardContentBlock.'
       )
 
       // Verify guard content filtered out
@@ -1271,7 +1253,7 @@ describe('OpenAIModel', () => {
 
       // Verify warning was logged
       expect(warnSpy).toHaveBeenCalledWith(
-        'OpenAI does not support guard content in messages. Removing guard content block.'
+        'OpenAI ChatCompletions API does not support content type: guardContentBlock.'
       )
 
       // Verify no user message added (only guard content)
