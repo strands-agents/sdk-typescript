@@ -5,6 +5,7 @@ import type { ToolSpec } from './types.js'
 import type { JSONSchema, JSONValue } from '../types/json.js'
 import { deepCopy } from '../types/json.js'
 import { JsonBlock, TextBlock, ToolResultBlock } from '../types/messages.js'
+import { normalizeError } from '../errors.js'
 
 /**
  * Callback function for FunctionTool implementations.
@@ -267,7 +268,7 @@ export class FunctionTool extends Tool {
    */
   private _createErrorResult(error: unknown, toolUseId: string): ToolResultBlock {
     // Ensure error is an Error object (wrap non-Error values)
-    const errorObject = error instanceof Error ? error : new Error(String(error))
+    const errorObject = normalizeError(error)
 
     return new ToolResultBlock({
       toolUseId,

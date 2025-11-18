@@ -89,3 +89,16 @@ export class ConcurrentInvocationError extends Error {
     this.name = 'ConcurrentInvocationError'
   }
 }
+
+/**
+ * Normalizes an unknown error value to an Error instance.
+ *
+ * This helper ensures that any thrown value (Error, string, number, etc.)
+ * is converted to a proper Error object for consistent error handling.
+ *
+ * @param error - The error value to normalize
+ * @returns An Error instance
+ */
+export function normalizeError(error: unknown): Error {
+  return error instanceof Error ? error : new Error(String(error))
+}

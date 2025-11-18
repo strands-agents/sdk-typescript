@@ -2,10 +2,7 @@ import {
   type AgentResult,
   type AgentStreamEvent,
   BedrockModel,
-  ConcurrentInvocationError,
-  ContextWindowOverflowError,
   type JSONValue,
-  MaxTokensError,
   Message,
   type MessageData,
   type SystemPrompt,
@@ -15,6 +12,7 @@ import {
   ToolResultBlock,
   type ToolUseBlock,
 } from '../index.js'
+import { normalizeError, ConcurrentInvocationError, MaxTokensError, ContextWindowOverflowError } from '../errors.js'
 import type { BaseModelConfig, Model, StreamOptions } from '../models/model.js'
 import { ToolRegistry } from '../registry/tool-registry.js'
 import { AgentState } from './state.js'
@@ -361,7 +359,7 @@ export class Agent implements AgentData {
 
       return { message, stopReason }
     } catch (error) {
-      const modelError = error instanceof Error ? error : new Error(String(error))
+      const modelError = normalizeError(error)
 
       // Invoke AfterModelCallEvent hook even on error
       await this.hooks.invokeCallbacks(new AfterModelCallEvent({ agent: this, error: modelError }))
@@ -524,7 +522,7 @@ export class Agent implements AgentData {
       return toolResult
     } catch (error) {
       // Tool execution failed with error
-      const toolError = error instanceof Error ? error : new Error(String(error))
+      const toolError = normalizeError(error)
       const errorResult = new ToolResultBlock({
         toolUseId: toolUseBlock.toolUseId,
         status: 'error',
