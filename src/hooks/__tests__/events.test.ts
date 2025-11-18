@@ -212,36 +212,38 @@ describe('AfterModelCallEvent', () => {
     const agent = new Agent()
     const message = new Message({ role: 'assistant', content: [{ type: 'textBlock', text: 'Response' }] })
     const stopReason = 'endTurn'
-    const event = new AfterModelCallEvent({ agent, message, stopReason })
+    const response = { message, stopReason }
+    const event = new AfterModelCallEvent({ agent, stopData: response })
 
     expect(event.agent).toBe(agent)
-    expect(event.message).toBe(message)
-    expect(event.stopReason).toBe(stopReason)
+    expect(event.stopData).toEqual(response)
+    expect(event.stopData?.message).toBe(message)
+    expect(event.stopData?.stopReason).toBe(stopReason)
     expect(event.error).toBeUndefined()
     expect(event.type).toBe('afterModelCallEvent')
     // @ts-expect-error verifying that property is readonly
     event.agent = new Agent()
     // @ts-expect-error verifying that property is readonly
-    event.message = message
-    // @ts-expect-error verifying that property is readonly
-    event.stopReason = stopReason
+    event.stopData = response
   })
 
   it('creates instance with error property when model invocation fails', () => {
     const agent = new Agent()
     const message = new Message({ role: 'assistant', content: [] })
     const error = new Error('Model failed')
-    const event = new AfterModelCallEvent({ agent, message, stopReason: 'error', error })
+    const response = { message, stopReason: 'error' }
+    const event = new AfterModelCallEvent({ agent, stopData: response, error })
 
     expect(event.agent).toBe(agent)
     expect(event.error).toBe(error)
-    expect(event.stopReason).toBe('error')
+    expect(event.stopData?.stopReason).toBe('error')
   })
 
   it('returns true for _shouldReverseCallbacks', () => {
     const agent = new Agent()
     const message = new Message({ role: 'assistant', content: [] })
-    const event = new AfterModelCallEvent({ agent, message, stopReason: 'endTurn' })
+    const response = { message, stopReason: 'endTurn' }
+    const event = new AfterModelCallEvent({ agent, stopData: response })
     expect(event._shouldReverseCallbacks()).toBe(true)
   })
 })

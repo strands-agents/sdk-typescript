@@ -41,8 +41,10 @@ describe('Agent Hooks Integration', () => {
       expect(lifecycleProvider.invocations[3]).toEqual(
         new AfterModelCallEvent({
           agent,
-          stopReason: 'endTurn',
-          message: new Message({ role: 'assistant', content: [new TextBlock('Hello')] }),
+          stopData: {
+            stopReason: 'endTurn',
+            message: new Message({ role: 'assistant', content: [new TextBlock('Hello')] }),
+          },
         })
       )
       expect(lifecycleProvider.invocations[4]).toEqual(
@@ -74,8 +76,10 @@ describe('Agent Hooks Integration', () => {
       expect(lifecycleProvider.invocations[3]).toEqual(
         new AfterModelCallEvent({
           agent,
-          stopReason: 'endTurn',
-          message: new Message({ role: 'assistant', content: [new TextBlock('Hello')] }),
+          stopData: {
+            stopReason: 'endTurn',
+            message: new Message({ role: 'assistant', content: [new TextBlock('Hello')] }),
+          },
         })
       )
       expect(lifecycleProvider.invocations[4]).toEqual(
@@ -264,8 +268,8 @@ describe('Agent Hooks Integration', () => {
     })
   })
 
-  describe('MessageAddedEvent exclusions', () => {
-    it('does not fire for initial config messages', async () => {
+  describe('MessageAddedEvent', () => {
+    it('fires for initial user input', async () => {
       const initialMessage = { role: 'user' as const, content: [{ type: 'textBlock' as const, text: 'Initial' }] }
 
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Response' })
@@ -280,41 +284,13 @@ describe('Agent Hooks Integration', () => {
 
       const messageAddedEvents = mockProvider.invocations.filter((e) => e instanceof MessageAddedEvent)
 
-      // Should only have 1 MessageAdded event (for the assistant response)
+      // Should have 2 MessageAdded event
       expect(messageAddedEvents).toHaveLength(2)
 
       expect(messageAddedEvents[0]).toEqual(
         new MessageAddedEvent({
           agent,
           message: new Message({ role: 'user', content: [new TextBlock('New message')] }),
-        })
-      )
-      expect(messageAddedEvents[1]).toEqual(
-        new MessageAddedEvent({
-          agent,
-          message: new Message({ role: 'assistant', content: [new TextBlock('Response')] }),
-        })
-      )
-    })
-
-    it('does fire for user input messages', async () => {
-      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Response' })
-
-      const agent = new Agent({
-        model,
-        hooks: [mockProvider],
-      })
-
-      await agent.invoke('User input')
-
-      const messageAddedEvents = mockProvider.invocations.filter((e) => e instanceof MessageAddedEvent)
-
-      expect(messageAddedEvents).toHaveLength(2)
-
-      expect(messageAddedEvents[0]).toEqual(
-        new MessageAddedEvent({
-          agent,
-          message: new Message({ role: 'user', content: [new TextBlock('User input')] }),
         })
       )
       expect(messageAddedEvents[1]).toEqual(

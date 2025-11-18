@@ -116,7 +116,7 @@ export {
   AfterModelCallEvent,
   ModelStreamEventHook,
 } from './hooks/index.js'
-export type { HookCallback, HookProvider, HookEventConstructor } from './hooks/index.js'
+export type { HookCallback, HookProvider, HookEventConstructor, ModelStopResponse } from './hooks/index.js'
 
 // Conversation Manager
 export { ConversationManager } from './conversation-manager/conversation-manager.js'

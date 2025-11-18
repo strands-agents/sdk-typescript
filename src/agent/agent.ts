@@ -351,36 +351,20 @@ export class Agent implements AgentData {
 
     await this.hooks.invokeCallbacks(new BeforeModelCallEvent({ agent: this }))
 
-    let message: Message | undefined
-    let stopReason: string | undefined
-    let modelError: Error | undefined
-
     try {
-      const result = yield* this._streamFromModel(this.messages, streamOptions)
-      message = result.message
-      stopReason = result.stopReason
+      const { message, stopReason } = yield* this._streamFromModel(this.messages, streamOptions)
 
       // Invoke AfterModelCallEvent hook on success
-      await this.hooks.invokeCallbacks(new AfterModelCallEvent({ agent: this, message, stopReason }))
+      await this.hooks.invokeCallbacks(new AfterModelCallEvent({ agent: this, stopData: { message, stopReason } }))
 
       yield { type: 'afterModelEvent', message, stopReason }
 
       return { message, stopReason }
     } catch (error) {
-      modelError = error instanceof Error ? error : new Error(String(error))
+      const modelError = error instanceof Error ? error : new Error(String(error))
 
-      // Invoke AfterModelCallEvent hook even on error (message and stopReason may be undefined)
-      const eventData: { agent: AgentData; message?: Message; stopReason?: string; error: Error } = {
-        agent: this,
-        error: modelError,
-      }
-      if (message !== undefined) {
-        eventData.message = message
-      }
-      if (stopReason !== undefined) {
-        eventData.stopReason = stopReason
-      }
-      await this.hooks.invokeCallbacks(new AfterModelCallEvent(eventData))
+      // Invoke AfterModelCallEvent hook even on error
+      await this.hooks.invokeCallbacks(new AfterModelCallEvent({ agent: this, error: modelError }))
 
       if (error instanceof ContextWindowOverflowError) {
         // Reduce context and retry
