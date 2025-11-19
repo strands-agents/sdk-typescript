@@ -23,6 +23,7 @@ export function createMockContext(
     toolUse,
     agent: {
       state: new AgentState(agentState),
+      messages: [],
     },
   }
 }

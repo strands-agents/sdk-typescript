@@ -10,6 +10,11 @@ export interface AgentData {
    * Agent state storage accessible to tools and application logic.
    */
   state: AgentState
+
+  /**
+   * The conversation history of messages between user and assistant.
+   */
+  messages: Message[]
 }
 
 /**
