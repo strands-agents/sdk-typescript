@@ -1,6 +1,6 @@
 import { fromNodeProviderChain } from '@aws-sdk/credential-providers'
 import type { Agent, ToolResultBlock } from '../../src/index.js'
-import type { Agent, ToolResultBlock } from '../../src/index.js'
+import type { Message, ContentBlock } from '../../src/types/messages.js'
 
 /**
  * Determines whether AWS integration tests should run based on environment and credentials.
@@ -31,19 +31,22 @@ export async function shouldRunTests(): Promise<boolean> {
 }
 
 /**
- * Extracts all tool result blocks from an agent's message history.
+ * Extracts plain text content from a Message object.
  *
  * This helper function handles different message formats by:
  * - Extracting text from Message objects by filtering for textBlock content blocks
  * - Joining multiple text blocks with newlines
  *
- * @param agent - The agent to extract tool results from
- * @returns Array of all ToolResultBlock objects from the agent's conversation history
+ * @param message - The message to extract text from. Message object with content blocks
+ * @returns The extracted text content as a string, or empty string if no content is found
  */
-export function extractToolResults(agent: Agent): ToolResultBlock[] {
-  return agent['_messages']
-    .filter((msg) => msg.role === 'user')
-    .flatMap((msg) => msg.content.filter((block): block is ToolResultBlock => block.type === 'toolResultBlock'))
+export const getMessageText = (message: Message): string => {
+  if (!message.content) return ''
+
+  return message.content
+    .filter((block: ContentBlock) => block.type === 'textBlock')
+    .map((block) => block.text)
+    .join('\n')
 }
 
 /**
@@ -56,7 +59,7 @@ export function extractToolResults(agent: Agent): ToolResultBlock[] {
  * @returns Array of all ToolResultBlock objects from the agent's conversation history
  */
 export function extractToolResults(agent: Agent): ToolResultBlock[] {
-  return agent['_messages']
+  return agent.messages
     .filter((msg) => msg.role === 'user')
     .flatMap((msg) => msg.content.filter((block): block is ToolResultBlock => block.type === 'toolResultBlock'))
 }
