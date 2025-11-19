@@ -70,6 +70,7 @@ jobs:
     permissions:
       contents: write
       issues: write
+      pull-requests: write
     runs-on: ubuntu-latest
     outputs:
       branch: ${{ steps.process.outputs.branch_name }}
