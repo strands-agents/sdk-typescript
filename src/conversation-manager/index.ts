@@ -1,10 +1,9 @@
 /**
  * Conversation Manager exports.
  *
- * This module exports all conversation manager implementations and types.
+ * This module exports conversation manager implementations.
  */
 
-export { ConversationManager, type ConversationContext } from './conversation-manager.js'
 export { NullConversationManager } from './null-conversation-manager.js'
 export {
   SlidingWindowConversationManager,

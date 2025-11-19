@@ -175,6 +175,13 @@ export class AfterModelCallEvent extends HookEvent {
   readonly stopData?: ModelStopData
   readonly error?: Error
 
+  /**
+   * Optional flag that can be set by hook callbacks to request a retry of the model call.
+   * Only valid when an error is present. When set to true, the agent will retry the model invocation.
+   * Typically used after reducing context size in response to a ContextWindowOverflowError.
+   */
+  retryModelCall?: boolean
+
   constructor(data: { agent: AgentData; stopData?: ModelStopData; error?: Error }) {
     super()
     this.agent = data.agent

@@ -12,16 +12,15 @@ import {
   ToolResultBlock,
   type ToolUseBlock,
 } from '../index.js'
-import { normalizeError, ConcurrentInvocationError, MaxTokensError, ContextWindowOverflowError } from '../errors.js'
+import { normalizeError, ConcurrentInvocationError, MaxTokensError } from '../errors.js'
 import type { BaseModelConfig, Model, StreamOptions } from '../models/model.js'
 import { ToolRegistry } from '../registry/tool-registry.js'
 import { AgentState } from './state.js'
 import type { AgentData } from '../types/agent.js'
 import { AgentPrinter, getDefaultAppender, type Printer } from './printer.js'
-import type { ConversationManager } from '../conversation-manager/conversation-manager.js'
+import type { HookProvider } from '../hooks/types.js'
 import { SlidingWindowConversationManager } from '../conversation-manager/sliding-window-conversation-manager.js'
 import { HookRegistryImplementation } from '../hooks/registry.js'
-import type { HookProvider } from '../hooks/types.js'
 import {
   AfterInvocationEvent,
   AfterModelCallEvent,
@@ -74,7 +73,7 @@ export type AgentConfig = {
    * Conversation manager for handling message history and context overflow.
    * Defaults to SlidingWindowConversationManager with windowSize of 40.
    */
-  conversationManager?: ConversationManager
+  conversationManager?: HookProvider
   /**
    * Hook providers to register with the agent.
    * Hooks enable observing and extending agent behavior.
@@ -107,7 +106,7 @@ export class Agent implements AgentData {
   /**
    * Conversation manager for handling message history and context overflow.
    */
-  public readonly conversationManager: ConversationManager
+  public readonly conversationManager: HookProvider
 
   private _isInvoking: boolean = false
   private _printer?: Printer
@@ -140,10 +139,12 @@ export class Agent implements AgentData {
 
     this.state = new AgentState(config?.state)
 
+    // Initialize conversation manager
     this.conversationManager = config?.conversationManager ?? new SlidingWindowConversationManager({ windowSize: 40 })
 
-    // Initialize hooks
+    // Initialize hooks and register conversation manager hooks
     this.hooks = new HookRegistryImplementation()
+    this.hooks.addHook(this.conversationManager)
     this.hooks.addAllHooks(config?.hooks ?? [])
 
     // Create printer if printer is enabled (default: true)
@@ -283,8 +284,6 @@ export class Agent implements AgentData {
         // Continue loop
       }
     } finally {
-      this.conversationManager.applyManagement(this)
-
       // Invoke AfterInvocationEvent hook
       await this.hooks.invokeCallbacks(new AfterInvocationEvent({ agent: this }))
 
@@ -362,14 +361,14 @@ export class Agent implements AgentData {
       const modelError = normalizeError(error)
 
       // Invoke AfterModelCallEvent hook even on error
-      await this.hooks.invokeCallbacks(new AfterModelCallEvent({ agent: this, error: modelError }))
+      const event = await this.hooks.invokeCallbacks(new AfterModelCallEvent({ agent: this, error: modelError }))
 
-      if (error instanceof ContextWindowOverflowError) {
-        // Reduce context and retry
-        this.conversationManager.reduceContext(this, error)
+      // Check if hooks request a retry (e.g., after reducing context)
+      if (event.retryModelCall) {
         return yield* this.invokeModel(args)
       }
-      // Re-throw other errors
+
+      // Re-throw error
       throw error
     }
   }

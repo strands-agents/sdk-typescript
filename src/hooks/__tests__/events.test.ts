@@ -268,6 +268,31 @@ describe('AfterModelCallEvent', () => {
     const event = new AfterModelCallEvent({ agent, stopData: response })
     expect(event._shouldReverseCallbacks()).toBe(true)
   })
+
+  it('allows retryModelCall to be set when error is present', () => {
+    const agent = new Agent()
+    const error = new Error('Model failed')
+    const event = new AfterModelCallEvent({ agent, error })
+
+    // Initially undefined
+    expect(event.retryModelCall).toBeUndefined()
+
+    // Can be set to true
+    event.retryModelCall = true
+    expect(event.retryModelCall).toBe(true)
+
+    // Can be set to false
+    event.retryModelCall = false
+    expect(event.retryModelCall).toBe(false)
+  })
+
+  it('retryModelCall is optional and defaults to undefined', () => {
+    const agent = new Agent()
+    const error = new Error('Model failed')
+    const event = new AfterModelCallEvent({ agent, error })
+
+    expect(event.retryModelCall).toBeUndefined()
+  })
 })
 
 describe('ModelStreamEventHook', () => {

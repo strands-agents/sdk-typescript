@@ -16,7 +16,7 @@ describe.skipIf(!isNode || process.platform === 'win32')('bash tool', () => {
         toolUseId: 'test-id',
         input: {},
       },
-      agent: { state },
+      agent: { state, messages: [] },
     }
     return { state, context }
   }

@@ -2,45 +2,25 @@
  * Null implementation of conversation management.
  *
  * This module provides a no-op conversation manager that does not modify
- * the conversation history, useful for testing and scenarios where conversation
+ * the conversation history. Useful for testing and scenarios where conversation
  * management is handled externally.
  */
 
-import { ContextWindowOverflowError } from '../errors.js'
-import { ConversationManager, type ConversationContext } from './conversation-manager.js'
+import type { HookProvider } from '../hooks/types.js'
+import type { HookRegistry } from '../hooks/registry.js'
 
 /**
  * A no-op conversation manager that does not modify the conversation history.
- *
+ * Implements HookProvider but registers zero hooks.
  */
-export class NullConversationManager extends ConversationManager {
+export class NullConversationManager implements HookProvider {
   /**
-   * Does nothing to the conversation history.
+   * Registers callbacks with the hook registry.
+   * This implementation registers no hooks, providing a complete no-op behavior.
    *
-   * @param _context - The conversation context whose message history will remain unmodified.
+   * @param _registry - The hook registry to register callbacks with (unused)
    */
-  public applyManagement(_context: ConversationContext): void {
-    // No-op
-  }
-
-  /**
-   * Does not reduce context and raises an exception.
-   *
-   * If an error is provided, re-throws it. Otherwise, throws a new
-   * ContextWindowOverflowError indicating that the context window has
-   * overflowed and cannot be reduced.
-   *
-   * @param _context - The conversation context whose message history will remain unmodified.
-   * @param error - The error that triggered the context reduction, if any.
-   *
-   * @throws Error The provided error if one was given.
-   * @throws ContextWindowOverflowError If no error was provided.
-   */
-  public reduceContext(_context: ConversationContext, error?: Error): void {
-    if (error) {
-      throw error
-    } else {
-      throw new ContextWindowOverflowError('Context window overflowed!')
-    }
+  public registerCallbacks(_registry: HookRegistry): void {
+    // No-op - register zero hooks
   }
 }
