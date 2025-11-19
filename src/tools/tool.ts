@@ -1,32 +1,14 @@
-import type { ToolResult, ToolSpec, ToolUse } from './types.js'
+import type { ToolSpec, ToolUse } from './types.js'
+import type { ToolResultBlock } from '../types/messages.js'
 import type { AgentData } from '../types/agent.js'
-import type { JSONValue } from '../types/json.js'
 
 export type { ToolSpec } from './types.js'
 
 /**
  * Context provided to tool implementations during execution.
  * Contains framework-level state and information from the agent invocation.
- *
- * @typeParam TAgentState - Optional type for strongly typing agent state keys and values
- *
- * @example
- * ```typescript
- * interface MyAgentState {
- *   userId: string
- *   sessionId: string
- * }
- *
- * const context: ToolContext<MyAgentState> = {
- *   toolUse: {
- *     name: 'testTool',
- *     toolUseId: 'test-123',
- *     input: {}
- *   },
- *   agent: agent
- * ```
  */
-export interface ToolContext<TAgentState extends Record<string, JSONValue> = Record<string, JSONValue>> {
+export interface ToolContext {
   /**
    * The tool use request that triggered this tool execution.
    * Contains the tool name, toolUseId, and input parameters.
@@ -37,28 +19,13 @@ export interface ToolContext<TAgentState extends Record<string, JSONValue> = Rec
    * The agent instance that is executing this tool.
    * Provides access to agent state and other agent-level information.
    */
-  agent: AgentData<TAgentState>
+  agent: AgentData
 }
 
 /**
- * Event yielded during tool execution to report streaming progress.
- * Tools can yield zero or more of these events before returning the final ToolResult.
- *
- * @example
- * ```typescript
- * const streamEvent: ToolStreamEvent = {
- *   type: 'toolStreamEvent',
- *   data: 'Processing step 1...'
- * }
- *
- * // Or with structured data
- * const streamEvent: ToolStreamEvent = {
- *   type: 'toolStreamEvent',
- *   data: { progress: 50, message: 'Halfway complete' }
- * }
- * ```
+ * Data for a tool stream event.
  */
-export interface ToolStreamEvent {
+export interface ToolStreamEventData {
   /**
    * Discriminator for tool stream events.
    */
@@ -72,10 +39,45 @@ export interface ToolStreamEvent {
 }
 
 /**
- * Type alias for the async generator returned by tool stream methods.
- * Yields ToolStreamEvents during execution and returns a ToolResult.
+ * Event yielded during tool execution to report streaming progress.
+ * Tools can yield zero or more of these events before returning the final ToolResult.
+ *
+ * @example
+ * ```typescript
+ * const streamEvent = new ToolStreamEvent({
+ *   data: 'Processing step 1...'
+ * })
+ *
+ * // Or with structured data
+ * const streamEvent = new ToolStreamEvent({
+ *   data: { progress: 50, message: 'Halfway complete' }
+ * })
+ * ```
  */
-export type ToolStreamGenerator = AsyncGenerator<ToolStreamEvent, ToolResult, never>
+export class ToolStreamEvent implements ToolStreamEventData {
+  /**
+   * Discriminator for tool stream events.
+   */
+  readonly type = 'toolStreamEvent' as const
+
+  /**
+   * Caller-provided data for the progress update.
+   * Can be any type of data the tool wants to report.
+   */
+  readonly data?: unknown
+
+  constructor(eventData: { data?: unknown }) {
+    if (eventData.data !== undefined) {
+      this.data = eventData.data
+    }
+  }
+}
+
+/**
+ * Type alias for the async generator returned by tool stream methods.
+ * Yields ToolStreamEvents during execution and returns a ToolResultBlock.
+ */
+export type ToolStreamGenerator = AsyncGenerator<ToolStreamEvent, ToolResultBlock, undefined>
 
 /**
  * Interface for tool implementations.
@@ -86,12 +88,12 @@ export type ToolStreamGenerator = AsyncGenerator<ToolStreamEvent, ToolResult, ne
  *
  * Most implementations should use FunctionTool rather than implementing this interface directly.
  */
-export interface Tool {
+export abstract class Tool {
   /**
    * The unique name of the tool.
    * This MUST match the name in the toolSpec.
    */
-  name: string
+  abstract name: string
 
   /**
    * Human-readable description of what the tool does.
@@ -99,21 +101,21 @@ export interface Tool {
    *
    * This MUST match the description in the toolSpec.description.
    */
-  description: string
+  abstract description: string
 
   /**
    * OpenAPI JSON specification for the tool.
    * Defines the tool's name, description, and input schema.
    */
-  toolSpec: ToolSpec
+  abstract toolSpec: ToolSpec
 
   /**
    * Executes the tool with streaming support.
    * Yields zero or more ToolStreamEvents during execution, then returns
-   * exactly one ToolResult as the final value.
+   * exactly one ToolResultBlock as the final value.
    *
    * @param toolContext - Context information including the tool use request and invocation state
-   * @returns Async generator that yields ToolStreamEvents and returns a ToolResult
+   * @returns Async generator that yields ToolStreamEvents and returns a ToolResultBlock
    *
    * @example
    * ```typescript
@@ -140,7 +142,7 @@ export interface Tool {
    * console.log('Final result:', result.value.status)
    * ```
    */
-  stream(toolContext: ToolContext): ToolStreamGenerator
+  abstract stream(toolContext: ToolContext): ToolStreamGenerator
 }
 
 /**

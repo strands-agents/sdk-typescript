@@ -1,12 +1,11 @@
 import { tool } from '../../src/tools/zod-tool.js'
 import { z } from 'zod'
-import type { FileEditorState, IFileReader } from './types.js'
+import type { IFileReader } from './types.js'
 import { promises as fs } from 'fs'
 import * as path from 'path'
 
 const SNIPPET_LINES = 4
 const DEFAULT_MAX_FILE_SIZE = 1048576 // 1MB
-const DEFAULT_MAX_HISTORY_SIZE = 10
 const MAX_DIRECTORY_DEPTH = 2
 
 /**
@@ -14,8 +13,8 @@ const MAX_DIRECTORY_DEPTH = 2
  */
 const fileEditorInputSchema = z.object({
   command: z
-    .enum(['view', 'create', 'str_replace', 'insert', 'undo_edit'])
-    .describe('The operation to perform: `view`, `create`, `str_replace`, `insert`, `undo_edit`.'),
+    .enum(['view', 'create', 'str_replace', 'insert'])
+    .describe('The operation to perform: `view`, `create`, `str_replace`, `insert`.'),
   path: z.string().describe('Absolute path to the file or directory.'),
   file_text: z.string().optional().describe('Content for new file (required for create command).'),
   view_range: z
@@ -44,7 +43,7 @@ class TextFileReader implements IFileReader {
  * File editor tool for viewing, creating, and editing files programmatically.
  *
  * Provides commands for viewing files/directories, creating files, string replacement,
- * line insertion, and undo functionality with history management.
+ * and line insertion.
  *
  * @example
  * ```typescript
@@ -64,7 +63,7 @@ class TextFileReader implements IFileReader {
 export const fileEditor = tool({
   name: 'fileEditor',
   description:
-    'Filesystem editor tool for viewing, creating, and editing files. Supports view (with line ranges), create, str_replace, insert, and undo_edit operations. Files must use absolute paths. Edit history is maintained for undo operations.',
+    'Filesystem editor tool for viewing, creating, and editing files. Supports view (with line ranges), create, str_replace, and insert operations. Files must use absolute paths.',
   inputSchema: fileEditorInputSchema,
   callback: async (input, context) => {
     if (!context) {
@@ -72,8 +71,6 @@ export const fileEditor = tool({
     }
 
     const fileReader = new TextFileReader()
-    let history =
-      (context.agent.state.get('fileEditorHistory') as FileEditorState['fileEditorHistory'] | undefined) ?? {}
 
     let result: string
 
@@ -83,27 +80,20 @@ export const fileEditor = tool({
         break
 
       case 'create':
-        result = await handleCreate(input.path, input.file_text!, history)
+        result = await handleCreate(input.path, input.file_text!)
         break
 
       case 'str_replace':
-        result = await handleStrReplace(input.path, input.old_str!, input.new_str, history, fileReader)
+        result = await handleStrReplace(input.path, input.old_str!, input.new_str, fileReader)
         break
 
       case 'insert':
-        result = await handleInsert(input.path, input.insert_line!, input.new_str!, history, fileReader)
-        break
-
-      case 'undo_edit':
-        result = await handleUndoEdit(input.path, history)
+        result = await handleInsert(input.path, input.insert_line!, input.new_str!, fileReader)
         break
 
       default:
         throw new Error(`Unknown command: ${input.command}`)
     }
-
-    // Persist history back to state
-    context.agent.state.set('fileEditorHistory', history)
 
     return result
   },
@@ -286,7 +276,7 @@ async function handleView(
 /**
  * Handles the create command.
  */
-async function handleCreate(filePath: string, fileText: string, history: Record<string, string[]>): Promise<string> {
+async function handleCreate(filePath: string, fileText: string): Promise<string> {
   if (fileText === undefined) {
     throw new Error('Parameter `file_text` is required for command: create')
   }
@@ -305,12 +295,6 @@ async function handleCreate(filePath: string, fileText: string, history: Record<
   // Write file
   await fs.writeFile(filePath, fileText, 'utf-8')
 
-  // Initialize history
-  if (!history[filePath]) {
-    history[filePath] = []
-  }
-  history[filePath].push(fileText)
-
   return `File created successfully at: ${filePath}`
 }
 
@@ -321,7 +305,6 @@ async function handleStrReplace(
   filePath: string,
   oldStr: string,
   newStr: string | undefined,
-  history: Record<string, string[]>,
   fileReader: IFileReader
 ): Promise<string> {
   if (oldStr === undefined) {
@@ -367,17 +350,6 @@ async function handleStrReplace(
     )
   }
 
-  // Save to history before modifying
-  if (!history[filePath]) {
-    history[filePath] = []
-  }
-  history[filePath].push(fileContent)
-
-  // Limit history size
-  if (history[filePath].length > DEFAULT_MAX_HISTORY_SIZE) {
-    history[filePath].shift()
-  }
-
   // Perform replacement
   const newFileContent = fileContent.replace(expandedOldStr, expandedNewStr)
 
@@ -408,7 +380,6 @@ async function handleInsert(
   filePath: string,
   insertLine: number,
   newStr: string,
-  history: Record<string, string[]>,
   fileReader: IFileReader
 ): Promise<string> {
   if (insertLine === undefined || newStr === undefined) {
@@ -446,17 +417,6 @@ async function handleInsert(
     )
   }
 
-  // Save to history before modifying
-  if (!history[filePath]) {
-    history[filePath] = []
-  }
-  history[filePath].push(fileText)
-
-  // Limit history size
-  if (history[filePath].length > DEFAULT_MAX_HISTORY_SIZE) {
-    history[filePath].shift()
-  }
-
   // Perform insertion
   const newStrLines = expandedNewStr.split('\n')
 
@@ -484,30 +444,6 @@ async function handleInsert(
   const successMsg = `The file ${filePath} has been edited. ${makeOutput(snippet, 'a snippet of the edited file', startLine)}Review the changes and make sure they are as expected (correct indentation, no duplicate lines, etc). Edit the file again if necessary.`
 
   return successMsg
-}
-
-/**
- * Handles the undo_edit command.
- */
-async function handleUndoEdit(filePath: string, history: Record<string, string[]>): Promise<string> {
-  validatePath('undo_edit', filePath)
-
-  const exists = await fileExists(filePath)
-  if (!exists) {
-    throw new Error(`The path ${filePath} does not exist. Please provide a valid path.`)
-  }
-
-  if (!history[filePath] || history[filePath].length === 0) {
-    throw new Error(`No edit history found for ${filePath}.`)
-  }
-
-  // Pop the most recent history entry
-  const oldText = history[filePath].pop()!
-
-  // Write back to file
-  await fs.writeFile(filePath, oldText, 'utf-8')
-
-  return `Last edit to ${filePath} undone successfully. ${makeOutput(oldText, filePath)}`
 }
 
 /**

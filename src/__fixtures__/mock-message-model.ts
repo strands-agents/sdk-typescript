@@ -252,6 +252,11 @@ export class MockMessageModel extends Model<BaseModelConfig> {
         // This shouldn't normally be in assistant messages, but we'll handle it gracefully
         break
 
+      case 'guardContentBlock':
+        // GuardContentBlock is handled by guardrails and doesn't generate model events
+        // This is typically used in system prompts or message content for guardrail evaluation
+        break
+
       default: {
         // Exhaustive check
         const _exhaustive: never = block

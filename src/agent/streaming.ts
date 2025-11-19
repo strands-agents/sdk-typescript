@@ -1,5 +1,5 @@
 import type { ModelStreamEvent } from '../models/streaming.js'
-import type { ToolStreamEvent } from '../tools/tool.js'
+import { ToolStreamEvent } from '../tools/tool.js'
 import type { ContentBlock, Message } from '../types/messages.js'
 
 /**

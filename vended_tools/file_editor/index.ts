@@ -3,4 +3,4 @@
  */
 
 export { fileEditor } from './file-editor.js'
-export type { FileEditorState, FileEditorInput, FileEditorOptions, IFileReader } from './types.js'
+export type { FileEditorInput, FileEditorOptions, IFileReader } from './types.js'

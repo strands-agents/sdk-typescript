@@ -1,16 +1,4 @@
 /**
- * State structure for file editor history storage.
- * File history is stored in agent state under the 'fileEditorHistory' key.
- */
-export interface FileEditorState {
-  /**
-   * Map of file paths to their edit history.
-   * Each file stores an array of previous contents (up to 10 versions).
-   */
-  fileEditorHistory: Record<string, string[]>
-}
-
-/**
  * Configuration options for the file editor tool.
  */
 export interface FileEditorOptions {
@@ -18,11 +6,6 @@ export interface FileEditorOptions {
    * Maximum file size in bytes that can be read (default: 1048576 / 1MB).
    */
   maxFileSize?: number
-
-  /**
-   * Maximum number of history versions to keep per file (default: 10).
-   */
-  maxHistorySize?: number
 }
 
 /**
@@ -64,17 +47,9 @@ export interface InsertInput {
 }
 
 /**
- * Input parameters for undo_edit operation.
- */
-export interface UndoEditInput {
-  command: 'undo_edit'
-  path: string
-}
-
-/**
  * Union type of all valid file editor inputs.
  */
-export type FileEditorInput = ViewInput | CreateInput | StrReplaceInput | InsertInput | UndoEditInput
+export type FileEditorInput = ViewInput | CreateInput | StrReplaceInput | InsertInput
 
 /**
  * Interface for pluggable file readers.

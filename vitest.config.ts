@@ -1,4 +1,16 @@
 import { defineConfig } from 'vitest/config'
+import { playwright } from '@vitest/browser-playwright'
+
+// Conditionally exclude bash tool from coverage on Windows
+// since tests are skipped on Windows (bash not available)
+const coverageExclude = [
+  'src/**/__tests__/**',
+  'src/**/__fixtures__/**',
+  'vended_tools/**/__tests__/**',
+]
+if (process.platform === 'win32') {
+  coverageExclude.push('vended_tools/bash/**')
+}
 
 export default defineConfig({
   test: {
@@ -17,11 +29,11 @@ export default defineConfig({
       {
         test: {
           include: ['src/**/__tests__/**/*.test.ts', 'vended_tools/**/__tests__/**/*.test.ts'],
-          exclude: ['vended_tools/file_editor/**/*.test.ts'],
+          exclude: ['vended_tools/file_editor/**/*.test.ts', 'vended_tools/bash/**/*.test.ts'],
           name: { label: 'unit-browser', color: 'cyan' },
           browser: {
             enabled: true,
-            provider: 'playwright',
+            provider: playwright(),
             instances: [
               {
                 browser: 'chromium',
@@ -35,6 +47,7 @@ export default defineConfig({
           include: ['tests_integ/**/*.test.ts'],
           name: { label: 'integ', color: 'magenta' },
           testTimeout: 30000,
+          retry: 1,
           globalSetup: './tests_integ/integ-setup.ts',
           sequence: {
             concurrent: true,
@@ -49,7 +62,7 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
       include: ['src/**/*', 'vended_tools/**/*'],
-      exclude: ['src/**/__tests__/**', 'src/**/__fixtures__/**', 'vended_tools/**/__tests__/**'],
+      exclude: coverageExclude,
       thresholds: {
         lines: 80,
         functions: 80,

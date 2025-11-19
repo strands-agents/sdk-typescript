@@ -13,9 +13,10 @@ export type { AgentState } from './agent/state.js'
 
 // Agent types
 export type { AgentData, AgentResult } from './types/agent.js'
+export type { AgentConfig, ToolList } from './agent/agent.js'
 
 // Error types
-export { ContextWindowOverflowError, MaxTokensError, JsonValidationError } from './errors.js'
+export { ContextWindowOverflowError, MaxTokensError, JsonValidationError, ConcurrentInvocationError } from './errors.js'
 
 // JSON types
 export type { JSONSchema, JSONValue } from './types/json.js'
@@ -42,10 +43,17 @@ export type {
 export { TextBlock, ToolUseBlock, ToolResultBlock, ReasoningBlock, CachePointBlock, Message } from './types/messages.js'
 
 // Tool types
-export type { ToolSpec, ToolUse, ToolResultStatus, ToolResult, ToolChoice } from './tools/types.js'
+export type { ToolSpec, ToolUse, ToolResultStatus, ToolChoice } from './tools/types.js'
 
 // Tool interface and related types
-export type { Tool, InvokableTool, ToolContext, ToolStreamEvent, ToolStreamGenerator } from './tools/tool.js'
+export type {
+  Tool,
+  InvokableTool,
+  ToolContext,
+  ToolStreamEventData,
+  ToolStreamEvent,
+  ToolStreamGenerator,
+} from './tools/tool.js'
 
 // FunctionTool implementation
 export { FunctionTool } from './tools/function-tool.js'
@@ -91,6 +99,29 @@ export type {
   AfterModelEvent,
   BeforeToolsEvent,
   AfterToolsEvent,
+  BeforeInvocationEvent as BeforeInvocationStreamEvent,
+  AfterInvocationEvent as AfterInvocationStreamEvent,
+} from './agent/streaming.js'
+
+// Hooks system
+export {
+  HookRegistry,
+  HookEvent,
   BeforeInvocationEvent,
   AfterInvocationEvent,
-} from './agent/streaming.js'
+  MessageAddedEvent,
+  BeforeToolCallEvent,
+  AfterToolCallEvent,
+  BeforeModelCallEvent,
+  AfterModelCallEvent,
+  ModelStreamEventHook,
+} from './hooks/index.js'
+export type { HookCallback, HookProvider, HookEventConstructor, ModelStopResponse } from './hooks/index.js'
+
+// Conversation Manager
+export { ConversationManager } from './conversation-manager/conversation-manager.js'
+export { NullConversationManager } from './conversation-manager/null-conversation-manager.js'
+export {
+  SlidingWindowConversationManager,
+  type SlidingWindowConversationManagerConfig,
+} from './conversation-manager/sliding-window-conversation-manager.js'

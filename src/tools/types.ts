@@ -1,33 +1,4 @@
 import type { JSONSchema, JSONValue } from '../types/json.js'
-import type { ToolResultContent } from '../types/messages.js'
-
-/**
- * Result of a tool execution.
- * Contains the outcome and any data returned by the tool.
- */
-export interface ToolResult {
-  /**
-   * The ID of the tool use that this result corresponds to.
-   */
-  toolUseId: string
-
-  /**
-   * Status indicating success or error.
-   */
-  status: ToolResultStatus
-
-  /**
-   * Array of content blocks containing the tool's output.
-   */
-  content: ToolResultContent[]
-
-  /**
-   * The original error object when status is 'error'.
-   * Available for inspection by hooks, error handlers, and event loop.
-   * Tools must wrap non-Error thrown values into Error objects.
-   */
-  error?: Error
-}
 
 /**
  * Status of a tool execution.

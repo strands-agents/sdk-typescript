@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { tool } from '../zod-tool.js'
+import { Tool } from '../tool.js'
 import { createMockContext } from '../../__fixtures__/tool-helpers.js'
 import { collectGenerator } from '../../__fixtures__/model-test-helpers.js'
 import type { JSONValue } from '../../types/json.js'
@@ -396,6 +397,30 @@ describe('tool', () => {
       expect(schema.required).toContain('name')
       expect(schema.required).toContain('age')
       expect(schema.required).toContain('email')
+    })
+  })
+
+  describe('instanceof checks', () => {
+    it('passes instanceof Tool check and has InvokableTool methods', () => {
+      const myTool = tool({
+        name: 'testTool',
+        description: 'Test description',
+        inputSchema: z.object({ value: z.string() }),
+        callback: (input) => input.value,
+      })
+
+      // Verify instanceof Tool
+      expect(myTool instanceof Tool).toBe(true)
+
+      // Verify InvokableTool interface methods are present
+      expect(typeof myTool.invoke).toBe('function')
+      expect(typeof myTool.stream).toBe('function')
+
+      // Verify can be used as type guard (various types)
+      expect(myTool instanceof Tool).toBe(true)
+      expect({} instanceof Tool).toBe(false)
+      // TypeScript doesn't allow null/undefined in instanceof, verify they're not Tool instances differently
+      expect((null as unknown) instanceof Tool).toBe(false)
     })
   })
 })

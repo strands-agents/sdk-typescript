@@ -81,13 +81,52 @@ describe('AgentState', () => {
 
     it('returns deep copy that cannot mutate stored state', () => {
       const state = new AgentState({ nested: { value: 'test' } })
-      const retrieved = state.get('nested') as { value: string }
+      const retrieved = state.get<{ nested: { value: string } }>('nested')
 
       // Mutate retrieved value
-      retrieved.value = 'changed'
+      retrieved!.value = 'changed'
 
       // Stored state should not be affected
       expect(state.get('nested')).toEqual({ value: 'test' })
+    })
+
+    it('infers correct type with generic state interface', () => {
+      interface TestState {
+        user: { name: string; age: number }
+        count: number
+        items: string[]
+      }
+
+      const state = new AgentState({ user: { name: 'John', age: 30 }, count: 5, items: ['a', 'b'] })
+
+      // Type inference tests
+      const user = state.get<TestState>('user')
+      const count = state.get<TestState>('count')
+      const items = state.get<TestState>('items')
+
+      expect(user).toEqual({ name: 'John', age: 30 })
+      expect(count).toBe(5)
+      expect(items).toEqual(['a', 'b'])
+    })
+
+    it('returns undefined for non-existent key with typed interface', () => {
+      interface TestState {
+        existing: string
+      }
+
+      const state = new AgentState({ existing: 'value' })
+      const result = state.get<TestState>('existing')
+
+      expect(result).toBe('value')
+
+      // Non-existent key
+      const state2 = new AgentState()
+      const missing = state2.get<TestState>('existing')
+
+      expect(missing).toBeUndefined()
+
+      // @ts-expect-error properties not on the TestsState are an error
+      state2.get<TestState>('not-really')
     })
   })
 
@@ -189,6 +228,24 @@ describe('AgentState', () => {
       const state = new AgentState()
       expect(() => state.set('key1', undefined)).toThrow('value for key "key1" is undefined which cannot be serialized')
     })
+
+    it('accepts typed value with generic state interface', () => {
+      interface TestState {
+        user: { name: string; age: number }
+        count: number
+      }
+
+      const state = new AgentState()
+
+      state.set<TestState>('user', { name: 'Alice', age: 25 })
+      state.set<TestState>('count', 10)
+
+      expect(state.get('user')).toEqual({ name: 'Alice', age: 25 })
+      expect(state.get('count')).toBe(10)
+
+      // @ts-expect-error properties not on the TestsState are an error
+      state.set<TestState>('not-really', 'nope')
+    })
   })
 
   describe('delete', () => {
@@ -202,6 +259,20 @@ describe('AgentState', () => {
     it('does not throw error for non-existent key', () => {
       const state = new AgentState()
       expect(() => state.delete('nonexistent')).not.toThrow()
+    })
+
+    it('supports typed usage with generic state interface', () => {
+      interface TestState {
+        user: { name: string }
+        count: number
+      }
+
+      const state = new AgentState({ user: { name: 'Alice' }, count: 5 })
+
+      // Typed delete
+      state.delete<TestState>('user')
+      expect(state.get('user')).toBeUndefined()
+      expect(state.get('count')).toBe(5)
     })
   })
 

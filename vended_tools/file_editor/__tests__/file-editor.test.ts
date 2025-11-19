@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { fileEditor } from '../file-editor.js'
-import type { FileEditorState } from '../types.js'
 import type { ToolContext } from '../../../src/tools/tool.js'
 import { AgentState } from '../../../src/agent/state.js'
 import { promises as fs } from 'fs'
@@ -9,14 +8,11 @@ import { tmpdir } from 'os'
 
 describe('fileEditor tool', () => {
   let testDir: string
-  let state: AgentState<{ fileEditorHistory: FileEditorState['fileEditorHistory'] }>
   let context: ToolContext
 
   // Helper to create fresh state and context for each test
   const createFreshContext = (): { state: AgentState; context: ToolContext } => {
-    const agentState = new AgentState<{ fileEditorHistory: FileEditorState['fileEditorHistory'] }>({
-      fileEditorHistory: {},
-    })
+    const agentState = new AgentState({})
     const toolContext: ToolContext = {
       toolUse: {
         name: 'fileEditor',
@@ -57,7 +53,6 @@ describe('fileEditor tool', () => {
 
     // Create fresh state and context
     const fresh = createFreshContext()
-    state = fresh.state
     context = fresh.context
   })
 
@@ -207,10 +202,6 @@ describe('fileEditor tool', () => {
       // Verify file was created
       const fileContent = await fs.readFile(filePath, 'utf-8')
       expect(fileContent).toBe(content)
-
-      // Verify history was initialized
-      const history = state.get('fileEditorHistory') as FileEditorState['fileEditorHistory']
-      expect(history[filePath]).toEqual([content])
     })
 
     it('creates file in non-existent directory', async () => {
@@ -290,15 +281,6 @@ describe('fileEditor tool', () => {
       expect(result).toContain('Line 1')
       expect(result).toContain('Line 9')
       expect(result).not.toContain('Line 10')
-    })
-
-    it('saves previous content to history', async () => {
-      const originalContent = 'Line 1\nLine 2 OLD\nLine 3'
-      const filePath = await createTestFile('test.txt', originalContent)
-      await fileEditor.invoke({ command: 'str_replace', path: filePath, old_str: 'OLD', new_str: 'NEW' }, context)
-
-      const history = state.get('fileEditorHistory') as FileEditorState['fileEditorHistory']
-      expect(history[filePath]).toEqual([originalContent])
     })
 
     it('handles empty new_str (deletion)', async () => {
@@ -407,15 +389,6 @@ describe('fileEditor tool', () => {
       expect(result).toContain('INSERTED')
     })
 
-    it('saves previous content to history', async () => {
-      const originalContent = 'Line 1\nLine 2'
-      const filePath = await createTestFile('test.txt', originalContent)
-      await fileEditor.invoke({ command: 'insert', path: filePath, insert_line: 1, new_str: 'NEW' }, context)
-
-      const history = state.get('fileEditorHistory') as FileEditorState['fileEditorHistory']
-      expect(history[filePath]).toEqual([originalContent])
-    })
-
     it('handles multi-line insertion', async () => {
       const filePath = await createTestFile('test.txt', 'Line 1\nLine 2')
       const result = await fileEditor.invoke(
@@ -471,110 +444,6 @@ describe('fileEditor tool', () => {
     })
   })
 
-  describe('undo_edit command', () => {
-    it('undoes str_replace operation', async () => {
-      const originalContent = 'Line 1\nLine 2 OLD\nLine 3'
-      const filePath = await createTestFile('test.txt', originalContent)
-
-      // Make a change
-      await fileEditor.invoke({ command: 'str_replace', path: filePath, old_str: 'OLD', new_str: 'NEW' }, context)
-
-      // Undo the change
-      const result = await fileEditor.invoke({ command: 'undo_edit', path: filePath }, context)
-      expect(result).toContain('undone successfully')
-
-      // Verify content is restored
-      const fileContent = await fs.readFile(filePath, 'utf-8')
-      expect(fileContent).toBe(originalContent)
-    })
-
-    it('undoes insert operation', async () => {
-      const originalContent = 'Line 1\nLine 2'
-      const filePath = await createTestFile('test.txt', originalContent)
-
-      // Make a change
-      await fileEditor.invoke({ command: 'insert', path: filePath, insert_line: 1, new_str: 'INSERTED' }, context)
-
-      // Undo the change
-      const result = await fileEditor.invoke({ command: 'undo_edit', path: filePath }, context)
-      expect(result).toContain('undone successfully')
-
-      // Verify content is restored
-      const fileContent = await fs.readFile(filePath, 'utf-8')
-      expect(fileContent).toBe(originalContent)
-    })
-
-    it('handles multiple undos (LIFO order)', async () => {
-      const originalContent = 'Line 1'
-      const filePath = await createTestFile('test.txt', originalContent)
-
-      // Make first change
-      await fileEditor.invoke({ command: 'insert', path: filePath, insert_line: 1, new_str: 'Line 2' }, context)
-      const afterFirst = await fs.readFile(filePath, 'utf-8')
-
-      // Make second change
-      await fileEditor.invoke({ command: 'insert', path: filePath, insert_line: 2, new_str: 'Line 3' }, context)
-
-      // First undo - should restore state after first change
-      await fileEditor.invoke({ command: 'undo_edit', path: filePath }, context)
-      let fileContent = await fs.readFile(filePath, 'utf-8')
-      expect(fileContent).toBe(afterFirst)
-
-      // Second undo - should restore original state
-      await fileEditor.invoke({ command: 'undo_edit', path: filePath }, context)
-      fileContent = await fs.readFile(filePath, 'utf-8')
-      expect(fileContent).toBe(originalContent)
-    })
-
-    it('shows file content after undo', async () => {
-      const originalContent = 'Line 1\nLine 2'
-      const filePath = await createTestFile('test.txt', originalContent)
-
-      await fileEditor.invoke(
-        { command: 'str_replace', path: filePath, old_str: 'Line 1', new_str: 'Modified' },
-        context
-      )
-      const result = await fileEditor.invoke({ command: 'undo_edit', path: filePath }, context)
-
-      expect(result).toContain('Line 1')
-      expect(result).toContain('Line 2')
-    })
-
-    describe('error cases', () => {
-      it('throws when no history available', async () => {
-        const filePath = await createTestFile('test.txt', 'Content')
-        await expect(fileEditor.invoke({ command: 'undo_edit', path: filePath }, context)).rejects.toThrow(
-          'No edit history'
-        )
-      })
-
-      it('throws when file not found', async () => {
-        const nonExistentPath = path.join(testDir, 'nonexistent.txt')
-        await expect(fileEditor.invoke({ command: 'undo_edit', path: nonExistentPath }, context)).rejects.toThrow(
-          'does not exist'
-        )
-      })
-
-      it('throws when all history has been consumed', async () => {
-        const filePath = await createTestFile('test.txt', 'Original')
-
-        // Make one change
-        await fileEditor.invoke(
-          { command: 'str_replace', path: filePath, old_str: 'Original', new_str: 'Changed' },
-          context
-        )
-
-        // Undo once (should work)
-        await fileEditor.invoke({ command: 'undo_edit', path: filePath }, context)
-
-        // Try to undo again (should fail)
-        await expect(fileEditor.invoke({ command: 'undo_edit', path: filePath }, context)).rejects.toThrow(
-          'No edit history'
-        )
-      })
-    })
-  })
-
   describe('path validation and security', () => {
     it('rejects relative paths', async () => {
       await expect(fileEditor.invoke({ command: 'view', path: 'relative/path.txt' }, context)).rejects.toThrow(
@@ -590,47 +459,6 @@ describe('fileEditor tool', () => {
       const filePath = await createTestFile('large.txt', largeContent)
 
       await expect(fileEditor.invoke({ command: 'view', path: filePath }, context)).rejects.toThrow('exceeds')
-    })
-  })
-
-  describe('history management', () => {
-    it('maintains separate history for different files', async () => {
-      const file1 = await createTestFile('file1.txt', 'File 1')
-      const file2 = await createTestFile('file2.txt', 'File 2')
-
-      await fileEditor.invoke(
-        { command: 'str_replace', path: file1, old_str: 'File 1', new_str: 'Modified 1' },
-        context
-      )
-      await fileEditor.invoke(
-        { command: 'str_replace', path: file2, old_str: 'File 2', new_str: 'Modified 2' },
-        context
-      )
-
-      const history = state.get('fileEditorHistory') as FileEditorState['fileEditorHistory']
-      expect(history[file1]).toEqual(['File 1'])
-      expect(history[file2]).toEqual(['File 2'])
-    })
-
-    it('limits history to 10 versions per file', async () => {
-      const filePath = await createTestFile('test.txt', 'Initial')
-
-      // Make 12 edits
-      for (let i = 1; i <= 12; i++) {
-        await fileEditor.invoke(
-          {
-            command: 'str_replace',
-            path: filePath,
-            old_str: i === 1 ? 'Initial' : `Edit ${i - 1}`,
-            new_str: `Edit ${i}`,
-          },
-          context
-        )
-      }
-
-      const history = state.get('fileEditorHistory') as FileEditorState['fileEditorHistory']
-      // Should only keep the last 10 versions
-      expect(history[filePath]?.length).toBeLessThanOrEqual(10)
     })
   })
 

@@ -7,7 +7,7 @@ import { AgentState } from '../../../src/agent/state.js'
 describe('notebook tool', () => {
   // Helper to create fresh state and context for each test
   const createFreshContext = (): { state: AgentState; context: ToolContext } => {
-    const state = new AgentState<{ notebooks: NotebookState['notebooks'] }>({ notebooks: {} })
+    const state = new AgentState({ notebooks: {} })
     const context: ToolContext = {
       toolUse: {
         name: 'notebook',
@@ -24,16 +24,16 @@ describe('notebook tool', () => {
       const { state, context } = createFreshContext()
       const result = await notebook.invoke({ mode: 'create' }, context)
       expect(result).toBe("Created notebook 'default' (empty)")
-      const notebooks = state.get('notebooks') as NotebookState['notebooks']
-      expect(notebooks.default).toBe('')
+      const notebooks = state.get<NotebookState>('notebooks')
+      expect(notebooks!.default).toBe('')
     })
 
     it('creates an empty notebook with custom name', async () => {
       const { state, context } = createFreshContext()
       const result = await notebook.invoke({ mode: 'create', name: 'notes' }, context)
       expect(result).toBe("Created notebook 'notes' (empty)")
-      const notebooks = state.get('notebooks') as NotebookState['notebooks']
-      expect(notebooks.notes).toBe('')
+      const notebooks = state.get<NotebookState>('notebooks')
+      expect(notebooks!.notes).toBe('')
     })
 
     it('creates a notebook with initial content', async () => {
@@ -41,8 +41,8 @@ describe('notebook tool', () => {
       const content = '# My Notes\n\nFirst entry'
       const result = await notebook.invoke({ mode: 'create', name: 'notes', newStr: content }, context)
       expect(result).toBe("Created notebook 'notes' with specified content")
-      const notebooks = state.get('notebooks') as NotebookState['notebooks']
-      expect(notebooks.notes).toBe(content)
+      const notebooks = state.get<NotebookState>('notebooks')
+      expect(notebooks!.notes).toBe(content)
     })
 
     it('overwrites existing notebook on create', async () => {
@@ -50,8 +50,8 @@ describe('notebook tool', () => {
       state.set('notebooks', { notes: 'Old content' })
       const result = await notebook.invoke({ mode: 'create', name: 'notes', newStr: 'New content' }, context)
       expect(result).toBe("Created notebook 'notes' with specified content")
-      const notebooks = state.get('notebooks') as NotebookState['notebooks']
-      expect(notebooks.notes).toBe('New content')
+      const notebooks = state.get<NotebookState>('notebooks')
+      expect(notebooks!.notes).toBe('New content')
     })
   })
 
@@ -157,8 +157,8 @@ describe('notebook tool', () => {
         context
       )
       expect(result).toBe("Replaced text in notebook 'default'")
-      const notebooks = state.get('notebooks') as NotebookState['notebooks']
-      expect(notebooks.default).toBe('# Todo List\n\n[x] Task 1\n[ ] Task 2\n[x] Task 3')
+      const notebooks = state.get<NotebookState>('notebooks')
+      expect(notebooks!.default).toBe('# Todo List\n\n[x] Task 1\n[ ] Task 2\n[x] Task 3')
     })
 
     it('replaces text in custom notebook', async () => {
@@ -174,8 +174,8 @@ describe('notebook tool', () => {
         context
       )
       expect(result).toBe("Replaced text in notebook 'notes'")
-      const notebooks = state.get('notebooks') as NotebookState['notebooks']
-      expect(notebooks.notes).toBe('Updated text')
+      const notebooks = state.get<NotebookState>('notebooks')
+      expect(notebooks!.notes).toBe('Updated text')
     })
 
     it('replaces multiline text', async () => {
@@ -190,8 +190,8 @@ describe('notebook tool', () => {
         context
       )
       expect(result).toBe("Replaced text in notebook 'default'")
-      const notebooks = state.get('notebooks') as NotebookState['notebooks']
-      expect(notebooks.default).toBe('# Todo List\n\n[x] Task 1\n[x] Task 2\n[x] Task 3')
+      const notebooks = state.get<NotebookState>('notebooks')
+      expect(notebooks!.default).toBe('# Todo List\n\n[x] Task 1\n[x] Task 2\n[x] Task 3')
     })
 
     it('throws error if old string not found', async () => {
@@ -238,8 +238,8 @@ describe('notebook tool', () => {
         context
       )
       expect(result).toBe("Inserted text at line 3 in notebook 'default'")
-      const notebooks = state.get('notebooks') as NotebookState['notebooks']
-      expect(notebooks.default).toBe('Line 1\nLine 2\nInserted line\nLine 3')
+      const notebooks = state.get<NotebookState>('notebooks')
+      expect(notebooks!.default).toBe('Line 1\nLine 2\nInserted line\nLine 3')
     })
 
     it('inserts at beginning (after line 0)', async () => {
@@ -254,8 +254,8 @@ describe('notebook tool', () => {
         context
       )
       expect(result).toBe("Inserted text at line 1 in notebook 'default'")
-      const notebooks = state.get('notebooks') as NotebookState['notebooks']
-      expect(notebooks.default).toBe('First line\nLine 1\nLine 2\nLine 3')
+      const notebooks = state.get<NotebookState>('notebooks')
+      expect(notebooks!.default).toBe('First line\nLine 1\nLine 2\nLine 3')
     })
 
     it('appends to end with negative index', async () => {
@@ -270,8 +270,8 @@ describe('notebook tool', () => {
         context
       )
       expect(result).toBe("Inserted text at line 4 in notebook 'default'")
-      const notebooks = state.get('notebooks') as NotebookState['notebooks']
-      expect(notebooks.default).toBe('Line 1\nLine 2\nLine 3\nLast line')
+      const notebooks = state.get<NotebookState>('notebooks')
+      expect(notebooks!.default).toBe('Line 1\nLine 2\nLine 3\nLast line')
     })
 
     it('inserts after negative line index', async () => {
@@ -286,8 +286,8 @@ describe('notebook tool', () => {
         context
       )
       expect(result).toBe("Inserted text at line 3 in notebook 'default'")
-      const notebooks = state.get('notebooks') as NotebookState['notebooks']
-      expect(notebooks.default).toBe('Line 1\nLine 2\nBefore last\nLine 3')
+      const notebooks = state.get<NotebookState>('notebooks')
+      expect(notebooks!.default).toBe('Line 1\nLine 2\nBefore last\nLine 3')
     })
 
     it('inserts after text search', async () => {
@@ -302,8 +302,8 @@ describe('notebook tool', () => {
         context
       )
       expect(result).toBe("Inserted text at line 2 in notebook 'default'")
-      const notebooks = state.get('notebooks') as NotebookState['notebooks']
-      expect(notebooks.default).toBe('Line 1\nAfter Line 1\nLine 2\nLine 3')
+      const notebooks = state.get<NotebookState>('notebooks')
+      expect(notebooks!.default).toBe('Line 1\nAfter Line 1\nLine 2\nLine 3')
     })
 
     it('inserts after partial text match', async () => {
@@ -318,8 +318,8 @@ describe('notebook tool', () => {
         context
       )
       expect(result).toBe("Inserted text at line 3 in notebook 'default'")
-      const notebooks = state.get('notebooks') as NotebookState['notebooks']
-      expect(notebooks.default).toBe('Line 1\nLine 2\nAfter match\nLine 3')
+      const notebooks = state.get<NotebookState>('notebooks')
+      expect(notebooks!.default).toBe('Line 1\nLine 2\nAfter match\nLine 3')
     })
 
     it('throws error if search text not found', async () => {
@@ -365,8 +365,8 @@ describe('notebook tool', () => {
         context
       )
       expect(result).toBe("Inserted text at line 2 in notebook 'notes'")
-      const notebooks = state.get('notebooks') as NotebookState['notebooks']
-      expect(notebooks.notes).toBe('First\nMiddle\nSecond')
+      const notebooks = state.get<NotebookState>('notebooks')
+      expect(notebooks!.notes).toBe('First\nMiddle\nSecond')
     })
   })
 
@@ -376,8 +376,8 @@ describe('notebook tool', () => {
       state.set('notebooks', { default: 'Some content' })
       const result = await notebook.invoke({ mode: 'clear' }, context)
       expect(result).toBe("Cleared notebook 'default'")
-      const notebooks = state.get('notebooks') as NotebookState['notebooks']
-      expect(notebooks.default).toBe('')
+      const notebooks = state.get<NotebookState>('notebooks')
+      expect(notebooks!.default).toBe('')
     })
 
     it('clears custom notebook', async () => {
@@ -385,8 +385,8 @@ describe('notebook tool', () => {
       state.set('notebooks', { notes: 'More content' })
       const result = await notebook.invoke({ mode: 'clear', name: 'notes' }, context)
       expect(result).toBe("Cleared notebook 'notes'")
-      const notebooks = state.get('notebooks') as NotebookState['notebooks']
-      expect(notebooks.notes).toBe('')
+      const notebooks = state.get<NotebookState>('notebooks')
+      expect(notebooks!.notes).toBe('')
     })
 
     it('throws error for non-existent notebook', async () => {
@@ -400,8 +400,8 @@ describe('notebook tool', () => {
       const { state, context } = createFreshContext()
       state.set('notebooks', { default: 'Some content', notes: 'More content' })
       await notebook.invoke({ mode: 'clear', name: 'notes' }, context)
-      const notebooks = state.get('notebooks') as NotebookState['notebooks']
-      expect(notebooks.default).toBe('Some content')
+      const notebooks = state.get<NotebookState>('notebooks')
+      expect(notebooks!.default).toBe('Some content')
     })
   })
 
@@ -410,29 +410,29 @@ describe('notebook tool', () => {
       const { state, context } = createFreshContext()
       // Create notebook
       await notebook.invoke({ mode: 'create', name: 'notes', newStr: 'Initial' }, context)
-      let notebooks = state.get('notebooks') as NotebookState['notebooks']
-      expect(notebooks.notes).toBe('Initial')
+      let notebooks = state.get<NotebookState>('notebooks')
+      expect(notebooks!.notes).toBe('Initial')
 
       // Write to notebook - use oldStr/newStr instead of insertLine for appending
       await notebook.invoke({ mode: 'write', name: 'notes', oldStr: 'Initial', newStr: 'Initial\nAdded' }, context)
-      notebooks = state.get('notebooks') as NotebookState['notebooks']
-      expect(notebooks.notes).toBe('Initial\nAdded')
+      notebooks = state.get<NotebookState>('notebooks')
+      expect(notebooks!.notes).toBe('Initial\nAdded')
 
       // Read notebook
       const content = await notebook.invoke({ mode: 'read', name: 'notes' }, context)
       expect(content).toBe('Initial\nAdded')
 
       // Verify state is still intact
-      notebooks = state.get('notebooks') as NotebookState['notebooks']
-      expect(notebooks.notes).toBe('Initial\nAdded')
+      notebooks = state.get<NotebookState>('notebooks')
+      expect(notebooks!.notes).toBe('Initial\nAdded')
     })
 
     it('initializes default notebook if state is empty', async () => {
       const { state, context } = createFreshContext()
       const result = await notebook.invoke({ mode: 'list' }, context)
       expect(result).toContain('default: Empty')
-      const notebooks = state.get('notebooks') as NotebookState['notebooks']
-      expect(notebooks.default).toBe('')
+      const notebooks = state.get<NotebookState>('notebooks')
+      expect(notebooks!.default).toBe('')
     })
   })
 

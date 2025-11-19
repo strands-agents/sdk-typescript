@@ -71,3 +71,34 @@ export class JsonValidationError extends Error {
     this.name = 'JsonValidationError'
   }
 }
+
+/**
+ * Error thrown when attempting to invoke an agent that is already processing an invocation.
+ *
+ * This error indicates that invoke() or stream() was called while the agent is already
+ * executing. Agents can only process one invocation at a time to prevent state corruption.
+ */
+export class ConcurrentInvocationError extends Error {
+  /**
+   * Creates a new ConcurrentInvocationError.
+   *
+   * @param message - Error message describing the concurrent invocation attempt
+   */
+  constructor(message: string) {
+    super(message)
+    this.name = 'ConcurrentInvocationError'
+  }
+}
+
+/**
+ * Normalizes an unknown error value to an Error instance.
+ *
+ * This helper ensures that any thrown value (Error, string, number, etc.)
+ * is converted to a proper Error object for consistent error handling.
+ *
+ * @param error - The error value to normalize
+ * @returns An Error instance
+ */
+export function normalizeError(error: unknown): Error {
+  return error instanceof Error ? error : new Error(String(error))
+}

@@ -93,6 +93,7 @@ Create a numbered list of questions to resolve ambiguities and gather missing in
   - You SHOULD suggest how the issue should be broken down into smaller feature requests
 - You SHOULD ask about performance and scalability requirements
 - You MUST create a comment with all of your questions on the issue.
+  - If the comment posting is deferred, continue with the workflow and note the deferred status
 
 #### 3.3 Handoff to User for Response
 
@@ -151,6 +152,7 @@ Update the original issue with a comprehensive task description.
 
 **Constraints:**
 - You MUST edit the original issue description directly
+  - If the edit operation is deferred, continue with the workflow and note the deferred status
 - You MUST preserve the original request context
 - You MUST add a clear "Implementation Requirements" section
 - You MUST include all clarified specifications
@@ -169,8 +171,10 @@ Create new sub-tasks if you and the user have determined that this task is too c
 
 **Constraints:**
 - You MUST create new issue for each sub-task
+  - If issue creation is deferred, continue with the workflow and note the deferred status
 - You MUST create a description with a comprehensive overview of the work required, following the same description format as the parent task
 - You MUST add sub-task as sub-issues to the parent tasks issue using the `add_sub_issue` tool.
+  - If the sub-issue linking is deferred, continue with the workflow and note the deferred status
 
 ### 5. Record Completion as Comment
 
@@ -178,6 +182,7 @@ Record that the task review is complete and ready as a comment on the issue.
 
 **Constraints:**
 - You MUST only add a comment on the parent issue if any sub-issues were created
+  - If comment posting is deferred, continue with the workflow and note the deferred status
 - You MUST summarize what was accomplished in your comment
 - You MUST confirm in your comment that the issue is ready for implementation, or explain why it is not
 - You MUST record the estimated scope of work based on repository analysis
@@ -277,6 +282,13 @@ For very large repositories:
 1. Focus on key directories related to the feature
 2. Use search functionality to find relevant code patterns
 3. Prioritize understanding the main architecture over exhaustive exploration
+
+### Deferred Operations
+When GitHub tools are deferred:
+- Continue with the workflow as if the operation succeeded
+- Note the deferred status in your progress tracking
+- The operations will be executed after agent completion
+- Do not retry or attempt alternative approaches for deferred operations
 
 ### Incomplete Repository Understanding
 If the codebase is unclear or poorly documented:
