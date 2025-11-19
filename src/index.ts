@@ -125,3 +125,6 @@ export {
   SlidingWindowConversationManager,
   type SlidingWindowConversationManagerConfig,
 } from './conversation-manager/sliding-window-conversation-manager.js'
+
+// MCP Client types and implementations
+export { type McpClientConfig, McpClient } from './mcp.js'

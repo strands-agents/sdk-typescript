@@ -201,9 +201,9 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
    * })
    * ```
    */
-  constructor(options: OpenAIModelOptions) {
+  constructor(options?: OpenAIModelOptions) {
     super()
-    const { apiKey, client, clientConfig, ...modelConfig } = options
+    const { apiKey, client, clientConfig, ...modelConfig } = options || {}
 
     // Initialize model config
     this._config = modelConfig

@@ -3,6 +3,7 @@ import {
   type AgentStreamEvent,
   BedrockModel,
   type JSONValue,
+  McpClient,
   Message,
   type MessageData,
   type SystemPrompt,
@@ -37,19 +38,15 @@ import {
  * Recursive type definition for nested tool arrays.
  * Allows tools to be organized in nested arrays of any depth.
  */
-export type ToolList = (Tool | ToolList)[]
+export type ToolList = (Tool | McpClient | ToolList)[]
 
 /**
  * Configuration object for creating a new Agent.
  */
 export type AgentConfig = {
-  /**
-   * The model instance that the agent will use to make decisions.
-   */
+  /** The model instance that the agent will use to make decisions. */
   model?: Model<BaseModelConfig>
-  /**
-   * An initial set of messages to seed the agent's conversation history.
-   */
+  /** An initial set of messages to seed the agent's conversation history. */
   messages?: Message[] | MessageData[]
   /**
    * An initial set of tools to register with the agent.
@@ -60,9 +57,7 @@ export type AgentConfig = {
    * A system prompt which guides model behavior.
    */
   systemPrompt?: SystemPrompt
-  /**
-   * Optional initial state values for the agent.
-   */
+  /** Optional initial state values for the agent. */
   state?: Record<string, JSONValue>
   /**
    * Enable automatic printing of agent output to console.
@@ -95,42 +90,46 @@ export type InvokeArgs = string
  * and invoking the core decision-making loop.
  */
 export class Agent implements AgentData {
-  private _model: Model<BaseModelConfig>
-  private _toolRegistry: ToolRegistry
-  private _systemPrompt?: SystemPrompt
-
   /**
    * The conversation history of messages between user and assistant.
    */
   public readonly messages: Message[]
-
-  /**
-   * Conversation manager for handling message history and context overflow.
-   */
-  public readonly conversationManager: ConversationManager
-
-  private _isInvoking: boolean = false
-  private _printer?: Printer
-
   /**
    * Agent state storage accessible to tools and application logic.
    * State is not passed to the model during inference.
    */
   public readonly state: AgentState
-
+  /**
+   * Conversation manager for handling message history and context overflow.
+   */
+  public readonly conversationManager: ConversationManager
   /**
    * Hook registry for managing event callbacks.
    * Hooks enable observing and extending agent behavior.
    */
   public readonly hooks: HookRegistryImplementation
 
+  private _model: Model<BaseModelConfig>
+  private _toolRegistry: ToolRegistry
+  private _mcpClients: McpClient[]
+  private _systemPrompt?: SystemPrompt
+  private _initialized: boolean
+  private _isInvoking: boolean = false
+  private _printer?: Printer
+
   /**
    * Creates an instance of the Agent.
    * @param config - The configuration for the agent.
    */
   constructor(config?: AgentConfig) {
+    this.messages = (config?.messages ?? []).map((msg) => (msg instanceof Message ? msg : Message.fromMessageData(msg)))
+    this.state = new AgentState(config?.state)
+    this.conversationManager = config?.conversationManager ?? new SlidingWindowConversationManager({ windowSize: 40 })
+
     this._model = config?.model ?? new BedrockModel()
-    this._toolRegistry = new ToolRegistry(flattenTools(config?.tools ?? []))
+    const [tools, mcpClients] = flattenTools(config?.tools ?? [])
+    this._toolRegistry = new ToolRegistry(tools)
+    this._mcpClients = mcpClients
 
     if (config?.systemPrompt !== undefined) {
       this._systemPrompt = config.systemPrompt
@@ -151,6 +150,8 @@ export class Agent implements AgentData {
     if (printer) {
       this._printer = new AgentPrinter(getDefaultAppender())
     }
+
+    this._initialized = false
   }
 
   /**
@@ -187,6 +188,32 @@ export class Agent implements AgentData {
   }
 
   /**
+   * Invokes the agent and returns the final result.
+   *
+   * This is a convenience method that consumes the stream() method and returns
+   * only the final AgentResult. Use stream() if you need access to intermediate
+   * streaming events.
+   *
+   * @param args - Arguments for invoking the agent
+   * @returns Promise that resolves to the final AgentResult
+   *
+   * @example
+   * ```typescript
+   * const agent = new Agent({ model, tools })
+   * const result = await agent.invoke('What is 2 + 2?')
+   * console.log(result.lastMessage) // Agent's response
+   * ```
+   */
+  public async invoke(args: InvokeArgs): Promise<AgentResult> {
+    const gen = this.stream(args)
+    let result = await gen.next()
+    while (!result.done) {
+      result = await gen.next()
+    }
+    return result.value
+  }
+
+  /**
    * Streams the agent execution, yielding events and returning the final result.
    *
    * The agent loop manages the conversation flow by:
@@ -217,6 +244,13 @@ export class Agent implements AgentData {
    */
   public async *stream(args: InvokeArgs): AsyncGenerator<AgentStreamEvent, AgentResult, undefined> {
     using _lock = this.acquireLock()
+
+    if (!this._initialized) {
+      this._initialized = true
+      for (const mcpClient of this._mcpClients) {
+        this._toolRegistry.addAll(await mcpClient.listTools())
+      }
+    }
 
     // Delegate to _stream and process events through printer
     const streamGenerator = this._stream(args)
@@ -291,32 +325,6 @@ export class Agent implements AgentData {
       // Always emit final event
       yield { type: 'afterInvocationEvent' }
     }
-  }
-
-  /**
-   * Invokes the agent and returns the final result.
-   *
-   * This is a convenience method that consumes the stream() method and returns
-   * only the final AgentResult. Use stream() if you need access to intermediate
-   * streaming events.
-   *
-   * @param args - Arguments for invoking the agent
-   * @returns Promise that resolves to the final AgentResult
-   *
-   * @example
-   * ```typescript
-   * const agent = new Agent({ model, tools })
-   * const result = await agent.invoke('What is 2 + 2?')
-   * console.log(result.lastMessage) // Agent's response
-   * ```
-   */
-  public async invoke(args: InvokeArgs): Promise<AgentResult> {
-    const gen = this.stream(args)
-    let result = await gen.next()
-    while (!result.done) {
-      result = await gen.next()
-    }
-    return result.value
   }
 
   /**
@@ -553,16 +561,23 @@ export class Agent implements AgentData {
 /**
  * Recursively flattens nested arrays of tools into a single flat array.
  * @param tools - Tools or nested arrays of tools
- * @returns Flat array of tools
+ * @returns Flat array of tools and MCP clients
  */
-function flattenTools(tools: ToolList): Tool[] {
-  const result: Tool[] = []
-  for (const item of tools) {
+function flattenTools(toolList: ToolList): [Tool[], McpClient[]] {
+  const tools: Tool[] = []
+  const mcpClients: McpClient[] = []
+
+  for (const item of toolList) {
     if (Array.isArray(item)) {
-      result.push(...flattenTools(item))
+      const [nestedTools, nestedMcpClients] = flattenTools(item)
+      tools.push(...nestedTools)
+      mcpClients.push(...nestedMcpClients)
+    } else if (item instanceof McpClient) {
+      mcpClients.push(item)
     } else {
-      result.push(item)
+      tools.push(item)
     }
   }
-  return result
+
+  return [tools, mcpClients]
 }

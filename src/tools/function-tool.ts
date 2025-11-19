@@ -1,11 +1,10 @@
-import { Tool } from './tool.js'
+import { createErrorResult, Tool } from './tool.js'
 import type { ToolContext } from './tool.js'
 import { ToolStreamEvent } from './tool.js'
 import type { ToolSpec } from './types.js'
 import type { JSONSchema, JSONValue } from '../types/json.js'
 import { deepCopy } from '../types/json.js'
 import { JsonBlock, TextBlock, ToolResultBlock } from '../types/messages.js'
-import { normalizeError } from '../errors.js'
 
 /**
  * Callback function for FunctionTool implementations.
@@ -182,7 +181,7 @@ export class FunctionTool extends Tool {
       }
     } catch (error) {
       // Handle any errors and yield as error ToolResultBlock
-      return this._createErrorResult(error, toolUse.toolUseId)
+      return createErrorResult(error, toolUse.toolUseId)
     }
   }
 
@@ -250,31 +249,7 @@ export class FunctionTool extends Tool {
       })
     } catch (error) {
       // If deep copy fails (circular references, non-serializable values), return error result
-      return this._createErrorResult(error, toolUseId)
+      return createErrorResult(error, toolUseId)
     }
-  }
-
-  /**
-   * Creates an error ToolResultBlock from an error object.
-   * Ensures all errors are normalized to Error objects and includes the original error
-   * in the ToolResultBlock for inspection by hooks, error handlers, and event loop.
-   *
-   * TODO: Implement consistent logging format as defined in #30
-   * This error should be logged to the caller using the established logging pattern.
-   *
-   * @param error - The error that occurred (can be Error object or any thrown value)
-   * @param toolUseId - The tool use ID for the ToolResultBlock
-   * @returns A ToolResultBlock with error status, error message content, and original error object
-   */
-  private _createErrorResult(error: unknown, toolUseId: string): ToolResultBlock {
-    // Ensure error is an Error object (wrap non-Error values)
-    const errorObject = normalizeError(error)
-
-    return new ToolResultBlock({
-      toolUseId,
-      status: 'error',
-      content: [new TextBlock(`Error: ${errorObject.message}`)],
-      error: errorObject,
-    })
   }
 }
