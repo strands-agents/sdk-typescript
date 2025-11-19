@@ -1,6 +1,9 @@
 name: 'Strands Agent Runner'
 description: 'Execute a Strands agent with the given prompts and configuration'
 inputs:
+  ref:
+    description: 'ref to checkout'
+    required: true
   system_prompt:
     description: 'System prompt for the agent'
     required: true
@@ -24,6 +27,35 @@ inputs:
 runs:
   using: 'composite'
   steps:
+    # Checkout main repo .github directory
+    - name: Checkout repository
+      uses: actions/checkout@v5
+      with:
+        sparse-checkout: |
+          .github
+
+    # Copy the .github directory to the runner temp directory so the branch content cant overwrite the scripts executed here
+    - name: Copy .github to safe directory
+      shell: bash
+      run: |
+        mkdir -p ${{ runner.temp }}/strands-agent-runner
+        cp -r .github ${{ runner.temp }}/strands-agent-runner
+
+    # Checkout the branch repo to stage the directory for the agent
+    - name: Checkout repository
+      uses: actions/checkout@v5
+      with:
+        ref: ${{ inputs.branch }}
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v6
+      with:
+        node-version: '20'
+
+    - name: Install dependencies
+      shell: bash
+      run: npm install
+      continue-on-error: true # This step's failure will not stop the workflow
 
     - name: Set up Python
       uses: actions/setup-python@v4
@@ -34,13 +66,13 @@ runs:
       uses: astral-sh/setup-uv@v3
       with:
         enable-cache: true
-        cache-dependency-glob: '.github/scripts/requirements.txt'
+        cache-dependency-glob: '${{ runner.temp }}/strands-agent-runner/.github/scripts/python/requirements.txt'
 
     - name: Install Strands Agents
       shell: bash
       run: |
         echo "📦 Installing from requirements.txt"
-        uv pip install --system -r .github/scripts/requirements.txt --quiet
+        uv pip install --system -r ${{ runner.temp }}/strands-agent-runner/.github/scripts/python/requirements.txt --quiet
 
     - name: Configure Git
       shell: bash
@@ -83,7 +115,7 @@ runs:
         STRANDS_TOOL_CONSOLE_MODE: 'enabled'
         BYPASS_TOOL_CONSENT: 'true'
       run: |
-        uv run .github/scripts/agent_runner.py "$INPUT_TASK"
+        uv run ${{ runner.temp }}/strands-agent-runner/.github/scripts/python/agent_runner.py "$INPUT_TASK"
 
     - name: Capture repository state
       shell: bash

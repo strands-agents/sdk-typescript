@@ -14,30 +14,36 @@ runs:
     - name: Log if ref equals main
       shell: bash
       run: |
-        if [ "${{ inputs.ref }}" = "main" ]; then
-          echo "🚫 Ref is 'main' - skipping push operations to prevent direct commits to main branch"
+        if [ "${{ inputs.ref }}" = "${{ github.event.repository.default_branch }}" ]; then
+          echo "🚫 Ref is default - skipping push operations to prevent direct commits to default branch"
         else
           echo "✅ Ref is '${{ inputs.ref }}' - push operations will proceed"
         fi
     
     - name: Download repository state artifact
-      if: inputs.ref != 'main'
+      if: inputs.ref != github.event.repository.default_branch
       uses: actions/download-artifact@v4
       with:
         name: repository-state
+        path: ${{ runner.temp }}
       continue-on-error: true
 
     - name: Apply Artifact and Push changes
-      if: inputs.ref != 'main'
+      if: inputs.ref != github.event.repository.default_branch
       shell: bash
       env:
         GITHUB_TOKEN: ${{ github.token }}
       run: |
 
-        if [ -f "repository_state.tar.gz" ]; then
+        if [ -f "$RUNNER_TEMP/repository_state.tar.gz" ]; then
           echo "📝 Applying repository state"
-          tar -xzf repository_state.tar.gz
-          rm repository_state.tar.gz
+          mkdir -p "$RUNNER_TEMP/temp_git_repo"
+          tar -xzf "$RUNNER_TEMP/repository_state.tar.gz" -C "$RUNNER_TEMP/temp_git_repo"
+          rm "$RUNNER_TEMP/repository_state.tar.gz"
+          
+          echo "📁 Changing to repository directory"
+          ORIGINAL_DIRECTORY=$(pwd)
+          cd "$RUNNER_TEMP/temp_git_repo"
 
           # Configure Git
           git config --local user.name "Strands Agent"
@@ -67,6 +73,10 @@ runs:
           else
             echo "📭 No changes to push"
           fi
+          
+          # Change back and clean up
+          cd $ORIGINAL_DIRECTORY
+          rm -rf "$RUNNER_TEMP/temp_git_repo"
         fi
     
     - name: Download artifact with write operations
@@ -81,11 +91,19 @@ runs:
       run: |
         if [ -f "write_operations.jsonl" ]; then
           echo "✅ Write operations artifact exists! Continuing to execute commands!"
+          cp -r write_operations.jsonl ${{ runner.temp }}
           echo "exists=true" >> $GITHUB_OUTPUT
         else
           echo "❌ Write operations artifact does not exist. Stopping execution."
           echo "exists=false" >> $GITHUB_OUTPUT
         fi
+    
+    - name: Checkout repo to temp dir
+      if: steps.check-write-ops.outputs.exists == 'true'
+      uses: actions/checkout@v5
+      with:
+        sparse-checkout: |
+          .github
       
     - name: Set up Python
       if: steps.check-write-ops.outputs.exists == 'true'
@@ -98,14 +116,14 @@ runs:
       uses: astral-sh/setup-uv@v3
       with:
         enable-cache: true
-        cache-dependency-glob: '.github/scripts/requirements.txt'
+        cache-dependency-glob: ./.github/scripts/python/requirements.txt
 
     - name: Install dependencies
       if: steps.check-write-ops.outputs.exists == 'true'
       shell: bash
       run: |
         echo "📦 Installing from requirements.txt"
-        uv pip install --system -r .github/scripts/requirements.txt --quiet
+        uv pip install --system -r ./.github/scripts/python/requirements.txt --quiet
 
     - name: Execute write operations
       if: steps.check-write-ops.outputs.exists == 'true'
@@ -119,4 +137,4 @@ runs:
         BYPASS_TOOL_CONSENT: 'true'
       run: |
         echo "🚀 Strands Write Executor - Processing write operations"
-        python .github/scripts/write_executor.py "write_operations.jsonl"
+        python ./.github/scripts/python/write_executor.py "${{ runner.temp }}/write_operations.jsonl"
