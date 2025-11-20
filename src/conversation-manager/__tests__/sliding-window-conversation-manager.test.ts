@@ -9,7 +9,7 @@ import type { Agent } from '../../agent/agent.js'
 // Helper to trigger sliding window management through hooks
 async function triggerSlidingWindow(manager: SlidingWindowConversationManager, agent: Agent): Promise<void> {
   const registry = new HookRegistryImplementation()
-  manager.registerCallbacks(registry)
+  registry.addHook(manager)
   await registry.invokeCallbacks(new AfterInvocationEvent({ agent }))
 }
 
@@ -20,7 +20,7 @@ async function triggerContextOverflow(
   error: Error
 ): Promise<{ retryModelCall?: boolean }> {
   const registry = new HookRegistryImplementation()
-  manager.registerCallbacks(registry)
+  registry.addHook(manager)
   return await registry.invokeCallbacks(new AfterModelCallEvent({ agent, error }))
 }
 
@@ -55,7 +55,7 @@ describe('SlidingWindowConversationManager', () => {
         new Message({ role: 'user', content: [new TextBlock('Message 1')] }),
         new Message({ role: 'assistant', content: [new TextBlock('Response 1')] }),
       ]
-      const mockAgent = createMockAgent(messages)
+      const mockAgent = createMockAgent({ messages })
 
       await triggerSlidingWindow(manager, mockAgent)
 
@@ -68,7 +68,7 @@ describe('SlidingWindowConversationManager', () => {
         new Message({ role: 'user', content: [new TextBlock('Message 1')] }),
         new Message({ role: 'assistant', content: [new TextBlock('Response 1')] }),
       ]
-      const mockAgent = createMockAgent(messages)
+      const mockAgent = createMockAgent({ messages })
 
       await triggerSlidingWindow(manager, mockAgent)
 
@@ -82,7 +82,7 @@ describe('SlidingWindowConversationManager', () => {
         new Message({ role: 'assistant', content: [new TextBlock('Response 1')] }),
         new Message({ role: 'user', content: [new TextBlock('Message 2')] }),
       ]
-      const mockAgent = createMockAgent(messages)
+      const mockAgent = createMockAgent({ messages })
 
       await triggerSlidingWindow(manager, mockAgent)
 
@@ -106,7 +106,7 @@ describe('SlidingWindowConversationManager', () => {
           ],
         }),
       ]
-      const mockAgent = createMockAgent(messages)
+      const mockAgent = createMockAgent({ messages })
 
       await triggerContextOverflow(manager, mockAgent, new ContextWindowOverflowError('Context overflow'))
 
@@ -141,7 +141,7 @@ describe('SlidingWindowConversationManager', () => {
           ],
         }),
       ]
-      const mockAgent = createMockAgent(messages)
+      const mockAgent = createMockAgent({ messages })
 
       await triggerContextOverflow(manager, mockAgent, new ContextWindowOverflowError('Context overflow'))
 
@@ -172,7 +172,7 @@ describe('SlidingWindowConversationManager', () => {
           ],
         }),
       ]
-      const mockAgent = createMockAgent(messages)
+      const mockAgent = createMockAgent({ messages })
 
       await triggerContextOverflow(manager, mockAgent, new ContextWindowOverflowError('Context overflow'))
 
@@ -196,7 +196,7 @@ describe('SlidingWindowConversationManager', () => {
           ],
         }),
       ]
-      const mockAgent = createMockAgent(messages)
+      const mockAgent = createMockAgent({ messages })
 
       await triggerContextOverflow(manager, mockAgent, new ContextWindowOverflowError('Context overflow'))
 
@@ -261,7 +261,7 @@ describe('SlidingWindowConversationManager', () => {
         new Message({ role: 'assistant', content: [new TextBlock('Response 2')] }),
         new Message({ role: 'user', content: [new TextBlock('Message 3')] }),
       ]
-      const mockAgent = createMockAgent(messages)
+      const mockAgent = createMockAgent({ messages })
 
       await triggerContextOverflow(manager, mockAgent, new ContextWindowOverflowError('Context overflow'))
 
@@ -277,7 +277,7 @@ describe('SlidingWindowConversationManager', () => {
         new Message({ role: 'user', content: [new TextBlock('Message 2')] }),
         new Message({ role: 'assistant', content: [new TextBlock('Response 2')] }),
       ]
-      const mockAgent = createMockAgent(messages)
+      const mockAgent = createMockAgent({ messages })
 
       await triggerContextOverflow(manager, mockAgent, new ContextWindowOverflowError('Context overflow'))
 
@@ -292,7 +292,7 @@ describe('SlidingWindowConversationManager', () => {
         new Message({ role: 'assistant', content: [new TextBlock('Response 1')] }),
         new Message({ role: 'user', content: [new TextBlock('Message 2')] }),
       ]
-      const mockAgent = createMockAgent(messages)
+      const mockAgent = createMockAgent({ messages })
 
       await triggerContextOverflow(manager, mockAgent, new ContextWindowOverflowError('Context overflow'))
 
@@ -308,7 +308,7 @@ describe('SlidingWindowConversationManager', () => {
         new Message({ role: 'user', content: [new TextBlock('Message 2')] }),
         new Message({ role: 'assistant', content: [new TextBlock('Response 2')] }),
       ]
-      const mockAgent = createMockAgent(messages)
+      const mockAgent = createMockAgent({ messages })
 
       await triggerContextOverflow(manager, mockAgent, new ContextWindowOverflowError('Context overflow'))
 
@@ -340,7 +340,7 @@ describe('SlidingWindowConversationManager', () => {
         new Message({ role: 'assistant', content: [new TextBlock('Response')] }),
         new Message({ role: 'user', content: [new TextBlock('Message')] }),
       ]
-      const mockAgent = createMockAgent(messages)
+      const mockAgent = createMockAgent({ messages })
 
       await triggerContextOverflow(manager, mockAgent, new ContextWindowOverflowError('Context overflow'))
 
@@ -361,7 +361,7 @@ describe('SlidingWindowConversationManager', () => {
         new Message({ role: 'assistant', content: [new TextBlock('Response')] }), // Not a toolResult
         new Message({ role: 'user', content: [new TextBlock('Message 2')] }),
       ]
-      const mockAgent = createMockAgent(messages)
+      const mockAgent = createMockAgent({ messages })
 
       await triggerContextOverflow(manager, mockAgent, new ContextWindowOverflowError('Context overflow'))
 
@@ -391,7 +391,7 @@ describe('SlidingWindowConversationManager', () => {
         new Message({ role: 'assistant', content: [new TextBlock('Response')] }),
         new Message({ role: 'user', content: [new TextBlock('Message 2')] }),
       ]
-      const mockAgent = createMockAgent(messages)
+      const mockAgent = createMockAgent({ messages })
 
       await triggerContextOverflow(manager, mockAgent, new ContextWindowOverflowError('Context overflow'))
 
@@ -426,7 +426,7 @@ describe('SlidingWindowConversationManager', () => {
         }),
         new Message({ role: 'assistant', content: [new TextBlock('Response 2')] }),
       ]
-      const mockAgent = createMockAgent(messages)
+      const mockAgent = createMockAgent({ messages })
 
       await triggerContextOverflow(manager, mockAgent, new ContextWindowOverflowError('Context overflow'))
 
@@ -454,7 +454,7 @@ describe('SlidingWindowConversationManager', () => {
         new Message({ role: 'assistant', content: [new TextBlock('Response 1')] }),
         new Message({ role: 'user', content: [new TextBlock('Message 2')] }),
       ]
-      const mockAgent = createMockAgent(messages)
+      const mockAgent = createMockAgent({ messages })
 
       await triggerContextOverflow(manager, mockAgent, new ContextWindowOverflowError('Context overflow'))
 
@@ -477,7 +477,7 @@ describe('SlidingWindowConversationManager', () => {
           ],
         }),
       ]
-      const mockAgent = createMockAgent(messages)
+      const mockAgent = createMockAgent({ messages })
 
       await expect(
         triggerContextOverflow(manager, mockAgent, new ContextWindowOverflowError('Context overflow'))

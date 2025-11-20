@@ -9,6 +9,7 @@ import {
   BeforeToolCallEvent,
   MessageAddedEvent,
   ModelStreamEventHook,
+  type HookRegistry,
 } from '../../hooks/index.js'
 import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
 import { MockHookProvider } from '../../__fixtures__/mock-hook-provider.js'
@@ -299,6 +300,39 @@ describe('Agent Hooks Integration', () => {
           message: new Message({ role: 'assistant', content: [new TextBlock('Response')] }),
         })
       )
+    })
+  })
+
+  describe('AfterModelCallEvent retryModelCall', () => {
+    it('retries model call when hook sets retryModelCall', async () => {
+      let callCount = 0
+      const retryHook = {
+        registerCallbacks: (registry: HookRegistry) => {
+          registry.addCallback(AfterModelCallEvent, (event: AfterModelCallEvent) => {
+            callCount++
+            if (callCount === 1 && event.error) {
+              event.retryModelCall = true
+            }
+          })
+        },
+      }
+
+      const model = new MockMessageModel()
+        .addTurn(new Error('First attempt failed'))
+        .addTurn({ type: 'textBlock', text: 'Success after retry' })
+
+      const agent = new Agent({ model, hooks: [retryHook] })
+      const result = await agent.invoke('Test')
+
+      expect(result.lastMessage.content[0]).toEqual({ type: 'textBlock', text: 'Success after retry' })
+      expect(callCount).toBe(2)
+    })
+
+    it('does not retry when retryModelCall is not set', async () => {
+      const model = new MockMessageModel().addTurn(new Error('Failure'))
+      const agent = new Agent({ model })
+
+      await expect(agent.invoke('Test')).rejects.toThrow('Failure')
     })
   })
 })

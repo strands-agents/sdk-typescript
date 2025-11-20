@@ -14,7 +14,7 @@ describe('NullConversationManager', () => {
         new Message({ role: 'user', content: [new TextBlock('Hello')] }),
         new Message({ role: 'assistant', content: [new TextBlock('Hi there')] }),
       ]
-      const mockAgent = createMockAgent(messages)
+      const mockAgent = createMockAgent({ messages })
 
       const registry = new HookRegistryImplementation()
       manager.registerCallbacks(registry)
