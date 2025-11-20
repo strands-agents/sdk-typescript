@@ -1,5 +1,7 @@
 import { Agent, McpClient } from '@strands-agents/sdk'
 import { OpenAIModel } from '../../../dist/src/models/openai.js'
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 
 async function runInvoke(title: string, agent: Agent, prompt: string) {
   console.log(`--- ${title} ---\nUser: ${prompt}`)
@@ -10,16 +12,11 @@ async function runInvoke(title: string, agent: Agent, prompt: string) {
 async function main() {
   const model = new OpenAIModel()
 
-  const applicationConfig = {
-    applicationName: 'First Agent Example',
-    applicationVersion: '0.0.0',
-  }
-
   const chromeDevtools = new McpClient({
-    ...applicationConfig,
-    type: 'stdio',
-    command: 'npx',
-    args: ['-y', 'chrome-devtools-mcp'],
+    transport: new StdioClientTransport({
+      command: 'npx',
+      args: ['-y', 'chrome-devtools-mcp'],
+    }),
   })
 
   const agentWithMcpClient = new Agent({
@@ -36,16 +33,22 @@ async function main() {
     return
   }
 
+  // Optional client configuration
+  const applicationConfig = {
+    applicationName: 'First Agent Example',
+    applicationVersion: '0.0.0',
+  }
+
   // Create a remote MCP client
   const githubMcpClient = new McpClient({
     ...applicationConfig,
-    type: 'http',
-    url: 'https://api.githubcopilot.com/mcp/',
-    requestInit: {
-      headers: {
-        Authorization: `Bearer ${process.env.GITHUB_PAT}`,
+    transport: new StreamableHTTPClientTransport(new URL('https://api.githubcopilot.com/mcp/'), {
+      requestInit: {
+        headers: {
+          Authorization: `Bearer ${process.env.GITHUB_PAT}`,
+        },
       },
-    },
+    }),
   })
 
   const agentWithGithubMcpClient = new Agent({

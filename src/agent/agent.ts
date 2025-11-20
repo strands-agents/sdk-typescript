@@ -127,7 +127,7 @@ export class Agent implements AgentData {
     this.conversationManager = config?.conversationManager ?? new SlidingWindowConversationManager({ windowSize: 40 })
 
     this._model = config?.model ?? new BedrockModel()
-    const [tools, mcpClients] = flattenTools(config?.tools ?? [])
+    const { tools, mcpClients } = flattenTools(config?.tools ?? [])
     this._toolRegistry = new ToolRegistry(tools)
     this._mcpClients = mcpClients
 
@@ -152,6 +152,22 @@ export class Agent implements AgentData {
     }
 
     this._initialized = false
+  }
+
+  public async initialize(): Promise<void> {
+    if (this._initialized) {
+      console.warn('Attempted to call Agent.initialize() more than once or after first stream.')
+      return
+    }
+
+    await Promise.all(
+      this._mcpClients.map(async (client) => {
+        const tools = await client.listTools()
+        this._toolRegistry.addAll(tools)
+      })
+    )
+
+    this._initialized = true
   }
 
   /**
@@ -245,12 +261,7 @@ export class Agent implements AgentData {
   public async *stream(args: InvokeArgs): AsyncGenerator<AgentStreamEvent, AgentResult, undefined> {
     using _lock = this.acquireLock()
 
-    if (!this._initialized) {
-      this._initialized = true
-      for (const mcpClient of this._mcpClients) {
-        this._toolRegistry.addAll(await mcpClient.listTools())
-      }
-    }
+    await this.initialize()
 
     // Delegate to _stream and process events through printer
     const streamGenerator = this._stream(args)
@@ -563,13 +574,13 @@ export class Agent implements AgentData {
  * @param tools - Tools or nested arrays of tools
  * @returns Flat array of tools and MCP clients
  */
-function flattenTools(toolList: ToolList): [Tool[], McpClient[]] {
+function flattenTools(toolList: ToolList): { tools: Tool[]; mcpClients: McpClient[] } {
   const tools: Tool[] = []
   const mcpClients: McpClient[] = []
 
   for (const item of toolList) {
     if (Array.isArray(item)) {
-      const [nestedTools, nestedMcpClients] = flattenTools(item)
+      const { tools: nestedTools, mcpClients: nestedMcpClients } = flattenTools(item)
       tools.push(...nestedTools)
       mcpClients.push(...nestedMcpClients)
     } else if (item instanceof McpClient) {
@@ -579,5 +590,5 @@ function flattenTools(toolList: ToolList): [Tool[], McpClient[]] {
     }
   }
 
-  return [tools, mcpClients]
+  return { tools, mcpClients }
 }
