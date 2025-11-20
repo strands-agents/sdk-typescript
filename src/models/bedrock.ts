@@ -640,32 +640,34 @@ export class BedrockModel extends Model<BedrockModelConfig> {
     | BedrockImageSource.S3LocationMember
     | BedrockVideoSource.BytesMember
     | BedrockVideoSource.S3LocationMember {
-    if ('bytes' in source) {
-      return { bytes: source.bytes }
-    }
+    switch (source.type) {
+      case 'imageSourceBytes':
+      case 'videoSourceBytes':
+        return { bytes: source.bytes }
 
-    if ('url' in source) {
-      // Check if URL is actually an S3 URI
-      if (source.url.startsWith('s3://')) {
+      case 'imageSourceUrl':
+        // Check if URL is actually an S3 URI
+        if (source.url.startsWith('s3://')) {
+          return {
+            s3Location: {
+              uri: source.url,
+            },
+          }
+        }
+        throw new Error('Bedrock does not support URL sources for media. Use bytes or s3Location instead.')
+
+      case 'imageSourceS3Location':
+      case 'videoSourceS3Location':
         return {
           s3Location: {
-            uri: source.url,
+            uri: source.s3Location.uri,
+            ...(source.s3Location.bucketOwner && { bucketOwner: source.s3Location.bucketOwner }),
           },
         }
-      }
-      throw new Error('Bedrock does not support URL sources for media. Use bytes or s3Location instead.')
-    }
 
-    if ('s3Location' in source) {
-      return {
-        s3Location: {
-          uri: source.s3Location.uri,
-          ...(source.s3Location.bucketOwner && { bucketOwner: source.s3Location.bucketOwner }),
-        },
-      }
+      default:
+        throw new Error('Invalid media source')
     }
-
-    throw new Error('Invalid media source')
   }
 
   /**
@@ -679,40 +681,34 @@ export class BedrockModel extends Model<BedrockModelConfig> {
   private _formatDocumentSource(
     source: DocumentSource
   ): BedrockDocumentSource.BytesMember | BedrockDocumentSource.ContentMember | BedrockDocumentSource.S3LocationMember {
-    if ('bytes' in source) {
-      return source
-    }
+    switch (source.type) {
+      case 'documentSourceBytes':
+        return source
 
-    // Convert text to bytes - Bedrock API doesn't accept text directly
-    if ('text' in source) {
-      const encoder = new TextEncoder()
-      return { bytes: encoder.encode(source.text) }
-    }
-
-    if ('content' in source) {
-      return {
-        content: source.content.map((block) => ({
-          text: block.text,
-        })),
+      case 'documentSourceText': {
+        // Convert text to bytes - Bedrock API doesn't accept text directly
+        const encoder = new TextEncoder()
+        return { bytes: encoder.encode(source.text) }
       }
-    }
 
-    if ('s3Location' in source) {
-      return {
-        s3Location: {
-          uri: source.s3Location.uri,
-          ...(source.s3Location.bucketOwner && { bucketOwner: source.s3Location.bucketOwner }),
-        },
-      }
-    }
+      case 'documentSourceContentBlock':
+        return {
+          content: source.content.map((block) => ({
+            text: block.text,
+          })),
+        }
 
-    if ('fileId' in source) {
-      throw new Error(
-        'Bedrock does not support OpenAI file references. Use bytes, text, content, or s3Location instead.'
-      )
-    }
+      case 'documentSourceS3Location':
+        return {
+          s3Location: {
+            uri: source.s3Location.uri,
+            ...(source.s3Location.bucketOwner && { bucketOwner: source.s3Location.bucketOwner }),
+          },
+        }
 
-    throw new Error('Invalid document source')
+      default:
+        throw new Error('Invalid document source')
+    }
   }
 
   private _mapBedrockEventToSDKEvent(event: ConverseCommandOutput): ModelStreamEvent[] {
