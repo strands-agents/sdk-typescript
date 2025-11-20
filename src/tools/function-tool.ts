@@ -5,6 +5,12 @@ import type { ToolSpec } from './types.js'
 import type { JSONSchema, JSONValue } from '../types/json.js'
 import { deepCopy } from '../types/json.js'
 import { JsonBlock, TextBlock, ToolResultBlock } from '../types/messages.js'
+import { createLogger } from '../logging/logger.js'
+
+/**
+ * Module-level logger for FunctionTool.
+ */
+const logger = createLogger('strands.tools.function')
 
 /**
  * Callback function for FunctionTool implementations.
@@ -258,9 +264,6 @@ export class FunctionTool extends Tool {
    * Ensures all errors are normalized to Error objects and includes the original error
    * in the ToolResultBlock for inspection by hooks, error handlers, and event loop.
    *
-   * TODO: Implement consistent logging format as defined in #30
-   * This error should be logged to the caller using the established logging pattern.
-   *
    * @param error - The error that occurred (can be Error object or any thrown value)
    * @param toolUseId - The tool use ID for the ToolResultBlock
    * @returns A ToolResultBlock with error status, error message content, and original error object
@@ -268,6 +271,9 @@ export class FunctionTool extends Tool {
   private _createErrorResult(error: unknown, toolUseId: string): ToolResultBlock {
     // Ensure error is an Error object (wrap non-Error values)
     const errorObject = error instanceof Error ? error : new Error(String(error))
+
+    // Log the error with tool context
+    logger.error(`Tool execution error [${this.toolSpec?.name ?? 'unknown'}]: ${errorObject.message}`)
 
     return new ToolResultBlock({
       toolUseId,

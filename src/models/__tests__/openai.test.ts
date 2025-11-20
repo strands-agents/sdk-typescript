@@ -996,6 +996,7 @@ describe('OpenAIModel', () => {
 
       // Verify warning was logged
       expect(warnSpy).toHaveBeenCalledWith(
+        '[strands.models.openai]',
         'Cache points are not supported in OpenAI system prompts and will be ignored.'
       )
 
@@ -1069,6 +1070,7 @@ describe('OpenAIModel', () => {
 
       // Verify warning was logged
       expect(warnSpy).toHaveBeenCalledWith(
+        '[strands.models.openai]',
         'OpenAI does not support guard content in system prompts. Removing guard content block.'
       )
 
@@ -1107,6 +1109,7 @@ describe('OpenAIModel', () => {
 
       // Verify warning was logged
       expect(warnSpy).toHaveBeenCalledWith(
+        '[strands.models.openai]',
         'OpenAI does not support guard content in system prompts. Removing guard content block.'
       )
 
@@ -1143,6 +1146,7 @@ describe('OpenAIModel', () => {
 
       // Verify warning was logged
       expect(warnSpy).toHaveBeenCalledWith(
+        '[strands.models.openai]',
         'OpenAI does not support guard content in system prompts. Removing guard content block.'
       )
 
@@ -1199,6 +1203,7 @@ describe('OpenAIModel', () => {
 
       // Verify warning was logged
       expect(warnSpy).toHaveBeenCalledWith(
+        '[strands.models.openai]',
         'OpenAI does not support guard content in messages. Removing guard content block.'
       )
 
@@ -1236,6 +1241,7 @@ describe('OpenAIModel', () => {
 
       // Verify warning was logged
       expect(warnSpy).toHaveBeenCalledWith(
+        '[strands.models.openai]',
         'OpenAI does not support guard content in messages. Removing guard content block.'
       )
 
@@ -1271,6 +1277,7 @@ describe('OpenAIModel', () => {
 
       // Verify warning was logged
       expect(warnSpy).toHaveBeenCalledWith(
+        '[strands.models.openai]',
         'OpenAI does not support guard content in messages. Removing guard content block.'
       )
 

@@ -114,3 +114,7 @@ export {
   SlidingWindowConversationManager,
   type SlidingWindowConversationManagerConfig,
 } from './conversation-manager/sliding-window-conversation-manager.js'
+
+// Logging
+export { configureLogging } from './logging/logger.js'
+export type { Logger, LogLevel, LoggingConfig } from './logging/types.js'

@@ -35,6 +35,12 @@ import type { ModelStreamEvent, ReasoningContentDelta, Usage } from '../models/s
 import type { JSONValue } from '../types/json.js'
 import { ContextWindowOverflowError } from '../errors.js'
 import { ensureDefined } from '../types/validation.js'
+import { createLogger } from '../logging/logger.js'
+
+/**
+ * Module-level logger for Bedrock model.
+ */
+const logger = createLogger('strands.models.bedrock')
 
 /**
  * Default Bedrock model ID.
@@ -400,7 +406,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
       } else if (options.systemPrompt.length > 0) {
         // Array path: use as-is, but warn if cachePrompt config is also set
         if (this._config.cachePrompt) {
-          console.warn(
+          logger.warn(
             'cachePrompt config is ignored when systemPrompt is an array. Use explicit cache points in the array instead.'
           )
         }
@@ -501,7 +507,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
     const shouldInclude = MODELS_INCLUDE_STATUS.some((pattern) => this._config.modelId?.includes(pattern))
 
     // Log debug message for auto-detection
-    console.debug(`Auto-detected includeToolResultStatus=${shouldInclude} for model: ${this._config.modelId}`)
+    logger.debug(`Auto-detected includeToolResultStatus=${shouldInclude} for model: ${this._config.modelId}`)
 
     return shouldInclude
   }
@@ -660,7 +666,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
           // @ts-expect-error - We know the value type corresponds to the handler key.
           blockHandlers[handlerKey](block[handlerKey])
         } else {
-          console.warn(`Skipping unsupported block key: ${key}`)
+          logger.warn(`Skipping unsupported block key: ${key}`)
         }
       }
     })
@@ -771,7 +777,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
             // @ts-expect-error - We know the value type corresponds to the handler key.
             deltaHandlers[handlerKey](delta[handlerKey])
           } else {
-            console.warn(`Skipping unsupported delta key: ${key}`)
+            logger.warn(`Skipping unsupported delta key: ${key}`)
           }
         }
 
@@ -850,7 +856,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
       }
       default:
         // Log warning for unsupported event types (for forward compatibility)
-        console.warn(`Unsupported Bedrock event type: ${eventType}`)
+        logger.warn(`Unsupported Bedrock event type: ${eventType}`)
         break
     }
 
@@ -870,7 +876,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
     if (stopReasonRaw in STOP_REASON_MAP) {
       mappedStopReason = STOP_REASON_MAP[stopReasonRaw as keyof typeof STOP_REASON_MAP]
     } else {
-      console.warn(`Unknown stop reason: "${stopReasonRaw}". Converting to camelCase: "${snakeToCamel(stopReasonRaw)}"`)
+      logger.warn(`Unknown stop reason: "${stopReasonRaw}". Converting to camelCase: "${snakeToCamel(stopReasonRaw)}"`)
       mappedStopReason = snakeToCamel(stopReasonRaw)
     }
 
@@ -882,7 +888,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
       event.output?.message?.content?.some((block) => 'toolUse' in block)
     ) {
       mappedStopReason = 'toolUse'
-      console.warn(`Adjusting stop reason from 'end_turn' to 'tool_use' due to tool use in content blocks.`)
+      logger.warn(`Adjusting stop reason from 'end_turn' to 'tool_use' due to tool use in content blocks.`)
     }
 
     return mappedStopReason
