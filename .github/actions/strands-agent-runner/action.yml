@@ -45,7 +45,7 @@ runs:
     - name: Checkout repository
       uses: actions/checkout@v5
       with:
-        ref: ${{ inputs.branch }}
+        ref: ${{ inputs.ref }}
 
     - name: Setup Node.js
       uses: actions/setup-node@v6

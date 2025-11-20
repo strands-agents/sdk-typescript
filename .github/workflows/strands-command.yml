@@ -135,6 +135,7 @@ jobs:
           aws_role_arn: ${{ secrets.AWS_ROLE_ARN }}
           sessions_bucket: ${{ secrets.TYPESCRIPT_SESSIONS_BUCKET }}
           write_permission: 'false'
+          ref: ${{ needs.setup-and-process.outputs.branch }}
 
   execute-write:
     needs: [setup-and-process, execute-readonly]
@@ -163,6 +164,7 @@ jobs:
     if: always()
     permissions:
       issues: write
+      pull-requests: write
     runs-on: ubuntu-latest 
     steps:
       - name: Remove strands-running label
