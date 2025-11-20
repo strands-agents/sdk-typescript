@@ -1,53 +1,42 @@
 import { describe, it, expect } from 'vitest'
 import { NullConversationManager } from '../null-conversation-manager.js'
-import { ContextWindowOverflowError, Message, TextBlock } from '../../index.js'
-import type { Agent } from '../../agent/agent.js'
+import { Message, TextBlock } from '../../index.js'
+import { HookRegistryImplementation } from '../../hooks/registry.js'
+import { AfterInvocationEvent, AfterModelCallEvent } from '../../hooks/events.js'
+import { ContextWindowOverflowError } from '../../errors.js'
+import { createMockAgent } from '../../__fixtures__/agent-helpers.js'
 
 describe('NullConversationManager', () => {
-  describe('applyManagement', () => {
-    it('does not modify messages array', () => {
+  describe('behavior', () => {
+    it('does not modify conversation history', async () => {
       const manager = new NullConversationManager()
       const messages = [
         new Message({ role: 'user', content: [new TextBlock('Hello')] }),
         new Message({ role: 'assistant', content: [new TextBlock('Hi there')] }),
       ]
-      const mockAgent = { messages } as unknown as Agent
+      const mockAgent = createMockAgent({ messages })
 
-      manager.applyManagement(mockAgent)
+      const registry = new HookRegistryImplementation()
+      manager.registerCallbacks(registry)
+
+      await registry.invokeCallbacks(new AfterInvocationEvent({ agent: mockAgent }))
 
       expect(mockAgent.messages).toHaveLength(2)
       expect(mockAgent.messages[0]!.content[0]).toEqual({ type: 'textBlock', text: 'Hello' })
       expect(mockAgent.messages[1]!.content[0]).toEqual({ type: 'textBlock', text: 'Hi there' })
     })
-  })
 
-  describe('reduceContext', () => {
-    it('re-throws provided error', () => {
+    it('does not set retryModelCall on context overflow', async () => {
       const manager = new NullConversationManager()
-      const mockAgent = { messages: [] } as unknown as Agent
-      const testError = new Error('Test error')
+      const mockAgent = createMockAgent()
+      const error = new ContextWindowOverflowError('Context overflow')
 
-      expect(() => {
-        manager.reduceContext(mockAgent, testError)
-      }).toThrow(testError)
-    })
+      const registry = new HookRegistryImplementation()
+      manager.registerCallbacks(registry)
 
-    it('throws ContextWindowOverflowError when no error provided', () => {
-      const manager = new NullConversationManager()
-      const mockAgent = { messages: [] } as unknown as Agent
+      const event = await registry.invokeCallbacks(new AfterModelCallEvent({ agent: mockAgent, error }))
 
-      expect(() => {
-        manager.reduceContext(mockAgent)
-      }).toThrow(ContextWindowOverflowError)
-    })
-
-    it('throws ContextWindowOverflowError with correct message when no error provided', () => {
-      const manager = new NullConversationManager()
-      const mockAgent = { messages: [] } as unknown as Agent
-
-      expect(() => {
-        manager.reduceContext(mockAgent)
-      }).toThrow('Context window overflowed!')
+      expect(event.retryModelCall).toBeUndefined()
     })
   })
 })

@@ -14,7 +14,7 @@ describe('notebook tool', () => {
         toolUseId: 'test-id',
         input: {},
       },
-      agent: { state },
+      agent: { state, messages: [] },
     }
     return { state, context }
   }

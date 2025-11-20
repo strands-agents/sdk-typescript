@@ -119,7 +119,6 @@ export {
 export type { HookCallback, HookProvider, HookEventConstructor, ModelStopResponse } from './hooks/index.js'
 
 // Conversation Manager
-export { ConversationManager } from './conversation-manager/conversation-manager.js'
 export { NullConversationManager } from './conversation-manager/null-conversation-manager.js'
 export {
   SlidingWindowConversationManager,
