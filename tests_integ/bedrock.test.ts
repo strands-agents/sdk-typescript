@@ -16,8 +16,8 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 // Import fixtures using Vite's ?url suffix
-import yellowPngUrl from './fixtures/yellow.png?url'
-import letterPdfUrl from './fixtures/letter.pdf?url'
+import yellowPngUrl from './__resources__/yellow.png?url'
+import letterPdfUrl from './__resources__/letter.pdf?url'
 
 // eslint-disable-next-line no-restricted-imports
 import { collectIterator, collectGenerator } from '../src/__fixtures__/model-test-helpers.js'
@@ -311,9 +311,10 @@ describe.skipIf(!(await shouldRunTests()))('BedrockModel Integration Tests', () 
 
         expect(streamEventCount).toBeGreaterThan(0)
         expect(contentBlockCount).toBe(1)
-        expect(result).toMatchObject({
+        expect(result).toEqual({
           stopReason: 'endTurn',
           message: {
+            type: 'message',
             role: 'assistant',
             content: [expect.objectContaining({ type: 'textBlock', text: expect.any(String) })],
           },

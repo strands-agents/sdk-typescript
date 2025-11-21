@@ -110,9 +110,7 @@ describe('Message.fromMessageData', () => {
     }
     const message = Message.fromMessageData(messageData)
     expect(message.content).toHaveLength(1)
-    expect(message.content[0]).toBeInstanceOf(TextBlock)
-    expect(message.content[0]!.type).toBe('textBlock')
-    expect((message.content[0] as TextBlock).text).toBe('hello world')
+    expect(message.content[0]).toEqual(new TextBlock('hello world'))
   })
 
   it('converts tool use block data to ToolUseBlock', () => {

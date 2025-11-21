@@ -4,7 +4,6 @@ import {
   ImageBlock,
   VideoBlock,
   DocumentBlock,
-  type S3LocationData,
   type ImageBlockData,
   type VideoBlockData,
   type DocumentBlockData,
@@ -13,21 +12,19 @@ import { TextBlock } from '../messages.js'
 
 describe('S3Location', () => {
   it('creates instance with uri only', () => {
-    const data: S3LocationData = {
+    const location = new S3Location({
       uri: 's3://my-bucket/image.jpg',
-    }
-    const location = new S3Location(data)
+    })
     expect(location).toEqual({
       uri: 's3://my-bucket/image.jpg',
     })
   })
 
   it('creates instance with uri and bucketOwner', () => {
-    const data: S3LocationData = {
+    const location = new S3Location({
       uri: 's3://my-bucket/image.jpg',
       bucketOwner: '123456789012',
-    }
-    const location = new S3Location(data)
+    })
     expect(location).toEqual({
       uri: 's3://my-bucket/image.jpg',
       bucketOwner: '123456789012',
@@ -38,12 +35,11 @@ describe('S3Location', () => {
 describe('ImageBlock', () => {
   it('creates instance with bytes source', () => {
     const bytes = new Uint8Array([1, 2, 3])
-    const data: ImageBlockData = {
+    const block = new ImageBlock({
       format: 'jpeg',
       source: { bytes },
-    }
-    const block = new ImageBlock(data)
-    expect(block).toMatchObject({
+    })
+    expect(block).toEqual({
       type: 'imageBlock',
       format: 'jpeg',
       source: { type: 'imageSourceBytes', bytes },
@@ -51,7 +47,7 @@ describe('ImageBlock', () => {
   })
 
   it('creates instance with S3 location source', () => {
-    const data: ImageBlockData = {
+    const block = new ImageBlock({
       format: 'png',
       source: {
         s3Location: {
@@ -59,9 +55,8 @@ describe('ImageBlock', () => {
           bucketOwner: '123456789012',
         },
       },
-    }
-    const block = new ImageBlock(data)
-    expect(block).toMatchObject({
+    })
+    expect(block).toEqual({
       type: 'imageBlock',
       format: 'png',
       source: {
@@ -77,12 +72,11 @@ describe('ImageBlock', () => {
   })
 
   it('creates instance with URL source', () => {
-    const data: ImageBlockData = {
+    const block = new ImageBlock({
       format: 'webp',
       source: { url: 'https://example.com/image.webp' },
-    }
-    const block = new ImageBlock(data)
-    expect(block).toMatchObject({
+    })
+    expect(block).toEqual({
       type: 'imageBlock',
       format: 'webp',
       source: { type: 'imageSourceUrl', url: 'https://example.com/image.webp' },
@@ -101,12 +95,11 @@ describe('ImageBlock', () => {
 describe('VideoBlock', () => {
   it('creates instance with bytes source', () => {
     const bytes = new Uint8Array([1, 2, 3])
-    const data: VideoBlockData = {
+    const block = new VideoBlock({
       format: 'mp4',
       source: { bytes },
-    }
-    const block = new VideoBlock(data)
-    expect(block).toMatchObject({
+    })
+    expect(block).toEqual({
       type: 'videoBlock',
       format: 'mp4',
       source: { type: 'videoSourceBytes', bytes },
@@ -114,16 +107,15 @@ describe('VideoBlock', () => {
   })
 
   it('creates instance with S3 location source', () => {
-    const data: VideoBlockData = {
+    const block = new VideoBlock({
       format: 'webm',
       source: {
         s3Location: {
           uri: 's3://my-bucket/video.webm',
         },
       },
-    }
-    const block = new VideoBlock(data)
-    expect(block).toMatchObject({
+    })
+    expect(block).toEqual({
       type: 'videoBlock',
       format: 'webm',
       source: {
@@ -149,13 +141,12 @@ describe('VideoBlock', () => {
 describe('DocumentBlock', () => {
   it('creates instance with bytes source', () => {
     const bytes = new Uint8Array([1, 2, 3])
-    const data: DocumentBlockData = {
+    const block = new DocumentBlock({
       name: 'document.pdf',
       format: 'pdf',
       source: { bytes },
-    }
-    const block = new DocumentBlock(data)
-    expect(block).toMatchObject({
+    })
+    expect(block).toEqual({
       type: 'documentBlock',
       name: 'document.pdf',
       format: 'pdf',
@@ -164,13 +155,12 @@ describe('DocumentBlock', () => {
   })
 
   it('creates instance with text source', () => {
-    const data: DocumentBlockData = {
+    const block = new DocumentBlock({
       name: 'note.txt',
       format: 'txt',
       source: { text: 'Hello world' },
-    }
-    const block = new DocumentBlock(data)
-    expect(block).toMatchObject({
+    })
+    expect(block).toEqual({
       type: 'documentBlock',
       format: 'txt',
       name: 'note.txt',
@@ -179,15 +169,14 @@ describe('DocumentBlock', () => {
   })
 
   it('creates instance with content source', () => {
-    const data: DocumentBlockData = {
+    const block = new DocumentBlock({
       name: 'report.html',
       format: 'html',
       source: {
         content: [{ text: 'Introduction' }, { text: 'Conclusion' }],
       },
-    }
-    const block = new DocumentBlock(data)
-    expect(block).toMatchObject({
+    })
+    expect(block).toEqual({
       type: 'documentBlock',
       name: 'report.html',
       format: 'html',
@@ -206,7 +195,7 @@ describe('DocumentBlock', () => {
   })
 
   it('creates instance with S3 location source', () => {
-    const data: DocumentBlockData = {
+    const block = new DocumentBlock({
       name: 'report.pdf',
       format: 'pdf',
       source: {
@@ -215,9 +204,8 @@ describe('DocumentBlock', () => {
           bucketOwner: '123456789012',
         },
       },
-    }
-    const block = new DocumentBlock(data)
-    expect(block).toMatchObject({
+    })
+    expect(block).toEqual({
       type: 'documentBlock',
       name: 'report.pdf',
       format: 'pdf',
@@ -233,13 +221,12 @@ describe('DocumentBlock', () => {
 
   it('creates instance with bytes and filename', () => {
     const bytes = new Uint8Array([1, 2, 3])
-    const data: DocumentBlockData = {
+    const block = new DocumentBlock({
       name: 'upload.pdf',
       format: 'pdf',
       source: { bytes },
-    }
-    const block = new DocumentBlock(data)
-    expect(block).toMatchObject({
+    })
+    expect(block).toEqual({
       type: 'documentBlock',
       name: 'upload.pdf',
       format: 'pdf',
@@ -248,13 +235,12 @@ describe('DocumentBlock', () => {
   })
 
   it('creates instance with text and filename', () => {
-    const data: DocumentBlockData = {
+    const block = new DocumentBlock({
       name: 'note.txt',
       format: 'txt',
       source: { text: 'Hello world' },
-    }
-    const block = new DocumentBlock(data)
-    expect(block).toMatchObject({
+    })
+    expect(block).toEqual({
       type: 'documentBlock',
       format: 'txt',
       name: 'note.txt',
@@ -264,15 +250,14 @@ describe('DocumentBlock', () => {
 
   it('creates instance with citations and context', () => {
     const bytes = new Uint8Array([1, 2, 3])
-    const data: DocumentBlockData = {
+    const block = new DocumentBlock({
       name: 'research.pdf',
       format: 'pdf',
       source: { bytes },
       citations: { enabled: true },
       context: 'Research paper about AI',
-    }
-    const block = new DocumentBlock(data)
-    expect(block).toMatchObject({
+    })
+    expect(block).toEqual({
       type: 'documentBlock',
       name: 'research.pdf',
       format: 'pdf',

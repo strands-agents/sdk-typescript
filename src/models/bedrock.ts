@@ -31,6 +31,7 @@ import {
   type ImageSource as BedrockImageSource,
   type VideoSource as BedrockVideoSource,
   type DocumentSource as BedrockDocumentSource,
+  type SystemContentBlock,
 } from '@aws-sdk/client-bedrock-runtime'
 import { type BaseModelConfig, Model, type StreamOptions } from '../models/model.js'
 import type { ContentBlock, Message, ToolUseBlock } from '../types/messages.js'
@@ -409,7 +410,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
           )
         }
 
-        request.system = options.systemPrompt.map((block) => this._formatContentBlock(block))
+        request.system = options.systemPrompt.map((block) => this._formatContentBlock(block) as SystemContentBlock)
       }
     }
 
@@ -479,10 +480,17 @@ export class BedrockModel extends Model<BedrockModelConfig> {
    * @returns Bedrock-formatted messages
    */
   private _formatMessages(messages: Message[]): BedrockMessage[] {
-    return messages.map((message) => ({
-      role: message.role,
-      content: message.content.map((block) => this._formatContentBlock(block)),
-    }))
+    return messages.reduce<BedrockMessage[]>((acc, message) => {
+      const content = message.content
+        .map((block) => this._formatContentBlock(block))
+        .filter((block) => block !== undefined)
+
+      if (content.length > 0) {
+        acc.push({ role: message.role, content })
+      }
+
+      return acc
+    }, [])
   }
 
   /**
@@ -516,7 +524,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
    * @param block - SDK content block
    * @returns Bedrock-formatted content block
    */
-  private _formatContentBlock(block: ContentBlock): BedrockContentBlock {
+  private _formatContentBlock(block: ContentBlock): BedrockContentBlock | undefined {
     switch (block.type) {
       case 'textBlock':
         return { text: block.text }
@@ -639,7 +647,8 @@ export class BedrockModel extends Model<BedrockModelConfig> {
     | BedrockImageSource.BytesMember
     | BedrockImageSource.S3LocationMember
     | BedrockVideoSource.BytesMember
-    | BedrockVideoSource.S3LocationMember {
+    | BedrockVideoSource.S3LocationMember
+    | undefined {
     switch (source.type) {
       case 'imageSourceBytes':
       case 'videoSourceBytes':
@@ -654,7 +663,8 @@ export class BedrockModel extends Model<BedrockModelConfig> {
             },
           }
         }
-        throw new Error('Bedrock does not support URL sources for media. Use bytes or s3Location instead.')
+        console.warn('Ignoring imageSourceUrl content block as its not supported by bedrock')
+        return
 
       case 'imageSourceS3Location':
       case 'videoSourceS3Location':

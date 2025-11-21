@@ -576,7 +576,7 @@ describe.skipIf(!hasApiKey)('OpenAIModel Integration Tests', () => {
       expect(contentBlockCount).toBe(1)
 
       // Verify the complete message structure is returned
-      expect(result).toMatchObject({
+      expect(result).toEqual({
         stopReason: 'endTurn',
         message: {
           type: 'message',

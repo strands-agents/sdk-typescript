@@ -16,6 +16,7 @@ import type { ImageBlock, DocumentBlock } from '../types/media.js'
 import { encodeBase64 } from '../types/media.js'
 import type { ModelStreamEvent } from '../models/streaming.js'
 import { ContextWindowOverflowError } from '../errors.js'
+import type { ChatCompletionContentPartText } from 'openai/resources/index.mjs'
 
 const DEFAULT_OPENAI_MODEL_ID = 'gpt-4o'
 
@@ -533,12 +534,15 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
 
         // Add non-tool-result content as user message
         if (otherContent.length > 0) {
-          const contentParts: (string | OpenAI.Chat.Completions.ChatCompletionContentPart)[] = []
+          const contentParts: OpenAI.Chat.Completions.ChatCompletionContentPart[] = []
 
           for (const block of otherContent) {
             switch (block.type) {
               case 'textBlock': {
-                contentParts.push(block.text)
+                contentParts.push({
+                  type: 'text',
+                  text: block.text,
+                })
                 break
               }
               case 'imageBlock': {
@@ -594,12 +598,22 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
                     console.warn(
                       'OpenAI does not support text document sources directly. Converting this text document to string content.'
                     )
-                    contentParts.push(docBlock.source.text)
+                    contentParts.push({
+                      type: 'text',
+                      text: docBlock.source.text,
+                    })
                     break
                   }
                   case 'documentSourceContentBlock': {
                     // Push each content block as a content part
-                    contentParts.push(...docBlock.source.content.map((block) => block.text))
+                    contentParts.push(
+                      ...docBlock.source.content.map<ChatCompletionContentPartText>((block) => {
+                        return {
+                          type: 'text',
+                          text: block.text,
+                        }
+                      })
+                    )
                     break
                   }
                   default: {
@@ -620,27 +634,10 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
 
           // Validate content is not empty before adding
           if (contentParts.length > 0) {
-            // If all content is text, join it
-            if (contentParts.every((part) => typeof part === 'string')) {
-              const contentText = contentParts.join('')
-              if (contentText.trim().length > 0) {
-                openAIMessages.push({
-                  role: 'user',
-                  content: contentText,
-                })
-              }
-            } else {
-              // Mixed content - use array format and filter out strings
-              const formattedParts = contentParts.map((part) =>
-                typeof part === 'string'
-                  ? ({ type: 'text' as const, text: part } as OpenAI.Chat.Completions.ChatCompletionContentPartText)
-                  : part
-              )
-              openAIMessages.push({
-                role: 'user',
-                content: formattedParts,
-              })
-            }
+            openAIMessages.push({
+              role: 'user',
+              content: contentParts,
+            })
           }
         }
 
