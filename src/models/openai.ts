@@ -692,38 +692,42 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
         const textParts: string[] = []
 
         for (const block of message.content) {
-          if (block.type === 'textBlock') {
-            textParts.push(block.text)
-          } else if (block.type === 'toolUseBlock') {
-            try {
-              toolUseCalls.push({
-                id: block.toolUseId,
-                type: 'function',
-                function: {
-                  name: block.name,
-                  arguments: JSON.stringify(block.input),
-                },
-              })
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            } catch (error: any) {
-              throw new Error(`Failed to serialize tool input for "${block.name}": ${error.message}`)
+          switch (block.type) {
+            case 'textBlock': {
+              textParts.push(block.text)
+
+              break
             }
-          } else if (block.type === 'reasoningBlock') {
-            throw new Error(
-              'Reasoning blocks are not supported by OpenAI. ' + 'This feature is specific to AWS Bedrock models.'
-            )
-          } else if (block.type === 'imageBlock') {
-            console.warn(
-              'OpenAI ChatCompletions API does not support image content in assistant messages. Skipping image block.'
-            )
-          } else if (block.type === 'videoBlock') {
-            console.warn(
-              'OpenAI ChatCompletions API does not support video content in assistant messages. Skipping video block.'
-            )
-          } else if (block.type === 'documentBlock') {
-            console.warn(
-              'OpenAI ChatCompletions API does not support document content in assistant messages. Skipping document block.'
-            )
+            case 'toolUseBlock': {
+              try {
+                toolUseCalls.push({
+                  id: block.toolUseId,
+                  type: 'function',
+                  function: {
+                    name: block.name,
+                    arguments: JSON.stringify(block.input),
+                  },
+                })
+              } catch (error: unknown) {
+                if (error instanceof Error) {
+                  throw new Error(`Failed to serialize tool input for "${block.name}`, error)
+                }
+                throw error
+              }
+              break
+            }
+            case 'reasoningBlock': {
+              if (block.text) {
+                console.warn('Reasoning blocks are not supported by OpenAI Chat Completions API. Converting to text.')
+                textParts.push(block.text)
+              }
+              break
+            }
+            default: {
+              console.warn(
+                `OpenAI ChatCompletions API does not support ${block.type} content in assistant messages. Skipping this block.`
+              )
+            }
           }
         }
 

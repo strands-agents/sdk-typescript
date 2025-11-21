@@ -693,7 +693,9 @@ export class BedrockModel extends Model<BedrockModelConfig> {
   ): BedrockDocumentSource.BytesMember | BedrockDocumentSource.ContentMember | BedrockDocumentSource.S3LocationMember {
     switch (source.type) {
       case 'documentSourceBytes':
-        return source
+        return {
+          bytes: source.bytes,
+        }
 
       case 'documentSourceText': {
         // Convert text to bytes - Bedrock API doesn't accept text directly
