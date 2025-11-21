@@ -10,6 +10,13 @@ async function runInvoke(title: string, agent: Agent, prompt: string) {
 }
 
 async function main() {
+  if (!process.env.STRANDS_EXAMPLE_MCP_DEMO) {
+    console.warn(
+      'Skipping MCP client example; STRANDS_EXAMPLE_MCP_DEMO environment variable not set. If you are comfortable with these tools performing side effects than you can set it and re-run the example.'
+    )
+    return
+  }
+
   const model = new OpenAIModel()
 
   const chromeDevtools = new McpClient({
@@ -28,8 +35,15 @@ async function main() {
 
   await runInvoke('1: Invocation with MCP client', agentWithMcpClient, 'Use a random tool from the MCP server.')
 
-  if (!process.env.GITHUB_PAT) {
-    console.warn('Skipping GitHub MCP client example; GITHUB_PAT environment variable not set.')
+  // Set the following environment variable to run the GitHub MCP client example.
+  //
+  // STRANDS_EXAMPLE_GITHUB_PAT=<your_personal_access_token>
+  //
+  // Though unlikely in practice, this can perform side effects when using certain tools.
+  if (!process.env.STRANDS_EXAMPLE_GITHUB_PAT) {
+    console.warn(
+      'Skipping GitHub MCP client example; STRANDS_EXAMPLE_GITHUB_PAT environment variable not set. Though prompted not to, this can perform side effects when using certain tools.'
+    )
     return
   }
 
@@ -45,7 +59,7 @@ async function main() {
     transport: new StreamableHTTPClientTransport(new URL('https://api.githubcopilot.com/mcp/'), {
       requestInit: {
         headers: {
-          Authorization: `Bearer ${process.env.GITHUB_PAT}`,
+          Authorization: `Bearer ${process.env.STRANDS_EXAMPLE_GITHUB_PAT}`,
         },
       },
     }),

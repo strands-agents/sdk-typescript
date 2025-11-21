@@ -41,8 +41,8 @@ export class McpTool extends Tool {
     const { toolUseId, input } = toolContext.toolUse
 
     try {
-      const toolArguments = input && typeof input === 'object' && !Array.isArray(input) ? (input as JSONValue) : {}
-      const rawResult: unknown = await this.mcpClient.callTool(this, toolArguments)
+      // Input is validated by MCP Client before invocation
+      const rawResult: unknown = await this.mcpClient.callTool(this, input as JSONValue)
 
       if (!this._isMcpToolResult(rawResult)) {
         throw new Error('Invalid tool result from MCP Client: missing content array')

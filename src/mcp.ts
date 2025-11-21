@@ -47,10 +47,14 @@ export class McpClient {
    *
    * @returns A promise that resolves when the connection is established.
    */
-  public async connect(): Promise<void> {
-    if (this._connected) {
-      console.warn(`Attempted to connect MCP Client "${this._clientName}" but it is already connected.`)
+  public async connect(reconnect: boolean = false): Promise<void> {
+    if (this._connected && !reconnect) {
       return
+    }
+
+    if (this._connected && reconnect) {
+      this._client.close()
+      this._connected = false
     }
 
     await this._client.connect(this._transport)
@@ -63,9 +67,7 @@ export class McpClient {
    * @returns A promise that resolves with an array of McpTool instances.
    */
   public async listTools(): Promise<McpTool[]> {
-    if (!this._connected) {
-      await this.connect()
-    }
+    await this.connect()
 
     const result = await this._client.listTools()
 
@@ -87,9 +89,7 @@ export class McpClient {
    * @returns A promise that resolves with the result of the tool invocation.
    */
   public async callTool(tool: McpTool, args: JSONValue): Promise<JSONValue> {
-    if (!this._connected) {
-      await this.connect()
-    }
+    await this.connect()
 
     if (args === null || args === undefined) {
       return await this.callTool(tool, {})

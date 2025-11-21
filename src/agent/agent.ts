@@ -121,9 +121,15 @@ export class Agent implements AgentData {
    * @param config - The configuration for the agent.
    */
   constructor(config?: AgentConfig) {
+    // Initialize public fields
     this.messages = (config?.messages ?? []).map((msg) => (msg instanceof Message ? msg : Message.fromMessageData(msg)))
     this.state = new AgentState(config?.state)
     this.conversationManager = config?.conversationManager ?? new SlidingWindowConversationManager({ windowSize: 40 })
+
+    // Initialize hooks and register conversation manager hooks
+    this.hooks = new HookRegistryImplementation()
+    this.hooks.addHook(this.conversationManager)
+    this.hooks.addAllHooks(config?.hooks ?? [])
 
     this._model = config?.model ?? new BedrockModel()
     const { tools, mcpClients } = flattenTools(config?.tools ?? [])
@@ -133,18 +139,6 @@ export class Agent implements AgentData {
     if (config?.systemPrompt !== undefined) {
       this._systemPrompt = config.systemPrompt
     }
-
-    this.messages = (config?.messages ?? []).map((msg) => (msg instanceof Message ? msg : Message.fromMessageData(msg)))
-
-    this.state = new AgentState(config?.state)
-
-    // Initialize conversation manager
-    this.conversationManager = config?.conversationManager ?? new SlidingWindowConversationManager({ windowSize: 40 })
-
-    // Initialize hooks and register conversation manager hooks
-    this.hooks = new HookRegistryImplementation()
-    this.hooks.addHook(this.conversationManager)
-    this.hooks.addAllHooks(config?.hooks ?? [])
 
     // Create printer if printer is enabled (default: true)
     const printer = config?.printer ?? true
@@ -157,7 +151,6 @@ export class Agent implements AgentData {
 
   public async initialize(): Promise<void> {
     if (this._initialized) {
-      console.warn('Attempted to call Agent.initialize() more than once or after first stream.')
       return
     }
 
