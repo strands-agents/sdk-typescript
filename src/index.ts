@@ -30,6 +30,12 @@ export type {
   ToolResultBlockData,
   ReasoningBlockData,
   CachePointBlockData,
+  GuardContentBlockData,
+  GuardContentText,
+  GuardContentImage,
+  GuardQualifier,
+  GuardImageFormat,
+  GuardImageSource,
   ContentBlock,
   ContentBlockData,
   MessageData,
@@ -45,9 +51,32 @@ export {
   ToolResultBlock,
   ReasoningBlock,
   CachePointBlock,
+  GuardContentBlock,
   Message,
   JsonBlock,
 } from './types/messages.js'
+
+// Media classes
+export { S3Location, ImageBlock, VideoBlock, DocumentBlock } from './types/media.js'
+
+// Media types
+export type {
+  S3LocationData,
+  ImageFormat,
+  ImageSource,
+  ImageSourceData,
+  ImageBlockData,
+  VideoFormat,
+  VideoSource,
+  VideoSourceData,
+  VideoBlockData,
+  DocumentFormat,
+  DocumentSource,
+  DocumentSourceData,
+  DocumentBlockData,
+  DocumentContentBlock,
+  DocumentContentBlockData,
+} from './types/media.js'
 
 // Tool types
 export type { ToolSpec, ToolUse, ToolResultStatus, ToolChoice } from './tools/types.js'

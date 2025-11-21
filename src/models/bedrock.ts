@@ -28,9 +28,14 @@ import {
   type Tool,
   type ToolConfiguration,
   type ToolUseBlockDelta,
+  type ImageSource as BedrockImageSource,
+  type VideoSource as BedrockVideoSource,
+  type DocumentSource as BedrockDocumentSource,
+  type SystemContentBlock,
 } from '@aws-sdk/client-bedrock-runtime'
 import { type BaseModelConfig, Model, type StreamOptions } from '../models/model.js'
-import type { ContentBlock, Message, SystemContentBlock, ToolUseBlock } from '../types/messages.js'
+import type { ContentBlock, Message, ToolUseBlock } from '../types/messages.js'
+import type { ImageSource, VideoSource, DocumentSource } from '../types/media.js'
 import type { ModelStreamEvent, ReasoningContentDelta, Usage } from '../models/streaming.js'
 import type { JSONValue } from '../types/json.js'
 import { ContextWindowOverflowError } from '../errors.js'
@@ -405,7 +410,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
           )
         }
 
-        request.system = options.systemPrompt.map((block) => this._formatContentBlock(block))
+        request.system = options.systemPrompt.map((block) => this._formatContentBlock(block) as SystemContentBlock)
       }
     }
 
@@ -475,10 +480,17 @@ export class BedrockModel extends Model<BedrockModelConfig> {
    * @returns Bedrock-formatted messages
    */
   private _formatMessages(messages: Message[]): BedrockMessage[] {
-    return messages.map((message) => ({
-      role: message.role,
-      content: message.content.map((block) => this._formatContentBlock(block)),
-    }))
+    return messages.reduce<BedrockMessage[]>((acc, message) => {
+      const content = message.content
+        .map((block) => this._formatContentBlock(block))
+        .filter((block) => block !== undefined)
+
+      if (content.length > 0) {
+        acc.push({ role: message.role, content })
+      }
+
+      return acc
+    }, [])
   }
 
   /**
@@ -512,7 +524,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
    * @param block - SDK content block
    * @returns Bedrock-formatted content block
    */
-  private _formatContentBlock(block: ContentBlock | SystemContentBlock): BedrockContentBlock {
+  private _formatContentBlock(block: ContentBlock): BedrockContentBlock | undefined {
     switch (block.type) {
       case 'textBlock':
         return { text: block.text }
@@ -569,6 +581,33 @@ export class BedrockModel extends Model<BedrockModelConfig> {
       case 'cachePointBlock':
         return { cachePoint: { type: block.cacheType } }
 
+      case 'imageBlock':
+        return {
+          image: {
+            format: block.format,
+            source: this._formatMediaSource(block.source),
+          },
+        }
+
+      case 'videoBlock':
+        return {
+          video: {
+            format: block.format === '3gp' ? 'three_gp' : block.format,
+            source: this._formatMediaSource(block.source),
+          },
+        }
+
+      case 'documentBlock':
+        return {
+          document: {
+            name: block.name,
+            format: block.format,
+            source: this._formatDocumentSource(block.source),
+            ...(block.citations && { citations: block.citations }),
+            ...(block.context && { context: block.context }),
+          },
+        }
+
       case 'guardContentBlock': {
         if (block.text) {
           return {
@@ -589,9 +628,98 @@ export class BedrockModel extends Model<BedrockModelConfig> {
             },
           }
         } else {
-          throw new Error('GuardContentBlock must have either text or image content')
+          throw new Error('guardContent must have either text or image')
         }
       }
+    }
+  }
+
+  /**
+   * Format media source (image/video) for Bedrock API.
+   * Handles bytes, S3 locations, and s3:// URLs.
+   *
+   * @param source - Media source
+   * @returns Formatted source for Bedrock API
+   */
+  private _formatMediaSource(
+    source: ImageSource | VideoSource
+  ):
+    | BedrockImageSource.BytesMember
+    | BedrockImageSource.S3LocationMember
+    | BedrockVideoSource.BytesMember
+    | BedrockVideoSource.S3LocationMember
+    | undefined {
+    switch (source.type) {
+      case 'imageSourceBytes':
+      case 'videoSourceBytes':
+        return { bytes: source.bytes }
+
+      case 'imageSourceUrl':
+        // Check if URL is actually an S3 URI
+        if (source.url.startsWith('s3://')) {
+          return {
+            s3Location: {
+              uri: source.url,
+            },
+          }
+        }
+        console.warn('Ignoring imageSourceUrl content block as its not supported by bedrock')
+        return
+
+      case 'imageSourceS3Location':
+      case 'videoSourceS3Location':
+        return {
+          s3Location: {
+            uri: source.s3Location.uri,
+            ...(source.s3Location.bucketOwner && { bucketOwner: source.s3Location.bucketOwner }),
+          },
+        }
+
+      default:
+        throw new Error('Invalid media source')
+    }
+  }
+
+  /**
+   * Format document source for Bedrock API.
+   * Handles bytes, text, content, and S3 locations.
+   * Note: Bedrock API only accepts bytes, content, or s3Location - text is converted to bytes.
+   *
+   * @param source - Document source
+   * @returns Formatted source for Bedrock API
+   */
+  private _formatDocumentSource(
+    source: DocumentSource
+  ): BedrockDocumentSource.BytesMember | BedrockDocumentSource.ContentMember | BedrockDocumentSource.S3LocationMember {
+    switch (source.type) {
+      case 'documentSourceBytes':
+        return {
+          bytes: source.bytes,
+        }
+
+      case 'documentSourceText': {
+        // Convert text to bytes - Bedrock API doesn't accept text directly
+        const encoder = new TextEncoder()
+        return { bytes: encoder.encode(source.text) }
+      }
+
+      case 'documentSourceContentBlock':
+        return {
+          content: source.content.map((block) => ({
+            text: block.text,
+          })),
+        }
+
+      case 'documentSourceS3Location':
+        return {
+          s3Location: {
+            uri: source.s3Location.uri,
+            ...(source.s3Location.bucketOwner && { bucketOwner: source.s3Location.bucketOwner }),
+          },
+        }
+
+      default:
+        throw new Error('Invalid document source')
     }
   }
 

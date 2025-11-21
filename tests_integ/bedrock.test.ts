@@ -6,13 +6,31 @@ import {
   ToolSpec,
   ModelStreamEvent,
   Agent,
+  ImageBlock,
+  DocumentBlock,
   NullConversationManager,
   SlidingWindowConversationManager,
 } from '@strands-agents/sdk'
 
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+
+// Import fixtures using Vite's ?url suffix
+import yellowPngUrl from './__resources__/yellow.png?url'
+import letterPdfUrl from './__resources__/letter.pdf?url'
+
 // eslint-disable-next-line no-restricted-imports
 import { collectIterator, collectGenerator } from '../src/__fixtures__/model-test-helpers.js'
 import { shouldRunTests } from './__fixtures__/model-test-helpers.js'
+
+// Helper to load fixture files from Vite URL imports
+// Vite ?url imports return paths like '/tests_integ/fixtures/yellow.png' in test environment
+const loadFixture = (url: string) => {
+  // Remove leading slash and resolve from project root
+  const relativePath = url.startsWith('/') ? url.slice(1) : url
+  const filePath = join(process.cwd(), relativePath)
+  return new Uint8Array(readFileSync(filePath))
+}
 
 describe.skipIf(!(await shouldRunTests()))('BedrockModel Integration Tests', () => {
   describe('Non-Streaming', () => {
@@ -293,9 +311,10 @@ describe.skipIf(!(await shouldRunTests()))('BedrockModel Integration Tests', () 
 
         expect(streamEventCount).toBeGreaterThan(0)
         expect(contentBlockCount).toBe(1)
-        expect(result).toMatchObject({
+        expect(result).toEqual({
           stopReason: 'endTurn',
           message: {
+            type: 'message',
             role: 'assistant',
             content: [expect.objectContaining({ type: 'textBlock', text: expect.any(String) })],
           },
@@ -338,5 +357,76 @@ describe.skipIf(!(await shouldRunTests()))('BedrockModel Integration Tests', () 
       // This should throw since NullConversationManager doesn't handle overflow
       await expect(agent.invoke(longPrompt)).rejects.toThrow()
     }, 30000)
+  })
+
+  describe('Media Blocks', () => {
+    it.concurrent('processes media blocks (image, text document, bytes document, PDF)', async () => {
+      const provider = new BedrockModel({ maxTokens: 300 })
+
+      // Load image from fixture
+      const imageBytes = loadFixture(yellowPngUrl)
+      const imageBlock = new ImageBlock({
+        format: 'png',
+        source: { bytes: imageBytes },
+      })
+
+      // Text document
+      const textDocBlock = new DocumentBlock({
+        name: 'sample-txt',
+        format: 'txt',
+        source: { text: 'The quick brown fox jumps over the lazy dog.' },
+      })
+
+      // Bytes document
+      const bytesContent = 'Integration test document content.'
+      const bytesDocBlock = new DocumentBlock({
+        name: 'test-document',
+        format: 'txt',
+        // eslint-disable-next-line no-undef
+        source: { bytes: new TextEncoder().encode(bytesContent) },
+      })
+
+      // PDF document
+      const pdfBytes = loadFixture(letterPdfUrl)
+      const pdfDocBlock = new DocumentBlock({
+        name: 'letter',
+        format: 'pdf',
+        source: { bytes: pdfBytes },
+      })
+
+      const messages: Message[] = [
+        {
+          type: 'message',
+          role: 'user',
+          content: [
+            imageBlock,
+            textDocBlock,
+            bytesDocBlock,
+            pdfDocBlock,
+            {
+              type: 'textBlock',
+              text: 'I have shared an image, some text documents, and a PDF. Please confirm you received them. Answer briefly.',
+            },
+          ],
+        },
+      ]
+
+      const events = await collectIterator(provider.stream(messages))
+
+      // Verify we got a response
+      const responseText = events.reduce((acc, event) => {
+        if (event.type === 'modelContentBlockDeltaEvent' && event.delta.type === 'textDelta') {
+          return acc + event.delta.text
+        }
+        return acc
+      }, '')
+
+      expect(responseText).toBeTruthy()
+      expect(responseText.length).toBeGreaterThan(0)
+
+      // Verify the stop event
+      const stopEvent = events.find((e) => e.type === 'modelMessageStopEvent')
+      expect(stopEvent?.stopReason).toBe('endTurn')
+    })
   })
 })

@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest'
+import { describe, expect, test, it } from 'vitest'
 import {
   Message,
   TextBlock,
@@ -7,8 +7,9 @@ import {
   ReasoningBlock,
   CachePointBlock,
   JsonBlock,
-  GuardContentBlock,
+  type MessageData,
 } from '../messages.js'
+import { ImageBlock, VideoBlock, DocumentBlock } from '../media.js'
 
 describe('Message', () => {
   test('creates message with role and content', () => {
@@ -101,77 +102,202 @@ describe('JsonBlock', () => {
   })
 })
 
-describe('GuardContentBlock', () => {
-  test('creates guard content block with single qualifier', () => {
-    const block = new GuardContentBlock({
-      text: {
-        qualifiers: ['grounding_source'],
-        text: 'This content should be evaluated for grounding.',
-      },
-    })
-
-    expect(block).toEqual({
-      type: 'guardContentBlock',
-      text: {
-        qualifiers: ['grounding_source'],
-        text: 'This content should be evaluated for grounding.',
-      },
-    })
+describe('Message.fromMessageData', () => {
+  it('converts text block data to TextBlock', () => {
+    const messageData: MessageData = {
+      role: 'user',
+      content: [{ text: 'hello world' }],
+    }
+    const message = Message.fromMessageData(messageData)
+    expect(message.content).toHaveLength(1)
+    expect(message.content[0]).toEqual(new TextBlock('hello world'))
   })
 
-  test('creates guard content block with all qualifier types', () => {
-    const block = new GuardContentBlock({
-      text: {
-        qualifiers: ['grounding_source', 'query', 'guard_content'],
-        text: 'Test content',
-      },
-    })
-
-    expect(block).toEqual({
-      type: 'guardContentBlock',
-      text: {
-        qualifiers: ['grounding_source', 'query', 'guard_content'],
-        text: 'Test content',
-      },
-    })
-  })
-
-  test('creates guard content block with image (bytes)', () => {
-    const imageBytes = new Uint8Array([1, 2, 3, 4])
-    const block = new GuardContentBlock({
-      image: {
-        format: 'jpeg',
-        source: { bytes: imageBytes },
-      },
-    })
-
-    expect(block).toEqual({
-      type: 'guardContentBlock',
-      image: {
-        format: 'jpeg',
-        source: { bytes: imageBytes },
-      },
-    })
-  })
-
-  test('throws error when neither text nor image is provided', () => {
-    expect(() => new GuardContentBlock({} as any)).toThrow('GuardContentBlock must have either text or image content')
-  })
-
-  test('throws error when both text and image are provided', () => {
-    const imageBytes = new Uint8Array([1, 2, 3, 4])
-    expect(
-      () =>
-        new GuardContentBlock({
-          text: {
-            qualifiers: ['grounding_source'],
-            text: 'Test',
+  it('converts tool use block data to ToolUseBlock', () => {
+    const messageData: MessageData = {
+      role: 'assistant',
+      content: [
+        {
+          toolUse: {
+            toolUseId: 'tool-123',
+            name: 'test-tool',
+            input: { key: 'value' },
           },
+        },
+      ],
+    }
+    const message = Message.fromMessageData(messageData)
+    expect(message.content).toHaveLength(1)
+    expect(message.content[0]).toBeInstanceOf(ToolUseBlock)
+    expect(message.content[0]!.type).toBe('toolUseBlock')
+  })
+
+  it('converts tool result block data to ToolResultBlock with text content', () => {
+    const messageData: MessageData = {
+      role: 'user',
+      content: [
+        {
+          toolResult: {
+            toolUseId: 'tool-123',
+            status: 'success',
+            content: [{ text: 'result text' }],
+          },
+        },
+      ],
+    }
+    const message = Message.fromMessageData(messageData)
+    expect(message.content).toHaveLength(1)
+    expect(message.content[0]).toBeInstanceOf(ToolResultBlock)
+    const toolResultBlock = message.content[0] as ToolResultBlock
+    expect(toolResultBlock.content).toHaveLength(1)
+    expect(toolResultBlock.content[0]).toBeInstanceOf(TextBlock)
+  })
+
+  it('converts tool result block data to ToolResultBlock with json content', () => {
+    const messageData: MessageData = {
+      role: 'user',
+      content: [
+        {
+          toolResult: {
+            toolUseId: 'tool-123',
+            status: 'success',
+            content: [{ json: { result: 'value' } }],
+          },
+        },
+      ],
+    }
+    const message = Message.fromMessageData(messageData)
+    expect(message.content).toHaveLength(1)
+    const toolResultBlock = message.content[0] as ToolResultBlock
+    expect(toolResultBlock.content).toHaveLength(1)
+    expect(toolResultBlock.content[0]).toBeInstanceOf(JsonBlock)
+  })
+
+  it('converts reasoning block data to ReasoningBlock', () => {
+    const messageData: MessageData = {
+      role: 'assistant',
+      content: [
+        {
+          reasoning: { text: 'thinking about it...' },
+        },
+      ],
+    }
+    const message = Message.fromMessageData(messageData)
+    expect(message.content).toHaveLength(1)
+    expect(message.content[0]).toBeInstanceOf(ReasoningBlock)
+    expect(message.content[0]!.type).toBe('reasoningBlock')
+  })
+
+  it('converts cache point block data to CachePointBlock', () => {
+    const messageData: MessageData = {
+      role: 'user',
+      content: [
+        {
+          cachePoint: { cacheType: 'default' },
+        },
+      ],
+    }
+    const message = Message.fromMessageData(messageData)
+    expect(message.content).toHaveLength(1)
+    expect(message.content[0]).toBeInstanceOf(CachePointBlock)
+    expect(message.content[0]!.type).toBe('cachePointBlock')
+  })
+
+  it('converts guard content block data to GuardContentBlock', () => {
+    const messageData: MessageData = {
+      role: 'user',
+      content: [
+        {
+          guardContent: {
+            text: {
+              text: 'guard this content',
+              qualifiers: ['guard_content'],
+            },
+          },
+        },
+      ],
+    }
+    const message = Message.fromMessageData(messageData)
+    expect(message.content).toHaveLength(1)
+    expect(message.content[0]!.type).toBe('guardContentBlock')
+  })
+
+  it('converts image block data to ImageBlock', () => {
+    const messageData: MessageData = {
+      role: 'user',
+      content: [
+        {
           image: {
             format: 'jpeg',
-            source: { bytes: imageBytes },
+            source: { bytes: new Uint8Array([1, 2, 3]) },
           },
-        })
-    ).toThrow('GuardContentBlock cannot have both text and image content')
+        },
+      ],
+    }
+    const message = Message.fromMessageData(messageData)
+    expect(message.content).toHaveLength(1)
+    expect(message.content[0]).toBeInstanceOf(ImageBlock)
+    expect(message.content[0]!.type).toBe('imageBlock')
+  })
+
+  it('converts video block data to VideoBlock', () => {
+    const messageData: MessageData = {
+      role: 'user',
+      content: [
+        {
+          video: {
+            format: 'mp4',
+            source: { bytes: new Uint8Array([1, 2, 3]) },
+          },
+        },
+      ],
+    }
+    const message = Message.fromMessageData(messageData)
+    expect(message.content).toHaveLength(1)
+    expect(message.content[0]).toBeInstanceOf(VideoBlock)
+    expect(message.content[0]!.type).toBe('videoBlock')
+  })
+
+  it('converts document block data to DocumentBlock', () => {
+    const messageData: MessageData = {
+      role: 'user',
+      content: [
+        {
+          document: {
+            name: 'test.pdf',
+            format: 'pdf',
+            source: { bytes: new Uint8Array([1, 2, 3]) },
+          },
+        },
+      ],
+    }
+    const message = Message.fromMessageData(messageData)
+    expect(message.content).toHaveLength(1)
+    expect(message.content[0]).toBeInstanceOf(DocumentBlock)
+    expect(message.content[0]!.type).toBe('documentBlock')
+  })
+
+  it('converts multiple content blocks', () => {
+    const messageData: MessageData = {
+      role: 'user',
+      content: [
+        { text: 'first block' },
+        { image: { format: 'png', source: { bytes: new Uint8Array([1, 2, 3]) } } },
+        { text: 'second block' },
+      ],
+    }
+    const message = Message.fromMessageData(messageData)
+    expect(message.content).toHaveLength(3)
+    expect(message.content[0]).toBeInstanceOf(TextBlock)
+    expect(message.content[1]).toBeInstanceOf(ImageBlock)
+    expect(message.content[2]).toBeInstanceOf(TextBlock)
+  })
+
+  it('throws error for unknown content block type', () => {
+    const messageData = {
+      role: 'user',
+      content: [{ unknownType: { data: 'value' } }],
+    } as unknown as MessageData
+    expect(() => Message.fromMessageData(messageData)).toThrow('Unknown ContentBlockData type')
   })
 })
