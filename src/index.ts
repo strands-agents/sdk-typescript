@@ -39,11 +39,13 @@ export type {
   ContentBlock,
   ContentBlockData,
   MessageData,
-  SystemPrompt,
   SystemPromptData,
   SystemContentBlock,
   ToolResultContent,
 } from './types/messages.js'
+
+// SystemPrompt (exports both the type and namespace)
+export { SystemPrompt } from './types/messages.js'
 
 // Message classes
 export {
@@ -55,7 +57,6 @@ export {
   GuardContentBlock,
   Message,
   JsonBlock,
-  systemPromptFromData,
 } from './types/messages.js'
 
 // Media classes

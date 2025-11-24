@@ -6,15 +6,15 @@ import {
   McpClient,
   Message,
   type MessageData,
-  type SystemPrompt,
   type SystemPromptData,
-  systemPromptFromData,
   TextBlock,
   type Tool,
   type ToolContext,
   ToolResultBlock,
   type ToolUseBlock,
 } from '../index.js'
+import type { SystemPrompt as SystemPromptType } from '../types/messages.js'
+import { SystemPrompt } from '../types/messages.js'
 import { normalizeError, ConcurrentInvocationError, MaxTokensError } from '../errors.js'
 import type { BaseModelConfig, Model, StreamOptions } from '../models/model.js'
 import { ToolRegistry } from '../registry/tool-registry.js'
@@ -57,7 +57,7 @@ export type AgentConfig = {
   /**
    * A system prompt which guides model behavior.
    */
-  systemPrompt?: SystemPrompt | SystemPromptData
+  systemPrompt?: SystemPromptType | SystemPromptData
   /** Optional initial state values for the agent. */
   state?: Record<string, JSONValue>
   /**
@@ -113,7 +113,7 @@ export class Agent implements AgentData {
   private _model: Model<BaseModelConfig>
   private _toolRegistry: ToolRegistry
   private _mcpClients: McpClient[]
-  private _systemPrompt?: SystemPrompt
+  private _systemPrompt?: SystemPromptType
   private _initialized: boolean
   private _isInvoking: boolean = false
   private _printer?: Printer
@@ -139,24 +139,7 @@ export class Agent implements AgentData {
     this._mcpClients = mcpClients
 
     if (config?.systemPrompt !== undefined) {
-      // Check if we need to convert from data format to class format
-      if (typeof config.systemPrompt === 'string') {
-        // String is valid for both formats
-        this._systemPrompt = config.systemPrompt
-      } else if (Array.isArray(config.systemPrompt)) {
-        // Check if it's an array of class instances (has 'type' discriminator) or data objects
-        const firstElement = config.systemPrompt[0]
-        if (config.systemPrompt.length === 0) {
-          // Empty array - can be treated as either format
-          this._systemPrompt = config.systemPrompt as SystemPrompt
-        } else if (firstElement !== undefined && 'type' in firstElement) {
-          // Array of class instances (has type discriminator)
-          this._systemPrompt = config.systemPrompt as SystemPrompt
-        } else {
-          // Data format - convert to class instances
-          this._systemPrompt = systemPromptFromData(config.systemPrompt as SystemPromptData)
-        }
-      }
+      this._systemPrompt = SystemPrompt.fromSystemPromptData(config.systemPrompt)
     }
 
     // Create printer if printer is enabled (default: true)

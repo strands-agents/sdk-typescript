@@ -463,6 +463,45 @@ export type SystemPrompt = string | SystemContentBlock[]
 export type SystemPromptData = string | SystemContentBlockData[]
 
 /**
+ * Namespace for SystemPrompt utility functions.
+ */
+// eslint-disable-next-line @typescript-eslint/no-namespace, no-redeclare
+export namespace SystemPrompt {
+  /**
+   * Converts SystemPromptData to SystemPrompt by converting data blocks to class instances.
+   * If already in SystemPrompt format (class instances), returns as-is.
+   *
+   * @param data - System prompt data to convert
+   * @returns SystemPrompt with class-based content blocks
+   */
+  export function fromSystemPromptData(data: SystemPromptData | SystemPrompt): SystemPrompt {
+    if (typeof data === 'string') {
+      return data
+    }
+
+    // Check if it's already class instances (has 'type' discriminator)
+    const firstElement = data[0]
+    if (data.length > 0 && firstElement !== undefined && 'type' in firstElement) {
+      return data as SystemPrompt
+    }
+
+    // Convert data format to class instances
+    return data.map((block) => {
+      if ('cachePoint' in block) {
+        return new CachePointBlock(block.cachePoint)
+      } else if ('guardContent' in block) {
+        return new GuardContentBlock(block.guardContent)
+      } else if ('text' in block) {
+        // After eliminating other options, this must be TextBlockData
+        return new TextBlock((block as TextBlockData).text)
+      } else {
+        throw new Error('Unknown SystemContentBlockData type')
+      }
+    })
+  }
+}
+
+/**
  * A block of content within a system prompt.
  * Supports text content, cache points, and guard content for prompt caching and guardrail evaluation.
  *
@@ -578,28 +617,4 @@ export class GuardContentBlock implements GuardContentBlockData {
       this.image = data.image
     }
   }
-}
-
-/**
- * Converts SystemPromptData to SystemPrompt by converting data blocks to class instances.
- *
- * @param data - System prompt data to convert
- * @returns SystemPrompt with class-based content blocks
- */
-export function systemPromptFromData(data: SystemPromptData): SystemPrompt {
-  if (typeof data === 'string') {
-    return data
-  }
-
-  return data.map((block) => {
-    if ('text' in block) {
-      return new TextBlock(block.text)
-    } else if ('cachePoint' in block) {
-      return new CachePointBlock(block.cachePoint)
-    } else if ('guardContent' in block) {
-      return new GuardContentBlock(block.guardContent)
-    } else {
-      throw new Error('Unknown SystemContentBlockData type')
-    }
-  })
 }
