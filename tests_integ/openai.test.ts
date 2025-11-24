@@ -6,9 +6,9 @@ import type { ToolSpec } from '@strands-agents/sdk'
 
 // eslint-disable-next-line no-restricted-imports
 import { collectGenerator, collectIterator } from '../src/__fixtures__/model-test-helpers.js'
-import { hasOpenAIApiKey } from './__fixtures__/test-helpers.js'
+import { shouldSkipOpenAITests } from './__fixtures__/test-helpers.js'
 
-describe.skipIf(!hasOpenAIApiKey())('OpenAIModel Integration Tests', () => {
+describe.skipIf(shouldSkipOpenAITests())('OpenAIModel Integration Tests', () => {
   describe('Basic Streaming', () => {
     it.concurrent('streams a simple text response', async () => {
       const provider = new OpenAIModel({
