@@ -318,10 +318,7 @@ describe('systemPromptFromData', () => {
     it('converts to TextBlock', () => {
       const data: SystemPromptData = [{ text: 'System prompt text' }]
       const result = systemPromptFromData(data)
-      expect(Array.isArray(result)).toBe(true)
-      expect(result).toHaveLength(1)
-      expect(result[0]).toBeInstanceOf(TextBlock)
-      expect(result[0]).toEqual(new TextBlock('System prompt text'))
+      expect(result).toEqual([new TextBlock('System prompt text')])
     })
   })
 
@@ -329,11 +326,7 @@ describe('systemPromptFromData', () => {
     it('converts to CachePointBlock', () => {
       const data: SystemPromptData = [{ text: 'prompt' }, { cachePoint: { cacheType: 'default' } }]
       const result = systemPromptFromData(data)
-      expect(Array.isArray(result)).toBe(true)
-      expect(result).toHaveLength(2)
-      expect(result[0]).toBeInstanceOf(TextBlock)
-      expect(result[1]).toBeInstanceOf(CachePointBlock)
-      expect(result[1]).toEqual(new CachePointBlock({ cacheType: 'default' }))
+      expect(result).toEqual([new TextBlock('prompt'), new CachePointBlock({ cacheType: 'default' })])
     })
   })
 
@@ -350,12 +343,14 @@ describe('systemPromptFromData', () => {
         },
       ]
       const result = systemPromptFromData(data)
-      expect(Array.isArray(result)).toBe(true)
-      expect(result).toHaveLength(1)
-      expect(result[0]).toBeInstanceOf(GuardContentBlock)
-      if (Array.isArray(result)) {
-        expect(result[0]!.type).toBe('guardContentBlock')
-      }
+      expect(result).toEqual([
+        new GuardContentBlock({
+          text: {
+            text: 'guard this content',
+            qualifiers: ['guard_content'],
+          },
+        }),
+      ])
     })
   })
 
@@ -375,12 +370,17 @@ describe('systemPromptFromData', () => {
         },
       ]
       const result = systemPromptFromData(data)
-      expect(Array.isArray(result)).toBe(true)
-      expect(result).toHaveLength(4)
-      expect(result[0]).toBeInstanceOf(TextBlock)
-      expect(result[1]).toBeInstanceOf(CachePointBlock)
-      expect(result[2]).toBeInstanceOf(TextBlock)
-      expect(result[3]).toBeInstanceOf(GuardContentBlock)
+      expect(result).toEqual([
+        new TextBlock('First text block'),
+        new CachePointBlock({ cacheType: 'default' }),
+        new TextBlock('Second text block'),
+        new GuardContentBlock({
+          text: {
+            text: 'guard content',
+            qualifiers: ['guard_content'],
+          },
+        }),
+      ])
     })
   })
 
@@ -388,8 +388,7 @@ describe('systemPromptFromData', () => {
     it('returns empty array', () => {
       const data: SystemPromptData = []
       const result = systemPromptFromData(data)
-      expect(Array.isArray(result)).toBe(true)
-      expect(result).toHaveLength(0)
+      expect(result).toEqual([])
     })
   })
 
@@ -404,7 +403,7 @@ describe('systemPromptFromData', () => {
     it('returns them unchanged', () => {
       const systemPrompt = [new TextBlock('prompt'), new CachePointBlock({ cacheType: 'default' })]
       const result = systemPromptFromData(systemPrompt)
-      expect(result).toBe(systemPrompt)
+      expect(result).toEqual(systemPrompt)
     })
   })
 })

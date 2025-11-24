@@ -8,13 +8,13 @@ import {
   type MessageData,
   type SystemPrompt,
   type SystemPromptData,
-  systemPromptFromData,
   TextBlock,
   type Tool,
   type ToolContext,
   ToolResultBlock,
   type ToolUseBlock,
 } from '../index.js'
+import { systemPromptFromData } from '../types/messages.js'
 import { normalizeError, ConcurrentInvocationError, MaxTokensError } from '../errors.js'
 import type { BaseModelConfig, Model, StreamOptions } from '../models/model.js'
 import { ToolRegistry } from '../registry/tool-registry.js'

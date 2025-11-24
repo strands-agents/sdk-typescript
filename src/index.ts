@@ -55,7 +55,6 @@ export {
   GuardContentBlock,
   Message,
   JsonBlock,
-  systemPromptFromData,
 } from './types/messages.js'
 
 // Media classes

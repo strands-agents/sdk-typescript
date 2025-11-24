@@ -474,24 +474,18 @@ export function systemPromptFromData(data: SystemPromptData | SystemPrompt): Sys
     return data
   }
 
-  // Check if it's already class instances (has 'type' discriminator)
-  const firstElement = data[0]
-  if (data.length > 0 && firstElement !== undefined && 'type' in firstElement) {
-    return data as SystemPrompt
-  }
-
   // Convert data format to class instances
   return data.map((block) => {
-    switch (true) {
-      case 'cachePoint' in block:
-        return new CachePointBlock(block.cachePoint)
-      case 'guardContent' in block:
-        return new GuardContentBlock(block.guardContent)
-      case 'text' in block:
-        // After eliminating other options, this must be TextBlockData
-        return new TextBlock((block as TextBlockData).text)
-      default:
-        throw new Error('Unknown SystemContentBlockData type')
+    if ('type' in block) {
+      return block
+    } else if ('cachePoint' in block) {
+      return new CachePointBlock(block.cachePoint)
+    } else if ('guardContent' in block) {
+      return new GuardContentBlock(block.guardContent)
+    } else if ('text' in block) {
+      return new TextBlock(block.text)
+    } else {
+      throw new Error('Unknown SystemContentBlockData type')
     }
   })
 }

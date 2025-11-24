@@ -4,7 +4,7 @@ import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
 import { collectGenerator } from '../../__fixtures__/model-test-helpers.js'
 import { createMockTool, createRandomTool } from '../../__fixtures__/tool-helpers.js'
 import { ConcurrentInvocationError } from '../../errors.js'
-import { MaxTokensError, TextBlock, CachePointBlock, type SystemPromptData } from '../../index.js'
+import { MaxTokensError, TextBlock, CachePointBlock } from '../../index.js'
 import { AgentPrinter } from '../printer.js'
 
 describe('Agent', () => {
@@ -428,28 +428,19 @@ describe('Agent', () => {
 
     describe('when provided as array SystemPromptData', () => {
       it('converts TextBlockData to TextBlock', () => {
-        const systemPromptData: SystemPromptData = [{ text: 'System prompt text' }]
-        const agent = new Agent({ systemPrompt: systemPromptData })
+        const agent = new Agent({ systemPrompt: [{ text: 'System prompt text' }] })
         expect(agent).toBeDefined()
       })
 
       it('converts mixed block data types', () => {
-        const systemPromptData: SystemPromptData = [
-          { text: 'First block' },
-          { cachePoint: { cacheType: 'default' } },
-          { text: 'Second block' },
-        ]
-        const agent = new Agent({ systemPrompt: systemPromptData })
+        const agent = new Agent({
+          systemPrompt: [{ text: 'First block' }, { cachePoint: { cacheType: 'default' } }, { text: 'Second block' }],
+        })
         expect(agent).toBeDefined()
       })
     })
 
     describe('when provided as SystemPrompt (class instances)', () => {
-      it('accepts string SystemPrompt', () => {
-        const agent = new Agent({ systemPrompt: 'You are helpful' })
-        expect(agent).toBeDefined()
-      })
-
       it('accepts array of class instances', () => {
         const systemPrompt = [new TextBlock('System prompt'), new CachePointBlock({ cacheType: 'default' })]
         const agent = new Agent({ systemPrompt })
