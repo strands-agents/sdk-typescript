@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { Agent, DocumentBlock, ImageBlock, Message, tool } from '@strands-agents/sdk'
+import { Agent, DocumentBlock, ImageBlock, Message, TextBlock, tool } from '@strands-agents/sdk'
 import { BedrockModel } from '@strands-agents/sdk/bedrock'
 import { OpenAIModel } from '@strands-agents/sdk/openai'
 import { z } from 'zod'
@@ -122,20 +122,25 @@ describe.each(providers)('Agent with $name', ({ name, skip, createModel }) => {
         })
 
         // Initialize agent with messages array containing Message instance
+        // Note: Bedrock requires a text block when using documents
         const agent = new Agent({
           model: createModel(),
           messages: [
             new Message({
               role: 'user',
-              content: [docBlock, imageBlock],
+              content: [
+                docBlock,
+                imageBlock,
+                new TextBlock(
+                  'I shared a document and an image. What animal is in the document and what color is the image? Answer briefly.'
+                ),
+              ],
             }),
           ],
           printer: false,
         })
 
-        const result = await agent.invoke(
-          'I shared a document and an image. What animal is in the document and what color is the image? Answer briefly.'
-        )
+        const result = await agent.invoke()
 
         expect(result.stopReason).toBe('endTurn')
         expect(result.lastMessage.role).toBe('assistant')
