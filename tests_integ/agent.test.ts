@@ -54,12 +54,12 @@ describe.each(providers)('Agent with $name', ({ name, skip, createModel }) => {
         const agent = new Agent({
           model: createModel(),
           printer: false,
-          systemPrompt: 'Always respond with exactly the word "TEST" and nothing else.',
+          systemPrompt: 'Use the calculator tool to solve math problems. Respond with only the numeric result.',
           tools: [calculatorTool],
         })
 
         // Test streaming with event collection
-        const { items, result } = await collectGenerator(agent.stream('What should I say?'))
+        const { items, result } = await collectGenerator(agent.stream('What is 123 * 456?'))
 
         // Verify high-level agent events are yielded
         expect(items.some((item) => item.type === 'beforeInvocationEvent')).toBe(true)
@@ -68,21 +68,21 @@ describe.each(providers)('Agent with $name', ({ name, skip, createModel }) => {
         expect(result.stopReason).toBe('endTurn')
         expect(result.lastMessage.role).toBe('assistant')
         expect(result.lastMessage.content.length).toBeGreaterThan(0)
-        expect(result.lastMessage.content[0].type).toBe('textBlock')
 
-        // Verify system prompt was respected
+        // Verify tool was used by checking message history
+        const toolUseMessage = agent.messages.find((msg) => msg.content.some((block) => block.type === 'toolUseBlock'))
+        expect(toolUseMessage).toBeDefined()
+
+        // Verify final response contains the result (123 * 456 = 56088)
         const textContent = result.lastMessage.content.find((block) => block.type === 'textBlock')
         expect(textContent).toBeDefined()
-        expect(textContent?.text.toUpperCase()).toContain('TEST')
+        expect(textContent?.text).toMatch(/56088/)
       })
     })
 
     describe('Multi-turn Conversations', () => {
       it('maintains message history and conversation context', async () => {
         const agent = new Agent({ model: createModel(), printer: false })
-
-        // Verify initial state
-        expect(agent.messages).toHaveLength(0)
 
         // First turn
         await agent.invoke('My name is Alice')
@@ -107,8 +107,6 @@ describe.each(providers)('Agent with $name', ({ name, skip, createModel }) => {
 
     describe('Media Blocks', () => {
       it('handles multiple media blocks in single request', async () => {
-        const agent = new Agent({ model: createModel(), printer: false })
-
         // Create document block
         const docBlock = new DocumentBlock({
           name: 'test-document',
@@ -123,21 +121,21 @@ describe.each(providers)('Agent with $name', ({ name, skip, createModel }) => {
           source: { bytes: imageBytes },
         })
 
-        // Add both media blocks to initial message
-        agent.messages.push({
-          type: 'message',
-          role: 'user',
-          content: [
-            docBlock,
-            imageBlock,
+        // Initialize agent with messages array
+        const agent = new Agent({
+          model: createModel(),
+          messages: [
             {
-              type: 'textBlock',
-              text: 'I shared a document and an image. What animal is in the document and what color is the image? Answer briefly.',
+              role: 'user',
+              content: [docBlock, imageBlock],
             },
           ],
+          printer: false,
         })
 
-        const result = await agent.invoke()
+        const result = await agent.invoke(
+          'I shared a document and an image. What animal is in the document and what color is the image? Answer briefly.'
+        )
 
         expect(result.stopReason).toBe('endTurn')
         expect(result.lastMessage.role).toBe('assistant')

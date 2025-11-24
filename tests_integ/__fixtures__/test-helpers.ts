@@ -16,14 +16,23 @@ export const loadFixture = (url: string): Uint8Array => {
 
 /**
  * Determines if OpenAI integration tests should be skipped.
- * Checks for the presence of OPENAI_API_KEY environment variable.
+ * In CI environments, throws an error if API key is missing (tests should not be skipped).
+ * In local development, skips tests if API key is not available.
  *
  * @returns true if tests should be skipped, false if they should run
+ * @throws Error if running in CI and API key is missing
  */
 export const shouldSkipOpenAITests = (): boolean => {
   try {
-    if (process.env.OPENAI_API_KEY) {
-      if (process.env.CI) {
+    const isCI = !!process.env.CI
+    const hasKey = !!process.env.OPENAI_API_KEY
+
+    if (isCI && !hasKey) {
+      throw new Error('OpenAI API key must be available in CI environments')
+    }
+
+    if (hasKey) {
+      if (isCI) {
         console.log('✅ Running in CI environment with OpenAI API key - tests will run')
       } else {
         console.log('✅ OpenAI API key found for integration tests')
@@ -33,7 +42,10 @@ export const shouldSkipOpenAITests = (): boolean => {
       console.log('⏭️  OpenAI API key not available - integration tests will be skipped')
       return true
     }
-  } catch {
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('CI environments')) {
+      throw error
+    }
     console.log('⏭️  OpenAI API key not available - integration tests will be skipped')
     return true
   }
