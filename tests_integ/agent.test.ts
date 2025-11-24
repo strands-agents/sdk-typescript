@@ -3,22 +3,14 @@ import { Agent, DocumentBlock, ImageBlock, tool } from '@strands-agents/sdk'
 import { BedrockModel } from '@strands-agents/sdk/bedrock'
 import { OpenAIModel } from '@strands-agents/sdk/openai'
 import { z } from 'zod'
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 
 // eslint-disable-next-line no-restricted-imports
 import { collectGenerator } from '../src/__fixtures__/model-test-helpers.js'
 import { shouldRunTests } from './__fixtures__/model-test-helpers.js'
+import { loadFixture, hasOpenAIApiKey } from './__fixtures__/test-helpers.js'
 
 // Import fixtures using Vite's ?url suffix
 import yellowPngUrl from './__resources__/yellow.png?url'
-
-// Helper to load fixture files from Vite URL imports
-const loadFixture = (url: string) => {
-  const relativePath = url.startsWith('/') ? url.slice(1) : url
-  const filePath = join(process.cwd(), relativePath)
-  return new Uint8Array(readFileSync(filePath))
-}
 
 // Calculator tool for testing
 const calculatorTool = tool({
@@ -49,7 +41,7 @@ const providers = [
   },
   {
     name: 'OpenAIModel',
-    skip: !process.env.OPENAI_API_KEY,
+    skip: !hasOpenAIApiKey(),
     createModel: () => new OpenAIModel({ modelId: 'gpt-4o-mini', maxTokens: 100 }),
   },
 ]
@@ -60,45 +52,28 @@ describe.each(providers)('Agent with $name', ({ name, skip, createModel }) => {
     return
   }
 
-  describe('Basic Invocation', () => {
-    it('handles basic invocation', async () => {
-      const agent = new Agent({ model: createModel(), printer: false })
-      const result = await agent.invoke('Say hello in one word')
-
-      expect(result.stopReason).toBe('endTurn')
-      expect(result.lastMessage.role).toBe('assistant')
-      expect(result.lastMessage.content.length).toBeGreaterThan(0)
-      expect(result.lastMessage.content[0].type).toBe('textBlock')
-    })
-
-    it('streams events correctly', async () => {
-      const agent = new Agent({ model: createModel(), printer: false })
-      const { items, result } = await collectGenerator(agent.stream('Say hello in one word'))
-
-      // Should yield high-level agent events
-      expect(items.some((item) => item.type === 'beforeInvocationEvent')).toBe(true)
-
-      // Result should have correct structure
-      expect(result.stopReason).toBe('endTurn')
-      expect(result.lastMessage.role).toBe('assistant')
-      expect(result.lastMessage.content.length).toBeGreaterThan(0)
-    })
-  })
-
-  describe('System Prompt', () => {
-    it('respects system prompt', async () => {
+  describe('Basic Functionality', () => {
+    it('handles invocation, streaming, and system prompts', async () => {
+      // Test basic invocation with system prompt
       const agent = new Agent({
         model: createModel(),
         printer: false,
         systemPrompt: 'Always respond with exactly the word "TEST" and nothing else.',
       })
 
-      const result = await agent.invoke('What should I say?')
+      // Test streaming with event collection
+      const { items, result } = await collectGenerator(agent.stream('What should I say?'))
 
+      // Verify high-level agent events are yielded
+      expect(items.some((item) => item.type === 'beforeInvocationEvent')).toBe(true)
+
+      // Verify result structure and stop reason
       expect(result.stopReason).toBe('endTurn')
       expect(result.lastMessage.role).toBe('assistant')
+      expect(result.lastMessage.content.length).toBeGreaterThan(0)
+      expect(result.lastMessage.content[0].type).toBe('textBlock')
 
-      // Extract text from response
+      // Verify system prompt was respected
       const textContent = result.lastMessage.content.find((block) => block.type === 'textBlock')
       expect(textContent).toBeDefined()
       expect(textContent?.text.toUpperCase()).toContain('TEST')
@@ -160,8 +135,11 @@ describe.each(providers)('Agent with $name', ({ name, skip, createModel }) => {
   })
 
   describe('Multi-turn Conversations', () => {
-    it('maintains message history', async () => {
+    it('maintains message history and conversation context', async () => {
       const agent = new Agent({ model: createModel(), printer: false })
+
+      // Verify initial state
+      expect(agent.messages).toHaveLength(0)
 
       // First turn
       await agent.invoke('My name is Alice')
@@ -171,48 +149,20 @@ describe.each(providers)('Agent with $name', ({ name, skip, createModel }) => {
       await agent.invoke('What is my name?')
       expect(agent.messages).toHaveLength(4) // 2 user + 2 assistant
 
-      // Response should reference the name
+      // Verify message ordering
+      expect(agent.messages[0].role).toBe('user')
+      expect(agent.messages[1].role).toBe('assistant')
+      expect(agent.messages[2].role).toBe('user')
+      expect(agent.messages[3].role).toBe('assistant')
+
+      // Verify conversation context is preserved
       const lastMessage = agent.messages[agent.messages.length - 1]
       const textContent = lastMessage.content.find((block) => block.type === 'textBlock')
       expect(textContent?.text).toMatch(/Alice/i)
     })
-
-    it('preserves conversation context', async () => {
-      const agent = new Agent({ model: createModel(), printer: false })
-
-      // Establish context
-      await agent.invoke('I like the color blue')
-      await agent.invoke('What color do I like?')
-
-      const lastMessage = agent.messages[agent.messages.length - 1]
-      const textContent = lastMessage.content.find((block) => block.type === 'textBlock')
-      expect(textContent?.text).toMatch(/blue/i)
-    })
   })
 
-  describe('Stop Reasons', () => {
-    it('handles endTurn stop reason', async () => {
-      const agent = new Agent({ model: createModel(), printer: false })
-      const result = await agent.invoke('Say hello')
-
-      expect(result.stopReason).toBe('endTurn')
-    })
-
-    it('handles toolUse stop reason when tool is used', async () => {
-      const agent = new Agent({
-        model: new BedrockModel({ maxTokens: 200 }),
-        tools: [calculatorTool],
-        printer: false,
-      })
-
-      // Keep trying until we get a tool use (models may vary in behavior)
-      const result = await agent.invoke('Use the calculator tool to compute 5 plus 3. You must use the tool.')
-
-      // Agent completed successfully
-      expect(['toolUse', 'endTurn']).toContain(result.stopReason)
-      expect(result.lastMessage.role).toBe('assistant')
-    })
-
+  describe('Error Handling', () => {
     it('handles maxTokens by throwing MaxTokensError', async () => {
       const agent = new Agent({
         model: new BedrockModel({ maxTokens: 10 }),
@@ -223,26 +173,6 @@ describe.each(providers)('Agent with $name', ({ name, skip, createModel }) => {
       await expect(agent.invoke('Write a very long story about dragons and knights and wizards')).rejects.toThrow(
         'maximum token limit'
       )
-    })
-  })
-
-  describe('Message History', () => {
-    it('updates messages array correctly', async () => {
-      const agent = new Agent({ model: createModel(), printer: false })
-
-      expect(agent.messages).toHaveLength(0)
-
-      await agent.invoke('First message')
-      expect(agent.messages).toHaveLength(2) // user + assistant
-
-      await agent.invoke('Second message')
-      expect(agent.messages).toHaveLength(4) // 2 user + 2 assistant
-
-      // Verify message ordering
-      expect(agent.messages[0].role).toBe('user')
-      expect(agent.messages[1].role).toBe('assistant')
-      expect(agent.messages[2].role).toBe('user')
-      expect(agent.messages[3].role).toBe('assistant')
     })
   })
 
@@ -298,6 +228,49 @@ describe.each(providers)('Agent with $name', ({ name, skip, createModel }) => {
       // Response should mention yellow
       const textContent = result.lastMessage.content.find((block) => block.type === 'textBlock')
       expect(textContent).toBeDefined()
+      expect(textContent?.text).toMatch(/yellow/i)
+    })
+
+    it('handles multiple media blocks in single request', async () => {
+      const agent = new Agent({ model: createModel(), printer: false })
+
+      // Create document block
+      const docBlock = new DocumentBlock({
+        name: 'test-document',
+        format: 'txt',
+        source: { text: 'The document contains the word ZEBRA.' },
+      })
+
+      // Create image block
+      const imageBytes = loadFixture(yellowPngUrl)
+      const imageBlock = new ImageBlock({
+        format: 'png',
+        source: { bytes: imageBytes },
+      })
+
+      // Add both media blocks to initial message
+      agent.messages.push({
+        type: 'message',
+        role: 'user',
+        content: [
+          docBlock,
+          imageBlock,
+          {
+            type: 'textBlock',
+            text: 'I shared a document and an image. What animal is in the document and what color is the image? Answer briefly.',
+          },
+        ],
+      })
+
+      const result = await agent.invoke()
+
+      expect(result.stopReason).toBe('endTurn')
+      expect(result.lastMessage.role).toBe('assistant')
+
+      // Response should reference both the document content and image color
+      const textContent = result.lastMessage.content.find((block) => block.type === 'textBlock')
+      expect(textContent).toBeDefined()
+      expect(textContent?.text).toMatch(/zebra/i)
       expect(textContent?.text).toMatch(/yellow/i)
     })
   })
