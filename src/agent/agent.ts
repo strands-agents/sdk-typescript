@@ -7,6 +7,8 @@ import {
   Message,
   type MessageData,
   type SystemPrompt,
+  type SystemPromptData,
+  systemPromptFromData,
   TextBlock,
   type Tool,
   type ToolContext,
@@ -55,7 +57,7 @@ export type AgentConfig = {
   /**
    * A system prompt which guides model behavior.
    */
-  systemPrompt?: SystemPrompt
+  systemPrompt?: SystemPrompt | SystemPromptData
   /** Optional initial state values for the agent. */
   state?: Record<string, JSONValue>
   /**
@@ -137,7 +139,24 @@ export class Agent implements AgentData {
     this._mcpClients = mcpClients
 
     if (config?.systemPrompt !== undefined) {
-      this._systemPrompt = config.systemPrompt
+      // Check if we need to convert from data format to class format
+      if (typeof config.systemPrompt === 'string') {
+        // String is valid for both formats
+        this._systemPrompt = config.systemPrompt
+      } else if (Array.isArray(config.systemPrompt)) {
+        // Check if it's an array of class instances (has 'type' discriminator) or data objects
+        const firstElement = config.systemPrompt[0]
+        if (config.systemPrompt.length === 0) {
+          // Empty array - can be treated as either format
+          this._systemPrompt = config.systemPrompt as SystemPrompt
+        } else if (firstElement !== undefined && 'type' in firstElement) {
+          // Array of class instances (has type discriminator)
+          this._systemPrompt = config.systemPrompt as SystemPrompt
+        } else {
+          // Data format - convert to class instances
+          this._systemPrompt = systemPromptFromData(config.systemPrompt as SystemPromptData)
+        }
+      }
     }
 
     // Create printer if printer is enabled (default: true)

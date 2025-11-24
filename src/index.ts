@@ -40,6 +40,7 @@ export type {
   ContentBlockData,
   MessageData,
   SystemPrompt,
+  SystemPromptData,
   SystemContentBlock,
   ToolResultContent,
 } from './types/messages.js'
@@ -54,6 +55,7 @@ export {
   GuardContentBlock,
   Message,
   JsonBlock,
+  systemPromptFromData,
 } from './types/messages.js'
 
 // Media classes

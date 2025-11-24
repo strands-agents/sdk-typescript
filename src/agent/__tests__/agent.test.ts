@@ -4,7 +4,7 @@ import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
 import { collectGenerator } from '../../__fixtures__/model-test-helpers.js'
 import { createMockTool, createRandomTool } from '../../__fixtures__/tool-helpers.js'
 import { ConcurrentInvocationError } from '../../errors.js'
-import { MaxTokensError, TextBlock } from '../../index.js'
+import { MaxTokensError, TextBlock, CachePointBlock, type SystemPromptData } from '../../index.js'
 import { AgentPrinter } from '../printer.js'
 
 describe('Agent', () => {
@@ -415,6 +415,46 @@ describe('Agent', () => {
       const tool2 = createRandomTool('duplicate')
 
       expect(() => new Agent({ tools: [[tool1], [tool2]] })).toThrow("Tool with name 'duplicate' already registered")
+    })
+  })
+
+  describe('systemPrompt configuration', () => {
+    describe('when provided as string SystemPromptData', () => {
+      it('accepts and stores string system prompt', () => {
+        const agent = new Agent({ systemPrompt: 'You are a helpful assistant' })
+        expect(agent).toBeDefined()
+      })
+    })
+
+    describe('when provided as array SystemPromptData', () => {
+      it('converts TextBlockData to TextBlock', () => {
+        const systemPromptData: SystemPromptData = [{ text: 'System prompt text' }]
+        const agent = new Agent({ systemPrompt: systemPromptData })
+        expect(agent).toBeDefined()
+      })
+
+      it('converts mixed block data types', () => {
+        const systemPromptData: SystemPromptData = [
+          { text: 'First block' },
+          { cachePoint: { cacheType: 'default' } },
+          { text: 'Second block' },
+        ]
+        const agent = new Agent({ systemPrompt: systemPromptData })
+        expect(agent).toBeDefined()
+      })
+    })
+
+    describe('when provided as SystemPrompt (class instances)', () => {
+      it('accepts string SystemPrompt', () => {
+        const agent = new Agent({ systemPrompt: 'You are helpful' })
+        expect(agent).toBeDefined()
+      })
+
+      it('accepts array of class instances', () => {
+        const systemPrompt = [new TextBlock('System prompt'), new CachePointBlock({ cacheType: 'default' })]
+        const agent = new Agent({ systemPrompt })
+        expect(agent).toBeDefined()
+      })
     })
   })
 })
