@@ -10,7 +10,7 @@ import {
   JsonBlock,
   type MessageData,
   type SystemPromptData,
-  SystemPrompt,
+  systemPromptFromData,
 } from '../messages.js'
 import { ImageBlock, VideoBlock, DocumentBlock } from '../media.js'
 
@@ -305,11 +305,11 @@ describe('Message.fromMessageData', () => {
   })
 })
 
-describe('SystemPrompt.fromSystemPromptData', () => {
+describe('systemPromptFromData', () => {
   describe('when called with string', () => {
     it('returns the string unchanged', () => {
       const data: SystemPromptData = 'You are a helpful assistant'
-      const result = SystemPrompt.fromSystemPromptData(data)
+      const result = systemPromptFromData(data)
       expect(result).toBe('You are a helpful assistant')
     })
   })
@@ -317,7 +317,7 @@ describe('SystemPrompt.fromSystemPromptData', () => {
   describe('when called with TextBlockData', () => {
     it('converts to TextBlock', () => {
       const data: SystemPromptData = [{ text: 'System prompt text' }]
-      const result = SystemPrompt.fromSystemPromptData(data)
+      const result = systemPromptFromData(data)
       expect(Array.isArray(result)).toBe(true)
       expect(result).toHaveLength(1)
       expect(result[0]).toBeInstanceOf(TextBlock)
@@ -328,7 +328,7 @@ describe('SystemPrompt.fromSystemPromptData', () => {
   describe('when called with CachePointBlockData', () => {
     it('converts to CachePointBlock', () => {
       const data: SystemPromptData = [{ text: 'prompt' }, { cachePoint: { cacheType: 'default' } }]
-      const result = SystemPrompt.fromSystemPromptData(data)
+      const result = systemPromptFromData(data)
       expect(Array.isArray(result)).toBe(true)
       expect(result).toHaveLength(2)
       expect(result[0]).toBeInstanceOf(TextBlock)
@@ -349,7 +349,7 @@ describe('SystemPrompt.fromSystemPromptData', () => {
           },
         },
       ]
-      const result = SystemPrompt.fromSystemPromptData(data)
+      const result = systemPromptFromData(data)
       expect(Array.isArray(result)).toBe(true)
       expect(result).toHaveLength(1)
       expect(result[0]).toBeInstanceOf(GuardContentBlock)
@@ -374,7 +374,7 @@ describe('SystemPrompt.fromSystemPromptData', () => {
           },
         },
       ]
-      const result = SystemPrompt.fromSystemPromptData(data)
+      const result = systemPromptFromData(data)
       expect(Array.isArray(result)).toBe(true)
       expect(result).toHaveLength(4)
       expect(result[0]).toBeInstanceOf(TextBlock)
@@ -387,7 +387,7 @@ describe('SystemPrompt.fromSystemPromptData', () => {
   describe('when called with empty array', () => {
     it('returns empty array', () => {
       const data: SystemPromptData = []
-      const result = SystemPrompt.fromSystemPromptData(data)
+      const result = systemPromptFromData(data)
       expect(Array.isArray(result)).toBe(true)
       expect(result).toHaveLength(0)
     })
@@ -396,14 +396,14 @@ describe('SystemPrompt.fromSystemPromptData', () => {
   describe('when called with unknown block type', () => {
     it('throws error', () => {
       const data = [{ unknownType: { data: 'value' } }] as unknown as SystemPromptData
-      expect(() => SystemPrompt.fromSystemPromptData(data)).toThrow('Unknown SystemContentBlockData type')
+      expect(() => systemPromptFromData(data)).toThrow('Unknown SystemContentBlockData type')
     })
   })
 
   describe('when called with class instances', () => {
     it('returns them unchanged', () => {
       const systemPrompt = [new TextBlock('prompt'), new CachePointBlock({ cacheType: 'default' })]
-      const result = SystemPrompt.fromSystemPromptData(systemPrompt)
+      const result = systemPromptFromData(systemPrompt)
       expect(result).toBe(systemPrompt)
     })
   })

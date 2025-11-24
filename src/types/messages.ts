@@ -463,42 +463,37 @@ export type SystemPrompt = string | SystemContentBlock[]
 export type SystemPromptData = string | SystemContentBlockData[]
 
 /**
- * Namespace for SystemPrompt utility functions.
+ * Converts SystemPromptData to SystemPrompt by converting data blocks to class instances.
+ * If already in SystemPrompt format (class instances), returns as-is.
+ *
+ * @param data - System prompt data to convert
+ * @returns SystemPrompt with class-based content blocks
  */
-// eslint-disable-next-line @typescript-eslint/no-namespace, no-redeclare
-export namespace SystemPrompt {
-  /**
-   * Converts SystemPromptData to SystemPrompt by converting data blocks to class instances.
-   * If already in SystemPrompt format (class instances), returns as-is.
-   *
-   * @param data - System prompt data to convert
-   * @returns SystemPrompt with class-based content blocks
-   */
-  export function fromSystemPromptData(data: SystemPromptData | SystemPrompt): SystemPrompt {
-    if (typeof data === 'string') {
-      return data
-    }
+export function systemPromptFromData(data: SystemPromptData | SystemPrompt): SystemPrompt {
+  if (typeof data === 'string') {
+    return data
+  }
 
-    // Check if it's already class instances (has 'type' discriminator)
-    const firstElement = data[0]
-    if (data.length > 0 && firstElement !== undefined && 'type' in firstElement) {
-      return data as SystemPrompt
-    }
+  // Check if it's already class instances (has 'type' discriminator)
+  const firstElement = data[0]
+  if (data.length > 0 && firstElement !== undefined && 'type' in firstElement) {
+    return data as SystemPrompt
+  }
 
-    // Convert data format to class instances
-    return data.map((block) => {
-      if ('cachePoint' in block) {
+  // Convert data format to class instances
+  return data.map((block) => {
+    switch (true) {
+      case 'cachePoint' in block:
         return new CachePointBlock(block.cachePoint)
-      } else if ('guardContent' in block) {
+      case 'guardContent' in block:
         return new GuardContentBlock(block.guardContent)
-      } else if ('text' in block) {
+      case 'text' in block:
         // After eliminating other options, this must be TextBlockData
         return new TextBlock((block as TextBlockData).text)
-      } else {
+      default:
         throw new Error('Unknown SystemContentBlockData type')
-      }
-    })
-  }
+    }
+  })
 }
 
 /**

@@ -6,15 +6,15 @@ import {
   McpClient,
   Message,
   type MessageData,
+  type SystemPrompt,
   type SystemPromptData,
+  systemPromptFromData,
   TextBlock,
   type Tool,
   type ToolContext,
   ToolResultBlock,
   type ToolUseBlock,
 } from '../index.js'
-import type { SystemPrompt as SystemPromptType } from '../types/messages.js'
-import { SystemPrompt } from '../types/messages.js'
 import { normalizeError, ConcurrentInvocationError, MaxTokensError } from '../errors.js'
 import type { BaseModelConfig, Model, StreamOptions } from '../models/model.js'
 import { ToolRegistry } from '../registry/tool-registry.js'
@@ -57,7 +57,7 @@ export type AgentConfig = {
   /**
    * A system prompt which guides model behavior.
    */
-  systemPrompt?: SystemPromptType | SystemPromptData
+  systemPrompt?: SystemPrompt | SystemPromptData
   /** Optional initial state values for the agent. */
   state?: Record<string, JSONValue>
   /**
@@ -113,7 +113,7 @@ export class Agent implements AgentData {
   private _model: Model<BaseModelConfig>
   private _toolRegistry: ToolRegistry
   private _mcpClients: McpClient[]
-  private _systemPrompt?: SystemPromptType
+  private _systemPrompt?: SystemPrompt
   private _initialized: boolean
   private _isInvoking: boolean = false
   private _printer?: Printer
@@ -139,7 +139,7 @@ export class Agent implements AgentData {
     this._mcpClients = mcpClients
 
     if (config?.systemPrompt !== undefined) {
-      this._systemPrompt = SystemPrompt.fromSystemPromptData(config.systemPrompt)
+      this._systemPrompt = systemPromptFromData(config.systemPrompt)
     }
 
     // Create printer if printer is enabled (default: true)
