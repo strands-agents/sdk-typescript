@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { Agent, DocumentBlock, ImageBlock, tool } from '@strands-agents/sdk'
+import { Agent, DocumentBlock, ImageBlock, Message, tool } from '@strands-agents/sdk'
 import { BedrockModel } from '@strands-agents/sdk/bedrock'
 import { OpenAIModel } from '@strands-agents/sdk/openai'
 import { z } from 'zod'
@@ -121,14 +121,14 @@ describe.each(providers)('Agent with $name', ({ name, skip, createModel }) => {
           source: { bytes: imageBytes },
         })
 
-        // Initialize agent with messages array
+        // Initialize agent with messages array containing Message instance
         const agent = new Agent({
           model: createModel(),
           messages: [
-            {
+            new Message({
               role: 'user',
               content: [docBlock, imageBlock],
-            },
+            }),
           ],
           printer: false,
         })
