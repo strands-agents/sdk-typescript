@@ -126,8 +126,6 @@ def run_agent(query: str):
             system_prompt=system_prompt,
             tools=tools,
             session_manager=session_manager,
-            # Set really big context window so agent is aware of as much info as possible
-            conversation_manager=SlidingWindowConversationManager(window_size=250)
         )
 
         print("Processing user query...")

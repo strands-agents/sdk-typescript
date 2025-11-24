@@ -46,11 +46,12 @@ def get_function_mapping() -> Dict[str, Any]:
     }
 
 
-def process_jsonl_file(file_path: Path):
+def process_jsonl_file(file_path: Path, default_issue_id: int | None = None):
     """Process JSONL file and execute operations.
     
     Args:
         file_path: Path to the JSONL artifact file
+        default_issue_id: Default issue ID to use for fallback operations
         
     Returns:
         Tuple of (total_operations, successful_operations, failed_operations)
@@ -86,6 +87,10 @@ def process_jsonl_file(file_path: Path):
                 
                 func = function_map[func_name]
                 
+                # Set default issue ID for create_pull_request if not already set
+                if func_name == "create_pull_request" and default_issue_id and "fallback_issue_id" not in kwargs:
+                    kwargs["fallback_issue_id"] = default_issue_id
+                
                 # Execute function
                 logger.info(f"Executing {func_name} with args={args}, kwargs={kwargs}")
                 result = func(*args, **kwargs)
@@ -109,11 +114,18 @@ def main():
         "artifact_file",
         help="Path to JSONL artifact file containing deferred operations"
     )
+    parser.add_argument(
+        "--issue-id",
+        type=int,
+        help="Default issue ID to use for fallback operations"
+    )
     
     args = parser.parse_args()
     artifact_path = Path(args.artifact_file)
     
     logger.info(f"Write executor started with artifact file: {artifact_path}")
+    if args.issue_id:
+        logger.info(f"Default issue ID set to: {args.issue_id}")
     
     # Check if file exists
     if not artifact_path.exists():
@@ -134,7 +146,7 @@ def main():
     logger.info(f"Processing deferred operations from: {artifact_path}")
     
     # Process the JSONL file
-    process_jsonl_file(artifact_path)
+    process_jsonl_file(artifact_path, args.issue_id)
 
 if __name__ == "__main__":
     main()
