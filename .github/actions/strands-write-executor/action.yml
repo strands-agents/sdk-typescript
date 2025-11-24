@@ -4,6 +4,9 @@ inputs:
   ref:
     description: 'Ref to push changes to'
     required: true
+  issue_id:
+    description: 'Issue ID for fallback operations'
+    required: false
 
 runs:
   using: 'composite'
@@ -137,4 +140,8 @@ runs:
         BYPASS_TOOL_CONSENT: 'true'
       run: |
         echo "🚀 Strands Write Executor - Processing write operations"
-        python ./.github/scripts/python/write_executor.py "${{ runner.temp }}/write_operations.jsonl"
+        if [ -n "${{ inputs.issue_id }}" ]; then
+          python ./.github/scripts/python/write_executor.py "${{ runner.temp }}/write_operations.jsonl" --issue-id "${{ inputs.issue_id }}"
+        else
+          python ./.github/scripts/python/write_executor.py "${{ runner.temp }}/write_operations.jsonl"
+        fi

@@ -157,6 +157,7 @@ jobs:
         uses: ./.github/actions/strands-write-executor
         with:
           ref: ${{ needs.setup-and-process.outputs.branch }}
+          issue_id: ${{ inputs.issue_id || github.event.issue.number }}
 
 
   cleanup:
