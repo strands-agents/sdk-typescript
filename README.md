@@ -18,6 +18,7 @@
     <a href="https://github.com/strands-agents/sdk-typescript/issues"><img alt="GitHub open issues" src="https://img.shields.io/github/issues/strands-agents/sdk-typescript"/></a>
     <a href="https://github.com/strands-agents/sdk-typescript/pulls"><img alt="GitHub open pull requests" src="https://img.shields.io/github/issues-pr/strands-agents/sdk-typescript"/></a>
     <a href="https://github.com/strands-agents/sdk-typescript/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/strands-agents/sdk-typescript"/></a>
+    <a href="https://www.npmjs.com/package/@strands-agents/sdk"><img alt="NPM Version" src="https://img.shields.io/npm/v/@strands-agents/sdk"/></a>
   </div>
   
   <p>
@@ -30,87 +31,164 @@
   </p>
 </div>
 
-Strands Agents is a simple yet powerful SDK that takes a model-driven approach to building and running AI agents. The TypeScript SDK brings key features from the Python Strands framework to TypeScript environments, enabling agent development for both Node.js servers and web browsers.
+Strands Agents is a simple yet powerful SDK that takes a model-driven approach to building and running AI agents. The TypeScript SDK brings key features from the Python Strands framework to Node.js environments, enabling type-safe agent development for everything from simple assistants to complex workflows.
 
-> **Note**: This SDK is currently under active development. Features are being added incrementally. Check the [project overview](.project/project-overview.md) for the roadmap.
+## Feature Overview
 
-## Feature Overview (Planned)
+- **Lightweight & Flexible**: Simple agent loop that works seamlessly in Node.js.
+- **Type-Safe Tools**: Define tools easily using Zod schemas for robust input validation.
+- **Model Agnostic**: First-class support for Amazon Bedrock and OpenAI, with more providers coming.
+- **Built-in MCP**: Native support for Model Context Protocol (MCP) clients, enabling access to external tools and servers.
 
-- **Lightweight & Flexible**: Simple agent loop that works seamlessly in Node.js and browsers
-- **Model Agnostic**: Support for Amazon Bedrock, OpenAI, and custom model providers
-- **Tool System**: Decorator-based tool definition with automatic registry management
+## Quick Start
 
-## Quick Start (Coming Soon)
+```bash
+# Install Strands Agents
+npm install @strands-agents/sdk zod
+```
 
-Once the SDK is complete, usage will look something like this:
+```typescript
+import { Agent, BedrockModel } from '@strands-agents/sdk'
+
+// Initialize model (uses default AWS credentials)
+const model = new BedrockModel()
+
+// Create agent
+const agent = new Agent({ model })
+
+// Invoke
+const result = await agent.invoke('What is the square root of 1764?')
+console.log(result.text)
+```
+
+> **Note**: For the default Amazon Bedrock model provider, you'll need AWS credentials configured and model access enabled for Claude 3.5 Sonnet in your region.
+
+## Installation
+
+Ensure you have **Node.js 20+** installed, then:
+
+```bash
+npm install @strands-agents/sdk zod
+```
+
+For MCP support, you will also likely need the MCP SDK:
+
+```bash
+npm install @modelcontextprotocol/sdk
+```
+
+## Features at a Glance
+
+### Type-Safe Tools
+
+Easily build tools using the `tool` helper and `zod` for schema definition. This ensures the LLM provides exactly the data structure your code expects.
+
+```typescript
+import { Agent, tool } from '@strands-agents/sdk'
+import { z } from 'zod'
+
+const weatherTool = tool({
+  name: 'get_weather',
+  description: 'Get the current weather for a specific location.',
+  inputSchema: z.object({
+    location: z.string().describe('The city and state, e.g., San Francisco, CA'),
+  }),
+  callback: (input) => {
+    // input is fully typed based on the Zod schema above
+    return `The weather in ${input.location} is 72°F and sunny.`
+  },
+})
+
+const agent = new Agent({
+  tools: [weatherTool],
+})
+
+await agent.invoke('What is the weather in San Francisco?')
+```
+
+### MCP Support
+
+Seamlessly integrate Model Context Protocol (MCP) servers to give your agents access to external systems and tools.
+
+```typescript
+import { Agent, McpClient } from '@strands-agents/sdk'
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
+
+// Create a client for a local MCP server
+const chromeDevtools = new McpClient({
+  transport: new StdioClientTransport({
+    command: 'npx',
+    args: ['-y', 'chrome-devtools-mcp'],
+  }),
+})
+
+const agent = new Agent({
+  systemPrompt: 'You are a helpful assistant using MCP tools.',
+  tools: [chromeDevtools], // Pass the MCP client directly as a tool source
+})
+
+await agent.invoke('Use a random tool from the MCP server.')
+```
+
+### Multiple Model Providers
+
+Switch between model providers easily.
+
+**Amazon Bedrock (Default)**
+
+```typescript
+import { Agent, BedrockModel } from '@strands-agents/sdk'
+
+const model = new BedrockModel({
+  region: 'us-east-1',
+  modelId: 'anthropic.claude-3-5-sonnet-20240620-v1:0',
+})
+
+const agent = new Agent({ model })
+```
+
+**OpenAI**
 
 ```typescript
 import { Agent } from '@strands-agents/sdk'
-import { calculator } from '@strands-agents/tools'
+import { OpenAIModel } from '@strands-agents/sdk/openai'
 
-// Invoke the agent and get response
-const agent = new Agent({ tools: [calculator] })
-const result = await agent.invoke('What is the square root of 1764?')
-console.log(result.lastMessage) // Agent's response with the answer
+const model = new OpenAIModel({
+  apiKey: process.env.OPENAI_API_KEY,
+  model: 'gpt-4o',
+})
 
-// Stream the response as it's generated from the agent:
-for await (const event of agent.stream('What is 42 squared?')) {
-  console.log('Event:', event.type)
+const agent = new Agent({ model })
+```
+
+### Streaming Responses
+
+Access the response as it is generated using the `stream` method:
+
+```typescript
+const agent = new Agent()
+
+console.log('Agent response stream:')
+for await (const event of agent.stream('Tell me a story about a brave toaster.')) {
+  console.log('[Event]', event.type)
 }
 ```
 
-## Installation (Coming Soon)
-
-Once published to npm:
-
-```bash
-npm install @strands-agents/sdk
-```
-
-For browser usage:
-
-```typescript
-import { Agent } from '@strands-agents/sdk'
-// Your agent code here
-```
-
-For Node.js usage:
-
-```typescript
-import { Agent } from '@strands-agents/sdk'
-// Your agent code here
-```
-
-## Development Status
-
-This TypeScript SDK is being developed with the following features (see [project overview](.project/project-overview.md) for details):
-
-- ✅ **Project Structure**: TypeScript configuration, testing framework, development infrastructure
-- 🚧 **Model Providers**: Amazon Bedrock, OpenAI, and custom provider support
-- ✅ **Tool System**: Tool execution, registry, and decorator-based definitions
-- 🚧 **Agent Interface**: Core agent class with `invoke` and `stream` methods
-- 🚧 **Event Loop**: Async iterator-based agent loop for orchestration
-- 🚧 **Conversation Manager**: Context window overflow handling
-- 🚧 **Hooks System**: Lifecycle event extensibility
-- 🚧 **Telemetry**: OpenTelemetry-based observability
-- 🚧 **Metrics**: Usage tracking and reporting
-
 ## Documentation
 
-For detailed guidance on the Strands Agents framework (Python-based examples):
+For detailed guidance on the Strands Agents framework (concepts shared between Python and TypeScript):
 
 - [User Guide](https://strandsagents.com/)
 - [Quick Start Guide](https://strandsagents.com/latest/user-guide/quickstart/)
 - [Model Providers](https://strandsagents.com/latest/user-guide/concepts/model-providers/amazon-bedrock/)
 - [Tools](https://strandsagents.com/latest/user-guide/concepts/tools/tools_overview/)
-- [Agent Loop](https://strandsagents.com/latest/user-guide/concepts/agents/agent-loop/)
-- [API Reference](https://strandsagents.com/latest/api-reference/agent/)
 
-TypeScript-specific documentation will be added as the SDK develops.
+TypeScript-specific API documentation will be added as the SDK develops.
 
 ## Contributing ❤️
 
 We welcome contributions! See our [Contributing Guide](CONTRIBUTING.md) for details on:
+
 - Development setup and environment
 - Testing and code quality standards
 - Pull request process
