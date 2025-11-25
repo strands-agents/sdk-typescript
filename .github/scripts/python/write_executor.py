@@ -88,7 +88,7 @@ def process_jsonl_file(file_path: Path, default_issue_id: int | None = None):
                 func = function_map[func_name]
                 
                 # Set default issue ID for create_pull_request if not already set
-                if func_name == "create_pull_request" and default_issue_id and "fallback_issue_id" not in kwargs:
+                if func_name == "create_pull_request" and default_issue_id and not kwargs.get("fallback_issue_id"):
                     kwargs["fallback_issue_id"] = default_issue_id
                 
                 # Execute function
