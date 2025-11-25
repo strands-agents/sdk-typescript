@@ -120,8 +120,8 @@ describe('MCP Integration', () => {
       await expect(client.callTool(tool, ['invalid-array'])).rejects.toThrow(/JSON Object/)
     })
 
-    it('cleans up resources', () => {
-      client[Symbol.dispose]()
+    it('cleans up resources', async () => {
+      await client.disconnect()
       expect(sdkClientMock.close).toHaveBeenCalled()
       expect(mockTransport.close).toHaveBeenCalled()
     })
