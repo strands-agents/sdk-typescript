@@ -62,6 +62,7 @@ sdk-typescript/
 │   │   │   ├── registry.test.ts  # Tests for ToolRegistry
 │   │   │   └── tool.test.ts      # Tests for FunctionTool
 │   │   ├── function-tool.ts      # FunctionTool implementation
+│   │   ├── mcp-tool.ts           # MCP tool wrapper
 │   │   ├── registry.ts           # ToolRegistry implementation
 │   │   ├── tool.ts               # Tool interface
 │   │   └── types.ts              # Tool-related type definitions
@@ -70,6 +71,12 @@ sdk-typescript/
 │   │   ├── json.ts               # JSON schema and value types
 │   │   └── messages.ts           # Message and content block types
 │   │
+│   ├── __tests__/                # Unit tests for root-level source files
+│   │   ├── errors.test.ts        # Tests for error classes
+│   │   ├── index.test.ts         # Tests for main entry point
+│   │   └── mcp.test.ts           # Tests for MCP integration
+│   │
+│   ├── mcp.ts                    # MCP client implementation
 │   ├── errors.ts                 # Custom error classes
 │   └── index.ts                  # Main SDK entry point (single export point)
 │
@@ -87,6 +94,10 @@ sdk-typescript/
 │   ├── bedrock.test.ts           # Bedrock integration tests (requires AWS credentials)
 │   ├── hooks.test.ts             # Hooks integration tests
 │   └── registry.test.ts          # ToolRegistry integration tests
+│
+├── examples/                     # Example applications
+│   ├── first-agent/              # Basic agent usage example
+│   └── mcp/                      # MCP integration examples
 │
 ├── .github/                      # GitHub Actions workflows
 │   ├── workflows/                # CI/CD workflows
@@ -768,6 +779,423 @@ const provider = new MockMessageModel()
   .addTurn({ type: 'textBlock', text: 'Success' })
   .addTurn(new Error('Model failed'))
 ```
+
+## MCP (Model Context Protocol) Integration
+
+### Overview
+
+The [Model Context Protocol (MCP)](https://modelcontextprotocol.io) is an open standard that enables AI applications to securely connect to external data sources and tools. MCP servers expose capabilities through a standardized protocol, making it easy to extend your agents with functionality from filesystems, databases, APIs, and other services.
+
+**Why use MCP?**
+- **Standardized Integration**: Connect to any MCP-compatible server using a consistent interface
+- **Extensible**: Access tools from the growing ecosystem of MCP servers without custom integration code
+- **Secure**: Control what resources your agent can access through server-side authorization
+- **Flexible**: Mix and match multiple MCP servers to create powerful agent capabilities
+
+The Strands TypeScript SDK provides first-class support for MCP through the `McpClient` class, which automatically discovers and registers tools from MCP servers for use with your agents.
+
+### Basic Usage
+
+To use MCP with your agent, create a `McpClient` instance with the appropriate transport and pass it to your `Agent`:
+
+```typescript
+import { Agent, McpClient } from '@strands-agents/sdk'
+import { OpenAIModel } from '@strands-agents/sdk'
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
+
+// Create an MCP client that connects to a local MCP server
+const mcpClient = new McpClient({
+  transport: new StdioClientTransport({
+    command: 'npx',
+    args: ['-y', 'chrome-devtools-mcp']
+  })
+})
+
+// Pass the MCP client to your agent alongside other tools
+const agent = new Agent({
+  systemPrompt: 'You are a helpful assistant with access to developer tools.',
+  tools: [mcpClient],
+  model: new OpenAIModel()
+})
+
+// The agent will automatically discover and use tools from the MCP server
+const result = await agent.invoke('List the available browser tabs')
+```
+
+**How it works:**
+1. `McpClient` connects to the MCP server using the specified transport
+2. On the agent's first invocation, the client discovers available tools from the server
+3. Tools are automatically registered with the agent's tool registry
+4. The agent can now call these tools just like any other tool
+5. The `McpClient` handles communication with the server and translates responses
+
+### Transport Options
+
+MCP supports multiple transport mechanisms for different deployment scenarios. The Strands SDK works with any transport from the `@modelcontextprotocol/sdk` package.
+
+#### stdio Transport - Local Command-Line Tools
+
+Use `StdioClientTransport` to connect to MCP servers running as local processes. This is ideal for development tools, filesystem access, and local services.
+
+```typescript
+import { McpClient } from '@strands-agents/sdk'
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
+
+const mcpClient = new McpClient({
+  transport: new StdioClientTransport({
+    command: 'npx',
+    args: ['-y', 'chrome-devtools-mcp']
+  })
+})
+```
+
+**Use cases:**
+- Local development tools (Chrome DevTools, VSCode extensions)
+- Filesystem operations
+- Local database access
+- Command-line utilities
+
+#### HTTP Transport - Remote MCP Servers
+
+Use `StreamableHTTPClientTransport` to connect to remote MCP servers over HTTP/HTTPS. This is ideal for cloud services, APIs, and multi-user deployments.
+
+```typescript
+import { McpClient } from '@strands-agents/sdk'
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
+
+const mcpClient = new McpClient({
+  transport: new StreamableHTTPClientTransport(
+    new URL('https://api.githubcopilot.com/mcp/'),
+    {
+      requestInit: {
+        headers: {
+          Authorization: `Bearer ${process.env.GITHUB_TOKEN}`
+        }
+      }
+    }
+  )
+})
+```
+
+**Use cases:**
+- Cloud-hosted MCP servers
+- Third-party API integrations
+- Multi-user agent deployments
+- Enterprise services requiring authentication
+
+#### Custom Transport - Advanced Scenarios
+
+For specialized needs, you can implement your own transport by satisfying the `Transport` interface from `@modelcontextprotocol/sdk/shared/transport.js`. This allows integration with custom protocols, message queues, or other communication mechanisms.
+
+```typescript
+import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
+
+class CustomTransport implements Transport {
+  async start(): Promise<void> {
+    // Initialize connection
+  }
+  
+  async send(message: JSONRPCMessage): Promise<void> {
+    // Send message to server
+  }
+  
+  async close(): Promise<void> {
+    // Clean up connection
+  }
+  
+  // Implement other required methods...
+}
+
+const mcpClient = new McpClient({
+  transport: new CustomTransport()
+})
+```
+
+### Architecture and Integration
+
+The `McpClient` integrates seamlessly with the Strands agent framework through the tool system:
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                        Agent                            │
+│                                                          │
+│  ┌────────────────────┐      ┌──────────────────────┐  │
+│  │   Tool Registry    │◄─────│   McpClient          │  │
+│  │                    │      │   - listTools()      │  │
+│  │  [FunctionTool,    │      │   - callTool()       │  │
+│  │   McpTool,         │      │                      │  │
+│  │   McpTool, ...]    │      └──────────┬───────────┘  │
+│  └──────────┬─────────┘                 │              │
+│             │                           │              │
+│             │  Tool Invocation          │              │
+│             └───────────────────────────┘              │
+└─────────────────────────────┬───────────────────────────┘
+                              │
+                              │ MCP Protocol
+                              ▼
+                   ┌────────────────────────┐
+                   │    MCP Server          │
+                   │  - Exposes tools       │
+                   │  - Executes requests   │
+                   │  - Returns results     │
+                   └────────────────────────┘
+```
+
+**Connection Lifecycle:**
+1. **Initialization**: `McpClient` is created with a transport but doesn't connect immediately
+2. **Lazy Connection**: Connection is established on first use (e.g., when agent invokes)
+3. **Tool Discovery**: Client lists available tools from the server
+4. **Tool Registration**: Each tool is wrapped as an `McpTool` and registered with the agent
+5. **Execution**: When the agent decides to use a tool, `McpClient` handles the RPC call
+6. **Cleanup**: Connection is closed when client is disposed or explicitly closed
+
+**Lazy initialization** means the connection is established only when needed, typically on the agent's first invocation. This allows for faster startup and defers connection errors until actual use.
+
+### Multiple MCP Servers
+
+You can connect to multiple MCP servers simultaneously by passing multiple `McpClient` instances to your agent:
+
+```typescript
+import { Agent, McpClient } from '@strands-agents/sdk'
+import { OpenAIModel } from '@strands-agents/sdk'
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
+
+// Create multiple MCP clients
+const localDevTools = new McpClient({
+  transport: new StdioClientTransport({
+    command: 'npx',
+    args: ['-y', 'chrome-devtools-mcp']
+  })
+})
+
+const githubMcp = new McpClient({
+  transport: new StreamableHTTPClientTransport(
+    new URL('https://api.githubcopilot.com/mcp/'),
+    {
+      requestInit: {
+        headers: {
+          Authorization: `Bearer ${process.env.GITHUB_TOKEN}`
+        }
+      }
+    }
+  )
+})
+
+// Pass all clients to the agent
+const agent = new Agent({
+  systemPrompt: 'You are a helpful assistant with access to development and GitHub tools.',
+  tools: [localDevTools, githubMcp],
+  model: new OpenAIModel()
+})
+
+// Agent can now use tools from both servers
+const result = await agent.invoke(
+  'Check the GitHub issues for this repository and open the relevant file in my browser'
+)
+```
+
+**Tool Naming Considerations:**
+- Each MCP server defines its own tool names
+- If multiple servers provide tools with the same name, the agent will use the first one registered
+- Tool name prefixing is not currently supported but may be added in future versions
+- Consider choosing MCP servers with distinct tool names to avoid conflicts
+
+### Advanced Features
+
+#### Direct Tool Invocation
+
+While tools are typically invoked by the agent, you can also call MCP tools directly for manual workflows or testing:
+
+```typescript
+import { McpClient } from '@strands-agents/sdk'
+
+const mcpClient = new McpClient({ transport })
+
+// Discover tools
+const tools = await mcpClient.listTools()
+const weatherTool = tools.find(t => t.name === 'get_weather')
+
+// Invoke tool directly
+if (weatherTool) {
+  const result = await mcpClient.callTool(weatherTool, { city: 'San Francisco' })
+  console.log(result)
+}
+```
+
+#### Resource Cleanup
+
+`McpClient` implements the `Symbol.dispose` protocol for automatic resource cleanup when using explicit resource management:
+
+```typescript
+{
+  using mcpClient = new McpClient({ transport })
+  const tools = await mcpClient.listTools()
+  // McpClient and transport are automatically closed at end of block
+}
+```
+
+You can also manually close the connection:
+
+```typescript
+const mcpClient = new McpClient({ transport })
+// ... use the client
+mcpClient[Symbol.dispose]() // Close connection and clean up resources
+```
+
+#### Client Configuration
+
+Customize the MCP client with application metadata:
+
+```typescript
+const mcpClient = new McpClient({
+  applicationName: 'My Agent App',
+  applicationVersion: '1.0.0',
+  transport: transport
+})
+```
+
+This information is sent to MCP servers and can be useful for logging, analytics, and server-side behavior customization.
+
+### Best Practices
+
+**Connection Management:**
+- Let the SDK handle connection lifecycle through lazy initialization
+- Use `Symbol.dispose` for cleanup in long-running applications
+- Reuse `McpClient` instances across multiple agent invocations
+- Don't create new clients for each agent invocation
+
+**Error Handling:**
+- MCP tool errors are automatically wrapped in `ToolResultBlock` with `status: 'error'`
+- Network errors and connection failures will propagate as exceptions
+- Consider adding try-catch blocks when creating clients if connection validation is critical
+- The agent will receive tool errors as regular tool responses and can retry or handle them
+
+**Security Considerations:**
+- Only connect to trusted MCP servers
+- Use authentication headers for remote servers when available
+- Be aware of what capabilities each MCP server exposes
+- Consider running MCP servers in sandboxed environments for untrusted code
+- Review MCP server documentation to understand what operations they can perform
+
+**Performance Tips:**
+- MCP tool calls involve network/IPC overhead; batch operations when possible
+- Connection is established lazily; first agent invocation may be slower
+- Reuse clients to avoid repeated connection overhead
+- Consider connection pooling for high-throughput scenarios
+
+**Resource Cleanup:**
+- Always dispose of clients when done in long-running applications
+- Use explicit resource management (`using` keyword) when available
+- Close clients before application shutdown to ensure clean disconnection
+
+### Examples
+
+The SDK includes working examples in the `examples/mcp/` directory:
+
+**Basic stdio Example:**
+```bash
+cd examples/mcp
+npm install
+STRANDS_EXAMPLE_MCP_DEMO=true npm start
+```
+
+This example demonstrates:
+- Connecting to a local MCP server via stdio
+- Automatic tool discovery and registration
+- Agent using MCP tools in its reasoning loop
+
+**HTTP Transport Example:**
+```bash
+cd examples/mcp
+npm install
+STRANDS_EXAMPLE_GITHUB_PAT=your_token npm start
+```
+
+This example demonstrates:
+- Connecting to a remote MCP server over HTTP
+- Authentication with bearer tokens
+- Using tools from a cloud-based MCP service
+
+**Multiple Servers Example:**
+The same example shows how to use multiple MCP servers simultaneously by passing multiple clients to the agent.
+
+### Troubleshooting
+
+**Connection Problems:**
+
+*Issue:* "Connection refused" or timeout errors
+- **Solution**: Verify the MCP server is running and accessible
+- For stdio: Check the command and args are correct
+- For HTTP: Verify the URL is reachable and authentication is valid
+- Check server logs for startup errors
+
+*Issue:* "Authentication failed" for HTTP transport
+- **Solution**: Verify your authentication token is valid and has required permissions
+- Check the header format matches the server's expectations (e.g., `Bearer` vs `Token`)
+- Ensure environment variables are loaded correctly
+
+**Tool Discovery Issues:**
+
+*Issue:* No tools discovered from MCP server
+- **Solution**: 
+  - Verify the MCP server implements the `tools/list` endpoint
+  - Check server logs to see if the tools/list request succeeded
+  - Try connecting to the server manually to verify it's working
+  - Ensure the server has tools configured and enabled
+
+*Issue:* Tools discovered but not appearing in agent
+- **Solution**:
+  - Verify you passed the `McpClient` to the agent's `tools` array
+  - Check for errors during agent initialization
+  - Ensure the agent's first invocation has completed (tools are discovered lazily)
+
+**Tool Execution Errors:**
+
+*Issue:* Tool calls fail with validation errors
+- **Solution**:
+  - Check the tool's input schema in the MCP server documentation
+  - Verify you're passing arguments as a JSON object (not array or primitive)
+  - Enable debug logging to see the exact arguments being sent
+
+*Issue:* Tool returns empty or unexpected results
+- **Solution**:
+  - Check the MCP server logs for execution errors
+  - Verify the tool is working correctly when called directly (outside the agent)
+  - Ensure the server's response format matches MCP protocol expectations
+
+**Debugging Tips:**
+
+1. **Enable verbose logging**: Check MCP SDK documentation for debug environment variables
+2. **Test server independently**: Use MCP CLI tools or direct API calls to verify server functionality
+3. **Inspect tool schemas**: Use `mcpClient.listTools()` to see what the agent will discover
+4. **Check network connectivity**: For HTTP, verify firewall rules and network access
+5. **Review server documentation**: Each MCP server may have specific configuration requirements
+
+### Testing
+
+**Unit Tests:**
+The MCP integration has comprehensive unit tests in `src/__tests__/mcp.test.ts` covering:
+- Client initialization and configuration
+- Connection lifecycle management
+- Tool discovery and registration
+- Tool invocation and error handling
+- Resource cleanup
+
+**Integration Tests:**
+Integration tests for MCP are planned but not yet implemented. When added, they will test:
+- Real MCP server connections
+- End-to-end tool discovery and execution
+- Multiple server scenarios
+- Error recovery and reconnection
+
+**Testing Your MCP Integration:**
+When testing agents that use MCP:
+1. Use mock MCP servers for unit tests to avoid external dependencies
+2. Test connection error scenarios (server down, auth failure)
+3. Verify tool discovery with different server configurations
+4. Test tool execution with various input/output patterns
+5. Ensure proper resource cleanup in teardown
 
 ## Things to Do
 

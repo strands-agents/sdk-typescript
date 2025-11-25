@@ -95,6 +95,35 @@ This TypeScript SDK is being developed with the following features (see [project
 - 🚧 **Telemetry**: OpenTelemetry-based observability
 - 🚧 **Metrics**: Usage tracking and reporting
 
+## MCP Support
+
+The TypeScript SDK supports the [Model Context Protocol (MCP)](https://modelcontextprotocol.io), enabling agents to connect to external MCP servers and use their tools.
+
+### Quick Example
+
+```typescript
+import { Agent, McpClient } from '@strands-agents/sdk'
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
+
+// Create MCP client
+const mcpClient = new McpClient({
+  transport: new StdioClientTransport({
+    command: 'npx',
+    args: ['-y', 'chrome-devtools-mcp']
+  })
+})
+
+// Use with Agent
+const agent = new Agent({
+  tools: [mcpClient],
+  model: new OpenAIModel()
+})
+
+await agent.invoke('Use a tool from the MCP server')
+```
+
+For more details, see the [MCP Documentation in AGENTS.md](AGENTS.md#mcp-model-context-protocol-integration).
+
 ## Documentation
 
 For detailed guidance on the Strands Agents framework (Python-based examples):
