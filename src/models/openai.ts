@@ -8,7 +8,6 @@
  */
 
 import OpenAI, { type ClientOptions } from 'openai'
-import { lookup } from 'mime-types'
 import { Model } from '../models/model.js'
 import type { BaseModelConfig, StreamOptions } from '../models/model.js'
 import type { Message } from '../types/messages.js'
@@ -17,6 +16,29 @@ import { encodeBase64 } from '../types/media.js'
 import type { ModelStreamEvent } from '../models/streaming.js'
 import { ContextWindowOverflowError } from '../errors.js'
 import type { ChatCompletionContentPartText } from 'openai/resources/index.mjs'
+
+/**
+ * Browser-compatible MIME type lookup.
+ * Maps file extensions to MIME types without using Node.js path module.
+ */
+const mimeTypeLookup = (format: string): string | false => {
+  const mimeTypes: Record<string, string> = {
+    // Images
+    png: 'image/png',
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    gif: 'image/gif',
+    webp: 'image/webp',
+    // Documents
+    pdf: 'application/pdf',
+    txt: 'text/plain',
+    json: 'application/json',
+    xml: 'application/xml',
+    html: 'text/html',
+    csv: 'text/csv',
+  }
+  return mimeTypes[format.toLowerCase()] || false
+}
 
 const DEFAULT_OPENAI_MODEL_ID = 'gpt-4o'
 
@@ -559,7 +581,7 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
                   }
                   case 'imageSourceBytes': {
                     const base64 = encodeBase64(String.fromCharCode(...imageBlock.source.bytes))
-                    const mimeType = lookup(imageBlock.format) || `image/${imageBlock.format}`
+                    const mimeType = mimeTypeLookup(imageBlock.format) || `image/${imageBlock.format}`
                     contentParts.push({
                       type: 'image_url',
                       image_url: {
@@ -581,7 +603,7 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
                 const docBlock = block as DocumentBlock
                 switch (docBlock.source.type) {
                   case 'documentSourceBytes': {
-                    const mimeType = lookup(docBlock.format) || `application/${docBlock.format}`
+                    const mimeType = mimeTypeLookup(docBlock.format) || `application/${docBlock.format}`
                     const base64 = encodeBase64(String.fromCharCode(...docBlock.source.bytes))
                     const file: OpenAI.Chat.Completions.ChatCompletionContentPart.File = {
                       type: 'file',

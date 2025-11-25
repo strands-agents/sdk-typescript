@@ -39,7 +39,7 @@
     "test:watch": "vitest --project unit-node",
     "test:coverage": "vitest run --coverage --project unit-node",
     "test:types": "vitest run --project types",
-    "test:integ": "vitest run --project integ --project integ-browser",
+    "test:integ": "vitest run --project integ",
     "test:integ:browser": "vitest run --project integ-browser",
     "test:integ:all": "vitest run --project integ --project integ-browser",
     "test:browser": "vitest run --project unit-browser",
@@ -68,7 +68,6 @@
     "@aws-sdk/client-secrets-manager": "^3.921.0",
     "@aws-sdk/credential-providers": "^3.913.0",
     "@types/json-schema": "^7.0.15",
-    "@types/mime-types": "^3.0.1",
     "@types/node": "^24.6.0",
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",
@@ -97,7 +96,6 @@
   "dependencies": {
     "@aws-sdk/client-bedrock-runtime": "^3.911.0",
     "@modelcontextprotocol/sdk": "^1.20.2",
-    "mime-types": "^3.0.1",
     "zod": "^4.1.12"
   },
   "optionalDependencies": {

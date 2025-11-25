@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest'
+import { commands } from 'vitest/browser'
 import { Agent, DocumentBlock, ImageBlock, Message, TextBlock, tool } from '@strands-agents/sdk'
 import { BedrockModel } from '@strands-agents/sdk/bedrock'
 import { OpenAIModel } from '@strands-agents/sdk/openai'
 import { z } from 'zod'
 
-// eslint-disable-next-line no-restricted-imports
-import { collectGenerator } from '../src/__fixtures__/model-test-helpers.js'
+import { collectGenerator } from '../../src/__fixtures__/model-test-helpers.js'
 
 // Import fixtures
 import yellowPngUrl from './__resources__/yellow.png?url'
@@ -28,26 +28,6 @@ const loadFixture = async (url: string): Promise<Uint8Array> => {
     const arrayBuffer = await response.arrayBuffer()
     return new Uint8Array(arrayBuffer)
   }
-}
-
-// Helper to get credentials in browser environment
-const getAWSCredentials = () => {
-  if (isNode) {
-    return undefined // Let AWS SDK handle it in Node
-  }
-  // In browser, use credentials injected via import.meta.env
-  return {
-    accessKeyId: import.meta.env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: import.meta.env.AWS_SECRET_ACCESS_KEY,
-    sessionToken: import.meta.env.AWS_SESSION_TOKEN,
-  }
-}
-
-const getOpenAIAPIKey = () => {
-  if (isNode) {
-    return process.env.OPENAI_API_KEY
-  }
-  return import.meta.env.OPENAI_API_KEY
 }
 
 // Calculator tool for testing
@@ -74,31 +54,36 @@ const calculatorTool = tool({
 const providers = [
   {
     name: 'BedrockModel',
-    skip: !import.meta.env.AWS_ACCESS_KEY_ID, // Skip if no credentials in browser
-    createModel: () => {
-      const credentials = getAWSCredentials()
+    createModel: async () => {
+      const credentials = await commands.getAwsCredentials()
       return new BedrockModel({
         maxTokens: 100,
-        ...(credentials && { credentials }),
+        region: 'us-east-1',
+        clientConfig: {
+          credentials,
+        },
       })
     },
   },
   {
     name: 'OpenAIModel',
-    skip: !getOpenAIAPIKey(),
-    createModel: () =>
+    createModel: async () =>
       new OpenAIModel({
         modelId: 'gpt-4o-mini',
         maxTokens: 100,
-        apiKey: getOpenAIAPIKey(),
+        apiKey: await commands.getOpenAIAPIKey(),
+        clientConfig: {
+          dangerouslyAllowBrowser: true,
+        },
       }),
   },
 ]
 
-describe.each(providers)('Agent Browser Tests with $name', ({ name, skip, createModel }) => {
-  describe.skipIf(skip)(`${name} Browser Integration`, () => {
+describe.each(providers)('Agent Browser Tests with $name', async ({ name, createModel }) => {
+  console.log(await commands.getOpenAIAPIKey())
+  describe(`${name} Browser Integration`, () => {
     it('handles basic invocation', async () => {
-      const agent = new Agent({ model: createModel(), printer: false })
+      const agent = new Agent({ model: await createModel(), printer: false })
       const result = await agent.invoke('Say hello in one word')
 
       expect(result.stopReason).toBe('endTurn')
@@ -108,7 +93,7 @@ describe.each(providers)('Agent Browser Tests with $name', ({ name, skip, create
 
     it('handles tool use', async () => {
       const agent = new Agent({
-        model: createModel(),
+        model: await createModel(),
         printer: false,
         systemPrompt: 'Use the calculator tool to solve math problems. Respond with only the numeric result.',
         tools: [calculatorTool],
@@ -139,7 +124,7 @@ describe.each(providers)('Agent Browser Tests with $name', ({ name, skip, create
       })
 
       const agent = new Agent({
-        model: createModel(),
+        model: await createModel(),
         messages: [
           new Message({
             role: 'user',
@@ -153,7 +138,7 @@ describe.each(providers)('Agent Browser Tests with $name', ({ name, skip, create
         printer: false,
       })
 
-      const result = await agent.invoke()
+      const result = await agent.invoke('Answer the question!')
 
       expect(result.stopReason).toBe('endTurn')
       expect(result.lastMessage.role).toBe('assistant')

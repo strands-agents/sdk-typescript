@@ -76,10 +76,12 @@ jobs:
           node-version: 22
 
       - name: Install dependencies
-        run: npm install
+        run: |
+          npm install
+          npm run test:browser:install
 
       - name: Build the package
         run: npm run build
 
       - name: Run integration tests
-        run: npm run test:integ
+        run: npm run test:integ:all
