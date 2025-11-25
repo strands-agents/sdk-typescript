@@ -62,6 +62,7 @@ sdk-typescript/
 │   │   │   ├── registry.test.ts  # Tests for ToolRegistry
 │   │   │   └── tool.test.ts      # Tests for FunctionTool
 │   │   ├── function-tool.ts      # FunctionTool implementation
+│   │   ├── mcp-tool.ts           # MCP tool wrapper
 │   │   ├── registry.ts           # ToolRegistry implementation
 │   │   ├── tool.ts               # Tool interface
 │   │   └── types.ts              # Tool-related type definitions
@@ -70,6 +71,12 @@ sdk-typescript/
 │   │   ├── json.ts               # JSON schema and value types
 │   │   └── messages.ts           # Message and content block types
 │   │
+│   ├── __tests__/                # Unit tests for root-level source files
+│   │   ├── errors.test.ts        # Tests for error classes
+│   │   ├── index.test.ts         # Tests for main entry point
+│   │   └── mcp.test.ts           # Tests for MCP integration
+│   │
+│   ├── mcp.ts                    # MCP client implementation
 │   ├── errors.ts                 # Custom error classes
 │   └── index.ts                  # Main SDK entry point (single export point)
 │
@@ -87,6 +94,10 @@ sdk-typescript/
 │   ├── bedrock.test.ts           # Bedrock integration tests (requires AWS credentials)
 │   ├── hooks.test.ts             # Hooks integration tests
 │   └── registry.test.ts          # ToolRegistry integration tests
+│
+├── examples/                     # Example applications
+│   ├── first-agent/              # Basic agent usage example
+│   └── mcp/                      # MCP integration examples
 │
 ├── .github/                      # GitHub Actions workflows
 │   ├── workflows/                # CI/CD workflows
@@ -768,6 +779,69 @@ const provider = new MockMessageModel()
   .addTurn({ type: 'textBlock', text: 'Success' })
   .addTurn(new Error('Model failed'))
 ```
+
+## MCP (Model Context Protocol) Integration
+
+The [Model Context Protocol (MCP)](https://modelcontextprotocol.io) enables agents to connect to external tools and data sources through a standardized protocol. The SDK provides `McpClient` for seamless integration with MCP servers.
+
+**Implementation:**
+- [`src/mcp.ts`](src/mcp.ts) - McpClient class
+- [`src/tools/mcp-tool.ts`](src/tools/mcp-tool.ts) - McpTool wrapper
+- [`examples/mcp/`](examples/mcp/) - Usage examples
+
+**Basic Usage:**
+
+```typescript
+import { Agent, McpClient } from '@strands-agents/sdk'
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
+
+// Connect to local MCP server
+const localMcpClient = new McpClient({
+  transport: new StdioClientTransport({
+    command: 'npx',
+    args: ['-y', 'chrome-devtools-mcp']
+  })
+})
+
+const agent = new Agent({
+  tools: [localMcpClient],
+  model: new OpenAIModel()
+})
+```
+
+**HTTP Transport for Remote Servers:**
+
+```typescript
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
+
+const remoteMcpClient = new McpClient({
+  transport: new StreamableHTTPClientTransport(
+    new URL('https://api.example.com/mcp/'),
+    {
+      requestInit: {
+        headers: { Authorization: `Bearer ${token}` }
+      }
+    }
+  )
+})
+```
+
+**Multiple MCP Servers:**
+
+```typescript
+const agent = new Agent({
+  tools: [localMcpClient, remoteMcpClient],
+  model: new OpenAIModel()
+})
+```
+
+**Key Features:**
+- Automatic tool discovery and registration
+- Lazy connection (connects on first use)
+- Supports stdio and HTTP transports
+- Resource cleanup with `Symbol.dispose`
+
+**See [`examples/mcp/`](examples/mcp/) for complete working examples.**
 
 ## Things to Do
 

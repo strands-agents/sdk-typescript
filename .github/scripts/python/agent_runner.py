@@ -4,14 +4,13 @@ Strands GitHub Agent Runner
 A portable agent runner for use in GitHub Actions across different repositories.
 """
 
-import datetime
 import json
-import logging
 import os
 import sys
 from typing import Any
 
 from strands import Agent
+from strands.agent.conversation_manager import SlidingWindowConversationManager
 from strands.session import S3SessionManager
 from strands.models.bedrock import BedrockModel
 from botocore.config import Config
@@ -47,18 +46,6 @@ STRANDS_REGION = "us-west-2"
 
 # Default values for environment variables used only in this file
 DEFAULT_SYSTEM_PROMPT = "You are an autonomous GitHub agent powered by Strands Agents SDK."
-
-# Apply configuration defaults
-os.environ.setdefault("BYPASS_TOOL_CONSENT", "true")
-os.environ.setdefault("STRANDS_TOOL_CONSOLE_MODE",  "enabled")
-
-# Configure logging
-if os.getenv("STRANDS_DEBUG") == "1":
-    logging.getLogger("strands").setLevel(logging.DEBUG)
-    logging.basicConfig(
-        format="%(levelname)s | %(name)s | %(message)s",
-        handlers=[logging.StreamHandler()],
-    )
 
 def _get_all_tools() -> list[Any]:
     return [

@@ -8,11 +8,15 @@
  */
 
 import OpenAI, { type ClientOptions } from 'openai'
+import { lookup } from 'mime-types'
 import { Model } from '../models/model.js'
 import type { BaseModelConfig, StreamOptions } from '../models/model.js'
 import type { Message } from '../types/messages.js'
+import type { ImageBlock, DocumentBlock } from '../types/media.js'
+import { encodeBase64 } from '../types/media.js'
 import type { ModelStreamEvent } from '../models/streaming.js'
 import { ContextWindowOverflowError } from '../errors.js'
+import type { ChatCompletionContentPartText } from 'openai/resources/index.mjs'
 import { createLogger } from '../logging/logger.js'
 
 /**
@@ -207,9 +211,9 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
    * })
    * ```
    */
-  constructor(options: OpenAIModelOptions) {
+  constructor(options?: OpenAIModelOptions) {
     super()
-    const { apiKey, client, clientConfig, ...modelConfig } = options
+    const { apiKey, client, clientConfig, ...modelConfig } = options || {}
 
     // Initialize model config
     this._config = modelConfig
@@ -536,27 +540,109 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
 
         // Add non-tool-result content as user message
         if (otherContent.length > 0) {
-          const contentText = otherContent
-            .map((block) => {
-              if (block.type === 'textBlock') {
-                return block.text
-              } else if (block.type === 'reasoningBlock') {
-                throw new Error(
-                  'Reasoning blocks are not supported by OpenAI. ' + 'This feature is specific to AWS Bedrock models.'
-                )
-              } else if (block.type === 'guardContentBlock') {
-                logger.warn('OpenAI does not support guard content in messages. Removing guard content block.')
-                return ''
+          const contentParts: OpenAI.Chat.Completions.ChatCompletionContentPart[] = []
+
+          for (const block of otherContent) {
+            switch (block.type) {
+              case 'textBlock': {
+                contentParts.push({
+                  type: 'text',
+                  text: block.text,
+                })
+                break
               }
-              return ''
-            })
-            .join('')
+              case 'imageBlock': {
+                const imageBlock = block as ImageBlock
+                switch (imageBlock.source.type) {
+                  case 'imageSourceUrl': {
+                    contentParts.push({
+                      type: 'image_url',
+                      image_url: {
+                        url: imageBlock.source.url,
+                      },
+                    })
+                    break
+                  }
+                  case 'imageSourceBytes': {
+                    const base64 = encodeBase64(String.fromCharCode(...imageBlock.source.bytes))
+                    const mimeType = lookup(imageBlock.format) || `image/${imageBlock.format}`
+                    contentParts.push({
+                      type: 'image_url',
+                      image_url: {
+                        url: `data:${mimeType};base64,${base64}`,
+                      },
+                    })
+                    break
+                  }
+                  default: {
+                    console.warn(
+                      `OpenAI ChatCompletions API does not support image block type: ${imageBlock.source.type}.`
+                    )
+                    break
+                  }
+                }
+                break
+              }
+              case 'documentBlock': {
+                const docBlock = block as DocumentBlock
+                switch (docBlock.source.type) {
+                  case 'documentSourceBytes': {
+                    const mimeType = lookup(docBlock.format) || `application/${docBlock.format}`
+                    const base64 = encodeBase64(String.fromCharCode(...docBlock.source.bytes))
+                    const file: OpenAI.Chat.Completions.ChatCompletionContentPart.File = {
+                      type: 'file',
+                      file: {
+                        file_data: `data:${mimeType};base64,${base64}`,
+                        filename: docBlock.name,
+                      },
+                    }
+                    contentParts.push(file)
+                    break
+                  }
+                  case 'documentSourceText': {
+                    // Text documents can be added directly
+                    console.warn(
+                      'OpenAI does not support text document sources directly. Converting this text document to string content.'
+                    )
+                    contentParts.push({
+                      type: 'text',
+                      text: docBlock.source.text,
+                    })
+                    break
+                  }
+                  case 'documentSourceContentBlock': {
+                    // Push each content block as a content part
+                    contentParts.push(
+                      ...docBlock.source.content.map<ChatCompletionContentPartText>((block) => {
+                        return {
+                          type: 'text',
+                          text: block.text,
+                        }
+                      })
+                    )
+                    break
+                  }
+                  default: {
+                    console.warn(
+                      `OpenAI ChatCompletions API only supports text content in user messages. Skipping document block type: ${docBlock.source.type}.`
+                    )
+                    break
+                  }
+                }
+                break
+              }
+              default: {
+                console.warn(`OpenAI ChatCompletions API does not support content type: ${block.type}.`)
+                break
+              }
+            }
+          }
 
           // Validate content is not empty before adding
-          if (contentText.trim().length > 0) {
+          if (contentParts.length > 0) {
             openAIMessages.push({
               role: 'user',
-              content: contentText,
+              content: contentParts,
             })
           }
         }
@@ -612,28 +698,42 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
         const textParts: string[] = []
 
         for (const block of message.content) {
-          if (block.type === 'textBlock') {
-            textParts.push(block.text)
-          } else if (block.type === 'toolUseBlock') {
-            try {
-              toolUseCalls.push({
-                id: block.toolUseId,
-                type: 'function',
-                function: {
-                  name: block.name,
-                  arguments: JSON.stringify(block.input),
-                },
-              })
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            } catch (error: any) {
-              throw new Error(`Failed to serialize tool input for "${block.name}": ${error.message}`)
+          switch (block.type) {
+            case 'textBlock': {
+              textParts.push(block.text)
+
+              break
             }
-          } else if (block.type === 'reasoningBlock') {
-            throw new Error(
-              'Reasoning blocks are not supported by OpenAI. ' + 'This feature is specific to AWS Bedrock models.'
-            )
-          } else if (block.type === 'guardContentBlock') {
-            logger.warn('OpenAI does not support guard content in messages. Removing guard content block.')
+            case 'toolUseBlock': {
+              try {
+                toolUseCalls.push({
+                  id: block.toolUseId,
+                  type: 'function',
+                  function: {
+                    name: block.name,
+                    arguments: JSON.stringify(block.input),
+                  },
+                })
+              } catch (error: unknown) {
+                if (error instanceof Error) {
+                  throw new Error(`Failed to serialize tool input for "${block.name}`, error)
+                }
+                throw error
+              }
+              break
+            }
+            case 'reasoningBlock': {
+              if (block.text) {
+                console.warn('Reasoning blocks are not supported by OpenAI Chat Completions API. Converting to text.')
+                textParts.push(block.text)
+              }
+              break
+            }
+            default: {
+              console.warn(
+                `OpenAI ChatCompletions API does not support ${block.type} content in assistant messages. Skipping this block.`
+              )
+            }
           }
         }
 

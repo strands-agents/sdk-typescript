@@ -1,4 +1,6 @@
 import type { JSONValue } from './json.js'
+import type { ImageBlockData, VideoBlockData, DocumentBlockData } from './media.js'
+import { ImageBlock, VideoBlock, DocumentBlock } from './media.js'
 
 /**
  * Message types and content blocks for conversational AI interactions.
@@ -77,6 +79,12 @@ export class Message {
         return new CachePointBlock(block.cachePoint)
       } else if ('guardContent' in block) {
         return new GuardContentBlock(block.guardContent)
+      } else if ('image' in block) {
+        return new ImageBlock(block.image)
+      } else if ('video' in block) {
+        return new VideoBlock(block.video)
+      } else if ('document' in block) {
+        return new DocumentBlock(block.document)
       } else {
         throw new Error('Unknown ContentBlockData type')
       }
@@ -97,7 +105,7 @@ export type Role = 'user' | 'assistant'
 
 /**
  * A block of content within a message.
- * Content blocks can contain text, tool usage requests, tool results, reasoning content, cache points, or guard content.
+ * Content blocks can contain text, tool usage requests, tool results, reasoning content, cache points, guard content, or media (image, video, document).
  *
  * This is a discriminated union where the object key determines the content format.
  *
@@ -115,6 +123,9 @@ export type ContentBlockData =
   | { reasoning: ReasoningBlockData }
   | { cachePoint: CachePointBlockData }
   | { guardContent: GuardContentBlockData }
+  | { image: ImageBlockData }
+  | { video: VideoBlockData }
+  | { document: DocumentBlockData }
 
 export type ContentBlock =
   | TextBlock
@@ -123,6 +134,9 @@ export type ContentBlock =
   | ReasoningBlock
   | CachePointBlock
   | GuardContentBlock
+  | ImageBlock
+  | VideoBlock
+  | DocumentBlock
 
 /**
  * Data for a text block.
@@ -439,6 +453,42 @@ export type StopReason =
  * ```
  */
 export type SystemPrompt = string | SystemContentBlock[]
+
+/**
+ * Data representation of a system prompt.
+ * Can be a simple string or an array of system content block data for advanced caching.
+ *
+ * This is the data interface counterpart to SystemPrompt, following the <name>Data pattern.
+ */
+export type SystemPromptData = string | SystemContentBlockData[]
+
+/**
+ * Converts SystemPromptData to SystemPrompt by converting data blocks to class instances.
+ * If already in SystemPrompt format (class instances), returns as-is.
+ *
+ * @param data - System prompt data to convert
+ * @returns SystemPrompt with class-based content blocks
+ */
+export function systemPromptFromData(data: SystemPromptData | SystemPrompt): SystemPrompt {
+  if (typeof data === 'string') {
+    return data
+  }
+
+  // Convert data format to class instances
+  return data.map((block) => {
+    if ('type' in block) {
+      return block
+    } else if ('cachePoint' in block) {
+      return new CachePointBlock(block.cachePoint)
+    } else if ('guardContent' in block) {
+      return new GuardContentBlock(block.guardContent)
+    } else if ('text' in block) {
+      return new TextBlock(block.text)
+    } else {
+      throw new Error('Unknown SystemContentBlockData type')
+    }
+  })
+}
 
 /**
  * A block of content within a system prompt.

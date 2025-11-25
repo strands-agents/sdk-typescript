@@ -1,28 +1,14 @@
 import { describe, it, expect } from 'vitest'
 import { OpenAIModel } from '@strands-agents/sdk/openai'
-import { ContextWindowOverflowError, ToolResultBlock } from '@strands-agents/sdk'
+import { ContextWindowOverflowError, ToolResultBlock, DocumentBlock } from '@strands-agents/sdk'
 import { Message } from '@strands-agents/sdk'
 import type { ToolSpec } from '@strands-agents/sdk'
 
 // eslint-disable-next-line no-restricted-imports
 import { collectGenerator, collectIterator } from '../src/__fixtures__/model-test-helpers.js'
+import { shouldSkipOpenAITests } from './__fixtures__/test-helpers.js'
 
-// Check for OpenAI API key at module level so skipIf can use it
-let hasApiKey = false
-try {
-  if (process.env.OPENAI_API_KEY) {
-    hasApiKey = true
-    console.log('✅ OpenAI API key found for integration tests')
-  } else {
-    hasApiKey = false
-    console.log('⏭️  OpenAI API key not available - integration tests will be skipped')
-  }
-} catch {
-  hasApiKey = false
-  console.log('⏭️  OpenAI API key not available - integration tests will be skipped')
-}
-
-describe.skipIf(!hasApiKey)('OpenAIModel Integration Tests', () => {
+describe.skipIf(shouldSkipOpenAITests())('OpenAIModel Integration Tests', () => {
   describe('Basic Streaming', () => {
     it.concurrent('streams a simple text response', async () => {
       const provider = new OpenAIModel({
@@ -576,7 +562,7 @@ describe.skipIf(!hasApiKey)('OpenAIModel Integration Tests', () => {
       expect(contentBlockCount).toBe(1)
 
       // Verify the complete message structure is returned
-      expect(result).toMatchObject({
+      expect(result).toEqual({
         stopReason: 'endTurn',
         message: {
           type: 'message',
@@ -587,6 +573,92 @@ describe.skipIf(!hasApiKey)('OpenAIModel Integration Tests', () => {
             }),
           ]),
         },
+      })
+    })
+  })
+
+  describe('Media Blocks', () => {
+    describe('Document Blocks', () => {
+      it.concurrent('processes document with text source', async () => {
+        const provider = new OpenAIModel({
+          modelId: 'gpt-4o-mini',
+          maxTokens: 150,
+        })
+
+        const documentBlock = new DocumentBlock({
+          name: 'sample.txt',
+          format: 'txt',
+          source: { text: 'The quick brown fox jumps over the lazy dog.' },
+        })
+
+        const messages: Message[] = [
+          new Message({
+            role: 'user',
+            content: [
+              documentBlock,
+              { type: 'textBlock', text: 'What animal is mentioned in the text above? Answer in one word.' },
+            ],
+          }),
+        ]
+
+        const events = await collectIterator(provider.stream(messages))
+
+        // Verify we got a response
+        const responseText = events.reduce((acc, event) => {
+          if (event.type === 'modelContentBlockDeltaEvent' && event.delta.type === 'textDelta') {
+            return acc + event.delta.text
+          }
+          return acc
+        }, '')
+
+        expect(responseText).toBeTruthy()
+        expect(responseText.toUpperCase()).toMatch(/FOX|DOG/)
+
+        // Verify the stop event
+        const stopEvent = events.find((e) => e.type === 'modelMessageStopEvent')
+        expect(stopEvent?.stopReason).toBe('endTurn')
+      })
+
+      it.concurrent('processes document with bytes source (converted to text)', async () => {
+        const provider = new OpenAIModel({
+          modelId: 'gpt-4o-mini',
+          maxTokens: 150,
+        })
+
+        const textContent = 'Integration test document content with important keywords.'
+
+        const documentBlock = new DocumentBlock({
+          name: 'test.txt',
+          format: 'txt',
+          source: { text: textContent },
+        })
+
+        const messages: Message[] = [
+          new Message({
+            role: 'user',
+            content: [
+              documentBlock,
+              { type: 'textBlock', text: 'What is mentioned in the text above? Answer in one or two words.' },
+            ],
+          }),
+        ]
+
+        const events = await collectIterator(provider.stream(messages))
+
+        // Verify we got a response
+        const responseText = events.reduce((acc, event) => {
+          if (event.type === 'modelContentBlockDeltaEvent' && event.delta.type === 'textDelta') {
+            return acc + event.delta.text
+          }
+          return acc
+        }, '')
+
+        expect(responseText).toBeTruthy()
+        expect(responseText.length).toBeGreaterThan(0)
+
+        // Verify the stop event
+        const stopEvent = events.find((e) => e.type === 'modelMessageStopEvent')
+        expect(stopEvent?.stopReason).toBe('endTurn')
       })
     })
   })

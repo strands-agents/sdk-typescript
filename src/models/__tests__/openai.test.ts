@@ -343,24 +343,6 @@ describe('OpenAIModel', () => {
           }
         }).rejects.toThrow('Failed to serialize tool input')
       })
-
-      it('throws error for reasoning blocks (OpenAI does not support them)', async () => {
-        const mockClient = createMockClient(async function* () {})
-        const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
-        const messages: Message[] = [
-          {
-            type: 'message',
-            role: 'user',
-            content: [{ type: 'reasoningBlock', reasoning: 'Some reasoning' }] as any,
-          },
-        ]
-
-        await expect(async () => {
-          for await (const _ of provider.stream(messages)) {
-            // Should not reach here
-          }
-        }).rejects.toThrow('Reasoning blocks are not supported by OpenAI')
-      })
     })
 
     describe('basic streaming', () => {
@@ -912,7 +894,7 @@ describe('OpenAIModel', () => {
       // Verify create was called with correct structure
       expect(callCount).toBe(1)
       expect(capturedRequest).toBeDefined()
-      expect(capturedRequest).toMatchObject({
+      expect(capturedRequest).toEqual({
         model: 'gpt-4o',
         stream: true,
         stream_options: { include_usage: true },
@@ -920,7 +902,7 @@ describe('OpenAIModel', () => {
         max_tokens: 1000,
         messages: [
           { role: 'system', content: 'You are a helpful assistant' },
-          { role: 'user', content: 'Hi' },
+          { role: 'user', content: [{ type: 'text', text: 'Hi' }] },
         ],
         tools: [
           {
@@ -973,7 +955,7 @@ describe('OpenAIModel', () => {
       expect(captured.request).toBeDefined()
       expect(captured.request!.messages).toEqual([
         { role: 'system', content: 'You are a helpful assistantAdditional context here' },
-        { role: 'user', content: 'Hello' },
+        { role: 'user', content: [{ type: 'text', text: 'Hello' }] },
       ])
     })
 
@@ -1004,7 +986,7 @@ describe('OpenAIModel', () => {
       expect(captured.request).toBeDefined()
       expect(captured.request!.messages).toEqual([
         { role: 'system', content: 'You are a helpful assistantLarge context document' },
-        { role: 'user', content: 'Hello' },
+        { role: 'user', content: [{ type: 'text', text: 'Hello' }] },
       ])
 
       warnSpy.mockRestore()
@@ -1024,7 +1006,7 @@ describe('OpenAIModel', () => {
 
       // Empty array should not add system message
       expect(captured.request).toBeDefined()
-      expect(captured.request!.messages).toEqual([{ role: 'user', content: 'Hello' }])
+      expect(captured.request!.messages).toEqual([{ role: 'user', content: [{ type: 'text', text: 'Hello' }] }])
     })
 
     it('formats array system prompt with single text block', async () => {
@@ -1042,7 +1024,7 @@ describe('OpenAIModel', () => {
       expect(captured.request).toBeDefined()
       expect(captured.request!.messages).toEqual([
         { role: 'system', content: 'You are a helpful assistant' },
-        { role: 'user', content: 'Hello' },
+        { role: 'user', content: [{ type: 'text', text: 'Hello' }] },
       ])
     })
 
@@ -1078,7 +1060,7 @@ describe('OpenAIModel', () => {
       expect(captured.request).toBeDefined()
       expect(captured.request!.messages).toEqual([
         { role: 'system', content: 'You are a helpful assistant' },
-        { role: 'user', content: 'Hello' },
+        { role: 'user', content: [{ type: 'text', text: 'Hello' }] },
       ])
 
       warnSpy.mockRestore()
@@ -1117,7 +1099,7 @@ describe('OpenAIModel', () => {
       expect(captured.request).toBeDefined()
       expect(captured.request!.messages).toEqual([
         { role: 'system', content: 'First textSecond text' },
-        { role: 'user', content: 'Hello' },
+        { role: 'user', content: [{ type: 'text', text: 'Hello' }] },
       ])
 
       warnSpy.mockRestore()
@@ -1152,7 +1134,7 @@ describe('OpenAIModel', () => {
 
       // Verify no system message added (only guard content)
       expect(captured.request).toBeDefined()
-      expect(captured.request!.messages).toEqual([{ role: 'user', content: 'Hello' }])
+      expect(captured.request!.messages).toEqual([{ role: 'user', content: [{ type: 'text', text: 'Hello' }] }])
 
       warnSpy.mockRestore()
     })
@@ -1203,13 +1185,20 @@ describe('OpenAIModel', () => {
 
       // Verify warning was logged
       expect(warnSpy).toHaveBeenCalledWith(
-        '[strands.models.openai]',
-        'OpenAI does not support guard content in messages. Removing guard content block.'
+        'OpenAI ChatCompletions API does not support content type: guardContentBlock.'
       )
 
       // Verify guard content filtered out
       expect(captured.request).toBeDefined()
-      expect(captured.request!.messages).toEqual([{ role: 'user', content: 'Verify this:Is it correct?' }])
+      expect(captured.request!.messages).toEqual([
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'Verify this:' },
+            { type: 'text', text: 'Is it correct?' },
+          ],
+        },
+      ])
 
       warnSpy.mockRestore()
     })
@@ -1241,13 +1230,14 @@ describe('OpenAIModel', () => {
 
       // Verify warning was logged
       expect(warnSpy).toHaveBeenCalledWith(
-        '[strands.models.openai]',
-        'OpenAI does not support guard content in messages. Removing guard content block.'
+        'OpenAI ChatCompletions API does not support content type: guardContentBlock.'
       )
 
       // Verify guard content filtered out
       expect(captured.request).toBeDefined()
-      expect(captured.request!.messages).toEqual([{ role: 'user', content: 'Check this image:' }])
+      expect(captured.request!.messages).toEqual([
+        { role: 'user', content: [{ type: 'text', text: 'Check this image:' }] },
+      ])
 
       warnSpy.mockRestore()
     })
@@ -1277,8 +1267,7 @@ describe('OpenAIModel', () => {
 
       // Verify warning was logged
       expect(warnSpy).toHaveBeenCalledWith(
-        '[strands.models.openai]',
-        'OpenAI does not support guard content in messages. Removing guard content block.'
+        'OpenAI ChatCompletions API does not support content type: guardContentBlock.'
       )
 
       // Verify no user message added (only guard content)

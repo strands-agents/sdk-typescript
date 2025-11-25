@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import { HookRegistryImplementation } from '../registry.js'
-import { BeforeInvocationEvent, AfterInvocationEvent } from '../events.js'
+import { AfterInvocationEvent, BeforeInvocationEvent } from '../events.js'
 import type { HookProvider } from '../types.js'
 import { Agent } from '../../agent/agent.js'
 

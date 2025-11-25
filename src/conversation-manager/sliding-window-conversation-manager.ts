@@ -7,7 +7,9 @@
 
 import { ContextWindowOverflowError } from '../errors.js'
 import { Message, TextBlock, ToolResultBlock } from '../types/messages.js'
-import { ConversationManager, type ConversationContext } from './conversation-manager.js'
+import type { HookProvider } from '../hooks/types.js'
+import type { HookRegistry } from '../hooks/registry.js'
+import { AfterInvocationEvent, AfterModelCallEvent } from '../hooks/events.js'
 
 /**
  * Configuration for the sliding window conversation manager.
@@ -33,8 +35,12 @@ export type SlidingWindowConversationManagerConfig = {
  * tool usage pairs and avoids invalid window states. When the message count exceeds
  * the window size, it will either truncate large tool results or remove the oldest
  * messages while ensuring tool use/result pairs remain valid.
+ *
+ * As a HookProvider, it registers callbacks for:
+ * - AfterInvocationEvent: Applies sliding window management after each invocation
+ * - AfterModelCallEvent: Reduces context on overflow errors and requests retry
  */
-export class SlidingWindowConversationManager extends ConversationManager {
+export class SlidingWindowConversationManager implements HookProvider {
   private readonly _windowSize: number
   private readonly _shouldTruncateResults: boolean
 
@@ -44,28 +50,49 @@ export class SlidingWindowConversationManager extends ConversationManager {
    * @param config - Configuration options for the sliding window manager.
    */
   constructor(config?: SlidingWindowConversationManagerConfig) {
-    super()
     this._windowSize = config?.windowSize ?? 40
     this._shouldTruncateResults = config?.shouldTruncateResults ?? true
   }
 
   /**
-   * Apply the sliding window to the conversation context's messages array to maintain a manageable history size.
+   * Registers callbacks with the hook registry.
+   *
+   * Registers:
+   * - AfterInvocationEvent callback to apply sliding window management
+   * - AfterModelCallEvent callback to handle context overflow and request retry
+   *
+   * @param registry - The hook registry to register callbacks with
+   */
+  public registerCallbacks(registry: HookRegistry): void {
+    // Apply sliding window management after each invocation
+    registry.addCallback(AfterInvocationEvent, (event) => {
+      this.applyManagement(event.agent.messages)
+    })
+
+    // Handle context overflow errors
+    registry.addCallback(AfterModelCallEvent, (event) => {
+      if (event.error instanceof ContextWindowOverflowError) {
+        this.reduceContext(event.agent.messages, event.error)
+        event.retryModelCall = true
+      }
+    })
+  }
+
+  /**
+   * Apply the sliding window to the messages array to maintain a manageable history size.
    *
    * This method is called after every event loop cycle to apply a sliding window if the message
    * count exceeds the window size. If the number of messages is within the window size, no action
    * is taken.
    *
-   * @param context - The conversation context whose messages will be managed. The messages array is modified in-place.
+   * @param messages - The message array to manage. Modified in-place.
    */
-  public applyManagement(context: ConversationContext): void {
-    const messages = context.messages
-
+  private applyManagement(messages: Message[]): void {
     if (messages.length <= this._windowSize) {
       return
     }
 
-    this.reduceContext(context)
+    this.reduceContext(messages)
   }
 
   /**
@@ -80,15 +107,13 @@ export class SlidingWindowConversationManager extends ConversationManager {
    * 2. If truncation is not possible or doesn't help, trim oldest messages
    * 3. When trimming, skip invalid trim points (toolResult at start, or toolUse without following toolResult)
    *
-   * @param context - The conversation context whose messages will be reduced. The messages array is modified in-place.
+   * @param messages - The message array to reduce. Modified in-place.
    * @param _error - The error that triggered the context reduction, if any.
    *
    * @throws ContextWindowOverflowError If the context cannot be reduced further,
    *         such as when the conversation is already minimal or when no valid trim point exists.
    */
-  public reduceContext(context: ConversationContext, _error?: Error): void {
-    const messages = context.messages
-
+  private reduceContext(messages: Message[], _error?: Error): void {
     // Try to truncate the tool result first
     const lastMessageIdxWithToolResults = this.findLastMessageWithToolResults(messages)
     if (lastMessageIdxWithToolResults !== undefined && this._shouldTruncateResults) {

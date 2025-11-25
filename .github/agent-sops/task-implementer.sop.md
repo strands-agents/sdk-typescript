@@ -18,6 +18,10 @@ Initialize the task environment and discover repository instruction files.
   - `CONTRIBUTING.md`
   - `README.md`
 - You MAY explore more files in the repository if you did not find instructions
+- You MUST check the `GITHUB_WRITE` environment variable value to determine if you have github write permission
+  - If the value is `true`, then you can run git write command like `add_comment` or run `git push`
+  - If the value is not `true`, you are running in a read-restricted sandbox. Any write commands you do run will be deferred to run outside the sandbox
+    - Any staged or unstaged changes will be pushed after you finish executing to the feature branch
 - You MUST make a note of environment setup and testing instructions
 - You MUST make note of the tasks number from the issue title
 - You MUST make note of the issue number
@@ -30,6 +34,7 @@ Initialize the task environment and discover repository instruction files.
   - You SHOULD use the BRANCH_NAME pattern `agent-tasks/{ISSUE_NUMBER}` unless this branch already exists
   - You MUST make note of the newly created branch name
   - You MUST use `git push origin <BRANCH_NAME>` to create the feature branch in remote
+  - If the push operation is deferred, continue with the workflow and note the deferred status
 - You MAY continue on the current branch if not on main branch
 
 
@@ -138,7 +143,7 @@ Write test cases based on the outlines, following strict TDD principles.
 - You MUST validate that the task environment is set up properly
   - If you already created a commit, ensure the latest commit matches the expected hash
   - If not, ensure the correct branch is checked out
-  - As a last resort, you MUST push your current work to the current branch, then leave a comment on the Task issue or Pull Request for feedback on how to proceed
+  - As a last resort, you MUST commit your current work to the current branch, then leave a comment on the Task issue or Pull Request for feedback on how to proceed
 - You MUST save test implementations to the appropriate test directories in repo_root
 - You MUST implement tests for ALL requirements before writing ANY implementation code
 - You MUST follow the testing framework conventions used in the existing codebase
@@ -186,7 +191,8 @@ Write implementation code to pass the tests, focusing on simplicity and correctn
   - Tests continue to fail after implementation for reasons you cannot resolve
   - You encounter a design decision that cannot be inferred from requirements
   - Multiple valid implementation approaches exist with significant trade-offs
-- You MUST commit and push your work before seeing user feedback
+- You MUST commit your work before seeing user feedback
+  - You MUST push your work if the `GITHUB_WRITE` environment variable is set to `true`
 - You MAY seek user input by commenting on the issue, and informing the user you are ready for their instruction by using the handoff_to_user tool
 - You MUST otherwise continue automatically after verifying test results
 - You MUST follow the Build Output Management practices defined in the Best Practices section
@@ -236,22 +242,25 @@ If all tests are passing, draft a conventional commit message, perform the git c
 - You MUST use `git status` to check which files have been modified
 - You MUST use `git add` to stage all relevant files
 - You MUST execute the `git commit -m <COMMIT_MESSAGE>` command with the prepared commit message
-- You MUST use `git push origin <BRANCH_NAME>` to push the local branch to the remote 
+- You MAY use `git push origin <BRANCH_NAME>` to push the local branch to the remote if the `GITHUB_WRITE` environment variable is set to `true`
+  - If the push operation is deferred, continue with PR creation and note the deferred status 
 - You MUST attempt to create the pull request using the `create_pull_request` tool if it does not exist yet
+  - If the PR creation is deferred, continue with the workflow and note the deferred status
   - You MUST use the task id recorded in your notes, not the issue id
   - You MUST include "Resolves: #<ISSUE NUMBER>" in the body of the pull request
     - You MUST NOT bold this line
   - You MUST give an overview of the feature being implemented
   - You MUST include any notes on key implementation decisions, ambiguity, or other information as part of the pull request description
-- If the `create_pull_request` tool fails:
+- If the `create_pull_request` tool fails (excluding deferred responses):
   - You MUST create a PR creation link using GitHub's query parameters
   - You MUST post the link as a comment on the issue
     - You MUST use the format: `https://github.com/{owner}/{repo}/compare/{base}...{head}?quick_pull=1&title={url_encoded_title}&body={url_encoded_body}`
     - URL-encode the title and body parameters
     - Include "Resolves: #{issue_number}" in the body
-- If PR creation succeeds:
+- If PR creation succeeds or is deferred:
   - You MUST review your notes for any updates to provide on the pull request
   - You MAY use the `update_pull_request` tool to update the pull request body or title
+    - If the update operation is deferred, continue with the workflow and note the deferred status
 - You MUST use your notebook to record the new commit hash and PR status (created or link provided)
 
 ### 6. Feedback Phase
@@ -280,6 +289,7 @@ Retrieve and analyze the user's responses from the pull request reviews and comm
   - Unclear requests that need clarification
   - General feedback that doesn't require code changes
 - You MUST reply to unclear comments asking for specific clarification
+  - If comment posting is deferred, continue with the workflow and note the deferred status
 - You MUST record your progress and update the implementation plan based on the feedback
 - You MUST return to step 6.1 if you needed further clarification
 
@@ -322,11 +332,18 @@ If feature branch creation fails:
 - As a last resort, leave a comment on the Task Issue mentioning the issue you are facing
 
 ### Pull Request Creation Issues
-If PR creation fails:
+If PR creation fails (excluding deferred responses):
 - Verify GitHub authentication and permissions
 - Check if remote repository exists and is accessible
-- You MUST push your current work to the branch
+- You MUST commit your current work to the branch
 - As a last resort, leave a comment on the Task Issue mentioning the issue you are facing
+
+### Deferred Operations
+When GitHub tools or git operations are deferred:
+- Continue with the workflow as if the operation succeeded
+- Note the deferred status in your progress tracking
+- The operations will be executed after agent completion
+- Do not retry or attempt alternative approaches for deferred operations
 
 ### Build Issues
 If builds fail during implementation:

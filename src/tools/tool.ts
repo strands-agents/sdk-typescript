@@ -1,6 +1,7 @@
 import type { ToolSpec, ToolUse } from './types.js'
-import type { ToolResultBlock } from '../types/messages.js'
+import { TextBlock, ToolResultBlock } from '../types/messages.js'
 import type { AgentData } from '../types/agent.js'
+import { normalizeError } from '../errors.js'
 
 export type { ToolSpec } from './types.js'
 
@@ -94,7 +95,6 @@ export abstract class Tool {
    * This MUST match the name in the toolSpec.
    */
   abstract name: string
-
   /**
    * Human-readable description of what the tool does.
    * This helps the model understand when to use the tool.
@@ -102,7 +102,6 @@ export abstract class Tool {
    * This MUST match the description in the toolSpec.description.
    */
   abstract description: string
-
   /**
    * OpenAPI JSON specification for the tool.
    * Defines the tool's name, description, and input schema.
@@ -166,4 +165,28 @@ export interface InvokableTool<TInput, TReturn> extends Tool {
    * @returns The unwrapped result
    */
   invoke(input: TInput, context?: ToolContext): Promise<TReturn>
+}
+
+/**
+ * Creates an error ToolResultBlock from an error object.
+ * Ensures all errors are normalized to Error objects and includes the original error
+ * in the ToolResultBlock for inspection by hooks, error handlers, and event loop.
+ *
+ * TODO: Implement consistent logging format as defined in #30
+ * This error should be logged to the caller using the established logging pattern.
+ *
+ * @param error - The error that occurred (can be Error object or any thrown value)
+ * @param toolUseId - The tool use ID for the ToolResultBlock
+ * @returns A ToolResultBlock with error status, error message content, and original error object
+ */
+export function createErrorResult(error: unknown, toolUseId: string): ToolResultBlock {
+  // Ensure error is an Error object (wrap non-Error values)
+  const errorObject = normalizeError(error)
+
+  return new ToolResultBlock({
+    toolUseId,
+    status: 'error',
+    content: [new TextBlock(`Error: ${errorObject.message}`)],
+    error: errorObject,
+  })
 }

@@ -30,17 +30,54 @@ export type {
   ToolResultBlockData,
   ReasoningBlockData,
   CachePointBlockData,
+  GuardContentBlockData,
+  GuardContentText,
+  GuardContentImage,
+  GuardQualifier,
+  GuardImageFormat,
+  GuardImageSource,
   ContentBlock,
   ContentBlockData,
   MessageData,
   SystemPrompt,
+  SystemPromptData,
   SystemContentBlock,
-  JsonBlock,
   ToolResultContent,
 } from './types/messages.js'
 
 // Message classes
-export { TextBlock, ToolUseBlock, ToolResultBlock, ReasoningBlock, CachePointBlock, Message } from './types/messages.js'
+export {
+  TextBlock,
+  ToolUseBlock,
+  ToolResultBlock,
+  ReasoningBlock,
+  CachePointBlock,
+  GuardContentBlock,
+  Message,
+  JsonBlock,
+} from './types/messages.js'
+
+// Media classes
+export { S3Location, ImageBlock, VideoBlock, DocumentBlock } from './types/media.js'
+
+// Media types
+export type {
+  S3LocationData,
+  ImageFormat,
+  ImageSource,
+  ImageSourceData,
+  ImageBlockData,
+  VideoFormat,
+  VideoSource,
+  VideoSourceData,
+  VideoBlockData,
+  DocumentFormat,
+  DocumentSource,
+  DocumentSourceData,
+  DocumentBlockData,
+  DocumentContentBlock,
+  DocumentContentBlockData,
+} from './types/media.js'
 
 // Tool types
 export type { ToolSpec, ToolUse, ToolResultStatus, ToolChoice } from './tools/types.js'
@@ -104,11 +141,21 @@ export type {
 } from './agent/streaming.js'
 
 // Hooks system
-export { HookRegistry, HookEvent, BeforeInvocationEvent, AfterInvocationEvent } from './hooks/index.js'
-export type { HookCallback, HookProvider, HookEventConstructor } from './hooks/index.js'
+export {
+  HookRegistry,
+  HookEvent,
+  BeforeInvocationEvent,
+  AfterInvocationEvent,
+  MessageAddedEvent,
+  BeforeToolCallEvent,
+  AfterToolCallEvent,
+  BeforeModelCallEvent,
+  AfterModelCallEvent,
+  ModelStreamEventHook,
+} from './hooks/index.js'
+export type { HookCallback, HookProvider, HookEventConstructor, ModelStopResponse } from './hooks/index.js'
 
 // Conversation Manager
-export { ConversationManager } from './conversation-manager/conversation-manager.js'
 export { NullConversationManager } from './conversation-manager/null-conversation-manager.js'
 export {
   SlidingWindowConversationManager,
@@ -118,3 +165,6 @@ export {
 // Logging
 export { configureLogging } from './logging/logger.js'
 export type { Logger, LogLevel, LoggingConfig } from './logging/types.js'
+
+// MCP Client types and implementations
+export { type McpClientConfig, McpClient } from './mcp.js'
