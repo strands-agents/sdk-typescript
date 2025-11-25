@@ -44,37 +44,28 @@ Strands Agents is a simple yet powerful SDK that takes a model-driven approach t
 
 ```bash
 # Install Strands Agents
-npm install @strands-agents/sdk zod
+npm install @strands-agents/sdk
 ```
 
 ```typescript
-import { Agent, BedrockModel } from '@strands-agents/sdk'
+import { Agent } from '@strands-agents/sdk'
 
-// Initialize model (uses default AWS credentials)
-const model = new BedrockModel()
-
-// Create agent
-const agent = new Agent({ model })
+// Create agent (uses default Amazon Bedrock provider)
+const agent = new Agent()
 
 // Invoke
 const result = await agent.invoke('What is the square root of 1764?')
 console.log(result.text)
 ```
 
-> **Note**: For the default Amazon Bedrock model provider, you'll need AWS credentials configured and model access enabled for Claude 3.5 Sonnet in your region.
+> **Note**: For the default Amazon Bedrock model provider, you'll need AWS credentials configured and model access enabled for Claude 4.5 Sonnet in your region.
 
 ## Installation
 
-Ensure you have **Node.js 20+** installed, then:
+Ensure you have **[Node.js 20+](https://nodejs.org/)** installed, then:
 
 ```bash
-npm install @strands-agents/sdk zod
-```
-
-For MCP support, you will also likely need the MCP SDK:
-
-```bash
-npm install @modelcontextprotocol/sdk
+npm install @strands-agents/sdk
 ```
 
 ## Features at a Glance
@@ -108,11 +99,10 @@ await agent.invoke('What is the weather in San Francisco?')
 
 ### MCP Support
 
-Seamlessly integrate Model Context Protocol (MCP) servers to give your agents access to external systems and tools.
+Seamlessly integrate Model Context Protocol (MCP) servers to give your agents access to external systems and tools. The SDK includes built-in support for MCP clients.
 
 ```typescript
-import { Agent, McpClient } from '@strands-agents/sdk'
-import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
+import { Agent, McpClient, StdioClientTransport } from '@strands-agents/sdk'
 
 // Create a client for a local MCP server
 const chromeDevtools = new McpClient({
@@ -153,10 +143,8 @@ const agent = new Agent({ model })
 import { Agent } from '@strands-agents/sdk'
 import { OpenAIModel } from '@strands-agents/sdk/openai'
 
-const model = new OpenAIModel({
-  apiKey: process.env.OPENAI_API_KEY,
-  model: 'gpt-4o',
-})
+// Automatically uses process.env.OPENAI_API_KEY and defaults to gpt-4o
+const model = new OpenAIModel()
 
 const agent = new Agent({ model })
 ```
@@ -176,14 +164,7 @@ for await (const event of agent.stream('Tell me a story about a brave toaster.')
 
 ## Documentation
 
-For detailed guidance on the Strands Agents framework (concepts shared between Python and TypeScript):
-
-- [User Guide](https://strandsagents.com/)
-- [Quick Start Guide](https://strandsagents.com/latest/user-guide/quickstart/)
-- [Model Providers](https://strandsagents.com/latest/user-guide/concepts/model-providers/amazon-bedrock/)
-- [Tools](https://strandsagents.com/latest/user-guide/concepts/tools/tools_overview/)
-
-TypeScript-specific API documentation will be added as the SDK develops.
+For detailed guidance, tutorials, and concept overviews (shared between Python and TypeScript), please visit the [Strands Agents Documentation](https://strandsagents.com/).
 
 ## Contributing ❤️
 
