@@ -3,9 +3,11 @@ import {
   AfterInvocationEvent,
   AfterModelCallEvent,
   AfterToolCallEvent,
+  AfterToolsEvent,
   BeforeInvocationEvent,
   BeforeModelCallEvent,
   BeforeToolCallEvent,
+  BeforeToolsEvent,
   MessageAddedEvent,
   ModelStreamEventHook,
 } from '../events.js'
@@ -323,5 +325,75 @@ describe('ModelStreamEventHook', () => {
     }
     const hookEvent = new ModelStreamEventHook({ agent, event: streamEvent })
     expect(hookEvent._shouldReverseCallbacks()).toBe(false)
+  })
+})
+
+describe('BeforeToolsEvent', () => {
+  it('creates instance with correct properties', () => {
+    const agent = new Agent()
+    const message = new Message({
+      role: 'assistant',
+      content: [
+        {
+          type: 'toolUseBlock',
+          name: 'testTool',
+          toolUseId: 'test-id',
+          input: { arg: 'value' },
+        },
+      ],
+    })
+    const event = new BeforeToolsEvent({ agent, message })
+
+    expect(event).toEqual({
+      type: 'beforeToolsEvent',
+      agent: agent,
+      message: message,
+    })
+    // @ts-expect-error verifying that property is readonly
+    event.agent = new Agent()
+    // @ts-expect-error verifying that property is readonly
+    event.message = message
+  })
+
+  it('returns false for _shouldReverseCallbacks', () => {
+    const agent = new Agent()
+    const message = new Message({ role: 'assistant', content: [] })
+    const event = new BeforeToolsEvent({ agent, message })
+    expect(event._shouldReverseCallbacks()).toBe(false)
+  })
+})
+
+describe('AfterToolsEvent', () => {
+  it('creates instance with correct properties', () => {
+    const agent = new Agent()
+    const message = new Message({
+      role: 'user',
+      content: [
+        {
+          type: 'toolResultBlock',
+          toolUseId: 'test-id',
+          status: 'success',
+          content: [{ type: 'textBlock', text: 'Result' }],
+        },
+      ],
+    })
+    const event = new AfterToolsEvent({ agent, message })
+
+    expect(event).toEqual({
+      type: 'afterToolsEvent',
+      agent: agent,
+      message: message,
+    })
+    // @ts-expect-error verifying that property is readonly
+    event.agent = new Agent()
+    // @ts-expect-error verifying that property is readonly
+    event.message = message
+  })
+
+  it('returns true for _shouldReverseCallbacks', () => {
+    const agent = new Agent()
+    const message = new Message({ role: 'user', content: [] })
+    const event = new AfterToolsEvent({ agent, message })
+    expect(event._shouldReverseCallbacks()).toBe(true)
   })
 })

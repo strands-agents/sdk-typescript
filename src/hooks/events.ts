@@ -214,3 +214,40 @@ export class ModelStreamEventHook extends HookEvent {
     this.event = data.event
   }
 }
+
+/**
+ * Event triggered before executing tools.
+ * Fired when the model returns tool use blocks that need to be executed.
+ */
+export class BeforeToolsEvent extends HookEvent {
+  readonly type = 'beforeToolsEvent' as const
+  readonly agent: AgentData
+  readonly message: Message
+
+  constructor(data: { agent: AgentData; message: Message }) {
+    super()
+    this.agent = data.agent
+    this.message = data.message
+  }
+}
+
+/**
+ * Event triggered after all tools complete execution.
+ * Fired after tool results are collected and ready to be added to conversation.
+ * Uses reverse callback ordering for proper cleanup semantics.
+ */
+export class AfterToolsEvent extends HookEvent {
+  readonly type = 'afterToolsEvent' as const
+  readonly agent: AgentData
+  readonly message: Message
+
+  constructor(data: { agent: AgentData; message: Message }) {
+    super()
+    this.agent = data.agent
+    this.message = data.message
+  }
+
+  override _shouldReverseCallbacks(): boolean {
+    return true
+  }
+}
