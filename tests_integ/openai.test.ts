@@ -6,23 +6,9 @@ import type { ToolSpec } from '@strands-agents/sdk'
 
 // eslint-disable-next-line no-restricted-imports
 import { collectGenerator, collectIterator } from '../src/__fixtures__/model-test-helpers.js'
+import { shouldSkipOpenAITests } from './__fixtures__/test-helpers.js'
 
-// Check for OpenAI API key at module level so skipIf can use it
-let hasApiKey = false
-try {
-  if (process.env.OPENAI_API_KEY) {
-    hasApiKey = true
-    console.log('✅ OpenAI API key found for integration tests')
-  } else {
-    hasApiKey = false
-    console.log('⏭️  OpenAI API key not available - integration tests will be skipped')
-  }
-} catch {
-  hasApiKey = false
-  console.log('⏭️  OpenAI API key not available - integration tests will be skipped')
-}
-
-describe.skipIf(!hasApiKey)('OpenAIModel Integration Tests', () => {
+describe.skipIf(shouldSkipOpenAITests())('OpenAIModel Integration Tests', () => {
   describe('Basic Streaming', () => {
     it.concurrent('streams a simple text response', async () => {
       const provider = new OpenAIModel({

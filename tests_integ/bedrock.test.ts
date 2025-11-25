@@ -12,9 +12,6 @@ import {
   SlidingWindowConversationManager,
 } from '@strands-agents/sdk'
 
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
-
 // Import fixtures using Vite's ?url suffix
 import yellowPngUrl from './__resources__/yellow.png?url'
 import letterPdfUrl from './__resources__/letter.pdf?url'
@@ -22,15 +19,7 @@ import letterPdfUrl from './__resources__/letter.pdf?url'
 // eslint-disable-next-line no-restricted-imports
 import { collectIterator, collectGenerator } from '../src/__fixtures__/model-test-helpers.js'
 import { shouldRunTests } from './__fixtures__/model-test-helpers.js'
-
-// Helper to load fixture files from Vite URL imports
-// Vite ?url imports return paths like '/tests_integ/fixtures/yellow.png' in test environment
-const loadFixture = (url: string) => {
-  // Remove leading slash and resolve from project root
-  const relativePath = url.startsWith('/') ? url.slice(1) : url
-  const filePath = join(process.cwd(), relativePath)
-  return new Uint8Array(readFileSync(filePath))
-}
+import { loadFixture } from './__fixtures__/test-helpers.js'
 
 describe.skipIf(!(await shouldRunTests()))('BedrockModel Integration Tests', () => {
   describe('Non-Streaming', () => {
