@@ -11,8 +11,7 @@ import { collectGenerator } from '../src/__fixtures__/model-test-helpers.js'
 import yellowPngUrl from './__resources__/yellow.png?url'
 
 // Environment detection for browser vs Node.js
-const isNode =
-  typeof process !== 'undefined' && typeof process.versions !== 'undefined' && !!process.versions.node
+const isNode = typeof process !== 'undefined' && typeof process.versions !== 'undefined' && !!process.versions.node
 
 // Browser-compatible fixture loader
 const loadFixture = async (url: string): Promise<Uint8Array> => {
