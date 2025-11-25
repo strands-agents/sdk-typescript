@@ -26,14 +26,14 @@ async function runTool<T>(gen: AsyncGenerator<unknown, T, unknown>): Promise<T> 
 
 describe('MCP Integration Tests', () => {
   describe('stdio transport', () => {
-    const serverPath = resolve(process.cwd(), 'dist/tests_integ/__fixtures__/test-mcp-server.js')
+    const serverPath = resolve(process.cwd(), 'tests_integ/__fixtures__/test-mcp-server.ts')
 
     function createStdioClient(appName: string = 'test-mcp-client'): McpClient {
       return new McpClient({
         applicationName: appName,
         transport: new StdioClientTransport({
-          command: 'node',
-          args: [serverPath],
+          command: 'npx',
+          args: ['tsx', serverPath],
         }),
       })
     }
