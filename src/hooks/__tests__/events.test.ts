@@ -216,6 +216,8 @@ describe('BeforeModelCallEvent', () => {
     expect(event).toEqual({
       type: 'beforeModelCallEvent',
       agent: agent,
+      messages: [],
+      toolSpecs: [],
     })
     // @ts-expect-error verifying that property is readonly
     event.agent = new Agent()

@@ -28,12 +28,16 @@ import {
   AfterInvocationEvent,
   AfterModelCallEvent,
   AfterToolCallEvent,
+  AfterToolsEvent,
   BeforeInvocationEvent,
   BeforeModelCallEvent,
   BeforeToolCallEvent,
+  BeforeToolsEvent,
   MessageAddedEvent,
   ModelStreamEventHook,
 } from '../hooks/events.js'
+import type { ToolSpec, ToolChoice } from '../tools/types.js'
+import type { ContentBlock } from '../types/messages.js'
 
 /**
  * Recursive type definition for nested tool arrays.
@@ -287,7 +291,7 @@ export class Agent implements AgentData {
     await this.hooks.invokeCallbacks(new BeforeInvocationEvent({ agent: this }))
 
     // Emit event before the loop starts
-    yield { type: 'beforeInvocationEvent' }
+    yield new BeforeInvocationEvent({ agent: this })
 
     try {
       // Main agent loop - continues until model stops without requesting tools
@@ -328,7 +332,7 @@ export class Agent implements AgentData {
       await this.hooks.invokeCallbacks(new AfterInvocationEvent({ agent: this }))
 
       // Always emit final event
-      yield { type: 'afterInvocationEvent' }
+      yield new AfterInvocationEvent({ agent: this })
     }
   }
 
@@ -341,14 +345,34 @@ export class Agent implements AgentData {
   private async *invokeModel(
     args?: InvokeArgs
   ): AsyncGenerator<AgentStreamEvent, { message: Message; stopReason: string }, undefined> {
-    // Emit event before invoking model
-    yield { type: 'beforeModelEvent', messages: [...this.messages] }
-
+    // Compute stream options before emitting event
     const toolSpecs = this._toolRegistry.values().map((tool) => tool.toolSpec)
     const streamOptions: StreamOptions = { toolSpecs }
     if (this._systemPrompt !== undefined) {
       streamOptions.systemPrompt = this._systemPrompt
     }
+
+    // Emit event before invoking model
+    const eventData: {
+      agent: AgentData
+      messages?: Message[]
+      systemPrompt?: string | ContentBlock[]
+      toolSpecs?: ToolSpec[]
+      toolChoice?: ToolChoice
+    } = {
+      agent: this,
+      messages: [...this.messages],
+    }
+    if (streamOptions.toolSpecs !== undefined) {
+      eventData.toolSpecs = streamOptions.toolSpecs
+    }
+    if (streamOptions.systemPrompt !== undefined) {
+      eventData.systemPrompt = streamOptions.systemPrompt
+    }
+    if (streamOptions.toolChoice !== undefined) {
+      eventData.toolChoice = streamOptions.toolChoice
+    }
+    yield new BeforeModelCallEvent(eventData)
 
     if (args !== undefined && typeof args === 'string') {
       // Add user message from args
@@ -368,7 +392,7 @@ export class Agent implements AgentData {
       // Invoke AfterModelCallEvent hook on success
       await this.hooks.invokeCallbacks(new AfterModelCallEvent({ agent: this, stopData: { message, stopReason } }))
 
-      yield { type: 'afterModelEvent', message, stopReason }
+      yield new AfterModelCallEvent({ agent: this, stopData: { message, stopReason } })
 
       return { message, stopReason }
     } catch (error) {
@@ -425,7 +449,7 @@ export class Agent implements AgentData {
     assistantMessage: Message,
     toolRegistry: ToolRegistry
   ): AsyncGenerator<AgentStreamEvent, Message, undefined> {
-    yield { type: 'beforeToolsEvent', message: assistantMessage }
+    yield new BeforeToolsEvent({ agent: this, message: assistantMessage })
 
     // Extract tool use blocks from assistant message
     const toolUseBlocks = assistantMessage.content.filter(
@@ -453,7 +477,7 @@ export class Agent implements AgentData {
       content: toolResultBlocks,
     })
 
-    yield { type: 'afterToolsEvent', message: toolResultMessage }
+    yield new AfterToolsEvent({ agent: this, message: toolResultMessage })
 
     return toolResultMessage
   }

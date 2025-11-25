@@ -130,15 +130,7 @@ export { BedrockModel as BedrockModel } from './models/bedrock.js'
 export type { BedrockModelConfig, BedrockModelOptions } from './models/bedrock.js'
 
 // Agent streaming event types
-export type {
-  AgentStreamEvent,
-  BeforeModelEvent,
-  AfterModelEvent,
-  BeforeToolsEvent,
-  AfterToolsEvent,
-  BeforeInvocationEvent as BeforeInvocationStreamEvent,
-  AfterInvocationEvent as AfterInvocationStreamEvent,
-} from './agent/streaming.js'
+export type { AgentStreamEvent } from './agent/streaming.js'
 
 // Hooks system
 export {
@@ -151,6 +143,8 @@ export {
   AfterToolCallEvent,
   BeforeModelCallEvent,
   AfterModelCallEvent,
+  BeforeToolsEvent,
+  AfterToolsEvent,
   ModelStreamEventHook,
 } from './hooks/index.js'
 export type { HookCallback, HookProvider, HookEventConstructor, ModelStopResponse } from './hooks/index.js'

@@ -37,7 +37,10 @@ describe('Agent', () => {
         const { items } = await collectGenerator(agent.stream('Test prompt'))
 
         expect(items.length).toBeGreaterThan(0)
-        expect(items[0]).toEqual({ type: 'beforeInvocationEvent' })
+        const firstItem = items[0]
+        expect(firstItem).toBeDefined()
+        expect(firstItem?.type).toBe('beforeInvocationEvent')
+        expect(firstItem).toHaveProperty('agent', agent)
       })
 
       it('returns AgentResult as generator return value', async () => {
@@ -102,29 +105,30 @@ describe('Agent', () => {
         const beforeTools = items.find((e) => e.type === 'beforeToolsEvent')
         const afterTools = items.find((e) => e.type === 'afterToolsEvent')
 
-        expect(beforeTools).toEqual({
-          type: 'beforeToolsEvent',
-          message: {
-            type: 'message',
-            role: 'assistant',
-            content: [{ type: 'toolUseBlock', name: 'testTool', toolUseId: 'tool-1', input: {} }],
-          },
+        expect(beforeTools).toBeDefined()
+        expect(beforeTools?.type).toBe('beforeToolsEvent')
+        expect(beforeTools?.message).toEqual({
+          type: 'message',
+          role: 'assistant',
+          content: [{ type: 'toolUseBlock', name: 'testTool', toolUseId: 'tool-1', input: {} }],
         })
-        expect(afterTools).toEqual({
-          type: 'afterToolsEvent',
-          message: {
-            type: 'message',
-            role: 'user',
-            content: [
-              {
-                type: 'toolResultBlock',
-                toolUseId: 'tool-1',
-                status: 'success',
-                content: [{ type: 'textBlock', text: 'Success' }],
-              },
-            ],
-          },
+        expect(beforeTools).toHaveProperty('agent', agent)
+
+        expect(afterTools).toBeDefined()
+        expect(afterTools?.type).toBe('afterToolsEvent')
+        expect(afterTools?.message).toEqual({
+          type: 'message',
+          role: 'user',
+          content: [
+            {
+              type: 'toolResultBlock',
+              toolUseId: 'tool-1',
+              status: 'success',
+              content: [{ type: 'textBlock', text: 'Success' }],
+            },
+          ],
         })
+        expect(afterTools).toHaveProperty('agent', agent)
       })
     })
 
