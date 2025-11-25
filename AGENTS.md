@@ -796,7 +796,7 @@ import { Agent, McpClient } from '@strands-agents/sdk'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 
 // Connect to local MCP server
-const mcpClient = new McpClient({
+const localMcpClient = new McpClient({
   transport: new StdioClientTransport({
     command: 'npx',
     args: ['-y', 'chrome-devtools-mcp']
@@ -804,7 +804,7 @@ const mcpClient = new McpClient({
 })
 
 const agent = new Agent({
-  tools: [mcpClient],
+  tools: [localMcpClient],
   model: new OpenAIModel()
 })
 ```
@@ -814,7 +814,7 @@ const agent = new Agent({
 ```typescript
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 
-const mcpClient = new McpClient({
+const remoteMcpClient = new McpClient({
   transport: new StreamableHTTPClientTransport(
     new URL('https://api.example.com/mcp/'),
     {
