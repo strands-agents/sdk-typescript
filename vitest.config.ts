@@ -45,12 +45,37 @@ export default defineConfig({
       {
         test: {
           include: ['tests_integ/**/*.test.ts'],
+          exclude: ['tests_integ/agent-browser.test.ts'],
           name: { label: 'integ', color: 'magenta' },
           testTimeout: 30000,
           retry: 1,
           globalSetup: './tests_integ/integ-setup.ts',
           sequence: {
             concurrent: true,
+          },
+        },
+      },
+      {
+        test: {
+          include: ['tests_integ/agent-browser.test.ts'],
+          name: { label: 'integ-browser', color: 'yellow' },
+          testTimeout: 30000,
+          browser: {
+            enabled: true,
+            provider: playwright(),
+            instances: [
+              {
+                browser: 'chromium',
+              },
+            ],
+          },
+          // Pass AWS credentials and API keys via define for browser environment
+          define: {
+            'import.meta.env.AWS_ACCESS_KEY_ID': JSON.stringify(process.env.AWS_ACCESS_KEY_ID || ''),
+            'import.meta.env.AWS_SECRET_ACCESS_KEY': JSON.stringify(process.env.AWS_SECRET_ACCESS_KEY || ''),
+            'import.meta.env.AWS_SESSION_TOKEN': JSON.stringify(process.env.AWS_SESSION_TOKEN || ''),
+            'import.meta.env.AWS_REGION': JSON.stringify(process.env.AWS_REGION || 'us-east-1'),
+            'import.meta.env.OPENAI_API_KEY': JSON.stringify(process.env.OPENAI_API_KEY || ''),
           },
         },
       },
