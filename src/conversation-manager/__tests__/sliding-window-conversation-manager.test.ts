@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { SlidingWindowConversationManager } from '../sliding-window-conversation-manager.js'
 import { ContextWindowOverflowError, Message, TextBlock, ToolUseBlock, ToolResultBlock } from '../../index.js'
 import { HookRegistryImplementation } from '../../hooks/registry.js'
@@ -248,6 +248,44 @@ describe('SlidingWindowConversationManager', () => {
 
       // Should have trimmed messages since truncation was skipped
       expect(mockAgent.messages.length).toBeLessThan(3)
+    })
+
+    it('does not call truncateToolResults unless an error is passed in', async () => {
+      const manager = new SlidingWindowConversationManager({ windowSize: 1, shouldTruncateResults: true })
+      const messages = [
+        new Message({ role: 'user', content: [new TextBlock('Message 1')] }),
+        new Message({
+          role: 'assistant',
+          content: [new ToolUseBlock({ name: 'tool1', toolUseId: 'id-1', input: {} })],
+        }),
+        new Message({
+          role: 'user',
+          content: [
+            new ToolResultBlock({
+              toolUseId: 'id-1',
+              status: 'success',
+              content: [new TextBlock('Tool result content')],
+            }),
+          ],
+        }),
+        new Message({ role: 'assistant', content: [new TextBlock('Response 1')] }),
+      ]
+      const mockAgent = createMockAgent({ messages })
+
+      // Spy on truncateToolResults to verify it's NOT called
+      const truncateSpy = vi.spyOn(manager as any, 'truncateToolResults')
+
+      // Trigger window size enforcement (no error parameter)
+      await triggerSlidingWindow(manager, mockAgent)
+
+      // Verify truncateToolResults was NOT called during window enforcement
+      expect(truncateSpy).not.toHaveBeenCalled()
+
+      // Should have trimmed to window size (1 message) through message trimming instead
+      expect(mockAgent.messages).toHaveLength(1)
+      expect(mockAgent.messages[0]!.content[0]!).toEqual({ type: 'textBlock', text: 'Response 1' })
+
+      truncateSpy.mockRestore()
     })
   })
 
