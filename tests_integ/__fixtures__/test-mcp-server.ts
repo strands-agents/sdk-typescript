@@ -1,16 +1,12 @@
 /**
  * Test MCP Server Implementation
  *
- * Provides a simple MCP server with test tools for integration testing.
- * Supports stdio, SSE, and Streamable HTTP transports.
+ * Provides a simple MCP server with test tools for integration testing via stdio transport.
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
-import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js'
 import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js'
-import { createServer, type Server as HttpServer } from 'node:http'
-import type { AddressInfo } from 'node:net'
 
 /**
  * Creates a test MCP server with echo, calculator, and error_tool tools.
@@ -167,125 +163,18 @@ function createTestServer(): Server {
 }
 
 /**
- * Creates and starts a stdio MCP server.
- * This server reads from stdin and writes to stdout.
+ * Starts a stdio MCP server.
+ * The server reads from stdin and writes to stdout.
+ * Process cleanup is handled automatically when the parent process closes the transport.
  */
-export async function startStdioServer(): Promise<void> {
+async function startStdioServer(): Promise<void> {
   const server = createTestServer()
   const transport = new StdioServerTransport()
   await server.connect(transport)
 
-  // Keep process alive
+  // Keep process alive - process will be killed when transport is closed by client
   process.stdin.resume()
 }
 
-/**
- * Interface for HTTP-based server info
- */
-export interface HttpServerInfo {
-  server: HttpServer
-  port: number
-  url: string
-  close: () => Promise<void>
-}
-
-/**
- * Creates and starts an SSE MCP server on a random port.
- */
-export async function startSSEServer(): Promise<HttpServerInfo> {
-  const mcpServer = createTestServer()
-
-  const httpServer = createServer(async (req, res) => {
-    if (req.url === '/sse' && req.method === 'GET') {
-      const transport = new SSEServerTransport('/message', res)
-      await mcpServer.connect(transport)
-    } else if (req.url === '/message' && req.method === 'POST') {
-      // SSE transport handles incoming messages
-      let _body = ''
-      req.on('data', (chunk) => {
-        _body += chunk.toString()
-      })
-      req.on('end', () => {
-        // The transport will handle the message
-        res.writeHead(200)
-        res.end()
-      })
-    } else {
-      res.writeHead(404)
-      res.end()
-    }
-  })
-
-  return new Promise((resolve) => {
-    httpServer.listen(0, () => {
-      const address = httpServer.address() as AddressInfo
-      const port = address.port
-      const url = `http://localhost:${port}/sse`
-
-      resolve({
-        server: httpServer,
-        port,
-        url,
-        close: async () => {
-          return new Promise((resolveClose) => {
-            httpServer.close(() => {
-              resolveClose()
-            })
-          })
-        },
-      })
-    })
-  })
-}
-
-/**
- * Creates and starts a Streamable HTTP MCP server on a random port.
- */
-export async function startHTTPServer(): Promise<HttpServerInfo> {
-  const _mcpServer = createTestServer()
-
-  const httpServer = createServer(async (req, res) => {
-    if (req.url === '/mcp' && req.method === 'POST') {
-      // For HTTP streaming, we need to handle the request/response
-      let _body = ''
-      req.on('data', (chunk) => {
-        _body += chunk.toString()
-      })
-      req.on('end', async () => {
-        // The MCP SDK handles the protocol over HTTP
-        // For now, we'll handle it manually
-        res.writeHead(200, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({ error: 'Not implemented' }))
-      })
-    } else {
-      res.writeHead(404)
-      res.end()
-    }
-  })
-
-  return new Promise((resolve) => {
-    httpServer.listen(0, () => {
-      const address = httpServer.address() as AddressInfo
-      const port = address.port
-      const url = `http://localhost:${port}/mcp`
-
-      resolve({
-        server: httpServer,
-        port,
-        url,
-        close: async () => {
-          return new Promise((resolveClose) => {
-            httpServer.close(() => {
-              resolveClose()
-            })
-          })
-        },
-      })
-    })
-  })
-}
-
-// If run directly, start the stdio server
-if (import.meta.url === `file://${process.argv[1]}`) {
-  startStdioServer().catch(console.error)
-}
+// Start the stdio server when this file is run directly
+startStdioServer().catch(console.error)
