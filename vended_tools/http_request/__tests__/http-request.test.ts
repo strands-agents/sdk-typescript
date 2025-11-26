@@ -204,8 +204,7 @@ describe('httpRequest tool', () => {
       globalThis.fetch = vi.fn().mockImplementation(
         async (_url, _options) =>
           new Promise((_resolve, reject) => {
-            // eslint-disable-next-line no-undef
-            setTimeout(() => {
+            globalThis.setTimeout(() => {
               const error = new Error('The operation was aborted')
               error.name = 'AbortError'
               reject(error)

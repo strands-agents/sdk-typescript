@@ -47,8 +47,7 @@ export const httpRequest = tool({
 
     // Create AbortController for timeout
     const controller = new AbortController()
-    // eslint-disable-next-line no-undef
-    const timeoutId: ReturnType<typeof setTimeout> = setTimeout(() => controller.abort(), timeout * 1000)
+    const timeoutId = globalThis.setTimeout(() => controller.abort(), timeout * 1000)
 
     try {
       // Build fetch options
@@ -66,12 +65,10 @@ export const httpRequest = tool({
       }
 
       // Make the fetch request
-      // eslint-disable-next-line no-undef
-      const response = await fetch(url, fetchOptions)
+      const response = await globalThis.fetch(url, fetchOptions)
 
       // Clear the timeout
-      // eslint-disable-next-line no-undef
-      clearTimeout(timeoutId)
+      globalThis.clearTimeout(timeoutId)
 
       // Get response body as text
       const responseBody = await response.text()
@@ -96,8 +93,7 @@ export const httpRequest = tool({
       }
     } catch (error) {
       // Clear timeout on error
-      // eslint-disable-next-line no-undef
-      clearTimeout(timeoutId)
+      globalThis.clearTimeout(timeoutId)
 
       // Handle abort/timeout error
       if (error instanceof Error && error.name === 'AbortError') {
