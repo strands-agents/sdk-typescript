@@ -120,6 +120,7 @@ export class Agent implements AgentData {
   private _initialized: boolean
   private _isInvoking: boolean = false
   private _printer?: Printer
+  private _eventsWithHooksInvoked: WeakSet<HookEvent> = new WeakSet()
 
   /**
    * Creates an instance of the Agent.
@@ -269,8 +270,8 @@ export class Agent implements AgentData {
     while (!result.done) {
       const event = result.value
 
-      // Invoke hook callbacks for Hook Events
-      if (event instanceof HookEvent) {
+      // Invoke hook callbacks for Hook Events (skip if already invoked)
+      if (event instanceof HookEvent && !this._eventsWithHooksInvoked.has(event)) {
         await this.hooks.invokeCallbacks(event)
       }
 
@@ -315,7 +316,7 @@ export class Agent implements AgentData {
         if (modelResult.stopReason !== 'toolUse') {
           // Loop terminates - no tool use requested
           // Add assistant message now that we're returning
-          await this._appendMessage(modelResult.message)
+          yield await this._appendMessage(modelResult.message)
           return new AgentResult({
             stopReason: modelResult.stopReason,
             lastMessage: modelResult.message,
@@ -327,8 +328,8 @@ export class Agent implements AgentData {
 
         // Add assistant message with tool uses right before adding tool results
         // This ensures we don't have dangling tool use messages if tool execution fails
-        await this._appendMessage(modelResult.message)
-        await this._appendMessage(toolResultMessage)
+        yield await this._appendMessage(modelResult.message)
+        yield await this._appendMessage(toolResultMessage)
 
         // Continue loop
       }
@@ -349,7 +350,7 @@ export class Agent implements AgentData {
   ): AsyncGenerator<AgentStreamEvent, { message: Message; stopReason: string }, undefined> {
     if (args !== undefined && typeof args === 'string') {
       // Add user message from args
-      await this._appendMessage(
+      yield await this._appendMessage(
         new Message({
           role: 'user',
           content: [{ type: 'textBlock', text: args }],
@@ -377,6 +378,12 @@ export class Agent implements AgentData {
       // Create error event
       const errorEvent = new AfterModelCallEvent({ agent: this, error: modelError })
 
+      // Mark event as hooks will be invoked
+      this._eventsWithHooksInvoked.add(errorEvent)
+
+      // Yield error event for stream observability
+      yield errorEvent
+
       // Invoke hook to check for retry request
       await this.hooks.invokeCallbacks(errorEvent)
 
@@ -384,9 +391,6 @@ export class Agent implements AgentData {
       if (errorEvent.retryModelCall) {
         return yield* this.invokeModel(args)
       }
-
-      // Yield error event before throwing
-      yield errorEvent
 
       // Re-throw error
       throw error
@@ -554,15 +558,20 @@ export class Agent implements AgentData {
   }
 
   /**
-   * Appends a message to the conversation history and invokes MessageAddedEvent hook.
+   * Appends a message to the conversation history, invokes MessageAddedEvent hook,
+   * and returns the event for yielding.
    *
    * @param message - The message to append
+   * @returns MessageAddedEvent to be yielded (hook already invoked)
    */
-  private async _appendMessage(message: Message): Promise<void> {
+  private async _appendMessage(message: Message): Promise<MessageAddedEvent> {
     this.messages.push(message)
     const event = new MessageAddedEvent({ agent: this, message })
     // Invoke hooks immediately for message tracking
     await this.hooks.invokeCallbacks(event)
+    this._eventsWithHooksInvoked.add(event)
+    // Return event for yielding (stream will skip hook invocation)
+    return event
   }
 }
 
