@@ -2,24 +2,22 @@
  * Test MCP Server Implementation
  *
  * Provides a simple MCP server with test tools for integration testing.
- * Supports stdio, SSE, and Streamable HTTP transports.
+ * Supports stdio and HTTP transports.
  */
 
-import { Server } from '@modelcontextprotocol/sdk/server/index.js'
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
-import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
-import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js'
 import { createServer, type Server as HttpServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { URL } from 'node:url'
+import * as z from 'zod/v4'
 
 /**
- * Creates a test MCP server with echo, calculator, and error_tool tools.
+ * Creates a test MCP server with echo, calculator, and error_tool tools using registerTool.
  */
-function createTestServer(): Server {
-  const server = new Server(
+function createTestServer(): McpServer {
+  const server = new McpServer(
     {
       name: 'test-mcp-server',
       version: '1.0.0',
@@ -31,140 +29,100 @@ function createTestServer(): Server {
     }
   )
 
-  // Register ListTools handler
-  server.setRequestHandler(ListToolsRequestSchema, async () => {
-    return {
-      tools: [
-        {
-          name: 'echo',
-          description: 'Echoes back the input message',
-          inputSchema: {
-            type: 'object',
-            properties: {
-              message: { type: 'string' },
-            },
-            required: ['message'],
+  // Register echo tool
+  server.registerTool(
+    'echo',
+    {
+      title: 'Echo Tool',
+      description: 'Echoes back the input message',
+      inputSchema: {
+        message: z.string(),
+      },
+      outputSchema: {
+        echo: z.string(),
+      },
+    },
+    async ({ message }) => {
+      const output = { echo: message }
+      return {
+        content: [
+          {
+            type: 'text',
+            text: message,
           },
-        },
-        {
-          name: 'calculator',
-          description: 'Performs basic arithmetic operations',
-          inputSchema: {
-            type: 'object',
-            properties: {
-              operation: { type: 'string', enum: ['add', 'subtract', 'multiply', 'divide'] },
-              a: { type: 'number' },
-              b: { type: 'number' },
-            },
-            required: ['operation', 'a', 'b'],
-          },
-        },
-        {
-          name: 'error_tool',
-          description: 'Intentionally throws an error for testing error handling',
-          inputSchema: {
-            type: 'object',
-            properties: {
-              error_message: { type: 'string' },
-            },
-          },
-        },
-      ],
+        ],
+        structuredContent: output,
+      }
     }
-  })
+  )
 
-  // Register CallTool handler
-  server.setRequestHandler(CallToolRequestSchema, async (request) => {
-    const { name, arguments: args } = request.params
+  // Register calculator tool
+  server.registerTool(
+    'calculator',
+    {
+      title: 'Calculator Tool',
+      description: 'Performs basic arithmetic operations',
+      inputSchema: {
+        operation: z.enum(['add', 'subtract', 'multiply', 'divide']),
+        a: z.number(),
+        b: z.number(),
+      },
+      outputSchema: {
+        result: z.number(),
+      },
+    },
+    async ({ operation, a, b }) => {
+      let result: number
 
-    switch (name) {
-      case 'echo': {
-        const message = (args as { message?: string }).message || ''
-        return {
-          content: [
-            {
-              type: 'text',
-              text: message,
-            },
-          ],
-        }
+      switch (operation) {
+        case 'add':
+          result = a + b
+          break
+        case 'subtract':
+          result = a - b
+          break
+        case 'multiply':
+          result = a * b
+          break
+        case 'divide':
+          if (b === 0) {
+            throw new Error('Division by zero')
+          }
+          result = a / b
+          break
       }
 
-      case 'calculator': {
-        const { operation, a, b } = args as { operation: string; a: number; b: number }
-        let result: number
-
-        switch (operation) {
-          case 'add':
-            result = a + b
-            break
-          case 'subtract':
-            result = a - b
-            break
-          case 'multiply':
-            result = a * b
-            break
-          case 'divide':
-            if (b === 0) {
-              return {
-                isError: true,
-                content: [
-                  {
-                    type: 'text',
-                    text: 'Division by zero',
-                  },
-                ],
-              }
-            }
-            result = a / b
-            break
-          default:
-            return {
-              isError: true,
-              content: [
-                {
-                  type: 'text',
-                  text: `Unknown operation: ${operation}`,
-                },
-              ],
-            }
-        }
-
-        return {
-          content: [
-            {
-              type: 'text',
-              text: `Result: ${result}`,
-            },
-          ],
-        }
+      const output = { result }
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Result: ${result}`,
+          },
+        ],
+        structuredContent: output,
       }
-
-      case 'error_tool': {
-        const errorMessage = (args as { error_message?: string }).error_message || 'Intentional error'
-        return {
-          isError: true,
-          content: [
-            {
-              type: 'text',
-              text: errorMessage,
-            },
-          ],
-        }
-      }
-
-      default:
-        return {
-          isError: true,
-          content: [
-            {
-              type: 'text',
-              text: `Unknown tool: ${name}`,
-            },
-          ],
-        }
     }
-  })
+  )
+
+  // Register error tool
+  server.registerTool(
+    'error_tool',
+    {
+      title: 'Error Tool',
+      description: 'Intentionally throws an error for testing error handling',
+      inputSchema: {
+        error_message: z.string().optional(),
+      },
+      outputSchema: {
+        error: z.string(),
+      },
+    },
+    async ({ error_message }) => {
+      const message = error_message || 'Intentional error'
+      throw new Error(message)
+    }
+  )
 
   return server
 }
@@ -194,83 +152,17 @@ export interface HttpServerInfo {
 }
 
 /**
- * Creates and starts an SSE MCP server on a random port.
- */
-export async function startSSEServer(): Promise<HttpServerInfo> {
-  const mcpServer = createTestServer()
-  const transports = new Map<string, SSEServerTransport>()
-
-  const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse) => {
-    if (req.url === '/sse' && req.method === 'GET') {
-      const transport = new SSEServerTransport('/messages', res)
-      transports.set(transport.sessionId, transport)
-
-      res.on('close', () => {
-        transports.delete(transport.sessionId)
-      })
-
-      await mcpServer.connect(transport)
-    } else if (req.url?.startsWith('/messages') && req.method === 'POST') {
-      // Extract sessionId from query string
-      const url = new URL(req.url, `http://${req.headers.host}`)
-      const sessionId = url.searchParams.get('sessionId')
-
-      if (!sessionId || !transports.has(sessionId)) {
-        res.writeHead(400)
-        res.end('Invalid sessionId')
-        return
-      }
-
-      // Read request body
-      let body = ''
-      req.on('data', (chunk) => {
-        body += chunk.toString()
-      })
-      req.on('end', async () => {
-        const transport = transports.get(sessionId)!
-        const parsedBody = JSON.parse(body)
-        await transport.handlePostMessage(req, res, parsedBody)
-      })
-    } else {
-      res.writeHead(404)
-      res.end()
-    }
-  })
-
-  return new Promise((resolve) => {
-    httpServer.listen(0, () => {
-      const address = httpServer.address() as AddressInfo
-      const port = address.port
-      const url = `http://localhost:${port}/sse`
-
-      resolve({
-        server: httpServer,
-        port,
-        url,
-        close: async () => {
-          return new Promise((resolveClose) => {
-            httpServer.close(() => {
-              resolveClose()
-            })
-          })
-        },
-      })
-    })
-  })
-}
-
-/**
  * Creates and starts a Streamable HTTP MCP server on a random port.
+ * Uses stateless mode - creates a new transport for each request.
  */
 export async function startHTTPServer(): Promise<HttpServerInfo> {
   const mcpServer = createTestServer()
-  const transports = new Map<string, StreamableHTTPServerTransport>()
 
   const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse) => {
-    if (req.url === '/mcp' && (req.method === 'GET' || req.method === 'POST' || req.method === 'DELETE')) {
-      // Read request body for POST requests
-      let body = ''
-      if (req.method === 'POST') {
+    if (req.url === '/mcp' && req.method === 'POST') {
+      try {
+        // Read request body
+        let body = ''
         await new Promise<void>((resolve) => {
           req.on('data', (chunk) => {
             body += chunk.toString()
@@ -279,37 +171,37 @@ export async function startHTTPServer(): Promise<HttpServerInfo> {
             resolve()
           })
         })
-      }
 
-      const parsedBody = body ? JSON.parse(body) : undefined
-      const sessionId = req.headers['mcp-session-id'] as string | undefined
+        const parsedBody = body ? JSON.parse(body) : undefined
 
-      let transport: StreamableHTTPServerTransport
-
-      if (sessionId && transports.has(sessionId)) {
-        transport = transports.get(sessionId)!
-      } else if (!sessionId && req.method === 'POST') {
-        // New session
-        transport = new StreamableHTTPServerTransport({
-          sessionIdGenerator: () => `test-session-${Date.now()}`,
-          onsessioninitialized: (sid) => {
-            transports.set(sid, transport)
-          },
+        // Create a new transport for each request (stateless mode)
+        const transport = new StreamableHTTPServerTransport({
+          sessionIdGenerator: undefined,
+          enableJsonResponse: true,
         })
-        transport.onclose = () => {
-          const sid = transport.sessionId
-          if (sid) {
-            transports.delete(sid)
-          }
-        }
-        await mcpServer.connect(transport)
-      } else {
-        res.writeHead(400)
-        res.end('Invalid request')
-        return
-      }
 
-      await transport.handleRequest(req, res, parsedBody)
+        res.on('close', () => {
+          transport.close()
+        })
+
+        await mcpServer.connect(transport)
+        await transport.handleRequest(req, res, parsedBody)
+      } catch (error) {
+        console.error('Error handling MCP request:', error)
+        if (!res.headersSent) {
+          res.writeHead(500, { 'Content-Type': 'application/json' })
+          res.end(
+            JSON.stringify({
+              jsonrpc: '2.0',
+              error: {
+                code: -32603,
+                message: 'Internal server error',
+              },
+              id: null,
+            })
+          )
+        }
+      }
     } else {
       res.writeHead(404)
       res.end()

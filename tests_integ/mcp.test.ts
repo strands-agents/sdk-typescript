@@ -1,7 +1,7 @@
 /**
  * MCP Integration Tests
  *
- * Tests Agent integration with MCP servers using all transport types.
+ * Tests Agent integration with MCP servers using all supported transport types.
  * Verifies that agents can successfully use MCP tools via the Bedrock model.
  */
 
@@ -9,7 +9,6 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { McpClient, Agent } from '@strands-agents/sdk'
 import { BedrockModel } from '@strands-agents/sdk/bedrock'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
-import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { resolve } from 'node:path'
 import { URL } from 'node:url'
@@ -23,20 +22,15 @@ type TransportConfig = {
 
 describe('MCP Integration Tests', () => {
   const serverPath = resolve(process.cwd(), 'tests_integ/__fixtures__/test-mcp-server.ts')
-  let sseServerInfo: HttpServerInfo | undefined
   let httpServerInfo: HttpServerInfo | undefined
 
   beforeAll(async () => {
-    // Start HTTP-based servers
-    const { startSSEServer, startHTTPServer } = await import('./__fixtures__/test-mcp-server.js')
-    sseServerInfo = await startSSEServer()
+    // Start HTTP server
+    const { startHTTPServer } = await import('./__fixtures__/test-mcp-server.js')
     httpServerInfo = await startHTTPServer()
   }, 30000)
 
   afterAll(async () => {
-    if (sseServerInfo) {
-      await sseServerInfo.close()
-    }
     if (httpServerInfo) {
       await httpServerInfo.close()
     }
@@ -52,16 +46,6 @@ describe('MCP Integration Tests', () => {
             command: 'npx',
             args: ['tsx', serverPath],
           }),
-        })
-      },
-    },
-    {
-      name: 'SSE',
-      createClient: () => {
-        if (!sseServerInfo) throw new Error('SSE server not started')
-        return new McpClient({
-          applicationName: 'test-mcp-sse',
-          transport: new SSEClientTransport(new URL(sseServerInfo.url)),
         })
       },
     },
