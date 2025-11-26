@@ -22,18 +22,15 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@v6
       with:
         persist-credentials: false
 
     - name: Set up Node.js
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@v6
       with:
         node-version: '20'
         registry-url: 'https://registry.npmjs.org'
-
-    - name: Update npm
-      run: npm install -g npm@latest
 
     - name: Extract version from tag
       id: version
@@ -84,13 +81,10 @@ jobs:
     
     steps:
     - name: Set up Node.js
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@v6
       with:
         node-version: '20'
         registry-url: 'https://registry.npmjs.org'
-
-    - name: Update npm
-      run: npm install -g npm@latest
 
     - name: Download all the dists
       uses: actions/download-artifact@v5
