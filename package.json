@@ -29,6 +29,10 @@
     "./vended_tools/file_editor": {
       "import": "./dist/vended_tools/file_editor/index.js",
       "types": "./dist/vended_tools/file_editor/index.d.ts"
+    },
+    "./vended_tools/http_request": {
+      "import": "./dist/vended_tools/http_request/index.js",
+      "types": "./dist/vended_tools/http_request/index.d.ts"
     }
   },
   "scripts": {
