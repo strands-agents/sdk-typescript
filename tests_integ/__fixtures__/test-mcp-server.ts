@@ -128,20 +128,6 @@ function createTestServer(): McpServer {
 }
 
 /**
- * Starts a stdio MCP server.
- * The server reads from stdin and writes to stdout.
- * Process cleanup is handled automatically when the parent process closes the transport.
- */
-async function startStdioServer(): Promise<void> {
-  const server = createTestServer()
-  const transport = new StdioServerTransport()
-  await server.connect(transport)
-
-  // Keep process alive - process will be killed when transport is closed by client
-  process.stdin.resume()
-}
-
-/**
  * Interface for HTTP-based server info
  */
 export interface HttpServerInfo {
@@ -180,8 +166,8 @@ export async function startHTTPServer(): Promise<HttpServerInfo> {
           enableJsonResponse: true,
         })
 
-        res.on('close', () => {
-          transport.close()
+        res.on('close', async () => {
+          await transport.close()
         })
 
         await mcpServer.connect(transport)
@@ -231,4 +217,8 @@ export async function startHTTPServer(): Promise<HttpServerInfo> {
 }
 
 // Start the stdio server when this file is run directly
-startStdioServer().catch(console.error)
+if (import.meta.url === `file://${process.argv[1]}`) {
+  const server = createTestServer()
+  const transport = new StdioServerTransport()
+  await server.connect(transport)
+}

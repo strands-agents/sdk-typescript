@@ -63,64 +63,56 @@ describe('MCP Integration Tests', () => {
   describe.each(transports)('$name transport', ({ createClient }) => {
     it('agent can use multiple MCP tools in a conversation', async () => {
       const client = await createClient()
-      try {
-        const model = new BedrockModel({ maxTokens: 300 })
+      const model = new BedrockModel({ maxTokens: 300 })
 
-        const agent = new Agent({
-          systemPrompt:
-            'You are a helpful assistant. Use the echo tool to repeat messages and the calculator tool for arithmetic.',
-          tools: [client],
-          model,
-        })
+      const agent = new Agent({
+        systemPrompt:
+          'You are a helpful assistant. Use the echo tool to repeat messages and the calculator tool for arithmetic.',
+        tools: [client],
+        model,
+      })
 
-        // First turn: Use echo tool
-        await agent.invoke('Use the echo tool to say "Multi-turn test"')
+      // First turn: Use echo tool
+      await agent.invoke('Use the echo tool to say "Multi-turn test"')
 
-        // Verify echo tool was used
-        const hasEchoUse = agent.messages.some((msg) =>
-          msg.content.some((block) => block.type === 'toolUseBlock' && block.name === 'echo')
-        )
-        expect(hasEchoUse).toBe(true)
+      // Verify echo tool was used
+      const hasEchoUse = agent.messages.some((msg) =>
+        msg.content.some((block) => block.type === 'toolUseBlock' && block.name === 'echo')
+      )
+      expect(hasEchoUse).toBe(true)
 
-        // Second turn: Use calculator tool in same conversation
-        const result = await agent.invoke('Now use the calculator tool to add 15 and 27')
+      // Second turn: Use calculator tool in same conversation
+      const result = await agent.invoke('Now use the calculator tool to add 15 and 27')
 
-        expect(result).toBeDefined()
-        expect(result.stopReason).toBeDefined()
+      expect(result).toBeDefined()
+      expect(result.stopReason).toBeDefined()
 
-        // Verify calculator tool was used
-        const hasCalculatorUse = agent.messages.some((msg) =>
-          msg.content.some((block) => block.type === 'toolUseBlock' && block.name === 'calculator')
-        )
-        expect(hasCalculatorUse).toBe(true)
-      } finally {
-        client[Symbol.dispose]()
-      }
+      // Verify calculator tool was used
+      const hasCalculatorUse = agent.messages.some((msg) =>
+        msg.content.some((block) => block.type === 'toolUseBlock' && block.name === 'calculator')
+      )
+      expect(hasCalculatorUse).toBe(true)
     }, 60000)
 
     it('agent handles MCP tool errors gracefully', async () => {
       const client = await createClient()
-      try {
-        const model = new BedrockModel({ maxTokens: 200 })
+      const model = new BedrockModel({ maxTokens: 200 })
 
-        const agent = new Agent({
-          systemPrompt: 'You are a helpful assistant. If asked to test errors, use the error_tool.',
-          tools: [client],
-          model,
-        })
+      const agent = new Agent({
+        systemPrompt: 'You are a helpful assistant. If asked to test errors, use the error_tool.',
+        tools: [client],
+        model,
+      })
 
-        const result = await agent.invoke('Use the error_tool to test error handling.')
+      const result = await agent.invoke('Use the error_tool to test error handling.')
 
-        expect(result).toBeDefined()
+      expect(result).toBeDefined()
 
-        // Verify the error was encountered
-        const hasErrorResult = agent.messages.some((msg) =>
-          msg.content.some((block) => block.type === 'toolResultBlock' && block.status === 'error')
-        )
-        expect(hasErrorResult).toBe(true)
-      } finally {
-        client[Symbol.dispose]()
-      }
+      // Verify the error was encountered
+      const hasErrorResult = agent.messages.some((msg) =>
+        msg.content.some((block) => block.type === 'toolResultBlock' && block.status === 'error')
+      )
+      expect(hasErrorResult).toBe(true)
     }, 30000)
   })
 })
