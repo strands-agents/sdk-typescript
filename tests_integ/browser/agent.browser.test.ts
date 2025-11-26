@@ -8,7 +8,7 @@ import { z } from 'zod'
 import { collectGenerator } from '../../src/__fixtures__/model-test-helpers.js'
 
 // Import fixtures
-import yellowPngUrl from './__resources__/yellow.png?url'
+import yellowPngUrl from '../__resources__/yellow.png?url'
 
 // Environment detection for browser vs Node.js
 const isNode = typeof process !== 'undefined' && typeof process.versions !== 'undefined' && !!process.versions.node
