@@ -377,7 +377,7 @@ export class Agent implements AgentData {
 
       // Create error event
       const errorEvent = new AfterModelCallEvent({ agent: this, error: modelError })
-      
+
       // Invoke hook to check for retry request
       await this.hooks.invokeCallbacks(errorEvent)
 
