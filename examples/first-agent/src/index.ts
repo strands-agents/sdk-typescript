@@ -88,4 +88,4 @@ async function main() {
   await runStreaming('3: Streaming invocation with events', streamingAgentWithTools, 'What is the weather in Seattle?')
 }
 
-main().catch(console.error)
+await main().catch(console.error)

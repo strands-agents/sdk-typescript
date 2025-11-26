@@ -31,13 +31,8 @@ export class McpClient {
     })
   }
 
-  [Symbol.dispose](): void {
-    this._client.close()
-    this._transport.close()
-  }
-
   get client(): Client {
-    return this.client
+    return this._client
   }
 
   /**
@@ -53,7 +48,7 @@ export class McpClient {
     }
 
     if (this._connected && reconnect) {
-      this._client.close()
+      await this._client.close()
       this._connected = false
     }
 
@@ -63,7 +58,20 @@ export class McpClient {
   }
 
   /**
+   * Disconnects the MCP client from the server and cleans up resources.
+   *
+   * @returns A promise that resolves when the disconnection is complete.
+   */
+  public async disconnect(): Promise<void> {
+    // Must be done sequentially
+    await this._client.close()
+    await this._transport.close()
+    this._connected = false
+  }
+
+  /**
    * Lists the tools available on the server and returns them as executable McpTool instances.
+   *
    * @returns A promise that resolves with an array of McpTool instances.
    */
   public async listTools(): Promise<McpTool[]> {

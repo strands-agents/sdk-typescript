@@ -114,9 +114,9 @@ export class SlidingWindowConversationManager implements HookProvider {
    *         such as when the conversation is already minimal or when no valid trim point exists.
    */
   private reduceContext(messages: Message[], _error?: Error): void {
-    // Try to truncate the tool result first
+    // Only truncate tool results when handling a context overflow error, not for window size enforcement
     const lastMessageIdxWithToolResults = this.findLastMessageWithToolResults(messages)
-    if (lastMessageIdxWithToolResults !== undefined && this._shouldTruncateResults) {
+    if (_error && lastMessageIdxWithToolResults !== undefined && this._shouldTruncateResults) {
       const resultsTruncated = this.truncateToolResults(messages, lastMessageIdxWithToolResults)
       if (resultsTruncated) {
         return

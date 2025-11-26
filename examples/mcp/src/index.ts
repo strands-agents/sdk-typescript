@@ -44,6 +44,7 @@ async function main() {
     console.warn(
       'Skipping GitHub MCP client example; STRANDS_EXAMPLE_GITHUB_PAT environment variable not set. Though prompted not to, this can perform side effects when using certain tools.'
     )
+    await chromeDevtools.disconnect()
     return
   }
 
@@ -77,6 +78,10 @@ async function main() {
     agentWithGithubMcpClient,
     'Use a random tool from the GitHub MCP server to illustrate that they work.'
   )
+
+  await Promise.all([chromeDevtools.disconnect(), githubMcpClient.disconnect()])
 }
 
-main().catch(console.error)
+await main()
+  .catch(console.error)
+  .finally(() => process.exit(0))
