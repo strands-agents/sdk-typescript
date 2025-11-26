@@ -80,7 +80,6 @@ const providers = [
 ]
 
 describe.each(providers)('Agent Browser Tests with $name', async ({ name, createModel }) => {
-  console.log(await commands.getOpenAIAPIKey())
   describe(`${name} Browser Integration`, () => {
     it('handles basic invocation', async () => {
       const agent = new Agent({ model: await createModel(), printer: false })

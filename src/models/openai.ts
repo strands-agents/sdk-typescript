@@ -11,7 +11,7 @@ import OpenAI, { type ClientOptions } from 'openai'
 import { Model } from '../models/model.js'
 import type { BaseModelConfig, StreamOptions } from '../models/model.js'
 import type { Message } from '../types/messages.js'
-import type { ImageBlock, DocumentBlock } from '../types/media.js'
+import type { ImageBlock, DocumentBlock, MediaFormats } from '../types/media.js'
 import { encodeBase64 } from '../types/media.js'
 import type { ModelStreamEvent } from '../models/streaming.js'
 import { ContextWindowOverflowError } from '../errors.js'
@@ -22,7 +22,17 @@ import type { ChatCompletionContentPartText } from 'openai/resources/index.mjs'
  * Maps file extensions to MIME types without using Node.js path module.
  */
 const mimeTypeLookup = (format: string): string | false => {
-  const mimeTypes: Record<string, string> = {
+  const mimeTypes: Record<MediaFormats, string> = {
+    // Video
+    mkv: 'video/x-matroska',
+    mov: 'video/quicktime',
+    mp4: 'application/mp4',
+    webm: 'video/webm',
+    flv: 'video/x-flv',
+    mpeg: 'video/mpeg',
+    mpg: 'video/mpeg',
+    wmv: 'video/x-ms-wmv',
+    '3gp': 'video/3gpp',
     // Images
     png: 'image/png',
     jpg: 'image/jpeg',
@@ -31,13 +41,18 @@ const mimeTypeLookup = (format: string): string | false => {
     webp: 'image/webp',
     // Documents
     pdf: 'application/pdf',
+    csv: 'text/csv',
+    doc: 'application/msword',
+    docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    xls: 'application/vnd.ms-excel',
     txt: 'text/plain',
     json: 'application/json',
     xml: 'application/xml',
     html: 'text/html',
-    csv: 'text/csv',
+    md: 'text/markdown',
   }
-  return mimeTypes[format.toLowerCase()] || false
+  return mimeTypes[format.toLowerCase() as MediaFormats] || false
 }
 
 const DEFAULT_OPENAI_MODEL_ID = 'gpt-4o'

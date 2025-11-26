@@ -32,6 +32,8 @@ import {
   type VideoSource as BedrockVideoSource,
   type DocumentSource as BedrockDocumentSource,
   type SystemContentBlock,
+  DocumentFormat,
+  ImageFormat,
 } from '@aws-sdk/client-bedrock-runtime'
 import { type BaseModelConfig, Model, type StreamOptions } from '../models/model.js'
 import type { ContentBlock, Message, ToolUseBlock } from '../types/messages.js'
@@ -589,7 +591,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
       case 'imageBlock':
         return {
           image: {
-            format: block.format,
+            format: block.format as ImageFormat,
             source: this._formatMediaSource(block.source),
           },
         }
@@ -606,7 +608,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
         return {
           document: {
             name: block.name,
-            format: block.format,
+            format: block.format as DocumentFormat,
             source: this._formatDocumentSource(block.source),
             ...(block.citations && { citations: block.citations }),
             ...(block.context && { context: block.context }),

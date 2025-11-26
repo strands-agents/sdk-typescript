@@ -64,7 +64,7 @@ export default defineConfig({
         test: {
           include: ['tests_integ/**/*.test.ts'],
           exclude: ['tests_integ/**/*.browser.test.ts'],
-          name: { label: 'integ', color: 'magenta' },
+          name: { label: 'integ-node', color: 'magenta' },
           testTimeout: 30000,
           retry: 1,
           globalSetup: './tests_integ/integ-setup.ts',
