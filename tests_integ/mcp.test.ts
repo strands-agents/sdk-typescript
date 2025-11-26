@@ -12,7 +12,7 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { resolve } from 'node:path'
 import { URL } from 'node:url'
-import type { HttpServerInfo } from './__fixtures__/test-mcp-server.js'
+import { startHTTPServer, type HttpServerInfo } from './__fixtures__/test-mcp-server.js'
 
 type TransportConfig = {
   name: string
@@ -26,7 +26,6 @@ describe('MCP Integration Tests', () => {
 
   beforeAll(async () => {
     // Start HTTP server
-    const { startHTTPServer } = await import('./__fixtures__/test-mcp-server.js')
     httpServerInfo = await startHTTPServer()
   }, 30000)
 
@@ -62,50 +61,34 @@ describe('MCP Integration Tests', () => {
   ]
 
   describe.each(transports)('$name transport', ({ createClient }) => {
-    it('agent can use MCP echo tool with Bedrock', async () => {
+    it('agent can use multiple MCP tools in a conversation', async () => {
       const client = await createClient()
       try {
-        const model = new BedrockModel({ maxTokens: 200 })
-
-        const agent = new Agent({
-          systemPrompt: 'You are a helpful assistant. Use the echo tool to repeat messages back to the user.',
-          tools: [client],
-          model,
-        })
-
-        const result = await agent.invoke('Use the echo tool to say "Integration test success"')
-
-        expect(result).toBeDefined()
-        expect(result.stopReason).toBeDefined()
-
-        // Verify that the echo tool was used
-        const hasToolUse = agent.messages.some((msg) =>
-          msg.content.some((block) => block.type === 'toolUseBlock' && block.name === 'echo')
-        )
-        expect(hasToolUse).toBe(true)
-      } finally {
-        client[Symbol.dispose]()
-      }
-    }, 30000)
-
-    it('agent can use MCP calculator tool with Bedrock', async () => {
-      const client = await createClient()
-      try {
-        const model = new BedrockModel({ maxTokens: 200 })
+        const model = new BedrockModel({ maxTokens: 300 })
 
         const agent = new Agent({
           systemPrompt:
-            'You are a helpful assistant. Use the calculator tool to perform arithmetic operations. When asked to calculate something, use the calculator tool.',
+            'You are a helpful assistant. Use the echo tool to repeat messages and the calculator tool for arithmetic.',
           tools: [client],
           model,
         })
 
-        const result = await agent.invoke('What is 25 plus 17? Use the calculator tool.')
+        // First turn: Use echo tool
+        await agent.invoke('Use the echo tool to say "Multi-turn test"')
+
+        // Verify echo tool was used
+        const hasEchoUse = agent.messages.some((msg) =>
+          msg.content.some((block) => block.type === 'toolUseBlock' && block.name === 'echo')
+        )
+        expect(hasEchoUse).toBe(true)
+
+        // Second turn: Use calculator tool in same conversation
+        const result = await agent.invoke('Now use the calculator tool to add 15 and 27')
 
         expect(result).toBeDefined()
         expect(result.stopReason).toBeDefined()
 
-        // Verify that the calculator tool was used
+        // Verify calculator tool was used
         const hasCalculatorUse = agent.messages.some((msg) =>
           msg.content.some((block) => block.type === 'toolUseBlock' && block.name === 'calculator')
         )
@@ -113,7 +96,7 @@ describe('MCP Integration Tests', () => {
       } finally {
         client[Symbol.dispose]()
       }
-    }, 30000)
+    }, 60000)
 
     it('agent handles MCP tool errors gracefully', async () => {
       const client = await createClient()
