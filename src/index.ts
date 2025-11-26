@@ -130,7 +130,7 @@ export { BedrockModel as BedrockModel } from './models/bedrock.js'
 export type { BedrockModelConfig, BedrockModelOptions } from './models/bedrock.js'
 
 // Agent streaming event types
-export type { AgentStreamEvent } from './agent/streaming.js'
+export type { AgentStreamEvent } from './types/agent.js'
 
 // Hooks system
 export {

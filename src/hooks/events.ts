@@ -1,7 +1,6 @@
 import type { AgentData } from '../types/agent.js'
 import type { ContentBlock, Message, ToolResultBlock } from '../types/messages.js'
 import type { Tool } from '../tools/tool.js'
-import type { ToolSpec, ToolChoice } from '../tools/types.js'
 import type { JSONValue } from '../types/json.js'
 import type { ModelStreamEvent } from '../models/streaming.js'
 
@@ -142,28 +141,10 @@ export class AfterToolCallEvent extends HookEvent {
 export class BeforeModelCallEvent extends HookEvent {
   readonly type = 'beforeModelCallEvent' as const
   readonly agent: AgentData
-  readonly messages: Message[]
-  readonly systemPrompt?: string | ContentBlock[]
-  readonly toolSpecs: ToolSpec[]
-  readonly toolChoice?: ToolChoice
 
-  constructor(data: {
-    agent: AgentData
-    messages?: Message[]
-    systemPrompt?: string | ContentBlock[]
-    toolSpecs?: ToolSpec[]
-    toolChoice?: ToolChoice
-  }) {
+  constructor(data: { agent: AgentData }) {
     super()
     this.agent = data.agent
-    this.messages = data.messages ?? []
-    if (data.systemPrompt !== undefined) {
-      this.systemPrompt = data.systemPrompt
-    }
-    this.toolSpecs = data.toolSpecs ?? []
-    if (data.toolChoice !== undefined) {
-      this.toolChoice = data.toolChoice
-    }
   }
 }
 

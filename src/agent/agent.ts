@@ -25,6 +25,7 @@ import type { HookProvider } from '../hooks/types.js'
 import { SlidingWindowConversationManager } from '../conversation-manager/sliding-window-conversation-manager.js'
 import { HookRegistryImplementation } from '../hooks/registry.js'
 import {
+  HookEvent,
   AfterInvocationEvent,
   AfterModelCallEvent,
   AfterToolCallEvent,
@@ -36,8 +37,6 @@ import {
   MessageAddedEvent,
   ModelStreamEventHook,
 } from '../hooks/events.js'
-import type { ToolSpec, ToolChoice } from '../tools/types.js'
-import type { ContentBlock } from '../types/messages.js'
 
 /**
  * Recursive type definition for nested tool arrays.
@@ -263,16 +262,25 @@ export class Agent implements AgentData {
 
     await this.initialize()
 
-    // Delegate to _stream and process events through printer
+    // Delegate to _stream and process events through printer and hooks
     const streamGenerator = this._stream(args)
     let result = await streamGenerator.next()
 
     while (!result.done) {
       const event = result.value
+
+      // Invoke hook callbacks for Hook Events
+      if (event instanceof HookEvent) {
+        await this.hooks.invokeCallbacks(event)
+      }
+
       this._printer?.processEvent(event)
       yield event
       result = await streamGenerator.next()
     }
+
+    // Yield final result as last event
+    yield result.value
 
     return result.value
   }
@@ -286,9 +294,6 @@ export class Agent implements AgentData {
    */
   private async *_stream(args: InvokeArgs): AsyncGenerator<AgentStreamEvent, AgentResult, undefined> {
     let currentArgs: InvokeArgs | undefined = args
-
-    // Invoke BeforeInvocationEvent hook
-    await this.hooks.invokeCallbacks(new BeforeInvocationEvent({ agent: this }))
 
     // Emit event before the loop starts
     yield new BeforeInvocationEvent({ agent: this })
@@ -310,8 +315,9 @@ export class Agent implements AgentData {
         if (modelResult.stopReason !== 'toolUse') {
           // Loop terminates - no tool use requested
           // Add assistant message now that we're returning
-          await this._appendMessage(modelResult.message)
+          yield this._appendMessage(modelResult.message)
           return {
+            type: 'agentResult' as const,
             stopReason: modelResult.stopReason,
             lastMessage: modelResult.message,
           }
@@ -322,15 +328,12 @@ export class Agent implements AgentData {
 
         // Add assistant message with tool uses right before adding tool results
         // This ensures we don't have dangling tool use messages if tool execution fails
-        await this._appendMessage(modelResult.message)
-        await this._appendMessage(toolResultMessage)
+        yield this._appendMessage(modelResult.message)
+        yield this._appendMessage(toolResultMessage)
 
         // Continue loop
       }
     } finally {
-      // Invoke AfterInvocationEvent hook
-      await this.hooks.invokeCallbacks(new AfterInvocationEvent({ agent: this }))
-
       // Always emit final event
       yield new AfterInvocationEvent({ agent: this })
     }
@@ -345,38 +348,9 @@ export class Agent implements AgentData {
   private async *invokeModel(
     args?: InvokeArgs
   ): AsyncGenerator<AgentStreamEvent, { message: Message; stopReason: string }, undefined> {
-    // Compute stream options before emitting event
-    const toolSpecs = this._toolRegistry.values().map((tool) => tool.toolSpec)
-    const streamOptions: StreamOptions = { toolSpecs }
-    if (this._systemPrompt !== undefined) {
-      streamOptions.systemPrompt = this._systemPrompt
-    }
-
-    // Emit event before invoking model
-    const eventData: {
-      agent: AgentData
-      messages?: Message[]
-      systemPrompt?: string | ContentBlock[]
-      toolSpecs?: ToolSpec[]
-      toolChoice?: ToolChoice
-    } = {
-      agent: this,
-      messages: [...this.messages],
-    }
-    if (streamOptions.toolSpecs !== undefined) {
-      eventData.toolSpecs = streamOptions.toolSpecs
-    }
-    if (streamOptions.systemPrompt !== undefined) {
-      eventData.systemPrompt = streamOptions.systemPrompt
-    }
-    if (streamOptions.toolChoice !== undefined) {
-      eventData.toolChoice = streamOptions.toolChoice
-    }
-    yield new BeforeModelCallEvent(eventData)
-
     if (args !== undefined && typeof args === 'string') {
       // Add user message from args
-      await this._appendMessage(
+      yield this._appendMessage(
         new Message({
           role: 'user',
           content: [{ type: 'textBlock', text: args }],
@@ -384,13 +358,16 @@ export class Agent implements AgentData {
       )
     }
 
-    await this.hooks.invokeCallbacks(new BeforeModelCallEvent({ agent: this }))
+    const toolSpecs = this._toolRegistry.values().map((tool) => tool.toolSpec)
+    const streamOptions: StreamOptions = { toolSpecs }
+    if (this._systemPrompt !== undefined) {
+      streamOptions.systemPrompt = this._systemPrompt
+    }
+
+    yield new BeforeModelCallEvent({ agent: this })
 
     try {
       const { message, stopReason } = yield* this._streamFromModel(this.messages, streamOptions)
-
-      // Invoke AfterModelCallEvent hook on success
-      await this.hooks.invokeCallbacks(new AfterModelCallEvent({ agent: this, stopData: { message, stopReason } }))
 
       yield new AfterModelCallEvent({ agent: this, stopData: { message, stopReason } })
 
@@ -398,13 +375,19 @@ export class Agent implements AgentData {
     } catch (error) {
       const modelError = normalizeError(error)
 
-      // Invoke AfterModelCallEvent hook even on error
-      const event = await this.hooks.invokeCallbacks(new AfterModelCallEvent({ agent: this, error: modelError }))
+      // Create error event
+      const errorEvent = new AfterModelCallEvent({ agent: this, error: modelError })
+      
+      // Invoke hook to check for retry request
+      await this.hooks.invokeCallbacks(errorEvent)
 
       // Check if hooks request a retry (e.g., after reducing context)
-      if (event.retryModelCall) {
+      if (errorEvent.retryModelCall) {
         return yield* this.invokeModel(args)
       }
+
+      // Yield error event before throwing
+      yield errorEvent
 
       // Re-throw error
       throw error
@@ -428,8 +411,10 @@ export class Agent implements AgentData {
     while (!result.done) {
       const event = result.value
 
-      await this.hooks.invokeCallbacks(new ModelStreamEventHook({ agent: this, event }))
+      // Yield hook event for observability
+      yield new ModelStreamEventHook({ agent: this, event })
 
+      // Yield the actual model event
       yield event
       result = await streamGenerator.next()
     }
@@ -505,8 +490,7 @@ export class Agent implements AgentData {
       input: toolUseBlock.input,
     }
 
-    // Invoke BeforeToolCallEvent hook
-    await this.hooks.invokeCallbacks(new BeforeToolCallEvent({ agent: this, toolUse, tool }))
+    yield new BeforeToolCallEvent({ agent: this, toolUse, tool })
 
     if (!tool) {
       // Tool not found - return error result instead of throwing
@@ -516,8 +500,7 @@ export class Agent implements AgentData {
         content: [new TextBlock(`Tool '${toolUseBlock.name}' not found in registry`)],
       })
 
-      // Invoke AfterToolCallEvent hook for tool not found
-      await this.hooks.invokeCallbacks(new AfterToolCallEvent({ agent: this, toolUse, tool, result: errorResult }))
+      yield new AfterToolCallEvent({ agent: this, toolUse, tool, result: errorResult })
 
       return errorResult
     }
@@ -546,14 +529,12 @@ export class Agent implements AgentData {
           content: [new TextBlock(`Tool '${toolUseBlock.name}' did not return a result`)],
         })
 
-        // Invoke AfterToolCallEvent hook for no result
-        await this.hooks.invokeCallbacks(new AfterToolCallEvent({ agent: this, toolUse, tool, result: errorResult }))
+        yield new AfterToolCallEvent({ agent: this, toolUse, tool, result: errorResult })
 
         return errorResult
       }
 
-      // Invoke AfterToolCallEvent hook for success
-      await this.hooks.invokeCallbacks(new AfterToolCallEvent({ agent: this, toolUse, tool, result: toolResult }))
+      yield new AfterToolCallEvent({ agent: this, toolUse, tool, result: toolResult })
 
       // Tool already returns ToolResultBlock directly
       return toolResult
@@ -567,23 +548,21 @@ export class Agent implements AgentData {
         error: toolError,
       })
 
-      // Invoke AfterToolCallEvent hook for error
-      await this.hooks.invokeCallbacks(
-        new AfterToolCallEvent({ agent: this, toolUse, tool, result: errorResult, error: toolError })
-      )
+      yield new AfterToolCallEvent({ agent: this, toolUse, tool, result: errorResult, error: toolError })
 
       return errorResult
     }
   }
 
   /**
-   * Appends a message to the conversation history and fires the MessageAddedEvent hook.
+   * Appends a message to the conversation history and returns MessageAddedEvent.
    *
    * @param message - The message to append
+   * @returns MessageAddedEvent to be yielded
    */
-  private async _appendMessage(message: Message): Promise<void> {
+  private _appendMessage(message: Message): MessageAddedEvent {
     this.messages.push(message)
-    await this.hooks.invokeCallbacks(new MessageAddedEvent({ agent: this, message }))
+    return new MessageAddedEvent({ agent: this, message })
   }
 }
 

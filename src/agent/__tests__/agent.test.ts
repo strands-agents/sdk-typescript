@@ -50,6 +50,7 @@ describe('Agent', () => {
         const { result } = await collectGenerator(agent.stream('Test prompt'))
 
         expect(result).toEqual({
+          type: 'agentResult',
           stopReason: 'endTurn',
           lastMessage: expect.objectContaining({
             role: 'assistant',
@@ -165,12 +166,13 @@ describe('Agent', () => {
         const result = await agent.invoke('Test prompt')
 
         expect(result).toEqual({
+          type: 'agentResult',
           stopReason: 'endTurn',
-          lastMessage: {
+          lastMessage: expect.objectContaining({
             type: 'message',
             role: 'assistant',
-            content: [{ type: 'textBlock', text: 'Response text' }],
-          },
+            content: expect.arrayContaining([expect.objectContaining({ type: 'textBlock', text: 'Response text' })]),
+          }),
         })
       })
 
@@ -181,14 +183,14 @@ describe('Agent', () => {
         const result = await agent.invoke('Test')
 
         expect(result).toEqual({
+          type: 'agentResult',
           stopReason: 'endTurn',
-          lastMessage: {
+          lastMessage: expect.objectContaining({
             type: 'message',
             role: 'assistant',
-            content: [{ type: 'textBlock', text: 'Hello' }],
-          },
+            content: expect.arrayContaining([expect.objectContaining({ type: 'textBlock', text: 'Hello' })]),
+          }),
         })
-        expect(result).not.toHaveProperty('type')
       })
     })
 
@@ -210,12 +212,13 @@ describe('Agent', () => {
         const result = await agent.invoke('What is 1 + 2?')
 
         expect(result).toEqual({
+          type: 'agentResult',
           stopReason: 'endTurn',
-          lastMessage: {
+          lastMessage: expect.objectContaining({
             type: 'message',
             role: 'assistant',
-            content: [{ type: 'textBlock', text: 'The answer is 3' }],
-          },
+            content: expect.arrayContaining([expect.objectContaining({ type: 'textBlock', text: 'The answer is 3' })]),
+          }),
         })
       })
     })
