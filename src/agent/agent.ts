@@ -120,7 +120,6 @@ export class Agent implements AgentData {
   private _initialized: boolean
   private _isInvoking: boolean = false
   private _printer?: Printer
-  private _eventsWithHooksInvoked: WeakSet<HookEvent> = new WeakSet()
 
   /**
    * Creates an instance of the Agent.
@@ -270,8 +269,8 @@ export class Agent implements AgentData {
     while (!result.done) {
       const event = result.value
 
-      // Invoke hook callbacks for Hook Events (skip if already invoked)
-      if (event instanceof HookEvent && !this._eventsWithHooksInvoked.has(event)) {
+      // Invoke hook callbacks for Hook Events (except MessageAddedEvent which invokes in _appendMessage)
+      if (event instanceof HookEvent && !(event instanceof MessageAddedEvent)) {
         await this.hooks.invokeCallbacks(event)
       }
 
@@ -378,16 +377,10 @@ export class Agent implements AgentData {
       // Create error event
       const errorEvent = new AfterModelCallEvent({ agent: this, error: modelError })
 
-      // Mark event as hooks will be invoked
-      this._eventsWithHooksInvoked.add(errorEvent)
-
-      // Yield error event for stream observability
+      // Yield error event - stream will invoke hooks
       yield errorEvent
 
-      // Invoke hook to check for retry request
-      await this.hooks.invokeCallbacks(errorEvent)
-
-      // Check if hooks request a retry (e.g., after reducing context)
+      // After yielding, hooks have been invoked and may have set retryModelCall
       if (errorEvent.retryModelCall) {
         return yield* this.invokeModel(args)
       }
@@ -569,8 +562,7 @@ export class Agent implements AgentData {
     const event = new MessageAddedEvent({ agent: this, message })
     // Invoke hooks immediately for message tracking
     await this.hooks.invokeCallbacks(event)
-    this._eventsWithHooksInvoked.add(event)
-    // Return event for yielding (stream will skip hook invocation)
+    // Return event for yielding (stream will skip hook invocation for MessageAddedEvent)
     return event
   }
 }
