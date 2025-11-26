@@ -4,4 +4,3 @@
 
 export { httpRequest } from './http-request.js'
 export type { HttpRequestInput, HttpRequestOutput } from './types.js'
-export { HttpTimeoutError, HttpRequestError } from './types.js'

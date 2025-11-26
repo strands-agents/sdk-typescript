@@ -52,35 +52,3 @@ export interface HttpRequestOutput {
    */
   body: string
 }
-
-/**
- * Error thrown when HTTP request times out.
- */
-export class HttpTimeoutError extends Error {
-  constructor(message: string) {
-    super(message)
-    this.name = 'HttpTimeoutError'
-  }
-}
-
-/**
- * Error thrown when HTTP request fails with non-2xx status.
- */
-export class HttpRequestError extends Error {
-  /**
-   * HTTP status code of the failed request.
-   */
-  public readonly status: number
-
-  /**
-   * HTTP status text of the failed request.
-   */
-  public readonly statusText: string
-
-  constructor(message: string, status: number, statusText: string) {
-    super(message)
-    this.name = 'HttpRequestError'
-    this.status = status
-    this.statusText = statusText
-  }
-}

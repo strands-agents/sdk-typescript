@@ -74,10 +74,10 @@ Returns an object with the following properties:
 
 ### Error Handling
 
-The tool throws errors in the following cases:
+The tool throws standard JavaScript Error objects in the following cases:
 
-- **HttpTimeoutError**: Request exceeds the specified timeout
-- **HttpRequestError**: HTTP response with non-2xx status code (includes status and statusText)
+- **Timeout Error**: Request exceeds the specified timeout (error message includes "Request timed out")
+- **HTTP Error**: HTTP response with non-2xx status code (error message includes HTTP status code and status text)
 - **Network Errors**: Connection failures, DNS resolution failures, etc.
 
 When used within an agent, these errors are automatically converted to tool execution errors.
@@ -155,20 +155,20 @@ console.log(response.headers.allow) // Check allowed methods
 ### Error Handling
 
 ```typescript
-import { HttpRequestError, HttpTimeoutError } from '@strands-agents/sdk/vended_tools/http_request'
-
 try {
   const response = await httpRequest.invoke({
     method: 'GET',
     url: 'https://api.example.com/protected',
   })
 } catch (error) {
-  if (error instanceof HttpRequestError) {
-    console.error(`HTTP Error: ${error.status} ${error.statusText}`)
-  } else if (error instanceof HttpTimeoutError) {
-    console.error('Request timed out')
-  } else {
-    console.error('Network error:', error)
+  if (error instanceof Error) {
+    if (error.message.includes('HTTP 401')) {
+      console.error('Unauthorized access')
+    } else if (error.message.includes('Request timed out')) {
+      console.error('Request timed out')
+    } else {
+      console.error('Network error:', error.message)
+    }
   }
 }
 ```

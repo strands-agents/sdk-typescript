@@ -1,12 +1,9 @@
-/* eslint-env node, browser */
-/* eslint-disable no-undef */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { httpRequest } from '../http-request.js'
-import { HttpTimeoutError, HttpRequestError } from '../types.js'
 
 describe('httpRequest tool', () => {
   // Store original fetch
-  const originalFetch = global.fetch
+  const originalFetch = globalThis.fetch
 
   beforeEach(() => {
     // Reset fetch mock before each test
@@ -15,13 +12,13 @@ describe('httpRequest tool', () => {
 
   afterEach(() => {
     // Restore original fetch after each test
-    global.fetch = originalFetch
+    globalThis.fetch = originalFetch
   })
 
   describe('GET request', () => {
     it('returns successful response with correct structure', async () => {
       // Mock fetch response
-      global.fetch = vi.fn().mockResolvedValue({
+      globalThis.fetch = vi.fn().mockResolvedValue({
         ok: true,
         status: 200,
         statusText: 'OK',
@@ -47,13 +44,13 @@ describe('httpRequest tool', () => {
         body: '{"message":"success"}',
       })
 
-      expect(global.fetch).toHaveBeenCalledWith('https://api.example.com/data', expect.any(Object))
+      expect(globalThis.fetch).toHaveBeenCalledWith('https://api.example.com/data', expect.any(Object))
     })
   })
 
   describe('POST request', () => {
     it('sends POST request with body and custom headers', async () => {
-      global.fetch = vi.fn().mockResolvedValue({
+      globalThis.fetch = vi.fn().mockResolvedValue({
         ok: true,
         status: 201,
         statusText: 'Created',
@@ -75,7 +72,7 @@ describe('httpRequest tool', () => {
         body: '{"id":123}',
       })
 
-      expect(global.fetch).toHaveBeenCalledWith(
+      expect(globalThis.fetch).toHaveBeenCalledWith(
         'https://api.example.com/users',
         expect.objectContaining({
           method: 'POST',
@@ -88,7 +85,7 @@ describe('httpRequest tool', () => {
 
   describe('PUT request', () => {
     it('sends PUT request successfully', async () => {
-      global.fetch = vi.fn().mockResolvedValue({
+      globalThis.fetch = vi.fn().mockResolvedValue({
         ok: true,
         status: 200,
         statusText: 'OK',
@@ -109,7 +106,7 @@ describe('httpRequest tool', () => {
 
   describe('DELETE request', () => {
     it('sends DELETE request successfully', async () => {
-      global.fetch = vi.fn().mockResolvedValue({
+      globalThis.fetch = vi.fn().mockResolvedValue({
         ok: true,
         status: 204,
         statusText: 'No Content',
@@ -129,7 +126,7 @@ describe('httpRequest tool', () => {
 
   describe('PATCH request', () => {
     it('sends PATCH request successfully', async () => {
-      global.fetch = vi.fn().mockResolvedValue({
+      globalThis.fetch = vi.fn().mockResolvedValue({
         ok: true,
         status: 200,
         statusText: 'OK',
@@ -150,7 +147,7 @@ describe('httpRequest tool', () => {
 
   describe('HEAD request', () => {
     it('sends HEAD request and returns headers only', async () => {
-      global.fetch = vi.fn().mockResolvedValue({
+      globalThis.fetch = vi.fn().mockResolvedValue({
         ok: true,
         status: 200,
         statusText: 'OK',
@@ -177,7 +174,7 @@ describe('httpRequest tool', () => {
 
   describe('OPTIONS request', () => {
     it('sends OPTIONS request successfully', async () => {
-      global.fetch = vi.fn().mockResolvedValue({
+      globalThis.fetch = vi.fn().mockResolvedValue({
         ok: true,
         status: 200,
         statusText: 'OK',
@@ -198,10 +195,11 @@ describe('httpRequest tool', () => {
   describe('timeout handling', () => {
     it('throws timeout error when request exceeds timeout', async () => {
       // Mock fetch to delay longer than timeout
-      global.fetch = vi.fn().mockImplementation(
+      globalThis.fetch = vi.fn().mockImplementation(
         async (_url, _options) =>
           new Promise((_resolve, reject) => {
             // Simulate timeout by calling abort
+            // eslint-disable-next-line no-undef
             setTimeout(() => {
               const error = new Error('The operation was aborted')
               error.name = 'AbortError'
@@ -216,11 +214,11 @@ describe('httpRequest tool', () => {
           url: 'https://slow-api.example.com',
           timeout: 0.1, // 100ms
         })
-      ).rejects.toThrow(HttpTimeoutError)
+      ).rejects.toThrow('Request timed out')
     })
 
     it('uses default timeout of 30 seconds', async () => {
-      global.fetch = vi.fn().mockResolvedValue({
+      globalThis.fetch = vi.fn().mockResolvedValue({
         ok: true,
         status: 200,
         statusText: 'OK',
@@ -234,7 +232,7 @@ describe('httpRequest tool', () => {
       })
 
       // Verify fetch was called with signal (timeout controller)
-      expect(global.fetch).toHaveBeenCalledWith(
+      expect(globalThis.fetch).toHaveBeenCalledWith(
         'https://api.example.com',
         expect.objectContaining({ signal: expect.any(Object) })
       )
@@ -243,7 +241,7 @@ describe('httpRequest tool', () => {
 
   describe('HTTP error responses', () => {
     it('throws error for 404 Not Found', async () => {
-      global.fetch = vi.fn().mockResolvedValue({
+      globalThis.fetch = vi.fn().mockResolvedValue({
         ok: false,
         status: 404,
         statusText: 'Not Found',
@@ -256,22 +254,11 @@ describe('httpRequest tool', () => {
           method: 'GET',
           url: 'https://api.example.com/notfound',
         })
-      ).rejects.toThrow(HttpRequestError)
-
-      try {
-        await httpRequest.invoke({
-          method: 'GET',
-          url: 'https://api.example.com/notfound',
-        })
-      } catch (error) {
-        expect(error).toBeInstanceOf(HttpRequestError)
-        expect((error as HttpRequestError).status).toBe(404)
-        expect((error as HttpRequestError).statusText).toBe('Not Found')
-      }
+      ).rejects.toThrow('HTTP 404 Not Found')
     })
 
     it('throws error for 400 Bad Request', async () => {
-      global.fetch = vi.fn().mockResolvedValue({
+      globalThis.fetch = vi.fn().mockResolvedValue({
         ok: false,
         status: 400,
         statusText: 'Bad Request',
@@ -285,11 +272,11 @@ describe('httpRequest tool', () => {
           url: 'https://api.example.com/data',
           body: 'invalid',
         })
-      ).rejects.toThrow(HttpRequestError)
+      ).rejects.toThrow('HTTP 400')
     })
 
     it('throws error for 401 Unauthorized', async () => {
-      global.fetch = vi.fn().mockResolvedValue({
+      globalThis.fetch = vi.fn().mockResolvedValue({
         ok: false,
         status: 401,
         statusText: 'Unauthorized',
@@ -302,11 +289,11 @@ describe('httpRequest tool', () => {
           method: 'GET',
           url: 'https://api.example.com/protected',
         })
-      ).rejects.toThrow(HttpRequestError)
+      ).rejects.toThrow('HTTP 401')
     })
 
     it('throws error for 403 Forbidden', async () => {
-      global.fetch = vi.fn().mockResolvedValue({
+      globalThis.fetch = vi.fn().mockResolvedValue({
         ok: false,
         status: 403,
         statusText: 'Forbidden',
@@ -319,11 +306,11 @@ describe('httpRequest tool', () => {
           method: 'GET',
           url: 'https://api.example.com/forbidden',
         })
-      ).rejects.toThrow(HttpRequestError)
+      ).rejects.toThrow('HTTP 403')
     })
 
     it('throws error for 500 Internal Server Error', async () => {
-      global.fetch = vi.fn().mockResolvedValue({
+      globalThis.fetch = vi.fn().mockResolvedValue({
         ok: false,
         status: 500,
         statusText: 'Internal Server Error',
@@ -336,11 +323,11 @@ describe('httpRequest tool', () => {
           method: 'GET',
           url: 'https://api.example.com/error',
         })
-      ).rejects.toThrow(HttpRequestError)
+      ).rejects.toThrow('HTTP 500')
     })
 
     it('throws error for 502 Bad Gateway', async () => {
-      global.fetch = vi.fn().mockResolvedValue({
+      globalThis.fetch = vi.fn().mockResolvedValue({
         ok: false,
         status: 502,
         statusText: 'Bad Gateway',
@@ -353,11 +340,11 @@ describe('httpRequest tool', () => {
           method: 'GET',
           url: 'https://api.example.com',
         })
-      ).rejects.toThrow(HttpRequestError)
+      ).rejects.toThrow('HTTP 502')
     })
 
     it('throws error for 503 Service Unavailable', async () => {
-      global.fetch = vi.fn().mockResolvedValue({
+      globalThis.fetch = vi.fn().mockResolvedValue({
         ok: false,
         status: 503,
         statusText: 'Service Unavailable',
@@ -370,13 +357,13 @@ describe('httpRequest tool', () => {
           method: 'GET',
           url: 'https://api.example.com',
         })
-      ).rejects.toThrow(HttpRequestError)
+      ).rejects.toThrow('HTTP 503')
     })
   })
 
   describe('network errors', () => {
     it('throws error when fetch fails with network error', async () => {
-      global.fetch = vi.fn().mockRejectedValue(new Error('Network error: Failed to fetch'))
+      globalThis.fetch = vi.fn().mockRejectedValue(new Error('Network error: Failed to fetch'))
 
       await expect(
         httpRequest.invoke({
@@ -387,7 +374,7 @@ describe('httpRequest tool', () => {
     })
 
     it('throws error when DNS resolution fails', async () => {
-      global.fetch = vi.fn().mockRejectedValue(new Error('DNS resolution failed'))
+      globalThis.fetch = vi.fn().mockRejectedValue(new Error('DNS resolution failed'))
 
       await expect(
         httpRequest.invoke({
@@ -400,7 +387,7 @@ describe('httpRequest tool', () => {
 
   describe('response body handling', () => {
     it('handles empty response body', async () => {
-      global.fetch = vi.fn().mockResolvedValue({
+      globalThis.fetch = vi.fn().mockResolvedValue({
         ok: true,
         status: 204,
         statusText: 'No Content',
@@ -417,7 +404,7 @@ describe('httpRequest tool', () => {
     })
 
     it('handles plain text response', async () => {
-      global.fetch = vi.fn().mockResolvedValue({
+      globalThis.fetch = vi.fn().mockResolvedValue({
         ok: true,
         status: 200,
         statusText: 'OK',
@@ -434,7 +421,7 @@ describe('httpRequest tool', () => {
     })
 
     it('handles HTML response', async () => {
-      global.fetch = vi.fn().mockResolvedValue({
+      globalThis.fetch = vi.fn().mockResolvedValue({
         ok: true,
         status: 200,
         statusText: 'OK',
@@ -452,7 +439,7 @@ describe('httpRequest tool', () => {
 
     it('handles large response body', async () => {
       const largeBody = 'x'.repeat(10000)
-      global.fetch = vi.fn().mockResolvedValue({
+      globalThis.fetch = vi.fn().mockResolvedValue({
         ok: true,
         status: 200,
         statusText: 'OK',
@@ -472,7 +459,7 @@ describe('httpRequest tool', () => {
 
   describe('headers handling', () => {
     it('converts response headers to plain object', async () => {
-      global.fetch = vi.fn().mockResolvedValue({
+      globalThis.fetch = vi.fn().mockResolvedValue({
         ok: true,
         status: 200,
         statusText: 'OK',
@@ -497,7 +484,7 @@ describe('httpRequest tool', () => {
     })
 
     it('handles response with no headers', async () => {
-      global.fetch = vi.fn().mockResolvedValue({
+      globalThis.fetch = vi.fn().mockResolvedValue({
         ok: true,
         status: 200,
         statusText: 'OK',
@@ -518,7 +505,7 @@ describe('httpRequest tool', () => {
     it('respects custom timeout value', async () => {
       let abortCalled = false
 
-      global.fetch = vi.fn().mockImplementation(
+      globalThis.fetch = vi.fn().mockImplementation(
         async (_url, options) =>
           new Promise((resolve, reject) => {
             // Check if signal is provided
@@ -533,6 +520,7 @@ describe('httpRequest tool', () => {
             }
 
             // Simulate delay
+            // eslint-disable-next-line no-undef
             setTimeout(() => {
               if (!abortCalled) {
                 resolve({
@@ -553,7 +541,7 @@ describe('httpRequest tool', () => {
           url: 'https://api.example.com',
           timeout: 0.1, // 100ms
         })
-      ).rejects.toThrow(HttpTimeoutError)
+      ).rejects.toThrow('Request timed out')
 
       expect(abortCalled).toBe(true)
     })
@@ -561,7 +549,7 @@ describe('httpRequest tool', () => {
 
   describe('request without optional parameters', () => {
     it('sends request without headers or body', async () => {
-      global.fetch = vi.fn().mockResolvedValue({
+      globalThis.fetch = vi.fn().mockResolvedValue({
         ok: true,
         status: 200,
         statusText: 'OK',
@@ -575,7 +563,7 @@ describe('httpRequest tool', () => {
       })
 
       expect(result.status).toBe(200)
-      expect(global.fetch).toHaveBeenCalledWith(
+      expect(globalThis.fetch).toHaveBeenCalledWith(
         'https://api.example.com',
         expect.objectContaining({
           method: 'GET',

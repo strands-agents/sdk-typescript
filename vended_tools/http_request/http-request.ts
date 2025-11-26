@@ -1,8 +1,6 @@
-/* eslint-env node, browser */
-/* eslint-disable no-undef */
+/* eslint-env browser, node */
 import { tool } from '../../src/tools/zod-tool.js'
 import { z } from 'zod'
-import { HttpTimeoutError, HttpRequestError } from './types.js'
 
 /**
  * Zod schema for HTTP request input validation.
@@ -49,7 +47,8 @@ export const httpRequest = tool({
 
     // Create AbortController for timeout
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), timeout * 1000)
+    // eslint-disable-next-line no-undef
+    const timeoutId: ReturnType<typeof setTimeout> = setTimeout(() => controller.abort(), timeout * 1000)
 
     try {
       // Build fetch options
@@ -67,9 +66,11 @@ export const httpRequest = tool({
       }
 
       // Make the fetch request
+      // eslint-disable-next-line no-undef
       const response = await fetch(url, fetchOptions)
 
       // Clear the timeout
+      // eslint-disable-next-line no-undef
       clearTimeout(timeoutId)
 
       // Get response body as text
@@ -83,11 +84,7 @@ export const httpRequest = tool({
 
       // Check if response was successful
       if (!response.ok) {
-        throw new HttpRequestError(
-          `HTTP ${response.status}: ${response.statusText}`,
-          response.status,
-          response.statusText
-        )
+        throw new Error(`HTTP ${response.status} ${response.statusText}: ${method} ${url}`)
       }
 
       // Return successful response as JSON-serializable object
@@ -99,19 +96,15 @@ export const httpRequest = tool({
       }
     } catch (error) {
       // Clear timeout on error
+      // eslint-disable-next-line no-undef
       clearTimeout(timeoutId)
 
       // Handle abort/timeout error
       if (error instanceof Error && error.name === 'AbortError') {
-        throw new HttpTimeoutError(`Request timed out after ${timeout} seconds`)
+        throw new Error(`Request timed out after ${timeout} seconds: ${method} ${url}`)
       }
 
-      // Re-throw HttpRequestError as-is
-      if (error instanceof HttpRequestError) {
-        throw error
-      }
-
-      // Re-throw other errors (network errors, etc.)
+      // Re-throw other errors (network errors, HTTP errors, etc.)
       throw error
     }
   },
