@@ -35,21 +35,15 @@ export interface AgentData {
 /**
  * Result returned by the agent loop.
  */
-export interface AgentResult {
-  /**
-   * Discriminator for agent result.
-   */
-  type: 'agentResult'
+export class AgentResult {
+  readonly type = 'agentResult' as const
+  readonly stopReason: string
+  readonly lastMessage: Message
 
-  /**
-   * The stop reason from the final model response.
-   */
-  stopReason: string
-
-  /**
-   * The last message added to the messages array.
-   */
-  lastMessage: Message
+  constructor(data: { stopReason: string; lastMessage: Message }) {
+    this.stopReason = data.stopReason
+    this.lastMessage = data.lastMessage
+  }
 }
 
 /**

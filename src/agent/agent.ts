@@ -1,5 +1,5 @@
 import {
-  type AgentResult,
+  AgentResult,
   type AgentStreamEvent,
   BedrockModel,
   type JSONValue,
@@ -315,12 +315,11 @@ export class Agent implements AgentData {
         if (modelResult.stopReason !== 'toolUse') {
           // Loop terminates - no tool use requested
           // Add assistant message now that we're returning
-          yield this._appendMessage(modelResult.message)
-          return {
-            type: 'agentResult' as const,
+          await this._appendMessage(modelResult.message)
+          return new AgentResult({
             stopReason: modelResult.stopReason,
             lastMessage: modelResult.message,
-          }
+          })
         }
 
         // Execute tools sequentially
@@ -328,8 +327,8 @@ export class Agent implements AgentData {
 
         // Add assistant message with tool uses right before adding tool results
         // This ensures we don't have dangling tool use messages if tool execution fails
-        yield this._appendMessage(modelResult.message)
-        yield this._appendMessage(toolResultMessage)
+        await this._appendMessage(modelResult.message)
+        await this._appendMessage(toolResultMessage)
 
         // Continue loop
       }
@@ -350,7 +349,7 @@ export class Agent implements AgentData {
   ): AsyncGenerator<AgentStreamEvent, { message: Message; stopReason: string }, undefined> {
     if (args !== undefined && typeof args === 'string') {
       // Add user message from args
-      yield this._appendMessage(
+      await this._appendMessage(
         new Message({
           role: 'user',
           content: [{ type: 'textBlock', text: args }],
@@ -555,14 +554,15 @@ export class Agent implements AgentData {
   }
 
   /**
-   * Appends a message to the conversation history and returns MessageAddedEvent.
+   * Appends a message to the conversation history and invokes MessageAddedEvent hook.
    *
    * @param message - The message to append
-   * @returns MessageAddedEvent to be yielded
    */
-  private _appendMessage(message: Message): MessageAddedEvent {
+  private async _appendMessage(message: Message): Promise<void> {
     this.messages.push(message)
-    return new MessageAddedEvent({ agent: this, message })
+    const event = new MessageAddedEvent({ agent: this, message })
+    // Invoke hooks immediately for message tracking
+    await this.hooks.invokeCallbacks(event)
   }
 }
 

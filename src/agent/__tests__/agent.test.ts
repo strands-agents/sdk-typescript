@@ -4,8 +4,9 @@ import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
 import { collectGenerator } from '../../__fixtures__/model-test-helpers.js'
 import { createMockTool, createRandomTool } from '../../__fixtures__/tool-helpers.js'
 import { ConcurrentInvocationError } from '../../errors.js'
-import { MaxTokensError, TextBlock, CachePointBlock } from '../../index.js'
+import { MaxTokensError, TextBlock, CachePointBlock, AgentResult, Message, ToolUseBlock } from '../../index.js'
 import { AgentPrinter } from '../printer.js'
+import { BeforeInvocationEvent, BeforeToolsEvent } from '../../hooks/events.js'
 
 describe('Agent', () => {
   describe('stream', () => {
@@ -38,9 +39,7 @@ describe('Agent', () => {
 
         expect(items.length).toBeGreaterThan(0)
         const firstItem = items[0]
-        expect(firstItem).toBeDefined()
-        expect(firstItem?.type).toBe('beforeInvocationEvent')
-        expect(firstItem).toHaveProperty('agent', agent)
+        expect(firstItem).toEqual(new BeforeInvocationEvent({ agent: agent }))
       })
 
       it('returns AgentResult as generator return value', async () => {
@@ -49,14 +48,15 @@ describe('Agent', () => {
 
         const { result } = await collectGenerator(agent.stream('Test prompt'))
 
-        expect(result).toEqual({
-          type: 'agentResult',
-          stopReason: 'endTurn',
-          lastMessage: expect.objectContaining({
-            role: 'assistant',
-            content: expect.arrayContaining([expect.objectContaining({ type: 'textBlock', text: 'Hello' })]),
-          }),
-        })
+        expect(result).toEqual(
+          new AgentResult({
+            stopReason: 'endTurn',
+            lastMessage: expect.objectContaining({
+              role: 'assistant',
+              content: expect.arrayContaining([expect.objectContaining({ type: 'textBlock', text: 'Hello' })]),
+            }),
+          })
+        )
       })
     })
 
@@ -106,14 +106,15 @@ describe('Agent', () => {
         const beforeTools = items.find((e) => e.type === 'beforeToolsEvent')
         const afterTools = items.find((e) => e.type === 'afterToolsEvent')
 
-        expect(beforeTools).toBeDefined()
-        expect(beforeTools?.type).toBe('beforeToolsEvent')
-        expect(beforeTools?.message).toEqual({
-          type: 'message',
-          role: 'assistant',
-          content: [{ type: 'toolUseBlock', name: 'testTool', toolUseId: 'tool-1', input: {} }],
-        })
-        expect(beforeTools).toHaveProperty('agent', agent)
+        expect(beforeTools).toEqual(
+          new BeforeToolsEvent({
+            agent: agent,
+            message: new Message({
+              role: 'assistant',
+              content: [new ToolUseBlock({ name: 'testTool', toolUseId: 'tool-1', input: {} })],
+            }),
+          })
+        )
 
         expect(afterTools).toBeDefined()
         expect(afterTools?.type).toBe('afterToolsEvent')

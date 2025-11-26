@@ -12,7 +12,8 @@ export { Agent } from './agent/agent.js'
 export type { AgentState } from './agent/state.js'
 
 // Agent types
-export type { AgentData, AgentResult } from './types/agent.js'
+export type { AgentData } from './types/agent.js'
+export { AgentResult } from './types/agent.js'
 export type { AgentConfig, ToolList } from './agent/agent.js'
 
 // Error types
