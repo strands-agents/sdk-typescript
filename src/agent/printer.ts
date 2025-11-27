@@ -1,4 +1,4 @@
-import type { AgentStreamEvent } from './streaming.js'
+import type { AgentStreamEvent } from '../types/agent.js'
 
 /**
  * Creates a default appender function for the current environment.

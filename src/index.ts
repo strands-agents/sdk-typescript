@@ -12,7 +12,8 @@ export { Agent } from './agent/agent.js'
 export type { AgentState } from './agent/state.js'
 
 // Agent types
-export type { AgentData, AgentResult } from './types/agent.js'
+export type { AgentData } from './types/agent.js'
+export { AgentResult } from './types/agent.js'
 export type { AgentConfig, ToolList } from './agent/agent.js'
 
 // Error types
@@ -130,15 +131,7 @@ export { BedrockModel as BedrockModel } from './models/bedrock.js'
 export type { BedrockModelConfig, BedrockModelOptions } from './models/bedrock.js'
 
 // Agent streaming event types
-export type {
-  AgentStreamEvent,
-  BeforeModelEvent,
-  AfterModelEvent,
-  BeforeToolsEvent,
-  AfterToolsEvent,
-  BeforeInvocationEvent as BeforeInvocationStreamEvent,
-  AfterInvocationEvent as AfterInvocationStreamEvent,
-} from './agent/streaming.js'
+export type { AgentStreamEvent } from './types/agent.js'
 
 // Hooks system
 export {
@@ -151,6 +144,8 @@ export {
   AfterToolCallEvent,
   BeforeModelCallEvent,
   AfterModelCallEvent,
+  BeforeToolsEvent,
+  AfterToolsEvent,
   ModelStreamEventHook,
 } from './hooks/index.js'
 export type { HookCallback, HookProvider, HookEventConstructor, ModelStopResponse } from './hooks/index.js'
