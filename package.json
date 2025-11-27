@@ -78,7 +78,7 @@
     "eslint-plugin-tsdoc": "^0.5.0",
     "husky": "^9.1.7",
     "playwright": "^1.56.1",
-    "prettier": "^3.0.0",
+    "prettier": "^3.7.1",
     "tsx": "^4.20.6",
     "typescript": "^5.5.0",
     "vitest": "^4.0.8"
