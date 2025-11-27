@@ -15,7 +15,13 @@ describe.skipIf(!(await shouldRunTests()))('httpRequest tool (integration)', () 
     const result = await agent.invoke('Call Open-Meteo to get the weather in NYC')
 
     // Verify agent made a request and returned weather information
-    const text = getMessageText(result.messages[result.messages.length - 1])
+    const lastMessage = agent.messages[agent.messages.length - 1]
+    const text = getMessageText(lastMessage)
     expect(text.toLowerCase()).toMatch(/weather|temperature|forecast|nyc|new york/)
+    
+    // Verify the result structure
+    expect(result.stopReason).toBe('endTurn')
+    expect(result.lastMessage.role).toBe('assistant')
   })
 })
+
