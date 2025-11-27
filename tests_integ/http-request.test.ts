@@ -18,10 +18,9 @@ describe.skipIf(!(await shouldRunTests()))('httpRequest tool (integration)', () 
     const lastMessage = agent.messages[agent.messages.length - 1]
     const text = getMessageText(lastMessage)
     expect(text.toLowerCase()).toMatch(/weather|temperature|forecast|nyc|new york/)
-    
+
     // Verify the result structure
     expect(result.stopReason).toBe('endTurn')
     expect(result.lastMessage.role).toBe('assistant')
   })
 })
-
