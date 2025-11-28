@@ -13,7 +13,6 @@ import {
   type ToolContext,
   ToolResultBlock,
   type ToolUseBlock,
-  type ContentBlock,
 } from '../index.js'
 import { systemPromptFromData } from '../types/messages.js'
 import { BaseContentBlock } from '../types/base-content-block.js'
