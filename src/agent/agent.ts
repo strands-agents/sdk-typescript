@@ -113,7 +113,11 @@ export class Agent implements AgentData {
    */
   public readonly hooks: HookRegistryImplementation
 
-  private _model: Model<BaseModelConfig>
+  /**
+   * The model provider used by the agent for inference.
+   * Can be changed at runtime to switch models or update configuration.
+   */
+  public model: Model<BaseModelConfig>
   private _toolRegistry: ToolRegistry
   private _mcpClients: McpClient[]
   private _systemPrompt?: SystemPrompt
@@ -136,7 +140,7 @@ export class Agent implements AgentData {
     this.hooks.addHook(this.conversationManager)
     this.hooks.addAllHooks(config?.hooks ?? [])
 
-    this._model = config?.model ?? new BedrockModel()
+    this.model = config?.model ?? new BedrockModel()
     const { tools, mcpClients } = flattenTools(config?.tools ?? [])
     this._toolRegistry = new ToolRegistry(tools)
     this._mcpClients = mcpClients
@@ -401,7 +405,7 @@ export class Agent implements AgentData {
     messages: Message[],
     streamOptions: StreamOptions
   ): AsyncGenerator<AgentStreamEvent, { message: Message; stopReason: string }, undefined> {
-    const streamGenerator = this._model.streamAggregated(messages, streamOptions)
+    const streamGenerator = this.model.streamAggregated(messages, streamOptions)
     let result = await streamGenerator.next()
 
     while (!result.done) {

@@ -843,6 +843,74 @@ const agent = new Agent({
 
 **See [`examples/mcp/`](examples/mcp/) for complete working examples.**
 
+## Dynamic Model Configuration
+
+The Agent's `model` property can be changed at runtime to dynamically switch between model providers or update model configuration without recreating the agent instance.
+
+### Basic Usage
+
+```typescript
+import { Agent, BedrockModel, OpenAIModel } from '@strands-agents/sdk'
+
+// Create agent with initial model
+const agent = new Agent({
+  model: new BedrockModel({ modelId: 'anthropic.claude-3-5-sonnet-20241022-v2:0' })
+})
+
+// Use the agent
+await agent.invoke('Hello')
+
+// Switch to a different model
+agent.model = new OpenAIModel({ modelId: 'gpt-4' })
+
+// Continue using with new model
+await agent.invoke('What is 2+2?')
+```
+
+### Use Cases
+
+**Switching Model IDs:**
+```typescript
+// Start with a smaller, faster model
+agent.model = new BedrockModel({ modelId: 'anthropic.claude-3-haiku-20240307-v1:0' })
+await agent.invoke('Simple query')
+
+// Switch to more capable model for complex task
+agent.model = new BedrockModel({ modelId: 'anthropic.claude-3-5-sonnet-20241022-v2:0' })
+await agent.invoke('Complex reasoning task')
+```
+
+**Switching Model Providers:**
+```typescript
+// Switch between AWS Bedrock and OpenAI
+agent.model = new BedrockModel()
+await agent.invoke('Use Bedrock')
+
+agent.model = new OpenAIModel()
+await agent.invoke('Use OpenAI')
+```
+
+**Updating Model Configuration:**
+```typescript
+// Update temperature or other model parameters
+agent.model = new BedrockModel({
+  modelId: 'anthropic.claude-3-5-sonnet-20241022-v2:0',
+  temperature: 0.8,
+  maxTokens: 2000
+})
+```
+
+### Important Notes
+
+- **Conversation History Preserved**: Changing the model does not clear the agent's message history. The conversation context persists across model changes.
+- **State Preserved**: The agent's state and tool registry remain unchanged when switching models.
+- **No Validation**: The SDK currently does not validate model compatibility or configuration. Ensure the new model is properly configured before assignment.
+- **Future Enhancement**: Per the [Compatibility Policy](../COMPATIBILITY.MD), validation may be added in future releases via getter/setter conversion without requiring a major version change.
+
+### Compatibility
+
+See [COMPATIBILITY.MD](../COMPATIBILITY.MD) for information about how the `model` property may evolve in future releases.
+
 ## Things to Do
 
 ✅ **Do**:
