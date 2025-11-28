@@ -1079,8 +1079,7 @@ describe('BedrockModel', () => {
 
       // Verify warning was logged
       expect(warnSpy).toHaveBeenCalledWith(
-        '[strands.models.bedrock]',
-        'cachePrompt config is ignored when systemPrompt is an array. Use explicit cache points in the array instead.'
+        'cachePrompt config is ignored when systemPrompt is an array, use explicit cache points instead'
       )
 
       // Verify array is used as-is (cachePrompt config ignored)

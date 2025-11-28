@@ -159,7 +159,7 @@ export {
 
 // Logging
 export { configureLogging } from './logging/logger.js'
-export type { Logger, LogLevel, LoggingConfig } from './logging/types.js'
+export type { Logger } from './logging/types.js'
 
 // MCP Client types and implementations
 export { type McpClientConfig, McpClient } from './mcp.js'

@@ -175,6 +175,57 @@ All checks must pass before commit is allowed.
 
 ## Coding Patterns and Best Practices
 
+### Logging Style Guide
+
+The SDK uses a structured logging format consistent with the Python SDK for better log parsing and searchability.
+
+**Format**:
+```typescript
+// With context fields
+logger.warn(`field1=<${value1}>, field2=<${value2}> | human readable message`)
+
+// Without context fields
+logger.warn('human readable message')
+
+// Multiple statements in message (use pipe to separate)
+logger.warn(`field=<${value}> | statement one | statement two`)
+```
+
+**Guidelines**:
+
+1. **Context Fields** (when relevant):
+   - Add context as `field=<value>` pairs at the beginning
+   - Use commas to separate pairs
+   - Enclose values in `<>` for readability (especially helpful for empty values: `field=<>`)
+   - Use template literals for string interpolation
+
+2. **Messages**:
+   - Add human-readable messages after context fields
+   - Use lowercase for consistency
+   - Avoid punctuation (periods, exclamation points) to reduce clutter
+   - Keep messages concise and focused on a single statement
+   - If multiple statements are needed, separate them with pipe character (`|`)
+
+**Examples**:
+
+```typescript
+// ✅ Good: Context fields with message
+logger.warn(`stop_reason=<${stopReason}>, fallback=<${fallback}> | unknown stop reason, converting to camelCase`)
+logger.warn(`event_type=<${eventType}> | unsupported bedrock event type`)
+
+// ✅ Good: Simple message without context fields
+logger.warn('cache points are not supported in openai system prompts, ignoring cache points')
+
+// ✅ Good: Multiple statements separated by pipes
+logger.warn(`request_id=<${id}> | processing request | starting validation`)
+
+// ❌ Bad: Not using angle brackets for values
+logger.warn(`stop_reason=${stopReason} | unknown stop reason`)
+
+// ❌ Bad: Using punctuation
+logger.warn(`event_type=<${eventType}> | Unsupported event type.`)
+```
+
 ### Import Organization
 
 Use relative imports for internal modules:
