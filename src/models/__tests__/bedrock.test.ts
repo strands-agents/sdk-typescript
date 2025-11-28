@@ -19,7 +19,10 @@ function setupMockSend(streamGenerator: () => AsyncGenerator<unknown>): void {
     })
   )
   vi.mocked(BedrockRuntimeClient).mockImplementation(function () {
-    return { send: mockSend, config: { region: vi.fn(async () => 'us-east-1'), useFipsEndpoint: vi.fn(async () => false) } } as never
+    return {
+      send: mockSend,
+      config: { region: vi.fn(async () => 'us-east-1'), useFipsEndpoint: vi.fn(async () => false) },
+    } as never
   })
 }
 
@@ -484,7 +487,10 @@ describe('BedrockModel', () => {
       })
 
       vi.mocked(BedrockRuntimeClient).mockImplementation(function () {
-        return { send: mockSend, config: { region: vi.fn(async () => 'us-east-1'), useFipsEndpoint: vi.fn(async () => false) } } as never
+        return {
+          send: mockSend,
+          config: { region: vi.fn(async () => 'us-east-1'), useFipsEndpoint: vi.fn(async () => false) },
+        } as never
       })
 
       const provider = new BedrockModel({ stream })
@@ -549,7 +555,10 @@ describe('BedrockModel', () => {
         }
       })
       vi.mocked(BedrockRuntimeClient).mockImplementation(function () {
-        return { send: mockSend, config: { region: vi.fn(async () => 'us-east-1'), useFipsEndpoint: vi.fn(async () => false) } } as never
+        return {
+          send: mockSend,
+          config: { region: vi.fn(async () => 'us-east-1'), useFipsEndpoint: vi.fn(async () => false) },
+        } as never
       })
 
       const provider = new BedrockModel({ stream })
@@ -615,7 +624,10 @@ describe('BedrockModel', () => {
         }
       })
       vi.mocked(BedrockRuntimeClient).mockImplementation(function () {
-        return { send: mockSend, config: { region: vi.fn(async () => 'us-east-1'), useFipsEndpoint: vi.fn(async () => false) } } as never
+        return {
+          send: mockSend,
+          config: { region: vi.fn(async () => 'us-east-1'), useFipsEndpoint: vi.fn(async () => false) },
+        } as never
       })
 
       const provider = new BedrockModel({ stream })
@@ -675,7 +687,10 @@ describe('BedrockModel', () => {
         }
       })
       vi.mocked(BedrockRuntimeClient).mockImplementation(function () {
-        return { send: mockSend, config: { region: vi.fn(async () => 'us-east-1'), useFipsEndpoint: vi.fn(async () => false) } } as never
+        return {
+          send: mockSend,
+          config: { region: vi.fn(async () => 'us-east-1'), useFipsEndpoint: vi.fn(async () => false) },
+        } as never
       })
 
       const provider = new BedrockModel({ stream })
@@ -1564,7 +1579,7 @@ describe('BedrockModel', () => {
             yield { messageStop: { stopReason: 'end_turn' } }
             yield { metadata: { usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } } }
           })(),
-        }),
+        })
       )
 
       vi.mocked(BedrockRuntimeClient).mockImplementation(function (..._args: unknown[]) {
@@ -1601,7 +1616,7 @@ describe('BedrockModel', () => {
             yield { messageStop: { stopReason: 'end_turn' } }
             yield { metadata: { usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } } }
           })(),
-        }),
+        })
       )
 
       vi.mocked(BedrockRuntimeClient).mockImplementation(function (..._args: unknown[]) {
@@ -1637,7 +1652,7 @@ describe('BedrockModel', () => {
             yield { messageStop: { stopReason: 'end_turn' } }
             yield { metadata: { usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } } }
           })(),
-        }),
+        })
       )
 
       vi.mocked(BedrockRuntimeClient).mockImplementation(function (..._args: unknown[]) {
@@ -1665,7 +1680,7 @@ describe('BedrockModel', () => {
           stream: (async function* (): AsyncGenerator<unknown> {
             yield { messageStart: { role: 'assistant' } }
           })(),
-        }),
+        })
       )
 
       vi.mocked(BedrockRuntimeClient).mockImplementation(function (..._args: unknown[]) {
@@ -1697,7 +1712,7 @@ describe('BedrockModel', () => {
             yield { messageStop: { stopReason: 'end_turn' } }
             yield { metadata: { usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } } }
           })(),
-        }),
+        })
       )
 
       vi.mocked(BedrockRuntimeClient).mockImplementation(function (..._args: unknown[]) {
