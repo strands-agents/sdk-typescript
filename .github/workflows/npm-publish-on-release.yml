@@ -13,13 +13,18 @@ jobs:
     with:
       ref: ${{ github.event.release.target_commitish }}
 
-  build:
-    name: Build distribution 📦
-    permissions:
-      contents: read
+  publish:
+    name: Build and publish to NPM
     needs:
       - call-test-lint
     runs-on: ubuntu-latest
+
+    environment:
+      name: npm
+      url: https://www.npmjs.com/package/@strands-agents/sdk
+    permissions:
+      id-token: write
+      contents: read
 
     steps:
     - uses: actions/checkout@v6
@@ -31,6 +36,9 @@ jobs:
       with:
         node-version: '20'
         registry-url: 'https://registry.npmjs.org'
+
+    - name: Update npm to latest
+      run: npm install -g npm@latest
 
     - name: Extract version from tag
       id: version
@@ -53,45 +61,15 @@ jobs:
       run: |
         npm version ${{ steps.version.outputs.version }} --no-git-tag-version
 
-    - name: Install dependencies
+    - name: Install dependencies and build
       run: npm ci
-
-    - name: Build
-      run: npm run build
 
     - name: Store the distribution packages
       uses: actions/upload-artifact@v5
       with:
         name: npm-package-distributions
-        path: |
-          dist/
-          package.json
-
-  deploy:
-    name: Upload release to NPM
-    needs:
-    - build
-    runs-on: ubuntu-latest
-
-    environment:
-      name: npm
-      url: https://www.npmjs.com/package/@strands-agents/sdk
-    permissions:
-      id-token: write  # Required for OIDC auth
-    
-    steps:
-    - name: Set up Node.js
-      uses: actions/setup-node@v6
-      with:
-        node-version: '20'
-        registry-url: 'https://registry.npmjs.org'
-
-    - name: Download all the dists
-      uses: actions/download-artifact@v6
-      with:
-        name: npm-package-distributions
         path: .
 
-    - name: Publish distribution 📦 to NPM
+    - name: Publish to NPM
       # TODO: uncomment `--access public` for launch
-      run: npm publish --ignore-scripts # --access public
+      run: npm publish # --access public
