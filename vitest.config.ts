@@ -1,8 +1,5 @@
 import { defineConfig } from 'vitest/config'
 import { playwright } from '@vitest/browser-playwright'
-import { AwsCredentialIdentity } from '@aws-sdk/types';
-import { fromNodeProviderChain } from '@aws-sdk/credential-providers'
-import { BrowserCommand } from 'vitest/node'
 
 // Conditionally exclude bash tool from coverage on Windows
 // since tests are skipped on Windows (bash not available)
@@ -13,21 +10,6 @@ const coverageExclude = [
 ]
 if (process.platform === 'win32') {
   coverageExclude.push('vended_tools/bash/**')
-}
-
-const getAwsCredentials: BrowserCommand<[], AwsCredentialIdentity> = async ({
-  testPath,
-  provider
-}) => {
-  const credentialProvider = fromNodeProviderChain()
-  return await credentialProvider()
-}
-
-const getOpenAIAPIKey: BrowserCommand<[], string | undefined> = async ({
-  testPath,
-  provider
-}) => {
-  return process.env.OPENAI_API_KEY
 }
 
 export default defineConfig({
@@ -63,36 +45,9 @@ export default defineConfig({
       {
         test: {
           include: ['tests_integ/**/*.test.ts'],
-          exclude: ['tests_integ/**/*.browser.test.ts'],
-          name: { label: 'integ-node', color: 'magenta' },
+          name: { label: 'integ', color: 'magenta' },
           testTimeout: 30000,
           retry: 1,
-          globalSetup: './tests_integ/integ-setup.ts',
-          sequence: {
-            concurrent: true,
-          },
-        },
-      },
-      {
-        test: {
-          include: ['tests_integ/**/*.browser.test.ts'],
-          name: { label: 'integ-browser', color: 'yellow' },
-          testTimeout: 30000,
-          browser: {
-            enabled: true,
-            provider: playwright(),
-            instances: [
-              {
-                browser: 'chromium',
-              },
-            ],
-            // These act as passthrough commands that browser tests can use to communicate with the test server running in node.
-            // This allows browsers to get access to credential secrets
-            commands: {
-              getAwsCredentials,
-              getOpenAIAPIKey,
-            },
-          },
           globalSetup: './tests_integ/integ-setup.ts',
           sequence: {
             concurrent: true,

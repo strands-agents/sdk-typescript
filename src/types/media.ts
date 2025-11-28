@@ -7,8 +7,6 @@
 
 import { TextBlock, type TextBlockData } from './messages.js'
 
-export type MediaFormats = DocumentFormat | ImageFormat | VideoFormat
-
 /**
  * Cross-platform base64 encoding function that works in both browser and Node.js environments.
  */
@@ -210,6 +208,11 @@ export class VideoBlock implements VideoBlockData {
  * Document format type.
  */
 export type DocumentFormat = 'pdf' | 'csv' | 'doc' | 'docx' | 'xls' | 'xlsx' | 'html' | 'txt' | 'md' | 'json' | 'xml'
+
+/**
+ * Union type of all media formats (image, video, document).
+ */
+export type MediaFormats = DocumentFormat | ImageFormat | VideoFormat
 
 /**
  * Content blocks that can be nested inside a document.

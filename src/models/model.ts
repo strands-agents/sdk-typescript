@@ -17,7 +17,6 @@ import {
   ModelMetadataEvent,
   type ModelStreamEvent,
 } from './streaming.js'
-import { MaxTokensError } from '../errors.js'
 
 /**
  * Base configuration interface for all model providers.
@@ -77,6 +76,27 @@ export interface StreamOptions {
 }
 
 /**
+ * Result interface for the streamAggregated method.
+ * Contains the complete message, stop reason, and optional metadata.
+ */
+export interface StreamAggregatedResult {
+  /**
+   * The complete message from the model.
+   */
+  message: Message
+
+  /**
+   * The reason why the model stopped generating.
+   */
+  stopReason: string
+
+  /**
+   * Optional metadata about the model invocation, including usage statistics and metrics.
+   */
+  metadata?: ModelMetadataEvent
+}
+
+/**
  * Base abstract class for model providers.
  * Defines the contract that all model provider implementations must follow.
  *
@@ -85,7 +105,7 @@ export interface StreamOptions {
  *
  * @typeParam T - Model configuration type extending BaseModelConfig
  */
-export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
+export abstract class Model<T extends BaseModelConfig> {
   /**
    * Updates the model configuration.
    * Merges the provided configuration with existing settings.
@@ -138,7 +158,7 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
 
   /**
    * Streams a conversation with aggregated content blocks and messages.
-   * Returns an async generator that yields streaming events and content blocks, and returns the final message with stop reason.
+   * Returns an async generator that yields streaming events and content blocks, and returns the final message with stop reason and optional metadata.
    *
    * This method enhances the basic stream() by collecting streaming events into complete
    * ContentBlock and Message objects, which are needed by the agentic loop for tool execution
@@ -149,16 +169,16 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
    * - ContentBlock - Complete content block (emitted when block completes)
    *
    * The method returns:
-   * - Object containing the complete message and stop reason
+   * - StreamAggregatedResult containing the complete message, stop reason, and optional metadata
    *
    * @param messages - Array of conversation messages
    * @param options - Optional streaming configuration
-   * @returns Async generator yielding ModelStreamEvent | ContentBlock and returning an object with message and stopReason
+   * @returns Async generator yielding ModelStreamEvent | ContentBlock and returning a StreamAggregatedResult
    */
   async *streamAggregated(
     messages: Message[],
     options?: StreamOptions
-  ): AsyncGenerator<ModelStreamEvent | ContentBlock, { message: Message; stopReason: string }, undefined> {
+  ): AsyncGenerator<ModelStreamEvent | ContentBlock, StreamAggregatedResult, undefined> {
     // State maintained in closure
     let messageRole: Role | null = null
     const contentBlocks: ContentBlock[] = []
@@ -171,7 +191,9 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
       signature?: string
       redactedContent?: Uint8Array
     } = {}
-    let errorToThrow: Error | undefined = undefined
+    let stoppedMessage: Message | null = null
+    let finalStopReason: string | null = null
+    let metadata: ModelMetadataEvent | undefined = undefined
 
     for await (const event_data of this.stream(messages, options)) {
       const event = this._convert_to_class_event(event_data)
@@ -213,63 +235,40 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
         case 'modelContentBlockStopEvent': {
           // Finalize and emit complete ContentBlock
           let block: ContentBlock
-          try {
-            if (toolUseId) {
-              block = new ToolUseBlock({
-                name: toolName,
-                toolUseId: toolUseId,
-                input: JSON.parse(accumulatedToolInput),
-              })
-              toolUseId = '' // Reset
-              toolName = ''
-            } else if (Object.keys(accumulatedReasoning).length > 0) {
-              block = new ReasoningBlock({
-                ...accumulatedReasoning,
-              })
-            } else {
-              block = new TextBlock(accumulatedText)
-            }
-            contentBlocks.push(block)
-            yield block
-          } catch (e: unknown) {
-            if (e instanceof SyntaxError) {
-              console.error('Unable to parse JSON string.')
-              errorToThrow = e
-            }
+          if (toolUseId) {
+            block = new ToolUseBlock({
+              name: toolName,
+              toolUseId: toolUseId,
+              input: JSON.parse(accumulatedToolInput),
+            })
+            toolUseId = '' // Reset
+            toolName = ''
+          } else if (Object.keys(accumulatedReasoning).length > 0) {
+            block = new ReasoningBlock({
+              ...accumulatedReasoning,
+            })
+          } else {
+            block = new TextBlock(accumulatedText)
           }
+          contentBlocks.push(block)
+          yield block
           break
         }
 
         case 'modelMessageStopEvent':
-          // Complete message and return with stop reason
+          // Store message and stop reason
           if (messageRole) {
-            const message: Message = new Message({
+            stoppedMessage = new Message({
               role: messageRole,
               content: [...contentBlocks],
             })
-            // Handle stop reason
-            if (event.stopReason === 'maxTokens') {
-              const maxTokensError = new MaxTokensError(
-                'Model reached maximum token limit. This is an unrecoverable state that requires intervention.',
-                message
-              )
-              if (errorToThrow !== undefined) {
-                errorToThrow.cause = maxTokensError
-              } else {
-                errorToThrow = maxTokensError
-              }
-            }
-
-            if (errorToThrow !== undefined) {
-              throw errorToThrow
-            }
-
-            return { message, stopReason: event.stopReason! }
+            finalStopReason = event.stopReason!
           }
           break
 
         case 'modelMetadataEvent':
-          // TODO: Implement metadata events: https://github.com/strands-agents/sdk-typescript/issues/70
+          // Store metadata, keeping the last one if multiple events occur
+          metadata = event
           break
 
         default:
@@ -277,7 +276,19 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
       }
     }
 
-    // If we exit the loop without returning a message, throw an error
+    // Return the final message with stop reason and optional metadata
+    if (stoppedMessage && finalStopReason) {
+      const result: StreamAggregatedResult = {
+        message: stoppedMessage,
+        stopReason: finalStopReason,
+      }
+      if (metadata !== undefined) {
+        result.metadata = metadata
+      }
+      return result
+    }
+
+    // If we exit the loop without completing a message, throw an error
     throw new Error('Stream ended without completing a message')
   }
 }

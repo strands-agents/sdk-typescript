@@ -350,10 +350,12 @@ export class BedrockModel extends Model<BedrockModelConfig> {
     try {
       // Format the request for Bedrock
       const request = this._formatRequest(messages, options)
+
       if (this._config.stream !== false) {
         // Create and send the command
         const command = new ConverseStreamCommand(request)
         const response = await this._client.send(command)
+
         // Stream the response
         if (response.stream) {
           for await (const chunk of response.stream) {
@@ -372,22 +374,15 @@ export class BedrockModel extends Model<BedrockModelConfig> {
         }
       }
     } catch (error) {
-      let errorMessage: string
-      if (error instanceof Error) {
-        errorMessage = error.message
-      } else if (typeof error === 'string') {
-        errorMessage = error
-      } else {
-        errorMessage = ''
-      }
+      const err = error as Error
 
       // Check for context window overflow
-      if (BEDROCK_CONTEXT_WINDOW_OVERFLOW_MESSAGES.some((msg) => errorMessage.includes(msg))) {
-        throw new ContextWindowOverflowError(errorMessage)
+      if (BEDROCK_CONTEXT_WINDOW_OVERFLOW_MESSAGES.some((msg) => err.message.includes(msg))) {
+        throw new ContextWindowOverflowError(err.message)
       }
 
       // Re-throw other errors as-is
-      throw error
+      throw err
     }
   }
 

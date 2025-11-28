@@ -1,8 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { Agent, DocumentBlock, ImageBlock, Message, TextBlock, tool } from '@strands-agents/sdk'
 import { BedrockModel } from '@strands-agents/sdk/bedrock'
-import { notebook } from '@strands-agents/sdk/vended_tools/notebook'
-import { httpRequest } from '@strands-agents/sdk/vended_tools/http_request'
 import { OpenAIModel } from '@strands-agents/sdk/openai'
 import { z } from 'zod'
 
@@ -39,12 +37,12 @@ const providers = [
   {
     name: 'BedrockModel',
     skip: !(await shouldRunTests()),
-    createModel: () => new BedrockModel(),
+    createModel: () => new BedrockModel({ maxTokens: 100 }),
   },
   {
     name: 'OpenAIModel',
     skip: shouldSkipOpenAITests(),
-    createModel: () => new OpenAIModel(),
+    createModel: () => new OpenAIModel({ modelId: 'gpt-4o-mini', maxTokens: 100 }),
   },
 ]
 
@@ -79,6 +77,34 @@ describe.each(providers)('Agent with $name', ({ name, skip, createModel }) => {
         const textContent = result.lastMessage.content.find((block) => block.type === 'textBlock')
         expect(textContent).toBeDefined()
         expect(textContent?.text).toMatch(/56088/)
+      })
+
+      it('yields metadata events through the agent stream', async () => {
+        const agent = new Agent({
+          model: createModel(),
+          printer: false,
+          systemPrompt: 'Respond with a brief greeting.',
+        })
+
+        // Test streaming with event collection
+        const { items, result } = await collectGenerator(agent.stream('Say hello'))
+
+        // Verify metadata event is yielded through the agent
+        const metadataEvent = items.find((item) => item.type === 'modelMetadataEvent')
+        expect(metadataEvent).toBeDefined()
+        expect(metadataEvent?.usage).toBeDefined()
+        expect(metadataEvent?.usage?.inputTokens).toBeGreaterThan(0)
+        expect(metadataEvent?.usage?.outputTokens).toBeGreaterThan(0)
+
+        // Bedrock includes latencyMs in metrics, OpenAI does not
+        if (name === 'BedrockModel') {
+          expect(metadataEvent?.metrics?.latencyMs).toBeGreaterThan(0)
+        }
+
+        // Verify result structure
+        expect(result.stopReason).toBe('endTurn')
+        expect(result.lastMessage.role).toBe('assistant')
+        expect(result.lastMessage.content.length).toBeGreaterThan(0)
       })
     })
 
@@ -154,25 +180,5 @@ describe.each(providers)('Agent with $name', ({ name, skip, createModel }) => {
         expect(textContent?.text).toMatch(/yellow/i)
       })
     })
-  })
-
-  it('handles tool invocation', async () => {
-    const agent = new Agent({
-      model: await createModel(),
-      tools: [notebook, httpRequest],
-      printer: false,
-    })
-
-    await agent.invoke('Call Open-Meteo to get the weather in NYC, and take a note of what you did')
-    expect(
-      agent.messages.some((message) =>
-        message.content.some((block) => block.type == 'toolUseBlock' && block.name == 'notebook')
-      )
-    ).toBe(true)
-    expect(
-      agent.messages.some((message) =>
-        message.content.some((block) => block.type == 'toolUseBlock' && block.name == 'http_request')
-      )
-    ).toBe(true)
   })
 })
