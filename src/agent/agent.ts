@@ -15,7 +15,7 @@ import {
   type ToolUseBlock,
 } from '../index.js'
 import { systemPromptFromData } from '../types/messages.js'
-import { normalizeError, ConcurrentInvocationError, MaxTokensError } from '../errors.js'
+import { normalizeError, ConcurrentInvocationError } from '../errors.js'
 import type { BaseModelConfig, Model, StreamOptions } from '../models/model.js'
 import { ToolRegistry } from '../registry/tool-registry.js'
 import { AgentState } from './state.js'
@@ -303,15 +303,6 @@ export class Agent implements AgentData {
       while (true) {
         const modelResult = yield* this.invokeModel(currentArgs)
         currentArgs = undefined // Only pass args on first invocation
-
-        // Handle stop reason
-        if (modelResult.stopReason === 'maxTokens') {
-          throw new MaxTokensError(
-            'Model reached maximum token limit. This is an unrecoverable state that requires intervention.',
-            modelResult.message
-          )
-        }
-
         if (modelResult.stopReason !== 'toolUse') {
           // Loop terminates - no tool use requested
           // Add assistant message now that we're returning
@@ -352,7 +343,7 @@ export class Agent implements AgentData {
       yield await this._appendMessage(
         new Message({
           role: 'user',
-          content: [{ type: 'textBlock', text: args }],
+          content: [new TextBlock(args)],
         })
       )
     }
