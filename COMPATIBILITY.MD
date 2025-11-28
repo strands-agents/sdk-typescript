@@ -29,18 +29,6 @@ const currentModel = agent.model  // Calls getter
 
 Consumers cannot distinguish between direct field access and property access at the call site. The implementation change is transparent to user code.
 
-### Scope
-
-This policy applies to:
-- Public mutable fields that may need future validation
-- Properties where validation requirements emerge after initial release
-- Fields that may benefit from computed values or caching
-
-This policy does **not** apply to:
-- Changing method signatures or return types
-- Removing or renaming public members
-- Changing constructor parameters (without backwards compatibility)
-
 ### Example
 
 The `Agent.model` property is currently a public mutable field. In a future release, it may be converted to a getter/setter to add validation:
