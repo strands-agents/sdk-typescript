@@ -221,6 +221,8 @@ export interface BedrockModelOptions extends BedrockModelConfig {
 export class BedrockModel extends Model<BedrockModelConfig> {
   private _config: BedrockModelConfig
   private _client: BedrockRuntimeClient
+  private _explicitRegion: boolean
+  private _regionChecked: boolean = false
 
   /**
    * Creates a new BedrockModel instance.
@@ -256,6 +258,9 @@ export class BedrockModel extends Model<BedrockModelConfig> {
     super()
 
     const { region, clientConfig, ...modelConfig } = options ?? {}
+
+    // Track whether region was explicitly provided (either directly or in clientConfig)
+    this._explicitRegion = !!(region || clientConfig?.region)
 
     // Initialize model config with default model ID if not provided
     this._config = {
@@ -312,6 +317,32 @@ export class BedrockModel extends Model<BedrockModelConfig> {
   }
 
   /**
+   * Ensures the region is resolved. If no region was explicitly provided
+   * and the AWS SDK doesn't resolve one, defaults to 'us-west-2'.
+   * This method only runs once and caches the result.
+   *
+   * @internal
+   */
+  private async _ensureRegionResolved(): Promise<void> {
+    // If region was explicitly provided or we've already checked, skip
+    if (this._explicitRegion || this._regionChecked) {
+      return
+    }
+
+    this._regionChecked = true
+
+    // Check if AWS SDK resolved a region
+    const resolvedRegion = await this._client.config.region()
+
+    // If no region is resolved, default to us-west-2
+    if (!resolvedRegion) {
+      this._client = new BedrockRuntimeClient({
+        region: 'us-west-2',
+      })
+    }
+  }
+
+  /**
    * Streams a conversation with the Bedrock model.
    * Returns an async iterable that yields streaming events as they occur.
    *
@@ -342,6 +373,9 @@ export class BedrockModel extends Model<BedrockModelConfig> {
    */
   async *stream(messages: Message[], options?: StreamOptions): AsyncIterable<ModelStreamEvent> {
     try {
+      // Ensure region is resolved (default to us-west-2 if needed)
+      await this._ensureRegionResolved()
+
       // Format the request for Bedrock
       const request = this._formatRequest(messages, options)
       if (this._config.stream !== false) {

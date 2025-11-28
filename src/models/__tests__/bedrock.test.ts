@@ -18,8 +18,9 @@ function setupMockSend(streamGenerator: () => AsyncGenerator<unknown>): void {
       stream: streamGenerator(),
     })
   )
+  const mockConfigRegion = vi.fn(async () => 'us-east-1')
   vi.mocked(BedrockRuntimeClient).mockImplementation(function () {
-    return { send: mockSend } as never
+    return { send: mockSend, config: { region: mockConfigRegion } } as never
   })
 }
 
@@ -83,6 +84,9 @@ vi.mock('@aws-sdk/client-bedrock-runtime', async (importOriginal) => {
     BedrockRuntimeClient: vi.fn(function () {
       return {
         send: mockSend,
+        config: {
+          region: vi.fn(async () => 'us-east-1'),
+        },
       }
     }),
     ConverseStreamCommand,
@@ -241,7 +245,7 @@ describe('BedrockModel', () => {
       }
 
       // Trigger the stream to make the request, but ignore the events for now
-      collectIterator(provider.stream(messages, options))
+      await collectIterator(provider.stream(messages, options))
 
       // Verify ConverseStreamCommand was called with properly formatted request
       expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
@@ -298,7 +302,7 @@ describe('BedrockModel', () => {
       ]
 
       // Run the stream but ignore the output
-      collectIterator(provider.stream(messages))
+      await collectIterator(provider.stream(messages))
 
       // Verify ConverseStreamCommand was called with properly formatted request
       expect(mockConverseStreamCommand).toHaveBeenLastCalledWith(
@@ -342,7 +346,7 @@ describe('BedrockModel', () => {
       ]
 
       // Start the stream
-      collectIterator(provider.stream(messages))
+      await collectIterator(provider.stream(messages))
 
       // Verify ConverseStreamCommand was called with properly formatted request
       expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
@@ -394,7 +398,7 @@ describe('BedrockModel', () => {
       ]
 
       // Start the stream but don't await it
-      collectIterator(provider.stream(messages))
+      await collectIterator(provider.stream(messages))
 
       // Verify ConverseStreamCommand was called with properly formatted request
       expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
@@ -435,7 +439,7 @@ describe('BedrockModel', () => {
         },
       ]
 
-      collectIterator(provider.stream(messages))
+      await collectIterator(provider.stream(messages))
 
       // Verify ConverseStreamCommand was called with properly formatted request
       expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
@@ -480,7 +484,7 @@ describe('BedrockModel', () => {
       })
 
       vi.mocked(BedrockRuntimeClient).mockImplementation(function () {
-        return { send: mockSend } as never
+        return { send: mockSend, config: { region: vi.fn(async () => 'us-east-1') } } as never
       })
 
       const provider = new BedrockModel({ stream })
@@ -545,7 +549,7 @@ describe('BedrockModel', () => {
         }
       })
       vi.mocked(BedrockRuntimeClient).mockImplementation(function () {
-        return { send: mockSend } as never
+        return { send: mockSend, config: { region: vi.fn(async () => 'us-east-1') } } as never
       })
 
       const provider = new BedrockModel({ stream })
@@ -611,7 +615,7 @@ describe('BedrockModel', () => {
         }
       })
       vi.mocked(BedrockRuntimeClient).mockImplementation(function () {
-        return { send: mockSend } as never
+        return { send: mockSend, config: { region: vi.fn(async () => 'us-east-1') } } as never
       })
 
       const provider = new BedrockModel({ stream })
@@ -671,7 +675,7 @@ describe('BedrockModel', () => {
         }
       })
       vi.mocked(BedrockRuntimeClient).mockImplementation(function () {
-        return { send: mockSend } as never
+        return { send: mockSend, config: { region: vi.fn(async () => 'us-east-1') } } as never
       })
 
       const provider = new BedrockModel({ stream })
@@ -712,7 +716,7 @@ describe('BedrockModel', () => {
         vi.clearAllMocks()
         const mockSendError = vi.fn().mockRejectedValue(error)
         vi.mocked(BedrockRuntimeClient).mockImplementation(function () {
-          return { send: mockSendError } as never
+          return { send: mockSendError, config: { region: vi.fn(async () => 'us-east-1') } } as never
         })
 
         const provider = new BedrockModel()
@@ -997,7 +1001,7 @@ describe('BedrockModel', () => {
         systemPrompt: 'You are a helpful assistant',
       }
 
-      collectIterator(provider.stream(messages, options))
+      await collectIterator(provider.stream(messages, options))
 
       expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
         modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
@@ -1021,7 +1025,7 @@ describe('BedrockModel', () => {
         ],
       }
 
-      collectIterator(provider.stream(messages, options))
+      await collectIterator(provider.stream(messages, options))
 
       expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
         modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
@@ -1046,7 +1050,7 @@ describe('BedrockModel', () => {
         ],
       }
 
-      collectIterator(provider.stream(messages, options))
+      await collectIterator(provider.stream(messages, options))
 
       expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
         modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
@@ -1075,7 +1079,7 @@ describe('BedrockModel', () => {
         ],
       }
 
-      collectIterator(provider.stream(messages, options))
+      await collectIterator(provider.stream(messages, options))
 
       // Verify warning was logged
       expect(warnSpy).toHaveBeenCalledWith(
@@ -1104,7 +1108,7 @@ describe('BedrockModel', () => {
         systemPrompt: [],
       }
 
-      collectIterator(provider.stream(messages, options))
+      await collectIterator(provider.stream(messages, options))
 
       // Empty array should not set system field
       expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
@@ -1133,7 +1137,7 @@ describe('BedrockModel', () => {
         ],
       }
 
-      collectIterator(provider.stream(messages, options))
+      await collectIterator(provider.stream(messages, options))
 
       expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
         modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
@@ -1174,7 +1178,7 @@ describe('BedrockModel', () => {
         ],
       }
 
-      collectIterator(provider.stream(messages, options))
+      await collectIterator(provider.stream(messages, options))
 
       expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
         modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
@@ -1214,7 +1218,7 @@ describe('BedrockModel', () => {
         ],
       }
 
-      collectIterator(provider.stream(messages, options))
+      await collectIterator(provider.stream(messages, options))
 
       expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
         modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
@@ -1252,7 +1256,7 @@ describe('BedrockModel', () => {
         ],
       }
 
-      collectIterator(provider.stream(messages, options))
+      await collectIterator(provider.stream(messages, options))
 
       expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
         modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
@@ -1302,7 +1306,7 @@ describe('BedrockModel', () => {
         },
       ]
 
-      collectIterator(provider.stream(messages))
+      await collectIterator(provider.stream(messages))
 
       expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
         modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
@@ -1344,7 +1348,7 @@ describe('BedrockModel', () => {
         },
       ]
 
-      collectIterator(provider.stream(messages))
+      await collectIterator(provider.stream(messages))
 
       expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
         modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
@@ -1390,7 +1394,7 @@ describe('BedrockModel', () => {
           },
         ]
 
-        collectIterator(provider.stream(messages))
+        await collectIterator(provider.stream(messages))
 
         expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
           messages: [
@@ -1430,7 +1434,7 @@ describe('BedrockModel', () => {
           },
         ]
 
-        collectIterator(provider.stream(messages))
+        await collectIterator(provider.stream(messages))
 
         expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
           messages: [
@@ -1472,7 +1476,7 @@ describe('BedrockModel', () => {
           },
         ]
 
-        collectIterator(provider.stream(messages))
+        await collectIterator(provider.stream(messages))
 
         expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
           messages: [
@@ -1514,7 +1518,7 @@ describe('BedrockModel', () => {
           },
         ]
 
-        collectIterator(provider.stream(messages))
+        await collectIterator(provider.stream(messages))
 
         expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
           messages: [
@@ -1532,6 +1536,200 @@ describe('BedrockModel', () => {
           ],
           modelId: 'amazon.nova-lite-v1:0',
         })
+      })
+    })
+  })
+
+  describe('region configuration', () => {
+    beforeEach(() => {
+      vi.clearAllMocks()
+    })
+
+    describe('when region is explicitly provided', () => {
+      it('uses the provided region without defaulting', async () => {
+        const mockConfigRegion = vi.fn(async () => 'should-not-be-called')
+        const mockSend = vi.fn(
+          async (): Promise<{ stream: AsyncIterable<unknown> }> => ({
+            stream: (async function* (): AsyncGenerator<unknown> {
+              yield { messageStart: { role: 'assistant' } }
+              yield { contentBlockStart: {} }
+              yield { contentBlockDelta: { delta: { text: 'Hello' } } }
+              yield { contentBlockStop: {} }
+              yield { messageStop: { stopReason: 'end_turn' } }
+              yield { metadata: { usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } } }
+            })(),
+          })
+        )
+
+        vi.mocked(BedrockRuntimeClient).mockImplementation(function (..._args: unknown[]) {
+          return {
+            send: mockSend,
+            config: {
+              region: mockConfigRegion,
+            },
+          } as never
+        } as never)
+
+        const provider = new BedrockModel({ region: 'eu-west-1' })
+        const messages: Message[] = [
+          { type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] },
+        ]
+
+        await collectIterator(provider.stream(messages))
+
+        // Should not check region when explicitly provided
+        expect(mockConfigRegion).not.toHaveBeenCalled()
+      })
+    })
+
+    describe('when region is resolved by AWS SDK', () => {
+      it('uses AWS-resolved region without defaulting', async () => {
+        const mockConfigRegion = vi.fn(async () => 'us-east-1')
+        const mockSend = vi.fn(
+          async (): Promise<{ stream: AsyncIterable<unknown> }> => ({
+            stream: (async function* (): AsyncGenerator<unknown> {
+              yield { messageStart: { role: 'assistant' } }
+              yield { contentBlockStart: {} }
+              yield { contentBlockDelta: { delta: { text: 'Hello' } } }
+              yield { contentBlockStop: {} }
+              yield { messageStop: { stopReason: 'end_turn' } }
+              yield { metadata: { usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } } }
+            })(),
+          })
+        )
+
+        vi.mocked(BedrockRuntimeClient).mockImplementation(function (..._args: unknown[]) {
+          return {
+            send: mockSend,
+            config: {
+              region: mockConfigRegion,
+            },
+          } as never
+        } as never)
+
+        const provider = new BedrockModel()
+        const messages: Message[] = [
+          { type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] },
+        ]
+
+        await collectIterator(provider.stream(messages))
+
+        // Should check the region once
+        expect(mockConfigRegion).toHaveBeenCalledTimes(1)
+      })
+    })
+
+    describe('when no region is provided or resolved', () => {
+      it('defaults to us-west-2', async () => {
+        const mockConfigRegion = vi.fn(async () => undefined)
+        const mockSend = vi.fn(
+          async (): Promise<{ stream: AsyncIterable<unknown> }> => ({
+            stream: (async function* (): AsyncGenerator<unknown> {
+              yield { messageStart: { role: 'assistant' } }
+              yield { contentBlockStart: {} }
+              yield { contentBlockDelta: { delta: { text: 'Hello' } } }
+              yield { contentBlockStop: {} }
+              yield { messageStop: { stopReason: 'end_turn' } }
+              yield { metadata: { usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } } }
+            })(),
+          })
+        )
+
+        vi.mocked(BedrockRuntimeClient).mockImplementation(function (..._args: unknown[]) {
+          return {
+            send: mockSend,
+            config: {
+              region: mockConfigRegion,
+            },
+          } as never
+        } as never)
+
+        const provider = new BedrockModel()
+        const messages: Message[] = [
+          { type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] },
+        ]
+
+        // First call should check and recreate client
+        await collectIterator(provider.stream(messages))
+
+        // Should have checked region
+        expect(mockConfigRegion).toHaveBeenCalled()
+      })
+
+      it('only checks region once', async () => {
+        const mockConfigRegion = vi.fn(async () => undefined)
+        const mockSend = vi.fn(
+          async (): Promise<{ stream: AsyncIterable<unknown> }> => ({
+            stream: (async function* (): AsyncGenerator<unknown> {
+              yield { messageStart: { role: 'assistant' } }
+              yield { contentBlockStart: {} }
+              yield { contentBlockDelta: { delta: { text: 'Hello' } } }
+              yield { contentBlockStop: {} }
+              yield { messageStop: { stopReason: 'end_turn' } }
+              yield { metadata: { usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } } }
+            })(),
+          })
+        )
+
+        vi.mocked(BedrockRuntimeClient).mockImplementation(function (..._args: unknown[]) {
+          return {
+            send: mockSend,
+            config: {
+              region: mockConfigRegion,
+            },
+          } as never
+        } as never)
+
+        const provider = new BedrockModel()
+        const messages: Message[] = [
+          { type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] },
+        ]
+
+        // Make multiple calls
+        await collectIterator(provider.stream(messages))
+        await collectIterator(provider.stream(messages))
+
+        // Should only check region once
+        expect(mockConfigRegion).toHaveBeenCalledTimes(1)
+      })
+    })
+
+    describe('when region is in clientConfig', () => {
+      it('uses clientConfig region without defaulting', async () => {
+        const mockConfigRegion = vi.fn(async () => 'should-not-be-called')
+        const mockSend = vi.fn(
+          async (): Promise<{ stream: AsyncIterable<unknown> }> => ({
+            stream: (async function* (): AsyncGenerator<unknown> {
+              yield { messageStart: { role: 'assistant' } }
+              yield { contentBlockStart: {} }
+              yield { contentBlockDelta: { delta: { text: 'Hello' } } }
+              yield { contentBlockStop: {} }
+              yield { messageStop: { stopReason: 'end_turn' } }
+              yield { metadata: { usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } } }
+            })(),
+          })
+        )
+
+        vi.mocked(BedrockRuntimeClient).mockImplementation(function (..._args: unknown[]) {
+          return {
+            send: mockSend,
+            config: {
+              region: mockConfigRegion,
+            },
+          } as never
+        } as never)
+
+        const provider = new BedrockModel({
+          clientConfig: { region: 'ap-southeast-1' },
+        })
+        const messages: Message[] = [
+          { type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] },
+        ]
+
+        await collectIterator(provider.stream(messages))
+
+        // Should not check region when explicitly in clientConfig
+        expect(mockConfigRegion).not.toHaveBeenCalled()
       })
     })
   })
