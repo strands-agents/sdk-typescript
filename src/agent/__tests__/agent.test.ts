@@ -570,6 +570,33 @@ describe('Agent', () => {
 
         expect(agent.messages).toHaveLength(1) // Only response message added
       })
+
+      it('accepts ContentBlockData[] and converts to ContentBlock[]', async () => {
+        const model = new MockMessageModel().addTurn(new TextBlock('Response'))
+        const agent = new Agent({ model })
+
+        await agent.invoke([
+          { text: 'Hello from data format' },
+          {
+            toolUse: {
+              name: 'testTool',
+              toolUseId: 'id-1',
+              input: { key: 'value' },
+            },
+          },
+        ])
+
+        expect(agent.messages).toHaveLength(2)
+        expect(agent.messages[0]).toEqual(
+          new Message({
+            role: 'user',
+            content: [
+              new TextBlock('Hello from data format'),
+              new ToolUseBlock({ name: 'testTool', toolUseId: 'id-1', input: { key: 'value' } }),
+            ],
+          })
+        )
+      })
     })
 
     describe('with Message[] input', () => {
@@ -623,27 +650,41 @@ describe('Agent', () => {
 
         expect(agent.messages).toHaveLength(1) // Only response message added
       })
+
+      it('accepts MessageData[] and converts to Message[]', async () => {
+        const model = new MockMessageModel().addTurn(new TextBlock('Response'))
+        const agent = new Agent({ model })
+
+        const messageDataArray = [
+          {
+            role: 'user' as const,
+            content: [{ text: 'First message' }],
+          },
+          {
+            role: 'assistant' as const,
+            content: [{ text: 'Second message' }],
+          },
+        ]
+
+        await agent.invoke(messageDataArray)
+
+        expect(agent.messages).toHaveLength(3) // 2 input + 1 response
+        expect(agent.messages[0]).toEqual(
+          new Message({
+            role: 'user',
+            content: [new TextBlock('First message')],
+          })
+        )
+        expect(agent.messages[1]).toEqual(
+          new Message({
+            role: 'assistant',
+            content: [new TextBlock('Second message')],
+          })
+        )
+      })
     })
 
-    describe('with null or undefined input', () => {
-      it('continues with existing conversation when null', async () => {
-        const model = new MockMessageModel().addTurn(new TextBlock('Response'))
-        const agent = new Agent({
-          model,
-          messages: [
-            new Message({
-              role: 'user',
-              content: [new TextBlock('Existing message')],
-            }),
-          ],
-        })
-
-        await agent.invoke(null)
-
-        expect(agent.messages).toHaveLength(2) // 1 existing + 1 response
-        expect(agent.messages[0]!.content).toEqual([new TextBlock('Existing message')])
-      })
-
+    describe('with undefined input', () => {
       it('continues with existing conversation when undefined', async () => {
         const model = new MockMessageModel().addTurn(new TextBlock('Response'))
         const agent = new Agent({

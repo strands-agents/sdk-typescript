@@ -209,7 +209,7 @@ describe.each(providers)('Agent with $name', ({ name, skip, createModel }) => {
         expect(textContent?.text).toMatch(/42/)
       })
 
-      it('accepts null to continue with existing conversation', async () => {
+      it('accepts undefined to continue with existing conversation', async () => {
         const agent = new Agent({
           model: createModel(),
           messages: [
@@ -221,7 +221,7 @@ describe.each(providers)('Agent with $name', ({ name, skip, createModel }) => {
           printer: false,
         })
 
-        const result = await agent.invoke(null)
+        const result = await agent.invoke(undefined)
 
         expect(result.stopReason).toBe('endTurn')
         expect(result.lastMessage.role).toBe('assistant')

@@ -2,18 +2,26 @@ import {
   AgentResult,
   type AgentStreamEvent,
   BedrockModel,
+  CachePointBlock,
   type ContentBlock,
+  type ContentBlockData,
+  DocumentBlock,
+  GuardContentBlock,
+  ImageBlock,
+  JsonBlock,
   type JSONValue,
   McpClient,
   Message,
   type MessageData,
+  ReasoningBlock,
   type SystemPrompt,
   type SystemPromptData,
   TextBlock,
   type Tool,
   type ToolContext,
   ToolResultBlock,
-  type ToolUseBlock,
+  ToolUseBlock,
+  VideoBlock,
 } from '../index.js'
 import { systemPromptFromData } from '../types/messages.js'
 import { normalizeError, ConcurrentInvocationError, MaxTokensError } from '../errors.js'
@@ -87,11 +95,11 @@ export type AgentConfig = {
  *
  * Supports multiple input formats:
  * - `string` - User text input (wrapped in TextBlock, creates user Message)
- * - `ContentBlock[]` - Array of content blocks (creates single user Message)
- * - `Message[]` - Array of messages (appends all to conversation)
- * - `null | undefined` - Skip message addition (agent continues with existing conversation)
+ * - `ContentBlock[]` | `ContentBlockData[]` - Array of content blocks (creates single user Message)
+ * - `Message[]` | `MessageData[]` - Array of messages (appends all to conversation)
+ * - `undefined` - Skip message addition (agent continues with existing conversation)
  */
-export type InvokeArgs = string | ContentBlock[] | Message[] | null | undefined
+export type InvokeArgs = string | ContentBlock[] | ContentBlockData[] | Message[] | MessageData[] | undefined
 
 /**
  * Orchestrates the interaction between a model, a set of tools, and MCP clients.
@@ -350,7 +358,7 @@ export class Agent implements AgentData {
    * @returns Array of messages to append to the conversation
    */
   private _normalizeInput(args?: InvokeArgs): Message[] {
-    if (args !== undefined && args !== null) {
+    if (args !== undefined) {
       if (typeof args === 'string') {
         // String input: wrap in TextBlock and create user Message
         return [
@@ -360,21 +368,78 @@ export class Agent implements AgentData {
           }),
         ]
       } else if (Array.isArray(args) && args.length > 0) {
-        if ('role' in args[0]!) {
-          // Message[] input: return all messages
-          return args as Message[]
+        const firstElement = args[0]!
+
+        // Check if it's Message[] or MessageData[]
+        if ('role' in firstElement) {
+          // Check if it's a Message instance or MessageData
+          if ('type' in firstElement && firstElement.type === 'message') {
+            // Message[] input: return all messages
+            return args as Message[]
+          } else {
+            // MessageData[] input: convert to Message[]
+            return (args as MessageData[]).map((data) => Message.fromMessageData(data))
+          }
         } else {
-          // ContentBlock[] input: create single user Message with all blocks
-          return [
-            new Message({
-              role: 'user',
-              content: args as ContentBlock[],
-            }),
-          ]
+          // It's ContentBlock[] or ContentBlockData[]
+          // Check if it's ContentBlock instances or ContentBlockData
+          if ('type' in firstElement) {
+            // ContentBlock[] input: create single user Message with all blocks
+            return [
+              new Message({
+                role: 'user',
+                content: args as ContentBlock[],
+              }),
+            ]
+          } else {
+            // ContentBlockData[] input: convert to ContentBlock[] then create user Message
+            const contentBlocks = (args as ContentBlockData[]).map((block) => {
+              if ('text' in block) {
+                return new TextBlock(block.text)
+              } else if ('toolUse' in block) {
+                return new ToolUseBlock(block.toolUse)
+              } else if ('toolResult' in block) {
+                return new ToolResultBlock({
+                  toolUseId: block.toolResult.toolUseId,
+                  status: block.toolResult.status,
+                  content: block.toolResult.content.map((contentItem) => {
+                    if ('text' in contentItem) {
+                      return new TextBlock(contentItem.text)
+                    } else if ('json' in contentItem) {
+                      return new JsonBlock(contentItem)
+                    } else {
+                      throw new Error('Unknown ToolResultContentData type')
+                    }
+                  }),
+                })
+              } else if ('reasoning' in block) {
+                return new ReasoningBlock(block.reasoning)
+              } else if ('cachePoint' in block) {
+                return new CachePointBlock(block.cachePoint)
+              } else if ('guardContent' in block) {
+                return new GuardContentBlock(block.guardContent)
+              } else if ('image' in block) {
+                return new ImageBlock(block.image)
+              } else if ('video' in block) {
+                return new VideoBlock(block.video)
+              } else if ('document' in block) {
+                return new DocumentBlock(block.document)
+              } else {
+                throw new Error('Unknown ContentBlockData type')
+              }
+            })
+
+            return [
+              new Message({
+                role: 'user',
+                content: contentBlocks,
+              }),
+            ]
+          }
         }
       }
     }
-    // null, undefined, or empty array: no messages to append
+    // undefined or empty array: no messages to append
     return []
   }
 
