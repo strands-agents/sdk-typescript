@@ -9,6 +9,47 @@ import type { StreamOptions } from '../model.js'
 import { collectIterator } from '../../__fixtures__/model-test-helpers.js'
 
 /**
+ * Helper function to mock BedrockRuntimeClient implementation with customizable config.
+ * @param options - Optional configuration for mock region, useFipsEndpoint, and send functions
+ */
+function mockBedrockClientImplementation(options?: {
+  region?: () => Promise<string>
+  useFipsEndpoint?: () => Promise<boolean>
+  send?: (...args: unknown[]) => Promise<unknown>
+}): void {
+  const mockSend = vi.fn(
+    options?.send ??
+      (async () => {
+        throw new Error('send() not mocked - specify send option if needed')
+      })
+  )
+
+  vi.mocked(BedrockRuntimeClient).mockImplementation(function (...args: unknown[]) {
+    // Extract region from constructor args if provided
+    const clientConfig = (args[0] as { region?: string } | undefined) ?? {}
+    const configuredRegion = clientConfig.region
+
+    const mockRegion = vi.fn(
+      options?.region ??
+        (async () => {
+          // If region was explicitly configured in constructor, return it; otherwise return default
+          if (configuredRegion) return configuredRegion
+          return 'us-east-1'
+        })
+    )
+    const mockUseFipsEndpoint = vi.fn(options?.useFipsEndpoint ?? (async () => false))
+
+    return {
+      send: mockSend,
+      config: {
+        region: mockRegion,
+        useFipsEndpoint: mockUseFipsEndpoint,
+      },
+    } as never
+  } as never)
+}
+
+/**
  * Helper function to setup mock send with custom stream generator.
  */
 function setupMockSend(streamGenerator: () => AsyncGenerator<unknown>): void {
@@ -18,12 +59,7 @@ function setupMockSend(streamGenerator: () => AsyncGenerator<unknown>): void {
       stream: streamGenerator(),
     })
   )
-  vi.mocked(BedrockRuntimeClient).mockImplementation(function () {
-    return {
-      send: mockSend,
-      config: { region: vi.fn(async () => 'us-east-1'), useFipsEndpoint: vi.fn(async () => false) },
-    } as never
-  })
+  mockBedrockClientImplementation({ send: mockSend })
 }
 
 // Mock the AWS SDK
@@ -486,12 +522,7 @@ describe('BedrockModel', () => {
         }
       })
 
-      vi.mocked(BedrockRuntimeClient).mockImplementation(function () {
-        return {
-          send: mockSend,
-          config: { region: vi.fn(async () => 'us-east-1'), useFipsEndpoint: vi.fn(async () => false) },
-        } as never
-      })
+      mockBedrockClientImplementation({ send: mockSend })
 
       const provider = new BedrockModel({ stream })
       const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
@@ -554,12 +585,7 @@ describe('BedrockModel', () => {
           }
         }
       })
-      vi.mocked(BedrockRuntimeClient).mockImplementation(function () {
-        return {
-          send: mockSend,
-          config: { region: vi.fn(async () => 'us-east-1'), useFipsEndpoint: vi.fn(async () => false) },
-        } as never
-      })
+      mockBedrockClientImplementation({ send: mockSend })
 
       const provider = new BedrockModel({ stream })
       const messages: Message[] = [
@@ -623,12 +649,7 @@ describe('BedrockModel', () => {
           }
         }
       })
-      vi.mocked(BedrockRuntimeClient).mockImplementation(function () {
-        return {
-          send: mockSend,
-          config: { region: vi.fn(async () => 'us-east-1'), useFipsEndpoint: vi.fn(async () => false) },
-        } as never
-      })
+      mockBedrockClientImplementation({ send: mockSend })
 
       const provider = new BedrockModel({ stream })
       const messages: Message[] = [
@@ -686,12 +707,7 @@ describe('BedrockModel', () => {
           }
         }
       })
-      vi.mocked(BedrockRuntimeClient).mockImplementation(function () {
-        return {
-          send: mockSend,
-          config: { region: vi.fn(async () => 'us-east-1'), useFipsEndpoint: vi.fn(async () => false) },
-        } as never
-      })
+      mockBedrockClientImplementation({ send: mockSend })
 
       const provider = new BedrockModel({ stream })
       const messages: Message[] = [
@@ -730,15 +746,7 @@ describe('BedrockModel', () => {
       ])('throws $name', async ({ error, expected }) => {
         vi.clearAllMocks()
         const mockSendError = vi.fn().mockRejectedValue(error)
-        vi.mocked(BedrockRuntimeClient).mockImplementation(function () {
-          return {
-            send: mockSendError,
-            config: {
-              region: vi.fn(async () => 'us-east-1'),
-              useFipsEndpoint: vi.fn(async () => false),
-            },
-          } as never
-        })
+        mockBedrockClientImplementation({ send: mockSendError })
 
         const provider = new BedrockModel()
         const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
@@ -1562,47 +1570,6 @@ describe('BedrockModel', () => {
   })
 
   describe('region configuration', () => {
-    /**
-     * Helper function to mock BedrockRuntimeClient implementation with customizable config.
-     * @param options - Optional configuration for mock region, useFipsEndpoint, and send functions
-     */
-    function mockBedrockClientImplementation(options?: {
-      region?: () => Promise<string>
-      useFipsEndpoint?: () => Promise<boolean>
-      send?: (...args: unknown[]) => Promise<unknown>
-    }): void {
-      const mockSend = vi.fn(
-        options?.send ??
-          (async () => {
-            throw new Error('send() not mocked - specify send option if needed')
-          })
-      )
-
-      vi.mocked(BedrockRuntimeClient).mockImplementation(function (...args: unknown[]) {
-        // Extract region from constructor args if provided
-        const clientConfig = (args[0] as { region?: string } | undefined) ?? {}
-        const configuredRegion = clientConfig.region
-
-        const mockRegion = vi.fn(
-          options?.region ??
-            (async () => {
-              // If region was explicitly configured in constructor, return it; otherwise return default
-              if (configuredRegion) return configuredRegion
-              return 'us-east-1'
-            })
-        )
-        const mockUseFipsEndpoint = vi.fn(options?.useFipsEndpoint ?? (async () => false))
-
-        return {
-          send: mockSend,
-          config: {
-            region: mockRegion,
-            useFipsEndpoint: mockUseFipsEndpoint,
-          },
-        } as never
-      } as never)
-    }
-
     beforeEach(() => {
       vi.clearAllMocks()
     })
