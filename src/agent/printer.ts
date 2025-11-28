@@ -40,24 +40,8 @@ export class AgentPrinter implements HookProvider {
    * @param registry - The hook registry to register callbacks with
    */
   public registerCallbacks(registry: HookRegistry): void {
-    registry.addCallback(ModelStreamEventHook, this.handleModelStreamEvent)
-    registry.addCallback(ContentBlockHook, this.handleContentBlock)
-  }
-
-  /**
-   * Handle model stream events and process them for printing.
-   * @param event - The model stream event to handle
-   */
-  private handleModelStreamEvent = (event: ModelStreamEventHook): void => {
-    this.processEvent(event.event)
-  }
-
-  /**
-   * Handle content block events and process them for printing.
-   * @param event - The content block event to handle
-   */
-  private handleContentBlock = (event: ContentBlockHook): void => {
-    this.processEvent(event.block)
+    registry.addCallback(ModelStreamEventHook, (event) => this.processEvent(event.event))
+    registry.addCallback(ContentBlockHook, (event) => this.processEvent(event.block))
   }
 
   /**

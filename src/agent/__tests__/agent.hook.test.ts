@@ -9,6 +9,7 @@ import {
   BeforeToolCallEvent,
   MessageAddedEvent,
   ModelStreamEventHook,
+  ContentBlockHook,
   type HookRegistry,
 } from '../../hooks/index.js'
 import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
@@ -266,6 +267,96 @@ describe('Agent Hooks Integration', () => {
         const event = (hookEvent as ModelStreamEventHook).event
         expect(allStreamEvents).toContain(event)
       }
+    })
+  })
+
+  describe('ContentBlockHook', () => {
+    it('fires for content blocks from model streaming', async () => {
+      const model = new MockMessageModel().addTurn([
+        { type: 'textBlock', text: 'Hello' },
+        { type: 'reasoningBlock', text: 'Thinking' },
+      ])
+
+      const agent = new Agent({
+        model,
+        hooks: [mockProvider],
+      })
+
+      await collectIterator(agent.stream('Test'))
+
+      const contentBlockHooks = mockProvider.invocations.filter((e) => e instanceof ContentBlockHook)
+
+      // Should have 2 content blocks (TextBlock and ReasoningBlock)
+      expect(contentBlockHooks.length).toBe(2)
+
+      const textBlockHook = contentBlockHooks[0] as ContentBlockHook
+      expect(textBlockHook.block.type).toBe('textBlock')
+
+      const reasoningBlockHook = contentBlockHooks[1] as ContentBlockHook
+      expect(reasoningBlockHook.block.type).toBe('reasoningBlock')
+    })
+
+    it('fires for tool result blocks', async () => {
+      const tool = new FunctionTool({
+        name: 'testTool',
+        description: 'Test tool',
+        inputSchema: {},
+        callback: () => 'Tool result',
+      })
+
+      const model = new MockMessageModel()
+        .addTurn({ type: 'toolUseBlock', name: 'testTool', toolUseId: 'tool-1', input: {} })
+        .addTurn({ type: 'textBlock', text: 'Done' })
+
+      const agent = new Agent({
+        model,
+        tools: [tool],
+        hooks: [mockProvider],
+      })
+
+      await collectIterator(agent.stream('Test'))
+
+      const contentBlockHooks = mockProvider.invocations.filter((e) => e instanceof ContentBlockHook)
+
+      // Should have content blocks from model streaming and tool result
+      const toolResultHooks = contentBlockHooks.filter((e) => (e as ContentBlockHook).block.type === 'toolResultBlock')
+      expect(toolResultHooks.length).toBe(1)
+
+      const toolResultHook = toolResultHooks[0] as ContentBlockHook
+      expect(toolResultHook.block.type).toBe('toolResultBlock')
+    })
+
+    it('fires for all content block types in comprehensive scenario', async () => {
+      const tool = new FunctionTool({
+        name: 'calc',
+        description: 'Calculator',
+        inputSchema: {},
+        callback: () => '42',
+      })
+
+      const model = new MockMessageModel()
+        .addTurn([
+          { type: 'textBlock', text: 'Let me calculate' },
+          { type: 'reasoningBlock', text: 'Need to use tool' },
+          { type: 'toolUseBlock', name: 'calc', toolUseId: 'tool-1', input: {} },
+        ])
+        .addTurn([{ type: 'textBlock', text: 'Result is 42' }])
+
+      const agent = new Agent({
+        model,
+        tools: [tool],
+        hooks: [mockProvider],
+      })
+
+      await collectIterator(agent.stream('Test'))
+
+      const contentBlockHooks = mockProvider.invocations.filter((e) => e instanceof ContentBlockHook)
+
+      // Should have: TextBlock, ReasoningBlock, ToolUseBlock, ToolResultBlock, TextBlock
+      expect(contentBlockHooks.length).toBe(5)
+
+      const blockTypes = contentBlockHooks.map((e) => (e as ContentBlockHook).block.type)
+      expect(blockTypes).toEqual(['textBlock', 'reasoningBlock', 'toolUseBlock', 'toolResultBlock', 'textBlock'])
     })
   })
 

@@ -6,6 +6,7 @@
  */
 
 import { TextBlock, type TextBlockData } from './messages.js'
+import { BaseContentBlock } from './base-content-block.js'
 
 export type MediaFormats = DocumentFormat | ImageFormat | VideoFormat
 
@@ -92,7 +93,7 @@ export interface ImageBlockData {
 /**
  * Image content block.
  */
-export class ImageBlock implements ImageBlockData {
+export class ImageBlock extends BaseContentBlock implements ImageBlockData {
   /**
    * Discriminator for image content.
    */
@@ -109,6 +110,7 @@ export class ImageBlock implements ImageBlockData {
   readonly source: ImageSource
 
   constructor(data: ImageBlockData) {
+    super()
     this.format = data.format
     this.source = this._convertSource(data.source)
   }
@@ -171,7 +173,7 @@ export interface VideoBlockData {
 /**
  * Video content block.
  */
-export class VideoBlock implements VideoBlockData {
+export class VideoBlock extends BaseContentBlock implements VideoBlockData {
   /**
    * Discriminator for video content.
    */
@@ -188,6 +190,7 @@ export class VideoBlock implements VideoBlockData {
   readonly source: VideoSource
 
   constructor(data: VideoBlockData) {
+    super()
     this.format = data.format
     this.source = this._convertSource(data.source)
   }
@@ -270,7 +273,7 @@ export interface DocumentBlockData {
 /**
  * Document content block.
  */
-export class DocumentBlock implements DocumentBlockData {
+export class DocumentBlock extends BaseContentBlock implements DocumentBlockData {
   /**
    * Discriminator for document content.
    */
@@ -302,6 +305,7 @@ export class DocumentBlock implements DocumentBlockData {
   readonly context?: string
 
   constructor(data: DocumentBlockData) {
+    super()
     this.name = data.name
     this.format = data.format
     this.source = this._convertSource(data.source)

@@ -16,6 +16,7 @@ import {
   type ContentBlock,
 } from '../index.js'
 import { systemPromptFromData } from '../types/messages.js'
+import { BaseContentBlock } from '../types/base-content-block.js'
 import { normalizeError, ConcurrentInvocationError, MaxTokensError } from '../errors.js'
 import type { BaseModelConfig, Model, StreamOptions } from '../models/model.js'
 import type { ModelStreamEvent } from '../models/streaming.js'
@@ -408,9 +409,9 @@ export class Agent implements AgentData {
       const event = result.value
 
       // Yield appropriate hook event for observability
-      if ('type' in event && typeof event.type === 'string' && event.type.endsWith('Block')) {
+      if (event instanceof BaseContentBlock) {
         // This is a ContentBlock
-        yield new ContentBlockHook({ agent: this, block: event as ContentBlock })
+        yield new ContentBlockHook({ agent: this, block: event })
       } else {
         // This is a ModelStreamEvent
         yield new ModelStreamEventHook({ agent: this, event: event as ModelStreamEvent })

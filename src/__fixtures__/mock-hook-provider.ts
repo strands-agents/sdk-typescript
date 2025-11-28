@@ -8,6 +8,7 @@ import {
   BeforeModelCallEvent,
   AfterModelCallEvent,
   ModelStreamEventHook,
+  ContentBlockHook,
 } from '../hooks/index.js'
 import type { HookEventConstructor } from '../hooks/types.js'
 
@@ -33,7 +34,7 @@ export class MockHookProvider implements HookProvider {
       AfterModelCallEvent,
     ]
 
-    const modelEvents: HookEventConstructor[] = [ModelStreamEventHook]
+    const modelEvents: HookEventConstructor[] = [ModelStreamEventHook, ContentBlockHook]
 
     const eventTypes = this.includeModelEvents ? [...lifecycleEvents, ...modelEvents] : lifecycleEvents
 
