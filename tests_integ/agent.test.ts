@@ -152,5 +152,84 @@ describe.each(providers)('Agent with $name', ({ name, skip, createModel }) => {
         expect(textContent?.text).toMatch(/yellow/i)
       })
     })
+
+    describe('multimodal input', () => {
+      it('accepts ContentBlock[] input', async () => {
+        const agent = new Agent({
+          model: createModel(),
+          printer: false,
+        })
+
+        const yellowPng = await loadFixture(yellowPngUrl)
+        const imageBlock = new ImageBlock({
+          format: 'png',
+          source: { bytes: yellowPng },
+        })
+
+        const contentBlocks = [new TextBlock('What color is this image? Answer in one word.'), imageBlock]
+
+        const result = await agent.invoke(contentBlocks)
+
+        expect(result.stopReason).toBe('endTurn')
+        expect(result.lastMessage.role).toBe('assistant')
+
+        const textContent = result.lastMessage.content.find((block) => block.type === 'textBlock')
+        expect(textContent).toBeDefined()
+        expect(textContent?.text).toMatch(/yellow/i)
+      })
+
+      it('accepts Message[] input for conversation history', async () => {
+        const agent = new Agent({
+          model: createModel(),
+          printer: false,
+        })
+
+        const conversationHistory = [
+          new Message({
+            role: 'user',
+            content: [new TextBlock('Remember this number: 42')],
+          }),
+          new Message({
+            role: 'assistant',
+            content: [new TextBlock('I will remember the number 42.')],
+          }),
+          new Message({
+            role: 'user',
+            content: [new TextBlock('What number did I ask you to remember?')],
+          }),
+        ]
+
+        const result = await agent.invoke(conversationHistory)
+
+        expect(result.stopReason).toBe('endTurn')
+        expect(result.lastMessage.role).toBe('assistant')
+
+        const textContent = result.lastMessage.content.find((block) => block.type === 'textBlock')
+        expect(textContent).toBeDefined()
+        expect(textContent?.text).toMatch(/42/)
+      })
+
+      it('accepts null to continue with existing conversation', async () => {
+        const agent = new Agent({
+          model: createModel(),
+          messages: [
+            new Message({
+              role: 'user',
+              content: [new TextBlock('Say hello in one word.')],
+            }),
+          ],
+          printer: false,
+        })
+
+        const result = await agent.invoke(null)
+
+        expect(result.stopReason).toBe('endTurn')
+        expect(result.lastMessage.role).toBe('assistant')
+
+        const textContent = result.lastMessage.content.find((block) => block.type === 'textBlock')
+        expect(textContent).toBeDefined()
+        expect(textContent?.text).toMatch(/hello/i)
+      })
+    })
   })
 })

@@ -2,6 +2,7 @@ import {
   AgentResult,
   type AgentStreamEvent,
   BedrockModel,
+  type ContentBlock,
   type JSONValue,
   McpClient,
   Message,
@@ -84,9 +85,13 @@ export type AgentConfig = {
 /**
  * Arguments for invoking an agent.
  *
- * A plain string represents user input to an agent.
+ * Supports multiple input formats:
+ * - `string` - User text input (wrapped in TextBlock, creates user Message)
+ * - `ContentBlock[]` - Array of content blocks (creates single user Message)
+ * - `Message[]` - Array of messages (appends all to conversation)
+ * - `null | undefined` - Skip message addition (agent continues with existing conversation)
  */
-export type InvokeArgs = string
+export type InvokeArgs = string | ContentBlock[] | Message[] | null | undefined
 
 /**
  * Orchestrates the interaction between a model, a set of tools, and MCP clients.
@@ -347,15 +352,34 @@ export class Agent implements AgentData {
   private async *invokeModel(
     args?: InvokeArgs
   ): AsyncGenerator<AgentStreamEvent, { message: Message; stopReason: string }, undefined> {
-    if (args !== undefined && typeof args === 'string') {
-      // Add user message from args
-      yield await this._appendMessage(
-        new Message({
-          role: 'user',
-          content: [{ type: 'textBlock', text: args }],
-        })
-      )
+    // Normalize input and add messages to conversation
+    if (args !== undefined && args !== null) {
+      if (typeof args === 'string') {
+        // String input: wrap in TextBlock and create user Message
+        yield await this._appendMessage(
+          new Message({
+            role: 'user',
+            content: [new TextBlock(args)],
+          })
+        )
+      } else if (Array.isArray(args) && args.length > 0) {
+        if ('role' in args[0]!) {
+          // Message[] input: append all messages to conversation
+          for (const message of args as Message[]) {
+            yield await this._appendMessage(message)
+          }
+        } else {
+          // ContentBlock[] input: create single user Message with all blocks
+          yield await this._appendMessage(
+            new Message({
+              role: 'user',
+              content: args as ContentBlock[],
+            })
+          )
+        }
+      }
     }
+    // null, undefined, or empty array: skip message addition
 
     const toolSpecs = this._toolRegistry.values().map((tool) => tool.toolSpec)
     const streamOptions: StreamOptions = { toolSpecs }
