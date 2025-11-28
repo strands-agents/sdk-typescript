@@ -13,7 +13,7 @@ const notebookInputSchema = z
     name: z.string().optional().describe('Name of the notebook to operate on. Defaults to "default".'),
     newStr: z.string().optional().describe('New string for replacement or insertion operations.'),
     readRange: z
-      .tuple([z.number(), z.number()])
+      .array(z.number())
       .optional()
       .describe('Optional parameter of `view` command. Line range to show [start, end]. Supports negative indices.'),
     oldStr: z.string().optional().describe('String to replace in write mode when doing text replacement.'),
@@ -144,7 +144,7 @@ function handleList(notebooks: Record<string, string>): string {
 /**
  * Handles read operation.
  */
-function handleRead(notebooks: Record<string, string>, name: string, readRange?: [number, number]): string {
+function handleRead(notebooks: Record<string, string>, name: string, readRange?: number[]): string {
   if (!(name in notebooks)) {
     throw new Error(`Notebook '${name}' not found`)
   }
@@ -157,7 +157,12 @@ function handleRead(notebooks: Record<string, string>, name: string, readRange?:
 
   // Handle line range reading
   const lines = content.split('\n')
-  let [start, end] = readRange
+  let start = readRange[0]
+  let end = readRange[1]
+
+  if (start === undefined || end === undefined) {
+    throw new Error('`readRange` must be a list of two integers: `[start, end]`')
+  }
 
   // Handle negative indices
   if (start < 0) {

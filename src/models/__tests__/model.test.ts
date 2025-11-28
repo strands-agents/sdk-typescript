@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import type { Message } from '../../types/messages.js'
 import { TestModelProvider, collectGenerator } from '../../__fixtures__/model-test-helpers.js'
+import { MaxTokensError } from '../../errors.js'
 
 describe('Model', () => {
   describe('streamAggregated', () => {
@@ -55,6 +56,29 @@ describe('Model', () => {
             usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
           },
         })
+      })
+
+      it('throws MaxTokenError when stopReason is MaxTokenError', async () => {
+        const provider = new TestModelProvider(async function* () {
+          yield { type: 'modelMessageStartEvent', role: 'assistant' }
+          yield { type: 'modelContentBlockStartEvent' }
+          yield {
+            type: 'modelContentBlockDeltaEvent',
+            delta: { type: 'textDelta', text: 'Hello' },
+          }
+          yield { type: 'modelContentBlockStopEvent' }
+          yield { type: 'modelMessageStopEvent', stopReason: 'maxTokens' }
+          yield {
+            type: 'modelMetadataEvent',
+            usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+          }
+        })
+
+        const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+
+        await expect(async () => await collectGenerator(provider.streamAggregated(messages))).rejects.toThrow(
+          'Model reached maximum token limit. This is an unrecoverable state that requires intervention.'
+        )
       })
     })
 
@@ -168,6 +192,31 @@ describe('Model', () => {
             usage: { inputTokens: 10, outputTokens: 8, totalTokens: 18 },
           },
         })
+      })
+
+      it('throws MaxTokenError when stopReason is MaxTokenError and toolUse is partial', async () => {
+        const provider = new TestModelProvider(async function* () {
+          yield { type: 'modelMessageStartEvent', role: 'assistant' }
+          yield {
+            type: 'modelContentBlockStartEvent',
+            start: { type: 'toolUseStart', toolUseId: 'tool1', name: 'get_weather' },
+          }
+          yield {
+            type: 'modelContentBlockDeltaEvent',
+            delta: { type: 'toolUseInputDelta', input: '{"location"' },
+          }
+          yield { type: 'modelMessageStopEvent', stopReason: 'maxTokens' }
+          yield {
+            type: 'modelMetadataEvent',
+            usage: { inputTokens: 10, outputTokens: 8, totalTokens: 18 },
+          }
+        })
+
+        const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+
+        await expect(async () => await collectGenerator(provider.streamAggregated(messages))).rejects.toThrow(
+          MaxTokensError
+        )
       })
     })
 

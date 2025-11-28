@@ -17,6 +17,7 @@ import {
   ModelMetadataEvent,
   type ModelStreamEvent,
 } from './streaming.js'
+import { MaxTokensError } from '../errors.js'
 
 /**
  * Base configuration interface for all model providers.
@@ -105,7 +106,7 @@ export interface StreamAggregatedResult {
  *
  * @typeParam T - Model configuration type extending BaseModelConfig
  */
-export abstract class Model<T extends BaseModelConfig> {
+export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
   /**
    * Updates the model configuration.
    * Merges the provided configuration with existing settings.
@@ -191,6 +192,7 @@ export abstract class Model<T extends BaseModelConfig> {
       signature?: string
       redactedContent?: Uint8Array
     } = {}
+    let errorToThrow: Error | undefined = undefined
     let stoppedMessage: Message | null = null
     let finalStopReason: string | null = null
     let metadata: ModelMetadataEvent | undefined = undefined
@@ -235,23 +237,30 @@ export abstract class Model<T extends BaseModelConfig> {
         case 'modelContentBlockStopEvent': {
           // Finalize and emit complete ContentBlock
           let block: ContentBlock
-          if (toolUseId) {
-            block = new ToolUseBlock({
-              name: toolName,
-              toolUseId: toolUseId,
-              input: JSON.parse(accumulatedToolInput),
-            })
-            toolUseId = '' // Reset
-            toolName = ''
-          } else if (Object.keys(accumulatedReasoning).length > 0) {
-            block = new ReasoningBlock({
-              ...accumulatedReasoning,
-            })
-          } else {
-            block = new TextBlock(accumulatedText)
+          try {
+            if (toolUseId) {
+              block = new ToolUseBlock({
+                name: toolName,
+                toolUseId: toolUseId,
+                input: JSON.parse(accumulatedToolInput),
+              })
+              toolUseId = '' // Reset
+              toolName = ''
+            } else if (Object.keys(accumulatedReasoning).length > 0) {
+              block = new ReasoningBlock({
+                ...accumulatedReasoning,
+              })
+            } else {
+              block = new TextBlock(accumulatedText)
+            }
+            contentBlocks.push(block)
+            yield block
+          } catch (e: unknown) {
+            if (e instanceof SyntaxError) {
+              console.error('Unable to parse JSON string.')
+              errorToThrow = e
+            }
           }
-          contentBlocks.push(block)
-          yield block
           break
         }
 
@@ -274,6 +283,23 @@ export abstract class Model<T extends BaseModelConfig> {
         default:
           break
       }
+    }
+
+    // Handle stop reason
+    if (finalStopReason === 'maxTokens') {
+      const maxTokensError = new MaxTokensError(
+        'Model reached maximum token limit. This is an unrecoverable state that requires intervention.',
+        stoppedMessage!
+      )
+      if (errorToThrow !== undefined) {
+        errorToThrow.cause = maxTokensError
+      } else {
+        errorToThrow = maxTokensError
+      }
+    }
+
+    if (errorToThrow !== undefined) {
+      throw errorToThrow
     }
 
     // Return the final message with stop reason and optional metadata

@@ -1,6 +1,6 @@
 {
   "name": "@strands-agents/sdk",
-  "version": "0.0.1",
+  "version": "@VERSION@",
   "description": "TypeScript SDK for Strands Agents framework",
   "main": "dist/src/index.js",
   "module": "dist/src/index.js",
@@ -29,6 +29,10 @@
     "./vended_tools/file_editor": {
       "import": "./dist/vended_tools/file_editor/index.js",
       "types": "./dist/vended_tools/file_editor/index.d.ts"
+    },
+    "./vended_tools/http_request": {
+      "import": "./dist/vended_tools/http_request/index.js",
+      "types": "./dist/vended_tools/http_request/index.d.ts"
     }
   },
   "scripts": {
@@ -39,7 +43,9 @@
     "test:watch": "vitest --project unit-node",
     "test:coverage": "vitest run --coverage --project unit-node",
     "test:types": "vitest run --project types",
-    "test:integ": "vitest run --project integ",
+    "test:integ": "vitest run --project integ-node",
+    "test:integ:browser": "vitest run --project integ-browser",
+    "test:integ:all": "vitest run --project integ-node --project integ-browser",
     "test:browser": "vitest run --project unit-browser",
     "test:browser:install": "npx playwright install --with-deps chromium",
     "test:all": "vitest run --project unit-node --project unit-browser",
@@ -66,7 +72,6 @@
     "@aws-sdk/client-secrets-manager": "^3.921.0",
     "@aws-sdk/credential-providers": "^3.913.0",
     "@types/json-schema": "^7.0.15",
-    "@types/mime-types": "^3.0.1",
     "@types/node": "^24.6.0",
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",
@@ -78,6 +83,7 @@
     "husky": "^9.1.7",
     "playwright": "^1.56.1",
     "prettier": "^3.0.0",
+    "tsx": "^4.20.6",
     "typescript": "^5.5.0",
     "vitest": "^4.0.8"
   },
@@ -93,9 +99,8 @@
   },
   "homepage": "https://github.com/strands-agents/sdk-typescript#readme",
   "dependencies": {
-    "@aws-sdk/client-bedrock-runtime": "^3.911.0",
+    "@aws-sdk/client-bedrock-runtime": "^3.941.0",
     "@modelcontextprotocol/sdk": "^1.20.2",
-    "mime-types": "^3.0.1",
     "zod": "^4.1.12"
   },
   "optionalDependencies": {
