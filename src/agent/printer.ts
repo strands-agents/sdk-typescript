@@ -1,4 +1,7 @@
 import type { AgentStreamEvent } from '../types/agent.js'
+import type { HookProvider } from '../hooks/types.js'
+import type { HookRegistry } from '../hooks/registry.js'
+import { ContentBlockHook, ModelStreamEventHook } from '../hooks/events.js'
 
 /**
  * Creates a default appender function for the current environment.
@@ -15,28 +18,10 @@ export function getDefaultAppender(): (text: string) => void {
 }
 
 /**
- * Interface for printing agent activity to a destination.
- * Implementations can output to stdout, console, HTML elements, etc.
- */
-export interface Printer {
-  /**
-   * Write content to the output destination.
-   * @param content - The content to write
-   */
-  write(content: string): void
-
-  /**
-   * Process a streaming event from the agent.
-   * @param event - The event to process
-   */
-  processEvent(event: AgentStreamEvent): void
-}
-
-/**
- * Default implementation of the Printer interface.
+ * Default implementation of agent output printing.
  * Outputs text, reasoning, and tool execution activity to the configured appender.
  */
-export class AgentPrinter implements Printer {
+export class AgentPrinter implements HookProvider {
   private readonly _appender: (text: string) => void
   private _inReasoningBlock: boolean = false
   private _toolCount: number = 0
@@ -48,6 +33,31 @@ export class AgentPrinter implements Printer {
    */
   constructor(appender: (text: string) => void) {
     this._appender = appender
+  }
+
+  /**
+   * Register callback functions for specific event types.
+   * @param registry - The hook registry to register callbacks with
+   */
+  public registerCallbacks(registry: HookRegistry): void {
+    registry.addCallback(ModelStreamEventHook, this.handleModelStreamEvent)
+    registry.addCallback(ContentBlockHook, this.handleContentBlock)
+  }
+
+  /**
+   * Handle model stream events and process them for printing.
+   * @param event - The model stream event to handle
+   */
+  private handleModelStreamEvent = (event: ModelStreamEventHook): void => {
+    this.processEvent(event.event)
+  }
+
+  /**
+   * Handle content block events and process them for printing.
+   * @param event - The content block event to handle
+   */
+  private handleContentBlock = (event: ContentBlockHook): void => {
+    this.processEvent(event.block)
   }
 
   /**
@@ -63,7 +73,7 @@ export class AgentPrinter implements Printer {
    * Handles text deltas, reasoning content, and tool execution events.
    * @param event - The event to process
    */
-  public processEvent(event: AgentStreamEvent): void {
+  private processEvent(event: AgentStreamEvent): void {
     switch (event.type) {
       case 'modelContentBlockDeltaEvent':
         this.handleContentBlockDelta(event)

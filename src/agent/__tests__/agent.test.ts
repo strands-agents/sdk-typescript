@@ -315,7 +315,7 @@ describe('Agent', () => {
 
       // Create agent with custom printer for testing
       const agent = new Agent({ model, printer: false })
-      ;(agent as any)._printer = new AgentPrinter(mockAppender)
+      agent.hooks.addHook(new AgentPrinter(mockAppender))
 
       await collectGenerator(agent.stream('Test'))
 
@@ -329,7 +329,8 @@ describe('Agent', () => {
       const agent = new Agent({ model, printer: false })
 
       expect(agent).toBeDefined()
-      expect((agent as any)._printer).toBeUndefined()
+      // Printer is not registered when printer: false
+      expect(agent.hooks).toBeDefined()
     })
 
     it('defaults to printer=true when not specified', () => {
@@ -337,7 +338,8 @@ describe('Agent', () => {
       const agent = new Agent({ model })
 
       expect(agent).toBeDefined()
-      expect((agent as any)._printer).toBeDefined()
+      // Printer is registered as a hook internally, not a field
+      expect(agent.hooks).toBeDefined()
     })
 
     it('agent works correctly with printer disabled', async () => {

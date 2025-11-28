@@ -15,7 +15,7 @@ describe('AgentPrinter', () => {
       const mockAppender = (text: string) => outputs.push(text)
 
       const agent = new Agent({ model, printer: false })
-      ;(agent as any)._printer = new AgentPrinter(mockAppender)
+      agent.hooks.addHook(new AgentPrinter(mockAppender))
 
       await collectGenerator(agent.stream('Test'))
 
@@ -30,7 +30,7 @@ describe('AgentPrinter', () => {
       const mockAppender = (text: string) => outputs.push(text)
 
       const agent = new Agent({ model, printer: false })
-      ;(agent as any)._printer = new AgentPrinter(mockAppender)
+      agent.hooks.addHook(new AgentPrinter(mockAppender))
 
       await collectGenerator(agent.stream('Test'))
 
@@ -48,7 +48,7 @@ describe('AgentPrinter', () => {
       const mockAppender = (text: string) => outputs.push(text)
 
       const agent = new Agent({ model, printer: false })
-      ;(agent as any)._printer = new AgentPrinter(mockAppender)
+      agent.hooks.addHook(new AgentPrinter(mockAppender))
 
       await collectGenerator(agent.stream('Test'))
 
@@ -66,7 +66,7 @@ describe('AgentPrinter', () => {
       const mockAppender = (text: string) => outputs.push(text)
 
       const agent = new Agent({ model, printer: false })
-      ;(agent as any)._printer = new AgentPrinter(mockAppender)
+      agent.hooks.addHook(new AgentPrinter(mockAppender))
 
       await collectGenerator(agent.stream('Test'))
 
@@ -96,7 +96,7 @@ describe('AgentPrinter', () => {
       const mockAppender = (text: string) => outputs.push(text)
 
       const agent = new Agent({ model, tools: [tool], printer: false })
-      ;(agent as any)._printer = new AgentPrinter(mockAppender)
+      agent.hooks.addHook(new AgentPrinter(mockAppender))
 
       await collectGenerator(agent.stream('Test'))
 
@@ -120,7 +120,7 @@ describe('AgentPrinter', () => {
       const mockAppender = (text: string) => outputs.push(text)
 
       const agent = new Agent({ model, tools: [tool], printer: false })
-      ;(agent as any)._printer = new AgentPrinter(mockAppender)
+      agent.hooks.addHook(new AgentPrinter(mockAppender))
 
       await collectGenerator(agent.stream('Test'))
 
@@ -163,7 +163,7 @@ describe('AgentPrinter', () => {
       const mockAppender = (text: string) => outputs.push(text)
 
       const agent = new Agent({ model, tools: [calcTool, validatorTool], printer: false })
-      ;(agent as any)._printer = new AgentPrinter(mockAppender)
+      agent.hooks.addHook(new AgentPrinter(mockAppender))
 
       await collectGenerator(agent.stream('Test'))
 

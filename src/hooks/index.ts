@@ -16,6 +16,7 @@ export {
   BeforeModelCallEvent,
   AfterModelCallEvent,
   ModelStreamEventHook,
+  ContentBlockHook,
   BeforeToolsEvent,
   AfterToolsEvent,
 } from './events.js'

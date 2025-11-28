@@ -10,6 +10,7 @@ import {
   BeforeToolsEvent,
   MessageAddedEvent,
   ModelStreamEventHook,
+  ContentBlockHook,
 } from '../events.js'
 import { Agent } from '../../agent/agent.js'
 import { Message, TextBlock, ToolResultBlock } from '../../types/messages.js'
@@ -325,6 +326,47 @@ describe('ModelStreamEventHook', () => {
     }
     const hookEvent = new ModelStreamEventHook({ agent, event: streamEvent })
     expect(hookEvent._shouldReverseCallbacks()).toBe(false)
+  })
+})
+
+describe('ContentBlockHook', () => {
+  it('creates instance with correct properties', () => {
+    const agent = new Agent()
+    const contentBlock = new TextBlock('Hello world')
+    const hookEvent = new ContentBlockHook({ agent, block: contentBlock })
+
+    expect(hookEvent).toEqual({
+      type: 'contentBlockHook',
+      agent: agent,
+      block: contentBlock,
+    })
+    // @ts-expect-error verifying that property is readonly
+    hookEvent.agent = new Agent()
+    // @ts-expect-error verifying that property is readonly
+    hookEvent.block = contentBlock
+  })
+
+  it('returns false for _shouldReverseCallbacks', () => {
+    const agent = new Agent()
+    const contentBlock = new TextBlock('Hello world')
+    const hookEvent = new ContentBlockHook({ agent, block: contentBlock })
+    expect(hookEvent._shouldReverseCallbacks()).toBe(false)
+  })
+
+  it('works with ToolResultBlock', () => {
+    const agent = new Agent()
+    const toolResultBlock = new ToolResultBlock({
+      toolUseId: 'test-id',
+      status: 'success',
+      content: [new TextBlock('Result')],
+    })
+    const hookEvent = new ContentBlockHook({ agent, block: toolResultBlock })
+
+    expect(hookEvent).toEqual({
+      type: 'contentBlockHook',
+      agent: agent,
+      block: toolResultBlock,
+    })
   })
 })
 

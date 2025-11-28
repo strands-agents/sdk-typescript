@@ -206,12 +206,29 @@ export class AfterModelCallEvent extends HookEvent {
 export class ModelStreamEventHook extends HookEvent {
   readonly type = 'modelStreamEventHook' as const
   readonly agent: AgentData
-  readonly event: ModelStreamEvent | ContentBlock
+  readonly event: ModelStreamEvent
 
-  constructor(data: { agent: AgentData; event: ModelStreamEvent | ContentBlock }) {
+  constructor(data: { agent: AgentData; event: ModelStreamEvent }) {
     super()
     this.agent = data.agent
     this.event = data.event
+  }
+}
+
+/**
+ * Event triggered for each content block from the model or tools.
+ * Allows hooks to observe content blocks during model streaming and tool execution.
+ * Provides read-only access to content blocks.
+ */
+export class ContentBlockHook extends HookEvent {
+  readonly type = 'contentBlockHook' as const
+  readonly agent: AgentData
+  readonly block: ContentBlock
+
+  constructor(data: { agent: AgentData; block: ContentBlock }) {
+    super()
+    this.agent = data.agent
+    this.block = data.block
   }
 }
 
