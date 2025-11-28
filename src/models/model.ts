@@ -63,7 +63,7 @@ export interface StreamOptions {
  *
  * @typeParam T - Model configuration type extending BaseModelConfig
  */
-export abstract class Model<T extends BaseModelConfig> {
+export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
   /**
    * Updates the model configuration.
    * Merges the provided configuration with existing settings.

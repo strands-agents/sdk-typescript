@@ -460,7 +460,7 @@ describe('Agent', () => {
   describe('model property', () => {
     describe('when accessing the model field', () => {
       it('returns the configured model instance', () => {
-        const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
+        const model = new MockMessageModel()
         const agent = new Agent({ model })
 
         expect(agent.model).toBe(model)
@@ -476,8 +476,8 @@ describe('Agent', () => {
 
     describe('when modifying the model field', () => {
       it('updates the model instance', () => {
-        const initialModel = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Initial' })
-        const newModel = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Updated' })
+        const initialModel = new MockMessageModel()
+        const newModel = new MockMessageModel()
         const agent = new Agent({ model: initialModel })
 
         agent.model = newModel

@@ -117,7 +117,7 @@ export class Agent implements AgentData {
    * The model provider used by the agent for inference.
    * Can be changed at runtime to switch models or update configuration.
    */
-  public model: Model<BaseModelConfig>
+  public model: Model
   private _toolRegistry: ToolRegistry
   private _mcpClients: McpClient[]
   private _systemPrompt?: SystemPrompt
