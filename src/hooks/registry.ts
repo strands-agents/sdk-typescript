@@ -80,6 +80,11 @@ export class HookRegistryImplementation implements HookRegistry {
    * @param provider - The hook provider to register
    */
   addHook(provider: HookProvider): void {
+    // We want to be able to remove all hooks from a given provider so that things implemented via hooks (like
+    // conversation-managers or printers) can be changed dynamically on the agent. To allow removing hooks, we
+    // need to track where a given callback came from - we could force callers to pass in the source when calling
+    // addCallback but that's a poor dev-x, so we do it ourselves here.
+
     this._currentProvider = provider
     try {
       provider.registerCallbacks(this)
