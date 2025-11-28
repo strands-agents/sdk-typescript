@@ -510,7 +510,7 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
     }
 
     // Add tool specifications with validation
-    if (options && options?.toolSpecs && options.toolSpecs.length > 0) {
+    if (options?.toolSpecs && options.toolSpecs.length > 0) {
       request.tools = options.toolSpecs.map((spec) => {
         if (!spec.name || !spec.description) {
           throw new Error('Tool specification must have both name and description')
