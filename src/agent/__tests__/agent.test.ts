@@ -584,18 +584,43 @@ describe('Agent', () => {
               input: { key: 'value' },
             },
           },
+          {
+            toolResult: {
+              toolUseId: 'id-1',
+              status: 'success' as const,
+              content: [{ text: 'Tool result' }, { json: { result: 42 } }],
+            },
+          },
+          { reasoning: { text: 'My reasoning' } },
+          { cachePoint: { cacheType: 'default' as const } },
+          { guardContent: { text: { text: 'Guard text', qualifiers: ['query' as const] } } },
+          {
+            image: {
+              format: 'png' as const,
+              source: { url: 'https://example.com/image.png' },
+            },
+          },
+          {
+            video: {
+              format: 'mp4' as const,
+              source: { s3Location: { uri: 's3://bucket/video.mp4' } },
+            },
+          },
+          {
+            document: {
+              format: 'pdf' as const,
+              name: 'doc.pdf',
+              source: { bytes: new Uint8Array([1, 2, 3]) },
+            },
+          },
         ])
 
         expect(agent.messages).toHaveLength(2)
-        expect(agent.messages[0]).toEqual(
-          new Message({
-            role: 'user',
-            content: [
-              new TextBlock('Hello from data format'),
-              new ToolUseBlock({ name: 'testTool', toolUseId: 'id-1', input: { key: 'value' } }),
-            ],
-          })
-        )
+        const userMessage = agent.messages[0]!
+        expect(userMessage.role).toBe('user')
+        expect(userMessage.content).toHaveLength(9)
+        expect(userMessage.content[0]).toEqual(new TextBlock('Hello from data format'))
+        expect(userMessage.content[1]).toEqual(new ToolUseBlock({ name: 'testTool', toolUseId: 'id-1', input: { key: 'value' } }))
       })
     })
 
