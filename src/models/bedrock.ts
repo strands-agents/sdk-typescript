@@ -34,6 +34,7 @@ import {
   type SystemContentBlock,
   DocumentFormat,
   ImageFormat,
+  type BedrockRuntimeClientResolvedConfig,
 } from '@aws-sdk/client-bedrock-runtime'
 import { type BaseModelConfig, Model, type StreamOptions } from '../models/model.js'
 import type { ContentBlock, Message, ToolUseBlock } from '../types/messages.js'
@@ -48,6 +49,9 @@ import { ensureDefined } from '../types/validation.js'
  * Uses Claude Sonnet 4.5 with global inference profile for cross-region availability.
  */
 const DEFAULT_BEDROCK_MODEL_ID = 'global.anthropic.claude-sonnet-4-5-20250929-v1:0'
+
+const DEFAULT_BEDROCK_REGION = 'us-west-2'
+const DEFAULT_BEDROCK_REGION_SUPPORTS_FIP = false
 
 /**
  * Models that require the status field in tool results.
@@ -221,8 +225,6 @@ export interface BedrockModelOptions extends BedrockModelConfig {
 export class BedrockModel extends Model<BedrockModelConfig> {
   private _config: BedrockModelConfig
   private _client: BedrockRuntimeClient
-  private _explicitRegion: boolean
-  private _regionChecked: boolean = false
 
   /**
    * Creates a new BedrockModel instance.
@@ -259,9 +261,6 @@ export class BedrockModel extends Model<BedrockModelConfig> {
 
     const { region, clientConfig, ...modelConfig } = options ?? {}
 
-    // Track whether region was explicitly provided (either directly or in clientConfig)
-    this._explicitRegion = !!(region || clientConfig?.region)
-
     // Initialize model config with default model ID if not provided
     this._config = {
       modelId: DEFAULT_BEDROCK_MODEL_ID,
@@ -280,6 +279,8 @@ export class BedrockModel extends Model<BedrockModelConfig> {
       ...(region ? { region: region } : {}),
       customUserAgent,
     })
+
+    applyDefaultRegion(this._client.config)
   }
 
   /**
@@ -317,32 +318,6 @@ export class BedrockModel extends Model<BedrockModelConfig> {
   }
 
   /**
-   * Ensures the region is resolved. If no region was explicitly provided
-   * and the AWS SDK doesn't resolve one, defaults to 'us-west-2'.
-   * This method only runs once and caches the result.
-   *
-   * @internal
-   */
-  private async _ensureRegionResolved(): Promise<void> {
-    // If region was explicitly provided or we've already checked, skip
-    if (this._explicitRegion || this._regionChecked) {
-      return
-    }
-
-    this._regionChecked = true
-
-    // Check if AWS SDK resolved a region
-    const resolvedRegion = await this._client.config.region()
-
-    // If no region is resolved, default to us-west-2
-    if (!resolvedRegion) {
-      this._client = new BedrockRuntimeClient({
-        region: 'us-west-2',
-      })
-    }
-  }
-
-  /**
    * Streams a conversation with the Bedrock model.
    * Returns an async iterable that yields streaming events as they occur.
    *
@@ -373,9 +348,6 @@ export class BedrockModel extends Model<BedrockModelConfig> {
    */
   async *stream(messages: Message[], options?: StreamOptions): AsyncIterable<ModelStreamEvent> {
     try {
-      // Ensure region is resolved (default to us-west-2 if needed)
-      await this._ensureRegionResolved()
-
       // Format the request for Bedrock
       const request = this._formatRequest(messages, options)
       if (this._config.stream !== false) {
@@ -1055,5 +1027,44 @@ export class BedrockModel extends Model<BedrockModelConfig> {
     }
 
     return mappedStopReason
+  }
+}
+
+/**
+ * What region is used for the BedrockConfiguration can't be known at construction-time so to apply a default
+ * we have to use an async function to intercept "Region is missing" errors and then apply our default (this
+ * is actually how many bedrock configuration parameters are implemented).
+ *
+ * We need to override both region & useFipsEndpoint because the region is used in both of those places:
+ * https://github.com/smithy-lang/smithy-typescript/blob/e11f7499c1bad30a515217f82a07b9e3e69a1f60/packages/config-resolver/src/regionConfig/resolveRegionConfig.ts#L42
+ *
+ * We do this unconditionally so that if a region is updated dynamically (environment variable or profile value) we
+ * also pick up those changes and stop applying the default.
+ */
+function applyDefaultRegion(config: BedrockRuntimeClientResolvedConfig): void {
+  // Bind original region function and wrap with error handling
+  const originalRegion = config.region.bind(config)
+  config.region = async (): Promise<string> => {
+    try {
+      return await originalRegion()
+    } catch (error) {
+      if (error instanceof Error && error.message === 'Region is missing') {
+        return DEFAULT_BEDROCK_REGION
+      }
+      throw error
+    }
+  }
+
+  // Bind original useFipsEndpoint function and wrap with error handling
+  const originalUseFipsEndpoint = config.useFipsEndpoint.bind(config)
+  config.useFipsEndpoint = async (): Promise<boolean> => {
+    try {
+      return await originalUseFipsEndpoint()
+    } catch (error) {
+      if (error instanceof Error && error.message === 'Region is missing') {
+        return DEFAULT_BEDROCK_REGION_SUPPORTS_FIP // false for us-west-2
+      }
+      throw error
+    }
   }
 }
