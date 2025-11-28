@@ -620,7 +620,9 @@ describe('Agent', () => {
         expect(userMessage.role).toBe('user')
         expect(userMessage.content).toHaveLength(9)
         expect(userMessage.content[0]).toEqual(new TextBlock('Hello from data format'))
-        expect(userMessage.content[1]).toEqual(new ToolUseBlock({ name: 'testTool', toolUseId: 'id-1', input: { key: 'value' } }))
+        expect(userMessage.content[1]).toEqual(
+          new ToolUseBlock({ name: 'testTool', toolUseId: 'id-1', input: { key: 'value' } })
+        )
       })
     })
 
