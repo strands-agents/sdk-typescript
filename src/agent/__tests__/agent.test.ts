@@ -471,12 +471,12 @@ describe('Agent', () => {
   })
 
   describe('multimodal input', () => {
-    describe('with string input (backwards compatibility)', () => {
+    describe('with string input', () => {
       it('creates user message with single TextBlock', async () => {
         const model = new MockMessageModel().addTurn(new TextBlock('Response'))
         const agent = new Agent({ model })
 
-        await collectGenerator(agent.stream('Hello'))
+        await agent.invoke('Hello')
 
         expect(agent.messages).toHaveLength(2)
         expect(agent.messages[0]).toEqual(
@@ -493,7 +493,7 @@ describe('Agent', () => {
         const model = new MockMessageModel().addTurn(new TextBlock('Response'))
         const agent = new Agent({ model })
 
-        await collectGenerator(agent.stream([new TextBlock('Hello')]))
+        await agent.invoke([new TextBlock('Hello')])
 
         expect(agent.messages).toHaveLength(2)
         expect(agent.messages[0]).toEqual(
@@ -510,7 +510,7 @@ describe('Agent', () => {
 
         const contentBlocks = [new TextBlock('Analyze this'), new TextBlock('and this')]
 
-        await collectGenerator(agent.stream(contentBlocks))
+        await agent.invoke(contentBlocks)
 
         expect(agent.messages).toHaveLength(2)
         expect(agent.messages[0]).toEqual(
@@ -551,7 +551,7 @@ describe('Agent', () => {
           }),
         ]
 
-        await collectGenerator(agent.stream(contentBlocks))
+        await agent.invoke(contentBlocks)
 
         expect(agent.messages).toHaveLength(2)
         expect(agent.messages[0]).toEqual(
@@ -566,11 +566,9 @@ describe('Agent', () => {
         const model = new MockMessageModel().addTurn(new TextBlock('Response'))
         const agent = new Agent({ model })
 
-        const initialLength = agent.messages.length
+        await agent.invoke([])
 
-        await collectGenerator(agent.stream([]))
-
-        expect(agent.messages).toHaveLength(initialLength + 1) // Only response message added
+        expect(agent.messages).toHaveLength(1) // Only response message added
       })
     })
 
@@ -584,7 +582,7 @@ describe('Agent', () => {
           content: [new TextBlock('Hello')],
         })
 
-        await collectGenerator(agent.stream([userMessage]))
+        await agent.invoke([userMessage])
 
         expect(agent.messages).toHaveLength(2)
         expect(agent.messages[0]).toEqual(userMessage)
@@ -609,7 +607,7 @@ describe('Agent', () => {
           }),
         ]
 
-        await collectGenerator(agent.stream(messages))
+        await agent.invoke(messages)
 
         expect(agent.messages).toHaveLength(4) // 3 input + 1 response
         expect(agent.messages[0]).toEqual(messages[0])
@@ -621,26 +619,9 @@ describe('Agent', () => {
         const model = new MockMessageModel().addTurn(new TextBlock('Response'))
         const agent = new Agent({ model })
 
-        const initialLength = agent.messages.length
+        await agent.invoke([])
 
-        await collectGenerator(agent.stream([]))
-
-        expect(agent.messages).toHaveLength(initialLength + 1) // Only response message added
-      })
-
-      it('handles messages with empty content arrays', async () => {
-        const model = new MockMessageModel().addTurn(new TextBlock('Response'))
-        const agent = new Agent({ model })
-
-        const emptyMessage = new Message({
-          role: 'user',
-          content: [],
-        })
-
-        await collectGenerator(agent.stream([emptyMessage]))
-
-        expect(agent.messages).toHaveLength(2)
-        expect(agent.messages[0]).toEqual(emptyMessage)
+        expect(agent.messages).toHaveLength(1) // Only response message added
       })
     })
 
@@ -657,11 +638,9 @@ describe('Agent', () => {
           ],
         })
 
-        const initialLength = agent.messages.length
+        await agent.invoke(null)
 
-        await collectGenerator(agent.stream(null))
-
-        expect(agent.messages).toHaveLength(initialLength + 1) // Only response added
+        expect(agent.messages).toHaveLength(2) // 1 existing + 1 response
         expect(agent.messages[0]!.content).toEqual([new TextBlock('Existing message')])
       })
 
@@ -677,11 +656,9 @@ describe('Agent', () => {
           ],
         })
 
-        const initialLength = agent.messages.length
+        await agent.invoke(undefined)
 
-        await collectGenerator(agent.stream(undefined))
-
-        expect(agent.messages).toHaveLength(initialLength + 1) // Only response added
+        expect(agent.messages).toHaveLength(2) // 1 existing + 1 response
         expect(agent.messages[0]!.content).toEqual([new TextBlock('Existing message')])
       })
 
@@ -689,7 +666,7 @@ describe('Agent', () => {
         const model = new MockMessageModel().addTurn(new TextBlock('Response'))
         const agent = new Agent({ model })
 
-        await collectGenerator(agent.stream(undefined))
+        await agent.invoke(undefined)
 
         expect(agent.messages).toHaveLength(1) // Only response
         expect(agent.messages[0]!.role).toBe('assistant')

@@ -344,39 +344,38 @@ export class Agent implements AgentData {
   }
 
   /**
-   * Normalizes agent invocation input and adds messages to conversation.
+   * Normalizes agent invocation input into an array of messages to append.
    *
    * @param args - Optional arguments for invoking the model
-   * @returns Generator that yields MessageAddedEvent for each message added
+   * @returns Array of messages to append to the conversation
    */
-  private async *_normalizeInput(args?: InvokeArgs): AsyncGenerator<MessageAddedEvent, void, undefined> {
+  private _normalizeInput(args?: InvokeArgs): Message[] {
     if (args !== undefined && args !== null) {
       if (typeof args === 'string') {
         // String input: wrap in TextBlock and create user Message
-        yield await this._appendMessage(
+        return [
           new Message({
             role: 'user',
             content: [new TextBlock(args)],
-          })
-        )
+          }),
+        ]
       } else if (Array.isArray(args) && args.length > 0) {
         if ('role' in args[0]!) {
-          // Message[] input: append all messages to conversation
-          for (const message of args as Message[]) {
-            yield await this._appendMessage(message)
-          }
+          // Message[] input: return all messages
+          return args as Message[]
         } else {
           // ContentBlock[] input: create single user Message with all blocks
-          yield await this._appendMessage(
+          return [
             new Message({
               role: 'user',
               content: args as ContentBlock[],
-            })
-          )
+            }),
+          ]
         }
       }
     }
-    // null, undefined, or empty array: skip message addition
+    // null, undefined, or empty array: no messages to append
+    return []
   }
 
   /**
@@ -388,7 +387,11 @@ export class Agent implements AgentData {
   private async *invokeModel(
     args?: InvokeArgs
   ): AsyncGenerator<AgentStreamEvent, { message: Message; stopReason: string }, undefined> {
-    yield* this._normalizeInput(args)
+    // Normalize input and append messages to conversation
+    const messagesToAppend = this._normalizeInput(args)
+    for (const message of messagesToAppend) {
+      yield await this._appendMessage(message)
+    }
 
     const toolSpecs = this._toolRegistry.values().map((tool) => tool.toolSpec)
     const streamOptions: StreamOptions = { toolSpecs }
