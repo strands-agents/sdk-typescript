@@ -1571,9 +1571,7 @@ describe('BedrockModel', () => {
         } as never)
 
         const provider = new BedrockModel({ region: 'eu-west-1' })
-        const messages: Message[] = [
-          { type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] },
-        ]
+        const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
 
         await collectIterator(provider.stream(messages))
 
@@ -1608,9 +1606,7 @@ describe('BedrockModel', () => {
         } as never)
 
         const provider = new BedrockModel()
-        const messages: Message[] = [
-          { type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] },
-        ]
+        const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
 
         await collectIterator(provider.stream(messages))
 
@@ -1645,9 +1641,7 @@ describe('BedrockModel', () => {
         } as never)
 
         const provider = new BedrockModel()
-        const messages: Message[] = [
-          { type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] },
-        ]
+        const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
 
         // First call should check and recreate client
         await collectIterator(provider.stream(messages))
@@ -1681,9 +1675,7 @@ describe('BedrockModel', () => {
         } as never)
 
         const provider = new BedrockModel()
-        const messages: Message[] = [
-          { type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] },
-        ]
+        const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
 
         // Make multiple calls
         await collectIterator(provider.stream(messages))
@@ -1722,9 +1714,7 @@ describe('BedrockModel', () => {
         const provider = new BedrockModel({
           clientConfig: { region: 'ap-southeast-1' },
         })
-        const messages: Message[] = [
-          { type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] },
-        ]
+        const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
 
         await collectIterator(provider.stream(messages))
 
