@@ -117,7 +117,7 @@ describe.each(providers)('Agent with $name', ({ name, skip, createModel }) => {
         })
 
         // Create image block
-        const imageBytes = loadFixture(yellowPngUrl)
+        const imageBytes = await loadFixture(yellowPngUrl)
         const imageBlock = new ImageBlock({
           format: 'png',
           source: { bytes: imageBytes },
