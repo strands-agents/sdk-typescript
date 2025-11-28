@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { httpRequest } from '../vended_tools/http_request/http-request.js'
+import { httpRequest } from '@strands-agents/sdk/vended_tools/http_request'
 import { Agent, BedrockModel } from '@strands-agents/sdk'
-import { getMessageText } from './__fixtures__/model-test-helpers.js'
 import { shouldRunTests } from './__fixtures__/model-test-helpers.js'
 
 describe.skipIf(!(await shouldRunTests()))('httpRequest tool (integration)', () => {
@@ -15,9 +14,7 @@ describe.skipIf(!(await shouldRunTests()))('httpRequest tool (integration)', () 
     const result = await agent.invoke('Call Open-Meteo to get the weather in NYC')
 
     // Verify agent made a request and returned weather information
-    const lastMessage = agent.messages[agent.messages.length - 1]
-    const text = getMessageText(lastMessage)
-    expect(text.toLowerCase()).toMatch(/weather|temperature|forecast|nyc|new york/)
+    expect(result.toString().toLowerCase()).toMatch(/weather|temperature|forecast|nyc|new york/)
 
     // Verify the result structure
     expect(result.stopReason).toBe('endTurn')
