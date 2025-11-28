@@ -418,4 +418,152 @@ describe.skipIf(!(await shouldRunTests()))('BedrockModel Integration Tests', () 
       expect(stopEvent?.stopReason).toBe('endTurn')
     })
   })
+
+  describe('Region Configuration', () => {
+    it('uses explicit region when provided', async () => {
+      const provider = new BedrockModel({
+        region: 'us-east-1',
+        maxTokens: 50,
+      })
+      const messages: Message[] = [
+        {
+          type: 'message',
+          role: 'user',
+          content: [{ type: 'textBlock', text: 'Say hello in one word' }],
+        },
+      ]
+
+      // Should successfully make API call with explicit region
+      const events = await collectIterator(provider.stream(messages))
+      const responseText = events.reduce((acc, event) => {
+        if (event.type === 'modelContentBlockDeltaEvent' && event.delta.type === 'textDelta') {
+          return acc + event.delta.text
+        }
+        return acc
+      }, '')
+
+      expect(responseText.trim().length).toBeGreaterThan(0)
+    })
+
+    it('defaults to us-west-2 when no region provided and AWS SDK does not resolve one', async () => {
+      // Save original AWS_REGION
+      const originalAwsRegion = process.env.AWS_REGION
+      const originalAwsDefaultRegion = process.env.AWS_DEFAULT_REGION
+
+      try {
+        // Clear any AWS region environment variables to force default behavior
+        delete process.env.AWS_REGION
+        delete process.env.AWS_DEFAULT_REGION
+
+        const provider = new BedrockModel({
+          maxTokens: 50,
+        })
+        const messages: Message[] = [
+          {
+            type: 'message',
+            role: 'user',
+            content: [{ type: 'textBlock', text: 'Say hello in one word' }],
+          },
+        ]
+
+        // Should successfully make API call with default region
+        const events = await collectIterator(provider.stream(messages))
+        const responseText = events.reduce((acc, event) => {
+          if (event.type === 'modelContentBlockDeltaEvent' && event.delta.type === 'textDelta') {
+            return acc + event.delta.text
+          }
+          return acc
+        }, '')
+
+        expect(responseText.trim().length).toBeGreaterThan(0)
+      } finally {
+        // Restore original environment variables
+        if (originalAwsRegion !== undefined) {
+          process.env.AWS_REGION = originalAwsRegion
+        }
+        if (originalAwsDefaultRegion !== undefined) {
+          process.env.AWS_DEFAULT_REGION = originalAwsDefaultRegion
+        }
+      }
+    })
+
+    it('uses AWS_REGION environment variable when set', async () => {
+      // Save original AWS_REGION
+      const originalAwsRegion = process.env.AWS_REGION
+
+      try {
+        // Set AWS_REGION environment variable
+        process.env.AWS_REGION = 'eu-west-1'
+
+        const provider = new BedrockModel({
+          maxTokens: 50,
+        })
+        const messages: Message[] = [
+          {
+            type: 'message',
+            role: 'user',
+            content: [{ type: 'textBlock', text: 'Say hello in one word' }],
+          },
+        ]
+
+        // Should successfully make API call with region from environment
+        const events = await collectIterator(provider.stream(messages))
+        const responseText = events.reduce((acc, event) => {
+          if (event.type === 'modelContentBlockDeltaEvent' && event.delta.type === 'textDelta') {
+            return acc + event.delta.text
+          }
+          return acc
+        }, '')
+
+        expect(responseText.trim().length).toBeGreaterThan(0)
+      } finally {
+        // Restore original environment variable
+        if (originalAwsRegion !== undefined) {
+          process.env.AWS_REGION = originalAwsRegion
+        } else {
+          delete process.env.AWS_REGION
+        }
+      }
+    })
+
+    it('explicit region takes precedence over environment variable', async () => {
+      // Save original AWS_REGION
+      const originalAwsRegion = process.env.AWS_REGION
+
+      try {
+        // Set AWS_REGION environment variable to a different region
+        process.env.AWS_REGION = 'eu-west-1'
+
+        const provider = new BedrockModel({
+          region: 'us-east-1', // Explicit region should override environment
+          maxTokens: 50,
+        })
+        const messages: Message[] = [
+          {
+            type: 'message',
+            role: 'user',
+            content: [{ type: 'textBlock', text: 'Say hello in one word' }],
+          },
+        ]
+
+        // Should successfully make API call with explicit region
+        const events = await collectIterator(provider.stream(messages))
+        const responseText = events.reduce((acc, event) => {
+          if (event.type === 'modelContentBlockDeltaEvent' && event.delta.type === 'textDelta') {
+            return acc + event.delta.text
+          }
+          return acc
+        }, '')
+
+        expect(responseText.trim().length).toBeGreaterThan(0)
+      } finally {
+        // Restore original environment variable
+        if (originalAwsRegion !== undefined) {
+          process.env.AWS_REGION = originalAwsRegion
+        } else {
+          delete process.env.AWS_REGION
+        }
+      }
+    })
+  })
 })

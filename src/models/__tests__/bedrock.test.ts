@@ -19,7 +19,7 @@ function setupMockSend(streamGenerator: () => AsyncGenerator<unknown>): void {
     })
   )
   vi.mocked(BedrockRuntimeClient).mockImplementation(function () {
-    return { send: mockSend } as never
+    return { send: mockSend, config: { region: vi.fn(async () => 'us-east-1'), useFipsEndpoint: vi.fn(async () => false) } } as never
   })
 }
 
@@ -83,6 +83,10 @@ vi.mock('@aws-sdk/client-bedrock-runtime', async (importOriginal) => {
     BedrockRuntimeClient: vi.fn(function () {
       return {
         send: mockSend,
+        config: {
+          region: vi.fn(async () => 'us-east-1'),
+          useFipsEndpoint: vi.fn(async () => false),
+        },
       }
     }),
     ConverseStreamCommand,
@@ -480,7 +484,7 @@ describe('BedrockModel', () => {
       })
 
       vi.mocked(BedrockRuntimeClient).mockImplementation(function () {
-        return { send: mockSend } as never
+        return { send: mockSend, config: { region: vi.fn(async () => 'us-east-1'), useFipsEndpoint: vi.fn(async () => false) } } as never
       })
 
       const provider = new BedrockModel({ stream })
@@ -545,7 +549,7 @@ describe('BedrockModel', () => {
         }
       })
       vi.mocked(BedrockRuntimeClient).mockImplementation(function () {
-        return { send: mockSend } as never
+        return { send: mockSend, config: { region: vi.fn(async () => 'us-east-1'), useFipsEndpoint: vi.fn(async () => false) } } as never
       })
 
       const provider = new BedrockModel({ stream })
@@ -611,7 +615,7 @@ describe('BedrockModel', () => {
         }
       })
       vi.mocked(BedrockRuntimeClient).mockImplementation(function () {
-        return { send: mockSend } as never
+        return { send: mockSend, config: { region: vi.fn(async () => 'us-east-1'), useFipsEndpoint: vi.fn(async () => false) } } as never
       })
 
       const provider = new BedrockModel({ stream })
@@ -671,7 +675,7 @@ describe('BedrockModel', () => {
         }
       })
       vi.mocked(BedrockRuntimeClient).mockImplementation(function () {
-        return { send: mockSend } as never
+        return { send: mockSend, config: { region: vi.fn(async () => 'us-east-1'), useFipsEndpoint: vi.fn(async () => false) } } as never
       })
 
       const provider = new BedrockModel({ stream })
@@ -712,7 +716,13 @@ describe('BedrockModel', () => {
         vi.clearAllMocks()
         const mockSendError = vi.fn().mockRejectedValue(error)
         vi.mocked(BedrockRuntimeClient).mockImplementation(function () {
-          return { send: mockSendError } as never
+          return {
+            send: mockSendError,
+            config: {
+              region: vi.fn(async () => 'us-east-1'),
+              useFipsEndpoint: vi.fn(async () => false),
+            },
+          } as never
         })
 
         const provider = new BedrockModel()
@@ -1533,6 +1543,179 @@ describe('BedrockModel', () => {
           modelId: 'amazon.nova-lite-v1:0',
         })
       })
+    })
+  })
+
+  describe('region configuration', () => {
+    beforeEach(() => {
+      vi.clearAllMocks()
+    })
+
+    it('uses explicit region when provided', async () => {
+      const mockRegion = vi.fn(async () => 'eu-west-1')
+      const mockUseFipsEndpoint = vi.fn(async () => false)
+      const mockSend = vi.fn(
+        async (): Promise<{ stream: AsyncIterable<unknown> }> => ({
+          stream: (async function* (): AsyncGenerator<unknown> {
+            yield { messageStart: { role: 'assistant' } }
+            yield { contentBlockStart: {} }
+            yield { contentBlockDelta: { delta: { text: 'Hello' } } }
+            yield { contentBlockStop: {} }
+            yield { messageStop: { stopReason: 'end_turn' } }
+            yield { metadata: { usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } } }
+          })(),
+        }),
+      )
+
+      vi.mocked(BedrockRuntimeClient).mockImplementation(function (..._args: unknown[]) {
+        return {
+          send: mockSend,
+          config: {
+            region: mockRegion,
+            useFipsEndpoint: mockUseFipsEndpoint,
+          },
+        } as never
+      } as never)
+
+      const provider = new BedrockModel({ region: 'eu-west-1' })
+
+      // After applyDefaultRegion wraps the config functions, verify they still return the correct value
+      const regionResult = await provider['_client'].config.region()
+      expect(regionResult).toBe('eu-west-1')
+    })
+
+    it('defaults to us-west-2 when region is missing', async () => {
+      const mockRegion = vi.fn(async () => {
+        throw new Error('Region is missing')
+      })
+      const mockUseFipsEndpoint = vi.fn(async () => {
+        throw new Error('Region is missing')
+      })
+      const mockSend = vi.fn(
+        async (): Promise<{ stream: AsyncIterable<unknown> }> => ({
+          stream: (async function* (): AsyncGenerator<unknown> {
+            yield { messageStart: { role: 'assistant' } }
+            yield { contentBlockStart: {} }
+            yield { contentBlockDelta: { delta: { text: 'Hello' } } }
+            yield { contentBlockStop: {} }
+            yield { messageStop: { stopReason: 'end_turn' } }
+            yield { metadata: { usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } } }
+          })(),
+        }),
+      )
+
+      vi.mocked(BedrockRuntimeClient).mockImplementation(function (..._args: unknown[]) {
+        return {
+          send: mockSend,
+          config: {
+            region: mockRegion,
+            useFipsEndpoint: mockUseFipsEndpoint,
+          },
+        } as never
+      } as never)
+
+      const provider = new BedrockModel()
+
+      // After applyDefaultRegion wraps the config functions
+      const regionResult = await provider['_client'].config.region()
+      expect(regionResult).toBe('us-west-2')
+
+      const fipsResult = await provider['_client'].config.useFipsEndpoint()
+      expect(fipsResult).toBe(false)
+    })
+
+    it('uses AWS SDK resolved region when available', async () => {
+      const mockRegion = vi.fn(async () => 'us-east-1')
+      const mockUseFipsEndpoint = vi.fn(async () => false)
+      const mockSend = vi.fn(
+        async (): Promise<{ stream: AsyncIterable<unknown> }> => ({
+          stream: (async function* (): AsyncGenerator<unknown> {
+            yield { messageStart: { role: 'assistant' } }
+            yield { contentBlockStart: {} }
+            yield { contentBlockDelta: { delta: { text: 'Hello' } } }
+            yield { contentBlockStop: {} }
+            yield { messageStop: { stopReason: 'end_turn' } }
+            yield { metadata: { usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } } }
+          })(),
+        }),
+      )
+
+      vi.mocked(BedrockRuntimeClient).mockImplementation(function (..._args: unknown[]) {
+        return {
+          send: mockSend,
+          config: {
+            region: mockRegion,
+            useFipsEndpoint: mockUseFipsEndpoint,
+          },
+        } as never
+      } as never)
+
+      const provider = new BedrockModel()
+      const regionResult = await provider['_client'].config.region()
+      expect(regionResult).toBe('us-east-1')
+    })
+
+    it('rethrows other region errors', async () => {
+      const mockRegion = vi.fn(async () => {
+        throw new Error('Network error')
+      })
+      const mockUseFipsEndpoint = vi.fn(async () => false)
+      const mockSend = vi.fn(
+        async (): Promise<{ stream: AsyncIterable<unknown> }> => ({
+          stream: (async function* (): AsyncGenerator<unknown> {
+            yield { messageStart: { role: 'assistant' } }
+          })(),
+        }),
+      )
+
+      vi.mocked(BedrockRuntimeClient).mockImplementation(function (..._args: unknown[]) {
+        return {
+          send: mockSend,
+          config: {
+            region: mockRegion,
+            useFipsEndpoint: mockUseFipsEndpoint,
+          },
+        } as never
+      } as never)
+
+      const provider = new BedrockModel()
+
+      // Should rethrow the error
+      await expect(provider['_client'].config.region()).rejects.toThrow('Network error')
+    })
+
+    it('uses region from clientConfig when provided', async () => {
+      const mockRegion = vi.fn(async () => 'ap-southeast-1')
+      const mockUseFipsEndpoint = vi.fn(async () => false)
+      const mockSend = vi.fn(
+        async (): Promise<{ stream: AsyncIterable<unknown> }> => ({
+          stream: (async function* (): AsyncGenerator<unknown> {
+            yield { messageStart: { role: 'assistant' } }
+            yield { contentBlockStart: {} }
+            yield { contentBlockDelta: { delta: { text: 'Hello' } } }
+            yield { contentBlockStop: {} }
+            yield { messageStop: { stopReason: 'end_turn' } }
+            yield { metadata: { usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } } }
+          })(),
+        }),
+      )
+
+      vi.mocked(BedrockRuntimeClient).mockImplementation(function (..._args: unknown[]) {
+        return {
+          send: mockSend,
+          config: {
+            region: mockRegion,
+            useFipsEndpoint: mockUseFipsEndpoint,
+          },
+        } as never
+      } as never)
+
+      const provider = new BedrockModel({
+        clientConfig: { region: 'ap-southeast-1' },
+      })
+
+      const regionResult = await provider['_client'].config.region()
+      expect(regionResult).toBe('ap-southeast-1')
     })
   })
 })
