@@ -344,15 +344,12 @@ export class Agent implements AgentData {
   }
 
   /**
-   * Invokes the model provider and streams all events.
+   * Normalizes agent invocation input and adds messages to conversation.
    *
    * @param args - Optional arguments for invoking the model
-   * @returns Object containing the assistant message and stop reason
+   * @returns Generator that yields MessageAddedEvent for each message added
    */
-  private async *invokeModel(
-    args?: InvokeArgs
-  ): AsyncGenerator<AgentStreamEvent, { message: Message; stopReason: string }, undefined> {
-    // Normalize input and add messages to conversation
+  private async *_normalizeInput(args?: InvokeArgs): AsyncGenerator<MessageAddedEvent, void, undefined> {
     if (args !== undefined && args !== null) {
       if (typeof args === 'string') {
         // String input: wrap in TextBlock and create user Message
@@ -380,6 +377,18 @@ export class Agent implements AgentData {
       }
     }
     // null, undefined, or empty array: skip message addition
+  }
+
+  /**
+   * Invokes the model provider and streams all events.
+   *
+   * @param args - Optional arguments for invoking the model
+   * @returns Object containing the assistant message and stop reason
+   */
+  private async *invokeModel(
+    args?: InvokeArgs
+  ): AsyncGenerator<AgentStreamEvent, { message: Message; stopReason: string }, undefined> {
+    yield* this._normalizeInput(args)
 
     const toolSpecs = this._toolRegistry.values().map((tool) => tool.toolSpec)
     const streamOptions: StreamOptions = { toolSpecs }
