@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import { Agent, DocumentBlock, ImageBlock, Message, TextBlock, tool } from '@strands-agents/sdk'
 import { BedrockModel } from '@strands-agents/sdk/bedrock'
+import { notebook } from '@strands-agents/sdk/vended_tools/notebook'
+import { httpRequest } from '@strands-agents/sdk/vended_tools/http_request'
 import { OpenAIModel } from '@strands-agents/sdk/openai'
 import { z } from 'zod'
 
@@ -37,12 +39,12 @@ const providers = [
   {
     name: 'BedrockModel',
     skip: !(await shouldRunTests()),
-    createModel: () => new BedrockModel({ maxTokens: 100 }),
+    createModel: () => new BedrockModel(),
   },
   {
     name: 'OpenAIModel',
     skip: shouldSkipOpenAITests(),
-    createModel: () => new OpenAIModel({ modelId: 'gpt-4o-mini', maxTokens: 100 }),
+    createModel: () => new OpenAIModel(),
   },
 ]
 
@@ -231,5 +233,25 @@ describe.each(providers)('Agent with $name', ({ name, skip, createModel }) => {
         expect(textContent?.text).toMatch(/hello/i)
       })
     })
+  })
+
+  it('handles tool invocation', async () => {
+    const agent = new Agent({
+      model: await createModel(),
+      tools: [notebook, httpRequest],
+      printer: false,
+    })
+
+    await agent.invoke('Call Open-Meteo to get the weather in NYC, and take a note of what you did')
+    expect(
+      agent.messages.some((message) =>
+        message.content.some((block) => block.type == 'toolUseBlock' && block.name == 'notebook')
+      )
+    ).toBe(true)
+    expect(
+      agent.messages.some((message) =>
+        message.content.some((block) => block.type == 'toolUseBlock' && block.name == 'http_request')
+      )
+    ).toBe(true)
   })
 })

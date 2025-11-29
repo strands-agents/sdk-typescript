@@ -24,7 +24,7 @@ import {
   VideoBlock,
 } from '../index.js'
 import { systemPromptFromData } from '../types/messages.js'
-import { normalizeError, ConcurrentInvocationError, MaxTokensError } from '../errors.js'
+import { normalizeError, ConcurrentInvocationError } from '../errors.js'
 import type { BaseModelConfig, Model, StreamOptions } from '../models/model.js'
 import { ToolRegistry } from '../registry/tool-registry.js'
 import { AgentState } from './state.js'
@@ -126,7 +126,11 @@ export class Agent implements AgentData {
    */
   public readonly hooks: HookRegistryImplementation
 
-  private _model: Model<BaseModelConfig>
+  /**
+   * The model provider used by the agent for inference.
+   */
+  public model: Model
+
   private _toolRegistry: ToolRegistry
   private _mcpClients: McpClient[]
   private _systemPrompt?: SystemPrompt
@@ -149,7 +153,7 @@ export class Agent implements AgentData {
     this.hooks.addHook(this.conversationManager)
     this.hooks.addAllHooks(config?.hooks ?? [])
 
-    this._model = config?.model ?? new BedrockModel()
+    this.model = config?.model ?? new BedrockModel()
     const { tools, mcpClients } = flattenTools(config?.tools ?? [])
     this._toolRegistry = new ToolRegistry(tools)
     this._mcpClients = mcpClients
@@ -316,15 +320,6 @@ export class Agent implements AgentData {
       while (true) {
         const modelResult = yield* this.invokeModel(currentArgs)
         currentArgs = undefined // Only pass args on first invocation
-
-        // Handle stop reason
-        if (modelResult.stopReason === 'maxTokens') {
-          throw new MaxTokensError(
-            'Model reached maximum token limit. This is an unrecoverable state that requires intervention.',
-            modelResult.message
-          )
-        }
-
         if (modelResult.stopReason !== 'toolUse') {
           // Loop terminates - no tool use requested
           // Add assistant message now that we're returning
@@ -502,7 +497,7 @@ export class Agent implements AgentData {
     messages: Message[],
     streamOptions: StreamOptions
   ): AsyncGenerator<AgentStreamEvent, { message: Message; stopReason: string }, undefined> {
-    const streamGenerator = this._model.streamAggregated(messages, streamOptions)
+    const streamGenerator = this.model.streamAggregated(messages, streamOptions)
     let result = await streamGenerator.next()
 
     while (!result.done) {

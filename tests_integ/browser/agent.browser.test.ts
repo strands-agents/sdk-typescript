@@ -3,6 +3,8 @@ import { commands } from 'vitest/browser'
 import { Agent, DocumentBlock, ImageBlock, Message, TextBlock, tool } from '@strands-agents/sdk'
 import { BedrockModel } from '@strands-agents/sdk/bedrock'
 import { OpenAIModel } from '@strands-agents/sdk/openai'
+import { notebook } from '@strands-agents/sdk/vended_tools/notebook'
+import { httpRequest } from '@strands-agents/sdk/vended_tools/http_request'
 import { z } from 'zod'
 
 import { collectGenerator } from '../../src/__fixtures__/model-test-helpers.js'
@@ -57,7 +59,6 @@ const providers = [
     createModel: async () => {
       const credentials = await commands.getAwsCredentials()
       return new BedrockModel({
-        maxTokens: 100,
         region: 'us-east-1',
         clientConfig: {
           credentials,
@@ -69,8 +70,6 @@ const providers = [
     name: 'OpenAIModel',
     createModel: async () =>
       new OpenAIModel({
-        modelId: 'gpt-4o-mini',
-        maxTokens: 100,
         apiKey: await commands.getOpenAIAPIKey(),
         clientConfig: {
           dangerouslyAllowBrowser: true,
@@ -142,5 +141,26 @@ describe.each(providers)('Agent Browser Tests with $name', async ({ name, create
       expect(result.stopReason).toBe('endTurn')
       expect(result.lastMessage.role).toBe('assistant')
     })
+  })
+
+  it('handles tool invocation', async () => {
+    const agent = new Agent({
+      model: await createModel(),
+      tools: [notebook, httpRequest],
+      printer: false,
+    })
+
+    await agent.invoke('Call Open-Meteo to get the weather in NYC, and take a note of it')
+
+    expect(
+      agent.messages.some((message) =>
+        message.content.some((block) => block.type == 'toolUseBlock' && block.name == 'notebook')
+      )
+    ).toBe(true)
+    expect(
+      agent.messages.some((message) =>
+        message.content.some((block) => block.type == 'toolUseBlock' && block.name == 'http_request')
+      )
+    ).toBe(true)
   })
 })
