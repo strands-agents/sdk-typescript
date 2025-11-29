@@ -108,16 +108,38 @@ function snakeToCamel(str: string): string {
 export interface BedrockModelConfig extends BaseModelConfig {
   /**
    * Maximum number of tokens to generate in the response.
+   *
+   * For Bedrock models, this specifies the maximum number of tokens
+   * in the generated response. The exact behavior may vary by model.
+   *
+   * @see https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_InferenceConfiguration.html
    */
   maxTokens?: number
 
   /**
-   * Controls randomness in generation (0 to 1).
+   * Controls randomness in generation.
+   *
+   * - Lower values (closer to 0) make output more deterministic
+   * - Higher values increase randomness and creativity
+   *
+   * Range: 0 to 1 for Bedrock models
+   *
+   * @see https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_InferenceConfiguration.html
    */
   temperature?: number
 
   /**
-   * Controls diversity via nucleus sampling (0 to 1).
+   * Controls diversity via nucleus sampling.
+   *
+   * An alternative to temperature sampling. The model considers the tokens
+   * with top_p probability mass. For example, 0.1 means only tokens comprising
+   * the top 10% probability mass are considered.
+   *
+   * Range: 0 to 1
+   *
+   * Note: Bedrock recommends altering either temperature or topP, not both.
+   *
+   * @see https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_InferenceConfiguration.html
    */
   topP?: number
 

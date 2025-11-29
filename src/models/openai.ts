@@ -114,17 +114,40 @@ export interface OpenAIModelConfig extends BaseModelConfig {
   modelId?: string
 
   /**
-   * Controls randomness in generation (0 to 2).
+   * Controls randomness in generation.
+   *
+   * - Lower values (closer to 0) make output more deterministic
+   * - Higher values increase randomness and creativity
+   *
+   * Range: 0 to 2 for OpenAI models (wider range than most providers)
+   *
+   * @see https://platform.openai.com/docs/api-reference/chat/create#chat-create-temperature
    */
   temperature?: number
 
   /**
-   * Maximum number of tokens to generate in the response.
+   * Maximum number of tokens to generate in the completion.
+   *
+   * For OpenAI models, this specifically refers to completion tokens only,
+   * not including prompt tokens. The API uses max_completion_tokens to
+   * make this distinction clear.
+   *
+   * @see https://platform.openai.com/docs/api-reference/chat/create#chat-create-max_completion_tokens
    */
   maxTokens?: number
 
   /**
-   * Controls diversity via nucleus sampling (0 to 1).
+   * Controls diversity via nucleus sampling.
+   *
+   * An alternative to temperature sampling. The model considers the tokens
+   * with top_p probability mass. For example, 0.1 means only tokens comprising
+   * the top 10% probability mass are considered.
+   *
+   * Range: 0 to 1
+   *
+   * Note: OpenAI recommends altering either temperature or topP, not both.
+   *
+   * @see https://platform.openai.com/docs/api-reference/chat/create#chat-create-top_p
    */
   topP?: number
 
