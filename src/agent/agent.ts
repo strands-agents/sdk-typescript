@@ -2,18 +2,13 @@ import {
   AgentResult,
   type AgentStreamEvent,
   BedrockModel,
-  CachePointBlock,
+  contentBlockFromData,
   type ContentBlock,
   type ContentBlockData,
-  DocumentBlock,
-  GuardContentBlock,
-  ImageBlock,
-  JsonBlock,
   type JSONValue,
   McpClient,
   Message,
   type MessageData,
-  ReasoningBlock,
   type SystemPrompt,
   type SystemPromptData,
   TextBlock,
@@ -21,7 +16,6 @@ import {
   type ToolContext,
   ToolResultBlock,
   ToolUseBlock,
-  VideoBlock,
 } from '../index.js'
 import { systemPromptFromData } from '../types/messages.js'
 import { normalizeError, ConcurrentInvocationError } from '../errors.js'
@@ -97,9 +91,8 @@ export type AgentConfig = {
  * - `string` - User text input (wrapped in TextBlock, creates user Message)
  * - `ContentBlock[]` | `ContentBlockData[]` - Array of content blocks (creates single user Message)
  * - `Message[]` | `MessageData[]` - Array of messages (appends all to conversation)
- * - `undefined` - Skip message addition (agent continues with existing conversation)
  */
-export type InvokeArgs = string | ContentBlock[] | ContentBlockData[] | Message[] | MessageData[] | undefined
+export type InvokeArgs = string | ContentBlock[] | ContentBlockData[] | Message[] | MessageData[]
 
 /**
  * Orchestrates the interaction between a model, a set of tools, and MCP clients.
@@ -236,7 +229,7 @@ export class Agent implements AgentData {
    * console.log(result.lastMessage) // Agent's response
    * ```
    */
-  public async invoke(args: InvokeArgs): Promise<AgentResult> {
+  public async invoke(args?: InvokeArgs): Promise<AgentResult> {
     const gen = this.stream(args)
     let result = await gen.next()
     while (!result.done) {
@@ -274,7 +267,7 @@ export class Agent implements AgentData {
    * // Messages array is mutated in place and contains the full conversation
    * ```
    */
-  public async *stream(args: InvokeArgs): AsyncGenerator<AgentStreamEvent, AgentResult, undefined> {
+  public async *stream(args?: InvokeArgs): AsyncGenerator<AgentStreamEvent, AgentResult, undefined> {
     using _lock = this.acquireLock()
 
     await this.initialize()
@@ -309,7 +302,7 @@ export class Agent implements AgentData {
    * @param args - Arguments for invoking the agent
    * @returns Async generator that yields AgentStreamEvent objects and returns AgentResult
    */
-  private async *_stream(args: InvokeArgs): AsyncGenerator<AgentStreamEvent, AgentResult, undefined> {
+  private async *_stream(args?: InvokeArgs): AsyncGenerator<AgentStreamEvent, AgentResult, undefined> {
     let currentArgs: InvokeArgs | undefined = args
 
     // Emit event before the loop starts
@@ -387,42 +380,8 @@ export class Agent implements AgentData {
               }),
             ]
           } else {
-            // ContentBlockData[] input: convert to ContentBlock[] then create user Message
-            const contentBlocks = (args as ContentBlockData[]).map((block) => {
-              if ('text' in block) {
-                return new TextBlock(block.text)
-              } else if ('toolUse' in block) {
-                return new ToolUseBlock(block.toolUse)
-              } else if ('toolResult' in block) {
-                return new ToolResultBlock({
-                  toolUseId: block.toolResult.toolUseId,
-                  status: block.toolResult.status,
-                  content: block.toolResult.content.map((contentItem) => {
-                    if ('text' in contentItem) {
-                      return new TextBlock(contentItem.text)
-                    } else if ('json' in contentItem) {
-                      return new JsonBlock(contentItem)
-                    } else {
-                      throw new Error('Unknown ToolResultContentData type')
-                    }
-                  }),
-                })
-              } else if ('reasoning' in block) {
-                return new ReasoningBlock(block.reasoning)
-              } else if ('cachePoint' in block) {
-                return new CachePointBlock(block.cachePoint)
-              } else if ('guardContent' in block) {
-                return new GuardContentBlock(block.guardContent)
-              } else if ('image' in block) {
-                return new ImageBlock(block.image)
-              } else if ('video' in block) {
-                return new VideoBlock(block.video)
-              } else if ('document' in block) {
-                return new DocumentBlock(block.document)
-              } else {
-                throw new Error('Unknown ContentBlockData type')
-              }
-            })
+            // ContentBlockData[] input: convert using helper function
+            const contentBlocks: ContentBlock[] = (args as ContentBlockData[]).map(contentBlockFromData)
 
             return [
               new Message({
