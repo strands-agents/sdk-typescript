@@ -285,11 +285,18 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
       }
     }
 
+    if (!stoppedMessage || !finalStopReason) {
+      // If we exit the loop without completing a message or stop reason, throw an error
+      throw new Error('Stream ended without completing a message', {
+        cause: errorToThrow,
+      })
+    }
+
     // Handle stop reason
     if (finalStopReason === 'maxTokens') {
       const maxTokensError = new MaxTokensError(
         'Model reached maximum token limit. This is an unrecoverable state that requires intervention.',
-        stoppedMessage!
+        stoppedMessage
       )
       if (errorToThrow !== undefined) {
         errorToThrow.cause = maxTokensError
@@ -303,18 +310,13 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
     }
 
     // Return the final message with stop reason and optional metadata
-    if (stoppedMessage && finalStopReason) {
-      const result: StreamAggregatedResult = {
-        message: stoppedMessage,
-        stopReason: finalStopReason,
-      }
-      if (metadata !== undefined) {
-        result.metadata = metadata
-      }
-      return result
+    const result: StreamAggregatedResult = {
+      message: stoppedMessage,
+      stopReason: finalStopReason,
     }
-
-    // If we exit the loop without completing a message, throw an error
-    throw new Error('Stream ended without completing a message')
+    if (metadata !== undefined) {
+      result.metadata = metadata
+    }
+    return result
   }
 }
