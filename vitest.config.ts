@@ -31,6 +31,11 @@ const getOpenAIAPIKey: BrowserCommand<[], string | undefined> = async ({
 }
 
 export default defineConfig({
+  server: {
+    fs: {
+      allow: ['.'],
+    },
+  },
   test: {
     projects: [
       {

@@ -1,17 +1,34 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
-
 /**
  * Helper to load fixture files from Vite URL imports.
- * Vite ?url imports return paths like '/tests_integ/__resources__/file.png' in test environment.
+ * Works in both Node.js and browser environments with a unified async API.
  *
  * @param url - The URL from a Vite ?url import
- * @returns The file contents as a Uint8Array
+ * @returns Promise resolving to the file contents as a Uint8Array
+ *
+ * @remarks
+ * Implementation uses environment-specific approaches:
+ * - **Browser**: Uses fetch() with HTTP URLs from Vite dev server
+ * - **Node.js**: Uses fs.readFile since Node's fetch() doesn't support file:// protocol
+ *
+ * Note: Node.js's native fetch() (v18+) explicitly does not support file:// URLs.
+ * This limitation is documented in the Node.js fetch implementation and returns
+ * "not implemented... yet..." error. The hybrid approach is necessary until Node.js
+ * adds file:// protocol support to fetch().
  */
-export const loadFixture = (url: string): Uint8Array => {
+export const loadFixture = async (url: string): Promise<Uint8Array> => {
+  // Browser environment: Vite serves files over HTTP during development
+  if (url.startsWith('http')) {
+    const arrayBuffer = await fetch(url).then((b) => b.arrayBuffer())
+    return new Uint8Array(arrayBuffer)
+  }
+
+  // Node.js environment: Use file system since fetch() doesn't support file:// protocol
+  const { readFile } = await import('node:fs/promises')
+  const { join } = await import('node:path')
   const relativePath = url.startsWith('/') ? url.slice(1) : url
   const filePath = join(process.cwd(), relativePath)
-  return new Uint8Array(readFileSync(filePath))
+  const buffer = await readFile(filePath)
+  return new Uint8Array(buffer)
 }
 
 /**

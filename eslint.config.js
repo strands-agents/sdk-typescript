@@ -46,6 +46,7 @@ export default [
         window: 'readonly',
         document: 'readonly',
         navigator: 'readonly',
+        fetch: 'readonly',
       },
     },
     plugins: {

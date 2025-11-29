@@ -376,7 +376,7 @@ describe.skipIf(!(await shouldRunTests()))('BedrockModel Integration Tests', () 
       })
 
       // PDF document
-      const pdfBytes = loadFixture(letterPdfUrl)
+      const pdfBytes = await loadFixture(letterPdfUrl)
       const pdfDocBlock = new DocumentBlock({
         name: 'letter',
         format: 'pdf',
