@@ -95,6 +95,15 @@ export class Message {
       content: contentBlocks,
     })
   }
+
+  /**
+   * Returns JSON string representation of this Message.
+   *
+   * @returns JSON string with type, role, and content array
+   */
+  public toString(): string {
+    return JSON.stringify(this, null, 2)
+  }
 }
 
 /**
@@ -165,6 +174,15 @@ export class TextBlock implements TextBlockData {
   constructor(data: string) {
     this.text = data
   }
+
+  /**
+   * Returns JSON string representation of this TextBlock.
+   *
+   * @returns JSON string with type and text
+   */
+  public toString(): string {
+    return JSON.stringify(this, null, 2)
+  }
 }
 
 /**
@@ -217,6 +235,15 @@ export class ToolUseBlock implements ToolUseBlockData {
     this.name = data.name
     this.toolUseId = data.toolUseId
     this.input = data.input
+  }
+
+  /**
+   * Returns JSON string representation of this ToolUseBlock.
+   *
+   * @returns JSON string with type, name, toolUseId, and input
+   */
+  public toString(): string {
+    return JSON.stringify(this, null, 2)
   }
 }
 
@@ -296,6 +323,15 @@ export class ToolResultBlock implements ToolResultBlockData {
       this.error = data.error
     }
   }
+
+  /**
+   * Returns JSON string representation of this ToolResultBlock.
+   *
+   * @returns JSON string with type, toolUseId, status, and content
+   */
+  public toString(): string {
+    return JSON.stringify(this, null, 2)
+  }
 }
 
 /**
@@ -353,6 +389,15 @@ export class ReasoningBlock implements ReasoningBlockData {
       this.redactedContent = data.redactedContent
     }
   }
+
+  /**
+   * Returns JSON string representation of this ReasoningBlock.
+   *
+   * @returns JSON string with type and optional text, signature, and redactedContent fields
+   */
+  public toString(): string {
+    return JSON.stringify(this, null, 2)
+  }
 }
 
 /**
@@ -383,6 +428,15 @@ export class CachePointBlock implements CachePointBlockData {
   constructor(data: CachePointBlockData) {
     this.cacheType = data.cacheType
   }
+
+  /**
+   * Returns JSON string representation of this CachePointBlock.
+   *
+   * @returns JSON string with type and cacheType
+   */
+  public toString(): string {
+    return JSON.stringify(this, null, 2)
+  }
 }
 
 /**
@@ -412,6 +466,15 @@ export class JsonBlock implements JsonBlockData {
 
   constructor(data: JsonBlockData) {
     this.json = data.json
+  }
+
+  /**
+   * Returns JSON string representation of this JsonBlock.
+   *
+   * @returns JSON string with type and json content
+   */
+  public toString(): string {
+    return JSON.stringify(this, null, 2)
   }
 }
 
@@ -605,5 +668,14 @@ export class GuardContentBlock implements GuardContentBlockData {
     if (data.image) {
       this.image = data.image
     }
+  }
+
+  /**
+   * Returns JSON string representation of this GuardContentBlock.
+   *
+   * @returns JSON string with type and text or image content
+   */
+  public toString(): string {
+    return JSON.stringify(this, null, 2)
   }
 }

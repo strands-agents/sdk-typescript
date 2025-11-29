@@ -407,3 +407,276 @@ describe('systemPromptFromData', () => {
     })
   })
 })
+
+describe('Message.toString', () => {
+  it('returns JSON string representation with type, role, and content', () => {
+    const message = new Message({
+      role: 'user',
+      content: [new TextBlock('Hello, world!')],
+    })
+
+    const result = message.toString()
+    const parsed = JSON.parse(result)
+
+    expect(parsed.type).toBe('message')
+    expect(parsed.role).toBe('user')
+    expect(parsed.content).toHaveLength(1)
+    expect(parsed.content[0].type).toBe('textBlock')
+    expect(parsed.content[0].text).toBe('Hello, world!')
+  })
+
+  it('returns valid JSON that can be parsed', () => {
+    const message = new Message({
+      role: 'assistant',
+      content: [new TextBlock('Response'), new TextBlock('More text')],
+    })
+
+    const result = message.toString()
+    expect(() => JSON.parse(result)).not.toThrow()
+  })
+})
+
+describe('TextBlock.toString', () => {
+  it('returns JSON string representation with type and text', () => {
+    const block = new TextBlock('Hello, world!')
+
+    const result = block.toString()
+    const parsed = JSON.parse(result)
+
+    expect(parsed.type).toBe('textBlock')
+    expect(parsed.text).toBe('Hello, world!')
+  })
+
+  it('returns valid JSON that can be parsed', () => {
+    const block = new TextBlock('Test text')
+
+    const result = block.toString()
+    expect(() => JSON.parse(result)).not.toThrow()
+  })
+})
+
+describe('ToolUseBlock.toString', () => {
+  it('returns JSON string representation with type, name, toolUseId, and input', () => {
+    const block = new ToolUseBlock({
+      name: 'get_weather',
+      toolUseId: 'tool-123',
+      input: { city: 'San Francisco', units: 'celsius' },
+    })
+
+    const result = block.toString()
+    const parsed = JSON.parse(result)
+
+    expect(parsed.type).toBe('toolUseBlock')
+    expect(parsed.name).toBe('get_weather')
+    expect(parsed.toolUseId).toBe('tool-123')
+    expect(parsed.input).toEqual({ city: 'San Francisco', units: 'celsius' })
+  })
+
+  it('returns valid JSON that can be parsed', () => {
+    const block = new ToolUseBlock({
+      name: 'test_tool',
+      toolUseId: 'id-1',
+      input: { param: 'value' },
+    })
+
+    const result = block.toString()
+    expect(() => JSON.parse(result)).not.toThrow()
+  })
+})
+
+describe('ToolResultBlock.toString', () => {
+  it('returns JSON string representation with type, toolUseId, status, and content', () => {
+    const block = new ToolResultBlock({
+      toolUseId: 'tool-123',
+      status: 'success',
+      content: [new TextBlock('Result text')],
+    })
+
+    const result = block.toString()
+    const parsed = JSON.parse(result)
+
+    expect(parsed.type).toBe('toolResultBlock')
+    expect(parsed.toolUseId).toBe('tool-123')
+    expect(parsed.status).toBe('success')
+    expect(parsed.content).toHaveLength(1)
+  })
+
+  it('handles nested content blocks', () => {
+    const block = new ToolResultBlock({
+      toolUseId: 'tool-456',
+      status: 'success',
+      content: [new TextBlock('Text result'), new JsonBlock({ json: { key: 'value' } })],
+    })
+
+    const result = block.toString()
+    const parsed = JSON.parse(result)
+
+    expect(parsed.content).toHaveLength(2)
+  })
+
+  it('returns valid JSON that can be parsed', () => {
+    const block = new ToolResultBlock({
+      toolUseId: 'tool-789',
+      status: 'error',
+      content: [new TextBlock('Error message')],
+    })
+
+    const result = block.toString()
+    expect(() => JSON.parse(result)).not.toThrow()
+  })
+})
+
+describe('ReasoningBlock.toString', () => {
+  it('returns JSON string representation with type and text', () => {
+    const block = new ReasoningBlock({ text: 'Let me think about this...' })
+
+    const result = block.toString()
+    const parsed = JSON.parse(result)
+
+    expect(parsed.type).toBe('reasoningBlock')
+    expect(parsed.text).toBe('Let me think about this...')
+  })
+
+  it('handles optional signature field', () => {
+    const block = new ReasoningBlock({
+      text: 'Reasoning text',
+      signature: 'sig123',
+    })
+
+    const result = block.toString()
+    const parsed = JSON.parse(result)
+
+    expect(parsed.type).toBe('reasoningBlock')
+    expect(parsed.text).toBe('Reasoning text')
+    expect(parsed.signature).toBe('sig123')
+  })
+
+  it('handles optional redactedContent field', () => {
+    const block = new ReasoningBlock({
+      text: 'Public reasoning',
+      redactedContent: new Uint8Array([1, 2, 3, 4]),
+    })
+
+    const result = block.toString()
+    const parsed = JSON.parse(result)
+
+    expect(parsed.type).toBe('reasoningBlock')
+    expect(parsed.text).toBe('Public reasoning')
+    expect(parsed.redactedContent).toEqual({ '0': 1, '1': 2, '2': 3, '3': 4 })
+  })
+
+  it('omits optional fields when not provided', () => {
+    const block = new ReasoningBlock({ text: 'Simple reasoning' })
+
+    const result = block.toString()
+    const parsed = JSON.parse(result)
+
+    expect(parsed.signature).toBeUndefined()
+    expect(parsed.redactedContent).toBeUndefined()
+  })
+
+  it('returns valid JSON that can be parsed', () => {
+    const block = new ReasoningBlock({ text: 'Test' })
+
+    const result = block.toString()
+    expect(() => JSON.parse(result)).not.toThrow()
+  })
+})
+
+describe('CachePointBlock.toString', () => {
+  it('returns JSON string representation with type and cacheType', () => {
+    const block = new CachePointBlock({ cacheType: 'default' })
+
+    const result = block.toString()
+    const parsed = JSON.parse(result)
+
+    expect(parsed.type).toBe('cachePointBlock')
+    expect(parsed.cacheType).toBe('default')
+  })
+
+  it('returns valid JSON that can be parsed', () => {
+    const block = new CachePointBlock({ cacheType: 'default' })
+
+    const result = block.toString()
+    expect(() => JSON.parse(result)).not.toThrow()
+  })
+})
+
+describe('JsonBlock.toString', () => {
+  it('returns JSON string representation with type and json content', () => {
+    const block = new JsonBlock({ json: { key: 'value', nested: { prop: 123 } } })
+
+    const result = block.toString()
+    const parsed = JSON.parse(result)
+
+    expect(parsed.type).toBe('jsonBlock')
+    expect(parsed.json).toEqual({ key: 'value', nested: { prop: 123 } })
+  })
+
+  it('handles array json content', () => {
+    const block = new JsonBlock({ json: [1, 2, 3, 'four'] })
+
+    const result = block.toString()
+    const parsed = JSON.parse(result)
+
+    expect(parsed.type).toBe('jsonBlock')
+    expect(parsed.json).toEqual([1, 2, 3, 'four'])
+  })
+
+  it('returns valid JSON that can be parsed', () => {
+    const block = new JsonBlock({ json: { test: true } })
+
+    const result = block.toString()
+    expect(() => JSON.parse(result)).not.toThrow()
+  })
+})
+
+describe('GuardContentBlock.toString', () => {
+  it('returns JSON string representation with text content', () => {
+    const block = new GuardContentBlock({
+      text: {
+        qualifiers: ['query'],
+        text: 'User query text',
+      },
+    })
+
+    const result = block.toString()
+    const parsed = JSON.parse(result)
+
+    expect(parsed.type).toBe('guardContentBlock')
+    expect(parsed.text).toEqual({
+      qualifiers: ['query'],
+      text: 'User query text',
+    })
+    expect(parsed.image).toBeUndefined()
+  })
+
+  it('returns JSON string representation with image content', () => {
+    const block = new GuardContentBlock({
+      image: {
+        format: 'png',
+        source: { bytes: new Uint8Array([1, 2, 3]) },
+      },
+    })
+
+    const result = block.toString()
+    const parsed = JSON.parse(result)
+
+    expect(parsed.type).toBe('guardContentBlock')
+    expect(parsed.image).toBeDefined()
+    expect(parsed.image.format).toBe('png')
+    expect(parsed.text).toBeUndefined()
+  })
+
+  it('returns valid JSON that can be parsed', () => {
+    const block = new GuardContentBlock({
+      text: {
+        qualifiers: ['guard_content'],
+        text: 'Content to guard',
+      },
+    })
+
+    const result = block.toString()
+    expect(() => JSON.parse(result)).not.toThrow()
+  })
+})

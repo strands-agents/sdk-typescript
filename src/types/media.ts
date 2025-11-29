@@ -50,6 +50,15 @@ export class S3Location implements S3LocationData {
       this.bucketOwner = data.bucketOwner
     }
   }
+
+  /**
+   * Returns JSON string representation of this S3Location.
+   *
+   * @returns JSON string with uri and optional bucketOwner
+   */
+  public toString(): string {
+    return JSON.stringify(this, null, 2)
+  }
 }
 
 /**
@@ -134,6 +143,15 @@ export class ImageBlock implements ImageBlockData {
     }
     throw new Error('Invalid image source')
   }
+
+  /**
+   * Returns JSON string representation of this ImageBlock.
+   *
+   * @returns JSON string with type, format, and source
+   */
+  public toString(): string {
+    return JSON.stringify(this, null, 2)
+  }
 }
 
 /**
@@ -203,6 +221,15 @@ export class VideoBlock implements VideoBlockData {
       return { type: 'videoSourceS3Location', s3Location: new S3Location(source.s3Location) }
     }
     throw new Error('Invalid video source')
+  }
+
+  /**
+   * Returns JSON string representation of this VideoBlock.
+   *
+   * @returns JSON string with type, format, and source
+   */
+  public toString(): string {
+    return JSON.stringify(this, null, 2)
   }
 }
 
@@ -339,5 +366,14 @@ export class DocumentBlock implements DocumentBlockData {
       }
     }
     throw new Error('Invalid document source')
+  }
+
+  /**
+   * Returns JSON string representation of this DocumentBlock.
+   *
+   * @returns JSON string with type, name, format, source, and optional citations and context
+   */
+  public toString(): string {
+    return JSON.stringify(this, null, 2)
   }
 }
