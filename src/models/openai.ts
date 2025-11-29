@@ -497,7 +497,7 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
       request.temperature = this._config.temperature
     }
     if (this._config.maxTokens !== undefined) {
-      request.max_tokens = this._config.maxTokens
+      request.max_completion_tokens = this._config.maxTokens
     }
     if (this._config.topP !== undefined) {
       request.top_p = this._config.topP

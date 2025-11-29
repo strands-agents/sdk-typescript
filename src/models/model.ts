@@ -32,6 +32,44 @@ export interface BaseModelConfig {
    * This typically specifies which model to use from the provider's catalog.
    */
   modelId?: string
+
+  /**
+   * Maximum number of tokens to generate in the response.
+   *
+   * The exact behavior may vary by provider:
+   * - Some providers count this as output tokens only
+   * - Others may include prompt tokens in this limit
+   *
+   * @see Provider-specific documentation for exact behavior
+   */
+  maxTokens?: number
+
+  /**
+   * Controls randomness in generation.
+   *
+   * - Lower values (closer to 0) make output more deterministic
+   * - Higher values increase randomness and creativity
+   *
+   * Valid range varies by provider:
+   * - Most providers: 0 to 1
+   * - Some providers (e.g., OpenAI): 0 to 2
+   *
+   * @see Provider-specific documentation for valid range
+   */
+  temperature?: number
+
+  /**
+   * Controls diversity via nucleus sampling.
+   *
+   * An alternative to temperature sampling. The model considers the tokens
+   * with top_p probability mass. For example, 0.1 means only tokens comprising
+   * the top 10% probability mass are considered.
+   *
+   * Range: 0 to 1
+   *
+   * Note: Most providers recommend altering either temperature or topP, not both.
+   */
+  topP?: number
 }
 
 /**
