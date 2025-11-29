@@ -1039,3 +1039,144 @@ describe('instanceof checks', () => {
     })
   })
 })
+
+describe('optional inputSchema', () => {
+  describe('when inputSchema is undefined', () => {
+    it('creates tool with default empty object schema', () => {
+      const tool = new FunctionTool({
+        name: 'noInputTool',
+        description: 'Tool that takes no input',
+        callback: () => 'result',
+      })
+
+      expect(tool.name).toBe('noInputTool')
+      expect(tool.description).toBe('Tool that takes no input')
+      expect(tool.toolSpec).toEqual({
+        name: 'noInputTool',
+        description: 'Tool that takes no input',
+        inputSchema: {
+          type: 'object',
+          properties: {},
+          additionalProperties: false,
+        },
+      })
+    })
+
+    it('executes successfully with empty input', async () => {
+      const tool = new FunctionTool({
+        name: 'getStatus',
+        description: 'Gets system status',
+        callback: () => ({ status: 'operational' }),
+      })
+
+      const toolUse = {
+        name: 'getStatus',
+        toolUseId: 'test-no-input-1',
+        input: {},
+      }
+
+      const { result } = await collectGenerator(tool.stream(createMockContext(toolUse)))
+
+      expect(result).toEqual({
+        type: 'toolResultBlock',
+        toolUseId: 'test-no-input-1',
+        status: 'success',
+        content: [
+          expect.objectContaining({
+            type: 'jsonBlock',
+            json: { status: 'operational' },
+          }),
+        ],
+      })
+    })
+
+    it('callback receives empty object when no schema provided', async () => {
+      let receivedInput: unknown
+      const tool = new FunctionTool({
+        name: 'captureInput',
+        description: 'Captures the input',
+        callback: (input: unknown) => {
+          receivedInput = input
+          return 'captured'
+        },
+      })
+
+      const toolUse = {
+        name: 'captureInput',
+        toolUseId: 'test-input-capture',
+        input: {},
+      }
+
+      await collectGenerator(tool.stream(createMockContext(toolUse)))
+
+      expect(receivedInput).toEqual({})
+    })
+
+    it('works with async callback', async () => {
+      const tool = new FunctionTool({
+        name: 'asyncNoInput',
+        description: 'Async tool with no input',
+        callback: async () => {
+          return 'async result'
+        },
+      })
+
+      const toolUse = {
+        name: 'asyncNoInput',
+        toolUseId: 'test-async-no-input',
+        input: {},
+      }
+
+      const { result } = await collectGenerator(tool.stream(createMockContext(toolUse)))
+
+      expect(result).toEqual({
+        type: 'toolResultBlock',
+        toolUseId: 'test-async-no-input',
+        status: 'success',
+        content: [
+          expect.objectContaining({
+            type: 'textBlock',
+            text: 'async result',
+          }),
+        ],
+      })
+    })
+
+    it('works with async generator callback', async () => {
+      const tool = new FunctionTool({
+        name: 'streamNoInput',
+        description: 'Streaming tool with no input',
+        callback: async function* () {
+          yield 'Starting...'
+          yield 'Processing...'
+          return 'Complete!'
+        },
+      })
+
+      const toolUse = {
+        name: 'streamNoInput',
+        toolUseId: 'test-stream-no-input',
+        input: {},
+      }
+
+      const { items: streamEvents, result } = await collectGenerator(tool.stream(createMockContext(toolUse)))
+
+      expect(streamEvents).toEqual([
+        { type: 'toolStreamEvent', data: 'Starting...' },
+        { type: 'toolStreamEvent', data: 'Processing...' },
+      ])
+
+      expect(result).toEqual({
+        type: 'toolResultBlock',
+        toolUseId: 'test-stream-no-input',
+        status: 'success',
+        content: [
+          expect.objectContaining({
+            type: 'textBlock',
+            text: 'Complete!',
+          }),
+        ],
+      })
+    })
+  })
+})

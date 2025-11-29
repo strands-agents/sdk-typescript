@@ -242,7 +242,7 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
               block = new ToolUseBlock({
                 name: toolName,
                 toolUseId: toolUseId,
-                input: JSON.parse(accumulatedToolInput),
+                input: JSON.parse(accumulatedToolInput || '{}'),
               })
               toolUseId = '' // Reset
               toolName = ''

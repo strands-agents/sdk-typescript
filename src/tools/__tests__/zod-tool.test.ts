@@ -392,11 +392,14 @@ describe('tool', () => {
       })
 
       const schema = myTool.toolSpec.inputSchema
-      expect(schema.type).toBe('object')
-      expect(schema.properties).toBeDefined()
-      expect(schema.required).toContain('name')
-      expect(schema.required).toContain('age')
-      expect(schema.required).toContain('email')
+      expect(schema).toBeDefined()
+      if (schema) {
+        expect(schema.type).toBe('object')
+        expect(schema.properties).toBeDefined()
+        expect(schema.required).toContain('name')
+        expect(schema.required).toContain('age')
+        expect(schema.required).toContain('email')
+      }
     })
   })
 
@@ -421,6 +424,210 @@ describe('tool', () => {
       expect({} instanceof Tool).toBe(false)
       // TypeScript doesn't allow null/undefined in instanceof, verify they're not Tool instances differently
       expect((null as unknown) instanceof Tool).toBe(false)
+    })
+  })
+
+  describe('optional inputSchema', () => {
+    describe('when inputSchema is undefined', () => {
+      it('creates tool with default empty object schema', () => {
+        const myTool = tool({
+          name: 'noInputTool',
+          description: 'Tool with no input',
+          callback: () => 'result',
+        })
+
+        expect(myTool.name).toBe('noInputTool')
+        expect(myTool.description).toBe('Tool with no input')
+        expect(myTool.toolSpec).toEqual({
+          name: 'noInputTool',
+          description: 'Tool with no input',
+          inputSchema: {
+            type: 'object',
+            properties: {},
+            additionalProperties: false,
+          },
+        })
+      })
+
+      it('invoke() works with empty object', async () => {
+        const myTool = tool({
+          name: 'getPreferences',
+          description: 'Gets user preferences',
+          callback: () => ({ theme: 'dark', language: 'en' }),
+        })
+
+        const result = await myTool.invoke({})
+        expect(result).toEqual({ theme: 'dark', language: 'en' })
+      })
+
+      it('stream() works with empty input', async () => {
+        const myTool = tool({
+          name: 'getStatus',
+          description: 'Gets system status',
+          callback: () => ({ status: 'operational', uptime: 99.9 }),
+        })
+
+        const { result } = await collectGenerator(myTool.stream(createContext({})))
+
+        expect(result).toEqual({
+          type: 'toolResultBlock',
+          toolUseId: 'test-123',
+          status: 'success',
+          content: [
+            expect.objectContaining({
+              type: 'jsonBlock',
+              json: { status: 'operational', uptime: 99.9 },
+            }),
+          ],
+        })
+      })
+
+      it('callback receives empty object when no schema', async () => {
+        let capturedInput: unknown
+        const myTool = tool({
+          name: 'captureInput',
+          description: 'Captures input',
+          callback: (input) => {
+            capturedInput = input
+            return 'captured'
+          },
+        })
+
+        await myTool.invoke({})
+        expect(capturedInput).toEqual({})
+      })
+
+      it('works with async callback', async () => {
+        const myTool = tool({
+          name: 'asyncNoInput',
+          description: 'Async tool',
+          callback: async () => {
+            return 'async result'
+          },
+        })
+
+        const result = await myTool.invoke({})
+        expect(result).toBe('async result')
+      })
+
+      it('works with async generator callback', async () => {
+        const myTool = tool({
+          name: 'streamNoInput',
+          description: 'Streaming tool',
+          callback: async function* () {
+            yield 'Starting...'
+            yield 'Processing...'
+            return 'Complete!'
+          },
+        })
+
+        const result = await myTool.invoke({})
+        // invoke() returns the last yielded value, not the return value
+        expect(result).toBe('Processing...')
+      })
+    })
+
+    describe('when inputSchema is z.void()', () => {
+      it('creates tool with default empty object schema', () => {
+        const myTool = tool({
+          name: 'voidInputTool',
+          description: 'Tool with z.void() input',
+          inputSchema: z.void(),
+          callback: () => 'result',
+        })
+
+        expect(myTool.name).toBe('voidInputTool')
+        expect(myTool.description).toBe('Tool with z.void() input')
+        expect(myTool.toolSpec).toEqual({
+          name: 'voidInputTool',
+          description: 'Tool with z.void() input',
+          inputSchema: {
+            type: 'object',
+            properties: {},
+            additionalProperties: false,
+          },
+        })
+      })
+
+      it('invoke() works with empty object', async () => {
+        const myTool = tool({
+          name: 'refreshCache',
+          description: 'Refreshes the cache',
+          inputSchema: z.void(),
+          callback: () => ({ refreshed: true, timestamp: Date.now() }),
+        })
+
+        const result = await myTool.invoke({} as never)
+        expect(result).toHaveProperty('refreshed', true)
+        expect(result).toHaveProperty('timestamp')
+      })
+
+      it('stream() works with empty input', async () => {
+        const myTool = tool({
+          name: 'pingServer',
+          description: 'Pings the server',
+          inputSchema: z.void(),
+          callback: () => ({ pong: true }),
+        })
+
+        const { result } = await collectGenerator(myTool.stream(createContext({})))
+
+        expect(result).toEqual({
+          type: 'toolResultBlock',
+          toolUseId: 'test-123',
+          status: 'success',
+          content: [
+            expect.objectContaining({
+              type: 'jsonBlock',
+              json: { pong: true },
+            }),
+          ],
+        })
+      })
+
+      it('works with async generator callback', async () => {
+        const myTool = tool({
+          name: 'streamVoidInput',
+          description: 'Streaming with void input',
+          inputSchema: z.void(),
+          callback: async function* () {
+            yield 'Step 1'
+            yield 'Step 2'
+            return 'Done'
+          },
+        })
+
+        const { items: streamEvents, result } = await collectGenerator(myTool.stream(createContext({})))
+
+        expect(streamEvents).toEqual([
+          { type: 'toolStreamEvent', data: 'Step 1' },
+          { type: 'toolStreamEvent', data: 'Step 2' },
+        ])
+
+        expect(result).toEqual({
+          type: 'toolResultBlock',
+          toolUseId: 'test-123',
+          status: 'success',
+          content: [
+            expect.objectContaining({
+              type: 'textBlock',
+              text: 'Done',
+            }),
+          ],
+        })
+      })
+
+      it('does not throw Zod conversion errors', () => {
+        // This test verifies that z.void() doesn't cause errors during tool creation
+        expect(() => {
+          tool({
+            name: 'voidTool',
+            description: 'Tool with void',
+            inputSchema: z.void(),
+            callback: () => 'ok',
+          })
+        }).not.toThrow()
+      })
     })
   })
 })

@@ -53,8 +53,8 @@ export interface FunctionToolConfig {
   name: string
   /** Human-readable description of the tool's purpose */
   description: string
-  /** JSON Schema defining the expected input structure */
-  inputSchema: JSONSchema
+  /** JSON Schema defining the expected input structure. If omitted, defaults to an empty object schema. */
+  inputSchema?: JSONSchema
   /** Function that implements the tool logic */
   callback: FunctionToolCallback
 }
@@ -116,7 +116,8 @@ export class FunctionTool extends Tool {
    *
    * @example
    * ```typescript
-   * const tool = new FunctionTool({
+   * // Tool with input schema
+   * const greetTool = new FunctionTool({
    *   name: 'greeter',
    *   description: 'Greets a person by name',
    *   inputSchema: {
@@ -126,16 +127,31 @@ export class FunctionTool extends Tool {
    *   },
    *   callback: (input: any) => `Hello, ${input.name}!`
    * })
+   *
+   * // Tool without input (no parameters)
+   * const statusTool = new FunctionTool({
+   *   name: 'getStatus',
+   *   description: 'Gets system status',
+   *   callback: () => ({ status: 'operational' })
+   * })
    * ```
    */
   constructor(config: FunctionToolConfig) {
     super()
     this.name = config.name
     this.description = config.description
+
+    // Use provided schema or default empty object schema
+    const inputSchema = config.inputSchema ?? {
+      type: 'object',
+      properties: {},
+      additionalProperties: false,
+    }
+
     this.toolSpec = {
       name: config.name,
       description: config.description,
-      inputSchema: config.inputSchema,
+      inputSchema: inputSchema,
     }
     this._callback = config.callback
   }

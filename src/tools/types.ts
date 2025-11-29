@@ -24,8 +24,9 @@ export interface ToolSpec {
 
   /**
    * JSON Schema defining the expected input structure for the tool.
+   * If omitted, defaults to an empty object schema allowing no input parameters.
    */
-  inputSchema: JSONSchema
+  inputSchema?: JSONSchema
 }
 
 /**
