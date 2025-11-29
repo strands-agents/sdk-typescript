@@ -775,35 +775,5 @@ describe('Agent', () => {
         )
       })
     })
-
-    describe('with undefined input', () => {
-      it('continues with existing conversation when undefined', async () => {
-        const model = new MockMessageModel().addTurn(new TextBlock('Response'))
-        const agent = new Agent({
-          model,
-          messages: [
-            new Message({
-              role: 'user',
-              content: [new TextBlock('Existing message')],
-            }),
-          ],
-        })
-
-        await agent.invoke(undefined)
-
-        expect(agent.messages).toHaveLength(2) // 1 existing + 1 response
-        expect(agent.messages[0]!.content).toEqual([new TextBlock('Existing message')])
-      })
-
-      it('works with no args and empty conversation', async () => {
-        const model = new MockMessageModel().addTurn(new TextBlock('Response'))
-        const agent = new Agent({ model })
-
-        await agent.invoke(undefined)
-
-        expect(agent.messages).toHaveLength(1) // Only response
-        expect(agent.messages[0]!.role).toBe('assistant')
-      })
-    })
   })
 })

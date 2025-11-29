@@ -210,28 +210,6 @@ describe.each(providers)('Agent with $name', ({ name, skip, createModel }) => {
         expect(textContent).toBeDefined()
         expect(textContent?.text).toMatch(/42/)
       })
-
-      it('accepts undefined to continue with existing conversation', async () => {
-        const agent = new Agent({
-          model: createModel(),
-          messages: [
-            new Message({
-              role: 'user',
-              content: [new TextBlock('Say hello in one word.')],
-            }),
-          ],
-          printer: false,
-        })
-
-        const result = await agent.invoke(undefined)
-
-        expect(result.stopReason).toBe('endTurn')
-        expect(result.lastMessage.role).toBe('assistant')
-
-        const textContent = result.lastMessage.content.find((block) => block.type === 'textBlock')
-        expect(textContent).toBeDefined()
-        expect(textContent?.text).toMatch(/hello/i)
-      })
     })
   })
 

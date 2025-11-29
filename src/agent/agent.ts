@@ -229,7 +229,7 @@ export class Agent implements AgentData {
    * console.log(result.lastMessage) // Agent's response
    * ```
    */
-  public async invoke(args?: InvokeArgs): Promise<AgentResult> {
+  public async invoke(args: InvokeArgs): Promise<AgentResult> {
     const gen = this.stream(args)
     let result = await gen.next()
     while (!result.done) {
@@ -267,7 +267,7 @@ export class Agent implements AgentData {
    * // Messages array is mutated in place and contains the full conversation
    * ```
    */
-  public async *stream(args?: InvokeArgs): AsyncGenerator<AgentStreamEvent, AgentResult, undefined> {
+  public async *stream(args: InvokeArgs): AsyncGenerator<AgentStreamEvent, AgentResult, undefined> {
     using _lock = this.acquireLock()
 
     await this.initialize()
@@ -302,7 +302,7 @@ export class Agent implements AgentData {
    * @param args - Arguments for invoking the agent
    * @returns Async generator that yields AgentStreamEvent objects and returns AgentResult
    */
-  private async *_stream(args?: InvokeArgs): AsyncGenerator<AgentStreamEvent, AgentResult, undefined> {
+  private async *_stream(args: InvokeArgs): AsyncGenerator<AgentStreamEvent, AgentResult, undefined> {
     let currentArgs: InvokeArgs | undefined = args
 
     // Emit event before the loop starts
