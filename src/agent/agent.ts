@@ -5,7 +5,6 @@ import {
   contentBlockFromData,
   type ContentBlock,
   type ContentBlockData,
-  isContentBlock,
   type JSONValue,
   McpClient,
   Message,
@@ -360,16 +359,20 @@ export class Agent implements AgentData {
         const firstElement = args[0]!
 
         // Check if it's Message[] or MessageData[]
-        if (firstElement instanceof Message) {
-          // Message[] input: return all messages
-          return args as Message[]
-        } else if ('role' in firstElement && typeof firstElement.role === 'string') {
-          // MessageData[] input: convert to Message[]
-          return (args as MessageData[]).map((data) => Message.fromMessageData(data))
+        if ('role' in firstElement && typeof firstElement.role === 'string') {
+          // Check if it's a Message instance or MessageData
+          if (firstElement instanceof Message) {
+            // Message[] input: return all messages
+            return args as Message[]
+          } else {
+            // MessageData[] input: convert to Message[]
+            return (args as MessageData[]).map((data) => Message.fromMessageData(data))
+          }
         } else {
           // It's ContentBlock[] or ContentBlockData[]
+          // Check if it's ContentBlock instances or ContentBlockData
           let contentBlocks: ContentBlock[]
-          if (isContentBlock(firstElement)) {
+          if ('type' in firstElement && typeof firstElement.type === 'string') {
             // ContentBlock[] input: use as-is
             contentBlocks = args as ContentBlock[]
           } else {
