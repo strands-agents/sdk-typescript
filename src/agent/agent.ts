@@ -361,7 +361,7 @@ export class Agent implements AgentData {
         // Check if it's Message[] or MessageData[]
         if ('role' in firstElement) {
           // Check if it's a Message instance or MessageData
-          if ('type' in firstElement && firstElement.type === 'message') {
+          if (firstElement instanceof Message) {
             // Message[] input: return all messages
             return args as Message[]
           } else {
@@ -371,25 +371,21 @@ export class Agent implements AgentData {
         } else {
           // It's ContentBlock[] or ContentBlockData[]
           // Check if it's ContentBlock instances or ContentBlockData
+          let contentBlocks: ContentBlock[]
           if ('type' in firstElement) {
-            // ContentBlock[] input: create single user Message with all blocks
-            return [
-              new Message({
-                role: 'user',
-                content: args as ContentBlock[],
-              }),
-            ]
+            // ContentBlock[] input: use as-is
+            contentBlocks = args as ContentBlock[]
           } else {
             // ContentBlockData[] input: convert using helper function
-            const contentBlocks: ContentBlock[] = (args as ContentBlockData[]).map(contentBlockFromData)
-
-            return [
-              new Message({
-                role: 'user',
-                content: contentBlocks,
-              }),
-            ]
+            contentBlocks = (args as ContentBlockData[]).map(contentBlockFromData)
           }
+
+          return [
+            new Message({
+              role: 'user',
+              content: contentBlocks,
+            }),
+          ]
         }
       }
     }
