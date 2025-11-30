@@ -11,6 +11,7 @@ import {
   type MessageData,
   type SystemPromptData,
   systemPromptFromData,
+  isContentBlock,
 } from '../messages.js'
 import { ImageBlock, VideoBlock, DocumentBlock } from '../media.js'
 
@@ -405,5 +406,151 @@ describe('systemPromptFromData', () => {
       const result = systemPromptFromData(systemPrompt)
       expect(result).toEqual(systemPrompt)
     })
+  })
+})
+
+describe('isContentBlock', () => {
+  it('returns true for TextBlock instances', () => {
+    const block = new TextBlock('test')
+    expect(isContentBlock(block)).toBe(true)
+  })
+
+  it('returns true for ToolUseBlock instances', () => {
+    const block = new ToolUseBlock({ name: 'test', toolUseId: 'id', input: {} })
+    expect(isContentBlock(block)).toBe(true)
+  })
+
+  it('returns true for ToolResultBlock instances', () => {
+    const block = new ToolResultBlock({ toolUseId: 'id', status: 'success', content: [new TextBlock('result')] })
+    expect(isContentBlock(block)).toBe(true)
+  })
+
+  it('returns true for ReasoningBlock instances', () => {
+    const block = new ReasoningBlock({ text: 'thinking' })
+    expect(isContentBlock(block)).toBe(true)
+  })
+
+  it('returns true for CachePointBlock instances', () => {
+    const block = new CachePointBlock({ cacheType: 'default' })
+    expect(isContentBlock(block)).toBe(true)
+  })
+
+  it('returns true for GuardContentBlock instances', () => {
+    const block = new GuardContentBlock({ text: { text: 'test', qualifiers: ['query'] } })
+    expect(isContentBlock(block)).toBe(true)
+  })
+
+  it('returns true for ImageBlock instances', () => {
+    const block = new ImageBlock({ format: 'png', source: { url: 'https://example.com/image.png' } })
+    expect(isContentBlock(block)).toBe(true)
+  })
+
+  it('returns true for VideoBlock instances', () => {
+    const block = new VideoBlock({ format: 'mp4', source: { s3Location: { uri: 's3://bucket/video.mp4' } } })
+    expect(isContentBlock(block)).toBe(true)
+  })
+
+  it('returns true for DocumentBlock instances', () => {
+    const block = new DocumentBlock({
+      format: 'pdf',
+      name: 'doc.pdf',
+      source: { bytes: new Uint8Array([1, 2, 3]) },
+    })
+    expect(isContentBlock(block)).toBe(true)
+  })
+
+  it('returns false for ContentBlockData objects', () => {
+    const data = { text: 'test' }
+    expect(isContentBlock(data)).toBe(false)
+  })
+
+  it('returns false for plain objects', () => {
+    expect(isContentBlock({ text: 'test' })).toBe(false)
+    expect(isContentBlock({ role: 'user', content: [] })).toBe(false)
+  })
+
+  it('returns false for primitives', () => {
+    expect(isContentBlock('string')).toBe(false)
+    expect(isContentBlock(123)).toBe(false)
+    expect(isContentBlock(null)).toBe(false)
+    expect(isContentBlock(undefined)).toBe(false)
+  })
+
+  it('returns false for objects with wrong type value', () => {
+    expect(isContentBlock({ type: 'wrongType' })).toBe(false)
+    expect(isContentBlock({ type: 123 })).toBe(false)
+  })
+})
+
+describe('isContentBlock', () => {
+  it('returns true for TextBlock instances', () => {
+    const block = new TextBlock('test')
+    expect(isContentBlock(block)).toBe(true)
+  })
+
+  it('returns true for ToolUseBlock instances', () => {
+    const block = new ToolUseBlock({ name: 'test', toolUseId: 'id', input: {} })
+    expect(isContentBlock(block)).toBe(true)
+  })
+
+  it('returns true for ToolResultBlock instances', () => {
+    const block = new ToolResultBlock({ toolUseId: 'id', status: 'success', content: [new TextBlock('result')] })
+    expect(isContentBlock(block)).toBe(true)
+  })
+
+  it('returns true for ReasoningBlock instances', () => {
+    const block = new ReasoningBlock({ text: 'thinking' })
+    expect(isContentBlock(block)).toBe(true)
+  })
+
+  it('returns true for CachePointBlock instances', () => {
+    const block = new CachePointBlock({ cacheType: 'default' })
+    expect(isContentBlock(block)).toBe(true)
+  })
+
+  it('returns true for GuardContentBlock instances', () => {
+    const block = new GuardContentBlock({ text: { text: 'test', qualifiers: ['query'] } })
+    expect(isContentBlock(block)).toBe(true)
+  })
+
+  it('returns true for ImageBlock instances', () => {
+    const block = new ImageBlock({ format: 'png', source: { url: 'https://example.com/image.png' } })
+    expect(isContentBlock(block)).toBe(true)
+  })
+
+  it('returns true for VideoBlock instances', () => {
+    const block = new VideoBlock({ format: 'mp4', source: { s3Location: { uri: 's3://bucket/video.mp4' } } })
+    expect(isContentBlock(block)).toBe(true)
+  })
+
+  it('returns true for DocumentBlock instances', () => {
+    const block = new DocumentBlock({
+      format: 'pdf',
+      name: 'doc.pdf',
+      source: { bytes: new Uint8Array([1, 2, 3]) },
+    })
+    expect(isContentBlock(block)).toBe(true)
+  })
+
+  it('returns false for ContentBlockData objects', () => {
+    const data = { text: 'test' }
+    expect(isContentBlock(data)).toBe(false)
+  })
+
+  it('returns false for plain objects', () => {
+    expect(isContentBlock({ text: 'test' })).toBe(false)
+    expect(isContentBlock({ role: 'user', content: [] })).toBe(false)
+  })
+
+  it('returns false for primitives', () => {
+    expect(isContentBlock('string')).toBe(false)
+    expect(isContentBlock(123)).toBe(false)
+    expect(isContentBlock(null)).toBe(false)
+    expect(isContentBlock(undefined)).toBe(false)
+  })
+
+  it('returns false for objects with wrong type value', () => {
+    expect(isContentBlock({ type: 'wrongType' })).toBe(false)
+    expect(isContentBlock({ type: 123 })).toBe(false)
   })
 })

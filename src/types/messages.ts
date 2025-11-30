@@ -575,6 +575,33 @@ export class GuardContentBlock implements GuardContentBlockData {
 }
 
 /**
+ * Type guard to check if a value is a ContentBlock instance.
+ * ContentBlock instances have a readonly 'type' property with specific string literal values.
+ *
+ * @param value - The value to check
+ * @returns True if the value is a ContentBlock instance
+ */
+export function isContentBlock(value: unknown): value is ContentBlock {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'type' in value &&
+    typeof (value as { type: unknown }).type === 'string' &&
+    [
+      'textBlock',
+      'toolUseBlock',
+      'toolResultBlock',
+      'reasoningBlock',
+      'cachePointBlock',
+      'guardContentBlock',
+      'imageBlock',
+      'videoBlock',
+      'documentBlock',
+    ].includes((value as { type: string }).type)
+  )
+}
+
+/**
  * Converts ContentBlockData to a ContentBlock instance.
  * Handles all content block types including text, tool use/result, reasoning, cache points, guard content, and media blocks.
  *
