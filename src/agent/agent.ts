@@ -359,7 +359,7 @@ export class Agent implements AgentData {
         const firstElement = args[0]!
 
         // Check if it's Message[] or MessageData[]
-        if ('role' in firstElement) {
+        if ('role' in firstElement && typeof firstElement.role === 'string') {
           // Check if it's a Message instance or MessageData
           if (firstElement instanceof Message) {
             // Message[] input: return all messages
@@ -372,7 +372,7 @@ export class Agent implements AgentData {
           // It's ContentBlock[] or ContentBlockData[]
           // Check if it's ContentBlock instances or ContentBlockData
           let contentBlocks: ContentBlock[]
-          if ('type' in firstElement) {
+          if ('type' in firstElement && typeof firstElement.type === 'string') {
             // ContentBlock[] input: use as-is
             contentBlocks = args as ContentBlock[]
           } else {
