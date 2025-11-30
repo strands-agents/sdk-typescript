@@ -193,6 +193,49 @@ describe('Model', () => {
           MaxTokensError
         )
       })
+
+      it('handles empty tool input', async () => {
+        const provider = new TestModelProvider(async function* () {
+          yield { type: 'modelMessageStartEvent', role: 'assistant' }
+          yield {
+            type: 'modelContentBlockStartEvent',
+            start: { type: 'toolUseStart', toolUseId: 'tool1', name: 'no_input_tool' },
+          }
+          yield { type: 'modelContentBlockStopEvent' }
+          yield { type: 'modelMessageStopEvent', stopReason: 'toolUse' }
+          yield {
+            type: 'modelMetadataEvent',
+            usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+          }
+        })
+
+        const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+
+        const { items, result } = await collectGenerator(provider.streamAggregated(messages))
+
+        expect(items).toContainEqual({
+          type: 'toolUseBlock',
+          toolUseId: 'tool1',
+          name: 'no_input_tool',
+          input: {},
+        })
+
+        expect(result).toEqual({
+          message: {
+            type: 'message',
+            role: 'assistant',
+            content: [
+              {
+                type: 'toolUseBlock',
+                toolUseId: 'tool1',
+                name: 'no_input_tool',
+                input: {},
+              },
+            ],
+          },
+          stopReason: 'toolUse',
+        })
+      })
     })
 
     describe('when streaming reasoning content', () => {
