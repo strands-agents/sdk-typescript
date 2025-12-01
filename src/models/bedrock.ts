@@ -377,19 +377,12 @@ export class BedrockModel extends Model<BedrockModelConfig> {
           yield event
         }
       }
-    } catch (error) {
-      let errorMessage: string
-      if (error instanceof Error) {
-        errorMessage = error.message
-      } else if (typeof error === 'string') {
-        errorMessage = error
-      } else {
-        errorMessage = ''
-      }
+    } catch (unknownError) {
+      const error = normalizeError(unknownError)
 
       // Check for context window overflow
-      if (BEDROCK_CONTEXT_WINDOW_OVERFLOW_MESSAGES.some((msg) => errorMessage.includes(msg))) {
-        throw new ContextWindowOverflowError(errorMessage)
+      if (BEDROCK_CONTEXT_WINDOW_OVERFLOW_MESSAGES.some((msg) => error.message.includes(msg))) {
+        throw new ContextWindowOverflowError(error.message)
       }
 
       // Re-throw other errors as-is
