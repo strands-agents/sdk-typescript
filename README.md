@@ -89,39 +89,6 @@ const agent = new Agent({
   systemPrompt: 'You are a helpful assistant.',
 })
 ```
-
-### Tools
-
-Tools enable agents to interact with external systems and perform actions. Create type-safe tools using Zod schemas:
-
-```typescript
-import { Agent, tool } from '@strands-agents/sdk'
-import { z } from 'zod'
-
-const weatherTool = tool({
-  name: 'get_weather',
-  description: 'Get the current weather for a specific location.',
-  inputSchema: z.object({
-    location: z.string().describe('The city and state, e.g., San Francisco, CA'),
-  }),
-  callback: (input) => {
-    // input is fully typed based on the Zod schema
-    return `The weather in ${input.location} is 72°F and sunny.`
-  },
-})
-
-const agent = new Agent({
-  tools: [weatherTool],
-})
-
-await agent.invoke('What is the weather in San Francisco?')
-```
-
-**Vended Tools**: The SDK includes optional pre-built tools:
-- **Notebook Tool**: Manage text-based notebooks for persistent note-taking
-- **File Editor Tool**: Perform file system operations (read, write, edit files)
-- **HTTP Request Tool**: Make HTTP requests to external APIs
-
 ### Model Providers
 
 Switch between model providers easily:
@@ -166,6 +133,39 @@ for await (const event of agent.stream('Tell me a story about a brave toaster.')
 }
 ```
 
+### Tools
+
+Tools enable agents to interact with external systems and perform actions. Create type-safe tools using Zod schemas:
+
+```typescript
+import { Agent, tool } from '@strands-agents/sdk'
+import { z } from 'zod'
+
+const weatherTool = tool({
+  name: 'get_weather',
+  description: 'Get the current weather for a specific location.',
+  inputSchema: z.object({
+    location: z.string().describe('The city and state, e.g., San Francisco, CA'),
+  }),
+  callback: (input) => {
+    // input is fully typed based on the Zod schema
+    return `The weather in ${input.location} is 72°F and sunny.`
+  },
+})
+
+const agent = new Agent({
+  tools: [weatherTool],
+})
+
+await agent.invoke('What is the weather in San Francisco?')
+```
+
+**Vended Tools**: The SDK includes optional pre-built tools:
+- **Notebook Tool**: Manage text-based notebooks for persistent note-taking
+- **File Editor Tool**: Perform file system operations (read, write, edit files)
+- **HTTP Request Tool**: Make HTTP requests to external APIs
+
+
 ### MCP Integration
 
 Seamlessly integrate Model Context Protocol (MCP) servers:
@@ -187,41 +187,6 @@ const agent = new Agent({
 })
 
 await agent.invoke('Use a random tool from the MCP server.')
-```
-
-### Hooks System
-
-Monitor and customize agent behavior with lifecycle hooks:
-
-```typescript
-import { Agent, HookRegistry, BeforeToolCallEvent } from '@strands-agents/sdk'
-
-const hooks = new HookRegistry()
-
-// Log all tool calls
-hooks.on(BeforeToolCallEvent, async (event) => {
-  console.log(`Calling tool: ${event.toolName}`)
-  console.log(`Input:`, event.input)
-})
-
-const agent = new Agent({
-  hooks,
-  tools: [weatherTool]
-})
-```
-
-### Conversation Management
-
-Control conversation history with flexible strategies:
-
-```typescript
-import { Agent, SlidingWindowConversationManager } from '@strands-agents/sdk'
-
-const agent = new Agent({
-  conversationManager: new SlidingWindowConversationManager({
-    maxMessages: 10  // Keep only the 10 most recent messages
-  })
-})
 ```
 
 ---
