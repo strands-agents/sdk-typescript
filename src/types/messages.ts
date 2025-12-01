@@ -54,41 +54,7 @@ export class Message {
    * Creates a Message instance from MessageData.
    */
   public static fromMessageData(data: MessageData): Message {
-    const contentBlocks: ContentBlock[] = data.content.map((block) => {
-      if ('text' in block) {
-        return new TextBlock(block.text)
-      } else if ('toolUse' in block) {
-        return new ToolUseBlock(block.toolUse)
-      } else if ('toolResult' in block) {
-        return new ToolResultBlock({
-          toolUseId: block.toolResult.toolUseId,
-          status: block.toolResult.status,
-          content: block.toolResult.content.map((contentItem) => {
-            if ('text' in contentItem) {
-              return new TextBlock(contentItem.text)
-            } else if ('json' in contentItem) {
-              return new JsonBlock(contentItem)
-            } else {
-              throw new Error('Unknown ToolResultContentData type')
-            }
-          }),
-        })
-      } else if ('reasoning' in block) {
-        return new ReasoningBlock(block.reasoning)
-      } else if ('cachePoint' in block) {
-        return new CachePointBlock(block.cachePoint)
-      } else if ('guardContent' in block) {
-        return new GuardContentBlock(block.guardContent)
-      } else if ('image' in block) {
-        return new ImageBlock(block.image)
-      } else if ('video' in block) {
-        return new VideoBlock(block.video)
-      } else if ('document' in block) {
-        return new DocumentBlock(block.document)
-      } else {
-        throw new Error('Unknown ContentBlockData type')
-      }
-    })
+    const contentBlocks: ContentBlock[] = data.content.map(contentBlockFromData)
 
     return new Message({
       role: data.role,
@@ -605,5 +571,49 @@ export class GuardContentBlock implements GuardContentBlockData {
     if (data.image) {
       this.image = data.image
     }
+  }
+}
+
+/**
+ * Converts ContentBlockData to a ContentBlock instance.
+ * Handles all content block types including text, tool use/result, reasoning, cache points, guard content, and media blocks.
+ *
+ * @param data - The content block data to convert
+ * @returns A ContentBlock instance of the appropriate type
+ * @throws Error if the content block type is unknown
+ */
+export function contentBlockFromData(data: ContentBlockData): ContentBlock {
+  if ('text' in data) {
+    return new TextBlock(data.text)
+  } else if ('toolUse' in data) {
+    return new ToolUseBlock(data.toolUse)
+  } else if ('toolResult' in data) {
+    return new ToolResultBlock({
+      toolUseId: data.toolResult.toolUseId,
+      status: data.toolResult.status,
+      content: data.toolResult.content.map((contentItem) => {
+        if ('text' in contentItem) {
+          return new TextBlock(contentItem.text)
+        } else if ('json' in contentItem) {
+          return new JsonBlock(contentItem)
+        } else {
+          throw new Error('Unknown ToolResultContentData type')
+        }
+      }),
+    })
+  } else if ('reasoning' in data) {
+    return new ReasoningBlock(data.reasoning)
+  } else if ('cachePoint' in data) {
+    return new CachePointBlock(data.cachePoint)
+  } else if ('guardContent' in data) {
+    return new GuardContentBlock(data.guardContent)
+  } else if ('image' in data) {
+    return new ImageBlock(data.image)
+  } else if ('video' in data) {
+    return new VideoBlock(data.video)
+  } else if ('document' in data) {
+    return new DocumentBlock(data.document)
+  } else {
+    throw new Error('Unknown ContentBlockData type')
   }
 }
