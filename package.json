@@ -29,6 +29,10 @@
     "./vended_tools/file_editor": {
       "import": "./dist/vended_tools/file_editor/index.js",
       "types": "./dist/vended_tools/file_editor/index.d.ts"
+    },
+    "./vended_tools/http_request": {
+      "import": "./dist/vended_tools/http_request/index.js",
+      "types": "./dist/vended_tools/http_request/index.d.ts"
     }
   },
   "scripts": {
@@ -95,7 +99,7 @@
   },
   "homepage": "https://github.com/strands-agents/sdk-typescript#readme",
   "dependencies": {
-    "@aws-sdk/client-bedrock-runtime": "^3.911.0",
+    "@aws-sdk/client-bedrock-runtime": "^3.941.0",
     "@modelcontextprotocol/sdk": "^1.20.2",
     "zod": "^4.1.12"
   },

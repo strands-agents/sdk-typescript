@@ -112,16 +112,22 @@ function snakeToCamel(str: string): string {
 export interface BedrockModelConfig extends BaseModelConfig {
   /**
    * Maximum number of tokens to generate in the response.
+   *
+   * @see https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_InferenceConfiguration.html
    */
   maxTokens?: number
 
   /**
-   * Controls randomness in generation (0 to 1).
+   * Controls randomness in generation.
+   *
+   * @see https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_InferenceConfiguration.html
    */
   temperature?: number
 
   /**
-   * Controls diversity via nucleus sampling (0 to 1).
+   * Controls diversity via nucleus sampling.
+   *
+   * @see https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_InferenceConfiguration.html
    */
   topP?: number
 
