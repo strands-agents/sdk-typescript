@@ -34,13 +34,14 @@ import {
   type SystemContentBlock,
   DocumentFormat,
   ImageFormat,
+  type BedrockRuntimeClientResolvedConfig,
 } from '@aws-sdk/client-bedrock-runtime'
 import { type BaseModelConfig, Model, type StreamOptions } from '../models/model.js'
 import type { ContentBlock, Message, ToolUseBlock } from '../types/messages.js'
 import type { ImageSource, VideoSource, DocumentSource } from '../types/media.js'
 import type { ModelStreamEvent, ReasoningContentDelta, Usage } from '../models/streaming.js'
 import type { JSONValue } from '../types/json.js'
-import { ContextWindowOverflowError } from '../errors.js'
+import { ContextWindowOverflowError, normalizeError } from '../errors.js'
 import { ensureDefined } from '../types/validation.js'
 
 /**
@@ -48,6 +49,9 @@ import { ensureDefined } from '../types/validation.js'
  * Uses Claude Sonnet 4.5 with global inference profile for cross-region availability.
  */
 const DEFAULT_BEDROCK_MODEL_ID = 'global.anthropic.claude-sonnet-4-5-20250929-v1:0'
+
+const DEFAULT_BEDROCK_REGION = 'us-west-2'
+const DEFAULT_BEDROCK_REGION_SUPPORTS_FIP = false
 
 /**
  * Models that require the status field in tool results.
@@ -281,6 +285,8 @@ export class BedrockModel extends Model<BedrockModelConfig> {
       ...(region ? { region: region } : {}),
       customUserAgent,
     })
+
+    applyDefaultRegion(this._client.config)
   }
 
   /**
@@ -371,19 +377,12 @@ export class BedrockModel extends Model<BedrockModelConfig> {
           yield event
         }
       }
-    } catch (error) {
-      let errorMessage: string
-      if (error instanceof Error) {
-        errorMessage = error.message
-      } else if (typeof error === 'string') {
-        errorMessage = error
-      } else {
-        errorMessage = ''
-      }
+    } catch (unknownError) {
+      const error = normalizeError(unknownError)
 
       // Check for context window overflow
-      if (BEDROCK_CONTEXT_WINDOW_OVERFLOW_MESSAGES.some((msg) => errorMessage.includes(msg))) {
-        throw new ContextWindowOverflowError(errorMessage)
+      if (BEDROCK_CONTEXT_WINDOW_OVERFLOW_MESSAGES.some((msg) => error.message.includes(msg))) {
+        throw new ContextWindowOverflowError(error.message)
       }
 
       // Re-throw other errors as-is
@@ -1027,5 +1026,49 @@ export class BedrockModel extends Model<BedrockModelConfig> {
     }
 
     return mappedStopReason
+  }
+}
+
+/**
+ * What region is used for the BedrockConfiguration can't be known at construction-time so to apply a default
+ * we have to use an async function to intercept "Region is missing" errors and then apply our default (this
+ * is actually how many bedrock configuration parameters are implemented).
+ *
+ * We need to override both region & useFipsEndpoint because the region is used in both of those places:
+ * https://github.com/smithy-lang/smithy-typescript/blob/e11f7499c1bad30a515217f82a07b9e3e69a1f60/packages/config-resolver/src/regionConfig/resolveRegionConfig.ts#L42
+ *
+ * We do this unconditionally so that if a region is updated dynamically (environment variable or profile value) we
+ * also pick up those changes and stop applying the default.
+ */
+function applyDefaultRegion(config: BedrockRuntimeClientResolvedConfig): void {
+  // Bind original region function and wrap with error handling
+  const originalRegion = config.region.bind(config)
+  config.region = async (): Promise<string> => {
+    try {
+      return await originalRegion()
+    } catch (error) {
+      // Note: it was observed that the browser version of the BedrockClient
+      // uses a string instead of an error object - thus the normalizeError call
+      if (normalizeError(error).message === 'Region is missing') {
+        return DEFAULT_BEDROCK_REGION
+      }
+
+      throw error
+    }
+  }
+
+  // Bind original useFipsEndpoint function and wrap with error handling
+  const originalUseFipsEndpoint = config.useFipsEndpoint.bind(config)
+  config.useFipsEndpoint = async (): Promise<boolean> => {
+    try {
+      return await originalUseFipsEndpoint()
+    } catch (error) {
+      // Note: it was observed that the browser version of the BedrockClient
+      // uses a string instead of an error object - thus the normalizeError call
+      if (normalizeError(error).message === 'Region is missing') {
+        return DEFAULT_BEDROCK_REGION_SUPPORTS_FIP
+      }
+      throw error
+    }
   }
 }
