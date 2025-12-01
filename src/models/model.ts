@@ -32,6 +32,27 @@ export interface BaseModelConfig {
    * This typically specifies which model to use from the provider's catalog.
    */
   modelId?: string
+
+  /**
+   * Maximum number of tokens to generate in the response.
+   *
+   * @see Provider-specific documentation for exact behavior
+   */
+  maxTokens?: number
+
+  /**
+   * Controls randomness in generation.
+   *
+   * @see Provider-specific documentation for valid range
+   */
+  temperature?: number
+
+  /**
+   * Controls diversity via nucleus sampling.
+   *
+   * @see Provider-specific documentation for details
+   */
+  topP?: number
 }
 
 /**

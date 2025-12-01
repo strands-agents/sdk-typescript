@@ -114,17 +114,23 @@ export interface OpenAIModelConfig extends BaseModelConfig {
   modelId?: string
 
   /**
-   * Controls randomness in generation (0 to 2).
+   * Controls randomness in generation.
+   *
+   * @see https://platform.openai.com/docs/api-reference/chat/create#chat-create-temperature
    */
   temperature?: number
 
   /**
-   * Maximum number of tokens to generate in the response.
+   * Maximum number of tokens to generate in the completion.
+   *
+   * @see https://platform.openai.com/docs/api-reference/chat/create#chat-create-max_completion_tokens
    */
   maxTokens?: number
 
   /**
-   * Controls diversity via nucleus sampling (0 to 1).
+   * Controls diversity via nucleus sampling.
+   *
+   * @see https://platform.openai.com/docs/api-reference/chat/create#chat-create-top_p
    */
   topP?: number
 
@@ -497,7 +503,7 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
       request.temperature = this._config.temperature
     }
     if (this._config.maxTokens !== undefined) {
-      request.max_tokens = this._config.maxTokens
+      request.max_completion_tokens = this._config.maxTokens
     }
     if (this._config.topP !== undefined) {
       request.top_p = this._config.topP

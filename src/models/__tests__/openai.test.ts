@@ -899,7 +899,7 @@ describe('OpenAIModel', () => {
         stream: true,
         stream_options: { include_usage: true },
         temperature: 0.7,
-        max_tokens: 1000,
+        max_completion_tokens: 1000,
         messages: [
           { role: 'system', content: 'You are a helpful assistant' },
           { role: 'user', content: [{ type: 'text', text: 'Hi' }] },
