@@ -194,6 +194,61 @@ describe('Model', () => {
         })
       })
 
+      it('yields complete tool use block with empty input', async () => {
+        const provider = new TestModelProvider(async function* () {
+          yield { type: 'modelMessageStartEvent', role: 'assistant' }
+          yield {
+            type: 'modelContentBlockStartEvent',
+            start: { type: 'toolUseStart', toolUseId: 'tool1', name: 'get_time' },
+          }
+          yield {
+            type: 'modelContentBlockDeltaEvent',
+            delta: { type: 'toolUseInputDelta', input: '' },
+          }
+          yield { type: 'modelContentBlockStopEvent' }
+          yield { type: 'modelMessageStopEvent', stopReason: 'toolUse' }
+          yield {
+            type: 'modelMetadataEvent',
+            usage: { inputTokens: 10, outputTokens: 8, totalTokens: 18 },
+          }
+        })
+
+        const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+
+        const { items, result } = await collectGenerator(provider.streamAggregated(messages))
+
+        expect(items).toContainEqual({
+          type: 'toolUseBlock',
+          toolUseId: 'tool1',
+          name: 'get_time',
+          input: {},
+        })
+        expect(items).toContainEqual({
+          type: 'modelMetadataEvent',
+          usage: { inputTokens: 10, outputTokens: 8, totalTokens: 18 },
+        })
+
+        expect(result).toEqual({
+          message: {
+            type: 'message',
+            role: 'assistant',
+            content: [
+              {
+                type: 'toolUseBlock',
+                toolUseId: 'tool1',
+                name: 'get_time',
+                input: {},
+              },
+            ],
+          },
+          stopReason: 'toolUse',
+          metadata: {
+            type: 'modelMetadataEvent',
+            usage: { inputTokens: 10, outputTokens: 8, totalTokens: 18 },
+          },
+        })
+      })
+
       it('throws MaxTokenError when stopReason is MaxTokenError and toolUse is partial', async () => {
         const provider = new TestModelProvider(async function* () {
           yield { type: 'modelMessageStartEvent', role: 'assistant' }
