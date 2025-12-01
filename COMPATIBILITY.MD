@@ -52,6 +52,42 @@ public set model(value: Model<BaseModelConfig>) {
 
 User code remains unchanged and continues to work as before.
 
+## Union Type Extensions
+
+Adding new types or classes to union types **is not considered a breaking change**, unless the union explicitly declares that it will no longer change.
+
+### Policy
+
+The SDK may add new event types, result variants, or other union members in minor or patch releases. This includes:
+- New event types in streaming results
+- Additional error types in result unions
+- New configuration options in config unions
+- Extended enum-like union types
+
+### Rationale
+
+Union type extensions are additive changes that don't break existing code.
+
+Consumers handle union types through type guards, switch statements, or pattern matching that focus on known variants.
+
+New union members are simply ignored by existing logic.
+
+### Example
+
+The `AgentStreamEvent` type returned by `Agent.stream()` may receive new event types:
+
+```typescript
+// Current usage (continues to work)
+for await (const event of agent.stream('Hello')) {
+  if (event.type === 'textDelta') {
+    console.log(event.text)
+  }
+  // New event types are ignored by existing code
+}
+```
+
+New event types added to the union don't affect existing event handling logic.
+
 ## Feedback
 
 If you have questions or concerns about this compatibility policy, please [open an issue](https://github.com/strands-agents/sdk-typescript/issues) on GitHub.
