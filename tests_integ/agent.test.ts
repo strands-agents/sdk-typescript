@@ -80,6 +80,34 @@ describe.each(providers)('Agent with $name', ({ name, skip, createModel }) => {
         expect(textContent).toBeDefined()
         expect(textContent?.text).toMatch(/56088/)
       })
+
+      it('yields metadata events through the agent stream', async () => {
+        const agent = new Agent({
+          model: createModel(),
+          printer: false,
+          systemPrompt: 'Respond with a brief greeting.',
+        })
+
+        // Test streaming with event collection
+        const { items, result } = await collectGenerator(agent.stream('Say hello'))
+
+        // Verify metadata event is yielded through the agent
+        const metadataEvent = items.find((item) => item.type === 'modelMetadataEvent')
+        expect(metadataEvent).toBeDefined()
+        expect(metadataEvent?.usage).toBeDefined()
+        expect(metadataEvent?.usage?.inputTokens).toBeGreaterThan(0)
+        expect(metadataEvent?.usage?.outputTokens).toBeGreaterThan(0)
+
+        // Bedrock includes latencyMs in metrics, OpenAI does not
+        if (name === 'BedrockModel') {
+          expect(metadataEvent?.metrics?.latencyMs).toBeGreaterThan(0)
+        }
+
+        // Verify result structure
+        expect(result.stopReason).toBe('endTurn')
+        expect(result.lastMessage.role).toBe('assistant')
+        expect(result.lastMessage.content.length).toBeGreaterThan(0)
+      })
     })
 
     describe('Multi-turn Conversations', () => {
