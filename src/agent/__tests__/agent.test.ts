@@ -4,7 +4,20 @@ import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
 import { collectGenerator } from '../../__fixtures__/model-test-helpers.js'
 import { createMockTool, createRandomTool } from '../../__fixtures__/tool-helpers.js'
 import { ConcurrentInvocationError } from '../../errors.js'
-import { MaxTokensError, TextBlock, CachePointBlock, AgentResult, Message, ToolUseBlock } from '../../index.js'
+import {
+  MaxTokensError,
+  TextBlock,
+  CachePointBlock,
+  AgentResult,
+  Message,
+  ToolUseBlock,
+  ToolResultBlock,
+  ReasoningBlock,
+  GuardContentBlock,
+  ImageBlock,
+  VideoBlock,
+  DocumentBlock,
+} from '../../index.js'
 import { AgentPrinter } from '../printer.js'
 import { BeforeInvocationEvent, BeforeToolsEvent } from '../../hooks/events.js'
 
@@ -518,6 +531,248 @@ describe('Agent', () => {
         // Second invocation with new provider
         const secondResult = await agent.invoke('Second prompt')
         expect(secondResult.lastMessage?.content[0]).toEqual(new TextBlock('OpenAI response'))
+      })
+    })
+  })
+
+  describe('multimodal input', () => {
+    describe('with string input', () => {
+      it('creates user message with single TextBlock', async () => {
+        const model = new MockMessageModel().addTurn(new TextBlock('Response'))
+        const agent = new Agent({ model })
+
+        await agent.invoke('Hello')
+
+        expect(agent.messages).toHaveLength(2)
+        expect(agent.messages[0]).toEqual(
+          new Message({
+            role: 'user',
+            content: [new TextBlock('Hello')],
+          })
+        )
+      })
+    })
+
+    describe('with ContentBlock[] input', () => {
+      it('creates single user message with single TextBlock', async () => {
+        const model = new MockMessageModel().addTurn(new TextBlock('Response'))
+        const agent = new Agent({ model })
+
+        await agent.invoke([new TextBlock('Hello')])
+
+        expect(agent.messages).toHaveLength(2)
+        expect(agent.messages[0]).toEqual(
+          new Message({
+            role: 'user',
+            content: [new TextBlock('Hello')],
+          })
+        )
+      })
+
+      it('creates single user message with multiple blocks', async () => {
+        const model = new MockMessageModel().addTurn(new TextBlock('Response'))
+        const agent = new Agent({ model })
+
+        const contentBlocks = [new TextBlock('Analyze this'), new TextBlock('and this')]
+
+        await agent.invoke(contentBlocks)
+
+        expect(agent.messages).toHaveLength(2)
+        expect(agent.messages[0]).toEqual(
+          new Message({
+            role: 'user',
+            content: contentBlocks,
+          })
+        )
+      })
+
+      it('supports all ContentBlock types', async () => {
+        const model = new MockMessageModel().addTurn(new TextBlock('Response'))
+        const agent = new Agent({ model })
+
+        const contentBlocks = [
+          new TextBlock('Text content'),
+          new ToolUseBlock({ name: 'tool1', toolUseId: 'id-1', input: { key: 'value' } }),
+          new ToolResultBlock({
+            toolUseId: 'id-1',
+            status: 'success',
+            content: [new TextBlock('Result')],
+          }),
+          new ReasoningBlock({ text: 'My reasoning' }),
+          new CachePointBlock({ cacheType: 'default' }),
+          new GuardContentBlock({ text: { text: 'Guard content', qualifiers: ['grounding_source'] } }),
+          new ImageBlock({
+            format: 'png',
+            source: { url: 'https://example.com/image.png' },
+          }),
+          new VideoBlock({
+            format: 'mp4',
+            source: { s3Location: { uri: 's3://bucket/video.mp4' } },
+          }),
+          new DocumentBlock({
+            format: 'pdf',
+            name: 'doc.pdf',
+            source: { bytes: new Uint8Array([1, 2, 3]) },
+          }),
+        ]
+
+        await agent.invoke(contentBlocks)
+
+        expect(agent.messages).toHaveLength(2)
+        expect(agent.messages[0]).toEqual(
+          new Message({
+            role: 'user',
+            content: contentBlocks,
+          })
+        )
+      })
+
+      it('handles empty ContentBlock array', async () => {
+        const model = new MockMessageModel().addTurn(new TextBlock('Response'))
+        const agent = new Agent({ model })
+
+        await agent.invoke([])
+
+        expect(agent.messages).toHaveLength(1) // Only response message added
+      })
+
+      it('accepts ContentBlockData[] and converts to ContentBlock[]', async () => {
+        const model = new MockMessageModel().addTurn(new TextBlock('Response'))
+        const agent = new Agent({ model })
+
+        await agent.invoke([
+          { text: 'Hello from data format' },
+          {
+            toolUse: {
+              name: 'testTool',
+              toolUseId: 'id-1',
+              input: { key: 'value' },
+            },
+          },
+          {
+            toolResult: {
+              toolUseId: 'id-1',
+              status: 'success' as const,
+              content: [{ text: 'Tool result' }, { json: { result: 42 } }],
+            },
+          },
+          { reasoning: { text: 'My reasoning' } },
+          { cachePoint: { cacheType: 'default' as const } },
+          { guardContent: { text: { text: 'Guard text', qualifiers: ['query' as const] } } },
+          {
+            image: {
+              format: 'png' as const,
+              source: { url: 'https://example.com/image.png' },
+            },
+          },
+          {
+            video: {
+              format: 'mp4' as const,
+              source: { s3Location: { uri: 's3://bucket/video.mp4' } },
+            },
+          },
+          {
+            document: {
+              format: 'pdf' as const,
+              name: 'doc.pdf',
+              source: { bytes: new Uint8Array([1, 2, 3]) },
+            },
+          },
+        ])
+
+        expect(agent.messages).toHaveLength(2)
+        const userMessage = agent.messages[0]!
+        expect(userMessage.role).toBe('user')
+        expect(userMessage.content).toHaveLength(9)
+        expect(userMessage.content[0]).toEqual(new TextBlock('Hello from data format'))
+        expect(userMessage.content[1]).toEqual(
+          new ToolUseBlock({ name: 'testTool', toolUseId: 'id-1', input: { key: 'value' } })
+        )
+      })
+    })
+
+    describe('with Message[] input', () => {
+      it('appends single message to conversation', async () => {
+        const model = new MockMessageModel().addTurn(new TextBlock('Response'))
+        const agent = new Agent({ model })
+
+        const userMessage = new Message({
+          role: 'user',
+          content: [new TextBlock('Hello')],
+        })
+
+        await agent.invoke([userMessage])
+
+        expect(agent.messages).toHaveLength(2)
+        expect(agent.messages[0]).toEqual(userMessage)
+      })
+
+      it('appends multiple messages in order', async () => {
+        const model = new MockMessageModel().addTurn(new TextBlock('Response'))
+        const agent = new Agent({ model })
+
+        const messages = [
+          new Message({
+            role: 'user',
+            content: [new TextBlock('First message')],
+          }),
+          new Message({
+            role: 'assistant',
+            content: [new TextBlock('Second message')],
+          }),
+          new Message({
+            role: 'user',
+            content: [new TextBlock('Third message')],
+          }),
+        ]
+
+        await agent.invoke(messages)
+
+        expect(agent.messages).toHaveLength(4) // 3 input + 1 response
+        expect(agent.messages[0]).toEqual(messages[0])
+        expect(agent.messages[1]).toEqual(messages[1])
+        expect(agent.messages[2]).toEqual(messages[2])
+      })
+
+      it('handles empty Message array', async () => {
+        const model = new MockMessageModel().addTurn(new TextBlock('Response'))
+        const agent = new Agent({ model })
+
+        await agent.invoke([])
+
+        expect(agent.messages).toHaveLength(1) // Only response message added
+      })
+
+      it('accepts MessageData[] and converts to Message[]', async () => {
+        const model = new MockMessageModel().addTurn(new TextBlock('Response'))
+        const agent = new Agent({ model })
+
+        const messageDataArray = [
+          {
+            role: 'user' as const,
+            content: [{ text: 'First message' }],
+          },
+          {
+            role: 'assistant' as const,
+            content: [{ text: 'Second message' }],
+          },
+        ]
+
+        await agent.invoke(messageDataArray)
+
+        expect(agent.messages).toHaveLength(3) // 2 input + 1 response
+        expect(agent.messages[0]).toEqual(
+          new Message({
+            role: 'user',
+            content: [new TextBlock('First message')],
+          })
+        )
+        expect(agent.messages[1]).toEqual(
+          new Message({
+            role: 'assistant',
+            content: [new TextBlock('Second message')],
+          })
+        )
       })
     })
   })
