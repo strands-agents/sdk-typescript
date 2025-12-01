@@ -17,20 +17,17 @@ async function main() {
     return
   }
 
-  const model = new OpenAIModel()
-
-  const chromeDevtools = new McpClient({
+  const documentationTools = new McpClient({
     transport: new StdioClientTransport({
-      command: 'npx',
-      args: ['-y', 'chrome-devtools-mcp'],
+      command: 'uvx',
+      args: ['awslabs.aws-documentation-mcp-server@latest'],
     }),
   })
 
   const agentWithMcpClient = new Agent({
     systemPrompt:
-      'You are a helpful assistant that uses the chrome_devtools_mcp server as a demonstration of mcp functionality. You must only use tools without side effects.',
-    tools: [chromeDevtools],
-    model,
+      'You are a helpful assistant that uses the aws-documentation-mcp-server server as a demonstration of mcp functionality. You must only use tools without side effects.',
+    tools: [documentationTools],
   })
 
   await runInvoke('1: Invocation with MCP client', agentWithMcpClient, 'Use a random tool from the MCP server.')
@@ -44,7 +41,7 @@ async function main() {
     console.warn(
       'Skipping GitHub MCP client example; STRANDS_EXAMPLE_GITHUB_PAT environment variable not set. Though prompted not to, this can perform side effects when using certain tools.'
     )
-    await chromeDevtools.disconnect()
+    await documentationTools.disconnect()
     return
   }
 
@@ -70,7 +67,6 @@ async function main() {
     systemPrompt:
       'You are a helpful assistant that uses the github_mcp server as a demonstration of mcp functionality. You must only use tools without side effects.',
     tools: [githubMcpClient],
-    model,
   })
 
   await runInvoke(
@@ -79,9 +75,7 @@ async function main() {
     'Use a random tool from the GitHub MCP server to illustrate that they work.'
   )
 
-  await Promise.all([chromeDevtools.disconnect(), githubMcpClient.disconnect()])
+  await Promise.all([documentationTools.disconnect(), githubMcpClient.disconnect()])
 }
 
-await main()
-  .catch(console.error)
-  .finally(() => process.exit(0))
+await main().catch(console.error)
