@@ -6,6 +6,11 @@ import { FunctionTool } from './function-tool.js'
 import { z, ZodVoid } from 'zod'
 
 /**
+ * Helper type to infer input type from Zod schema or default to never.
+ */
+type ZodInferred<TInput> = TInput extends z.ZodType ? z.infer<TInput> : never
+
+/**
  * Configuration for creating a Zod-based tool.
  *
  * @typeParam TInput - Zod schema type for input validation
@@ -32,7 +37,7 @@ export interface ToolConfig<TInput extends z.ZodType | undefined, TReturn extend
    * @returns The result (can be a value, Promise, or AsyncGenerator)
    */
   callback: (
-    input: TInput extends z.ZodType ? z.infer<TInput> : Record<string, never>,
+    input: ZodInferred<TInput>,
     context?: ToolContext
   ) => AsyncGenerator<unknown, TReturn, never> | Promise<TReturn> | TReturn
 }
@@ -43,7 +48,7 @@ export interface ToolConfig<TInput extends z.ZodType | undefined, TReturn extend
  */
 class ZodTool<TInput extends z.ZodType | undefined, TReturn extends JSONValue = JSONValue>
   extends Tool
-  implements InvokableTool<TInput extends z.ZodType ? z.infer<TInput> : Record<string, never>, TReturn>
+  implements InvokableTool<ZodInferred<TInput>, TReturn>
 {
   /**
    * Internal FunctionTool for delegating stream operations.
@@ -52,14 +57,15 @@ class ZodTool<TInput extends z.ZodType | undefined, TReturn extends JSONValue = 
 
   /**
    * Zod schema for input validation.
+   * Note: undefined is normalized to z.void() in constructor, so this is always defined.
    */
-  private readonly _inputSchema: TInput | undefined
+  private readonly _inputSchema: z.ZodType
 
   /**
    * User callback function.
    */
   private readonly _callback: (
-    input: TInput extends z.ZodType ? z.infer<TInput> : Record<string, never>,
+    input: ZodInferred<TInput>,
     context?: ToolContext
   ) => AsyncGenerator<unknown, TReturn, never> | Promise<TReturn> | TReturn
 
@@ -68,7 +74,7 @@ class ZodTool<TInput extends z.ZodType | undefined, TReturn extends JSONValue = 
     const { name, description = '', inputSchema, callback } = config
 
     // Normalize undefined to z.void() to simplify logic throughout
-    this._inputSchema = (inputSchema ?? z.void()) as TInput | undefined
+    this._inputSchema = inputSchema ?? z.void()
     this._callback = callback
 
     let generatedSchema: JSONSchema
@@ -82,7 +88,7 @@ class ZodTool<TInput extends z.ZodType | undefined, TReturn extends JSONValue = 
       }
     } else {
       // Generate JSON Schema from Zod and strip $schema property to reduce token usage
-      const schema = z.toJSONSchema(this._inputSchema as z.ZodType) as JSONSchema & { $schema?: string }
+      const schema = z.toJSONSchema(this._inputSchema) as JSONSchema & { $schema?: string }
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { $schema, ...schemaWithoutMeta } = schema
       generatedSchema = schemaWithoutMeta as JSONSchema
@@ -97,14 +103,13 @@ class ZodTool<TInput extends z.ZodType | undefined, TReturn extends JSONValue = 
         input: unknown,
         toolContext: ToolContext
       ): AsyncGenerator<JSONValue, JSONValue, never> | Promise<JSONValue> | JSONValue => {
-        // Only validate if schema is not z.void()
-        const validatedInput =
-          this._inputSchema instanceof ZodVoid ? input : (this._inputSchema as z.ZodType).parse(input)
+        // Only validate if schema is not z.void() (after normalization, it's never undefined)
+        const validatedInput = this._inputSchema instanceof ZodVoid ? input : this._inputSchema.parse(input)
         // Execute user callback with validated input
-        return callback(
-          validatedInput as TInput extends z.ZodType ? z.infer<TInput> : Record<string, never>,
-          toolContext
-        ) as AsyncGenerator<JSONValue, JSONValue, never> | Promise<JSONValue> | JSONValue
+        return callback(validatedInput as ZodInferred<TInput>, toolContext) as
+          | AsyncGenerator<JSONValue, JSONValue, never>
+          | Promise<JSONValue>
+          | JSONValue
       },
     })
   }
@@ -153,18 +158,12 @@ class ZodTool<TInput extends z.ZodType | undefined, TReturn extends JSONValue = 
    * @param context - Optional tool execution context
    * @returns The unwrapped result
    */
-  async invoke(
-    input: TInput extends z.ZodType ? z.infer<TInput> : Record<string, never>,
-    context?: ToolContext
-  ): Promise<TReturn> {
-    // Only validate if schema is not z.void()
-    const validatedInput = this._inputSchema instanceof ZodVoid ? input : (this._inputSchema as z.ZodType).parse(input)
+  async invoke(input: ZodInferred<TInput>, context?: ToolContext): Promise<TReturn> {
+    // Only validate if schema is not z.void() (after normalization, it's never undefined)
+    const validatedInput = this._inputSchema instanceof ZodVoid ? input : this._inputSchema.parse(input)
 
     // Execute callback with validated input
-    const result = this._callback(
-      validatedInput as TInput extends z.ZodType ? z.infer<TInput> : Record<string, never>,
-      context
-    )
+    const result = this._callback(validatedInput as ZodInferred<TInput>, context)
 
     // Handle different return types
     if (result && typeof result === 'object' && Symbol.asyncIterator in result) {
@@ -218,14 +217,6 @@ class ZodTool<TInput extends z.ZodType | undefined, TReturn extends JSONValue = 
  *   callback: () => ({ status: 'operational', uptime: 99.9 })
  * })
  *
- * // Tool without input (use z.void())
- * const refreshCache = tool({
- *   name: 'refreshCache',
- *   description: 'Refreshes the cache',
- *   inputSchema: z.void(),
- *   callback: () => 'Cache refreshed'
- * })
- *
  * // Direct invocation
  * const result = await calculator.invoke({ operation: 'add', a: 5, b: 3 })
  *
@@ -242,6 +233,6 @@ class ZodTool<TInput extends z.ZodType | undefined, TReturn extends JSONValue = 
  */
 export function tool<TInput extends z.ZodType | undefined, TReturn extends JSONValue = JSONValue>(
   config: ToolConfig<TInput, TReturn>
-): InvokableTool<TInput extends z.ZodType ? z.infer<TInput> : Record<string, never>, TReturn> {
+): InvokableTool<ZodInferred<TInput>, TReturn> {
   return new ZodTool(config)
 }
