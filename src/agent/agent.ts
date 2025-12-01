@@ -68,9 +68,6 @@ export type AgentConfig = {
    *     maxTokens: 2048
    *   })
    * })
-   *
-   * // Using default model (global.anthropic.claude-sonnet-4-5-20250929-v1:0)
-   * const agent = new Agent()
    * ```
    */
   model?: Model<BaseModelConfig> | string
@@ -164,7 +161,6 @@ export class Agent implements AgentData {
     this.hooks.addHook(this.conversationManager)
     this.hooks.addAllHooks(config?.hooks ?? [])
 
-    // Initialize model - handle string as Bedrock model ID
     if (typeof config?.model === 'string') {
       this.model = new BedrockModel({ modelId: config.model })
     } else {
