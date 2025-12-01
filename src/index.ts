@@ -56,6 +56,7 @@ export {
   GuardContentBlock,
   Message,
   JsonBlock,
+  contentBlockFromData,
 } from './types/messages.js'
 
 // Media classes

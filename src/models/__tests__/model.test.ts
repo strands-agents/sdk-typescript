@@ -26,7 +26,7 @@ describe('Model', () => {
 
         const { items, result } = await collectGenerator(provider.streamAggregated(messages))
 
-        // Verify all yielded items (events + aggregated content block)
+        // Verify all yielded items (events + aggregated content block + metadata)
         expect(items).toEqual([
           { type: 'modelMessageStartEvent', role: 'assistant' },
           { type: 'modelContentBlockStartEvent' },
@@ -37,9 +37,13 @@ describe('Model', () => {
           { type: 'modelContentBlockStopEvent' },
           { type: 'textBlock', text: 'Hello' },
           { type: 'modelMessageStopEvent', stopReason: 'endTurn' },
+          {
+            type: 'modelMetadataEvent',
+            usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+          },
         ])
 
-        // Verify the returned result
+        // Verify the returned result includes metadata
         expect(result).toEqual({
           message: {
             type: 'message',
@@ -47,6 +51,10 @@ describe('Model', () => {
             content: [{ type: 'textBlock', text: 'Hello' }],
           },
           stopReason: 'endTurn',
+          metadata: {
+            type: 'modelMetadataEvent',
+            usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+          },
         })
       })
 
@@ -103,6 +111,10 @@ describe('Model', () => {
 
         expect(items).toContainEqual({ type: 'textBlock', text: 'First' })
         expect(items).toContainEqual({ type: 'textBlock', text: 'Second' })
+        expect(items).toContainEqual({
+          type: 'modelMetadataEvent',
+          usage: { inputTokens: 10, outputTokens: 10, totalTokens: 20 },
+        })
 
         expect(result).toEqual({
           message: {
@@ -114,6 +126,10 @@ describe('Model', () => {
             ],
           },
           stopReason: 'endTurn',
+          metadata: {
+            type: 'modelMetadataEvent',
+            usage: { inputTokens: 10, outputTokens: 10, totalTokens: 20 },
+          },
         })
       })
     })
@@ -152,6 +168,10 @@ describe('Model', () => {
           name: 'get_weather',
           input: { location: 'Paris' },
         })
+        expect(items).toContainEqual({
+          type: 'modelMetadataEvent',
+          usage: { inputTokens: 10, outputTokens: 8, totalTokens: 18 },
+        })
 
         expect(result).toEqual({
           message: {
@@ -167,8 +187,13 @@ describe('Model', () => {
             ],
           },
           stopReason: 'toolUse',
+          metadata: {
+            type: 'modelMetadataEvent',
+            usage: { inputTokens: 10, outputTokens: 8, totalTokens: 18 },
+          },
         })
       })
+
       it('throws MaxTokenError when stopReason is MaxTokenError and toolUse is partial', async () => {
         const provider = new TestModelProvider(async function* () {
           yield { type: 'modelMessageStartEvent', role: 'assistant' }
@@ -225,6 +250,10 @@ describe('Model', () => {
           text: 'Thinking about the problem',
           signature: 'sig1',
         })
+        expect(items).toContainEqual({
+          type: 'modelMetadataEvent',
+          usage: { inputTokens: 10, outputTokens: 10, totalTokens: 20 },
+        })
 
         expect(result).toEqual({
           message: {
@@ -239,6 +268,10 @@ describe('Model', () => {
             ],
           },
           stopReason: 'endTurn',
+          metadata: {
+            type: 'modelMetadataEvent',
+            usage: { inputTokens: 10, outputTokens: 10, totalTokens: 20 },
+          },
         })
       })
 
@@ -266,6 +299,10 @@ describe('Model', () => {
           type: 'reasoningBlock',
           redactedContent: new Uint8Array(0),
         })
+        expect(items).toContainEqual({
+          type: 'modelMetadataEvent',
+          usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+        })
 
         expect(result).toEqual({
           message: {
@@ -279,6 +316,10 @@ describe('Model', () => {
             ],
           },
           stopReason: 'endTurn',
+          metadata: {
+            type: 'modelMetadataEvent',
+            usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+          },
         })
       })
 
@@ -306,6 +347,10 @@ describe('Model', () => {
           type: 'reasoningBlock',
           text: 'Thinking',
         })
+        expect(items).toContainEqual({
+          type: 'modelMetadataEvent',
+          usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+        })
 
         expect(result).toEqual({
           message: {
@@ -319,6 +364,10 @@ describe('Model', () => {
             ],
           },
           stopReason: 'endTurn',
+          metadata: {
+            type: 'modelMetadataEvent',
+            usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+          },
         })
       })
     })
@@ -367,6 +416,10 @@ describe('Model', () => {
           input: { city: 'Paris' },
         })
         expect(items).toContainEqual({ type: 'reasoningBlock', text: 'Reasoning', signature: 'sig1' })
+        expect(items).toContainEqual({
+          type: 'modelMetadataEvent',
+          usage: { inputTokens: 10, outputTokens: 15, totalTokens: 25 },
+        })
 
         expect(result).toEqual({
           message: {
@@ -379,6 +432,97 @@ describe('Model', () => {
             ],
           },
           stopReason: 'endTurn',
+          metadata: {
+            type: 'modelMetadataEvent',
+            usage: { inputTokens: 10, outputTokens: 15, totalTokens: 25 },
+          },
+        })
+      })
+    })
+
+    describe('when multiple metadata events are emitted', () => {
+      it('yields all metadata events but keeps only the last one in return value', async () => {
+        const provider = new TestModelProvider(async function* () {
+          yield { type: 'modelMessageStartEvent', role: 'assistant' }
+          yield { type: 'modelContentBlockStartEvent' }
+          yield {
+            type: 'modelContentBlockDeltaEvent',
+            delta: { type: 'textDelta', text: 'Hello' },
+          }
+          yield { type: 'modelContentBlockStopEvent' }
+          yield { type: 'modelMessageStopEvent', stopReason: 'endTurn' }
+          yield {
+            type: 'modelMetadataEvent',
+            usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+          }
+          yield {
+            type: 'modelMetadataEvent',
+            usage: { inputTokens: 20, outputTokens: 10, totalTokens: 30 },
+            metrics: { latencyMs: 100 },
+          }
+        })
+
+        const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+
+        const { items, result } = await collectGenerator(provider.streamAggregated(messages))
+
+        // Both metadata events should be yielded
+        expect(items).toContainEqual({
+          type: 'modelMetadataEvent',
+          usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+        })
+        expect(items).toContainEqual({
+          type: 'modelMetadataEvent',
+          usage: { inputTokens: 20, outputTokens: 10, totalTokens: 30 },
+          metrics: { latencyMs: 100 },
+        })
+
+        // Only the last metadata should be in return value
+        expect(result).toEqual({
+          message: {
+            type: 'message',
+            role: 'assistant',
+            content: [{ type: 'textBlock', text: 'Hello' }],
+          },
+          stopReason: 'endTurn',
+          metadata: {
+            type: 'modelMetadataEvent',
+            usage: { inputTokens: 20, outputTokens: 10, totalTokens: 30 },
+            metrics: { latencyMs: 100 },
+          },
+        })
+      })
+    })
+
+    describe('when no metadata events are emitted', () => {
+      it('returns result with undefined metadata', async () => {
+        const provider = new TestModelProvider(async function* () {
+          yield { type: 'modelMessageStartEvent', role: 'assistant' }
+          yield { type: 'modelContentBlockStartEvent' }
+          yield {
+            type: 'modelContentBlockDeltaEvent',
+            delta: { type: 'textDelta', text: 'Hello' },
+          }
+          yield { type: 'modelContentBlockStopEvent' }
+          yield { type: 'modelMessageStopEvent', stopReason: 'endTurn' }
+        })
+
+        const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+
+        const { items, result } = await collectGenerator(provider.streamAggregated(messages))
+
+        // No metadata event should be in yielded items
+        expect(items.filter((item) => item.type === 'modelMetadataEvent')).toHaveLength(0)
+
+        // Metadata should be undefined in return value
+        expect(result).toEqual({
+          message: {
+            type: 'message',
+            role: 'assistant',
+            content: [{ type: 'textBlock', text: 'Hello' }],
+          },
+          stopReason: 'endTurn',
+          metadata: undefined,
         })
       })
     })

@@ -80,6 +80,34 @@ describe.each(providers)('Agent with $name', ({ name, skip, createModel }) => {
         expect(textContent).toBeDefined()
         expect(textContent?.text).toMatch(/56088/)
       })
+
+      it('yields metadata events through the agent stream', async () => {
+        const agent = new Agent({
+          model: createModel(),
+          printer: false,
+          systemPrompt: 'Respond with a brief greeting.',
+        })
+
+        // Test streaming with event collection
+        const { items, result } = await collectGenerator(agent.stream('Say hello'))
+
+        // Verify metadata event is yielded through the agent
+        const metadataEvent = items.find((item) => item.type === 'modelMetadataEvent')
+        expect(metadataEvent).toBeDefined()
+        expect(metadataEvent?.usage).toBeDefined()
+        expect(metadataEvent?.usage?.inputTokens).toBeGreaterThan(0)
+        expect(metadataEvent?.usage?.outputTokens).toBeGreaterThan(0)
+
+        // Bedrock includes latencyMs in metrics, OpenAI does not
+        if (name === 'BedrockModel') {
+          expect(metadataEvent?.metrics?.latencyMs).toBeGreaterThan(0)
+        }
+
+        // Verify result structure
+        expect(result.stopReason).toBe('endTurn')
+        expect(result.lastMessage.role).toBe('assistant')
+        expect(result.lastMessage.content.length).toBeGreaterThan(0)
+      })
     })
 
     describe('Multi-turn Conversations', () => {
@@ -152,6 +180,63 @@ describe.each(providers)('Agent with $name', ({ name, skip, createModel }) => {
         expect(textContent).toBeDefined()
         expect(textContent?.text).toMatch(/zebra/i)
         expect(textContent?.text).toMatch(/yellow/i)
+      })
+    })
+
+    describe('multimodal input', () => {
+      it('accepts ContentBlock[] input', async () => {
+        const agent = new Agent({
+          model: createModel(),
+          printer: false,
+        })
+
+        const yellowPng = await loadFixture(yellowPngUrl)
+        const imageBlock = new ImageBlock({
+          format: 'png',
+          source: { bytes: yellowPng },
+        })
+
+        const contentBlocks = [new TextBlock('What color is this image? Answer in one word.'), imageBlock]
+
+        const result = await agent.invoke(contentBlocks)
+
+        expect(result.stopReason).toBe('endTurn')
+        expect(result.lastMessage.role).toBe('assistant')
+
+        const textContent = result.lastMessage.content.find((block) => block.type === 'textBlock')
+        expect(textContent).toBeDefined()
+        expect(textContent?.text).toMatch(/yellow/i)
+      })
+
+      it('accepts Message[] input for conversation history', async () => {
+        const agent = new Agent({
+          model: createModel(),
+          printer: false,
+        })
+
+        const conversationHistory = [
+          new Message({
+            role: 'user',
+            content: [new TextBlock('Remember this number: 42')],
+          }),
+          new Message({
+            role: 'assistant',
+            content: [new TextBlock('I will remember the number 42.')],
+          }),
+          new Message({
+            role: 'user',
+            content: [new TextBlock('What number did I ask you to remember?')],
+          }),
+        ]
+
+        const result = await agent.invoke(conversationHistory)
+
+        expect(result.stopReason).toBe('endTurn')
+        expect(result.lastMessage.role).toBe('assistant')
+
+        const textContent = result.lastMessage.content.find((block) => block.type === 'textBlock')
+        expect(textContent).toBeDefined()
+        expect(textContent?.text).toMatch(/42/)
       })
     })
   })

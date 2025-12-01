@@ -2,6 +2,9 @@ import {
   AgentResult,
   type AgentStreamEvent,
   BedrockModel,
+  contentBlockFromData,
+  type ContentBlock,
+  type ContentBlockData,
   type JSONValue,
   McpClient,
   Message,
@@ -12,7 +15,7 @@ import {
   type Tool,
   type ToolContext,
   ToolResultBlock,
-  type ToolUseBlock,
+  ToolUseBlock,
 } from '../index.js'
 import { systemPromptFromData } from '../types/messages.js'
 import { normalizeError, ConcurrentInvocationError } from '../errors.js'
@@ -105,9 +108,12 @@ export type AgentConfig = {
 /**
  * Arguments for invoking an agent.
  *
- * A plain string represents user input to an agent.
+ * Supports multiple input formats:
+ * - `string` - User text input (wrapped in TextBlock, creates user Message)
+ * - `ContentBlock[]` | `ContentBlockData[]` - Array of content blocks (creates single user Message)
+ * - `Message[]` | `MessageData[]` - Array of messages (appends all to conversation)
  */
-export type InvokeArgs = string
+export type InvokeArgs = string | ContentBlock[] | ContentBlockData[] | Message[] | MessageData[]
 
 /**
  * Orchestrates the interaction between a model, a set of tools, and MCP clients.
@@ -360,6 +366,60 @@ export class Agent implements AgentData {
   }
 
   /**
+   * Normalizes agent invocation input into an array of messages to append.
+   *
+   * @param args - Optional arguments for invoking the model
+   * @returns Array of messages to append to the conversation
+   */
+  private _normalizeInput(args?: InvokeArgs): Message[] {
+    if (args !== undefined) {
+      if (typeof args === 'string') {
+        // String input: wrap in TextBlock and create user Message
+        return [
+          new Message({
+            role: 'user',
+            content: [new TextBlock(args)],
+          }),
+        ]
+      } else if (Array.isArray(args) && args.length > 0) {
+        const firstElement = args[0]!
+
+        // Check if it's Message[] or MessageData[]
+        if ('role' in firstElement && typeof firstElement.role === 'string') {
+          // Check if it's a Message instance or MessageData
+          if (firstElement instanceof Message) {
+            // Message[] input: return all messages
+            return args as Message[]
+          } else {
+            // MessageData[] input: convert to Message[]
+            return (args as MessageData[]).map((data) => Message.fromMessageData(data))
+          }
+        } else {
+          // It's ContentBlock[] or ContentBlockData[]
+          // Check if it's ContentBlock instances or ContentBlockData
+          let contentBlocks: ContentBlock[]
+          if ('type' in firstElement && typeof firstElement.type === 'string') {
+            // ContentBlock[] input: use as-is
+            contentBlocks = args as ContentBlock[]
+          } else {
+            // ContentBlockData[] input: convert using helper function
+            contentBlocks = (args as ContentBlockData[]).map(contentBlockFromData)
+          }
+
+          return [
+            new Message({
+              role: 'user',
+              content: contentBlocks,
+            }),
+          ]
+        }
+      }
+    }
+    // undefined or empty array: no messages to append
+    return []
+  }
+
+  /**
    * Invokes the model provider and streams all events.
    *
    * @param args - Optional arguments for invoking the model
@@ -368,14 +428,10 @@ export class Agent implements AgentData {
   private async *invokeModel(
     args?: InvokeArgs
   ): AsyncGenerator<AgentStreamEvent, { message: Message; stopReason: string }, undefined> {
-    if (args !== undefined && typeof args === 'string') {
-      // Add user message from args
-      yield await this._appendMessage(
-        new Message({
-          role: 'user',
-          content: [new TextBlock(args)],
-        })
-      )
+    // Normalize input and append messages to conversation
+    const messagesToAppend = this._normalizeInput(args)
+    for (const message of messagesToAppend) {
+      yield await this._appendMessage(message)
     }
 
     const toolSpecs = this._toolRegistry.values().map((tool) => tool.toolSpec)
