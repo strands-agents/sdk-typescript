@@ -213,4 +213,27 @@ describe.skipIf(!(await shouldRunTests()))('BedrockModel Integration Tests', () 
       expect(regionResult).toBe('ap-northeast-1')
     })
   })
+
+  describe('Agent with String Model ID', () => {
+    it.concurrent('accepts string model ID and creates functional Agent', async () => {
+      // Create agent with string model ID
+      const agent = new Agent({
+        model: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
+        printer: false,
+      })
+
+      // Invoke agent with simple prompt
+      const result = await agent.invoke('Say hello')
+
+      // Verify agent works correctly
+      expect(result.stopReason).toBe('endTurn')
+      expect(result.lastMessage.role).toBe('assistant')
+      expect(result.lastMessage.content.length).toBeGreaterThan(0)
+
+      // Verify message contains text content
+      const textContent = result.lastMessage.content.find((block) => block.type === 'textBlock')
+      expect(textContent).toBeDefined()
+      expect(textContent?.text).toBeTruthy()
+    })
+  })
 })

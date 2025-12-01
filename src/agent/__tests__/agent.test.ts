@@ -20,6 +20,7 @@ import {
 } from '../../index.js'
 import { AgentPrinter } from '../printer.js'
 import { BeforeInvocationEvent, BeforeToolsEvent } from '../../hooks/events.js'
+import { BedrockModel } from '../../models/bedrock.js'
 
 describe('Agent', () => {
   describe('stream', () => {
@@ -773,6 +774,61 @@ describe('Agent', () => {
             content: [new TextBlock('Second message')],
           })
         )
+      })
+    })
+  })
+
+  describe('model initialization', () => {
+    describe('when model is a string', () => {
+      it('creates BedrockModel with specified modelId', () => {
+        const agent = new Agent({ model: 'anthropic.claude-3-5-sonnet-20240620-v1:0' })
+
+        expect(agent.model).toBeDefined()
+        expect(agent.model.constructor.name).toBe('BedrockModel')
+        expect(agent.model.getConfig().modelId).toBe('anthropic.claude-3-5-sonnet-20240620-v1:0')
+      })
+
+      it('creates BedrockModel with custom model ID', () => {
+        const customModelId = 'custom.model.id'
+        const agent = new Agent({ model: customModelId })
+
+        expect(agent.model.getConfig().modelId).toBe(customModelId)
+      })
+    })
+
+    describe('when model is explicit BedrockModel', () => {
+      it('uses provided BedrockModel instance', () => {
+        const explicitModel = new BedrockModel({ modelId: 'explicit-model-id' })
+        const agent = new Agent({ model: explicitModel })
+
+        expect(agent.model).toBe(explicitModel)
+        expect(agent.model.getConfig().modelId).toBe('explicit-model-id')
+      })
+    })
+
+    describe('when no model is provided', () => {
+      it('creates default BedrockModel', () => {
+        const agent = new Agent()
+
+        expect(agent.model).toBeDefined()
+        expect(agent.model.constructor.name).toBe('BedrockModel')
+      })
+    })
+
+    describe('behavior parity', () => {
+      it('string model behaves identically to explicit BedrockModel with same modelId', () => {
+        const modelId = 'anthropic.claude-3-5-sonnet-20240620-v1:0'
+
+        // Create agent with string model ID
+        const agentWithString = new Agent({ model: modelId })
+
+        // Create agent with explicit BedrockModel
+        const explicitModel = new BedrockModel({ modelId })
+        const agentWithExplicit = new Agent({ model: explicitModel })
+
+        // Both should have same modelId
+        expect(agentWithString.model.getConfig().modelId).toBe(agentWithExplicit.model.getConfig().modelId)
+        expect(agentWithString.model.getConfig().modelId).toBe(modelId)
       })
     })
   })

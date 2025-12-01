@@ -158,5 +158,9 @@ export {
   type SlidingWindowConversationManagerConfig,
 } from './conversation-manager/sliding-window-conversation-manager.js'
 
+// Logging
+export { configureLogging } from './logging/logger.js'
+export type { Logger } from './logging/types.js'
+
 // MCP Client types and implementations
 export { type McpClientConfig, McpClient } from './mcp.js'

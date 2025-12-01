@@ -51,8 +51,29 @@ export type ToolList = (Tool | McpClient | ToolList)[]
  * Configuration object for creating a new Agent.
  */
 export type AgentConfig = {
-  /** The model instance that the agent will use to make decisions. */
-  model?: Model<BaseModelConfig>
+  /**
+   * The model instance that the agent will use to make decisions.
+   * Accepts either a Model instance or a string representing a Bedrock model ID.
+   * When a string is provided, it will be used to create a BedrockModel instance.
+   *
+   * @example
+   * ```typescript
+   * // Using a string model ID (creates BedrockModel)
+   * const agent = new Agent({
+   *   model: 'anthropic.claude-3-5-sonnet-20240620-v1:0'
+   * })
+   *
+   * // Using an explicit BedrockModel instance with configuration
+   * const agent = new Agent({
+   *   model: new BedrockModel({
+   *     modelId: 'anthropic.claude-3-5-sonnet-20240620-v1:0',
+   *     temperature: 0.7,
+   *     maxTokens: 2048
+   *   })
+   * })
+   * ```
+   */
+  model?: Model<BaseModelConfig> | string
   /** An initial set of messages to seed the agent's conversation history. */
   messages?: Message[] | MessageData[]
   /**
@@ -146,7 +167,12 @@ export class Agent implements AgentData {
     this.hooks.addHook(this.conversationManager)
     this.hooks.addAllHooks(config?.hooks ?? [])
 
-    this.model = config?.model ?? new BedrockModel()
+    if (typeof config?.model === 'string') {
+      this.model = new BedrockModel({ modelId: config.model })
+    } else {
+      this.model = config?.model ?? new BedrockModel()
+    }
+
     const { tools, mcpClients } = flattenTools(config?.tools ?? [])
     this._toolRegistry = new ToolRegistry(tools)
     this._mcpClients = mcpClients

@@ -16,6 +16,7 @@ import { encodeBase64 } from '../types/media.js'
 import type { ModelStreamEvent } from '../models/streaming.js'
 import { ContextWindowOverflowError } from '../errors.js'
 import type { ChatCompletionContentPartText } from 'openai/resources/index.mjs'
+import { logger } from '../logging/logger.js'
 
 /**
  * Browser-compatible MIME type lookup.
@@ -478,11 +479,11 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
         }
 
         if (hasCachePoints) {
-          console.warn('Cache points are not supported in OpenAI system prompts and will be ignored.')
+          logger.warn('cache points are not supported in openai system prompts, ignoring cache points')
         }
 
         if (hasGuardContent) {
-          console.warn('OpenAI does not support guard content in system prompts. Removing guard content block.')
+          logger.warn('guard content is not supported in openai system prompts, removing guard content block')
         }
 
         if (textBlocks.length > 0) {
@@ -837,7 +838,7 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
 
     // Validate choice is an object
     if (!choice || typeof choice !== 'object') {
-      console.warn('Invalid choice format in OpenAI chunk:', choice)
+      logger.warn(`choice=<${choice}> | invalid choice format in openai chunk`)
       return events
     }
 
@@ -883,7 +884,7 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
       for (const toolCall of delta.tool_calls) {
         // Validate tool call index
         if (toolCall.index === undefined || typeof toolCall.index !== 'number') {
-          console.warn('Received tool call with invalid index:', toolCall)
+          logger.warn(`tool_call=<${JSON.stringify(toolCall)}> | received tool call with invalid index`)
           continue
         }
 
@@ -944,10 +945,8 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
       let stopReason = stopReasonMap[typedChoice.finish_reason]
       if (!stopReason) {
         const fallbackReason = this._snakeToCamel(typedChoice.finish_reason)
-        console.warn(
-          `Unknown OpenAI stop reason: "${typedChoice.finish_reason}". ` +
-            `Using camelCase conversion as fallback: "${fallbackReason}". ` +
-            'Please report this to update the stop reason mapping.'
+        logger.warn(
+          `finish_reason=<${typedChoice.finish_reason}>, fallback=<${fallbackReason}> | unknown openai stop reason, using camelCase conversion as fallback`
         )
         stopReason = fallbackReason
       }
