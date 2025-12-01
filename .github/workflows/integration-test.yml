@@ -92,4 +92,5 @@ jobs:
         with:
           name: browser-test-screenshots
           path: tests_integ/browser/__screenshots__/
+          retention-days: 4
           if-no-files-found: ignore
