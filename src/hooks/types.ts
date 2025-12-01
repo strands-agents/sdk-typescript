@@ -21,6 +21,13 @@ export type HookEventConstructor<T extends HookEvent = HookEvent> = new (...args
 export type HookCallback<T extends HookEvent> = (event: T) => void | Promise<void>
 
 /**
+ * Function that removes a previously registered hook callback.
+ * Safe to call multiple times (idempotent).
+ * No-op if the callback is no longer registered.
+ */
+export type HookCleanup = () => void
+
+/**
  * Protocol for objects that provide hook callbacks to an agent.
  * Enables composable extension of agent functionality.
  *

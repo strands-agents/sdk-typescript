@@ -17,6 +17,7 @@ import {
   ModelMetadataEvent,
   type ModelStreamEvent,
 } from './streaming.js'
+import { MaxTokensError } from '../errors.js'
 
 /**
  * Base configuration interface for all model providers.
@@ -31,6 +32,27 @@ export interface BaseModelConfig {
    * This typically specifies which model to use from the provider's catalog.
    */
   modelId?: string
+
+  /**
+   * Maximum number of tokens to generate in the response.
+   *
+   * @see Provider-specific documentation for exact behavior
+   */
+  maxTokens?: number
+
+  /**
+   * Controls randomness in generation.
+   *
+   * @see Provider-specific documentation for valid range
+   */
+  temperature?: number
+
+  /**
+   * Controls diversity via nucleus sampling.
+   *
+   * @see Provider-specific documentation for details
+   */
+  topP?: number
 }
 
 /**
@@ -63,7 +85,7 @@ export interface StreamOptions {
  *
  * @typeParam T - Model configuration type extending BaseModelConfig
  */
-export abstract class Model<T extends BaseModelConfig> {
+export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
   /**
    * Updates the model configuration.
    * Merges the provided configuration with existing settings.
@@ -149,6 +171,7 @@ export abstract class Model<T extends BaseModelConfig> {
       signature?: string
       redactedContent?: Uint8Array
     } = {}
+    let errorToThrow: Error | undefined = undefined
 
     for await (const event_data of this.stream(messages, options)) {
       const event = this._convert_to_class_event(event_data)
@@ -190,23 +213,30 @@ export abstract class Model<T extends BaseModelConfig> {
         case 'modelContentBlockStopEvent': {
           // Finalize and emit complete ContentBlock
           let block: ContentBlock
-          if (toolUseId) {
-            block = new ToolUseBlock({
-              name: toolName,
-              toolUseId: toolUseId,
-              input: JSON.parse(accumulatedToolInput),
-            })
-            toolUseId = '' // Reset
-            toolName = ''
-          } else if (Object.keys(accumulatedReasoning).length > 0) {
-            block = new ReasoningBlock({
-              ...accumulatedReasoning,
-            })
-          } else {
-            block = new TextBlock(accumulatedText)
+          try {
+            if (toolUseId) {
+              block = new ToolUseBlock({
+                name: toolName,
+                toolUseId: toolUseId,
+                input: JSON.parse(accumulatedToolInput),
+              })
+              toolUseId = '' // Reset
+              toolName = ''
+            } else if (Object.keys(accumulatedReasoning).length > 0) {
+              block = new ReasoningBlock({
+                ...accumulatedReasoning,
+              })
+            } else {
+              block = new TextBlock(accumulatedText)
+            }
+            contentBlocks.push(block)
+            yield block
+          } catch (e: unknown) {
+            if (e instanceof SyntaxError) {
+              console.error('Unable to parse JSON string.')
+              errorToThrow = e
+            }
           }
-          contentBlocks.push(block)
-          yield block
           break
         }
 
@@ -217,6 +247,23 @@ export abstract class Model<T extends BaseModelConfig> {
               role: messageRole,
               content: [...contentBlocks],
             })
+            // Handle stop reason
+            if (event.stopReason === 'maxTokens') {
+              const maxTokensError = new MaxTokensError(
+                'Model reached maximum token limit. This is an unrecoverable state that requires intervention.',
+                message
+              )
+              if (errorToThrow !== undefined) {
+                errorToThrow.cause = maxTokensError
+              } else {
+                errorToThrow = maxTokensError
+              }
+            }
+
+            if (errorToThrow !== undefined) {
+              throw errorToThrow
+            }
+
             return { message, stopReason: event.stopReason! }
           }
           break

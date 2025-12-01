@@ -456,4 +456,69 @@ describe('Agent', () => {
       })
     })
   })
+
+  describe('model property', () => {
+    describe('when accessing the model field', () => {
+      it('returns the configured model instance', () => {
+        const model = new MockMessageModel()
+        const agent = new Agent({ model })
+
+        expect(agent.model).toBe(model)
+      })
+
+      it('returns default BedrockModel when no model provided', () => {
+        const agent = new Agent()
+
+        expect(agent.model).toBeDefined()
+        expect(agent.model.constructor.name).toBe('BedrockModel')
+      })
+    })
+
+    describe('when modifying the model field', () => {
+      it('updates the model instance', () => {
+        const initialModel = new MockMessageModel()
+        const newModel = new MockMessageModel()
+        const agent = new Agent({ model: initialModel })
+
+        agent.model = newModel
+
+        expect(agent.model).toBe(newModel)
+        expect(agent.model).not.toBe(initialModel)
+      })
+
+      it('allows model change to persist across invocations', async () => {
+        const firstModel = new MockMessageModel().addTurn({ type: 'textBlock', text: 'First response' })
+        const secondModel = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Second response' })
+        const agent = new Agent({ model: firstModel })
+
+        // First invocation with initial model
+        const firstResult = await agent.invoke('First prompt')
+        expect(firstResult.lastMessage?.content[0]).toEqual(new TextBlock('First response'))
+
+        // Change model
+        agent.model = secondModel
+
+        // Second invocation should use new model
+        const secondResult = await agent.invoke('Second prompt')
+        expect(secondResult.lastMessage?.content[0]).toEqual(new TextBlock('Second response'))
+      })
+
+      it('successfully switches between different model providers', async () => {
+        const bedrockModel = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Bedrock response' })
+        const openaiModel = new MockMessageModel().addTurn({ type: 'textBlock', text: 'OpenAI response' })
+        const agent = new Agent({ model: bedrockModel })
+
+        // First invocation
+        const firstResult = await agent.invoke('First prompt')
+        expect(firstResult.lastMessage?.content[0]).toEqual(new TextBlock('Bedrock response'))
+
+        // Switch to different provider
+        agent.model = openaiModel
+
+        // Second invocation with new provider
+        const secondResult = await agent.invoke('Second prompt')
+        expect(secondResult.lastMessage?.content[0]).toEqual(new TextBlock('OpenAI response'))
+      })
+    })
+  })
 })

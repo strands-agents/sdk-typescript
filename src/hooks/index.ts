@@ -27,4 +27,4 @@ export type { ModelStopData as ModelStopResponse } from './events.js'
 export { HookRegistryImplementation as HookRegistry } from './registry.js'
 
 // Types
-export type { HookCallback, HookProvider, HookEventConstructor } from './types.js'
+export type { HookCallback, HookProvider, HookEventConstructor, HookCleanup } from './types.js'

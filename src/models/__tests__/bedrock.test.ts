@@ -9,6 +9,47 @@ import type { StreamOptions } from '../model.js'
 import { collectIterator } from '../../__fixtures__/model-test-helpers.js'
 
 /**
+ * Helper function to mock BedrockRuntimeClient implementation with customizable config.
+ * @param options - Optional configuration for mock region, useFipsEndpoint, and send functions
+ */
+function mockBedrockClientImplementation(options?: {
+  region?: () => Promise<string>
+  useFipsEndpoint?: () => Promise<boolean>
+  send?: (...args: unknown[]) => Promise<unknown>
+}): void {
+  const mockSend = vi.fn(
+    options?.send ??
+      (async () => {
+        throw new Error('send() not mocked - specify send option if needed')
+      })
+  )
+
+  vi.mocked(BedrockRuntimeClient).mockImplementation(function (...args: unknown[]) {
+    // Extract region from constructor args if provided
+    const clientConfig = (args[0] as { region?: string } | undefined) ?? {}
+    const configuredRegion = clientConfig.region
+
+    const mockRegion = vi.fn(
+      options?.region ??
+        (async () => {
+          // If region was explicitly configured in constructor, return it; otherwise return default
+          if (configuredRegion) return configuredRegion
+          return 'us-east-1'
+        })
+    )
+    const mockUseFipsEndpoint = vi.fn(options?.useFipsEndpoint ?? (async () => false))
+
+    return {
+      send: mockSend,
+      config: {
+        region: mockRegion,
+        useFipsEndpoint: mockUseFipsEndpoint,
+      },
+    } as never
+  } as never)
+}
+
+/**
  * Helper function to setup mock send with custom stream generator.
  */
 function setupMockSend(streamGenerator: () => AsyncGenerator<unknown>): void {
@@ -18,9 +59,7 @@ function setupMockSend(streamGenerator: () => AsyncGenerator<unknown>): void {
       stream: streamGenerator(),
     })
   )
-  vi.mocked(BedrockRuntimeClient).mockImplementation(function () {
-    return { send: mockSend } as never
-  })
+  mockBedrockClientImplementation({ send: mockSend })
 }
 
 // Mock the AWS SDK
@@ -83,6 +122,10 @@ vi.mock('@aws-sdk/client-bedrock-runtime', async (importOriginal) => {
     BedrockRuntimeClient: vi.fn(function () {
       return {
         send: mockSend,
+        config: {
+          region: vi.fn(async () => 'us-east-1'),
+          useFipsEndpoint: vi.fn(async () => false),
+        },
       }
     }),
     ConverseStreamCommand,
@@ -479,9 +522,7 @@ describe('BedrockModel', () => {
         }
       })
 
-      vi.mocked(BedrockRuntimeClient).mockImplementation(function () {
-        return { send: mockSend } as never
-      })
+      mockBedrockClientImplementation({ send: mockSend })
 
       const provider = new BedrockModel({ stream })
       const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
@@ -544,9 +585,7 @@ describe('BedrockModel', () => {
           }
         }
       })
-      vi.mocked(BedrockRuntimeClient).mockImplementation(function () {
-        return { send: mockSend } as never
-      })
+      mockBedrockClientImplementation({ send: mockSend })
 
       const provider = new BedrockModel({ stream })
       const messages: Message[] = [
@@ -610,9 +649,7 @@ describe('BedrockModel', () => {
           }
         }
       })
-      vi.mocked(BedrockRuntimeClient).mockImplementation(function () {
-        return { send: mockSend } as never
-      })
+      mockBedrockClientImplementation({ send: mockSend })
 
       const provider = new BedrockModel({ stream })
       const messages: Message[] = [
@@ -670,9 +707,7 @@ describe('BedrockModel', () => {
           }
         }
       })
-      vi.mocked(BedrockRuntimeClient).mockImplementation(function () {
-        return { send: mockSend } as never
-      })
+      mockBedrockClientImplementation({ send: mockSend })
 
       const provider = new BedrockModel({ stream })
       const messages: Message[] = [
@@ -711,9 +746,7 @@ describe('BedrockModel', () => {
       ])('throws $name', async ({ error, expected }) => {
         vi.clearAllMocks()
         const mockSendError = vi.fn().mockRejectedValue(error)
-        vi.mocked(BedrockRuntimeClient).mockImplementation(function () {
-          return { send: mockSendError } as never
-        })
+        mockBedrockClientImplementation({ send: mockSendError })
 
         const provider = new BedrockModel()
         const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
@@ -1533,6 +1566,55 @@ describe('BedrockModel', () => {
           modelId: 'amazon.nova-lite-v1:0',
         })
       })
+    })
+  })
+
+  describe('region configuration', () => {
+    beforeEach(() => {
+      vi.clearAllMocks()
+    })
+
+    it('uses explicit region when provided', async () => {
+      mockBedrockClientImplementation()
+
+      const provider = new BedrockModel({ region: 'eu-west-1' })
+
+      // After applyDefaultRegion wraps the config functions, verify they still return the correct value
+      const regionResult = await provider['_client'].config.region()
+      expect(regionResult).toBe('eu-west-1')
+    })
+
+    it('defaults to us-west-2 when region is missing', async () => {
+      mockBedrockClientImplementation({
+        region: async () => {
+          throw new Error('Region is missing')
+        },
+        useFipsEndpoint: async () => {
+          throw new Error('Region is missing')
+        },
+      })
+
+      const provider = new BedrockModel()
+
+      // After applyDefaultRegion wraps the config functions
+      const regionResult = await provider['_client'].config.region()
+      expect(regionResult).toBe('us-west-2')
+
+      const fipsResult = await provider['_client'].config.useFipsEndpoint()
+      expect(fipsResult).toBe(false)
+    })
+
+    it('rethrows other region errors', async () => {
+      mockBedrockClientImplementation({
+        region: async () => {
+          throw new Error('Network error')
+        },
+      })
+
+      const provider = new BedrockModel()
+
+      // Should rethrow the error
+      await expect(provider['_client'].config.region()).rejects.toThrow('Network error')
     })
   })
 })
