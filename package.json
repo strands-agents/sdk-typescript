@@ -1,6 +1,6 @@
 {
   "name": "@strands-agents/sdk",
-  "version": "@VERSION@",
+  "version": "0.0.1-development",
   "description": "TypeScript SDK for Strands Agents framework",
   "main": "dist/src/index.js",
   "module": "dist/src/index.js",
