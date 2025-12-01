@@ -392,14 +392,25 @@ describe('tool', () => {
       })
 
       const schema = myTool.toolSpec.inputSchema
-      expect(schema).toBeDefined()
-      if (schema) {
-        expect(schema.type).toBe('object')
-        expect(schema.properties).toBeDefined()
-        expect(schema.required).toContain('name')
-        expect(schema.required).toContain('age')
-        expect(schema.required).toContain('email')
-      }
+      expect(schema).toEqual({
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          age: {
+            type: 'number',
+          },
+          email: {
+            format: 'email',
+            pattern:
+              "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$",
+            type: 'string',
+          },
+          name: {
+            type: 'string',
+          },
+        },
+        required: ['name', 'age', 'email'],
+      })
     })
   })
 
