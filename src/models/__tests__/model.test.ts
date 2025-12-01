@@ -259,6 +259,10 @@ describe('Model', () => {
             ],
           },
           stopReason: 'toolUse',
+          metadata: {
+            type: 'modelMetadataEvent',
+            usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+          },
         })
       })
     })
