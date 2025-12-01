@@ -7,6 +7,7 @@ import {
   ModelStreamEvent,
   Agent,
   ImageBlock,
+  TextBlock,
   DocumentBlock,
   NullConversationManager,
   SlidingWindowConversationManager,
@@ -434,61 +435,56 @@ describe.skipIf(!(await shouldRunTests()))('BedrockModel Integration Tests', () 
 
     it('defaults to us-west-2 when no region provided and AWS SDK does not resolve one', async () => {
       // Use vitest to stub environment variables
-      vi.stubEnv('AWS_REGION', '')
-      vi.stubEnv('AWS_DEFAULT_REGION', '')
+      vi.stubEnv('AWS_REGION', undefined)
+      vi.stubEnv('AWS_DEFAULT_REGION', undefined)
 
-      try {
-        const provider = new BedrockModel({
-          maxTokens: 50,
-        })
+      const provider = new BedrockModel({
+        maxTokens: 50,
+      })
 
-        // Validate region defaults to us-west-2
-        // Making an actual request doesn't guarantee the correct region is being used
-        const regionResult = await provider['_client'].config.region()
-        expect(regionResult).toBe('us-west-2')
-      } finally {
-        // Restore original environment
-        vi.unstubAllEnvs()
-      }
+      // Validate region defaults to us-west-2
+      // Making an actual request doesn't guarantee the correct region is being used
+      const regionResult = await provider['_client'].config.region()
+      expect(regionResult).toBe('us-west-2')
+
+      // ensure that invocation works
+      await collectIterator(
+        provider.stream([
+          Message.fromMessageData({
+            role: 'user',
+            content: [new TextBlock('say hi')],
+          }),
+        ])
+      )
     })
 
     it('uses AWS_REGION environment variable when set', async () => {
       // Use vitest to stub the environment variable
       vi.stubEnv('AWS_REGION', 'eu-central-1')
 
-      try {
-        const provider = new BedrockModel({
-          maxTokens: 50,
-        })
+      const provider = new BedrockModel({
+        maxTokens: 50,
+      })
 
-        // Validate AWS_REGION environment variable is used
-        // Making an actual request doesn't guarantee the correct region is being used
-        const regionResult = await provider['_client'].config.region()
-        expect(regionResult).toBe('eu-central-1')
-      } finally {
-        // Restore original environment
-        vi.unstubAllEnvs()
-      }
+      // Validate AWS_REGION environment variable is used
+      // Making an actual request doesn't guarantee the correct region is being used
+      const regionResult = await provider['_client'].config.region()
+      expect(regionResult).toBe('eu-central-1')
     })
 
     it('explicit region takes precedence over environment variable', async () => {
       // Use vitest to stub the environment variable
       vi.stubEnv('AWS_REGION', 'eu-west-1')
 
-      try {
-        const provider = new BedrockModel({
-          region: 'ap-southeast-2',
-          maxTokens: 50,
-        })
+      const provider = new BedrockModel({
+        region: 'ap-southeast-2',
+        maxTokens: 50,
+      })
 
-        // Validate explicit region takes precedence over environment variable
-        // Making an actual request doesn't guarantee the correct region is being used
-        const regionResult = await provider['_client'].config.region()
-        expect(regionResult).toBe('ap-southeast-2')
-      } finally {
-        // Restore original environment
-        vi.unstubAllEnvs()
-      }
+      // Validate explicit region takes precedence over environment variable
+      // Making an actual request doesn't guarantee the correct region is being used
+      const regionResult = await provider['_client'].config.region()
+      expect(regionResult).toBe('ap-southeast-2')
     })
 
     it('uses region from clientConfig when provided', async () => {

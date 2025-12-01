@@ -1,37 +1,28 @@
 import { defineConfig } from 'vitest/config'
 import { playwright } from '@vitest/browser-playwright'
-import { AwsCredentialIdentity } from '@aws-sdk/types';
+import { AwsCredentialIdentity } from '@aws-sdk/types'
 import { fromNodeProviderChain } from '@aws-sdk/credential-providers'
 import { BrowserCommand } from 'vitest/node'
 
 // Conditionally exclude bash tool from coverage on Windows
 // since tests are skipped on Windows (bash not available)
-const coverageExclude = [
-  'src/**/__tests__/**',
-  'src/**/__fixtures__/**',
-  'vended_tools/**/__tests__/**',
-]
+const coverageExclude = ['src/**/__tests__/**', 'src/**/__fixtures__/**', 'vended_tools/**/__tests__/**']
 if (process.platform === 'win32') {
   coverageExclude.push('vended_tools/bash/**')
 }
 
-const getAwsCredentials: BrowserCommand<[], AwsCredentialIdentity> = async ({
-  testPath,
-  provider
-}) => {
+const getAwsCredentials: BrowserCommand<[], AwsCredentialIdentity> = async ({ testPath, provider }) => {
   const credentialProvider = fromNodeProviderChain()
   return await credentialProvider()
 }
 
-const getOpenAIAPIKey: BrowserCommand<[], string | undefined> = async ({
-  testPath,
-  provider
-}) => {
+const getOpenAIAPIKey: BrowserCommand<[], string | undefined> = async ({ testPath, provider }) => {
   return process.env.OPENAI_API_KEY
 }
 
 export default defineConfig({
   test: {
+    unstubEnvs: true,
     projects: [
       {
         test: {

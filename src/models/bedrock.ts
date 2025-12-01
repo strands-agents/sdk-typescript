@@ -41,7 +41,7 @@ import type { ContentBlock, Message, ToolUseBlock } from '../types/messages.js'
 import type { ImageSource, VideoSource, DocumentSource } from '../types/media.js'
 import type { ModelStreamEvent, ReasoningContentDelta, Usage } from '../models/streaming.js'
 import type { JSONValue } from '../types/json.js'
-import { ContextWindowOverflowError } from '../errors.js'
+import { ContextWindowOverflowError, normalizeError } from '../errors.js'
 import { ensureDefined } from '../types/validation.js'
 
 /**
@@ -1048,9 +1048,12 @@ function applyDefaultRegion(config: BedrockRuntimeClientResolvedConfig): void {
     try {
       return await originalRegion()
     } catch (error) {
-      if (error instanceof Error && error.message === 'Region is missing') {
+      // Note: it was observed that the browser version of the BedrockClient
+      // uses a string instead of an error object - thus the normalizeError call
+      if (normalizeError(error).message === 'Region is missing') {
         return DEFAULT_BEDROCK_REGION
       }
+
       throw error
     }
   }
@@ -1061,8 +1064,10 @@ function applyDefaultRegion(config: BedrockRuntimeClientResolvedConfig): void {
     try {
       return await originalUseFipsEndpoint()
     } catch (error) {
-      if (error instanceof Error && error.message === 'Region is missing') {
-        return DEFAULT_BEDROCK_REGION_SUPPORTS_FIP // false for us-west-2
+      // Note: it was observed that the browser version of the BedrockClient
+      // uses a string instead of an error object - thus the normalizeError call
+      if (normalizeError(error).message === 'Region is missing') {
+        return DEFAULT_BEDROCK_REGION_SUPPORTS_FIP
       }
       throw error
     }
