@@ -145,9 +145,13 @@ export class Agent implements AgentData {
    */
   public model: Model
 
+  /**
+   * The system prompt to pass to the model provider.
+   */
+  public systemPrompt?: SystemPrompt
+
   private _toolRegistry: ToolRegistry
   private _mcpClients: McpClient[]
-  private _systemPrompt?: SystemPrompt
   private _initialized: boolean
   private _isInvoking: boolean = false
   private _printer?: Printer
@@ -178,7 +182,7 @@ export class Agent implements AgentData {
     this._mcpClients = mcpClients
 
     if (config?.systemPrompt !== undefined) {
-      this._systemPrompt = systemPromptFromData(config.systemPrompt)
+      this.systemPrompt = systemPromptFromData(config.systemPrompt)
     }
 
     // Create printer if printer is enabled (default: true)
@@ -436,8 +440,8 @@ export class Agent implements AgentData {
 
     const toolSpecs = this._toolRegistry.values().map((tool) => tool.toolSpec)
     const streamOptions: StreamOptions = { toolSpecs }
-    if (this._systemPrompt !== undefined) {
-      streamOptions.systemPrompt = this._systemPrompt
+    if (this.systemPrompt !== undefined) {
+      streamOptions.systemPrompt = this.systemPrompt
     }
 
     yield new BeforeModelCallEvent({ agent: this })

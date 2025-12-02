@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { Agent, type ToolList } from '../agent.js'
 import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
 import { collectGenerator } from '../../__fixtures__/model-test-helpers.js'
@@ -467,6 +467,52 @@ describe('Agent', () => {
         const systemPrompt = [new TextBlock('System prompt'), new CachePointBlock({ cacheType: 'default' })]
         const agent = new Agent({ systemPrompt })
         expect(agent).toBeDefined()
+      })
+    })
+
+    describe('when modifying systemPrompt', () => {
+      it('allows systemPrompt to be set after initialization', () => {
+        const agent = new Agent({ systemPrompt: 'Initial prompt' })
+
+        agent.systemPrompt = 'Updated prompt'
+
+        expect(agent.systemPrompt).toEqual('Updated prompt')
+      })
+
+      it('allows systemPrompt to be changed between turns', async () => {
+        const firstModel = new MockMessageModel().addTurn({ type: 'textBlock', text: 'First response' })
+
+        const streamSpy = vi.spyOn(firstModel, 'stream')
+
+        const agent = new Agent({ model: firstModel, systemPrompt: [new TextBlock('You are a helpful assistant')] })
+
+        // First invocation with initial system prompt
+        await agent.invoke('First prompt')
+        expect(agent.systemPrompt).toEqual([new TextBlock('You are a helpful assistant')])
+
+        // Should have been called with the given promp
+        expect(streamSpy).toHaveBeenCalledWith(
+          expect.any(Array),
+          expect.objectContaining({
+            systemPrompt: [new TextBlock('You are a helpful assistant')],
+            toolSpecs: [],
+          })
+        )
+
+        // Change system prompt and model
+        agent.systemPrompt = 'You are a coding expert'
+
+        // Second invocation should use new system prompt
+        streamSpy.mockReset()
+        await agent.invoke('Second prompt')
+        expect(agent.systemPrompt).toEqual('You are a coding expert')
+        expect(streamSpy).toHaveBeenCalledWith(
+          expect.any(Array),
+          expect.objectContaining({
+            systemPrompt: 'You are a coding expert',
+            toolSpecs: [],
+          })
+        )
       })
     })
   })
