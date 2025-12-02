@@ -62,7 +62,7 @@ jobs:
         npm version ${{ steps.version.outputs.version }} --no-git-tag-version
 
     - name: Install dependencies and build
-      run: npm ci
+      run: npm ci && npm run build
 
     - name: Store the distribution packages
       uses: actions/upload-artifact@v5

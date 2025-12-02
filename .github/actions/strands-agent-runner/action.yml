@@ -54,7 +54,7 @@ runs:
 
     - name: Install dependencies
       shell: bash
-      run: npm install
+      run: npm ci
       continue-on-error: true # This step's failure will not stop the workflow
 
     - name: Set up Python
