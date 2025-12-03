@@ -71,5 +71,4 @@ jobs:
         path: .
 
     - name: Publish to NPM
-      # TODO: uncomment `--access public` for launch
-      run: npm publish # --access public
+      run: npm publish --access public
