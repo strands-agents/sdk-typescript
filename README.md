@@ -171,22 +171,25 @@ await agent.invoke('What is the weather in San Francisco?')
 Seamlessly integrate Model Context Protocol (MCP) servers:
 
 ```typescript
-import { Agent, McpClient, StdioClientTransport } from '@strands-agents/sdk'
+import { Agent, McpClient } from "@strands-agents/sdk";
+import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 
 // Create a client for a local MCP server
-const chromeDevtools = new McpClient({
+const documentationTools = new McpClient({
   transport: new StdioClientTransport({
-    command: 'npx',
-    args: ['-y', 'chrome-devtools-mcp'],
+    command: "uvx",
+    args: ["awslabs.aws-documentation-mcp-server@latest"],
   }),
-})
+});
 
 const agent = new Agent({
-  systemPrompt: 'You are a helpful assistant using MCP tools.',
-  tools: [chromeDevtools], // Pass the MCP client directly as a tool source
-})
+  systemPrompt: "You are a helpful assistant using MCP tools.",
+  tools: [documentationTools], // Pass the MCP client directly as a tool source
+});
 
-await agent.invoke('Use a random tool from the MCP server.')
+await agent.invoke("Use a random tool from the MCP server.");
+
+await documentationTools.disconnect();
 ```
 
 ---
