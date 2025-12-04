@@ -5,6 +5,6 @@
   "private": true,
   "description": "Test package to verify SDK works without bundler",
   "dependencies": {
-    "@strands-agents/sdk": "file:.."
+    "@strands-agents/sdk": "file:../../.."
   }
 }

@@ -50,7 +50,7 @@
     "test:browser:install": "npx playwright install --with-deps chromium",
     "test:all": "vitest run --project unit-node --project unit-browser",
     "test:all:coverage": "vitest run --coverage --project unit-node --project unit-browser",
-    "test:package": "npm run build && cd test-package && npm install && node verify.js",
+    "test:package": "cd test/packages/esm-module && npm install && node esm.js && cd ../cjs-module && npm install && node cjs.js",
     "lint": "eslint src tests_integ vended_tools",
     "lint:fix": "eslint src tests_integ vended_tools --fix",
     "format": "prettier --write src tests_integ vended_tools",
