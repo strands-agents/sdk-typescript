@@ -11,28 +11,28 @@
   ],
   "exports": {
     ".": {
-      "import": "./dist/src/index.js",
-      "types": "./dist/src/index.d.ts"
+      "types": "./dist/src/index.d.ts",
+      "default": "./dist/src/index.js"
     },
     "./openai": {
-      "import": "./dist/src/models/openai.js",
-      "types": "./dist/src/models/openai.d.ts"
+      "types": "./dist/src/models/openai.d.ts",
+      "default": "./dist/src/models/openai.js"
     },
     "./bedrock": {
-      "import": "./dist/src/models/bedrock.js",
-      "types": "./dist/src/models/bedrock.d.ts"
+      "types": "./dist/src/models/bedrock.d.ts",
+      "default": "./dist/src/models/bedrock.js"
     },
     "./vended_tools/notebook": {
-      "import": "./dist/vended_tools/notebook/index.js",
-      "types": "./dist/vended_tools/notebook/index.d.ts"
+      "types": "./dist/vended_tools/notebook/index.d.ts",
+      "default": "./dist/vended_tools/notebook/index.js"
     },
     "./vended_tools/file_editor": {
-      "import": "./dist/vended_tools/file_editor/index.js",
-      "types": "./dist/vended_tools/file_editor/index.d.ts"
+      "types": "./dist/vended_tools/file_editor/index.d.ts",
+      "default": "./dist/vended_tools/file_editor/index.js"
     },
     "./vended_tools/http_request": {
-      "import": "./dist/vended_tools/http_request/index.js",
-      "types": "./dist/vended_tools/http_request/index.d.ts"
+      "types": "./dist/vended_tools/http_request/index.d.ts",
+      "default": "./dist/vended_tools/http_request/index.js"
     }
   },
   "scripts": {
