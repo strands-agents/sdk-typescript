@@ -86,11 +86,11 @@ jobs:
       - name: Run integration tests
         run: npm run test:integ:all
 
-      - name: Upload browser test screenshots
+      - name: Upload Artifacts
         if: always()
         uses: actions/upload-artifact@v5
         with:
-          name: browser-test-screenshots
-          path: tests_integ/browser/__screenshots__/
+          name: test-artifacts
+          path: ./test/.artifacts/
           retention-days: 4
           if-no-files-found: ignore

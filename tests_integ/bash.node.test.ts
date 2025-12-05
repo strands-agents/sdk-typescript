@@ -1,12 +1,12 @@
-/* eslint-disable no-restricted-imports */
 import { describe, it, expect } from 'vitest'
-import { Agent, BedrockModel } from '../src/index.js'
-import { bash } from '../vended_tools/bash/index.js'
-import { getMessageText, shouldRunTests } from './__fixtures__/model-test-helpers.js'
+import { Agent, BedrockModel } from '@strands-agents/sdk'
+import { bash } from '@strands-agents/sdk/vended_tools/bash'
+import { getMessageText, shouldSkipBedrockTests } from './__fixtures__/model-test-helpers.js'
+import { isInBrowser } from './__fixtures__/test-helpers.js'
 
-describe.skipIf(!(await shouldRunTests()) || process.platform === 'win32')(
+describe.skipIf((await shouldSkipBedrockTests()) || globalThis.process.platform === 'win32')(
   'Bash Tool Integration',
-  { timeout: 60000 },
+  { timeout: 60000, skip: isInBrowser() },
   () => {
     // Shared agent configuration for all tests
     const createAgent = () =>

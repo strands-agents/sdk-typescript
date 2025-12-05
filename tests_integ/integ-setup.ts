@@ -51,7 +51,13 @@ async function loadApiKeysFromSecretsManager(): Promise<void> {
   }
 }
 
+let didSetup = false
+
 export async function setup(): Promise<void> {
+  if (didSetup) {
+    return
+  }
+
   console.log('Global setup: Loading API keys from Secrets Manager...')
 
   try {
@@ -59,5 +65,7 @@ export async function setup(): Promise<void> {
     console.log('Global setup complete: API keys loaded into environment')
   } catch (error) {
     console.error('Global setup failed:', error)
+  } finally {
+    didSetup = true
   }
 }

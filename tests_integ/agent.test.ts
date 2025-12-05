@@ -1,15 +1,16 @@
 import { describe, it, expect } from 'vitest'
-import { Agent, DocumentBlock, ImageBlock, Message, TextBlock, tool } from '@strands-agents/sdk'
-import { BedrockModel } from '@strands-agents/sdk/bedrock'
+import { Agent, DocumentBlock, ImageBlock, Message, TextBlock, tool, type Model } from '@strands-agents/sdk'
 import { notebook } from '@strands-agents/sdk/vended_tools/notebook'
 import { httpRequest } from '@strands-agents/sdk/vended_tools/http_request'
-import { OpenAIModel } from '@strands-agents/sdk/openai'
 import { z } from 'zod'
-
-// eslint-disable-next-line no-restricted-imports
-import { collectGenerator } from '../src/__fixtures__/model-test-helpers.js'
-import { shouldRunTests } from './__fixtures__/model-test-helpers.js'
-import { loadFixture, shouldSkipOpenAITests } from './__fixtures__/test-helpers.js'
+import {
+  createBedrockModel,
+  createOpenAIModel,
+  shouldSkipBedrockTests,
+  collectGenerator,
+  shouldSkipOpenAITests,
+} from './__fixtures__/model-test-helpers.js'
+import { loadFixture } from './__fixtures__/test-helpers.js'
 
 // Import fixtures using Vite's ?url suffix
 import yellowPngUrl from './__resources__/yellow.png?url'
@@ -38,18 +39,22 @@ const calculatorTool = tool({
 const providers = [
   {
     name: 'BedrockModel',
-    skip: !(await shouldRunTests()),
-    createModel: () => new BedrockModel(),
+    skip: shouldSkipBedrockTests,
+    createModel: () => createBedrockModel(),
   },
   {
     name: 'OpenAIModel',
-    skip: shouldSkipOpenAITests(),
-    createModel: () => new OpenAIModel(),
+    skip: shouldSkipOpenAITests,
+    createModel: () => createOpenAIModel(),
   },
-]
+] satisfies Array<{
+  name: string
+  skip: () => Promise<boolean>
+  createModel: () => Model
+}>
 
-describe.each(providers)('Agent with $name', ({ name, skip, createModel }) => {
-  describe.skipIf(skip)(`${name} Integration Tests`, () => {
+describe.each(providers)('Agent with $name', async ({ name, skip, createModel }) => {
+  describe(`${name} Integration Tests`, { skip: await skip(), timeout: 60000 }, () => {
     describe('Basic Functionality', () => {
       it('handles invocation, streaming, system prompts, and tool use', async () => {
         // Test basic invocation with system prompt and tool
@@ -123,14 +128,14 @@ describe.each(providers)('Agent with $name', ({ name, skip, createModel }) => {
         expect(agent.messages).toHaveLength(4) // 2 user + 2 assistant
 
         // Verify message ordering
-        expect(agent.messages[0].role).toBe('user')
-        expect(agent.messages[1].role).toBe('assistant')
-        expect(agent.messages[2].role).toBe('user')
-        expect(agent.messages[3].role).toBe('assistant')
+        expect(agent.messages[0]?.role).toBe('user')
+        expect(agent.messages[1]?.role).toBe('assistant')
+        expect(agent.messages[2]?.role).toBe('user')
+        expect(agent.messages[3]?.role).toBe('assistant')
 
         // Verify conversation context is preserved
-        const lastMessage = agent.messages[agent.messages.length - 1]
-        const textContent = lastMessage.content.find((block) => block.type === 'textBlock')
+        const lastMessage = agent.messages.at(-1)
+        const textContent = lastMessage?.content.find((block) => block.type === 'textBlock')
         expect(textContent?.text).toMatch(/Alice/i)
       })
     })
@@ -145,7 +150,7 @@ describe.each(providers)('Agent with $name', ({ name, skip, createModel }) => {
         })
 
         // Create image block
-        const imageBytes = loadFixture(yellowPngUrl)
+        const imageBytes = await loadFixture(yellowPngUrl)
         const imageBlock = new ImageBlock({
           format: 'png',
           source: { bytes: imageBytes },
@@ -170,7 +175,7 @@ describe.each(providers)('Agent with $name', ({ name, skip, createModel }) => {
           printer: false,
         })
 
-        const result = await agent.invoke()
+        const result = await agent.invoke([])
 
         expect(result.stopReason).toBe('endTurn')
         expect(result.lastMessage.role).toBe('assistant')
@@ -243,7 +248,7 @@ describe.each(providers)('Agent with $name', ({ name, skip, createModel }) => {
 
   it('handles tool invocation', async () => {
     const agent = new Agent({
-      model: await createModel(),
+      model: createModel(),
       tools: [notebook, httpRequest],
       printer: false,
     })

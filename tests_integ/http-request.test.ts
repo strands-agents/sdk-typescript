@@ -1,12 +1,12 @@
 import { describe, it, expect } from 'vitest'
 import { httpRequest } from '@strands-agents/sdk/vended_tools/http_request'
-import { Agent, BedrockModel } from '@strands-agents/sdk'
-import { shouldRunTests } from './__fixtures__/model-test-helpers.js'
+import { Agent } from '@strands-agents/sdk'
+import { createBedrockModel, shouldSkipBedrockTests } from './__fixtures__/model-test-helpers.js'
 
-describe.skipIf(!(await shouldRunTests()))('httpRequest tool (integration)', () => {
+describe.skipIf(await shouldSkipBedrockTests())('httpRequest tool (integration)', () => {
   it('agent uses http_request tool to fetch weather from Open-Meteo', async () => {
     const agent = new Agent({
-      model: new BedrockModel({ maxTokens: 500 }),
+      model: createBedrockModel({ maxTokens: 500 }),
       tools: [httpRequest],
       printer: false,
     })

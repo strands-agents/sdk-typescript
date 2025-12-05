@@ -40,6 +40,23 @@ jobs:
       - name: Run unit tests
         run: npm run test:all:coverage
 
+      - name: List directory contents
+        if: always()
+        run: |
+          echo "Current directory:"
+          pwd
+          echo "Directory contents:"
+          find . -type f
+
+      - name: Upload Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-artifacts
+          path: ./test/.artifacts/
+          retention-days: 4
+          if-no-files-found: ignore
+
       - name: Run linting
         run: npm run lint
 

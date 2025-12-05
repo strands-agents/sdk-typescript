@@ -1,8 +1,9 @@
 import { defineConfig } from 'vitest/config'
 import { playwright } from '@vitest/browser-playwright'
-import { AwsCredentialIdentity } from '@aws-sdk/types'
+import { type AwsCredentialIdentity } from '@aws-sdk/types'
 import { fromNodeProviderChain } from '@aws-sdk/credential-providers'
-import { BrowserCommand } from 'vitest/node'
+import { type BrowserCommand } from 'vitest/node'
+import { setup } from './tests_integ/integ-setup'
 
 // Conditionally exclude bash tool from coverage on Windows
 // since tests are skipped on Windows (bash not available)
@@ -12,19 +13,27 @@ if (process.platform === 'win32') {
 }
 
 const getAwsCredentials: BrowserCommand<[], AwsCredentialIdentity> = async ({ testPath, provider }) => {
+  await setup()
   const credentialProvider = fromNodeProviderChain()
   return await credentialProvider()
 }
 
 const getOpenAIAPIKey: BrowserCommand<[], string | undefined> = async ({ testPath, provider }) => {
+  await setup()
   return process.env.OPENAI_API_KEY
 }
 
 export default defineConfig({
   test: {
     unstubEnvs: true,
+    reporters: [
+      'default',
+      ['junit', { outputFile: 'test/.artifacts/test-report/junit/report.xml' }],
+      ['json', { outputFile: 'test/.artifacts/test-report/json/report.json' }],
+    ],
     projects: [
       {
+        // Unit Tests (node)
         test: {
           include: ['src/**/__tests__/**/*.test.ts', 'vended_tools/**/__tests__/**/*.test.ts'],
           includeSource: ['src/**/*.{js,ts}'],
@@ -36,13 +45,16 @@ export default defineConfig({
         },
       },
       {
+        // Unit Tests (browser)
         test: {
           include: ['src/**/__tests__/**/*.test.ts', 'vended_tools/**/__tests__/**/*.test.ts'],
           exclude: ['vended_tools/file_editor/**/*.test.ts', 'vended_tools/bash/**/*.test.ts'],
           name: { label: 'unit-browser', color: 'cyan' },
           browser: {
             enabled: true,
+            headless: true,
             provider: playwright(),
+            screenshotDirectory: 'test/.artifacts/browser-screenshots/',
             instances: [
               {
                 browser: 'chromium',
@@ -52,6 +64,7 @@ export default defineConfig({
         },
       },
       {
+        // Integ Tests (Node)
         test: {
           include: ['tests_integ/**/*.test.ts'],
           exclude: ['tests_integ/**/*.browser.test.ts'],
@@ -65,13 +78,17 @@ export default defineConfig({
         },
       },
       {
+        // Integ Tests (browser)
         test: {
-          include: ['tests_integ/**/*.browser.test.ts'],
+          include: ['tests_integ/**/*.test.ts'],
+          exclude: ['**/*.node.test.ts'],
           name: { label: 'integ-browser', color: 'yellow' },
           testTimeout: 30000,
           browser: {
             enabled: true,
+            headless: true,
             provider: playwright(),
+            screenshotDirectory: 'test/.artifacts/browser-screenshots/',
             instances: [
               {
                 browser: 'chromium',
@@ -97,7 +114,7 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
-      include: ['src/**/*', 'vended_tools/**/*'],
+      include: ['src/**/*.{ts,js}', 'vended_tools/**/*.{ts,js}'],
       exclude: coverageExclude,
       thresholds: {
         lines: 80,

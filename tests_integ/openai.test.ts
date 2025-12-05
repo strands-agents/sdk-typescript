@@ -1,16 +1,13 @@
 import { describe, it, expect } from 'vitest'
-import { OpenAIModel } from '@strands-agents/sdk/openai'
 import { Message } from '@strands-agents/sdk'
 import type { ToolSpec } from '@strands-agents/sdk'
 
-// eslint-disable-next-line no-restricted-imports
-import { collectIterator } from '../src/__fixtures__/model-test-helpers.js'
-import { shouldSkipOpenAITests } from './__fixtures__/test-helpers.js'
+import { collectIterator, createOpenAIModel, shouldSkipOpenAITests } from './__fixtures__/model-test-helpers.js'
 
-describe.skipIf(shouldSkipOpenAITests())('OpenAIModel Integration Tests', () => {
+describe.skipIf(await shouldSkipOpenAITests())('OpenAIModel Integration Tests', () => {
   describe('Configuration', () => {
     it.concurrent('respects maxTokens configuration', async () => {
-      const provider = new OpenAIModel({
+      const provider = createOpenAIModel({
         modelId: 'gpt-4o-mini',
         maxTokens: 20, // Very small limit
       })
@@ -34,7 +31,7 @@ describe.skipIf(shouldSkipOpenAITests())('OpenAIModel Integration Tests', () => 
     })
 
     it.concurrent('respects temperature configuration', async () => {
-      const provider = new OpenAIModel({
+      const provider = createOpenAIModel({
         modelId: 'gpt-4o-mini',
         temperature: 0, // Deterministic
         maxTokens: 50,
@@ -77,7 +74,7 @@ describe.skipIf(shouldSkipOpenAITests())('OpenAIModel Integration Tests', () => 
 
   describe('Error Handling', () => {
     it.concurrent('handles invalid model ID gracefully', async () => {
-      const provider = new OpenAIModel({
+      const provider = createOpenAIModel({
         modelId: 'invalid-model-id-that-does-not-exist-xyz',
       })
 
@@ -99,7 +96,7 @@ describe.skipIf(shouldSkipOpenAITests())('OpenAIModel Integration Tests', () => 
 
   describe('Content Block Lifecycle', () => {
     it.concurrent('emits complete content block lifecycle events', async () => {
-      const provider = new OpenAIModel({
+      const provider = createOpenAIModel({
         modelId: 'gpt-4o-mini',
         maxTokens: 50,
       })
@@ -139,7 +136,7 @@ describe.skipIf(shouldSkipOpenAITests())('OpenAIModel Integration Tests', () => 
 
   describe('Stop Reasons', () => {
     it.concurrent('returns endTurn stop reason for natural completion', async () => {
-      const provider = new OpenAIModel({
+      const provider = createOpenAIModel({
         modelId: 'gpt-4o-mini',
         maxTokens: 100,
       })
@@ -159,7 +156,7 @@ describe.skipIf(shouldSkipOpenAITests())('OpenAIModel Integration Tests', () => 
     })
 
     it.concurrent('returns maxTokens stop reason when token limit reached', async () => {
-      const provider = new OpenAIModel({
+      const provider = createOpenAIModel({
         modelId: 'gpt-4o-mini',
         maxTokens: 10, // Very small limit to force cutoff
       })
@@ -179,7 +176,7 @@ describe.skipIf(shouldSkipOpenAITests())('OpenAIModel Integration Tests', () => 
     })
 
     it.concurrent('returns toolUse stop reason when requesting tool use', async () => {
-      const provider = new OpenAIModel({
+      const provider = createOpenAIModel({
         modelId: 'gpt-4o-mini',
         maxTokens: 200,
       })

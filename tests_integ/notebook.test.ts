@@ -1,17 +1,14 @@
 /* eslint-disable no-restricted-imports */
 import { describe, it, expect } from 'vitest'
-import { Agent, BedrockModel } from '../src/index.js'
-import type { AgentStreamEvent, AgentResult } from '../src/index.js'
-import { notebook } from '../vended_tools/notebook/index.js'
+import { Agent, type AgentStreamEvent, AgentResult } from '@strands-agents/sdk'
+import { notebook } from '@strands-agents/sdk/vended_tools/notebook'
 import { collectGenerator } from '../src/__fixtures__/model-test-helpers.js'
-import { shouldRunTests } from './__fixtures__/model-test-helpers.js'
+import { createBedrockModel, shouldSkipBedrockTests } from './__fixtures__/model-test-helpers.js'
 
-describe.skipIf(!(await shouldRunTests()))('Notebook Tool Integration', () => {
+describe.skipIf(await shouldSkipBedrockTests())('Notebook Tool Integration', () => {
   // Shared agent configuration for all tests
   const agentParams = {
-    model: new BedrockModel({
-      region: 'us-east-1',
-    }),
+    model: createBedrockModel(),
     tools: [notebook],
   }
 

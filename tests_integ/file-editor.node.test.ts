@@ -3,12 +3,12 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { Agent, BedrockModel } from '../src/index.js'
 import { fileEditor } from '../vended_tools/file_editor/index.js'
 import { collectGenerator } from '../src/__fixtures__/model-test-helpers.js'
-import { shouldRunTests } from './__fixtures__/model-test-helpers.js'
+import { shouldSkipBedrockTests } from './__fixtures__/model-test-helpers.js'
 import { promises as fs } from 'fs'
 import * as path from 'path'
 import { tmpdir } from 'os'
 
-describe.skipIf(!(await shouldRunTests()))('FileEditor Tool Integration', () => {
+describe.skipIf(await shouldSkipBedrockTests())('FileEditor Tool Integration', () => {
   let testDir: string
 
   // Shared agent configuration for all tests

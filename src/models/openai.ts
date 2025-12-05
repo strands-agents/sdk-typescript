@@ -276,7 +276,7 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
       // In Node.js, can use OPENAI_API_KEY environment variable as fallback
       const hasEnvKey =
         typeof process !== 'undefined' && typeof process.env !== 'undefined' && process.env.OPENAI_API_KEY
-      if (!apiKey && !hasEnvKey) {
+      if (!apiKey && !hasEnvKey && !clientConfig?.apiKey) {
         throw new Error(
           "OpenAI API key is required. Provide it via the 'apiKey' option (string or function) or set the OPENAI_API_KEY environment variable."
         )

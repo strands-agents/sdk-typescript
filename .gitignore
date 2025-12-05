@@ -38,3 +38,5 @@ Thumbs.db
 
 # Github workflow artifacts
 .artifact
+# Test artifacts
+test/.artifacts

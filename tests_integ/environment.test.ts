@@ -1,21 +1,60 @@
 import { describe, it, expect } from 'vitest'
 
 // eslint-disable-next-line no-restricted-imports
-import { isNode } from '../src/__fixtures__/environment.js'
+import { isBrowser, isNode } from '../src/__fixtures__/environment.js'
+import { isInBrowser } from './__fixtures__/test-helpers.js'
 
 describe('environment', () => {
-  describe('Node.js compatibility', () => {
+  describe('Node.js compatibility', { skip: isInBrowser() }, () => {
     it('works in Node.js environment', () => {
       // Test Node.js specific features are available
       expect(typeof process).toBe('object')
       expect(process.version).toBeDefined()
     })
-  })
 
-  describe('environment detection', () => {
     it('correctly identifies Node.js environment', () => {
       expect(isNode).toBe(true)
       expect(typeof process).toBe('object')
+    })
+
+    it('correctly identifies browser environment', () => {
+      expect(isBrowser).toBe(false)
+      expect(typeof window).toBe('undefined')
+    })
+  })
+
+  describe('Browser compatibility', { skip: !isInBrowser() }, () => {
+    describe('when running in browser', () => {
+      it('isNode should resolve to false', () => {
+        expect(isNode).toBe(false)
+      })
+      it('has window object with expected properties', () => {
+        expect(window).toBeDefined()
+        expect(typeof window).toBe('object')
+        expect(window.location).toBeDefined()
+        expect(window.navigator).toBeDefined()
+      })
+
+      it('has document object with DOM methods', () => {
+        expect(document).toBeDefined()
+        expect(typeof document).toBe('object')
+        expect(typeof document.createElement).toBe('function')
+        expect(typeof document.querySelector).toBe('function')
+      })
+
+      it('has navigator object with browser information', () => {
+        expect(navigator).toBeDefined()
+        expect(typeof navigator).toBe('object')
+        expect(typeof navigator.userAgent).toBe('string')
+        expect(navigator.userAgent.length).toBeGreaterThan(0)
+      })
+    })
+
+    describe('environment detection', () => {
+      it('correctly identifies browser environment', () => {
+        expect(isBrowser).toBe(true)
+        expect(typeof window).toBe('object')
+      })
     })
   })
 
