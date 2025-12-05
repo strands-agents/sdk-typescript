@@ -390,6 +390,7 @@ export class JsonBlock implements JsonBlockData {
  * - `maxTokens` - Maximum token limit was reached
  * - `stopSequence` - A stop sequence was encountered
  * - `toolUse` - Model wants to use a tool
+ * - `modelContextWindowExceeded` - Input exceeded the model's context window
  */
 export type StopReason =
   | 'contentFiltered'
@@ -399,7 +400,7 @@ export type StopReason =
   | 'stopSequence'
   | 'toolUse'
   | 'modelContextWindowExceeded'
-  | string
+  | (string & {})
 
 /**
  * System prompt for guiding model behavior.

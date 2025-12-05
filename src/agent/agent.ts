@@ -9,6 +9,7 @@ import {
   McpClient,
   Message,
   type MessageData,
+  type StopReason,
   type SystemPrompt,
   type SystemPromptData,
   TextBlock,
@@ -431,7 +432,7 @@ export class Agent implements AgentData {
    */
   private async *invokeModel(
     args?: InvokeArgs
-  ): AsyncGenerator<AgentStreamEvent, { message: Message; stopReason: string }, undefined> {
+  ): AsyncGenerator<AgentStreamEvent, { message: Message; stopReason: StopReason }, undefined> {
     // Normalize input and append messages to conversation
     const messagesToAppend = this._normalizeInput(args)
     for (const message of messagesToAppend) {
@@ -481,7 +482,7 @@ export class Agent implements AgentData {
   private async *_streamFromModel(
     messages: Message[],
     streamOptions: StreamOptions
-  ): AsyncGenerator<AgentStreamEvent, { message: Message; stopReason: string }, undefined> {
+  ): AsyncGenerator<AgentStreamEvent, { message: Message; stopReason: StopReason }, undefined> {
     const streamGenerator = this.model.streamAggregated(messages, streamOptions)
     let result = await streamGenerator.next()
 
