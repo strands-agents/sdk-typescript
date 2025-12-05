@@ -133,7 +133,7 @@ jobs:
           session_id: ${{ needs.setup-and-process.outputs.session_id }}
           task_prompt: ${{ needs.setup-and-process.outputs.prompt }}
           aws_role_arn: ${{ secrets.AWS_ROLE_ARN }}
-          sessions_bucket: ${{ secrets.TYPESCRIPT_SESSIONS_BUCKET }}
+          sessions_bucket: ${{ secrets.AGENT_SESSIONS_BUCKET }}
           write_permission: 'false'
           ref: ${{ needs.setup-and-process.outputs.branch }}
 

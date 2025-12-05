@@ -109,13 +109,14 @@ def run_agent(query: str):
         system_prompt = os.getenv("INPUT_SYSTEM_PROMPT", DEFAULT_SYSTEM_PROMPT)
         session_id = os.getenv("SESSION_ID")
         s3_bucket = os.getenv("S3_SESSION_BUCKET")
+        s3_prefix = os.getenv("GITHUB_REPOSITORY", "")
 
         if s3_bucket and session_id:
             print(f"🤖 Using session manager with session ID: {session_id}")
             session_manager = S3SessionManager(
                 session_id=session_id,
                 bucket=s3_bucket,
-                prefix="",
+                prefix=s3_prefix,
             )
         else:
             raise ValueError("Both SESSION_ID and S3_SESSION_BUCKET must be set")
