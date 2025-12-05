@@ -33,6 +33,10 @@
     "./vended_tools/http_request": {
       "types": "./dist/vended_tools/http_request/index.d.ts",
       "default": "./dist/vended_tools/http_request/index.js"
+    },
+    "./vended_tools/bash": {
+      "types": "./dist/vended_tools/bash/index.d.ts",
+      "default": "./dist/vended_tools/bash/index.js"
     }
   },
   "scripts": {
