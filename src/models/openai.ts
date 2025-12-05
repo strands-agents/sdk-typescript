@@ -246,7 +246,7 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
    *   modelId: 'gpt-3.5-turbo'
    * })
    *
-   * // Using function-based API key for dynamic rotation
+   * // Using function-based API key for dynamic key retrieval
    * const provider = new OpenAIModel({
    *   modelId: 'gpt-4o',
    *   apiKey: async () => await getRotatingApiKey()

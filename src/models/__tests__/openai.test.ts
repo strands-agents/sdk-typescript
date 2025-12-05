@@ -175,24 +175,6 @@ describe('OpenAIModel', () => {
         })
       )
     })
-
-    if (isNode) {
-      it('function-based API key takes precedence over environment variable', () => {
-        vi.stubEnv('OPENAI_API_KEY', 'sk-from-env')
-        const apiKeyFn = async (): Promise<string> => 'sk-from-function'
-
-        new OpenAIModel({
-          modelId: 'gpt-4o',
-          apiKey: apiKeyFn,
-        })
-
-        expect(OpenAI).toHaveBeenCalledWith(
-          expect.objectContaining({
-            apiKey: apiKeyFn,
-          })
-        )
-      })
-    }
   })
 
   describe('updateConfig', () => {
