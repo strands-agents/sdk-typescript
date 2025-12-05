@@ -3,7 +3,7 @@ import { join } from 'node:path'
 
 /**
  * Helper to load fixture files from Vite URL imports.
- * Vite ?url imports return paths like '/tests_integ/__resources__/file.png' in test environment.
+ * Vite ?url imports return paths like '/test/integ/__resources__/file.png' in test environment.
  *
  * @param url - The URL from a Vite ?url import
  * @returns The file contents as a Uint8Array

@@ -22,13 +22,13 @@ export default [
   }),
   // Apply UT rules to the integ tests
   unitTestRules({
-    files: ['tests_integ/**/*.ts'],
-    tsconfig: './tests_integ/tsconfig.json',
+    files: ['test/integ/**/*.ts'],
+    tsconfig: './test/integ/tsconfig.json',
   }),
   // Then stricter integ test rules
   integTestRules({
-    files: ['tests_integ/**/*.ts'],
-    tsconfig: './tests_integ/tsconfig.json',
+    files: ['test/integ/**/*.ts'],
+    tsconfig: './test/integ/tsconfig.json',
   }),
 ]
 

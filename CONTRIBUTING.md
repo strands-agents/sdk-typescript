@@ -75,7 +75,7 @@ npm run test:watch
 npm run test:integ
 
 # Run integ tests for a single file
-npm run test:integ -- tests_integ/openai.test.ts
+npm run test:integ -- test/integ/openai.test.ts
 
 # Run browser tests (Chromium)
 npm run test:browser
@@ -91,7 +91,7 @@ npm run test:all:coverage
 
 - **80%+ Coverage**: All code should have at least 80% test coverage
 - **Unit Tests**: Test individual functions in `src/**/__tests__/**` directories
-- **Integration Tests**: Test complete workflows in `tests_integ/` directory
+- **Integration Tests**: Test complete workflows in `test/integ/` directory
 - **TSDoc Coverage**: All exported functions must have complete documentation
 
 For detailed testing patterns and examples, see [AGENTS.md - Testing Patterns](AGENTS.md#testing-patterns).

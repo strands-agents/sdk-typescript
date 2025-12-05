@@ -90,7 +90,7 @@ sdk-typescript/
 │   │   └── README.md             # Notebook tool documentation
 │   └── README.md                 # Vended tools overview
 │
-├── tests_integ/                  # Integration tests (separate from source)
+├── test/integ/                  # Integration tests (separate from source)
 │   ├── bedrock.test.ts           # Bedrock integration tests (requires AWS credentials)
 │   ├── hooks.test.ts             # Hooks integration tests
 │   └── registry.test.ts          # ToolRegistry integration tests
@@ -140,7 +140,7 @@ sdk-typescript/
 - **`src/tools/`**: Tool definitions and types for agent tool use
 - **`src/types/`**: Core type definitions used across the SDK
 - **`vended_tools/`**: Optional vended tools (not part of core SDK, independently importable)
-- **`tests_integ/`**: Integration tests (tests public API and external integrations)
+- **`test/integ/`**: Integration tests (tests public API and external integrations)
 - **`.github/workflows/`**: CI/CD automation and quality gates
 - **`.project/`**: Task management and project tracking
 
@@ -284,7 +284,7 @@ export async function* mainFunction() {
 
 **For integration tests**:
 ```
-tests_integ/
+test/integ/
 └── feature.test.ts        # Tests public API
 ```
 
@@ -669,10 +669,10 @@ src/subdir/
 
 ### Integration Test Location
 
-**Rule**: Integration tests are separate in `tests_integ/`
+**Rule**: Integration tests are separate in `test/integ/`
 
 ```
-tests_integ/
+test/integ/
 ├── api.test.ts                 # Tests public API
 └── environment.test.ts         # Tests environment compatibility
 ```
@@ -680,7 +680,7 @@ tests_integ/
 ### Test File Naming
 
 - Unit tests: `{sourceFileName}.test.ts` in `src/**/__tests__/**`
-- Integration tests: `{feature}.test.ts` in `tests_integ/`
+- Integration tests: `{feature}.test.ts` in `test/integ/`
 
 ### Test Coverage
 

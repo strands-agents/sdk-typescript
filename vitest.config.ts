@@ -68,12 +68,12 @@ export default defineConfig({
             '$/sdk': path.resolve(__dirname, './src'),
             '$/vended': path.resolve(__dirname, './src/vended-tools'),
           },
-          include: ['tests_integ/**/*.test.ts'],
-          exclude: ['tests_integ/**/*.browser.test.ts'],
+          include: ['test/integ/**/*.test.ts'],
+          exclude: ['test/integ/**/*.browser.test.ts'],
           name: { label: 'integ-node', color: 'magenta' },
           testTimeout: 30000,
           retry: 1,
-          globalSetup: './tests_integ/integ-setup.ts',
+          globalSetup: './test/integ/integ-setup.ts',
           sequence: {
             concurrent: true,
           },
@@ -85,7 +85,7 @@ export default defineConfig({
             '$/sdk': path.resolve(__dirname, './src'),
             '$/vended': path.resolve(__dirname, './src/vended-tools'),
           },
-          include: ['tests_integ/**/*.browser.test.ts'],
+          include: ['test/integ/**/*.browser.test.ts'],
           name: { label: 'integ-browser', color: 'yellow' },
           testTimeout: 30000,
           browser: {
@@ -104,7 +104,7 @@ export default defineConfig({
               getOpenAIAPIKey,
             },
           },
-          globalSetup: './tests_integ/integ-setup.ts',
+          globalSetup: './test/integ/integ-setup.ts',
           sequence: {
             concurrent: true,
           },
@@ -117,6 +117,7 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
+      reportsDirectory: 'test/.artifacts/coverage',
       include: ['src/**/*.{ts,js}', 'src/vended-tools/**/*.{ts,js}'],
       exclude: coverageExclude,
       thresholds: {

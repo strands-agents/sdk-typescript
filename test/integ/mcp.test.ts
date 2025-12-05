@@ -22,7 +22,7 @@ type TransportConfig = {
 }
 
 describe('MCP Integration Tests', () => {
-  const serverPath = resolve(process.cwd(), 'tests_integ/__fixtures__/test-mcp-server.ts')
+  const serverPath = resolve(process.cwd(), 'test/integ/__fixtures__/test-mcp-server.ts')
   let httpServerInfo: HttpServerInfo | undefined
 
   beforeAll(async () => {
