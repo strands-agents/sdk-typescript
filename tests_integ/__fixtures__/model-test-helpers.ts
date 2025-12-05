@@ -1,5 +1,5 @@
 import { fromNodeProviderChain } from '@aws-sdk/credential-providers'
-import type { Message, ContentBlock } from '../../src/types/messages.js'
+import type { Message, ContentBlock } from '$/sdk/types/messages.js'
 
 /**
  * Determines whether AWS integration tests should run based on environment and credentials.

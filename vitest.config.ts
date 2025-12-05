@@ -1,8 +1,12 @@
 import { defineConfig } from 'vitest/config'
 import { playwright } from '@vitest/browser-playwright'
-import { AwsCredentialIdentity } from '@aws-sdk/types'
+import type { AwsCredentialIdentity } from '@aws-sdk/types'
 import { fromNodeProviderChain } from '@aws-sdk/credential-providers'
-import { BrowserCommand } from 'vitest/node'
+import type { BrowserCommand } from 'vitest/node'
+import path from 'path'
+import { fileURLToPath } from 'url'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 // Conditionally exclude bash tool from coverage on Windows
 // since tests are skipped on Windows (bash not available)
@@ -36,6 +40,7 @@ export default defineConfig({
           name: { label: 'unit-node', color: 'green' },
           typecheck: {
             enabled: true,
+            tsconfig: 'src/tsconfig.json',
             include: ['src/**/__tests__**/*.test-d.ts'],
           },
         },
@@ -59,6 +64,10 @@ export default defineConfig({
       },
       {
         test: {
+          alias: {
+            '$/sdk': path.resolve(__dirname, './src'),
+            '$/vended': path.resolve(__dirname, './vended_tools'),
+          },
           include: ['tests_integ/**/*.test.ts'],
           exclude: ['tests_integ/**/*.browser.test.ts'],
           name: { label: 'integ-node', color: 'magenta' },
@@ -72,6 +81,10 @@ export default defineConfig({
       },
       {
         test: {
+          alias: {
+            '$/sdk': path.resolve(__dirname, './src'),
+            '$/vended': path.resolve(__dirname, './vended_tools'),
+          },
           include: ['tests_integ/**/*.browser.test.ts'],
           name: { label: 'integ-browser', color: 'yellow' },
           testTimeout: 30000,
@@ -104,7 +117,7 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
-      include: ['src/**/*', 'vended_tools/**/*'],
+      include: ['src/**/*.{ts,js}', 'vended_tools/**/*.{ts,js}'],
       exclude: coverageExclude,
       thresholds: {
         lines: 80,

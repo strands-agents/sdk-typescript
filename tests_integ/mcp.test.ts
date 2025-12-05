@@ -13,6 +13,7 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { resolve } from 'node:path'
 import { URL } from 'node:url'
 import { startHTTPServer, type HttpServerInfo } from './__fixtures__/test-mcp-server.js'
+import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
 
 type TransportConfig = {
   name: string
@@ -54,7 +55,7 @@ describe('MCP Integration Tests', () => {
         if (!httpServerInfo) throw new Error('HTTP server not started')
         return new McpClient({
           applicationName: 'test-mcp-http',
-          transport: new StreamableHTTPClientTransport(new URL(httpServerInfo.url)),
+          transport: new StreamableHTTPClientTransport(new URL(httpServerInfo.url)) as Transport,
         })
       },
     },

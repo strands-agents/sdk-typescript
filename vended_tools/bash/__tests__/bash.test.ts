@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { bash } from '../index.js'
 import { BashTimeoutError, BashSessionError, type BashOutput } from '../index.js'
-import type { ToolContext } from '../../../src/tools/tool.js'
+import type { ToolContext } from '../../../src/index.js'
 import { AgentState } from '../../../src/agent/state.js'
 import { isNode } from '../../../src/__fixtures__/environment.js'
 

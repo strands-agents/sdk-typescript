@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest'
 
-// eslint-disable-next-line no-restricted-imports
-import { isNode } from '../src/__fixtures__/environment.js'
+import { isNode } from '$/sdk/__fixtures__/environment.js'
 
 describe('environment', () => {
   describe('Node.js compatibility', () => {

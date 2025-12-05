@@ -4,6 +4,7 @@
     "module": "NodeNext",
     "moduleResolution": "nodenext",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "composite": true,
     "allowJs": false,
     "declaration": true,
     "declarationMap": true,
@@ -27,7 +28,5 @@
     "sourceMap": true,
     "removeComments": false,
     "types": ["vitest/importMeta"]
-  },
-  "include": ["src/**/*", "vended_tools/**/*"],
-  "exclude": ["node_modules", "dist"]
+  }
 }

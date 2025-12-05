@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { isBrowser, isNode } from '../../src/__fixtures__/environment.js'
+import { isBrowser, isNode } from '$/sdk/__fixtures__/environment.js'
 
 describe('environment', () => {
   describe('Browser compatibility', () => {

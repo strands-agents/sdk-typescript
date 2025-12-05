@@ -8,8 +8,7 @@ import {
   SlidingWindowConversationManager,
 } from '@strands-agents/sdk'
 
-// eslint-disable-next-line no-restricted-imports
-import { collectIterator } from '../src/__fixtures__/model-test-helpers.js'
+import { collectIterator } from '$/sdk/__fixtures__/model-test-helpers.js'
 import { shouldRunTests } from './__fixtures__/model-test-helpers.js'
 
 describe.skipIf(!(await shouldRunTests()))('BedrockModel Integration Tests', () => {

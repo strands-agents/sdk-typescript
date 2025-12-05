@@ -1,6 +1,5 @@
-/* eslint-disable no-restricted-imports */
 import { describe, it, expect } from 'vitest'
-import { Agent, BedrockModel } from '../src/index.js'
+import { Agent, BedrockModel } from '$/sdk/index.js'
 import { bash } from '../vended_tools/bash/index.js'
 import { getMessageText, shouldRunTests } from './__fixtures__/model-test-helpers.js'
 

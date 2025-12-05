@@ -40,7 +40,7 @@
     }
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc --project src/tsconfig.json && tsc --project vended_tools/tsconfig.json",
     "check": "npm run lint && npm run format && npm run type-check && npm run test:coverage && npm run test:package",
     "clean": "rm -rf node_modules dist package-lock.json",
     "test": "vitest run --project unit-node",
@@ -59,7 +59,7 @@
     "lint:fix": "eslint src tests_integ vended_tools --fix",
     "format": "prettier --write src tests_integ vended_tools",
     "format:check": "prettier --check src tests_integ vended_tools",
-    "type-check": "tsc --noEmit",
+    "type-check": "tsc --noEmit --project src/tsconfig.json && tsc --noEmit --project vended_tools/tsconfig.json && tsc --noEmit --project tests_integ/tsconfig.json",
     "type-check:watch": "tsc --noEmit --watch",
     "prepare": "npm run build && husky"
   },

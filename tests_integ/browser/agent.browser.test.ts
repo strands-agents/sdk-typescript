@@ -7,7 +7,7 @@ import { notebook } from '@strands-agents/sdk/vended_tools/notebook'
 import { httpRequest } from '@strands-agents/sdk/vended_tools/http_request'
 import { z } from 'zod'
 
-import { collectGenerator } from '../../src/__fixtures__/model-test-helpers.js'
+import { collectGenerator } from '$/sdk/__fixtures__/model-test-helpers.js'
 
 // Import fixtures
 import yellowPngUrl from '../__resources__/yellow.png?url'

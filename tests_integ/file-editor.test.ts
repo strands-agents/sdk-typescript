@@ -1,8 +1,7 @@
-/* eslint-disable no-restricted-imports */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { Agent, BedrockModel } from '../src/index.js'
+import { Agent, BedrockModel } from '$/sdk/index.js'
 import { fileEditor } from '../vended_tools/file_editor/index.js'
-import { collectGenerator } from '../src/__fixtures__/model-test-helpers.js'
+import { collectGenerator } from '$/sdk/__fixtures__/model-test-helpers.js'
 import { shouldRunTests } from './__fixtures__/model-test-helpers.js'
 import { promises as fs } from 'fs'
 import * as path from 'path'

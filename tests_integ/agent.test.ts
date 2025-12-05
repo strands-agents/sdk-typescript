@@ -6,8 +6,7 @@ import { httpRequest } from '@strands-agents/sdk/vended_tools/http_request'
 import { OpenAIModel } from '@strands-agents/sdk/openai'
 import { z } from 'zod'
 
-// eslint-disable-next-line no-restricted-imports
-import { collectGenerator } from '../src/__fixtures__/model-test-helpers.js'
+import { collectGenerator } from '$/sdk/__fixtures__/model-test-helpers.js'
 import { shouldRunTests } from './__fixtures__/model-test-helpers.js'
 import { loadFixture, shouldSkipOpenAITests } from './__fixtures__/test-helpers.js'
 
@@ -123,14 +122,14 @@ describe.each(providers)('Agent with $name', ({ name, skip, createModel }) => {
         expect(agent.messages).toHaveLength(4) // 2 user + 2 assistant
 
         // Verify message ordering
-        expect(agent.messages[0].role).toBe('user')
-        expect(agent.messages[1].role).toBe('assistant')
-        expect(agent.messages[2].role).toBe('user')
-        expect(agent.messages[3].role).toBe('assistant')
+        expect(agent.messages[0]?.role).toBe('user')
+        expect(agent.messages[1]?.role).toBe('assistant')
+        expect(agent.messages[2]?.role).toBe('user')
+        expect(agent.messages[3]?.role).toBe('assistant')
 
         // Verify conversation context is preserved
         const lastMessage = agent.messages[agent.messages.length - 1]
-        const textContent = lastMessage.content.find((block) => block.type === 'textBlock')
+        const textContent = lastMessage?.content.find((block) => block.type === 'textBlock')
         expect(textContent?.text).toMatch(/Alice/i)
       })
     })
@@ -170,7 +169,7 @@ describe.each(providers)('Agent with $name', ({ name, skip, createModel }) => {
           printer: false,
         })
 
-        const result = await agent.invoke()
+        const result = await agent.invoke([])
 
         expect(result.stopReason).toBe('endTurn')
         expect(result.lastMessage.role).toBe('assistant')

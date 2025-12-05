@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { BedrockModel } from '@strands-agents/sdk/bedrock'
 import { Message, TextBlock } from '@strands-agents/sdk'
 import { commands } from 'vitest/browser'
-import { collectIterator } from '../../src/__fixtures__/model-test-helpers'
+import { collectIterator } from '$/sdk/__fixtures__/model-test-helpers.js'
 
 describe('Region Configuration', () => {
   const sayHighMessage = Message.fromMessageData({

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { fileEditor } from '../file-editor.js'
-import type { ToolContext } from '../../../src/tools/tool.js'
+import type { ToolContext } from '../../../src/index.js'
 import { AgentState } from '../../../src/agent/state.js'
 import { promises as fs } from 'fs'
 import * as path from 'path'

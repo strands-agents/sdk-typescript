@@ -1,9 +1,8 @@
-/* eslint-disable no-restricted-imports */
 import { describe, it, expect } from 'vitest'
-import { Agent, BedrockModel } from '../src/index.js'
-import type { AgentStreamEvent, AgentResult } from '../src/index.js'
+import { Agent, BedrockModel } from '$/sdk/index.js'
+import type { AgentStreamEvent, AgentResult } from '$/sdk/index.js'
 import { notebook } from '../vended_tools/notebook/index.js'
-import { collectGenerator } from '../src/__fixtures__/model-test-helpers.js'
+import { collectGenerator } from '$/sdk/__fixtures__/model-test-helpers.js'
 import { shouldRunTests } from './__fixtures__/model-test-helpers.js'
 
 describe.skipIf(!(await shouldRunTests()))('Notebook Tool Integration', () => {

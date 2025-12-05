@@ -3,8 +3,7 @@ import { OpenAIModel } from '@strands-agents/sdk/openai'
 import { Message } from '@strands-agents/sdk'
 import type { ToolSpec } from '@strands-agents/sdk'
 
-// eslint-disable-next-line no-restricted-imports
-import { collectIterator } from '../src/__fixtures__/model-test-helpers.js'
+import { collectIterator } from '$/sdk/__fixtures__/model-test-helpers.js'
 import { shouldSkipOpenAITests } from './__fixtures__/test-helpers.js'
 
 describe.skipIf(shouldSkipOpenAITests())('OpenAIModel Integration Tests', () => {
