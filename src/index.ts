@@ -86,13 +86,15 @@ export type { ToolSpec, ToolUse, ToolResultStatus, ToolChoice } from './tools/ty
 
 // Tool interface and related types
 export type {
-  Tool,
   InvokableTool,
   ToolContext,
   ToolStreamEventData,
   ToolStreamEvent,
   ToolStreamGenerator,
 } from './tools/tool.js'
+
+// Tool base class
+export { Tool } from './tools/tool.js'
 
 // FunctionTool implementation
 export { FunctionTool } from './tools/function-tool.js'
