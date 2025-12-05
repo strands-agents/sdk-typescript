@@ -10,9 +10,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 // Conditionally exclude bash tool from coverage on Windows
 // since tests are skipped on Windows (bash not available)
-const coverageExclude = ['src/**/__tests__/**', 'src/**/__fixtures__/**', 'vended_tools/**/__tests__/**']
+const coverageExclude = ['src/**/__tests__/**', 'src/**/__fixtures__/**', 'src/vended-tools/**/__tests__/**']
 if (process.platform === 'win32') {
-  coverageExclude.push('vended_tools/bash/**')
+  coverageExclude.push('src/vended-tools/bash/**')
 }
 
 const getAwsCredentials: BrowserCommand<[], AwsCredentialIdentity> = async ({ testPath, provider }) => {
@@ -35,7 +35,7 @@ export default defineConfig({
     projects: [
       {
         test: {
-          include: ['src/**/__tests__/**/*.test.ts', 'vended_tools/**/__tests__/**/*.test.ts'],
+          include: ['src/**/__tests__/**/*.test.ts', 'src/vended-tools/**/__tests__/**/*.test.ts'],
           includeSource: ['src/**/*.{js,ts}'],
           name: { label: 'unit-node', color: 'green' },
           typecheck: {
@@ -47,8 +47,8 @@ export default defineConfig({
       },
       {
         test: {
-          include: ['src/**/__tests__/**/*.test.ts', 'vended_tools/**/__tests__/**/*.test.ts'],
-          exclude: ['vended_tools/file_editor/**/*.test.ts', 'vended_tools/bash/**/*.test.ts'],
+          include: ['src/**/__tests__/**/*.test.ts'],
+          exclude: ['src/vended-tools/file_editor/**/*.test.ts', 'src/vended-tools/bash/**/*.test.ts'],
           name: { label: 'unit-browser', color: 'cyan' },
           browser: {
             enabled: true,
@@ -66,7 +66,7 @@ export default defineConfig({
         test: {
           alias: {
             '$/sdk': path.resolve(__dirname, './src'),
-            '$/vended': path.resolve(__dirname, './vended_tools'),
+            '$/vended': path.resolve(__dirname, './src/vended-tools'),
           },
           include: ['tests_integ/**/*.test.ts'],
           exclude: ['tests_integ/**/*.browser.test.ts'],
@@ -83,7 +83,7 @@ export default defineConfig({
         test: {
           alias: {
             '$/sdk': path.resolve(__dirname, './src'),
-            '$/vended': path.resolve(__dirname, './vended_tools'),
+            '$/vended': path.resolve(__dirname, './src/vended-tools'),
           },
           include: ['tests_integ/**/*.browser.test.ts'],
           name: { label: 'integ-browser', color: 'yellow' },
@@ -117,7 +117,7 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
-      include: ['src/**/*.{ts,js}', 'vended_tools/**/*.{ts,js}'],
+      include: ['src/**/*.{ts,js}', 'src/vended-tools/**/*.{ts,js}'],
       exclude: coverageExclude,
       thresholds: {
         lines: 80,
