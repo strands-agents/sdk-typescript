@@ -1,4 +1,4 @@
-import { tool } from '../../src/tools/zod-tool.js'
+import { tool } from '../../tools/zod-tool.js'
 import { z } from 'zod'
 import type { IFileReader } from './types.js'
 import { promises as fs } from 'fs'

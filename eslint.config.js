@@ -10,20 +10,15 @@ export default [
     files: ['src/**/*.ts'],
     tsconfig: './src/tsconfig.json',
   }),
+  // Prevent non-vended-tools from importing vended-tools
+  noVendedToolsImports({
+    files: ['src/**/*.ts'],
+    ignores: ['src/vended-tools/**/*.ts'],
+  }),
   // Then unit-test rules to UTs
   unitTestRules({
     files: ['src/**/__tests__/**/*.ts'],
     tsconfig: './src/tsconfig.json',
-  }),
-  // Apply SDK rules to vended_tool files
-  sdkRules({
-    files: ['vended_tools/**/*.ts'],
-    tsconfig: './vended_tools/tsconfig.json',
-  }),
-  // Then unit-test rules to UTs
-  unitTestRules({
-    files: ['vended_tools/**/__tests__/**/*.ts'],
-    tsconfig: './vended_tools/tsconfig.json',
   }),
   // Apply UT rules to the integ tests
   unitTestRules({
@@ -115,6 +110,27 @@ function integTestRules(options) {
               group: ['../src', '../src/**'],
               message:
                 'Integration tests should use $/sdk/* path aliases instead of ../src. Test fixtures can import from $/sdk/*.',
+            },
+          ],
+        },
+      ],
+    },
+  }
+}
+
+function noVendedToolsImports(options) {
+  return {
+    files: options.files,
+    ignores: options.ignores,
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['**/vended-tools', '**/vended-tools/**'],
+              message:
+                'Core SDK files should not import from vended-tools. Vended tools are optional and independently importable.',
             },
           ],
         },

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { Agent, BedrockModel } from '$/sdk/index.js'
 import type { AgentStreamEvent, AgentResult } from '$/sdk/index.js'
-import { notebook } from '../vended_tools/notebook/index.js'
+import { notebook } from '$/sdk/vended-tools/notebook/index.js'
 import { collectGenerator } from '$/sdk/__fixtures__/model-test-helpers.js'
 import { shouldRunTests } from './__fixtures__/model-test-helpers.js'
 

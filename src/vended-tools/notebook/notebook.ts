@@ -1,4 +1,4 @@
-import { tool } from '../../src/index.js'
+import { tool } from '../../index.js'
 import { z } from 'zod'
 import type { NotebookState } from './types.js'
 

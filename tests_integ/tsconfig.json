@@ -2,10 +2,9 @@
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
     "paths": {
-      "$/sdk/*": ["../src/*"],
-      "$/vended/*": ["../vended_tools/*"]
+      "$/sdk/*": ["../src/*"]
     },
-    "types": ["vite/client", "vitest/importMeta"]
+    "types": ["vite/client", "vitest/importMeta", "@types/node"]
   },
-  "references": [{ "path": "../src/tsconfig.json" }, { "path": "../vended_tools/tsconfig.json" }]
+  "references": [{ "path": "../src/tsconfig.json" }]
 }

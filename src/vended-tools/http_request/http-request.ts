@@ -1,5 +1,5 @@
 /* eslint-env browser, node */
-import { tool } from '../../src/tools/zod-tool.js'
+import { tool } from '../../tools/zod-tool.js'
 import { z } from 'zod'
 
 /**
