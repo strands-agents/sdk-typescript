@@ -133,6 +133,10 @@ export type { BaseModelConfig, StreamOptions, Model } from './models/model.js'
 export { BedrockModel as BedrockModel } from './models/bedrock.js'
 export type { BedrockModelConfig, BedrockModelOptions } from './models/bedrock.js'
 
+// Gemini model provider
+export { GeminiModel } from './models/gemini.js'
+export type { GeminiModelConfig, GeminiModelOptions } from './models/gemini.js'
+
 // Agent streaming event types
 export type { AgentStreamEvent } from './types/agent.js'
 
