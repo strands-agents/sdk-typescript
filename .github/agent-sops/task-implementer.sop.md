@@ -252,11 +252,9 @@ If all tests are passing, draft a conventional commit message, perform the git c
   - You MUST give an overview of the feature being implemented
   - You MUST include any notes on key implementation decisions, ambiguity, or other information as part of the pull request description
 - If the `create_pull_request` tool fails (excluding deferred responses):
-  - You MUST create a PR creation link using GitHub's query parameters
-  - You MUST post the link as a comment on the issue
-    - You MUST use the format: `https://github.com/{owner}/{repo}/compare/{base}...{head}?quick_pull=1&title={url_encoded_title}&body={url_encoded_body}`
-    - URL-encode the title and body parameters
-    - Include "Resolves: #{issue_number}" in the body
+    - The tool automatically handles fallback by posting a properly URL-encoded manual PR creation link as a comment on the specified fallback issue
+    - You MUST verify the fallback comment was posted successfully by checking the tool's return message
+    - You MUST NOT manually construct PR creation URLs since the tool handles URL encoding automatically
 - If PR creation succeeds or is deferred:
   - You MUST review your notes for any updates to provide on the pull request
   - You MAY use the `update_pull_request` tool to update the pull request body or title
