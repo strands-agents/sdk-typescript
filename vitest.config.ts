@@ -1,9 +1,6 @@
 import { defineConfig } from 'vitest/config'
 import { playwright } from '@vitest/browser-playwright'
-import type { AwsCredentialIdentity } from '@aws-sdk/types'
-import { fromNodeProviderChain } from '@aws-sdk/credential-providers'
-import type { BrowserCommand } from 'vitest/node'
-import path from 'path'
+import * as path from 'node:path'
 import { fileURLToPath } from 'url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -15,21 +12,12 @@ if (process.platform === 'win32') {
   coverageExclude.push('src/vended-tools/bash/**')
 }
 
-const getAwsCredentials: BrowserCommand<[], AwsCredentialIdentity> = async ({ testPath, provider }) => {
-  const credentialProvider = fromNodeProviderChain()
-  return await credentialProvider()
-}
-
-const getOpenAIAPIKey: BrowserCommand<[], string | undefined> = async ({ testPath, provider }) => {
-  return process.env.OPENAI_API_KEY
-}
-
 export default defineConfig({
   test: {
     unstubEnvs: true,
     reporters: [
       'default',
-      ['junit', { outputFile: 'test/.artifacts/test-report/junit/report.xml' }],
+      ['junit', { outputFile: 'test/.artifacts/test-report/junit/report.xml', includeConsoleOutput: true }],
       ['json', { outputFile: 'test/.artifacts/test-report/json/report.json' }],
     ],
     projects: [
@@ -53,6 +41,7 @@ export default defineConfig({
           browser: {
             enabled: true,
             provider: playwright(),
+            headless: true,
             screenshotDirectory: 'test/.artifacts/browser-screenshots/',
             instances: [
               {
@@ -73,7 +62,8 @@ export default defineConfig({
           name: { label: 'integ-node', color: 'magenta' },
           testTimeout: 30000,
           retry: 1,
-          globalSetup: './test/integ/integ-setup.ts',
+          globalSetup: './test/integ/__fixtures__/_setup-global.ts',
+          setupFiles: './test/integ/__fixtures__/_setup-test.ts',
           sequence: {
             concurrent: true,
           },
@@ -91,20 +81,16 @@ export default defineConfig({
           browser: {
             enabled: true,
             provider: playwright(),
+            headless: true,
             screenshotDirectory: 'test/.artifacts/browser-screenshots/',
             instances: [
               {
                 browser: 'chromium',
               },
             ],
-            // These act as passthrough commands that browser tests can use to communicate with the test server running in node.
-            // This allows browsers to get access to credential secrets
-            commands: {
-              getAwsCredentials,
-              getOpenAIAPIKey,
-            },
           },
-          globalSetup: './test/integ/integ-setup.ts',
+          globalSetup: './test/integ/__fixtures__/_setup-global.ts',
+          setupFiles: './test/integ/__fixtures__/_setup-test.ts',
           sequence: {
             concurrent: true,
           },

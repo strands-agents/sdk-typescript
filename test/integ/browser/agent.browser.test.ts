@@ -1,8 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { commands } from 'vitest/browser'
 import { Agent, DocumentBlock, ImageBlock, Message, TextBlock, tool } from '@strands-agents/sdk'
-import { BedrockModel } from '@strands-agents/sdk/bedrock'
-import { OpenAIModel } from '@strands-agents/sdk/openai'
 import { notebook } from '@strands-agents/sdk/vended_tools/notebook'
 import { httpRequest } from '@strands-agents/sdk/vended_tools/http_request'
 import { z } from 'zod'
@@ -12,6 +9,7 @@ import { collectGenerator } from '$/sdk/__fixtures__/model-test-helpers.js'
 // Import fixtures
 import yellowPngUrl from '../__resources__/yellow.png?url'
 import { loadFixture } from '../__fixtures__/test-helpers.js'
+import { allProviders } from '../__fixtures__/model-providers.js'
 
 // Calculator tool for testing
 const calculatorTool = tool({
@@ -33,36 +31,10 @@ const calculatorTool = tool({
   },
 })
 
-// Provider configurations with browser credential handling
-const providers = [
-  {
-    name: 'BedrockModel',
-    createModel: async () => {
-      const credentials = await commands.getAwsCredentials()
-      return new BedrockModel({
-        region: 'us-east-1',
-        clientConfig: {
-          credentials,
-        },
-      })
-    },
-  },
-  {
-    name: 'OpenAIModel',
-    createModel: async () =>
-      new OpenAIModel({
-        apiKey: await commands.getOpenAIAPIKey(),
-        clientConfig: {
-          dangerouslyAllowBrowser: true,
-        },
-      }),
-  },
-]
-
-describe.each(providers)('Agent Browser Tests with $name', async ({ name, createModel }) => {
-  describe(`${name} Browser Integration`, () => {
+describe.each(allProviders)('Agent Browser Tests with $name', async ({ name, skip, createModel }) => {
+  describe.skipIf(skip)(`${name} Browser Integration`, () => {
     it('handles basic invocation', async () => {
-      const agent = new Agent({ model: await createModel(), printer: false })
+      const agent = new Agent({ model: createModel(), printer: false })
       const result = await agent.invoke('Say hello in one word')
 
       expect(result.stopReason).toBe('endTurn')
@@ -72,7 +44,7 @@ describe.each(providers)('Agent Browser Tests with $name', async ({ name, create
 
     it('handles tool use', async () => {
       const agent = new Agent({
-        model: await createModel(),
+        model: createModel(),
         printer: false,
         systemPrompt: 'Use the calculator tool to solve math problems. Respond with only the numeric result.',
         tools: [calculatorTool],
@@ -103,7 +75,7 @@ describe.each(providers)('Agent Browser Tests with $name', async ({ name, create
       })
 
       const agent = new Agent({
-        model: await createModel(),
+        model: createModel(),
         messages: [
           new Message({
             role: 'user',
@@ -126,7 +98,7 @@ describe.each(providers)('Agent Browser Tests with $name', async ({ name, create
 
   it('handles tool invocation', async () => {
     const agent = new Agent({
-      model: await createModel(),
+      model: createModel(),
       tools: [notebook, httpRequest],
       printer: false,
     })

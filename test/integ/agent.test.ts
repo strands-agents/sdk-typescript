@@ -1,17 +1,15 @@
-import { describe, it, expect } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { Agent, DocumentBlock, ImageBlock, Message, TextBlock, tool } from '@strands-agents/sdk'
-import { BedrockModel } from '@strands-agents/sdk/bedrock'
 import { notebook } from '@strands-agents/sdk/vended_tools/notebook'
 import { httpRequest } from '@strands-agents/sdk/vended_tools/http_request'
-import { OpenAIModel } from '@strands-agents/sdk/openai'
 import { z } from 'zod'
 
 import { collectGenerator } from '$/sdk/__fixtures__/model-test-helpers.js'
-import { shouldSkipBedrockTests, shouldSkipOpenAITests } from './__fixtures__/model-test-helpers.js'
 import { loadFixture } from './__fixtures__/test-helpers.js'
 
 // Import fixtures using Vite's ?url suffix
 import yellowPngUrl from './__resources__/yellow.png?url'
+import { allProviders } from './__fixtures__/model-providers.js'
 
 // Calculator tool for testing
 const calculatorTool = tool({
@@ -33,21 +31,7 @@ const calculatorTool = tool({
   },
 })
 
-// Provider configurations
-const providers = [
-  {
-    name: 'BedrockModel',
-    skip: await shouldSkipBedrockTests(),
-    createModel: () => new BedrockModel(),
-  },
-  {
-    name: 'OpenAIModel',
-    skip: shouldSkipOpenAITests(),
-    createModel: () => new OpenAIModel(),
-  },
-]
-
-describe.each(providers)('Agent with $name', ({ name, skip, createModel }) => {
+describe.each(allProviders)('Agent with $name', ({ name, skip, createModel }) => {
   describe.skipIf(skip)(`${name} Integration Tests`, () => {
     describe('Basic Functionality', () => {
       it('handles invocation, streaming, system prompts, and tool use', async () => {
@@ -242,7 +226,7 @@ describe.each(providers)('Agent with $name', ({ name, skip, createModel }) => {
 
   it('handles tool invocation', async () => {
     const agent = new Agent({
-      model: await createModel(),
+      model: createModel(),
       tools: [notebook, httpRequest],
       printer: false,
     })
