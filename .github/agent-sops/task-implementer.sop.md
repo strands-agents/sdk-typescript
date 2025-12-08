@@ -320,7 +320,7 @@ Based on the users feedback, you will review and update your implementation plan
 - You MUST NOT close the parent issue - only the user should close it after the pull request is merged
 - You MUST not attempt to merge the pull request
 - You MUST use the handoff_to_user tool to inform the user you are ready for clarifying information on the pull request
-- You SHOULD include additional checklist items from [docs/PR.md](../../docs/PR.md) to validate the pull request description is correct after making additional changes
+- You MUST include additional checklist items from [docs/PR.md](../../docs/PR.md) to validate the pull request description is correct after making additional changes
 
 ## Desired Outcome
 
