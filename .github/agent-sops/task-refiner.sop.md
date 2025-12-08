@@ -185,7 +185,6 @@ Record that the task review is complete and ready as a comment on the issue.
   - If comment posting is deferred, continue with the workflow and note the deferred status
 - You MUST summarize what was accomplished in your comment
 - You MUST confirm in your comment that the issue is ready for implementation, or explain why it is not
-- You MUST record the estimated scope of work based on repository analysis
 - You SHOULD mention any final recommendations or considerations
 
 ## Examples
@@ -257,12 +256,6 @@ Based on clarification discussion and repository analysis:
 - [ ] 2FA can be enabled/disabled by user
 - [ ] Integration tests pass
 - [ ] Existing auth functionality remains intact
-
-### Estimated Scope
-- **Complexity**: Medium
-- **Files Modified**: ~8-10 files
-- **New Components**: 2-3 React components
-- **Database Migrations**: 1-2 migrations required
 ```
 
 ## Troubleshooting

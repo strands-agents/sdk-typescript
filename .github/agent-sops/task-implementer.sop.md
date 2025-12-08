@@ -98,7 +98,7 @@ Create a comprehensive list of test scenarios covering normal operation, edge ca
 - You MUST check for existing testing strategies documented in the repository documentation or your notes
 - You MUST cover all acceptance criteria with at least one test scenario
 - You MUST define explicit input/output pairs for each test case
-- You MUST make note of these test scenarios 
+- You MUST make note of these test scenarios
 - You MUST design tests that will initially fail when run against non-existent implementations
 - You MUST NOT create mock implementations during the test design phase because tests should be written based solely on expected behavior, not influenced by implementation details
 - You MUST focus on test scenarios and expected behaviors rather than detailed test code in documentation
@@ -234,23 +234,40 @@ If the implementation meets all requirements and follows established patterns, p
 
 If all tests are passing, draft a conventional commit message, perform the git commit, and create/update the pull request.
 
+**PR Checklist Verification (REQUIRED):**
+
+Before creating or updating a PR, you MUST copy the checklist from [docs/PR.md](../../docs/PR.md) into your progress notes and explicitly verify each item. For each checklist item, you MUST:
+
+1. Copy the checklist item verbatim
+2. Mark it as `[x]` (pass) or `[ ]` (fail)
+3. If failed, revise the PR description until the item passes
+
+Example format in your notes:
+
+```markdown
+## PR Description Checklist Verification
+
+- [x] Does the PR description target a Senior Engineer familiar with the project?
+- [ ] Does the PR include a "Resolves #<ISSUE NUMBER>" in the body? → FAILED: missing issue reference, adding now
+```
+
+You MUST NOT create or update the PR until ALL checklist items pass.
+
 **Constraints:**
+
+- You MUST read and follow the PR description guidelines in [docs/PR.md](../../docs/PR.md) when creating pull requests & commits
 - You MUST check that all tasks are complete before proceeding
 - You MUST reference your notes for the issue you are creating a pull request for
-- You MUST NOT commit changes until builds AND tests have been verified because committing broken code can disrupt the development workflow and introduce bugs into the codebase 
+- You MUST NOT commit changes until builds AND tests have been verified because committing broken code can disrupt the development workflow and introduce bugs into the codebase
 - You MUST follow the Conventional Commits specification
 - You MUST use `git status` to check which files have been modified
 - You MUST use `git add` to stage all relevant files
 - You MUST execute the `git commit -m <COMMIT_MESSAGE>` command with the prepared commit message
 - You MAY use `git push origin <BRANCH_NAME>` to push the local branch to the remote if the `GITHUB_WRITE` environment variable is set to `true`
-  - If the push operation is deferred, continue with PR creation and note the deferred status 
+  - If the push operation is deferred, continue with PR creation and note the deferred status
 - You MUST attempt to create the pull request using the `create_pull_request` tool if it does not exist yet
   - If the PR creation is deferred, continue with the workflow and note the deferred status
   - You MUST use the task id recorded in your notes, not the issue id
-  - You MUST include "Resolves: #<ISSUE NUMBER>" in the body of the pull request
-    - You MUST NOT bold this line
-  - You MUST give an overview of the feature being implemented
-  - You MUST include any notes on key implementation decisions, ambiguity, or other information as part of the pull request description
 - If the `create_pull_request` tool fails (excluding deferred responses):
     - The tool automatically handles fallback by posting a properly URL-encoded manual PR creation link as a comment on the specified fallback issue
     - You MUST verify the fallback comment was posted successfully by checking the tool's return message
@@ -303,6 +320,7 @@ Based on the users feedback, you will review and update your implementation plan
 - You MUST NOT close the parent issue - only the user should close it after the pull request is merged
 - You MUST not attempt to merge the pull request
 - You MUST use the handoff_to_user tool to inform the user you are ready for clarifying information on the pull request
+- You SHOULD include additional checklist items from [docs/PR.md](../../docs/PR.md) to validate the pull request description is correct after making additional changes
 
 ## Desired Outcome
 
@@ -395,6 +413,25 @@ If builds fail during implementation:
 - Focus on high-level concepts rather than detailed code in documentation
 - Use progress tracking with markdown checklists
 - Document decisions, assumptions, and challenges
+
+### Checklist Verification Pattern
+
+When documentation files contain checklists (e.g., `docs/PR.md`), you MUST:
+
+1. Copy the entire checklist into your progress notes
+2. Explicitly verify each item by marking `[x]` or `[ ]`
+3. For any failed items, document the issue and fix it before proceeding
+4. Re-verify failed items after fixes until all pass
+
+This pattern ensures quality gates are not skipped and provides an audit trail of verification.
+
+### Pull Request Best Practices
+
+- You MUST follow the PR description guidelines in [docs/PR.md](../../docs/PR.md)
+- Focus on WHY the change is needed, not HOW it's implemented
+- Document public API changes with before/after code examples
+- Write for senior engineers familiar with the project
+- Skip implementation details, test coverage notes, and line-by-line change lists
 
 ### Git Best Practices
 - Commit early and often with descriptive messages
