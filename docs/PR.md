@@ -18,8 +18,8 @@ Write for senior engineers familiar with the SDK. Assume your reader:
 Every PR description should have:
 
 1. **Motivation** — Why is this change needed?
-2. **Public API Changes** — What changes to the public API (with code examples)?
-3. **Use Cases** (optional) — When would developers use this feature? Only include for non-obvious functionality; skip for trivial changes.
+2. **Public API Changes** — What changes to the public API (with code snippets)?
+3. **Use Cases** (optional) — When would developers use this feature? Only include for non-obvious functionality; skip for trivial changes or obvious fixes.
 4. **Breaking Changes** (if applicable) — What breaks and how to migrate?
 
 ## Writing Principles
@@ -29,9 +29,9 @@ Every PR description should have:
 - ✅ "The OpenAI SDK supports dynamic API keys, but we don't expose this capability"
 - ❌ "Added ApiKeySetter type import from openai/client"
 
-**Document public API changes with examples:**
+**Document public API changes with example code snippets:**
 
-- ✅ Show before/after code examples for API changes
+- ✅ Show before/after code snippets for API changes
 - ❌ List every file or line changed
 
 **Be concise:**
@@ -117,7 +117,6 @@ const model = new OpenAIModel({
   apiKey: async () => await secretManager.getApiKey(),
 })
 ```
-````
 
 The change is backward compatible—all existing string-based usage continues
 to work without modification.
@@ -145,7 +144,7 @@ Resolves: #[issue-number]
 
 ## Public API Changes
 
-[Document changes to public APIs with before/after code examples. If no public
+[Document changes to public APIs with before/after code snippets. If no public
 API changes, state "No public API changes."]
 
 ```typescript
@@ -155,14 +154,13 @@ API changes, state "No public API changes."]
 // After
 [new API usage]
 ```
-````
 
 [Explain behavior, parameters, return values, and backward compatibility.]
 
 ## Use Cases (optional)
 
-[Only include for non-obvious functionality. Provide 2-4 concrete use cases
-showing when developers would use this feature. Skip for trivial changes.]
+[Only include for non-obvious functionality. Provide 1-3 concrete use cases
+showing when developers would use this feature. Skip for trivial changes obvious fixes..]
 
 ## Breaking Changes (if applicable)
 
@@ -178,7 +176,7 @@ showing when developers would use this feature. Skip for trivial changes.]
 [new code]
 ```
 
-```
+````
 
 ## Why These Guidelines?
 
@@ -192,7 +190,6 @@ showing when developers would use this feature. Skip for trivial changes.]
 
 - [Conventional Commits](https://www.conventionalcommits.org/)
 - [Google's Code Review Guidelines](https://google.github.io/eng-practices/review/)
-```
 
 ## Checklist Items
 
