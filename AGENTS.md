@@ -52,8 +52,10 @@ sdk-typescript/
 │   │
 │   ├── models/                   # Model provider implementations
 │   │   ├── __tests__/            # Unit tests for model providers
-│   │   │   └── bedrock.test.ts   # Tests for Bedrock model provider
+│   │   │   ├── bedrock.test.ts   # Tests for Bedrock model provider
+│   │   │   └── gemini.test.ts    # Tests for Gemini model provider
 │   │   ├── bedrock.ts            # AWS Bedrock model provider
+│   │   ├── gemini.ts             # Google Gemini model provider
 │   │   ├── model.ts              # Base model provider interface
 │   │   └── streaming.ts          # Streaming event types
 │   │
@@ -136,7 +138,7 @@ sdk-typescript/
 - **`src/agent/`**: Agent loop coordination, streaming event types, output printing, and conversation management
 - **`src/agent/conversation-manager/`**: Conversation history management strategies
 - **`src/hooks/`**: Hooks system for event-driven extensibility
-- **`src/models/`**: Model provider implementations (Bedrock, OpenAI, future providers)
+- **`src/models/`**: Model provider implementations (Bedrock, OpenAI, Gemini, future providers)
 - **`src/tools/`**: Tool definitions and types for agent tool use
 - **`src/types/`**: Core type definitions used across the SDK
 - **`vended_tools/`**: Optional vended tools (not part of core SDK, independently importable)

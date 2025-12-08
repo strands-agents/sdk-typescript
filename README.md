@@ -41,7 +41,7 @@ Strands Agents is a simple yet powerful SDK that takes a model-driven approach t
 
 - **🪶 Lightweight & Flexible**: Simple agent loop that works seamlessly in Node.js and browser environments
 - **🔒 Type-Safe Tools**: Define tools easily using Zod schemas for robust input validation and type inference
-- **🔌 Model Agnostic**: First-class support for Amazon Bedrock and OpenAI, with extensible architecture for custom providers
+- **🔌 Model Agnostic**: First-class support for Amazon Bedrock, OpenAI, and Google Gemini, with extensible architecture for custom providers
 - **🔗 Built-in MCP**: Native support for Model Context Protocol (MCP) clients, enabling access to external tools and servers
 - **⚡ Streaming Support**: Real-time response streaming for better user experience
 - **🎣 Extensible Hooks**: Lifecycle hooks for monitoring and customizing agent behavior
@@ -116,6 +116,21 @@ import { OpenAIModel } from '@strands-agents/sdk/openai'
 
 // Automatically uses process.env.OPENAI_API_KEY and defaults to gpt-4o
 const model = new OpenAIModel()
+
+const agent = new Agent({ model })
+```
+
+**Google Gemini**
+
+```typescript
+import { Agent } from '@strands-agents/sdk'
+import { GeminiModel } from '@strands-agents/sdk/gemini'
+
+const model = new GeminiModel({
+  modelId: 'gemini-2.5-flash',
+  clientArgs: { apiKey: process.env.GOOGLE_API_KEY },
+  params: { temperature: 0.7, maxTokens: 2048 }
+})
 
 const agent = new Agent({ model })
 ```
