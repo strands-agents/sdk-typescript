@@ -72,7 +72,7 @@ export async function setup(project: TestProject): Promise<void> {
 
 async function getOpenAITestContext(isCI: boolean): Promise<ProvidedContext['provider-openai']> {
   const apiKey = process.env.OPENAI_API_KEY
-  const shouldSkip = !!apiKey
+  const shouldSkip = !apiKey
 
   if (shouldSkip) {
     console.log('⏭️  OpenAI API key not available - integration tests will be skipped')
