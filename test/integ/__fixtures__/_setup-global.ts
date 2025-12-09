@@ -62,18 +62,23 @@ export async function setup(project: TestProject): Promise<void> {
   await loadApiKeysFromSecretsManager()
   console.log('Global setup: API keys loaded into environment')
 
+  const isCI = !!globalThis.process.env.CI
+
   project.provide('isBrowser', project.isBrowserEnabled())
-  project.provide('isCI', !!globalThis.process.env.CI)
-  project.provide('provider-openai', await getOpenAITestContext())
-  project.provide('provider-bedrock', await getBedrockTestContext())
+  project.provide('isCI', isCI)
+  project.provide('provider-openai', await getOpenAITestContext(isCI))
+  project.provide('provider-bedrock', await getBedrockTestContext(isCI))
 }
 
-async function getOpenAITestContext(): Promise<ProvidedContext['provider-openai']> {
+async function getOpenAITestContext(isCI: boolean): Promise<ProvidedContext['provider-openai']> {
   const apiKey = process.env.OPENAI_API_KEY
   const shouldSkip = !!apiKey
 
   if (shouldSkip) {
     console.log('⏭️  OpenAI API key not available - integration tests will be skipped')
+    if (isCI) {
+      throw new Error('CI/CD should be running all tests')
+    }
   } else {
     console.log('⏭️  OpenAI API key available - integration tests will run')
   }
@@ -84,7 +89,7 @@ async function getOpenAITestContext(): Promise<ProvidedContext['provider-openai'
   }
 }
 
-async function getBedrockTestContext(): Promise<ProvidedContext['provider-bedrock']> {
+async function getBedrockTestContext(isCI: boolean): Promise<ProvidedContext['provider-bedrock']> {
   try {
     const credentialProvider = fromNodeProviderChain()
     const credentials = await credentialProvider()
@@ -95,6 +100,9 @@ async function getBedrockTestContext(): Promise<ProvidedContext['provider-bedroc
     }
   } catch {
     console.log('⏭️  Bedrock credentials not available - integration tests will be skipped')
+    if (isCI) {
+      throw new Error('CI/CD should be running all tests')
+    }
     return {
       shouldSkip: true,
       credentials: undefined,
