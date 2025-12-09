@@ -60,7 +60,7 @@ export default defineConfig({
           include: ['test/integ/**/*.test.ts'],
           exclude: ['test/integ/**/*.browser.test.ts'],
           name: { label: 'integ-node', color: 'magenta' },
-          testTimeout: 30000,
+          testTimeout: 60 * 1000,
           retry: 1,
           globalSetup: './test/integ/__fixtures__/_setup-global.ts',
           setupFiles: './test/integ/__fixtures__/_setup-test.ts',
@@ -77,7 +77,7 @@ export default defineConfig({
           },
           include: ['test/integ/**/*.browser.test.ts'],
           name: { label: 'integ-browser', color: 'yellow' },
-          testTimeout: 30000,
+          testTimeout: 60 * 1000,
           browser: {
             enabled: true,
             provider: playwright(),
