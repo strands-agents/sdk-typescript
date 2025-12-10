@@ -140,6 +140,8 @@ Outline the high-level structure of the implementation and create an implementat
 Write test cases based on the outlines, following strict TDD principles.
 
 **Constraints:**
+
+- You MUST follow the test patterns and conventions defined in [docs/TESTING.md](../../docs/TESTING.md)
 - You MUST validate that the task environment is set up properly
   - If you already created a commit, ensure the latest commit matches the expected hash
   - If not, ensure the correct branch is checked out
@@ -197,13 +199,12 @@ Write implementation code to pass the tests, focusing on simplicity and correctn
 - You MUST otherwise continue automatically after verifying test results
 - You MUST follow the Build Output Management practices defined in the Best Practices section
 
-#### 4.3 Review, Refactor, and Optimize
+#### 4.3 Review and Refactor Implementation
 
-If the implementation is complete, proceed with review of the implementation to identify opportunities for simplification or improvement.
+If the implementation is complete, proceed with a self-review of the implementation code to identify opportunities for simplification or improvement.
 
 **Constraints:**
-- You MAY reply to user review threads with a concise response
-  - You MUST keep your response to less than 3 sentences
+
 - You MUST check that all tasks are complete before proceeding
   - if tests fail, you MUST identify the issue and implement a fix
   - if builds fail, you MUST identify the issue implement a fix
@@ -211,8 +212,40 @@ If the implementation is complete, proceed with review of the implementation to 
 - You MUST maintain test passing status throughout refactoring
 - You SHOULD make note of simplification  in your progress notes
 - You SHOULD record significant refactorings in your progress notes
+- You MUST return to step 4.2 if refactoring reveals additional implementation needs
 
-#### 4.4 Validate Implementation
+#### 4.4 Review and Refactor Tests
+
+After reviewing the implementation, review the test code to ensure it follows established patterns and provides adequate coverage.
+
+**Constraints:**
+
+- You MUST review your test code according to the guidelines in [docs/TESTING.md](../../docs/TESTING.md).
+- You MUST verify tests conform to the testing documentation standards
+- You MUST verify tests are readable and maintainable
+- You SHOULD refactor tests that are overly complex or duplicative
+- You MUST return to step 4.1 if tests need significant restructuring
+
+**Testing Checklist Verification (REQUIRED):**
+
+You MUST copy the checklist from [docs/TESTING.md](../../docs/TESTING.md) into your progress notes and explicitly verify each item. For each checklist item, you MUST:
+
+1. Copy the checklist item verbatim
+2. Mark it as `[x]` (pass) or `[-]` (fail)
+3. If failed, provide a brief explanation and fix the issue before proceeding
+
+Example format in your notes:
+
+```markdown
+## Testing Checklist Verification
+
+- [x] Do the tests use relevant helpers from `__fixtures__` as noted in the "Test Fixtures Reference" section
+- [ ] Are tests asserting on the entire object instead of specific fields? → FAILED: test on line 45 asserts individual properties, refactoring now
+```
+
+You MUST NOT proceed to step 4.5 until ALL checklist items pass.
+
+#### 4.5 Validate Implementation
 
 If the implementation meets all requirements and follows established patterns, proceed with this step. Otherwise, return to step 4.2 to fix any issues.
 
@@ -230,6 +263,24 @@ If the implementation meets all requirements and follows established patterns, p
 - You MUST verify that all dependencies are satisfied
 - You MUST follow the Build Output Management practices defined in the Best Practices section
 
+#### 4.6 Respond to Review Feedback
+
+If you have received feedback from user reviews or PR comments, address them before proceeding to the commit phase.
+
+**Constraints:**
+
+- You MAY skip this step if no user feedback has been received yet
+- You MUST reply to user review threads with a concise response
+  - You MUST keep your response to less than 3 sentences
+- You MUST categorize each piece of feedback as:
+  - Actionable code changes that can be implemented immediately
+  - Clarifying questions that require user input
+  - Suggestions to consider for future iterations
+- You MUST implement actionable code changes before proceeding
+- You MUST re-run tests after addressing feedback to ensure nothing is broken
+- You MUST return to step 4.3 after implementing changes to review the updated code
+- You MUST use the handoff_to_user tool if clarification is needed before you can proceed
+
 ### 5. Commit and Pull Request Phase
 
 If all tests are passing, draft a conventional commit message, perform the git commit, and create/update the pull request.
@@ -239,7 +290,7 @@ If all tests are passing, draft a conventional commit message, perform the git c
 Before creating or updating a PR, you MUST copy the checklist from [docs/PR.md](../../docs/PR.md) into your progress notes and explicitly verify each item. For each checklist item, you MUST:
 
 1. Copy the checklist item verbatim
-2. Mark it as `[x]` (pass) or `[ ]` (fail)
+2. Mark it as `[x]` (pass) or `[-]` (fail)
 3. If failed, revise the PR description until the item passes
 
 Example format in your notes:
@@ -401,6 +452,8 @@ If builds fail during implementation:
 - Use appropriate package managers and dependency files for the project type
 
 ### Testing Best Practices
+
+- You MUST follow the comprehensive testing guidelines in [docs/TESTING.md](../../docs/TESTING.md)
 - Follow TDD principles: RED → GREEN → REFACTOR
 - Write tests that fail initially, then implement to make them pass
 - Use appropriate testing frameworks for the project type or as specified in DEVELOPMENT.md
@@ -416,7 +469,7 @@ If builds fail during implementation:
 
 ### Checklist Verification Pattern
 
-When documentation files contain checklists (e.g., `docs/PR.md`), you MUST:
+When documentation files contain checklists (e.g., `docs/TESTING.md`, `docs/PR.md`), you MUST:
 
 1. Copy the entire checklist into your progress notes
 2. Explicitly verify each item by marking `[x]` or `[ ]`

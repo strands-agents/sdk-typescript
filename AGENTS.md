@@ -162,8 +162,21 @@ See [CONTRIBUTING.md - Development Environment](CONTRIBUTING.md#development-envi
 3. **Run quality checks** before committing (pre-commit hooks will run automatically)
 4. **Commit with conventional commits**: `feat:`, `fix:`, `refactor:`, `docs:`, etc.
 5. **Push to remote**: `git push origin agent-tasks/{ISSUE_NUMBER}`
+6. **Create pull request** following [PR.md](docs/PR.md) guidelines
 
-### 3. Quality Gates
+### 3. Pull Request Guidelines
+
+When creating pull requests, you **MUST** follow the guidelines in [PR.md](docs/PR.md). Key principles:
+
+- **Focus on WHY**: Explain motivation and user impact, not implementation details
+- **Document public API changes**: Show before/after code examples
+- **Be concise**: Use prose over bullet lists; avoid exhaustive checklists
+- **Target senior engineers**: Assume familiarity with the SDK
+- **Exclude implementation details**: Leave these to code comments and diffs
+
+See [PR.md](docs/PR.md) for the complete guidance and template.
+
+### 4. Quality Gates
 
 Pre-commit hooks automatically run:
 - Unit tests (via npm test)
@@ -172,6 +185,18 @@ Pre-commit hooks automatically run:
 - Type checking (via npm run type-check)
 
 All checks must pass before commit is allowed.
+
+### 5. Testing Guidelines
+
+When writing tests, you **MUST** follow the guidelines in [docs/TESTING.md](docs/TESTING.md). Key topics covered:
+
+- Test organization and file location
+- Test batching strategy
+- Object assertion best practices
+- Test coverage requirements
+- Multi-environment testing (Node.js and browser)
+
+See [TESTING.md](docs/TESTING.md) for the complete testing reference.
 
 ## Coding Patterns and Best Practices
 
@@ -286,102 +311,6 @@ export async function* mainFunction() {
 ```
 test/integ/
 └── feature.test.ts        # Tests public API
-```
-
-### Test Organization Pattern
-
-Follow this nested describe pattern for consistency:
-
-**For functions**:
-```typescript
-import { describe, it, expect } from 'vitest'
-import { functionName } from '../module'
-
-describe('functionName', () => {
-  describe('when called with valid input', () => {
-    it('returns expected result', () => {
-      const result = functionName('input')
-      expect(result).toBe('expected')
-    })
-  })
-
-  describe('when called with edge case', () => {
-    it('handles gracefully', () => {
-      const result = functionName('')
-      expect(result).toBeDefined()
-    })
-  })
-})
-```
-
-**For classes**:
-```typescript
-import { describe, it, expect } from 'vitest'
-import { ClassName } from '../module'
-
-describe('ClassName', () => {
-  describe('methodName', () => {
-    it('returns expected result', () => {
-      const instance = new ClassName()
-      const result = instance.methodName()
-      expect(result).toBe('expected')
-    })
-
-    it('handles error case', () => {
-      const instance = new ClassName()
-      expect(() => instance.methodName()).toThrow()
-    })
-  })
-
-  describe('anotherMethod', () => {
-    it('performs expected action', () => {
-      // Test implementation
-    })
-  })
-})
-```
-
-**Key principles**:
-- Top-level `describe` uses the function/class name
-- Nested `describe` blocks group related test scenarios
-- Use descriptive test names without "should" prefix
-- Group tests by functionality or scenario
-
-### Test Batching Strategy
-
-**Rule**: When test setup cost exceeds test logic cost, you MUST batch related assertions into a single test.
-
-**You MUST batch when**:
-- Setup complexity > test logic complexity
-- Multiple assertions verify the same object state
-- Related behaviors share expensive context
-
-**You SHOULD keep separate tests for**:
-- Distinct behaviors or execution paths
-- Error conditions
-- Different input scenarios
-
-**Bad - Redundant setup**:
-```typescript
-it('has correct tool name', () => {
-  const tool = createComplexTool({ /* expensive setup */ })
-  expect(tool.toolName).toBe('testTool')
-})
-
-it('has correct description', () => {
-  const tool = createComplexTool({ /* same expensive setup */ })
-  expect(tool.description).toBe('Test description')
-})
-```
-
-**Good - Batched properties**:
-```typescript
-it('creates tool with correct properties', () => {
-  const tool = createComplexTool({ /* setup once */ })
-  expect(tool.toolName).toBe('testTool')
-  expect(tool.description).toBe('Test description')
-  expect(tool.toolSpec.name).toBe('testTool')
-})
 ```
 
 ### TypeScript Type Safety
@@ -652,185 +581,6 @@ export class ValidationError extends Error {
 }
 ```
 
-## Testing Patterns
-
-### Unit Test Location
-
-**Rule**: Unit tests files are co-located with source files, grouped in a directory named `__tests__`
-
-```
-src/subdir/
-├── agent.ts                    # Source file
-├── model.ts                    # Source file
-└── __tests__/
-    ├── agent.test.ts           # Tests for agent.ts
-    └── model.test.ts           # Tests for model.ts
-```
-
-### Integration Test Location
-
-**Rule**: Integration tests are separate in `test/integ/`
-
-```
-test/integ/
-├── api.test.ts                 # Tests public API
-└── environment.test.ts         # Tests environment compatibility
-```
-
-### Test File Naming
-
-- Unit tests: `{sourceFileName}.test.ts` in `src/**/__tests__/**`
-- Integration tests: `{feature}.test.ts` in `test/integ/`
-
-### Test Coverage
-
-- **Minimum**: 80% coverage required (enforced by Vitest)
-- **Target**: Aim for high coverage on critical paths
-- **Exclusions**: Test files, config files, generated code
-
-### Writing Effective Tests
-
-```typescript
-// Good: Clear, specific test
-describe('calculateTotal', () => {
-  describe('when given valid numbers', () => {
-    it('returns the sum', () => {
-      expect(calculateTotal([1, 2, 3])).toBe(6)
-    })
-  })
-
-  describe('when given empty array', () => {
-    it('returns zero', () => {
-      expect(calculateTotal([])).toBe(0)
-    })
-  })
-})
-
-// Bad: Vague, unclear test
-describe('calculateTotal', () => {
-  it('works', () => {
-    expect(calculateTotal([1, 2, 3])).toBeTruthy()
-  })
-})
-```
-
-### Object Assertion Best Practices
-
-**Prefer testing entire objects at once** instead of individual properties for better readability and test coverage.
-
-```typescript
-// ✅ Good: Verify entire object at once
-it('returns expected user object', () => {
-  const user = getUser('123')
-  expect(user).toEqual({
-    id: '123',
-    name: 'John Doe',
-    email: 'john@example.com',
-    isActive: true
-  })
-})
-
-// ✅ Good: Verify entire array of objects
-it('yields expected stream events', async () => {
-  const events = await collectIterator(stream)
-  expect(events).toEqual([
-    { type: 'streamEvent', data: 'Starting...' },
-    { type: 'streamEvent', data: 'Processing...' },
-    { type: 'streamEvent', data: 'Complete!' },
-  ])
-})
-
-// ❌ Bad: Testing individual properties
-it('returns expected user object', () => {
-  const user = getUser('123')
-  expect(user).toBeDefined()
-  expect(user.id).toBe('123')
-  expect(user.name).toBe('John Doe')
-  expect(user.email).toBe('john@example.com')
-  expect(user.isActive).toBe(true)
-})
-
-// ❌ Bad: Testing array elements individually in a loop
-it('yields expected stream events', async () => {
-  const events = await collectIterator(stream)
-  for (const event of events) {
-    expect(event.type).toBe('streamEvent')
-    expect(event).toHaveProperty('data')
-  }
-})
-```
-
-**Benefits of testing entire objects**:
-- **More concise**: Single assertion instead of multiple
-- **Better test coverage**: Catches unexpected additional or missing properties
-- **More readable**: Clear expectation of the entire structure
-- **Easier to maintain**: Changes to the object require updating one place
-
-**Use cases**:
-- Always use `toEqual()` for object and array comparisons
-- Use `toBe()` only for primitive values and reference equality
-- When testing error objects, verify the entire structure including message and type
-
-### Testing Guidelines
-
-**Testing Approach:**
-- You **MUST** write tests for implementations (functions, classes, methods)
-- You **SHOULD NOT** write tests for interfaces since TypeScript compiler already enforces type correctness
-- You **SHOULD** write Vitest type tests (`*.test-d.ts`) for complex types to ensure backwards compatibility
-
-**Example Implementation Test:**
-```typescript
-describe('BedrockModel', () => {
-  it('streams messages correctly', async () => {
-    const provider = new BedrockModel(config)
-    const stream = provider.stream(messages)
-    
-    for await (const event of stream) {
-      if (event.type === 'modelMessageStartEvent') {
-        expect(event.role).toBe('assistant')
-      }
-    }
-  })
-})
-```
-
-### Test Model Providers
-
-**When to use each test provider:**
-
-- **`MockMessageModel`**: For agent loop tests and high-level flows - focused on content blocks
-- **`TestModelProvider`**: For low-level event streaming tests where you need precise control over individual events
-
-#### MockMessageModel - Content-Focused Testing
-
-For tests focused on messages, you SHOULD use `MockMessageModel` with a content-focused API that eliminates boilerplate:
-
-```typescript
-import { MockMessageModel } from '../__fixtures__/mock-message-model'
-
-// ✅ RECOMMENDED - Single content block (most common)
-const provider = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
-
-// ✅ RECOMMENDED - Array of content blocks
-const provider = new MockMessageModel().addTurn([
-  { type: 'textBlock', text: 'Let me help' },
-  { type: 'toolUseBlock', name: 'calc', toolUseId: 'id-1', input: {} },
-])
-
-// ✅ RECOMMENDED - Multi-turn with builder pattern
-const provider = new MockMessageModel()
-  .addTurn({ type: 'toolUseBlock', name: 'calc', toolUseId: 'id-1', input: {} }) // Auto-derives 'toolUse'
-  .addTurn({ type: 'textBlock', text: 'The answer is 42' }) // Auto-derives 'endTurn'
-
-// ✅ OPTIONAL - Explicit stopReason when needed
-const provider = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Partial response' }, 'maxTokens')
-
-// ✅ OPTIONAL - Error handling
-const provider = new MockMessageModel()
-  .addTurn({ type: 'textBlock', text: 'Success' })
-  .addTurn(new Error('Model failed'))
-```
-
 ## MCP (Model Context Protocol) Integration
 
 The [Model Context Protocol (MCP)](https://modelcontextprotocol.io) enables agents to connect to external tools and data sources through a standardized protocol. The SDK provides `McpClient` for seamless integration with MCP servers.
@@ -928,43 +678,12 @@ Quick reference:
 npm test              # Run unit tests in Node.js
 npm run test:browser  # Run unit tests in browser (Chromium via Playwright)
 npm run test:all      # Run all tests in all environments
-npm run test:integ    # Run integration tests  
+npm run test:integ    # Run integration tests
 npm run test:coverage # Run tests with coverage report
 npm run lint          # Check code quality
 npm run format        # Auto-fix formatting
 npm run type-check    # Verify TypeScript types
 npm run build         # Compile TypeScript
-```
-
-## Multi-Environment Testing
-
-The SDK is designed to work seamlessly in both Node.js and browser environments. Our test suite validates this by running tests in both environments using Vitest's browser mode with Playwright.
-
-### Test Projects
-
-The test suite is organized into three projects:
-
-1. **unit-node** (green): Unit tests running in Node.js environment
-2. **unit-browser** (cyan): Same unit tests running in Chromium browser
-3. **integ** (magenta): Integration tests running in Node.js
-
-### Environment-Specific Test Patterns
-
-- You MUST write tests that are environment-agnostic unless they depend on Node.js features like filesystem or env-vars
-
-Some tests require Node.js-specific features (like process.env, AWS SDK) and should be skipped in browser environments:
-
-```typescript
-import { describe, it, expect } from 'vitest'
-import { isNode } from '../__fixtures__/environment'
-
-// Tests will run in Node.js, skip in browser
-describe.skipIf(!isNode)("Node.js specific features", () => {
-  it("uses environment variables", () => {
-    // This test accesses process.env
-    expect(process.env.NODE_ENV).toBeDefined()
-  })
-})
 ```
 
 ## Troubleshooting Common Issues
@@ -1018,6 +737,8 @@ When responding to PR feedback:
 ### Integration with Other Files
 
 - **CONTRIBUTING.md**: Contains testing/setup commands and human contribution guidelines
+- **docs/TESTING.md**: Comprehensive testing guidelines (MUST follow when writing tests)
+- **docs/PR.md**: Pull request guidelines and template
 - **README.md**: Public-facing documentation, links to strandsagents.com
 - **package.json**: Defines all npm scripts referenced in documentation
 
