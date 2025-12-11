@@ -65,6 +65,7 @@ from datetime import datetime
 from functools import wraps
 import json
 from typing import Any, TypedDict
+from urllib.parse import urlencode, quote
 
 import requests
 from rich import box
@@ -363,9 +364,15 @@ def create_pull_request(title: str, head: str, base: str, body: str = "", repo: 
             agent_message = "Failed to create pull request, commenting on issue instead."
             console.print(Panel(escape(agent_message), title="[bold yellow]Fallback", border_style="yellow"))
             repo_name = repo or os.environ.get("GITHUB_REPOSITORY", "")
-            pr_link = f"https://github.com/{repo_name}/compare/{base}...{head}?quick_pull=1&title={title.replace(' ', '%20')}&body={body.replace(' ', '%20').replace('\n', '%0A')}"
-            fallback_comment = f"Failed to create pull request, you can create it by clicking this link:\n\n{pr_link}"
-            return add_issue_comment(fallback_issue_id, fallback_comment, repo)
+            query_params = urlencode({
+                'quick_pull': '1',
+                'title': title,
+                'body': body
+            }, quote_via=quote)
+            pr_link = f"https://github.com/{repo_name}/compare/{base}...{head}?{query_params}"
+            fallback_comment = f"Unable to create pull request via API. You can create it manually by clicking [here]({pr_link})."
+            add_issue_comment(fallback_issue_id, fallback_comment, repo)
+            return f"Unable to create pull request via API - posted a manual creation link as a comment on issue #{fallback_issue_id}"
         else:
             error_msg = f"Error: {e!s}"
             console.print(Panel(escape(error_msg), title="[bold red]Error", border_style="red"))

@@ -40,6 +40,16 @@ jobs:
       - name: Run unit tests
         run: npm run test:all:coverage
 
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: test-artifacts-${{ matrix.node-version }}-${{ matrix.os }}
+          path: ./test/.artifacts/
+          include-hidden-files: true # needed because the path has a directory starting with a '.'
+          retention-days: 4
+          if-no-files-found: ignore
+
       - name: Run linting
         run: npm run lint
 

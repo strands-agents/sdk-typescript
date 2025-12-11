@@ -199,7 +199,7 @@ await documentationTools.disconnect();
 For detailed guidance, tutorials, and concept overviews, please visit:
 
 - **[Official Documentation](https://strandsagents.com/)**: Comprehensive guides and tutorials
-- **[API Reference](.sop/summary/interfaces.md)**: Complete API documentation
+- **[API Reference](https://strandsagents.com/latest/documentation/docs/api-reference/typescript/)**: Complete API documentation
 - **[Examples](./examples/)**: Sample applications
 - **[Contributing Guide](CONTRIBUTING.md)**: Development setup and guidelines
 

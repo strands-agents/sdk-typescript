@@ -5,14 +5,42 @@ import tsdoc from 'eslint-plugin-tsdoc'
 
 export default [
   eslint.configs.recommended,
-  {
-    files: ['src/**/*.ts', 'vended_tools/**/*.ts'],
+  // Apply SDK rules to src files
+  sdkRules({
+    files: ['src/**/*.ts'],
+    tsconfig: './src/tsconfig.json',
+  }),
+  // Prevent non-vended-tools from importing vended-tools
+  noVendedToolsImports({
+    files: ['src/**/*.ts'],
+    ignores: ['src/vended-tools/**/*.ts'],
+  }),
+  // Then unit-test rules to UTs
+  unitTestRules({
+    files: ['src/**/__tests__/**/*.ts'],
+    tsconfig: './src/tsconfig.json',
+  }),
+  // Apply UT rules to the integ tests
+  unitTestRules({
+    files: ['test/integ/**/*.ts'],
+    tsconfig: './test/integ/tsconfig.json',
+  }),
+  // Then stricter integ test rules
+  integTestRules({
+    files: ['test/integ/**/*.ts'],
+    tsconfig: './test/integ/tsconfig.json',
+  }),
+]
+
+function sdkRules(options) {
+  return {
+    files: options.files,
     languageOptions: {
       parser: tsparser,
       parserOptions: {
         ecmaVersion: 2022,
         sourceType: 'module',
-        project: './tsconfig.json',
+        project: options.tsconfig,
       },
       globals: {
         console: 'readonly',
@@ -31,14 +59,18 @@ export default [
       '@typescript-eslint/explicit-module-boundary-types': 'error',
       'tsdoc/syntax': 'error',
     },
-  },
-  {
-    files: ['src/**/__tests__/**/*.ts', 'tests_integ/**/*.ts', 'vended_tools/**/__tests__/**/*.ts'],
+  }
+}
+
+function unitTestRules(options) {
+  return {
+    files: options.files,
     languageOptions: {
       parser: tsparser,
       parserOptions: {
         ecmaVersion: 2022,
         sourceType: 'module',
+        project: options.tsconfig,
       },
       globals: {
         process: 'readonly',
@@ -56,18 +88,53 @@ export default [
       '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
       '@typescript-eslint/explicit-function-return-type': 'off',
-      'quotes': ['error', 'single', { avoidEscape: true }],
+      quotes: ['error', 'single', { avoidEscape: true }],
     },
-  },
-  {
-    files: ['tests_integ/**/*.ts'],
-    rules: {
-      'no-restricted-imports': ['error', {
-        patterns: [{
-          group: ['../src', '../src/**'],
-          message: 'Integration tests should import from @strands-agent/sdk instead of ../src'
-        }]
-      }]
-    }
   }
-]
+}
+
+function integTestRules(options) {
+  return {
+    files: options.files,
+    languageOptions: {
+      parserOptions: {
+        project: options.tsconfig,
+      },
+    },
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['../src', '../src/**'],
+              message:
+                'Integration tests should use $/sdk/* path aliases instead of ../src. Test fixtures can import from $/sdk/*.',
+            },
+          ],
+        },
+      ],
+    },
+  }
+}
+
+function noVendedToolsImports(options) {
+  return {
+    files: options.files,
+    ignores: options.ignores,
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['**/vended-tools', '**/vended-tools/**'],
+              message:
+                'Core SDK files should not import from vended-tools. Vended tools are optional and independently importable.',
+            },
+          ],
+        },
+      ],
+    },
+  }
+}

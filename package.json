@@ -11,32 +11,36 @@
   ],
   "exports": {
     ".": {
-      "import": "./dist/src/index.js",
-      "types": "./dist/src/index.d.ts"
+      "types": "./dist/src/index.d.ts",
+      "default": "./dist/src/index.js"
     },
     "./openai": {
-      "import": "./dist/src/models/openai.js",
-      "types": "./dist/src/models/openai.d.ts"
+      "types": "./dist/src/models/openai.d.ts",
+      "default": "./dist/src/models/openai.js"
     },
     "./bedrock": {
-      "import": "./dist/src/models/bedrock.js",
-      "types": "./dist/src/models/bedrock.d.ts"
+      "types": "./dist/src/models/bedrock.d.ts",
+      "default": "./dist/src/models/bedrock.js"
     },
     "./vended_tools/notebook": {
-      "import": "./dist/vended_tools/notebook/index.js",
-      "types": "./dist/vended_tools/notebook/index.d.ts"
+      "types": "./dist/src/vended-tools/notebook/index.d.ts",
+      "default": "./dist/src/vended-tools/notebook/index.js"
     },
     "./vended_tools/file_editor": {
-      "import": "./dist/vended_tools/file_editor/index.js",
-      "types": "./dist/vended_tools/file_editor/index.d.ts"
+      "types": "./dist/src/vended-tools/file_editor/index.d.ts",
+      "default": "./dist/src/vended-tools/file_editor/index.js"
     },
     "./vended_tools/http_request": {
-      "import": "./dist/vended_tools/http_request/index.js",
-      "types": "./dist/vended_tools/http_request/index.d.ts"
+      "types": "./dist/src/vended-tools/http_request/index.d.ts",
+      "default": "./dist/src/vended-tools/http_request/index.js"
+    },
+    "./vended_tools/bash": {
+      "types": "./dist/src/vended-tools/bash/index.d.ts",
+      "default": "./dist/src/vended-tools/bash/index.js"
     }
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc --project src/tsconfig.json",
     "check": "npm run lint && npm run format && npm run type-check && npm run test:coverage && npm run test:package",
     "clean": "rm -rf node_modules dist package-lock.json",
     "test": "vitest run --project unit-node",
@@ -50,12 +54,12 @@
     "test:browser:install": "npx playwright install --with-deps chromium",
     "test:all": "vitest run --project unit-node --project unit-browser",
     "test:all:coverage": "vitest run --coverage --project unit-node --project unit-browser",
-    "test:package": "npm run build && cd test-package && npm install && node verify.js",
-    "lint": "eslint src tests_integ vended_tools",
-    "lint:fix": "eslint src tests_integ vended_tools --fix",
-    "format": "prettier --write src tests_integ vended_tools",
-    "format:check": "prettier --check src tests_integ vended_tools",
-    "type-check": "tsc --noEmit",
+    "test:package": "cd test/packages/esm-module && npm install && node esm.js && cd ../cjs-module && npm install && node cjs.js",
+    "lint": "eslint src test/integ",
+    "lint:fix": "eslint src test/integ --fix",
+    "format": "prettier --write src test/integ",
+    "format:check": "prettier --check src test/integ",
+    "type-check": "tsc --noEmit --project src/tsconfig.json && tsc --noEmit --project test/integ/tsconfig.json",
     "type-check:watch": "tsc --noEmit --watch",
     "prepare": "npm run build && husky"
   },
@@ -92,7 +96,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/strands-agents/sdk-typescript.git"
+    "url": "git+https://github.com/strands-agents/sdk-typescript.git"
   },
   "bugs": {
     "url": "https://github.com/strands-agents/sdk-typescript/issues"

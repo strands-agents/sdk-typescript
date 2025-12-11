@@ -94,6 +94,9 @@ Create a numbered list of questions to resolve ambiguities and gather missing in
 - You SHOULD ask about performance and scalability requirements
 - You MUST create a comment with all of your questions on the issue.
   - If the comment posting is deferred, continue with the workflow and note the deferred status
+- You MUST wrap the comment body in a `<details><summary>` element so it is collapsed by default
+  - Use a brief, descriptive summary (e.g., "Repository Analysis & Clarifying Questions")
+  - Place all detailed content inside the `<details>` block
 
 #### 3.3 Handoff to User for Response
 
@@ -185,14 +188,16 @@ Record that the task review is complete and ready as a comment on the issue.
   - If comment posting is deferred, continue with the workflow and note the deferred status
 - You MUST summarize what was accomplished in your comment
 - You MUST confirm in your comment that the issue is ready for implementation, or explain why it is not
-- You MUST record the estimated scope of work based on repository analysis
 - You SHOULD mention any final recommendations or considerations
+- You MUST wrap the comment body in a `<details><summary>` element so it is collapsed by default
+  - Use a brief, descriptive summary (e.g., "Task Refinement Complete")
 
 ## Examples
 
 ### Example Repository Analysis Comment
 ```markdown
-## Repository Analysis & Clarifying Questions
+<details>
+<summary>Repository Analysis & Clarifying Questions</summary>
 
 I've analyzed the repository structure and have some questions to ensure proper implementation:
 
@@ -217,6 +222,8 @@ I've analyzed the repository structure and have some questions to ensure proper 
 6. What should the user interface look like for this feature?
 
 Please respond when you have a chance. Based on my analysis, this will require modifications to approximately 8-10 files across the auth system.
+
+</details>
 ```
 
 ### Example Final Issue Description Update
@@ -257,12 +264,6 @@ Based on clarification discussion and repository analysis:
 - [ ] 2FA can be enabled/disabled by user
 - [ ] Integration tests pass
 - [ ] Existing auth functionality remains intact
-
-### Estimated Scope
-- **Complexity**: Medium
-- **Files Modified**: ~8-10 files
-- **New Components**: 2-3 React components
-- **Database Migrations**: 1-2 migrations required
 ```
 
 ## Troubleshooting

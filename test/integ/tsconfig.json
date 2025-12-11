@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "paths": {
+      "$/sdk/*": ["../../src/*"]
+    },
+    "types": ["vite/client", "vitest/importMeta", "@types/node"]
+  },
+  "references": [{ "path": "../../src/tsconfig.json" }]
+}

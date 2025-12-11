@@ -1,14 +1,18 @@
 import { defineConfig } from 'vitest/config'
 import { playwright } from '@vitest/browser-playwright'
-import { AwsCredentialIdentity } from '@aws-sdk/types'
+import type { AwsCredentialIdentity } from '@aws-sdk/types'
 import { fromNodeProviderChain } from '@aws-sdk/credential-providers'
-import { BrowserCommand } from 'vitest/node'
+import type { BrowserCommand } from 'vitest/node'
+import path from 'path'
+import { fileURLToPath } from 'url'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 // Conditionally exclude bash tool from coverage on Windows
 // since tests are skipped on Windows (bash not available)
-const coverageExclude = ['src/**/__tests__/**', 'src/**/__fixtures__/**', 'vended_tools/**/__tests__/**']
+const coverageExclude = ['src/**/__tests__/**', 'src/**/__fixtures__/**', 'src/vended-tools/**/__tests__/**']
 if (process.platform === 'win32') {
-  coverageExclude.push('vended_tools/bash/**')
+  coverageExclude.push('src/vended-tools/bash/**')
 }
 
 const getAwsCredentials: BrowserCommand<[], AwsCredentialIdentity> = async ({ testPath, provider }) => {
@@ -23,26 +27,33 @@ const getOpenAIAPIKey: BrowserCommand<[], string | undefined> = async ({ testPat
 export default defineConfig({
   test: {
     unstubEnvs: true,
+    reporters: [
+      'default',
+      ['junit', { outputFile: 'test/.artifacts/test-report/junit/report.xml' }],
+      ['json', { outputFile: 'test/.artifacts/test-report/json/report.json' }],
+    ],
     projects: [
       {
         test: {
-          include: ['src/**/__tests__/**/*.test.ts', 'vended_tools/**/__tests__/**/*.test.ts'],
+          include: ['src/**/__tests__/**/*.test.ts', 'src/vended-tools/**/__tests__/**/*.test.ts'],
           includeSource: ['src/**/*.{js,ts}'],
           name: { label: 'unit-node', color: 'green' },
           typecheck: {
             enabled: true,
+            tsconfig: 'src/tsconfig.json',
             include: ['src/**/__tests__**/*.test-d.ts'],
           },
         },
       },
       {
         test: {
-          include: ['src/**/__tests__/**/*.test.ts', 'vended_tools/**/__tests__/**/*.test.ts'],
-          exclude: ['vended_tools/file_editor/**/*.test.ts', 'vended_tools/bash/**/*.test.ts'],
+          include: ['src/**/__tests__/**/*.test.ts'],
+          exclude: ['src/vended-tools/file_editor/**/*.test.ts', 'src/vended-tools/bash/**/*.test.ts'],
           name: { label: 'unit-browser', color: 'cyan' },
           browser: {
             enabled: true,
             provider: playwright(),
+            screenshotDirectory: 'test/.artifacts/browser-screenshots/',
             instances: [
               {
                 browser: 'chromium',
@@ -53,12 +64,16 @@ export default defineConfig({
       },
       {
         test: {
-          include: ['tests_integ/**/*.test.ts'],
-          exclude: ['tests_integ/**/*.browser.test.ts'],
+          alias: {
+            '$/sdk': path.resolve(__dirname, './src'),
+            '$/vended': path.resolve(__dirname, './src/vended-tools'),
+          },
+          include: ['test/integ/**/*.test.ts'],
+          exclude: ['test/integ/**/*.browser.test.ts'],
           name: { label: 'integ-node', color: 'magenta' },
           testTimeout: 30000,
           retry: 1,
-          globalSetup: './tests_integ/integ-setup.ts',
+          globalSetup: './test/integ/integ-setup.ts',
           sequence: {
             concurrent: true,
           },
@@ -66,12 +81,17 @@ export default defineConfig({
       },
       {
         test: {
-          include: ['tests_integ/**/*.browser.test.ts'],
+          alias: {
+            '$/sdk': path.resolve(__dirname, './src'),
+            '$/vended': path.resolve(__dirname, './src/vended-tools'),
+          },
+          include: ['test/integ/**/*.browser.test.ts'],
           name: { label: 'integ-browser', color: 'yellow' },
           testTimeout: 30000,
           browser: {
             enabled: true,
             provider: playwright(),
+            screenshotDirectory: 'test/.artifacts/browser-screenshots/',
             instances: [
               {
                 browser: 'chromium',
@@ -84,7 +104,7 @@ export default defineConfig({
               getOpenAIAPIKey,
             },
           },
-          globalSetup: './tests_integ/integ-setup.ts',
+          globalSetup: './test/integ/integ-setup.ts',
           sequence: {
             concurrent: true,
           },
@@ -97,7 +117,8 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
-      include: ['src/**/*', 'vended_tools/**/*'],
+      reportsDirectory: 'test/.artifacts/coverage',
+      include: ['src/**/*.{ts,js}', 'src/vended-tools/**/*.{ts,js}'],
       exclude: coverageExclude,
       thresholds: {
         lines: 80,

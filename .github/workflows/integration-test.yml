@@ -86,11 +86,12 @@ jobs:
       - name: Run integration tests
         run: npm run test:integ:all
 
-      - name: Upload browser test screenshots
+      - name: Upload test artifacts
         if: always()
         uses: actions/upload-artifact@v5
         with:
-          name: browser-test-screenshots
-          path: tests_integ/browser/__screenshots__/
+          name: test-artifacts-integ
+          path: ./test/.artifacts/
           retention-days: 4
+          include-hidden-files: true # needed because the path has a directory starting with a '.'
           if-no-files-found: ignore
