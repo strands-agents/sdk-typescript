@@ -2,7 +2,7 @@ name: Issue Metadata Automation
 
 on:
   issues:
-    types: [opened]
+    types: [opened,reopened]
 
 jobs:
   auto-label:
