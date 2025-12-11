@@ -1,6 +1,8 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
+import { ElicitRequestSchema } from '@modelcontextprotocol/sdk/types.js'
 import type { JSONSchema, JSONValue } from './types/json.js'
+import type { ElicitationCallback, ElicitRequestParams } from './types/elicitation.js'
 import { McpTool } from './tools/mcp-tool.js'
 
 /** Temporary placeholder for RuntimeConfig */
@@ -10,7 +12,10 @@ export interface RuntimeConfig {
 }
 
 /** Arguments for configuring an MCP Client. */
-export type McpClientConfig = RuntimeConfig & { transport: Transport }
+export type McpClientConfig = RuntimeConfig & {
+  transport: Transport
+  elicitationCallback?: ElicitationCallback
+}
 
 /** MCP Client for interacting with Model Context Protocol servers. */
 export class McpClient {
@@ -19,16 +24,33 @@ export class McpClient {
   private _transport: Transport
   private _connected: boolean
   private _client: Client
+  private _elicitationCallback?: ElicitationCallback
 
   constructor(args: McpClientConfig) {
     this._clientName = args.applicationName || 'strands-agents-ts-sdk'
     this._clientVersion = args.applicationVersion || '0.0.1'
     this._transport = args.transport
     this._connected = false
-    this._client = new Client({
-      name: this._clientName,
-      version: this._clientVersion,
-    })
+
+    if (args.elicitationCallback !== undefined) {
+      this._elicitationCallback = args.elicitationCallback
+    }
+
+    const clientOptions = this._elicitationCallback
+      ? {
+          capabilities: {
+            elicitation: { form: {} },
+          },
+        }
+      : undefined
+
+    this._client = new Client(
+      {
+        name: this._clientName,
+        version: this._clientVersion,
+      },
+      clientOptions
+    )
   }
 
   get client(): Client {
@@ -53,6 +75,25 @@ export class McpClient {
     }
 
     await this._client.connect(this._transport)
+
+    if (this._elicitationCallback) {
+      const callback = this._elicitationCallback
+      this._client.setRequestHandler(ElicitRequestSchema, async (request, extra) => {
+        const params: ElicitRequestParams = {
+          message: request.params.message,
+          ...(request.params.requestedSchema !== undefined && {
+            requestedSchema: request.params.requestedSchema as JSONSchema,
+          }),
+        }
+
+        const result = await callback(extra, params)
+
+        return {
+          action: result.action,
+          content: result.content,
+        }
+      })
+    }
 
     this._connected = true
   }
