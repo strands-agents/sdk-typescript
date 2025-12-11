@@ -1,0 +1,159 @@
+{
+  "area_experts": {
+    "agent_loop": {
+      "name": "Agent Loop",
+      "github_usernames": ["pgrayy", "zastrowm"]
+    },
+    "context_management": {
+      "name": "Context Management / Windows",
+      "github_usernames": ["Unshure", "afarntrog"]
+    },
+    "async_streaming": {
+      "name": "Async / Callbacks Streaming",
+      "github_usernames": ["pgrayy"]
+    },
+    "tool_executors": {
+      "name": "Tool Executors",
+      "github_usernames": ["pgrayy"]
+    },
+    "bi_directional_streaming": {
+      "name": "Bi-directional Streaming",
+      "github_usernames": ["mthtarac", "mkmeral", "pgrayy"]
+    },
+    "human_in_loop": {
+      "name": "Human in the Loop / Interrupts",
+      "github_usernames": ["mkmeral", "pgrayy"]
+    },
+    "hooks": {
+      "name": "Hooks",
+      "github_usernames": ["zastrowm"]
+    },
+    "bedrock": {
+      "name": "Bedrock Model Provider",
+      "github_usernames": ["mthtarac"]
+    },
+    "anthropic": {
+      "name": "Anthropic Model Provider",
+      "github_usernames": ["pgrayy"]
+    },
+    "gemini": {
+      "name": "Gemini Model Provider",
+      "github_usernames": ["notgitika"]
+    },
+    "litellm": {
+      "name": "LiteLLM Model Provider",
+      "github_usernames": ["dbschmigelski"]
+    },
+    "llamaapi": {
+      "name": "LlamaAPI Model Provider",
+      "github_usernames": ["pgrayy"]
+    },
+    "llama_cpp": {
+      "name": "llama.cpp Model Provider",
+      "github_usernames": ["awsarron"]
+    },
+    "mistralai": {
+      "name": "MistralAI Model Provider",
+      "github_usernames": ["mthtarac"]
+    },
+    "ollama": {
+      "name": "Ollama Model Provider",
+      "github_usernames": ["dbschmigelski"]
+    },
+    "openai": {
+      "name": "OpenAI Model Provider",
+      "github_usernames": ["pgrayy"]
+    },
+    "sagemaker": {
+      "name": "SageMaker Model Provider",
+      "github_usernames": ["mthtarac"]
+    },
+    "writer": {
+      "name": "Writer Model Provider",
+      "github_usernames": ["mthtarac"]
+    },
+    "cohere": {
+      "name": "Cohere Model Provider",
+      "github_usernames": ["Unshure"]
+    },
+    "multi_agent": {
+      "name": "Multi-agent Orchestrators",
+      "github_usernames": ["mkmeral", "JackYPCOnline", "awsarron"]
+    },
+    "a2a": {
+      "name": "A2A",
+      "github_usernames": ["awsarron"]
+    },
+    "sessions": {
+      "name": "Sessions",
+      "github_usernames": ["Unshure", "JackYPCOnline"]
+    },
+    "memory": {
+      "name": "Memory",
+      "github_usernames": ["Unshure", "mthtarac", "afarntrog"]
+    },
+    "mcp": {
+      "name": "MCP",
+      "github_usernames": ["dbschmigelski"]
+    },
+    "structured_outputs": {
+      "name": "Structured Outputs",
+      "github_usernames": ["afarntrog"]
+    },
+    "agentcore_integrations": {
+      "name": "AgentCore Integrations",
+      "github_usernames": ["JackYPCOnline", "afarntrog", "mthtarac", "dbschmigelski"]
+    },
+    "telemetry": {
+      "name": "Telemetry / Observability",
+      "github_usernames": ["poshinchen", "JackYPCOnline"]
+    },
+    "evaluations": {
+      "name": "Evaluations",
+      "github_usernames": ["poshinchen"]
+    },
+    "github_workflows": {
+      "name": "GitHub Workflows and Actions",
+      "github_usernames": ["dbschmigelski", "yonib05", "Unshure"]
+    },
+    "website_docs": {
+      "name": "Website and Docs",
+      "github_usernames": ["zastrowm", "yonib05", "rycolez"]
+    },
+    "tools": {
+      "name": "Tools",
+      "github_usernames": ["cagataycali", "JackYPCOnline", "zastrowm", "mthtarac"]
+    },
+    "agent_builder": {
+      "name": "Agent Builder",
+      "github_usernames": ["cagataycali"]
+    },
+    "mcp_server": {
+      "name": "MCP Server",
+      "github_usernames": ["JackYPCOnline", "mkmeral"]
+    },
+    "embodied_ai": {
+      "name": "Embodied / Physical AI and Edge Inference / Robotics",
+      "github_usernames": ["awsarron", "cagataycali", "mkmeral"]
+    },
+    "typescript": {
+      "name": "TypeScript",
+      "github_usernames": ["Unshure", "zastrowm", "afarntrog", "awsarron"]
+    },
+    "constraints_engine": {
+      "name": "Constraints Engine",
+      "github_usernames": ["dbschmigelski"]
+    }
+  },
+  "labels": {
+    "available": ["dependencies", "javascript", "bug", "documentation", "duplicate", "enhancement", "github_actions", "good first issue", "help wanted", "implement-task", "invalid", "project-task", "question", "review-task", "wontfix"]
+  },
+  "priority_levels": ["Sev2", "On-Call", "High", "Medium", "Low", "N/A"],
+  "priority_rules": {
+    "sev2_keywords": ["crash", "security", "data loss", "production down", "critical bug","high priority bug"],
+    "oncall_keywords": ["urgent", "blocking", "production issue","critical bug","high priority bug"],
+    "high_keywords": ["performance", "regression", "breaking change", "important","high customer impact","block users"],
+    "medium_keywords": ["improvement", "enhancement", "feature request"],
+    "low_keywords": ["documentation", "typo", "cleanup", "minor"]
+  }
+}

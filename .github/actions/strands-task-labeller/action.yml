@@ -1,0 +1,147 @@
+name: 'Strands Task Labeller'
+description: 'Automatically analyze and label GitHub issues using Strands agent'
+inputs:
+  aws_role_arn:
+    description: 'AWS IAM role ARN for authentication'
+    required: true
+  sessions_bucket:
+    description: 'S3 bucket for session storage'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Checkout repository
+      uses: actions/checkout@v6
+      with:
+        sparse-checkout: |
+          .github
+
+    - name: Copy .github to safe directory
+      shell: bash
+      run: |
+        mkdir -p ${{ runner.temp }}/strands-labeller
+        cp -r .github ${{ runner.temp }}/strands-labeller
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.13'
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v3
+      with:
+        enable-cache: true
+        cache-dependency-glob: '${{ runner.temp }}/strands-labeller/.github/scripts/python/requirements.txt'
+
+    - name: Install Strands Agents
+      shell: bash
+      run: |
+        echo "📦 Installing from requirements.txt"
+        uv pip install --system -r ${{ runner.temp }}/strands-labeller/.github/scripts/python/requirements.txt --quiet
+
+    - name: Configure Git
+      shell: bash
+      run: |
+        git config --global user.name "Strands Agent"
+        git config --global user.email "217235299+strands-agent@users.noreply.github.com"
+        git config --global core.pager cat
+        PAGER=cat
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ inputs.aws_role_arn }}
+        role-session-name: GitHubActions-StrandsLabeller-${{ github.run_id }}
+        aws-region: us-west-2
+        mask-aws-account-id: true
+        inline_session_policy: >-
+          {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Sid":"Bedrock Access",
+                "Effect": "Allow",
+                "Action": [
+                  "bedrock:InvokeModelWithResponseStream",
+                  "bedrock:InvokeModel"
+                ],
+                "Resource": "*"
+              }, {
+                "Effect": "Allow",
+                "Action": [
+                  "s3:PutObject",
+                  "s3:GetObject",
+                  "s3:DeleteObject"
+                ],
+                "Resource": [
+                  "arn:aws:s3:::${{ inputs.sessions_bucket }}/*"
+                ]
+              }, {
+                "Effect": "Allow",
+                "Action": "s3:ListBucket",
+                "Resource": [
+                  "arn:aws:s3:::${{ inputs.sessions_bucket }}"
+                ]
+              }
+            ]
+          }
+
+    - name: Execute labelling task
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+        GITHUB_WRITE: 'true'
+        S3_SESSION_BUCKET: ${{ inputs.sessions_bucket }}
+        SESSION_ID: 'labeller-${{ github.event.issue.number }}-${{ github.run_id }}'
+        INPUT_SYSTEM_PROMPT: 'You are a GitHub Issue Metadata Automation Agent. Your role is to analyze new GitHub issues and automatically apply appropriate metadata including labels, area expert assignments, and priority classification.
+
+## Core Responsibilities
+1. **Label Assignment**: Apply relevant labels from the available repository labels based on issue content
+2. **Area Expert Tagging**: Tag appropriate team members using @mentions based on technical areas
+3. **Priority Classification**: Assess and set priority levels based on impact and urgency
+
+## Process
+1. Read the automation configuration from .github/config/automation-config.json
+2. Analyze the issue title, description, and any provided context
+3. Apply appropriate labels using GitHub tools
+4. Tag relevant area experts with @mentions in a comment
+5. Set priority level if applicable
+
+## Available Labels (from config)
+Use ONLY these labels from the repository: dependencies, javascript, bug, documentation, duplicate, enhancement, github_actions, good first issue, help wanted, implement-task, invalid, project-task, question, review-task, wontfix
+
+## Priority Keywords (from config)
+- **Sev2**: crash, security, data loss, production down, critical bug, high priority bug
+- **On-Call**: urgent, blocking, production issue, critical bug, high priority bug  
+- **High**: performance, regression, breaking change, important, high customer impact, block users
+- **Medium**: improvement, enhancement, feature request
+- **Low**: documentation, typo, cleanup, minor
+
+## Area Expert Assignment Rules
+- Match issue content to technical areas (typescript, bedrock, openai, mcp, etc.)
+- Tag specific experts based on the area_experts configuration
+- Use @username format for mentions
+- Group related experts in single comment when appropriate
+
+## Area Expert Matching
+Match issue content to these technical areas and tag corresponding experts:
+- agent_loop, context_management, async_streaming, tool_executors
+- bi_directional_streaming, human_in_loop, hooks
+- bedrock, anthropic, gemini, litellm, llamaapi, llama_cpp, mistralai, ollama, openai, sagemaker, writer, cohere
+- multi_agent, a2a, sessions, memory, mcp, structured_outputs
+- agentcore_integrations, telemetry, evaluations, github_workflows
+- website_docs, tools, samples, agent_builder, mcp_server
+- embodied_ai, typescript, constraints_engine
+
+## Output Format
+- Apply labels immediately using GitHub tools
+- Post a single comment with expert mentions: "CC @expert1 @expert2 for [area] expertise"
+- Keep comments concise and professional
+
+Use GitHub tools to execute all actions. Be thorough but efficient in your analysis.'
+        STRANDS_TOOL_CONSOLE_MODE: 'enabled'
+        BYPASS_TOOL_CONSENT: 'true'
+      run: |
+        uv run ${{ runner.temp }}/strands-labeller/.github/scripts/python/agent_runner.py "Perform complete GitHub issue metadata automation for issue #${{ github.event.issue.number }}: analyze content, apply labels, tag area experts, and set priority based on automation configuration."

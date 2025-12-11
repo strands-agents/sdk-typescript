@@ -1,0 +1,20 @@
+name: Issue Metadata Automation
+
+on:
+  issues:
+    types: [opened]
+
+jobs:
+  auto-label:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      id-token: write
+    timeout-minutes: 10
+    steps:
+      - name: Auto-label and tag experts
+        uses: ./.github/actions/strands-task-labeller
+        with:
+          aws_role_arn: ${{ secrets.AWS_ROLE_ARN }}
+          sessions_bucket: ${{ secrets.TYPESCRIPT_SESSIONS_BUCKET }}
