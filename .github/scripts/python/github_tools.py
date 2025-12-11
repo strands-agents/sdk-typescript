@@ -834,3 +834,8 @@ def get_pr_review_and_comments(pr_number: int, show_resolved: bool = False, repo
         error_msg = f"Error: {e!s}\n\nStack trace:\n{traceback.format_exc()}"
         console.print(Panel(escape(error_msg), title="[bold red]Error", border_style="red"))
         return error_msg
+
+@tool
+@log_inputs
+def assign_area_experts(issue_number: int, repo: str | None = None) -> str:
+    """Assigns area experts to a PR."""
