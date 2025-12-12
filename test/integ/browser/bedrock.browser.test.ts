@@ -1,8 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { BedrockModel } from '@strands-agents/sdk/bedrock'
 import { Message, TextBlock } from '@strands-agents/sdk'
-import { commands } from 'vitest/browser'
 import { collectIterator } from '$/sdk/__fixtures__/model-test-helpers.js'
+import { bedrock } from '../__fixtures__/model-providers.js'
 
 describe('Region Configuration', () => {
   const sayHighMessage = Message.fromMessageData({
@@ -11,12 +10,9 @@ describe('Region Configuration', () => {
   })
 
   it('uses explicit region when provided', async () => {
-    const provider = new BedrockModel({
+    const provider = bedrock.createModel({
       region: 'us-east-1',
       maxTokens: 50,
-      clientConfig: {
-        credentials: await commands.getAwsCredentials(),
-      },
     })
 
     // Validate region configuration by checking config.region() directly
@@ -29,11 +25,8 @@ describe('Region Configuration', () => {
   })
 
   it('defaults to us-west-2 when no region provided and AWS SDK does not resolve one', async () => {
-    const provider = new BedrockModel({
+    const provider = bedrock.createModel({
       maxTokens: 50,
-      clientConfig: {
-        credentials: await commands.getAwsCredentials(),
-      },
     })
 
     // Validate region defaults to us-west-2
@@ -46,8 +39,8 @@ describe('Region Configuration', () => {
   })
 
   it('uses region from clientConfig when provided', async () => {
-    const provider = new BedrockModel({
-      clientConfig: { region: 'ap-northeast-1', credentials: await commands.getAwsCredentials() },
+    const provider = bedrock.createModel({
+      clientConfig: { region: 'ap-northeast-1' },
       maxTokens: 50,
     })
 

@@ -27,6 +27,6 @@
     "verbatimModuleSyntax": true,
     "sourceMap": true,
     "removeComments": false,
-    "types": ["vitest/importMeta"]
+    "types": ["vite/client", "vitest/importMeta", "@types/node"]
   }
 }

@@ -7,13 +7,13 @@
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { McpClient, Agent } from '@strands-agents/sdk'
-import { BedrockModel } from '@strands-agents/sdk/bedrock'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { resolve } from 'node:path'
 import { URL } from 'node:url'
 import { startHTTPServer, type HttpServerInfo } from './__fixtures__/test-mcp-server.js'
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
+import { bedrock } from './__fixtures__/model-providers.js'
 
 type TransportConfig = {
   name: string
@@ -64,7 +64,7 @@ describe('MCP Integration Tests', () => {
   describe.each(transports)('$name transport', ({ createClient }) => {
     it('agent can use multiple MCP tools in a conversation', async () => {
       const client = await createClient()
-      const model = new BedrockModel({ maxTokens: 300 })
+      const model = bedrock.createModel({ maxTokens: 300 })
 
       const agent = new Agent({
         systemPrompt:
@@ -97,7 +97,7 @@ describe('MCP Integration Tests', () => {
 
     it('agent handles MCP tool errors gracefully', async () => {
       const client = await createClient()
-      const model = new BedrockModel({ maxTokens: 200 })
+      const model = bedrock.createModel({ maxTokens: 200 })
 
       const agent = new Agent({
         systemPrompt: 'You are a helpful assistant. If asked to test errors, use the error_tool.',

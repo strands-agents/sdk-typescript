@@ -1,8 +1,14 @@
+import { inject } from 'vitest'
+
 /**
  * Checks whether we're running tests in the browser.
  */
 export const isInBrowser = () => {
-  return globalThis?.process?.env == null
+  return inject('isBrowser')
+}
+
+export function isCI() {
+  return inject('isCI')
 }
 
 /**

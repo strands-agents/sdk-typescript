@@ -1,21 +1,20 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
-  BedrockModel,
-  Message,
   Agent,
-  TextBlock,
+  Message,
   NullConversationManager,
   SlidingWindowConversationManager,
+  TextBlock,
 } from '@strands-agents/sdk'
 
 import { collectIterator } from '$/sdk/__fixtures__/model-test-helpers.js'
-import { shouldSkipBedrockTests } from './__fixtures__/model-test-helpers.js'
+import { bedrock } from './__fixtures__/model-providers.js'
 
-describe.skipIf(await shouldSkipBedrockTests())('BedrockModel Integration Tests', () => {
+describe.skipIf(bedrock.skip)('BedrockModel Integration Tests', () => {
   describe('Streaming', () => {
     describe('Configuration', () => {
       it.concurrent('respects maxTokens configuration', async () => {
-        const provider = new BedrockModel({ maxTokens: 20 })
+        const provider = bedrock.createModel({ maxTokens: 20 })
         const messages: Message[] = [
           {
             type: 'message',
@@ -34,7 +33,7 @@ describe.skipIf(await shouldSkipBedrockTests())('BedrockModel Integration Tests'
       })
 
       it.concurrent('uses system prompt cache on subsequent requests', async () => {
-        const provider = new BedrockModel({ maxTokens: 100 })
+        const provider = bedrock.createModel({ maxTokens: 100 })
         const largeContext = `Context information: ${'hello '.repeat(2000)} [test-${Date.now()}-${Math.random()}]`
         const cachedSystemPrompt = [
           { type: 'textBlock' as const, text: 'You are a helpful assistant.' },
@@ -62,7 +61,7 @@ describe.skipIf(await shouldSkipBedrockTests())('BedrockModel Integration Tests'
       })
 
       it.concurrent('uses message cache points on subsequent requests', async () => {
-        const provider = new BedrockModel({ maxTokens: 100 })
+        const provider = bedrock.createModel({ maxTokens: 100 })
         const largeContext = `Context information: ${'hello '.repeat(2000)} [test-${Date.now()}-${Math.random()}]`
         const messagesWithCachePoint = (text: string): Message[] => [
           {
@@ -90,7 +89,7 @@ describe.skipIf(await shouldSkipBedrockTests())('BedrockModel Integration Tests'
 
     describe('Error Handling', () => {
       it.concurrent('handles invalid model ID gracefully', async () => {
-        const provider = new BedrockModel({ modelId: 'invalid-model-id-that-does-not-exist' })
+        const provider = bedrock.createModel({ modelId: 'invalid-model-id-that-does-not-exist' })
         const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
         await expect(collectIterator(provider.stream(messages))).rejects.toThrow()
       })
@@ -100,7 +99,7 @@ describe.skipIf(await shouldSkipBedrockTests())('BedrockModel Integration Tests'
   describe('Agent with Conversation Manager', () => {
     it('manages conversation history with SlidingWindowConversationManager', async () => {
       const agent = new Agent({
-        model: new BedrockModel({ maxTokens: 100 }),
+        model: bedrock.createModel({ maxTokens: 100 }),
         conversationManager: new SlidingWindowConversationManager({ windowSize: 4 }),
       })
 
@@ -121,7 +120,7 @@ describe.skipIf(await shouldSkipBedrockTests())('BedrockModel Integration Tests'
 
     it('throws ContextWindowOverflowError with NullConversationManager', async () => {
       const agent = new Agent({
-        model: new BedrockModel({ maxTokens: 50 }),
+        model: bedrock.createModel({ maxTokens: 50 }),
         conversationManager: new NullConversationManager(),
       })
 
@@ -135,7 +134,7 @@ describe.skipIf(await shouldSkipBedrockTests())('BedrockModel Integration Tests'
 
   describe('Region Configuration', () => {
     it('uses explicit region when provided', async () => {
-      const provider = new BedrockModel({
+      const provider = bedrock.createModel({
         region: 'us-east-1',
         maxTokens: 50,
       })
@@ -151,7 +150,7 @@ describe.skipIf(await shouldSkipBedrockTests())('BedrockModel Integration Tests'
       vi.stubEnv('AWS_REGION', undefined)
       vi.stubEnv('AWS_DEFAULT_REGION', undefined)
 
-      const provider = new BedrockModel({
+      const provider = bedrock.createModel({
         maxTokens: 50,
       })
 
@@ -175,7 +174,7 @@ describe.skipIf(await shouldSkipBedrockTests())('BedrockModel Integration Tests'
       // Use vitest to stub the environment variable
       vi.stubEnv('AWS_REGION', 'eu-central-1')
 
-      const provider = new BedrockModel({
+      const provider = bedrock.createModel({
         maxTokens: 50,
       })
 
@@ -189,7 +188,7 @@ describe.skipIf(await shouldSkipBedrockTests())('BedrockModel Integration Tests'
       // Use vitest to stub the environment variable
       vi.stubEnv('AWS_REGION', 'eu-west-1')
 
-      const provider = new BedrockModel({
+      const provider = bedrock.createModel({
         region: 'ap-southeast-2',
         maxTokens: 50,
       })
@@ -201,7 +200,7 @@ describe.skipIf(await shouldSkipBedrockTests())('BedrockModel Integration Tests'
     })
 
     it('uses region from clientConfig when provided', async () => {
-      const provider = new BedrockModel({
+      const provider = bedrock.createModel({
         clientConfig: { region: 'ap-northeast-1' },
         maxTokens: 50,
       })
