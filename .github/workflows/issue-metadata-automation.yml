@@ -1,0 +1,28 @@
+name: Issue Metadata Automation
+
+on:
+  issues:
+    types: [opened,reopened]
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  repository-projects: write
+jobs:
+  auto-label:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      id-token: write
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        
+      - name: Auto-label and tag experts
+        uses: ./.github/actions/strands-task-labeller
+        with:
+          aws_role_arn: ${{ secrets.AWS_ROLE_ARN }}
+          sessions_bucket: ${{ secrets.S3_SESSION_BUCKET }}
+          pat_token: ${{ secrets.PAT_TOKEN }}
