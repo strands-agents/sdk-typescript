@@ -868,244 +868,64 @@ def add_labels_to_issue(issue_number: int, labels: list[str], repo: str | None =
 
 @tool
 @log_inputs
-@check_should_call_write_api_or_record
-def set_issue_project_field(issue_number: int, field_name: str, field_value: str, repo: str | None = None) -> str:
-    """Sets a custom field value for an issue in GitHub Projects v2.
-    If the issue is not in a project, it will try to add it to the first available project.
+def search_similar_issues(query: str, state: str = "all", limit: int = 5, repo: str | None = None) -> str:
+    """Searches for similar issues using GitHub's search API.
 
     Args:
-        issue_number: The issue number
-        field_name: The project field name (e.g., "Priority")
-        field_value: The field value (e.g., "Sev2", "High", etc.)
+        query: Search query (keywords from issue title/body)
+        state: Filter by state: "open", "closed", or "all" (default: "all")
+        limit: Maximum number of results to return (default: 5)
         repo: GitHub repository in the format "owner/repo" (optional; falls back to env var)
 
     Returns:
-        Result of the operation
+        List of similar issues with relevance scores
     """
     if repo is None:
         repo = os.environ.get("GITHUB_REPOSITORY")
     if not repo:
         return "Error: GITHUB_REPOSITORY environment variable not found"
 
-    # Use PAT_TOKEN for Projects API if available, fallback to GITHUB_TOKEN
-    token = os.environ.get("PAT_TOKEN") or os.environ.get("GITHUB_TOKEN", "")
+    token = os.environ.get("GITHUB_TOKEN", "")
     if not token:
-        return "Error: Neither PAT_TOKEN nor GITHUB_TOKEN environment variable found"
+        return "Error: GITHUB_TOKEN environment variable not found"
 
-    owner, repo_name = repo.split("/")
-    
+    # Build search query
+    search_query = f"{query} repo:{repo} is:issue"
+    if state != "all":
+        search_query += f" state:{state}"
+
+    url = "https://api.github.com/search/issues"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github.v3+json",
+    }
+    params = {"q": search_query, "per_page": limit, "sort": "relevance"}
+
     try:
-
-        
-        # Step 1: Get issue and available projects
-        query = """
-        query($owner: String!, $repo: String!, $number: Int!) {
-          repository(owner: $owner, name: $repo) {
-            issue(number: $number) {
-              id
-              projectItems(first: 10) {
-                nodes {
-                  id
-                  project {
-                    id
-                    title
-                    fields(first: 20) {
-                      nodes {
-                        ... on ProjectV2SingleSelectField {
-                          id
-                          name
-                          options {
-                            id
-                            name
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-            projectsV2(first: 10) {
-              nodes {
-                id
-                title
-                fields(first: 20) {
-                  nodes {
-                    ... on ProjectV2SingleSelectField {
-                      id
-                      name
-                      options {
-                        id
-                        name
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-          user(login: $owner) {
-            projectsV2(first: 10) {
-              nodes {
-                id
-                title
-                fields(first: 20) {
-                  nodes {
-                    ... on ProjectV2SingleSelectField {
-                      id
-                      name
-                      options {
-                        id
-                        name
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-        """
-        
-        response = requests.post(
-            "https://api.github.com/graphql",
-            headers={"Authorization": f"Bearer {token}"},
-            json={"query": query, "variables": {"owner": owner, "repo": repo_name, "number": issue_number}},
-            timeout=30
-        )
+        response = requests.get(url, headers=headers, params=params, timeout=30)
         response.raise_for_status()
         data = response.json()
-        
-        if "errors" in data:
-            return f"GraphQL Error: {data['errors']}"
-        
-        issue_data = data["data"]["repository"]["issue"]
-        issue_id = issue_data["id"]
-        project_items = issue_data["projectItems"]["nodes"]
-        
-        # Get all available projects (repo + user)
-        repo_projects = data["data"]["repository"]["projectsV2"]["nodes"]
-        user_projects = data["data"]["user"]["projectsV2"]["nodes"] if data["data"]["user"] else []
-        all_projects = repo_projects + user_projects
-        
 
-        
-        project_item_id = None
-        target_project = None
-        field_id = None
-        option_id = None
-        
-        # Check if issue is already in a project with the field
-        for item in project_items:
-            project = item["project"]
-            for field in project["fields"]["nodes"]:
-                if not field or "name" not in field:
-                    continue
-                if field["name"] == field_name:
-                    field_id = field["id"]
-                    project_item_id = item["id"]
-                    target_project = project
-                    # Find the option ID for the field value
-                    for option in field["options"]:
-                        if option["name"] == field_value:
-                            option_id = option["id"]
-                            break
-                    break
-            if field_id:
-                break
-        
-        # If not in a project with the field, find a suitable project and add the issue
-        if not project_item_id:
-            for project in all_projects:
-                for field in project["fields"]["nodes"]:
-                    if not field or "name" not in field:
-                        continue
-                    if field["name"] == field_name:
-                        target_project = project
-                        field_id = field["id"]
-                        # Find the option ID for the field value
-                        for option in field["options"]:
-                            if option["name"] == field_value:
-                                option_id = option["id"]
-                                break
-                        break
-                if target_project:
-                    break
-            
-            if not target_project:
-                return f"No project found with field '{field_name}'"
-            
-            # Add issue to project
-            add_mutation = """
-            mutation($input: AddProjectV2ItemByIdInput!) {
-              addProjectV2ItemById(input: $input) {
-                item {
-                  id
-                }
-              }
-            }
-            """
-            
-            add_input = {
-                "projectId": target_project["id"],
-                "contentId": issue_id
-            }
-            
-            response = requests.post(
-                "https://api.github.com/graphql",
-                headers={"Authorization": f"Bearer {token}"},
-                json={"query": add_mutation, "variables": {"input": add_input}},
-                timeout=30
-            )
-            response.raise_for_status()
-            add_result = response.json()
-            
-            if "errors" in add_result:
-                return f"Error adding issue to project: {add_result['errors']}"
-            
-            project_item_id = add_result["data"]["addProjectV2ItemById"]["item"]["id"]
-        
-        if not option_id:
-            return f"Could not find option '{field_value}' for field '{field_name}'"
-        
-        # Step 2: Update the project field
-        update_mutation = """
-        mutation($input: UpdateProjectV2ItemFieldValueInput!) {
-          updateProjectV2ItemFieldValue(input: $input) {
-            projectV2Item {
-              id
-            }
-          }
-        }
-        """
-        
-        update_input = {
-            "projectId": target_project["id"],
-            "itemId": project_item_id,
-            "fieldId": field_id,
-            "value": {
-                "singleSelectOptionId": option_id
-            }
-        }
-        
-        response = requests.post(
-            "https://api.github.com/graphql",
-            headers={"Authorization": f"Bearer {token}"},
-            json={"query": update_mutation, "variables": {"input": update_input}},
-            timeout=30
-        )
-        response.raise_for_status()
-        result = response.json()
-        
-        if "errors" in result:
-            return f"GraphQL Mutation Error: {result['errors']}"
-        
-        message = f"Successfully set project field '{field_name}' to '{field_value}' for issue #{issue_number} in project '{target_project['title']}'" 
-        console.print(Panel(escape(message), title="[bold green]Project Field Updated", border_style="green"))
-        return message
-        
+        if data["total_count"] == 0:
+            message = f"No similar issues found for query: {query}"
+            console.print(Panel(escape(message), title="[bold yellow]Info", border_style="yellow"))
+            return message
+
+        output = f"Found {data['total_count']} similar issue(s) (showing top {min(limit, len(data['items']))}):\n\n"
+        for issue in data["items"]:
+            output += f"#{issue['number']} - {issue['title']}\n"
+            output += f"  State: {issue['state']} | Author: {issue['user']['login']}\n"
+            output += f"  URL: {issue['html_url']}\n"
+            if issue.get("labels"):
+                labels = ", ".join([label["name"] for label in issue["labels"]])
+                output += f"  Labels: {labels}\n"
+            output += "\n"
+
+        console.print(Panel(escape(output), title="[bold green]🔍 Similar Issues", border_style="blue"))
+        return output
+
     except Exception as e:
-        error_msg = f"Error setting project field: {e!s}"
+        error_msg = f"Error searching issues: {e!s}"
         console.print(Panel(escape(error_msg), title="[bold red]Error", border_style="red"))
         return error_msg
 

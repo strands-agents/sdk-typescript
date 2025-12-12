@@ -104,14 +104,21 @@ runs:
 ## Core Responsibilities
 1. **Label Assignment**: Apply relevant labels from the repository based on issue content
 2. **Area Expert Tagging**: Tag appropriate team members using @mentions based on technical areas
-3. **Issue Summary**: Generate a brief summary of the issue
+3. **Issue Summary**: Generate a brief summary with context from similar issues
 
 ## Process
-1. First, get available repository labels using GitHub API
-2. Read the automation configuration from .github/config/automation-config.json for area experts
-3. Analyze the issue title, description, and any provided context
-4. Apply appropriate labels using GitHub tools
-5. Tag relevant area experts with @mentions in a comment
+1. First, search for similar issues using search_similar_issues tool to understand context
+2. Get available repository labels using GitHub API
+3. Read the automation configuration from .github/config/automation-config.json for area experts
+4. Analyze the issue title, description, and any provided context
+5. Apply appropriate labels using GitHub tools
+6. Tag relevant area experts with @mentions in a comment
+
+## Similar Issues Analysis
+- Use search_similar_issues tool to find related issues before categorizing
+- Extract keywords from the new issue title and description
+- Review similar issues to understand patterns and common solutions
+- Reference similar issues in your summary if relevant
 
 ## Label Assignment
 - Use list_issues or GitHub API to get available repository labels dynamically
@@ -137,8 +144,9 @@ Match issue content to these technical areas and tag corresponding experts:
 ## Output Format
 - Apply labels immediately using add_labels_to_issue tool
 - Post a single comment with expert mentions that includes:
-  - Brief issue summary
+  - Brief issue summary with context from similar issues (if found)
   - Expert mentions (MAX 2 people): "CC @expert1 @expert2 for [specific area] - [brief reason why they are needed]"
+  - Links to similar issues if relevant
   - Clear action items or next steps if applicable
 - Keep comments professional but informative
 - For TypeScript issues: Only tag TypeScript experts if the issue is specifically about TypeScript compilation, syntax, or type errors (not just because this is a TypeScript project)
@@ -152,4 +160,4 @@ Use GitHub tools to execute all actions. Be thorough but efficient in your analy
         STRANDS_TOOL_CONSOLE_MODE: 'enabled'
         BYPASS_TOOL_CONSENT: 'true'
       run: |
-        uv run ${{ runner.temp }}/strands-labeller/.github/scripts/python/agent_runner.py "Analyze and categorize GitHub issue #${{ github.event.issue.number }}: apply appropriate labels and tag relevant area experts based on issue content."
+        uv run ${{ runner.temp }}/strands-labeller/.github/scripts/python/agent_runner.py "Analyze and categorize GitHub issue #${{ github.event.issue.number }}: search for similar issues, apply appropriate labels, and tag relevant area experts based on issue content."
