@@ -6,6 +6,7 @@ import {
   TextBlock,
   NullConversationManager,
   SlidingWindowConversationManager,
+  FunctionTool,
 } from '@strands-agents/sdk'
 
 import { collectIterator } from '$/sdk/__fixtures__/model-test-helpers.js'
@@ -234,5 +235,52 @@ describe.skipIf(await shouldSkipBedrockTests())('BedrockModel Integration Tests'
       expect(textContent).toBeDefined()
       expect(textContent?.text).toBeTruthy()
     })
+  })
+
+  describe('Thinking Mode with Tools', () => {
+    it('handles thinking mode with tool use', async () => {
+      const bedrockModel = new BedrockModel({
+        modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
+        additionalRequestFields: {
+          thinking: {
+            type: 'enabled',
+            budget_tokens: 1024,
+          },
+        },
+        maxTokens: 2048,
+      })
+
+      const testTool = new FunctionTool({
+        name: 'testTool',
+        description: 'Test description',
+        inputSchema: { type: 'object' },
+        callback: (): string => 'result',
+      })
+
+      // Create agent with thinking mode and tool
+      const agent = new Agent({
+        model: bedrockModel,
+        tools: [testTool],
+        printer: false,
+      })
+
+      // Invoke agent with a prompt that triggers tool use
+      const result = await agent.invoke('Use the testTool with the message "Hello World"')
+
+      // Verify the agent completed successfully
+      expect(result.stopReason).toBe('endTurn')
+      expect(result.lastMessage.role).toBe('assistant')
+      expect(result.lastMessage.content.length).toBeGreaterThan(0)
+
+      // Verify the tool was used
+      const toolUseMessage = agent.messages.find((msg) => msg.content.some((block) => block.type === 'toolUseBlock'))
+      expect(toolUseMessage).toBeDefined()
+
+      // Verify the tool result is in the history
+      const toolResultMessage = agent.messages.find((msg) =>
+        msg.content.some((block) => block.type === 'toolResultBlock')
+      )
+      expect(toolResultMessage).toBeDefined()
+    }, 30000)
   })
 })
