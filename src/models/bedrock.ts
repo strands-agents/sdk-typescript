@@ -37,7 +37,7 @@ import {
   type BedrockRuntimeClientResolvedConfig,
 } from '@aws-sdk/client-bedrock-runtime'
 import { type BaseModelConfig, Model, type StreamOptions } from '../models/model.js'
-import type { ContentBlock, Message, ToolUseBlock } from '../types/messages.js'
+import type { ContentBlock, Message, StopReason, ToolUseBlock } from '../types/messages.js'
 import type { ImageSource, VideoSource, DocumentSource } from '../types/media.js'
 import type { ModelStreamEvent, ReasoningContentDelta, Usage } from '../models/streaming.js'
 import type { JSONValue } from '../types/json.js'
@@ -1003,10 +1003,13 @@ export class BedrockModel extends Model<BedrockModelConfig> {
    *
    * @param stopReasonRaw - The raw stop reason string from Bedrock.
    * @param event - The full event output, used to check for tool_use adjustments.
-   * @returns The transformed stop reason string.
+   * @returns The transformed stop reason.
    */
-  private _transformStopReason(stopReasonRaw: string, event?: ConverseCommandOutput | BedrockMessageStopEvent): string {
-    let mappedStopReason: string
+  private _transformStopReason(
+    stopReasonRaw: string,
+    event?: ConverseCommandOutput | BedrockMessageStopEvent
+  ): StopReason {
+    let mappedStopReason: StopReason
 
     if (stopReasonRaw in STOP_REASON_MAP) {
       mappedStopReason = STOP_REASON_MAP[stopReasonRaw as keyof typeof STOP_REASON_MAP]

@@ -3,6 +3,7 @@ import {
   Message,
   ReasoningBlock,
   type Role,
+  type StopReason,
   type SystemPrompt,
   TextBlock,
   ToolUseBlock,
@@ -89,7 +90,7 @@ export interface StreamAggregatedResult {
   /**
    * The reason why the model stopped generating.
    */
-  stopReason: string
+  stopReason: StopReason
 
   /**
    * Optional metadata about the model invocation, including usage statistics and metrics.
@@ -194,7 +195,7 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
     } = {}
     let errorToThrow: Error | undefined = undefined
     let stoppedMessage: Message | null = null
-    let finalStopReason: string | null = null
+    let finalStopReason: StopReason | null = null
     let metadata: ModelMetadataEvent | undefined = undefined
 
     for await (const event_data of this.stream(messages, options)) {

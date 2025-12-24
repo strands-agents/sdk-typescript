@@ -1,5 +1,5 @@
 import type { AgentData } from '../types/agent.js'
-import type { ContentBlock, Message, ToolResultBlock } from '../types/messages.js'
+import type { ContentBlock, Message, StopReason, ToolResultBlock } from '../types/messages.js'
 import type { Tool } from '../tools/tool.js'
 import type { JSONValue } from '../types/json.js'
 import type { ModelStreamEvent } from '../models/streaming.js'
@@ -159,7 +159,7 @@ export interface ModelStopData {
   /**
    * The reason the model stopped generating.
    */
-  readonly stopReason: string
+  readonly stopReason: StopReason
 }
 
 /**
