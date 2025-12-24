@@ -250,6 +250,7 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
               block = new ReasoningBlock({
                 ...accumulatedReasoning,
               })
+              accumulatedReasoning = {} // Reset after creating reasoning block
             } else {
               block = new TextBlock(accumulatedText)
             }
