@@ -1,5 +1,7 @@
 /**
- * Global setup that runs once before all integration tests and possibly runs in the *parent* process
+ * Test setup that runs once before all integration tests, but in the *child* process.
+ *
+ * _setup-global on the other hand runs in the *parent* process.
  */
 
 import { beforeAll } from 'vitest'

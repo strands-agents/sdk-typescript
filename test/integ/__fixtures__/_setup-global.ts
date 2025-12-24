@@ -1,5 +1,7 @@
 /**
- * Global setup that runs once before all integration tests and possibly runs in the *parent* process
+ * Global setup that runs once before all integration tests and possibly runs in the *parent* process.
+ *
+ * _setup-test on the other hand runs in the *child* process.
  */
 
 import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager'
@@ -55,7 +57,7 @@ async function loadApiKeysFromSecretsManager(): Promise<void> {
 }
 
 /**
- * Perform shared setup for the integration tests unless it's already been.
+ * Perform shared setup for the integration tests.
  */
 export async function setup(project: TestProject): Promise<void> {
   console.log('Global setup: Loading API keys from Secrets Manager...')

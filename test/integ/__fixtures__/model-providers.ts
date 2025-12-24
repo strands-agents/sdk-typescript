@@ -2,7 +2,6 @@
  * Contains helpers for creating various model providers that work both in node & the browser
  */
 
-import { isCI } from './test-helpers.js'
 import { inject } from 'vitest'
 import { BedrockModel, type BedrockModelOptions } from '$/sdk/models/bedrock.js'
 import { OpenAIModel, type OpenAIModelOptions } from '$/sdk/models/openai.js'
@@ -10,7 +9,7 @@ import { OpenAIModel, type OpenAIModelOptions } from '$/sdk/models/openai.js'
 export const bedrock = {
   name: 'BedrockModel',
   get skip() {
-    return !isCI() && inject('provider-bedrock').shouldSkip
+    return inject('provider-bedrock').shouldSkip
   },
   createModel: (options: BedrockModelOptions = {}): BedrockModel => {
     const credentials = inject('provider-bedrock').credentials
@@ -31,7 +30,7 @@ export const bedrock = {
 export const openai = {
   name: 'OpenAIModel',
   get skip() {
-    return !isCI() && inject('provider-openai').shouldSkip
+    return inject('provider-openai').shouldSkip
   },
   createModel: (config: OpenAIModelOptions = {}): OpenAIModel => {
     const apiKey = inject('provider-openai').apiKey

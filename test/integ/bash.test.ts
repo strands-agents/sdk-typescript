@@ -4,7 +4,7 @@ import { bash } from '$/sdk/vended-tools/bash/index.js'
 import { getMessageText } from './__fixtures__/model-test-helpers.js'
 import { bedrock } from './__fixtures__/model-providers.js'
 
-describe.skipIf(bedrock.skip || process.platform === 'win32')('Bash Tool Integration', { timeout: 60000 }, () => {
+describe.skipIf(bedrock.skip || process.platform === 'win32')('Bash Tool Integration', () => {
   // Shared agent configuration for all tests
   const createAgent = () =>
     new Agent({
