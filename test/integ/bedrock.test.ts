@@ -146,6 +146,18 @@ describe.skipIf(bedrock.skip)('BedrockModel Integration Tests', () => {
       expect(regionResult).toBe('us-east-1')
     })
 
+    it('uses region from clientConfig when provided', async () => {
+      const provider = bedrock.createModel({
+        clientConfig: { region: 'ap-northeast-1' },
+        maxTokens: 50,
+      })
+
+      // Validate clientConfig region is used
+      // Making an actual request doesn't guarantee the correct region is being used
+      const regionResult = await provider['_client'].config.region()
+      expect(regionResult).toBe('ap-northeast-1')
+    })
+
     it('defaults to us-west-2 when no region provided and AWS SDK does not resolve one', async () => {
       // Use vitest to stub environment variables
       vi.stubEnv('AWS_REGION', undefined)
@@ -171,35 +183,6 @@ describe.skipIf(bedrock.skip)('BedrockModel Integration Tests', () => {
       )
     })
 
-    it('uses AWS_REGION environment variable when set', async () => {
-      // Use vitest to stub the environment variable
-      vi.stubEnv('AWS_REGION', 'eu-central-1')
-
-      const provider = bedrock.createModel({
-        maxTokens: 50,
-      })
-
-      // Validate AWS_REGION environment variable is used
-      // Making an actual request doesn't guarantee the correct region is being used
-      const regionResult = await provider['_client'].config.region()
-      expect(regionResult).toBe('eu-central-1')
-    })
-
-    it('explicit region takes precedence over environment variable', async () => {
-      // Use vitest to stub the environment variable
-      vi.stubEnv('AWS_REGION', 'eu-west-1')
-
-      const provider = bedrock.createModel({
-        region: 'ap-southeast-2',
-        maxTokens: 50,
-      })
-
-      // Validate explicit region takes precedence over environment variable
-      // Making an actual request doesn't guarantee the correct region is being used
-      const regionResult = await provider['_client'].config.region()
-      expect(regionResult).toBe('ap-southeast-2')
-    })
-
     it('uses region from clientConfig when provided', async () => {
       const provider = bedrock.createModel({
         clientConfig: { region: 'ap-northeast-1' },
@@ -210,29 +193,6 @@ describe.skipIf(bedrock.skip)('BedrockModel Integration Tests', () => {
       // Making an actual request doesn't guarantee the correct region is being used
       const regionResult = await provider['_client'].config.region()
       expect(regionResult).toBe('ap-northeast-1')
-    })
-  })
-
-  describe('Agent with String Model ID', () => {
-    it.concurrent('accepts string model ID and creates functional Agent', async () => {
-      // Create agent with string model ID
-      const agent = new Agent({
-        model: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
-        printer: false,
-      })
-
-      // Invoke agent with simple prompt
-      const result = await agent.invoke('Say hello')
-
-      // Verify agent works correctly
-      expect(result.stopReason).toBe('endTurn')
-      expect(result.lastMessage.role).toBe('assistant')
-      expect(result.lastMessage.content.length).toBeGreaterThan(0)
-
-      // Verify message contains text content
-      const textContent = result.lastMessage.content.find((block) => block.type === 'textBlock')
-      expect(textContent).toBeDefined()
-      expect(textContent?.text).toBeTruthy()
     })
   })
 

@@ -57,8 +57,7 @@ export default defineConfig({
             '$/sdk': path.resolve(__dirname, './src'),
             '$/vended': path.resolve(__dirname, './src/vended-tools'),
           },
-          include: ['test/integ/**/*.test.ts'],
-          exclude: ['test/integ/**/*.browser.test.ts'],
+          include: ['test/integ/**/*.test.ts', 'test/integ/**/*.test.node.ts'],
           name: { label: 'integ-node', color: 'magenta' },
           testTimeout: 60 * 1000,
           retry: 1,
@@ -75,7 +74,7 @@ export default defineConfig({
             '$/sdk': path.resolve(__dirname, './src'),
             '$/vended': path.resolve(__dirname, './src/vended-tools'),
           },
-          include: ['test/integ/**/*.browser.test.ts'],
+          include: ['test/integ/**/*.test.ts', 'test/integ/**/*.test.browser.ts'],
           name: { label: 'integ-browser', color: 'yellow' },
           testTimeout: 60 * 1000,
           browser: {
