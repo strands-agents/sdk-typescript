@@ -52,6 +52,10 @@ jobs:
     name: Run integration tests
     runs-on: ubuntu-latest
     needs: authorization-check
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [20, 22, 24]
     environment: ${{ needs.authorization-check.outputs.approval-env }}
     permissions:
       id-token: write
@@ -75,7 +79,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: ${{ matrix.node-version }}
 
       - name: Install dependencies
         run: |
@@ -92,7 +96,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: test-artifacts-integ
+          name: test-artifacts-integ-${{ matrix.node-version }}
           path: ./test/.artifacts/
           retention-days: 4
           include-hidden-files: true # needed because the path has a directory starting with a '.'
