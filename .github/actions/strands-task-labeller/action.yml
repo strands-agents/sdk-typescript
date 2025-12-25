@@ -1,0 +1,165 @@
+name: 'Strands Task Labeller'
+description: 'Automatically analyze and label GitHub issues using Strands agent'
+inputs:
+  aws_role_arn:
+    description: 'AWS IAM role ARN for authentication'
+    required: true
+  sessions_bucket:
+    description: 'S3 bucket for session storage'
+    required: true
+  pat_token:
+    description: 'pat token to modify repo'
+    required: false
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Checkout repository
+      uses: actions/checkout@v6
+      with:
+        sparse-checkout: |
+          .github
+
+    - name: Copy .github to safe directory
+      shell: bash
+      run: |
+        mkdir -p ${{ runner.temp }}/strands-labeller
+        cp -r .github ${{ runner.temp }}/strands-labeller
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.13'
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v3
+      with:
+        enable-cache: true
+        cache-dependency-glob: '${{ runner.temp }}/strands-labeller/.github/scripts/python/requirements.txt'
+
+    - name: Install Strands Agents
+      shell: bash
+      run: |
+        echo "📦 Installing from requirements.txt"
+        uv pip install --system -r ${{ runner.temp }}/strands-labeller/.github/scripts/python/requirements.txt --quiet
+
+    - name: Configure Git
+      shell: bash
+      run: |
+        git config --global user.name "Strands Agent"
+        git config --global user.email "217235299+strands-agent@users.noreply.github.com"
+        git config --global core.pager cat
+        PAGER=cat
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ inputs.aws_role_arn }}
+        role-session-name: GitHubActions-StrandsAgent-${{ github.run_id }}
+        aws-region: us-west-2
+        mask-aws-account-id: true
+        inline-session-policy: >-
+          {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Sid":"BedrockAccess",
+                "Effect": "Allow",
+                "Action": [
+                  "bedrock:InvokeModelWithResponseStream",
+                  "bedrock:InvokeModel"
+                ],
+                "Resource": "*"
+              }, {
+                "Effect": "Allow",
+                "Action": [
+                  "s3:PutObject",
+                  "s3:GetObject",
+                  "s3:DeleteObject"
+                ],
+                "Resource": [
+                  "arn:aws:s3:::${{ inputs.sessions_bucket }}/*"
+                ]
+              }, {
+                "Effect": "Allow",
+                "Action": "s3:ListBucket",
+                "Resource": [
+                  "arn:aws:s3:::${{ inputs.sessions_bucket }}"
+                ]
+              }
+            ]
+          }
+
+    - name: Execute labelling task
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+        PAT_TOKEN: ${{ inputs.pat_token }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+        GITHUB_WRITE: 'true'
+        S3_SESSION_BUCKET: ${{ inputs.sessions_bucket }}
+        SESSION_ID: 'labeller-${{ github.event.issue.number }}-${{ github.run_id }}'
+        INPUT_SYSTEM_PROMPT: 'You are a GitHub Issue Categorization Agent. Your role is to analyze new GitHub issues and automatically apply appropriate labels and tag relevant area experts.
+
+## Core Responsibilities
+1. **Label Assignment**: Apply relevant labels from the repository based on issue content
+2. **Area Expert Tagging**: Tag appropriate team members using @mentions based on technical areas
+3. **Issue Summary**: Generate a brief summary with context from similar issues
+
+## Process
+1. First, search for similar issues using search_similar_issues tool to understand context
+2. Get available repository labels using list_repository_labels tool
+3. Read the automation configuration from .github/config/automation-config.json for area experts
+4. Analyze the issue title, description, and any provided context
+5. Apply ONLY existing labels from step 2 using add_labels_to_issue tool
+6. Tag relevant area experts with @mentions in a comment
+
+## Similar Issues Analysis
+- Use search_similar_issues tool to find related issues before categorizing
+- Extract keywords from the new issue title and description
+- Review similar issues to understand patterns and common solutions
+- Reference similar issues in your summary if relevant
+
+## Label Assignment
+- CRITICAL: Use list_repository_labels tool FIRST to get available labels
+- ONLY apply labels that exist in the repository - NEVER create new labels
+- Match issue content to existing labels (bug, enhancement, documentation, etc.)
+- If no perfect match exists, choose the closest existing label
+- Focus on categorization labels that help with organization
+
+## Area Expert Assignment Rules
+- Match issue content to technical areas (typescript, bedrock, openai, mcp, etc.)
+- Tag ONLY the 2 most relevant experts based on the area_experts configuration
+- Use @username format for mentions
+- Prioritize experts most closely related to the specific issue content
+
+## Area Expert Matching
+Match issue content to these technical areas and tag corresponding experts:
+- agent_loop, context_management, async_streaming, tool_executors
+- bi_directional_streaming, human_in_loop, hooks
+- bedrock, anthropic, gemini, litellm, llamaapi, llama_cpp, mistralai, ollama, openai, sagemaker, writer, cohere
+- multi_agent, a2a, sessions, memory, mcp, structured_outputs
+- agentcore_integrations, telemetry, evaluations, github_workflows
+- website_docs, tools, samples, agent_builder, mcp_server
+- embodied_ai, typescript, constraints_engine
+
+## Output Format
+- Apply labels immediately using add_labels_to_issue tool
+- Post a single comment with expert mentions that includes:
+  - Brief issue summary with context from similar issues (if found)
+  - Expert mentions (MAX 2 people): "CC @expert1 @expert2 for [specific area] - [brief reason why they are needed]"
+  - Links to similar issues if relevant
+  - Clear action items or next steps if applicable
+- Keep comments professional but informative
+- For TypeScript issues: Only tag TypeScript experts if the issue is specifically about TypeScript compilation, syntax, or type errors (not just because this is a TypeScript project)
+
+## Important Notes
+- Do NOT set any project fields or priorities - this agent is for categorization only
+- Focus on helping organize and route issues to the right people
+- Prioritization will be handled by a separate process
+
+Use GitHub tools to execute all actions. Be thorough but efficient in your analysis.'
+        STRANDS_TOOL_CONSOLE_MODE: 'enabled'
+        BYPASS_TOOL_CONSENT: 'true'
+      run: |
+        uv run ${{ runner.temp }}/strands-labeller/.github/scripts/python/agent_runner.py "Analyze and categorize GitHub issue #${{ github.event.issue.number }}: search for similar issues, apply appropriate labels, and tag relevant area experts based on issue content."

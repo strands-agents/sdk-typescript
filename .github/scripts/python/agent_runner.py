@@ -20,6 +20,7 @@ from strands_tools import http_request, shell
 # Import local GitHub tools we need
 from github_tools import (
     add_issue_comment,
+    add_labels_to_issue,
     create_issue,
     create_pull_request,
     get_issue,
@@ -28,7 +29,9 @@ from github_tools import (
     get_pr_review_and_comments,
     list_issues,
     list_pull_requests,
+    list_repository_labels,
     reply_to_review_comment,
+    search_similar_issues,
     update_issue,
     update_pull_request,
 )
@@ -62,7 +65,10 @@ def _get_all_tools() -> list[Any]:
         update_issue,
         list_issues,
         add_issue_comment,
+        add_labels_to_issue,
         get_issue_comments,
+        search_similar_issues,
+        list_repository_labels,
         
         # GitHub PR tools
         create_pull_request,
