@@ -450,6 +450,103 @@ def reply_to_review_comment(pr_number: int, comment_id: int, reply_text: str, re
     return message
 
 
+@tool
+@log_inputs
+@check_should_call_write_api_or_record
+def create_pr_review(pr_number: int, body: str = "", event: str = "COMMENT", comments: list = None, repo: str | None = None) -> str:
+    """Creates a pull request review with optional line-specific comments.
+
+    Args:
+        pr_number: The pull request number
+        body: The overall review comment body (optional)
+        event: The review event type - "APPROVE", "REQUEST_CHANGES", or "COMMENT" (default: "COMMENT")
+        comments: List of line-specific comments, each with keys: path, line, body (optional)
+        repo: GitHub repository in the format "owner/repo" (optional; falls back to env var)
+
+    Returns:
+        Result of the operation
+    
+    Example comments format:
+    [
+        {
+            "path": "src/example.ts",
+            "line": 42,
+            "body": "Consider using a more descriptive variable name here."
+        }
+    ]
+    """
+    if event not in ["APPROVE", "REQUEST_CHANGES", "COMMENT"]:
+        return f"Error: Invalid event type '{event}'. Must be APPROVE, REQUEST_CHANGES, or COMMENT"
+    
+    review_data = {
+        "event": event
+    }
+    
+    if body:
+        review_data["body"] = body
+    
+    if comments:
+        review_data["comments"] = comments
+    
+    result = _github_request("POST", f"pulls/{pr_number}/reviews", repo, review_data)
+    if isinstance(result, str):
+        console.print(Panel(escape(result), title="[bold red]Error", border_style="red"))
+        return result
+
+    message = f"PR review created: {result['html_url']}"
+    review_details = f"Event: {event}\nBody: {body or 'No general comment'}\nLine comments: {len(comments) if comments else 0}\nURL: {result['html_url']}"
+    console.print(Panel(escape(review_details), title="[bold green]✅ Review Created", border_style="green"))
+    return message
+
+
+@tool
+@log_inputs
+def get_pr_files(pr_number: int, repo: str | None = None) -> str:
+    """Gets the list of files changed in a pull request with their diffs.
+
+    Args:
+        pr_number: The pull request number
+        repo: GitHub repository in the format "owner/repo" (optional; falls back to env var)
+
+    Returns:
+        Formatted list of changed files with their diffs
+    """
+    result = _github_request("GET", f"pulls/{pr_number}/files", repo)
+    if isinstance(result, str):
+        console.print(Panel(escape(result), title="[bold red]Error", border_style="red"))
+        return result
+
+    output = f"Files changed in PR #{pr_number}:\n\n"
+    
+    for file in result:
+        filename = file['filename']
+        status = file['status']
+        additions = file['additions']
+        deletions = file['deletions']
+        changes = file['changes']
+        
+        output += f"📄 **{filename}** ({status})\n"
+        output += f"   +{additions} -{deletions} (~{changes} changes)\n"
+        
+        if file.get('patch'):
+            output += f"   Diff:\n"
+            # Limit diff size to avoid overwhelming output
+            patch_lines = file['patch'].split('\n')
+            if len(patch_lines) > 50:
+                output += '\n'.join(patch_lines[:50])
+                output += f"\n   ... (truncated, {len(patch_lines) - 50} more lines)\n"
+            else:
+                output += file['patch']
+            output += "\n"
+        else:
+            output += "   (Binary file or no diff available)\n"
+        
+        output += "\n"
+    
+    console.print(Panel(escape(output), title=f"[bold green]PR #{pr_number} Files", border_style="blue"))
+    return output
+
+
 # =============================================================================
 # READ FUNCTIONS (Functions that only read GitHub resources)
 # =============================================================================
