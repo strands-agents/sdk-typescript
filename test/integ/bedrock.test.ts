@@ -162,6 +162,9 @@ describe.skipIf(bedrock.skip)('BedrockModel Integration Tests', () => {
       // Use vitest to stub environment variables
       vi.stubEnv('AWS_REGION', undefined)
       vi.stubEnv('AWS_DEFAULT_REGION', undefined)
+      // Point config and credential files to null values
+      vi.stubEnv('AWS_CONFIG_FILE', '/dev/null')
+      vi.stubEnv('AWS_SHARED_CREDENTIALS_FILE', '/dev/null')
 
       const provider = bedrock.createModel({
         maxTokens: 50,
