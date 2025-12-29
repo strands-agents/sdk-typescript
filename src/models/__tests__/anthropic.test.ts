@@ -77,7 +77,6 @@ describe('AnthropicModel', () => {
       it('uses API key from environment variable', () => {
         vi.stubEnv('ANTHROPIC_API_KEY', 'sk-from-env')
         new AnthropicModel()
-        // Anthropic client should be called (uses env var internally)
         expect(Anthropic).toHaveBeenCalled()
       })
 
@@ -90,7 +89,6 @@ describe('AnthropicModel', () => {
     it('uses provided client instance', () => {
       const mockClient = {} as Anthropic
       const provider = new AnthropicModel({ client: mockClient })
-      // Should not create a new Anthropic client
       expect(Anthropic).not.toHaveBeenCalled()
       expect(provider).toBeDefined()
     })
