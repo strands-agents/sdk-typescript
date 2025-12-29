@@ -103,6 +103,7 @@
   },
   "homepage": "https://github.com/strands-agents/sdk-typescript#readme",
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.71.2",
     "@aws-sdk/client-bedrock-runtime": "^3.943.0",
     "@modelcontextprotocol/sdk": "^1.24.2",
     "zod": "^4.1.12"

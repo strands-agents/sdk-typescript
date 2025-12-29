@@ -5,14 +5,15 @@
 import { inject } from 'vitest'
 import { BedrockModel, type BedrockModelOptions } from '$/sdk/models/bedrock.js'
 import { OpenAIModel, type OpenAIModelOptions } from '$/sdk/models/openai.js'
+import { AnthropicModel, type AnthropicModelOptions } from '$/sdk/models/anthropic.js'
 
 export const bedrock = {
   name: 'BedrockModel',
   get skip() {
-    return inject('provider-bedrock').shouldSkip
+    return inject('provider-bedrock')?.shouldSkip ?? true
   },
   createModel: (options: BedrockModelOptions = {}): BedrockModel => {
-    const credentials = inject('provider-bedrock').credentials
+    const credentials = inject('provider-bedrock')?.credentials
     if (!credentials) {
       throw new Error('No Bedrock credentials provided')
     }
@@ -30,10 +31,10 @@ export const bedrock = {
 export const openai = {
   name: 'OpenAIModel',
   get skip() {
-    return inject('provider-openai').shouldSkip
+    return inject('provider-openai')?.shouldSkip ?? true
   },
   createModel: (config: OpenAIModelOptions = {}): OpenAIModel => {
-    const apiKey = inject('provider-openai').apiKey
+    const apiKey = inject('provider-openai')?.apiKey
     if (!apiKey) {
       throw new Error('No OpenAI apiKey provided')
     }
@@ -49,4 +50,26 @@ export const openai = {
   },
 }
 
-export const allProviders = [bedrock, openai]
+export const anthropic = {
+  name: 'AnthropicModel',
+  get skip() {
+    return inject('provider-anthropic')?.shouldSkip ?? true
+  },
+  createModel: (config: AnthropicModelOptions = {}): AnthropicModel => {
+    const apiKey = inject('provider-anthropic')?.apiKey
+    if (!apiKey) {
+      throw new Error('No Anthropic apiKey provided')
+    }
+
+    return new AnthropicModel({
+      ...config,
+      apiKey: apiKey,
+      clientConfig: {
+        ...(config.clientConfig ?? {}),
+        dangerouslyAllowBrowser: true,
+      },
+    })
+  },
+}
+
+export const allProviders = [bedrock, openai, anthropic]
