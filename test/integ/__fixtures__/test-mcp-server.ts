@@ -162,6 +162,7 @@ export async function startHTTPServer(): Promise<HttpServerInfo> {
 
         // Create a new transport for each request (stateless mode)
         const transport = new StreamableHTTPServerTransport({
+          sessionIdGenerator: undefined,
           enableJsonResponse: true,
         })
 
@@ -169,7 +170,7 @@ export async function startHTTPServer(): Promise<HttpServerInfo> {
           await transport.close()
         })
 
-        await mcpServer.connect(transport as any)
+        await mcpServer.connect(transport)
         await transport.handleRequest(req, res, parsedBody)
       } catch (error) {
         console.error('Error handling MCP request:', error)
