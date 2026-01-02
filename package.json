@@ -14,6 +14,10 @@
       "types": "./dist/src/index.d.ts",
       "default": "./dist/src/index.js"
     },
+    "./anthropic": {
+      "types": "./dist/src/models/anthropic.d.ts",
+      "default": "./dist/src/models/anthropic.js"
+    },
     "./openai": {
       "types": "./dist/src/models/openai.d.ts",
       "default": "./dist/src/models/openai.js"
@@ -108,6 +112,7 @@
     "zod": "^4.1.12"
   },
   "optionalDependencies": {
+    "@anthropic-ai/sdk": "^0.71.2",
     "openai": "^6.7.0"
   },
   "overrides": {
