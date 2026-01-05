@@ -11,7 +11,7 @@ import OpenAI, { type ClientOptions } from 'openai'
 import type { ApiKeySetter } from 'openai/client'
 import { Model } from '../models/model.js'
 import type { BaseModelConfig, StreamOptions } from '../models/model.js'
-import type { Message } from '../types/messages.js'
+import type { Message, StopReason } from '../types/messages.js'
 import type { ImageBlock, DocumentBlock, MediaFormats } from '../types/media.js'
 import { encodeBase64 } from '../types/media.js'
 import type { ModelStreamEvent } from '../models/streaming.js'
@@ -945,7 +945,7 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
       }
 
       // Map OpenAI stop reason to SDK stop reason
-      const stopReasonMap: Record<string, string> = {
+      const stopReasonMap: Record<string, StopReason> = {
         stop: 'endTurn',
         tool_calls: 'toolUse',
         length: 'maxTokens',
@@ -953,13 +953,12 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
       }
 
       // Log unknown stop reasons
-      let stopReason = stopReasonMap[typedChoice.finish_reason]
-      if (!stopReason) {
-        const fallbackReason = this._snakeToCamel(typedChoice.finish_reason)
+      let stopReason: StopReason =
+        stopReasonMap[typedChoice.finish_reason] ?? this._snakeToCamel(typedChoice.finish_reason)
+      if (!stopReasonMap[typedChoice.finish_reason]) {
         logger.warn(
-          `finish_reason=<${typedChoice.finish_reason}>, fallback=<${fallbackReason}> | unknown openai stop reason, using camelCase conversion as fallback`
+          `finish_reason=<${typedChoice.finish_reason}>, fallback=<${stopReason}> | unknown openai stop reason, using camelCase conversion as fallback`
         )
-        stopReason = fallbackReason
       }
 
       events.push({
