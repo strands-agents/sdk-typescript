@@ -34,8 +34,10 @@ export interface AgentData {
 
 /**
  * Result returned by the agent loop.
+ *
+ * @typeParam T - Type of the structured output (inferred from schema)
  */
-export class AgentResult {
+export class AgentResult<T = any> {
   readonly type = 'agentResult' as const
 
   /**
@@ -48,9 +50,16 @@ export class AgentResult {
    */
   readonly lastMessage: Message
 
-  constructor(data: { stopReason: string; lastMessage: Message }) {
+  /**
+   * The validated structured output from the LLM, if a schema was provided.
+   * Type is inferred from the Zod schema using z.infer.
+   */
+  readonly structuredOutput?: T
+
+  constructor(data: { stopReason: string; lastMessage: Message; structuredOutput?: T }) {
     this.stopReason = data.stopReason
     this.lastMessage = data.lastMessage
+    this.structuredOutput = data.structuredOutput
   }
 
   /**

@@ -40,6 +40,8 @@ import {
   MessageAddedEvent,
   ModelStreamEventHook,
 } from '../hooks/events.js'
+import { StructuredOutputContext } from '../structured_output/structured_output_context.js'
+import type { z } from 'zod'
 
 /**
  * Recursive type definition for nested tool arrays.
@@ -103,6 +105,27 @@ export type AgentConfig = {
    * Hooks enable observing and extending agent behavior.
    */
   hooks?: HookProvider[]
+  /**
+   * Zod schema for structured output validation.
+   * When provided, all invocations will validate their output against this schema
+   * unless overridden at the invocation level.
+   *
+   * @example
+   * ```typescript
+   * import { z } from 'zod'
+   *
+   * const PersonSchema = z.object({
+   *   name: z.string(),
+   *   age: z.number()
+   * })
+   *
+   * const agent = new Agent({
+   *   model: 'anthropic.claude-3-5-sonnet-20240620-v1:0',
+   *   structuredOutputSchema: PersonSchema
+   * })
+   * ```
+   */
+  structuredOutputSchema?: z.ZodSchema
 }
 
 /**
@@ -155,6 +178,7 @@ export class Agent implements AgentData {
   private _initialized: boolean
   private _isInvoking: boolean = false
   private _printer?: Printer
+  private _defaultStructuredOutputSchema?: z.ZodSchema | undefined
 
   /**
    * Creates an instance of the Agent.
@@ -190,6 +214,9 @@ export class Agent implements AgentData {
     if (printer) {
       this._printer = new AgentPrinter(getDefaultAppender())
     }
+
+    // Store default structured output schema
+    this._defaultStructuredOutputSchema = config?.structuredOutputSchema
 
     this._initialized = false
   }
@@ -335,10 +362,19 @@ export class Agent implements AgentData {
   private async *_stream(args: InvokeArgs): AsyncGenerator<AgentStreamEvent, AgentResult, undefined> {
     let currentArgs: InvokeArgs | undefined = args
 
-    // Emit event before the loop starts
-    yield new BeforeInvocationEvent({ agent: this })
+    // Create structured output context if schema is provided
+    const schema = this._defaultStructuredOutputSchema
+    const context = schema ? new StructuredOutputContext(schema) : undefined
 
     try {
+      // Register structured output tool if context exists
+      if (context) {
+        context.registerTool(this._toolRegistry)
+      }
+
+      // Emit event before the loop starts
+      yield new BeforeInvocationEvent({ agent: this })
+
       // Main agent loop - continues until model stops without requesting tools
       while (true) {
         const modelResult = yield* this.invokeModel(currentArgs)
@@ -347,9 +383,14 @@ export class Agent implements AgentData {
           // Loop terminates - no tool use requested
           // Add assistant message now that we're returning
           yield await this._appendMessage(modelResult.message)
+
+          // Get structured output result if available
+          const structuredOutput = context?.getResult()
+
           return new AgentResult({
             stopReason: modelResult.stopReason,
             lastMessage: modelResult.message,
+            structuredOutput,
           })
         }
 
@@ -364,6 +405,11 @@ export class Agent implements AgentData {
         // Continue loop
       }
     } finally {
+      // Always cleanup structured output context
+      if (context) {
+        context.cleanup(this._toolRegistry)
+      }
+
       // Always emit final event
       yield new AfterInvocationEvent({ agent: this })
     }
@@ -438,7 +484,7 @@ export class Agent implements AgentData {
       yield await this._appendMessage(message)
     }
 
-    const toolSpecs = this._toolRegistry.values().map((tool) => tool.toolSpec)
+    const toolSpecs = this._toolRegistry.getToolsForModel().map((tool) => tool.toolSpec)
     const streamOptions: StreamOptions = { toolSpecs }
     if (this.systemPrompt !== undefined) {
       streamOptions.systemPrompt = this.systemPrompt

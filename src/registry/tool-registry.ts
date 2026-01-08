@@ -9,6 +9,12 @@ import { ToolResultBlock } from '../types/messages.js'
  */
 export class ToolRegistry extends Registry<Tool, Tool> {
   /**
+   * Dynamic tools are hidden from the public tools list but included in model tool specs.
+   * Used for features like structured output that need to register tools temporarily.
+   */
+  private _dynamicTools: Map<string, Tool> = new Map()
+
+  /**
    * Generates a unique identifier for a Tool.
    * @override
    * @returns The tool itself as the identifier.
@@ -47,28 +53,69 @@ export class ToolRegistry extends Registry<Tool, Tool> {
       }
     }
 
-    // Check for duplicate names
-    if (this.values().some((t) => t.name === tool.name)) {
+    // Check for duplicate names in both public and dynamic tools
+    if (this.values().some((t) => t.name === tool.name) || this._dynamicTools.has(tool.name)) {
       throw new ValidationError(`Tool with name '${tool.name}' already registered`)
     }
   }
 
   /**
+   * Adds a dynamic tool that is hidden from the public tools list.
+   * Dynamic tools are included in getToolsForModel() but not in values().
+   *
+   * @param tool - The tool to add as dynamic
+   * @throws ValidationError If the tool is invalid or the name is already in use
+   */
+  public addDynamic(tool: Tool): void {
+    // Validate using same rules as regular tools
+    this.validate(tool)
+    this._dynamicTools.set(tool.name, tool)
+  }
+
+  /**
    * Retrieves the first tool that matches the given name.
+   * Checks both public and dynamic tools.
+   *
    * @param name - The name of the tool to retrieve.
    * @returns The tool if found, otherwise undefined.
    */
   public getByName(name: string): Tool | undefined {
-    return this.values().find((tool) => tool.name === name)
+    // Check public tools first
+    const publicTool = this.values().find((tool) => tool.name === name)
+    if (publicTool) {
+      return publicTool
+    }
+
+    // Check dynamic tools
+    return this._dynamicTools.get(name)
   }
 
   /**
    * Finds and removes the first tool that matches the given name.
+   * Checks both public and dynamic tools.
    * If multiple tools have the same name, only the first one found is removed.
+   *
    * @param name - The name of the tool to remove.
    */
   public removeByName(name: string): void {
+    // Try to remove from dynamic tools first
+    if (this._dynamicTools.has(name)) {
+      this._dynamicTools.delete(name)
+      return
+    }
+
+    // Otherwise remove from public tools
     this.findRemove((tool) => tool.name === name)
+  }
+
+  /**
+   * Gets all tools (public and dynamic) for passing to the model.
+   * This includes both regular tools and temporarily registered dynamic tools.
+   *
+   * @returns Array of all tools available to the model
+   */
+  public getToolsForModel(): Tool[] {
+    return [...this.values(), ...Array.from(this._dynamicTools.values())]
   }
 }
 
