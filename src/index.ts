@@ -127,7 +127,9 @@ export type {
 } from './models/streaming.js'
 
 // Model provider types
-export type { BaseModelConfig, StreamOptions, Model } from './models/model.js'
+export type { BaseModelConfig, StreamOptions } from './models/model.js'
+
+export { Model } from './models/model.js'
 
 // Bedrock model provider
 export { BedrockModel as BedrockModel } from './models/bedrock.js'
