@@ -9,7 +9,7 @@ import { getToolNameFromSchema } from './schema_converter.js'
  */
 export class StructuredOutputContext {
   private _schema?: z.ZodSchema | undefined
-  private _tool?: StructuredOutputTool
+  private _tool?: StructuredOutputTool | undefined
   private _result: any = undefined
 
   /**

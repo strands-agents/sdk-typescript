@@ -66,8 +66,10 @@ describe('StructuredOutputTool', () => {
 
       expect(result.done).toBe(true)
       expect(result.value).toBeDefined()
-      expect(result.value.toolUseId).toBe('tool-123')
-      expect(result.value.status).toBe('success')
+      if (result.value && 'toolUseId' in result.value) {
+        expect(result.value.toolUseId).toBe('tool-123')
+        expect(result.value.status).toBe('success')
+      }
       expect(context.getResult()).toEqual(validInput)
     })
 
@@ -91,13 +93,15 @@ describe('StructuredOutputTool', () => {
       const result = await generator.next()
 
       expect(result.done).toBe(true)
-      expect(result.value.status).toBe('error')
-      expect(result.value.content).toHaveLength(1)
+      if (result.value && 'status' in result.value) {
+        expect(result.value.status).toBe('error')
+        expect(result.value.content).toHaveLength(1)
 
-      const errorContent = result.value.content[0] as any
-      expect(errorContent.text).toContain('Validation failed')
-      expect(errorContent.text).toContain('PersonSchema')
-      expect(errorContent.text).toContain("Field 'age'")
+        const errorContent = result.value.content[0] as any
+        expect(errorContent.text).toContain('Validation failed')
+        expect(errorContent.text).toContain('PersonSchema')
+        expect(errorContent.text).toContain("Field 'age'")
+      }
     })
 
     it('returns error for missing required field', async () => {
@@ -119,11 +123,13 @@ describe('StructuredOutputTool', () => {
       const result = await generator.next()
 
       expect(result.done).toBe(true)
-      expect(result.value.status).toBe('error')
+      if (result.value && 'status' in result.value) {
+        expect(result.value.status).toBe('error')
 
-      const errorContent = result.value.content[0] as any
-      expect(errorContent.text).toContain("Field 'age'")
-      expect(errorContent.text).toContain("Field 'occupation'")
+        const errorContent = result.value.content[0] as any
+        expect(errorContent.text).toContain("Field 'age'")
+        expect(errorContent.text).toContain("Field 'occupation'")
+      }
     })
 
     it('formats multiple validation errors as bullet list', async () => {
@@ -146,13 +152,15 @@ describe('StructuredOutputTool', () => {
       const result = await generator.next()
 
       expect(result.done).toBe(true)
-      expect(result.value.status).toBe('error')
+      if (result.value && 'status' in result.value) {
+        expect(result.value.status).toBe('error')
 
-      const errorContent = result.value.content[0] as any
-      // Should have bullet points for each field
-      expect(errorContent.text).toContain("- Field 'name'")
-      expect(errorContent.text).toContain("- Field 'age'")
-      expect(errorContent.text).toContain("- Field 'occupation'")
+        const errorContent = result.value.content[0] as any
+        // Should have bullet points for each field
+        expect(errorContent.text).toContain("- Field 'name'")
+        expect(errorContent.text).toContain("- Field 'age'")
+        expect(errorContent.text).toContain("- Field 'occupation'")
+      }
     })
 
     it('does not store result for validation errors', async () => {

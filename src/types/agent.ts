@@ -54,9 +54,9 @@ export class AgentResult<T = any> {
    * The validated structured output from the LLM, if a schema was provided.
    * Type is inferred from the Zod schema using z.infer.
    */
-  readonly structuredOutput?: T
+  readonly structuredOutput?: T | undefined
 
-  constructor(data: { stopReason: string; lastMessage: Message; structuredOutput?: T }) {
+  constructor(data: { stopReason: string; lastMessage: Message; structuredOutput?: T | undefined }) {
     this.stopReason = data.stopReason
     this.lastMessage = data.lastMessage
     this.structuredOutput = data.structuredOutput

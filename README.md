@@ -41,6 +41,7 @@ Strands Agents is a simple yet powerful SDK that takes a model-driven approach t
 
 - **🪶 Lightweight & Flexible**: Simple agent loop that works seamlessly in Node.js and browser environments
 - **🔒 Type-Safe Tools**: Define tools easily using Zod schemas for robust input validation and type inference
+- **📋 Structured Output**: Get type-safe, validated responses from LLMs using Zod schemas with automatic retry on validation errors
 - **🔌 Model Agnostic**: First-class support for Amazon Bedrock and OpenAI, with extensible architecture for custom providers
 - **🔗 Built-in MCP**: Native support for Model Context Protocol (MCP) clients, enabling access to external tools and servers
 - **⚡ Streaming Support**: Real-time response streaming for better user experience
@@ -164,6 +165,61 @@ await agent.invoke('What is the weather in San Francisco?')
 - **Notebook Tool**: Manage text-based notebooks for persistent note-taking
 - **File Editor Tool**: Perform file system operations (read, write, edit files)
 - **HTTP Request Tool**: Make HTTP requests to external APIs
+
+
+### Structured Output
+
+Get type-safe, validated responses from LLMs by defining the expected output structure with Zod schemas. The agent automatically validates the LLM's response and retries on validation errors:
+
+```typescript
+import { Agent } from '@strands-agents/sdk'
+import { z } from 'zod'
+
+const PersonSchema = z.object({
+  name: z.string().describe('Name of the person'),
+  age: z.number().describe('Age of the person'),
+  occupation: z.string().describe('Occupation of the person')
+})
+
+const agent = new Agent()
+const result = await agent.invoke(
+  'John Smith is a 30 year-old software engineer',
+  { structuredOutputSchema: PersonSchema }
+)
+
+// result.structuredOutput is fully typed based on the schema
+console.log(result.structuredOutput.name) // "John Smith"
+console.log(result.structuredOutput.age)  // 30
+```
+
+**Agent-level defaults**: Set a schema at the agent level to apply it to all invocations:
+
+```typescript
+const agent = new Agent({ 
+  structuredOutputSchema: PersonSchema 
+})
+
+// Schema applies to all invocations
+const result = await agent.invoke('Extract person info...')
+console.log(result.structuredOutput) // Typed as PersonInfo
+```
+
+**Error handling**: The agent automatically retries with validation feedback when the LLM provides invalid output:
+
+```typescript
+import { StructuredOutputException } from '@strands-agents/sdk'
+
+try {
+  const result = await agent.invoke(prompt, { 
+    structuredOutputSchema: PersonSchema 
+  })
+  console.log(result.structuredOutput)
+} catch (error) {
+  if (error instanceof StructuredOutputException) {
+    console.error('Validation failed:', error.validationErrors)
+  }
+}
+```
 
 
 ### MCP Integration

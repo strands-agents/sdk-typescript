@@ -55,7 +55,7 @@ describe('StructuredOutputException', () => {
 describe('formatValidationErrors', () => {
   it('formats single validation error', () => {
     const issues: z.ZodIssue[] = [
-      { code: 'invalid_type' as const, message: 'Expected number, received string', path: ['age'], expected: 'number', received: 'string' }
+      { code: 'invalid_type', message: 'Expected number, received string', path: ['age'], expected: 'number', received: 'string' } as z.ZodIssue
     ]
 
     const formatted = formatValidationErrors(issues)
@@ -65,8 +65,8 @@ describe('formatValidationErrors', () => {
 
   it('formats multiple validation errors', () => {
     const issues: z.ZodIssue[] = [
-      { code: 'invalid_type' as const, message: 'Expected number, received string', path: ['age'], expected: 'number', received: 'string' },
-      { code: 'invalid_type' as const, message: 'Expected string, received number', path: ['name'], expected: 'string', received: 'number' }
+      { code: 'invalid_type', message: 'Expected number, received string', path: ['age'], expected: 'number', received: 'string' } as z.ZodIssue,
+      { code: 'invalid_type', message: 'Expected string, received number', path: ['name'], expected: 'string', received: 'number' } as z.ZodIssue
     ]
 
     const formatted = formatValidationErrors(issues)
@@ -79,7 +79,7 @@ describe('formatValidationErrors', () => {
 
   it('formats nested field path', () => {
     const issues: z.ZodIssue[] = [
-      { code: 'invalid_type' as const, message: 'Invalid format', path: ['address', 'street'], expected: 'string', received: 'number' }
+      { code: 'invalid_type', message: 'Invalid format', path: ['address', 'street'], expected: 'string', received: 'number' } as z.ZodIssue
     ]
 
     const formatted = formatValidationErrors(issues)
@@ -89,7 +89,7 @@ describe('formatValidationErrors', () => {
 
   it('formats root-level error', () => {
     const issues: z.ZodIssue[] = [
-      { code: 'invalid_type' as const, message: 'Invalid type', path: [], expected: 'object', received: 'string' }
+      { code: 'invalid_type', message: 'Invalid type', path: [], expected: 'object', received: 'string' } as z.ZodIssue
     ]
 
     const formatted = formatValidationErrors(issues)
@@ -99,7 +99,7 @@ describe('formatValidationErrors', () => {
 
   it('formats array index in path', () => {
     const issues: z.ZodIssue[] = [
-      { code: 'invalid_type' as const, message: 'Invalid item', path: ['items', 0, 'name'], expected: 'string', received: 'number' }
+      { code: 'invalid_type', message: 'Invalid item', path: ['items', 0, 'name'], expected: 'string', received: 'number' } as z.ZodIssue
     ]
 
     const formatted = formatValidationErrors(issues)
