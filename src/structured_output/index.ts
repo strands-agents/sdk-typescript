@@ -1,7 +1,5 @@
 /**
  * Structured output functionality for type-safe, validated LLM responses.
- *
- * @module structured_output
  */
 
 export { StructuredOutputException } from './exceptions.js'

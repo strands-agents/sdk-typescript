@@ -42,6 +42,7 @@ export class StructuredOutputTool extends Tool {
    * @param toolContext - The tool execution context
    * @returns Generator that returns a ToolResultBlock
    */
+  // eslint-disable-next-line require-yield
   async *stream(toolContext: ToolContext): ToolStreamGenerator {
     const { toolUse } = toolContext
 

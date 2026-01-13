@@ -57,12 +57,11 @@ export class ToolRegistry extends Registry<Tool, Tool> {
     // Only check dynamic tools if the map has been initialized
     const hasDuplicateInPublic = this.values().some((t) => t.name === tool.name)
     const hasDuplicateInDynamic = this._dynamicTools !== undefined && this._dynamicTools.has(tool.name)
-    
+
     if (hasDuplicateInPublic || hasDuplicateInDynamic) {
       throw new ValidationError(`Tool with name '${tool.name}' already registered`)
     }
   }
-
 
   /**
    * Adds a dynamic tool that is hidden from the public tools list.

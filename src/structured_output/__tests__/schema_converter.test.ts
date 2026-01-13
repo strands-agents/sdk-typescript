@@ -93,18 +93,14 @@ describe('convertSchemaToJsonSchema', () => {
     })
 
     expect(() => convertSchemaToJsonSchema(schema)).toThrow(StructuredOutputException)
-    expect(() => convertSchemaToJsonSchema(schema)).toThrow(
-      'Zod refinements and transforms are not supported'
-    )
+    expect(() => convertSchemaToJsonSchema(schema)).toThrow('Zod refinements and transforms are not supported')
   })
 
   it('throws error for schema with transforms', () => {
     const schema = z.string().transform((val) => val.toUpperCase())
 
     expect(() => convertSchemaToJsonSchema(schema)).toThrow(StructuredOutputException)
-    expect(() => convertSchemaToJsonSchema(schema)).toThrow(
-      'Zod refinements and transforms are not supported'
-    )
+    expect(() => convertSchemaToJsonSchema(schema)).toThrow('Zod refinements and transforms are not supported')
   })
 
   it('throws error for nested schema with refinements', () => {

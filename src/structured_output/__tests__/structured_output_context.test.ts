@@ -101,7 +101,7 @@ describe('StructuredOutputContext', () => {
     it('can be called multiple times safely', () => {
       context.registerTool(registry)
       context.cleanup(registry)
-      
+
       // Should not throw on second cleanup
       expect(() => context.cleanup(registry)).not.toThrow()
     })

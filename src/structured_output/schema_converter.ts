@@ -22,10 +22,10 @@ export function convertSchemaToJsonSchema(schema: z.ZodSchema): JSONSchema {
   }
 
   // Convert to JSON Schema using Zod v4's built-in toJSONSchema
-  const result = z4mini.toJSONSchema(schema, { target: 'draft-7' })
-  
+  const result = z4mini.toJSONSchema(schema, { target: 'draft-7' }) as JSONSchema & { $schema?: string }
+
   // Remove the $schema property and return the rest
-  const { $schema, ...jsonSchema } = result as any
+  const { $schema: _$schema, ...jsonSchema } = result
 
   return jsonSchema as JSONSchema
 }
@@ -61,7 +61,7 @@ export function getSchemaDescription(schema: z.ZodSchema): string {
   }
 
   // Check _def for description (common in Zod schemas)
-  const def = (schema as any)._def
+  const def = (schema as { _def?: { description?: string } })._def
   if (def && typeof def.description === 'string') {
     return def.description
   }
@@ -76,6 +76,7 @@ export function getSchemaDescription(schema: z.ZodSchema): string {
  * @returns true if unsupported features are detected
  */
 function hasUnsupportedFeatures(schema: z.ZodSchema): boolean {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const def = (schema as any)._def
 
   if (!def) {
@@ -97,7 +98,8 @@ function hasUnsupportedFeatures(schema: z.ZodSchema): boolean {
 
   // Check for refinements (custom checks in Zod v4)
   if (def.checks && Array.isArray(def.checks)) {
-    for (const check of def.checks) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const check of def.checks as any[]) {
       if (check.type === 'custom' || check.def?.type === 'custom') {
         return true
       }
@@ -110,20 +112,20 @@ function hasUnsupportedFeatures(schema: z.ZodSchema): boolean {
   }
 
   // Recursively check wrapped/inner types
-  if (def.innerType) {
+  if (def.innerType && typeof def.innerType === 'object' && '_def' in def.innerType) {
     return hasUnsupportedFeatures(def.innerType)
   }
 
   // Check pipe input/output
-  if (def.in) {
+  if (def.in && typeof def.in === 'object' && '_def' in def.in) {
     if (hasUnsupportedFeatures(def.in)) return true
   }
-  if (def.out) {
+  if (def.out && typeof def.out === 'object' && '_def' in def.out) {
     if (hasUnsupportedFeatures(def.out)) return true
   }
 
   // Check array element type
-  if (def.type && typeof def.type === 'object') {
+  if (def.type && typeof def.type === 'object' && '_def' in def.type) {
     return hasUnsupportedFeatures(def.type)
   }
 
@@ -131,15 +133,19 @@ function hasUnsupportedFeatures(schema: z.ZodSchema): boolean {
   if (def.shape) {
     const shape = typeof def.shape === 'function' ? def.shape() : def.shape
     for (const key in shape) {
-      if (hasUnsupportedFeatures(shape[key])) {
-        return true
+      const property = shape[key]
+      if (property && typeof property === 'object' && '_def' in property) {
+        if (hasUnsupportedFeatures(property)) {
+          return true
+        }
       }
     }
   }
 
   // Check union options
   if (def.options && Array.isArray(def.options)) {
-    return def.options.some((option: z.ZodSchema) => hasUnsupportedFeatures(option))
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (def.options as any[]).some((option) => hasUnsupportedFeatures(option))
   }
 
   return false
@@ -154,7 +160,7 @@ function hasUnsupportedFeatures(schema: z.ZodSchema): boolean {
  */
 export function getToolNameFromSchema(schema: z.ZodSchema): string {
   // Try to get name from schema metadata
-  const def = (schema as any)._def
+  const def = (schema as { _def?: { name?: string } })._def
   if (def && typeof def.name === 'string' && def.name.length > 0) {
     return def.name
   }

@@ -10,7 +10,7 @@ import { getToolNameFromSchema } from './schema_converter.js'
 export class StructuredOutputContext {
   private _schema?: z.ZodSchema | undefined
   private _tool?: StructuredOutputTool | undefined
-  private _result: any = undefined
+  private _result: unknown = undefined
 
   /**
    * Creates a new StructuredOutputContext.
@@ -45,7 +45,7 @@ export class StructuredOutputContext {
    * @param toolUseId - The tool use ID
    * @param result - The validated result
    */
-  storeResult(toolUseId: string, result: any): void {
+  storeResult(toolUseId: string, result: unknown): void {
     this._result = result
   }
 
@@ -54,7 +54,7 @@ export class StructuredOutputContext {
    *
    * @returns The validated result or undefined if not yet set
    */
-  getResult(): any | undefined {
+  getResult(): unknown | undefined {
     return this._result
   }
 

@@ -37,7 +37,7 @@ export interface AgentData {
  *
  * @typeParam T - Type of the structured output (inferred from schema)
  */
-export class AgentResult<T = any> {
+export class AgentResult<T = unknown> {
   readonly type = 'agentResult' as const
 
   /**
