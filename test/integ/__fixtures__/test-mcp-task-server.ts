@@ -323,7 +323,6 @@ export async function startTaskHTTPServer(): Promise<TaskHttpServerInfo> {
         // The taskStore is shared across all requests to persist task state
         const mcpServer = createTaskTestServer(taskStore)
         const transport = new StreamableHTTPServerTransport({
-          sessionIdGenerator: undefined,
           enableJsonResponse: true,
         })
 
@@ -331,6 +330,7 @@ export async function startTaskHTTPServer(): Promise<TaskHttpServerInfo> {
           await transport.close()
         })
 
+        // @ts-expect-error - MCP SDK doesn't support exactOptionalPropertyTypes
         await mcpServer.connect(transport)
         await transport.handleRequest(req, res, parsedBody)
       } catch (error) {
