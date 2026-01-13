@@ -1,14 +1,11 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { McpClient, Agent, type Message } from '@strands-agents/sdk'
+import { McpClient, Agent } from '@strands-agents/sdk'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
 import { startTaskHTTPServer, type TaskHttpServerInfo } from './__fixtures__/test-mcp-task-server.js'
 import { startHTTPServer, type HttpServerInfo } from './__fixtures__/test-mcp-server.js'
 import { bedrock } from './__fixtures__/model-providers.js'
-
-// ================================
-// Test Helpers
-// ================================
+import { hasToolUse, countToolResults } from './__fixtures__/test-helpers.js'
 
 /**
  * Creates a connected McpClient for the given server URL.
@@ -20,35 +17,6 @@ function createClient(serverUrl: string, appName: string): McpClient {
     transport: new StreamableHTTPClientTransport(new URL(serverUrl)) as Transport,
   })
 }
-
-/**
- * Checks if any message contains a toolUseBlock with the specified tool name.
- */
-function hasToolUse(messages: Message[], toolName: string): boolean {
-  return messages.some((msg) => msg.content.some((block) => block.type === 'toolUseBlock' && block.name === toolName))
-}
-
-/**
- * Checks if any message contains a toolResultBlock with the specified status.
- */
-function hasToolResult(messages: Message[], status: 'success' | 'error'): boolean {
-  return messages.some((msg) =>
-    msg.content.some((block) => block.type === 'toolResultBlock' && block.status === status)
-  )
-}
-
-/**
- * Counts messages containing toolResultBlocks with the specified status.
- */
-function countToolResults(messages: Message[], status: 'success' | 'error'): number {
-  return messages.filter((msg) =>
-    msg.content.some((block) => block.type === 'toolResultBlock' && block.status === status)
-  ).length
-}
-
-// ================================
-// Tests
-// ================================
 
 describe('MCP Task Integration Tests', () => {
   let taskServerInfo: TaskHttpServerInfo | undefined
@@ -193,7 +161,7 @@ describe('MCP Task Integration Tests', () => {
         expect(result).toBeDefined()
         expect(result.stopReason).toBeDefined()
         expect(hasToolUse(agent.messages, 'instant_task')).toBe(true)
-        expect(hasToolResult(agent.messages, 'success')).toBe(true)
+        expect(countToolResults(agent.messages, 'success')).toBeGreaterThan(0)
       } finally {
         await client.disconnect()
       }
@@ -215,7 +183,7 @@ describe('MCP Task Integration Tests', () => {
 
         expect(result).toBeDefined()
         expect(hasToolUse(agent.messages, 'failing_task')).toBe(true)
-        expect(hasToolResult(agent.messages, 'error')).toBe(true)
+        expect(countToolResults(agent.messages, 'error')).toBeGreaterThan(0)
       } finally {
         await client.disconnect()
       }

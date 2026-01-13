@@ -110,6 +110,9 @@ export class McpClient {
       )
     }
 
+    // Using callToolStream which automatically handles both:
+    // - Regular (non-task) tools: returns result immediately
+    // - Task-augmented tools: handles taskCreated -> taskStatus -> result flow
     const stream = this._client.experimental.tasks.callToolStream({
       name: tool.name,
       arguments: args as Record<string, unknown>,
