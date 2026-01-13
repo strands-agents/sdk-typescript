@@ -96,7 +96,7 @@ runs:
             "Version": "2012-10-17",
             "Statement": [
               {
-                "Sid":"Bedrock Access",
+                "Sid":"BedrockAccess",
                 "Effect": "Allow",
                 "Action": [
                   "bedrock:InvokeModelWithResponseStream",
