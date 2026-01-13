@@ -12,6 +12,7 @@ import { createServer, type Server as HttpServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import * as z from 'zod/v4'
+import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
 
 /**
  * Creates a test MCP server with echo, calculator, and error_tool tools using registerTool.
@@ -162,7 +163,6 @@ export async function startHTTPServer(): Promise<HttpServerInfo> {
 
         // Create a new transport for each request (stateless mode)
         const transport = new StreamableHTTPServerTransport({
-          sessionIdGenerator: undefined,
           enableJsonResponse: true,
         })
 
@@ -170,7 +170,7 @@ export async function startHTTPServer(): Promise<HttpServerInfo> {
           await transport.close()
         })
 
-        await mcpServer.connect(transport)
+        await mcpServer.connect(transport as Transport)
         await transport.handleRequest(req, res, parsedBody)
       } catch (error) {
         console.error('Error handling MCP request:', error)
