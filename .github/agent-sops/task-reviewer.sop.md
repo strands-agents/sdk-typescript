@@ -148,18 +148,6 @@ Provide a concise overall summary of the review.
   [Brief encouraging note]
   ```
 
-### 7. Follow-up Review
-
-If the author makes changes based on feedback, review the updates.
-
-**Constraints:**
-- You MAY skip this step if this is the initial review
-- You MUST check if your previous comments have been addressed
-- You MUST verify that new changes don't introduce other issues
-- You MUST acknowledge when feedback has been properly addressed
-- You MUST provide approval when all critical issues are resolved
-- You SHOULD be responsive to questions from the author
-
 ## Review Focus Areas
 
 ### Code Quality Priorities
