@@ -6,69 +6,27 @@ import { ContextWindowOverflowError, normalizeError } from '../errors.js'
 import type { ImageBlock, DocumentBlock } from '../types/media.js'
 import { encodeBase64 } from '../types/media.js'
 import { logger } from '../logging/logger.js'
-import type { ApiKeySetter } from '@anthropic-ai/sdk/client'
 
 const DEFAULT_ANTHROPIC_MODEL_ID = 'claude-sonnet-4-5-20250929'
 const CONTEXT_WINDOW_OVERFLOW_ERRORS = ['prompt is too long', 'max_tokens exceeded', 'input too long']
 const TEXT_FILE_FORMATS = ['txt', 'md', 'markdown', 'csv', 'json', 'xml', 'html', 'yml', 'yaml', 'js', 'ts', 'py']
 
-/**
- * Configuration interface for Anthropic model provider.
- */
 export interface AnthropicModelConfig extends BaseModelConfig {
-  /**
-   * Maximum number of tokens to generate. Required by Anthropic API.
-   * Defaults to 4096 if not specified.
-   */
   maxTokens?: number
-
-  /**
-   * Custom stop sequences.
-   */
   stopSequences?: string[]
-
-  /**
-   * Additional parameters to pass to the API (e.g., top_k, metadata).
-   */
   params?: Record<string, unknown>
 }
 
-/**
- * Options for creating an AnthropicModel instance.
- */
 export interface AnthropicModelOptions extends AnthropicModelConfig {
-  /**
-   * Anthropic API key.
-   * If not provided, looks for ANTHROPIC_API_KEY environment variable.
-   */
-  apiKey?: string | ApiKeySetter
-
-  /**
-   * Pre-configured Anthropic client instance.
-   */
+  apiKey?: string
   client?: Anthropic
-
-  /**
-   * Additional client configuration options.
-   */
   clientConfig?: ClientOptions
 }
 
-/**
- * Anthropic model provider implementation.
- *
- * Implements the Model interface for Anthropic using the Messages API.
- * Supports streaming, tools, prompt caching, and reasoning (thinking) blocks.
- */
 export class AnthropicModel extends Model<AnthropicModelConfig> {
   private _config: AnthropicModelConfig
   private _client: Anthropic
 
-  /**
-   * Creates a new AnthropicModel instance.
-   *
-   * @param options - Configuration for model and client
-   */
   constructor(options?: AnthropicModelOptions) {
     super()
     const { apiKey, client, clientConfig, ...modelConfig } = options || {}
@@ -96,50 +54,54 @@ export class AnthropicModel extends Model<AnthropicModelConfig> {
         ...clientConfig,
         defaultHeaders: {
           ...clientConfig?.defaultHeaders,
-          'anthropic-beta': 'pdfs-2024-09-25',
+          'anthropic-beta': 'pdfs-2024-09-25,prompt-caching-2024-07-31',
         },
       })
     }
   }
 
-  /**
-   * Updates the model configuration.
-   */
   updateConfig(modelConfig: AnthropicModelConfig): void {
     this._config = { ...this._config, ...modelConfig }
   }
 
-  /**
-   * Retrieves the current model configuration.
-   */
   getConfig(): AnthropicModelConfig {
     return this._config
   }
 
-  /**
-   * Streams a conversation with the Anthropic model.
-   *
-   * @param messages - Array of conversation messages
-   * @param options - Optional streaming configuration
-   * @returns Async iterable of streaming events
-   */
   async *stream(messages: Message[], options?: StreamOptions): AsyncIterable<ModelStreamEvent> {
     try {
       const request = this._formatRequest(messages, options)
       const stream = this._client.messages.stream(request)
 
-      let usage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 }
+      const usage: {
+        inputTokens: number
+        outputTokens: number
+        totalTokens: number
+        cacheWriteInputTokens?: number
+        cacheReadInputTokens?: number
+      } = { inputTokens: 0, outputTokens: 0, totalTokens: 0 }
+
       let stopReason = 'endTurn'
 
       for await (const event of stream) {
         switch (event.type) {
-          case 'message_start':
+          case 'message_start': {
             usage.inputTokens = event.message.usage.input_tokens
+
+            const rawUsage = event.message.usage as unknown as Record<string, number | undefined>
+            if (rawUsage.cache_creation_input_tokens !== undefined) {
+              usage.cacheWriteInputTokens = rawUsage.cache_creation_input_tokens
+            }
+            if (rawUsage.cache_read_input_tokens !== undefined) {
+              usage.cacheReadInputTokens = rawUsage.cache_read_input_tokens
+            }
+
             yield {
               type: 'modelMessageStartEvent',
               role: event.message.role,
             }
             break
+          }
 
           case 'content_block_start':
             if (event.content_block.type === 'tool_use') {
@@ -244,9 +206,6 @@ export class AnthropicModel extends Model<AnthropicModelConfig> {
     }
   }
 
-  /**
-   * Formats the request payload for the Anthropic SDK.
-   */
   private _formatRequest(messages: Message[], options?: StreamOptions): Anthropic.MessageStreamParams {
     if (!this._config.modelId) throw new Error('Model ID is required')
 
@@ -261,7 +220,6 @@ export class AnthropicModel extends Model<AnthropicModelConfig> {
       if (typeof options.systemPrompt === 'string') {
         request.system = options.systemPrompt
       } else if (Array.isArray(options.systemPrompt)) {
-        // Lookahead strategy: Consolidate cachePointBlock into the preceding textBlock's cache_control property
         const systemBlocks: Anthropic.TextBlockParam[] = []
         for (let i = 0; i < options.systemPrompt.length; i++) {
           const block = options.systemPrompt[i]
@@ -312,12 +270,8 @@ export class AnthropicModel extends Model<AnthropicModelConfig> {
     return request
   }
 
-  /**
-   * Formats messages for Anthropic, handling prompt caching lookahead.
-   */
   private _formatMessages(messages: Message[]): Anthropic.MessageParam[] {
     return messages.map((msg) => {
-      // Role mapping: Anthropic uses 'user' role for tool results.
       const role = (msg.role as string) === 'tool' ? 'user' : msg.role
 
       const content: Anthropic.ContentBlockParam[] = []
@@ -326,7 +280,6 @@ export class AnthropicModel extends Model<AnthropicModelConfig> {
         const block = msg.content[i]
         if (!block) continue
 
-        // Lookahead strategy: attach cache_control to current block if next block is a cache point
         const nextBlock = msg.content[i + 1]
         const hasCachePoint = nextBlock?.type === 'cachePointBlock'
 
@@ -410,7 +363,6 @@ export class AnthropicModel extends Model<AnthropicModelConfig> {
           } as unknown as Anthropic.ContentBlockParam
         }
 
-        // Anthropic doesn't support txt/md/csv as "documents", so we convert them to text content.
         if (TEXT_FILE_FORMATS.includes(docBlock.format)) {
           let textContent: string | undefined
 
@@ -449,9 +401,10 @@ export class AnthropicModel extends Model<AnthropicModelConfig> {
           .map((c) => {
             if (c.type === 'textBlock') return { type: 'text' as const, text: c.text }
             if (c.type === 'jsonBlock') return { type: 'text' as const, text: JSON.stringify(c.json) }
+
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             if ((c as any).type === 'imageBlock') {
-              const img = this._formatContentBlock(c)
+              const img = this._formatContentBlock(c as unknown as ContentBlock)
               if (img && img.type === 'image') return img
             }
             return undefined
