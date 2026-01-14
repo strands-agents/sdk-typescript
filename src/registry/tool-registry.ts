@@ -84,10 +84,10 @@ export class ToolRegistry extends Registry<Tool, Tool> {
    * @returns The tool if found, otherwise undefined.
    */
   public getByName(name: string): Tool | undefined {
-    // Check public tools first
-    const publicTool = this.values().find((tool) => tool.name === name)
-    if (publicTool) {
-      return publicTool
+    // Check registered tools first
+    const registeredTool = this.values().find((tool) => tool.name === name)
+    if (registeredTool) {
+      return registeredTool
     }
 
     // Check dynamic tools

@@ -4,7 +4,7 @@ import {
   convertSchemaToToolSpec,
   getSchemaDescription,
   getToolNameFromSchema,
-} from '../schema_converter.js'
+} from '../structured_output_utils.js'
 import { z } from 'zod'
 import { StructuredOutputException } from '../exceptions.js'
 

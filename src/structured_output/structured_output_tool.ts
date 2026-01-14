@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { Tool, type ToolContext, type ToolStreamGenerator } from '../tools/tool.js'
 import type { ToolSpec } from '../tools/types.js'
 import { TextBlock, ToolResultBlock } from '../types/messages.js'
-import { convertSchemaToToolSpec } from './schema_converter.js'
+import { convertSchemaToToolSpec } from './structured_output_utils.js'
 import { formatValidationErrors } from './exceptions.js'
 import type { StructuredOutputContext } from './structured_output_context.js'
 

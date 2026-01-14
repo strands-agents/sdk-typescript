@@ -13,6 +13,7 @@ import {
   type SystemPromptData,
   TextBlock,
   type Tool,
+  type ToolChoice,
   type ToolContext,
   ToolResultBlock,
   ToolUseBlock,
@@ -107,25 +108,8 @@ export type AgentConfig = {
   hooks?: HookProvider[]
   /**
    * Zod schema for structured output validation.
-   * When provided, all invocations will validate their output against this schema
-   * unless overridden at the invocation level.
-   *
-   * @example
-   * ```typescript
-   * import { z } from 'zod'
-   *
-   * const PersonSchema = z.object({
-   *   name: z.string(),
-   *   age: z.number()
-   * })
-   *
-   * const agent = new Agent({
-   *   model: 'anthropic.claude-3-5-sonnet-20240620-v1:0',
-   *   structuredOutputSchema: PersonSchema
-   * })
-   * ```
    */
-  structuredOutputSchema?: z.ZodSchema
+  structuredOutputModel?: z.ZodSchema
 }
 
 /**
@@ -178,7 +162,8 @@ export class Agent implements AgentData {
   private _initialized: boolean
   private _isInvoking: boolean = false
   private _printer?: Printer
-  private _defaultStructuredOutputSchema?: z.ZodSchema | undefined
+  private _defaultStructuredOutputModel?: z.ZodSchema | undefined
+  private _forcedToolChoice?: ToolChoice | undefined
 
   /**
    * Creates an instance of the Agent.
@@ -215,8 +200,8 @@ export class Agent implements AgentData {
       this._printer = new AgentPrinter(getDefaultAppender())
     }
 
-    // Store default structured output schema
-    this._defaultStructuredOutputSchema = config?.structuredOutputSchema
+    // Store default structured output model
+    this._defaultStructuredOutputModel = config?.structuredOutputModel
 
     this._initialized = false
   }
@@ -362,8 +347,8 @@ export class Agent implements AgentData {
   private async *_stream(args: InvokeArgs): AsyncGenerator<AgentStreamEvent, AgentResult, undefined> {
     let currentArgs: InvokeArgs | undefined = args
 
-    // Create structured output context if schema is provided
-    const schema = this._defaultStructuredOutputSchema
+    // Create structured output context if model is provided
+    const schema = this._defaultStructuredOutputModel
     const context = schema ? new StructuredOutputContext(schema) : undefined
 
     try {
@@ -379,8 +364,18 @@ export class Agent implements AgentData {
       while (true) {
         const modelResult = yield* this.invokeModel(currentArgs)
         currentArgs = undefined // Only pass args on first invocation
+
         if (modelResult.stopReason !== 'toolUse') {
-          // Loop terminates - no tool use requested
+          // Check if we need to force structured output tool
+          if (context && !context.hasResult()) {
+            // Force the model to use the structured output tool
+            const toolName = context.getToolName()
+            this._forcedToolChoice = { tool: { name: toolName } }
+            // Continue loop without adding messages (don't re-add user message)
+            continue
+          }
+
+          // Loop terminates - no tool use requested (and structured output satisfied if needed)
           // Add assistant message now that we're returning
           yield await this._appendMessage(modelResult.message)
 
@@ -397,10 +392,22 @@ export class Agent implements AgentData {
         // Execute tools sequentially
         const toolResultMessage = yield* this.executeTools(modelResult.message, this._toolRegistry)
 
+        // Extract structured output result AFTER all tools execute (two-phase pattern)
+        if (context) {
+          const toolUseIds = modelResult.message.content
+            .filter((block): block is ToolUseBlock => block.type === 'toolUseBlock')
+            .map((block) => block.toolUseId)
+
+          context.extractResult(toolUseIds)
+        }
+
         // Add assistant message with tool uses right before adding tool results
         // This ensures we don't have dangling tool use messages if tool execution fails
         yield await this._appendMessage(modelResult.message)
         yield await this._appendMessage(toolResultMessage)
+
+        // Clear forced tool choice after successful tool execution
+        this._forcedToolChoice = undefined
 
         // Continue loop
       }
@@ -409,6 +416,9 @@ export class Agent implements AgentData {
       if (context) {
         context.cleanup(this._toolRegistry)
       }
+
+      // Always clear forced tool choice
+      this._forcedToolChoice = undefined
 
       // Always emit final event
       yield new AfterInvocationEvent({ agent: this })
@@ -488,6 +498,11 @@ export class Agent implements AgentData {
     const streamOptions: StreamOptions = { toolSpecs }
     if (this.systemPrompt !== undefined) {
       streamOptions.systemPrompt = this.systemPrompt
+    }
+
+    // Add forced tool choice if set (for structured output forcing)
+    if (this._forcedToolChoice) {
+      streamOptions.toolChoice = this._forcedToolChoice
     }
 
     yield new BeforeModelCallEvent({ agent: this })

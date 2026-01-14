@@ -69,7 +69,7 @@ type PersonInfo = z.infer<typeof PersonSchema>
 ### Invocation-Level Schema
 ```typescript
 const result = await agent.invoke(prompt, { 
-  structuredOutputSchema: PersonSchema 
+  structuredOutputModel: PersonSchema 
 })
 console.log(result.structuredOutput) // Fully typed!
 ```
@@ -77,7 +77,7 @@ console.log(result.structuredOutput) // Fully typed!
 ### Agent-Level Default
 ```typescript
 const agent = new Agent({ 
-  structuredOutputSchema: PersonSchema 
+  structuredOutputModel: PersonSchema 
 })
 const result = await agent.invoke(prompt)
 console.log(result.structuredOutput) // Uses default schema

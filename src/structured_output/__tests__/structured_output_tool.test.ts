@@ -70,6 +70,8 @@ describe('StructuredOutputTool', () => {
         expect(result.value.toolUseId).toBe('tool-123')
         expect(result.value.status).toBe('success')
       }
+      // Phase 2: Extract the result (simulating what agent does after tool execution)
+      context.extractResult(['tool-123'])
       expect(context.getResult()).toEqual(validInput)
     })
 
@@ -217,6 +219,8 @@ describe('StructuredOutputTool', () => {
       if (result.value && 'status' in result.value) {
         expect(result.value.status).toBe('success')
       }
+      // Phase 2: Extract the result
+      optContext.extractResult(['tool-opt'])
       expect(optContext.getResult()).toEqual(validInput)
     })
   })

@@ -184,7 +184,7 @@ const PersonSchema = z.object({
 const agent = new Agent()
 const result = await agent.invoke(
   'John Smith is a 30 year-old software engineer',
-  { structuredOutputSchema: PersonSchema }
+  { structuredOutputModel: PersonSchema }
 )
 
 // result.structuredOutput is fully typed based on the schema
@@ -196,7 +196,7 @@ console.log(result.structuredOutput.age)  // 30
 
 ```typescript
 const agent = new Agent({ 
-  structuredOutputSchema: PersonSchema 
+  structuredOutputModel: PersonSchema 
 })
 
 // Schema applies to all invocations
@@ -211,7 +211,7 @@ import { StructuredOutputException } from '@strands-agents/sdk'
 
 try {
   const result = await agent.invoke(prompt, { 
-    structuredOutputSchema: PersonSchema 
+    structuredOutputModel: PersonSchema 
   })
   console.log(result.structuredOutput)
 } catch (error) {

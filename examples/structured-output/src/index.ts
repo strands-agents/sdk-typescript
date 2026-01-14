@@ -31,7 +31,7 @@ async function basicExample() {
   const agent = new Agent({ model: new BedrockModel() })
 
   const result = await agent.invoke('John Smith is a 30 year-old software engineer', {
-    structuredOutputSchema: PersonSchema,
+    structuredOutputModel: PersonSchema,
   })
 
   console.log('Structured Output:', result.structuredOutput)
@@ -49,7 +49,7 @@ async function agentLevelDefaultExample() {
 
   const agent = new Agent({
     model: new BedrockModel(),
-    structuredOutputSchema: PersonSchema,
+    structuredOutputModel: PersonSchema,
   })
 
   // First invocation - uses default schema
@@ -71,12 +71,12 @@ async function schemaOverrideExample() {
   // Agent with default PersonSchema
   const agent = new Agent({
     model: new BedrockModel(),
-    structuredOutputSchema: PersonSchema,
+    structuredOutputModel: PersonSchema,
   })
 
   // Override with CompanySchema for this specific invocation
   const result = await agent.invoke('TechCorp is a software company founded in 2010 with 500 employees', {
-    structuredOutputSchema: CompanySchema,
+    structuredOutputModel: CompanySchema,
   })
 
   console.log('Company Info:', result.structuredOutput)
@@ -100,7 +100,7 @@ async function streamingExample() {
 
   console.log('Streaming events:')
   for await (const event of agent.stream('Seattle is in Washington state, USA, with about 750,000 people', {
-    structuredOutputSchema: LocationSchema,
+    structuredOutputModel: LocationSchema,
   })) {
     console.log(`  [${event.type}]`)
     
@@ -119,7 +119,7 @@ async function optionalFieldsExample() {
 
   const agent = new Agent({
     model: new BedrockModel(),
-    structuredOutputSchema: LocationSchema,
+    structuredOutputModel: LocationSchema,
   })
 
   // Location without population info

@@ -1,16 +1,23 @@
 import { z } from 'zod'
 import type { ToolRegistry } from '../registry/tool-registry.js'
 import { StructuredOutputTool } from './structured_output_tool.js'
-import { getToolNameFromSchema } from './schema_converter.js'
+import { getToolNameFromSchema } from './structured_output_utils.js'
 
 /**
  * Context for managing structured output tool lifecycle per-invocation.
  * Handles tool registration, result storage, and cleanup.
+ *
+ * Uses a two-phase storage pattern:
+ * 1. Phase 1 (Store): During tool execution, results are stored in temporary storage
+ * 2. Phase 2 (Extract): After all tools execute, the result is extracted from temporary storage
  */
 export class StructuredOutputContext {
   private _schema?: z.ZodSchema | undefined
   private _tool?: StructuredOutputTool | undefined
-  private _result: unknown = undefined
+
+  // Two-phase storage
+  private _temporaryStorage: Map<string, unknown> = new Map() // Phase 1: Store
+  private _extractedResult: unknown = undefined // Phase 2: Extract
 
   /**
    * Creates a new StructuredOutputContext.
@@ -40,22 +47,59 @@ export class StructuredOutputContext {
   }
 
   /**
-   * Stores the validated result from the structured output tool.
+   * Phase 1: Stores the validated result from the structured output tool.
+   * Results are stored in temporary storage until extracted.
    *
    * @param toolUseId - The tool use ID
    * @param result - The validated result
    */
   storeResult(toolUseId: string, result: unknown): void {
-    this._result = result
+    this._temporaryStorage.set(toolUseId, result)
   }
 
   /**
-   * Retrieves the stored result, if available.
+   * Phase 2: Extracts the result from temporary storage after all tools execute.
+   * Looks through the provided tool use IDs to find a stored result.
    *
-   * @returns The validated result or undefined if not yet set
+   * @param toolUseIds - Array of tool use IDs to check
+   * @returns The extracted result or undefined if not found
+   */
+  extractResult(toolUseIds: string[]): unknown | undefined {
+    for (const toolUseId of toolUseIds) {
+      if (this._temporaryStorage.has(toolUseId)) {
+        this._extractedResult = this._temporaryStorage.get(toolUseId)
+        this._temporaryStorage.delete(toolUseId)
+        return this._extractedResult
+      }
+    }
+    return undefined
+  }
+
+  /**
+   * Checks if a result has been extracted (used for forcing logic).
+   *
+   * @returns true if a result has been extracted
+   */
+  hasResult(): boolean {
+    return this._extractedResult !== undefined
+  }
+
+  /**
+   * Retrieves the extracted result, if available.
+   *
+   * @returns The validated result or undefined if not yet extracted
    */
   getResult(): unknown | undefined {
-    return this._result
+    return this._extractedResult
+  }
+
+  /**
+   * Gets the tool name for forcing.
+   *
+   * @returns The tool name or 'StructuredOutput' as fallback
+   */
+  getToolName(): string {
+    return this._tool?.name ?? 'StructuredOutput'
   }
 
   /**
@@ -69,5 +113,6 @@ export class StructuredOutputContext {
       registry.removeByName(this._tool.name)
       this._tool = undefined
     }
+    this._temporaryStorage.clear()
   }
 }
