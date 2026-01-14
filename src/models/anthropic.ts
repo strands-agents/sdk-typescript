@@ -6,6 +6,7 @@ import { ContextWindowOverflowError, normalizeError } from '../errors.js'
 import type { ImageBlock, DocumentBlock } from '../types/media.js'
 import { encodeBase64 } from '../types/media.js'
 import { logger } from '../logging/logger.js'
+import type { ApiKeySetter } from '@anthropic-ai/sdk/client'
 
 const DEFAULT_ANTHROPIC_MODEL_ID = 'claude-sonnet-4-5-20250929'
 const CONTEXT_WINDOW_OVERFLOW_ERRORS = ['prompt is too long', 'max_tokens exceeded', 'input too long']
@@ -40,7 +41,7 @@ export interface AnthropicModelOptions extends AnthropicModelConfig {
    * Anthropic API key.
    * If not provided, looks for ANTHROPIC_API_KEY environment variable.
    */
-  apiKey?: string
+  apiKey?: string | ApiKeySetter
 
   /**
    * Pre-configured Anthropic client instance.
