@@ -42,6 +42,7 @@ import {
   ModelStreamEventHook,
 } from '../hooks/events.js'
 import { StructuredOutputContext } from '../structured_output/structured_output_context.js'
+import { StructuredOutputException } from '../structured_output/exceptions.js'
 import type { z } from 'zod'
 
 /**
@@ -346,6 +347,7 @@ export class Agent implements AgentData {
    */
   private async *_stream(args: InvokeArgs): AsyncGenerator<AgentStreamEvent, AgentResult, undefined> {
     let currentArgs: InvokeArgs | undefined = args
+    let forceAttempted = false
 
     // Create structured output context if model is provided
     const schema = this._defaultStructuredOutputModel
@@ -368,9 +370,17 @@ export class Agent implements AgentData {
         if (modelResult.stopReason !== 'toolUse') {
           // Check if we need to force structured output tool
           if (context && !context.hasResult()) {
+            if (forceAttempted) {
+              // Already tried forcing - LLM refused to use the tool
+              throw new StructuredOutputException(
+                'The model failed to invoke the structured output tool even after it was forced.'
+              )
+            }
+
             // Force the model to use the structured output tool
             const toolName = context.getToolName()
             this._forcedToolChoice = { tool: { name: toolName } }
+            forceAttempted = true
             // Continue loop without adding messages (don't re-add user message)
             continue
           }

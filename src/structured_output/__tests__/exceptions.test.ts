@@ -3,64 +3,26 @@ import { StructuredOutputException, formatValidationErrors } from '../exceptions
 import { z } from 'zod'
 
 describe('StructuredOutputException', () => {
-  it('creates exception with message only', () => {
+  it('creates exception with message', () => {
     const error = new StructuredOutputException('Test error')
 
     expect(error.message).toBe('Test error')
     expect(error.name).toBe('StructuredOutputException')
-    expect(error.validationErrors).toBeUndefined()
-    expect(error.toolName).toBeUndefined()
-    expect(error.toolUseId).toBeUndefined()
   })
 
-  it('creates exception with validation errors', () => {
-    const validationErrors: z.ZodIssue[] = [
-      {
-        code: 'invalid_type' as const,
-        message: 'Expected number',
-        path: ['age'],
-        expected: 'number',
-        received: 'string',
-      } as z.ZodIssue,
-    ]
+  it('is an instance of Error', () => {
+    const error = new StructuredOutputException('Test error')
 
-    const error = new StructuredOutputException('Validation failed', { validationErrors })
-
-    expect(error.message).toBe('Validation failed')
-    expect(error.validationErrors).toEqual(validationErrors)
+    expect(error).toBeInstanceOf(Error)
+    expect(error).toBeInstanceOf(StructuredOutputException)
   })
 
-  it('creates exception with tool name and tool use id', () => {
-    const error = new StructuredOutputException('Tool error', {
-      toolName: 'PersonSchema',
-      toolUseId: 'tool-123',
-    })
+  it('creates exception with forced tool failure message', () => {
+    const error = new StructuredOutputException(
+      'The model failed to invoke the structured output tool even after it was forced.'
+    )
 
-    expect(error.toolName).toBe('PersonSchema')
-    expect(error.toolUseId).toBe('tool-123')
-  })
-
-  it('creates exception with all options', () => {
-    const validationErrors: z.ZodIssue[] = [
-      {
-        code: 'invalid_type' as const,
-        message: 'Expected string',
-        path: ['name'],
-        expected: 'string',
-        received: 'number',
-      } as z.ZodIssue,
-    ]
-
-    const error = new StructuredOutputException('Complete error', {
-      validationErrors,
-      toolName: 'TestTool',
-      toolUseId: 'tool-456',
-    })
-
-    expect(error.message).toBe('Complete error')
-    expect(error.validationErrors).toEqual(validationErrors)
-    expect(error.toolName).toBe('TestTool')
-    expect(error.toolUseId).toBe('tool-456')
+    expect(error.message).toBe('The model failed to invoke the structured output tool even after it was forced.')
   })
 })
 
