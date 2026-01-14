@@ -168,5 +168,10 @@ export type { Logger } from './logging/types.js'
 export { type McpClientConfig, McpClient } from './mcp.js'
 
 // Structured output
-export { StructuredOutputException } from './structured_output/index.js'
-export type { StructuredOutputContext, StructuredOutputTool } from './structured_output/index.js'
+export { StructuredOutputException } from './structured_output/exceptions.js'
+export type {
+  StructuredOutputContext,
+  IStructuredOutputContext,
+  NullStructuredOutputContext,
+} from './structured_output/structured_output_context.js'
+export { StructuredOutputTool } from './structured_output/structured_output_tool.js'

@@ -1,5 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { StructuredOutputContext } from '../structured_output_context.js'
+import {
+  StructuredOutputContext,
+  NullStructuredOutputContext,
+  createStructuredOutputContext,
+} from '../structured_output_context.js'
 import { ToolRegistry } from '../../registry/tool-registry.js'
 import { Message, ToolUseBlock, TextBlock } from '../../types/messages.js'
 import { z } from 'zod'
@@ -21,6 +25,7 @@ describe('StructuredOutputContext', () => {
   describe('constructor', () => {
     it('creates context with schema', () => {
       expect(context).toBeDefined()
+      expect(context.isEnabled).toBe(true)
     })
   })
 
@@ -173,5 +178,95 @@ describe('StructuredOutputContext', () => {
     it('returns fallback when not registered', () => {
       expect(context.getToolName()).toBe('StructuredOutput')
     })
+  })
+})
+
+describe('NullStructuredOutputContext', () => {
+  let context: NullStructuredOutputContext
+  let registry: ToolRegistry
+
+  beforeEach(() => {
+    registry = new ToolRegistry()
+    context = new NullStructuredOutputContext()
+  })
+
+  describe('isEnabled', () => {
+    it('returns false', () => {
+      expect(context.isEnabled).toBe(false)
+    })
+  })
+
+  describe('registerTool', () => {
+    it('does nothing (no-op)', () => {
+      context.registerTool(registry)
+      expect(registry.getToolsForModel()).toHaveLength(0)
+    })
+  })
+
+  describe('storeResult', () => {
+    it('does nothing (no-op)', () => {
+      context.storeResult('tool-123', { name: 'John', age: 30 })
+      expect(context.getResult()).toBeUndefined()
+    })
+  })
+
+  describe('extractResultFromMessage', () => {
+    it('returns undefined (no-op)', () => {
+      const message = new Message({
+        role: 'assistant',
+        content: [new ToolUseBlock({ name: 'Test', toolUseId: 'tool-1', input: {} })],
+      })
+      expect(context.extractResultFromMessage(message)).toBeUndefined()
+    })
+  })
+
+  describe('hasResult', () => {
+    it('returns true to skip forcing logic', () => {
+      expect(context.hasResult()).toBe(true)
+    })
+  })
+
+  describe('getResult', () => {
+    it('returns undefined', () => {
+      expect(context.getResult()).toBeUndefined()
+    })
+  })
+
+  describe('getToolName', () => {
+    it('returns default tool name', () => {
+      expect(context.getToolName()).toBe('StructuredOutput')
+    })
+  })
+
+  describe('cleanup', () => {
+    it('does nothing (no-op)', () => {
+      expect(() => context.cleanup(registry)).not.toThrow()
+      expect(registry.getToolsForModel()).toHaveLength(0)
+    })
+  })
+})
+
+describe('createStructuredOutputContext', () => {
+  const PersonSchema = z.object({
+    name: z.string(),
+    age: z.number(),
+  })
+
+  it('returns StructuredOutputContext when schema is provided', () => {
+    const context = createStructuredOutputContext(PersonSchema)
+    expect(context).toBeInstanceOf(StructuredOutputContext)
+    expect(context.isEnabled).toBe(true)
+  })
+
+  it('returns NullStructuredOutputContext when schema is undefined', () => {
+    const context = createStructuredOutputContext(undefined)
+    expect(context).toBeInstanceOf(NullStructuredOutputContext)
+    expect(context.isEnabled).toBe(false)
+  })
+
+  it('returns NullStructuredOutputContext when called with no arguments', () => {
+    const context = createStructuredOutputContext()
+    expect(context).toBeInstanceOf(NullStructuredOutputContext)
+    expect(context.isEnabled).toBe(false)
   })
 })

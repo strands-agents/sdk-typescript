@@ -6,6 +6,57 @@ import { StructuredOutputTool } from './structured_output_tool.js'
 import { getToolNameFromSchema } from './structured_output_utils.js'
 
 /**
+ * Interface for structured output context operations.
+ * Allows for null object pattern implementation.
+ */
+export interface IStructuredOutputContext {
+  registerTool(registry: ToolRegistry): void
+  storeResult(toolUseId: string, result: unknown): void
+  extractResultFromMessage(message: Message): unknown | undefined
+  hasResult(): boolean
+  getResult(): unknown | undefined
+  getToolName(): string
+  cleanup(registry: ToolRegistry): void
+  readonly isEnabled: boolean
+}
+
+/**
+ * Null object implementation that does nothing.
+ * Used when no structured output schema is provided.
+ */
+export class NullStructuredOutputContext implements IStructuredOutputContext {
+  readonly isEnabled = false
+
+  registerTool(_registry: ToolRegistry): void {
+    // No-op
+  }
+
+  storeResult(_toolUseId: string, _result: unknown): void {
+    // No-op
+  }
+
+  extractResultFromMessage(_message: Message): unknown | undefined {
+    return undefined
+  }
+
+  hasResult(): boolean {
+    return true // Always "has result" to skip forcing logic
+  }
+
+  getResult(): unknown | undefined {
+    return undefined
+  }
+
+  getToolName(): string {
+    return 'StructuredOutput'
+  }
+
+  cleanup(_registry: ToolRegistry): void {
+    // No-op
+  }
+}
+
+/**
  * Context for managing structured output tool lifecycle per-invocation.
  * Handles tool registration, result storage, and cleanup.
  *
@@ -13,7 +64,9 @@ import { getToolNameFromSchema } from './structured_output_utils.js'
  * 1. Phase 1 (Store): During tool execution, results are stored in temporary storage
  * 2. Phase 2 (Extract): After all tools execute, the result is extracted from temporary storage
  */
-export class StructuredOutputContext {
+export class StructuredOutputContext implements IStructuredOutputContext {
+  readonly isEnabled = true
+
   private _schema: z.ZodSchema
   private _tool?: StructuredOutputTool | undefined
 
@@ -115,4 +168,14 @@ export class StructuredOutputContext {
       this._tool = undefined
     }
   }
+}
+
+/**
+ * Factory function to create the appropriate context based on schema presence.
+ *
+ * @param schema - Optional Zod schema for structured output
+ * @returns StructuredOutputContext if schema provided, NullStructuredOutputContext otherwise
+ */
+export function createStructuredOutputContext(schema?: z.ZodSchema): IStructuredOutputContext {
+  return schema ? new StructuredOutputContext(schema) : new NullStructuredOutputContext()
 }

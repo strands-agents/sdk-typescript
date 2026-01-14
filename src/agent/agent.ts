@@ -41,7 +41,7 @@ import {
   MessageAddedEvent,
   ModelStreamEventHook,
 } from '../hooks/events.js'
-import { StructuredOutputContext } from '../structured_output/structured_output_context.js'
+import { createStructuredOutputContext } from '../structured_output/structured_output_context.js'
 import { StructuredOutputException } from '../structured_output/exceptions.js'
 import type { z } from 'zod'
 
@@ -349,18 +349,16 @@ export class Agent implements AgentData {
     let forceAttempted = false
     let forcedToolChoice: ToolChoice | undefined = undefined
 
-    // Create structured output context if schema is provided
+    // Create structured output context (uses null object pattern when no schema)
     const schema = this._defaultStructuredOutputModel
-    const context = schema ? new StructuredOutputContext(schema) : undefined
+    const context = createStructuredOutputContext(schema)
 
     try {
       // Emit event before the loop starts
       yield new BeforeInvocationEvent({ agent: this })
 
-      // Register structured output tool if context exists
-      if (context) {
-        context.registerTool(this._toolRegistry)
-      }
+      // Register structured output tool (no-op if null context)
+      context.registerTool(this._toolRegistry)
 
       // Main agent loop - continues until model stops without requesting tools
       while (true) {
@@ -370,7 +368,8 @@ export class Agent implements AgentData {
 
         if (modelResult.stopReason !== 'toolUse') {
           // Check if we need to force structured output tool
-          if (context && !context.hasResult()) {
+          // NullStructuredOutputContext.hasResult() always returns true, so this only fires for real contexts
+          if (!context.hasResult()) {
             if (forceAttempted) {
               // Already tried forcing - LLM refused to use the tool
               throw new StructuredOutputException(
@@ -391,7 +390,7 @@ export class Agent implements AgentData {
           yield await this._appendMessage(modelResult.message)
 
           // Get structured output result if available
-          const structuredOutput = context?.getResult()
+          const structuredOutput = context.getResult()
 
           return new AgentResult({
             stopReason: modelResult.stopReason,
@@ -404,9 +403,8 @@ export class Agent implements AgentData {
         const toolResultMessage = yield* this.executeTools(modelResult.message, this._toolRegistry)
 
         // Extract structured output result AFTER all tools execute (two-phase pattern)
-        if (context) {
-          context.extractResultFromMessage(modelResult.message)
-        }
+        // NullStructuredOutputContext.extractResultFromMessage() is a no-op
+        context.extractResultFromMessage(modelResult.message)
 
         // Add assistant message with tool uses right before adding tool results
         // This ensures we don't have dangling tool use messages if tool execution fails
@@ -416,10 +414,8 @@ export class Agent implements AgentData {
         // Continue loop
       }
     } finally {
-      // Always cleanup structured output context
-      if (context) {
-        context.cleanup(this._toolRegistry)
-      }
+      // Always cleanup structured output context (no-op for null context)
+      context.cleanup(this._toolRegistry)
 
       // Always emit final event
       yield new AfterInvocationEvent({ agent: this })
