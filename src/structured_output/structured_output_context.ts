@@ -1,4 +1,6 @@
 import { z } from 'zod'
+import type { Message } from '../types/messages.js'
+import { ToolUseBlock } from '../types/messages.js'
 import type { ToolRegistry } from '../registry/tool-registry.js'
 import { StructuredOutputTool } from './structured_output_tool.js'
 import { getToolNameFromSchema } from './structured_output_utils.js'
@@ -12,7 +14,7 @@ import { getToolNameFromSchema } from './structured_output_utils.js'
  * 2. Phase 2 (Extract): After all tools execute, the result is extracted from temporary storage
  */
 export class StructuredOutputContext {
-  private _schema?: z.ZodSchema | undefined
+  private _schema: z.ZodSchema
   private _tool?: StructuredOutputTool | undefined
 
   // Two-phase storage
@@ -22,28 +24,23 @@ export class StructuredOutputContext {
   /**
    * Creates a new StructuredOutputContext.
    *
-   * @param schema - Optional Zod schema for structured output
+   * @param schema - Zod schema for structured output
    */
-  constructor(schema?: z.ZodSchema) {
+  constructor(schema: z.ZodSchema) {
     this._schema = schema
   }
 
   /**
    * Registers the structured output tool with the tool registry.
-   * The tool is registered as a dynamic tool (hidden from public tools list).
    *
    * @param registry - The tool registry to register with
    */
   registerTool(registry: ToolRegistry): void {
-    if (!this._schema) {
-      return
-    }
-
     const toolName = getToolNameFromSchema(this._schema)
     this._tool = new StructuredOutputTool(this._schema, toolName, this)
 
-    // Register as dynamic tool (hidden from public tools)
-    registry.addDynamic(this._tool)
+    // Register tool (will be removed in cleanup)
+    registry.add(this._tool)
   }
 
   /**
@@ -58,13 +55,17 @@ export class StructuredOutputContext {
   }
 
   /**
-   * Phase 2: Extracts the result from temporary storage after all tools execute.
-   * Looks through the provided tool use IDs to find a stored result.
+   * Phase 2: Extracts the result from a message after all tools execute.
+   * Finds tool use blocks in the message and extracts stored results.
    *
-   * @param toolUseIds - Array of tool use IDs to check
+   * @param message - The assistant message containing tool use blocks
    * @returns The extracted result or undefined if not found
    */
-  extractResult(toolUseIds: string[]): unknown | undefined {
+  extractResultFromMessage(message: Message): unknown | undefined {
+    const toolUseIds = message.content
+      .filter((block): block is ToolUseBlock => block.type === 'toolUseBlock')
+      .map((block) => block.toolUseId)
+
     for (const toolUseId of toolUseIds) {
       if (this._temporaryStorage.has(toolUseId)) {
         this._extractedResult = this._temporaryStorage.get(toolUseId)
@@ -113,6 +114,5 @@ export class StructuredOutputContext {
       registry.removeByName(this._tool.name)
       this._tool = undefined
     }
-    this._temporaryStorage.clear()
   }
 }

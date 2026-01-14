@@ -164,7 +164,6 @@ export class Agent implements AgentData {
   private _isInvoking: boolean = false
   private _printer?: Printer
   private _defaultStructuredOutputModel?: z.ZodSchema | undefined
-  private _forcedToolChoice?: ToolChoice | undefined
 
   /**
    * Creates an instance of the Agent.
@@ -348,24 +347,26 @@ export class Agent implements AgentData {
   private async *_stream(args: InvokeArgs): AsyncGenerator<AgentStreamEvent, AgentResult, undefined> {
     let currentArgs: InvokeArgs | undefined = args
     let forceAttempted = false
+    let forcedToolChoice: ToolChoice | undefined = undefined
 
-    // Create structured output context if model is provided
+    // Create structured output context if schema is provided
     const schema = this._defaultStructuredOutputModel
     const context = schema ? new StructuredOutputContext(schema) : undefined
 
     try {
+      // Emit event before the loop starts
+      yield new BeforeInvocationEvent({ agent: this })
+
       // Register structured output tool if context exists
       if (context) {
         context.registerTool(this._toolRegistry)
       }
 
-      // Emit event before the loop starts
-      yield new BeforeInvocationEvent({ agent: this })
-
       // Main agent loop - continues until model stops without requesting tools
       while (true) {
-        const modelResult = yield* this.invokeModel(currentArgs)
+        const modelResult = yield* this.invokeModel(currentArgs, forcedToolChoice)
         currentArgs = undefined // Only pass args on first invocation
+        forcedToolChoice = undefined // Clear after use
 
         if (modelResult.stopReason !== 'toolUse') {
           // Check if we need to force structured output tool
@@ -379,7 +380,7 @@ export class Agent implements AgentData {
 
             // Force the model to use the structured output tool
             const toolName = context.getToolName()
-            this._forcedToolChoice = { tool: { name: toolName } }
+            forcedToolChoice = { tool: { name: toolName } }
             forceAttempted = true
             // Continue loop without adding messages (don't re-add user message)
             continue
@@ -404,20 +405,13 @@ export class Agent implements AgentData {
 
         // Extract structured output result AFTER all tools execute (two-phase pattern)
         if (context) {
-          const toolUseIds = modelResult.message.content
-            .filter((block): block is ToolUseBlock => block.type === 'toolUseBlock')
-            .map((block) => block.toolUseId)
-
-          context.extractResult(toolUseIds)
+          context.extractResultFromMessage(modelResult.message)
         }
 
         // Add assistant message with tool uses right before adding tool results
         // This ensures we don't have dangling tool use messages if tool execution fails
         yield await this._appendMessage(modelResult.message)
         yield await this._appendMessage(toolResultMessage)
-
-        // Clear forced tool choice after successful tool execution
-        this._forcedToolChoice = undefined
 
         // Continue loop
       }
@@ -426,9 +420,6 @@ export class Agent implements AgentData {
       if (context) {
         context.cleanup(this._toolRegistry)
       }
-
-      // Always clear forced tool choice
-      this._forcedToolChoice = undefined
 
       // Always emit final event
       yield new AfterInvocationEvent({ agent: this })
@@ -493,10 +484,12 @@ export class Agent implements AgentData {
    * Invokes the model provider and streams all events.
    *
    * @param args - Optional arguments for invoking the model
+   * @param toolChoice - Optional tool choice to force specific tool usage
    * @returns Object containing the assistant message and stop reason
    */
   private async *invokeModel(
-    args?: InvokeArgs
+    args?: InvokeArgs,
+    toolChoice?: ToolChoice
   ): AsyncGenerator<AgentStreamEvent, { message: Message; stopReason: string }, undefined> {
     // Normalize input and append messages to conversation
     const messagesToAppend = this._normalizeInput(args)
@@ -510,9 +503,9 @@ export class Agent implements AgentData {
       streamOptions.systemPrompt = this.systemPrompt
     }
 
-    // Add forced tool choice if set (for structured output forcing)
-    if (this._forcedToolChoice) {
-      streamOptions.toolChoice = this._forcedToolChoice
+    // Add tool choice if provided (for structured output forcing)
+    if (toolChoice) {
+      streamOptions.toolChoice = toolChoice
     }
 
     yield new BeforeModelCallEvent({ agent: this })
@@ -534,7 +527,7 @@ export class Agent implements AgentData {
 
       // After yielding, hooks have been invoked and may have set retryModelCall
       if (errorEvent.retryModelCall) {
-        return yield* this.invokeModel(args)
+        return yield* this.invokeModel(args, toolChoice)
       }
 
       // Re-throw error

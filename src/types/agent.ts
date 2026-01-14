@@ -56,7 +56,7 @@ export class AgentResult<T = unknown> {
    */
   readonly structuredOutput?: T | undefined
 
-  constructor(data: { stopReason: string; lastMessage: Message; structuredOutput?: T | undefined }) {
+  constructor(data: { stopReason: string; lastMessage: Message; structuredOutput?: T }) {
     this.stopReason = data.stopReason
     this.lastMessage = data.lastMessage
     this.structuredOutput = data.structuredOutput
