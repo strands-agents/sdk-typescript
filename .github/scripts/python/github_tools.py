@@ -841,3 +841,122 @@ def get_pr_review_and_comments(pr_number: int, show_resolved: bool = False, repo
         error_msg = f"Error: {e!s}\n\nStack trace:\n{traceback.format_exc()}"
         console.print(Panel(escape(error_msg), title="[bold red]Error", border_style="red"))
         return error_msg
+
+@tool
+@log_inputs
+@check_should_call_write_api_or_record
+def add_labels_to_issue(issue_number: int, labels: list[str], repo: str | None = None) -> str:
+    """Adds labels to an issue.
+
+    Args:
+        issue_number: The issue number
+        labels: List of label names to add
+        repo: GitHub repository in the format "owner/repo" (optional; falls back to env var)
+
+    Returns:
+        Result of the operation
+    """
+    result = _github_request("POST", f"issues/{issue_number}/labels", repo, {"labels": labels})
+    if isinstance(result, str):
+        console.print(Panel(escape(result), title="[bold red]Error", border_style="red"))
+        return result
+
+    message = f"Labels {labels} added to issue #{issue_number}"
+    console.print(Panel(escape(message), title="[bold green]Success", border_style="green"))
+    return message
+
+
+@tool
+@log_inputs
+def search_similar_issues(query: str, state: str = "all", limit: int = 5, repo: str | None = None) -> str:
+    """Searches for similar issues using GitHub's search API.
+
+    Args:
+        query: Search query (keywords from issue title/body)
+        state: Filter by state: "open", "closed", or "all" (default: "all")
+        limit: Maximum number of results to return (default: 5)
+        repo: GitHub repository in the format "owner/repo" (optional; falls back to env var)
+
+    Returns:
+        List of similar issues with relevance scores
+    """
+    if repo is None:
+        repo = os.environ.get("GITHUB_REPOSITORY")
+    if not repo:
+        return "Error: GITHUB_REPOSITORY environment variable not found"
+
+    token = os.environ.get("GITHUB_TOKEN", "")
+    if not token:
+        return "Error: GITHUB_TOKEN environment variable not found"
+
+    # Build search query
+    search_query = f"{query} repo:{repo} is:issue"
+    if state != "all":
+        search_query += f" state:{state}"
+
+    url = "https://api.github.com/search/issues"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github.v3+json",
+    }
+    params = {"q": search_query, "per_page": limit, "sort": "relevance"}
+
+    try:
+        response = requests.get(url, headers=headers, params=params, timeout=30)
+        response.raise_for_status()
+        data = response.json()
+
+        if data["total_count"] == 0:
+            message = f"No similar issues found for query: {query}"
+            console.print(Panel(escape(message), title="[bold yellow]Info", border_style="yellow"))
+            return message
+
+        output = f"Found {data['total_count']} similar issue(s) (showing top {min(limit, len(data['items']))}):\n\n"
+        for issue in data["items"]:
+            output += f"#{issue['number']} - {issue['title']}\n"
+            output += f"  State: {issue['state']} | Author: {issue['user']['login']}\n"
+            output += f"  URL: {issue['html_url']}\n"
+            if issue.get("labels"):
+                labels = ", ".join([label["name"] for label in issue["labels"]])
+                output += f"  Labels: {labels}\n"
+            output += "\n"
+
+        console.print(Panel(escape(output), title="[bold green]🔍 Similar Issues", border_style="blue"))
+        return output
+
+    except Exception as e:
+        error_msg = f"Error searching issues: {e!s}"
+        console.print(Panel(escape(error_msg), title="[bold red]Error", border_style="red"))
+        return error_msg
+
+
+@tool
+@log_inputs
+def list_repository_labels(repo: str | None = None) -> str:
+    """Lists all available labels in the repository.
+
+    Args:
+        repo: GitHub repository in the format "owner/repo" (optional; falls back to env var)
+
+    Returns:
+        List of available label names
+    """
+    result = _github_request("GET", "labels", repo)
+    if isinstance(result, str):
+        console.print(Panel(escape(result), title="[bold red]Error", border_style="red"))
+        return result
+
+    if not result:
+        message = f"No labels found in {repo or os.environ.get('GITHUB_REPOSITORY')}"
+        console.print(Panel(escape(message), title="[bold yellow]Info", border_style="yellow"))
+        return message
+
+    label_names = [label["name"] for label in result]
+    output = f"Available labels in {repo or os.environ.get('GITHUB_REPOSITORY')}:\n"
+    output += ", ".join(label_names)
+
+    console.print(Panel(escape(output), title="[bold green]🏷️ Repository Labels", border_style="blue"))
+    return output
+
+
+
