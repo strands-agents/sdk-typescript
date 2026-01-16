@@ -12,12 +12,33 @@ export type MediaFormats = DocumentFormat | ImageFormat | VideoFormat
 /**
  * Cross-platform base64 encoding function that works in both browser and Node.js environments.
  */
-export function encodeBase64(str: string): string {
-  if (typeof globalThis.btoa === 'function') {
-    return globalThis.btoa(str)
+export function encodeBase64(input: string | Uint8Array): string {
+  // Handle Uint8Array (Image/PDF bytes)
+  if (input instanceof Uint8Array) {
+    // Node.js: Fast and zero copy
+    if (typeof globalThis.Buffer === 'function') {
+      return globalThis.Buffer.from(input).toString('base64')
+    }
+
+    // Browser: Safe conversion which doesn't cause a stack overflow like when using the spread operator.
+    // We convert bytes to binary string in chunks to satisfy btoa()
+    const CHUNK_SIZE = 0x8000 // 32k chunks
+    let binary = ''
+    for (let i = 0; i < input.length; i += CHUNK_SIZE) {
+      binary += String.fromCharCode.apply(
+        null,
+        input.subarray(i, Math.min(i + CHUNK_SIZE, input.length)) as unknown as number[]
+      )
+    }
+
+    return globalThis.btoa(binary)
   }
-  // Node.js environment
-  return globalThis.Buffer.from(str, 'binary').toString('base64')
+
+  if (typeof globalThis.btoa === 'function') {
+    return globalThis.btoa(input)
+  }
+
+  return globalThis.Buffer.from(input, 'binary').toString('base64')
 }
 
 /**
