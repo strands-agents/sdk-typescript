@@ -1,4 +1,4 @@
-import { Agent } from '@strands-agents/sdk';
+import { Agent, BedrockModel } from '@strands-agents/sdk';
 import { OpenAIModel } from '@strands-agents/sdk/openai';
 import { updateCanvasTool } from './tools';
 
@@ -8,44 +8,94 @@ const userInput = document.getElementById('user-input') as HTMLInputElement;
 const sendBtn = document.getElementById('send-btn') as HTMLButtonElement;
 
 // Helper to add message to UI
-function addMessage(role: 'user' | 'agent', text: string) {
+function addMessage(role: 'user' | 'agent' | 'tool', text: string): HTMLDivElement {
     const div = document.createElement('div');
     div.className = `message ${role}`;
     div.textContent = text;
     messagesDiv.appendChild(div);
     messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    return div;
 }
 
-// Helper to get API Key
-async function getApiKey(): Promise<string> {
-    const savedKey = localStorage.getItem('openai_api_key');
-    if (savedKey) return savedKey;
+// Helper to initialize model based on user selection
+async function getModel() {
+    const savedProvider = localStorage.getItem('agent_provider');
+    // Default to openai if not set, but allow changing via prompt if we want to be fancy.
+    // For simplicity, we'll check if we have keys for one or the other, or ask.
 
-    const key = prompt('Please enter your OpenAI API Key to use this demo (it will be saved in localStorage):');
-    if (!key) {
-        addMessage('agent', '⚠️ APIs Key is required. Please reload and enter a valid key.');
-        throw new Error('No API Key provided');
+    let provider = savedProvider;
+    if (!provider) {
+        provider = prompt('Choose model provider: "openai" or "bedrock"', 'openai') || 'openai';
+        localStorage.setItem('agent_provider', provider);
     }
 
-    localStorage.setItem('openai_api_key', key);
-    return key;
+    if (provider.toLowerCase() === 'bedrock') {
+        const savedRegion = localStorage.getItem('bedrock_region');
+        const savedAccessKey = localStorage.getItem('bedrock_access_key');
+        const savedSecretKey = localStorage.getItem('bedrock_secret_key');
+
+        if (savedRegion && savedAccessKey && savedSecretKey) {
+            return new BedrockModel({
+                region: savedRegion,
+                clientConfig: {
+                    credentials: {
+                        accessKeyId: savedAccessKey,
+                        secretAccessKey: savedSecretKey
+                    }
+                }
+            });
+        }
+
+        const region = prompt('Enter AWS Region (e.g., us-west-2):', 'us-west-2');
+        const accessKey = prompt('Enter AWS Access Key ID:');
+        const secretKey = prompt('Enter AWS Secret Access Key:');
+
+        if (!region || !accessKey || !secretKey) {
+            addMessage('agent', '⚠️ AWS Credentials are required for Bedrock. Please reload.');
+            throw new Error('Missing AWS Credentials');
+        }
+
+        localStorage.setItem('bedrock_region', region);
+        localStorage.setItem('bedrock_access_key', accessKey);
+        localStorage.setItem('bedrock_secret_key', secretKey);
+
+        return new BedrockModel({
+            region,
+            clientConfig: {
+                credentials: {
+                    accessKeyId: accessKey,
+                    secretAccessKey: secretKey
+                }
+            }
+        });
+    } else {
+        // OpenAI default
+        const savedKey = localStorage.getItem('openai_api_key');
+        let apiKey = savedKey;
+
+        if (!apiKey) {
+            apiKey = prompt('Please enter your OpenAI API Key (saved in localStorage):');
+            if (!apiKey) {
+                addMessage('agent', '⚠️ API Key is required. Please reload.');
+                throw new Error('No API Key provided');
+            }
+            localStorage.setItem('openai_api_key', apiKey);
+        }
+
+        return new OpenAIModel({
+            apiKey: apiKey!,
+            modelId: 'gpt-4o',
+            clientConfig: {
+                dangerouslyAllowBrowser: true
+            }
+        });
+    }
 }
 
 
 async function main() {
     try {
-        const apiKey = await getApiKey();
-
-        // Initialize model
-        // Note: In a production app, you should proxy requests to avoid exposing keys,
-        // or use a provider that supports browser-safe authentication.
-        const model = new OpenAIModel({
-            apiKey: apiKey,
-            modelId: 'gpt-4o', // or gpt-3.5-turbo
-            clientConfig: {
-                dangerouslyAllowBrowser: true // OpenAI SDK requires this for browser usage
-            }
-        });
+        const model = await getModel();
 
         const agent = new Agent({
             model,
@@ -70,9 +120,7 @@ Be concise in your text responses.`,
             try {
                 // Stream the response
                 let fullText = '';
-                const messageDiv = document.createElement('div');
-                messageDiv.className = 'message agent';
-                messagesDiv.appendChild(messageDiv);
+                const messageDiv = addMessage('agent', '');
 
                 // We will update this div as tokens come in
                 for await (const event of agent.stream(text)) {
@@ -80,14 +128,18 @@ Be concise in your text responses.`,
                         fullText += event.delta.text;
                         messageDiv.textContent = fullText;
                         messagesDiv.scrollTop = messagesDiv.scrollHeight;
+                    } else if (event.type === 'modelContentBlockStartEvent' && event.start.type === 'toolUseStart') {
+                        // Indicate tool use
+                        const toolMsg = document.createElement('div');
+                        toolMsg.className = 'message tool';
+                        toolMsg.style.fontSize = '0.8em';
+                        toolMsg.style.color = '#666';
+                        toolMsg.textContent = `🛠️ Using tool: ${event.start.name}...`;
+                        // Insert before the current agent message or append?
+                        // If we append, it might appear after partial text.
+                        // Let's just append it to the main container for now.
+                        messagesDiv.insertBefore(toolMsg, messageDiv);
                     }
-                }
-
-                // If the response was empty (e.g. only tool calls), we might want to say something
-                if (!fullText) {
-                    // Check if we can get the final response from invoke if stream is purely tool based?
-                    // The stream iterator yields events. Tool use events happen, then tool results, then agent response.
-                    // The textDelta accumulates the final answer.
                 }
 
             } catch (err) {

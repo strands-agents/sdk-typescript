@@ -12,6 +12,7 @@ export const updateCanvasTool = tool({
         borderColor: z.string().optional().describe('CSS color for the border'),
         width: z.string().optional().describe('CSS width (e.g., "200px")'),
         height: z.string().optional().describe('CSS height (e.g., "200px")'),
+        style: z.record(z.string()).optional().describe('JSON object containing CSS properties to apply to the canvas element (e.g. {"backgroundColor": "red", "fontSize": "20px"}). This allows you to set any CSS property.'),
     }),
     callback: async (input: any) => {
         const canvas = document.getElementById('canvas');
@@ -21,6 +22,7 @@ export const updateCanvasTool = tool({
 
         const updates: string[] = [];
 
+        // Apply specific properties if provided
         if (input.backgroundColor) {
             canvas.style.backgroundColor = input.backgroundColor;
             updates.push(`background=${input.backgroundColor}`);
@@ -48,6 +50,12 @@ export const updateCanvasTool = tool({
         if (input.height) {
             canvas.style.height = input.height;
             updates.push(`height=${input.height}`);
+        }
+
+        // Apply raw styles if provided
+        if (input.style) {
+            Object.assign(canvas.style, input.style);
+            updates.push(`styleObject=${JSON.stringify(input.style)}`);
         }
 
         if (updates.length === 0) {
