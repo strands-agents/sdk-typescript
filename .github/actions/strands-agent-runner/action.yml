@@ -91,12 +91,12 @@ runs:
         role-session-name: GitHubActions-StrandsAgent-${{ github.run_id }}
         aws-region: us-west-2
         mask-aws-account-id: true
-        inline_session_policy: >-
+        inline-session-policy: >-
           {
             "Version": "2012-10-17",
             "Statement": [
               {
-                "Sid":"Bedrock Access",
+                "Sid":"BedrockAccess",
                 "Effect": "Allow",
                 "Action": [
                   "bedrock:InvokeModelWithResponseStream",
@@ -108,16 +108,16 @@ runs:
                 "Action": [
                   "s3:PutObject",
                   "s3:GetObject",
-                  "s3:DeleteObject",
+                  "s3:DeleteObject"
                 ],
                 "Resource": [
-                  "arn:aws:s3:::strands-typescript-project-sessions/*",
+                  "arn:aws:s3:::strands-typescript-project-sessions/*"
                 ]
               }, {
                 "Effect": "Allow",
                 "Action": "s3:ListBucket",
                 "Resource": [
-                  "arn:aws:s3:::strands-typescript-project-sessions",
+                  "arn:aws:s3:::strands-typescript-project-sessions"
                 ]
               }
             ]

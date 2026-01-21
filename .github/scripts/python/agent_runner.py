@@ -20,11 +20,13 @@ from strands_tools import http_request, shell
 # Import local GitHub tools we need
 from github_tools import (
     add_issue_comment,
+    add_pr_comment,
     create_issue,
     create_pull_request,
     get_issue,
     get_issue_comments,
     get_pull_request,
+    get_pr_files,
     get_pr_review_and_comments,
     list_issues,
     list_pull_requests,
@@ -39,7 +41,7 @@ from notebook import notebook
 from str_replace_based_edit_tool import str_replace_based_edit_tool
 
 # Strands configuration constants
-STRANDS_MODEL_ID = "global.anthropic.claude-sonnet-4-5-20250929-v1:0"
+STRANDS_MODEL_ID = "global.anthropic.claude-opus-4-5-20251101-v1:0"
 STRANDS_MAX_TOKENS = 64000
 STRANDS_BUDGET_TOKENS = 8000
 STRANDS_REGION = "us-west-2"
@@ -69,8 +71,10 @@ def _get_all_tools() -> list[Any]:
         get_pull_request,
         update_pull_request,
         list_pull_requests,
+        get_pr_files,
         get_pr_review_and_comments,
         reply_to_review_comment,
+        add_pr_comment,
         
         # Agent tools
         notebook,

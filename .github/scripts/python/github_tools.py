@@ -450,6 +450,114 @@ def reply_to_review_comment(pr_number: int, comment_id: int, reply_text: str, re
     return message
 
 
+@tool
+@log_inputs
+@check_should_call_write_api_or_record
+def add_pr_comment(pr_number: int, body: str, path: str | None = None, line: int | None = None, repo: str | None = None) -> str:
+    """Adds a comment to a pull request - either inline on a specific line, file-level, or general PR comment.
+
+    Args:
+        pr_number: The pull request number
+        body: The comment text
+        path: The file path to comment on (optional; if omitted, creates general PR comment)
+        line: The line number to comment on (optional; if omitted with path, creates file-level comment)
+        repo: GitHub repository in the format "owner/repo" (optional; falls back to env var)
+
+    Returns:
+        Result of the operation
+    """
+    # If no path provided, create a general PR comment (issue comment)
+    if path is None:
+        result = _github_request("POST", f"issues/{pr_number}/comments", repo, {"body": body})
+        if isinstance(result, str):
+            console.print(Panel(escape(result), title="[bold red]Error", border_style="red"))
+            return result
+        
+        message = f"PR comment added: {result['html_url']}"
+        console.print(Panel(escape(f"Comment: {body}\nURL: {result['html_url']}"), 
+                           title="[bold green]✅ PR Comment Added", border_style="green"))
+        return message
+    
+    # Get the latest commit SHA for the PR
+    pr_result = _github_request("GET", f"pulls/{pr_number}", repo)
+    if isinstance(pr_result, str):
+        console.print(Panel(escape(pr_result), title="[bold red]Error", border_style="red"))
+        return pr_result
+    
+    commit_sha = pr_result['head']['sha']
+    
+    # Create inline or file-level comment
+    comment_data = {
+        "body": body,
+        "commit_id": commit_sha,
+        "path": path
+    }
+    
+    # Add line number if provided (inline comment), otherwise it's a file-level comment
+    if line is not None:
+        comment_data["line"] = line
+    
+    result = _github_request("POST", f"pulls/{pr_number}/comments", repo, comment_data)
+    if isinstance(result, str):
+        console.print(Panel(escape(result), title="[bold red]Error", border_style="red"))
+        return result
+
+    comment_type = "Inline" if line else "File-level"
+    location = f"{path}:{line}" if line else path
+    message = f"{comment_type} comment added: {result['html_url']}"
+    comment_details = f"Location: {location}\nComment: {body}\nURL: {result['html_url']}"
+    console.print(Panel(escape(comment_details), title=f"[bold green]✅ {comment_type} Comment Added", border_style="green"))
+    return message
+
+
+@tool
+@log_inputs
+def get_pr_files(pr_number: int, repo: str | None = None) -> str:
+    """Gets the list of files changed in a pull request with their diffs.
+
+    Args:
+        pr_number: The pull request number
+        repo: GitHub repository in the format "owner/repo" (optional; falls back to env var)
+
+    Returns:
+        Formatted list of changed files with their diffs
+    """
+    result = _github_request("GET", f"pulls/{pr_number}/files", repo)
+    if isinstance(result, str):
+        console.print(Panel(escape(result), title="[bold red]Error", border_style="red"))
+        return result
+
+    output = f"Files changed in PR #{pr_number}:\n\n"
+    
+    for file in result:
+        filename = file['filename']
+        status = file['status']
+        additions = file['additions']
+        deletions = file['deletions']
+        changes = file['changes']
+        
+        output += f"📄 **{filename}** ({status})\n"
+        output += f"   +{additions} -{deletions} (~{changes} changes)\n"
+        
+        if file.get('patch'):
+            output += f"   Diff:\n"
+            # Limit diff size to avoid overwhelming output
+            patch_lines = file['patch'].split('\n')
+            if len(patch_lines) > 50:
+                output += '\n'.join(patch_lines[:50])
+                output += f"\n   ... (truncated, {len(patch_lines) - 50} more lines)\n"
+            else:
+                output += file['patch']
+            output += "\n"
+        else:
+            output += "   (Binary file or no diff available)\n"
+        
+        output += "\n"
+    
+    console.print(Panel(escape(output), title=f"[bold green]PR #{pr_number} Files", border_style="blue"))
+    return output
+
+
 # =============================================================================
 # READ FUNCTIONS (Functions that only read GitHub resources)
 # =============================================================================
