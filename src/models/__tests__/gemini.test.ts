@@ -172,7 +172,7 @@ describe('GeminiModel', () => {
           ],
           usageMetadata: {
             promptTokenCount: 10,
-            candidatesTokenCount: 5,
+            totalTokenCount: 15,
           },
         }
         yield { candidates: [{ finishReason: 'STOP' }] }

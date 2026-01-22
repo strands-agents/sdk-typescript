@@ -59,7 +59,7 @@ describe.skipIf(gemini.skip)('GeminiModel Integration Tests', () => {
           }),
         ]
 
-        await expect(collectIterator(provider.stream(messages))).rejects.toThrow()
+        await expect(collectIterator(provider.stream(messages))).rejects.toThrow(/not found/i)
       })
     })
 

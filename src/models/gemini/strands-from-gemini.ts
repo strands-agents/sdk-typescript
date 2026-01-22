@@ -19,8 +19,10 @@ export function mapChunkToEvents(chunk: GenerateContentResponse, streamState: Ge
 
   // Extract usage metadata if available
   if (chunk.usageMetadata) {
-    streamState.inputTokens = chunk.usageMetadata.promptTokenCount || 0
-    streamState.outputTokens = chunk.usageMetadata.candidatesTokenCount || 0
+    const promptTokens = chunk.usageMetadata.promptTokenCount || 0
+    const totalTokens = chunk.usageMetadata.totalTokenCount || 0
+    streamState.inputTokens = promptTokens
+    streamState.outputTokens = totalTokens - promptTokens
   }
 
   const candidates = chunk.candidates
