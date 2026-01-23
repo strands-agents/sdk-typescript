@@ -1,4 +1,4 @@
-name: v1
+name: V1 Release
 description: Item associated with the release of Strands TypeScript SDK V1.
 labels:
 - milestone:v1
