@@ -2,8 +2,8 @@ name: v1
 description: Item associated with the release of Strands TypeScript SDK V1.
 labels:
 - milestone:v1
-projects: projects/17
-title: [V1] <COMPONENT> - <SUBCOMPONENT> - <DESCRIPTION>
+projects: strands-agents/17
+title: "[V1] <COMPONENT> - <SUBCOMPONENT> - <DESCRIPTION>"
 type: Feature
 body:
 - type: textarea
