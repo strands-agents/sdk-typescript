@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import OpenAI from 'openai'
 import { isNode } from '../../__fixtures__/environment.js'
 import { OpenAIModel } from '../openai.js'
-import { ContextWindowOverflowError } from '../../errors.js'
+import { ContextWindowOverflowError, ModelThrottleError } from '../../errors.js'
 import { collectIterator } from '../../__fixtures__/model-test-helpers.js'
 import type { Message } from '../../types/messages.js'
 
@@ -1415,6 +1415,94 @@ describe('OpenAIModel', () => {
           // Stream will be interrupted
         }
       }).rejects.toThrow('Network connection lost')
+    })
+
+    it('throws ModelThrottleError for HTTP 429 status', async () => {
+      const mockClient = {
+        chat: {
+          completions: {
+            create: vi.fn(async () => {
+              const error: Error & { status?: number } = new Error('Too many requests')
+              error.status = 429
+              throw error
+            }),
+          },
+        },
+      } as unknown as OpenAI
+
+      const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
+      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+
+      await expect(async () => {
+        for await (const _ of provider.stream(messages)) {
+          // Should not reach here
+        }
+      }).rejects.toThrow(ModelThrottleError)
+    })
+
+    it('throws ModelThrottleError for rate_limit_exceeded error code', async () => {
+      const mockClient = {
+        chat: {
+          completions: {
+            create: vi.fn(async () => {
+              const error: Error & { code?: string } = new Error('Rate limit reached')
+              error.code = 'rate_limit_exceeded'
+              throw error
+            }),
+          },
+        },
+      } as unknown as OpenAI
+
+      const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
+      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+
+      await expect(async () => {
+        for await (const _ of provider.stream(messages)) {
+          // Should not reach here
+        }
+      }).rejects.toThrow(ModelThrottleError)
+    })
+
+    it('throws ModelThrottleError for error message containing rate limit pattern', async () => {
+      const mockClient = {
+        chat: {
+          completions: {
+            create: vi.fn(async () => {
+              throw new Error('You have exceeded your rate limit')
+            }),
+          },
+        },
+      } as unknown as OpenAI
+
+      const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
+      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+
+      await expect(async () => {
+        for await (const _ of provider.stream(messages)) {
+          // Should not reach here
+        }
+      }).rejects.toThrow(ModelThrottleError)
+    })
+
+    it('throws ModelThrottleError for too many requests message', async () => {
+      const mockClient = {
+        chat: {
+          completions: {
+            create: vi.fn(async () => {
+              throw new Error('Too many requests, please slow down')
+            }),
+          },
+        },
+      } as unknown as OpenAI
+
+      const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
+      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+
+      await expect(async () => {
+        for await (const _ of provider.stream(messages)) {
+          // Should not reach here
+        }
+      }).rejects.toThrow(ModelThrottleError)
     })
   })
 })

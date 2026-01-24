@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { ContextWindowOverflowError, normalizeError } from '../errors.js'
+import { ContextWindowOverflowError, ModelThrottleError, normalizeError } from '../errors.js'
 
 describe('ContextWindowOverflowError', () => {
   describe('when instantiated with a message', () => {
@@ -18,6 +18,29 @@ describe('ContextWindowOverflowError', () => {
 
     it('is an instance of Error', () => {
       const error = new ContextWindowOverflowError('test')
+
+      expect(error).toBeInstanceOf(Error)
+    })
+  })
+})
+
+describe('ModelThrottleError', () => {
+  describe('when instantiated with a message', () => {
+    it('creates an error with the correct message', () => {
+      const message = 'Rate limit exceeded'
+      const error = new ModelThrottleError(message)
+
+      expect(error.message).toBe(message)
+    })
+
+    it('has the correct error name', () => {
+      const error = new ModelThrottleError('test')
+
+      expect(error.name).toBe('ModelThrottleError')
+    })
+
+    it('is an instance of Error', () => {
+      const error = new ModelThrottleError('test')
 
       expect(error).toBeInstanceOf(Error)
     })
