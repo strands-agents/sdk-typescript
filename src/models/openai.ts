@@ -442,17 +442,21 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
     } catch (error) {
       const err = error as Error & { status?: number; code?: string }
 
-      // Check for rate limit errors (HTTP 429 or rate_limit_exceeded error code)
+      // Check for rate limit errors - OpenAI SDK throws errors with status 429
+      // or code 'rate_limit_exceeded' for all rate limiting scenarios (TPM, RPM, etc.)
+      // This matches Python SDK behavior: `except openai.RateLimitError as e`
       if (
         err.status === 429 ||
         err.code === 'rate_limit_exceeded' ||
         OPENAI_RATE_LIMIT_PATTERNS.some((pattern) => err.message?.toLowerCase().includes(pattern))
       ) {
-        throw new ModelThrottleError(err.message ?? 'Request was throttled by the model provider')
+        logger.warn('OpenAI threw rate limit error')
+        throw new ModelThrottleError(err.message ?? 'Request was throttled by the model provider', { cause: err })
       }
 
       // Check for context window overflow using simple pattern matching
       if (OPENAI_CONTEXT_WINDOW_OVERFLOW_PATTERNS.some((pattern) => err.message?.toLowerCase().includes(pattern))) {
+        logger.warn('OpenAI threw context window overflow error')
         throw new ContextWindowOverflowError(err.message)
       }
 

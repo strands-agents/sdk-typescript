@@ -1418,13 +1418,14 @@ describe('OpenAIModel', () => {
     })
 
     it('throws ModelThrottleError for HTTP 429 status', async () => {
+      const originalError: Error & { status?: number } = new Error('Too many requests')
+      originalError.status = 429
+
       const mockClient = {
         chat: {
           completions: {
             create: vi.fn(async () => {
-              const error: Error & { status?: number } = new Error('Too many requests')
-              error.status = 429
-              throw error
+              throw originalError
             }),
           },
         },
@@ -1441,13 +1442,14 @@ describe('OpenAIModel', () => {
     })
 
     it('throws ModelThrottleError for rate_limit_exceeded error code', async () => {
+      const originalError: Error & { code?: string } = new Error('Rate limit reached')
+      originalError.code = 'rate_limit_exceeded'
+
       const mockClient = {
         chat: {
           completions: {
             create: vi.fn(async () => {
-              const error: Error & { code?: string } = new Error('Rate limit reached')
-              error.code = 'rate_limit_exceeded'
-              throw error
+              throw originalError
             }),
           },
         },
@@ -1503,6 +1505,36 @@ describe('OpenAIModel', () => {
           // Should not reach here
         }
       }).rejects.toThrow(ModelThrottleError)
+    })
+
+    it('preserves original error as cause in ModelThrottleError', async () => {
+      const originalError: Error & { status?: number } = new Error('Request too large for gpt-4o on tokens per min')
+      originalError.status = 429
+
+      const mockClient = {
+        chat: {
+          completions: {
+            create: vi.fn(async () => {
+              throw originalError
+            }),
+          },
+        },
+      } as unknown as OpenAI
+
+      const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
+      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+
+      try {
+        for await (const _ of provider.stream(messages)) {
+          // Should not reach here
+        }
+        expect.fail('Should have thrown')
+      } catch (error) {
+        expect(error).toBeInstanceOf(ModelThrottleError)
+        const throttleError = error as ModelThrottleError
+        expect(throttleError.cause).toBe(originalError)
+        expect(throttleError.message).toBe('Request too large for gpt-4o on tokens per min')
+      }
     })
   })
 })

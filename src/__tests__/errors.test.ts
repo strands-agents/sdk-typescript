@@ -44,6 +44,29 @@ describe('ModelThrottleError', () => {
 
       expect(error).toBeInstanceOf(Error)
     })
+
+    it('exposes message as a dedicated property for Python SDK consistency', () => {
+      const message = 'API rate limit: 10 requests per minute'
+      const error = new ModelThrottleError(message)
+
+      expect(error.message).toBe(message)
+      expect(error).toHaveProperty('message', message)
+    })
+  })
+
+  describe('when instantiated with a cause', () => {
+    it('preserves the original error as cause', () => {
+      const originalError = new Error('Original rate limit error')
+      const error = new ModelThrottleError('Rate limit exceeded', { cause: originalError })
+
+      expect(error.cause).toBe(originalError)
+    })
+
+    it('has undefined cause when not provided', () => {
+      const error = new ModelThrottleError('Rate limit exceeded')
+
+      expect(error.cause).toBeUndefined()
+    })
   })
 })
 

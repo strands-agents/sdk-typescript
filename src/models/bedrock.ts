@@ -990,6 +990,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
       }
       case 'throttlingException': {
         const message = (eventData as { message?: string }).message ?? 'Request was throttled by the model provider'
+        logger.warn(`throttling_message=<${message}> | bedrock threw throttling exception`)
         throw new ModelThrottleError(message)
       }
       default:

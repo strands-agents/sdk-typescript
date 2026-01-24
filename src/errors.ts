@@ -119,13 +119,21 @@ export class ConcurrentInvocationError extends Error {
  */
 export class ModelThrottleError extends Error {
   /**
+   * The original error message from the model provider.
+   * Accessible as a dedicated property for consistency with Python SDK.
+   */
+  public override readonly message: string
+
+  /**
    * Creates a new ModelThrottleError.
    *
    * @param message - Error message describing the throttling condition
+   * @param options - Optional error options including cause for error chaining
    */
-  constructor(message: string) {
-    super(message)
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options)
     this.name = 'ModelThrottleError'
+    this.message = message
   }
 }
 
