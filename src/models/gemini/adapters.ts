@@ -1,5 +1,7 @@
 /**
  * Adapters for converting between Strands SDK types and Gemini API format.
+ *
+ * @internal This module is not part of the public API.
  */
 
 import {

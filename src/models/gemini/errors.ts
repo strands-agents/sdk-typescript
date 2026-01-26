@@ -1,11 +1,16 @@
 /**
  * Error handling utilities for the Gemini model provider.
+ *
+ * @internal This module is not part of the public API.
  */
 
 import { logger } from '../../logging/logger.js'
 
 /**
- * Error types that can be detected from Gemini API errors.
+ * Recognized error types from Gemini API responses.
+ *
+ * This union type will expand as more error types are supported
+ * (e.g., 'throttling', 'invalidRequest').
  */
 export type GeminiErrorType = 'contextOverflow'
 
