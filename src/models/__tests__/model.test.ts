@@ -1,7 +1,36 @@
 import { describe, it, expect } from 'vitest'
 import type { Message } from '../../types/messages.js'
 import { TestModelProvider, collectGenerator } from '../../__fixtures__/model-test-helpers.js'
-import { MaxTokensError } from '../../errors.js'
+import { MaxTokensError, ModelException, ContextWindowOverflowError, ModelThrottledError } from '../../errors.js'
+import { Model } from '../model.js'
+import type { BaseModelConfig, StreamOptions } from '../model.js'
+import type { ModelStreamEvent } from '../streaming.js'
+
+/**
+ * Test model provider that throws an error from stream().
+ */
+class ErrorThrowingModelProvider extends Model<BaseModelConfig> {
+  private config: BaseModelConfig = { modelId: 'test-model' }
+  private errorToThrow: Error
+
+  constructor(errorToThrow: Error) {
+    super()
+    this.errorToThrow = errorToThrow
+  }
+
+  updateConfig(modelConfig: BaseModelConfig): void {
+    this.config = { ...this.config, ...modelConfig }
+  }
+
+  getConfig(): BaseModelConfig {
+    return this.config
+  }
+
+  // eslint-disable-next-line require-yield
+  async *stream(_messages: Message[], _options?: StreamOptions): AsyncGenerator<ModelStreamEvent> {
+    throw this.errorToThrow
+  }
+}
 
 describe('Model', () => {
   describe('streamAggregated', () => {
@@ -579,6 +608,100 @@ describe('Model', () => {
           stopReason: 'endTurn',
           metadata: undefined,
         })
+      })
+    })
+
+    describe('when stream() throws an error', () => {
+      it('wraps non-ModelException errors in ModelException', async () => {
+        const originalError = new Error('API connection failed')
+        const provider = new ErrorThrowingModelProvider(originalError)
+
+        const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+
+        await expect(async () => await collectGenerator(provider.streamAggregated(messages))).rejects.toThrow(
+          ModelException
+        )
+      })
+
+      it('preserves the original error message when wrapping', async () => {
+        const originalError = new Error('API connection failed')
+        const provider = new ErrorThrowingModelProvider(originalError)
+
+        const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+
+        await expect(async () => await collectGenerator(provider.streamAggregated(messages))).rejects.toThrow(
+          'API connection failed'
+        )
+      })
+
+      it('stores the original error as cause', async () => {
+        const originalError = new Error('API connection failed')
+        const provider = new ErrorThrowingModelProvider(originalError)
+
+        const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+
+        try {
+          await collectGenerator(provider.streamAggregated(messages))
+          expect.fail('Expected error to be thrown')
+        } catch (error) {
+          expect(error).toBeInstanceOf(ModelException)
+          expect((error as ModelException).cause).toBe(originalError)
+        }
+      })
+
+      it('re-throws ContextWindowOverflowError without wrapping', async () => {
+        const contextError = new ContextWindowOverflowError('Input too long')
+        const provider = new ErrorThrowingModelProvider(contextError)
+
+        const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+
+        try {
+          await collectGenerator(provider.streamAggregated(messages))
+          expect.fail('Expected error to be thrown')
+        } catch (error) {
+          expect(error).toBe(contextError)
+          expect(error).toBeInstanceOf(ContextWindowOverflowError)
+          expect(error).toBeInstanceOf(ModelException)
+        }
+      })
+
+      it('re-throws ModelThrottledError without wrapping', async () => {
+        const throttledError = new ModelThrottledError('Rate limited')
+        const provider = new ErrorThrowingModelProvider(throttledError)
+
+        const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+
+        try {
+          await collectGenerator(provider.streamAggregated(messages))
+          expect.fail('Expected error to be thrown')
+        } catch (error) {
+          expect(error).toBe(throttledError)
+          expect(error).toBeInstanceOf(ModelThrottledError)
+          expect(error).toBeInstanceOf(ModelException)
+        }
+      })
+
+      it('re-throws MaxTokensError without wrapping', async () => {
+        const provider = new TestModelProvider(async function* () {
+          yield { type: 'modelMessageStartEvent', role: 'assistant' }
+          yield { type: 'modelContentBlockStartEvent' }
+          yield {
+            type: 'modelContentBlockDeltaEvent',
+            delta: { type: 'textDelta', text: 'Hello' },
+          }
+          yield { type: 'modelContentBlockStopEvent' }
+          yield { type: 'modelMessageStopEvent', stopReason: 'maxTokens' }
+        })
+
+        const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+
+        try {
+          await collectGenerator(provider.streamAggregated(messages))
+          expect.fail('Expected error to be thrown')
+        } catch (error) {
+          expect(error).toBeInstanceOf(MaxTokensError)
+          expect(error).toBeInstanceOf(ModelException)
+        }
       })
     })
   })

@@ -8,13 +8,34 @@
 import type { Message } from './types/messages.js'
 
 /**
+ * Base exception class for all model-related errors.
+ *
+ * This class serves as the common base type for errors that originate from
+ * model provider interactions. By catching ModelException, consumers can handle
+ * all model-related errors uniformly while still having access to specific
+ * error types through instanceof checks.
+ */
+export class ModelException extends Error {
+  /**
+   * Creates a new ModelException.
+   *
+   * @param message - Error message describing the model error
+   * @param cause - The original error that caused this exception
+   */
+  constructor(message: string, cause?: Error) {
+    super(message, { cause })
+    this.name = 'ModelException'
+  }
+}
+
+/**
  * Error thrown when input exceeds the model's context window.
  *
  * This error indicates that the combined length of the input (prompt, messages,
  * system prompt, and tool definitions) exceeds the maximum context window size
  * supported by the model.
  */
-export class ContextWindowOverflowError extends Error {
+export class ContextWindowOverflowError extends ModelException {
   /**
    * Creates a new ContextWindowOverflowError.
    *
@@ -27,6 +48,25 @@ export class ContextWindowOverflowError extends Error {
 }
 
 /**
+ * Error thrown when the model provider throttles requests.
+ *
+ * This error indicates that the model provider has rate-limited or throttled
+ * the request due to exceeding usage limits. Callers may retry the request
+ * after a delay.
+ */
+export class ModelThrottledError extends ModelException {
+  /**
+   * Creates a new ModelThrottledError.
+   *
+   * @param message - Error message describing the throttling condition
+   */
+  constructor(message: string) {
+    super(message)
+    this.name = 'ModelThrottledError'
+  }
+}
+
+/**
  * Error thrown when the model reaches its maximum token limit during generation.
  *
  * This error indicates that the model stopped generating content because it reached
@@ -34,7 +74,7 @@ export class ContextWindowOverflowError extends Error {
  * state that requires intervention, such as reducing the input size or adjusting
  * the max tokens parameter.
  */
-export class MaxTokensError extends Error {
+export class MaxTokensError extends ModelException {
   /**
    * The partial assistant message that was generated before hitting the token limit.
    * This can be useful for understanding what the model was trying to generate.

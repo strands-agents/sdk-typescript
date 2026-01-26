@@ -41,7 +41,7 @@ import type { ContentBlock, Message, ToolUseBlock } from '../types/messages.js'
 import type { ImageSource, VideoSource, DocumentSource } from '../types/media.js'
 import type { ModelStreamEvent, ReasoningContentDelta, Usage } from '../models/streaming.js'
 import type { JSONValue } from '../types/json.js'
-import { ContextWindowOverflowError, normalizeError } from '../errors.js'
+import { ContextWindowOverflowError, ModelThrottledError, normalizeError } from '../errors.js'
 import { ensureDefined } from '../types/validation.js'
 import { logger } from '../logging/logger.js'
 
@@ -982,11 +982,14 @@ export class BedrockModel extends Model<BedrockModelConfig> {
         events.push(event)
         break
       }
+      case 'throttlingException': {
+        const throttleError = eventData as { message?: string }
+        throw new ModelThrottledError(throttleError.message ?? 'Request was throttled by the model provider')
+      }
       case 'internalServerException':
       case 'modelStreamErrorException':
       case 'serviceUnavailableException':
-      case 'validationException':
-      case 'throttlingException': {
+      case 'validationException': {
         throw eventData
       }
       default:
