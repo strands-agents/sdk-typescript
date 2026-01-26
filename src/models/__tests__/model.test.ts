@@ -275,6 +275,53 @@ describe('Model', () => {
       })
     })
 
+    describe('when streaming empty text blocks', () => {
+      it('filters out empty text blocks from the final message', async () => {
+        const provider = new TestModelProvider(async function* () {
+          yield { type: 'modelMessageStartEvent', role: 'assistant' }
+
+          // first block
+          yield { type: 'modelContentBlockStartEvent' }
+          yield {
+            type: 'modelContentBlockDeltaEvent',
+            delta: { type: 'textDelta', text: 'Hello' },
+          }
+          yield { type: 'modelContentBlockStopEvent' }
+
+          // second block
+          yield { type: 'modelContentBlockStartEvent' }
+          yield {
+            type: 'modelContentBlockDeltaEvent',
+            delta: { type: 'textDelta', text: '' },
+          }
+          yield { type: 'modelContentBlockStopEvent' }
+
+          // third block
+          yield { type: 'modelContentBlockStartEvent' }
+          yield {
+            type: 'modelContentBlockDeltaEvent',
+            delta: { type: 'textDelta', text: 'World' },
+          }
+          yield { type: 'modelContentBlockStopEvent' }
+
+          yield { type: 'modelMessageStopEvent', stopReason: 'endTurn' }
+        })
+
+        const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+
+        const { items, result } = await collectGenerator(provider.streamAggregated(messages))
+
+        expect(items).toContainEqual({ type: 'textBlock', text: 'Hello' })
+        expect(items).toContainEqual({ type: 'textBlock', text: '' })
+        expect(items).toContainEqual({ type: 'textBlock', text: 'World' })
+
+        // result message should have filtered out the empty block
+        expect(result.message.content).toHaveLength(2)
+        expect(result.message.content[0]).toEqual({ type: 'textBlock', text: 'Hello' })
+        expect(result.message.content[1]).toEqual({ type: 'textBlock', text: 'World' })
+      })
+    })
+
     describe('when streaming reasoning content', () => {
       it('yields complete reasoning block', async () => {
         const provider = new TestModelProvider(async function* () {
