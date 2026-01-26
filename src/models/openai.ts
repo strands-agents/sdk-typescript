@@ -942,7 +942,7 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
       }
 
       // Log unknown stop reasons
-      let stopReason: StopReason =
+      const stopReason: StopReason =
         stopReasonMap[typedChoice.finish_reason] ?? this._snakeToCamel(typedChoice.finish_reason)
       if (!stopReasonMap[typedChoice.finish_reason]) {
         logger.warn(
