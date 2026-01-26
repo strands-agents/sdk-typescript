@@ -1,11 +1,62 @@
 /**
- * Gemini → Strands: Converts Gemini API responses to Strands SDK streaming events.
+ * Adapters for converting between Strands SDK types and Gemini API format.
  */
 
-import { type GenerateContentResponse, FinishReason as GeminiFinishReason } from '@google/genai'
+import {
+  type Content,
+  type GenerateContentResponse,
+  type Part,
+  FinishReason as GeminiFinishReason,
+} from '@google/genai'
+import type { Message, StopReason } from '../../types/messages.js'
 import type { ModelStreamEvent } from '../streaming.js'
 import type { GeminiStreamState } from './types.js'
-import { FINISH_REASON_MAP } from './constants.js'
+
+/**
+ * Mapping of Gemini finish reasons to SDK stop reasons.
+ * Only MAX_TOKENS needs explicit mapping; everything else defaults to endTurn.
+ * TOOL_USE is handled separately via hasToolCalls flag.
+ */
+export const FINISH_REASON_MAP: Partial<Record<GeminiFinishReason, StopReason>> = {
+  [GeminiFinishReason.MAX_TOKENS]: 'maxTokens',
+}
+
+// =============================================================================
+// Strands → Gemini
+// =============================================================================
+
+/**
+ * Formats an array of messages for the Gemini API.
+ *
+ * @param messages - SDK messages to format
+ * @returns Gemini-formatted contents array
+ */
+export function formatMessages(messages: Message[]): Content[] {
+  const contents: Content[] = []
+
+  for (const message of messages) {
+    const parts: Part[] = []
+
+    for (const block of message.content) {
+      if (block.type === 'textBlock') {
+        parts.push({ text: block.text })
+      }
+    }
+
+    if (parts.length > 0) {
+      contents.push({
+        role: message.role === 'assistant' ? 'model' : 'user',
+        parts,
+      })
+    }
+  }
+
+  return contents
+}
+
+// =============================================================================
+// Gemini → Strands
+// =============================================================================
 
 /**
  * Maps a Gemini response chunk to SDK streaming events.

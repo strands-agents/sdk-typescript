@@ -13,11 +13,14 @@ import type { StreamOptions } from '../model.js'
 import type { Message } from '../../types/messages.js'
 import type { ModelStreamEvent } from '../streaming.js'
 import { ContextWindowOverflowError } from '../../errors.js'
-import { logger } from '../../logging/logger.js'
 import type { GeminiModelConfig, GeminiModelOptions, GeminiStreamState } from './types.js'
-import { DEFAULT_GEMINI_MODEL_ID, ERROR_STATUS_MAP, type GeminiErrorType } from './constants.js'
-import { formatMessages } from './strands-to-gemini.js'
-import { mapChunkToEvents } from './strands-from-gemini.js'
+import { classifyGeminiError } from './errors.js'
+import { formatMessages, mapChunkToEvents } from './adapters.js'
+
+/**
+ * Default Gemini model ID.
+ */
+const DEFAULT_GEMINI_MODEL_ID = 'gemini-2.5-flash'
 
 /**
  * Google Gemini model provider implementation.
@@ -88,7 +91,7 @@ export class GeminiModel extends Model<GeminiModelConfig> {
     if (client) {
       this._client = client
     } else {
-      const resolvedApiKey = apiKey || this._getEnvApiKey()
+      const resolvedApiKey = apiKey || GeminiModel._getEnvApiKey()
 
       if (!resolvedApiKey) {
         throw new Error(
@@ -194,7 +197,7 @@ export class GeminiModel extends Model<GeminiModelConfig> {
       if (!(error instanceof Error)) {
         throw error
       }
-      const errorType: GeminiErrorType | undefined = this._classifyGeminiError(error)
+      const errorType = classifyGeminiError(error)
 
       if (errorType === 'contextOverflow') {
         throw new ContextWindowOverflowError(error.message)
@@ -207,52 +210,10 @@ export class GeminiModel extends Model<GeminiModelConfig> {
   /**
    * Gets API key from environment variables.
    */
-  private _getEnvApiKey(): string | undefined {
+  private static _getEnvApiKey(): string | undefined {
     if (typeof process !== 'undefined' && typeof process.env !== 'undefined') {
       return process.env.GEMINI_API_KEY
     }
-    return undefined
-  }
-
-  /**
-   * Classifies a Gemini API error based on status and message patterns.
-   * Returns the error type if recognized, undefined otherwise.
-   */
-  private _classifyGeminiError(error: Error): GeminiErrorType | undefined {
-    if (!error.message) {
-      return undefined
-    }
-
-    let status: string
-    let message: string
-
-    try {
-      const parsed = JSON.parse(error.message)
-      status = parsed?.error?.status || ''
-      message = parsed?.error?.message || ''
-    } catch {
-      logger.debug(`error_message=<${error.message}> | gemini api returned non-json error`)
-      return undefined
-    }
-
-    const config = ERROR_STATUS_MAP[status.toUpperCase()]
-    if (!config) {
-      return undefined
-    }
-
-    // If no message patterns required, status alone determines the error type
-    if (!config.messagePatterns) {
-      return config.type
-    }
-
-    // Check if message matches any of the patterns
-    const lowerMessage = message.toLowerCase()
-    for (const pattern of config.messagePatterns) {
-      if (lowerMessage.includes(pattern)) {
-        return config.type
-      }
-    }
-
     return undefined
   }
 

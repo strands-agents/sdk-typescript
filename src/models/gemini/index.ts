@@ -12,5 +12,5 @@
  * ```
  */
 
-export { GeminiModel } from './gemini-model.js'
+export { GeminiModel } from './model.js'
 export type { GeminiModelConfig, GeminiModelOptions } from './types.js'

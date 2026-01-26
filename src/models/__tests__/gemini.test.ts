@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { GoogleGenAI } from '@google/genai'
 import { isNode } from '../../__fixtures__/environment.js'
 import { collectIterator } from '../../__fixtures__/model-test-helpers.js'
-import { GeminiModel } from '../gemini/gemini-model.js'
+import { GeminiModel } from '../gemini/model.js'
 import { ContextWindowOverflowError } from '../../errors.js'
 import type { Message } from '../../types/messages.js'
 
