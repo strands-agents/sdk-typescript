@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import type { Message } from '../../types/messages.js'
 import { TestModelProvider, collectGenerator } from '../../__fixtures__/model-test-helpers.js'
-import { MaxTokensError, ModelException } from '../../errors.js'
+import { MaxTokensError, ModelError } from '../../errors.js'
 import { Model } from '../model.js'
 import type { BaseModelConfig, StreamOptions } from '../model.js'
 import type { ModelStreamEvent } from '../streaming.js'
@@ -612,7 +612,7 @@ describe('Model', () => {
     })
 
     describe('when stream() throws an error', () => {
-      it('wraps non-ModelException errors in ModelException with original as cause', async () => {
+      it('wraps non-ModelError errors in ModelError with original as cause', async () => {
         const originalError = new Error('API connection failed')
         const provider = new ErrorThrowingModelProvider(originalError)
 
@@ -622,9 +622,9 @@ describe('Model', () => {
           await collectGenerator(provider.streamAggregated(messages))
           expect.fail('Expected error to be thrown')
         } catch (error) {
-          expect(error).toBeInstanceOf(ModelException)
-          expect((error as ModelException).message).toBe('API connection failed')
-          expect((error as ModelException).cause).toBe(originalError)
+          expect(error).toBeInstanceOf(ModelError)
+          expect((error as ModelError).message).toBe('API connection failed')
+          expect((error as ModelError).cause).toBe(originalError)
         }
       })
     })

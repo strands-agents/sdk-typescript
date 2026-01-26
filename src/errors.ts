@@ -11,20 +11,20 @@ import type { Message } from './types/messages.js'
  * Base exception class for all model-related errors.
  *
  * This class serves as the common base type for errors that originate from
- * model provider interactions. By catching ModelException, consumers can handle
+ * model provider interactions. By catching ModelError, consumers can handle
  * all model-related errors uniformly while still having access to specific
  * error types through instanceof checks.
  */
-export class ModelException extends Error {
+export class ModelError extends Error {
   /**
-   * Creates a new ModelException.
+   * Creates a new ModelError.
    *
    * @param message - Error message describing the model error
    * @param cause - The original error that caused this exception
    */
   constructor(message: string, cause?: Error) {
     super(message, { cause })
-    this.name = 'ModelException'
+    this.name = 'ModelError'
   }
 }
 
@@ -35,7 +35,7 @@ export class ModelException extends Error {
  * system prompt, and tool definitions) exceeds the maximum context window size
  * supported by the model.
  */
-export class ContextWindowOverflowError extends ModelException {
+export class ContextWindowOverflowError extends ModelError {
   /**
    * Creates a new ContextWindowOverflowError.
    *
@@ -55,7 +55,7 @@ export class ContextWindowOverflowError extends ModelException {
  * state that requires intervention, such as reducing the input size or adjusting
  * the max tokens parameter.
  */
-export class MaxTokensError extends ModelException {
+export class MaxTokensError extends ModelError {
   /**
    * The partial assistant message that was generated before hitting the token limit.
    * This can be useful for understanding what the model was trying to generate.

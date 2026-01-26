@@ -17,7 +17,7 @@ import {
   ModelMetadataEvent,
   type ModelStreamEvent,
 } from './streaming.js'
-import { MaxTokensError, ModelException, normalizeError } from '../errors.js'
+import { MaxTokensError, ModelError, normalizeError } from '../errors.js'
 
 /**
  * Base configuration interface for all model providers.
@@ -172,14 +172,14 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
    * The method returns:
    * - StreamAggregatedResult containing the complete message, stop reason, and optional metadata
    *
-   * All exceptions thrown from this method are wrapped in ModelException to provide
+   * All exceptions thrown from this method are wrapped in ModelError to provide
    * a consistent error type for model-related errors. Specific error subtypes like
    * ContextWindowOverflowError, ModelThrottledError, and MaxTokensError are preserved.
    *
    * @param messages - Array of conversation messages
    * @param options - Optional streaming configuration
    * @returns Async generator yielding ModelStreamEvent | ContentBlock and returning a StreamAggregatedResult
-   * @throws ModelException - Base class for all model-related errors
+   * @throws ModelError - Base class for all model-related errors
    * @throws ContextWindowOverflowError - When input exceeds the model's context window
    * @throws ModelThrottledError - When the model provider throttles requests
    * @throws MaxTokensError - When the model reaches its maximum token limit
@@ -297,7 +297,7 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
 
       if (!stoppedMessage || !finalStopReason) {
         // If we exit the loop without completing a message or stop reason, throw an error
-        throw new ModelException('Stream ended without completing a message', errorToThrow)
+        throw new ModelError('Stream ended without completing a message', errorToThrow)
       }
 
       // Handle stop reason
@@ -323,12 +323,12 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
       }
       return result
     } catch (error) {
-      // Wrap non-ModelException errors in ModelException
-      if (error instanceof ModelException) {
+      // Wrap non-ModelError errors in ModelError
+      if (error instanceof ModelError) {
         throw error
       }
       const normalizedError = normalizeError(error)
-      throw new ModelException(normalizedError.message, normalizedError)
+      throw new ModelError(normalizedError.message, normalizedError)
     }
   }
 }

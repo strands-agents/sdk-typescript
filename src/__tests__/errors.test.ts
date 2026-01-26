@@ -1,18 +1,18 @@
 import { describe, it, expect } from 'vitest'
-import { ModelException, ContextWindowOverflowError, MaxTokensError, normalizeError } from '../errors.js'
+import { ModelError, ContextWindowOverflowError, MaxTokensError, normalizeError } from '../errors.js'
 import { Message, TextBlock } from '../types/messages.js'
 
-describe('ModelException', () => {
+describe('ModelError', () => {
   it('creates an error with the correct message and name', () => {
-    const error = new ModelException('Model error occurred')
+    const error = new ModelError('Model error occurred')
 
     expect(error.message).toBe('Model error occurred')
-    expect(error.name).toBe('ModelException')
+    expect(error.name).toBe('ModelError')
   })
 
   it('stores the cause error when provided', () => {
     const cause = new Error('original error')
-    const error = new ModelException('wrapped error', cause)
+    const error = new ModelError('wrapped error', cause)
 
     expect(error.message).toBe('wrapped error')
     expect(error.cause).toBe(cause)

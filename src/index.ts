@@ -18,7 +18,7 @@ export type { AgentConfig, ToolList } from './agent/agent.js'
 
 // Error types
 export {
-  ModelException,
+  ModelError,
   ContextWindowOverflowError,
   MaxTokensError,
   JsonValidationError,
