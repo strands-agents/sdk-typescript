@@ -3,7 +3,13 @@
  * This script runs in a pure Node.js ES module environment.
  */
 
-import { Agent, BedrockModel, tool } from '@strands-agents/sdk'
+import { Agent, BedrockModel, tool, Tool } from '@strands-agents/sdk'
+
+import { notebook } from '@strands-agents/sdk/vended_tools/notebook'
+import { fileEditor } from '@strands-agents/sdk/vended_tools/file_editor'
+import { httpRequest } from '@strands-agents/sdk/vended_tools/http_request'
+import { bash } from '@strands-agents/sdk/vended_tools/bash'
+
 import { z } from 'zod'
 
 console.log('✓ Import from main entry point successful')
@@ -52,4 +58,43 @@ const agent = new Agent({
 
 if (agent.tools.length == 0) {
   throw new Error('Tool was not correctly added to the agent')
+}
+
+async function validateScratchpad() {
+  let context = { agent: agent }
+  notebook.invoke(
+    {
+      mode: 'create',
+      name: 'scratchpad',
+      newStr: 'Content',
+    },
+    context
+  )
+
+  const result = await notebook.invoke(
+    {
+      mode: 'read',
+      name: 'scratchpad',
+    },
+    context
+  )
+
+  if (result !== 'Content') {
+    throw new Error(`Tool returned invalid response: ${result}`)
+  }
+
+  console.log('Notebook created successful')
+}
+
+const tools = {
+  notebook,
+  fileEditor,
+  httpRequest,
+  bash,
+}
+
+for (const tool of Object.values(tools)) {
+  if (!(tool instanceof Tool)) {
+    throw new Error(`Tool ${tool.name} isn't an instance of a tool`)
+  }
 }

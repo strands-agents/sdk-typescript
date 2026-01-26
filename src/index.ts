@@ -86,13 +86,15 @@ export type { ToolSpec, ToolUse, ToolResultStatus, ToolChoice } from './tools/ty
 
 // Tool interface and related types
 export type {
-  Tool,
   InvokableTool,
   ToolContext,
   ToolStreamEventData,
   ToolStreamEvent,
   ToolStreamGenerator,
 } from './tools/tool.js'
+
+// Tool base class
+export { Tool } from './tools/tool.js'
 
 // FunctionTool implementation
 export { FunctionTool } from './tools/function-tool.js'
@@ -125,7 +127,9 @@ export type {
 } from './models/streaming.js'
 
 // Model provider types
-export type { BaseModelConfig, StreamOptions, Model } from './models/model.js'
+export type { BaseModelConfig, StreamOptions } from './models/model.js'
+
+export { Model } from './models/model.js'
 
 // Bedrock model provider
 export { BedrockModel as BedrockModel } from './models/bedrock.js'

@@ -1,5 +1,6 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
+import { takeResult } from '@modelcontextprotocol/sdk/shared/responseMessage.js'
 import type { JSONSchema, JSONValue } from './types/json.js'
 import { McpTool } from './tools/mcp-tool.js'
 
@@ -109,11 +110,15 @@ export class McpClient {
       )
     }
 
-    const result = await this._client.callTool({
+    // Using callToolStream which automatically handles both:
+    // - Regular (non-task) tools: returns result immediately
+    // - Task-augmented tools: handles taskCreated -> taskStatus -> result flow
+    const stream = this._client.experimental.tasks.callToolStream({
       name: tool.name,
       arguments: args as Record<string, unknown>,
     })
 
+    const result = await takeResult(stream)
     return result as JSONValue
   }
 }
