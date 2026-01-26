@@ -20,7 +20,6 @@ export type { AgentConfig, ToolList } from './agent/agent.js'
 export {
   ModelException,
   ContextWindowOverflowError,
-  ModelThrottledError,
   MaxTokensError,
   JsonValidationError,
   ConcurrentInvocationError,

@@ -48,25 +48,6 @@ export class ContextWindowOverflowError extends ModelException {
 }
 
 /**
- * Error thrown when the model provider throttles requests.
- *
- * This error indicates that the model provider has rate-limited or throttled
- * the request due to exceeding usage limits. Callers may retry the request
- * after a delay.
- */
-export class ModelThrottledError extends ModelException {
-  /**
-   * Creates a new ModelThrottledError.
-   *
-   * @param message - Error message describing the throttling condition
-   */
-  constructor(message: string) {
-    super(message)
-    this.name = 'ModelThrottledError'
-  }
-}
-
-/**
  * Error thrown when the model reaches its maximum token limit during generation.
  *
  * This error indicates that the model stopped generating content because it reached

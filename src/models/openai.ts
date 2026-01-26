@@ -15,7 +15,7 @@ import type { Message } from '../types/messages.js'
 import type { ImageBlock, DocumentBlock, MediaFormats } from '../types/media.js'
 import { encodeBase64 } from '../types/media.js'
 import type { ModelStreamEvent } from '../models/streaming.js'
-import { ContextWindowOverflowError, ModelThrottledError } from '../errors.js'
+import { ContextWindowOverflowError } from '../errors.js'
 import type { ChatCompletionContentPartText } from 'openai/resources/index.mjs'
 import { logger } from '../logging/logger.js'
 
@@ -71,14 +71,6 @@ const OPENAI_CONTEXT_WINDOW_OVERFLOW_PATTERNS = [
   'too many tokens',
   'context length',
 ]
-
-/**
- * Error message patterns that indicate rate limiting/throttling.
- * Used to detect when requests are being rate limited.
- *
- * @see https://platform.openai.com/docs/guides/error-codes
- */
-const OPENAI_RATE_LIMIT_PATTERNS = ['rate limit', 'rate_limit', 'too many requests', 'quota exceeded']
 
 /**
  * Type representing an OpenAI streaming chat choice.
@@ -441,16 +433,10 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
       }
     } catch (error) {
       const err = error as Error
-      const errorMessage = err.message?.toLowerCase() ?? ''
 
       // Check for context window overflow using simple pattern matching
-      if (OPENAI_CONTEXT_WINDOW_OVERFLOW_PATTERNS.some((pattern) => errorMessage.includes(pattern))) {
+      if (OPENAI_CONTEXT_WINDOW_OVERFLOW_PATTERNS.some((pattern) => err.message?.toLowerCase().includes(pattern))) {
         throw new ContextWindowOverflowError(err.message)
-      }
-
-      // Check for rate limiting/throttling
-      if (OPENAI_RATE_LIMIT_PATTERNS.some((pattern) => errorMessage.includes(pattern))) {
-        throw new ModelThrottledError(err.message)
       }
 
       // Re-throw other errors unchanged
