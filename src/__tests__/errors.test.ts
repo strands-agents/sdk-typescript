@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { ContextWindowOverflowError, normalizeError } from '../errors.js'
+import { ContextWindowOverflowError, ModelThrottleError, normalizeError } from '../errors.js'
 
 describe('ContextWindowOverflowError', () => {
   describe('when instantiated with a message', () => {
@@ -20,6 +20,52 @@ describe('ContextWindowOverflowError', () => {
       const error = new ContextWindowOverflowError('test')
 
       expect(error).toBeInstanceOf(Error)
+    })
+  })
+})
+
+describe('ModelThrottleError', () => {
+  describe('when instantiated with a message', () => {
+    it('creates an error with the correct message', () => {
+      const message = 'Rate limit exceeded'
+      const error = new ModelThrottleError(message)
+
+      expect(error.message).toBe(message)
+    })
+
+    it('has the correct error name', () => {
+      const error = new ModelThrottleError('test')
+
+      expect(error.name).toBe('ModelThrottleError')
+    })
+
+    it('is an instance of Error', () => {
+      const error = new ModelThrottleError('test')
+
+      expect(error).toBeInstanceOf(Error)
+    })
+
+    it('exposes message as a dedicated property for Python SDK consistency', () => {
+      const message = 'API rate limit: 10 requests per minute'
+      const error = new ModelThrottleError(message)
+
+      expect(error.message).toBe(message)
+      expect(error).toHaveProperty('message', message)
+    })
+  })
+
+  describe('when instantiated with a cause', () => {
+    it('preserves the original error as cause', () => {
+      const originalError = new Error('Original rate limit error')
+      const error = new ModelThrottleError('Rate limit exceeded', { cause: originalError })
+
+      expect(error.cause).toBe(originalError)
+    })
+
+    it('has undefined cause when not provided', () => {
+      const error = new ModelThrottleError('Rate limit exceeded')
+
+      expect(error.cause).toBeUndefined()
     })
   })
 })
