@@ -3,56 +3,173 @@ import { ModelError, ContextWindowOverflowError, MaxTokensError, normalizeError 
 import { Message, TextBlock } from '../types/messages.js'
 
 describe('ModelError', () => {
-  it('creates an error with the correct message and name', () => {
-    const error = new ModelError('Model error occurred')
+  describe('when instantiated with a message', () => {
+    it('creates an error with the correct message', () => {
+      const message = 'Model error occurred'
+      const error = new ModelError(message)
 
-    expect(error.message).toBe('Model error occurred')
-    expect(error.name).toBe('ModelError')
+      expect(error.message).toBe(message)
+    })
+
+    it('has the correct error name', () => {
+      const error = new ModelError('test')
+
+      expect(error.name).toBe('ModelError')
+    })
+
+    it('is an instance of Error', () => {
+      const error = new ModelError('test')
+
+      expect(error).toBeInstanceOf(Error)
+    })
   })
 
-  it('stores the cause error when provided', () => {
-    const cause = new Error('original error')
-    const error = new ModelError('wrapped error', cause)
+  describe('when instantiated with a cause', () => {
+    it('stores the cause error', () => {
+      const cause = new Error('original error')
+      const error = new ModelError('wrapped error', { cause })
 
-    expect(error.message).toBe('wrapped error')
-    expect(error.cause).toBe(cause)
+      expect(error.message).toBe('wrapped error')
+      expect(error.cause).toBe(cause)
+    })
   })
 })
 
 describe('ContextWindowOverflowError', () => {
-  it('creates an error with the correct message and name', () => {
-    const error = new ContextWindowOverflowError('Context window overflow occurred')
+  describe('when instantiated with a message', () => {
+    it('creates an error with the correct message', () => {
+      const message = 'Context window overflow occurred'
+      const error = new ContextWindowOverflowError(message)
 
-    expect(error.message).toBe('Context window overflow occurred')
-    expect(error.name).toBe('ContextWindowOverflowError')
+      expect(error.message).toBe(message)
+    })
+
+    it('has the correct error name', () => {
+      const error = new ContextWindowOverflowError('test')
+
+      expect(error.name).toBe('ContextWindowOverflowError')
+    })
+
+    it('is an instance of Error', () => {
+      const error = new ContextWindowOverflowError('test')
+
+      expect(error).toBeInstanceOf(Error)
+    })
+
+    it('is an instance of ModelError', () => {
+      const error = new ContextWindowOverflowError('test')
+
+      expect(error).toBeInstanceOf(ModelError)
+    })
   })
 })
 
 describe('MaxTokensError', () => {
-  it('creates an error with the correct message, name, and partial message', () => {
-    const partialMessage = new Message({
-      role: 'assistant',
-      content: [new TextBlock('partial response')],
-    })
-    const error = new MaxTokensError('Max tokens reached', partialMessage)
+  describe('when instantiated with a message and partial message', () => {
+    it('creates an error with the correct message', () => {
+      const partialMessage = new Message({
+        role: 'assistant',
+        content: [new TextBlock('partial response')],
+      })
+      const error = new MaxTokensError('Max tokens reached', partialMessage)
 
-    expect(error.message).toBe('Max tokens reached')
-    expect(error.name).toBe('MaxTokensError')
-    expect(error.partialMessage).toBe(partialMessage)
+      expect(error.message).toBe('Max tokens reached')
+    })
+
+    it('has the correct error name', () => {
+      const partialMessage = new Message({
+        role: 'assistant',
+        content: [new TextBlock('partial response')],
+      })
+      const error = new MaxTokensError('test', partialMessage)
+
+      expect(error.name).toBe('MaxTokensError')
+    })
+
+    it('stores the partial message', () => {
+      const partialMessage = new Message({
+        role: 'assistant',
+        content: [new TextBlock('partial response')],
+      })
+      const error = new MaxTokensError('Max tokens reached', partialMessage)
+
+      expect(error.partialMessage).toBe(partialMessage)
+    })
+
+    it('is an instance of Error', () => {
+      const partialMessage = new Message({
+        role: 'assistant',
+        content: [new TextBlock('partial response')],
+      })
+      const error = new MaxTokensError('test', partialMessage)
+
+      expect(error).toBeInstanceOf(Error)
+    })
+
+    it('is an instance of ModelError', () => {
+      const partialMessage = new Message({
+        role: 'assistant',
+        content: [new TextBlock('partial response')],
+      })
+      const error = new MaxTokensError('test', partialMessage)
+
+      expect(error).toBeInstanceOf(ModelError)
+    })
   })
 })
 
 describe('normalizeError', () => {
-  it('returns the same Error instance when given an Error', () => {
-    const error = new Error('test error')
-    expect(normalizeError(error)).toBe(error)
+  describe('when given an Error instance', () => {
+    it('returns the same Error instance', () => {
+      const error = new Error('test error')
+      const result = normalizeError(error)
+
+      expect(result).toBe(error)
+    })
   })
 
-  it('wraps non-Error values in an Error', () => {
-    expect(normalizeError('test error').message).toBe('test error')
-    expect(normalizeError(42).message).toBe('42')
-    expect(normalizeError({ code: 'ERR_TEST' }).message).toBe('[object Object]')
-    expect(normalizeError(null).message).toBe('null')
-    expect(normalizeError(undefined).message).toBe('undefined')
+  describe('when given a string', () => {
+    it('wraps it in an Error', () => {
+      const result = normalizeError('test error')
+
+      expect(result).toBeInstanceOf(Error)
+      expect(result.message).toBe('test error')
+    })
+  })
+
+  describe('when given a number', () => {
+    it('converts it to string and wraps in Error', () => {
+      const result = normalizeError(42)
+
+      expect(result).toBeInstanceOf(Error)
+      expect(result.message).toBe('42')
+    })
+  })
+
+  describe('when given an object', () => {
+    it('converts it to string and wraps in Error', () => {
+      const result = normalizeError({ code: 'ERR_TEST' })
+
+      expect(result).toBeInstanceOf(Error)
+      expect(result.message).toBe('[object Object]')
+    })
+  })
+
+  describe('when given null', () => {
+    it('converts it to string and wraps in Error', () => {
+      const result = normalizeError(null)
+
+      expect(result).toBeInstanceOf(Error)
+      expect(result.message).toBe('null')
+    })
+  })
+
+  describe('when given undefined', () => {
+    it('converts it to string and wraps in Error', () => {
+      const result = normalizeError(undefined)
+
+      expect(result).toBeInstanceOf(Error)
+      expect(result.message).toBe('undefined')
+    })
   })
 })

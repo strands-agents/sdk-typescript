@@ -20,10 +20,10 @@ export class ModelError extends Error {
    * Creates a new ModelError.
    *
    * @param message - Error message describing the model error
-   * @param cause - The original error that caused this exception
+   * @param options - Optional error options including the cause
    */
-  constructor(message: string, cause?: Error) {
-    super(message, { cause })
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options)
     this.name = 'ModelError'
   }
 }
