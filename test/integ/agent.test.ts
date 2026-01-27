@@ -222,25 +222,25 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel }) =>
         expect(textContent?.text).toMatch(/42/)
       })
     })
-  })
 
-  it('handles tool invocation', async () => {
-    const agent = new Agent({
-      model: createModel(),
-      tools: [notebook, httpRequest],
-      printer: false,
+    it('handles tool invocation', async () => {
+      const agent = new Agent({
+        model: createModel(),
+        tools: [notebook, httpRequest],
+        printer: false,
+      })
+
+      await agent.invoke('Call Open-Meteo to get the weather in NYC, and take a note of what you did')
+      expect(
+        agent.messages.some((message) =>
+          message.content.some((block) => block.type == 'toolUseBlock' && block.name == 'notebook')
+        )
+      ).toBe(true)
+      expect(
+        agent.messages.some((message) =>
+          message.content.some((block) => block.type == 'toolUseBlock' && block.name == 'http_request')
+        )
+      ).toBe(true)
     })
-
-    await agent.invoke('Call Open-Meteo to get the weather in NYC, and take a note of what you did')
-    expect(
-      agent.messages.some((message) =>
-        message.content.some((block) => block.type == 'toolUseBlock' && block.name == 'notebook')
-      )
-    ).toBe(true)
-    expect(
-      agent.messages.some((message) =>
-        message.content.some((block) => block.type == 'toolUseBlock' && block.name == 'http_request')
-      )
-    ).toBe(true)
   })
 })
