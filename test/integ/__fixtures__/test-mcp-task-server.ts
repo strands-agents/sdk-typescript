@@ -324,13 +324,13 @@ export async function startTaskHTTPServer(): Promise<TaskHttpServerInfo> {
         const mcpServer = createTaskTestServer(taskStore)
         const transport = new StreamableHTTPServerTransport({
           enableJsonResponse: true,
+          sessionIdGenerator: () => 'test-session',
         })
 
         res.on('close', async () => {
           await transport.close()
         })
 
-        // @ts-expect-error - MCP SDK doesn't support exactOptionalPropertyTypes
         await mcpServer.connect(transport)
         await transport.handleRequest(req, res, parsedBody)
       } catch (error) {
