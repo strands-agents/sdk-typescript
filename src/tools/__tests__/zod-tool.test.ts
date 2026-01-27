@@ -98,6 +98,28 @@ describe('tool', () => {
         const result = await myTool.invoke({ count: 3 })
         expect(result).toBe(3)
       })
+
+      it('handles DocumentBlock return', async () => {
+        const { DocumentBlock } = await import('../../types/media.js')
+
+        const docTool = tool({
+          name: 'create_document',
+          description: 'Creates a document',
+          inputSchema: z.object({ content: z.string() }),
+          callback: (input) => {
+            return new DocumentBlock({
+              name: 'RESULT',
+              format: 'md',
+              source: { bytes: new TextEncoder().encode(input.content) },
+            })
+          },
+        })
+
+        const result = await docTool.invoke({ content: 'Hello World!' })
+        expect(result.type).toBe('documentBlock')
+        expect(result.name).toBe('RESULT')
+        expect(result.format).toBe('md')
+      })
     })
 
     describe('validation', () => {

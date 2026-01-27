@@ -176,6 +176,38 @@ describe('Message.fromMessageData', () => {
     expect(toolResultBlock.content[0]).toBeInstanceOf(JsonBlock)
   })
 
+  it('converts tool result block data to ToolResultBlock with document content', () => {
+    const messageData: MessageData = {
+      role: 'user',
+      content: [
+        {
+          toolResult: {
+            toolUseId: 'tooluse_HUxQGMooooooooooooooeV',
+            status: 'success',
+            content: [
+              {
+                document: {
+                  format: 'md',
+                  name: 'DOCUMENT',
+                  source: {
+                    bytes: Uint8Array.from(
+                      'CiMgUHJvZHVjdCBSZXF1aXJlbWVudHMgRG9jdW1lbnQKCiMjIE92ZXJ2aWV3ClRoaXMgZG9jdW1lbnQgb3V0bGluZXMgdGhlIHJlcXVpcmVtZW50cyBmb3IgYSBuZXcgZmVhdHVyZSBpbiBvdXIgYXBwbGljYXRpb24uCgojIyBSZXF1aXJlbWVudHMKMS4gVXNlciBhdXRoZW50aWNhdGlvbiBtdXN0IHN1cHBvcnQgT0F1dGggMi4wCjIuIEFQSSByZXNwb25zZSB0aW1lIG11c3QgYmUgdW5kZXIgMjAwbXMKMy4gU3lzdGVtIG11c3QgaGFuZGxlIDEwLDAwMCBjb25jdXJyZW50IHVzZXJzCjQuIERhdGEgbXVzdCBiZSBlbmNyeXB0ZWQgYXQgcmVzdCBhbmQgaW4gdHJhbnNpdAoKIyMgVGltZWxpbmUKLSBQaGFzZSAxOiBRMSAyMDI2Ci0gUGhhc2UgMjogUTIgMjAyNgo='
+                    ),
+                  },
+                },
+              },
+            ],
+          },
+        },
+      ],
+    }
+    const message = Message.fromMessageData(messageData)
+    expect(message.content).toHaveLength(1)
+    const toolResultBlock = message.content[0] as ToolResultBlock
+    expect(toolResultBlock.content).toHaveLength(1)
+    expect(toolResultBlock.content[0]).toBeInstanceOf(DocumentBlock)
+  })
+
   it('converts reasoning block data to ReasoningBlock', () => {
     const messageData: MessageData = {
       role: 'assistant',
