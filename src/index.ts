@@ -17,7 +17,13 @@ export { AgentResult } from './types/agent.js'
 export type { AgentConfig, ToolList } from './agent/agent.js'
 
 // Error types
-export { ContextWindowOverflowError, MaxTokensError, JsonValidationError, ConcurrentInvocationError } from './errors.js'
+export {
+  ModelError,
+  ContextWindowOverflowError,
+  MaxTokensError,
+  JsonValidationError,
+  ConcurrentInvocationError,
+} from './errors.js'
 
 // JSON types
 export type { JSONSchema, JSONValue } from './types/json.js'

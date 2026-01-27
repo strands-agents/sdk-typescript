@@ -17,7 +17,7 @@ import {
   ModelMetadataEvent,
   type ModelStreamEvent,
 } from './streaming.js'
-import { MaxTokensError } from '../errors.js'
+import { MaxTokensError, ModelError, normalizeError } from '../errors.js'
 
 /**
  * Base configuration interface for all model providers.
@@ -172,152 +172,166 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
    * The method returns:
    * - StreamAggregatedResult containing the complete message, stop reason, and optional metadata
    *
+   * All exceptions thrown from this method are wrapped in ModelError to provide
+   * a consistent error type for model-related errors. Specific error subtypes like
+   * ContextWindowOverflowError, ModelThrottledError, and MaxTokensError are preserved.
+   *
    * @param messages - Array of conversation messages
    * @param options - Optional streaming configuration
    * @returns Async generator yielding ModelStreamEvent | ContentBlock and returning a StreamAggregatedResult
+   * @throws ModelError - Base class for all model-related errors
+   * @throws ContextWindowOverflowError - When input exceeds the model's context window
+   * @throws ModelThrottledError - When the model provider throttles requests
+   * @throws MaxTokensError - When the model reaches its maximum token limit
    */
   async *streamAggregated(
     messages: Message[],
     options?: StreamOptions
   ): AsyncGenerator<ModelStreamEvent | ContentBlock, StreamAggregatedResult, undefined> {
-    // State maintained in closure
-    let messageRole: Role | null = null
-    const contentBlocks: ContentBlock[] = []
-    let accumulatedText = ''
-    let accumulatedToolInput = ''
-    let toolName = ''
-    let toolUseId = ''
-    let accumulatedReasoning: {
-      text?: string
-      signature?: string
-      redactedContent?: Uint8Array
-    } = {}
-    let errorToThrow: Error | undefined = undefined
-    let stoppedMessage: Message | null = null
-    let finalStopReason: string | null = null
-    let metadata: ModelMetadataEvent | undefined = undefined
+    try {
+      // State maintained in closure
+      let messageRole: Role | null = null
+      const contentBlocks: ContentBlock[] = []
+      let accumulatedText = ''
+      let accumulatedToolInput = ''
+      let toolName = ''
+      let toolUseId = ''
+      let accumulatedReasoning: {
+        text?: string
+        signature?: string
+        redactedContent?: Uint8Array
+      } = {}
+      let errorToThrow: Error | undefined = undefined
+      let stoppedMessage: Message | null = null
+      let finalStopReason: string | null = null
+      let metadata: ModelMetadataEvent | undefined = undefined
 
-    for await (const event_data of this.stream(messages, options)) {
-      const event = this._convert_to_class_event(event_data)
-      yield event // Pass through immediately
+      for await (const event_data of this.stream(messages, options)) {
+        const event = this._convert_to_class_event(event_data)
+        yield event // Pass through immediately
 
-      // Aggregation logic based on event type
-      switch (event.type) {
-        case 'modelMessageStartEvent':
-          messageRole = event.role
-          contentBlocks.length = 0 // Reset
-          break
+        // Aggregation logic based on event type
+        switch (event.type) {
+          case 'modelMessageStartEvent':
+            messageRole = event.role
+            contentBlocks.length = 0 // Reset
+            break
 
-        case 'modelContentBlockStartEvent':
-          if (event.start?.type === 'toolUseStart') {
-            toolName = event.start.name
-            toolUseId = event.start.toolUseId
-          }
-          accumulatedToolInput = ''
-          accumulatedText = ''
-          accumulatedReasoning = {}
-          break
-
-        case 'modelContentBlockDeltaEvent':
-          switch (event.delta.type) {
-            case 'textDelta':
-              accumulatedText += event.delta.text
-              break
-            case 'toolUseInputDelta':
-              accumulatedToolInput += event.delta.input
-              break
-            case 'reasoningContentDelta':
-              if (event.delta.text) accumulatedReasoning.text = (accumulatedReasoning.text ?? '') + event.delta.text
-              if (event.delta.signature) accumulatedReasoning.signature = event.delta.signature
-              if (event.delta.redactedContent) accumulatedReasoning.redactedContent = event.delta.redactedContent
-              break
-          }
-          break
-
-        case 'modelContentBlockStopEvent': {
-          // Finalize and emit complete ContentBlock
-          let block: ContentBlock
-          try {
-            if (toolUseId) {
-              block = new ToolUseBlock({
-                name: toolName,
-                toolUseId: toolUseId,
-                input: accumulatedToolInput ? JSON.parse(accumulatedToolInput) : {},
-              })
-              toolUseId = '' // Reset
-              toolName = ''
-            } else if (Object.keys(accumulatedReasoning).length > 0) {
-              block = new ReasoningBlock({
-                ...accumulatedReasoning,
-              })
-              accumulatedReasoning = {} // Reset after creating reasoning block
-            } else {
-              block = new TextBlock(accumulatedText)
+          case 'modelContentBlockStartEvent':
+            if (event.start?.type === 'toolUseStart') {
+              toolName = event.start.name
+              toolUseId = event.start.toolUseId
             }
-            contentBlocks.push(block)
-            yield block
-          } catch (e: unknown) {
-            if (e instanceof SyntaxError) {
-              console.error('Unable to parse JSON string.')
-              errorToThrow = e
+            accumulatedToolInput = ''
+            accumulatedText = ''
+            accumulatedReasoning = {}
+            break
+
+          case 'modelContentBlockDeltaEvent':
+            switch (event.delta.type) {
+              case 'textDelta':
+                accumulatedText += event.delta.text
+                break
+              case 'toolUseInputDelta':
+                accumulatedToolInput += event.delta.input
+                break
+              case 'reasoningContentDelta':
+                if (event.delta.text) accumulatedReasoning.text = (accumulatedReasoning.text ?? '') + event.delta.text
+                if (event.delta.signature) accumulatedReasoning.signature = event.delta.signature
+                if (event.delta.redactedContent) accumulatedReasoning.redactedContent = event.delta.redactedContent
+                break
             }
+            break
+
+          case 'modelContentBlockStopEvent': {
+            // Finalize and emit complete ContentBlock
+            let block: ContentBlock
+            try {
+              if (toolUseId) {
+                block = new ToolUseBlock({
+                  name: toolName,
+                  toolUseId: toolUseId,
+                  input: accumulatedToolInput ? JSON.parse(accumulatedToolInput) : {},
+                })
+                toolUseId = '' // Reset
+                toolName = ''
+              } else if (Object.keys(accumulatedReasoning).length > 0) {
+                block = new ReasoningBlock({
+                  ...accumulatedReasoning,
+                })
+                accumulatedReasoning = {} // Reset after creating reasoning block
+              } else {
+                block = new TextBlock(accumulatedText)
+              }
+              contentBlocks.push(block)
+              yield block
+            } catch (e: unknown) {
+              if (e instanceof SyntaxError) {
+                console.error('Unable to parse JSON string.')
+                errorToThrow = e
+              }
+            }
+            break
           }
-          break
+
+          case 'modelMessageStopEvent':
+            // Store message and stop reason
+            if (messageRole) {
+              stoppedMessage = new Message({
+                role: messageRole,
+                content: [...contentBlocks],
+              })
+              finalStopReason = event.stopReason!
+            }
+            break
+
+          case 'modelMetadataEvent':
+            // Store metadata, keeping the last one if multiple events occur
+            metadata = event
+            break
+
+          default:
+            break
         }
-
-        case 'modelMessageStopEvent':
-          // Store message and stop reason
-          if (messageRole) {
-            stoppedMessage = new Message({
-              role: messageRole,
-              content: [...contentBlocks],
-            })
-            finalStopReason = event.stopReason!
-          }
-          break
-
-        case 'modelMetadataEvent':
-          // Store metadata, keeping the last one if multiple events occur
-          metadata = event
-          break
-
-        default:
-          break
       }
-    }
 
-    if (!stoppedMessage || !finalStopReason) {
-      // If we exit the loop without completing a message or stop reason, throw an error
-      throw new Error('Stream ended without completing a message', {
-        cause: errorToThrow,
-      })
-    }
+      if (!stoppedMessage || !finalStopReason) {
+        // If we exit the loop without completing a message or stop reason, throw an error
+        throw new ModelError(
+          'Stream ended without completing a message',
+          errorToThrow ? { cause: errorToThrow } : undefined
+        )
+      }
 
-    // Handle stop reason
-    if (finalStopReason === 'maxTokens') {
-      const maxTokensError = new MaxTokensError(
-        'Model reached maximum token limit. This is an unrecoverable state that requires intervention.',
-        stoppedMessage
-      )
-      if (errorToThrow !== undefined) {
-        errorToThrow.cause = maxTokensError
-      } else {
+      // Handle stop reason
+      if (finalStopReason === 'maxTokens') {
+        const maxTokensError = new MaxTokensError(
+          'Model reached maximum token limit. This is an unrecoverable state that requires intervention.',
+          stoppedMessage
+        )
         errorToThrow = maxTokensError
       }
-    }
 
-    if (errorToThrow !== undefined) {
-      throw errorToThrow
-    }
+      if (errorToThrow !== undefined) {
+        throw errorToThrow
+      }
 
-    // Return the final message with stop reason and optional metadata
-    const result: StreamAggregatedResult = {
-      message: stoppedMessage,
-      stopReason: finalStopReason,
+      // Return the final message with stop reason and optional metadata
+      const result: StreamAggregatedResult = {
+        message: stoppedMessage,
+        stopReason: finalStopReason,
+      }
+      if (metadata !== undefined) {
+        result.metadata = metadata
+      }
+      return result
+    } catch (error) {
+      // Wrap non-ModelError errors in ModelError
+      if (error instanceof ModelError) {
+        throw error
+      }
+      const normalizedError = normalizeError(error)
+      throw new ModelError(normalizedError.message, { cause: error })
     }
-    if (metadata !== undefined) {
-      result.metadata = metadata
-    }
-    return result
   }
 }

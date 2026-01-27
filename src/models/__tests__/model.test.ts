@@ -1,7 +1,36 @@
 import { describe, it, expect } from 'vitest'
 import type { Message } from '../../types/messages.js'
 import { TestModelProvider, collectGenerator } from '../../__fixtures__/model-test-helpers.js'
-import { MaxTokensError } from '../../errors.js'
+import { MaxTokensError, ModelError } from '../../errors.js'
+import { Model } from '../model.js'
+import type { BaseModelConfig, StreamOptions } from '../model.js'
+import type { ModelStreamEvent } from '../streaming.js'
+
+/**
+ * Test model provider that throws an error from stream().
+ */
+class ErrorThrowingModelProvider extends Model<BaseModelConfig> {
+  private config: BaseModelConfig = { modelId: 'test-model' }
+  private errorToThrow: Error
+
+  constructor(errorToThrow: Error) {
+    super()
+    this.errorToThrow = errorToThrow
+  }
+
+  updateConfig(modelConfig: BaseModelConfig): void {
+    this.config = { ...this.config, ...modelConfig }
+  }
+
+  getConfig(): BaseModelConfig {
+    return this.config
+  }
+
+  // eslint-disable-next-line require-yield
+  async *stream(_messages: Message[], _options?: StreamOptions): AsyncGenerator<ModelStreamEvent> {
+    throw this.errorToThrow
+  }
+}
 
 describe('Model', () => {
   describe('streamAggregated', () => {
@@ -579,6 +608,24 @@ describe('Model', () => {
           stopReason: 'endTurn',
           metadata: undefined,
         })
+      })
+    })
+
+    describe('when stream() throws an error', () => {
+      it('wraps non-ModelError errors in ModelError with original as cause', async () => {
+        const originalError = new Error('API connection failed')
+        const provider = new ErrorThrowingModelProvider(originalError)
+
+        const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+
+        try {
+          await collectGenerator(provider.streamAggregated(messages))
+          expect.fail('Expected error to be thrown')
+        } catch (error) {
+          expect(error).toBeInstanceOf(ModelError)
+          expect((error as ModelError).message).toBe('API connection failed')
+          expect((error as ModelError).cause).toBe(originalError)
+        }
       })
     })
   })
