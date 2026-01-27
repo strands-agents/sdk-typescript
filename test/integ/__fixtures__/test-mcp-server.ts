@@ -164,7 +164,6 @@ export async function startHTTPServer(): Promise<HttpServerInfo> {
         // Create a new transport for each request (stateless mode)
         const transport = new StreamableHTTPServerTransport({
           enableJsonResponse: true,
-          sessionIdGenerator: () => 'test-session',
         })
 
         res.on('close', async () => {
