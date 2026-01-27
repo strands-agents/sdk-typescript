@@ -41,6 +41,8 @@ export const ERROR_STATUS_MAP: Record<string, ErrorStatusConfig> = {
  *
  * @param error - The error to classify
  * @returns The error type if recognized, undefined otherwise
+ *
+ * @internal
  */
 export function classifyGeminiError(error: Error): GeminiErrorType | undefined {
   if (!error.message) {

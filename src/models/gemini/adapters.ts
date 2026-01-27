@@ -18,6 +18,8 @@ import type { GeminiStreamState } from './types.js'
  * Mapping of Gemini finish reasons to SDK stop reasons.
  * Only MAX_TOKENS needs explicit mapping; everything else defaults to endTurn.
  * TOOL_USE is handled separately via hasToolCalls flag.
+ *
+ * @internal
  */
 export const FINISH_REASON_MAP: Partial<Record<GeminiFinishReason, StopReason>> = {
   [GeminiFinishReason.MAX_TOKENS]: 'maxTokens',
@@ -32,6 +34,8 @@ export const FINISH_REASON_MAP: Partial<Record<GeminiFinishReason, StopReason>> 
  *
  * @param messages - SDK messages to format
  * @returns Gemini-formatted contents array
+ *
+ * @internal
  */
 export function formatMessages(messages: Message[]): Content[] {
   const contents: Content[] = []
@@ -66,6 +70,8 @@ export function formatMessages(messages: Message[]): Content[] {
  * @param chunk - Gemini response chunk
  * @param streamState - Mutable state object tracking message and content block state
  * @returns Array of SDK streaming events
+ *
+ * @internal
  */
 export function mapChunkToEvents(chunk: GenerateContentResponse, streamState: GeminiStreamState): ModelStreamEvent[] {
   const events: ModelStreamEvent[] = []
