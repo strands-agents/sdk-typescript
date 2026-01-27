@@ -17,7 +17,7 @@ import {
   ModelMetadataEvent,
   type ModelStreamEvent,
 } from './streaming.js'
-import { MaxTokensError, ModelError } from '../errors.js'
+import { MaxTokensError, ModelError, normalizeError } from '../errors.js'
 
 /**
  * Base configuration interface for all model providers.
@@ -330,8 +330,8 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
       if (error instanceof ModelError) {
         throw error
       }
-      const message = error instanceof Error ? error.message : String(error)
-      throw new ModelError(message, { cause: error })
+      const normalizedError = normalizeError(error)
+      throw new ModelError(normalizedError.message, { cause: error })
     }
   }
 }
