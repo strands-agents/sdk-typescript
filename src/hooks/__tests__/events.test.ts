@@ -28,6 +28,18 @@ describe('BeforeInvocationEvent', () => {
     event.agent = new Agent()
   })
 
+  it('creates instance with invocationState', () => {
+    const agent = new Agent()
+    const invocationState = { userId: '123', sessionId: 'abc' }
+    const event = new BeforeInvocationEvent({ agent, invocationState })
+
+    expect(event).toEqual({
+      type: 'beforeInvocationEvent',
+      agent: agent,
+      invocationState: { userId: '123', sessionId: 'abc' },
+    })
+  })
+
   it('returns false for _shouldReverseCallbacks', () => {
     const agent = new Agent()
     const event = new BeforeInvocationEvent({ agent })

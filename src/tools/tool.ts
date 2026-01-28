@@ -21,6 +21,12 @@ export interface ToolContext {
    * Provides access to agent state and other agent-level information.
    */
   agent: AgentData
+
+  /**
+   * Per-invocation state passed from the invoke call.
+   * Not persisted in agent state between invocations.
+   */
+  invocationState?: Record<string, unknown>
 }
 
 /**

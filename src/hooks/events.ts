@@ -26,10 +26,14 @@ export abstract class HookEvent {
 export class BeforeInvocationEvent extends HookEvent {
   readonly type = 'beforeInvocationEvent' as const
   readonly agent: AgentData
+  readonly invocationState?: Record<string, unknown>
 
-  constructor(data: { agent: AgentData }) {
+  constructor(data: { agent: AgentData; invocationState?: Record<string, unknown> }) {
     super()
     this.agent = data.agent
+    if (data.invocationState !== undefined) {
+      this.invocationState = data.invocationState
+    }
   }
 }
 
@@ -82,16 +86,21 @@ export class BeforeToolCallEvent extends HookEvent {
     input: JSONValue
   }
   readonly tool: Tool | undefined
+  readonly invocationState?: Record<string, unknown>
 
   constructor(data: {
     agent: AgentData
     toolUse: { name: string; toolUseId: string; input: JSONValue }
     tool: Tool | undefined
+    invocationState?: Record<string, unknown>
   }) {
     super()
     this.agent = data.agent
     this.toolUse = data.toolUse
     this.tool = data.tool
+    if (data.invocationState !== undefined) {
+      this.invocationState = data.invocationState
+    }
   }
 }
 
@@ -111,6 +120,7 @@ export class AfterToolCallEvent extends HookEvent {
   readonly tool: Tool | undefined
   readonly result: ToolResultBlock
   readonly error?: Error
+  readonly invocationState?: Record<string, unknown>
 
   constructor(data: {
     agent: AgentData
@@ -118,6 +128,7 @@ export class AfterToolCallEvent extends HookEvent {
     tool: Tool | undefined
     result: ToolResultBlock
     error?: Error
+    invocationState?: Record<string, unknown>
   }) {
     super()
     this.agent = data.agent
@@ -126,6 +137,9 @@ export class AfterToolCallEvent extends HookEvent {
     this.result = data.result
     if (data.error !== undefined) {
       this.error = data.error
+    }
+    if (data.invocationState !== undefined) {
+      this.invocationState = data.invocationState
     }
   }
 
@@ -141,10 +155,14 @@ export class AfterToolCallEvent extends HookEvent {
 export class BeforeModelCallEvent extends HookEvent {
   readonly type = 'beforeModelCallEvent' as const
   readonly agent: AgentData
+  readonly invocationState?: Record<string, unknown>
 
-  constructor(data: { agent: AgentData }) {
+  constructor(data: { agent: AgentData; invocationState?: Record<string, unknown> }) {
     super()
     this.agent = data.agent
+    if (data.invocationState !== undefined) {
+      this.invocationState = data.invocationState
+    }
   }
 }
 
@@ -174,6 +192,7 @@ export class AfterModelCallEvent extends HookEvent {
   readonly agent: AgentData
   readonly stopData?: ModelStopData
   readonly error?: Error
+  readonly invocationState?: Record<string, unknown>
 
   /**
    * Optional flag that can be set by hook callbacks to request a retry of the model call.
@@ -182,7 +201,7 @@ export class AfterModelCallEvent extends HookEvent {
    */
   retryModelCall?: boolean
 
-  constructor(data: { agent: AgentData; stopData?: ModelStopData; error?: Error }) {
+  constructor(data: { agent: AgentData; stopData?: ModelStopData; error?: Error; invocationState?: Record<string, unknown> }) {
     super()
     this.agent = data.agent
     if (data.stopData !== undefined) {
@@ -190,6 +209,9 @@ export class AfterModelCallEvent extends HookEvent {
     }
     if (data.error !== undefined) {
       this.error = data.error
+    }
+    if (data.invocationState !== undefined) {
+      this.invocationState = data.invocationState
     }
   }
 

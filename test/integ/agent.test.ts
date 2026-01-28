@@ -1,8 +1,19 @@
 import { describe, expect, it } from 'vitest'
-import { Agent, DocumentBlock, ImageBlock, Message, TextBlock, tool } from '@strands-agents/sdk'
+import {
+  Agent,
+  DocumentBlock,
+  ImageBlock,
+  Message,
+  TextBlock,
+  tool,
+  type ToolContext,
+  type HookProvider,
+} from '@strands-agents/sdk'
 import { notebook } from '@strands-agents/sdk/vended_tools/notebook'
 import { httpRequest } from '@strands-agents/sdk/vended_tools/http_request'
 import { z } from 'zod'
+import type { HookRegistry } from '../../src/hooks/index.js'
+import { BeforeInvocationEvent, BeforeToolCallEvent } from '../../src/hooks/events.js'
 
 import { collectGenerator } from '$/sdk/__fixtures__/model-test-helpers.js'
 import { loadFixture } from './__fixtures__/test-helpers.js'
@@ -241,6 +252,75 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel }) =>
           message.content.some((block) => block.type == 'toolUseBlock' && block.name == 'http_request')
         )
       ).toBe(true)
+    })
+
+    describe('invocationState', () => {
+      it('flows invocationState from invoke through hooks to tools', async () => {
+        const events: string[] = []
+        const invocationState = { requestId: 'req-123', user: 'testUser' }
+
+        class TestHookProvider implements HookProvider {
+          registerCallbacks(registry: HookRegistry): void {
+            registry.addCallback(BeforeInvocationEvent, async (event: BeforeInvocationEvent) => {
+              events.push(`beforeInvoke:${JSON.stringify(event.invocationState)}`)
+            })
+            registry.addCallback(BeforeToolCallEvent, async () => {
+              events.push('beforeToolCall')
+            })
+          }
+        }
+
+        let toolReceivedState: Record<string, unknown> | undefined
+
+        const echoTool = tool({
+          name: 'echo',
+          description: 'Echoes input',
+          inputSchema: z.object({
+            message: z.string(),
+          }),
+          callback: async (input, context?: ToolContext) => {
+            toolReceivedState = context?.invocationState
+            return `Echo: ${input.message}`
+          },
+        })
+
+        const agent = new Agent({
+          model: createModel(),
+          tools: [echoTool],
+          hooks: [new TestHookProvider()],
+          printer: false,
+        })
+
+        await agent.invoke('Use echo tool with message "test"', { invocationState })
+
+        expect(events).toContain(`beforeInvoke:${JSON.stringify(invocationState)}`)
+        expect(toolReceivedState).toEqual(invocationState)
+      })
+
+      it('invocationState is not persisted between invocations', async () => {
+        const capturedStates: Array<Record<string, unknown> | undefined> = []
+
+        class TestHookProvider implements HookProvider {
+          registerCallbacks(registry: HookRegistry): void {
+            registry.addCallback(BeforeInvocationEvent, async (event: BeforeInvocationEvent) => {
+              capturedStates.push(event.invocationState)
+            })
+          }
+        }
+
+        const agent = new Agent({
+          model: createModel(),
+          hooks: [new TestHookProvider()],
+          printer: false,
+        })
+
+        await agent.invoke('First request', { invocationState: { call: 1 } })
+        await agent.invoke('Second request') // No invocationState
+
+        expect(capturedStates).toHaveLength(2)
+        expect(capturedStates[0]).toEqual({ call: 1 })
+        expect(capturedStates[1]).toBeUndefined()
+      })
     })
   })
 })

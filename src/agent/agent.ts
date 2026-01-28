@@ -116,6 +116,17 @@ export type AgentConfig = {
 export type InvokeArgs = string | ContentBlock[] | ContentBlockData[] | Message[] | MessageData[]
 
 /**
+ * Options for invoking an agent.
+ */
+export type InvokeOptions = {
+  /**
+   * Per-invocation state passed to hooks and tools.
+   * Not persisted in agent state between invocations.
+   */
+  invocationState?: Record<string, unknown>
+}
+
+/**
  * Orchestrates the interaction between a model, a set of tools, and MCP clients.
  * The Agent is responsible for managing the lifecycle of tools and clients
  * and invoking the core decision-making loop.
@@ -250,17 +261,20 @@ export class Agent implements AgentData {
    * streaming events.
    *
    * @param args - Arguments for invoking the agent
+   * @param options - Optional invocation options including invocationState
    * @returns Promise that resolves to the final AgentResult
    *
    * @example
    * ```typescript
    * const agent = new Agent({ model, tools })
-   * const result = await agent.invoke('What is 2 + 2?')
+   * const result = await agent.invoke('What is 2 + 2?', {
+   *   invocationState: { userId: '123', sessionId: 'abc' }
+   * })
    * console.log(result.lastMessage) // Agent's response
    * ```
    */
-  public async invoke(args: InvokeArgs): Promise<AgentResult> {
-    const gen = this.stream(args)
+  public async invoke(args: InvokeArgs, options?: InvokeOptions): Promise<AgentResult> {
+    const gen = this.stream(args, options)
     let result = await gen.next()
     while (!result.done) {
       result = await gen.next()
@@ -285,25 +299,28 @@ export class Agent implements AgentData {
    * with valid toolResponses
    *
    * @param args - Arguments for invoking the agent
+   * @param options - Optional invocation options including invocationState
    * @returns Async generator that yields AgentStreamEvent objects and returns AgentResult
    *
    * @example
    * ```typescript
    * const agent = new Agent({ model, tools })
    *
-   * for await (const event of agent.stream('Hello')) {
+   * for await (const event of agent.stream('Hello', {
+   *   invocationState: { userId: '123' }
+   * })) {
    *   console.log('Event:', event.type)
    * }
    * // Messages array is mutated in place and contains the full conversation
    * ```
    */
-  public async *stream(args: InvokeArgs): AsyncGenerator<AgentStreamEvent, AgentResult, undefined> {
+  public async *stream(args: InvokeArgs, options?: InvokeOptions): AsyncGenerator<AgentStreamEvent, AgentResult, undefined> {
     using _lock = this.acquireLock()
 
     await this.initialize()
 
     // Delegate to _stream and process events through printer and hooks
-    const streamGenerator = this._stream(args)
+    const streamGenerator = this._stream(args, options?.invocationState)
     let result = await streamGenerator.next()
 
     while (!result.done) {
@@ -330,18 +347,26 @@ export class Agent implements AgentData {
    * Separated to centralize printer event processing in the public stream method.
    *
    * @param args - Arguments for invoking the agent
+   * @param invocationState - Per-invocation state passed to hooks and tools
    * @returns Async generator that yields AgentStreamEvent objects and returns AgentResult
    */
-  private async *_stream(args: InvokeArgs): AsyncGenerator<AgentStreamEvent, AgentResult, undefined> {
+  private async *_stream(
+    args: InvokeArgs,
+    invocationState?: Record<string, unknown>
+  ): AsyncGenerator<AgentStreamEvent, AgentResult, undefined> {
     let currentArgs: InvokeArgs | undefined = args
 
     // Emit event before the loop starts
-    yield new BeforeInvocationEvent({ agent: this })
+    const eventData: { agent: AgentData; invocationState?: Record<string, unknown> } = { agent: this }
+    if (invocationState !== undefined) {
+      eventData.invocationState = invocationState
+    }
+    yield new BeforeInvocationEvent(eventData)
 
     try {
       // Main agent loop - continues until model stops without requesting tools
       while (true) {
-        const modelResult = yield* this.invokeModel(currentArgs)
+        const modelResult = yield* this.invokeModel(currentArgs, invocationState)
         currentArgs = undefined // Only pass args on first invocation
         if (modelResult.stopReason !== 'toolUse') {
           // Loop terminates - no tool use requested
@@ -354,7 +379,7 @@ export class Agent implements AgentData {
         }
 
         // Execute tools sequentially
-        const toolResultMessage = yield* this.executeTools(modelResult.message, this._toolRegistry)
+        const toolResultMessage = yield* this.executeTools(modelResult.message, this._toolRegistry, invocationState)
 
         // Add assistant message with tool uses right before adding tool results
         // This ensures we don't have dangling tool use messages if tool execution fails
@@ -427,10 +452,12 @@ export class Agent implements AgentData {
    * Invokes the model provider and streams all events.
    *
    * @param args - Optional arguments for invoking the model
+   * @param invocationState - Per-invocation state passed to hooks
    * @returns Object containing the assistant message and stop reason
    */
   private async *invokeModel(
-    args?: InvokeArgs
+    args?: InvokeArgs,
+    invocationState?: Record<string, unknown>
   ): AsyncGenerator<AgentStreamEvent, { message: Message; stopReason: string }, undefined> {
     // Normalize input and append messages to conversation
     const messagesToAppend = this._normalizeInput(args)
@@ -444,26 +471,44 @@ export class Agent implements AgentData {
       streamOptions.systemPrompt = this.systemPrompt
     }
 
-    yield new BeforeModelCallEvent({ agent: this })
+    const modelEventData: { agent: AgentData; invocationState?: Record<string, unknown> } = { agent: this }
+    if (invocationState !== undefined) {
+      modelEventData.invocationState = invocationState
+    }
+    yield new BeforeModelCallEvent(modelEventData)
 
     try {
       const { message, stopReason } = yield* this._streamFromModel(this.messages, streamOptions)
 
-      yield new AfterModelCallEvent({ agent: this, stopData: { message, stopReason } })
+      const afterModelData: { agent: AgentData; stopData: { message: Message; stopReason: string }; invocationState?: Record<string, unknown> } = {
+        agent: this as AgentData,
+        stopData: { message, stopReason },
+      }
+      if (invocationState !== undefined) {
+        afterModelData.invocationState = invocationState
+      }
+      yield new AfterModelCallEvent(afterModelData)
 
       return { message, stopReason }
     } catch (error) {
       const modelError = normalizeError(error)
 
       // Create error event
-      const errorEvent = new AfterModelCallEvent({ agent: this, error: modelError })
+      const errorEventData: { agent: AgentData; error: Error; invocationState?: Record<string, unknown> } = {
+        agent: this as AgentData,
+        error: modelError,
+      }
+      if (invocationState !== undefined) {
+        errorEventData.invocationState = invocationState
+      }
+      const errorEvent = new AfterModelCallEvent(errorEventData)
 
       // Yield error event - stream will invoke hooks
       yield errorEvent
 
       // After yielding, hooks have been invoked and may have set retryModelCall
       if (errorEvent.retryModelCall) {
-        return yield* this.invokeModel(args)
+        return yield* this.invokeModel(args, invocationState)
       }
 
       // Re-throw error
@@ -505,11 +550,13 @@ export class Agent implements AgentData {
    *
    * @param assistantMessage - The assistant message containing tool use blocks
    * @param toolRegistry - Registry containing available tools
+   * @param invocationState - Per-invocation state passed to tool contexts
    * @returns User message containing tool results
    */
   private async *executeTools(
     assistantMessage: Message,
-    toolRegistry: ToolRegistry
+    toolRegistry: ToolRegistry,
+    invocationState?: Record<string, unknown>
   ): AsyncGenerator<AgentStreamEvent, Message, undefined> {
     yield new BeforeToolsEvent({ agent: this, message: assistantMessage })
 
@@ -526,7 +573,7 @@ export class Agent implements AgentData {
     const toolResultBlocks: ToolResultBlock[] = []
 
     for (const toolUseBlock of toolUseBlocks) {
-      const toolResultBlock = yield* this.executeTool(toolUseBlock, toolRegistry)
+      const toolResultBlock = yield* this.executeTool(toolUseBlock, toolRegistry, invocationState)
       toolResultBlocks.push(toolResultBlock)
 
       // Yield the tool result block as it's created
@@ -552,11 +599,13 @@ export class Agent implements AgentData {
    *
    * @param toolUseBlock - Tool use block to execute
    * @param toolRegistry - Registry containing available tools
+   * @param invocationState - Per-invocation state passed to tool context
    * @returns Tool result block
    */
   private async *executeTool(
     toolUseBlock: ToolUseBlock,
-    toolRegistry: ToolRegistry
+    toolRegistry: ToolRegistry,
+    invocationState?: Record<string, unknown>
   ): AsyncGenerator<AgentStreamEvent, ToolResultBlock, undefined> {
     const tool = toolRegistry.find((t) => t.name === toolUseBlock.name)
 
@@ -567,7 +616,15 @@ export class Agent implements AgentData {
       input: toolUseBlock.input,
     }
 
-    yield new BeforeToolCallEvent({ agent: this, toolUse, tool })
+    const beforeToolData: { agent: AgentData; toolUse: { name: string; toolUseId: string; input: JSONValue }; tool: Tool | undefined; invocationState?: Record<string, unknown> } = {
+      agent: this as AgentData,
+      toolUse,
+      tool,
+    }
+    if (invocationState !== undefined) {
+      beforeToolData.invocationState = invocationState
+    }
+    yield new BeforeToolCallEvent(beforeToolData)
 
     if (!tool) {
       // Tool not found - return error result instead of throwing
@@ -577,7 +634,16 @@ export class Agent implements AgentData {
         content: [new TextBlock(`Tool '${toolUseBlock.name}' not found in registry`)],
       })
 
-      yield new AfterToolCallEvent({ agent: this, toolUse, tool, result: errorResult })
+      const afterToolData: { agent: AgentData; toolUse: { name: string; toolUseId: string; input: JSONValue }; tool: undefined; result: ToolResultBlock; invocationState?: Record<string, unknown> } = {
+        agent: this as AgentData,
+        toolUse,
+        tool,
+        result: errorResult,
+      }
+      if (invocationState !== undefined) {
+        afterToolData.invocationState = invocationState
+      }
+      yield new AfterToolCallEvent(afterToolData)
 
       return errorResult
     }
@@ -590,6 +656,9 @@ export class Agent implements AgentData {
         input: toolUseBlock.input,
       },
       agent: this,
+    }
+    if (invocationState !== undefined) {
+      toolContext.invocationState = invocationState
     }
 
     try {
@@ -606,12 +675,30 @@ export class Agent implements AgentData {
           content: [new TextBlock(`Tool '${toolUseBlock.name}' did not return a result`)],
         })
 
-        yield new AfterToolCallEvent({ agent: this, toolUse, tool, result: errorResult })
+        const afterToolData: { agent: AgentData; toolUse: { name: string; toolUseId: string; input: JSONValue }; tool: Tool; result: ToolResultBlock; invocationState?: Record<string, unknown> } = {
+          agent: this as AgentData,
+          toolUse,
+          tool,
+          result: errorResult,
+        }
+        if (invocationState !== undefined) {
+          afterToolData.invocationState = invocationState
+        }
+        yield new AfterToolCallEvent(afterToolData)
 
         return errorResult
       }
 
-      yield new AfterToolCallEvent({ agent: this, toolUse, tool, result: toolResult })
+      const afterSuccessData: { agent: AgentData; toolUse: { name: string; toolUseId: string; input: JSONValue }; tool: Tool; result: ToolResultBlock; invocationState?: Record<string, unknown> } = {
+        agent: this as AgentData,
+        toolUse,
+        tool,
+        result: toolResult,
+      }
+      if (invocationState !== undefined) {
+        afterSuccessData.invocationState = invocationState
+      }
+      yield new AfterToolCallEvent(afterSuccessData)
 
       // Tool already returns ToolResultBlock directly
       return toolResult
@@ -625,7 +712,17 @@ export class Agent implements AgentData {
         error: toolError,
       })
 
-      yield new AfterToolCallEvent({ agent: this, toolUse, tool, result: errorResult, error: toolError })
+      const afterErrorData: { agent: AgentData; toolUse: { name: string; toolUseId: string; input: JSONValue }; tool: Tool; result: ToolResultBlock; error: Error; invocationState?: Record<string, unknown> } = {
+        agent: this as AgentData,
+        toolUse,
+        tool,
+        result: errorResult,
+        error: toolError,
+      }
+      if (invocationState !== undefined) {
+        afterErrorData.invocationState = invocationState
+      }
+      yield new AfterToolCallEvent(afterErrorData)
 
       return errorResult
     }
