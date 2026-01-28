@@ -22,6 +22,10 @@
       "types": "./dist/src/models/bedrock.d.ts",
       "default": "./dist/src/models/bedrock.js"
     },
+    "./gemini": {
+      "types": "./dist/src/models/gemini/index.d.ts",
+      "default": "./dist/src/models/gemini/index.js"
+    },
     "./vended_tools/notebook": {
       "types": "./dist/src/vended-tools/notebook/index.d.ts",
       "default": "./dist/src/vended-tools/notebook/index.js"
@@ -107,11 +111,15 @@
     "@aws-sdk/client-bedrock-runtime": "^3.943.0"
   },
   "peerDependencies": {
+    "@google/genai": "^0.14.0",
     "@modelcontextprotocol/sdk": "^1.24.2",
     "openai": "^6.7.0",
     "zod": "^4.1.12"
   },
   "peerDependenciesMeta": {
+    "@google/genai": {
+      "optional": true
+    },
     "openai": {
       "optional": true
     }
