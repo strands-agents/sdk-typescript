@@ -1,6 +1,5 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { GoogleGenAI } from '@google/genai'
-import { isNode } from '../../__fixtures__/environment.js'
 import { collectIterator } from '../../__fixtures__/model-test-helpers.js'
 import { GeminiModel } from '../gemini/model.js'
 import { ContextWindowOverflowError } from '../../errors.js'
@@ -19,17 +18,7 @@ function createMockClient(streamGenerator: () => AsyncGenerator<Record<string, u
 
 describe('GeminiModel', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
-    if (isNode) {
-      vi.stubEnv('GEMINI_API_KEY', 'test-api-key')
-    }
-  })
-
-  afterEach(() => {
-    vi.clearAllMocks()
-    if (isNode) {
-      vi.unstubAllEnvs()
-    }
+    vi.stubEnv('GEMINI_API_KEY', 'test-api-key')
   })
 
   describe('constructor', () => {
@@ -48,17 +37,13 @@ describe('GeminiModel', () => {
     })
 
     it('throws error when no API key provided and no env variable', () => {
-      if (isNode) {
-        vi.stubEnv('GEMINI_API_KEY', '')
-      }
+      vi.stubEnv('GEMINI_API_KEY', '')
 
       expect(() => new GeminiModel()).toThrow('Gemini API key is required')
     })
 
     it('does not require API key when client is provided', () => {
-      if (isNode) {
-        vi.stubEnv('GEMINI_API_KEY', '')
-      }
+      vi.stubEnv('GEMINI_API_KEY', '')
 
       const mockClient = createMockClient(async function* () {
         yield { candidates: [{ finishReason: 'STOP' }] }
