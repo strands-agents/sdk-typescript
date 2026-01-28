@@ -483,6 +483,26 @@ describe.skipIf(!isNode)('Node.js specific features', () => {
 })
 ```
 
+### Environment Variable Stubbing
+
+When stubbing environment variables with `vi.stubEnv()`, you do **not** need to wrap calls in `if (isNode)` conditions. Vitest handles this automatically across environments, and the vitest config has `unstubEnvs: true` which restores env vars after each test.
+
+```typescript
+// ✅ CORRECT - No condition needed
+beforeEach(() => {
+  vi.stubEnv('API_KEY', 'test-key')
+})
+
+// ❌ WRONG - Unnecessary condition
+beforeEach(() => {
+  if (isNode) {
+    vi.stubEnv('API_KEY', 'test-key')
+  }
+})
+```
+
+Similarly, you do **not** need to call `vi.unstubAllEnvs()` in `afterEach` since the vitest config handles this automatically.
+
 ## Development Commands
 
 ```bash

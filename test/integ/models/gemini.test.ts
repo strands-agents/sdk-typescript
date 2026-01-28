@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { Agent, Message, SlidingWindowConversationManager } from '@strands-agents/sdk'
+import type { ModelStreamEvent } from '$/sdk/models/streaming.js'
 
 import { collectIterator } from '$/sdk/__fixtures__/model-test-helpers.js'
 
@@ -21,8 +22,8 @@ describe.skipIf(gemini.skip)('GeminiModel Integration Tests', () => {
           }),
         ]
 
-        const events1 = await collectIterator(provider.stream(messages))
-        const events2 = await collectIterator(provider.stream(messages))
+        const events1 = await collectIterator<ModelStreamEvent>(provider.stream(messages))
+        const events2 = await collectIterator<ModelStreamEvent>(provider.stream(messages))
 
         let text1 = ''
         let text2 = ''
@@ -77,7 +78,7 @@ describe.skipIf(gemini.skip)('GeminiModel Integration Tests', () => {
           }),
         ]
 
-        const events = await collectIterator(provider.stream(messages))
+        const events = await collectIterator<ModelStreamEvent>(provider.stream(messages))
 
         const startEvents = events.filter((e) => e.type === 'modelContentBlockStartEvent')
         const deltaEvents = events.filter((e) => e.type === 'modelContentBlockDeltaEvent')
@@ -114,7 +115,7 @@ describe.skipIf(gemini.skip)('GeminiModel Integration Tests', () => {
           }),
         ]
 
-        const events = await collectIterator(provider.stream(messages))
+        const events = await collectIterator<ModelStreamEvent>(provider.stream(messages))
 
         const messageStopEvent = events.find((e) => e.type === 'modelMessageStopEvent')
         expect(messageStopEvent).toBeDefined()
@@ -136,7 +137,7 @@ describe.skipIf(gemini.skip)('GeminiModel Integration Tests', () => {
           }),
         ]
 
-        const events = await collectIterator(
+        const events = await collectIterator<ModelStreamEvent>(
           provider.stream(messages, {
             systemPrompt: 'You are a helpful assistant named Claude. Always introduce yourself by name.',
           })
@@ -175,7 +176,7 @@ describe.skipIf(gemini.skip)('GeminiModel Integration Tests', () => {
           }),
         ]
 
-        const events = await collectIterator(provider.stream(messages))
+        const events = await collectIterator<ModelStreamEvent>(provider.stream(messages))
 
         let text = ''
         for (const event of events) {
@@ -189,6 +190,7 @@ describe.skipIf(gemini.skip)('GeminiModel Integration Tests', () => {
     })
   })
 
+  // TODO: Add comprehensive agent tests (tools, media) once tool and media support is implemented
   describe('Agent with Conversation Manager', () => {
     it('manages conversation history with SlidingWindowConversationManager', async () => {
       const agent = new Agent({
@@ -210,7 +212,7 @@ describe.skipIf(gemini.skip)('GeminiModel Integration Tests', () => {
 
       // Should maintain window size of 4 messages
       expect(agent.messages).toHaveLength(4)
-    }, 30000)
+    })
   })
 
   describe('Agent Basic', () => {
@@ -234,6 +236,6 @@ describe.skipIf(gemini.skip)('GeminiModel Integration Tests', () => {
         }
       }
       expect(text.toLowerCase()).toMatch(/hello|hi|hey/i)
-    }, 30000)
+    })
   })
 })

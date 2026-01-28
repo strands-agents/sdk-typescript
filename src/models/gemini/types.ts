@@ -22,6 +22,7 @@ export interface GeminiModelConfig extends BaseModelConfig {
   /**
    * Gemini model identifier (e.g., gemini-2.5-flash, gemini-2.5-pro).
    *
+   * @defaultValue 'gemini-2.5-flash'
    * @see https://ai.google.dev/gemini-api/docs/models
    */
   modelId?: string

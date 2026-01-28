@@ -10,9 +10,9 @@ import { loadFixture } from './__fixtures__/test-helpers.js'
 // Import fixtures using Vite's ?url suffix
 import yellowPngUrl from './__resources__/yellow.png?url'
 // TODO: Add gemini back to agent tests once tool and media support is implemented
-import { bedrock, openai } from './__fixtures__/model-providers.js'
+import { allProviders as realAllProviders, gemini } from './__fixtures__/model-providers.js'
 
-const allProviders = [bedrock, openai]
+const allProviders = realAllProviders.filter((p) => p !== gemini)
 
 // Calculator tool for testing
 const calculatorTool = tool({

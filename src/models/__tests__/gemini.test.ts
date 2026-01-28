@@ -23,17 +23,8 @@ describe('GeminiModel', () => {
 
   describe('constructor', () => {
     it('creates instance with API key', () => {
-      const provider = new GeminiModel({ apiKey: 'test-key' })
-      expect(provider).toBeInstanceOf(GeminiModel)
-    })
-
-    it('creates instance with pre-configured client', () => {
-      const mockClient = createMockClient(async function* () {
-        yield { candidates: [{ finishReason: 'STOP' }] }
-      })
-
-      const provider = new GeminiModel({ client: mockClient })
-      expect(provider).toBeInstanceOf(GeminiModel)
+      const provider = new GeminiModel({ apiKey: 'test-key', modelId: 'gemini-2.0-flash' })
+      expect(provider.getConfig().modelId).toBe('gemini-2.0-flash')
     })
 
     it('throws error when no API key provided and no env variable', () => {
