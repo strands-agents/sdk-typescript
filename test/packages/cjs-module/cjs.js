@@ -3,7 +3,13 @@
  * This script runs in a pure Node.js ES module environment.
  */
 
-const { Agent, BedrockModel, tool } = require('@strands-agents/sdk')
+const { Agent, BedrockModel, tool, Tool } = require('@strands-agents/sdk')
+
+const { notebook } = require('@strands-agents/sdk/vended_tools/notebook')
+const { fileEditor } = require('@strands-agents/sdk/vended_tools/file_editor')
+const { httpRequest } = require('@strands-agents/sdk/vended_tools/http_request')
+const { bash } = require('@strands-agents/sdk/vended_tools/bash')
+
 const { z } = require('zod')
 
 console.log('✓ Import from main entry point successful')
@@ -53,6 +59,19 @@ async function main() {
 
   if (agent.tools.length == 0) {
     throw new Error('Tool was not correctly added to the agent')
+  }
+
+  const tools = {
+    notebook,
+    fileEditor,
+    httpRequest,
+    bash,
+  }
+
+  for (const tool of Object.values(tools)) {
+    if (!(tool instanceof Tool)) {
+      throw new Error(`Tool ${tool.name} isn't an instance of a tool`)
+    }
   }
 }
 

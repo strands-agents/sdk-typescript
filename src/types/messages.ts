@@ -400,7 +400,7 @@ export type StopReason =
   | 'stopSequence'
   | 'toolUse'
   | 'modelContextWindowExceeded'
-  | (string & {})
+  | (string & {}) // Allow any string while preserving autocomplete for known values
 
 /**
  * System prompt for guiding model behavior.

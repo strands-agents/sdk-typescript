@@ -23,24 +23,24 @@
       "default": "./dist/src/models/bedrock.js"
     },
     "./vended_tools/notebook": {
-      "types": "./dist/vended_tools/notebook/index.d.ts",
-      "default": "./dist/vended_tools/notebook/index.js"
+      "types": "./dist/src/vended-tools/notebook/index.d.ts",
+      "default": "./dist/src/vended-tools/notebook/index.js"
     },
     "./vended_tools/file_editor": {
-      "types": "./dist/vended_tools/file_editor/index.d.ts",
-      "default": "./dist/vended_tools/file_editor/index.js"
+      "types": "./dist/src/vended-tools/file_editor/index.d.ts",
+      "default": "./dist/src/vended-tools/file_editor/index.js"
     },
     "./vended_tools/http_request": {
-      "types": "./dist/vended_tools/http_request/index.d.ts",
-      "default": "./dist/vended_tools/http_request/index.js"
+      "types": "./dist/src/vended-tools/http_request/index.d.ts",
+      "default": "./dist/src/vended-tools/http_request/index.js"
     },
     "./vended_tools/bash": {
-      "types": "./dist/vended_tools/bash/index.d.ts",
-      "default": "./dist/vended_tools/bash/index.js"
+      "types": "./dist/src/vended-tools/bash/index.d.ts",
+      "default": "./dist/src/vended-tools/bash/index.js"
     }
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc --project src/tsconfig.json",
     "check": "npm run lint && npm run format && npm run type-check && npm run test:coverage && npm run test:package",
     "clean": "rm -rf node_modules dist package-lock.json",
     "test": "vitest run --project unit-node",
@@ -55,11 +55,11 @@
     "test:all": "vitest run --project unit-node --project unit-browser",
     "test:all:coverage": "vitest run --coverage --project unit-node --project unit-browser",
     "test:package": "cd test/packages/esm-module && npm install && node esm.js && cd ../cjs-module && npm install && node cjs.js",
-    "lint": "eslint src tests_integ vended_tools",
-    "lint:fix": "eslint src tests_integ vended_tools --fix",
-    "format": "prettier --write src tests_integ vended_tools",
-    "format:check": "prettier --check src tests_integ vended_tools",
-    "type-check": "tsc --noEmit",
+    "lint": "eslint src test/integ",
+    "lint:fix": "eslint src test/integ --fix",
+    "format": "prettier --write src test/integ",
+    "format:check": "prettier --check src test/integ",
+    "type-check": "tsc --noEmit --project src/tsconfig.json && tsc --noEmit --project test/integ/tsconfig.json",
     "type-check:watch": "tsc --noEmit --watch",
     "prepare": "npm run build && husky"
   },
@@ -85,6 +85,7 @@
     "eslint": "^9.0.0",
     "eslint-plugin-tsdoc": "^0.5.0",
     "husky": "^9.1.7",
+    "openai": "^6.7.0",
     "playwright": "^1.56.1",
     "prettier": "^3.7.4",
     "tsx": "^4.21.0",
@@ -103,12 +104,17 @@
   },
   "homepage": "https://github.com/strands-agents/sdk-typescript#readme",
   "dependencies": {
-    "@aws-sdk/client-bedrock-runtime": "^3.943.0",
+    "@aws-sdk/client-bedrock-runtime": "^3.943.0"
+  },
+  "peerDependencies": {
     "@modelcontextprotocol/sdk": "^1.24.2",
+    "openai": "^6.7.0",
     "zod": "^4.1.12"
   },
-  "optionalDependencies": {
-    "openai": "^6.7.0"
+  "peerDependenciesMeta": {
+    "openai": {
+      "optional": true
+    }
   },
   "overrides": {
     "rollup": "4.52.5"

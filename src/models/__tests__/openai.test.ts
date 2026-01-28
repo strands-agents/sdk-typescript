@@ -100,7 +100,7 @@ describe('OpenAIModel', () => {
         vi.stubEnv('OPENAI_API_KEY', '')
       }
       expect(() => new OpenAIModel({ modelId: 'gpt-4o' })).toThrow(
-        "OpenAI API key is required. Provide it via the 'apiKey' option or set the OPENAI_API_KEY environment variable."
+        "OpenAI API key is required. Provide it via the 'apiKey' option (string or function) or set the OPENAI_API_KEY environment variable."
       )
     })
 
@@ -143,6 +143,37 @@ describe('OpenAIModel', () => {
       }
       const mockClient = {} as OpenAI
       expect(() => new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })).not.toThrow()
+    })
+
+    it('accepts function-based API key', () => {
+      const apiKeyFn = vi.fn(async () => 'sk-dynamic')
+      new OpenAIModel({
+        modelId: 'gpt-4o',
+        apiKey: apiKeyFn,
+      })
+      expect(OpenAI).toHaveBeenCalledWith(
+        expect.objectContaining({
+          apiKey: apiKeyFn,
+        })
+      )
+    })
+
+    it('accepts async function-based API key', () => {
+      const apiKeyFn = async (): Promise<string> => {
+        await new Promise((resolve) => globalThis.setTimeout(resolve, 10))
+        return 'sk-async-key'
+      }
+
+      new OpenAIModel({
+        modelId: 'gpt-4o',
+        apiKey: apiKeyFn,
+      })
+
+      expect(OpenAI).toHaveBeenCalledWith(
+        expect.objectContaining({
+          apiKey: apiKeyFn,
+        })
+      )
     })
   })
 

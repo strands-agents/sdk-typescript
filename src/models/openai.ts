@@ -8,6 +8,7 @@
  */
 
 import OpenAI, { type ClientOptions } from 'openai'
+import type { ApiKeySetter } from 'openai/client'
 import { Model } from '../models/model.js'
 import type { BaseModelConfig, StreamOptions } from '../models/model.js'
 import type { Message, StopReason } from '../types/messages.js'
@@ -169,8 +170,12 @@ export interface OpenAIModelConfig extends BaseModelConfig {
 export interface OpenAIModelOptions extends OpenAIModelConfig {
   /**
    * OpenAI API key (falls back to OPENAI_API_KEY environment variable).
+   *
+   * Accepts either a static string or an async function that resolves to a string.
+   * When a function is provided, it is invoked before each request, allowing for
+   * dynamic API key rotation or runtime credential refresh.
    */
-  apiKey?: string
+  apiKey?: string | ApiKeySetter
 
   /**
    * Pre-configured OpenAI client instance.
@@ -241,6 +246,12 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
    *   modelId: 'gpt-3.5-turbo'
    * })
    *
+   * // Using function-based API key for dynamic key retrieval
+   * const provider = new OpenAIModel({
+   *   modelId: 'gpt-4o',
+   *   apiKey: async () => await getRotatingApiKey()
+   * })
+   *
    * // Using a pre-configured client instance
    * const client = new OpenAI({ apiKey: 'sk-...', timeout: 60000 })
    * const provider = new OpenAIModel({
@@ -267,7 +278,7 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
         typeof process !== 'undefined' && typeof process.env !== 'undefined' && process.env.OPENAI_API_KEY
       if (!apiKey && !hasEnvKey) {
         throw new Error(
-          "OpenAI API key is required. Provide it via the 'apiKey' option or set the OPENAI_API_KEY environment variable."
+          "OpenAI API key is required. Provide it via the 'apiKey' option (string or function) or set the OPENAI_API_KEY environment variable."
         )
       }
 
@@ -942,7 +953,7 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
       }
 
       // Log unknown stop reasons
-      let stopReason: StopReason =
+      const stopReason: StopReason =
         stopReasonMap[typedChoice.finish_reason] ?? this._snakeToCamel(typedChoice.finish_reason)
       if (!stopReasonMap[typedChoice.finish_reason]) {
         logger.warn(
