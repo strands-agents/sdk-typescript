@@ -76,7 +76,7 @@
     "@aws-sdk/client-secrets-manager": "^3.943.0",
     "@aws-sdk/credential-providers": "^3.943.0",
     "@types/json-schema": "^7.0.15",
-    "@types/node": "^24.6.0",
+    "@types/node": "^25.0.3",
     "@typescript-eslint/eslint-plugin": "^8.48.1",
     "@typescript-eslint/parser": "^8.0.0",
     "@vitest/browser": "^4.0.15",
