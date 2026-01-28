@@ -107,7 +107,7 @@
     "@aws-sdk/client-bedrock-runtime": "^3.943.0"
   },
   "peerDependencies": {
-    "@modelcontextprotocol/sdk": "^1.24.2",
+    "@modelcontextprotocol/sdk": "^1.25.2",
     "openai": "^6.7.0",
     "zod": "^4.1.12"
   },
