@@ -35,6 +35,7 @@ When proposing solutions or reviewing code, we reference these principles to gui
    ```
 
 2. Install Playwright browsers for browser testing:
+
    ```bash
    npm run test:browser:install
    ```
@@ -94,7 +95,7 @@ npm run test:all:coverage
 - **Integration Tests**: Test complete workflows in `test/integ/` directory
 - **TSDoc Coverage**: All exported functions must have complete documentation
 
-For detailed testing patterns and examples, see [AGENTS.md - Testing Patterns](AGENTS.md#testing-patterns).
+For detailed testing patterns and guidelines, see [Testing Guidelines](docs/TESTING.md).
 
 ### Documentation Updates
 
@@ -119,7 +120,7 @@ When filing an issue, please check existing open, or recently closed, issues to 
 
 Contributions via pull requests are much appreciated. Before sending us a pull request, please ensure that:
 
-1. You are working against the latest source on the *main* branch.
+1. You are working against the latest source on the _main_ branch.
 2. You check existing open, and recently merged, pull requests to make sure someone else hasn't addressed the problem already.
 3. You open an issue to discuss any significant work - we would hate for your time to be wasted.
 
@@ -148,6 +149,7 @@ To send us a pull request, please:
 - **Formatting**: Prettier formatting applied consistently
 - **Type safety**: No `any` types allowed, explicit return types required
 - **Conventional commits**: Use conventional commit message format
+- **PR description**: Follow the [PR description guidelines](docs/PR.md) for writing effective descriptions
 
 GitHub provides additional documentation on [forking a repository](https://help.github.com/articles/fork-a-repo/) and
 [creating a pull request](https://help.github.com/articles/creating-a-pull-request/).
@@ -169,4 +171,3 @@ If you discover a potential security issue in this project we ask that you notif
 ## Licensing
 
 See the [LICENSE](LICENSE) file for our project's licensing. We will ask you to confirm the licensing of your contribution.
-

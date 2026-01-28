@@ -1,14 +1,14 @@
-import { describe, it, expect } from 'vitest'
-import { Agent, BedrockModel } from '$/sdk/index.js'
-import type { AgentStreamEvent, AgentResult } from '$/sdk/index.js'
+import { describe, expect, it } from 'vitest'
+import type { AgentResult, AgentStreamEvent } from '$/sdk/index.js'
+import { Agent } from '$/sdk/index.js'
 import { notebook } from '$/sdk/vended-tools/notebook/index.js'
 import { collectGenerator } from '$/sdk/__fixtures__/model-test-helpers.js'
-import { shouldRunTests } from './__fixtures__/model-test-helpers.js'
+import { bedrock } from './__fixtures__/model-providers.js'
 
-describe.skipIf(!(await shouldRunTests()))('Notebook Tool Integration', () => {
+describe.skipIf(bedrock.skip)('Notebook Tool Integration', () => {
   // Shared agent configuration for all tests
   const agentParams = {
-    model: new BedrockModel({
+    model: bedrock.createModel({
       region: 'us-east-1',
     }),
     tools: [notebook],

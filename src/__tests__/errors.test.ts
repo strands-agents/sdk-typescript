@@ -1,5 +1,39 @@
 import { describe, it, expect } from 'vitest'
-import { ContextWindowOverflowError, normalizeError } from '../errors.js'
+import { ModelError, ContextWindowOverflowError, MaxTokensError, normalizeError } from '../errors.js'
+import { Message, TextBlock } from '../types/messages.js'
+
+describe('ModelError', () => {
+  describe('when instantiated with a message', () => {
+    it('creates an error with the correct message', () => {
+      const message = 'Model error occurred'
+      const error = new ModelError(message)
+
+      expect(error.message).toBe(message)
+    })
+
+    it('has the correct error name', () => {
+      const error = new ModelError('test')
+
+      expect(error.name).toBe('ModelError')
+    })
+
+    it('is an instance of Error', () => {
+      const error = new ModelError('test')
+
+      expect(error).toBeInstanceOf(Error)
+    })
+  })
+
+  describe('when instantiated with a cause', () => {
+    it('stores the cause error', () => {
+      const cause = new Error('original error')
+      const error = new ModelError('wrapped error', { cause })
+
+      expect(error.message).toBe('wrapped error')
+      expect(error.cause).toBe(cause)
+    })
+  })
+})
 
 describe('ContextWindowOverflowError', () => {
   describe('when instantiated with a message', () => {
@@ -20,6 +54,66 @@ describe('ContextWindowOverflowError', () => {
       const error = new ContextWindowOverflowError('test')
 
       expect(error).toBeInstanceOf(Error)
+    })
+
+    it('is an instance of ModelError', () => {
+      const error = new ContextWindowOverflowError('test')
+
+      expect(error).toBeInstanceOf(ModelError)
+    })
+  })
+})
+
+describe('MaxTokensError', () => {
+  describe('when instantiated with a message and partial message', () => {
+    it('creates an error with the correct message', () => {
+      const partialMessage = new Message({
+        role: 'assistant',
+        content: [new TextBlock('partial response')],
+      })
+      const error = new MaxTokensError('Max tokens reached', partialMessage)
+
+      expect(error.message).toBe('Max tokens reached')
+    })
+
+    it('has the correct error name', () => {
+      const partialMessage = new Message({
+        role: 'assistant',
+        content: [new TextBlock('partial response')],
+      })
+      const error = new MaxTokensError('test', partialMessage)
+
+      expect(error.name).toBe('MaxTokensError')
+    })
+
+    it('stores the partial message', () => {
+      const partialMessage = new Message({
+        role: 'assistant',
+        content: [new TextBlock('partial response')],
+      })
+      const error = new MaxTokensError('Max tokens reached', partialMessage)
+
+      expect(error.partialMessage).toBe(partialMessage)
+    })
+
+    it('is an instance of Error', () => {
+      const partialMessage = new Message({
+        role: 'assistant',
+        content: [new TextBlock('partial response')],
+      })
+      const error = new MaxTokensError('test', partialMessage)
+
+      expect(error).toBeInstanceOf(Error)
+    })
+
+    it('is an instance of ModelError', () => {
+      const partialMessage = new Message({
+        role: 'assistant',
+        content: [new TextBlock('partial response')],
+      })
+      const error = new MaxTokensError('test', partialMessage)
+
+      expect(error).toBeInstanceOf(ModelError)
     })
   })
 })

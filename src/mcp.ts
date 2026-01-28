@@ -1,8 +1,9 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
 import { ElicitRequestSchema } from '@modelcontextprotocol/sdk/types.js'
+import { takeResult } from '@modelcontextprotocol/sdk/shared/responseMessage.js'
 import type { JSONSchema, JSONValue } from './types/json.js'
-import type { ElicitationCallback, ElicitRequestParams } from './types/elicitation.js'
+import type { ElicitationCallback } from './types/elicitation.js'
 import { McpTool } from './tools/mcp-tool.js'
 
 /** Temporary placeholder for RuntimeConfig */
@@ -39,7 +40,7 @@ export class McpClient {
     const clientOptions = this._elicitationCallback
       ? {
           capabilities: {
-            elicitation: { form: {} },
+            elicitation: { form: {}, url: {} },
           },
         }
       : undefined
@@ -79,14 +80,7 @@ export class McpClient {
     if (this._elicitationCallback) {
       const callback = this._elicitationCallback
       this._client.setRequestHandler(ElicitRequestSchema, async (request, extra) => {
-        const params: ElicitRequestParams = {
-          message: request.params.message,
-          ...(request.params.requestedSchema !== undefined && {
-            requestedSchema: request.params.requestedSchema as JSONSchema,
-          }),
-        }
-
-        const result = await callback(extra, params)
+        const result = await callback(extra, request.params)
 
         return {
           action: result.action,
@@ -150,11 +144,15 @@ export class McpClient {
       )
     }
 
-    const result = await this._client.callTool({
+    // Using callToolStream which automatically handles both:
+    // - Regular (non-task) tools: returns result immediately
+    // - Task-augmented tools: handles taskCreated -> taskStatus -> result flow
+    const stream = this._client.experimental.tasks.callToolStream({
       name: tool.name,
       arguments: args as Record<string, unknown>,
     })
 
+    const result = await takeResult(stream)
     return result as JSONValue
   }
 }

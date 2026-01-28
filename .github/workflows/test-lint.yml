@@ -16,7 +16,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node-version: [20, 22]
+        node-version: [20, 22, 24]
         os: [ubuntu-latest, windows-latest, macos-latest]
     
     steps:
@@ -32,7 +32,7 @@ jobs:
           node-version: ${{ matrix.node-version }}
 
       - name: Install dependencies
-        run: npm install && npm audit --audit-level=low
+        run: npm install
 
       - name: Install Playwright browsers
         run: npm run test:browser:install
@@ -42,7 +42,7 @@ jobs:
 
       - name: Upload test artifacts
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: test-artifacts-${{ matrix.node-version }}-${{ matrix.os }}
           path: ./test/.artifacts/

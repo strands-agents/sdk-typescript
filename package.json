@@ -85,6 +85,7 @@
     "eslint": "^9.0.0",
     "eslint-plugin-tsdoc": "^0.5.0",
     "husky": "^9.1.7",
+    "openai": "^6.7.0",
     "playwright": "^1.56.1",
     "prettier": "^3.7.4",
     "tsx": "^4.21.0",
@@ -103,12 +104,17 @@
   },
   "homepage": "https://github.com/strands-agents/sdk-typescript#readme",
   "dependencies": {
-    "@aws-sdk/client-bedrock-runtime": "^3.943.0",
+    "@aws-sdk/client-bedrock-runtime": "^3.943.0"
+  },
+  "peerDependencies": {
     "@modelcontextprotocol/sdk": "^1.24.2",
+    "openai": "^6.7.0",
     "zod": "^4.1.12"
   },
-  "optionalDependencies": {
-    "openai": "^6.7.0"
+  "peerDependenciesMeta": {
+    "openai": {
+      "optional": true
+    }
   },
   "overrides": {
     "rollup": "4.52.5"

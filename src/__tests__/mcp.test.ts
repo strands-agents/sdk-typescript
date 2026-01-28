@@ -11,14 +11,28 @@ vi.mock('@modelcontextprotocol/sdk/types.js', () => ({
   ElicitRequestSchema: { method: 'elicitation/create' },
 }))
 
+/**
+ * Helper to create a mock async generator that yields a result message.
+ * This simulates the behavior of callToolStream returning a stream that ends with a result.
+ */
+function createMockCallToolStream(result: unknown) {
+  return async function* () {
+    yield { type: 'result', result }
+  }
+}
+
 vi.mock('@modelcontextprotocol/sdk/client/index.js', () => ({
   Client: vi.fn(function () {
     return {
       connect: vi.fn(),
       close: vi.fn(),
       listTools: vi.fn(),
-      callTool: vi.fn(),
       setRequestHandler: vi.fn(),
+      experimental: {
+        tasks: {
+          callToolStream: vi.fn(),
+        },
+      },
     }
   }),
 }))
@@ -107,14 +121,14 @@ describe('MCP Integration', () => {
       expect(tools[0]!.name).toBe('weather')
     })
 
-    it('delegates invocation to SDK client', async () => {
+    it('delegates invocation to SDK client via experimental.tasks.callToolStream', async () => {
       const tool = new McpTool({ name: 'calc', description: '', inputSchema: {}, client })
-      sdkClientMock.callTool.mockResolvedValue({ content: [] })
+      sdkClientMock.experimental.tasks.callToolStream.mockReturnValue(createMockCallToolStream({ content: [] })())
 
       await client.callTool(tool, { op: 'add' })
 
       expect(sdkClientMock.connect).toHaveBeenCalled()
-      expect(sdkClientMock.callTool).toHaveBeenCalledWith({
+      expect(sdkClientMock.experimental.tasks.callToolStream).toHaveBeenCalledWith({
         name: 'calc',
         arguments: { op: 'add' },
       })
@@ -166,7 +180,7 @@ describe('MCP Integration', () => {
         const handler = sdkClient.setRequestHandler.mock.calls[0]![1]
         const mockExtra = { sessionId: 'test-session' }
 
-        // Test accept action
+        // Test accept action (form mode)
         callback.mockResolvedValueOnce({ action: 'accept', content: { response: 'yes' } })
         const acceptResult = await handler(
           {
@@ -196,6 +210,31 @@ describe('MCP Integration', () => {
         callback.mockResolvedValueOnce({ action: 'cancel' })
         const cancelResult = await handler({ params: { message: 'Cancel operation?' } }, mockExtra)
         expect(cancelResult).toEqual({ action: 'cancel', content: undefined })
+
+        // Test URL mode
+        callback.mockResolvedValueOnce({ action: 'accept' })
+        const urlResult = await handler(
+          {
+            params: {
+              mode: 'url',
+              message: 'Please authorize via OAuth',
+              url: 'https://example.com/oauth',
+              elicitationId: 'elicit-123',
+            },
+          },
+          mockExtra
+        )
+
+        expect(callback).toHaveBeenCalledWith(mockExtra, {
+          mode: 'url',
+          message: 'Please authorize via OAuth',
+          url: 'https://example.com/oauth',
+          elicitationId: 'elicit-123',
+        })
+        expect(urlResult).toEqual({
+          action: 'accept',
+          content: undefined,
+        })
       })
 
       it('handles callback errors gracefully', async () => {

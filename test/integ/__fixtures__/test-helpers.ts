@@ -1,5 +1,16 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { inject } from 'vitest'
+import type { Message } from '@strands-agents/sdk'
+
+/**
+ * Checks whether we're running tests in the browser.
+ */
+export const isInBrowser = () => {
+  return inject('isBrowser')
+}
+
+export function isCI() {
+  return inject('isCI')
+}
 
 /**
  * Helper to load fixture files from Vite URL imports.
@@ -8,45 +19,36 @@ import { join } from 'node:path'
  * @param url - The URL from a Vite ?url import
  * @returns The file contents as a Uint8Array
  */
-export const loadFixture = (url: string): Uint8Array => {
-  const relativePath = url.startsWith('/') ? url.slice(1) : url
-  const filePath = join(process.cwd(), relativePath)
-  return new Uint8Array(readFileSync(filePath))
+export async function loadFixture(url: string): Promise<Uint8Array> {
+  if (isInBrowser()) {
+    const response = await globalThis.fetch(url)
+    const arrayBuffer = await response.arrayBuffer()
+    return new Uint8Array(arrayBuffer)
+  } else {
+    const { join } = await import('node:path')
+    const { readFile } = await import('node:fs/promises')
+    const relativePath = url.startsWith('/') ? url.slice(1) : url
+    const filePath = join(process.cwd(), relativePath)
+    return new Uint8Array(await readFile(filePath))
+  }
+}
+
+// ================================
+// Agent Message Helpers
+// ================================
+
+/**
+ * Checks if any message contains a toolUseBlock with the specified tool name.
+ */
+export function hasToolUse(messages: Message[], toolName: string): boolean {
+  return messages.some((msg) => msg.content.some((block) => block.type === 'toolUseBlock' && block.name === toolName))
 }
 
 /**
- * Determines if OpenAI integration tests should be skipped.
- * In CI environments, throws an error if API key is missing (tests should not be skipped).
- * In local development, skips tests if API key is not available.
- *
- * @returns true if tests should be skipped, false if they should run
- * @throws Error if running in CI and API key is missing
+ * Counts messages containing toolResultBlocks with the specified status.
  */
-export const shouldSkipOpenAITests = (): boolean => {
-  try {
-    const isCI = !!process.env.CI
-    const hasKey = !!process.env.OPENAI_API_KEY
-
-    if (isCI && !hasKey) {
-      throw new Error('OpenAI API key must be available in CI environments')
-    }
-
-    if (hasKey) {
-      if (isCI) {
-        console.log('✅ Running in CI environment with OpenAI API key - tests will run')
-      } else {
-        console.log('✅ OpenAI API key found for integration tests')
-      }
-      return false
-    } else {
-      console.log('⏭️  OpenAI API key not available - integration tests will be skipped')
-      return true
-    }
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('CI environments')) {
-      throw error
-    }
-    console.log('⏭️  OpenAI API key not available - integration tests will be skipped')
-    return true
-  }
+export function countToolResults(messages: Message[], status: 'success' | 'error'): number {
+  return messages.filter((msg) =>
+    msg.content.some((block) => block.type === 'toolResultBlock' && block.status === status)
+  ).length
 }

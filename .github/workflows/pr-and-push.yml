@@ -13,6 +13,13 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  call-security-audit:
+    uses: ./.github/workflows/security-audit.yml
+    permissions:
+      contents: read
+    with:
+      ref: ${{ github.event.pull_request.head.sha }}
+
   call-test-lint:
     uses: ./.github/workflows/test-lint.yml
     permissions:

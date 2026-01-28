@@ -1,19 +1,19 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { Agent, BedrockModel } from '$/sdk/index.js'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { Agent } from '$/sdk/index.js'
 import { fileEditor } from '$/sdk/vended-tools/file_editor/index.js'
 import { collectGenerator } from '$/sdk/__fixtures__/model-test-helpers.js'
-import { shouldRunTests } from './__fixtures__/model-test-helpers.js'
 import { promises as fs } from 'fs'
 import * as path from 'path'
 import { tmpdir } from 'os'
+import { bedrock } from './__fixtures__/model-providers.js'
 
-describe.skipIf(!(await shouldRunTests()))('FileEditor Tool Integration', () => {
+describe.skipIf(bedrock.skip)('FileEditor Tool Integration', () => {
   let testDir: string
 
   // Shared agent configuration for all tests
   const createAgent = () =>
     new Agent({
-      model: new BedrockModel({
+      model: bedrock.createModel({
         region: 'us-east-1',
       }),
       tools: [fileEditor],
