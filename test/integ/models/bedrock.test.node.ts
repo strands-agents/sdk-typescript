@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { bedrock } from './__fixtures__/model-providers.js'
+import { bedrock } from '../__fixtures__/model-providers.js'
 import { Agent } from '$/sdk/agent/agent.js'
 
 describe.skipIf(bedrock.skip)('BedrockModel Integration Tests', () => {

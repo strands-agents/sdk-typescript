@@ -4,7 +4,7 @@ import { Message } from '@strands-agents/sdk'
 
 import { collectIterator } from '$/sdk/__fixtures__/model-test-helpers.js'
 
-import { openai } from './__fixtures__/model-providers.js'
+import { openai } from '../__fixtures__/model-providers.js'
 
 describe.skipIf(openai.skip)('OpenAIModel Integration Tests', () => {
   describe('Configuration', () => {

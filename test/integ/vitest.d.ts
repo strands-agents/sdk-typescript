@@ -13,5 +13,9 @@ declare module 'vitest' {
       shouldSkip: boolean
       credentials: AwsCredentialIdentity | undefined
     }
+    ['provider-gemini']: {
+      shouldSkip: boolean
+      apiKey: string | undefined
+    }
   }
 }
