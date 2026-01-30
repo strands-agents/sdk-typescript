@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi, inject } from 'vitest'
 import {
   Agent,
   Message,
@@ -6,6 +6,9 @@ import {
   SlidingWindowConversationManager,
   TextBlock,
   FunctionTool,
+  ImageBlock,
+  DocumentBlock,
+  VideoBlock,
 } from '@strands-agents/sdk'
 
 import { collectIterator } from '$/sdk/__fixtures__/model-test-helpers.js'
@@ -245,4 +248,116 @@ describe.skipIf(bedrock.skip)('BedrockModel Integration Tests', () => {
       expect(toolResultMessage).toBeDefined()
     }, 30000)
   })
+})
+
+describe('S3 Location Media', () => {
+  const s3Resources = () => inject('s3-resources')
+
+  describe.skipIf(inject('provider-bedrock').shouldSkip || inject('s3-resources').shouldSkip)(
+    'Bedrock S3 Location Integration Tests',
+    () => {
+      it.concurrent(
+        'processes image from S3 location',
+        async () => {
+          const resources = s3Resources()
+          const imageUri = resources.imageUri!
+
+          const messages: Message[] = [
+            {
+              type: 'message',
+              role: 'user',
+              content: [
+                new TextBlock('What colors do you see in this image?'),
+                new ImageBlock({
+                  format: 'png',
+                  source: { s3Location: { uri: imageUri } },
+                }),
+              ],
+            },
+          ]
+
+          const agent = new Agent({
+            model: bedrock.createModel({
+              modelId: 'us.amazon.nova-lite-v1:0',
+              maxTokens: 200,
+            }),
+            printer: false,
+          })
+
+          const result = await agent.invoke(messages)
+          expect(result.toString().length).toBeGreaterThan(0)
+        },
+        30000
+      )
+
+      it.concurrent(
+        'processes document from S3 location',
+        async () => {
+          const resources = s3Resources()
+          const documentUri = resources.documentUri!
+
+          const messages: Message[] = [
+            {
+              type: 'message',
+              role: 'user',
+              content: [
+                new TextBlock('Please summarize this document briefly.'),
+                new DocumentBlock({
+                  name: 'letter',
+                  format: 'pdf',
+                  source: { s3Location: { uri: documentUri } },
+                }),
+              ],
+            },
+          ]
+
+          const agent = new Agent({
+            model: bedrock.createModel({
+              modelId: 'us.amazon.nova-lite-v1:0',
+              maxTokens: 200,
+            }),
+            printer: false,
+          })
+
+          const result = await agent.invoke(messages)
+          expect(result.toString().length).toBeGreaterThan(0)
+        },
+        30000
+      )
+
+      it.concurrent(
+        'processes video from S3 location',
+        async () => {
+          const resources = s3Resources()
+          const videoUri = resources.videoUri!
+
+          const messages: Message[] = [
+            {
+              type: 'message',
+              role: 'user',
+              content: [
+                new TextBlock('What colors do you see in this video?'),
+                new VideoBlock({
+                  format: 'mp4',
+                  source: { s3Location: { uri: videoUri } },
+                }),
+              ],
+            },
+          ]
+
+          const agent = new Agent({
+            model: bedrock.createModel({
+              modelId: 'us.amazon.nova-pro-v1:0',
+              maxTokens: 200,
+            }),
+            printer: false,
+          })
+
+          const result = await agent.invoke(messages)
+          expect(result.toString().length).toBeGreaterThan(0)
+        },
+        60000
+      )
+    }
+  )
 })

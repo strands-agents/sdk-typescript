@@ -8,6 +8,7 @@ import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-sec
 import type { TestProject } from 'vitest/node'
 import type { ProvidedContext } from 'vitest'
 import { fromNodeProviderChain } from '@aws-sdk/credential-providers'
+import { getS3TestResources } from './s3-test-helper.js'
 
 /**
  * Load API keys as environment variables from AWS Secrets Manager
@@ -70,6 +71,7 @@ export async function setup(project: TestProject): Promise<void> {
   project.provide('isCI', isCI)
   project.provide('provider-openai', await getOpenAITestContext(isCI))
   project.provide('provider-bedrock', await getBedrockTestContext(isCI))
+  project.provide('s3-resources', await getS3TestContext(isCI))
 }
 
 async function getOpenAITestContext(isCI: boolean): Promise<ProvidedContext['provider-openai']> {
@@ -108,6 +110,31 @@ async function getBedrockTestContext(isCI: boolean): Promise<ProvidedContext['pr
     return {
       shouldSkip: true,
       credentials: undefined,
+    }
+  }
+}
+
+async function getS3TestContext(isCI: boolean): Promise<ProvidedContext['s3-resources']> {
+  try {
+    const resources = await getS3TestResources()
+    console.log('⏭️  S3 resources uploaded - S3 location tests will run')
+    return {
+      shouldSkip: false,
+      imageUri: resources.imageUri,
+      documentUri: resources.documentUri,
+      videoUri: resources.videoUri,
+    }
+  } catch (error) {
+    console.log('⏭️  S3 resources not available - S3 location tests will be skipped')
+    console.log(`   Error: ${error instanceof Error ? error.message : String(error)}`)
+    if (isCI) {
+      throw new Error('CI/CD should be running all tests')
+    }
+    return {
+      shouldSkip: true,
+      imageUri: undefined,
+      documentUri: undefined,
+      videoUri: undefined,
     }
   }
 }

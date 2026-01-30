@@ -13,5 +13,11 @@ declare module 'vitest' {
       shouldSkip: boolean
       credentials: AwsCredentialIdentity | undefined
     }
+    ['s3-resources']: {
+      shouldSkip: boolean
+      imageUri: string | undefined
+      documentUri: string | undefined
+      videoUri: string | undefined
+    }
   }
 }
