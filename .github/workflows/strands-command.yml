@@ -88,6 +88,7 @@ jobs:
           evals_sqs_queue_arn: ${{ secrets.EVALS_SQS_QUEUE_ARN }}
 
   finalize:
+    if: always()
     needs: [setup-and-process, execute-readonly-agent]
     permissions:
       contents: write
