@@ -15,7 +15,7 @@ import type { Message, StopReason } from '../types/messages.js'
 import type { ImageBlock, DocumentBlock, MediaFormats } from '../types/media.js'
 import { encodeBase64 } from '../types/media.js'
 import type { ModelStreamEvent } from '../models/streaming.js'
-import { ContextWindowOverflowError } from '../errors.js'
+import { ContextWindowOverflowError, ModelThrottledError } from '../errors.js'
 import type { ChatCompletionContentPartText } from 'openai/resources/index.mjs'
 import { logger } from '../logging/logger.js'
 
@@ -71,6 +71,14 @@ const OPENAI_CONTEXT_WINDOW_OVERFLOW_PATTERNS = [
   'too many tokens',
   'context length',
 ]
+
+/**
+ * Error patterns and status codes that indicate rate limiting.
+ * Used to detect when the API is throttling requests.
+ *
+ * @see https://platform.openai.com/docs/guides/error-codes
+ */
+const OPENAI_RATE_LIMIT_PATTERNS = ['rate_limit_exceeded', 'rate limit', 'too many requests']
 
 /**
  * Type representing an OpenAI streaming chat choice.
@@ -432,7 +440,20 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
         yield bufferedUsage
       }
     } catch (error) {
-      const err = error as Error
+      const err = error as Error & { status?: number; code?: string }
+
+      // Check for rate limit errors - OpenAI SDK throws errors with status 429
+      // or code 'rate_limit_exceeded' for all rate limiting scenarios (TPM, RPM, etc.)
+      // This matches Python SDK behavior: `except openai.RateLimitError as e`
+      if (
+        err.status === 429 ||
+        err.code === 'rate_limit_exceeded' ||
+        OPENAI_RATE_LIMIT_PATTERNS.some((pattern) => err.message?.toLowerCase().includes(pattern))
+      ) {
+        const message = err.message ?? 'Request was throttled by the model provider'
+        logger.debug(`throttled | error_message=<${message}>`)
+        throw new ModelThrottledError(message, { cause: err })
+      }
 
       // Check for context window overflow using simple pattern matching
       if (OPENAI_CONTEXT_WINDOW_OVERFLOW_PATTERNS.some((pattern) => err.message?.toLowerCase().includes(pattern))) {
