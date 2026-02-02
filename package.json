@@ -117,6 +117,7 @@
     }
   },
   "overrides": {
-    "rollup": "4.52.5"
+    "rollup": "4.52.5",
+    "fast-xml-parser": "^5.3.4"
   }
 }
