@@ -80,12 +80,7 @@ jobs:
         uses: strands-agents/devtools/strands-command/actions/strands-agent-runner@main
         with:
           aws_role_arn: ${{ secrets.AWS_ROLE_ARN }}
-          sessions_bucket: ${{ secrets.AGENT_SESSIONS_BUCKET }}
           write_permission: 'false'
-          langfuse_public_key: ${{ secrets.LANGFUSE_PUBLIC_KEY }}
-          langfuse_secret_key: ${{ secrets.LANGFUSE_SECRET_KEY }}
-          langfuse_host: ${{ secrets.LANGFUSE_HOST }}
-          evals_sqs_queue_arn: ${{ secrets.EVALS_SQS_QUEUE_ARN }}
 
   finalize:
     needs: [setup-and-process, execute-readonly-agent]
