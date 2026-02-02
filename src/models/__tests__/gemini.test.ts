@@ -73,9 +73,7 @@ describe('GeminiModel', () => {
     it('throws error when messages array is empty', async () => {
       const provider = new GeminiModel({ apiKey: 'test-key' })
 
-      await expect(async () => {
-        await collectIterator(provider.stream([]))
-      }).rejects.toThrow('At least one message is required')
+      await expect(collectIterator(provider.stream([]))).rejects.toThrow('At least one message is required')
     })
 
     it('emits message start and stop events', async () => {
@@ -214,9 +212,7 @@ describe('GeminiModel', () => {
       const provider = new GeminiModel({ client: mockClient })
       const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
 
-      await expect(async () => {
-        await collectIterator(provider.stream(messages))
-      }).rejects.toThrow(ContextWindowOverflowError)
+      await expect(collectIterator(provider.stream(messages))).rejects.toThrow(ContextWindowOverflowError)
     })
 
     it('rethrows unrecognized errors', async () => {
@@ -231,9 +227,7 @@ describe('GeminiModel', () => {
       const provider = new GeminiModel({ client: mockClient })
       const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
 
-      await expect(async () => {
-        await collectIterator(provider.stream(messages))
-      }).rejects.toThrow('Network error')
+      await expect(collectIterator(provider.stream(messages))).rejects.toThrow('Network error')
     })
   })
 

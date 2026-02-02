@@ -23,8 +23,8 @@
       "default": "./dist/src/models/bedrock.js"
     },
     "./gemini": {
-      "types": "./dist/src/models/gemini/index.d.ts",
-      "default": "./dist/src/models/gemini/index.js"
+      "types": "./dist/src/models/gemini/model.d.ts",
+      "default": "./dist/src/models/gemini/model.js"
     },
     "./vended_tools/notebook": {
       "types": "./dist/src/vended-tools/notebook/index.d.ts",

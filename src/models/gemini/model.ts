@@ -14,6 +14,7 @@ import type { Message } from '../../types/messages.js'
 import type { ModelStreamEvent } from '../streaming.js'
 import { ContextWindowOverflowError } from '../../errors.js'
 import type { GeminiModelConfig, GeminiModelOptions, GeminiStreamState } from './types.js'
+export type { GeminiModelConfig, GeminiModelOptions }
 import { classifyGeminiError } from './errors.js'
 import { formatMessages, mapChunkToEvents } from './adapters.js'
 
@@ -211,10 +212,7 @@ export class GeminiModel extends Model<GeminiModelConfig> {
    * Gets API key from environment variables.
    */
   private static _getEnvApiKey(): string | undefined {
-    if (typeof process !== 'undefined' && typeof process.env !== 'undefined') {
-      return process.env.GEMINI_API_KEY
-    }
-    return undefined
+    return globalThis?.process?.env?.GEMINI_API_KEY
   }
 
   /**

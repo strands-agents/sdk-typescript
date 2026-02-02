@@ -5,7 +5,7 @@
 import { inject } from 'vitest'
 import { BedrockModel, type BedrockModelOptions } from '$/sdk/models/bedrock.js'
 import { OpenAIModel, type OpenAIModelOptions } from '$/sdk/models/openai.js'
-import { GeminiModel, type GeminiModelOptions } from '$/sdk/models/gemini/index.js'
+import { GeminiModel, type GeminiModelOptions } from '$/sdk/models/gemini/model.js'
 
 export const bedrock = {
   name: 'BedrockModel',
