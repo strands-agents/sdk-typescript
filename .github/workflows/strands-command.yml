@@ -85,8 +85,10 @@ jobs:
           langfuse_public_key: ${{ secrets.LANGFUSE_PUBLIC_KEY }}
           langfuse_secret_key: ${{ secrets.LANGFUSE_SECRET_KEY }}
           langfuse_host: ${{ secrets.LANGFUSE_HOST }}
+          evals_sqs_queue_arn: ${{ secrets.EVALS_SQS_QUEUE_ARN }}
 
   finalize:
+    if: always()
     needs: [setup-and-process, execute-readonly-agent]
     permissions:
       contents: write
