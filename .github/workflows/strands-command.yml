@@ -31,7 +31,7 @@ jobs:
     steps:
       - name: Check Authorization
         id: auth
-        uses: afarntrog/devtools/authorization-check@update_secrets_approach
+        uses: strands-agents/devtools/authorization-check@main
         with:
           skip-check: ${{ github.event_name == 'workflow_dispatch' }}
           username: ${{ github.event.comment.user.login || 'invalid' }}
@@ -50,7 +50,7 @@ jobs:
     steps:
       - name: Parse input
         id: parse
-        uses: afarntrog/devtools/strands-command/actions/strands-input-parser@update_secrets_approach
+        uses: strands-agents/devtools/strands-command/actions/strands-input-parser@main
         with:
           issue_id: ${{ inputs.issue_id }}
           command: ${{ inputs.command }}
@@ -77,7 +77,7 @@ jobs:
 
       - name: Run Strands Agent
         id: agent-runner
-        uses: afarntrog/devtools/strands-command/actions/strands-agent-runner@update_secrets_approach
+        uses: strands-agents/devtools/strands-command/actions/strands-agent-runner@main
         with:
           aws_role_arn: ${{ secrets.AWS_ROLE_ARN }}
           aws_secrets_manager_secret_id: ${{ secrets.STRANDS_SECRET_ID || 'strands-agent-config' }}
@@ -93,4 +93,4 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Execute write operations
-        uses: afarntrog/devtools/strands-command/actions/strands-finalize@update_secrets_approach
+        uses: strands-agents/devtools/strands-command/actions/strands-finalize@main
