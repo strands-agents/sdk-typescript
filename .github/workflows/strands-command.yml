@@ -80,6 +80,7 @@ jobs:
         uses: afarntrog/devtools/strands-command/actions/strands-agent-runner@update_secrets_approach
         with:
           aws_role_arn: ${{ secrets.AWS_ROLE_ARN }}
+          aws_secrets_manager_secret_id: ${{ secrets.STRANDS_SECRET_ID || 'strands-agent-config' }}
           write_permission: 'false'
 
   finalize:
