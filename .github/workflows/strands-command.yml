@@ -80,6 +80,7 @@ jobs:
         uses: strands-agents/devtools/strands-command/actions/strands-agent-runner@main
         with:
           aws_role_arn: ${{ secrets.AWS_ROLE_ARN }}
+          sessions_bucket: ${{ secrets.AGENT_SESSIONS_BUCKET }} # Optional. Ideally should be stored in aws secrets
           aws_secrets_manager_secret_id: ${{ secrets.STRANDS_SECRET_ID || 'strands-agent-config' }}
           write_permission: 'false'
 
