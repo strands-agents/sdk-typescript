@@ -8,12 +8,21 @@ import { OpenAIModel, type OpenAIModelOptions } from '$/sdk/models/openai.js'
 import { GeminiModel, type GeminiModelOptions } from '$/sdk/models/gemini/model.js'
 
 /**
+ * Configuration for reasoning/thinking feature support.
+ * Presence of this config implies support; modelId specifies which model to use.
+ */
+export interface ReasoningFeature {
+  /** Model ID to use for reasoning tests */
+  modelId: string
+}
+
+/**
  * Feature support flags for model providers.
  * Used to conditionally run tests based on model capabilities.
  */
 export interface ProviderFeatures {
-  /** Whether the model supports reasoning/thinking content */
-  reasoning: boolean
+  /** Reasoning/thinking content support. Undefined means not supported. */
+  reasoning?: ReasoningFeature
   /** Whether the model supports tool use */
   tools: boolean
   /** Whether the model supports image input */
@@ -27,7 +36,9 @@ export interface ProviderFeatures {
 export const bedrock = {
   name: 'BedrockModel',
   supports: {
-    reasoning: true,
+    reasoning: {
+      modelId: 'us.anthropic.claude-3-5-sonnet-20241022-v2:0',
+    },
     tools: true,
     images: true,
     documents: true,
@@ -59,8 +70,7 @@ export const bedrock = {
 
     return new BedrockModel({
       ...options,
-      // Claude 3.5 Sonnet supports extended thinking
-      modelId: options.modelId ?? 'us.anthropic.claude-3-5-sonnet-20241022-v2:0',
+      modelId: options.modelId ?? bedrock.supports.reasoning.modelId,
       // Enable extended thinking via additionalRequestFields
       additionalRequestFields: {
         ...(options.additionalRequestFields as Record<string, unknown> | undefined),
@@ -77,7 +87,9 @@ export const bedrock = {
 export const openai = {
   name: 'OpenAIModel',
   supports: {
-    reasoning: true,
+    reasoning: {
+      modelId: 'o1-mini',
+    },
     tools: true,
     images: true,
     documents: true,
@@ -110,8 +122,7 @@ export const openai = {
 
     return new OpenAIModel({
       ...config,
-      // o1 models support reasoning
-      modelId: config.modelId ?? 'o1-mini',
+      modelId: config.modelId ?? openai.supports.reasoning.modelId,
       apiKey: apiKey,
       clientConfig: {
         ...(config.clientConfig ?? {}),
@@ -124,7 +135,9 @@ export const openai = {
 export const gemini = {
   name: 'GeminiModel',
   supports: {
-    reasoning: true,
+    reasoning: {
+      modelId: 'gemini-2.0-flash-thinking-exp',
+    },
     tools: false, // Not yet implemented
     images: true,
     documents: true,
@@ -153,8 +166,7 @@ export const gemini = {
 
     return new GeminiModel({
       ...config,
-      // Gemini thinking model
-      modelId: config.modelId ?? 'gemini-2.0-flash-thinking-exp',
+      modelId: config.modelId ?? gemini.supports.reasoning.modelId,
       apiKey: apiKey,
     })
   },
