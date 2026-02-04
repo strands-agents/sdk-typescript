@@ -140,11 +140,10 @@ export const openai = {
 export const gemini = {
   name: 'GeminiModel',
   supports: {
-    // Gemini thinking models (gemini-2.5-flash-preview, gemini-3-flash-preview) require
-    // preview access. Set to false until stable thinking models are available.
-    // Note: When enabled, thinking models also require thought signature handling for
-    // tool calls - see Python SDK PR #1382.
-    reasoning: false,
+    reasoning: {
+      // gemini-2.5-flash with thinkingConfig enables thinking mode
+      modelId: 'gemini-2.5-flash',
+    },
     tools: false, // Not yet implemented
     images: true,
     documents: true,
@@ -180,6 +179,14 @@ export const gemini = {
       ...config,
       modelId: config.modelId ?? reasoning.modelId,
       apiKey: apiKey,
+      // Enable thinking mode with thought content included in response
+      params: {
+        ...((config.params as Record<string, unknown>) ?? {}),
+        thinkingConfig: {
+          thinkingBudget: 1024,
+          includeThoughts: true,
+        },
+      },
     })
   },
 }
