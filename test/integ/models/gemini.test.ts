@@ -329,6 +329,56 @@ describe.skipIf(gemini.skip)('GeminiModel Integration Tests', () => {
     })
   })
 
+  describe.skipIf(!gemini.supports.reasoning)('Reasoning Content', () => {
+    it('emits reasoning content delta events with thinking model', async () => {
+      const provider = gemini.createReasoningModel({
+        params: { maxOutputTokens: 2048 },
+      })
+
+      const messages: Message[] = [
+        new Message({
+          role: 'user',
+          content: [new TextBlock('What is 15 * 23? Think through this step by step.')],
+        }),
+      ]
+
+      const events = await collectIterator<ModelStreamEvent>(provider.stream(messages))
+
+      // Check for reasoning content delta events
+      const reasoningDeltas = events.filter(
+        (e) => e.type === 'modelContentBlockDeltaEvent' && e.delta.type === 'reasoningContentDelta'
+      )
+
+      // Thinking model should emit reasoning content
+      expect(reasoningDeltas.length).toBeGreaterThan(0)
+
+      // Collect reasoning text
+      let reasoningText = ''
+      for (const event of reasoningDeltas) {
+        if (event.type === 'modelContentBlockDeltaEvent' && event.delta.type === 'reasoningContentDelta') {
+          reasoningText += event.delta.text
+        }
+      }
+
+      // Reasoning should contain some thought process
+      expect(reasoningText.length).toBeGreaterThan(0)
+
+      // Should also have text content with the answer
+      const textDeltas = events.filter((e) => e.type === 'modelContentBlockDeltaEvent' && e.delta.type === 'textDelta')
+      expect(textDeltas.length).toBeGreaterThan(0)
+
+      let answerText = ''
+      for (const event of textDeltas) {
+        if (event.type === 'modelContentBlockDeltaEvent' && event.delta.type === 'textDelta') {
+          answerText += event.delta.text
+        }
+      }
+
+      // Answer should contain 345 (15 * 23 = 345)
+      expect(answerText).toContain('345')
+    })
+  })
+
   // TODO: Add comprehensive agent tests with tools once tool support is implemented
   describe('Agent with Conversation Manager', () => {
     it('manages conversation history with SlidingWindowConversationManager', async () => {
