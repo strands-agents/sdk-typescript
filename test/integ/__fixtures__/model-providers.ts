@@ -157,9 +157,11 @@ export const anthropic = {
 export const gemini = {
   name: 'GeminiModel',
   supports: {
-    reasoning: {
-      modelId: 'gemini-2.0-flash-thinking-exp',
-    },
+    // Gemini thinking models (gemini-2.5-flash-preview, gemini-3-flash-preview) require
+    // preview access. Set to false until stable thinking models are available.
+    // Note: When enabled, thinking models also require thought signature handling for
+    // tool calls - see Python SDK PR #1382.
+    reasoning: false,
     tools: false, // Not yet implemented
     images: true,
     documents: true,
@@ -181,6 +183,11 @@ export const gemini = {
   },
   /** Creates a model configured for reasoning/thinking tests */
   createReasoningModel: (config: GeminiModelOptions = {}): GeminiModel => {
+    const reasoning = gemini.supports.reasoning as ReasoningFeature | false
+    if (!reasoning) {
+      throw new Error('Gemini reasoning is not currently supported')
+    }
+
     const apiKey = inject('provider-gemini').apiKey
     if (!apiKey) {
       throw new Error('No Gemini apiKey provided')
@@ -188,7 +195,7 @@ export const gemini = {
 
     return new GeminiModel({
       ...config,
-      modelId: config.modelId ?? gemini.supports.reasoning.modelId,
+      modelId: config.modelId ?? reasoning.modelId,
       apiKey: apiKey,
     })
   },

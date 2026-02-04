@@ -234,37 +234,8 @@ describe.skipIf(gemini.skip)('GeminiModel Integration Tests', () => {
         expect(text.toLowerCase()).toContain('yellow')
       })
 
-      it.concurrent('processes image via URL', async () => {
-        const provider = gemini.createModel({
-          modelId: 'gemini-2.0-flash',
-          params: { maxOutputTokens: 100 },
-        })
-
-        // Use a well-known public image URL
-        const imageBlock = new ImageBlock({
-          format: 'png',
-          source: { url: 'https://upload.wikimedia.org/wikipedia/commons/4/47/PNG_transparency_demonstration_1.png' },
-        })
-
-        const messages: Message[] = [
-          new Message({
-            role: 'user',
-            content: [new TextBlock('Describe this image briefly.'), imageBlock],
-          }),
-        ]
-
-        const events = await collectIterator<ModelStreamEvent>(provider.stream(messages))
-
-        let text = ''
-        for (const event of events) {
-          if (event.type === 'modelContentBlockDeltaEvent' && event.delta.type === 'textDelta') {
-            text += event.delta.text
-          }
-        }
-
-        // The Wikipedia PNG transparency demo image contains dice
-        expect(text.length).toBeGreaterThan(0)
-      })
+      // Note: Gemini only supports Google Cloud Storage URIs for fileData, not arbitrary URLs
+      // Image URL test skipped - use bytes source instead
     })
 
     describe('Document Content', () => {
