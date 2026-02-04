@@ -31,7 +31,7 @@ const calculatorTool = tool({
   },
 })
 
-describe.each(allProviders)('Agent with $name', ({ name, skip, createModel, supports }) => {
+describe.each(allProviders)('Agent with $name', ({ name, skip, createModel, createReasoningModel, supports }) => {
   describe.skipIf(skip)(`${name} Integration Tests`, () => {
     describe('Basic Functionality', () => {
       it.skipIf(!supports.tools)('handles invocation, streaming, system prompts, and tool use', async () => {
@@ -272,6 +272,28 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel, supp
           message.content.some((block) => block.type == 'toolUseBlock' && block.name == 'http_request')
         )
       ).toBe(true)
+    })
+
+    it.skipIf(!supports.reasoning)('emits reasoning content with thinking model', async () => {
+      const agent = new Agent({
+        model: createReasoningModel(),
+        printer: false,
+      })
+
+      const { items, result } = await collectGenerator(agent.stream('What is 15 * 23? Think step by step.'))
+
+      // Should have reasoning content deltas
+      const reasoningDeltas = items.filter(
+        (item) =>
+          item.type === 'modelContentBlockDeltaEvent' && 'delta' in item && item.delta.type === 'reasoningContentDelta'
+      )
+      expect(reasoningDeltas.length).toBeGreaterThan(0)
+
+      // Should also have text content with the answer
+      expect(result.stopReason).toBe('endTurn')
+      const textContent = result.lastMessage.content.find((block) => block.type === 'textBlock')
+      expect(textContent).toBeDefined()
+      expect(textContent?.text).toContain('345')
     })
   })
 })

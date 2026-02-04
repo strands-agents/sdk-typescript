@@ -37,7 +37,8 @@ export const bedrock = {
   name: 'BedrockModel',
   supports: {
     reasoning: {
-      modelId: 'us.anthropic.claude-3-5-sonnet-20241022-v2:0',
+      // Claude Sonnet 4 supports extended thinking
+      modelId: 'us.anthropic.claude-sonnet-4-20250514-v1:0',
     },
     tools: true,
     images: true,
@@ -87,9 +88,9 @@ export const bedrock = {
 export const openai = {
   name: 'OpenAIModel',
   supports: {
-    reasoning: {
-      modelId: 'o1-mini',
-    },
+    // OpenAI o1 models have internal reasoning but don't expose it in the streaming API yet
+    // TODO: Add support for choice.delta.reasoning_content when available
+    reasoning: false,
     tools: true,
     images: true,
     documents: true,
@@ -115,6 +116,11 @@ export const openai = {
   },
   /** Creates a model configured for reasoning/thinking tests */
   createReasoningModel: (config: OpenAIModelOptions = {}): OpenAIModel => {
+    const reasoning = openai.supports.reasoning as ReasoningFeature | false
+    if (!reasoning) {
+      throw new Error('OpenAI reasoning is not currently supported')
+    }
+
     const apiKey = inject('provider-openai').apiKey
     if (!apiKey) {
       throw new Error('No OpenAI apiKey provided')
@@ -122,7 +128,7 @@ export const openai = {
 
     return new OpenAIModel({
       ...config,
-      modelId: config.modelId ?? openai.supports.reasoning.modelId,
+      modelId: config.modelId ?? reasoning.modelId,
       apiKey: apiKey,
       clientConfig: {
         ...(config.clientConfig ?? {}),
