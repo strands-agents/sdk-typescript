@@ -88,6 +88,20 @@ function formatContentBlock(block: ContentBlock): Part | undefined {
     case 'videoBlock':
       return formatVideoBlock(block)
 
+    case 'cachePointBlock':
+      logger.warn('cache points are not supported by gemini, skipping')
+      return undefined
+
+    case 'guardContentBlock':
+      logger.warn('guard content is not supported by gemini, skipping')
+      return undefined
+
+    case 'toolUseBlock':
+    case 'toolResultBlock':
+      // Tool blocks will be handled in a future commit
+      logger.warn(`tool blocks are not yet supported by gemini, skipping`)
+      return undefined
+
     default:
       return undefined
   }
