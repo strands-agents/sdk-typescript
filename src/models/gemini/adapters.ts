@@ -10,7 +10,7 @@ import {
   type Part,
   FinishReason as GeminiFinishReason,
 } from '@google/genai'
-import type { Message, StopReason, ContentBlock } from '../../types/messages.js'
+import type { Message, StopReason, ContentBlock, ReasoningBlock } from '../../types/messages.js'
 import type { ModelStreamEvent } from '../streaming.js'
 import type { GeminiStreamState } from './types.js'
 import { encodeBase64, getMimeType, type ImageBlock } from '../../types/media.js'
@@ -79,6 +79,9 @@ function formatContentBlock(block: ContentBlock): Part | undefined {
     case 'imageBlock':
       return formatImageBlock(block)
 
+    case 'reasoningBlock':
+      return formatReasoningBlock(block)
+
     default:
       return undefined
   }
@@ -124,6 +127,33 @@ function formatImageBlock(block: ImageBlock): Part | undefined {
     default:
       return undefined
   }
+}
+
+/**
+ * Formats a reasoning block to a Gemini Part.
+ *
+ * @param block - Reasoning block to format
+ * @returns Gemini Part with thought flag
+ *
+ * @internal
+ */
+function formatReasoningBlock(block: ReasoningBlock): Part | undefined {
+  if (!block.text) {
+    return undefined
+  }
+
+  const part: Part = {
+    text: block.text,
+    thought: true,
+  }
+
+  // Add thought signature if present
+  if (block.signature) {
+    // Cast to add thoughtSignature as it may not be in the SDK types yet
+    ;(part as Part & { thoughtSignature?: Uint8Array }).thoughtSignature = new TextEncoder().encode(block.signature)
+  }
+
+  return part
 }
 
 // =============================================================================
@@ -173,12 +203,52 @@ export function mapChunkToEvents(chunk: GenerateContentResponse, streamState: Ge
   const content = candidate.content
   if (content && content.parts) {
     for (const part of content.parts) {
-      // Handle text content
-      if ('text' in part && part.text) {
+      if (!('text' in part) || !part.text) {
+        continue
+      }
+
+      const isThought = 'thought' in part && part.thought === true
+
+      if (isThought) {
+        // Handle reasoning content
+        // Close text block if transitioning from text to reasoning
+        if (streamState.textContentBlockStarted) {
+          events.push({ type: 'modelContentBlockStopEvent' })
+          streamState.textContentBlockStarted = false
+        }
+
+        if (!streamState.reasoningContentBlockStarted) {
+          streamState.reasoningContentBlockStarted = true
+          events.push({ type: 'modelContentBlockStartEvent' })
+        }
+
+        // Extract signature if present
+        let signature: string | undefined
+        if ('thoughtSignature' in part && part.thoughtSignature) {
+          signature = new TextDecoder().decode(part.thoughtSignature as Uint8Array)
+        }
+
+        events.push({
+          type: 'modelContentBlockDeltaEvent',
+          delta: {
+            type: 'reasoningContentDelta',
+            text: part.text,
+            ...(signature !== undefined && { signature }),
+          },
+        })
+      } else {
+        // Handle regular text content
+        // Close reasoning block if transitioning from reasoning to text
+        if (streamState.reasoningContentBlockStarted) {
+          events.push({ type: 'modelContentBlockStopEvent' })
+          streamState.reasoningContentBlockStarted = false
+        }
+
         if (!streamState.textContentBlockStarted) {
           streamState.textContentBlockStarted = true
           events.push({ type: 'modelContentBlockStartEvent' })
         }
+
         events.push({
           type: 'modelContentBlockDeltaEvent',
           delta: {
@@ -193,10 +263,14 @@ export function mapChunkToEvents(chunk: GenerateContentResponse, streamState: Ge
   // Handle finish reason
   const finishReason = candidate.finishReason
   if (finishReason && finishReason !== GeminiFinishReason.FINISH_REASON_UNSPECIFIED) {
-    // Close text content block if still open
+    // Close any open content blocks
     if (streamState.textContentBlockStarted) {
       events.push({ type: 'modelContentBlockStopEvent' })
       streamState.textContentBlockStarted = false
+    }
+    if (streamState.reasoningContentBlockStarted) {
+      events.push({ type: 'modelContentBlockStopEvent' })
+      streamState.reasoningContentBlockStarted = false
     }
 
     const stopReason = FINISH_REASON_MAP[finishReason] || 'endTurn'

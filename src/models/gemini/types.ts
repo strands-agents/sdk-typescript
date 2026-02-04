@@ -63,6 +63,7 @@ export interface GeminiModelOptions extends GeminiModelConfig {
 export interface GeminiStreamState {
   messageStarted: boolean
   textContentBlockStarted: boolean
+  reasoningContentBlockStarted: boolean
   inputTokens: number
   outputTokens: number
 }
