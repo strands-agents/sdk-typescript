@@ -13,7 +13,7 @@ import {
 import type { Message, StopReason, ContentBlock, ReasoningBlock } from '../../types/messages.js'
 import type { ModelStreamEvent } from '../streaming.js'
 import type { GeminiStreamState } from './types.js'
-import { encodeBase64, getMimeType, type ImageBlock, type DocumentBlock } from '../../types/media.js'
+import { encodeBase64, getMimeType, type ImageBlock, type DocumentBlock, type VideoBlock } from '../../types/media.js'
 import { logger } from '../../logging/logger.js'
 
 /**
@@ -84,6 +84,9 @@ function formatContentBlock(block: ContentBlock): Part | undefined {
 
     case 'documentBlock':
       return formatDocumentBlock(block)
+
+    case 'videoBlock':
+      return formatVideoBlock(block)
 
     default:
       return undefined
@@ -195,6 +198,39 @@ function formatDocumentBlock(block: DocumentBlock): Part | undefined {
 
     case 'documentSourceS3Location':
       logger.warn('s3 document sources are not supported by gemini, skipping')
+      return undefined
+
+    default:
+      return undefined
+  }
+}
+
+/**
+ * Formats a video block to a Gemini Part.
+ *
+ * @param block - Video block to format
+ * @returns Gemini Part with inline data
+ *
+ * @internal
+ */
+function formatVideoBlock(block: VideoBlock): Part | undefined {
+  const mimeType = getMimeType(block.format) ?? `video/${block.format}`
+
+  switch (block.source.type) {
+    case 'videoSourceBytes': {
+      // Convert Uint8Array to base64 string
+      const binaryString = String.fromCharCode(...block.source.bytes)
+      const base64Data = encodeBase64(binaryString)
+      return {
+        inlineData: {
+          data: base64Data,
+          mimeType,
+        },
+      }
+    }
+
+    case 'videoSourceS3Location':
+      logger.warn('s3 video sources are not supported by gemini, skipping')
       return undefined
 
     default:
