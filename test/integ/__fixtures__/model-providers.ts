@@ -10,7 +10,6 @@ import { GeminiModel, type GeminiModelOptions } from '$/sdk/models/gemini/model.
 
 /**
  * Configuration for reasoning/thinking feature support.
- * Presence of this config implies support; modelId specifies which model to use.
  */
 export interface ReasoningFeature {
   /** Model ID to use for reasoning tests */
@@ -22,8 +21,8 @@ export interface ReasoningFeature {
  * Used to conditionally run tests based on model capabilities.
  */
 export interface ProviderFeatures {
-  /** Reasoning/thinking content support. Undefined means not supported. */
-  reasoning?: ReasoningFeature
+  /** Reasoning/thinking content support. False if not supported. */
+  reasoning: ReasoningFeature | false
   /** Whether the model supports tool use */
   tools: boolean
   /** Whether the model supports image input */
