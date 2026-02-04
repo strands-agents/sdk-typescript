@@ -10,9 +10,11 @@ import {
   type Part,
   FinishReason as GeminiFinishReason,
 } from '@google/genai'
-import type { Message, StopReason } from '../../types/messages.js'
+import type { Message, StopReason, ContentBlock } from '../../types/messages.js'
 import type { ModelStreamEvent } from '../streaming.js'
 import type { GeminiStreamState } from './types.js'
+import { encodeBase64, getMimeType, type ImageBlock } from '../../types/media.js'
+import { logger } from '../../logging/logger.js'
 
 /**
  * Mapping of Gemini finish reasons to SDK stop reasons.
@@ -44,8 +46,9 @@ export function formatMessages(messages: Message[]): Content[] {
     const parts: Part[] = []
 
     for (const block of message.content) {
-      if (block.type === 'textBlock') {
-        parts.push({ text: block.text })
+      const part = formatContentBlock(block)
+      if (part) {
+        parts.push(part)
       }
     }
 
@@ -58,6 +61,69 @@ export function formatMessages(messages: Message[]): Content[] {
   }
 
   return contents
+}
+
+/**
+ * Formats a content block to a Gemini Part.
+ *
+ * @param block - SDK content block
+ * @returns Gemini Part or undefined if block type is not supported
+ *
+ * @internal
+ */
+function formatContentBlock(block: ContentBlock): Part | undefined {
+  switch (block.type) {
+    case 'textBlock':
+      return { text: block.text }
+
+    case 'imageBlock':
+      return formatImageBlock(block)
+
+    default:
+      return undefined
+  }
+}
+
+/**
+ * Formats an image block to a Gemini Part.
+ *
+ * @param block - Image block to format
+ * @returns Gemini Part with inline data
+ *
+ * @internal
+ */
+function formatImageBlock(block: ImageBlock): Part | undefined {
+  const mimeType = getMimeType(block.format) ?? `image/${block.format}`
+
+  switch (block.source.type) {
+    case 'imageSourceBytes': {
+      // Convert Uint8Array to base64 string
+      const binaryString = String.fromCharCode(...block.source.bytes)
+      const base64Data = encodeBase64(binaryString)
+      return {
+        inlineData: {
+          data: base64Data,
+          mimeType,
+        },
+      }
+    }
+
+    case 'imageSourceUrl':
+      // Gemini supports URLs via fileData
+      return {
+        fileData: {
+          fileUri: block.source.url,
+          mimeType,
+        },
+      }
+
+    case 'imageSourceS3Location':
+      logger.warn('s3 image sources are not supported by gemini, skipping')
+      return undefined
+
+    default:
+      return undefined
+  }
 }
 
 // =============================================================================
