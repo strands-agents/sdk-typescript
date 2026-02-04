@@ -1,4 +1,4 @@
-name: Test and Lint
+name: Test
 
 on:
   workflow_call:
@@ -8,8 +8,8 @@ on:
         type: string
 
 jobs:
-  test-lint:
-    name: Test and Lint (Node ${{ matrix.node-version }} on ${{ matrix.os }})
+  test:
+    name: Test (Node ${{ matrix.node-version }} on ${{ matrix.os }})
     permissions:
       contents: read
     runs-on: ${{ matrix.os }}
@@ -18,7 +18,7 @@ jobs:
       matrix:
         node-version: [20, 22, 24]
         os: [ubuntu-latest, windows-latest, macos-latest]
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -49,15 +49,6 @@ jobs:
           include-hidden-files: true # needed because the path has a directory starting with a '.'
           retention-days: 4
           if-no-files-found: ignore
-
-      - name: Run linting
-        run: npm run lint
-
-      - name: Check code formatting
-        run: npm run format:check
-
-      - name: Run type checking
-        run: npm run type-check
 
       - name: Build package
         run: npm run build

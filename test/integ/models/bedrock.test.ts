@@ -9,7 +9,7 @@ import {
 } from '@strands-agents/sdk'
 
 import { collectIterator } from '$/sdk/__fixtures__/model-test-helpers.js'
-import { bedrock } from './__fixtures__/model-providers.js'
+import { bedrock } from '../__fixtures__/model-providers.js'
 
 describe.skipIf(bedrock.skip)('BedrockModel Integration Tests', () => {
   describe('Streaming', () => {

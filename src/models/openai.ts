@@ -11,51 +11,13 @@ import OpenAI, { type ClientOptions } from 'openai'
 import type { ApiKeySetter } from 'openai/client'
 import { Model } from '../models/model.js'
 import type { BaseModelConfig, StreamOptions } from '../models/model.js'
-import type { Message } from '../types/messages.js'
-import type { ImageBlock, DocumentBlock, MediaFormats } from '../types/media.js'
-import { encodeBase64 } from '../types/media.js'
+import type { Message, StopReason } from '../types/messages.js'
+import type { ImageBlock, DocumentBlock } from '../types/media.js'
+import { encodeBase64, getMimeType } from '../types/media.js'
 import type { ModelStreamEvent } from '../models/streaming.js'
 import { ContextWindowOverflowError } from '../errors.js'
 import type { ChatCompletionContentPartText } from 'openai/resources/index.mjs'
 import { logger } from '../logging/logger.js'
-
-/**
- * Browser-compatible MIME type lookup.
- * Maps file extensions to MIME types without using Node.js path module.
- */
-const mimeTypeLookup = (format: string): string | false => {
-  const mimeTypes: Record<MediaFormats, string> = {
-    // Video
-    mkv: 'video/x-matroska',
-    mov: 'video/quicktime',
-    mp4: 'application/mp4',
-    webm: 'video/webm',
-    flv: 'video/x-flv',
-    mpeg: 'video/mpeg',
-    mpg: 'video/mpeg',
-    wmv: 'video/x-ms-wmv',
-    '3gp': 'video/3gpp',
-    // Images
-    png: 'image/png',
-    jpg: 'image/jpeg',
-    jpeg: 'image/jpeg',
-    gif: 'image/gif',
-    webp: 'image/webp',
-    // Documents
-    pdf: 'application/pdf',
-    csv: 'text/csv',
-    doc: 'application/msword',
-    docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    xls: 'application/vnd.ms-excel',
-    txt: 'text/plain',
-    json: 'application/json',
-    xml: 'application/xml',
-    html: 'text/html',
-    md: 'text/markdown',
-  }
-  return mimeTypes[format.toLowerCase() as MediaFormats] || false
-}
 
 const DEFAULT_OPENAI_MODEL_ID = 'gpt-4o'
 
@@ -614,7 +576,7 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
                   }
                   case 'imageSourceBytes': {
                     const base64 = encodeBase64(String.fromCharCode(...imageBlock.source.bytes))
-                    const mimeType = mimeTypeLookup(imageBlock.format) || `image/${imageBlock.format}`
+                    const mimeType = getMimeType(imageBlock.format) || `image/${imageBlock.format}`
                     contentParts.push({
                       type: 'image_url',
                       image_url: {
@@ -636,7 +598,7 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
                 const docBlock = block as DocumentBlock
                 switch (docBlock.source.type) {
                   case 'documentSourceBytes': {
-                    const mimeType = mimeTypeLookup(docBlock.format) || `application/${docBlock.format}`
+                    const mimeType = getMimeType(docBlock.format) || `application/${docBlock.format}`
                     const base64 = encodeBase64(String.fromCharCode(...docBlock.source.bytes))
                     const file: OpenAI.Chat.Completions.ChatCompletionContentPart.File = {
                       type: 'file',
@@ -945,7 +907,7 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
       }
 
       // Map OpenAI stop reason to SDK stop reason
-      const stopReasonMap: Record<string, string> = {
+      const stopReasonMap: Record<string, StopReason> = {
         stop: 'endTurn',
         tool_calls: 'toolUse',
         length: 'maxTokens',
@@ -953,13 +915,12 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
       }
 
       // Log unknown stop reasons
-      let stopReason = stopReasonMap[typedChoice.finish_reason]
-      if (!stopReason) {
-        const fallbackReason = this._snakeToCamel(typedChoice.finish_reason)
+      const stopReason: StopReason =
+        stopReasonMap[typedChoice.finish_reason] ?? this._snakeToCamel(typedChoice.finish_reason)
+      if (!stopReasonMap[typedChoice.finish_reason]) {
         logger.warn(
-          `finish_reason=<${typedChoice.finish_reason}>, fallback=<${fallbackReason}> | unknown openai stop reason, using camelCase conversion as fallback`
+          `finish_reason=<${typedChoice.finish_reason}>, fallback=<${stopReason}> | unknown openai stop reason, using camelCase conversion as fallback`
         )
-        stopReason = fallbackReason
       }
 
       events.push({

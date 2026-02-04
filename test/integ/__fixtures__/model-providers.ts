@@ -5,6 +5,7 @@
 import { inject } from 'vitest'
 import { BedrockModel, type BedrockModelOptions } from '$/sdk/models/bedrock.js'
 import { OpenAIModel, type OpenAIModelOptions } from '$/sdk/models/openai.js'
+import { GeminiModel, type GeminiModelOptions } from '$/sdk/models/gemini/model.js'
 
 export const bedrock = {
   name: 'BedrockModel',
@@ -49,4 +50,22 @@ export const openai = {
   },
 }
 
-export const allProviders = [bedrock, openai]
+export const gemini = {
+  name: 'GeminiModel',
+  get skip() {
+    return inject('provider-gemini').shouldSkip
+  },
+  createModel: (config: GeminiModelOptions = {}): GeminiModel => {
+    const apiKey = inject('provider-gemini').apiKey
+    if (!apiKey) {
+      throw new Error('No Gemini apiKey provided')
+    }
+
+    return new GeminiModel({
+      ...config,
+      apiKey: apiKey,
+    })
+  },
+}
+
+export const allProviders = [bedrock, openai, gemini]

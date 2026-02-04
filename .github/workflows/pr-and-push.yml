@@ -20,8 +20,15 @@ jobs:
     with:
       ref: ${{ github.event.pull_request.head.sha }}
 
-  call-test-lint:
-    uses: ./.github/workflows/test-lint.yml
+  call-code-quality:
+    uses: ./.github/workflows/code-quality.yml
+    permissions:
+      contents: read
+    with:
+      ref: ${{ github.event.pull_request.head.sha }}
+
+  call-test:
+    uses: ./.github/workflows/test.yml
     permissions:
       contents: read
     with:

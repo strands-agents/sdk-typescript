@@ -1,5 +1,5 @@
 import type { AgentState } from '../agent/state.js'
-import type { Message } from './messages.js'
+import type { Message, StopReason } from './messages.js'
 import type { ModelStreamEvent } from '../models/streaming.js'
 import { ToolStreamEvent } from '../tools/tool.js'
 import type { ContentBlock } from './messages.js'
@@ -41,14 +41,14 @@ export class AgentResult {
   /**
    * The stop reason from the final model response.
    */
-  readonly stopReason: string
+  readonly stopReason: StopReason
 
   /**
    * The last message added to the messages array.
    */
   readonly lastMessage: Message
 
-  constructor(data: { stopReason: string; lastMessage: Message }) {
+  constructor(data: { stopReason: StopReason; lastMessage: Message }) {
     this.stopReason = data.stopReason
     this.lastMessage = data.lastMessage
   }

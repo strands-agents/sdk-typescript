@@ -9,7 +9,10 @@ import { loadFixture } from './__fixtures__/test-helpers.js'
 
 // Import fixtures using Vite's ?url suffix
 import yellowPngUrl from './__resources__/yellow.png?url'
-import { allProviders } from './__fixtures__/model-providers.js'
+// TODO: Add gemini back to agent tests once tool and media support is implemented
+import { allProviders as realAllProviders, gemini } from './__fixtures__/model-providers.js'
+
+const allProviders = realAllProviders.filter((p) => p !== gemini)
 
 // Calculator tool for testing
 const calculatorTool = tool({
@@ -222,25 +225,25 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel }) =>
         expect(textContent?.text).toMatch(/42/)
       })
     })
-  })
 
-  it('handles tool invocation', async () => {
-    const agent = new Agent({
-      model: createModel(),
-      tools: [notebook, httpRequest],
-      printer: false,
+    it('handles tool invocation', async () => {
+      const agent = new Agent({
+        model: createModel(),
+        tools: [notebook, httpRequest],
+        printer: false,
+      })
+
+      await agent.invoke('Call Open-Meteo to get the weather in NYC, and take a note of what you did')
+      expect(
+        agent.messages.some((message) =>
+          message.content.some((block) => block.type == 'toolUseBlock' && block.name == 'notebook')
+        )
+      ).toBe(true)
+      expect(
+        agent.messages.some((message) =>
+          message.content.some((block) => block.type == 'toolUseBlock' && block.name == 'http_request')
+        )
+      ).toBe(true)
     })
-
-    await agent.invoke('Call Open-Meteo to get the weather in NYC, and take a note of what you did')
-    expect(
-      agent.messages.some((message) =>
-        message.content.some((block) => block.type == 'toolUseBlock' && block.name == 'notebook')
-      )
-    ).toBe(true)
-    expect(
-      agent.messages.some((message) =>
-        message.content.some((block) => block.type == 'toolUseBlock' && block.name == 'http_request')
-      )
-    ).toBe(true)
   })
 })
