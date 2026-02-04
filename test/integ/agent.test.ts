@@ -9,10 +9,7 @@ import { loadFixture } from './__fixtures__/test-helpers.js'
 // Import fixtures using Vite's ?url suffix
 import yellowPngUrl from './__resources__/yellow.png?url'
 import letterPdfUrl from './__resources__/letter.pdf?url'
-// TODO: Add gemini back to agent tests once tool and media support is implemented
-import { allProviders as realAllProviders, gemini } from './__fixtures__/model-providers.js'
-
-const allProviders = realAllProviders.filter((p) => p !== gemini)
+import { allProviders } from './__fixtures__/model-providers.js'
 
 // Calculator tool for testing
 const calculatorTool = tool({
@@ -34,10 +31,10 @@ const calculatorTool = tool({
   },
 })
 
-describe.each(allProviders)('Agent with $name', ({ name, skip, createModel }) => {
+describe.each(allProviders)('Agent with $name', ({ name, skip, createModel, supports }) => {
   describe.skipIf(skip)(`${name} Integration Tests`, () => {
     describe('Basic Functionality', () => {
-      it('handles invocation, streaming, system prompts, and tool use', async () => {
+      it.skipIf(!supports.tools)('handles invocation, streaming, system prompts, and tool use', async () => {
         // Test basic invocation with system prompt and tool
         const agent = new Agent({
           model: createModel(),
@@ -121,7 +118,7 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel }) =>
       })
     })
 
-    describe('Media Blocks', () => {
+    describe.skipIf(!supports.images || !supports.documents)('Media Blocks', () => {
       it('handles multiple media blocks in single request', async () => {
         // Create document block
         const docBlock = new DocumentBlock({
@@ -200,7 +197,7 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel }) =>
       })
     })
 
-    describe('multimodal input', () => {
+    describe.skipIf(!supports.images)('multimodal input', () => {
       it('accepts ContentBlock[] input', async () => {
         const agent = new Agent({
           model: createModel(),
@@ -257,7 +254,7 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel }) =>
       })
     })
 
-    it('handles tool invocation', async () => {
+    it.skipIf(!supports.tools)('handles tool invocation', async () => {
       const agent = new Agent({
         model: createModel(),
         tools: [notebook, httpRequest],
