@@ -98,7 +98,6 @@ function formatContentBlock(block: ContentBlock): Part | undefined {
 
     case 'toolUseBlock':
     case 'toolResultBlock':
-      // Tool blocks will be handled in a future commit
       logger.warn(`tool blocks are not yet supported by gemini, skipping`)
       return undefined
 
