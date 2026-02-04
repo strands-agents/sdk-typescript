@@ -1,10 +1,21 @@
 import { describe, expect, it } from 'vitest'
-import { Agent, Message, SlidingWindowConversationManager } from '@strands-agents/sdk'
+import {
+  Agent,
+  DocumentBlock,
+  ImageBlock,
+  Message,
+  SlidingWindowConversationManager,
+  TextBlock,
+} from '@strands-agents/sdk'
 import type { ModelStreamEvent } from '$/sdk/models/streaming.js'
 
 import { collectIterator } from '$/sdk/__fixtures__/model-test-helpers.js'
+import { loadFixture } from '../__fixtures__/test-helpers.js'
 
 import { gemini } from '../__fixtures__/model-providers.js'
+
+// Import fixtures using Vite's ?url suffix
+import yellowPngUrl from '../__resources__/yellow.png?url'
 
 describe.skipIf(gemini.skip)('GeminiModel Integration Tests', () => {
   describe('Streaming', () => {
@@ -190,7 +201,135 @@ describe.skipIf(gemini.skip)('GeminiModel Integration Tests', () => {
     })
   })
 
-  // TODO: Add comprehensive agent tests (tools, media) once tool and media support is implemented
+  describe('Media Content Types', () => {
+    describe('Image Content', () => {
+      it.concurrent('processes image content and describes it', async () => {
+        const provider = gemini.createModel({
+          modelId: 'gemini-2.0-flash',
+          params: { maxOutputTokens: 100 },
+        })
+
+        const imageBytes = await loadFixture(yellowPngUrl)
+        const imageBlock = new ImageBlock({
+          format: 'png',
+          source: { bytes: imageBytes },
+        })
+
+        const messages: Message[] = [
+          new Message({
+            role: 'user',
+            content: [new TextBlock('What color is this image? Answer in one word.'), imageBlock],
+          }),
+        ]
+
+        const events = await collectIterator<ModelStreamEvent>(provider.stream(messages))
+
+        let text = ''
+        for (const event of events) {
+          if (event.type === 'modelContentBlockDeltaEvent' && event.delta.type === 'textDelta') {
+            text += event.delta.text
+          }
+        }
+
+        expect(text.toLowerCase()).toContain('yellow')
+      })
+
+      it.concurrent('processes image via URL', async () => {
+        const provider = gemini.createModel({
+          modelId: 'gemini-2.0-flash',
+          params: { maxOutputTokens: 100 },
+        })
+
+        // Use a well-known public image URL
+        const imageBlock = new ImageBlock({
+          format: 'png',
+          source: { url: 'https://upload.wikimedia.org/wikipedia/commons/4/47/PNG_transparency_demonstration_1.png' },
+        })
+
+        const messages: Message[] = [
+          new Message({
+            role: 'user',
+            content: [new TextBlock('Describe this image briefly.'), imageBlock],
+          }),
+        ]
+
+        const events = await collectIterator<ModelStreamEvent>(provider.stream(messages))
+
+        let text = ''
+        for (const event of events) {
+          if (event.type === 'modelContentBlockDeltaEvent' && event.delta.type === 'textDelta') {
+            text += event.delta.text
+          }
+        }
+
+        // The Wikipedia PNG transparency demo image contains dice
+        expect(text.length).toBeGreaterThan(0)
+      })
+    })
+
+    describe('Document Content', () => {
+      it.concurrent('processes document with text source', async () => {
+        const provider = gemini.createModel({
+          modelId: 'gemini-2.0-flash',
+          params: { maxOutputTokens: 100 },
+        })
+
+        const docBlock = new DocumentBlock({
+          name: 'secret.txt',
+          format: 'txt',
+          source: { text: 'The secret code word is GIRAFFE.' },
+        })
+
+        const messages: Message[] = [
+          new Message({
+            role: 'user',
+            content: [new TextBlock('What is the secret code word in the document?'), docBlock],
+          }),
+        ]
+
+        const events = await collectIterator<ModelStreamEvent>(provider.stream(messages))
+
+        let text = ''
+        for (const event of events) {
+          if (event.type === 'modelContentBlockDeltaEvent' && event.delta.type === 'textDelta') {
+            text += event.delta.text
+          }
+        }
+
+        expect(text.toUpperCase()).toContain('GIRAFFE')
+      })
+    })
+
+    describe('Agent with Image Input', () => {
+      it('processes image in agent conversation', async () => {
+        const agent = new Agent({
+          model: gemini.createModel({ params: { maxOutputTokens: 100 } }),
+          printer: false,
+        })
+
+        const imageBytes = await loadFixture(yellowPngUrl)
+        const imageBlock = new ImageBlock({
+          format: 'png',
+          source: { bytes: imageBytes },
+        })
+
+        const result = await agent.invoke([new TextBlock('What color is this image? Answer in one word.'), imageBlock])
+
+        expect(result.stopReason).toBe('endTurn')
+        expect(result.lastMessage.role).toBe('assistant')
+
+        let text = ''
+        for (const block of result.lastMessage.content) {
+          if (block.type === 'textBlock') {
+            text += block.text
+          }
+        }
+        expect(text.toLowerCase()).toContain('yellow')
+      })
+    })
+  })
+
+  // TODO: Add comprehensive agent tests with tools once tool support is implemented
   describe('Agent with Conversation Manager', () => {
     it('manages conversation history with SlidingWindowConversationManager', async () => {
       const agent = new Agent({
