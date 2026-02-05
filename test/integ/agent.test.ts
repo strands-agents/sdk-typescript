@@ -178,7 +178,7 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel }) =>
               role: 'user',
               content: [
                 new DocumentBlock({
-                  name: 'letter.pdf',
+                  name: 'letter',
                   format: 'pdf',
                   source: { bytes: pdfBytes },
                 }),
