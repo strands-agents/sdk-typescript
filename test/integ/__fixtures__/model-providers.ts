@@ -32,7 +32,7 @@ export const bedrock = {
     tools: true,
     images: true,
     documents: true,
-    video: true,
+    video: false, // Bedrock/Claude doesn't support video content blocks
   } satisfies ProviderFeatures,
   get skip() {
     return inject('provider-bedrock').shouldSkip

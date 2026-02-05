@@ -9,6 +9,7 @@ import { loadFixture } from './__fixtures__/test-helpers.js'
 // Import fixtures using Vite's ?url suffix
 import yellowPngUrl from './__resources__/yellow.png?url'
 import letterPdfUrl from './__resources__/letter.pdf?url'
+import orangeMp4Url from './__resources__/orange.mp4?url'
 import { allProviders } from './__fixtures__/model-providers.js'
 
 // Calculator tool for testing
@@ -221,34 +222,10 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel, crea
     })
 
     it.skipIf(!supports.video)('handles video input', async () => {
-      // Minimal MP4 file header (ftyp box) - not a real video but enough to test the pipeline
-      // Real video testing would require a proper video file
-      const minimalMp4 = new Uint8Array([
-        0x00,
-        0x00,
-        0x00,
-        0x14, // Box size (20 bytes)
-        0x66,
-        0x74,
-        0x79,
-        0x70, // Box type: 'ftyp'
-        0x69,
-        0x73,
-        0x6f,
-        0x6d, // Major brand: 'isom'
-        0x00,
-        0x00,
-        0x00,
-        0x01, // Minor version
-        0x69,
-        0x73,
-        0x6f,
-        0x6d, // Compatible brand: 'isom'
-      ])
-
+      const videoBytes = await loadFixture(orangeMp4Url)
       const videoBlock = new VideoBlock({
         format: 'mp4',
-        source: { bytes: minimalMp4 },
+        source: { bytes: videoBytes },
       })
 
       const agent = new Agent({
@@ -256,17 +233,15 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel, crea
         printer: false,
       })
 
-      // Video APIs may reject minimal/invalid video data, so we test that the request is made
-      // and handle both success and expected API errors gracefully
-      try {
-        const result = await agent.invoke([new TextBlock('Describe this video briefly.'), videoBlock])
-        // If the API accepts it, we should get a response
-        expect(result.stopReason).toBeDefined()
-      } catch (error) {
-        // Expected: API may reject invalid video data
-        // This still validates that video blocks are properly formatted and sent
-        expect(error).toBeDefined()
-      }
+      const result = await agent.invoke([
+        new TextBlock('What color is shown in this video? Answer in one word.'),
+        videoBlock,
+      ])
+
+      expect(result.stopReason).toBe('endTurn')
+      const textContent = result.lastMessage.content.find((block) => block.type === 'textBlock')
+      expect(textContent).toBeDefined()
+      expect(textContent?.text).toMatch(/orange/i)
     })
 
     describe.skipIf(!supports.images)('multimodal input', () => {
