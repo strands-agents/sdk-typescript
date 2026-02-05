@@ -9,20 +9,12 @@ import { AnthropicModel, type AnthropicModelOptions } from '$/sdk/models/anthrop
 import { GeminiModel, type GeminiModelOptions } from '$/sdk/models/gemini/model.js'
 
 /**
- * Configuration for reasoning/thinking feature support.
- */
-export interface ReasoningFeature {
-  /** Model ID to use for reasoning tests */
-  modelId: string
-}
-
-/**
  * Feature support flags for model providers.
  * Used to conditionally run tests based on model capabilities.
  */
 export interface ProviderFeatures {
-  /** Reasoning/thinking content support. False if not supported. */
-  reasoning: ReasoningFeature | false
+  /** Whether the model supports reasoning/thinking content */
+  reasoning: boolean
   /** Whether the model supports tool use */
   tools: boolean
   /** Whether the model supports image input */
@@ -36,10 +28,7 @@ export interface ProviderFeatures {
 export const bedrock = {
   name: 'BedrockModel',
   supports: {
-    reasoning: {
-      // Claude Sonnet 4 supports extended thinking
-      modelId: 'us.anthropic.claude-sonnet-4-20250514-v1:0',
-    },
+    reasoning: true,
     tools: true,
     images: true,
     documents: true,
@@ -64,22 +53,13 @@ export const bedrock = {
   },
   /** Creates a model configured for reasoning/thinking tests */
   createReasoningModel: (options: BedrockModelOptions = {}): BedrockModel => {
-    const credentials = inject('provider-bedrock').credentials
-    if (!credentials) {
-      throw new Error('No Bedrock credentials provided')
-    }
-
-    return new BedrockModel({
+    return bedrock.createModel({
       ...options,
-      modelId: options.modelId ?? bedrock.supports.reasoning.modelId,
-      // Enable extended thinking via additionalRequestFields
+      // Claude Sonnet 4 supports extended thinking
+      modelId: options.modelId ?? 'us.anthropic.claude-sonnet-4-20250514-v1:0',
       additionalRequestFields: {
         ...(options.additionalRequestFields as Record<string, unknown> | undefined),
         thinking: { type: 'enabled', budget_tokens: 1024 },
-      },
-      clientConfig: {
-        ...(options.clientConfig ?? {}),
-        credentials: credentials,
       },
     })
   },
@@ -89,7 +69,6 @@ export const openai = {
   name: 'OpenAIModel',
   supports: {
     // OpenAI o1 models have internal reasoning but don't expose it in the streaming API yet
-    // TODO: Add support for choice.delta.reasoning_content when available
     reasoning: false,
     tools: true,
     images: true,
@@ -116,24 +95,12 @@ export const openai = {
   },
   /** Creates a model configured for reasoning/thinking tests */
   createReasoningModel: (config: OpenAIModelOptions = {}): OpenAIModel => {
-    const reasoning = openai.supports.reasoning as ReasoningFeature | false
-    if (!reasoning) {
+    if (!openai.supports.reasoning) {
       throw new Error('OpenAI reasoning is not currently supported')
     }
-
-    const apiKey = inject('provider-openai').apiKey
-    if (!apiKey) {
-      throw new Error('No OpenAI apiKey provided')
-    }
-
-    return new OpenAIModel({
+    return openai.createModel({
       ...config,
-      modelId: config.modelId ?? reasoning.modelId,
-      apiKey: apiKey,
-      clientConfig: {
-        ...(config.clientConfig ?? {}),
-        dangerouslyAllowBrowser: true,
-      },
+      modelId: config.modelId ?? 'o1-mini',
     })
   },
 }
@@ -163,10 +130,7 @@ export const anthropic = {
 export const gemini = {
   name: 'GeminiModel',
   supports: {
-    reasoning: {
-      // gemini-2.5-flash with thinkingConfig enables thinking mode
-      modelId: 'gemini-2.5-flash',
-    },
+    reasoning: true,
     tools: false, // Not yet implemented
     images: true,
     documents: true,
@@ -188,21 +152,9 @@ export const gemini = {
   },
   /** Creates a model configured for reasoning/thinking tests */
   createReasoningModel: (config: GeminiModelOptions = {}): GeminiModel => {
-    const reasoning = gemini.supports.reasoning as ReasoningFeature | false
-    if (!reasoning) {
-      throw new Error('Gemini reasoning is not currently supported')
-    }
-
-    const apiKey = inject('provider-gemini').apiKey
-    if (!apiKey) {
-      throw new Error('No Gemini apiKey provided')
-    }
-
-    return new GeminiModel({
+    return gemini.createModel({
       ...config,
-      modelId: config.modelId ?? reasoning.modelId,
-      apiKey: apiKey,
-      // Enable thinking mode with thought content included in response
+      modelId: config.modelId ?? 'gemini-2.5-flash',
       params: {
         ...((config.params as Record<string, unknown>) ?? {}),
         thinkingConfig: {
