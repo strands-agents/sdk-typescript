@@ -32,7 +32,7 @@ const calculatorTool = tool({
   },
 })
 
-describe.each(allProviders)('Agent with $name', ({ name, skip, createModel, createReasoningModel, supports }) => {
+describe.each(allProviders)('Agent with $name', ({ name, skip, createModel, models, supports }) => {
   describe.skipIf(skip)(`${name} Integration Tests`, () => {
     describe('Basic Functionality', () => {
       it.skipIf(!supports.tools)('handles invocation, streaming, system prompts, and tool use', async () => {
@@ -229,7 +229,7 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel, crea
       })
 
       const agent = new Agent({
-        model: createModel(),
+        model: createModel(models.video),
         printer: false,
       })
 
@@ -241,7 +241,8 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel, crea
       expect(result.stopReason).toBe('endTurn')
       const textContent = result.lastMessage.content.find((block) => block.type === 'textBlock')
       expect(textContent).toBeDefined()
-      expect(textContent?.text).toMatch(/orange/i)
+      // Amazon orange (#FF9900) can be perceived as orange or yellow
+      expect(textContent?.text).toMatch(/orange|yellow/i)
     })
 
     describe.skipIf(!supports.images)('multimodal input', () => {
@@ -323,7 +324,7 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel, crea
 
     it.skipIf(!supports.reasoning)('emits reasoning content with thinking model', async () => {
       const agent = new Agent({
-        model: createReasoningModel(),
+        model: createModel(models.reasoning),
         printer: false,
       })
 
