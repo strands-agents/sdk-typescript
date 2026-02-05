@@ -405,7 +405,7 @@ describe('GeminiModel', () => {
         expect((part as { inlineData: { mimeType: string } }).inlineData.mimeType).toBe('application/pdf')
       })
 
-      it('formats document with text source as text part', () => {
+      it('formats document with text source as inlineData bytes', () => {
         const docBlock = new DocumentBlock({
           name: 'test.txt',
           format: 'txt',
@@ -417,10 +417,11 @@ describe('GeminiModel', () => {
 
         expect(contents).toHaveLength(1)
         const part = contents[0]!.parts![0]!
-        expect(part).toEqual({ text: 'Document content here' })
+        expect(part).toHaveProperty('inlineData')
+        expect((part as { inlineData: { mimeType: string } }).inlineData.mimeType).toBe('text/plain')
       })
 
-      it('formats document with content block source as text', () => {
+      it('formats document with content block source as inlineData bytes', () => {
         const docBlock = new DocumentBlock({
           name: 'test.txt',
           format: 'txt',
@@ -432,7 +433,8 @@ describe('GeminiModel', () => {
 
         expect(contents).toHaveLength(1)
         const part = contents[0]!.parts![0]!
-        expect(part).toEqual({ text: 'Line 1\nLine 2' })
+        expect(part).toHaveProperty('inlineData')
+        expect((part as { inlineData: { mimeType: string } }).inlineData.mimeType).toBe('text/plain')
       })
     })
 

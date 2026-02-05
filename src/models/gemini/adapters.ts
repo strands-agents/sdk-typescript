@@ -204,11 +204,21 @@ function formatDocumentBlock(block: DocumentBlock): Part | undefined {
       }
 
     case 'documentSourceText':
-      return { text: block.source.text }
+      // Convert text to bytes - Gemini API doesn't accept text directly
+      return {
+        inlineData: {
+          data: bytesToBase64(new TextEncoder().encode(block.source.text)),
+          mimeType,
+        },
+      }
 
     case 'documentSourceContentBlock':
+      // Convert content blocks to text, then to bytes
       return {
-        text: block.source.content.map((b) => b.text).join('\n'),
+        inlineData: {
+          data: bytesToBase64(new TextEncoder().encode(block.source.content.map((b) => b.text).join('\n'))),
+          mimeType,
+        },
       }
 
     case 'documentSourceS3Location':
