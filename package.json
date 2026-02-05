@@ -79,6 +79,7 @@
   "devDependencies": {
     "@aws-sdk/client-secrets-manager": "^3.943.0",
     "@aws-sdk/credential-providers": "^3.943.0",
+    "@google/genai": "^1.40.0",
     "@types/json-schema": "^7.0.15",
     "@types/node": "^24.6.0",
     "@typescript-eslint/eslint-plugin": "^8.48.1",
@@ -111,7 +112,7 @@
     "@aws-sdk/client-bedrock-runtime": "^3.943.0"
   },
   "peerDependencies": {
-    "@google/genai": "^0.14.0",
+    "@google/genai": "^1.40.0",
     "@modelcontextprotocol/sdk": "^1.25.2",
     "openai": "^6.7.0",
     "zod": "^4.1.12"
