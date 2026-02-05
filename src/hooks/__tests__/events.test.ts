@@ -206,6 +206,42 @@ describe('AfterToolCallEvent', () => {
     const event = new AfterToolCallEvent({ agent, toolUse, tool: undefined, result })
     expect(event._shouldReverseCallbacks()).toBe(true)
   })
+
+  it('allows retry to be set when error is present', () => {
+    const agent = new Agent()
+    const toolUse = { name: 'test', toolUseId: 'id', input: {} }
+    const result = new ToolResultBlock({
+      toolUseId: 'id',
+      status: 'error',
+      content: [new TextBlock('Error')],
+    })
+    const error = new Error('Tool failed')
+    const event = new AfterToolCallEvent({ agent, toolUse, tool: undefined, result, error })
+
+    expect(event.retry).toBeUndefined()
+
+    event.retry = true
+    expect(event.retry).toBe(true)
+
+    event.retry = false
+    expect(event.retry).toBe(false)
+  })
+
+  it('allows retry to be set on success', () => {
+    const agent = new Agent()
+    const toolUse = { name: 'test', toolUseId: 'id', input: {} }
+    const result = new ToolResultBlock({
+      toolUseId: 'id',
+      status: 'success',
+      content: [new TextBlock('Success')],
+    })
+    const event = new AfterToolCallEvent({ agent, toolUse, tool: undefined, result })
+
+    expect(event.retry).toBeUndefined()
+
+    event.retry = true
+    expect(event.retry).toBe(true)
+  })
 })
 
 describe('BeforeModelCallEvent', () => {
