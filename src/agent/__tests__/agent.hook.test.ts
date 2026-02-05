@@ -13,8 +13,7 @@ import {
 import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
 import { MockHookProvider } from '../../__fixtures__/mock-hook-provider.js'
 import { collectIterator } from '../../__fixtures__/model-test-helpers.js'
-import { FunctionTool } from '../../tools/function-tool.js'
-import { createCallbackTool } from '../../__fixtures__/tool-helpers.js'
+import { createMockTool } from '../../__fixtures__/tool-helpers.js'
 import { Message, TextBlock, ToolResultBlock } from '../../types/messages.js'
 
 describe('Agent Hooks Integration', () => {
@@ -139,11 +138,8 @@ describe('Agent Hooks Integration', () => {
 
   describe('tool execution hooks', () => {
     it('fires tool hooks during tool execution', async () => {
-      const tool = new FunctionTool({
-        name: 'testTool',
-        description: 'A test tool',
-        inputSchema: {},
-        callback: () => 'Tool result',
+      const tool = createMockTool('testTool', () => {
+        return new ToolResultBlock({ toolUseId: 'tool-1', status: 'success', content: [new TextBlock('Tool result')] })
       })
 
       const model = new MockMessageModel()
@@ -197,13 +193,8 @@ describe('Agent Hooks Integration', () => {
     })
 
     it('fires AfterToolCallEvent with error when tool fails', async () => {
-      const tool = new FunctionTool({
-        name: 'failingTool',
-        description: 'A tool that fails',
-        inputSchema: {},
-        callback: () => {
-          throw new Error('Tool execution failed')
-        },
+      const tool = createMockTool('failingTool', () => {
+        throw new Error('Tool execution failed')
       })
 
       const model = new MockMessageModel()
@@ -234,7 +225,7 @@ describe('Agent Hooks Integration', () => {
             error: new Error('Tool execution failed'),
             toolUseId: 'tool-1',
             status: 'error',
-            content: [new TextBlock('Error: Tool execution failed')],
+            content: [new TextBlock('Tool execution failed')],
           }),
           error: new Error('Tool execution failed'),
         })
@@ -356,12 +347,12 @@ describe('Agent Hooks Integration', () => {
   describe('AfterToolCallEvent retry', () => {
     it('retries tool call when hook sets retry', async () => {
       let toolCallCount = 0
-      const tool = createCallbackTool('retryableTool', () => {
+      const tool = createMockTool('retryableTool', () => {
         toolCallCount++
         if (toolCallCount === 1) {
           throw new Error('First attempt failed')
         }
-        return 'Success after retry'
+        return new ToolResultBlock({ toolUseId: 'tool-1', status: 'success', content: [new TextBlock('Success')] })
       })
 
       let hookCallCount = 0
@@ -386,7 +377,7 @@ describe('Agent Hooks Integration', () => {
 
     it('does not retry tool call when retry is not set', async () => {
       let toolCallCount = 0
-      const tool = createCallbackTool('failingTool', () => {
+      const tool = createMockTool('failingTool', () => {
         toolCallCount++
         throw new Error('Tool failed')
       })
@@ -404,9 +395,9 @@ describe('Agent Hooks Integration', () => {
 
     it('fires BeforeToolCallEvent on each retry', async () => {
       let toolCallCount = 0
-      const tool = createCallbackTool('retryableTool', () => {
+      const tool = createMockTool('retryableTool', () => {
         toolCallCount++
-        return `Result ${toolCallCount}`
+        return new ToolResultBlock({ toolUseId: 'tool-1', status: 'success', content: [new TextBlock(`Result ${toolCallCount}`)] })
       })
 
       let beforeCount = 0
@@ -435,9 +426,9 @@ describe('Agent Hooks Integration', () => {
 
     it('retries tool call on success when hook requests it', async () => {
       let toolCallCount = 0
-      const tool = createCallbackTool('successTool', () => {
+      const tool = createMockTool('successTool', () => {
         toolCallCount++
-        return `Result ${toolCallCount}`
+        return new ToolResultBlock({ toolUseId: 'tool-1', status: 'success', content: [new TextBlock(`Result ${toolCallCount}`)] })
       })
 
       let hookCallCount = 0
