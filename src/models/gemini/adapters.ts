@@ -294,56 +294,55 @@ export function mapChunkToEvents(chunk: GenerateContentResponse, streamState: Ge
   const content = candidate.content
   if (content && content.parts) {
     for (const part of content.parts) {
-      if (!('text' in part) || !part.text) {
-        continue
-      }
+      // Only process parts that have text content
+      if ('text' in part && part.text) {
+        const isThought = 'thought' in part && part.thought === true
 
-      const isThought = 'thought' in part && part.thought === true
+        if (isThought) {
+          // Handle reasoning content
+          // Close text block if transitioning from text to reasoning
+          if (streamState.textContentBlockStarted) {
+            events.push({ type: 'modelContentBlockStopEvent' })
+            streamState.textContentBlockStarted = false
+          }
 
-      if (isThought) {
-        // Handle reasoning content
-        // Close text block if transitioning from text to reasoning
-        if (streamState.textContentBlockStarted) {
-          events.push({ type: 'modelContentBlockStopEvent' })
-          streamState.textContentBlockStarted = false
+          if (!streamState.reasoningContentBlockStarted) {
+            streamState.reasoningContentBlockStarted = true
+            events.push({ type: 'modelContentBlockStartEvent' })
+          }
+
+          // Extract signature if present
+          const signature = part.thoughtSignature
+
+          events.push({
+            type: 'modelContentBlockDeltaEvent',
+            delta: {
+              type: 'reasoningContentDelta',
+              text: part.text,
+              ...(signature !== undefined && { signature }),
+            },
+          })
+        } else {
+          // Handle regular text content
+          // Close reasoning block if transitioning from reasoning to text
+          if (streamState.reasoningContentBlockStarted) {
+            events.push({ type: 'modelContentBlockStopEvent' })
+            streamState.reasoningContentBlockStarted = false
+          }
+
+          if (!streamState.textContentBlockStarted) {
+            streamState.textContentBlockStarted = true
+            events.push({ type: 'modelContentBlockStartEvent' })
+          }
+
+          events.push({
+            type: 'modelContentBlockDeltaEvent',
+            delta: {
+              type: 'textDelta',
+              text: part.text,
+            },
+          })
         }
-
-        if (!streamState.reasoningContentBlockStarted) {
-          streamState.reasoningContentBlockStarted = true
-          events.push({ type: 'modelContentBlockStartEvent' })
-        }
-
-        // Extract signature if present
-        const signature = part.thoughtSignature
-
-        events.push({
-          type: 'modelContentBlockDeltaEvent',
-          delta: {
-            type: 'reasoningContentDelta',
-            text: part.text,
-            ...(signature !== undefined && { signature }),
-          },
-        })
-      } else {
-        // Handle regular text content
-        // Close reasoning block if transitioning from reasoning to text
-        if (streamState.reasoningContentBlockStarted) {
-          events.push({ type: 'modelContentBlockStopEvent' })
-          streamState.reasoningContentBlockStarted = false
-        }
-
-        if (!streamState.textContentBlockStarted) {
-          streamState.textContentBlockStarted = true
-          events.push({ type: 'modelContentBlockStartEvent' })
-        }
-
-        events.push({
-          type: 'modelContentBlockDeltaEvent',
-          delta: {
-            type: 'textDelta',
-            text: part.text,
-          },
-        })
       }
     }
   }
