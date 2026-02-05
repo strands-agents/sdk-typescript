@@ -112,6 +112,12 @@ export class AfterToolCallEvent extends HookEvent {
   readonly result: ToolResultBlock
   readonly error?: Error
 
+  /**
+   * Optional flag that can be set by hook callbacks to request a retry of the tool call.
+   * When set to true, the agent will re-execute the tool.
+   */
+  retry?: boolean
+
   constructor(data: {
     agent: AgentData
     toolUse: { name: string; toolUseId: string; input: JSONValue }
@@ -177,10 +183,9 @@ export class AfterModelCallEvent extends HookEvent {
 
   /**
    * Optional flag that can be set by hook callbacks to request a retry of the model call.
-   * Only valid when an error is present. When set to true, the agent will retry the model invocation.
-   * Typically used after reducing context size in response to a ContextWindowOverflowError.
+   * When set to true, the agent will retry the model invocation.
    */
-  retryModelCall?: boolean
+  retry?: boolean
 
   constructor(data: { agent: AgentData; stopData?: ModelStopData; error?: Error }) {
     super()
