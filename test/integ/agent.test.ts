@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { Agent, DocumentBlock, ImageBlock, Message, TextBlock, tool } from '@strands-agents/sdk'
+import { Agent, DocumentBlock, ImageBlock, Message, TextBlock, VideoBlock, tool } from '@strands-agents/sdk'
 import { notebook } from '@strands-agents/sdk/vended_tools/notebook'
 import { httpRequest } from '@strands-agents/sdk/vended_tools/http_request'
 import { z } from 'zod'
@@ -9,10 +9,8 @@ import { loadFixture } from './__fixtures__/test-helpers.js'
 
 // Import fixtures using Vite's ?url suffix
 import yellowPngUrl from './__resources__/yellow.png?url'
-// TODO: Add gemini back to agent tests once tool and media support is implemented
-import { allProviders as realAllProviders, gemini } from './__fixtures__/model-providers.js'
-
-const allProviders = realAllProviders.filter((p) => p !== gemini)
+import orangeMp4Url from './__resources__/orange.mp4?url'
+import { allProviders } from './__fixtures__/model-providers.js'
 
 // Calculator tool for testing
 const calculatorTool = tool({
@@ -34,10 +32,10 @@ const calculatorTool = tool({
   },
 })
 
-describe.each(allProviders)('Agent with $name', ({ name, skip, createModel }) => {
+describe.each(allProviders)('Agent with $name', ({ name, skip, createModel, models, supports }) => {
   describe.skipIf(skip)(`${name} Integration Tests`, () => {
     describe('Basic Functionality', () => {
-      it('handles invocation, streaming, system prompts, and tool use', async () => {
+      it.skipIf(!supports.tools)('handles invocation, streaming, system prompts, and tool use', async () => {
         // Test basic invocation with system prompt and tool
         const agent = new Agent({
           model: createModel(),
@@ -121,7 +119,7 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel }) =>
       })
     })
 
-    describe('Media Blocks', () => {
+    describe.skipIf(!supports.images || !supports.documents)('Media Blocks', () => {
       it('handles multiple media blocks in single request', async () => {
         // Create document block
         const docBlock = new DocumentBlock({
@@ -169,7 +167,54 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel }) =>
       })
     })
 
-    describe('multimodal input', () => {
+    it.skipIf(!supports.documents)('handles document input', async () => {
+      const docBlock = new DocumentBlock({
+        name: 'test-document',
+        format: 'txt',
+        source: { text: 'The secret code word is ELEPHANT.' },
+      })
+
+      const agent = new Agent({
+        model: createModel(),
+        printer: false,
+      })
+
+      const result = await agent.invoke([
+        new TextBlock('What is the secret code word in the document? Answer in one word.'),
+        docBlock,
+      ])
+
+      expect(result.stopReason).toBe('endTurn')
+      const textContent = result.lastMessage.content.find((block) => block.type === 'textBlock')
+      expect(textContent).toBeDefined()
+      expect(textContent?.text).toMatch(/elephant/i)
+    })
+
+    it.skipIf(!supports.video)('handles video input', async () => {
+      const videoBytes = await loadFixture(orangeMp4Url)
+      const videoBlock = new VideoBlock({
+        format: 'mp4',
+        source: { bytes: videoBytes },
+      })
+
+      const agent = new Agent({
+        model: createModel(models.video),
+        printer: false,
+      })
+
+      const result = await agent.invoke([
+        new TextBlock('What color is shown in this video? Answer in one word.'),
+        videoBlock,
+      ])
+
+      expect(result.stopReason).toBe('endTurn')
+      const textContent = result.lastMessage.content.find((block) => block.type === 'textBlock')
+      expect(textContent).toBeDefined()
+      // Amazon orange (#FF9900) can be perceived as orange or yellow
+      expect(textContent?.text).toMatch(/orange|yellow/i)
+    })
+
+    describe.skipIf(!supports.images)('multimodal input', () => {
       it('accepts ContentBlock[] input', async () => {
         const agent = new Agent({
           model: createModel(),
@@ -226,7 +271,7 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel }) =>
       })
     })
 
-    it('handles tool invocation', async () => {
+    it.skipIf(!supports.tools)('handles tool invocation', async () => {
       const agent = new Agent({
         model: createModel(),
         tools: [notebook, httpRequest],
@@ -244,6 +289,28 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel }) =>
           message.content.some((block) => block.type == 'toolUseBlock' && block.name == 'http_request')
         )
       ).toBe(true)
+    })
+
+    it.skipIf(!supports.reasoning)('emits reasoning content with thinking model', async () => {
+      const agent = new Agent({
+        model: createModel(models.reasoning),
+        printer: false,
+      })
+
+      const { items, result } = await collectGenerator(agent.stream('What is 15 * 23? Think step by step.'))
+
+      // Should have reasoning content deltas
+      const reasoningDeltas = items.filter(
+        (item) =>
+          item.type === 'modelContentBlockDeltaEvent' && 'delta' in item && item.delta.type === 'reasoningContentDelta'
+      )
+      expect(reasoningDeltas.length).toBeGreaterThan(0)
+
+      // Should also have text content with the answer
+      expect(result.stopReason).toBe('endTurn')
+      const textContent = result.lastMessage.content.find((block) => block.type === 'textBlock')
+      expect(textContent).toBeDefined()
+      expect(textContent?.text).toContain('345')
     })
   })
 })
