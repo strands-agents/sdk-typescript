@@ -6,11 +6,12 @@ import { inject } from 'vitest'
 import { BedrockModel, type BedrockModelOptions } from '$/sdk/models/bedrock.js'
 import { OpenAIModel, type OpenAIModelOptions } from '$/sdk/models/openai.js'
 import { AnthropicModel, type AnthropicModelOptions } from '$/sdk/models/anthropic.js'
+import { GeminiModel, type GeminiModelOptions } from '$/sdk/models/gemini/model.js'
 
 export const bedrock = {
   name: 'BedrockModel',
   get skip() {
-    return inject('provider-bedrock')?.shouldSkip ?? true
+    return inject('provider-bedrock').shouldSkip
   },
   createModel: (options: BedrockModelOptions = {}): BedrockModel => {
     const credentials = inject('provider-bedrock')?.credentials
@@ -31,7 +32,7 @@ export const bedrock = {
 export const openai = {
   name: 'OpenAIModel',
   get skip() {
-    return inject('provider-openai')?.shouldSkip ?? true
+    return inject('provider-openai').shouldSkip
   },
   createModel: (config: OpenAIModelOptions = {}): OpenAIModel => {
     const apiKey = inject('provider-openai')?.apiKey
@@ -53,7 +54,7 @@ export const openai = {
 export const anthropic = {
   name: 'AnthropicModel',
   get skip() {
-    return inject('provider-anthropic')?.shouldSkip ?? true
+    return inject('provider-anthropic').shouldSkip
   },
   createModel: (config: AnthropicModelOptions = {}): AnthropicModel => {
     const apiKey = inject('provider-anthropic')?.apiKey
@@ -72,4 +73,22 @@ export const anthropic = {
   },
 }
 
-export const allProviders = [bedrock, openai, anthropic]
+export const gemini = {
+  name: 'GeminiModel',
+  get skip() {
+    return inject('provider-gemini').shouldSkip
+  },
+  createModel: (config: GeminiModelOptions = {}): GeminiModel => {
+    const apiKey = inject('provider-gemini').apiKey
+    if (!apiKey) {
+      throw new Error('No Gemini apiKey provided')
+    }
+
+    return new GeminiModel({
+      ...config,
+      apiKey: apiKey,
+    })
+  },
+}
+
+export const allProviders = [bedrock, openai, anthropic, gemini]

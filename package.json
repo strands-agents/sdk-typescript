@@ -26,6 +26,10 @@
       "types": "./dist/src/models/bedrock.d.ts",
       "default": "./dist/src/models/bedrock.js"
     },
+    "./gemini": {
+      "types": "./dist/src/models/gemini/model.d.ts",
+      "default": "./dist/src/models/gemini/model.js"
+    },
     "./vended_tools/notebook": {
       "types": "./dist/src/vended-tools/notebook/index.d.ts",
       "default": "./dist/src/vended-tools/notebook/index.js"
@@ -89,6 +93,7 @@
     "eslint": "^9.0.0",
     "eslint-plugin-tsdoc": "^0.5.0",
     "husky": "^9.1.7",
+    "openai": "^6.7.0",
     "playwright": "^1.56.1",
     "prettier": "^3.7.4",
     "tsx": "^4.21.0",
@@ -107,15 +112,28 @@
   },
   "homepage": "https://github.com/strands-agents/sdk-typescript#readme",
   "dependencies": {
-    "@aws-sdk/client-bedrock-runtime": "^3.943.0",
-    "@modelcontextprotocol/sdk": "^1.24.2",
+    "@aws-sdk/client-bedrock-runtime": "^3.943.0"
+  },
+  "peerDependencies": {
+    "@anthropic-ai/sdk": "^0.71.2",
+    "@google/genai": "^0.14.1",
+    "@modelcontextprotocol/sdk": "^1.25.2",
+    "openai": "^6.7.0",
     "zod": "^4.1.12"
   },
-  "optionalDependencies": {
-    "@anthropic-ai/sdk": "^0.71.2",
-    "openai": "^6.7.0"
+  "peerDependenciesMeta": {
+    "@anthropic-ai/sdk": {
+      "optional": true
+    },
+    "@google/genai": {
+      "optional": true
+    },
+    "openai": {
+      "optional": true
+    }
   },
   "overrides": {
-    "rollup": "4.52.5"
+    "rollup": "4.52.5",
+    "fast-xml-parser": "5.3.4"
   }
 }

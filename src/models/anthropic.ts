@@ -209,9 +209,12 @@ export class AnthropicModel extends Model<AnthropicModelConfig> {
   private _formatRequest(messages: Message[], options?: StreamOptions): Anthropic.MessageStreamParams {
     if (!this._config.modelId) throw new Error('Model ID is required')
 
+    // Set max_tokens based on model: Haiku 3 supports 4096, others support up to 32k
+    const maxTokens = this._config.maxTokens ?? (this._config.modelId.includes('haiku-3') ? 4096 : 32768)
+
     const request: Anthropic.MessageStreamParams = {
       model: this._config.modelId,
-      max_tokens: this._config.maxTokens ?? 1024,
+      max_tokens: maxTokens,
       messages: this._formatMessages(messages),
       stream: true,
     }
@@ -287,7 +290,6 @@ export class AnthropicModel extends Model<AnthropicModelConfig> {
 
         if (formattedBlock) {
           if (hasCachePoint && this._isCacheableBlock(formattedBlock)) {
-            // @ts-expect-error - strict types may not explicitly allow cache_control on all discriminated union members yet
             formattedBlock.cache_control = { type: 'ephemeral' }
             i++
           }
@@ -302,7 +304,15 @@ export class AnthropicModel extends Model<AnthropicModelConfig> {
     })
   }
 
-  private _isCacheableBlock(block: Anthropic.ContentBlockParam | Anthropic.ToolResultBlockParam): boolean {
+  private _isCacheableBlock(
+    block: Anthropic.ContentBlockParam | Anthropic.ToolResultBlockParam
+  ): block is (
+    | Anthropic.TextBlockParam
+    | Anthropic.ImageBlockParam
+    | Anthropic.ToolUseBlockParam
+    | Anthropic.ToolResultBlockParam
+    | Anthropic.DocumentBlockParam
+  ) & { cache_control?: { type: 'ephemeral' } } {
     return ['text', 'image', 'tool_use', 'tool_result', 'document'].includes(block.type)
   }
 

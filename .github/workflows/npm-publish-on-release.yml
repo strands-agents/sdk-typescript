@@ -6,8 +6,15 @@ on:
       - published
 
 jobs:
-  call-test-lint:
-    uses: ./.github/workflows/test-lint.yml
+  call-code-quality:
+    uses: ./.github/workflows/code-quality.yml
+    permissions:
+      contents: read
+    with:
+      ref: ${{ github.event.release.target_commitish }}
+
+  call-test:
+    uses: ./.github/workflows/test.yml
     permissions:
       contents: read
     with:
@@ -16,7 +23,8 @@ jobs:
   publish:
     name: Build and publish to NPM
     needs:
-      - call-test-lint
+      - call-code-quality
+      - call-test
     runs-on: ubuntu-latest
 
     environment:

@@ -4,6 +4,7 @@ import { BashTimeoutError, BashSessionError, type BashOutput } from '../index.js
 import type { ToolContext } from '../../../index.js'
 import { AgentState } from '../../../agent/state.js'
 import { isNode } from '../../../__fixtures__/environment.js'
+import { realpathSync } from 'fs'
 
 // Skip all tests if not in Node.js environment
 describe.skipIf(!isNode || process.platform === 'win32')('bash tool', () => {
@@ -333,11 +334,11 @@ describe.skipIf(!isNode || process.platform === 'win32')('bash tool', () => {
   describe('working directory', () => {
     it('starts in process.cwd()', async () => {
       const { context } = createFreshContext()
-      const expectedCwd = process.cwd()
+      const expectedCwd = realpathSync(process.cwd())
 
       const result = await bash.invoke({ mode: 'execute', command: 'pwd' }, context)
 
-      expect((result as BashOutput).output).toContain(expectedCwd)
+      expect(realpathSync((result as BashOutput).output)).toContain(expectedCwd)
     })
   })
 

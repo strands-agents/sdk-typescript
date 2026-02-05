@@ -17,5 +17,9 @@ declare module 'vitest' {
       shouldSkip: boolean
       apiKey: string | undefined
     }
+    ['provider-gemini']: {
+      shouldSkip: boolean
+      apiKey: string | undefined
+    }
   }
 }

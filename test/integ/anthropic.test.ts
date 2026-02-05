@@ -1,11 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { Message, Agent, FunctionTool, ImageBlock, DocumentBlock, TextBlock } from '@strands-agents/sdk'
+import { Message, ImageBlock, TextBlock } from '@strands-agents/sdk'
 import { collectIterator } from '$/sdk/__fixtures__/model-test-helpers.js'
 import { loadFixture } from './__fixtures__/test-helpers.js'
 import { anthropic } from './__fixtures__/model-providers.js'
 
 import yellowPngUrl from './__resources__/yellow.png?url'
-import letterPdfUrl from './__resources__/letter.pdf?url'
 
 describe.skipIf(anthropic.skip)('AnthropicModel Integration Tests', () => {
   describe('Configuration', () => {
@@ -132,40 +131,6 @@ describe.skipIf(anthropic.skip)('AnthropicModel Integration Tests', () => {
 
       expect(fullText.toLowerCase()).toContain('yellow')
     })
-
-    it('processes PDF document input correctly', async () => {
-      const provider = anthropic.createModel({ maxTokens: 1024 })
-
-      const pdfBytes = await loadFixture(letterPdfUrl)
-
-      const messages: Message[] = [
-        {
-          type: 'message',
-          role: 'user',
-          content: [
-            new DocumentBlock({
-              name: 'letter.pdf',
-              format: 'pdf',
-              source: { bytes: pdfBytes },
-            }),
-            { type: 'textBlock', text: 'Summarize this document briefly.' },
-          ],
-        },
-      ]
-
-      const events = await collectIterator(provider.stream(messages))
-
-      const stopEvent = events.find((e) => e.type === 'modelMessageStopEvent')
-      expect(stopEvent?.stopReason).toBe('endTurn')
-
-      let fullText = ''
-      for (const event of events) {
-        if (event.type === 'modelContentBlockDeltaEvent' && event.delta.type === 'textDelta') {
-          fullText += event.delta.text
-        }
-      }
-      expect(fullText.length).toBeGreaterThan(10)
-    })
   })
 
   describe('Thinking Mode', () => {
@@ -199,46 +164,6 @@ describe.skipIf(anthropic.skip)('AnthropicModel Integration Tests', () => {
         const firstThinking = thinkingEvents[0] as any
         expect(firstThinking.delta.text).toBeDefined()
       }
-    })
-  })
-
-  describe('Agent Tool Use', () => {
-    it('executes tools successfully', async () => {
-      const provider = anthropic.createModel({ maxTokens: 1024 })
-
-      const calculatorTool = new FunctionTool({
-        name: 'calculator',
-        description: 'Performs basic arithmetic',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            expression: { type: 'string' },
-          },
-          required: ['expression'],
-        },
-        callback: async (input: any) => {
-          const { expression } = input
-          if (expression.includes('2 + 2') || expression.includes('2+2')) return '4'
-          return 'unknown'
-        },
-      })
-
-      const agent = new Agent({
-        model: provider,
-        tools: [calculatorTool],
-      })
-
-      const result = await agent.invoke('Calculate 2 + 2')
-
-      expect(result.stopReason).toBe('endTurn')
-
-      const toolUseMsg = agent.messages.find(
-        (m) => m.role === 'assistant' && m.content.some((c) => c.type === 'toolUseBlock')
-      )
-      expect(toolUseMsg).toBeDefined()
-
-      const finalTextBlock = result.lastMessage.content[0] as TextBlock
-      expect(finalTextBlock.text).toContain('4')
     })
   })
 })

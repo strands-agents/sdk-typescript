@@ -27,7 +27,7 @@ async function loadApiKeysFromSecretsManager(): Promise<void> {
     if (response.SecretString) {
       const secret = JSON.parse(response.SecretString)
       // Only add API keys for currently supported providers
-      const supportedProviders = ['openai', 'anthropic']
+      const supportedProviders = ['openai', 'anthropic', 'gemini']
       Object.entries(secret).forEach(([key, value]) => {
         if (supportedProviders.includes(key.toLowerCase())) {
           process.env[`${key.toUpperCase()}_API_KEY`] = String(value)
@@ -71,6 +71,7 @@ export async function setup(project: TestProject): Promise<void> {
   project.provide('provider-openai', await getOpenAITestContext(isCI))
   project.provide('provider-bedrock', await getBedrockTestContext(isCI))
   project.provide('provider-anthropic', await getAnthropicTestContext(isCI))
+  project.provide('provider-gemini', await getGeminiTestContext(isCI))
 }
 
 async function getOpenAITestContext(isCI: boolean): Promise<ProvidedContext['provider-openai']> {
@@ -129,5 +130,22 @@ async function getBedrockTestContext(isCI: boolean): Promise<ProvidedContext['pr
       shouldSkip: true,
       credentials: undefined,
     }
+  }
+}
+
+async function getGeminiTestContext(_isCI: boolean): Promise<ProvidedContext['provider-gemini']> {
+  const apiKey = process.env.GEMINI_API_KEY
+  const shouldSkip = !apiKey
+
+  if (shouldSkip) {
+    console.log('⏭️  Gemini API key not available - integration tests will be skipped')
+    // Note: Gemini is not required in CI for now, so we don't throw an error
+  } else {
+    console.log('⏭️  Gemini API key available - integration tests will run')
+  }
+
+  return {
+    apiKey: apiKey,
+    shouldSkip: shouldSkip,
   }
 }
