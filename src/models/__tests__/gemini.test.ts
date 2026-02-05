@@ -474,9 +474,8 @@ describe('GeminiModel', () => {
 
         const contents = formatMessages(messages)
 
-        const part = contents[0]!.parts![0]! as { thoughtSignature?: Uint8Array }
-        expect(part.thoughtSignature).toBeDefined()
-        expect(new TextDecoder().decode(part.thoughtSignature)).toBe('sig123')
+        const part = contents[0]!.parts![0]!
+        expect(part.thoughtSignature).toBe('sig123')
       })
 
       it('skips reasoning block with empty text', () => {
@@ -613,7 +612,7 @@ describe('GeminiModel', () => {
                   {
                     text: 'Thinking...',
                     thought: true,
-                    thoughtSignature: new TextEncoder().encode('sig456'),
+                    thoughtSignature: 'sig456',
                   },
                 ],
               },

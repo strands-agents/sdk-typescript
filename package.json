@@ -137,5 +137,8 @@
   "overrides": {
     "rollup": "4.52.5",
     "fast-xml-parser": "5.3.4"
+  },
+  "optionalDependencies": {
+    "@google/genai": "^1.40.0"
   }
 }
