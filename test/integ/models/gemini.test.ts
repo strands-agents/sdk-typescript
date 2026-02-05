@@ -302,8 +302,9 @@ describe.skipIf(gemini.skip)('GeminiModel Integration Tests', () => {
 
   describe.skipIf(!gemini.supports.reasoning)('Reasoning Content', () => {
     it('emits reasoning content delta events with thinking model', async () => {
-      const provider = gemini.createReasoningModel({
-        params: { maxOutputTokens: 2048 },
+      const provider = gemini.createModel({
+        ...gemini.models.reasoning,
+        params: { ...gemini.models.reasoning.params, maxOutputTokens: 2048 },
       })
 
       const messages: Message[] = [

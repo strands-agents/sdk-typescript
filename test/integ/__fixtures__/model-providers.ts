@@ -10,17 +10,14 @@ import { GeminiModel, type GeminiModelOptions } from '$/sdk/models/gemini/model.
 /**
  * Feature support flags for model providers.
  * Used to conditionally run tests based on model capabilities.
+ *
+ * TODO: after https://github.com/strands-agents/sdk-python/issues/780 this config should be in src not test
  */
 export interface ProviderFeatures {
-  /** Whether the model supports reasoning/thinking content */
   reasoning: boolean
-  /** Whether the model supports tool use */
   tools: boolean
-  /** Whether the model supports image input */
   images: boolean
-  /** Whether the model supports document input */
   documents: boolean
-  /** Whether the model supports video input */
   video: boolean
 }
 
@@ -31,8 +28,16 @@ export const bedrock = {
     tools: true,
     images: true,
     documents: true,
-    video: false, // Bedrock/Claude doesn't support video content blocks
+    video: true,
   } satisfies ProviderFeatures,
+  models: {
+    default: {},
+    reasoning: {
+      modelId: 'us.anthropic.claude-sonnet-4-20250514-v1:0',
+      additionalRequestFields: { thinking: { type: 'enabled', budget_tokens: 1024 } },
+    },
+    video: { modelId: 'amazon.nova-pro-v1:0' },
+  },
   get skip() {
     return inject('provider-bedrock').shouldSkip
   },
@@ -41,25 +46,9 @@ export const bedrock = {
     if (!credentials) {
       throw new Error('No Bedrock credentials provided')
     }
-
     return new BedrockModel({
       ...options,
-      clientConfig: {
-        ...(options.clientConfig ?? {}),
-        credentials: credentials,
-      },
-    })
-  },
-  /** Creates a model configured for reasoning/thinking tests */
-  createReasoningModel: (options: BedrockModelOptions = {}): BedrockModel => {
-    return bedrock.createModel({
-      ...options,
-      // Claude Sonnet 4 supports extended thinking
-      modelId: options.modelId ?? 'us.anthropic.claude-sonnet-4-20250514-v1:0',
-      additionalRequestFields: {
-        ...(options.additionalRequestFields as Record<string, unknown> | undefined),
-        thinking: { type: 'enabled', budget_tokens: 1024 },
-      },
+      clientConfig: { ...(options.clientConfig ?? {}), credentials },
     })
   },
 }
@@ -67,13 +56,17 @@ export const bedrock = {
 export const openai = {
   name: 'OpenAIModel',
   supports: {
-    // OpenAI o1 models have internal reasoning but don't expose it in the streaming API yet
     reasoning: false,
     tools: true,
     images: true,
     documents: true,
     video: false,
   } satisfies ProviderFeatures,
+  models: {
+    default: {},
+    reasoning: { modelId: 'o1-mini' },
+    video: {},
+  },
   get skip() {
     return inject('provider-openai').shouldSkip
   },
@@ -82,24 +75,10 @@ export const openai = {
     if (!apiKey) {
       throw new Error('No OpenAI apiKey provided')
     }
-
     return new OpenAIModel({
       ...config,
-      apiKey: apiKey,
-      clientConfig: {
-        ...(config.clientConfig ?? {}),
-        dangerouslyAllowBrowser: true,
-      },
-    })
-  },
-  /** Creates a model configured for reasoning/thinking tests */
-  createReasoningModel: (config: OpenAIModelOptions = {}): OpenAIModel => {
-    if (!openai.supports.reasoning) {
-      throw new Error('OpenAI reasoning is not currently supported')
-    }
-    return openai.createModel({
-      ...config,
-      modelId: config.modelId ?? 'o1-mini',
+      apiKey,
+      clientConfig: { ...(config.clientConfig ?? {}), dangerouslyAllowBrowser: true },
     })
   },
 }
@@ -108,11 +87,19 @@ export const gemini = {
   name: 'GeminiModel',
   supports: {
     reasoning: true,
-    tools: false, // Not yet implemented
+    tools: false,
     images: true,
     documents: true,
     video: true,
   } satisfies ProviderFeatures,
+  models: {
+    default: {},
+    reasoning: {
+      modelId: 'gemini-2.5-flash',
+      params: { thinkingConfig: { thinkingBudget: 1024, includeThoughts: true } },
+    },
+    video: {},
+  },
   get skip() {
     return inject('provider-gemini').shouldSkip
   },
@@ -121,25 +108,7 @@ export const gemini = {
     if (!apiKey) {
       throw new Error('No Gemini apiKey provided')
     }
-
-    return new GeminiModel({
-      ...config,
-      apiKey: apiKey,
-    })
-  },
-  /** Creates a model configured for reasoning/thinking tests */
-  createReasoningModel: (config: GeminiModelOptions = {}): GeminiModel => {
-    return gemini.createModel({
-      ...config,
-      modelId: config.modelId ?? 'gemini-2.5-flash',
-      params: {
-        ...((config.params as Record<string, unknown>) ?? {}),
-        thinkingConfig: {
-          thinkingBudget: 1024,
-          includeThoughts: true,
-        },
-      },
-    })
+    return new GeminiModel({ ...config, apiKey })
   },
 }
 
