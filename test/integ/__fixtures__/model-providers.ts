@@ -37,7 +37,7 @@ export const bedrock = {
       modelId: 'us.anthropic.claude-sonnet-4-20250514-v1:0',
       additionalRequestFields: { thinking: { type: 'enabled', budget_tokens: 1024 } },
     },
-    video: { modelId: 'amazon.nova-pro-v1:0' },
+    video: { modelId: 'us.amazon.nova-pro-v1:0' },
   },
   get skip() {
     return inject('provider-bedrock').shouldSkip
