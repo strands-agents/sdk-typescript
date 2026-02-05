@@ -111,7 +111,6 @@
     "@aws-sdk/client-bedrock-runtime": "^3.943.0"
   },
   "peerDependencies": {
-    "@google/genai": "^0.14.0",
     "@modelcontextprotocol/sdk": "^1.25.2",
     "openai": "^6.7.0",
     "zod": "^4.1.12"
@@ -127,5 +126,8 @@
   "overrides": {
     "rollup": "4.52.5",
     "fast-xml-parser": "5.3.4"
+  },
+  "optionalDependencies": {
+    "@google/genai": "^1.40.0"
   }
 }

@@ -17,19 +17,6 @@ import { encodeBase64, getMimeType, type ImageBlock, type DocumentBlock, type Vi
 import { logger } from '../../logging/logger.js'
 
 /**
- * Encodes a Uint8Array to a base64 string for Gemini inlineData.
- *
- * @param bytes - Binary data to encode
- * @returns Base64-encoded string
- *
- * @internal
- */
-function bytesToBase64(bytes: Uint8Array): string {
-  const binaryString = String.fromCharCode(...bytes)
-  return encodeBase64(binaryString)
-}
-
-/**
  * Mapping of Gemini finish reasons to SDK stop reasons.
  * Only MAX_TOKENS needs explicit mapping; everything else defaults to endTurn.
  * TOOL_USE is handled separately via hasToolCalls flag.
@@ -134,7 +121,7 @@ function formatImageBlock(block: ImageBlock): Part | undefined {
     case 'imageSourceBytes':
       return {
         inlineData: {
-          data: bytesToBase64(block.source.bytes),
+          data: encodeBase64(String.fromCharCode(...block.source.bytes)),
           mimeType,
         },
       }
@@ -176,8 +163,7 @@ function formatReasoningBlock(block: ReasoningBlock): Part | undefined {
 
   // Add thought signature if present
   if (block.signature) {
-    // Cast to add thoughtSignature as it may not be in the SDK types yet
-    ;(part as Part & { thoughtSignature?: Uint8Array }).thoughtSignature = new TextEncoder().encode(block.signature)
+    part.thoughtSignature = block.signature
   }
 
   return part
@@ -198,7 +184,7 @@ function formatDocumentBlock(block: DocumentBlock): Part | undefined {
     case 'documentSourceBytes':
       return {
         inlineData: {
-          data: bytesToBase64(block.source.bytes),
+          data: encodeBase64(String.fromCharCode(...block.source.bytes)),
           mimeType,
         },
       }
@@ -207,7 +193,7 @@ function formatDocumentBlock(block: DocumentBlock): Part | undefined {
       // Convert text to bytes - Gemini API doesn't accept text directly
       return {
         inlineData: {
-          data: bytesToBase64(new TextEncoder().encode(block.source.text)),
+          data: encodeBase64(String.fromCharCode(...new TextEncoder().encode(block.source.text))),
           mimeType,
         },
       }
@@ -216,7 +202,9 @@ function formatDocumentBlock(block: DocumentBlock): Part | undefined {
       // Convert content blocks to text, then to bytes
       return {
         inlineData: {
-          data: bytesToBase64(new TextEncoder().encode(block.source.content.map((b) => b.text).join('\n'))),
+          data: encodeBase64(
+            String.fromCharCode(...new TextEncoder().encode(block.source.content.map((b) => b.text).join('\n')))
+          ),
           mimeType,
         },
       }
@@ -245,7 +233,7 @@ function formatVideoBlock(block: VideoBlock): Part | undefined {
     case 'videoSourceBytes':
       return {
         inlineData: {
-          data: bytesToBase64(block.source.bytes),
+          data: encodeBase64(String.fromCharCode(...block.source.bytes)),
           mimeType,
         },
       }
@@ -326,10 +314,7 @@ export function mapChunkToEvents(chunk: GenerateContentResponse, streamState: Ge
         }
 
         // Extract signature if present
-        let signature: string | undefined
-        if ('thoughtSignature' in part && part.thoughtSignature) {
-          signature = new TextDecoder().decode(part.thoughtSignature as Uint8Array)
-        }
+        const signature = part.thoughtSignature
 
         events.push({
           type: 'modelContentBlockDeltaEvent',
