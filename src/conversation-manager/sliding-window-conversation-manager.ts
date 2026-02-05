@@ -73,7 +73,7 @@ export class SlidingWindowConversationManager implements HookProvider {
     registry.addCallback(AfterModelCallEvent, (event) => {
       if (event.error instanceof ContextWindowOverflowError) {
         this.reduceContext(event.agent.messages, event.error)
-        event.retryModelCall = true
+        event.retry = true
       }
     })
   }
