@@ -17,6 +17,19 @@ import { encodeBase64, getMimeType, type ImageBlock, type DocumentBlock, type Vi
 import { logger } from '../../logging/logger.js'
 
 /**
+ * Encodes a Uint8Array to a base64 string for Gemini inlineData.
+ *
+ * @param bytes - Binary data to encode
+ * @returns Base64-encoded string
+ *
+ * @internal
+ */
+function bytesToBase64(bytes: Uint8Array): string {
+  const binaryString = String.fromCharCode(...bytes)
+  return encodeBase64(binaryString)
+}
+
+/**
  * Mapping of Gemini finish reasons to SDK stop reasons.
  * Only MAX_TOKENS needs explicit mapping; everything else defaults to endTurn.
  * TOOL_USE is handled separately via hasToolCalls flag.
@@ -89,16 +102,16 @@ function formatContentBlock(block: ContentBlock): Part | undefined {
       return formatVideoBlock(block)
 
     case 'cachePointBlock':
-      logger.warn('cache points are not supported by gemini, skipping')
+      logger.warn('block_type=<cachePointBlock> | cache points not supported by gemini, skipping')
       return undefined
 
     case 'guardContentBlock':
-      logger.warn('guard content is not supported by gemini, skipping')
+      logger.warn('block_type=<guardContentBlock> | guard content not supported by gemini, skipping')
       return undefined
 
     case 'toolUseBlock':
     case 'toolResultBlock':
-      logger.warn(`tool blocks are not yet supported by gemini, skipping`)
+      logger.warn(`block_type=<${block.type}> | tool blocks not yet supported by gemini, skipping`)
       return undefined
 
     default:
@@ -118,20 +131,15 @@ function formatImageBlock(block: ImageBlock): Part | undefined {
   const mimeType = getMimeType(block.format) ?? `image/${block.format}`
 
   switch (block.source.type) {
-    case 'imageSourceBytes': {
-      // Convert Uint8Array to base64 string
-      const binaryString = String.fromCharCode(...block.source.bytes)
-      const base64Data = encodeBase64(binaryString)
+    case 'imageSourceBytes':
       return {
         inlineData: {
-          data: base64Data,
+          data: bytesToBase64(block.source.bytes),
           mimeType,
         },
       }
-    }
 
     case 'imageSourceUrl':
-      // Gemini supports URLs via fileData
       return {
         fileData: {
           fileUri: block.source.url,
@@ -140,7 +148,7 @@ function formatImageBlock(block: ImageBlock): Part | undefined {
       }
 
     case 'imageSourceS3Location':
-      logger.warn('s3 image sources are not supported by gemini, skipping')
+      logger.warn('source_type=<imageSourceS3Location> | s3 sources not supported by gemini, skipping')
       return undefined
 
     default:
@@ -187,30 +195,24 @@ function formatDocumentBlock(block: DocumentBlock): Part | undefined {
   const mimeType = getMimeType(block.format) ?? `application/${block.format}`
 
   switch (block.source.type) {
-    case 'documentSourceBytes': {
-      // Convert Uint8Array to base64 string
-      const binaryString = String.fromCharCode(...block.source.bytes)
-      const base64Data = encodeBase64(binaryString)
+    case 'documentSourceBytes':
       return {
         inlineData: {
-          data: base64Data,
+          data: bytesToBase64(block.source.bytes),
           mimeType,
         },
       }
-    }
 
     case 'documentSourceText':
-      // Convert text to a text part
       return { text: block.source.text }
 
     case 'documentSourceContentBlock':
-      // Convert content blocks to text
       return {
         text: block.source.content.map((b) => b.text).join('\n'),
       }
 
     case 'documentSourceS3Location':
-      logger.warn('s3 document sources are not supported by gemini, skipping')
+      logger.warn('source_type=<documentSourceS3Location> | s3 sources not supported by gemini, skipping')
       return undefined
 
     default:
@@ -230,20 +232,16 @@ function formatVideoBlock(block: VideoBlock): Part | undefined {
   const mimeType = getMimeType(block.format) ?? `video/${block.format}`
 
   switch (block.source.type) {
-    case 'videoSourceBytes': {
-      // Convert Uint8Array to base64 string
-      const binaryString = String.fromCharCode(...block.source.bytes)
-      const base64Data = encodeBase64(binaryString)
+    case 'videoSourceBytes':
       return {
         inlineData: {
-          data: base64Data,
+          data: bytesToBase64(block.source.bytes),
           mimeType,
         },
       }
-    }
 
     case 'videoSourceS3Location':
-      logger.warn('s3 video sources are not supported by gemini, skipping')
+      logger.warn('source_type=<videoSourceS3Location> | s3 sources not supported by gemini, skipping')
       return undefined
 
     default:
