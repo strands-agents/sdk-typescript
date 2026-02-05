@@ -397,7 +397,11 @@ describe('Agent Hooks Integration', () => {
       let toolCallCount = 0
       const tool = createMockTool('retryableTool', () => {
         toolCallCount++
-        return new ToolResultBlock({ toolUseId: 'tool-1', status: 'success', content: [new TextBlock(`Result ${toolCallCount}`)] })
+        return new ToolResultBlock({
+          toolUseId: 'tool-1',
+          status: 'success',
+          content: [new TextBlock(`Result ${toolCallCount}`)],
+        })
       })
 
       let beforeCount = 0
@@ -428,7 +432,11 @@ describe('Agent Hooks Integration', () => {
       let toolCallCount = 0
       const tool = createMockTool('successTool', () => {
         toolCallCount++
-        return new ToolResultBlock({ toolUseId: 'tool-1', status: 'success', content: [new TextBlock(`Result ${toolCallCount}`)] })
+        return new ToolResultBlock({
+          toolUseId: 'tool-1',
+          status: 'success',
+          content: [new TextBlock(`Result ${toolCallCount}`)],
+        })
       })
 
       let hookCallCount = 0
