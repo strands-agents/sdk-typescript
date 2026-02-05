@@ -4,6 +4,8 @@
  */
 
 import type { Tool, ToolContext } from '../tools/tool.js'
+import { FunctionTool } from '../tools/function-tool.js'
+import type { FunctionToolCallback } from '../tools/function-tool.js'
 import { ToolResultBlock } from '../types/messages.js'
 import type { JSONValue } from '../types/json.js'
 import { AgentState } from '../agent/state.js'
@@ -89,4 +91,22 @@ export function createRandomTool(name?: string): Tool {
         content: [],
       })
   )
+}
+
+/**
+ * Helper to create a FunctionTool with minimal configuration for testing.
+ * Use this when you need callback behavior (throwing errors, returning raw values)
+ * rather than ToolResultBlock.
+ *
+ * @param name - The name of the tool
+ * @param callback - The callback function to execute
+ * @returns FunctionTool instance
+ */
+export function createCallbackTool(name: string, callback: FunctionToolCallback): FunctionTool {
+  return new FunctionTool({
+    name,
+    description: `Test tool ${name}`,
+    inputSchema: {},
+    callback,
+  })
 }

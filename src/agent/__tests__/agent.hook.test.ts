@@ -9,12 +9,12 @@ import {
   BeforeToolCallEvent,
   MessageAddedEvent,
   ModelStreamEventHook,
-  type HookRegistry,
 } from '../../hooks/index.js'
 import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
 import { MockHookProvider } from '../../__fixtures__/mock-hook-provider.js'
 import { collectIterator } from '../../__fixtures__/model-test-helpers.js'
 import { FunctionTool } from '../../tools/function-tool.js'
+import { createCallbackTool } from '../../__fixtures__/tool-helpers.js'
 import { Message, TextBlock, ToolResultBlock } from '../../types/messages.js'
 
 describe('Agent Hooks Integration', () => {
@@ -307,22 +307,18 @@ describe('Agent Hooks Integration', () => {
   describe('AfterModelCallEvent retry', () => {
     it('retries model call when hook sets retry', async () => {
       let callCount = 0
-      const retryHook = {
-        registerCallbacks: (registry: HookRegistry) => {
-          registry.addCallback(AfterModelCallEvent, (event: AfterModelCallEvent) => {
-            callCount++
-            if (callCount === 1 && event.error) {
-              event.retry = true
-            }
-          })
-        },
-      }
-
       const model = new MockMessageModel()
         .addTurn(new Error('First attempt failed'))
         .addTurn({ type: 'textBlock', text: 'Success after retry' })
 
-      const agent = new Agent({ model, hooks: [retryHook] })
+      const agent = new Agent({ model })
+      agent.hooks.addCallback(AfterModelCallEvent, (event: AfterModelCallEvent) => {
+        callCount++
+        if (callCount === 1 && event.error) {
+          event.retry = true
+        }
+      })
+
       const result = await agent.invoke('Test')
 
       expect(result.lastMessage.content[0]).toEqual({ type: 'textBlock', text: 'Success after retry' })
@@ -338,23 +334,18 @@ describe('Agent Hooks Integration', () => {
 
     it('retries model call on success when hook requests it', async () => {
       let callCount = 0
-      const retryHook = {
-        registerCallbacks: (registry: HookRegistry) => {
-          registry.addCallback(AfterModelCallEvent, (event: AfterModelCallEvent) => {
-            callCount++
-            // Retry on first successful call
-            if (callCount === 1 && !event.error) {
-              event.retry = true
-            }
-          })
-        },
-      }
-
       const model = new MockMessageModel()
         .addTurn({ type: 'textBlock', text: 'First response' })
         .addTurn({ type: 'textBlock', text: 'Second response after retry' })
 
-      const agent = new Agent({ model, hooks: [retryHook] })
+      const agent = new Agent({ model })
+      agent.hooks.addCallback(AfterModelCallEvent, (event: AfterModelCallEvent) => {
+        callCount++
+        if (callCount === 1 && !event.error) {
+          event.retry = true
+        }
+      })
+
       const result = await agent.invoke('Test')
 
       expect(result.lastMessage.content[0]).toEqual({ type: 'textBlock', text: 'Second response after retry' })
@@ -365,37 +356,27 @@ describe('Agent Hooks Integration', () => {
   describe('AfterToolCallEvent retry', () => {
     it('retries tool call when hook sets retry', async () => {
       let toolCallCount = 0
-      const tool = new FunctionTool({
-        name: 'retryableTool',
-        description: 'A tool that may need retrying',
-        inputSchema: {},
-        callback: () => {
-          toolCallCount++
-          if (toolCallCount === 1) {
-            throw new Error('First attempt failed')
-          }
-          return 'Success after retry'
-        },
+      const tool = createCallbackTool('retryableTool', () => {
+        toolCallCount++
+        if (toolCallCount === 1) {
+          throw new Error('First attempt failed')
+        }
+        return 'Success after retry'
       })
 
       let hookCallCount = 0
-      const retryHook = {
-        registerCallbacks: (registry: HookRegistry) => {
-          registry.addCallback(AfterToolCallEvent, (event: AfterToolCallEvent) => {
-            hookCallCount++
-            // Retry on first call when there's an error
-            if (hookCallCount === 1 && event.error) {
-              event.retry = true
-            }
-          })
-        },
-      }
-
       const model = new MockMessageModel()
         .addTurn({ type: 'toolUseBlock', name: 'retryableTool', toolUseId: 'tool-1', input: {} })
         .addTurn({ type: 'textBlock', text: 'Done' })
 
-      const agent = new Agent({ model, tools: [tool], hooks: [retryHook] })
+      const agent = new Agent({ model, tools: [tool] })
+      agent.hooks.addCallback(AfterToolCallEvent, (event: AfterToolCallEvent) => {
+        hookCallCount++
+        if (hookCallCount === 1 && event.error) {
+          event.retry = true
+        }
+      })
+
       const result = await agent.invoke('Test')
 
       expect(result.stopReason).toBe('endTurn')
@@ -405,14 +386,9 @@ describe('Agent Hooks Integration', () => {
 
     it('does not retry tool call when retry is not set', async () => {
       let toolCallCount = 0
-      const tool = new FunctionTool({
-        name: 'failingTool',
-        description: 'A tool that fails',
-        inputSchema: {},
-        callback: () => {
-          toolCallCount++
-          throw new Error('Tool failed')
-        },
+      const tool = createCallbackTool('failingTool', () => {
+        toolCallCount++
+        throw new Error('Tool failed')
       })
 
       const model = new MockMessageModel()
@@ -422,49 +398,36 @@ describe('Agent Hooks Integration', () => {
       const agent = new Agent({ model, tools: [tool] })
       const result = await agent.invoke('Test')
 
-      // Agent should complete (tool errors are handled gracefully)
       expect(result.stopReason).toBe('endTurn')
-      // Tool should only be called once (no retry)
       expect(toolCallCount).toBe(1)
     })
 
     it('fires BeforeToolCallEvent on each retry', async () => {
       let toolCallCount = 0
-      const tool = new FunctionTool({
-        name: 'retryableTool',
-        description: 'A tool that retries',
-        inputSchema: {},
-        callback: () => {
-          toolCallCount++
-          return `Result ${toolCallCount}`
-        },
+      const tool = createCallbackTool('retryableTool', () => {
+        toolCallCount++
+        return `Result ${toolCallCount}`
       })
 
       let beforeCount = 0
       let afterCount = 0
-      const retryHook = {
-        registerCallbacks: (registry: HookRegistry) => {
-          registry.addCallback(BeforeToolCallEvent, () => {
-            beforeCount++
-          })
-          registry.addCallback(AfterToolCallEvent, (event: AfterToolCallEvent) => {
-            afterCount++
-            // Retry on first call
-            if (afterCount === 1) {
-              event.retry = true
-            }
-          })
-        },
-      }
-
       const model = new MockMessageModel()
         .addTurn({ type: 'toolUseBlock', name: 'retryableTool', toolUseId: 'tool-1', input: {} })
         .addTurn({ type: 'textBlock', text: 'Done' })
 
-      const agent = new Agent({ model, tools: [tool], hooks: [retryHook] })
+      const agent = new Agent({ model, tools: [tool] })
+      agent.hooks.addCallback(BeforeToolCallEvent, () => {
+        beforeCount++
+      })
+      agent.hooks.addCallback(AfterToolCallEvent, (event: AfterToolCallEvent) => {
+        afterCount++
+        if (afterCount === 1) {
+          event.retry = true
+        }
+      })
+
       await agent.invoke('Test')
 
-      // BeforeToolCallEvent should fire twice (once per attempt)
       expect(beforeCount).toBe(2)
       expect(afterCount).toBe(2)
       expect(toolCallCount).toBe(2)
@@ -472,34 +435,24 @@ describe('Agent Hooks Integration', () => {
 
     it('retries tool call on success when hook requests it', async () => {
       let toolCallCount = 0
-      const tool = new FunctionTool({
-        name: 'successTool',
-        description: 'A successful tool',
-        inputSchema: {},
-        callback: () => {
-          toolCallCount++
-          return `Result ${toolCallCount}`
-        },
+      const tool = createCallbackTool('successTool', () => {
+        toolCallCount++
+        return `Result ${toolCallCount}`
       })
 
       let hookCallCount = 0
-      const retryHook = {
-        registerCallbacks: (registry: HookRegistry) => {
-          registry.addCallback(AfterToolCallEvent, (event: AfterToolCallEvent) => {
-            hookCallCount++
-            // Retry once even on success
-            if (hookCallCount === 1) {
-              event.retry = true
-            }
-          })
-        },
-      }
-
       const model = new MockMessageModel()
         .addTurn({ type: 'toolUseBlock', name: 'successTool', toolUseId: 'tool-1', input: {} })
         .addTurn({ type: 'textBlock', text: 'Done' })
 
-      const agent = new Agent({ model, tools: [tool], hooks: [retryHook] })
+      const agent = new Agent({ model, tools: [tool] })
+      agent.hooks.addCallback(AfterToolCallEvent, (event: AfterToolCallEvent) => {
+        hookCallCount++
+        if (hookCallCount === 1) {
+          event.retry = true
+        }
+      })
+
       const result = await agent.invoke('Test')
 
       expect(result.stopReason).toBe('endTurn')
