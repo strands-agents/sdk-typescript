@@ -7,6 +7,10 @@ import { JsonBlock, type TextBlock, type ToolResultBlock } from '../types/messag
 import type { AgentData } from '../types/agent.js'
 import type { ToolContext } from '../tools/tool.js'
 
+vi.mock('@modelcontextprotocol/sdk/types.js', () => ({
+  ElicitRequestSchema: { method: 'elicitation/create' },
+}))
+
 /**
  * Helper to create a mock async generator that yields a result message.
  * This simulates the behavior of callToolStream returning a stream that ends with a result.
@@ -23,6 +27,7 @@ vi.mock('@modelcontextprotocol/sdk/client/index.js', () => ({
       connect: vi.fn(),
       close: vi.fn(),
       listTools: vi.fn(),
+      setRequestHandler: vi.fn(),
       experimental: {
         tasks: {
           callToolStream: vi.fn(),
@@ -84,7 +89,7 @@ describe('MCP Integration', () => {
     })
 
     it('initializes SDK client with correct configuration', () => {
-      expect(Client).toHaveBeenCalledWith({ name: 'TestApp', version: '0.0.1' })
+      expect(Client).toHaveBeenCalledWith({ name: 'TestApp', version: '0.0.1' }, undefined)
     })
 
     it('manages connection state lazily', async () => {
@@ -138,6 +143,120 @@ describe('MCP Integration', () => {
       await client.disconnect()
       expect(sdkClientMock.close).toHaveBeenCalled()
       expect(mockTransport.close).toHaveBeenCalled()
+    })
+
+    describe('elicitation callback', () => {
+      it('registers callback when provided', async () => {
+        const callback = vi.fn()
+        const clientWithCallback = new McpClient({
+          applicationName: 'TestApp',
+          transport: mockTransport,
+          elicitationCallback: callback,
+        })
+        const sdkClient = vi.mocked(Client).mock.results[1]!.value
+
+        await clientWithCallback.connect()
+
+        expect(sdkClient.setRequestHandler).toHaveBeenCalled()
+      })
+
+      it('does not register callback when not provided', async () => {
+        await client.connect()
+
+        expect(sdkClientMock.setRequestHandler).not.toHaveBeenCalled()
+      })
+
+      it('invokes callback and returns all action types correctly', async () => {
+        const callback = vi.fn()
+        const clientWithCallback = new McpClient({
+          applicationName: 'TestApp',
+          transport: mockTransport,
+          elicitationCallback: callback,
+        })
+        const sdkClient = vi.mocked(Client).mock.results[vi.mocked(Client).mock.results.length - 1]!.value
+
+        await clientWithCallback.connect()
+
+        const handler = sdkClient.setRequestHandler.mock.calls[0]![1]
+        const mockExtra = { sessionId: 'test-session' }
+
+        // Test accept action (form mode)
+        callback.mockResolvedValueOnce({ action: 'accept', content: { response: 'yes' } })
+        const acceptResult = await handler(
+          {
+            params: {
+              message: 'Do you want to continue?',
+              requestedSchema: { type: 'object' },
+            },
+          },
+          mockExtra
+        )
+
+        expect(callback).toHaveBeenCalledWith(mockExtra, {
+          message: 'Do you want to continue?',
+          requestedSchema: { type: 'object' },
+        })
+        expect(acceptResult).toEqual({
+          action: 'accept',
+          content: { response: 'yes' },
+        })
+
+        // Test decline action
+        callback.mockResolvedValueOnce({ action: 'decline' })
+        const declineResult = await handler({ params: { message: 'Proceed?' } }, mockExtra)
+        expect(declineResult).toEqual({ action: 'decline', content: undefined })
+
+        // Test cancel action
+        callback.mockResolvedValueOnce({ action: 'cancel' })
+        const cancelResult = await handler({ params: { message: 'Cancel operation?' } }, mockExtra)
+        expect(cancelResult).toEqual({ action: 'cancel', content: undefined })
+
+        // Test URL mode
+        callback.mockResolvedValueOnce({ action: 'accept' })
+        const urlResult = await handler(
+          {
+            params: {
+              mode: 'url',
+              message: 'Please authorize via OAuth',
+              url: 'https://example.com/oauth',
+              elicitationId: 'elicit-123',
+            },
+          },
+          mockExtra
+        )
+
+        expect(callback).toHaveBeenCalledWith(mockExtra, {
+          mode: 'url',
+          message: 'Please authorize via OAuth',
+          url: 'https://example.com/oauth',
+          elicitationId: 'elicit-123',
+        })
+        expect(urlResult).toEqual({
+          action: 'accept',
+          content: undefined,
+        })
+      })
+
+      it('handles callback errors gracefully', async () => {
+        const callback = vi.fn().mockRejectedValue(new Error('User cancelled'))
+
+        const clientWithCallback = new McpClient({
+          applicationName: 'TestApp',
+          transport: mockTransport,
+          elicitationCallback: callback,
+        })
+        const sdkClient = vi.mocked(Client).mock.results[vi.mocked(Client).mock.results.length - 1]!.value
+
+        await clientWithCallback.connect()
+
+        const handler = sdkClient.setRequestHandler.mock.calls[0]![1]
+        const mockRequest = {
+          params: { message: 'Continue?' },
+        }
+        const mockExtra = { sessionId: 'test-session' }
+
+        await expect(handler(mockRequest, mockExtra)).rejects.toThrow('User cancelled')
+      })
     })
   })
 
