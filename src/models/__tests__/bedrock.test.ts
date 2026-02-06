@@ -137,6 +137,15 @@ vi.mock('@aws-sdk/client-bedrock-runtime', async (importOriginal) => {
 describe('BedrockModel', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // Reset mock to a working implementation to ensure test isolation
+    setupMockSend(async function* () {
+      yield { messageStart: { role: 'assistant' } }
+      yield { contentBlockStart: {} }
+      yield { contentBlockDelta: { delta: { text: 'Hello' } } }
+      yield { contentBlockStop: {} }
+      yield { messageStop: { stopReason: 'end_turn' } }
+      yield { metadata: { usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } } }
+    })
     // Clean up AWS_REGION env var in Node.js only
     if (isNode && process.env) {
       delete process.env.AWS_REGION
@@ -1015,18 +1024,6 @@ describe('BedrockModel', () => {
     })
 
     describe('throttling', () => {
-      afterEach(() => {
-        // Reset to a non-error mock to avoid affecting subsequent tests
-        setupMockSend(async function* () {
-          yield { messageStart: { role: 'assistant' } }
-          yield { contentBlockStart: {} }
-          yield { contentBlockDelta: { delta: { text: 'Hello' } } }
-          yield { contentBlockStop: {} }
-          yield { messageStop: { stopReason: 'end_turn' } }
-          yield { metadata: { usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } } }
-        })
-      })
-
       it('throws ModelThrottledError when throttlingException is received', async () => {
         setupMockSend(async function* () {
           yield { messageStart: { role: 'assistant' } }

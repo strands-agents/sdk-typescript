@@ -2,7 +2,7 @@ import Anthropic, { type ClientOptions } from '@anthropic-ai/sdk'
 import { Model, type BaseModelConfig, type StreamOptions } from '../models/model.js'
 import type { Message, ContentBlock } from '../types/messages.js'
 import type { ModelStreamEvent } from '../models/streaming.js'
-import { ContextWindowOverflowError, normalizeError } from '../errors.js'
+import { ContextWindowOverflowError, ModelThrottledError, normalizeError } from '../errors.js'
 import type { ImageBlock, DocumentBlock } from '../types/media.js'
 import { encodeBase64 } from '../types/media.js'
 import { logger } from '../logging/logger.js'
@@ -197,6 +197,15 @@ export class AnthropicModel extends Model<AnthropicModelConfig> {
       }
     } catch (unknownError) {
       const error = normalizeError(unknownError)
+
+      // Check for rate limit errors - Anthropic SDK throws errors with status 429
+      // This matches Python SDK behavior: `except anthropic.RateLimitError as e`
+      const err = unknownError as Error & { status?: number }
+      if (err.status === 429) {
+        const message = error.message ?? 'Request was throttled by the model provider'
+        logger.debug(`throttled | error_message=<${message}>`)
+        throw new ModelThrottledError(message, { cause: err })
+      }
 
       if (CONTEXT_WINDOW_OVERFLOW_ERRORS.some((msg) => error.message.includes(msg))) {
         throw new ContextWindowOverflowError(error.message)

@@ -116,27 +116,7 @@ export class ConcurrentInvocationError extends Error {
  *
  * This error indicates that the model API has rate limited the request. Users can
  * handle this error in hooks to implement custom retry strategies using the
- * `AfterModelCallEvent.retryModelCall` mechanism.
- *
- * @example
- * ```typescript
- * import { Agent, AfterModelCallEvent, ModelThrottledError } from '@strands-agents/sdk'
- *
- * const retryOnThrottleHook = {
- *   registerCallbacks(registry) {
- *     registry.addCallback(AfterModelCallEvent, (event) => {
- *       if (event.error instanceof ModelThrottledError) {
- *         // Implement custom backoff logic
- *         event.retryModelCall = true
- *       }
- *     })
- *   }
- * }
- *
- * const agent = new Agent({
- *   hooks: [retryOnThrottleHook]
- * })
- * ```
+ * `AfterModelCallEvent.retry` mechanism.
  */
 export class ModelThrottledError extends ModelError {
   /**
