@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import Anthropic from '@anthropic-ai/sdk'
 import { isNode } from '../../__fixtures__/environment.js'
 import { AnthropicModel } from '../anthropic.js'
-import { ContextWindowOverflowError } from '../../errors.js'
+import { ContextWindowOverflowError, ModelThrottledError } from '../../errors.js'
 import { collectIterator } from '../../__fixtures__/model-test-helpers.js'
 import type { Message } from '../../types/messages.js'
 import { TextBlock, CachePointBlock, GuardContentBlock } from '../../types/messages.js'
@@ -268,6 +268,19 @@ describe('AnthropicModel', () => {
       const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
 
       await expect(collectIterator(provider.stream(messages))).rejects.toThrow(ContextWindowOverflowError)
+    })
+
+    it('maps HTTP 429 error to ModelThrottledError', async () => {
+      const rateLimitError = Object.assign(new Error('Rate limit exceeded'), { status: 429 })
+      // eslint-disable-next-line require-yield
+      const mockClient = createMockClient(async function* () {
+        throw rateLimitError
+      })
+      const provider = new AnthropicModel({ client: mockClient })
+      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+
+      await expect(collectIterator(provider.stream(messages))).rejects.toThrow(ModelThrottledError)
+      await expect(collectIterator(provider.stream(messages))).rejects.toThrow('Rate limit exceeded')
     })
   })
 
