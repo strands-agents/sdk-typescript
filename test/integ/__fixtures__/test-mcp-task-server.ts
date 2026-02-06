@@ -324,6 +324,7 @@ export async function startTaskHTTPServer(): Promise<TaskHttpServerInfo> {
         const mcpServer = createTaskTestServer(taskStore)
         const transport = new StreamableHTTPServerTransport({
           enableJsonResponse: true,
+          sessionIdGenerator: () => 'test-session',
         })
 
         res.on('close', async () => {
