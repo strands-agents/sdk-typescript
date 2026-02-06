@@ -198,17 +198,15 @@ export class AnthropicModel extends Model<AnthropicModelConfig> {
     } catch (unknownError) {
       const error = normalizeError(unknownError)
 
-      // Check for rate limit errors - Anthropic SDK throws errors with status 429
-      // This matches Python SDK behavior: `except anthropic.RateLimitError as e`
+      if (CONTEXT_WINDOW_OVERFLOW_ERRORS.some((msg) => error.message.includes(msg))) {
+        throw new ContextWindowOverflowError(error.message)
+      }
+
       const err = unknownError as Error & { status?: number }
       if (err.status === 429) {
         const message = error.message ?? 'Request was throttled by the model provider'
         logger.debug(`throttled | error_message=<${message}>`)
         throw new ModelThrottledError(message, { cause: err })
-      }
-
-      if (CONTEXT_WINDOW_OVERFLOW_ERRORS.some((msg) => error.message.includes(msg))) {
-        throw new ContextWindowOverflowError(error.message)
       }
 
       throw error
