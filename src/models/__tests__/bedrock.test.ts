@@ -41,6 +41,7 @@ function mockBedrockClientImplementation(options?: {
 
     return {
       send: mockSend,
+      middlewareStack: { add: vi.fn() },
       config: {
         region: mockRegion,
         useFipsEndpoint: mockUseFipsEndpoint,
@@ -122,6 +123,7 @@ vi.mock('@aws-sdk/client-bedrock-runtime', async (importOriginal) => {
     BedrockRuntimeClient: vi.fn(function () {
       return {
         send: mockSend,
+        middlewareStack: { add: vi.fn() },
         config: {
           region: vi.fn(async () => 'us-east-1'),
           useFipsEndpoint: vi.fn(async () => false),
@@ -202,6 +204,47 @@ describe('BedrockModel', () => {
         region,
         credentials,
         customUserAgent: 'strands-agents-ts-sdk',
+      })
+    })
+
+    it('adds api key middleware when apiKey is provided', () => {
+      const provider = new BedrockModel({ region: 'us-east-1', apiKey: 'br-test-key' })
+      const mockAdd = provider['_client'].middlewareStack.add as ReturnType<typeof vi.fn>
+      expect(mockAdd).toHaveBeenCalledWith(expect.any(Function), {
+        step: 'finalizeRequest',
+        priority: 'low',
+        name: 'bedrockApiKeyMiddleware',
+      })
+    })
+
+    it('does not add api key middleware when apiKey is not provided', () => {
+      const provider = new BedrockModel({ region: 'us-east-1' })
+      const mockAdd = provider['_client'].middlewareStack.add as ReturnType<typeof vi.fn>
+      expect(mockAdd).not.toHaveBeenCalled()
+    })
+
+    it('api key middleware sets authorization header', async () => {
+      const provider = new BedrockModel({ region: 'us-east-1', apiKey: 'br-test-key' })
+      const mockAdd = provider['_client'].middlewareStack.add as ReturnType<typeof vi.fn>
+      const middlewareFn = mockAdd.mock.calls[0]![0] as (
+        next: (args: unknown) => Promise<unknown>
+      ) => (args: unknown) => Promise<unknown>
+
+      const mockNext = vi.fn(async (args: unknown) => args)
+      const handler = middlewareFn(mockNext)
+      const args = { request: { headers: { authorization: 'AWS4-HMAC-SHA256 ...' } } }
+      await handler(args)
+
+      expect(args.request.headers['authorization']).toBe('Bearer br-test-key')
+      expect(mockNext).toHaveBeenCalledWith(args)
+    })
+
+    it('does not include apiKey in model config', () => {
+      const provider = new BedrockModel({ region: 'us-east-1', apiKey: 'br-test-key', temperature: 0.5 })
+      const config = provider.getConfig()
+      expect(config).toStrictEqual({
+        modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
+        temperature: 0.5,
       })
     })
   })
