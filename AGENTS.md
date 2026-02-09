@@ -620,6 +620,16 @@ expect(provider.getConfig().params.temperature).toBe(0.5)
 
 **Rationale**: Full object assertions catch unexpected properties and ensure the complete shape is correct.
 
+### Dependency Management
+
+When adding or modifying dependencies, you **MUST** follow the guidelines in [docs/DEPENDENCIES.md](docs/DEPENDENCIES.md). Key points:
+
+- **`dependencies`**: Core SDK functionality that users don't interact with directly
+- **`peerDependencies`**: Dependencies that cross API boundaries (users construct/pass instances)
+- **`devDependencies`**: Build tools, testing frameworks, linters - not shipped to users
+
+**Rule**: If a dependency crosses an API boundary, it **MUST** be a peer dependency.
+
 ## Things to Do
 
 ✅ **Do**:
