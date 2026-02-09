@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { BedrockRuntimeClient } from '@aws-sdk/client-bedrock-runtime'
 import { isNode } from '../../__fixtures__/environment.js'
 import { BedrockModel } from '../bedrock.js'
-import { ContextWindowOverflowError } from '../../errors.js'
+import { ContextWindowOverflowError, ModelThrottledError } from '../../errors.js'
 import type { Message } from '../../types/messages.js'
 import { TextBlock, GuardContentBlock, CachePointBlock } from '../../types/messages.js'
 import type { StreamOptions } from '../model.js'
@@ -137,6 +137,15 @@ vi.mock('@aws-sdk/client-bedrock-runtime', async (importOriginal) => {
 describe('BedrockModel', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // Reset mock to a working implementation to ensure test isolation
+    setupMockSend(async function* () {
+      yield { messageStart: { role: 'assistant' } }
+      yield { contentBlockStart: {} }
+      yield { contentBlockDelta: { delta: { text: 'Hello' } } }
+      yield { contentBlockStop: {} }
+      yield { messageStop: { stopReason: 'end_turn' } }
+      yield { metadata: { usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } } }
+    })
     // Clean up AWS_REGION env var in Node.js only
     if (isNode && process.env) {
       delete process.env.AWS_REGION
@@ -1012,6 +1021,56 @@ describe('BedrockModel', () => {
           }
         })
       }
+    })
+
+    describe('throttling', () => {
+      it('throws ModelThrottledError when throttlingException is received', async () => {
+        setupMockSend(async function* () {
+          yield { messageStart: { role: 'assistant' } }
+          yield { throttlingException: { message: 'Rate exceeded' } }
+        })
+
+        const provider = new BedrockModel()
+        const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+
+        await expect(async () => {
+          for await (const _ of provider.stream(messages)) {
+            // consume stream
+          }
+        }).rejects.toThrow(ModelThrottledError)
+      })
+
+      it('includes throttling message in ModelThrottledError', async () => {
+        setupMockSend(async function* () {
+          yield { messageStart: { role: 'assistant' } }
+          yield { throttlingException: { message: 'Too many requests' } }
+        })
+
+        const provider = new BedrockModel()
+        const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+
+        await expect(async () => {
+          for await (const _ of provider.stream(messages)) {
+            // consume stream
+          }
+        }).rejects.toThrow('Too many requests')
+      })
+
+      it('uses default message when throttlingException has no message', async () => {
+        setupMockSend(async function* () {
+          yield { messageStart: { role: 'assistant' } }
+          yield { throttlingException: {} }
+        })
+
+        const provider = new BedrockModel()
+        const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+
+        await expect(async () => {
+          for await (const _ of provider.stream(messages)) {
+            // consume stream
+          }
+        }).rejects.toThrow('Request was throttled by the model provider')
+      })
     })
   })
 

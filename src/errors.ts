@@ -112,6 +112,26 @@ export class ConcurrentInvocationError extends Error {
 }
 
 /**
+ * Error thrown when a model provider returns a throttling or rate limit error.
+ *
+ * This error indicates that the model API has rate limited the request. Users can
+ * handle this error in hooks to implement custom retry strategies using the
+ * `AfterModelCallEvent.retry` mechanism.
+ */
+export class ModelThrottledError extends ModelError {
+  /**
+   * Creates a new ModelThrottledError.
+   *
+   * @param message - Error message describing the throttling condition
+   * @param options - Optional error options including cause for error chaining
+   */
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options)
+    this.name = 'ModelThrottledError'
+  }
+}
+
+/**
  * Normalizes an unknown error value to an Error instance.
  *
  * This helper ensures that any thrown value (Error, string, number, etc.)

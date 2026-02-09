@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { ModelError, ContextWindowOverflowError, MaxTokensError, normalizeError } from '../errors.js'
+import {
+  ModelError,
+  ContextWindowOverflowError,
+  MaxTokensError,
+  ModelThrottledError,
+  normalizeError,
+} from '../errors.js'
 import { Message, TextBlock } from '../types/messages.js'
 
 describe('ModelError', () => {
@@ -114,6 +120,50 @@ describe('MaxTokensError', () => {
       const error = new MaxTokensError('test', partialMessage)
 
       expect(error).toBeInstanceOf(ModelError)
+    })
+  })
+})
+
+describe('ModelThrottledError', () => {
+  describe('when instantiated with a message', () => {
+    it('creates an error with the correct message', () => {
+      const message = 'Rate limit exceeded'
+      const error = new ModelThrottledError(message)
+
+      expect(error.message).toBe(message)
+    })
+
+    it('has the correct error name', () => {
+      const error = new ModelThrottledError('test')
+
+      expect(error.name).toBe('ModelThrottledError')
+    })
+
+    it('is an instance of Error', () => {
+      const error = new ModelThrottledError('test')
+
+      expect(error).toBeInstanceOf(Error)
+    })
+
+    it('is an instance of ModelError', () => {
+      const error = new ModelThrottledError('test')
+
+      expect(error).toBeInstanceOf(ModelError)
+    })
+  })
+
+  describe('when instantiated with a cause', () => {
+    it('preserves the original error as cause', () => {
+      const originalError = new Error('Original rate limit error')
+      const error = new ModelThrottledError('Rate limit exceeded', { cause: originalError })
+
+      expect(error.cause).toBe(originalError)
+    })
+
+    it('has undefined cause when not provided', () => {
+      const error = new ModelThrottledError('Rate limit exceeded')
+
+      expect(error.cause).toBeUndefined()
     })
   })
 })

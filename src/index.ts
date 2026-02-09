@@ -23,6 +23,7 @@ export {
   MaxTokensError,
   JsonValidationError,
   ConcurrentInvocationError,
+  ModelThrottledError,
 } from './errors.js'
 
 // JSON types
