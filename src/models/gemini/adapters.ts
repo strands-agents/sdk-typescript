@@ -46,10 +46,7 @@ export function formatMessages(messages: Message[]): Content[] {
     const parts: Part[] = []
 
     for (const block of message.content) {
-      const part = formatContentBlock(block)
-      if (part) {
-        parts.push(part)
-      }
+      formatContentBlock(block, parts)
     }
 
     if (parts.length > 0) {
@@ -64,45 +61,56 @@ export function formatMessages(messages: Message[]): Content[] {
 }
 
 /**
- * Formats a content block to a Gemini Part.
+ * Formats a content block to one or more Gemini Parts, pushing them into the provided array.
  *
  * @param block - SDK content block
- * @returns Gemini Part or undefined if block type is not supported
+ * @param parts - Array to push formatted parts into
  *
  * @internal
  */
-function formatContentBlock(block: ContentBlock): Part | undefined {
+function formatContentBlock(block: ContentBlock, parts: Part[]): void {
   switch (block.type) {
     case 'textBlock':
-      return { text: block.text }
+      parts.push({ text: block.text })
+      return
 
-    case 'imageBlock':
-      return formatImageBlock(block)
+    case 'imageBlock': {
+      const part = formatImageBlock(block)
+      if (part) parts.push(part)
+      return
+    }
 
-    case 'reasoningBlock':
-      return formatReasoningBlock(block)
+    case 'reasoningBlock': {
+      const part = formatReasoningBlock(block)
+      if (part) parts.push(part)
+      return
+    }
 
     case 'documentBlock':
-      return formatDocumentBlock(block)
+      formatDocumentBlock(block, parts)
+      return
 
-    case 'videoBlock':
-      return formatVideoBlock(block)
+    case 'videoBlock': {
+      const part = formatVideoBlock(block)
+      if (part) parts.push(part)
+      return
+    }
 
     case 'cachePointBlock':
       logger.warn('block_type=<cachePointBlock> | cache points not supported by gemini, skipping')
-      return undefined
+      return
 
     case 'guardContentBlock':
       logger.warn('block_type=<guardContentBlock> | guard content not supported by gemini, skipping')
-      return undefined
+      return
 
     case 'toolUseBlock':
     case 'toolResultBlock':
       logger.warn(`block_type=<${block.type}> | tool blocks not yet supported by gemini, skipping`)
-      return undefined
+      return
 
     default:
-      return undefined
+      return
   }
 }
 
@@ -121,7 +129,7 @@ function formatImageBlock(block: ImageBlock): Part | undefined {
     case 'imageSourceBytes':
       return {
         inlineData: {
-          data: encodeBase64(String.fromCharCode(...block.source.bytes)),
+          data: encodeBase64(block.source.bytes),
           mimeType,
         },
       }
@@ -170,51 +178,49 @@ function formatReasoningBlock(block: ReasoningBlock): Part | undefined {
 }
 
 /**
- * Formats a document block to a Gemini Part.
+ * Formats a document block to one or more Gemini Parts, pushing them into the provided array.
  *
  * @param block - Document block to format
- * @returns Gemini Part with inline data
+ * @param parts - Array to push formatted parts into
  *
  * @internal
  */
-function formatDocumentBlock(block: DocumentBlock): Part | undefined {
+function formatDocumentBlock(block: DocumentBlock, parts: Part[]): void {
   const mimeType = getMimeType(block.format) ?? `application/${block.format}`
 
   switch (block.source.type) {
     case 'documentSourceBytes':
-      return {
+      parts.push({
         inlineData: {
-          data: encodeBase64(String.fromCharCode(...block.source.bytes)),
+          data: encodeBase64(block.source.bytes),
           mimeType,
         },
-      }
+      })
+      return
 
     case 'documentSourceText':
       // Convert text to bytes - Gemini API doesn't accept text directly
-      return {
+      parts.push({
         inlineData: {
-          data: encodeBase64(String.fromCharCode(...new TextEncoder().encode(block.source.text))),
+          data: encodeBase64(new TextEncoder().encode(block.source.text)),
           mimeType,
         },
-      }
+      })
+      return
 
     case 'documentSourceContentBlock':
-      // Convert content blocks to text, then to bytes
-      return {
-        inlineData: {
-          data: encodeBase64(
-            String.fromCharCode(...new TextEncoder().encode(block.source.content.map((b) => b.text).join('\n')))
-          ),
-          mimeType,
-        },
+      // Push each content block as a separate text part
+      for (const contentBlock of block.source.content) {
+        parts.push({ text: contentBlock.text })
       }
+      return
 
     case 'documentSourceS3Location':
       logger.warn('source_type=<documentSourceS3Location> | s3 sources not supported by gemini, skipping')
-      return undefined
+      return
 
     default:
-      return undefined
+      return
   }
 }
 
@@ -233,7 +239,7 @@ function formatVideoBlock(block: VideoBlock): Part | undefined {
     case 'videoSourceBytes':
       return {
         inlineData: {
-          data: encodeBase64(String.fromCharCode(...block.source.bytes)),
+          data: encodeBase64(block.source.bytes),
           mimeType,
         },
       }
