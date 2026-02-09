@@ -149,6 +149,7 @@ export type { AgentStreamEvent } from './types/agent.js'
 export {
   HookRegistry,
   HookEvent,
+  InitializedEvent,
   BeforeInvocationEvent,
   AfterInvocationEvent,
   MessageAddedEvent,

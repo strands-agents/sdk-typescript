@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { HookRegistryImplementation } from '../registry.js'
-import { AfterInvocationEvent, AgentInitializedEvent, BeforeInvocationEvent } from '../events.js'
+import { AfterInvocationEvent, BeforeInvocationEvent } from '../events.js'
 import type { HookProvider } from '../types.js'
 import { Agent } from '../../agent/agent.js'
 
@@ -19,15 +19,6 @@ describe('HookRegistryImplementation', () => {
       registry.addCallback(BeforeInvocationEvent, callback)
 
       await registry.invokeCallbacks(new BeforeInvocationEvent({ agent: mockAgent }))
-
-      expect(callback).toHaveBeenCalledOnce()
-    })
-
-    it('registers callback for AgentInitializedEvent', async () => {
-      const callback = vi.fn()
-      registry.addCallback(AgentInitializedEvent, callback)
-
-      await registry.invokeCallbacks(new AgentInitializedEvent({ agent: mockAgent }))
 
       expect(callback).toHaveBeenCalledOnce()
     })

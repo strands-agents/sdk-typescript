@@ -23,8 +23,8 @@ export abstract class HookEvent {
  * Event triggered when an agent has finished initialization.
  * Fired after the agent has been fully constructed and all built-in components have been initialized.
  */
-export class AgentInitializedEvent extends HookEvent {
-  readonly type = 'agentInitializedEvent' as const
+export class InitializedEvent extends HookEvent {
+  readonly type = 'initializedEvent' as const
   readonly agent: AgentData
 
   constructor(data: { agent: AgentData }) {

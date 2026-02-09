@@ -8,7 +8,7 @@
 // Event classes
 export {
   HookEvent,
-  AgentInitializedEvent,
+  InitializedEvent,
   BeforeInvocationEvent,
   AfterInvocationEvent,
   MessageAddedEvent,
