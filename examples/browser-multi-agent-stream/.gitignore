@@ -1,0 +1,10 @@
+node_modules
+dist
+.env
+*.log
+.session-store
+.yalc
+yalc.lock
+.data
+artifacts/
+journal/

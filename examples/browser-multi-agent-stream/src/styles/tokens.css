@@ -1,0 +1,139 @@
+:root {
+  --bg: #0f0f12;
+  --surface: #18181c;
+  --surface-subtle: #1d1e24;
+  --surface-soft: #23252d;
+  --surface-muted: #14161c;
+  --surface-strong: #101218;
+  --panel-contrast: #12141a;
+  --shell-gradient-start: rgba(255, 255, 255, 0.03);
+  --shell-gradient-end: rgba(255, 255, 255, 0);
+  --run-nav-bg: color-mix(in srgb, var(--bg) 93%, rgba(255, 255, 255, 0.07));
+  --run-drawer-bg: color-mix(in srgb, var(--bg) 82%, black 18%);
+  --border: #2a2a30;
+  --text: #e4e4e7;
+  --muted: #71717a;
+  --accent: #a78bfa;
+  --accent-dim: #7c5fd9;
+  --success: #34d399;
+  --error: #f87171;
+  --warn: #fbbf24;
+  --radius: 6px;
+  --font: 'DM Sans', system-ui, sans-serif;
+  --stream-agent-0: #a78bfa;
+  --stream-agent-1: #34d399;
+  --stream-agent-2: #fbbf24;
+  --stream-agent-3: #38bdf8;
+  --stream-agent-4: #f472b6;
+}
+
+body[data-theme='light'] {
+  --bg: #f3f5fa;
+  --surface: #ffffff;
+  --surface-subtle: #fbfcff;
+  --surface-soft: #f6f9ff;
+  --surface-muted: #f1f5fd;
+  --surface-strong: #e8eef9;
+  --panel-contrast: #f0f4fc;
+  --shell-gradient-start: rgba(79, 70, 229, 0.06);
+  --shell-gradient-end: rgba(79, 70, 229, 0.01);
+  --run-nav-bg: #f9fbff;
+  --run-drawer-bg: color-mix(in srgb, var(--bg) 94%, #dfe8f8 6%);
+  --border: #d6dbe7;
+  --text: #1f2937;
+  --muted: #667085;
+  --accent: #4f46e5;
+  --accent-dim: #4338ca;
+  --success: #059669;
+  --error: #dc2626;
+  --warn: #d97706;
+  --stream-agent-0: #4f46e5;
+  --stream-agent-1: #059669;
+  --stream-agent-2: #d97706;
+  --stream-agent-3: #0369a1;
+  --stream-agent-4: #be185d;
+}
+
+/* Radix Themes token overrides: match our app dark palette so Select, Tabs, etc. look consistent */
+.radix-themes {
+  /* Consistent 6–8px radius; radius-full 0 so max(radius-N, radius-full) uses our values (not pills) */
+  --radius-1: 4px;
+  --radius-2: 6px;
+  --radius-3: 6px;
+  --radius-4: 8px;
+  --radius-5: 10px;
+  --radius-6: 12px;
+  --radius-full: 0px;
+}
+
+body[data-theme='dark'] .radix-themes,
+.radix-themes {
+  --color-background: var(--bg);
+  --color-surface: var(--surface);
+  --color-panel-solid: var(--surface);
+  --gray-1: var(--bg);
+  --gray-2: var(--surface);
+  --gray-3: #1f1f24;
+  --gray-4: #25252a;
+  --gray-5: #2e2e34;
+  --gray-6: #36363d;
+  --gray-7: #45454d;
+  --gray-8: #57575f;
+  --gray-9: #6b6b73;
+  --gray-10: var(--muted);
+  --gray-11: #a1a1aa;
+  --gray-12: var(--text);
+  --gray-a1: rgba(255, 255, 255, 0.03);
+  --gray-a2: rgba(255, 255, 255, 0.06);
+  --gray-a3: rgba(255, 255, 255, 0.09);
+  --gray-a4: rgba(255, 255, 255, 0.12);
+  --gray-a5: rgba(255, 255, 255, 0.16);
+  --gray-a6: rgba(255, 255, 255, 0.22);
+  --gray-a7: var(--border);
+  --gray-a8: rgba(255, 255, 255, 0.4);
+  --gray-a9: rgba(255, 255, 255, 0.5);
+  --gray-a10: var(--muted);
+  --gray-a11: rgba(255, 255, 255, 0.8);
+  --gray-a12: rgba(255, 255, 255, 0.9);
+  --accent-9: var(--accent);
+  --accent-12: var(--text);
+  --accent-a3: rgba(167, 139, 250, 0.15);
+  --accent-a4: rgba(167, 139, 250, 0.25);
+  --focus-8: var(--accent);
+}
+
+body[data-theme='light'] .radix-themes {
+  --color-background: var(--bg);
+  --color-surface: var(--surface);
+  --color-panel-solid: var(--surface);
+  --gray-1: #ffffff;
+  --gray-2: #f8fafc;
+  --gray-3: #eef2f7;
+  --gray-4: #e4eaf2;
+  --gray-5: #d7deea;
+  --gray-6: #c6d0e0;
+  --gray-7: #b1bdd2;
+  --gray-8: #98a8c2;
+  --gray-9: #7f92af;
+  --gray-10: #6d80a0;
+  --gray-11: #4d627f;
+  --gray-12: #1f2937;
+  --gray-a1: rgba(15, 23, 42, 0.02);
+  --gray-a2: rgba(15, 23, 42, 0.04);
+  --gray-a3: rgba(15, 23, 42, 0.08);
+  --gray-a4: rgba(15, 23, 42, 0.12);
+  --gray-a5: rgba(15, 23, 42, 0.16);
+  --gray-a6: rgba(15, 23, 42, 0.2);
+  --gray-a7: rgba(15, 23, 42, 0.26);
+  --gray-a8: rgba(15, 23, 42, 0.38);
+  --gray-a9: rgba(15, 23, 42, 0.48);
+  --gray-a10: rgba(15, 23, 42, 0.58);
+  --gray-a11: rgba(15, 23, 42, 0.72);
+  --gray-a12: rgba(15, 23, 42, 0.9);
+  --accent-9: var(--accent);
+  --accent-12: #1f2937;
+  --accent-a3: rgba(79, 70, 229, 0.14);
+  --accent-a4: rgba(79, 70, 229, 0.22);
+  --focus-8: var(--accent);
+}
+

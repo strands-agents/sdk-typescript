@@ -1,5 +1,14 @@
 import { describe, it, expect } from 'vitest'
-import { ModelError, ContextWindowOverflowError, MaxTokensError, normalizeError } from '../errors.js'
+import {
+  ModelError,
+  ContextWindowOverflowError,
+  MaxTokensError,
+  JsonValidationError,
+  ConcurrentInvocationError,
+  StructuredOutputError,
+  SessionException,
+  normalizeError,
+} from '../errors.js'
 import { Message, TextBlock } from '../types/messages.js'
 
 describe('ModelError', () => {
@@ -115,6 +124,105 @@ describe('MaxTokensError', () => {
 
       expect(error).toBeInstanceOf(ModelError)
     })
+  })
+})
+
+describe('JsonValidationError', () => {
+  it('creates an error with the correct message', () => {
+    const error = new JsonValidationError('Invalid JSON: unexpected token')
+
+    expect(error.message).toBe('Invalid JSON: unexpected token')
+  })
+
+  it('has the correct error name', () => {
+    const error = new JsonValidationError('test')
+
+    expect(error.name).toBe('JsonValidationError')
+  })
+
+  it('is an instance of Error', () => {
+    const error = new JsonValidationError('test')
+
+    expect(error).toBeInstanceOf(Error)
+  })
+
+  it('can be caught as a generic Error', () => {
+    expect(() => {
+      throw new JsonValidationError('validation failed')
+    }).toThrow(Error)
+  })
+})
+
+describe('ConcurrentInvocationError', () => {
+  it('creates an error with the correct message', () => {
+    const error = new ConcurrentInvocationError('Agent is already processing an invocation')
+
+    expect(error.message).toBe('Agent is already processing an invocation')
+  })
+
+  it('has the correct error name', () => {
+    const error = new ConcurrentInvocationError('test')
+
+    expect(error.name).toBe('ConcurrentInvocationError')
+  })
+
+  it('is an instance of Error', () => {
+    const error = new ConcurrentInvocationError('test')
+
+    expect(error).toBeInstanceOf(Error)
+  })
+
+  it('can be caught as a generic Error', () => {
+    expect(() => {
+      throw new ConcurrentInvocationError('concurrent call')
+    }).toThrow(Error)
+  })
+})
+
+describe('StructuredOutputError', () => {
+  it('creates an error with the correct message', () => {
+    const message = 'Model did not produce structured output.'
+    const error = new StructuredOutputError(message)
+
+    expect(error.message).toBe(message)
+  })
+
+  it('has the correct error name', () => {
+    const error = new StructuredOutputError('test')
+
+    expect(error.name).toBe('StructuredOutputError')
+  })
+
+  it('is an instance of Error', () => {
+    const error = new StructuredOutputError('test')
+
+    expect(error).toBeInstanceOf(Error)
+  })
+})
+
+describe('SessionException', () => {
+  it('creates an error with the correct message', () => {
+    const error = new SessionException('Session expired')
+
+    expect(error.message).toBe('Session expired')
+  })
+
+  it('has the correct error name', () => {
+    const error = new SessionException('test')
+
+    expect(error.name).toBe('SessionException')
+  })
+
+  it('is an instance of Error', () => {
+    const error = new SessionException('test')
+
+    expect(error).toBeInstanceOf(Error)
+  })
+
+  it('can be caught as a generic Error', () => {
+    expect(() => {
+      throw new SessionException('Failed to restore session')
+    }).toThrow(Error)
   })
 })
 

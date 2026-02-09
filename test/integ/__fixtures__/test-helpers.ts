@@ -1,5 +1,5 @@
+import type { Message } from '@strands-agents/sdk-fork'
 import { inject } from 'vitest'
-import type { Message } from '@strands-agents/sdk'
 
 /**
  * Checks whether we're running tests in the browser.

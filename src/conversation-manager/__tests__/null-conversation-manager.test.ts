@@ -34,7 +34,7 @@ describe('NullConversationManager', () => {
       const registry = new HookRegistryImplementation()
       manager.registerCallbacks(registry)
 
-      const event = await registry.invokeCallbacks(new AfterModelCallEvent({ agent: mockAgent, error }))
+      const { event } = await registry.invokeCallbacks(new AfterModelCallEvent({ agent: mockAgent, error }))
 
       expect(event.retry).toBeUndefined()
     })

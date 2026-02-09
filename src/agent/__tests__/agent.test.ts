@@ -1,9 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
+import { z } from 'zod'
 import { Agent, type ToolList } from '../agent.js'
 import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
 import { collectGenerator } from '../../__fixtures__/model-test-helpers.js'
 import { createMockTool, createRandomTool } from '../../__fixtures__/tool-helpers.js'
-import { ConcurrentInvocationError } from '../../errors.js'
+import { ConcurrentInvocationError, StructuredOutputError } from '../../errors.js'
 import {
   MaxTokensError,
   TextBlock,
@@ -19,8 +20,9 @@ import {
   DocumentBlock,
 } from '../../index.js'
 import { AgentPrinter } from '../printer.js'
-import { BeforeInvocationEvent, BeforeToolsEvent } from '../../hooks/events.js'
+import { BeforeInvocationEvent, BeforeToolCallEvent, BeforeToolsEvent } from '../../hooks/events.js'
 import { BedrockModel } from '../../models/bedrock.js'
+import type { HookProvider } from '../../hooks/types.js'
 
 describe('Agent', () => {
   describe('stream', () => {
@@ -69,8 +71,28 @@ describe('Agent', () => {
               role: 'assistant',
               content: expect.arrayContaining([expect.objectContaining({ type: 'textBlock', text: 'Hello' })]),
             }),
+            metrics: {
+              accumulatedUsage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+              accumulatedMetrics: { latencyMs: 0 },
+            },
           })
         )
+      })
+
+      it('accepts parentSpan in options and stream completes', async () => {
+        const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
+        const agent = new Agent({ model })
+        const parentSpan = {
+          spanContext: () => ({ traceId: 'trace', spanId: 'span', traceFlags: 0 }),
+          isRecording: () => true,
+        }
+
+        const { result } = await collectGenerator(
+          agent.stream('Test prompt', { parentSpan: parentSpan as import('@opentelemetry/api').Span })
+        )
+
+        expect(result).toBeDefined()
+        expect(result.stopReason).toBe('endTurn')
       })
     })
 
@@ -158,6 +180,214 @@ describe('Agent', () => {
         }).rejects.toThrow(MaxTokensError)
       })
     })
+
+    describe('metrics accumulation', () => {
+      it('populates metrics on single-turn result', async () => {
+        const model = new MockMessageModel().addTurn(new TextBlock('Hello'), {
+          usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+          metrics: { latencyMs: 100 },
+        })
+        const agent = new Agent({ model, printer: false })
+
+        const { result } = await collectGenerator(agent.stream('Test'))
+
+        expect(result.metrics).toBeDefined()
+        expect(result.metrics!.accumulatedUsage).toStrictEqual({
+          inputTokens: 10,
+          outputTokens: 5,
+          totalTokens: 15,
+        })
+        expect(result.metrics!.accumulatedMetrics).toStrictEqual({ latencyMs: 100 })
+      })
+
+      it('accumulates usage across multiple model calls', async () => {
+        const model = new MockMessageModel()
+          .addTurn(new ToolUseBlock({ name: 'testTool', toolUseId: 'tool-1', input: {} }), {
+            usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+            metrics: { latencyMs: 50 },
+          })
+          .addTurn(new TextBlock('Done'), {
+            usage: { inputTokens: 20, outputTokens: 8, totalTokens: 28 },
+            metrics: { latencyMs: 75 },
+          })
+
+        const tool = createMockTool('testTool', () => ({
+          type: 'toolResultBlock',
+          toolUseId: 'tool-1',
+          status: 'success' as const,
+          content: [new TextBlock('Tool executed')],
+        }))
+
+        const agent = new Agent({ model, tools: [tool], printer: false })
+
+        const { result } = await collectGenerator(agent.stream('Use the tool'))
+
+        expect(result.metrics).toBeDefined()
+        expect(result.metrics!.accumulatedUsage).toStrictEqual({
+          inputTokens: 30,
+          outputTokens: 13,
+          totalTokens: 43,
+        })
+        expect(result.metrics!.accumulatedMetrics).toStrictEqual({ latencyMs: 125 })
+      })
+
+      it('accumulates cache token metrics when present', async () => {
+        const model = new MockMessageModel()
+          .addTurn(new ToolUseBlock({ name: 'testTool', toolUseId: 'tool-1', input: {} }), {
+            usage: {
+              inputTokens: 10,
+              outputTokens: 5,
+              totalTokens: 15,
+              cacheReadInputTokens: 3,
+              cacheWriteInputTokens: 2,
+            },
+            metrics: { latencyMs: 50 },
+          })
+          .addTurn(new TextBlock('Done'), {
+            usage: {
+              inputTokens: 20,
+              outputTokens: 8,
+              totalTokens: 28,
+              cacheReadInputTokens: 7,
+              cacheWriteInputTokens: 4,
+            },
+            metrics: { latencyMs: 75 },
+          })
+
+        const tool = createMockTool('testTool', () => ({
+          type: 'toolResultBlock',
+          toolUseId: 'tool-1',
+          status: 'success' as const,
+          content: [new TextBlock('Tool executed')],
+        }))
+
+        const agent = new Agent({ model, tools: [tool], printer: false })
+
+        const { result } = await collectGenerator(agent.stream('Use the tool'))
+
+        expect(result.metrics!.accumulatedUsage).toStrictEqual({
+          inputTokens: 30,
+          outputTokens: 13,
+          totalTokens: 43,
+          cacheReadInputTokens: 10,
+          cacheWriteInputTokens: 6,
+        })
+      })
+
+      it('accumulates latency across multiple model calls', async () => {
+        const model = new MockMessageModel()
+          .addTurn(new ToolUseBlock({ name: 'testTool', toolUseId: 'tool-1', input: {} }), {
+            usage: { inputTokens: 5, outputTokens: 3, totalTokens: 8 },
+            metrics: { latencyMs: 200 },
+          })
+          .addTurn(new TextBlock('Done'), {
+            usage: { inputTokens: 5, outputTokens: 3, totalTokens: 8 },
+            metrics: { latencyMs: 300 },
+          })
+
+        const tool = createMockTool('testTool', () => ({
+          type: 'toolResultBlock',
+          toolUseId: 'tool-1',
+          status: 'success' as const,
+          content: [new TextBlock('Result')],
+        }))
+
+        const agent = new Agent({ model, tools: [tool], printer: false })
+
+        const { result } = await collectGenerator(agent.stream('Test'))
+
+        expect(result.metrics!.accumulatedMetrics!.latencyMs).toBe(500)
+      })
+
+      it('includes metrics in interrupt result', async () => {
+        const model = new MockMessageModel().addTurn(
+          new ToolUseBlock({ name: 'testTool', toolUseId: 'tool-1', input: {} }),
+          {
+            usage: { inputTokens: 15, outputTokens: 10, totalTokens: 25 },
+            metrics: { latencyMs: 150 },
+          }
+        )
+
+        const tool = createMockTool('testTool', () => ({
+          type: 'toolResultBlock',
+          toolUseId: 'tool-1',
+          status: 'success' as const,
+          content: [new TextBlock('Result')],
+        }))
+
+        const interruptHook: HookProvider = {
+          registerCallbacks(registry) {
+            registry.addCallback(BeforeToolCallEvent, (event) => {
+              event.interrupt('need-approval', 'Needs user approval')
+            })
+          },
+        }
+
+        const agent = new Agent({ model, tools: [tool], hooks: [interruptHook], printer: false })
+
+        const { result } = await collectGenerator(agent.stream('Test'))
+
+        expect(result.stopReason).toBe('interrupt')
+        expect(result.metrics).toBeDefined()
+        expect(result.metrics!.accumulatedUsage).toStrictEqual({
+          inputTokens: 15,
+          outputTokens: 10,
+          totalTokens: 25,
+        })
+        expect(result.metrics!.accumulatedMetrics).toStrictEqual({ latencyMs: 150 })
+      })
+    })
+
+    describe('structured output', () => {
+      const SimpleSchema = z
+        .object({
+          name: z.string(),
+          value: z.number(),
+        })
+        .describe('SimpleModel')
+
+      it('returns structuredOutput when model uses structured output tool', async () => {
+        const model = new MockMessageModel().addTurn({
+          type: 'toolUseBlock',
+          name: 'SimpleModel',
+          toolUseId: 'so-1',
+          input: { name: 'Test', value: 42 },
+        })
+
+        const agent = new Agent({ model, structuredOutput: SimpleSchema })
+
+        const { result } = await collectGenerator(agent.stream('Extract data'))
+
+        expect(result.structuredOutput).toStrictEqual({ name: 'Test', value: 42 })
+        expect(result.stopReason).toBe('endTurn')
+      })
+
+      it('invoke with options overrides default structured output', async () => {
+        const OtherSchema = z.object({ x: z.number() }).describe('OtherModel')
+        const model = new MockMessageModel().addTurn({
+          type: 'toolUseBlock',
+          name: 'OtherModel',
+          toolUseId: 'so-1',
+          input: { x: 99 },
+        })
+
+        const agent = new Agent({ model, structuredOutput: SimpleSchema })
+
+        const result = await agent.invoke('Prompt', { structuredOutput: OtherSchema })
+
+        expect(result.structuredOutput).toStrictEqual({ x: 99 })
+      })
+
+      it('throws StructuredOutputError when model does not use tool after force', async () => {
+        const model = new MockMessageModel()
+          .addTurn({ type: 'textBlock', text: 'I will not use the tool' })
+          .addTurn({ type: 'textBlock', text: 'Still no tool' })
+
+        const agent = new Agent({ model, structuredOutput: SimpleSchema })
+
+        await expect(collectGenerator(agent.stream('Extract data'))).rejects.toThrow(StructuredOutputError)
+      })
+    })
   })
 
   describe('invoke', () => {
@@ -180,15 +410,18 @@ describe('Agent', () => {
 
         const result = await agent.invoke('Test prompt')
 
-        expect(result).toEqual({
-          type: 'agentResult',
-          stopReason: 'endTurn',
-          lastMessage: expect.objectContaining({
-            type: 'message',
-            role: 'assistant',
-            content: expect.arrayContaining([expect.objectContaining({ type: 'textBlock', text: 'Response text' })]),
-          }),
-        })
+        expect(result).toEqual(
+          expect.objectContaining({
+            type: 'agentResult',
+            stopReason: 'endTurn',
+            interrupts: [],
+            lastMessage: expect.objectContaining({
+              type: 'message',
+              role: 'assistant',
+              content: expect.arrayContaining([expect.objectContaining({ type: 'textBlock', text: 'Response text' })]),
+            }),
+          })
+        )
       })
 
       it('consumes stream events internally', async () => {
@@ -197,15 +430,18 @@ describe('Agent', () => {
 
         const result = await agent.invoke('Test')
 
-        expect(result).toEqual({
-          type: 'agentResult',
-          stopReason: 'endTurn',
-          lastMessage: expect.objectContaining({
-            type: 'message',
-            role: 'assistant',
-            content: expect.arrayContaining([expect.objectContaining({ type: 'textBlock', text: 'Hello' })]),
-          }),
-        })
+        expect(result).toEqual(
+          expect.objectContaining({
+            type: 'agentResult',
+            stopReason: 'endTurn',
+            interrupts: [],
+            lastMessage: expect.objectContaining({
+              type: 'message',
+              role: 'assistant',
+              content: expect.arrayContaining([expect.objectContaining({ type: 'textBlock', text: 'Hello' })]),
+            }),
+          })
+        )
       })
     })
 
@@ -226,15 +462,20 @@ describe('Agent', () => {
 
         const result = await agent.invoke('What is 1 + 2?')
 
-        expect(result).toEqual({
-          type: 'agentResult',
-          stopReason: 'endTurn',
-          lastMessage: expect.objectContaining({
-            type: 'message',
-            role: 'assistant',
-            content: expect.arrayContaining([expect.objectContaining({ type: 'textBlock', text: 'The answer is 3' })]),
-          }),
-        })
+        expect(result).toEqual(
+          expect.objectContaining({
+            type: 'agentResult',
+            stopReason: 'endTurn',
+            interrupts: [],
+            lastMessage: expect.objectContaining({
+              type: 'message',
+              role: 'assistant',
+              content: expect.arrayContaining([
+                expect.objectContaining({ type: 'textBlock', text: 'The answer is 3' }),
+              ]),
+            }),
+          })
+        )
       })
     })
 

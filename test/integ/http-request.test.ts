@@ -1,6 +1,6 @@
+import { Agent } from '@strands-agents/sdk-fork'
+import { httpRequest } from '@strands-agents/sdk-fork/vended_tools/http_request'
 import { describe, expect, it } from 'vitest'
-import { httpRequest } from '@strands-agents/sdk/vended_tools/http_request'
-import { Agent } from '@strands-agents/sdk'
 import { bedrock } from './__fixtures__/model-providers.js'
 
 describe.skipIf(bedrock.skip)('httpRequest tool (integration)', () => {

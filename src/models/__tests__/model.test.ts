@@ -163,6 +163,72 @@ describe('Model', () => {
       })
     })
 
+    describe('when stream ends without messageStop', () => {
+      it('synthesizes message and endTurn when stream ends after content blocks', async () => {
+        const provider = new TestModelProvider(async function* () {
+          yield { type: 'modelMessageStartEvent', role: 'assistant' }
+          yield { type: 'modelContentBlockStartEvent' }
+          yield {
+            type: 'modelContentBlockDeltaEvent',
+            delta: { type: 'textDelta', text: 'Hello' },
+          }
+          yield { type: 'modelContentBlockStopEvent' }
+          // No messageStopEvent - stream ends (e.g. Bedrock omits it under load)
+        })
+
+        const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+
+        const { result } = await collectGenerator(provider.streamAggregated(messages))
+
+        expect(result).toEqual({
+          message: {
+            type: 'message',
+            role: 'assistant',
+            content: [{ type: 'textBlock', text: 'Hello' }],
+          },
+          stopReason: 'endTurn',
+        })
+      })
+
+      it('synthesizes message and toolUse when last block is tool use', async () => {
+        const provider = new TestModelProvider(async function* () {
+          yield { type: 'modelMessageStartEvent', role: 'assistant' }
+          yield {
+            type: 'modelContentBlockStartEvent',
+            start: { type: 'toolUseStart', toolUseId: 't1', name: 'handoff' },
+          }
+          yield {
+            type: 'modelContentBlockDeltaEvent',
+            delta: { type: 'toolUseInputDelta', input: '{}' },
+          }
+          yield { type: 'modelContentBlockStopEvent' }
+          // No messageStopEvent
+        })
+
+        const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+
+        const { result } = await collectGenerator(provider.streamAggregated(messages))
+
+        expect(result?.message?.content).toHaveLength(1)
+        expect(result?.message?.content?.[0]).toMatchObject({ type: 'toolUseBlock', toolUseId: 't1', name: 'handoff' })
+        expect(result?.stopReason).toBe('toolUse')
+      })
+
+      it('recovers when stream ends with no content blocks by returning empty message and endTurn', async () => {
+        const provider = new TestModelProvider(async function* () {
+          yield { type: 'modelMessageStartEvent', role: 'assistant' }
+          // No content blocks, no messageStop
+        })
+
+        const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+
+        const { result } = await collectGenerator(provider.streamAggregated(messages))
+        expect(result?.message?.role).toBe('assistant')
+        expect(result?.message?.content).toHaveLength(0)
+        expect(result?.stopReason).toBe('endTurn')
+      })
+    })
+
     describe('when streaming tool use', () => {
       it('yields complete tool use block', async () => {
         const provider = new TestModelProvider(async function* () {

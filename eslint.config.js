@@ -45,6 +45,7 @@ function sdkRules(options) {
       globals: {
         console: 'readonly',
         process: 'readonly',
+        structuredClone: 'readonly',
       },
     },
     plugins: {

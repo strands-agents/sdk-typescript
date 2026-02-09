@@ -1,6 +1,6 @@
 {
-  "name": "@strands-agents/sdk",
-  "version": "0.0.1-development",
+  "name": "@strands-agents/sdk-fork",
+  "version": "0.0.1",
   "description": "TypeScript SDK for Strands Agents framework",
   "main": "dist/src/index.js",
   "module": "dist/src/index.js",
@@ -45,6 +45,10 @@
     "./vended_tools/bash": {
       "types": "./dist/src/vended-tools/bash/index.d.ts",
       "default": "./dist/src/vended-tools/bash/index.js"
+    },
+    "./community_tools": {
+      "types": "./dist/src/tools/community-tools/index.d.ts",
+      "default": "./dist/src/tools/community-tools/index.js"
     }
   },
   "scripts": {
@@ -58,9 +62,9 @@
     "test:integ": "vitest run --project integ-node",
     "test:integ:browser": "vitest run --project integ-browser",
     "test:integ:all": "vitest run --project integ-node --project integ-browser",
-    "test:browser": "vitest run --project unit-browser",
+    "test:browser": "cross-env VITEST_BROWSER=1 vitest run --project unit-browser",
     "test:browser:install": "npx playwright install --with-deps chromium",
-    "test:all": "vitest run --project unit-node --project unit-browser",
+    "test:all": "vitest run --project unit-node && npm run test:browser",
     "test:all:coverage": "vitest run --coverage --project unit-node --project unit-browser",
     "test:package": "cd test/packages/esm-module && npm install && node esm.js && cd ../cjs-module && npm install && node cjs.js",
     "lint": "eslint src test/integ",
@@ -69,7 +73,8 @@
     "format:check": "prettier --check src test/integ",
     "type-check": "tsc --noEmit --project src/tsconfig.json && tsc --noEmit --project test/integ/tsconfig.json",
     "type-check:watch": "tsc --noEmit --watch",
-    "prepare": "npm run build && husky"
+    "prepare": "npm run build && husky",
+    "demo": "npm run build && yalc publish --no-scripts && cd examples/browser-multi-agent-stream && yalc add @strands-agents/sdk-fork && npm install && npm run dev"
   },
   "keywords": [
     "agents",
@@ -82,19 +87,25 @@
   "license": "Apache-2.0",
   "devDependencies": {
     "@anthropic-ai/sdk": "^0.71.2",
+    "@aws-sdk/client-bedrock-agent-runtime": "^3.948.0",
+    "@aws-sdk/client-s3": "^3.985.0",
     "@aws-sdk/client-secrets-manager": "^3.943.0",
     "@aws-sdk/credential-providers": "^3.943.0",
     "@google/genai": "^1.40.0",
+    "@opentelemetry/api": "^1.9.0",
     "@types/json-schema": "^7.0.15",
     "@types/node": "^24.6.0",
+    "@types/uuid": "^10.0.0",
     "@typescript-eslint/eslint-plugin": "^8.48.1",
     "@typescript-eslint/parser": "^8.0.0",
     "@vitest/browser": "^4.0.15",
     "@vitest/browser-playwright": "^4.0.15",
     "@vitest/coverage-v8": "^4.0.15",
+    "cross-env": "^7.0.3",
     "eslint": "^9.0.0",
     "eslint-plugin-tsdoc": "^0.5.0",
     "husky": "^9.1.7",
+    "mathjs": "^13.0.0",
     "openai": "^6.7.0",
     "playwright": "^1.56.1",
     "prettier": "^3.7.4",
@@ -114,12 +125,16 @@
   },
   "homepage": "https://github.com/strands-agents/sdk-typescript#readme",
   "dependencies": {
-    "@aws-sdk/client-bedrock-runtime": "^3.943.0"
+    "@aws-sdk/client-bedrock-runtime": "^3.943.0",
+    "uuid": "^13.0.0"
   },
   "peerDependencies": {
     "@anthropic-ai/sdk": "^0.71.2",
+    "@aws-sdk/client-bedrock-agent-runtime": "^3.948.0",
     "@google/genai": "^1.40.0",
     "@modelcontextprotocol/sdk": "^1.25.2",
+    "@opentelemetry/api": "^1.9.0",
+    "mathjs": "^13.0.0",
     "openai": "^6.7.0",
     "zod": "^4.1.12"
   },
@@ -127,7 +142,16 @@
     "@anthropic-ai/sdk": {
       "optional": true
     },
+    "@aws-sdk/client-bedrock-agent-runtime": {
+      "optional": true
+    },
     "@google/genai": {
+      "optional": true
+    },
+    "mathjs": {
+      "optional": true
+    },
+    "@opentelemetry/api": {
       "optional": true
     },
     "openai": {

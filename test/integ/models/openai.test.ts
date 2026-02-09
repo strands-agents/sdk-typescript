@@ -1,6 +1,6 @@
+import type { ToolSpec } from '@strands-agents/sdk-fork'
+import { Message } from '@strands-agents/sdk-fork'
 import { describe, expect, it } from 'vitest'
-import type { ToolSpec } from '@strands-agents/sdk'
-import { Message } from '@strands-agents/sdk'
 
 import { collectIterator } from '$/sdk/__fixtures__/model-test-helpers.js'
 

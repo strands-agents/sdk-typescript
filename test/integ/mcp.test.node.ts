@@ -5,15 +5,15 @@
  * Verifies that agents can successfully use MCP tools via the Bedrock model.
  */
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { McpClient, Agent } from '@strands-agents/sdk'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
+import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
+import { Agent, McpClient } from '@strands-agents/sdk-fork'
 import { resolve } from 'node:path'
 import { URL } from 'node:url'
-import { startHTTPServer, type HttpServerInfo } from './__fixtures__/test-mcp-server.js'
-import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { bedrock } from './__fixtures__/model-providers.js'
+import { startHTTPServer, type HttpServerInfo } from './__fixtures__/test-mcp-server.js'
 
 type TransportConfig = {
   name: string

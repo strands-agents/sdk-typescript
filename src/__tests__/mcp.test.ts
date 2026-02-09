@@ -153,6 +153,9 @@ describe('MCP Integration', () => {
     const context: ToolContext = {
       toolUse: { toolUseId: 'id-123', name: 'weather', input: { city: 'NYC' } },
       agent: {} as AgentData,
+      interrupt() {
+        throw new Error('not available')
+      },
     }
 
     it('returns text results on success', async () => {

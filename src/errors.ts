@@ -112,6 +112,38 @@ export class ConcurrentInvocationError extends Error {
 }
 
 /**
+ * Error thrown when structured output was requested but the model did not produce
+ * valid structured output after being forced to use the structured output tool.
+ *
+ * This can occur when the model repeatedly fails validation or does not call
+ * the structured output tool when required.
+ */
+export class StructuredOutputError extends Error {
+  /**
+   * Creates a new StructuredOutputError.
+   *
+   * @param message - Error message describing the structured output failure
+   */
+  constructor(message: string) {
+    super(message)
+    this.name = 'StructuredOutputError'
+  }
+}
+
+/**
+ * Error thrown when a session operation fails.
+ *
+ * Covers scenarios such as missing sessions, duplicate agent IDs,
+ * invalid message IDs, and storage failures.
+ */
+export class SessionException extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'SessionException'
+  }
+}
+
+/**
  * Normalizes an unknown error value to an Error instance.
  *
  * This helper ensures that any thrown value (Error, string, number, etc.)

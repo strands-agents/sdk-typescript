@@ -6,10 +6,11 @@
  */
 
 import { ContextWindowOverflowError } from '../errors.js'
+import type { JSONValue } from '../types/json.js'
 import { Message, TextBlock, ToolResultBlock } from '../types/messages.js'
-import type { HookProvider } from '../hooks/types.js'
 import type { HookRegistry } from '../hooks/registry.js'
 import { AfterInvocationEvent, AfterModelCallEvent } from '../hooks/events.js'
+import { ConversationManager } from './conversation-manager.js'
 
 /**
  * Configuration for the sliding window conversation manager.
@@ -40,7 +41,7 @@ export type SlidingWindowConversationManagerConfig = {
  * - AfterInvocationEvent: Applies sliding window management after each invocation
  * - AfterModelCallEvent: Reduces context on overflow errors and requests retry
  */
-export class SlidingWindowConversationManager implements HookProvider {
+export class SlidingWindowConversationManager extends ConversationManager {
   private readonly _windowSize: number
   private readonly _shouldTruncateResults: boolean
 
@@ -50,6 +51,7 @@ export class SlidingWindowConversationManager implements HookProvider {
    * @param config - Configuration options for the sliding window manager.
    */
   constructor(config?: SlidingWindowConversationManagerConfig) {
+    super()
     this._windowSize = config?.windowSize ?? 40
     this._shouldTruncateResults = config?.shouldTruncateResults ?? true
   }
@@ -257,5 +259,28 @@ export class SlidingWindowConversationManager implements HookProvider {
     }
 
     return undefined
+  }
+
+  /**
+   * Returns the current state of the sliding window conversation manager.
+   *
+   * @returns A record containing the manager class name and window size
+   */
+  public getState(): Record<string, JSONValue> {
+    return {
+      __name__: 'SlidingWindowConversationManager',
+      windowSize: this._windowSize,
+    }
+  }
+
+  /**
+   * Restores state from a previously saved session.
+   * The sliding window manager has no per-session state to restore beyond configuration.
+   *
+   * @param _state - The previously saved state (unused)
+   * @returns null (no messages to prepend)
+   */
+  public restoreFromSession(_state: Record<string, JSONValue>): Message[] | null {
+    return null
   }
 }

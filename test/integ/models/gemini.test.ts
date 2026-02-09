@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest'
-import { Agent, Message, SlidingWindowConversationManager } from '@strands-agents/sdk'
 import type { ModelStreamEvent } from '$/sdk/models/streaming.js'
+import { Agent, Message, SlidingWindowConversationManager } from '@strands-agents/sdk-fork'
+import { describe, expect, it } from 'vitest'
 
 import { collectIterator } from '$/sdk/__fixtures__/model-test-helpers.js'
 

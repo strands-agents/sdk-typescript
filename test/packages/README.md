@@ -17,10 +17,10 @@ This command builds and installs the SDK locally, then runs both ESM and CJS imp
 ```
 test/packages/
 ├── esm-module/     # ES Module import test
-│   ├── esm.js      # Uses `import { ... } from '@strands-agents/sdk'`
+│   ├── esm.js      # Uses `import { ... } from '@strands-agents/sdk-fork'`
 │   └── package.json
 ├── cjs-module/     # CommonJS import test
-│   ├── cjs.js      # Uses `require('@strands-agents/sdk')`
+│   ├── cjs.js      # Uses `require('@strands-agents/sdk-fork')`
 │   └── package.json
 └── README.md
 ```

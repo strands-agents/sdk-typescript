@@ -3,12 +3,12 @@
  * This script runs in a pure Node.js ES module environment.
  */
 
-import { Agent, BedrockModel, tool, Tool } from '@strands-agents/sdk'
+import { Agent, BedrockModel, tool, Tool } from '@strands-agents/sdk-fork'
 
-import { notebook } from '@strands-agents/sdk/vended_tools/notebook'
-import { fileEditor } from '@strands-agents/sdk/vended_tools/file_editor'
-import { httpRequest } from '@strands-agents/sdk/vended_tools/http_request'
-import { bash } from '@strands-agents/sdk/vended_tools/bash'
+import { bash } from '@strands-agents/sdk-fork/vended_tools/bash'
+import { fileEditor } from '@strands-agents/sdk-fork/vended_tools/file_editor'
+import { httpRequest } from '@strands-agents/sdk-fork/vended_tools/http_request'
+import { notebook } from '@strands-agents/sdk-fork/vended_tools/notebook'
 
 import { z } from 'zod'
 

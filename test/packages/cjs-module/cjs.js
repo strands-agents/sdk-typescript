@@ -3,12 +3,12 @@
  * This script runs in a pure Node.js ES module environment.
  */
 
-const { Agent, BedrockModel, tool, Tool } = require('@strands-agents/sdk')
+const { Agent, BedrockModel, tool, Tool } = require('@strands-agents/sdk-fork')
 
-const { notebook } = require('@strands-agents/sdk/vended_tools/notebook')
-const { fileEditor } = require('@strands-agents/sdk/vended_tools/file_editor')
-const { httpRequest } = require('@strands-agents/sdk/vended_tools/http_request')
-const { bash } = require('@strands-agents/sdk/vended_tools/bash')
+const { notebook } = require('@strands-agents/sdk-fork/vended_tools/notebook')
+const { fileEditor } = require('@strands-agents/sdk-fork/vended_tools/file_editor')
+const { httpRequest } = require('@strands-agents/sdk-fork/vended_tools/http_request')
+const { bash } = require('@strands-agents/sdk-fork/vended_tools/bash')
 
 const { z } = require('zod')
 

@@ -1,5 +1,6 @@
 import type { HookEvent } from './events.js'
 import type { HookCallback, HookProvider, HookEventConstructor, HookCleanup } from './types.js'
+import { type Interrupt, InterruptException } from '../interrupt.js'
 
 /**
  * Represents a callback entry with its source provider.
@@ -124,15 +125,34 @@ export class HookRegistryImplementation implements HookRegistry {
    * Invoke all registered callbacks for the given event.
    * Awaits each callback, supporting both sync and async.
    *
+   * Catches InterruptException from callbacks and collects interrupts.
+   * Each callback is allowed to raise one interrupt. Duplicate interrupt
+   * names across callbacks are not allowed.
+   *
    * @param event - The event to invoke callbacks for
-   * @returns The event after all callbacks have been invoked
+   * @returns The event and any interrupts raised by callbacks
    */
-  async invokeCallbacks<T extends HookEvent>(event: T): Promise<T> {
+  async invokeCallbacks<T extends HookEvent>(event: T): Promise<{ event: T; interrupts: Interrupt[] }> {
+    const interrupts = new Map<string, Interrupt>()
     const callbacks = this.getCallbacksFor(event)
+
     for (const callback of callbacks) {
-      await callback(event)
+      try {
+        await callback(event)
+      } catch (e) {
+        if (e instanceof InterruptException) {
+          const interrupt = e.interrupt
+          if (interrupts.has(interrupt.name)) {
+            throw new Error(`interrupt_name=<${interrupt.name}> | interrupt name used more than once`)
+          }
+          interrupts.set(interrupt.name, interrupt)
+        } else {
+          throw e
+        }
+      }
     }
-    return event
+
+    return { event, interrupts: [...interrupts.values()] }
   }
 
   /**

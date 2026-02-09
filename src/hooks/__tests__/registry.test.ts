@@ -190,10 +190,11 @@ describe('HookRegistryImplementation', () => {
       expect(callOrder).toEqual(['sync', 'async'])
     })
 
-    it('returns the event after invocation', async () => {
+    it('returns the event and empty interrupts after invocation', async () => {
       const event = new BeforeInvocationEvent({ agent: mockAgent })
       const result = await registry.invokeCallbacks(event)
-      expect(result).toBe(event)
+      expect(result.event).toBe(event)
+      expect(result.interrupts).toStrictEqual([])
     })
   })
 
@@ -220,6 +221,21 @@ describe('HookRegistryImplementation', () => {
       await registry.invokeCallbacks(new BeforeInvocationEvent({ agent: mockAgent }))
 
       expect(callback).not.toHaveBeenCalled()
+    })
+
+    it('cleanup does not throw when event type was already removed from registry', () => {
+      let storedCleanup: (() => void) | undefined
+      const provider: HookProvider = {
+        registerCallbacks: (reg) => {
+          storedCleanup = reg.addCallback(BeforeInvocationEvent, vi.fn())
+        },
+      }
+
+      registry.addHook(provider)
+      registry.removeHook(provider)
+
+      expect(storedCleanup).toBeDefined()
+      expect(() => storedCleanup!()).not.toThrow()
     })
 
     it('cleanup function does not affect other callbacks', async () => {

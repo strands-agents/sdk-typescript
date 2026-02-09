@@ -21,7 +21,8 @@ async function triggerContextOverflow(
 ): Promise<{ retry?: boolean }> {
   const registry = new HookRegistryImplementation()
   registry.addHook(manager)
-  return await registry.invokeCallbacks(new AfterModelCallEvent({ agent, error }))
+  const { event } = await registry.invokeCallbacks(new AfterModelCallEvent({ agent, error }))
+  return event
 }
 
 describe('SlidingWindowConversationManager', () => {

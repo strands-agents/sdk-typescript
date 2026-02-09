@@ -21,6 +21,25 @@ export interface ToolContext {
    * Provides access to agent state and other agent-level information.
    */
   agent: AgentData
+
+  /**
+   * Trigger an interrupt to pause tool execution for human input.
+   *
+   * On first call, throws InterruptException to pause execution.
+   * On resume (when the interrupt already has a response), returns the human's response
+   * so the tool can use it to make decisions.
+   *
+   * Tools that call interrupt() must be designed for re-execution: when the agent resumes,
+   * the entire tool re-runs from the start, and interrupt() returns the response instead
+   * of throwing. Place interrupt() calls BEFORE irreversible side effects.
+   *
+   * @param name - User-defined name for the interrupt. Must be unique within this tool.
+   * @param reason - Reason for raising the interrupt
+   * @param response - Preemptive response if available
+   * @returns The human's response when resuming from an interrupt state
+   * @throws InterruptException when human input is required
+   */
+  interrupt(name: string, reason?: unknown, response?: unknown): unknown
 }
 
 /**

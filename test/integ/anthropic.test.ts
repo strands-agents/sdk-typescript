@@ -1,8 +1,8 @@
-import { describe, expect, it } from 'vitest'
-import { Message, ImageBlock, TextBlock } from '@strands-agents/sdk'
 import { collectIterator } from '$/sdk/__fixtures__/model-test-helpers.js'
-import { loadFixture } from './__fixtures__/test-helpers.js'
+import { ImageBlock, Message, TextBlock } from '@strands-agents/sdk-fork'
+import { describe, expect, it } from 'vitest'
 import { anthropic } from './__fixtures__/model-providers.js'
+import { loadFixture } from './__fixtures__/test-helpers.js'
 
 import yellowPngUrl from './__resources__/yellow.png?url'
 

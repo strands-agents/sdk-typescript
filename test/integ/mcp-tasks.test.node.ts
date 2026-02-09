@@ -1,11 +1,11 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { McpClient, Agent } from '@strands-agents/sdk'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
-import { startTaskHTTPServer, type TaskHttpServerInfo } from './__fixtures__/test-mcp-task-server.js'
-import { startHTTPServer, type HttpServerInfo } from './__fixtures__/test-mcp-server.js'
+import { Agent, McpClient } from '@strands-agents/sdk-fork'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { bedrock } from './__fixtures__/model-providers.js'
-import { hasToolUse, countToolResults } from './__fixtures__/test-helpers.js'
+import { countToolResults, hasToolUse } from './__fixtures__/test-helpers.js'
+import { startHTTPServer, type HttpServerInfo } from './__fixtures__/test-mcp-server.js'
+import { startTaskHTTPServer, type TaskHttpServerInfo } from './__fixtures__/test-mcp-task-server.js'
 
 /**
  * Creates a connected McpClient for the given server URL.

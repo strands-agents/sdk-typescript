@@ -3,6 +3,7 @@ import { notebook } from '../notebook.js'
 import type { NotebookState } from '../types.js'
 import type { ToolContext } from '../../../index.js'
 import { AgentState } from '../../../agent/state.js'
+import { NullConversationManager } from '../../../conversation-manager/null-conversation-manager.js'
 
 describe('notebook tool', () => {
   // Helper to create fresh state and context for each test
@@ -14,7 +15,10 @@ describe('notebook tool', () => {
         toolUseId: 'test-id',
         input: {},
       },
-      agent: { state, messages: [] },
+      agent: { state, messages: [], agentId: 'default', conversationManager: new NullConversationManager() },
+      interrupt() {
+        throw new Error('not available')
+      },
     }
     return { state, context }
   }

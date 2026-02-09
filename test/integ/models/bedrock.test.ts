@@ -1,12 +1,12 @@
-import { describe, expect, it, vi } from 'vitest'
 import {
   Agent,
+  FunctionTool,
   Message,
   NullConversationManager,
   SlidingWindowConversationManager,
   TextBlock,
-  FunctionTool,
-} from '@strands-agents/sdk'
+} from '@strands-agents/sdk-fork'
+import { describe, expect, it, vi } from 'vitest'
 
 import { collectIterator } from '$/sdk/__fixtures__/model-test-helpers.js'
 import { bedrock } from '../__fixtures__/model-providers.js'

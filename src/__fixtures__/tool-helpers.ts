@@ -7,6 +7,7 @@ import type { Tool, ToolContext } from '../tools/tool.js'
 import { ToolResultBlock } from '../types/messages.js'
 import type { JSONValue } from '../types/json.js'
 import { AgentState } from '../agent/state.js'
+import { NullConversationManager } from '../conversation-manager/null-conversation-manager.js'
 
 /**
  * Helper to create a mock ToolContext for testing.
@@ -22,8 +23,13 @@ export function createMockContext(
   return {
     toolUse,
     agent: {
+      agentId: 'default',
       state: new AgentState(agentState),
       messages: [],
+      conversationManager: new NullConversationManager(),
+    },
+    interrupt(): unknown {
+      throw new Error('interrupt() is not available in mock ToolContext')
     },
   }
 }

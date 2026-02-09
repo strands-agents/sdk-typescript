@@ -3,6 +3,7 @@ import { bash } from '../index.js'
 import { BashTimeoutError, BashSessionError, type BashOutput } from '../index.js'
 import type { ToolContext } from '../../../index.js'
 import { AgentState } from '../../../agent/state.js'
+import { NullConversationManager } from '../../../conversation-manager/null-conversation-manager.js'
 import { isNode } from '../../../__fixtures__/environment.js'
 import { realpathSync } from 'fs'
 
@@ -17,7 +18,10 @@ describe.skipIf(!isNode || process.platform === 'win32')('bash tool', () => {
         toolUseId: 'test-id',
         input: {},
       },
-      agent: { state, messages: [] },
+      agent: { state, messages: [], agentId: 'default', conversationManager: new NullConversationManager() },
+      interrupt() {
+        throw new Error('not available')
+      },
     }
     return { state, context }
   }

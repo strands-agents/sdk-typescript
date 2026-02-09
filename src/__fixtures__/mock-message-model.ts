@@ -7,14 +7,16 @@
 
 import { Model } from '../models/model.js'
 import type { Message, ContentBlock, StopReason } from '../types/messages.js'
-import type { ModelStreamEvent } from '../models/streaming.js'
+import type { ModelStreamEvent, Usage, Metrics } from '../models/streaming.js'
 import type { BaseModelConfig, StreamOptions } from '../models/model.js'
 
 /**
  * Represents a single turn in the test sequence.
  * Can be either content blocks with stopReason, or an Error to throw.
  */
-type Turn = { type: 'content'; content: ContentBlock[]; stopReason: StopReason } | { type: 'error'; error: Error }
+type Turn =
+  | { type: 'content'; content: ContentBlock[]; stopReason: StopReason; usage?: Usage; metrics?: Metrics }
+  | { type: 'error'; error: Error }
 
 /**
  * Test model provider that operates at the content block level.
@@ -48,7 +50,7 @@ export class MockMessageModel extends Model<BaseModelConfig> {
    * Returns this for method chaining.
    *
    * @param turn - ContentBlock, ContentBlock[], or Error to add
-   * @param stopReason - Optional explicit stopReason (overrides auto-derivation)
+   * @param options - Optional stopReason override, usage, and metrics
    * @returns This provider for chaining
    *
    * @example
@@ -58,10 +60,21 @@ export class MockMessageModel extends Model<BaseModelConfig> {
    *   .addTurn([{ type: 'toolUseBlock', ... }])  // Array of blocks
    *   .addTurn({ type: 'textBlock', text: 'Done' }, 'maxTokens')  // Explicit stopReason
    *   .addTurn(new Error('Failed'))  // Error turn
+   *   .addTurn({ type: 'textBlock', text: 'Hi' }, {  // With usage/metrics
+   *     usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+   *     metrics: { latencyMs: 100 },
+   *   })
    * ```
    */
-  addTurn(turn: ContentBlock | ContentBlock[] | Error, stopReason?: StopReason): this {
-    this._turns.push(this._createTurn(turn, stopReason))
+  addTurn(
+    turn: ContentBlock | ContentBlock[] | Error,
+    options?: StopReason | { stopReason?: StopReason; usage?: Usage; metrics?: Metrics }
+  ): this {
+    if (typeof options === 'string' || options === undefined) {
+      this._turns.push(this._createTurn(turn, options))
+    } else {
+      this._turns.push(this._createTurn(turn, options.stopReason, options.usage, options.metrics))
+    }
     return this
   }
 
@@ -119,7 +132,7 @@ export class MockMessageModel extends Model<BaseModelConfig> {
     }
 
     // Generate events for content turn
-    yield* this._generateEventsForContent(turn.content, turn.stopReason)
+    yield* this._generateEventsForContent(turn.content, turn.stopReason, turn.usage, turn.metrics)
   }
 
   /**
@@ -128,7 +141,9 @@ export class MockMessageModel extends Model<BaseModelConfig> {
    */
   private async *_generateEventsForContent(
     content: ContentBlock[],
-    stopReason: StopReason
+    stopReason: StopReason,
+    usage?: Usage,
+    metrics?: Metrics
   ): AsyncGenerator<ModelStreamEvent> {
     // Yield message start event (always assistant role)
     yield { type: 'modelMessageStartEvent', role: 'assistant' }
@@ -141,12 +156,25 @@ export class MockMessageModel extends Model<BaseModelConfig> {
 
     // Yield message stop event
     yield { type: 'modelMessageStopEvent', stopReason }
+
+    // Yield metadata event with usage/metrics when present
+    if (usage !== undefined || metrics !== undefined) {
+      const metadataEvent: ModelStreamEvent = { type: 'modelMetadataEvent' }
+      if (usage !== undefined) metadataEvent.usage = usage
+      if (metrics !== undefined) metadataEvent.metrics = metrics
+      yield metadataEvent
+    }
   }
 
   /**
    * Creates a Turn object from ContentBlock(s) or Error.
    */
-  private _createTurn(turn: ContentBlock | ContentBlock[] | Error, explicitStopReason?: StopReason): Turn {
+  private _createTurn(
+    turn: ContentBlock | ContentBlock[] | Error,
+    explicitStopReason?: StopReason,
+    usage?: Usage,
+    metrics?: Metrics
+  ): Turn {
     if (turn instanceof Error) {
       return { type: 'error', error: turn }
     }
@@ -154,11 +182,14 @@ export class MockMessageModel extends Model<BaseModelConfig> {
     // Normalize to array
     const content = Array.isArray(turn) ? turn : [turn]
 
-    return {
+    const result: Turn = {
       type: 'content',
       content,
       stopReason: explicitStopReason ?? this._deriveStopReason(content),
     }
+    if (usage !== undefined) result.usage = usage
+    if (metrics !== undefined) result.metrics = metrics
+    return result
   }
 
   /**

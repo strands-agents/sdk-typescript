@@ -1,6 +1,9 @@
 import type { AgentState } from '../agent/state.js'
+import type { ConversationManager } from '../conversation-manager/conversation-manager.js'
+import type { Interrupt } from '../interrupt.js'
 import type { Message, StopReason } from './messages.js'
 import type { ModelStreamEvent } from '../models/streaming.js'
+import type { Usage, Metrics } from '../models/streaming.js'
 import { ToolStreamEvent } from '../tools/tool.js'
 import type { ContentBlock } from './messages.js'
 import type {
@@ -14,13 +17,19 @@ import type {
   AfterToolCallEvent,
   MessageAddedEvent,
   ModelStreamEventHook,
+  AgentInitializedEvent,
 } from '../hooks/events.js'
 
 /**
- * Interface for objects that provide agent state.
- * Allows ToolContext to work with different agent types.
+ * Interface for objects that provide agent state and identity.
+ * Allows ToolContext and SessionManager to work with different agent types.
  */
 export interface AgentData {
+  /**
+   * Unique identifier for the agent within a session.
+   */
+  agentId: string
+
   /**
    * Agent state storage accessible to tools and application logic.
    */
@@ -30,6 +39,26 @@ export interface AgentData {
    * The conversation history of messages between user and assistant.
    */
   messages: Message[]
+
+  /**
+   * Conversation manager for managing message history.
+   */
+  conversationManager: ConversationManager
+}
+
+/**
+ * Accumulated metrics from an agent invocation.
+ */
+export interface AgentResultMetrics {
+  /**
+   * Accumulated token usage across all model calls in this invocation.
+   */
+  accumulatedUsage?: Usage
+
+  /**
+   * Accumulated performance metrics across all model calls in this invocation.
+   */
+  accumulatedMetrics?: Metrics
 }
 
 /**
@@ -48,18 +77,55 @@ export class AgentResult {
    */
   readonly lastMessage: Message
 
-  constructor(data: { stopReason: StopReason; lastMessage: Message }) {
+  /**
+   * Validated structured output when a structured output schema was requested.
+   * Present when the model successfully invoked the structured output tool.
+   */
+  readonly structuredOutput?: unknown
+
+  /**
+   * Accumulated usage and performance metrics from all model calls during this invocation.
+   */
+  readonly metrics: AgentResultMetrics | undefined
+
+  /**
+   * Interrupts that occurred during agent execution.
+   * Present when `stopReason` is `'interrupt'`, containing the interrupts
+   * that need human responses before the agent can resume.
+   */
+  readonly interrupts: Interrupt[]
+
+  constructor(data: {
+    stopReason: StopReason
+    lastMessage: Message
+    structuredOutput?: unknown
+    metrics?: AgentResultMetrics
+    interrupts?: Interrupt[]
+  }) {
     this.stopReason = data.stopReason
     this.lastMessage = data.lastMessage
+    this.structuredOutput = data.structuredOutput
+    this.metrics = data.metrics
+    this.interrupts = data.interrupts ?? []
   }
 
   /**
    * Extracts and concatenates all text content from the last message.
-   * Includes text from TextBlock and ReasoningBlock content blocks.
+   * When interrupts are present, returns a summary of the interrupts.
+   * When structuredOutput is present, returns its JSON string representation.
+   * Otherwise includes text from TextBlock and ReasoningBlock content blocks.
    *
-   * @returns The agent's last message as a string, with multiple blocks joined by newlines.
+   * @returns The agent's response as a string.
    */
   public toString(): string {
+    if (this.interrupts.length > 0) {
+      return this.interrupts.map((i) => `Interrupt: ${i.name} (${i.id})`).join('\n')
+    }
+
+    if (this.structuredOutput !== undefined && this.structuredOutput !== null) {
+      return JSON.stringify(this.structuredOutput)
+    }
+
     const textParts: string[] = []
 
     for (const block of this.lastMessage.content) {
@@ -98,6 +164,7 @@ export type AgentStreamEvent =
   | ModelStreamEvent
   | ContentBlock
   | ToolStreamEvent
+  | AgentInitializedEvent
   | BeforeInvocationEvent
   | AfterInvocationEvent
   | BeforeModelCallEvent

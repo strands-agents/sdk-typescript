@@ -399,4 +399,9 @@ export interface Metrics {
    * Latency in milliseconds.
    */
   latencyMs: number
+
+  /**
+   * Time to first byte/token in milliseconds.
+   */
+  timeToFirstByteMs?: number
 }

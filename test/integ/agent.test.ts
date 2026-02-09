@@ -1,16 +1,16 @@
+import { Agent, DocumentBlock, ImageBlock, Message, TextBlock, tool } from '@strands-agents/sdk-fork'
+import { httpRequest } from '@strands-agents/sdk-fork/vended_tools/http_request'
+import { notebook } from '@strands-agents/sdk-fork/vended_tools/notebook'
 import { describe, expect, it } from 'vitest'
-import { Agent, DocumentBlock, ImageBlock, Message, TextBlock, tool } from '@strands-agents/sdk'
-import { notebook } from '@strands-agents/sdk/vended_tools/notebook'
-import { httpRequest } from '@strands-agents/sdk/vended_tools/http_request'
 import { z } from 'zod'
 
 import { collectGenerator } from '$/sdk/__fixtures__/model-test-helpers.js'
 import { loadFixture } from './__fixtures__/test-helpers.js'
 // Import fixtures using Vite's ?url suffix
-import yellowPngUrl from './__resources__/yellow.png?url'
 import letterPdfUrl from './__resources__/letter.pdf?url'
+import yellowPngUrl from './__resources__/yellow.png?url'
 // TODO: Add gemini back to agent tests once tool and media support is implemented
-import { allProviders as realAllProviders, gemini } from './__fixtures__/model-providers.js'
+import { gemini, allProviders as realAllProviders } from './__fixtures__/model-providers.js'
 
 const allProviders = realAllProviders.filter((p) => p !== gemini)
 
@@ -93,6 +93,36 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel }) =>
         expect(result.stopReason).toBe('endTurn')
         expect(result.lastMessage.role).toBe('assistant')
         expect(result.lastMessage.content.length).toBeGreaterThan(0)
+      })
+    })
+
+    describe('Structured output', () => {
+      const UserProfileSchema = z
+        .object({
+          name: z.string().describe('Full name'),
+          age: z.number().describe('Age in years'),
+          occupation: z.string().describe('Occupation'),
+        })
+        .describe('UserProfile')
+
+      it('returns validated structured output when schema is provided', async () => {
+        const agent = new Agent({
+          model: createModel(),
+          printer: false,
+          systemPrompt: 'When asked about a person, respond by calling the UserProfile tool with the extracted fields.',
+          structuredOutput: UserProfileSchema,
+        })
+
+        const result = await agent.invoke('John Smith is a 30-year-old software engineer. Extract his details.')
+
+        expect(result.stopReason).toBe('endTurn')
+        expect(result.structuredOutput).toBeDefined()
+        const so = result.structuredOutput as { name: string; age: number; occupation: string }
+        expect(typeof so.name).toBe('string')
+        expect(typeof so.age).toBe('number')
+        expect(typeof so.occupation).toBe('string')
+        expect(so.name).toMatch(/john|smith/i)
+        expect(so.occupation).toMatch(/engineer|software/i)
       })
     })
 

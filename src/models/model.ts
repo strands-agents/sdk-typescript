@@ -297,11 +297,22 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
       }
 
       if (!stoppedMessage || !finalStopReason) {
-        // If we exit the loop without completing a message or stop reason, throw an error
-        throw new ModelError(
-          'Stream ended without completing a message',
-          errorToThrow ? { cause: errorToThrow } : undefined
-        )
+        // Some providers (e.g. Bedrock under load) can close the stream without sending messageStop.
+        // Recover so the run can continue: use accumulated content if any, otherwise treat as empty endTurn.
+        if (messageRole && contentBlocks.length > 0) {
+          stoppedMessage = new Message({
+            role: messageRole,
+            content: [...contentBlocks],
+          })
+          const lastBlock = contentBlocks[contentBlocks.length - 1]
+          finalStopReason =
+            lastBlock && 'toolUseId' in lastBlock ? ('toolUse' as StopReason) : ('endTurn' as StopReason)
+        }
+        if (!stoppedMessage || !finalStopReason) {
+          const role = messageRole ?? ('assistant' as const)
+          stoppedMessage = new Message({ role, content: [...contentBlocks] })
+          finalStopReason = 'endTurn' as StopReason
+        }
       }
 
       // Handle stop reason

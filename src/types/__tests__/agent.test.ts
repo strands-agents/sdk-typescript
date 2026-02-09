@@ -181,6 +181,67 @@ describe('AgentResult', () => {
 
         expect(`Response: ${result}`).toBe('Response: World')
       })
+
+      it('when structuredOutput is present returns JSON string of structured output', () => {
+        const message = new Message({
+          role: 'assistant',
+          content: [new TextBlock('Ignore this text')],
+        })
+        const structuredOutput = { name: 'Jane', age: 30 }
+
+        const result = new AgentResult({
+          stopReason: 'endTurn',
+          lastMessage: message,
+          structuredOutput,
+        })
+
+        expect(result.structuredOutput).toStrictEqual(structuredOutput)
+        expect(String(result)).toBe(JSON.stringify(structuredOutput))
+      })
+    })
+  })
+
+  describe('metrics', () => {
+    it('defaults to undefined when not provided', () => {
+      const message = new Message({ role: 'assistant', content: [new TextBlock('Hi')] })
+
+      const result = new AgentResult({ stopReason: 'endTurn', lastMessage: message })
+
+      expect(result.metrics).toBeUndefined()
+    })
+
+    it('stores metrics when provided', () => {
+      const message = new Message({ role: 'assistant', content: [new TextBlock('Hi')] })
+      const metrics = {
+        accumulatedUsage: { inputTokens: 50, outputTokens: 100, totalTokens: 150 },
+        accumulatedMetrics: { latencyMs: 200 },
+      }
+
+      const result = new AgentResult({ stopReason: 'endTurn', lastMessage: message, metrics })
+
+      expect(result.metrics).toStrictEqual(metrics)
+    })
+  })
+
+  describe('interrupts', () => {
+    it('defaults to empty array when not provided', () => {
+      const message = new Message({ role: 'assistant', content: [new TextBlock('Hi')] })
+
+      const result = new AgentResult({ stopReason: 'endTurn', lastMessage: message })
+
+      expect(result.interrupts).toStrictEqual([])
+    })
+
+    it('stores interrupts when provided', async () => {
+      const message = new Message({ role: 'assistant', content: [new TextBlock('Hi')] })
+      const { Interrupt } = await import('../../interrupt.js')
+      const interrupts = [new Interrupt({ id: 'int-1', name: 'approval', reason: 'Need approval' })]
+
+      const result = new AgentResult({ stopReason: 'endTurn', lastMessage: message, interrupts })
+
+      expect(result.interrupts).toHaveLength(1)
+      expect(result.interrupts[0]!.id).toBe('int-1')
+      expect(result.interrupts[0]!.name).toBe('approval')
     })
   })
 })

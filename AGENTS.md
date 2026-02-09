@@ -19,14 +19,17 @@ sdk-typescript/
 ├── src/                          # Source code (all production code)
 │   ├── __tests__/                # Unit tests for root-level source files
 │   │   ├── errors.test.ts        # Tests for error classes
-│   │   └── index.test.ts         # Tests for main entry point
+│   │   ├── index.test.ts         # Tests for main entry point
+│   │   └── interrupt.test.ts     # Tests for interrupt system
 │   │
 │   ├── agent/                    # Agent loop and streaming
 │   │   ├── __tests__/            # Unit tests for agent loop
 │   │   │   ├── agent.test.ts     # Tests for agent implementation
+│   │   │   ├── agent.interrupt.test.ts # Tests for interrupt raise/resume cycle
+│   │   │   ├── agent.hook.test.ts # Tests for agent hook integration
 │   │   │   ├── state.test.ts     # Tests for agent state
 │   │   │   └── printer.test.ts   # Tests for printer
-│   │   ├── agent.ts              # Core agent implementation
+│   │   ├── agent.ts              # Core agent implementation (incl. interrupt, structured output, steering)
 │   │   ├── printer.ts            # Agent output printing
 │   │   ├── state.ts              # Agent state implementation
 │   │   └── streaming.ts          # Agent streaming event types
@@ -35,52 +38,152 @@ sdk-typescript/
 │   │   ├── __tests__/        # Unit tests for conversation managers
 │   │   │   ├── conversation-manager.test.ts
 │   │   │   ├── null-conversation-manager.test.ts
-│   │   │   └── sliding-window-conversation-manager.test.ts
+│   │   │   ├── sliding-window-conversation-manager.test.ts
+│   │   │   └── summarizing-conversation-manager.test.ts
 │   │   ├── conversation-manager.ts        # Abstract base class
 │   │   ├── null-conversation-manager.ts   # No-op implementation
 │   │   ├── sliding-window-conversation-manager.ts  # Sliding window strategy
+│   │   ├── summarizing-conversation-manager.ts     # LLM-based summarization strategy
 │   │   └── index.ts          # Public exports
 │   │
 │   ├── hooks/                    # Hooks system for extensibility
 │   │   ├── __tests__/            # Unit tests for hooks
 │   │   │   ├── events.test.ts    # Tests for hook events
+│   │   │   ├── events-interrupt.test.ts  # Tests for BeforeToolCallEvent.interrupt()
+│   │   │   ├── interrupt-integration.test.ts # Tests for interrupt collection in registry
 │   │   │   └── registry.test.ts  # Tests for HookRegistry
-│   │   ├── events.ts             # HookEvent base class and concrete events
-│   │   ├── registry.ts           # HookRegistry implementation
+│   │   ├── events.ts             # HookEvent base class and concrete events (incl. interrupt support)
+│   │   ├── registry.ts           # HookRegistry implementation (incl. interrupt collection)
 │   │   ├── types.ts              # Hook-related type definitions
 │   │   └── index.ts              # Public exports for hooks
 │   │
 │   ├── models/                   # Model provider implementations
 │   │   ├── __tests__/            # Unit tests for model providers
-│   │   │   └── bedrock.test.ts   # Tests for Bedrock model provider
+│   │   │   ├── anthropic.test.ts # Tests for Anthropic model provider
+│   │   │   ├── bedrock.test.ts   # Tests for Bedrock model provider
+│   │   │   ├── gemini.test.ts    # Tests for Gemini model provider
+│   │   │   ├── model.test.ts     # Tests for base model provider
+│   │   │   └── openai.test.ts    # Tests for OpenAI model provider
+│   │   ├── anthropic.ts          # Anthropic Claude model provider
 │   │   ├── bedrock.ts            # AWS Bedrock model provider
+│   │   ├── gemini/               # Google Gemini model provider
+│   │   │   ├── adapters.ts       # Gemini adapter utilities
+│   │   │   ├── errors.ts         # Gemini error types
+│   │   │   ├── model.ts          # Gemini model implementation
+│   │   │   └── types.ts          # Gemini-specific types
 │   │   ├── model.ts              # Base model provider interface
+│   │   ├── openai.ts             # OpenAI model provider
 │   │   └── streaming.ts          # Streaming event types
 │   │
 │   ├── tools/                    # Tool definitions and types
 │   │   ├── __tests__/            # Unit tests for tools
+│   │   │   ├── agent-tool.test.ts # Tests for AgentTool
 │   │   │   ├── registry.test.ts  # Tests for ToolRegistry
-│   │   │   └── tool.test.ts      # Tests for FunctionTool
+│   │   │   ├── tool.test.ts      # Tests for FunctionTool
+│   │   │   └── zod-tool.test.ts  # Tests for zod-based tool factory
+│   │   ├── structured-output/    # Structured output tool system
+│   │   │   ├── __tests__/
+│   │   │   │   ├── structured-output-context.test.ts
+│   │   │   │   └── structured-output-tool.test.ts
+│   │   │   ├── structured-output-context.ts  # Structured output context management
+│   │   │   └── structured-output-tool.ts     # Structured output tool implementation
+│   │   ├── agent-tool.ts         # AgentTool implementation (wraps Agent as Tool)
 │   │   ├── function-tool.ts      # FunctionTool implementation
 │   │   ├── mcp-tool.ts           # MCP tool wrapper
-│   │   ├── registry.ts           # ToolRegistry implementation
-│   │   ├── tool.ts               # Tool interface
-│   │   └── types.ts              # Tool-related type definitions
+│   │   ├── tool.ts               # Tool interface (incl. ToolContext with interrupt support)
+│   │   ├── types.ts              # Tool-related type definitions
+│   │   └── zod-tool.ts           # Zod schema-based tool factory
+│   │
+│   ├── registry/                 # Generic and tool registries
+│   │   ├── registry.ts           # Base Registry implementation
+│   │   └── tool-registry.ts      # ToolRegistry specialization
+│   │
+│   ├── session/                  # Session management (persistence)
+│   │   ├── __tests__/            # Unit tests for session managers
+│   │   │   └── file-session-manager.test.ts
+│   │   ├── file-session-manager.ts       # File-system session manager
+│   │   ├── repository-session-manager.ts # Repository-pattern session manager
+│   │   ├── s3-session-manager.ts         # AWS S3 session manager
+│   │   ├── session-manager.ts            # Abstract base session manager
+│   │   └── session-repository.ts         # SessionRepository interface
+│   │
+│   ├── multiagent/               # Multi-agent orchestration (Swarm, Graph)
+│   │   ├── __tests__/            # Unit tests for multi-agent patterns
+│   │   │   ├── base.test.ts      # Tests for Status, NodeResult, MultiAgentBase, events
+│   │   │   ├── swarm.test.ts     # Tests for Swarm and SwarmNode
+│   │   │   └── graph.test.ts     # Tests for Graph, GraphBuilder, GraphNode
+│   │   ├── base.ts               # Status, NodeResult, MultiAgentResult, MultiAgentBase
+│   │   ├── graph.ts              # Graph, GraphBuilder, GraphNode, GraphEdge, GraphState, GraphResult
+│   │   ├── hook-events.ts        # Multi-agent hook events (BeforeNodeCallEvent, etc.)
+│   │   ├── index.ts              # Public exports for multiagent
+│   │   ├── streaming-events.ts   # Multi-agent streaming event classes
+│   │   ├── swarm.ts              # Swarm, SwarmNode, SharedContext, SwarmState, SwarmResult
+│   │   └── types.ts              # MultiAgentInput, MultiAgentStreamEvent
+│   │
+│   ├── telemetry/                # OpenTelemetry tracing integration
+│   │   ├── __tests__/            # Unit tests for telemetry
+│   │   │   └── tracer.test.ts    # Tests for tracer
+│   │   ├── tracer.ts             # Core tracing implementation (StrandsTracer, getTracer, serialize)
+│   │   └── types.ts              # Telemetry type definitions (AttributeValue)
+│   │
+│   ├── experimental/             # Experimental features (API may change)
+│   │   └── steering/             # Agent steering system
+│   │       ├── core/             # Core steering abstractions
+│   │       │   ├── __tests__/
+│   │       │   │   └── handler.test.ts
+│   │       │   ├── action.ts     # Steering actions (Proceed, Guide, Interrupt)
+│   │       │   ├── context.ts    # SteeringContext and providers
+│   │       │   └── handler.ts    # Base SteeringHandler
+│   │       ├── handlers/         # Steering handler implementations
+│   │       │   └── llm/          # LLM-based steering
+│   │       │       ├── __tests__/
+│   │       │       │   ├── llm-handler.test.ts
+│   │       │       │   └── mappers.test.ts
+│   │       │       ├── llm-handler.ts  # LLMSteeringHandler
+│   │       │       └── mappers.ts      # Prompt mappers for LLM steering
+│   │       └── context-providers/ # Built-in context providers
+│   │           ├── __tests__/
+│   │           │   └── ledger-provider.test.ts
+│   │           └── ledger-provider.ts  # Ledger-based tool tracking
+│   │
+│   ├── logging/                  # Structured logging
+│   │   ├── index.ts              # Public exports
+│   │   ├── logger.ts             # Logger implementation and configureLogging
+│   │   └── types.ts              # Logger interface
 │   │
 │   ├── types/                    # Core type definitions
+│   │   ├── __tests__/            # Unit tests for types
+│   │   │   ├── agent.test.ts     # Tests for AgentResult
+│   │   │   ├── json.test.ts      # Tests for JSON utilities
+│   │   │   ├── media.test.ts     # Tests for media types
+│   │   │   ├── messages.test.ts  # Tests for message types
+│   │   │   └── validation.test.ts # Tests for validation utilities
+│   │   ├── agent.ts              # Agent types (AgentResult, AgentData, AgentResultMetrics)
+│   │   ├── interrupt.ts          # Interrupt response types (InterruptResponse, InterruptResponseContent)
 │   │   ├── json.ts               # JSON schema and value types
-│   │   └── messages.ts           # Message and content block types
+│   │   ├── media.ts              # Media content types (ImageBlock, VideoBlock, DocumentBlock)
+│   │   ├── messages.ts           # Message and content block types
+│   │   ├── session.ts            # Session serialization types and helpers
+│   │   └── validation.ts         # Validation utilities
 │   │
 │   ├── __tests__/                # Unit tests for root-level source files
 │   │   ├── errors.test.ts        # Tests for error classes
 │   │   ├── index.test.ts         # Tests for main entry point
+│   │   ├── interrupt.test.ts     # Tests for interrupt system
 │   │   └── mcp.test.ts           # Tests for MCP integration
 │   │
+│   ├── __fixtures__/             # Shared test fixtures
+│   │   ├── mock-message-model.ts # Content-focused mock model for agent tests
+│   │   ├── model-test-helpers.ts # Test helpers for model testing
+│   │   ├── tool-helpers.ts       # Mock tool and context helpers
+│   │   └── environment.ts        # Environment detection for tests
+│   │
+│   ├── interrupt.ts              # Interrupt system (Interrupt, InterruptException, InterruptState)
 │   ├── mcp.ts                    # MCP client implementation
 │   ├── errors.ts                 # Custom error classes
 │   └── index.ts                  # Main SDK entry point (single export point)
 │
-├── vended_tools/                  # Optional vended tools (not part of core SDK)
+├── src/vended-tools/              # Optional vended tools (not part of core SDK)
 │   ├── notebook/                 # Notebook tool for managing text notebooks
 │   │   ├── __tests__/            # Unit tests for notebook tool
 │   │   │   └── notebook.test.ts
@@ -91,6 +194,7 @@ sdk-typescript/
 │   └── README.md                 # Vended tools overview
 │
 ├── test/integ/                  # Integration tests (separate from source)
+│   ├── agent.test.ts             # Agent integration tests
 │   ├── bedrock.test.ts           # Bedrock integration tests (requires AWS credentials)
 │   ├── hooks.test.ts             # Hooks integration tests
 │   └── registry.test.ts          # ToolRegistry integration tests
@@ -133,13 +237,20 @@ sdk-typescript/
 
 - **`src/`**: All production code lives here with co-located unit tests
 - **`src/__tests__/`**: Unit tests for root-level source files
-- **`src/agent/`**: Agent loop coordination, streaming event types, output printing, and conversation management
-- **`src/agent/conversation-manager/`**: Conversation history management strategies
-- **`src/hooks/`**: Hooks system for event-driven extensibility
-- **`src/models/`**: Model provider implementations (Bedrock, OpenAI, future providers)
-- **`src/tools/`**: Tool definitions and types for agent tool use
+- **`src/__fixtures__/`**: Shared test fixtures (mock models, tool helpers, environment detection)
+- **`src/agent/`**: Agent loop coordination, streaming, output printing, interrupt handling
+- **`src/conversation-manager/`**: Conversation history management strategies (sliding window, summarizing)
+- **`src/hooks/`**: Hooks system for event-driven extensibility (incl. interrupt support)
+- **`src/models/`**: Model provider implementations (Bedrock, Anthropic, OpenAI, Gemini)
+- **`src/registry/`**: Generic and tool-specific registries
+- **`src/session/`**: Session management and persistence (file, S3, repository pattern)
+- **`src/multiagent/`**: Multi-agent orchestration (Swarm pattern, Graph pattern, base infrastructure, hook/stream events)
+- **`src/telemetry/`**: OpenTelemetry tracing integration (optional peer dependency)
+- **`src/tools/`**: Tool definitions, types, and implementations (FunctionTool, AgentTool, MCP, structured output)
 - **`src/types/`**: Core type definitions used across the SDK
-- **`vended_tools/`**: Optional vended tools (not part of core SDK, independently importable)
+- **`src/experimental/`**: Experimental features with unstable APIs (agent steering)
+- **`src/logging/`**: Structured logging configuration and types
+- **`src/vended-tools/`**: Optional vended tools (not part of core SDK, independently importable)
 - **`test/integ/`**: Integration tests (tests public API and external integrations)
 - **`.github/workflows/`**: CI/CD automation and quality gates
 - **`.project/`**: Task management and project tracking

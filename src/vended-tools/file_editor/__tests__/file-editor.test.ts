@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { fileEditor } from '../file-editor.js'
 import type { ToolContext } from '../../../index.js'
 import { AgentState } from '../../../agent/state.js'
+import { NullConversationManager } from '../../../conversation-manager/null-conversation-manager.js'
 import { promises as fs } from 'fs'
 import * as path from 'path'
 import { tmpdir } from 'os'
@@ -19,7 +20,15 @@ describe('fileEditor tool', () => {
         toolUseId: 'test-id',
         input: {},
       },
-      agent: { state: agentState, messages: [] },
+      agent: {
+        state: agentState,
+        messages: [],
+        agentId: 'default',
+        conversationManager: new NullConversationManager(),
+      },
+      interrupt() {
+        throw new Error('not available')
+      },
     }
     return { state: agentState, context: toolContext }
   }
