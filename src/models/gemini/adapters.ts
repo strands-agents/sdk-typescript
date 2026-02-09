@@ -46,7 +46,7 @@ export function formatMessages(messages: Message[]): Content[] {
     const parts: Part[] = []
 
     for (const block of message.content) {
-      formatContentBlock(block, parts)
+      parts.push(...formatContentBlock(block))
     }
 
     if (parts.length > 0) {
@@ -61,52 +61,46 @@ export function formatMessages(messages: Message[]): Content[] {
 }
 
 /**
- * Formats a content block to one or more Gemini Parts, pushing them into the provided array.
+ * Formats a content block to Gemini Parts.
  *
  * @param block - SDK content block
- * @param parts - Array to push formatted parts into
+ * @returns Array of Gemini Parts
  *
  * @internal
  */
-function formatContentBlock(block: ContentBlock, parts: Part[]): void {
-  let formatted: Part[] = []
-
+function formatContentBlock(block: ContentBlock): Part[] {
   switch (block.type) {
     case 'textBlock':
-      formatted = [{ text: block.text }]
-      break
+      return [{ text: block.text }]
 
     case 'imageBlock':
-      formatted = formatImageBlock(block)
-      break
+      return formatImageBlock(block)
 
     case 'reasoningBlock':
-      formatted = formatReasoningBlock(block)
-      break
+      return formatReasoningBlock(block)
 
     case 'documentBlock':
-      formatted = formatDocumentBlock(block)
-      break
+      return formatDocumentBlock(block)
 
     case 'videoBlock':
-      formatted = formatVideoBlock(block)
-      break
+      return formatVideoBlock(block)
 
     case 'cachePointBlock':
       logger.warn('block_type=<cachePointBlock> | cache points not supported by gemini, skipping')
-      break
+      return []
 
     case 'guardContentBlock':
       logger.warn('block_type=<guardContentBlock> | guard content not supported by gemini, skipping')
-      break
+      return []
 
     case 'toolUseBlock':
     case 'toolResultBlock':
       logger.warn(`block_type=<${block.type}> | tool blocks not yet supported by gemini, skipping`)
-      break
-  }
+      return []
 
-  parts.push(...formatted)
+    default:
+      return []
+  }
 }
 
 /**
