@@ -86,6 +86,21 @@ export const openai = {
 
 export const anthropic = {
   name: 'AnthropicModel',
+  supports: {
+    reasoning: true,
+    tools: true,
+    images: true,
+    documents: true,
+    video: false,
+  } satisfies ProviderFeatures,
+  models: {
+    default: {},
+    reasoning: {
+      modelId: 'claude-sonnet-4-5-20250929',
+      params: { thinking: { type: 'enabled', budget_tokens: 1024 } },
+    },
+    video: {},
+  },
   get skip() {
     return inject('provider-anthropic').shouldSkip
   },
