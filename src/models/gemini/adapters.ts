@@ -69,99 +69,84 @@ export function formatMessages(messages: Message[]): Content[] {
  * @internal
  */
 function formatContentBlock(block: ContentBlock, parts: Part[]): void {
+  let formatted: Part[] = []
+
   switch (block.type) {
     case 'textBlock':
-      parts.push({ text: block.text })
-      return
+      formatted = [{ text: block.text }]
+      break
 
-    case 'imageBlock': {
-      const part = formatImageBlock(block)
-      if (part) parts.push(part)
-      return
-    }
+    case 'imageBlock':
+      formatted = formatImageBlock(block)
+      break
 
-    case 'reasoningBlock': {
-      const part = formatReasoningBlock(block)
-      if (part) parts.push(part)
-      return
-    }
+    case 'reasoningBlock':
+      formatted = formatReasoningBlock(block)
+      break
 
     case 'documentBlock':
-      formatDocumentBlock(block, parts)
-      return
+      formatted = formatDocumentBlock(block)
+      break
 
-    case 'videoBlock': {
-      const part = formatVideoBlock(block)
-      if (part) parts.push(part)
-      return
-    }
+    case 'videoBlock':
+      formatted = formatVideoBlock(block)
+      break
 
     case 'cachePointBlock':
       logger.warn('block_type=<cachePointBlock> | cache points not supported by gemini, skipping')
-      return
+      break
 
     case 'guardContentBlock':
       logger.warn('block_type=<guardContentBlock> | guard content not supported by gemini, skipping')
-      return
+      break
 
     case 'toolUseBlock':
     case 'toolResultBlock':
       logger.warn(`block_type=<${block.type}> | tool blocks not yet supported by gemini, skipping`)
-      return
-
-    default:
-      return
+      break
   }
+
+  parts.push(...formatted)
 }
 
 /**
- * Formats an image block to a Gemini Part.
+ * Formats an image block to Gemini Parts.
  *
  * @param block - Image block to format
- * @returns Gemini Part with inline data
+ * @returns Array of Gemini Parts
  *
  * @internal
  */
-function formatImageBlock(block: ImageBlock): Part | undefined {
+function formatImageBlock(block: ImageBlock): Part[] {
   const mimeType = getMimeType(block.format) ?? `image/${block.format}`
 
   switch (block.source.type) {
     case 'imageSourceBytes':
-      return {
-        inlineData: {
-          data: encodeBase64(block.source.bytes),
-          mimeType,
-        },
-      }
+      return [{ inlineData: { data: encodeBase64(block.source.bytes), mimeType } }]
 
     case 'imageSourceUrl':
-      return {
-        fileData: {
-          fileUri: block.source.url,
-          mimeType,
-        },
-      }
+      return [{ fileData: { fileUri: block.source.url, mimeType } }]
 
     case 'imageSourceS3Location':
       logger.warn('source_type=<imageSourceS3Location> | s3 sources not supported by gemini, skipping')
-      return undefined
+      return []
 
     default:
-      return undefined
+      return []
   }
 }
 
 /**
- * Formats a reasoning block to a Gemini Part.
+ * Formats a reasoning block to Gemini Parts.
  *
  * @param block - Reasoning block to format
- * @returns Gemini Part with thought flag
+ * @returns Array of Gemini Parts
  *
  * @internal
  */
-function formatReasoningBlock(block: ReasoningBlock): Part | undefined {
+function formatReasoningBlock(block: ReasoningBlock): Part[] {
   if (!block.text) {
-    return undefined
+    return []
   }
 
   const part: Part = {
@@ -174,82 +159,61 @@ function formatReasoningBlock(block: ReasoningBlock): Part | undefined {
     part.thoughtSignature = block.signature
   }
 
-  return part
+  return [part]
 }
 
 /**
- * Formats a document block to one or more Gemini Parts, pushing them into the provided array.
+ * Formats a document block to Gemini Parts.
  *
  * @param block - Document block to format
- * @param parts - Array to push formatted parts into
+ * @returns Array of Gemini Parts
  *
  * @internal
  */
-function formatDocumentBlock(block: DocumentBlock, parts: Part[]): void {
+function formatDocumentBlock(block: DocumentBlock): Part[] {
   const mimeType = getMimeType(block.format) ?? `application/${block.format}`
 
   switch (block.source.type) {
     case 'documentSourceBytes':
-      parts.push({
-        inlineData: {
-          data: encodeBase64(block.source.bytes),
-          mimeType,
-        },
-      })
-      return
+      return [{ inlineData: { data: encodeBase64(block.source.bytes), mimeType } }]
 
     case 'documentSourceText':
       // Convert text to bytes - Gemini API doesn't accept text directly
-      parts.push({
-        inlineData: {
-          data: encodeBase64(new TextEncoder().encode(block.source.text)),
-          mimeType,
-        },
-      })
-      return
+      return [{ inlineData: { data: encodeBase64(new TextEncoder().encode(block.source.text)), mimeType } }]
 
     case 'documentSourceContentBlock':
-      // Push each content block as a separate text part
-      for (const contentBlock of block.source.content) {
-        parts.push({ text: contentBlock.text })
-      }
-      return
+      return block.source.content.map((contentBlock) => ({ text: contentBlock.text }))
 
     case 'documentSourceS3Location':
       logger.warn('source_type=<documentSourceS3Location> | s3 sources not supported by gemini, skipping')
-      return
+      return []
 
     default:
-      return
+      return []
   }
 }
 
 /**
- * Formats a video block to a Gemini Part.
+ * Formats a video block to Gemini Parts.
  *
  * @param block - Video block to format
- * @returns Gemini Part with inline data
+ * @returns Array of Gemini Parts
  *
  * @internal
  */
-function formatVideoBlock(block: VideoBlock): Part | undefined {
+function formatVideoBlock(block: VideoBlock): Part[] {
   const mimeType = getMimeType(block.format) ?? `video/${block.format}`
 
   switch (block.source.type) {
     case 'videoSourceBytes':
-      return {
-        inlineData: {
-          data: encodeBase64(block.source.bytes),
-          mimeType,
-        },
-      }
+      return [{ inlineData: { data: encodeBase64(block.source.bytes), mimeType } }]
 
     case 'videoSourceS3Location':
       logger.warn('source_type=<videoSourceS3Location> | s3 sources not supported by gemini, skipping')
-      return undefined
+      return []
 
     default:
-      return undefined
+      return []
   }
 }
 
