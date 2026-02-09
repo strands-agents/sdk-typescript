@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  AgentInitializedEvent,
   AfterInvocationEvent,
   AfterModelCallEvent,
   AfterToolCallEvent,
@@ -14,6 +15,26 @@ import {
 import { Agent } from '../../agent/agent.js'
 import { Message, TextBlock, ToolResultBlock } from '../../types/messages.js'
 import { FunctionTool } from '../../tools/function-tool.js'
+
+describe('AgentInitializedEvent', () => {
+  it('creates instance with correct properties', () => {
+    const agent = new Agent()
+    const event = new AgentInitializedEvent({ agent })
+
+    expect(event).toEqual({
+      type: 'agentInitializedEvent',
+      agent: agent,
+    })
+    // @ts-expect-error verifying that property is readonly
+    event.agent = new Agent()
+  })
+
+  it('returns false for _shouldReverseCallbacks', () => {
+    const agent = new Agent()
+    const event = new AgentInitializedEvent({ agent })
+    expect(event._shouldReverseCallbacks()).toBe(false)
+  })
+})
 
 describe('BeforeInvocationEvent', () => {
   it('creates instance with correct properties', () => {
