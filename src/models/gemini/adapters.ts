@@ -267,9 +267,16 @@ function formatToolResultBlock(block: ToolResultBlock, toolUseIdToName: Map<stri
   functionResponse.name = toolUseIdToName.get(block.toolUseId) ?? block.toolUseId
   functionResponse.response = {
     output: block.content.map((c) => {
-      if (c.type === 'textBlock') return { text: c.text }
-      if (c.type === 'jsonBlock') return { json: c.json }
-      return {}
+      switch (c.type) {
+        case 'textBlock':
+          return { text: c.text }
+        case 'jsonBlock':
+          return { json: c.json }
+        default: {
+          const _exhaustive: never = c
+          return _exhaustive
+        }
+      }
     }),
   }
 
