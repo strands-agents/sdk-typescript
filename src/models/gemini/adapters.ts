@@ -268,7 +268,7 @@ function formatToolResultBlock(block: ToolResultBlock, toolUseIdToName: Map<stri
   functionResponse.response = {
     output: block.content.map((c) => {
       if (c.type === 'textBlock') return { text: c.text }
-      if (c.type === 'jsonBlock') return c.json
+      if (c.type === 'jsonBlock') return { json: c.json }
       return {}
     }),
   }
