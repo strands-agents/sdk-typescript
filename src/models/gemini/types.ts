@@ -64,6 +64,7 @@ export interface GeminiStreamState {
   messageStarted: boolean
   textContentBlockStarted: boolean
   reasoningContentBlockStarted: boolean
+  hasToolCalls: boolean
   inputTokens: number
   outputTokens: number
 }
