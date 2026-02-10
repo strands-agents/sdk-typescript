@@ -266,6 +266,8 @@ function formatToolResultBlock(block: ToolResultBlock, toolUseIdToName: Map<stri
   functionResponse.id = block.toolUseId
   functionResponse.name = toolUseIdToName.get(block.toolUseId) ?? block.toolUseId
   functionResponse.response = {
+    // Convert each ToolResultContent to a plain object, matching the Bedrock
+    // provider pattern: text as {text}, json wrapped as {json} (not unwrapped).
     output: block.content.map((c) => {
       switch (c.type) {
         case 'textBlock':
