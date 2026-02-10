@@ -1,11 +1,18 @@
 import { describe, expect, it } from 'vitest'
-import { Agent, Message, SlidingWindowConversationManager } from '@strands-agents/sdk'
+import { Message } from '@strands-agents/sdk'
 import type { ModelStreamEvent } from '$/sdk/models/streaming.js'
 
 import { collectIterator } from '$/sdk/__fixtures__/model-test-helpers.js'
 
 import { gemini } from '../__fixtures__/model-providers.js'
 
+/**
+ * Gemini-specific integration tests.
+ *
+ * Tests for functionality covered by agent.test.ts (system prompts, conversation context,
+ * media content, reasoning, basic agent usage) are intentionally omitted here to avoid duplication.
+ * This file focuses on low-level model provider behavior specific to Gemini.
+ */
 describe.skipIf(gemini.skip)('GeminiModel Integration Tests', () => {
   describe('Streaming', () => {
     describe('Configuration', () => {
@@ -121,121 +128,6 @@ describe.skipIf(gemini.skip)('GeminiModel Integration Tests', () => {
         expect(messageStopEvent).toBeDefined()
         expect(messageStopEvent?.stopReason).toBe('endTurn')
       })
-    })
-
-    describe('System Prompt', () => {
-      it.concurrent('respects system prompt instructions', async () => {
-        const provider = gemini.createModel({
-          modelId: 'gemini-2.0-flash',
-          params: { maxOutputTokens: 100 },
-        })
-
-        const messages: Message[] = [
-          new Message({
-            role: 'user',
-            content: [{ type: 'textBlock', text: 'What is your name?' }],
-          }),
-        ]
-
-        const events = await collectIterator<ModelStreamEvent>(
-          provider.stream(messages, {
-            systemPrompt: 'You are a helpful assistant named Claude. Always introduce yourself by name.',
-          })
-        )
-
-        let text = ''
-        for (const event of events) {
-          if (event.type === 'modelContentBlockDeltaEvent' && event.delta.type === 'textDelta') {
-            text += event.delta.text
-          }
-        }
-
-        expect(text.toLowerCase()).toContain('claude')
-      })
-    })
-
-    describe('Conversation', () => {
-      it.concurrent('maintains conversation context', async () => {
-        const provider = gemini.createModel({
-          modelId: 'gemini-2.0-flash',
-          params: { maxOutputTokens: 100 },
-        })
-
-        const messages: Message[] = [
-          new Message({
-            role: 'user',
-            content: [{ type: 'textBlock', text: 'My favorite color is blue.' }],
-          }),
-          new Message({
-            role: 'assistant',
-            content: [{ type: 'textBlock', text: 'That is a nice color!' }],
-          }),
-          new Message({
-            role: 'user',
-            content: [{ type: 'textBlock', text: 'What is my favorite color?' }],
-          }),
-        ]
-
-        const events = await collectIterator<ModelStreamEvent>(provider.stream(messages))
-
-        let text = ''
-        for (const event of events) {
-          if (event.type === 'modelContentBlockDeltaEvent' && event.delta.type === 'textDelta') {
-            text += event.delta.text
-          }
-        }
-
-        expect(text.toLowerCase()).toContain('blue')
-      })
-    })
-  })
-
-  // TODO: Add comprehensive agent tests (tools, media) once tool and media support is implemented
-  describe('Agent with Conversation Manager', () => {
-    it('manages conversation history with SlidingWindowConversationManager', async () => {
-      const agent = new Agent({
-        model: gemini.createModel({ params: { maxOutputTokens: 100 } }),
-        conversationManager: new SlidingWindowConversationManager({ windowSize: 4 }),
-        printer: false,
-      })
-
-      // First exchange
-      await agent.invoke('Count from 1 to 1.')
-      expect(agent.messages).toHaveLength(2) // user + assistant
-
-      // Second exchange
-      await agent.invoke('Count from 2 to 2.')
-      expect(agent.messages).toHaveLength(4) // 2 user + 2 assistant
-
-      // Third exchange - should trigger sliding window
-      await agent.invoke('Count from 3 to 3.')
-
-      // Should maintain window size of 4 messages
-      expect(agent.messages).toHaveLength(4)
-    })
-  })
-
-  describe('Agent Basic', () => {
-    it('completes simple request without tools', async () => {
-      const agent = new Agent({
-        model: gemini.createModel({ params: { maxOutputTokens: 100 } }),
-        printer: false,
-      })
-
-      const result = await agent.invoke('Say hello')
-
-      expect(result.stopReason).toBe('endTurn')
-      expect(result.lastMessage.role).toBe('assistant')
-      expect(result.lastMessage.content.length).toBeGreaterThan(0)
-
-      // Verify response contains greeting
-      let text = ''
-      for (const block of result.lastMessage.content) {
-        if (block.type === 'textBlock') {
-          text += block.text
-        }
-      }
-      expect(text.toLowerCase()).toMatch(/hello|hi|hey/i)
     })
   })
 })

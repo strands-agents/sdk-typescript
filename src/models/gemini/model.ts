@@ -176,6 +176,7 @@ export class GeminiModel extends Model<GeminiModelConfig> {
       const streamState: GeminiStreamState = {
         messageStarted: false,
         textContentBlockStarted: false,
+        reasoningContentBlockStarted: false,
         inputTokens: 0,
         outputTokens: 0,
       }

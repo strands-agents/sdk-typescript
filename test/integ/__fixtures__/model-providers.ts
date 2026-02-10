@@ -8,8 +8,37 @@ import { OpenAIModel, type OpenAIModelOptions } from '$/sdk/models/openai.js'
 import { AnthropicModel, type AnthropicModelOptions } from '$/sdk/models/anthropic.js'
 import { GeminiModel, type GeminiModelOptions } from '$/sdk/models/gemini/model.js'
 
+/**
+ * Feature support flags for model providers.
+ * Used to conditionally run tests based on model capabilities.
+ *
+ * TODO: after https://github.com/strands-agents/sdk-python/issues/780 this config should be in src not test
+ */
+export interface ProviderFeatures {
+  reasoning: boolean
+  tools: boolean
+  images: boolean
+  documents: boolean
+  video: boolean
+}
+
 export const bedrock = {
   name: 'BedrockModel',
+  supports: {
+    reasoning: true,
+    tools: true,
+    images: true,
+    documents: true,
+    video: true,
+  } satisfies ProviderFeatures,
+  models: {
+    default: {},
+    reasoning: {
+      modelId: 'us.anthropic.claude-sonnet-4-20250514-v1:0',
+      additionalRequestFields: { thinking: { type: 'enabled', budget_tokens: 1024 } },
+    },
+    video: { modelId: 'us.amazon.nova-pro-v1:0' },
+  },
   get skip() {
     return inject('provider-bedrock').shouldSkip
   },
@@ -18,19 +47,27 @@ export const bedrock = {
     if (!credentials) {
       throw new Error('No Bedrock credentials provided')
     }
-
     return new BedrockModel({
       ...options,
-      clientConfig: {
-        ...(options.clientConfig ?? {}),
-        credentials: credentials,
-      },
+      clientConfig: { ...(options.clientConfig ?? {}), credentials },
     })
   },
 }
 
 export const openai = {
   name: 'OpenAIModel',
+  supports: {
+    reasoning: false,
+    tools: true,
+    images: true,
+    documents: true,
+    video: false,
+  } satisfies ProviderFeatures,
+  models: {
+    default: {},
+    reasoning: { modelId: 'o1-mini' },
+    video: {},
+  },
   get skip() {
     return inject('provider-openai').shouldSkip
   },
@@ -39,20 +76,31 @@ export const openai = {
     if (!apiKey) {
       throw new Error('No OpenAI apiKey provided')
     }
-
     return new OpenAIModel({
       ...config,
-      apiKey: apiKey,
-      clientConfig: {
-        ...(config.clientConfig ?? {}),
-        dangerouslyAllowBrowser: true,
-      },
+      apiKey,
+      clientConfig: { ...(config.clientConfig ?? {}), dangerouslyAllowBrowser: true },
     })
   },
 }
 
 export const anthropic = {
   name: 'AnthropicModel',
+  supports: {
+    reasoning: true,
+    tools: true,
+    images: true,
+    documents: true,
+    video: false,
+  } satisfies ProviderFeatures,
+  models: {
+    default: {},
+    reasoning: {
+      modelId: 'claude-sonnet-4-5-20250929',
+      params: { thinking: { type: 'enabled', budget_tokens: 1024 } },
+    },
+    video: {},
+  },
   get skip() {
     return inject('provider-anthropic').shouldSkip
   },
@@ -75,6 +123,21 @@ export const anthropic = {
 
 export const gemini = {
   name: 'GeminiModel',
+  supports: {
+    reasoning: true,
+    tools: false,
+    images: true,
+    documents: true,
+    video: true,
+  } satisfies ProviderFeatures,
+  models: {
+    default: {},
+    reasoning: {
+      modelId: 'gemini-2.5-flash',
+      params: { thinkingConfig: { thinkingBudget: 1024, includeThoughts: true } },
+    },
+    video: {},
+  },
   get skip() {
     return inject('provider-gemini').shouldSkip
   },
@@ -83,11 +146,7 @@ export const gemini = {
     if (!apiKey) {
       throw new Error('No Gemini apiKey provided')
     }
-
-    return new GeminiModel({
-      ...config,
-      apiKey: apiKey,
-    })
+    return new GeminiModel({ ...config, apiKey })
   },
 }
 
