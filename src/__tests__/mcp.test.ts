@@ -23,6 +23,7 @@ vi.mock('@modelcontextprotocol/sdk/client/index.js', () => ({
       connect: vi.fn(),
       close: vi.fn(),
       listTools: vi.fn(),
+      callTool: vi.fn(),
       experimental: {
         tasks: {
           callToolStream: vi.fn(),
@@ -116,17 +117,60 @@ describe('MCP Integration', () => {
       expect(tools[0]!.name).toBe('weather')
     })
 
-    it('delegates invocation to SDK client via experimental.tasks.callToolStream', async () => {
+    it('uses callTool when tasksConfig is undefined (default)', async () => {
       const tool = new McpTool({ name: 'calc', description: '', inputSchema: {}, client })
-      sdkClientMock.experimental.tasks.callToolStream.mockReturnValue(createMockCallToolStream({ content: [] })())
+      sdkClientMock.callTool.mockResolvedValue({ content: [] })
 
       await client.callTool(tool, { op: 'add' })
 
       expect(sdkClientMock.connect).toHaveBeenCalled()
-      expect(sdkClientMock.experimental.tasks.callToolStream).toHaveBeenCalledWith({
+      expect(sdkClientMock.callTool).toHaveBeenCalledWith({
         name: 'calc',
         arguments: { op: 'add' },
       })
+      expect(sdkClientMock.experimental.tasks.callToolStream).not.toHaveBeenCalled()
+    })
+
+    it('uses callToolStream when tasksConfig is provided (empty object)', async () => {
+      const resultsLengthBefore = vi.mocked(Client).mock.results.length
+      const taskClient = new McpClient({
+        applicationName: 'TestApp',
+        transport: mockTransport,
+        tasksConfig: {},
+      })
+      const taskSdkClientMock = vi.mocked(Client).mock.results[resultsLengthBefore]!.value
+      const tool = new McpTool({ name: 'calc', description: '', inputSchema: {}, client: taskClient })
+      taskSdkClientMock.experimental.tasks.callToolStream.mockReturnValue(createMockCallToolStream({ content: [] })())
+
+      await taskClient.callTool(tool, { op: 'add' })
+
+      expect(taskSdkClientMock.connect).toHaveBeenCalled()
+      expect(taskSdkClientMock.experimental.tasks.callToolStream).toHaveBeenCalledWith(
+        { name: 'calc', arguments: { op: 'add' } },
+        undefined,
+        { timeout: 60000, maxTotalTimeout: 300000, resetTimeoutOnProgress: true }
+      )
+      expect(taskSdkClientMock.callTool).not.toHaveBeenCalled()
+    })
+
+    it('passes custom TTL and pollTimeout to callToolStream', async () => {
+      const resultsLengthBefore = vi.mocked(Client).mock.results.length
+      const taskClient = new McpClient({
+        applicationName: 'TestApp',
+        transport: mockTransport,
+        tasksConfig: { ttl: 30000, pollTimeout: 120000 },
+      })
+      const taskSdkClientMock = vi.mocked(Client).mock.results[resultsLengthBefore]!.value
+      const tool = new McpTool({ name: 'calc', description: '', inputSchema: {}, client: taskClient })
+      taskSdkClientMock.experimental.tasks.callToolStream.mockReturnValue(createMockCallToolStream({ content: [] })())
+
+      await taskClient.callTool(tool, { op: 'add' })
+
+      expect(taskSdkClientMock.experimental.tasks.callToolStream).toHaveBeenCalledWith(
+        { name: 'calc', arguments: { op: 'add' } },
+        undefined,
+        { timeout: 30000, maxTotalTimeout: 120000, resetTimeoutOnProgress: true }
+      )
     })
 
     it('validates tool arguments', async () => {
