@@ -28,7 +28,7 @@ import { logger } from '../../logging/logger.js'
  * Mapping of Gemini finish reasons to SDK stop reasons.
  * Only MAX_TOKENS needs explicit mapping; everything else defaults to endTurn.
  * Tool use stop reason is determined by the hasToolCalls flag in GeminiStreamState,
- * since Gemini does not reliably report tool use as a finish reason.
+ * since Gemini does not have a tool use finish reason.
  *
  * @internal
  */
