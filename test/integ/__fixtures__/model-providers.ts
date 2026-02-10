@@ -17,6 +17,7 @@ import { GeminiModel, type GeminiModelOptions } from '$/sdk/models/gemini/model.
 export interface ProviderFeatures {
   reasoning: boolean
   tools: boolean
+  toolThinking: boolean
   images: boolean
   documents: boolean
   video: boolean
@@ -27,6 +28,7 @@ export const bedrock = {
   supports: {
     reasoning: true,
     tools: true,
+    toolThinking: true,
     images: true,
     documents: true,
     video: true,
@@ -59,6 +61,7 @@ export const openai = {
   supports: {
     reasoning: false,
     tools: true,
+    toolThinking: false,
     images: true,
     documents: true,
     video: false,
@@ -89,6 +92,7 @@ export const anthropic = {
   supports: {
     reasoning: true,
     tools: true,
+    toolThinking: true,
     images: true,
     documents: true,
     video: false,
@@ -125,7 +129,8 @@ export const gemini = {
   name: 'GeminiModel',
   supports: {
     reasoning: true,
-    tools: false,
+    tools: true,
+    toolThinking: true,
     images: true,
     documents: true,
     video: true,

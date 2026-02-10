@@ -345,5 +345,35 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel, mode
       expect(textContent).toBeDefined()
       expect(textContent?.text).toContain('345')
     })
+
+    it.skipIf(!supports.toolThinking)('handles tool use with thinking model', async () => {
+      const agent = new Agent({
+        model: createModel(models.reasoning),
+        printer: false,
+        systemPrompt: 'Use the calculator tool to solve math problems. Respond with only the numeric result.',
+        tools: [calculatorTool],
+      })
+
+      const { items, result } = await collectGenerator(agent.stream('What is 789 * 321?'))
+
+      // Should have reasoning content deltas
+      const reasoningDeltas = items.filter(
+        (item) =>
+          item.type === 'modelContentBlockDeltaEvent' && 'delta' in item && item.delta.type === 'reasoningContentDelta'
+      )
+      expect(reasoningDeltas.length).toBeGreaterThan(0)
+
+      // Should have used the calculator tool
+      const toolUseMessage = agent.messages.find((msg) =>
+        msg.content.some((block) => block.type === 'toolUseBlock' && block.name === 'calculator')
+      )
+      expect(toolUseMessage).toBeDefined()
+
+      // Should contain the correct result (789 * 321 = 253269)
+      expect(result.stopReason).toBe('endTurn')
+      const textContent = result.lastMessage.content.find((block) => block.type === 'textBlock')
+      expect(textContent).toBeDefined()
+      expect(textContent?.text).toMatch(/253269/)
+    })
   })
 })
