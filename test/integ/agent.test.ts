@@ -16,9 +16,9 @@ import { z } from 'zod'
 import { collectGenerator } from '$/sdk/__fixtures__/model-test-helpers.js'
 import { loadFixture } from './__fixtures__/test-helpers.js'
 // Import fixtures using Vite's ?url suffix
+import yellowMp4Url from './__resources__/yellow.mp4?url'
 import yellowPngUrl from './__resources__/yellow.png?url'
 import letterPdfUrl from './__resources__/letter.pdf?url'
-import orangeMp4Url from './__resources__/orange.mp4?url'
 import { allProviders } from './__fixtures__/model-providers.js'
 
 // Calculator tool for testing
@@ -234,7 +234,7 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel, mode
     })
 
     it.skipIf(!supports.video)('handles video input', async () => {
-      const videoBytes = await loadFixture(orangeMp4Url)
+      const videoBytes = await loadFixture(yellowMp4Url)
       const videoBlock = new VideoBlock({
         format: 'mp4',
         source: { bytes: videoBytes },
@@ -247,7 +247,7 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel, mode
 
       const result = await agent.invoke([
         new TextBlock(
-          "This video shows a solid color. What color is it? Answer in one word. If you cannot tell, respond with just 'UNKNOWN'."
+          "This video shows a solid primary color. What color is it? Answer in one word. If you cannot tell, respond with just 'UNKNOWN'."
         ),
         videoBlock,
       ])
@@ -255,8 +255,7 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel, mode
       expect(result.stopReason).toBe('endTurn')
       const textContent = result.lastMessage.content.find((block) => block.type === 'textBlock')
       expect(textContent).toBeDefined()
-      // Amazon orange (#FF9900) can be perceived differently by various models
-      expect(textContent?.text).toMatch(/orange|yellow|red|amber|gold/i)
+      expect(textContent?.text).toMatch(/yellow/i)
     })
 
     describe.skipIf(!supports.images)('multimodal input', () => {
