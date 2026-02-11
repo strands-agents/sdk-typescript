@@ -12,3 +12,17 @@ export function ensureDefined<T>(value: T | null | undefined, fieldName: string)
   }
   return value
 }
+
+/**
+ * Validates that an identifier does not contain path separators.
+ *
+ * @param id - The identifier to validate
+ * @returns The validated identifier
+ * @throws Error if identifier contains path separators
+ */
+export function validateIdentifier(id: string): string {
+  if (id.includes('/') || id.includes('\\')) {
+    throw new Error(`Identifier '${id}' cannot contain path separators`)
+  }
+  return id
+}
