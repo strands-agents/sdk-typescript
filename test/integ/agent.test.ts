@@ -246,9 +246,7 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel, mode
       })
 
       const result = await agent.invoke([
-        new TextBlock(
-          "This video shows a solid primary color. What color is it? Answer in one word. If you cannot tell, respond with just 'UNKNOWN'."
-        ),
+        new TextBlock('What color is shown in this video? Answer in one word.'),
         videoBlock,
       ])
 
