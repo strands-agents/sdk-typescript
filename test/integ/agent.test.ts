@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { Agent, DocumentBlock, ImageBlock, Message, TextBlock, VideoBlock, tool } from '@strands-agents/sdk'
+import {
+  Agent,
+  DocumentBlock,
+  ImageBlock,
+  Message,
+  TextBlock,
+  ToolUseBlock,
+  VideoBlock,
+  tool,
+} from '@strands-agents/sdk'
 import { notebook } from '@strands-agents/sdk/vended_tools/notebook'
 import { httpRequest } from '@strands-agents/sdk/vended_tools/http_request'
 import { z } from 'zod'
@@ -377,8 +386,7 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel, mode
 
       // Verify reasoningSignature is present on tool use block
       const toolUseBlock = toolUseMessage!.content.find(
-        (block): block is import('@strands-agents/sdk').ToolUseBlock =>
-          block.type === 'toolUseBlock' && block.name === 'calculator'
+        (block): block is ToolUseBlock => block.type === 'toolUseBlock' && block.name === 'calculator'
       )
       expect(toolUseBlock?.reasoningSignature).toBeDefined()
 
