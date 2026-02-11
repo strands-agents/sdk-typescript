@@ -1,10 +1,10 @@
-import type { Message, SystemPrompt } from '../../types/messages.js'
+import type { Message, SystemPrompt } from '../types/messages.js'
 
 /**
  * Scope defines the context for session data.
  * Sessions can be scoped to a single agent or a multi-agent system.
  */
-export type Scope = { kind: 'agent'; agentId: string } | { kind: 'multi_agent'; multiAgentId: string }
+export type Scope = { kind: 'agent'; agentId: string } | { kind: 'multiAgent'; multiAgentId: string }
 
 /**
  * Snapshot represents a point-in-time capture of agent runtime state.

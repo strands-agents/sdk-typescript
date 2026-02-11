@@ -143,3 +143,22 @@ export class ModelThrottledError extends ModelError {
 export function normalizeError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error))
 }
+
+/**
+ * Error thrown when session operations fail.
+ *
+ * This error indicates failures in session storage operations such as
+ * reading, writing, or managing session data.
+ */
+export class SessionError extends Error {
+  /**
+   * Creates a new SessionError.
+   *
+   * @param message - Error message describing the session error
+   * @param options - Optional error options including cause for error chaining
+   */
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options)
+    this.name = 'SessionError'
+  }
+}
