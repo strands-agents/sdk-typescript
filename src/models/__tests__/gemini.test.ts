@@ -670,6 +670,62 @@ describe('GeminiModel', () => {
     })
   })
 
+  describe('built-in tools', () => {
+    it('appends geminiTools to config.tools alongside functionDeclarations', async () => {
+      const { client, captured } = createMockClientWithCapture()
+      const provider = new GeminiModel({ client, geminiTools: [{ googleSearch: {} }] })
+      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+
+      await collectIterator(
+        provider.stream(messages, {
+          toolSpecs: [
+            {
+              name: 'get_weather',
+              description: 'Get the weather',
+              inputSchema: { type: 'object', properties: { city: { type: 'string' } } },
+            },
+          ],
+        })
+      )
+
+      const config = captured.config as { tools?: unknown[] }
+      expect(config.tools).toHaveLength(2)
+      expect(config.tools![0]).toEqual({
+        functionDeclarations: [
+          {
+            name: 'get_weather',
+            description: 'Get the weather',
+            parametersJsonSchema: { type: 'object', properties: { city: { type: 'string' } } },
+          },
+        ],
+      })
+      expect(config.tools![1]).toEqual({ googleSearch: {} })
+    })
+
+    it('passes geminiTools when no toolSpecs provided', async () => {
+      const { client, captured } = createMockClientWithCapture()
+      const provider = new GeminiModel({ client, geminiTools: [{ codeExecution: {} }] })
+      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+
+      await collectIterator(provider.stream(messages))
+
+      const config = captured.config as { tools?: unknown[] }
+      expect(config.tools).toHaveLength(1)
+      expect(config.tools![0]).toEqual({ codeExecution: {} })
+    })
+
+    it('does not add tools when neither geminiTools nor toolSpecs provided', async () => {
+      const { client, captured } = createMockClientWithCapture()
+      const provider = new GeminiModel({ client })
+      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+
+      await collectIterator(provider.stream(messages))
+
+      const config = captured.config as { tools?: unknown }
+      expect(config.tools).toBeUndefined()
+    })
+  })
+
   describe('tool use formatting', () => {
     it('formats toolUseBlock with reasoningSignature as thoughtSignature', () => {
       const toolUseBlock = new ToolUseBlock({

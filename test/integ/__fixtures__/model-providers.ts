@@ -18,6 +18,7 @@ export interface ProviderFeatures {
   reasoning: boolean
   tools: boolean
   toolThinking: boolean
+  builtInTools: boolean
   images: boolean
   documents: boolean
   video: boolean
@@ -28,7 +29,8 @@ export const bedrock = {
   supports: {
     reasoning: true,
     tools: true,
-    toolThinking: true,
+    toolThinking: false,
+    builtInTools: false,
     images: true,
     documents: true,
     video: true,
@@ -62,6 +64,7 @@ export const openai = {
     reasoning: false,
     tools: true,
     toolThinking: false,
+    builtInTools: false,
     images: true,
     documents: true,
     video: false,
@@ -92,7 +95,8 @@ export const anthropic = {
   supports: {
     reasoning: true,
     tools: true,
-    toolThinking: true,
+    toolThinking: false,
+    builtInTools: false,
     images: true,
     documents: true,
     video: false,
@@ -131,6 +135,7 @@ export const gemini = {
     reasoning: true,
     tools: true,
     toolThinking: true,
+    builtInTools: true,
     images: true,
     documents: true,
     video: true,
@@ -140,6 +145,9 @@ export const gemini = {
     reasoning: {
       modelId: 'gemini-2.5-flash',
       params: { thinkingConfig: { thinkingBudget: 1024, includeThoughts: true } },
+    },
+    builtInTools: {
+      geminiTools: [{ codeExecution: {} }],
     },
     video: {},
   },

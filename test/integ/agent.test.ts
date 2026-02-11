@@ -63,6 +63,9 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel, mode
         const textContent = result.lastMessage.content.find((block) => block.type === 'textBlock')
         expect(textContent).toBeDefined()
         expect(textContent?.text).toMatch(/56088/)
+
+        // Validate multi-turn works after tool use
+        await collectGenerator(agent.stream('What was the result?'))
       })
 
       it('yields metadata events through the agent stream', async () => {
@@ -322,6 +325,9 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel, mode
           message.content.some((block) => block.type == 'toolUseBlock' && block.name == 'http_request')
         )
       ).toBe(true)
+
+      // Validate multi-turn works after tool use
+      await collectGenerator(agent.stream('What was the result?'))
     })
 
     it.skipIf(!supports.reasoning)('emits reasoning content with thinking model', async () => {
@@ -369,11 +375,40 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel, mode
       )
       expect(toolUseMessage).toBeDefined()
 
+      // Verify reasoningSignature is present on tool use block
+      const toolUseBlock = toolUseMessage!.content.find(
+        (block): block is import('@strands-agents/sdk').ToolUseBlock =>
+          block.type === 'toolUseBlock' && block.name === 'calculator'
+      )
+      expect(toolUseBlock?.reasoningSignature).toBeDefined()
+
       // Should contain the correct result (789 * 321 = 253269)
       expect(result.stopReason).toBe('endTurn')
       const textContent = result.lastMessage.content.find((block) => block.type === 'textBlock')
       expect(textContent).toBeDefined()
       expect(textContent?.text).toMatch(/253269/)
+
+      // Validate multi-turn works after tool use
+      await collectGenerator(agent.stream('What was the result?'))
+    })
+
+    it.skipIf(!supports.builtInTools)('handles built-in tools (code execution)', async () => {
+      const agent = new Agent({
+        model: createModel('builtInTools' in models ? models.builtInTools : {}),
+        printer: false,
+      })
+
+      const result = await agent.invoke([
+        new TextBlock('What is the sum of the first 50 prime numbers? Generate and run code to calculate it.'),
+      ])
+
+      expect(result.stopReason).toBe('endTurn')
+      const textContent = result.lastMessage.content.find((block) => block.type === 'textBlock')
+      expect(textContent).toBeDefined()
+      expect(textContent?.text).toMatch(/5117/)
+
+      // Validate multi-turn works after built-in tool use
+      await collectGenerator(agent.stream('What was the result?'))
     })
   })
 })

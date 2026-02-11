@@ -278,6 +278,14 @@ export class GeminiModel extends Model<GeminiModelConfig> {
       }
     }
 
+    // Append built-in tools (e.g., GoogleSearch, CodeExecution)
+    if (this._config.geminiTools && this._config.geminiTools.length > 0) {
+      if (!config.tools) {
+        config.tools = []
+      }
+      config.tools.push(...this._config.geminiTools)
+    }
+
     // Spread params object for forward compatibility
     if (this._config.params) {
       Object.assign(config, this._config.params)
