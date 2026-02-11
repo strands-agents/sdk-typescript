@@ -47,6 +47,40 @@ function createMockClientWithCapture(): { client: GoogleGenAI; captured: Record<
   return { client, captured }
 }
 
+/**
+ * Helper to set up a capture-based test with provider, captured params, and a default user message.
+ */
+function setupCaptureTest(): {
+  provider: GeminiModel
+  captured: Record<string, unknown>
+  messages: Message[]
+} {
+  const { client, captured } = createMockClientWithCapture()
+  const provider = new GeminiModel({ client })
+  const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+  return { provider, captured, messages }
+}
+
+/**
+ * Helper to set up a stream-based test with a mock client, provider, and default user message.
+ */
+function setupStreamTest(streamGenerator: () => AsyncGenerator<Record<string, unknown>>): {
+  provider: GeminiModel
+  messages: Message[]
+} {
+  const client = createMockClient(streamGenerator)
+  const provider = new GeminiModel({ client })
+  const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+  return { provider, messages }
+}
+
+/**
+ * Helper to format a single content block via formatMessages.
+ */
+function formatBlock(block: ContentBlock, role: 'user' | 'assistant' = 'user'): ReturnType<typeof formatMessages> {
+  return formatMessages([{ type: 'message', role, content: [block] }])
+}
+
 describe('GeminiModel', () => {
   beforeEach(() => {
     vi.stubEnv('GEMINI_API_KEY', 'test-api-key')
@@ -108,7 +142,7 @@ describe('GeminiModel', () => {
     })
 
     it('emits message start and stop events', async () => {
-      const mockClient = createMockClient(async function* () {
+      const { provider, messages } = setupStreamTest(async function* () {
         yield {
           candidates: [
             {
@@ -119,9 +153,6 @@ describe('GeminiModel', () => {
         yield { candidates: [{ finishReason: 'STOP' }] }
       })
 
-      const provider = new GeminiModel({ client: mockClient })
-      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
-
       const events = await collectIterator(provider.stream(messages))
 
       expect(events[0]).toEqual({ type: 'modelMessageStartEvent', role: 'assistant' })
@@ -129,7 +160,7 @@ describe('GeminiModel', () => {
     })
 
     it('emits text content block events', async () => {
-      const mockClient = createMockClient(async function* () {
+      const { provider, messages } = setupStreamTest(async function* () {
         yield {
           candidates: [
             {
@@ -146,9 +177,6 @@ describe('GeminiModel', () => {
         }
         yield { candidates: [{ finishReason: 'STOP' }] }
       })
-
-      const provider = new GeminiModel({ client: mockClient })
-      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
 
       const events = await collectIterator(provider.stream(messages))
 
@@ -168,7 +196,7 @@ describe('GeminiModel', () => {
     })
 
     it('emits usage metadata when available', async () => {
-      const mockClient = createMockClient(async function* () {
+      const { provider, messages } = setupStreamTest(async function* () {
         yield {
           candidates: [
             {
@@ -183,13 +211,9 @@ describe('GeminiModel', () => {
         yield { candidates: [{ finishReason: 'STOP' }] }
       })
 
-      const provider = new GeminiModel({ client: mockClient })
-      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
-
       const events = await collectIterator(provider.stream(messages))
 
       const metadataEvent = events.find((e) => e.type === 'modelMetadataEvent')
-      expect(metadataEvent).toBeDefined()
       expect(metadataEvent).toEqual({
         type: 'modelMetadataEvent',
         usage: {
@@ -201,7 +225,7 @@ describe('GeminiModel', () => {
     })
 
     it('handles MAX_TOKENS finish reason', async () => {
-      const mockClient = createMockClient(async function* () {
+      const { provider, messages } = setupStreamTest(async function* () {
         yield {
           candidates: [
             {
@@ -211,9 +235,6 @@ describe('GeminiModel', () => {
         }
         yield { candidates: [{ finishReason: 'MAX_TOKENS' }] }
       })
-
-      const provider = new GeminiModel({ client: mockClient })
-      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
 
       const events = await collectIterator(provider.stream(messages))
 
@@ -264,10 +285,7 @@ describe('GeminiModel', () => {
 
   describe('system prompt', () => {
     it('passes string system prompt to config', async () => {
-      const { client, captured } = createMockClientWithCapture()
-
-      const provider = new GeminiModel({ client })
-      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+      const { provider, captured, messages } = setupCaptureTest()
 
       await collectIterator(provider.stream(messages, { systemPrompt: 'You are a helpful assistant' }))
 
@@ -276,10 +294,7 @@ describe('GeminiModel', () => {
     })
 
     it('ignores empty string system prompt', async () => {
-      const { client, captured } = createMockClientWithCapture()
-
-      const provider = new GeminiModel({ client })
-      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+      const { provider, captured, messages } = setupCaptureTest()
 
       await collectIterator(provider.stream(messages, { systemPrompt: '   ' }))
 
@@ -290,9 +305,7 @@ describe('GeminiModel', () => {
 
   describe('message formatting', () => {
     it('formats user messages correctly', async () => {
-      const { client, captured } = createMockClientWithCapture()
-
-      const provider = new GeminiModel({ client })
+      const { provider, captured } = setupCaptureTest()
       const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
 
       await collectIterator(provider.stream(messages))
@@ -304,9 +317,7 @@ describe('GeminiModel', () => {
     })
 
     it('formats assistant messages correctly', async () => {
-      const { client, captured } = createMockClientWithCapture()
-
-      const provider = new GeminiModel({ client })
+      const { provider, captured } = setupCaptureTest()
       const messages: Message[] = [
         { type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] },
         { type: 'message', role: 'assistant', content: [{ type: 'textBlock', text: 'Hello!' }] },
@@ -330,9 +341,8 @@ describe('GeminiModel', () => {
           format: 'png',
           source: { bytes: new Uint8Array([0x89, 0x50, 0x4e, 0x47]) },
         })
-        const messages: Message[] = [{ type: 'message', role: 'user', content: [imageBlock as ContentBlock] }]
 
-        const contents = formatMessages(messages)
+        const contents = formatBlock(imageBlock)
 
         expect(contents).toHaveLength(1)
         expect(contents[0]!.parts).toEqual([{ inlineData: { data: 'iVBORw==', mimeType: 'image/png' } }])
@@ -343,9 +353,8 @@ describe('GeminiModel', () => {
           format: 'jpeg',
           source: { url: 'https://example.com/image.jpg' },
         })
-        const messages: Message[] = [{ type: 'message', role: 'user', content: [imageBlock as ContentBlock] }]
 
-        const contents = formatMessages(messages)
+        const contents = formatBlock(imageBlock)
 
         expect(contents).toHaveLength(1)
         expect(contents[0]!.parts).toEqual([
@@ -360,9 +369,8 @@ describe('GeminiModel', () => {
           format: 'png',
           source: { s3Location: { uri: 's3://test/image.png' } },
         })
-        const messages: Message[] = [{ type: 'message', role: 'user', content: [imageBlock as ContentBlock] }]
 
-        const contents = formatMessages(messages)
+        const contents = formatBlock(imageBlock)
 
         // Message with no valid parts is not included
         expect(contents).toHaveLength(0)
@@ -378,9 +386,8 @@ describe('GeminiModel', () => {
           format: 'pdf',
           source: { bytes: new Uint8Array([0x25, 0x50, 0x44, 0x46]) },
         })
-        const messages: Message[] = [{ type: 'message', role: 'user', content: [docBlock as ContentBlock] }]
 
-        const contents = formatMessages(messages)
+        const contents = formatBlock(docBlock)
 
         expect(contents).toHaveLength(1)
         expect(contents[0]!.parts).toEqual([{ inlineData: { data: 'JVBERg==', mimeType: 'application/pdf' } }])
@@ -392,9 +399,8 @@ describe('GeminiModel', () => {
           format: 'txt',
           source: { text: 'Document content here' },
         })
-        const messages: Message[] = [{ type: 'message', role: 'user', content: [docBlock as ContentBlock] }]
 
-        const contents = formatMessages(messages)
+        const contents = formatBlock(docBlock)
 
         expect(contents).toHaveLength(1)
         expect(contents[0]!.parts).toEqual([
@@ -408,9 +414,8 @@ describe('GeminiModel', () => {
           format: 'txt',
           source: { content: [{ text: 'Line 1' }, { text: 'Line 2' }] },
         })
-        const messages: Message[] = [{ type: 'message', role: 'user', content: [docBlock as ContentBlock] }]
 
-        const contents = formatMessages(messages)
+        const contents = formatBlock(docBlock)
 
         expect(contents).toHaveLength(1)
         expect(contents[0]!.parts).toEqual([{ text: 'Line 1' }, { text: 'Line 2' }])
@@ -423,9 +428,8 @@ describe('GeminiModel', () => {
           format: 'mp4',
           source: { bytes: new Uint8Array([0x00, 0x00, 0x00, 0x1c]) },
         })
-        const messages: Message[] = [{ type: 'message', role: 'user', content: [videoBlock as ContentBlock] }]
 
-        const contents = formatMessages(messages)
+        const contents = formatBlock(videoBlock)
 
         expect(contents).toHaveLength(1)
         expect(contents[0]!.parts).toEqual([{ inlineData: { data: 'AAAAHA==', mimeType: 'video/mp4' } }])
@@ -435,9 +439,8 @@ describe('GeminiModel', () => {
     describe('reasoning content', () => {
       it('formats reasoning block with thought flag', () => {
         const reasoningBlock = new ReasoningBlock({ text: 'Let me think about this...' })
-        const messages: Message[] = [{ type: 'message', role: 'assistant', content: [reasoningBlock as ContentBlock] }]
 
-        const contents = formatMessages(messages)
+        const contents = formatBlock(reasoningBlock, 'assistant')
 
         expect(contents).toHaveLength(1)
         expect(contents[0]!.parts).toEqual([{ text: 'Let me think about this...', thought: true }])
@@ -445,9 +448,8 @@ describe('GeminiModel', () => {
 
       it('includes thought signature when present', () => {
         const reasoningBlock = new ReasoningBlock({ text: 'Thinking...', signature: 'sig123' })
-        const messages: Message[] = [{ type: 'message', role: 'assistant', content: [reasoningBlock as ContentBlock] }]
 
-        const contents = formatMessages(messages)
+        const contents = formatBlock(reasoningBlock, 'assistant')
 
         expect(contents).toHaveLength(1)
         expect(contents[0]!.parts).toEqual([{ text: 'Thinking...', thought: true, thoughtSignature: 'sig123' }])
@@ -455,34 +457,24 @@ describe('GeminiModel', () => {
 
       it('skips reasoning block with empty text', () => {
         const reasoningBlock = new ReasoningBlock({ text: '' })
-        const messages: Message[] = [{ type: 'message', role: 'assistant', content: [reasoningBlock as ContentBlock] }]
 
-        const contents = formatMessages(messages)
+        const contents = formatBlock(reasoningBlock, 'assistant')
 
         expect(contents).toHaveLength(0)
       })
     })
 
     describe('unsupported content types', () => {
-      it('skips cache point blocks with warning', () => {
+      it.each([
+        { name: 'cache point', block: new CachePointBlock({ cacheType: 'default' }) },
+        {
+          name: 'guard content',
+          block: new GuardContentBlock({ text: { qualifiers: ['guard_content'], text: 'test' } }),
+        },
+      ])('skips $name blocks with warning', ({ block }) => {
         const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
-        const cacheBlock = new CachePointBlock({ cacheType: 'default' })
-        const messages: Message[] = [{ type: 'message', role: 'user', content: [cacheBlock as ContentBlock] }]
-
-        const contents = formatMessages(messages)
-
-        expect(contents).toHaveLength(0)
-        warnSpy.mockRestore()
-      })
-
-      it('skips guard content blocks with warning', () => {
-        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-
-        const guardBlock = new GuardContentBlock({ text: { qualifiers: ['guard_content'], text: 'test' } })
-        const messages: Message[] = [{ type: 'message', role: 'user', content: [guardBlock as ContentBlock] }]
-
-        const contents = formatMessages(messages)
+        const contents = formatBlock(block)
 
         expect(contents).toHaveLength(0)
         warnSpy.mockRestore()
@@ -490,9 +482,8 @@ describe('GeminiModel', () => {
 
       it('formats tool use blocks as function calls', () => {
         const toolUseBlock = new ToolUseBlock({ toolUseId: 'test-id', name: 'testTool', input: { key: 'value' } })
-        const messages: Message[] = [{ type: 'message', role: 'assistant', content: [toolUseBlock as ContentBlock] }]
 
-        const contents = formatMessages(messages)
+        const contents = formatBlock(toolUseBlock, 'assistant')
 
         expect(contents).toHaveLength(1)
         expect(contents[0]!.parts).toEqual([
@@ -504,7 +495,7 @@ describe('GeminiModel', () => {
 
   describe('reasoning content streaming', () => {
     it('emits reasoning content delta events for thought parts', async () => {
-      const mockClient = createMockClient(async function* () {
+      const { provider, messages } = setupStreamTest(async function* () {
         yield {
           candidates: [
             {
@@ -514,9 +505,6 @@ describe('GeminiModel', () => {
         }
         yield { candidates: [{ finishReason: 'STOP' }] }
       })
-
-      const provider = new GeminiModel({ client: mockClient })
-      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
 
       const events = await collectIterator(provider.stream(messages))
 
@@ -532,7 +520,7 @@ describe('GeminiModel', () => {
     })
 
     it('handles transition from reasoning to text content', async () => {
-      const mockClient = createMockClient(async function* () {
+      const { provider, messages } = setupStreamTest(async function* () {
         yield {
           candidates: [
             {
@@ -549,9 +537,6 @@ describe('GeminiModel', () => {
         }
         yield { candidates: [{ finishReason: 'STOP' }] }
       })
-
-      const provider = new GeminiModel({ client: mockClient })
-      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
 
       const events = await collectIterator(provider.stream(messages))
 
@@ -578,7 +563,7 @@ describe('GeminiModel', () => {
     })
 
     it('includes signature in reasoning delta when present', async () => {
-      const mockClient = createMockClient(async function* () {
+      const { provider, messages } = setupStreamTest(async function* () {
         yield {
           candidates: [
             {
@@ -597,25 +582,21 @@ describe('GeminiModel', () => {
         yield { candidates: [{ finishReason: 'STOP' }] }
       })
 
-      const provider = new GeminiModel({ client: mockClient })
-      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
-
       const events = await collectIterator(provider.stream(messages))
 
       const deltaEvent = events.find(
         (e) => e.type === 'modelContentBlockDeltaEvent' && e.delta.type === 'reasoningContentDelta'
       )
-      expect(deltaEvent).toBeDefined()
-      expect((deltaEvent as { delta: { signature?: string } }).delta.signature).toBe('sig456')
+      expect(deltaEvent).toEqual({
+        type: 'modelContentBlockDeltaEvent',
+        delta: { type: 'reasoningContentDelta', text: 'Thinking...', signature: 'sig456' },
+      })
     })
   })
 
   describe('tool configuration', () => {
     it('passes tool specs as functionDeclarations', async () => {
-      const { client, captured } = createMockClientWithCapture()
-
-      const provider = new GeminiModel({ client })
-      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+      const { provider, captured, messages } = setupCaptureTest()
 
       await collectIterator(
         provider.stream(messages, {
@@ -643,65 +624,44 @@ describe('GeminiModel', () => {
       ])
     })
 
-    it('maps toolChoice auto to FunctionCallingConfigMode.AUTO', async () => {
-      const { client, captured } = createMockClientWithCapture()
-
-      const provider = new GeminiModel({ client })
-      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
-
-      await collectIterator(
-        provider.stream(messages, {
-          toolSpecs: [{ name: 'test', description: 'test' }],
-          toolChoice: { auto: {} },
-        })
-      )
-
-      const config = captured.config as { toolConfig?: { functionCallingConfig?: { mode?: string } } }
-      expect(config.toolConfig?.functionCallingConfig?.mode).toBe(FunctionCallingConfigMode.AUTO)
-    })
-
-    it('maps toolChoice any to FunctionCallingConfigMode.ANY', async () => {
-      const { client, captured } = createMockClientWithCapture()
-
-      const provider = new GeminiModel({ client })
-      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
-
-      await collectIterator(
-        provider.stream(messages, {
-          toolSpecs: [{ name: 'test', description: 'test' }],
-          toolChoice: { any: {} },
-        })
-      )
-
-      const config = captured.config as { toolConfig?: { functionCallingConfig?: { mode?: string } } }
-      expect(config.toolConfig?.functionCallingConfig?.mode).toBe(FunctionCallingConfigMode.ANY)
-    })
-
-    it('maps toolChoice tool to ANY with allowedFunctionNames', async () => {
-      const { client, captured } = createMockClientWithCapture()
-
-      const provider = new GeminiModel({ client })
-      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+    it.each([
+      {
+        name: 'auto to AUTO',
+        toolChoice: { auto: {} },
+        expectedMode: FunctionCallingConfigMode.AUTO,
+      },
+      {
+        name: 'any to ANY',
+        toolChoice: { any: {} },
+        expectedMode: FunctionCallingConfigMode.ANY,
+      },
+      {
+        name: 'tool to ANY with allowedFunctionNames',
+        toolChoice: { tool: { name: 'get_weather' } },
+        expectedMode: FunctionCallingConfigMode.ANY,
+        expectedAllowedFunctionNames: ['get_weather'],
+      },
+    ])('maps toolChoice $name', async ({ toolChoice, expectedMode, expectedAllowedFunctionNames }) => {
+      const { provider, captured, messages } = setupCaptureTest()
 
       await collectIterator(
         provider.stream(messages, {
           toolSpecs: [{ name: 'get_weather', description: 'test' }],
-          toolChoice: { tool: { name: 'get_weather' } },
+          toolChoice,
         })
       )
 
       const config = captured.config as {
         toolConfig?: { functionCallingConfig?: { mode?: string; allowedFunctionNames?: string[] } }
       }
-      expect(config.toolConfig?.functionCallingConfig?.mode).toBe(FunctionCallingConfigMode.ANY)
-      expect(config.toolConfig?.functionCallingConfig?.allowedFunctionNames).toEqual(['get_weather'])
+      expect(config.toolConfig?.functionCallingConfig?.mode).toBe(expectedMode)
+      if (expectedAllowedFunctionNames) {
+        expect(config.toolConfig?.functionCallingConfig?.allowedFunctionNames).toEqual(expectedAllowedFunctionNames)
+      }
     })
 
     it('does not add tools config when no toolSpecs provided', async () => {
-      const { client, captured } = createMockClientWithCapture()
-
-      const provider = new GeminiModel({ client })
-      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+      const { provider, captured, messages } = setupCaptureTest()
 
       await collectIterator(provider.stream(messages))
 
@@ -718,9 +678,8 @@ describe('GeminiModel', () => {
         input: { key: 'value' },
         reasoningSignature: 'sig789',
       })
-      const messages: Message[] = [{ type: 'message', role: 'assistant', content: [toolUseBlock as ContentBlock] }]
 
-      const contents = formatMessages(messages)
+      const contents = formatBlock(toolUseBlock, 'assistant')
 
       expect(contents).toHaveLength(1)
       expect(contents[0]!.parts).toEqual([
@@ -746,12 +705,13 @@ describe('GeminiModel', () => {
       const contents = formatMessages(messages)
 
       expect(contents).toHaveLength(2)
-      const resultPart = contents[1]!.parts![0]!
-      expect(resultPart).toHaveProperty('functionResponse')
-      const fr = (resultPart as { functionResponse: { id: string; name: string; response: unknown } }).functionResponse
-      expect(fr.id).toBe('test-id')
-      expect(fr.name).toBe('testTool')
-      expect(fr.response).toEqual({ output: [{ text: 'result text' }] })
+      expect(contents[1]!.parts![0]).toEqual({
+        functionResponse: {
+          id: 'test-id',
+          name: 'testTool',
+          response: { output: [{ text: 'result text' }] },
+        },
+      })
     })
 
     it('resolves tool name from toolUseId in toolResultBlock', () => {
@@ -886,9 +846,12 @@ describe('GeminiModel', () => {
       expect(events).toEqual([{ type: 'modelMessageStopEvent', stopReason: 'toolUse' }])
     })
 
-    it('closes reasoning block before tool use block', () => {
+    it.each([
+      { blockType: 'reasoning', stateField: 'reasoningContentBlockStarted' as const },
+      { blockType: 'text', stateField: 'textContentBlockStarted' as const },
+    ])('closes $blockType block before tool use block', ({ stateField }) => {
       const streamState = createStreamState()
-      streamState.reasoningContentBlockStarted = true
+      streamState[stateField] = true
 
       const chunk = {
         candidates: [
@@ -907,31 +870,7 @@ describe('GeminiModel', () => {
         type: 'modelContentBlockStartEvent',
         start: { type: 'toolUseStart', name: 'testTool', toolUseId: 'tool-1' },
       })
-      expect(streamState.reasoningContentBlockStarted).toBe(false)
-    })
-
-    it('closes text block before tool use block', () => {
-      const streamState = createStreamState()
-      streamState.textContentBlockStarted = true
-
-      const chunk = {
-        candidates: [
-          {
-            content: {
-              parts: [{ functionCall: { id: 'tool-1', name: 'testTool', args: {} } }],
-            },
-          },
-        ],
-      }
-
-      const events = mapChunkToEvents(chunk as unknown as GenerateContentResponse, streamState)
-
-      expect(events[0]).toEqual({ type: 'modelContentBlockStopEvent' })
-      expect(events[1]).toEqual({
-        type: 'modelContentBlockStartEvent',
-        start: { type: 'toolUseStart', name: 'testTool', toolUseId: 'tool-1' },
-      })
-      expect(streamState.textContentBlockStarted).toBe(false)
+      expect(streamState[stateField]).toBe(false)
     })
 
     it('handles multiple function calls in a single response', () => {
@@ -964,7 +903,7 @@ describe('GeminiModel', () => {
     })
 
     it('handles full tool use flow via stream method', async () => {
-      const mockClient = createMockClient(async function* () {
+      const { provider, messages } = setupStreamTest(async function* () {
         yield {
           candidates: [
             {
@@ -976,9 +915,6 @@ describe('GeminiModel', () => {
         }
         yield { candidates: [{ finishReason: 'STOP' }] }
       })
-
-      const provider = new GeminiModel({ client: mockClient })
-      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
 
       const events = await collectIterator(provider.stream(messages))
 
