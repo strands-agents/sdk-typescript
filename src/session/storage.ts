@@ -42,7 +42,7 @@ export abstract class SnapshotStorage {
    * @param isLatest - If true, save as snapshot_latest.json; otherwise save to immutable_history
    * @param snapshot - Snapshot data to persist
    */
-  abstract saveSnapShot(sessionId: string, scope: Scope, isLatest: boolean, snapshot: Snapshot): Promise<void>
+  abstract saveSnapshot(sessionId: string, scope: Scope, isLatest: boolean, snapshot: Snapshot): Promise<void>
 
   /**
    * Loads a snapshot from storage.
@@ -61,7 +61,7 @@ export abstract class SnapshotStorage {
    * @param scope - Scope of the snapshots
    * @returns Array of snapshot IDs (sorted ascending)
    */
-  abstract listSnapShot(sessionId: string, scope: Scope): Promise<number[]>
+  abstract listSnapshot(sessionId: string, scope: Scope): Promise<number[]>
 
   /**
    * Loads the snapshot manifest.

@@ -49,7 +49,7 @@ export class MockSnapshotStorage extends SnapshotStorage {
     super()
   }
 
-  async saveSnapShot(sessionId: string, scope: Scope, isLatest: boolean, snapshot: Snapshot): Promise<void> {
+  async saveSnapshot(sessionId: string, scope: Scope, isLatest: boolean, snapshot: Snapshot): Promise<void> {
     if (this.shouldThrowErrors) throw new Error('Mock save error')
 
     const key = this.getKey(sessionId, scope, snapshot.snapshotId)
@@ -70,7 +70,7 @@ export class MockSnapshotStorage extends SnapshotStorage {
     return this.snapshots.get(key) ?? null
   }
 
-  async listSnapShot(sessionId: string, scope: Scope): Promise<number[]> {
+  async listSnapshot(sessionId: string, scope: Scope): Promise<number[]> {
     if (this.shouldThrowErrors) throw new Error('Mock list error')
 
     const scopeId: string = scope.kind === 'agent' ? scope.agentId! : scope.multiAgentId!

@@ -6,14 +6,10 @@
  *
  * @example
  * ```typescript
- * import { SessionManager } from '@strands/agents/session'
+ * import { FileSnapshotStorage, SnapshotStorage } from '@strands/agents/session'
  *
- * const agent = new Agent({
- *   sessionManager: new SessionManager({
- *     sessionId: 'user-123',
- *     snapshotTrigger: ({ turnCount }) => turnCount % 5 === 0
- *   })
- * })
+ * const storage = new FileSnapshotStorage('./sessions')
+ * await storage.saveSnapshot(sessionId, scope, true, snapshot)
  * ```
  */
 
@@ -23,3 +19,7 @@ export type { Scope, Snapshot, SnapshotManifest, SnapshotTriggerCallback } from 
 // Storage layer
 export type { SessionStorage } from './storage.js'
 export { SnapshotStorage } from './storage.js'
+
+// Storage implementations
+export { FileSnapshotStorage } from './file-snapshot-storage.js'
+export { S3SnapshotStorage, type S3SnapshotStorageConfig } from './s3-snapshot-storage.js'

@@ -39,14 +39,14 @@ describe('FileSnapshotStorage', () => {
     })
   })
 
-  describe('saveSnapShot', () => {
-    describe('FileSnapshotStorage_When_SaveSnapshot_Then_CreatesFiles', () => {
+  describe('saveSnapshot', () => {
+    describe('FileSnapshotStorage_When_saveSnapshot_Then_CreatesFiles', () => {
       it('saves snapshot to history file', async () => {
         const sessionId = 'test-session'
         const scope = createTestScope()
         const snapshot = createTestSnapshot({ sessionId, scope, snapshotId: 1 })
 
-        await storage.saveSnapShot(sessionId, scope, false, snapshot)
+        await storage.saveSnapshot(sessionId, scope, false, snapshot)
 
         const historyPath = join(
           testDir,
@@ -67,7 +67,7 @@ describe('FileSnapshotStorage', () => {
         const scope = createTestScope()
         const snapshot = createTestSnapshot({ sessionId, scope, snapshotId: 1 })
 
-        await storage.saveSnapShot(sessionId, scope, true, snapshot)
+        await storage.saveSnapshot(sessionId, scope, true, snapshot)
 
         const latestPath = join(testDir, sessionId, 'scopes', 'agent', 'test-id', 'snapshots', 'snapshot_latest.json')
         const content = await fs.readFile(latestPath, 'utf8')
@@ -79,7 +79,7 @@ describe('FileSnapshotStorage', () => {
         const scope = createTestScope('agent', 'new-agent')
         const snapshot = createTestSnapshot({ sessionId, scope, snapshotId: 1 })
 
-        await storage.saveSnapShot(sessionId, scope, true, snapshot)
+        await storage.saveSnapshot(sessionId, scope, true, snapshot)
 
         const expectedDir = join(testDir, sessionId, 'scopes', 'agent', 'new-agent', 'snapshots')
         const stats = await fs.stat(expectedDir)
@@ -87,7 +87,7 @@ describe('FileSnapshotStorage', () => {
       })
     })
 
-    describe('FileSnapshotStorage_When_SaveSnapshotFails_Then_ThrowsSessionError', () => {
+    describe('FileSnapshotStorage_When_saveSnapshotFails_Then_ThrowsSessionError', () => {
       it('throws SessionError when write fails', async () => {
         const sessionId = 'test-session'
         const scope = createTestScope()
@@ -95,7 +95,7 @@ describe('FileSnapshotStorage', () => {
 
         vi.spyOn(fs, 'writeFile').mockRejectedValueOnce(new Error('Write failed'))
 
-        await expect(storage.saveSnapShot(sessionId, scope, false, snapshot)).rejects.toThrow(SessionError)
+        await expect(storage.saveSnapshot(sessionId, scope, false, snapshot)).rejects.toThrow(SessionError)
       })
     })
 
@@ -105,7 +105,7 @@ describe('FileSnapshotStorage', () => {
         const scope = createTestScope('multiAgent', 'graph-1')
         const snapshot = createTestSnapshot({ sessionId, scope, snapshotId: 1 })
 
-        await storage.saveSnapShot(sessionId, scope, true, snapshot)
+        await storage.saveSnapshot(sessionId, scope, true, snapshot)
 
         const expectedPath = join(
           testDir,
@@ -128,7 +128,7 @@ describe('FileSnapshotStorage', () => {
         const sessionId = 'test-session'
         const scope = createTestScope()
         const snapshot = createTestSnapshot({ sessionId, scope, snapshotId: 1 })
-        await storage.saveSnapShot(sessionId, scope, true, snapshot)
+        await storage.saveSnapshot(sessionId, scope, true, snapshot)
 
         const result = await storage.loadSnapshot(sessionId, scope, null)
 
@@ -141,7 +141,7 @@ describe('FileSnapshotStorage', () => {
         const sessionId = 'test-session'
         const scope = createTestScope()
         const snapshot = createTestSnapshot({ sessionId, scope, snapshotId: 5 })
-        await storage.saveSnapShot(sessionId, scope, false, snapshot)
+        await storage.saveSnapshot(sessionId, scope, false, snapshot)
 
         const result = await storage.loadSnapshot(sessionId, scope, 5)
 
@@ -185,18 +185,18 @@ describe('FileSnapshotStorage', () => {
     })
   })
 
-  describe('listSnapShot', () => {
-    describe('FileSnapshotStorage_When_ListSnapshots_Then_ReturnsOrderedIds', () => {
+  describe('listSnapshot', () => {
+    describe('FileSnapshotStorage_When_listSnapshots_Then_ReturnsOrderedIds', () => {
       it('returns sorted snapshot IDs', async () => {
         const sessionId = 'test-session'
         const scope = createTestScope()
         const snapshots = createTestSnapshots(3, { sessionId, scope })
 
-        await storage.saveSnapShot(sessionId, scope, false, snapshots[2]!)
-        await storage.saveSnapShot(sessionId, scope, false, snapshots[0]!)
-        await storage.saveSnapShot(sessionId, scope, false, snapshots[1]!)
+        await storage.saveSnapshot(sessionId, scope, false, snapshots[2]!)
+        await storage.saveSnapshot(sessionId, scope, false, snapshots[0]!)
+        await storage.saveSnapshot(sessionId, scope, false, snapshots[1]!)
 
-        const result = await storage.listSnapShot(sessionId, scope)
+        const result = await storage.listSnapshot(sessionId, scope)
 
         expect(result).toEqual([1, 2, 3])
       })
@@ -205,7 +205,7 @@ describe('FileSnapshotStorage', () => {
         const sessionId = 'empty-session'
         const scope = createTestScope()
 
-        const result = await storage.listSnapShot(sessionId, scope)
+        const result = await storage.listSnapshot(sessionId, scope)
 
         expect(result).toEqual([])
       })
@@ -214,12 +214,12 @@ describe('FileSnapshotStorage', () => {
         const sessionId = 'test-session'
         const scope = createTestScope()
         const snapshot = createTestSnapshot({ sessionId, scope, snapshotId: 1 })
-        await storage.saveSnapShot(sessionId, scope, false, snapshot)
+        await storage.saveSnapshot(sessionId, scope, false, snapshot)
 
         const historyDir = join(testDir, sessionId, 'scopes', 'agent', 'test-id', 'snapshots', 'immutable_history')
         await fs.writeFile(join(historyDir, 'other-file.txt'), 'not a snapshot', 'utf8')
 
-        const result = await storage.listSnapShot(sessionId, scope)
+        const result = await storage.listSnapshot(sessionId, scope)
 
         expect(result).toEqual([1])
       })
@@ -230,7 +230,7 @@ describe('FileSnapshotStorage', () => {
         const sessionId = 'nonexistent-session'
         const scope = createTestScope()
 
-        const result = await storage.listSnapShot(sessionId, scope)
+        const result = await storage.listSnapshot(sessionId, scope)
 
         expect(result).toEqual([])
       })
@@ -243,7 +243,7 @@ describe('FileSnapshotStorage', () => {
 
         vi.spyOn(fs, 'readdir').mockRejectedValueOnce(new Error('Permission denied'))
 
-        await expect(storage.listSnapShot(sessionId, scope)).rejects.toThrow(SessionError)
+        await expect(storage.listSnapshot(sessionId, scope)).rejects.toThrow(SessionError)
       })
     })
   })
