@@ -32,11 +32,11 @@ export type S3SnapshotStorageConfig = {
  */
 export class S3SnapshotStorage extends SnapshotStorage {
   /** S3 client instance */
-  private s3: S3Client
-  /** S3 bucket name */
-  private readonly bucket: string
-  /** Key prefix for all objects */
-  private readonly prefix: string
+  private _s3: S3Client
+  /** S3 _bucket name */
+  private readonly _bucket: string
+  /** Key _prefix for all objects */
+  private readonly _prefix: string
 
   /**
    * Creates new S3SnapshotStorage instance
@@ -44,17 +44,17 @@ export class S3SnapshotStorage extends SnapshotStorage {
    */
   constructor(config: S3SnapshotStorageConfig) {
     super()
-    this.bucket = config.bucket
-    this.prefix = config.prefix ?? ''
+    this._bucket = config.bucket
+    this._prefix = config.prefix ?? ''
 
     if (config.s3Client) {
-      this.s3 = config.s3Client
+      this._s3 = config.s3Client
     } else {
       const clientConfig: S3ClientConfig = {
         ...config.s3ClientConfig,
         region: config.region ?? config.s3ClientConfig?.region ?? 'us-east-1',
       }
-      this.s3 = new S3Client(clientConfig)
+      this._s3 = new S3Client(clientConfig)
     }
   }
 
@@ -66,7 +66,7 @@ export class S3SnapshotStorage extends SnapshotStorage {
     const scopeId = scope.kind === 'agent' ? scope.agentId : scope.multiAgentId
     validateIdentifier(scopeId)
 
-    const base = this.prefix ? `${this.prefix}/` : ''
+    const base = this._prefix ? `${this._prefix}/` : ''
     return `${base}${sessionId}/scopes/${scope.kind}/${scopeId}/snapshots/${path}`
   }
 
@@ -97,8 +97,8 @@ export class S3SnapshotStorage extends SnapshotStorage {
   async listSnapshot(sessionId: string, scope: Scope): Promise<number[]> {
     const prefix = this.getKey(sessionId, scope, IMMUTABLE_HISTORY)
     try {
-      const response: ListObjectsV2CommandOutput = await this.s3.send(
-        new ListObjectsV2Command({ Bucket: this.bucket, Prefix: prefix })
+      const response: ListObjectsV2CommandOutput = await this._s3.send(
+        new ListObjectsV2Command({ Bucket: this._bucket, Prefix: prefix })
       )
       return (response.Contents ?? [])
         .map((obj) => obj.Key?.match(SNAPSHOT_REGEX)?.[1])
@@ -137,9 +137,9 @@ export class S3SnapshotStorage extends SnapshotStorage {
    */
   private async writeJSON(key: string, data: unknown): Promise<void> {
     try {
-      await this.s3.send(
+      await this._s3.send(
         new PutObjectCommand({
-          Bucket: this.bucket,
+          Bucket: this._bucket,
           Key: key,
           Body: JSON.stringify(data, null, 2),
           ContentType: 'application/json',
@@ -155,7 +155,7 @@ export class S3SnapshotStorage extends SnapshotStorage {
    */
   private async readJSON<T>(key: string): Promise<T | null> {
     try {
-      const response = await this.s3.send(new GetObjectCommand({ Bucket: this.bucket, Key: key }))
+      const response = await this._s3.send(new GetObjectCommand({ Bucket: this._bucket, Key: key }))
       const body = await response.Body?.transformToString()
       if (!body) return null
       return JSON.parse(body)

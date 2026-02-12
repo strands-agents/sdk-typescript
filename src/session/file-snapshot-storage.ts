@@ -15,7 +15,7 @@ const SNAPSHOT_REGEX = /snapshot_(\d+)\.json$/
  */
 export class FileSnapshotStorage extends SnapshotStorage {
   /** Base directory path */
-  private readonly baseDir: string
+  private readonly _baseDir: string
 
   /**
    * Creates new FileSnapshotStorage instance
@@ -23,7 +23,7 @@ export class FileSnapshotStorage extends SnapshotStorage {
    */
   constructor(baseDir: string) {
     super()
-    this.baseDir = baseDir
+    this._baseDir = baseDir
   }
 
   /**
@@ -34,7 +34,7 @@ export class FileSnapshotStorage extends SnapshotStorage {
     const scopeId = scope.kind === 'agent' ? scope.agentId : scope.multiAgentId
     validateIdentifier(scopeId)
 
-    return join(this.baseDir, sessionId, 'scopes', scope.kind, scopeId, 'snapshots', filename)
+    return join(this._baseDir, sessionId, 'scopes', scope.kind, scopeId, 'snapshots', filename)
   }
 
   /**
