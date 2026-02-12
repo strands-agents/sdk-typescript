@@ -33,7 +33,7 @@ describe('S3SnapshotStorage', () => {
       region: 'us-east-1',
     })
 
-    mockS3Client = (storage as any).s3
+    mockS3Client = (storage as any)._s3
   })
 
   describe('constructor', () => {
@@ -115,7 +115,7 @@ describe('S3SnapshotStorage', () => {
           prefix: 'my-app',
           region: 'us-east-1',
         })
-        const mockPrefixS3Client = (storageWithPrefix as any).s3
+        const mockPrefixS3Client = (storageWithPrefix as any)._s3
         const sessionId = 'test-session'
         const scope = createTestScope()
         const snapshot = createTestSnapshot({ sessionId, scope, snapshotId: 1 })
