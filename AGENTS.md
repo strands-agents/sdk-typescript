@@ -62,12 +62,10 @@ sdk-typescript/
 │   │   │   ├── exceptions.test.ts           # Tests for StructuredOutputException
 │   │   │   ├── schema_converter.test.ts     # Tests for Zod to JSON Schema conversion
 │   │   │   ├── structured_output_tool.test.ts      # Tests for StructuredOutputTool
-│   │   │   └── structured_output_context.test.ts   # Tests for StructuredOutputContext
-│   │   ├── exceptions.ts         # StructuredOutputException
-│   │   ├── schema_converter.ts   # Zod to JSON Schema conversion
+│   │   ├── exceptions.ts                    # StructuredOutputException
+│   │   ├── structured_output_utils.ts       # Zod to JSON Schema conversion
 │   │   ├── structured_output_tool.ts        # Tool implementation for validation
-│   │   ├── structured_output_context.ts     # Per-invocation context management
-│   │   └── index.ts              # Public exports for structured output
+│   │   └── structured_output_context.ts     # Per-invocation context management
 │   │
 │   ├── tools/                    # Tool definitions and types
 │   │   ├── __tests__/            # Unit tests for tools

@@ -42,6 +42,7 @@ export class StructuredOutputTool extends Tool {
    * @param toolContext - The tool execution context
    * @returns Generator that returns a ToolResultBlock
    */
+  // Validation is synchronous, so no streaming events are yielded - only the final result is returned
   // eslint-disable-next-line require-yield
   async *stream(toolContext: ToolContext): ToolStreamGenerator {
     const { toolUse } = toolContext

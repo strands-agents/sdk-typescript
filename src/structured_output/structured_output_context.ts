@@ -68,6 +68,7 @@ export class StructuredOutputContext implements IStructuredOutputContext {
   readonly isEnabled = true
 
   private _schema: z.ZodSchema
+  // The `| undefined` is needed for `exactOptionalPropertyTypes` since we assign undefined in cleanup()
   private _tool?: StructuredOutputTool | undefined
 
   // Two-phase storage
