@@ -1,4 +1,3 @@
-import * as z4mini from 'zod/v4-mini'
 import { z } from 'zod'
 import type { JSONSchema } from '../types/json.js'
 import type { ToolSpec } from '../tools/types.js'
@@ -6,6 +5,7 @@ import { StructuredOutputException } from './exceptions.js'
 
 /**
  * Converts a Zod schema to a JSON Schema for use in tool specifications.
+ * Uses the same approach as ZodTool for consistency.
  *
  * @param schema - The Zod schema to convert
  * @returns JSON Schema representation of the Zod schema
@@ -13,16 +13,14 @@ import { StructuredOutputException } from './exceptions.js'
  */
 export function convertSchemaToJsonSchema(schema: z.ZodSchema): JSONSchema {
   // Check for unsupported features (refinements and transforms)
-  // Note: This is a basic check - Zod doesn't expose a clean way to detect these
-  // We'll rely on the schema structure and _def property
   if (hasUnsupportedFeatures(schema)) {
     throw new StructuredOutputException(
       'Zod refinements and transforms are not supported in structured output schemas. Please use basic validation types only.'
     )
   }
 
-  // Convert to JSON Schema using Zod v4's built-in toJSONSchema
-  const result = z4mini.toJSONSchema(schema, { target: 'draft-7' }) as JSONSchema & { $schema?: string }
+  // Convert to JSON Schema using Zod's built-in toJSONSchema (same as ZodTool)
+  const result = z.toJSONSchema(schema) as JSONSchema & { $schema?: string }
 
   // Remove the $schema property and return the rest
   const { $schema: _$schema, ...jsonSchema } = result

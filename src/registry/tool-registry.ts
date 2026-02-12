@@ -72,15 +72,6 @@ export class ToolRegistry extends Registry<Tool, Tool> {
   public removeByName(name: string): void {
     this.findRemove((tool) => tool.name === name)
   }
-
-  /**
-   * Gets all tools for passing to the model.
-   *
-   * @returns Array of all tools available to the model
-   */
-  public getToolsForModel(): Tool[] {
-    return this.values()
-  }
 }
 
 // Unit tests
