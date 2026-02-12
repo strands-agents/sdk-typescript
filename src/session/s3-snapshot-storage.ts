@@ -73,7 +73,7 @@ export class S3SnapshotStorage extends SnapshotStorage {
   /**
    * Saves snapshot to S3, optionally marking as latest
    */
-  async saveSnapShot(sessionId: string, scope: Scope, isLatest: boolean, snapshot: Snapshot): Promise<void> {
+  async saveSnapshot(sessionId: string, scope: Scope, isLatest: boolean, snapshot: Snapshot): Promise<void> {
     await this.writeJSON(this.getHistorySnapshotKey(sessionId, scope, snapshot.snapshotId), snapshot)
     if (isLatest) {
       await this.writeJSON(this.getLatestSnapshotKey(sessionId, scope), snapshot)
@@ -94,7 +94,7 @@ export class S3SnapshotStorage extends SnapshotStorage {
   /**
    * Lists all snapshot IDs for a session scope
    */
-  async listSnapShot(sessionId: string, scope: Scope): Promise<number[]> {
+  async listSnapshot(sessionId: string, scope: Scope): Promise<number[]> {
     const prefix = this.getKey(sessionId, scope, IMMUTABLE_HISTORY)
     try {
       const response: ListObjectsV2CommandOutput = await this.s3.send(

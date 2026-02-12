@@ -40,7 +40,7 @@ export class FileSnapshotStorage extends SnapshotStorage {
   /**
    * Saves snapshot to file, optionally marking as latest
    */
-  async saveSnapShot(sessionId: string, scope: Scope, isLatest: boolean, snapshot: Snapshot): Promise<void> {
+  async saveSnapshot(sessionId: string, scope: Scope, isLatest: boolean, snapshot: Snapshot): Promise<void> {
     await this.writeJSON(this.getHistorySnapshotPath(sessionId, scope, snapshot.snapshotId), snapshot)
     if (isLatest) {
       await this.writeJSON(this.getLatestSnapshotPath(sessionId, scope), snapshot)
@@ -61,7 +61,7 @@ export class FileSnapshotStorage extends SnapshotStorage {
   /**
    * Lists all snapshot IDs for a session scope
    */
-  async listSnapShot(sessionId: string, scope: Scope): Promise<number[]> {
+  async listSnapshot(sessionId: string, scope: Scope): Promise<number[]> {
     const dirPath = this.getPath(sessionId, scope, IMMUTABLE_HISTORY)
     try {
       const files = await fs.readdir(dirPath)
