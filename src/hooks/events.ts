@@ -1,5 +1,5 @@
 import type { AgentData } from '../types/agent.js'
-import type { ContentBlock, Message, ToolResultBlock } from '../types/messages.js'
+import type { ContentBlock, Message, StopReason, ToolResultBlock } from '../types/messages.js'
 import type { Tool } from '../tools/tool.js'
 import type { JSONValue } from '../types/json.js'
 import type { ModelStreamEvent } from '../models/streaming.js'
@@ -16,6 +16,20 @@ export abstract class HookEvent {
    */
   _shouldReverseCallbacks(): boolean {
     return false
+  }
+}
+
+/**
+ * Event triggered when an agent has finished initialization.
+ * Fired after the agent has been fully constructed and all built-in components have been initialized.
+ */
+export class InitializedEvent extends HookEvent {
+  readonly type = 'initializedEvent' as const
+  readonly agent: AgentData
+
+  constructor(data: { agent: AgentData }) {
+    super()
+    this.agent = data.agent
   }
 }
 
@@ -112,6 +126,12 @@ export class AfterToolCallEvent extends HookEvent {
   readonly result: ToolResultBlock
   readonly error?: Error
 
+  /**
+   * Optional flag that can be set by hook callbacks to request a retry of the tool call.
+   * When set to true, the agent will re-execute the tool.
+   */
+  retry?: boolean
+
   constructor(data: {
     agent: AgentData
     toolUse: { name: string; toolUseId: string; input: JSONValue }
@@ -159,7 +179,7 @@ export interface ModelStopData {
   /**
    * The reason the model stopped generating.
    */
-  readonly stopReason: string
+  readonly stopReason: StopReason
 }
 
 /**
@@ -177,10 +197,9 @@ export class AfterModelCallEvent extends HookEvent {
 
   /**
    * Optional flag that can be set by hook callbacks to request a retry of the model call.
-   * Only valid when an error is present. When set to true, the agent will retry the model invocation.
-   * Typically used after reducing context size in response to a ContextWindowOverflowError.
+   * When set to true, the agent will retry the model invocation.
    */
-  retryModelCall?: boolean
+  retry?: boolean
 
   constructor(data: { agent: AgentData; stopData?: ModelStopData; error?: Error }) {
     super()

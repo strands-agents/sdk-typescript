@@ -326,6 +326,19 @@ test/integ/
 
 ### TypeScript Type Safety
 
+**Optional chaining for null safety**: Prefer optional chaining over verbose `typeof` checks when accessing potentially undefined properties:
+
+```typescript
+// ✅ Good: Optional chaining
+return globalThis?.process?.env?.API_KEY
+
+// ❌ Bad: Verbose typeof checks
+if (typeof process !== 'undefined' && typeof process.env !== 'undefined') {
+  return process.env.API_KEY
+}
+return undefined
+```
+
 **Strict requirements**:
 ```typescript
 // Good: Explicit return types
@@ -599,6 +612,34 @@ export class ValidationError extends Error {
 - Resource cleanup with `Symbol.dispose`
 
 **See [`examples/mcp/`](examples/mcp/) for complete working examples.**
+
+### Test Assertions
+
+When asserting on objects, prefer `toStrictEqual` for full object comparison rather than checking individual fields:
+
+```typescript
+// ✅ Good: Full object assertion with toStrictEqual
+expect(provider.getConfig()).toStrictEqual({
+  modelId: 'gemini-2.5-flash',
+  params: { temperature: 0.5 },
+})
+
+// ❌ Bad: Checking individual fields
+expect(provider.getConfig().modelId).toBe('gemini-2.5-flash')
+expect(provider.getConfig().params.temperature).toBe(0.5)
+```
+
+**Rationale**: Full object assertions catch unexpected properties and ensure the complete shape is correct.
+
+### Dependency Management
+
+When adding or modifying dependencies, you **MUST** follow the guidelines in [docs/DEPENDENCIES.md](docs/DEPENDENCIES.md). Key points:
+
+- **`dependencies`**: Core SDK functionality that users don't interact with directly
+- **`peerDependencies`**: Dependencies that cross API boundaries (users construct/pass instances)
+- **`devDependencies`**: Build tools, testing frameworks, linters - not shipped to users
+
+**Rule**: If a dependency crosses an API boundary, it **MUST** be a peer dependency.
 
 ## Things to Do
 

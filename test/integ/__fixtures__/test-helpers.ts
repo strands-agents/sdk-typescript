@@ -1,4 +1,5 @@
 import { inject } from 'vitest'
+import type { Message } from '@strands-agents/sdk'
 
 /**
  * Checks whether we're running tests in the browser.
@@ -30,4 +31,24 @@ export async function loadFixture(url: string): Promise<Uint8Array> {
     const filePath = join(process.cwd(), relativePath)
     return new Uint8Array(await readFile(filePath))
   }
+}
+
+// ================================
+// Agent Message Helpers
+// ================================
+
+/**
+ * Checks if any message contains a toolUseBlock with the specified tool name.
+ */
+export function hasToolUse(messages: Message[], toolName: string): boolean {
+  return messages.some((msg) => msg.content.some((block) => block.type === 'toolUseBlock' && block.name === toolName))
+}
+
+/**
+ * Counts messages containing toolResultBlocks with the specified status.
+ */
+export function countToolResults(messages: Message[], status: 'success' | 'error'): number {
+  return messages.filter((msg) =>
+    msg.content.some((block) => block.type === 'toolResultBlock' && block.status === status)
+  ).length
 }

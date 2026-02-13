@@ -1,5 +1,6 @@
 import type { HookEvent, HookProvider, HookRegistry } from '../hooks/index.js'
 import {
+  InitializedEvent,
   BeforeInvocationEvent,
   AfterInvocationEvent,
   MessageAddedEvent,
@@ -24,6 +25,7 @@ export class MockHookProvider implements HookProvider {
 
   registerCallbacks(registry: HookRegistry): void {
     const lifecycleEvents: HookEventConstructor[] = [
+      InitializedEvent,
       BeforeInvocationEvent,
       AfterInvocationEvent,
       MessageAddedEvent,

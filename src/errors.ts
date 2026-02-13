@@ -8,13 +8,34 @@
 import type { Message } from './types/messages.js'
 
 /**
+ * Base exception class for all model-related errors.
+ *
+ * This class serves as the common base type for errors that originate from
+ * model provider interactions. By catching ModelError, consumers can handle
+ * all model-related errors uniformly while still having access to specific
+ * error types through instanceof checks.
+ */
+export class ModelError extends Error {
+  /**
+   * Creates a new ModelError.
+   *
+   * @param message - Error message describing the model error
+   * @param options - Optional error options including the cause
+   */
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options)
+    this.name = 'ModelError'
+  }
+}
+
+/**
  * Error thrown when input exceeds the model's context window.
  *
  * This error indicates that the combined length of the input (prompt, messages,
  * system prompt, and tool definitions) exceeds the maximum context window size
  * supported by the model.
  */
-export class ContextWindowOverflowError extends Error {
+export class ContextWindowOverflowError extends ModelError {
   /**
    * Creates a new ContextWindowOverflowError.
    *
@@ -34,7 +55,7 @@ export class ContextWindowOverflowError extends Error {
  * state that requires intervention, such as reducing the input size or adjusting
  * the max tokens parameter.
  */
-export class MaxTokensError extends Error {
+export class MaxTokensError extends ModelError {
   /**
    * The partial assistant message that was generated before hitting the token limit.
    * This can be useful for understanding what the model was trying to generate.
@@ -87,6 +108,26 @@ export class ConcurrentInvocationError extends Error {
   constructor(message: string) {
     super(message)
     this.name = 'ConcurrentInvocationError'
+  }
+}
+
+/**
+ * Error thrown when a model provider returns a throttling or rate limit error.
+ *
+ * This error indicates that the model API has rate limited the request. Users can
+ * handle this error in hooks to implement custom retry strategies using the
+ * `AfterModelCallEvent.retry` mechanism.
+ */
+export class ModelThrottledError extends ModelError {
+  /**
+   * Creates a new ModelThrottledError.
+   *
+   * @param message - Error message describing the throttling condition
+   * @param options - Optional error options including cause for error chaining
+   */
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options)
+    this.name = 'ModelThrottledError'
   }
 }
 

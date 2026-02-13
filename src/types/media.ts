@@ -10,14 +10,80 @@ import { TextBlock, type TextBlockData } from './messages.js'
 export type MediaFormats = DocumentFormat | ImageFormat | VideoFormat
 
 /**
+ * MIME type mappings for supported media formats.
+ * Browser-compatible (no external dependencies).
+ */
+const MIME_TYPES: Record<MediaFormats, string> = {
+  // Images
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  // Videos
+  mkv: 'video/x-matroska',
+  mov: 'video/quicktime',
+  mp4: 'video/mp4',
+  webm: 'video/webm',
+  flv: 'video/x-flv',
+  mpeg: 'video/mpeg',
+  mpg: 'video/mpeg',
+  wmv: 'video/x-ms-wmv',
+  '3gp': 'video/3gpp',
+  // Documents
+  pdf: 'application/pdf',
+  csv: 'text/csv',
+  doc: 'application/msword',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xls: 'application/vnd.ms-excel',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  html: 'text/html',
+  txt: 'text/plain',
+  md: 'text/markdown',
+  json: 'application/json',
+  xml: 'application/xml',
+}
+
+/**
+ * Get the MIME type for a media format.
+ *
+ * @param format - File format/extension
+ * @returns MIME type string or undefined if not a known format
+ */
+export function getMimeType(format: string): string | undefined {
+  return MIME_TYPES[format.toLowerCase() as MediaFormats]
+}
+
+/**
  * Cross-platform base64 encoding function that works in both browser and Node.js environments.
  */
-export function encodeBase64(str: string): string {
-  if (typeof globalThis.btoa === 'function') {
-    return globalThis.btoa(str)
+export function encodeBase64(input: string | Uint8Array): string {
+  // Handle Uint8Array (Image/PDF bytes)
+  if (input instanceof Uint8Array) {
+    // Node.js: Fast and zero copy
+    if (typeof globalThis.Buffer === 'function') {
+      return globalThis.Buffer.from(input).toString('base64')
+    }
+
+    // Browser: Safe conversion which doesn't cause a stack overflow like when using the spread operator.
+    // We convert bytes to binary string in chunks to satisfy btoa()
+    const CHUNK_SIZE = 0x8000 // 32k chunks
+    let binary = ''
+    for (let i = 0; i < input.length; i += CHUNK_SIZE) {
+      binary += String.fromCharCode.apply(
+        null,
+        input.subarray(i, Math.min(i + CHUNK_SIZE, input.length)) as unknown as number[]
+      )
+    }
+
+    return globalThis.btoa(binary)
   }
-  // Node.js environment
-  return globalThis.Buffer.from(str, 'binary').toString('base64')
+
+  if (typeof globalThis.btoa === 'function') {
+    return globalThis.btoa(input)
+  }
+
+  return globalThis.Buffer.from(input, 'binary').toString('base64')
 }
 
 /**

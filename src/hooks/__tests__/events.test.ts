@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  InitializedEvent,
   AfterInvocationEvent,
   AfterModelCallEvent,
   AfterToolCallEvent,
@@ -14,6 +15,26 @@ import {
 import { Agent } from '../../agent/agent.js'
 import { Message, TextBlock, ToolResultBlock } from '../../types/messages.js'
 import { FunctionTool } from '../../tools/function-tool.js'
+
+describe('InitializedEvent', () => {
+  it('creates instance with correct properties', () => {
+    const agent = new Agent()
+    const event = new InitializedEvent({ agent })
+
+    expect(event).toEqual({
+      type: 'initializedEvent',
+      agent: agent,
+    })
+    // @ts-expect-error verifying that property is readonly
+    event.agent = new Agent()
+  })
+
+  it('returns false for _shouldReverseCallbacks', () => {
+    const agent = new Agent()
+    const event = new InitializedEvent({ agent })
+    expect(event._shouldReverseCallbacks()).toBe(false)
+  })
+})
 
 describe('BeforeInvocationEvent', () => {
   it('creates instance with correct properties', () => {
@@ -206,6 +227,42 @@ describe('AfterToolCallEvent', () => {
     const event = new AfterToolCallEvent({ agent, toolUse, tool: undefined, result })
     expect(event._shouldReverseCallbacks()).toBe(true)
   })
+
+  it('allows retry to be set when error is present', () => {
+    const agent = new Agent()
+    const toolUse = { name: 'test', toolUseId: 'id', input: {} }
+    const result = new ToolResultBlock({
+      toolUseId: 'id',
+      status: 'error',
+      content: [new TextBlock('Error')],
+    })
+    const error = new Error('Tool failed')
+    const event = new AfterToolCallEvent({ agent, toolUse, tool: undefined, result, error })
+
+    expect(event.retry).toBeUndefined()
+
+    event.retry = true
+    expect(event.retry).toBe(true)
+
+    event.retry = false
+    expect(event.retry).toBe(false)
+  })
+
+  it('allows retry to be set on success', () => {
+    const agent = new Agent()
+    const toolUse = { name: 'test', toolUseId: 'id', input: {} }
+    const result = new ToolResultBlock({
+      toolUseId: 'id',
+      status: 'success',
+      content: [new TextBlock('Success')],
+    })
+    const event = new AfterToolCallEvent({ agent, toolUse, tool: undefined, result })
+
+    expect(event.retry).toBeUndefined()
+
+    event.retry = true
+    expect(event.retry).toBe(true)
+  })
 })
 
 describe('BeforeModelCallEvent', () => {
@@ -271,29 +328,29 @@ describe('AfterModelCallEvent', () => {
     expect(event._shouldReverseCallbacks()).toBe(true)
   })
 
-  it('allows retryModelCall to be set when error is present', () => {
+  it('allows retry to be set when error is present', () => {
     const agent = new Agent()
     const error = new Error('Model failed')
     const event = new AfterModelCallEvent({ agent, error })
 
     // Initially undefined
-    expect(event.retryModelCall).toBeUndefined()
+    expect(event.retry).toBeUndefined()
 
     // Can be set to true
-    event.retryModelCall = true
-    expect(event.retryModelCall).toBe(true)
+    event.retry = true
+    expect(event.retry).toBe(true)
 
     // Can be set to false
-    event.retryModelCall = false
-    expect(event.retryModelCall).toBe(false)
+    event.retry = false
+    expect(event.retry).toBe(false)
   })
 
-  it('retryModelCall is optional and defaults to undefined', () => {
+  it('retry is optional and defaults to undefined', () => {
     const agent = new Agent()
     const error = new Error('Model failed')
     const event = new AfterModelCallEvent({ agent, error })
 
-    expect(event.retryModelCall).toBeUndefined()
+    expect(event.retry).toBeUndefined()
   })
 })
 

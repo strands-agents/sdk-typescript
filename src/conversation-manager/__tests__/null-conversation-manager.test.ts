@@ -26,7 +26,7 @@ describe('NullConversationManager', () => {
       expect(mockAgent.messages[1]!.content[0]).toEqual({ type: 'textBlock', text: 'Hi there' })
     })
 
-    it('does not set retryModelCall on context overflow', async () => {
+    it('does not set retry on context overflow', async () => {
       const manager = new NullConversationManager()
       const mockAgent = createMockAgent()
       const error = new ContextWindowOverflowError('Context overflow')
@@ -36,7 +36,7 @@ describe('NullConversationManager', () => {
 
       const event = await registry.invokeCallbacks(new AfterModelCallEvent({ agent: mockAgent, error }))
 
-      expect(event.retryModelCall).toBeUndefined()
+      expect(event.retry).toBeUndefined()
     })
   })
 })

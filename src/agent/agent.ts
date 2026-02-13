@@ -9,6 +9,7 @@ import {
   McpClient,
   Message,
   type MessageData,
+  type StopReason,
   type SystemPrompt,
   type SystemPromptData,
   TextBlock,
@@ -30,6 +31,7 @@ import { SlidingWindowConversationManager } from '../conversation-manager/slidin
 import { HookRegistryImplementation } from '../hooks/registry.js'
 import {
   HookEvent,
+  InitializedEvent,
   AfterInvocationEvent,
   AfterModelCallEvent,
   AfterToolCallEvent,
@@ -217,6 +219,8 @@ export class Agent implements AgentData {
         this._toolRegistry.addAll(tools)
       })
     )
+
+    await this.hooks.invokeCallbacks(new InitializedEvent({ agent: this }))
 
     this._initialized = true
   }
@@ -475,9 +479,8 @@ export class Agent implements AgentData {
    * @returns Object containing the assistant message and stop reason
    */
   private async *invokeModel(
-    args?: InvokeArgs,
-    toolChoice?: ToolChoice
-  ): AsyncGenerator<AgentStreamEvent, { message: Message; stopReason: string }, undefined> {
+    args?: InvokeArgs
+  ): AsyncGenerator<AgentStreamEvent, { message: Message; stopReason: StopReason }, undefined> {
     // Normalize input and append messages to conversation
     const messagesToAppend = this._normalizeInput(args)
     for (const message of messagesToAppend) {
@@ -500,7 +503,12 @@ export class Agent implements AgentData {
     try {
       const { message, stopReason } = yield* this._streamFromModel(this.messages, streamOptions)
 
-      yield new AfterModelCallEvent({ agent: this, stopData: { message, stopReason } })
+      const afterModelCallEvent = new AfterModelCallEvent({ agent: this, stopData: { message, stopReason } })
+      yield afterModelCallEvent
+
+      if (afterModelCallEvent.retry) {
+        return yield* this.invokeModel(args)
+      }
 
       return { message, stopReason }
     } catch (error) {
@@ -512,9 +520,9 @@ export class Agent implements AgentData {
       // Yield error event - stream will invoke hooks
       yield errorEvent
 
-      // After yielding, hooks have been invoked and may have set retryModelCall
-      if (errorEvent.retryModelCall) {
-        return yield* this.invokeModel(args, toolChoice)
+      // After yielding, hooks have been invoked and may have set retry
+      if (errorEvent.retry) {
+        return yield* this.invokeModel(args)
       }
 
       // Re-throw error
@@ -532,7 +540,7 @@ export class Agent implements AgentData {
   private async *_streamFromModel(
     messages: Message[],
     streamOptions: StreamOptions
-  ): AsyncGenerator<AgentStreamEvent, { message: Message; stopReason: string }, undefined> {
+  ): AsyncGenerator<AgentStreamEvent, { message: Message; stopReason: StopReason }, undefined> {
     const streamGenerator = this.model.streamAggregated(messages, streamOptions)
     let result = await streamGenerator.next()
 
@@ -618,67 +626,72 @@ export class Agent implements AgentData {
       input: toolUseBlock.input,
     }
 
-    yield new BeforeToolCallEvent({ agent: this, toolUse, tool })
+    // Retry loop for tool execution
+    while (true) {
+      yield new BeforeToolCallEvent({ agent: this, toolUse, tool })
 
-    if (!tool) {
-      // Tool not found - return error result instead of throwing
-      const errorResult = new ToolResultBlock({
-        toolUseId: toolUseBlock.toolUseId,
-        status: 'error',
-        content: [new TextBlock(`Tool '${toolUseBlock.name}' not found in registry`)],
-      })
+      let toolResult: ToolResultBlock
+      let error: Error | undefined
 
-      yield new AfterToolCallEvent({ agent: this, toolUse, tool, result: errorResult })
-
-      return errorResult
-    }
-
-    // Execute tool and collect result
-    const toolContext: ToolContext = {
-      toolUse: {
-        name: toolUseBlock.name,
-        toolUseId: toolUseBlock.toolUseId,
-        input: toolUseBlock.input,
-      },
-      agent: this,
-    }
-
-    try {
-      const toolGenerator = tool.stream(toolContext)
-
-      // Use yield* to delegate to the tool generator and capture the return value
-      const toolResult = yield* toolGenerator
-
-      if (!toolResult) {
-        // Tool didn't return a result - return error result instead of throwing
-        const errorResult = new ToolResultBlock({
+      if (!tool) {
+        // Tool not found
+        toolResult = new ToolResultBlock({
           toolUseId: toolUseBlock.toolUseId,
           status: 'error',
-          content: [new TextBlock(`Tool '${toolUseBlock.name}' did not return a result`)],
+          content: [new TextBlock(`Tool '${toolUseBlock.name}' not found in registry`)],
         })
+      } else {
+        // Execute tool and collect result
+        const toolContext: ToolContext = {
+          toolUse: {
+            name: toolUseBlock.name,
+            toolUseId: toolUseBlock.toolUseId,
+            input: toolUseBlock.input,
+          },
+          agent: this,
+        }
 
-        yield new AfterToolCallEvent({ agent: this, toolUse, tool, result: errorResult })
+        try {
+          const result = yield* tool.stream(toolContext)
 
-        return errorResult
+          if (!result) {
+            // Tool didn't return a result
+            toolResult = new ToolResultBlock({
+              toolUseId: toolUseBlock.toolUseId,
+              status: 'error',
+              content: [new TextBlock(`Tool '${toolUseBlock.name}' did not return a result`)],
+            })
+          } else {
+            toolResult = result
+            error = result.error
+          }
+        } catch (e) {
+          // Tool execution failed with error
+          error = normalizeError(e)
+          toolResult = new ToolResultBlock({
+            toolUseId: toolUseBlock.toolUseId,
+            status: 'error',
+            content: [new TextBlock(error.message)],
+            error,
+          })
+        }
       }
 
-      yield new AfterToolCallEvent({ agent: this, toolUse, tool, result: toolResult })
-
-      // Tool already returns ToolResultBlock directly
-      return toolResult
-    } catch (error) {
-      // Tool execution failed with error
-      const toolError = normalizeError(error)
-      const errorResult = new ToolResultBlock({
-        toolUseId: toolUseBlock.toolUseId,
-        status: 'error',
-        content: [new TextBlock(toolError.message)],
-        error: toolError,
+      // Single point for AfterToolCallEvent
+      const afterToolCallEvent = new AfterToolCallEvent({
+        agent: this,
+        toolUse,
+        tool,
+        result: toolResult,
+        ...(error !== undefined && { error }),
       })
+      yield afterToolCallEvent
 
-      yield new AfterToolCallEvent({ agent: this, toolUse, tool, result: errorResult, error: toolError })
+      if (afterToolCallEvent.retry) {
+        continue
+      }
 
-      return errorResult
+      return toolResult
     }
   }
 

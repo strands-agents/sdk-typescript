@@ -17,7 +17,14 @@ export { AgentResult } from './types/agent.js'
 export type { AgentConfig, ToolList } from './agent/agent.js'
 
 // Error types
-export { ContextWindowOverflowError, MaxTokensError, JsonValidationError, ConcurrentInvocationError } from './errors.js'
+export {
+  ModelError,
+  ContextWindowOverflowError,
+  MaxTokensError,
+  JsonValidationError,
+  ConcurrentInvocationError,
+  ModelThrottledError,
+} from './errors.js'
 
 // JSON types
 export type { JSONSchema, JSONValue } from './types/json.js'
@@ -127,7 +134,9 @@ export type {
 } from './models/streaming.js'
 
 // Model provider types
-export type { BaseModelConfig, StreamOptions, Model } from './models/model.js'
+export type { BaseModelConfig, StreamOptions } from './models/model.js'
+
+export { Model } from './models/model.js'
 
 // Bedrock model provider
 export { BedrockModel as BedrockModel } from './models/bedrock.js'
@@ -140,6 +149,7 @@ export type { AgentStreamEvent } from './types/agent.js'
 export {
   HookRegistry,
   HookEvent,
+  InitializedEvent,
   BeforeInvocationEvent,
   AfterInvocationEvent,
   MessageAddedEvent,

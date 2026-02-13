@@ -41,3 +41,6 @@ Thumbs.db
 
 # Test artifacts
 test/.artifacts
+
+# LLM
+CLAUDE.md

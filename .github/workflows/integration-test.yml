@@ -2,7 +2,7 @@ name: Secure Integration test
 
 on:
   pull_request_target:
-    branches: main
+    branches: [main]
   merge_group: # Run tests in merge queue
     types: [checks_requested]
 jobs:
@@ -11,42 +11,15 @@ jobs:
     permissions: read-all
     runs-on: ubuntu-latest
     outputs:
-      approval-env: ${{ steps.collab-check.outputs.result }}
+      approval-env: ${{ steps.auth.outputs.result }}
     steps:
-      - name: Collaborator Check
-        if: github.event_name != 'merge_group'
-        uses: actions/github-script@v8
-        id: collab-check
+      - name: Check Authorization
+        id: auth
+        uses: strands-agents/devtools/authorization-check@main
         with:
-          result-encoding: string
-          script: |
-            try {
-              const permissionResponse = await github.rest.repos.getCollaboratorPermissionLevel({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                username: context.payload.pull_request.user.login,
-              });
-              const permission = permissionResponse.data.permission;
-              const hasWriteAccess = ['write', 'admin'].includes(permission);
-              if (!hasWriteAccess) {
-                console.log(`User ${context.payload.pull_request.user.login} does not have write access to the repository (permission: ${permission})`);
-                return "manual-approval"
-              } else {
-                console.log(`Verifed ${context.payload.pull_request.user.login} has write access. Auto Approving PR Checks.`)
-                return "auto-approve"
-              }
-            } catch (error) {
-              console.log(`${context.payload.pull_request.user.login} does not have write access. Requiring Manual Approval to run PR Checks.`)
-              return "manual-approval"
-            }
-      - name: Auto-approve for merge queue
-        if: github.event_name == 'merge_group'
-        id: auto-approve
-        uses: actions/github-script@v8
-        with:
-          result-encoding: string
-          script: |
-            return "auto-approve"
+          skip-check: ${{ github.event_name == 'merge_group' }}
+          username: ${{ github.event.pull_request.user.login || 'invalid' }}
+          allowed-roles: 'triage,write,admin'
 
   run-integration-tests:
     name: Run integration tests

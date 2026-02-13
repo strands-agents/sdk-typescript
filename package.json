@@ -14,6 +14,10 @@
       "types": "./dist/src/index.d.ts",
       "default": "./dist/src/index.js"
     },
+    "./anthropic": {
+      "types": "./dist/src/models/anthropic.d.ts",
+      "default": "./dist/src/models/anthropic.js"
+    },
     "./openai": {
       "types": "./dist/src/models/openai.d.ts",
       "default": "./dist/src/models/openai.js"
@@ -21,6 +25,10 @@
     "./bedrock": {
       "types": "./dist/src/models/bedrock.d.ts",
       "default": "./dist/src/models/bedrock.js"
+    },
+    "./gemini": {
+      "types": "./dist/src/models/gemini/model.d.ts",
+      "default": "./dist/src/models/gemini/model.js"
     },
     "./vended_tools/notebook": {
       "types": "./dist/src/vended-tools/notebook/index.d.ts",
@@ -73,8 +81,10 @@
   "author": "Strands Agents",
   "license": "Apache-2.0",
   "devDependencies": {
+    "@anthropic-ai/sdk": "^0.71.2",
     "@aws-sdk/client-secrets-manager": "^3.943.0",
     "@aws-sdk/credential-providers": "^3.943.0",
+    "@google/genai": "^1.40.0",
     "@types/json-schema": "^7.0.15",
     "@types/node": "^24.6.0",
     "@typescript-eslint/eslint-plugin": "^8.48.1",
@@ -85,6 +95,7 @@
     "eslint": "^9.0.0",
     "eslint-plugin-tsdoc": "^0.5.0",
     "husky": "^9.1.7",
+    "openai": "^6.7.0",
     "playwright": "^1.56.1",
     "prettier": "^3.7.4",
     "tsx": "^4.21.0",
@@ -103,14 +114,28 @@
   },
   "homepage": "https://github.com/strands-agents/sdk-typescript#readme",
   "dependencies": {
-    "@aws-sdk/client-bedrock-runtime": "^3.943.0",
-    "@modelcontextprotocol/sdk": "^1.24.2",
+    "@aws-sdk/client-bedrock-runtime": "^3.943.0"
+  },
+  "peerDependencies": {
+    "@anthropic-ai/sdk": "^0.71.2",
+    "@google/genai": "^1.40.0",
+    "@modelcontextprotocol/sdk": "^1.25.2",
+    "openai": "^6.7.0",
     "zod": "^4.1.12"
   },
-  "optionalDependencies": {
-    "openai": "^6.7.0"
+  "peerDependenciesMeta": {
+    "@anthropic-ai/sdk": {
+      "optional": true
+    },
+    "@google/genai": {
+      "optional": true
+    },
+    "openai": {
+      "optional": true
+    }
   },
   "overrides": {
-    "rollup": "4.52.5"
+    "rollup": "4.52.5",
+    "fast-xml-parser": "5.3.4"
   }
 }
