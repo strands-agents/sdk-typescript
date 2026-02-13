@@ -149,6 +149,7 @@ const weatherTool = tool({
   }),
   callback: (input) => {
     // input is fully typed based on the Zod schema
+    // Tools can return strings, JSON values, or media blocks (DocumentBlock, ImageBlock, VideoBlock)
     return `The weather in ${input.location} is 72°F and sunny.`
   },
 })
