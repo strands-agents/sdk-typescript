@@ -7,7 +7,12 @@
  * @see https://ai.google.dev/docs
  */
 
-import { GoogleGenAI, type GenerateContentConfig, type GenerateContentParameters } from '@google/genai'
+import {
+  GoogleGenAI,
+  FunctionCallingConfigMode,
+  type GenerateContentConfig,
+  type GenerateContentParameters,
+} from '@google/genai'
 import { Model } from '../model.js'
 import type { StreamOptions } from '../model.js'
 import type { Message } from '../../types/messages.js'
@@ -177,6 +182,7 @@ export class GeminiModel extends Model<GeminiModelConfig> {
         messageStarted: false,
         textContentBlockStarted: false,
         reasoningContentBlockStarted: false,
+        hasToolCalls: false,
         inputTokens: 0,
         outputTokens: 0,
       }
@@ -242,6 +248,42 @@ export class GeminiModel extends Model<GeminiModelConfig> {
           config.systemInstruction = textBlocks.join('')
         }
       }
+    }
+
+    // Add tool specifications
+    if (options?.toolSpecs && options.toolSpecs.length > 0) {
+      config.tools = [
+        {
+          functionDeclarations: options.toolSpecs.map((spec) => ({
+            name: spec.name,
+            description: spec.description,
+            parametersJsonSchema: spec.inputSchema,
+          })),
+        },
+      ]
+
+      if (options.toolChoice) {
+        if ('auto' in options.toolChoice) {
+          config.toolConfig = { functionCallingConfig: { mode: FunctionCallingConfigMode.AUTO } }
+        } else if ('any' in options.toolChoice) {
+          config.toolConfig = { functionCallingConfig: { mode: FunctionCallingConfigMode.ANY } }
+        } else if ('tool' in options.toolChoice) {
+          config.toolConfig = {
+            functionCallingConfig: {
+              mode: FunctionCallingConfigMode.ANY,
+              allowedFunctionNames: [options.toolChoice.tool.name],
+            },
+          }
+        }
+      }
+    }
+
+    // Append built-in tools (e.g., GoogleSearch, CodeExecution)
+    if (this._config.geminiTools && this._config.geminiTools.length > 0) {
+      if (!config.tools) {
+        config.tools = []
+      }
+      config.tools.push(...this._config.geminiTools)
     }
 
     // Spread params object for forward compatibility

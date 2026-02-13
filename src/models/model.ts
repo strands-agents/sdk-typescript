@@ -197,6 +197,7 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
       let accumulatedToolInput = ''
       let toolName = ''
       let toolUseId = ''
+      let toolReasoningSignature = ''
       let accumulatedReasoning: {
         text?: string
         signature?: string
@@ -222,6 +223,7 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
             if (event.start?.type === 'toolUseStart') {
               toolName = event.start.name
               toolUseId = event.start.toolUseId
+              toolReasoningSignature = event.start.reasoningSignature ?? ''
             }
             accumulatedToolInput = ''
             accumulatedText = ''
@@ -253,9 +255,11 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
                   name: toolName,
                   toolUseId: toolUseId,
                   input: accumulatedToolInput ? JSON.parse(accumulatedToolInput) : {},
+                  ...(toolReasoningSignature && { reasoningSignature: toolReasoningSignature }),
                 })
                 toolUseId = '' // Reset
                 toolName = ''
+                toolReasoningSignature = ''
               } else if (Object.keys(accumulatedReasoning).length > 0) {
                 block = new ReasoningBlock({
                   ...accumulatedReasoning,

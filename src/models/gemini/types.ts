@@ -2,7 +2,7 @@
  * Type definitions for the Gemini model provider.
  */
 
-import type { GoogleGenAI, GoogleGenAIOptions } from '@google/genai'
+import type { GoogleGenAI, GoogleGenAIOptions, Tool } from '@google/genai'
 import type { BaseModelConfig } from '../model.js'
 
 /**
@@ -33,6 +33,14 @@ export interface GeminiModelConfig extends BaseModelConfig {
    * @see https://ai.google.dev/api/generate-content#generationconfig
    */
   params?: Record<string, unknown>
+
+  /**
+   * Gemini-specific built-in tools (e.g., GoogleSearch, CodeExecution, UrlContext).
+   * These are appended as separate Tool objects alongside any functionDeclarations.
+   *
+   * @see https://ai.google.dev/gemini-api/docs/function-calling
+   */
+  geminiTools?: Tool[]
 }
 
 /**
@@ -64,6 +72,7 @@ export interface GeminiStreamState {
   messageStarted: boolean
   textContentBlockStarted: boolean
   reasoningContentBlockStarted: boolean
+  hasToolCalls: boolean
   inputTokens: number
   outputTokens: number
 }
