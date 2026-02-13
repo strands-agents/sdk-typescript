@@ -14,6 +14,7 @@ import {
   type SystemPromptData,
   TextBlock,
   type Tool,
+  type ToolChoice,
   type ToolContext,
   ToolResultBlock,
   ToolUseBlock,
@@ -42,6 +43,9 @@ import {
   MessageAddedEvent,
   ModelStreamEventHook,
 } from '../hooks/events.js'
+import { createStructuredOutputContext } from '../structured_output/structured_output_context.js'
+import { StructuredOutputException } from '../structured_output/exceptions.js'
+import type { z } from 'zod'
 
 /**
  * Recursive type definition for nested tool arrays.
@@ -105,6 +109,10 @@ export type AgentConfig = {
    * Hooks enable observing and extending agent behavior.
    */
   hooks?: HookProvider[]
+  /**
+   * Zod schema for structured output validation.
+   */
+  structuredOutputModel?: z.ZodSchema
 }
 
 /**
@@ -157,6 +165,7 @@ export class Agent implements AgentData {
   private _initialized: boolean
   private _isInvoking: boolean = false
   private _printer?: Printer
+  private _defaultStructuredOutputModel?: z.ZodSchema | undefined
 
   /**
    * Creates an instance of the Agent.
@@ -192,6 +201,9 @@ export class Agent implements AgentData {
     if (printer) {
       this._printer = new AgentPrinter(getDefaultAppender())
     }
+
+    // Store default structured output model
+    this._defaultStructuredOutputModel = config?.structuredOutputModel
 
     this._initialized = false
   }
@@ -338,36 +350,68 @@ export class Agent implements AgentData {
    */
   private async *_stream(args: InvokeArgs): AsyncGenerator<AgentStreamEvent, AgentResult, undefined> {
     let currentArgs: InvokeArgs | undefined = args
+    let forcedToolChoice: ToolChoice | undefined = undefined
 
-    // Emit event before the loop starts
-    yield new BeforeInvocationEvent({ agent: this })
+    // Create structured output context (uses null object pattern when no schema)
+    const schema = this._defaultStructuredOutputModel
+    const context = createStructuredOutputContext(schema)
 
     try {
+      // Emit event before the loop starts
+      yield new BeforeInvocationEvent({ agent: this })
+
+      // Register structured output tool
+      context.registerTool(this._toolRegistry)
+
       // Main agent loop - continues until model stops without requesting tools
       while (true) {
-        const modelResult = yield* this.invokeModel(currentArgs)
+        const modelResult = yield* this.invokeModel(currentArgs, forcedToolChoice)
         currentArgs = undefined // Only pass args on first invocation
+        const wasForced = forcedToolChoice !== undefined
+        forcedToolChoice = undefined // Clear after use
+
         if (modelResult.stopReason !== 'toolUse') {
-          // Loop terminates - no tool use requested
-          // Add assistant message now that we're returning
+          // Check if we need to force structured output tool
+          if (!context.hasResult()) {
+            if (wasForced) {
+              // Already tried forcing - LLM refused to use the tool
+              throw new StructuredOutputException(
+                'The model failed to invoke the structured output tool even after it was forced.'
+              )
+            }
+
+            // Force the model to use the structured output tool
+            const toolName = context.getToolName()
+            forcedToolChoice = { tool: { name: toolName } }
+            continue
+          }
+
+          // Loop terminates - no tool use requested (and structured output satisfied if needed)
           yield await this._appendMessage(modelResult.message)
+
+          const structuredOutput = context.getResult()
+
           return new AgentResult({
             stopReason: modelResult.stopReason,
             lastMessage: modelResult.message,
+            structuredOutput,
           })
         }
 
         // Execute tools sequentially
         const toolResultMessage = yield* this.executeTools(modelResult.message, this._toolRegistry)
 
+        // Extract structured output result after all tools execute
+        context.extractResultFromMessage(modelResult.message)
+
         // Add assistant message with tool uses right before adding tool results
-        // This ensures we don't have dangling tool use messages if tool execution fails
         yield await this._appendMessage(modelResult.message)
         yield await this._appendMessage(toolResultMessage)
-
-        // Continue loop
       }
     } finally {
+      // Cleanup structured output context
+      context.cleanup(this._toolRegistry)
+
       // Always emit final event
       yield new AfterInvocationEvent({ agent: this })
     }
@@ -431,10 +475,12 @@ export class Agent implements AgentData {
    * Invokes the model provider and streams all events.
    *
    * @param args - Optional arguments for invoking the model
+   * @param toolChoice - Optional tool choice to force specific tool usage
    * @returns Object containing the assistant message and stop reason
    */
   private async *invokeModel(
-    args?: InvokeArgs
+    args?: InvokeArgs,
+    forcedToolChoice?: ToolChoice
   ): AsyncGenerator<AgentStreamEvent, { message: Message; stopReason: StopReason }, undefined> {
     // Normalize input and append messages to conversation
     const messagesToAppend = this._normalizeInput(args)
@@ -446,6 +492,11 @@ export class Agent implements AgentData {
     const streamOptions: StreamOptions = { toolSpecs }
     if (this.systemPrompt !== undefined) {
       streamOptions.systemPrompt = this.systemPrompt
+    }
+
+    // Add tool choice if provided (for structured output forcing)
+    if (forcedToolChoice) {
+      streamOptions.toolChoice = forcedToolChoice
     }
 
     yield new BeforeModelCallEvent({ agent: this })
