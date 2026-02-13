@@ -181,42 +181,29 @@ const PersonSchema = z.object({
   occupation: z.string().describe('Occupation of the person')
 })
 
-const agent = new Agent()
-const result = await agent.invoke(
-  'John Smith is a 30 year-old software engineer',
-  { structuredOutputModel: PersonSchema }
-)
+// Configure structured output at the agent level
+const agent = new Agent({ 
+  structuredOutputModel: PersonSchema 
+})
+
+const result = await agent.invoke('John Smith is a 30 year-old software engineer')
 
 // result.structuredOutput is fully typed based on the schema
 console.log(result.structuredOutput.name) // "John Smith"
 console.log(result.structuredOutput.age)  // 30
 ```
 
-**Agent-level defaults**: Set a schema at the agent level to apply it to all invocations:
-
-```typescript
-const agent = new Agent({ 
-  structuredOutputModel: PersonSchema 
-})
-
-// Schema applies to all invocations
-const result = await agent.invoke('Extract person info...')
-console.log(result.structuredOutput) // Typed as PersonInfo
-```
-
-**Error handling**: The agent automatically retries with validation feedback when the LLM provides invalid output:
+**Error handling**: The agent automatically retries with validation feedback when the LLM provides invalid output. If validation ultimately fails, a `StructuredOutputException` is thrown:
 
 ```typescript
 import { StructuredOutputException } from '@strands-agents/sdk'
 
 try {
-  const result = await agent.invoke(prompt, { 
-    structuredOutputModel: PersonSchema 
-  })
+  const result = await agent.invoke('Extract person info...')
   console.log(result.structuredOutput)
 } catch (error) {
   if (error instanceof StructuredOutputException) {
-    console.error('Validation failed:', error.validationErrors)
+    console.error('Validation failed:', error.message)
   }
 }
 ```

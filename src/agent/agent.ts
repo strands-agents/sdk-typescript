@@ -479,7 +479,8 @@ export class Agent implements AgentData {
    * @returns Object containing the assistant message and stop reason
    */
   private async *invokeModel(
-    args?: InvokeArgs
+    args?: InvokeArgs,
+    forcedToolChoice?: ToolChoice
   ): AsyncGenerator<AgentStreamEvent, { message: Message; stopReason: StopReason }, undefined> {
     // Normalize input and append messages to conversation
     const messagesToAppend = this._normalizeInput(args)
@@ -494,8 +495,8 @@ export class Agent implements AgentData {
     }
 
     // Add tool choice if provided (for structured output forcing)
-    if (toolChoice) {
-      streamOptions.toolChoice = toolChoice
+    if (forcedToolChoice) {
+      streamOptions.toolChoice = forcedToolChoice
     }
 
     yield new BeforeModelCallEvent({ agent: this })
