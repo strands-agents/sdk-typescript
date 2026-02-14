@@ -272,3 +272,37 @@ export class AfterToolsEvent extends HookEvent {
     return true
   }
 }
+
+/**
+ * Event triggered immediately before control is transferred between agents.
+ */
+export class BeforeTransferEvent extends HookEvent {
+  readonly type = 'beforeTransferEvent' as const
+  readonly agent: AgentData
+  readonly fromAgentName: string
+  readonly toAgentName: string
+
+  constructor(data: { agent: AgentData; fromAgentName: string; toAgentName: string }) {
+    super()
+    this.agent = data.agent
+    this.fromAgentName = data.fromAgentName
+    this.toAgentName = data.toAgentName
+  }
+}
+
+/**
+ * Event triggered immediately after control has transferred between agents.
+ */
+export class AfterTransferEvent extends HookEvent {
+  readonly type = 'afterTransferEvent' as const
+  readonly agent: AgentData
+  readonly fromAgentName: string
+  readonly toAgentName: string
+
+  constructor(data: { agent: AgentData; fromAgentName: string; toAgentName: string }) {
+    super()
+    this.agent = data.agent
+    this.fromAgentName = data.fromAgentName
+    this.toAgentName = data.toAgentName
+  }
+}

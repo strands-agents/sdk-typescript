@@ -19,6 +19,8 @@ export {
   ModelStreamEventHook,
   BeforeToolsEvent,
   AfterToolsEvent,
+  BeforeTransferEvent,
+  AfterTransferEvent,
 } from './events.js'
 
 // Event types

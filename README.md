@@ -160,6 +160,47 @@ const agent = new Agent({
 await agent.invoke('What is the weather in San Francisco?')
 ```
 
+### SubAgents and Handoff
+
+Create an agent tree and let the model hand off to specialists with the built-in
+`transfer_to_agent` tool.
+
+```typescript
+import { Agent, BedrockModel } from '@strands-agents/sdk'
+
+const model = new BedrockModel({
+  region: 'us-east-1',
+  modelId: 'anthropic.claude-3-5-sonnet-20240620-v1:0',
+})
+
+const mathAgent = new Agent({
+  name: 'math',
+  model,
+  systemPrompt: 'You are a math specialist.',
+})
+
+const flashcardAgent = new Agent({
+  name: 'flashcards',
+  model,
+  systemPrompt: 'You create concise study flashcards.',
+})
+
+const root = new Agent({
+  name: 'orchestrator',
+  model,
+  systemPrompt: 'Route requests to the best specialist.',
+  subAgents: [mathAgent, flashcardAgent],
+})
+
+const result = await root.invoke('Make 5 flashcards for Newton\\'s laws.')
+console.log(result.toString())
+```
+
+Notes:
+- Agent names are required for agents in a sub-agent tree.
+- Transfer targets are resolved from children, parent, and peers (configurable with `disallowTransferToParent` and `disallowTransferToPeers`).
+- The conversation timeline is shared across handoffs.
+
 **Vended Tools**: The SDK includes optional pre-built tools:
 - **Notebook Tool**: Manage text-based notebooks for persistent note-taking
 - **File Editor Tool**: Perform file system operations (read, write, edit files)

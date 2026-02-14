@@ -39,9 +39,14 @@ import {
   BeforeModelCallEvent,
   BeforeToolCallEvent,
   BeforeToolsEvent,
+  BeforeTransferEvent,
+  AfterTransferEvent,
   MessageAddedEvent,
   ModelStreamEventHook,
 } from '../hooks/events.js'
+import { createTransferToAgentTool } from '../tools/transfer-to-agent-tool.js'
+
+const MAX_CONSECUTIVE_TRANSFERS = 8
 
 /**
  * Recursive type definition for nested tool arrays.
@@ -53,27 +58,11 @@ export type ToolList = (Tool | McpClient | ToolList)[]
  * Configuration object for creating a new Agent.
  */
 export type AgentConfig = {
+  /** Optional unique identifier for this agent in a sub-agent tree. */
+  name?: string
   /**
    * The model instance that the agent will use to make decisions.
    * Accepts either a Model instance or a string representing a Bedrock model ID.
-   * When a string is provided, it will be used to create a BedrockModel instance.
-   *
-   * @example
-   * ```typescript
-   * // Using a string model ID (creates BedrockModel)
-   * const agent = new Agent({
-   *   model: 'anthropic.claude-3-5-sonnet-20240620-v1:0'
-   * })
-   *
-   * // Using an explicit BedrockModel instance with configuration
-   * const agent = new Agent({
-   *   model: new BedrockModel({
-   *     modelId: 'anthropic.claude-3-5-sonnet-20240620-v1:0',
-   *     temperature: 0.7,
-   *     maxTokens: 2048
-   *   })
-   * })
-   * ```
    */
   model?: Model<BaseModelConfig> | string
   /** An initial set of messages to seed the agent's conversation history. */
@@ -87,11 +76,18 @@ export type AgentConfig = {
    * A system prompt which guides model behavior.
    */
   systemPrompt?: SystemPrompt | SystemPromptData
+  /** Child agents available for transfer from this agent. */
+  subAgents?: Agent[]
+  /** Optional parent agent reference (internally normalized via tree wiring). */
+  parentAgent?: Agent
+  /** Disallow LLM-driven transfer from this agent to its parent. */
+  disallowTransferToParent?: boolean
+  /** Disallow LLM-driven transfer from this agent to sibling peers. */
+  disallowTransferToPeers?: boolean
   /** Optional initial state values for the agent. */
   state?: Record<string, JSONValue>
   /**
    * Enable automatic printing of agent output to console.
-   * When true, prints text generation, reasoning, and tool usage as they occur.
    * Defaults to true.
    */
   printer?: boolean
@@ -109,18 +105,16 @@ export type AgentConfig = {
 
 /**
  * Arguments for invoking an agent.
- *
- * Supports multiple input formats:
- * - `string` - User text input (wrapped in TextBlock, creates user Message)
- * - `ContentBlock[]` | `ContentBlockData[]` - Array of content blocks (creates single user Message)
- * - `Message[]` | `MessageData[]` - Array of messages (appends all to conversation)
  */
 export type InvokeArgs = string | ContentBlock[] | ContentBlockData[] | Message[] | MessageData[]
 
+type ActiveAgentRuntime = {
+  toolRegistry: ToolRegistry
+  systemPrompt: SystemPrompt | undefined
+}
+
 /**
  * Orchestrates the interaction between a model, a set of tools, and MCP clients.
- * The Agent is responsible for managing the lifecycle of tools and clients
- * and invoking the core decision-making loop.
  */
 export class Agent implements AgentData {
   /**
@@ -129,7 +123,6 @@ export class Agent implements AgentData {
   public readonly messages: Message[]
   /**
    * Agent state storage accessible to tools and application logic.
-   * State is not passed to the model during inference.
    */
   public readonly state: AgentState
   /**
@@ -138,9 +131,23 @@ export class Agent implements AgentData {
   public readonly conversationManager: HookProvider
   /**
    * Hook registry for managing event callbacks.
-   * Hooks enable observing and extending agent behavior.
    */
   public readonly hooks: HookRegistryImplementation
+
+  /** Optional unique name used for sub-agent transfer routing. */
+  public readonly name: string | undefined
+
+  /** Child agents available for transfer from this agent. */
+  public readonly subAgents: Agent[]
+
+  /** Parent agent in the tree when present. */
+  public parentAgent: Agent | undefined
+
+  /** Whether transfer to parent is disabled for this agent. */
+  public readonly disallowTransferToParent: boolean
+
+  /** Whether transfer to peers is disabled for this agent. */
+  public readonly disallowTransferToPeers: boolean
 
   /**
    * The model provider used by the agent for inference.
@@ -155,23 +162,32 @@ export class Agent implements AgentData {
   private _toolRegistry: ToolRegistry
   private _mcpClients: McpClient[]
   private _initialized: boolean
-  private _isInvoking: boolean = false
+  private _isInvoking = false
   private _printer?: Printer
+
+  // Root-managed runtime state for handoff orchestration
+  private _activeAgentName: string | undefined
+  private _pendingTransferTarget: string | undefined
+  private _consecutiveTransfers = 0
 
   /**
    * Creates an instance of the Agent.
    * @param config - The configuration for the agent.
    */
   constructor(config?: AgentConfig) {
-    // Initialize public fields
     this.messages = (config?.messages ?? []).map((msg) => (msg instanceof Message ? msg : Message.fromMessageData(msg)))
     this.state = new AgentState(config?.state)
     this.conversationManager = config?.conversationManager ?? new SlidingWindowConversationManager({ windowSize: 40 })
 
-    // Initialize hooks and register conversation manager hooks
     this.hooks = new HookRegistryImplementation()
     this.hooks.addHook(this.conversationManager)
     this.hooks.addAllHooks(config?.hooks ?? [])
+
+    this.name = config?.name
+    this.subAgents = config?.subAgents ?? []
+    this.parentAgent = config?.parentAgent
+    this.disallowTransferToParent = config?.disallowTransferToParent ?? false
+    this.disallowTransferToPeers = config?.disallowTransferToPeers ?? false
 
     if (typeof config?.model === 'string') {
       this.model = new BedrockModel({ modelId: config.model })
@@ -187,13 +203,44 @@ export class Agent implements AgentData {
       this.systemPrompt = systemPromptFromData(config.systemPrompt)
     }
 
-    // Create printer if printer is enabled (default: true)
     const printer = config?.printer ?? true
     if (printer) {
       this._printer = new AgentPrinter(getDefaultAppender())
     }
 
     this._initialized = false
+
+    this._wireAgentTree()
+  }
+
+  /**
+   * Returns the root agent by traversing parent links.
+   */
+  get rootAgent(): Agent {
+    return getRootAgent(this)
+  }
+
+  /**
+   * Finds an agent by name in this agent and descendants.
+   */
+  findAgent(name: string): Agent | undefined {
+    if (this.name === name) {
+      return this
+    }
+    return this.findSubAgent(name)
+  }
+
+  /**
+   * Finds an agent by name in descendants only.
+   */
+  findSubAgent(name: string): Agent | undefined {
+    for (const child of this.subAgents) {
+      const found = child.findAgent(name)
+      if (found) {
+        return found
+      }
+    }
+    return undefined
   }
 
   public async initialize(): Promise<void> {
@@ -215,7 +262,6 @@ export class Agent implements AgentData {
 
   /**
    * Acquires a lock to prevent concurrent invocations.
-   * Returns a Disposable that releases the lock when disposed.
    */
   private acquireLock(): { [Symbol.dispose]: () => void } {
     if (this._isInvoking) {
@@ -248,20 +294,6 @@ export class Agent implements AgentData {
 
   /**
    * Invokes the agent and returns the final result.
-   *
-   * This is a convenience method that consumes the stream() method and returns
-   * only the final AgentResult. Use stream() if you need access to intermediate
-   * streaming events.
-   *
-   * @param args - Arguments for invoking the agent
-   * @returns Promise that resolves to the final AgentResult
-   *
-   * @example
-   * ```typescript
-   * const agent = new Agent({ model, tools })
-   * const result = await agent.invoke('What is 2 + 2?')
-   * console.log(result.lastMessage) // Agent's response
-   * ```
    */
   public async invoke(args: InvokeArgs): Promise<AgentResult> {
     const gen = this.stream(args)
@@ -274,46 +306,31 @@ export class Agent implements AgentData {
 
   /**
    * Streams the agent execution, yielding events and returning the final result.
-   *
-   * The agent loop manages the conversation flow by:
-   * 1. Streaming model responses and yielding all events
-   * 2. Executing tools when the model requests them
-   * 3. Continuing the loop until the model completes without tool use
-   *
-   * Use this method when you need access to intermediate streaming events.
-   * For simple request/response without streaming, use invoke() instead.
-   *
-   * An explicit goal of this method is to always leave the message array in a way that
-   * the agent can be reinvoked with a user prompt after this method completes. To that end
-   * assistant messages containing tool uses are only added after tool execution succeeds
-   * with valid toolResponses
-   *
-   * @param args - Arguments for invoking the agent
-   * @returns Async generator that yields AgentStreamEvent objects and returns AgentResult
-   *
-   * @example
-   * ```typescript
-   * const agent = new Agent({ model, tools })
-   *
-   * for await (const event of agent.stream('Hello')) {
-   *   console.log('Event:', event.type)
-   * }
-   * // Messages array is mutated in place and contains the full conversation
-   * ```
    */
   public async *stream(args: InvokeArgs): AsyncGenerator<AgentStreamEvent, AgentResult, undefined> {
+    const root = this.rootAgent
+
+    if (root !== this) {
+      return yield* root._streamFromEntry(args, this)
+    }
+
+    return yield* this._streamFromEntry(args, this)
+  }
+
+  private async *_streamFromEntry(
+    args: InvokeArgs,
+    initialAgent: Agent
+  ): AsyncGenerator<AgentStreamEvent, AgentResult, undefined> {
     using _lock = this.acquireLock()
 
     await this.initialize()
 
-    // Delegate to _stream and process events through printer and hooks
-    const streamGenerator = this._stream(args)
+    const streamGenerator = this._stream(args, initialAgent)
     let result = await streamGenerator.next()
 
     while (!result.done) {
       const event = result.value
 
-      // Invoke hook callbacks for Hook Events (except MessageAddedEvent which invokes in _appendMessage)
       if (event instanceof HookEvent && !(event instanceof MessageAddedEvent)) {
         await this.hooks.invokeCallbacks(event)
       }
@@ -323,7 +340,6 @@ export class Agent implements AgentData {
       result = await streamGenerator.next()
     }
 
-    // Yield final result as last event
     yield result.value
 
     return result.value
@@ -331,58 +347,86 @@ export class Agent implements AgentData {
 
   /**
    * Internal implementation of the agent streaming logic.
-   * Separated to centralize printer event processing in the public stream method.
-   *
-   * @param args - Arguments for invoking the agent
-   * @returns Async generator that yields AgentStreamEvent objects and returns AgentResult
    */
-  private async *_stream(args: InvokeArgs): AsyncGenerator<AgentStreamEvent, AgentResult, undefined> {
+  private async *_stream(
+    args: InvokeArgs,
+    initialAgent: Agent
+  ): AsyncGenerator<AgentStreamEvent, AgentResult, undefined> {
     let currentArgs: InvokeArgs | undefined = args
+    let activeAgent = this._resolveInitialActiveAgent(initialAgent)
 
-    // Emit event before the loop starts
     yield new BeforeInvocationEvent({ agent: this })
 
     try {
-      // Main agent loop - continues until model stops without requesting tools
       while (true) {
-        const modelResult = yield* this.invokeModel(currentArgs)
-        currentArgs = undefined // Only pass args on first invocation
+        await activeAgent.initialize()
+
+        const runtime = this._buildRuntimeForActiveAgent(activeAgent)
+        const modelResult = yield* this.invokeModel(activeAgent, runtime, currentArgs)
+        currentArgs = undefined
+
         if (modelResult.stopReason !== 'toolUse') {
-          // Loop terminates - no tool use requested
-          // Add assistant message now that we're returning
-          yield await this._appendMessage(modelResult.message)
+          yield await this._appendMessage(modelResult.message, activeAgent.name)
+          this._activeAgentName = activeAgent.name
           return new AgentResult({
             stopReason: modelResult.stopReason,
             lastMessage: modelResult.message,
           })
         }
 
-        // Execute tools sequentially
-        const toolResultMessage = yield* this.executeTools(modelResult.message, this._toolRegistry)
+        const toolResultMessage = yield* this.executeTools(modelResult.message, runtime.toolRegistry, activeAgent)
 
-        // Add assistant message with tool uses right before adding tool results
-        // This ensures we don't have dangling tool use messages if tool execution fails
-        yield await this._appendMessage(modelResult.message)
-        yield await this._appendMessage(toolResultMessage)
+        yield await this._appendMessage(modelResult.message, activeAgent.name)
+        yield await this._appendMessage(toolResultMessage, activeAgent.name)
 
-        // Continue loop
+        const pendingTarget = this._pendingTransferTarget
+        this._pendingTransferTarget = undefined
+
+        if (pendingTarget) {
+          const nextAgent = this.findAgent(pendingTarget)
+          if (!nextAgent) {
+            throw new Error(`Agent '${pendingTarget}' not found in the agent tree`)
+          }
+
+          if (this._consecutiveTransfers >= MAX_CONSECUTIVE_TRANSFERS) {
+            this._consecutiveTransfers = 0
+            continue
+          }
+
+          const fromAgentName = activeAgent.name ?? 'unnamed_agent'
+          const toAgentName = nextAgent.name ?? 'unnamed_agent'
+
+          yield new BeforeTransferEvent({
+            agent: this,
+            fromAgentName,
+            toAgentName,
+          })
+
+          activeAgent = nextAgent
+          this._activeAgentName = activeAgent.name
+          this._consecutiveTransfers++
+
+          yield new AfterTransferEvent({
+            agent: this,
+            fromAgentName,
+            toAgentName,
+          })
+          continue
+        }
+
+        this._consecutiveTransfers = 0
       }
     } finally {
-      // Always emit final event
       yield new AfterInvocationEvent({ agent: this })
     }
   }
 
   /**
    * Normalizes agent invocation input into an array of messages to append.
-   *
-   * @param args - Optional arguments for invoking the model
-   * @returns Array of messages to append to the conversation
    */
   private _normalizeInput(args?: InvokeArgs): Message[] {
     if (args !== undefined) {
       if (typeof args === 'string') {
-        // String input: wrap in TextBlock and create user Message
         return [
           new Message({
             role: 'user',
@@ -392,157 +436,128 @@ export class Agent implements AgentData {
       } else if (Array.isArray(args) && args.length > 0) {
         const firstElement = args[0]!
 
-        // Check if it's Message[] or MessageData[]
         if ('role' in firstElement && typeof firstElement.role === 'string') {
-          // Check if it's a Message instance or MessageData
           if (firstElement instanceof Message) {
-            // Message[] input: return all messages
             return args as Message[]
-          } else {
-            // MessageData[] input: convert to Message[]
-            return (args as MessageData[]).map((data) => Message.fromMessageData(data))
-          }
-        } else {
-          // It's ContentBlock[] or ContentBlockData[]
-          // Check if it's ContentBlock instances or ContentBlockData
-          let contentBlocks: ContentBlock[]
-          if ('type' in firstElement && typeof firstElement.type === 'string') {
-            // ContentBlock[] input: use as-is
-            contentBlocks = args as ContentBlock[]
-          } else {
-            // ContentBlockData[] input: convert using helper function
-            contentBlocks = (args as ContentBlockData[]).map(contentBlockFromData)
           }
 
-          return [
-            new Message({
-              role: 'user',
-              content: contentBlocks,
-            }),
-          ]
+          return (args as MessageData[]).map((data) => Message.fromMessageData(data))
         }
+
+        let contentBlocks: ContentBlock[]
+        if ('type' in firstElement && typeof firstElement.type === 'string') {
+          contentBlocks = args as ContentBlock[]
+        } else {
+          contentBlocks = (args as ContentBlockData[]).map(contentBlockFromData)
+        }
+
+        return [
+          new Message({
+            role: 'user',
+            content: contentBlocks,
+          }),
+        ]
       }
     }
-    // undefined or empty array: no messages to append
+
     return []
   }
 
   /**
    * Invokes the model provider and streams all events.
-   *
-   * @param args - Optional arguments for invoking the model
-   * @returns Object containing the assistant message and stop reason
    */
   private async *invokeModel(
+    activeAgent: Agent,
+    runtime: ActiveAgentRuntime,
     args?: InvokeArgs
   ): AsyncGenerator<AgentStreamEvent, { message: Message; stopReason: StopReason }, undefined> {
-    // Normalize input and append messages to conversation
     const messagesToAppend = this._normalizeInput(args)
     for (const message of messagesToAppend) {
       yield await this._appendMessage(message)
     }
 
-    const toolSpecs = this._toolRegistry.values().map((tool) => tool.toolSpec)
+    const toolSpecs = runtime.toolRegistry.values().map((tool) => tool.toolSpec)
     const streamOptions: StreamOptions = { toolSpecs }
-    if (this.systemPrompt !== undefined) {
-      streamOptions.systemPrompt = this.systemPrompt
+    if (runtime.systemPrompt !== undefined) {
+      streamOptions.systemPrompt = runtime.systemPrompt
     }
 
     yield new BeforeModelCallEvent({ agent: this })
 
     try {
-      const { message, stopReason } = yield* this._streamFromModel(this.messages, streamOptions)
+      const { message, stopReason } = yield* this._streamFromModel(activeAgent, this.messages, streamOptions)
 
       const afterModelCallEvent = new AfterModelCallEvent({ agent: this, stopData: { message, stopReason } })
       yield afterModelCallEvent
 
       if (afterModelCallEvent.retry) {
-        return yield* this.invokeModel(args)
+        return yield* this.invokeModel(activeAgent, runtime, args)
       }
 
       return { message, stopReason }
     } catch (error) {
       const modelError = normalizeError(error)
 
-      // Create error event
       const errorEvent = new AfterModelCallEvent({ agent: this, error: modelError })
-
-      // Yield error event - stream will invoke hooks
       yield errorEvent
 
-      // After yielding, hooks have been invoked and may have set retry
       if (errorEvent.retry) {
-        return yield* this.invokeModel(args)
+        return yield* this.invokeModel(activeAgent, runtime, args)
       }
 
-      // Re-throw error
       throw error
     }
   }
 
   /**
    * Streams events from the model and fires ModelStreamEventHook for each event.
-   *
-   * @param messages - Messages to send to the model
-   * @param streamOptions - Options for streaming
-   * @returns Object containing the assistant message and stop reason
    */
   private async *_streamFromModel(
+    activeAgent: Agent,
     messages: Message[],
     streamOptions: StreamOptions
   ): AsyncGenerator<AgentStreamEvent, { message: Message; stopReason: StopReason }, undefined> {
-    const streamGenerator = this.model.streamAggregated(messages, streamOptions)
+    const streamGenerator = activeAgent.model.streamAggregated(messages, streamOptions)
     let result = await streamGenerator.next()
 
     while (!result.done) {
       const event = result.value
 
-      // Yield hook event for observability
       yield new ModelStreamEventHook({ agent: this, event })
-
-      // Yield the actual model event
       yield event
       result = await streamGenerator.next()
     }
 
-    // result.done is true, result.value contains the return value
     return result.value
   }
 
   /**
    * Executes tools sequentially and streams all tool events.
-   *
-   * @param assistantMessage - The assistant message containing tool use blocks
-   * @param toolRegistry - Registry containing available tools
-   * @returns User message containing tool results
    */
   private async *executeTools(
     assistantMessage: Message,
-    toolRegistry: ToolRegistry
+    toolRegistry: ToolRegistry,
+    activeAgent: Agent
   ): AsyncGenerator<AgentStreamEvent, Message, undefined> {
     yield new BeforeToolsEvent({ agent: this, message: assistantMessage })
 
-    // Extract tool use blocks from assistant message
     const toolUseBlocks = assistantMessage.content.filter(
       (block): block is ToolUseBlock => block.type === 'toolUseBlock'
     )
 
     if (toolUseBlocks.length === 0) {
-      // No tool use blocks found even though stopReason is toolUse
       throw new Error('Model indicated toolUse but no tool use blocks found in message')
     }
 
     const toolResultBlocks: ToolResultBlock[] = []
 
     for (const toolUseBlock of toolUseBlocks) {
-      const toolResultBlock = yield* this.executeTool(toolUseBlock, toolRegistry)
+      const toolResultBlock = yield* this.executeTool(toolUseBlock, toolRegistry, activeAgent)
       toolResultBlocks.push(toolResultBlock)
 
-      // Yield the tool result block as it's created
       yield toolResultBlock
     }
 
-    // Create user message with tool results
     const toolResultMessage: Message = new Message({
       role: 'user',
       content: toolResultBlocks,
@@ -555,28 +570,20 @@ export class Agent implements AgentData {
 
   /**
    * Executes a single tool and returns the result.
-   * If the tool is not found or fails to return a result, returns an error ToolResult
-   * instead of throwing an exception. This allows the agent loop to continue and
-   * let the model handle the error gracefully.
-   *
-   * @param toolUseBlock - Tool use block to execute
-   * @param toolRegistry - Registry containing available tools
-   * @returns Tool result block
    */
   private async *executeTool(
     toolUseBlock: ToolUseBlock,
-    toolRegistry: ToolRegistry
+    toolRegistry: ToolRegistry,
+    activeAgent: Agent
   ): AsyncGenerator<AgentStreamEvent, ToolResultBlock, undefined> {
     const tool = toolRegistry.find((t) => t.name === toolUseBlock.name)
 
-    // Create toolUse object for hook events
     const toolUse = {
       name: toolUseBlock.name,
       toolUseId: toolUseBlock.toolUseId,
       input: toolUseBlock.input,
     }
 
-    // Retry loop for tool execution
     while (true) {
       yield new BeforeToolCallEvent({ agent: this, toolUse, tool })
 
@@ -584,28 +591,25 @@ export class Agent implements AgentData {
       let error: Error | undefined
 
       if (!tool) {
-        // Tool not found
         toolResult = new ToolResultBlock({
           toolUseId: toolUseBlock.toolUseId,
           status: 'error',
           content: [new TextBlock(`Tool '${toolUseBlock.name}' not found in registry`)],
         })
       } else {
-        // Execute tool and collect result
         const toolContext: ToolContext = {
           toolUse: {
             name: toolUseBlock.name,
             toolUseId: toolUseBlock.toolUseId,
             input: toolUseBlock.input,
           },
-          agent: this,
+          agent: activeAgent,
         }
 
         try {
           const result = yield* tool.stream(toolContext)
 
           if (!result) {
-            // Tool didn't return a result
             toolResult = new ToolResultBlock({
               toolUseId: toolUseBlock.toolUseId,
               status: 'error',
@@ -616,7 +620,6 @@ export class Agent implements AgentData {
             error = result.error
           }
         } catch (e) {
-          // Tool execution failed with error
           error = normalizeError(e)
           toolResult = new ToolResultBlock({
             toolUseId: toolUseBlock.toolUseId,
@@ -627,7 +630,6 @@ export class Agent implements AgentData {
         }
       }
 
-      // Single point for AfterToolCallEvent
       const afterToolCallEvent = new AfterToolCallEvent({
         agent: this,
         toolUse,
@@ -648,24 +650,180 @@ export class Agent implements AgentData {
   /**
    * Appends a message to the conversation history, invokes MessageAddedEvent hook,
    * and returns the event for yielding.
-   *
-   * @param message - The message to append
-   * @returns MessageAddedEvent to be yielded (hook already invoked)
    */
-  private async _appendMessage(message: Message): Promise<MessageAddedEvent> {
-    this.messages.push(message)
-    const event = new MessageAddedEvent({ agent: this, message })
-    // Invoke hooks immediately for message tracking
+  private async _appendMessage(message: Message, author?: string): Promise<MessageAddedEvent> {
+    const messageToAppend =
+      author !== undefined && message.author === undefined
+        ? new Message({ role: message.role, content: message.content, author })
+        : message
+
+    this.messages.push(messageToAppend)
+    const event = new MessageAddedEvent({ agent: this, message: messageToAppend })
     await this.hooks.invokeCallbacks(event)
-    // Return event for yielding (stream will skip hook invocation for MessageAddedEvent)
     return event
+  }
+
+  private _wireAgentTree(): void {
+    // Normalize config.parentAgent links
+    if (this.parentAgent && !this.parentAgent.subAgents.includes(this)) {
+      ;(this.parentAgent.subAgents as Agent[]).push(this)
+    }
+
+    // Ensure child parent pointers are aligned and share root timeline state.
+    for (const child of this.subAgents) {
+      if (child.parentAgent && child.parentAgent !== this) {
+        throw new Error(
+          `Agent '${child.name ?? '<unnamed>'}' already has parent '${child.parentAgent.name ?? '<unnamed>'}'`
+        )
+      }
+
+      child.parentAgent = this
+      ;(child as unknown as { messages: Message[] }).messages = this.messages
+    }
+
+    this._validateSiblingNames()
+
+    if (this.subAgents.length > 0 || this.parentAgent !== undefined) {
+      this._assertNamePresent(this)
+      for (const child of this.subAgents) {
+        this._assertNamePresent(child)
+      }
+    }
+  }
+
+  private _validateSiblingNames(): void {
+    const seen = new Set<string>()
+    for (const child of this.subAgents) {
+      if (child.name === undefined) {
+        continue
+      }
+      if (seen.has(child.name)) {
+        throw new Error(`Duplicate sub-agent name '${child.name}' under parent '${this.name ?? '<unnamed>'}'`)
+      }
+      seen.add(child.name)
+    }
+  }
+
+  private _assertNamePresent(agent: Agent): void {
+    if (!agent.name) {
+      throw new Error('Agent name is required when using subAgents or parentAgent')
+    }
+  }
+
+  private _resolveInitialActiveAgent(initialAgent: Agent): Agent {
+    if (this._activeAgentName) {
+      const remembered = this.findAgent(this._activeAgentName)
+      if (remembered) {
+        return remembered
+      }
+    }
+
+    return initialAgent
+  }
+
+  private _buildRuntimeForActiveAgent(activeAgent: Agent): ActiveAgentRuntime {
+    const transferTargets = this._getTransferTargets(activeAgent)
+    const runtimeTools = [...activeAgent.toolRegistry.values()]
+
+    if (transferTargets.length > 0) {
+      runtimeTools.push(
+        createTransferToAgentTool({
+          resolveAllowedTargets: () => transferTargets.map((agent) => agent.name!),
+          queueTransfer: (targetAgentName) => {
+            if (this._consecutiveTransfers >= MAX_CONSECUTIVE_TRANSFERS) {
+              throw new Error(
+                `Transfer guard triggered after ${MAX_CONSECUTIVE_TRANSFERS} consecutive transfers in one invocation`
+              )
+            }
+            this._pendingTransferTarget = targetAgentName
+          },
+        })
+      )
+    }
+
+    return {
+      toolRegistry: new ToolRegistry(runtimeTools),
+      systemPrompt: this._buildEffectiveSystemPrompt(activeAgent, transferTargets),
+    }
+  }
+
+  private _buildEffectiveSystemPrompt(activeAgent: Agent, transferTargets: Agent[]): SystemPrompt | undefined {
+    const basePrompt = activeAgent.systemPrompt
+
+    if (transferTargets.length === 0) {
+      return basePrompt
+    }
+
+    const transferPrompt = this._buildTransferInstructions(activeAgent, transferTargets)
+
+    if (basePrompt === undefined) {
+      return transferPrompt
+    }
+
+    if (typeof basePrompt === 'string') {
+      return `${basePrompt}\n\n${transferPrompt}`
+    }
+
+    return [...basePrompt, new TextBlock(transferPrompt)]
+  }
+
+  private _buildTransferInstructions(activeAgent: Agent, targets: Agent[]): string {
+    const lines: string[] = []
+    lines.push('You can transfer this conversation to another specialized agent when appropriate.')
+    lines.push('Available transfer targets:')
+    for (const target of targets) {
+      const description = target.systemPrompt
+      if (typeof description === 'string' && description.trim().length > 0) {
+        lines.push(`- ${target.name}: ${description}`)
+      } else {
+        lines.push(`- ${target.name}`)
+      }
+    }
+
+    lines.push(
+      'If another agent should handle the request, call transfer_to_agent with agentName and do not include extra assistant text in that same handoff step.'
+    )
+
+    if (activeAgent.parentAgent && !activeAgent.disallowTransferToParent) {
+      lines.push(
+        `If no listed specialist is better and you are not best suited, transfer to your parent agent '${activeAgent.parentAgent.name}'.`
+      )
+    }
+
+    return lines.join('\n')
+  }
+
+  private _getTransferTargets(agent: Agent): Agent[] {
+    const targets: Agent[] = []
+
+    targets.push(...agent.subAgents)
+
+    if (agent.parentAgent) {
+      if (!agent.disallowTransferToParent) {
+        targets.push(agent.parentAgent)
+      }
+
+      if (!agent.disallowTransferToPeers) {
+        targets.push(...agent.parentAgent.subAgents.filter((peer) => peer !== agent))
+      }
+    }
+
+    const dedupedTargets: Agent[] = []
+    const seenNames = new Set<string>()
+    for (const target of targets) {
+      if (!target.name || seenNames.has(target.name)) {
+        continue
+      }
+      seenNames.add(target.name)
+      dedupedTargets.push(target)
+    }
+
+    return dedupedTargets
   }
 }
 
 /**
  * Recursively flattens nested arrays of tools into a single flat array.
- * @param tools - Tools or nested arrays of tools
- * @returns Flat array of tools and MCP clients
  */
 function flattenTools(toolList: ToolList): { tools: Tool[]; mcpClients: McpClient[] } {
   const tools: Tool[] = []
@@ -684,4 +842,12 @@ function flattenTools(toolList: ToolList): { tools: Tool[]; mcpClients: McpClien
   }
 
   return { tools, mcpClients }
+}
+
+function getRootAgent(agent: Agent): Agent {
+  let current = agent
+  while (current.parentAgent !== undefined) {
+    current = current.parentAgent
+  }
+  return current
 }
