@@ -14,6 +14,8 @@ import type {
   AfterToolCallEvent,
   MessageAddedEvent,
   ModelStreamEventHook,
+  BeforeTransferEvent,
+  AfterTransferEvent,
 } from '../hooks/events.js'
 
 /**
@@ -106,6 +108,8 @@ export type AgentStreamEvent =
   | AfterToolsEvent
   | BeforeToolCallEvent
   | AfterToolCallEvent
+  | BeforeTransferEvent
+  | AfterTransferEvent
   | MessageAddedEvent
   | ModelStreamEventHook
   | AgentResult

@@ -23,6 +23,12 @@ export interface MessageData {
    * Array of content blocks that make up this message.
    */
   content: ContentBlockData[]
+
+  /**
+   * Optional agent identity that authored the message.
+   * Used by multi-agent orchestration to preserve provenance in a shared timeline.
+   */
+  author?: string
 }
 
 /**
@@ -45,9 +51,17 @@ export class Message {
    */
   readonly content: ContentBlock[]
 
-  constructor(data: { role: Role; content: ContentBlock[] }) {
+  /**
+   * Optional agent identity that authored this message.
+   */
+  readonly author?: string
+
+  constructor(data: { role: Role; content: ContentBlock[]; author?: string }) {
     this.role = data.role
     this.content = data.content
+    if (data.author !== undefined) {
+      this.author = data.author
+    }
   }
 
   /**
@@ -59,6 +73,7 @@ export class Message {
     return new Message({
       role: data.role,
       content: contentBlocks,
+      ...(data.author !== undefined && { author: data.author }),
     })
   }
 }
