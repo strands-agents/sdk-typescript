@@ -21,7 +21,7 @@ import { ContextWindowOverflowError } from '../../errors.js'
 import type { GeminiModelConfig, GeminiModelOptions, GeminiStreamState } from './types.js'
 export type { GeminiModelConfig, GeminiModelOptions }
 import { classifyGeminiError } from './errors.js'
-import { formatMessages, mapChunkToEvents } from './adapters.js'
+import { formatMessages, formatToolSpecs, mapChunkToEvents } from './adapters.js'
 
 /**
  * Default Gemini model ID.
@@ -252,15 +252,7 @@ export class GeminiModel extends Model<GeminiModelConfig> {
 
     // Add tool specifications
     if (options?.toolSpecs && options.toolSpecs.length > 0) {
-      config.tools = [
-        {
-          functionDeclarations: options.toolSpecs.map((spec) => ({
-            name: spec.name,
-            description: spec.description,
-            parametersJsonSchema: spec.inputSchema,
-          })),
-        },
-      ]
+      config.tools = formatToolSpecs(options.toolSpecs)
 
       if (options.toolChoice) {
         if ('auto' in options.toolChoice) {

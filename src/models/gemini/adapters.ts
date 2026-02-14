@@ -7,7 +7,9 @@
 import {
   type Content,
   type GenerateContentResponse,
+  type FunctionDeclaration,
   type Part,
+  type Tool,
   FunctionResponse,
   FinishReason as GeminiFinishReason,
 } from '@google/genai'
@@ -22,6 +24,7 @@ import type {
 import type { ModelStreamEvent } from '../streaming.js'
 import type { GeminiStreamState } from './types.js'
 import { encodeBase64, getMimeType, type ImageBlock, type DocumentBlock, type VideoBlock } from '../../types/media.js'
+import type { ToolSpec } from '../../tools/types.js'
 import { logger } from '../../logging/logger.js'
 
 /**
@@ -245,11 +248,19 @@ function formatToolUseBlock(block: ToolUseBlock): Part[] {
       functionCall: {
         id: block.toolUseId,
         name: block.name,
-        args: block.input as Record<string, unknown>,
+        args: normalizeToolInput(block.input),
       },
       ...(block.reasoningSignature && { thoughtSignature: block.reasoningSignature }),
     },
   ]
+}
+
+function normalizeToolInput(input: unknown): Record<string, unknown> {
+  if (input !== null && typeof input === 'object' && !Array.isArray(input)) {
+    return input as Record<string, unknown>
+  }
+
+  return { value: input }
 }
 
 /**
@@ -277,6 +288,25 @@ function formatToolResultBlock(block: ToolResultBlock, toolUseIdToName: Map<stri
   }
 
   return [{ functionResponse }]
+}
+
+export function formatToolSpecs(toolSpecs: ToolSpec[]): Tool[] {
+  const declarations: FunctionDeclaration[] = toolSpecs.map((spec) => {
+    if (!spec.name || !spec.description) {
+      throw new Error('Tool specification must have both name and description')
+    }
+
+    return {
+      name: spec.name,
+      description: spec.description,
+      parametersJsonSchema: spec.inputSchema ?? {
+        type: 'object',
+        additionalProperties: false,
+      },
+    }
+  })
+
+  return [{ functionDeclarations: declarations }]
 }
 
 // =============================================================================
