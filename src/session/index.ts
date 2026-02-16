@@ -9,7 +9,7 @@
  * import { FileStorage, SnapshotStorage } from '@strands/agents/session'
  *
  * const storage = new FileStorage('./sessions')
- * await storage.saveSnapshot(sessionId, scope, true, snapshot)
+ * await storage.saveSnapshot({ sessionId, scope, isLatest: true, snapshot })
  * ```
  */
 

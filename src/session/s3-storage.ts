@@ -29,10 +29,10 @@ export type S3StorageConfig = {
  */
 export class S3Storage implements SnapshotStorage {
   /** S3 client instance */
-  private _s3: S3Client
-  /** S3 _bucket name */
+  private readonly _s3: S3Client
+  /** S3 bucket name */
   private readonly _bucket: string
-  /** Key _prefix for all objects */
+  /** Key prefix for all objects */
   private readonly _prefix: string
 
   /**
