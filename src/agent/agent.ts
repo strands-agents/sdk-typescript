@@ -43,8 +43,8 @@ import {
   MessageAddedEvent,
   ModelStreamEventHook,
 } from '../hooks/events.js'
-import { createStructuredOutputContext } from '../structured_output/structured_output_context.js'
-import { StructuredOutputException } from '../structured_output/exceptions.js'
+import { createStructuredOutputContext } from '../structured-output/structured-output-context.js'
+import { StructuredOutputException } from '../structured-output/exceptions.js'
 import type { z } from 'zod'
 
 /**
@@ -112,7 +112,7 @@ export type AgentConfig = {
   /**
    * Zod schema for structured output validation.
    */
-  structuredOutputModel?: z.ZodSchema
+  structuredOutputSchema?: z.ZodSchema
 }
 
 /**
@@ -165,7 +165,7 @@ export class Agent implements AgentData {
   private _initialized: boolean
   private _isInvoking: boolean = false
   private _printer?: Printer
-  private _defaultStructuredOutputModel?: z.ZodSchema | undefined
+  private _structuredOutputSchema?: z.ZodSchema | undefined
 
   /**
    * Creates an instance of the Agent.
@@ -202,8 +202,8 @@ export class Agent implements AgentData {
       this._printer = new AgentPrinter(getDefaultAppender())
     }
 
-    // Store default structured output model
-    this._defaultStructuredOutputModel = config?.structuredOutputModel
+    // Store structured output schema
+    this._structuredOutputSchema = config?.structuredOutputSchema
 
     this._initialized = false
   }
@@ -353,7 +353,7 @@ export class Agent implements AgentData {
     let forcedToolChoice: ToolChoice | undefined = undefined
 
     // Create structured output context (uses null object pattern when no schema)
-    const schema = this._defaultStructuredOutputModel
+    const schema = this._structuredOutputSchema
     const context = createStructuredOutputContext(schema)
 
     try {
@@ -373,6 +373,13 @@ export class Agent implements AgentData {
         if (modelResult.stopReason !== 'toolUse') {
           // Check if we need to force structured output tool
           if (!context.hasResult()) {
+            // Special handling for maxTokens - don't try to force tool
+            if (modelResult.stopReason === 'maxTokens') {
+              throw new StructuredOutputException(
+                'The model reached maxTokens before producing structured output. Consider increasing maxTokens in your model configuration.'
+              )
+            }
+
             if (wasForced) {
               // Already tried forcing - LLM refused to use the tool
               throw new StructuredOutputException(

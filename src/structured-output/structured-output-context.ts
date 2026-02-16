@@ -2,8 +2,8 @@ import { z } from 'zod'
 import type { Message } from '../types/messages.js'
 import { ToolUseBlock } from '../types/messages.js'
 import type { ToolRegistry } from '../registry/tool-registry.js'
-import { StructuredOutputTool } from './structured_output_tool.js'
-import { getToolNameFromSchema } from './structured_output_utils.js'
+import { StructuredOutputTool } from './structured-output-tool.js'
+import { getToolNameFromSchema } from './structured-output-utils.js'
 
 /**
  * Interface for structured output context operations.

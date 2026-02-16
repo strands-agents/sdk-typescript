@@ -2,31 +2,7 @@ import { z } from 'zod'
 import type { JSONSchema } from '../types/json.js'
 import type { ToolSpec } from '../tools/types.js'
 import { StructuredOutputException } from './exceptions.js'
-
-/**
- * Converts a Zod schema to a JSON Schema for use in tool specifications.
- * Uses the same approach as ZodTool for consistency.
- *
- * @param schema - The Zod schema to convert
- * @returns JSON Schema representation of the Zod schema
- * @throws StructuredOutputException if the schema contains unsupported features
- */
-export function convertSchemaToJsonSchema(schema: z.ZodSchema): JSONSchema {
-  // Check for unsupported features (refinements and transforms)
-  if (hasUnsupportedFeatures(schema)) {
-    throw new StructuredOutputException(
-      'Zod refinements and transforms are not supported in structured output schemas. Please use basic validation types only.'
-    )
-  }
-
-  // Convert to JSON Schema using Zod's built-in toJSONSchema (same as ZodTool)
-  const result = z.toJSONSchema(schema) as JSONSchema & { $schema?: string }
-
-  // Remove the $schema property and return the rest
-  const { $schema: _$schema, ...jsonSchema } = result
-
-  return jsonSchema as JSONSchema
-}
+import { zodSchemaToJsonSchema } from '../utils/zod-utils.js'
 
 /**
  * Converts a Zod schema to a complete tool specification.
@@ -34,9 +10,17 @@ export function convertSchemaToJsonSchema(schema: z.ZodSchema): JSONSchema {
  * @param schema - The Zod schema to convert
  * @param toolName - The name to use for the tool
  * @returns Complete tool specification
+ * @throws StructuredOutputException if the schema contains unsupported features
  */
 export function convertSchemaToToolSpec(schema: z.ZodSchema, toolName: string): ToolSpec {
-  const jsonSchema = convertSchemaToJsonSchema(schema)
+  // Check for unsupported features (refinements and transforms)
+  if (hasUnsupportedFeatures(schema)) {
+    throw new StructuredOutputException(
+      'Zod refinements and transforms are not supported in structured output schemas. Please use basic validation types only.'
+    )
+  }
+
+  const jsonSchema = zodSchemaToJsonSchema(schema)
   const schemaDescription = getSchemaDescription(schema)
 
   return {
