@@ -62,18 +62,22 @@ export class MockSnapshotStorage implements SnapshotStorage {
     }
   }
 
-  async loadSnapshot(params: { sessionId: string; scope: Scope; snapshotId: string | null }): Promise<Snapshot | null> {
+  async loadSnapshot(params: {
+    sessionId: string
+    scope: Scope
+    snapshotId: string | undefined
+  }): Promise<Snapshot | null> {
     if (this.shouldThrowErrors) throw new Error('Mock load error')
 
     const key =
-      params.snapshotId === null
+      params.snapshotId === undefined
         ? this.getKey(params.sessionId, params.scope, 'latest')
         : this.getKey(params.sessionId, params.scope, params.snapshotId)
 
     return this.snapshots.get(key) ?? null
   }
 
-  async listSnapshots(params: { sessionId: string; scope: Scope }): Promise<string[]> {
+  async listSnapshotIds(params: { sessionId: string; scope: Scope }): Promise<string[]> {
     if (this.shouldThrowErrors) throw new Error('Mock list error')
 
     const scopeId: string = params.scope.kind === 'agent' ? params.scope.agentId! : params.scope.multiAgentId!

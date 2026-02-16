@@ -83,7 +83,6 @@
   "devDependencies": {
     "@anthropic-ai/sdk": "^0.71.2",
     "@aws-sdk/client-secrets-manager": "^3.943.0",
-    "@aws-sdk/client-s3": "^3.982.0",
     "@aws-sdk/credential-providers": "^3.943.0",
     "@google/genai": "^1.40.0",
     "@types/json-schema": "^7.0.15",
@@ -119,6 +118,7 @@
   },
   "peerDependencies": {
     "@anthropic-ai/sdk": "^0.71.2",
+    "@aws-sdk/client-s3": "^3.982.0",
     "@google/genai": "^1.40.0",
     "@modelcontextprotocol/sdk": "^1.25.2",
     "openai": "^6.7.0",
@@ -126,6 +126,9 @@
   },
   "peerDependenciesMeta": {
     "@anthropic-ai/sdk": {
+      "optional": true
+    },
+    "@aws-sdk/client-s3": {
       "optional": true
     },
     "@google/genai": {

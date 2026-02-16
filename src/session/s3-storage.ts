@@ -82,11 +82,15 @@ export class S3Storage implements SnapshotStorage {
   }
 
   /**
-   * Loads snapshot by ID or latest if null
+   * Loads snapshot by ID or latest if undefined
    */
-  async loadSnapshot(params: { sessionId: string; scope: Scope; snapshotId: string | null }): Promise<Snapshot | null> {
+  async loadSnapshot(params: {
+    sessionId: string
+    scope: Scope
+    snapshotId: string | undefined
+  }): Promise<Snapshot | null> {
     const key =
-      params.snapshotId === null
+      params.snapshotId === undefined
         ? this.getLatestSnapshotKey(params.sessionId, params.scope)
         : this.getHistorySnapshotKey(params.sessionId, params.scope, params.snapshotId)
     return this.readJSON<Snapshot>(key)
@@ -106,7 +110,7 @@ export class S3Storage implements SnapshotStorage {
    * }): Promise<{ snapshotIds: string[]; nextToken?: string }>
    * ```
    */
-  async listSnapshots(params: { sessionId: string; scope: Scope }): Promise<string[]> {
+  async listSnapshotIds(params: { sessionId: string; scope: Scope }): Promise<string[]> {
     const prefix = this.getKey(params.sessionId, params.scope, IMMUTABLE_HISTORY)
     try {
       const response: ListObjectsV2CommandOutput = await this._s3.send(
@@ -127,8 +131,10 @@ export class S3Storage implements SnapshotStorage {
    */
   async loadManifest(params: { sessionId: string; scope: Scope }): Promise<SnapshotManifest> {
     const key = this.getKey(params.sessionId, params.scope, MANIFEST)
+    const manifest = await this.readJSON<SnapshotManifest>(key)
+
     return (
-      (await this.readJSON<SnapshotManifest>(key)) ?? {
+      manifest ?? {
         schemaVersion: SCHEMA_VERSION,
         nextSnapshotId: DEFAULT_SNAPSHOT_ID,
         updatedAt: new Date().toISOString(),

@@ -42,7 +42,7 @@ export interface SnapshotStorage {
   /**
    * Loads a snapshot from storage.
    */
-  loadSnapshot(params: { sessionId: string; scope: Scope; snapshotId: string | null }): Promise<Snapshot | null>
+  loadSnapshot(params: { sessionId: string; scope: Scope; snapshotId: string | undefined }): Promise<Snapshot | null>
 
   /**
    * Lists all available snapshot IDs for a session scope.
@@ -58,7 +58,7 @@ export interface SnapshotStorage {
    * }): Promise<{ snapshotIds: string[]; nextToken?: string }>
    * ```
    */
-  listSnapshots(params: { sessionId: string; scope: Scope }): Promise<string[]>
+  listSnapshotIds(params: { sessionId: string; scope: Scope }): Promise<string[]>
 
   /**
    * Loads the snapshot manifest.

@@ -59,9 +59,13 @@ export class FileStorage implements SnapshotStorage {
   /**
    * Loads snapshot by ID or latest if null
    */
-  async loadSnapshot(params: { sessionId: string; scope: Scope; snapshotId: string | null }): Promise<Snapshot | null> {
+  async loadSnapshot(params: {
+    sessionId: string
+    scope: Scope
+    snapshotId: string | undefined
+  }): Promise<Snapshot | null> {
     const path =
-      params.snapshotId === null
+      params.snapshotId === undefined
         ? this.getLatestSnapshotPath(params.sessionId, params.scope)
         : this.getHistorySnapshotPath(params.sessionId, params.scope, params.snapshotId)
     return this.readJSON<Snapshot>(path)
@@ -81,7 +85,7 @@ export class FileStorage implements SnapshotStorage {
    * }): Promise<{ snapshotIds: string[]; nextToken?: string }>
    * ```
    */
-  async listSnapshots(params: { sessionId: string; scope: Scope }): Promise<string[]> {
+  async listSnapshotIds(params: { sessionId: string; scope: Scope }): Promise<string[]> {
     const dirPath = this.getPath(params.sessionId, params.scope, IMMUTABLE_HISTORY)
     try {
       const files = await fs.readdir(dirPath)
@@ -102,8 +106,10 @@ export class FileStorage implements SnapshotStorage {
    */
   async loadManifest(params: { sessionId: string; scope: Scope }): Promise<SnapshotManifest> {
     const path = this.getPath(params.sessionId, params.scope, MANIFEST)
+    const manifest = await this.readJSON<SnapshotManifest>(path)
+
     return (
-      (await this.readJSON<SnapshotManifest>(path)) ?? {
+      manifest ?? {
         schemaVersion: SCHEMA_VERSION,
         nextSnapshotId: DEFAULT_SNAPSHOT_ID,
         updatedAt: new Date().toISOString(),

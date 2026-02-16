@@ -132,7 +132,7 @@ describe('FileStorage', () => {
         const snapshot = createTestSnapshot({ snapshotId: '1' })
         await storage.saveSnapshot({ sessionId, scope, isLatest: true, snapshot })
 
-        const result = await storage.loadSnapshot({ sessionId, scope, snapshotId: null })
+        const result = await storage.loadSnapshot({ sessionId, scope, snapshotId: undefined })
 
         expect(result).toEqual(snapshot)
       })
@@ -156,7 +156,7 @@ describe('FileStorage', () => {
         const sessionId = 'nonexistent-session'
         const scope = createTestScope()
 
-        const result = await storage.loadSnapshot({ sessionId, scope, snapshotId: null })
+        const result = await storage.loadSnapshot({ sessionId, scope, snapshotId: undefined })
 
         expect(result).toBeNull()
       })
@@ -171,7 +171,7 @@ describe('FileStorage', () => {
         await fs.mkdir(join(testDir, sessionId, 'scopes', 'agent', 'test-id', 'snapshots'), { recursive: true })
         await fs.writeFile(filePath, 'invalid json', 'utf8')
 
-        await expect(storage.loadSnapshot({ sessionId, scope, snapshotId: null })).rejects.toThrow(SessionError)
+        await expect(storage.loadSnapshot({ sessionId, scope, snapshotId: undefined })).rejects.toThrow(SessionError)
       })
     })
 
@@ -182,7 +182,7 @@ describe('FileStorage', () => {
 
         vi.spyOn(fs, 'readFile').mockRejectedValueOnce(new Error('Permission denied'))
 
-        await expect(storage.loadSnapshot({ sessionId, scope, snapshotId: null })).rejects.toThrow(SessionError)
+        await expect(storage.loadSnapshot({ sessionId, scope, snapshotId: undefined })).rejects.toThrow(SessionError)
       })
     })
   })
@@ -198,7 +198,7 @@ describe('FileStorage', () => {
         await storage.saveSnapshot({ sessionId, scope, isLatest: false, snapshot: snapshots[0]! })
         await storage.saveSnapshot({ sessionId, scope, isLatest: false, snapshot: snapshots[1]! })
 
-        const result = await storage.listSnapshots({ sessionId, scope })
+        const result = await storage.listSnapshotIds({ sessionId, scope })
 
         expect(result).toEqual(['00001', '00002', '00003'])
       })
@@ -207,7 +207,7 @@ describe('FileStorage', () => {
         const sessionId = 'empty-session'
         const scope = createTestScope()
 
-        const result = await storage.listSnapshots({ sessionId, scope })
+        const result = await storage.listSnapshotIds({ sessionId, scope })
 
         expect(result).toEqual([])
       })
@@ -221,7 +221,7 @@ describe('FileStorage', () => {
         const historyDir = join(testDir, sessionId, 'scopes', 'agent', 'test-id', 'snapshots', 'immutable_history')
         await fs.writeFile(join(historyDir, 'other-file.txt'), 'not a snapshot', 'utf8')
 
-        const result = await storage.listSnapshots({ sessionId, scope })
+        const result = await storage.listSnapshotIds({ sessionId, scope })
 
         expect(result).toEqual(['00001'])
       })
@@ -232,7 +232,7 @@ describe('FileStorage', () => {
         const sessionId = 'nonexistent-session'
         const scope = createTestScope()
 
-        const result = await storage.listSnapshots({ sessionId, scope })
+        const result = await storage.listSnapshotIds({ sessionId, scope })
 
         expect(result).toEqual([])
       })
@@ -245,7 +245,7 @@ describe('FileStorage', () => {
 
         vi.spyOn(fs, 'readdir').mockRejectedValueOnce(new Error('Permission denied'))
 
-        await expect(storage.listSnapshots({ sessionId, scope })).rejects.toThrow(SessionError)
+        await expect(storage.listSnapshotIds({ sessionId, scope })).rejects.toThrow(SessionError)
       })
     })
   })

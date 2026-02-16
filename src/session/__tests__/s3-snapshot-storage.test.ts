@@ -179,7 +179,7 @@ describe('S3Storage', () => {
           Body: { transformToString: () => Promise.resolve(JSON.stringify(snapshot)) },
         })
 
-        const result = await storage.loadSnapshot({ sessionId, scope, snapshotId: null })
+        const result = await storage.loadSnapshot({ sessionId, scope, snapshotId: undefined })
 
         expect(result).toEqual(snapshot)
         expect(mockS3Client.send).toHaveBeenCalledWith(
@@ -223,7 +223,7 @@ describe('S3Storage', () => {
         noSuchKeyError.name = 'NoSuchKey'
         mockS3Client.send.mockRejectedValue(noSuchKeyError)
 
-        const result = await storage.loadSnapshot({ sessionId, scope, snapshotId: null })
+        const result = await storage.loadSnapshot({ sessionId, scope, snapshotId: undefined })
 
         expect(result).toBeNull()
       })
@@ -233,7 +233,7 @@ describe('S3Storage', () => {
         const scope = createTestScope()
         mockS3Client.send.mockResolvedValue({ Body: null })
 
-        const result = await storage.loadSnapshot({ sessionId, scope, snapshotId: null })
+        const result = await storage.loadSnapshot({ sessionId, scope, snapshotId: undefined })
 
         expect(result).toBeNull()
       })
@@ -245,7 +245,7 @@ describe('S3Storage', () => {
           Body: { transformToString: () => Promise.resolve('') },
         })
 
-        const result = await storage.loadSnapshot({ sessionId, scope, snapshotId: null })
+        const result = await storage.loadSnapshot({ sessionId, scope, snapshotId: undefined })
 
         expect(result).toBeNull()
       })
@@ -259,8 +259,8 @@ describe('S3Storage', () => {
           Body: { transformToString: () => Promise.resolve('invalid json') },
         })
 
-        await expect(storage.loadSnapshot({ sessionId, scope, snapshotId: null })).rejects.toThrow(SessionError)
-        await expect(storage.loadSnapshot({ sessionId, scope, snapshotId: null })).rejects.toThrow(
+        await expect(storage.loadSnapshot({ sessionId, scope, snapshotId: undefined })).rejects.toThrow(SessionError)
+        await expect(storage.loadSnapshot({ sessionId, scope, snapshotId: undefined })).rejects.toThrow(
           'Invalid JSON in S3 object'
         )
       })
@@ -272,8 +272,10 @@ describe('S3Storage', () => {
         const scope = createTestScope()
         mockS3Client.send.mockRejectedValue(new Error('S3 error'))
 
-        await expect(storage.loadSnapshot({ sessionId, scope, snapshotId: null })).rejects.toThrow(SessionError)
-        await expect(storage.loadSnapshot({ sessionId, scope, snapshotId: null })).rejects.toThrow('S3 error reading')
+        await expect(storage.loadSnapshot({ sessionId, scope, snapshotId: undefined })).rejects.toThrow(SessionError)
+        await expect(storage.loadSnapshot({ sessionId, scope, snapshotId: undefined })).rejects.toThrow(
+          'S3 error reading'
+        )
       })
     })
   })
@@ -291,7 +293,7 @@ describe('S3Storage', () => {
           ],
         })
 
-        const result = await storage.listSnapshots({ sessionId, scope })
+        const result = await storage.listSnapshotIds({ sessionId, scope })
 
         expect(result).toEqual(['1', '2', '3'])
         expect(mockS3Client.send).toHaveBeenCalledWith(
@@ -309,7 +311,7 @@ describe('S3Storage', () => {
         const scope = createTestScope()
         mockS3Client.send.mockResolvedValue({ Contents: [] })
 
-        const result = await storage.listSnapshots({ sessionId, scope })
+        const result = await storage.listSnapshotIds({ sessionId, scope })
 
         expect(result).toEqual([])
       })
@@ -325,7 +327,7 @@ describe('S3Storage', () => {
           ],
         })
 
-        const result = await storage.listSnapshots({ sessionId, scope })
+        const result = await storage.listSnapshotIds({ sessionId, scope })
 
         expect(result).toEqual(['1', '2'])
       })
@@ -341,7 +343,7 @@ describe('S3Storage', () => {
           ],
         })
 
-        const result = await storage.listSnapshots({ sessionId, scope })
+        const result = await storage.listSnapshotIds({ sessionId, scope })
 
         expect(result).toEqual(['1', '2'])
       })
@@ -353,8 +355,8 @@ describe('S3Storage', () => {
         const scope = createTestScope()
         mockS3Client.send.mockRejectedValue(new Error('S3 list error'))
 
-        await expect(storage.listSnapshots({ sessionId, scope })).rejects.toThrow(SessionError)
-        await expect(storage.listSnapshots({ sessionId, scope })).rejects.toThrow(
+        await expect(storage.listSnapshotIds({ sessionId, scope })).rejects.toThrow(SessionError)
+        await expect(storage.listSnapshotIds({ sessionId, scope })).rejects.toThrow(
           'Failed to list snapshots for session test-session'
         )
       })
@@ -490,7 +492,7 @@ describe('S3Storage', () => {
           })
 
         await storage.saveSnapshot({ sessionId, scope, isLatest: true, snapshot })
-        const result = await storage.loadSnapshot({ sessionId, scope, snapshotId: null })
+        const result = await storage.loadSnapshot({ sessionId, scope, snapshotId: undefined })
 
         expect(result?.state).toEqual(largeState)
       })
@@ -513,7 +515,7 @@ describe('S3Storage', () => {
           })
 
         await storage.saveSnapshot({ sessionId, scope, isLatest: true, snapshot })
-        const result = await storage.loadSnapshot({ sessionId, scope, snapshotId: null })
+        const result = await storage.loadSnapshot({ sessionId, scope, snapshotId: undefined })
 
         expect(result?.state).toEqual(specialData)
       })
