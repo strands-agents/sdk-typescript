@@ -1,12 +1,11 @@
 import type { Scope, Snapshot, SnapshotManifest } from '../session/types.js'
-import { SnapshotStorage } from '../session/index.js'
+import type { SnapshotStorage } from '../session/index.js'
 
 export function createTestSnapshot(overrides: Partial<Snapshot> = {}): Snapshot {
   return {
     schemaVersion: 1,
-    sessionId: 'test-session-123',
     scope: { kind: 'agent', agentId: 'test-agent' },
-    snapshotId: 1,
+    snapshotId: '1',
     messages: [],
     state: { testKey: 'testValue' },
     systemPrompt: 'You are a test assistant',
@@ -18,7 +17,7 @@ export function createTestSnapshot(overrides: Partial<Snapshot> = {}): Snapshot 
 export function createTestManifest(overrides: Partial<SnapshotManifest> = {}): SnapshotManifest {
   return {
     schemaVersion: 1,
-    nextSnapshotId: 2,
+    nextSnapshotId: '2',
     updatedAt: '2024-01-01T00:00:00.000Z',
     ...overrides,
   }
@@ -32,7 +31,7 @@ export function createTestSnapshots(count: number, baseSnapshot?: Partial<Snapsh
   return Array.from({ length: count }, (_, i) =>
     createTestSnapshot({
       ...baseSnapshot,
-      snapshotId: i + 1,
+      snapshotId: String(i + 1),
       createdAt: new Date(2024, 0, 1, 0, i).toISOString(),
     })
   )
@@ -41,53 +40,57 @@ export function createTestSnapshots(count: number, baseSnapshot?: Partial<Snapsh
 /**
  * Mock storage implementation for testing that stores data in memory
  */
-export class MockSnapshotStorage extends SnapshotStorage {
+export class MockSnapshotStorage implements SnapshotStorage {
   private snapshots = new Map<string, Snapshot>()
   private manifests = new Map<string, SnapshotManifest>()
+  public shouldThrowErrors = false
 
-  constructor(public shouldThrowErrors = false) {
-    super()
-  }
-
-  async saveSnapshot(sessionId: string, scope: Scope, isLatest: boolean, snapshot: Snapshot): Promise<void> {
+  async saveSnapshot(params: {
+    sessionId: string
+    scope: Scope
+    isLatest: boolean
+    snapshot: Snapshot
+  }): Promise<void> {
     if (this.shouldThrowErrors) throw new Error('Mock save error')
 
-    const key = this.getKey(sessionId, scope, snapshot.snapshotId)
-    this.snapshots.set(key, snapshot)
+    const key = this.getKey(params.sessionId, params.scope, params.snapshot.snapshotId)
+    this.snapshots.set(key, params.snapshot)
 
-    if (isLatest) {
-      const latestKey = this.getKey(sessionId, scope, 'latest')
-      this.snapshots.set(latestKey, snapshot)
+    if (params.isLatest) {
+      const latestKey = this.getKey(params.sessionId, params.scope, 'latest')
+      this.snapshots.set(latestKey, params.snapshot)
     }
   }
 
-  async loadSnapshot(sessionId: string, scope: Scope, snapshotId: number | null): Promise<Snapshot | null> {
+  async loadSnapshot(params: { sessionId: string; scope: Scope; snapshotId: string | null }): Promise<Snapshot | null> {
     if (this.shouldThrowErrors) throw new Error('Mock load error')
 
     const key =
-      snapshotId === null ? this.getKey(sessionId, scope, 'latest') : this.getKey(sessionId, scope, snapshotId)
+      params.snapshotId === null
+        ? this.getKey(params.sessionId, params.scope, 'latest')
+        : this.getKey(params.sessionId, params.scope, params.snapshotId)
 
     return this.snapshots.get(key) ?? null
   }
 
-  async listSnapshot(sessionId: string, scope: Scope): Promise<number[]> {
+  async listSnapshots(params: { sessionId: string; scope: Scope }): Promise<string[]> {
     if (this.shouldThrowErrors) throw new Error('Mock list error')
 
-    const scopeId: string = scope.kind === 'agent' ? scope.agentId! : scope.multiAgentId!
+    const scopeId: string = params.scope.kind === 'agent' ? params.scope.agentId! : params.scope.multiAgentId!
     if (!scopeId) {
-      throw new Error(`Invalid scope: missing ${scope.kind === 'agent' ? 'agentId' : 'multiAgentId'}`)
+      throw new Error(`Invalid scope: missing ${params.scope.kind === 'agent' ? 'agentId' : 'multiAgentId'}`)
     }
-    const prefix = `${sessionId}::${scope.kind}::${scopeId}::`
-    const ids: number[] = []
+    const prefix = `${params.sessionId}::${params.scope.kind}::${scopeId}::`
+    const ids: string[] = []
 
     for (const [key] of this.snapshots) {
       if (key.startsWith(prefix) && !key.endsWith('latest')) {
-        const match = key.match(/::(\d+)$/)
-        if (match && match[1]) ids.push(parseInt(match[1]))
+        const match = key.match(/::([^:]+)$/)
+        if (match && match[1]) ids.push(match[1])
       }
     }
 
-    return ids.sort((a, b) => a - b)
+    return ids.sort()
   }
 
   async loadManifest(params: { sessionId: string; scope: Scope }): Promise<SnapshotManifest> {
@@ -101,7 +104,7 @@ export class MockSnapshotStorage extends SnapshotStorage {
     return (
       this.manifests.get(key) ?? {
         schemaVersion: 1,
-        nextSnapshotId: 1,
+        nextSnapshotId: '1',
         updatedAt: new Date().toISOString(),
       }
     )

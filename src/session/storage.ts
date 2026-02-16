@@ -7,7 +7,7 @@ import type { Scope, Snapshot, SnapshotManifest } from './types.js'
  * @example
  * ```typescript
  * const storage: SessionStorage = {
- *   snapshot: new S3SnapshotStorage({ bucket: 'my-bucket' })
+ *   snapshot: new S3Storage({ bucket: 'my-bucket' })
  * }
  * ```
  */
@@ -17,7 +17,7 @@ export type SessionStorage = {
 }
 
 /**
- * Abstract base class for snapshot persistence.
+ * Interface for snapshot persistence.
  * Implementations provide storage backends (S3, filesystem, etc.).
  *
  * File layout convention:
@@ -33,48 +33,40 @@ export type SessionStorage = {
  *           snapshot_00002.json
  * ```
  */
-export abstract class SnapshotStorage {
+export interface SnapshotStorage {
   /**
    * Persists a snapshot to storage.
-   *
-   * @param sessionId - Session identifier
-   * @param scope - Scope of the snapshot
-   * @param isLatest - If true, save as snapshot_latest.json; otherwise save to immutable_history
-   * @param snapshot - Snapshot data to persist
    */
-  abstract saveSnapshot(sessionId: string, scope: Scope, isLatest: boolean, snapshot: Snapshot): Promise<void>
+  saveSnapshot(params: { sessionId: string; scope: Scope; isLatest: boolean; snapshot: Snapshot }): Promise<void>
 
   /**
    * Loads a snapshot from storage.
-   *
-   * @param sessionId - Session identifier
-   * @param scope - Scope of the snapshot
-   * @param snapshotId - Snapshot ID to load (null = latest)
-   * @returns Snapshot data or null if not found
    */
-  abstract loadSnapshot(sessionId: string, scope: Scope, snapshotId: number | null): Promise<Snapshot | null>
+  loadSnapshot(params: { sessionId: string; scope: Scope; snapshotId: string | null }): Promise<Snapshot | null>
 
   /**
    * Lists all available snapshot IDs for a session scope.
    *
-   * @param sessionId - Session identifier
-   * @param scope - Scope of the snapshots
-   * @returns Array of snapshot IDs (sorted ascending)
+   * TODO: Add pagination support for long-running agents with many snapshots.
+   * Future signature could be:
+   * ```typescript
+   * listSnapshots(params: {
+   *   sessionId: string
+   *   scope: Scope
+   *   limit?: number        // Max results to return (e.g., 100)
+   *   startAfter?: string   // Snapshot ID to start after (for cursor-based pagination)
+   * }): Promise<{ snapshotIds: string[]; nextToken?: string }>
+   * ```
    */
-  abstract listSnapshot(sessionId: string, scope: Scope): Promise<number[]>
+  listSnapshots(params: { sessionId: string; scope: Scope }): Promise<string[]>
 
   /**
    * Loads the snapshot manifest.
-   *
-   * @param params - Parameters that contains sessionId and scope
-   * @returns Manifest data
    */
-  abstract loadManifest(params: { sessionId: string; scope: Scope }): Promise<SnapshotManifest>
+  loadManifest(params: { sessionId: string; scope: Scope }): Promise<SnapshotManifest>
 
   /**
    * Saves the snapshot manifest.
-   *
-   * @param params - Parameters that contains sessionId, scope and SnapshotManifest
    */
-  abstract saveManifest(params: { sessionId: string; scope: Scope; manifest: SnapshotManifest }): Promise<void>
+  saveManifest(params: { sessionId: string; scope: Scope; manifest: SnapshotManifest }): Promise<void>
 }

@@ -1,6 +1,6 @@
 import { promises as fs } from 'fs'
 import { join, dirname } from 'path'
-import { SnapshotStorage } from './storage.js'
+import type { SnapshotStorage } from './storage.js'
 import type { Scope, Snapshot, SnapshotManifest } from './types.js'
 import { validateIdentifier } from '../types/validation.js'
 import { SessionError } from '../errors.js'
@@ -13,16 +13,15 @@ const SNAPSHOT_REGEX = /snapshot_(\d+)\.json$/
 /**
  * File-based implementation of SnapshotStorage for persisting session snapshots
  */
-export class FileSnapshotStorage extends SnapshotStorage {
+export class FileStorage implements SnapshotStorage {
   /** Base directory path */
   private readonly _baseDir: string
 
   /**
-   * Creates new FileSnapshotStorage instance
+   * Creates new FileStorage instance
    * @param baseDir - Base directory path for storing snapshots
    */
   constructor(baseDir: string) {
-    super()
     this._baseDir = baseDir
   }
 
@@ -40,41 +39,59 @@ export class FileSnapshotStorage extends SnapshotStorage {
   /**
    * Saves snapshot to file, optionally marking as latest
    */
-  async saveSnapshot(sessionId: string, scope: Scope, isLatest: boolean, snapshot: Snapshot): Promise<void> {
-    await this.writeJSON(this.getHistorySnapshotPath(sessionId, scope, snapshot.snapshotId), snapshot)
-    if (isLatest) {
-      await this.writeJSON(this.getLatestSnapshotPath(sessionId, scope), snapshot)
+  async saveSnapshot(params: {
+    sessionId: string
+    scope: Scope
+    isLatest: boolean
+    snapshot: Snapshot
+  }): Promise<void> {
+    await this.writeJSON(
+      this.getHistorySnapshotPath(params.sessionId, params.scope, params.snapshot.snapshotId),
+      params.snapshot
+    )
+    if (params.isLatest) {
+      await this.writeJSON(this.getLatestSnapshotPath(params.sessionId, params.scope), params.snapshot)
     }
   }
 
   /**
    * Loads snapshot by ID or latest if null
    */
-  async loadSnapshot(sessionId: string, scope: Scope, snapshotId: number | null): Promise<Snapshot | null> {
+  async loadSnapshot(params: { sessionId: string; scope: Scope; snapshotId: string | null }): Promise<Snapshot | null> {
     const path =
-      snapshotId === null
-        ? this.getLatestSnapshotPath(sessionId, scope)
-        : this.getHistorySnapshotPath(sessionId, scope, snapshotId)
+      params.snapshotId === null
+        ? this.getLatestSnapshotPath(params.sessionId, params.scope)
+        : this.getHistorySnapshotPath(params.sessionId, params.scope, params.snapshotId)
     return this.readJSON<Snapshot>(path)
   }
 
   /**
-   * Lists all snapshot IDs for a session scope
+   * Lists all snapshot IDs for a session scope.
+   *
+   * TODO: Add pagination support for long-running agents with many snapshots.
+   * Future signature could be:
+   * ```typescript
+   * listSnapshots(params: {
+   *   sessionId: string
+   *   scope: Scope
+   *   limit?: number        // Max results to return (e.g., 100)
+   *   startAfter?: string   // Snapshot ID to start after (for cursor-based pagination)
+   * }): Promise<{ snapshotIds: string[]; nextToken?: string }>
+   * ```
    */
-  async listSnapshot(sessionId: string, scope: Scope): Promise<number[]> {
-    const dirPath = this.getPath(sessionId, scope, IMMUTABLE_HISTORY)
+  async listSnapshots(params: { sessionId: string; scope: Scope }): Promise<string[]> {
+    const dirPath = this.getPath(params.sessionId, params.scope, IMMUTABLE_HISTORY)
     try {
       const files = await fs.readdir(dirPath)
       return files
         .map((file) => file.match(SNAPSHOT_REGEX)?.[1])
         .filter((id): id is string => id !== undefined)
-        .map((id) => parseInt(id))
-        .sort((a, b) => a - b)
+        .sort((a, b) => parseInt(a) - parseInt(b))
     } catch (error: unknown) {
       if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
         return []
       }
-      throw new SessionError(`Failed to list snapshots for session ${sessionId}`, { cause: error })
+      throw new SessionError(`Failed to list snapshots for session ${params.sessionId}`, { cause: error })
     }
   }
 
@@ -86,7 +103,7 @@ export class FileSnapshotStorage extends SnapshotStorage {
     return (
       (await this.readJSON<SnapshotManifest>(path)) ?? {
         schemaVersion: 1,
-        nextSnapshotId: 1,
+        nextSnapshotId: '1',
         updatedAt: new Date().toISOString(),
       }
     )
@@ -136,7 +153,7 @@ export class FileSnapshotStorage extends SnapshotStorage {
     return this.getPath(sessionId, scope, SNAPSHOT_LATEST)
   }
 
-  private getHistorySnapshotPath(sessionId: string, scope: Scope, snapshotId: number): string {
+  private getHistorySnapshotPath(sessionId: string, scope: Scope, snapshotId: string): string {
     return this.getPath(sessionId, scope, `${IMMUTABLE_HISTORY}/snapshot_${String(snapshotId).padStart(5, '0')}.json`)
   }
 }

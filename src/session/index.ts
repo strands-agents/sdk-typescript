@@ -6,20 +6,20 @@
  *
  * @example
  * ```typescript
- * import { FileSnapshotStorage, SnapshotStorage } from '@strands/agents/session'
+ * import { FileStorage, SnapshotStorage } from '@strands/agents/session'
  *
- * const storage = new FileSnapshotStorage('./sessions')
+ * const storage = new FileStorage('./sessions')
  * await storage.saveSnapshot(sessionId, scope, true, snapshot)
  * ```
  */
 
+// TODO: add these to top level index
 // Core types
 export type { Scope, Snapshot, SnapshotManifest, SnapshotTriggerCallback } from './types.js'
 
 // Storage layer
-export type { SessionStorage } from './storage.js'
-export { SnapshotStorage } from './storage.js'
+export type { SessionStorage, SnapshotStorage } from './storage.js'
 
 // Storage implementations
-export { FileSnapshotStorage } from './file-snapshot-storage.js'
-export { S3SnapshotStorage, type S3SnapshotStorageConfig } from './s3-snapshot-storage.js'
+export { FileStorage } from './file-storage.js'
+export { S3Storage, type S3StorageConfig } from './s3-storage.js'

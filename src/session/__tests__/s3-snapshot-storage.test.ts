@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach, vi, type MockedFunction } from 'vitest'
-import { S3SnapshotStorage } from '../s3-snapshot-storage.js'
+import { S3Storage } from '../s3-storage.js'
 import { SessionError } from '../../errors.js'
 import { createTestSnapshot, createTestManifest, createTestScope } from '../../__fixtures__/mock-storage-provider.js'
 
@@ -21,14 +21,14 @@ vi.mock('@aws-sdk/client-s3', () => ({
   }),
 }))
 
-describe('S3SnapshotStorage', () => {
-  let storage: S3SnapshotStorage
+describe('S3Storage', () => {
+  let storage: S3Storage
   let mockS3Client: { send: MockedFunction<any> }
 
   beforeEach(() => {
     vi.clearAllMocks()
 
-    storage = new S3SnapshotStorage({
+    storage = new S3Storage({
       bucket: 'test-bucket',
       region: 'us-east-1',
     })
@@ -40,21 +40,21 @@ describe('S3SnapshotStorage', () => {
     describe('S3SnapshotStorage_When_ValidConfig_Then_CreatesInstance', () => {
       it('creates instance with bucket and region', () => {
         const config = { bucket: 'test-bucket', region: 'us-west-2' }
-        const instance = new S3SnapshotStorage(config)
-        expect(instance).toBeInstanceOf(S3SnapshotStorage)
+        const instance = new S3Storage(config)
+        expect(instance).toBeInstanceOf(S3Storage)
       })
 
       it('creates instance with prefix', () => {
         const config = { bucket: 'test-bucket', prefix: 'my-prefix', region: 'us-east-1' }
-        const instance = new S3SnapshotStorage(config)
-        expect(instance).toBeInstanceOf(S3SnapshotStorage)
+        const instance = new S3Storage(config)
+        expect(instance).toBeInstanceOf(S3Storage)
       })
 
       it('uses provided S3 client when specified', () => {
         const customClient = { send: vi.fn() }
         const config = { bucket: 'test-bucket', s3Client: customClient as any }
-        const instance = new S3SnapshotStorage(config)
-        expect(instance).toBeInstanceOf(S3SnapshotStorage)
+        const instance = new S3Storage(config)
+        expect(instance).toBeInstanceOf(S3Storage)
       })
 
       it('merges s3ClientConfig with region override', () => {
@@ -63,8 +63,8 @@ describe('S3SnapshotStorage', () => {
           region: 'us-west-2',
           s3ClientConfig: { region: 'us-east-1', maxAttempts: 3 },
         }
-        const instance = new S3SnapshotStorage(config)
-        expect(instance).toBeInstanceOf(S3SnapshotStorage)
+        const instance = new S3Storage(config)
+        expect(instance).toBeInstanceOf(S3Storage)
       })
     })
   })
@@ -74,10 +74,10 @@ describe('S3SnapshotStorage', () => {
       it('saves snapshot to S3 history', async () => {
         const sessionId = 'test-session'
         const scope = createTestScope()
-        const snapshot = createTestSnapshot({ sessionId, scope, snapshotId: 1 })
+        const snapshot = createTestSnapshot({ snapshotId: '1' })
         mockS3Client.send.mockResolvedValue({})
 
-        await storage.saveSnapshot(sessionId, scope, false, snapshot)
+        await storage.saveSnapshot({ sessionId, scope, isLatest: false, snapshot })
 
         expect(mockS3Client.send).toHaveBeenCalledWith(
           expect.objectContaining({
@@ -94,10 +94,10 @@ describe('S3SnapshotStorage', () => {
       it('saves snapshot as latest when isLatest is true', async () => {
         const sessionId = 'test-session'
         const scope = createTestScope()
-        const snapshot = createTestSnapshot({ sessionId, scope, snapshotId: 1 })
+        const snapshot = createTestSnapshot({ snapshotId: '1' })
         mockS3Client.send.mockResolvedValue({})
 
-        await storage.saveSnapshot(sessionId, scope, true, snapshot)
+        await storage.saveSnapshot({ sessionId, scope, isLatest: true, snapshot })
 
         expect(mockS3Client.send).toHaveBeenCalledTimes(2)
         expect(mockS3Client.send).toHaveBeenCalledWith(
@@ -110,7 +110,7 @@ describe('S3SnapshotStorage', () => {
       })
 
       it('uses prefix when configured', async () => {
-        const storageWithPrefix = new S3SnapshotStorage({
+        const storageWithPrefix = new S3Storage({
           bucket: 'test-bucket',
           prefix: 'my-app',
           region: 'us-east-1',
@@ -118,10 +118,10 @@ describe('S3SnapshotStorage', () => {
         const mockPrefixS3Client = (storageWithPrefix as any)._s3
         const sessionId = 'test-session'
         const scope = createTestScope()
-        const snapshot = createTestSnapshot({ sessionId, scope, snapshotId: 1 })
+        const snapshot = createTestSnapshot({ snapshotId: '1' })
         mockPrefixS3Client.send.mockResolvedValue({})
 
-        await storageWithPrefix.saveSnapshot(sessionId, scope, false, snapshot)
+        await storageWithPrefix.saveSnapshot({ sessionId, scope, isLatest: false, snapshot })
 
         expect(mockPrefixS3Client.send).toHaveBeenCalledWith(
           expect.objectContaining({
@@ -137,11 +137,13 @@ describe('S3SnapshotStorage', () => {
       it('throws SessionError when S3 put fails', async () => {
         const sessionId = 'test-session'
         const scope = createTestScope()
-        const snapshot = createTestSnapshot({ sessionId, scope, snapshotId: 1 })
+        const snapshot = createTestSnapshot({ snapshotId: '1' })
         mockS3Client.send.mockRejectedValue(new Error('S3 error'))
 
-        await expect(storage.saveSnapshot(sessionId, scope, false, snapshot)).rejects.toThrow(SessionError)
-        await expect(storage.saveSnapshot(sessionId, scope, false, snapshot)).rejects.toThrow(
+        await expect(storage.saveSnapshot({ sessionId, scope, isLatest: false, snapshot })).rejects.toThrow(
+          SessionError
+        )
+        await expect(storage.saveSnapshot({ sessionId, scope, isLatest: false, snapshot })).rejects.toThrow(
           'Failed to write S3 object'
         )
       })
@@ -151,10 +153,10 @@ describe('S3SnapshotStorage', () => {
       it('saves multi-agent snapshot to correct S3 key', async () => {
         const sessionId = 'multi-session'
         const scope = createTestScope('multiAgent', 'graph-1')
-        const snapshot = createTestSnapshot({ sessionId, scope, snapshotId: 1 })
+        const snapshot = createTestSnapshot({ snapshotId: '1' })
         mockS3Client.send.mockResolvedValue({})
 
-        await storage.saveSnapshot(sessionId, scope, true, snapshot)
+        await storage.saveSnapshot({ sessionId, scope, isLatest: true, snapshot })
 
         expect(mockS3Client.send).toHaveBeenCalledWith(
           expect.objectContaining({
@@ -172,12 +174,12 @@ describe('S3SnapshotStorage', () => {
       it('loads latest snapshot when snapshotId is null', async () => {
         const sessionId = 'test-session'
         const scope = createTestScope()
-        const snapshot = createTestSnapshot({ sessionId, scope, snapshotId: 1 })
+        const snapshot = createTestSnapshot({ snapshotId: '1' })
         mockS3Client.send.mockResolvedValue({
           Body: { transformToString: () => Promise.resolve(JSON.stringify(snapshot)) },
         })
 
-        const result = await storage.loadSnapshot(sessionId, scope, null)
+        const result = await storage.loadSnapshot({ sessionId, scope, snapshotId: null })
 
         expect(result).toEqual(snapshot)
         expect(mockS3Client.send).toHaveBeenCalledWith(
@@ -195,12 +197,12 @@ describe('S3SnapshotStorage', () => {
       it('loads specific snapshot by ID', async () => {
         const sessionId = 'test-session'
         const scope = createTestScope()
-        const snapshot = createTestSnapshot({ sessionId, scope, snapshotId: 5 })
+        const snapshot = createTestSnapshot({ snapshotId: '5' })
         mockS3Client.send.mockResolvedValue({
           Body: { transformToString: () => Promise.resolve(JSON.stringify(snapshot)) },
         })
 
-        const result = await storage.loadSnapshot(sessionId, scope, 5)
+        const result = await storage.loadSnapshot({ sessionId, scope, snapshotId: '5' })
 
         expect(result).toEqual(snapshot)
         expect(mockS3Client.send).toHaveBeenCalledWith(
@@ -221,7 +223,7 @@ describe('S3SnapshotStorage', () => {
         noSuchKeyError.name = 'NoSuchKey'
         mockS3Client.send.mockRejectedValue(noSuchKeyError)
 
-        const result = await storage.loadSnapshot(sessionId, scope, null)
+        const result = await storage.loadSnapshot({ sessionId, scope, snapshotId: null })
 
         expect(result).toBeNull()
       })
@@ -231,7 +233,7 @@ describe('S3SnapshotStorage', () => {
         const scope = createTestScope()
         mockS3Client.send.mockResolvedValue({ Body: null })
 
-        const result = await storage.loadSnapshot(sessionId, scope, null)
+        const result = await storage.loadSnapshot({ sessionId, scope, snapshotId: null })
 
         expect(result).toBeNull()
       })
@@ -243,7 +245,7 @@ describe('S3SnapshotStorage', () => {
           Body: { transformToString: () => Promise.resolve('') },
         })
 
-        const result = await storage.loadSnapshot(sessionId, scope, null)
+        const result = await storage.loadSnapshot({ sessionId, scope, snapshotId: null })
 
         expect(result).toBeNull()
       })
@@ -257,8 +259,10 @@ describe('S3SnapshotStorage', () => {
           Body: { transformToString: () => Promise.resolve('invalid json') },
         })
 
-        await expect(storage.loadSnapshot(sessionId, scope, null)).rejects.toThrow(SessionError)
-        await expect(storage.loadSnapshot(sessionId, scope, null)).rejects.toThrow('Invalid JSON in S3 object')
+        await expect(storage.loadSnapshot({ sessionId, scope, snapshotId: null })).rejects.toThrow(SessionError)
+        await expect(storage.loadSnapshot({ sessionId, scope, snapshotId: null })).rejects.toThrow(
+          'Invalid JSON in S3 object'
+        )
       })
     })
 
@@ -268,13 +272,13 @@ describe('S3SnapshotStorage', () => {
         const scope = createTestScope()
         mockS3Client.send.mockRejectedValue(new Error('S3 error'))
 
-        await expect(storage.loadSnapshot(sessionId, scope, null)).rejects.toThrow(SessionError)
-        await expect(storage.loadSnapshot(sessionId, scope, null)).rejects.toThrow('S3 error reading')
+        await expect(storage.loadSnapshot({ sessionId, scope, snapshotId: null })).rejects.toThrow(SessionError)
+        await expect(storage.loadSnapshot({ sessionId, scope, snapshotId: null })).rejects.toThrow('S3 error reading')
       })
     })
   })
 
-  describe('listSnapshot', () => {
+  describe('listSnapshots', () => {
     describe('S3SnapshotStorage_When_listSnapshots_Then_ReturnsOrderedIds', () => {
       it('returns sorted snapshot IDs', async () => {
         const sessionId = 'test-session'
@@ -287,9 +291,9 @@ describe('S3SnapshotStorage', () => {
           ],
         })
 
-        const result = await storage.listSnapshot(sessionId, scope)
+        const result = await storage.listSnapshots({ sessionId, scope })
 
-        expect(result).toEqual([1, 2, 3])
+        expect(result).toEqual(['1', '2', '3'])
         expect(mockS3Client.send).toHaveBeenCalledWith(
           expect.objectContaining({
             input: {
@@ -305,7 +309,7 @@ describe('S3SnapshotStorage', () => {
         const scope = createTestScope()
         mockS3Client.send.mockResolvedValue({ Contents: [] })
 
-        const result = await storage.listSnapshot(sessionId, scope)
+        const result = await storage.listSnapshots({ sessionId, scope })
 
         expect(result).toEqual([])
       })
@@ -321,9 +325,9 @@ describe('S3SnapshotStorage', () => {
           ],
         })
 
-        const result = await storage.listSnapshot(sessionId, scope)
+        const result = await storage.listSnapshots({ sessionId, scope })
 
-        expect(result).toEqual([1, 2])
+        expect(result).toEqual(['1', '2'])
       })
 
       it('handles objects without Key property', async () => {
@@ -337,9 +341,9 @@ describe('S3SnapshotStorage', () => {
           ],
         })
 
-        const result = await storage.listSnapshot(sessionId, scope)
+        const result = await storage.listSnapshots({ sessionId, scope })
 
-        expect(result).toEqual([1, 2])
+        expect(result).toEqual(['1', '2'])
       })
     })
 
@@ -349,8 +353,8 @@ describe('S3SnapshotStorage', () => {
         const scope = createTestScope()
         mockS3Client.send.mockRejectedValue(new Error('S3 list error'))
 
-        await expect(storage.listSnapshot(sessionId, scope)).rejects.toThrow(SessionError)
-        await expect(storage.listSnapshot(sessionId, scope)).rejects.toThrow(
+        await expect(storage.listSnapshots({ sessionId, scope })).rejects.toThrow(SessionError)
+        await expect(storage.listSnapshots({ sessionId, scope })).rejects.toThrow(
           'Failed to list snapshots for session test-session'
         )
       })
@@ -362,7 +366,7 @@ describe('S3SnapshotStorage', () => {
       it('loads existing manifest', async () => {
         const sessionId = 'test-session'
         const scope = createTestScope()
-        const manifest = createTestManifest({ nextSnapshotId: 5 })
+        const manifest = createTestManifest({ nextSnapshotId: '5' })
         mockS3Client.send.mockResolvedValue({
           Body: { transformToString: () => Promise.resolve(JSON.stringify(manifest)) },
         })
@@ -392,7 +396,7 @@ describe('S3SnapshotStorage', () => {
 
         expect(result).toEqual({
           schemaVersion: 1,
-          nextSnapshotId: 1,
+          nextSnapshotId: '1',
           updatedAt: expect.any(String),
         })
       })
@@ -416,7 +420,7 @@ describe('S3SnapshotStorage', () => {
       it('saves manifest to S3', async () => {
         const sessionId = 'test-session'
         const scope = createTestScope()
-        const manifest = createTestManifest({ nextSnapshotId: 10 })
+        const manifest = createTestManifest({ nextSnapshotId: '10' })
         mockS3Client.send.mockResolvedValue({})
 
         await storage.saveManifest({ sessionId, scope, manifest })
@@ -451,17 +455,21 @@ describe('S3SnapshotStorage', () => {
       it('throws error for invalid session ID', async () => {
         const invalidSessionId = 'invalid/session'
         const scope = createTestScope()
-        const snapshot = createTestSnapshot({ sessionId: invalidSessionId, scope, snapshotId: 1 })
+        const snapshot = createTestSnapshot({ snapshotId: '1' })
 
-        await expect(storage.saveSnapshot(invalidSessionId, scope, false, snapshot)).rejects.toThrow()
+        await expect(
+          storage.saveSnapshot({ sessionId: invalidSessionId, scope, isLatest: false, snapshot })
+        ).rejects.toThrow()
       })
 
       it('throws error for invalid agent ID', async () => {
         const sessionId = 'test-session'
         const invalidScope = createTestScope('agent', 'invalid/agent')
-        const snapshot = createTestSnapshot({ sessionId, scope: invalidScope, snapshotId: 1 })
+        const snapshot = createTestSnapshot({ snapshotId: '1' })
 
-        await expect(storage.saveSnapshot(sessionId, invalidScope, false, snapshot)).rejects.toThrow()
+        await expect(
+          storage.saveSnapshot({ sessionId, scope: invalidScope, isLatest: false, snapshot })
+        ).rejects.toThrow()
       })
     })
 
@@ -470,7 +478,7 @@ describe('S3SnapshotStorage', () => {
         const sessionId = 'test-session'
         const scope = createTestScope()
         const largeState = { data: 'x'.repeat(10000) }
-        const snapshot = createTestSnapshot({ sessionId, scope, snapshotId: 1, state: largeState })
+        const snapshot = createTestSnapshot({ snapshotId: '1', state: largeState })
 
         // Setup mocks for both save and load operations
         mockS3Client.send
@@ -481,8 +489,8 @@ describe('S3SnapshotStorage', () => {
             Body: { transformToString: () => Promise.resolve(JSON.stringify(snapshot)) },
           })
 
-        await storage.saveSnapshot(sessionId, scope, true, snapshot)
-        const result = await storage.loadSnapshot(sessionId, scope, null)
+        await storage.saveSnapshot({ sessionId, scope, isLatest: true, snapshot })
+        const result = await storage.loadSnapshot({ sessionId, scope, snapshotId: null })
 
         expect(result?.state).toEqual(largeState)
       })
@@ -493,7 +501,7 @@ describe('S3SnapshotStorage', () => {
         const sessionId = 'test-session'
         const scope = createTestScope()
         const specialData = { emoji: '🚀', unicode: 'café', quotes: '"test"' }
-        const snapshot = createTestSnapshot({ sessionId, scope, snapshotId: 1, state: specialData })
+        const snapshot = createTestSnapshot({ snapshotId: '1', state: specialData })
 
         // Setup mocks for both save and load operations
         mockS3Client.send
@@ -504,8 +512,8 @@ describe('S3SnapshotStorage', () => {
             Body: { transformToString: () => Promise.resolve(JSON.stringify(snapshot)) },
           })
 
-        await storage.saveSnapshot(sessionId, scope, true, snapshot)
-        const result = await storage.loadSnapshot(sessionId, scope, null)
+        await storage.saveSnapshot({ sessionId, scope, isLatest: true, snapshot })
+        const result = await storage.loadSnapshot({ sessionId, scope, snapshotId: null })
 
         expect(result?.state).toEqual(specialData)
       })

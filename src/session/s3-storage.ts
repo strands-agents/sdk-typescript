@@ -1,7 +1,6 @@
 import { S3Client, PutObjectCommand, GetObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3'
-import type { S3ClientConfig } from '@aws-sdk/client-s3'
 import type { ListObjectsV2CommandOutput } from '@aws-sdk/client-s3/dist-types/commands/ListObjectsV2Command.js'
-import { SnapshotStorage } from './storage.js'
+import type { SnapshotStorage } from './storage.js'
 import type { Scope, Snapshot, SnapshotManifest } from './types.js'
 import { validateIdentifier } from '../types/validation.js'
 import { SessionError } from '../errors.js'
@@ -12,25 +11,23 @@ const IMMUTABLE_HISTORY = 'immutable_history/'
 const SNAPSHOT_REGEX = /snapshot_(\d+)\.json$/
 
 /**
- * Configuration options for S3SnapshotStorage
+ * Configuration options for S3Storage
  */
-export type S3SnapshotStorageConfig = {
+export type S3StorageConfig = {
   /** S3 bucket name */
   bucket: string
   /** Optional key prefix for all objects */
   prefix?: string
-  /** AWS region (overrides s3ClientConfig.region if both provided) */
+  /** AWS region (default: us-east-1). Cannot be used with s3Client */
   region?: string
-  /** Pre-configured S3 client (if provided, other config options are ignored) */
+  /** Pre-configured S3 client. Cannot be used with region */
   s3Client?: S3Client
-  /** S3 client configuration (used only if s3Client not provided) */
-  s3ClientConfig?: S3ClientConfig
 }
 
 /**
  * S3-based implementation of SnapshotStorage for persisting session snapshots
  */
-export class S3SnapshotStorage extends SnapshotStorage {
+export class S3Storage implements SnapshotStorage {
   /** S3 client instance */
   private _s3: S3Client
   /** S3 _bucket name */
@@ -39,23 +36,17 @@ export class S3SnapshotStorage extends SnapshotStorage {
   private readonly _prefix: string
 
   /**
-   * Creates new S3SnapshotStorage instance
+   * Creates new S3Storage instance
    * @param config - Configuration options
    */
-  constructor(config: S3SnapshotStorageConfig) {
-    super()
+  constructor(config: S3StorageConfig) {
+    if (config.s3Client && config.region) {
+      throw new SessionError('Cannot specify both s3Client and region. Configure region in the S3Client instead.')
+    }
+
     this._bucket = config.bucket
     this._prefix = config.prefix ?? ''
-
-    if (config.s3Client) {
-      this._s3 = config.s3Client
-    } else {
-      const clientConfig: S3ClientConfig = {
-        ...config.s3ClientConfig,
-        region: config.region ?? config.s3ClientConfig?.region ?? 'us-east-1',
-      }
-      this._s3 = new S3Client(clientConfig)
-    }
+    this._s3 = config.s3Client ?? new S3Client({ region: config.region ?? 'us-east-1' })
   }
 
   /**
@@ -73,29 +64,48 @@ export class S3SnapshotStorage extends SnapshotStorage {
   /**
    * Saves snapshot to S3, optionally marking as latest
    */
-  async saveSnapshot(sessionId: string, scope: Scope, isLatest: boolean, snapshot: Snapshot): Promise<void> {
-    await this.writeJSON(this.getHistorySnapshotKey(sessionId, scope, snapshot.snapshotId), snapshot)
-    if (isLatest) {
-      await this.writeJSON(this.getLatestSnapshotKey(sessionId, scope), snapshot)
+  async saveSnapshot(params: {
+    sessionId: string
+    scope: Scope
+    isLatest: boolean
+    snapshot: Snapshot
+  }): Promise<void> {
+    await this.writeJSON(
+      this.getHistorySnapshotKey(params.sessionId, params.scope, params.snapshot.snapshotId),
+      params.snapshot
+    )
+    if (params.isLatest) {
+      await this.writeJSON(this.getLatestSnapshotKey(params.sessionId, params.scope), params.snapshot)
     }
   }
 
   /**
    * Loads snapshot by ID or latest if null
    */
-  async loadSnapshot(sessionId: string, scope: Scope, snapshotId: number | null): Promise<Snapshot | null> {
+  async loadSnapshot(params: { sessionId: string; scope: Scope; snapshotId: string | null }): Promise<Snapshot | null> {
     const key =
-      snapshotId === null
-        ? this.getLatestSnapshotKey(sessionId, scope)
-        : this.getHistorySnapshotKey(sessionId, scope, snapshotId)
+      params.snapshotId === null
+        ? this.getLatestSnapshotKey(params.sessionId, params.scope)
+        : this.getHistorySnapshotKey(params.sessionId, params.scope, params.snapshotId)
     return this.readJSON<Snapshot>(key)
   }
 
   /**
-   * Lists all snapshot IDs for a session scope
+   * Lists all snapshot IDs for a session scope.
+   *
+   * TODO: Add pagination support for long-running agents with many snapshots.
+   * Future signature could be:
+   * ```typescript
+   * listSnapshots(params: {
+   *   sessionId: string
+   *   scope: Scope
+   *   limit?: number        // Max results to return (e.g., 100)
+   *   startAfter?: string   // Snapshot ID to start after (for cursor-based pagination)
+   * }): Promise<{ snapshotIds: string[]; nextToken?: string }>
+   * ```
    */
-  async listSnapshot(sessionId: string, scope: Scope): Promise<number[]> {
-    const prefix = this.getKey(sessionId, scope, IMMUTABLE_HISTORY)
+  async listSnapshots(params: { sessionId: string; scope: Scope }): Promise<string[]> {
+    const prefix = this.getKey(params.sessionId, params.scope, IMMUTABLE_HISTORY)
     try {
       const response: ListObjectsV2CommandOutput = await this._s3.send(
         new ListObjectsV2Command({ Bucket: this._bucket, Prefix: prefix })
@@ -103,10 +113,10 @@ export class S3SnapshotStorage extends SnapshotStorage {
       return (response.Contents ?? [])
         .map((obj) => obj.Key?.match(SNAPSHOT_REGEX)?.[1])
         .filter((id): id is string => id !== undefined)
-        .map((id) => parseInt(id))
-        .sort((a, b) => a - b)
+        .map((id) => String(parseInt(id)))
+        .sort((a, b) => parseInt(a) - parseInt(b))
     } catch (error) {
-      throw new SessionError(`Failed to list snapshots for session ${sessionId}`, { cause: error })
+      throw new SessionError(`Failed to list snapshots for session ${params.sessionId}`, { cause: error })
     }
   }
 
@@ -118,7 +128,7 @@ export class S3SnapshotStorage extends SnapshotStorage {
     return (
       (await this.readJSON<SnapshotManifest>(key)) ?? {
         schemaVersion: 1,
-        nextSnapshotId: 1,
+        nextSnapshotId: '1',
         updatedAt: new Date().toISOString(),
       }
     )
@@ -174,7 +184,7 @@ export class S3SnapshotStorage extends SnapshotStorage {
     return this.getKey(sessionId, scope, SNAPSHOT_LATEST)
   }
 
-  private getHistorySnapshotKey(sessionId: string, scope: Scope, snapshotId: number): string {
+  private getHistorySnapshotKey(sessionId: string, scope: Scope, snapshotId: string): string {
     return this.getKey(sessionId, scope, `${IMMUTABLE_HISTORY}snapshot_${String(snapshotId).padStart(5, '0')}.json`)
   }
 }
