@@ -52,12 +52,14 @@ export class AgentResult {
    * The validated structured output from the LLM, if a schema was provided.
    * Always typed as unknown - use your schema to parse/validate the result.
    */
-  readonly structuredOutput: unknown | undefined
+  readonly structuredOutput?: unknown
 
   constructor(data: { stopReason: StopReason; lastMessage: Message; structuredOutput?: unknown }) {
     this.stopReason = data.stopReason
     this.lastMessage = data.lastMessage
-    this.structuredOutput = data.structuredOutput
+    if (data.structuredOutput !== undefined) {
+      this.structuredOutput = data.structuredOutput
+    }
   }
 
   /**
