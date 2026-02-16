@@ -9,6 +9,8 @@ const MANIFEST = 'manifest.json'
 const SNAPSHOT_LATEST = 'snapshot_latest.json'
 const IMMUTABLE_HISTORY = 'immutable_history/'
 const SNAPSHOT_REGEX = /snapshot_(\d+)\.json$/
+const SCHEMA_VERSION = '1.0'
+const DEFAULT_SNAPSHOT_ID = '1'
 
 /**
  * Configuration options for S3Storage
@@ -127,8 +129,8 @@ export class S3Storage implements SnapshotStorage {
     const key = this.getKey(params.sessionId, params.scope, MANIFEST)
     return (
       (await this.readJSON<SnapshotManifest>(key)) ?? {
-        schemaVersion: 1,
-        nextSnapshotId: '1',
+        schemaVersion: SCHEMA_VERSION,
+        nextSnapshotId: DEFAULT_SNAPSHOT_ID,
         updatedAt: new Date().toISOString(),
       }
     )

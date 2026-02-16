@@ -13,7 +13,7 @@ export type Scope = { kind: 'agent'; agentId: string } | { kind: 'multiAgent'; m
  */
 export interface Snapshot {
   /** Schema version for forward/backward compatibility */
-  schemaVersion: number
+  schemaVersion: string
   /** Scope of the snapshot (agent or multi-agent) */
   scope: Scope
   /** Snapshot identifier (e.g., "1", "2", or custom string IDs for future extensibility) */
@@ -34,7 +34,7 @@ export interface Snapshot {
  */
 export interface SnapshotManifest {
   /** Schema version for forward/backward compatibility */
-  schemaVersion: number
+  schemaVersion: string
   /** Next available snapshot ID for allocation */
   nextSnapshotId: string
   /** ISO 8601 timestamp of last manifest update */

@@ -395,7 +395,7 @@ describe('S3Storage', () => {
         const result = await storage.loadManifest({ sessionId, scope })
 
         expect(result).toEqual({
-          schemaVersion: 1,
+          schemaVersion: '1.0',
           nextSnapshotId: '1',
           updatedAt: expect.any(String),
         })

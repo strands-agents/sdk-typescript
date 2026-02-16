@@ -3,7 +3,7 @@ import type { SnapshotStorage } from '../session/index.js'
 
 export function createTestSnapshot(overrides: Partial<Snapshot> = {}): Snapshot {
   return {
-    schemaVersion: 1,
+    schemaVersion: '1.0',
     scope: { kind: 'agent', agentId: 'test-agent' },
     snapshotId: '1',
     messages: [],
@@ -16,7 +16,7 @@ export function createTestSnapshot(overrides: Partial<Snapshot> = {}): Snapshot 
 
 export function createTestManifest(overrides: Partial<SnapshotManifest> = {}): SnapshotManifest {
   return {
-    schemaVersion: 1,
+    schemaVersion: '1.0',
     nextSnapshotId: '2',
     updatedAt: '2024-01-01T00:00:00.000Z',
     ...overrides,
@@ -103,7 +103,7 @@ export class MockSnapshotStorage implements SnapshotStorage {
     const key = this.getManifestKey(params.sessionId, params.scope)
     return (
       this.manifests.get(key) ?? {
-        schemaVersion: 1,
+        schemaVersion: '1',
         nextSnapshotId: '1',
         updatedAt: new Date().toISOString(),
       }
