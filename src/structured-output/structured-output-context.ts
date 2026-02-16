@@ -1,6 +1,4 @@
 import { z } from 'zod'
-import type { Message } from '../types/messages.js'
-import { ToolUseBlock } from '../types/messages.js'
 import type { ToolRegistry } from '../registry/tool-registry.js'
 import { StructuredOutputTool } from './structured-output-tool.js'
 import { getToolNameFromSchema } from './structured-output-utils.js'
@@ -12,7 +10,6 @@ import { getToolNameFromSchema } from './structured-output-utils.js'
 export interface IStructuredOutputContext {
   registerTool(registry: ToolRegistry): void
   storeResult(toolUseId: string, result: unknown): void
-  extractResultFromMessage(message: Message): unknown | undefined
   hasResult(): boolean
   getResult(): unknown | undefined
   getToolName(): string
@@ -35,10 +32,6 @@ export class NullStructuredOutputContext implements IStructuredOutputContext {
     // No-op
   }
 
-  extractResultFromMessage(_message: Message): unknown | undefined {
-    return undefined
-  }
-
   hasResult(): boolean {
     return true // Always "has result" to skip forcing logic
   }
@@ -59,10 +52,6 @@ export class NullStructuredOutputContext implements IStructuredOutputContext {
 /**
  * Context for managing structured output tool lifecycle per-invocation.
  * Handles tool registration, result storage, and cleanup.
- *
- * Uses a two-phase storage pattern:
- * 1. Phase 1 (Store): During tool execution, results are stored in temporary storage
- * 2. Phase 2 (Extract): After all tools execute, the result is extracted from temporary storage
  */
 export class StructuredOutputContext implements IStructuredOutputContext {
   readonly isEnabled = true
@@ -70,10 +59,7 @@ export class StructuredOutputContext implements IStructuredOutputContext {
   private _schema: z.ZodSchema
   // The `| undefined` is needed for `exactOptionalPropertyTypes` since we assign undefined in cleanup()
   private _tool?: StructuredOutputTool | undefined
-
-  // Two-phase storage
-  private _temporaryStorage: Map<string, unknown> = new Map() // Phase 1: Store
-  private _extractedResult: unknown = undefined // Phase 2: Extract
+  private _result: unknown = undefined
 
   /**
    * Creates a new StructuredOutputContext.
@@ -98,54 +84,32 @@ export class StructuredOutputContext implements IStructuredOutputContext {
   }
 
   /**
-   * Phase 1: Stores the validated result from the structured output tool.
-   * Results are stored in temporary storage until extracted.
+   * Stores the validated result from the structured output tool.
+   * If called multiple times, only the latest result is kept.
    *
-   * @param toolUseId - The tool use ID
+   * @param toolUseId - The tool use ID (unused, kept for interface compatibility)
    * @param result - The validated result
    */
   storeResult(toolUseId: string, result: unknown): void {
-    this._temporaryStorage.set(toolUseId, result)
+    this._result = result
   }
 
   /**
-   * Phase 2: Extracts the result from a message after all tools execute.
-   * Finds tool use blocks in the message and extracts stored results.
+   * Checks if a result has been stored.
    *
-   * @param message - The assistant message containing tool use blocks
-   * @returns The extracted result or undefined if not found
-   */
-  extractResultFromMessage(message: Message): unknown | undefined {
-    const toolUseIds = message.content
-      .filter((block): block is ToolUseBlock => block.type === 'toolUseBlock')
-      .map((block) => block.toolUseId)
-
-    for (const toolUseId of toolUseIds) {
-      if (this._temporaryStorage.has(toolUseId)) {
-        this._extractedResult = this._temporaryStorage.get(toolUseId)
-        this._temporaryStorage.delete(toolUseId)
-        return this._extractedResult
-      }
-    }
-    return undefined
-  }
-
-  /**
-   * Checks if a result has been extracted (used for forcing logic).
-   *
-   * @returns true if a result has been extracted
+   * @returns true if a result has been stored
    */
   hasResult(): boolean {
-    return this._extractedResult !== undefined
+    return this._result !== undefined
   }
 
   /**
-   * Retrieves the extracted result, if available.
+   * Retrieves the stored result, if available.
    *
-   * @returns The validated result or undefined if not yet extracted
+   * @returns The validated result or undefined if not yet stored
    */
   getResult(): unknown | undefined {
-    return this._extractedResult
+    return this._result
   }
 
   /**

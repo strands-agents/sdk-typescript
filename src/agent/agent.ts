@@ -356,10 +356,10 @@ export class Agent implements AgentData {
     const schema = this._structuredOutputSchema
     const context = createStructuredOutputContext(schema)
 
-    try {
-      // Emit event before the loop starts
-      yield new BeforeInvocationEvent({ agent: this })
+    // Emit event before the try block
+    yield new BeforeInvocationEvent({ agent: this })
 
+    try {
       // Register structured output tool
       context.registerTool(this._toolRegistry)
 
@@ -407,9 +407,6 @@ export class Agent implements AgentData {
 
         // Execute tools sequentially
         const toolResultMessage = yield* this.executeTools(modelResult.message, this._toolRegistry)
-
-        // Extract structured output result after all tools execute
-        context.extractResultFromMessage(modelResult.message)
 
         // Add assistant message with tool uses right before adding tool results
         yield await this._appendMessage(modelResult.message)
