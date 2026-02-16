@@ -14,15 +14,17 @@ export function ensureDefined<T>(value: T | null | undefined, fieldName: string)
 }
 
 /**
- * Validates that an identifier does not contain path separators.
+ * Validates that an identifier contains only allowed characters.
+ * Allowed characters: lowercase letters (a-z), numbers (0-9), hyphens (-), and underscores (_)
  *
  * @param id - The identifier to validate
  * @returns The validated identifier
- * @throws Error if identifier contains path separators
+ * @throws Error if identifier contains invalid characters
  */
 export function validateIdentifier(id: string): string {
-  if (id.includes('/') || id.includes('\\')) {
-    throw new Error(`Identifier '${id}' cannot contain path separators`)
+  const validPattern = /^[a-z0-9_-]+$/
+  if (!validPattern.test(id)) {
+    throw new Error(`Identifier '${id}' can only contain lowercase letters, numbers, hyphens, and underscores`)
   }
   return id
 }

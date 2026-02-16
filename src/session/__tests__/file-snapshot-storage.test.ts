@@ -2,7 +2,7 @@ import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest'
 import { promises as fs } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
-import { FileSnapshotStorage } from '../file-snapshot-storage.js'
+import { FileStorage } from '../file-storage.js'
 import { SessionError } from '../../errors.js'
 import {
   createTestSnapshot,
@@ -11,14 +11,14 @@ import {
   createTestSnapshots,
 } from '../../__fixtures__/mock-storage-provider.js'
 
-describe('FileSnapshotStorage', () => {
-  let storage: FileSnapshotStorage
+describe('FileStorage', () => {
+  let storage: FileStorage
   let testDir: string
 
   beforeEach(async () => {
     testDir = join(tmpdir(), `file-storage-test-${Date.now()}-${Math.random().toString(36).slice(2)}`)
     await fs.mkdir(testDir, { recursive: true })
-    storage = new FileSnapshotStorage(testDir)
+    storage = new FileStorage(testDir)
   })
 
   afterEach(async () => {
@@ -33,8 +33,8 @@ describe('FileSnapshotStorage', () => {
     describe('FileSnapshotStorage_When_ValidBaseDir_Then_CreatesInstance', () => {
       it('creates instance with valid base directory', () => {
         const baseDir = '/test/path'
-        const instance = new FileSnapshotStorage(baseDir)
-        expect(instance).toBeInstanceOf(FileSnapshotStorage)
+        const instance = new FileStorage(baseDir)
+        expect(instance).toBeInstanceOf(FileStorage)
       })
     })
   })
@@ -44,9 +44,9 @@ describe('FileSnapshotStorage', () => {
       it('saves snapshot to history file', async () => {
         const sessionId = 'test-session'
         const scope = createTestScope()
-        const snapshot = createTestSnapshot({ sessionId, scope, snapshotId: 1 })
+        const snapshot = createTestSnapshot({ snapshotId: '1' })
 
-        await storage.saveSnapshot(sessionId, scope, false, snapshot)
+        await storage.saveSnapshot({ sessionId, scope, isLatest: false, snapshot })
 
         const historyPath = join(
           testDir,
@@ -65,9 +65,9 @@ describe('FileSnapshotStorage', () => {
       it('saves snapshot as latest when isLatest is true', async () => {
         const sessionId = 'test-session'
         const scope = createTestScope()
-        const snapshot = createTestSnapshot({ sessionId, scope, snapshotId: 1 })
+        const snapshot = createTestSnapshot({ snapshotId: '1' })
 
-        await storage.saveSnapshot(sessionId, scope, true, snapshot)
+        await storage.saveSnapshot({ sessionId, scope, isLatest: true, snapshot })
 
         const latestPath = join(testDir, sessionId, 'scopes', 'agent', 'test-id', 'snapshots', 'snapshot_latest.json')
         const content = await fs.readFile(latestPath, 'utf8')
@@ -77,9 +77,9 @@ describe('FileSnapshotStorage', () => {
       it('creates directories recursively', async () => {
         const sessionId = 'new-session'
         const scope = createTestScope('agent', 'new-agent')
-        const snapshot = createTestSnapshot({ sessionId, scope, snapshotId: 1 })
+        const snapshot = createTestSnapshot({ snapshotId: '1' })
 
-        await storage.saveSnapshot(sessionId, scope, true, snapshot)
+        await storage.saveSnapshot({ sessionId, scope, isLatest: true, snapshot })
 
         const expectedDir = join(testDir, sessionId, 'scopes', 'agent', 'new-agent', 'snapshots')
         const stats = await fs.stat(expectedDir)
@@ -91,11 +91,13 @@ describe('FileSnapshotStorage', () => {
       it('throws SessionError when write fails', async () => {
         const sessionId = 'test-session'
         const scope = createTestScope()
-        const snapshot = createTestSnapshot({ sessionId, scope, snapshotId: 1 })
+        const snapshot = createTestSnapshot({ snapshotId: '1' })
 
         vi.spyOn(fs, 'writeFile').mockRejectedValueOnce(new Error('Write failed'))
 
-        await expect(storage.saveSnapshot(sessionId, scope, false, snapshot)).rejects.toThrow(SessionError)
+        await expect(storage.saveSnapshot({ sessionId, scope, isLatest: false, snapshot })).rejects.toThrow(
+          SessionError
+        )
       })
     })
 
@@ -103,9 +105,9 @@ describe('FileSnapshotStorage', () => {
       it('saves multi-agent snapshot to correct path', async () => {
         const sessionId = 'multi-session'
         const scope = createTestScope('multiAgent', 'graph-1')
-        const snapshot = createTestSnapshot({ sessionId, scope, snapshotId: 1 })
+        const snapshot = createTestSnapshot({ snapshotId: '1' })
 
-        await storage.saveSnapshot(sessionId, scope, true, snapshot)
+        await storage.saveSnapshot({ sessionId, scope, isLatest: true, snapshot })
 
         const expectedPath = join(
           testDir,
@@ -127,10 +129,10 @@ describe('FileSnapshotStorage', () => {
       it('loads latest snapshot when snapshotId is null', async () => {
         const sessionId = 'test-session'
         const scope = createTestScope()
-        const snapshot = createTestSnapshot({ sessionId, scope, snapshotId: 1 })
-        await storage.saveSnapshot(sessionId, scope, true, snapshot)
+        const snapshot = createTestSnapshot({ snapshotId: '1' })
+        await storage.saveSnapshot({ sessionId, scope, isLatest: true, snapshot })
 
-        const result = await storage.loadSnapshot(sessionId, scope, null)
+        const result = await storage.loadSnapshot({ sessionId, scope, snapshotId: null })
 
         expect(result).toEqual(snapshot)
       })
@@ -140,10 +142,10 @@ describe('FileSnapshotStorage', () => {
       it('loads specific snapshot by ID', async () => {
         const sessionId = 'test-session'
         const scope = createTestScope()
-        const snapshot = createTestSnapshot({ sessionId, scope, snapshotId: 5 })
-        await storage.saveSnapshot(sessionId, scope, false, snapshot)
+        const snapshot = createTestSnapshot({ snapshotId: '5' })
+        await storage.saveSnapshot({ sessionId, scope, isLatest: false, snapshot })
 
-        const result = await storage.loadSnapshot(sessionId, scope, 5)
+        const result = await storage.loadSnapshot({ sessionId, scope, snapshotId: '5' })
 
         expect(result).toEqual(snapshot)
       })
@@ -154,7 +156,7 @@ describe('FileSnapshotStorage', () => {
         const sessionId = 'nonexistent-session'
         const scope = createTestScope()
 
-        const result = await storage.loadSnapshot(sessionId, scope, null)
+        const result = await storage.loadSnapshot({ sessionId, scope, snapshotId: null })
 
         expect(result).toBeNull()
       })
@@ -169,7 +171,7 @@ describe('FileSnapshotStorage', () => {
         await fs.mkdir(join(testDir, sessionId, 'scopes', 'agent', 'test-id', 'snapshots'), { recursive: true })
         await fs.writeFile(filePath, 'invalid json', 'utf8')
 
-        await expect(storage.loadSnapshot(sessionId, scope, null)).rejects.toThrow(SessionError)
+        await expect(storage.loadSnapshot({ sessionId, scope, snapshotId: null })).rejects.toThrow(SessionError)
       })
     })
 
@@ -180,32 +182,32 @@ describe('FileSnapshotStorage', () => {
 
         vi.spyOn(fs, 'readFile').mockRejectedValueOnce(new Error('Permission denied'))
 
-        await expect(storage.loadSnapshot(sessionId, scope, null)).rejects.toThrow(SessionError)
+        await expect(storage.loadSnapshot({ sessionId, scope, snapshotId: null })).rejects.toThrow(SessionError)
       })
     })
   })
 
-  describe('listSnapshot', () => {
+  describe('listSnapshots', () => {
     describe('FileSnapshotStorage_When_listSnapshots_Then_ReturnsOrderedIds', () => {
       it('returns sorted snapshot IDs', async () => {
         const sessionId = 'test-session'
         const scope = createTestScope()
-        const snapshots = createTestSnapshots(3, { sessionId, scope })
+        const snapshots = createTestSnapshots(3)
 
-        await storage.saveSnapshot(sessionId, scope, false, snapshots[2]!)
-        await storage.saveSnapshot(sessionId, scope, false, snapshots[0]!)
-        await storage.saveSnapshot(sessionId, scope, false, snapshots[1]!)
+        await storage.saveSnapshot({ sessionId, scope, isLatest: false, snapshot: snapshots[2]! })
+        await storage.saveSnapshot({ sessionId, scope, isLatest: false, snapshot: snapshots[0]! })
+        await storage.saveSnapshot({ sessionId, scope, isLatest: false, snapshot: snapshots[1]! })
 
-        const result = await storage.listSnapshot(sessionId, scope)
+        const result = await storage.listSnapshots({ sessionId, scope })
 
-        expect(result).toEqual([1, 2, 3])
+        expect(result).toEqual(['00001', '00002', '00003'])
       })
 
       it('returns empty array when no snapshots exist', async () => {
         const sessionId = 'empty-session'
         const scope = createTestScope()
 
-        const result = await storage.listSnapshot(sessionId, scope)
+        const result = await storage.listSnapshots({ sessionId, scope })
 
         expect(result).toEqual([])
       })
@@ -213,15 +215,15 @@ describe('FileSnapshotStorage', () => {
       it('ignores non-snapshot files', async () => {
         const sessionId = 'test-session'
         const scope = createTestScope()
-        const snapshot = createTestSnapshot({ sessionId, scope, snapshotId: 1 })
-        await storage.saveSnapshot(sessionId, scope, false, snapshot)
+        const snapshot = createTestSnapshot({ snapshotId: '1' })
+        await storage.saveSnapshot({ sessionId, scope, isLatest: false, snapshot })
 
         const historyDir = join(testDir, sessionId, 'scopes', 'agent', 'test-id', 'snapshots', 'immutable_history')
         await fs.writeFile(join(historyDir, 'other-file.txt'), 'not a snapshot', 'utf8')
 
-        const result = await storage.listSnapshot(sessionId, scope)
+        const result = await storage.listSnapshots({ sessionId, scope })
 
-        expect(result).toEqual([1])
+        expect(result).toEqual(['00001'])
       })
     })
 
@@ -230,7 +232,7 @@ describe('FileSnapshotStorage', () => {
         const sessionId = 'nonexistent-session'
         const scope = createTestScope()
 
-        const result = await storage.listSnapshot(sessionId, scope)
+        const result = await storage.listSnapshots({ sessionId, scope })
 
         expect(result).toEqual([])
       })
@@ -243,7 +245,7 @@ describe('FileSnapshotStorage', () => {
 
         vi.spyOn(fs, 'readdir').mockRejectedValueOnce(new Error('Permission denied'))
 
-        await expect(storage.listSnapshot(sessionId, scope)).rejects.toThrow(SessionError)
+        await expect(storage.listSnapshots({ sessionId, scope })).rejects.toThrow(SessionError)
       })
     })
   })
@@ -299,7 +301,7 @@ describe('FileSnapshotStorage', () => {
 
         expect(result).toEqual({
           schemaVersion: 1,
-          nextSnapshotId: 1,
+          nextSnapshotId: '1',
           updatedAt: expect.any(String),
         })
       })
