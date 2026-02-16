@@ -183,7 +183,7 @@ const PersonSchema = z.object({
 
 // Configure structured output at the agent level
 const agent = new Agent({ 
-  structuredOutputModel: PersonSchema 
+  structuredOutputSchema: PersonSchema 
 })
 
 const result = await agent.invoke('John Smith is a 30 year-old software engineer')

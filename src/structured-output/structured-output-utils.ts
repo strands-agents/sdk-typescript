@@ -1,5 +1,4 @@
 import { z } from 'zod'
-import type { JSONSchema } from '../types/json.js'
 import type { ToolSpec } from '../tools/types.js'
 import { StructuredOutputException } from './exceptions.js'
 import { zodSchemaToJsonSchema } from '../utils/zod-utils.js'
