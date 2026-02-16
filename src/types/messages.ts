@@ -152,6 +152,12 @@ export interface ToolUseBlockData {
    * This can be any JSON-serializable value.
    */
   input: JSONValue
+
+  /**
+   * Reasoning signature from thinking models (e.g., Gemini).
+   * Must be preserved and sent back to the model for multi-turn tool use.
+   */
+  reasoningSignature?: string
 }
 
 /**
@@ -179,10 +185,19 @@ export class ToolUseBlock implements ToolUseBlockData {
    */
   readonly input: JSONValue
 
+  /**
+   * Reasoning signature from thinking models (e.g., Gemini).
+   * Must be preserved and sent back to the model for multi-turn tool use.
+   */
+  readonly reasoningSignature?: string
+
   constructor(data: ToolUseBlockData) {
     this.name = data.name
     this.toolUseId = data.toolUseId
     this.input = data.input
+    if (data.reasoningSignature !== undefined) {
+      this.reasoningSignature = data.reasoningSignature
+    }
   }
 }
 

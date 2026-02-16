@@ -290,6 +290,12 @@ export interface ToolUseStart {
    * Unique identifier for this tool use.
    */
   toolUseId: string
+
+  /**
+   * Reasoning signature from thinking models (e.g., Gemini).
+   * Must be preserved and sent back to the model for multi-turn tool use.
+   */
+  reasoningSignature?: string
 }
 
 /**

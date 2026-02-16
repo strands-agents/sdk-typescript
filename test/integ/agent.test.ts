@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { Agent, DocumentBlock, ImageBlock, Message, TextBlock, VideoBlock, tool } from '@strands-agents/sdk'
+import {
+  Agent,
+  DocumentBlock,
+  ImageBlock,
+  Message,
+  TextBlock,
+  ToolUseBlock,
+  VideoBlock,
+  tool,
+} from '@strands-agents/sdk'
 import { notebook } from '@strands-agents/sdk/vended_tools/notebook'
 import { httpRequest } from '@strands-agents/sdk/vended_tools/http_request'
 import { z } from 'zod'
@@ -7,9 +16,9 @@ import { z } from 'zod'
 import { collectGenerator } from '$/sdk/__fixtures__/model-test-helpers.js'
 import { loadFixture } from './__fixtures__/test-helpers.js'
 // Import fixtures using Vite's ?url suffix
+import yellowMp4Url from './__resources__/yellow.mp4?url'
 import yellowPngUrl from './__resources__/yellow.png?url'
 import letterPdfUrl from './__resources__/letter.pdf?url'
-import orangeMp4Url from './__resources__/orange.mp4?url'
 import { allProviders } from './__fixtures__/model-providers.js'
 
 // Calculator tool for testing
@@ -63,6 +72,9 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel, mode
         const textContent = result.lastMessage.content.find((block) => block.type === 'textBlock')
         expect(textContent).toBeDefined()
         expect(textContent?.text).toMatch(/56088/)
+
+        // Validate multi-turn works after tool use
+        await collectGenerator(agent.stream('What was the result?'))
       })
 
       it('yields metadata events through the agent stream', async () => {
@@ -222,7 +234,7 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel, mode
     })
 
     it.skipIf(!supports.video)('handles video input', async () => {
-      const videoBytes = await loadFixture(orangeMp4Url)
+      const videoBytes = await loadFixture(yellowMp4Url)
       const videoBlock = new VideoBlock({
         format: 'mp4',
         source: { bytes: videoBytes },
@@ -234,17 +246,14 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel, mode
       })
 
       const result = await agent.invoke([
-        new TextBlock(
-          "This video shows a solid color. What color is it? Answer in one word. If you cannot tell, respond with just 'UNKNOWN'."
-        ),
+        new TextBlock('What color is shown in this video? Answer in one word.'),
         videoBlock,
       ])
 
       expect(result.stopReason).toBe('endTurn')
       const textContent = result.lastMessage.content.find((block) => block.type === 'textBlock')
       expect(textContent).toBeDefined()
-      // Amazon orange (#FF9900) can be perceived differently by various models
-      expect(textContent?.text).toMatch(/orange|yellow|red|amber|gold/i)
+      expect(textContent?.text).toMatch(/yellow/i)
     })
 
     describe.skipIf(!supports.images)('multimodal input', () => {
@@ -322,6 +331,9 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel, mode
           message.content.some((block) => block.type == 'toolUseBlock' && block.name == 'http_request')
         )
       ).toBe(true)
+
+      // Validate multi-turn works after tool use
+      await collectGenerator(agent.stream('What was the result?'))
     })
 
     it.skipIf(!supports.reasoning)('emits reasoning content with thinking model', async () => {
@@ -344,6 +356,64 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel, mode
       const textContent = result.lastMessage.content.find((block) => block.type === 'textBlock')
       expect(textContent).toBeDefined()
       expect(textContent?.text).toContain('345')
+    })
+
+    it.skipIf(!supports.toolThinking)('handles tool use with thinking model', async () => {
+      const agent = new Agent({
+        model: createModel(models.reasoning),
+        printer: false,
+        systemPrompt: 'Use the calculator tool to solve math problems. Respond with only the numeric result.',
+        tools: [calculatorTool],
+      })
+
+      const { items, result } = await collectGenerator(agent.stream('What is 789 * 321?'))
+
+      // Should have reasoning content deltas
+      const reasoningDeltas = items.filter(
+        (item) =>
+          item.type === 'modelContentBlockDeltaEvent' && 'delta' in item && item.delta.type === 'reasoningContentDelta'
+      )
+      expect(reasoningDeltas.length).toBeGreaterThan(0)
+
+      // Should have used the calculator tool
+      const toolUseMessage = agent.messages.find((msg) =>
+        msg.content.some((block) => block.type === 'toolUseBlock' && block.name === 'calculator')
+      )
+      expect(toolUseMessage).toBeDefined()
+
+      // Verify reasoningSignature is present on tool use block
+      const toolUseBlock = toolUseMessage!.content.find(
+        (block): block is ToolUseBlock => block.type === 'toolUseBlock' && block.name === 'calculator'
+      )
+      expect(toolUseBlock?.reasoningSignature).toBeDefined()
+
+      // Should contain the correct result (789 * 321 = 253269)
+      expect(result.stopReason).toBe('endTurn')
+      const textContent = result.lastMessage.content.find((block) => block.type === 'textBlock')
+      expect(textContent).toBeDefined()
+      expect(textContent?.text).toMatch(/253269/)
+
+      // Validate multi-turn works after tool use
+      await collectGenerator(agent.stream('What was the result?'))
+    })
+
+    it.skipIf(!supports.builtInTools)('handles built-in tools (code execution)', async () => {
+      const agent = new Agent({
+        model: createModel('builtInTools' in models ? models.builtInTools : {}),
+        printer: false,
+      })
+
+      const result = await agent.invoke([
+        new TextBlock('What is the sum of the first 50 prime numbers? Generate and run code to calculate it.'),
+      ])
+
+      expect(result.stopReason).toBe('endTurn')
+      const textContent = result.lastMessage.content.find((block) => block.type === 'textBlock')
+      expect(textContent).toBeDefined()
+      expect(textContent?.text).toMatch(/5117/)
+
+      // Validate multi-turn works after built-in tool use
+      await collectGenerator(agent.stream('What was the result?'))
     })
   })
 })

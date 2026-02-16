@@ -8,9 +8,17 @@ import {
   type Content,
   type GenerateContentResponse,
   type Part,
+  FunctionResponse,
   FinishReason as GeminiFinishReason,
 } from '@google/genai'
-import type { Message, StopReason, ContentBlock, ReasoningBlock } from '../../types/messages.js'
+import type {
+  Message,
+  StopReason,
+  ContentBlock,
+  ReasoningBlock,
+  ToolUseBlock,
+  ToolResultBlock,
+} from '../../types/messages.js'
 import type { ModelStreamEvent } from '../streaming.js'
 import type { GeminiStreamState } from './types.js'
 import { encodeBase64, getMimeType, type ImageBlock, type DocumentBlock, type VideoBlock } from '../../types/media.js'
@@ -19,7 +27,8 @@ import { logger } from '../../logging/logger.js'
 /**
  * Mapping of Gemini finish reasons to SDK stop reasons.
  * Only MAX_TOKENS needs explicit mapping; everything else defaults to endTurn.
- * TOOL_USE is handled separately via hasToolCalls flag.
+ * Tool use stop reason is determined by the hasToolCalls flag in GeminiStreamState,
+ * since Gemini does not have a tool use finish reason.
  *
  * @internal
  */
@@ -42,11 +51,21 @@ export const FINISH_REASON_MAP: Partial<Record<GeminiFinishReason, StopReason>> 
 export function formatMessages(messages: Message[]): Content[] {
   const contents: Content[] = []
 
+  // Build toolUseId → name mapping for resolving tool result names
+  const toolUseIdToName = new Map<string, string>()
+  for (const message of messages) {
+    for (const block of message.content) {
+      if (block.type === 'toolUseBlock') {
+        toolUseIdToName.set(block.toolUseId, block.name)
+      }
+    }
+  }
+
   for (const message of messages) {
     const parts: Part[] = []
 
     for (const block of message.content) {
-      parts.push(...formatContentBlock(block))
+      parts.push(...formatContentBlock(block, toolUseIdToName))
     }
 
     if (parts.length > 0) {
@@ -68,7 +87,7 @@ export function formatMessages(messages: Message[]): Content[] {
  *
  * @internal
  */
-function formatContentBlock(block: ContentBlock): Part[] {
+function formatContentBlock(block: ContentBlock, toolUseIdToName: Map<string, string>): Part[] {
   switch (block.type) {
     case 'textBlock':
       return [{ text: block.text }]
@@ -85,17 +104,18 @@ function formatContentBlock(block: ContentBlock): Part[] {
     case 'videoBlock':
       return formatVideoBlock(block)
 
+    case 'toolUseBlock':
+      return formatToolUseBlock(block)
+
+    case 'toolResultBlock':
+      return formatToolResultBlock(block, toolUseIdToName)
+
     case 'cachePointBlock':
       logger.warn('block_type=<cachePointBlock> | cache points not supported by gemini, skipping')
       return []
 
     case 'guardContentBlock':
       logger.warn('block_type=<guardContentBlock> | guard content not supported by gemini, skipping')
-      return []
-
-    case 'toolUseBlock':
-    case 'toolResultBlock':
-      logger.warn(`block_type=<${block.type}> | tool blocks not yet supported by gemini, skipping`)
       return []
 
     default:
@@ -211,6 +231,54 @@ function formatVideoBlock(block: VideoBlock): Part[] {
   }
 }
 
+/**
+ * Formats a tool use block to a Gemini Part.
+ *
+ * @param block - Tool use block to format
+ * @returns Array of Gemini Parts with functionCall
+ *
+ * @internal
+ */
+function formatToolUseBlock(block: ToolUseBlock): Part[] {
+  return [
+    {
+      functionCall: {
+        id: block.toolUseId,
+        name: block.name,
+        args: block.input as Record<string, unknown>,
+      },
+      ...(block.reasoningSignature && { thoughtSignature: block.reasoningSignature }),
+    },
+  ]
+}
+
+/**
+ * Formats a tool result block to a Gemini Part.
+ *
+ * @param block - Tool result block to format
+ * @param toolUseIdToName - Mapping from tool use IDs to tool names
+ * @returns Array of Gemini Parts with functionResponse
+ *
+ * @internal
+ */
+function formatToolResultBlock(block: ToolResultBlock, toolUseIdToName: Map<string, string>): Part[] {
+  const functionResponse = new FunctionResponse()
+  functionResponse.id = block.toolUseId
+  functionResponse.name = toolUseIdToName.get(block.toolUseId) ?? block.toolUseId
+  functionResponse.response = {
+    output: block.content.map((c) => {
+      switch (c.type) {
+        case 'textBlock':
+          return { text: c.text }
+        case 'jsonBlock':
+          return { json: c.json }
+      }
+    }),
+  }
+
+  return [{ functionResponse }]
+}
+
 // =============================================================================
 // Gemini → Strands
 // =============================================================================
@@ -258,7 +326,45 @@ export function mapChunkToEvents(chunk: GenerateContentResponse, streamState: Ge
   const content = candidate.content
   if (content && content.parts) {
     for (const part of content.parts) {
-      // Only process parts that have text content
+      // Handle function call parts
+      if (part.functionCall) {
+        // Close any open text/reasoning blocks before tool use
+        if (streamState.textContentBlockStarted) {
+          events.push({ type: 'modelContentBlockStopEvent' })
+          streamState.textContentBlockStarted = false
+        }
+        if (streamState.reasoningContentBlockStarted) {
+          events.push({ type: 'modelContentBlockStopEvent' })
+          streamState.reasoningContentBlockStarted = false
+        }
+
+        const toolUseId = part.functionCall.id || `tooluse_${globalThis.crypto.randomUUID()}`
+
+        events.push({
+          type: 'modelContentBlockStartEvent',
+          start: {
+            type: 'toolUseStart',
+            name: part.functionCall.name!,
+            toolUseId,
+            ...(part.thoughtSignature && { reasoningSignature: part.thoughtSignature }),
+          },
+        })
+
+        events.push({
+          type: 'modelContentBlockDeltaEvent',
+          delta: {
+            type: 'toolUseInputDelta',
+            input: JSON.stringify(part.functionCall.args ?? {}),
+          },
+        })
+
+        events.push({ type: 'modelContentBlockStopEvent' })
+
+        streamState.hasToolCalls = true
+        continue
+      }
+
+      // Handle text and reasoning parts
       if ('text' in part && part.text) {
         const isThought = 'thought' in part && part.thought === true
 
@@ -324,7 +430,7 @@ export function mapChunkToEvents(chunk: GenerateContentResponse, streamState: Ge
       streamState.reasoningContentBlockStarted = false
     }
 
-    const stopReason = FINISH_REASON_MAP[finishReason] || 'endTurn'
+    const stopReason = streamState.hasToolCalls ? 'toolUse' : FINISH_REASON_MAP[finishReason] || 'endTurn'
 
     events.push({
       type: 'modelMessageStopEvent',
