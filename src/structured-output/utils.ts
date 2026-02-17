@@ -83,6 +83,7 @@ function hasUnsupportedFeatures(schema: z.ZodSchema): boolean {
     }
 
     // superRefine() creates checks without 'type' at object/array level
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     if ((def.type === 'object' || def.type === 'array') && def.checks.some((c: any) => !c.type)) {
       return true
     }
