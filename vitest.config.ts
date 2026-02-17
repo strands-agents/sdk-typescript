@@ -29,7 +29,6 @@ export default defineConfig({
             'src/vended-tools/**/__tests__/**/*.test.ts',
             'src/vended-tools/**/__tests__/**/*.test.node.ts',
           ],
-          exclude: ['src/**/__tests__/**/*.test.browser.ts', 'src/vended-tools/**/__tests__/**/*.test.browser.ts'],
           includeSource: ['src/**/*.{js,ts}'],
           name: { label: 'unit-node', color: 'green' },
           typecheck: {
@@ -41,8 +40,12 @@ export default defineConfig({
       },
       {
         test: {
-          include: ['src/**/__tests__/**/*.test.ts', 'src/**/__tests__/**/*.test.browser.ts'],
-          exclude: ['src/**/__tests__/**/*.test.node.ts', 'src/vended-tools/**/__tests__/**/*.test.node.ts'],
+          include: [
+            'src/**/__tests__/**/*.test.ts',
+            'src/**/__tests__/**/*.test.browser.ts',
+            'src/vended-tools/**/__tests__/**/*.test.ts',
+            'src/vended-tools/**/__tests__/**/*.test.browser.ts',
+          ],
           name: { label: 'unit-browser', color: 'cyan' },
           browser: {
             enabled: true,
