@@ -885,7 +885,12 @@ describe('Agent', () => {
       const schema = z.object({ name: z.string(), age: z.number() })
 
       const model = new MockMessageModel()
-        .addTurn({ type: 'toolUseBlock', name: 'StructuredOutput', toolUseId: 'tool-1', input: { name: 'John', age: 30 } })
+        .addTurn({
+          type: 'toolUseBlock',
+          name: 'StructuredOutput',
+          toolUseId: 'tool-1',
+          input: { name: 'John', age: 30 },
+        })
         .addTurn({ type: 'textBlock', text: 'Done' })
 
       const agent = new Agent({ model, structuredOutputSchema: schema })
@@ -940,8 +945,18 @@ describe('Agent', () => {
       const schema = z.object({ name: z.string(), age: z.number() })
 
       const model = new MockMessageModel()
-        .addTurn({ type: 'toolUseBlock', name: 'StructuredOutput', toolUseId: 'tool-1', input: { name: 'John', age: 'invalid' } })
-        .addTurn({ type: 'toolUseBlock', name: 'StructuredOutput', toolUseId: 'tool-2', input: { name: 'John', age: 30 } })
+        .addTurn({
+          type: 'toolUseBlock',
+          name: 'StructuredOutput',
+          toolUseId: 'tool-1',
+          input: { name: 'John', age: 'invalid' },
+        })
+        .addTurn({
+          type: 'toolUseBlock',
+          name: 'StructuredOutput',
+          toolUseId: 'tool-2',
+          input: { name: 'John', age: 30 },
+        })
         .addTurn({ type: 'textBlock', text: 'Done' })
 
       const agent = new Agent({ model, structuredOutputSchema: schema })
@@ -1001,7 +1016,12 @@ describe('Agent', () => {
       })
 
       const model = new MockMessageModel()
-        .addTurn({ type: 'toolUseBlock', name: 'StructuredOutput', toolUseId: 'tool-1', input: { user: { name: 'Alice', age: 25 } } })
+        .addTurn({
+          type: 'toolUseBlock',
+          name: 'StructuredOutput',
+          toolUseId: 'tool-1',
+          input: { user: { name: 'Alice', age: 25 } },
+        })
         .addTurn({ type: 'textBlock', text: 'Done' })
 
       const agent = new Agent({ model, structuredOutputSchema: schema })
@@ -1018,7 +1038,12 @@ describe('Agent', () => {
       })
 
       const model = new MockMessageModel()
-        .addTurn({ type: 'toolUseBlock', name: 'StructuredOutput', toolUseId: 'tool-1', input: { items: ['a', 'b', 'c'] } })
+        .addTurn({
+          type: 'toolUseBlock',
+          name: 'StructuredOutput',
+          toolUseId: 'tool-1',
+          input: { items: ['a', 'b', 'c'] },
+        })
         .addTurn({ type: 'textBlock', text: 'Done' })
 
       const agent = new Agent({ model, structuredOutputSchema: schema })

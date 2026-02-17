@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import {
-  StructuredOutputContext,
-  NullStructuredOutputContext,
-  createStructuredOutputContext,
-} from '../context.js'
+import { StructuredOutputContext, NullStructuredOutputContext, createStructuredOutputContext } from '../context.js'
 import { ToolRegistry } from '../../registry/tool-registry.js'
 import { StructuredOutputTool } from '../tool.js'
 
@@ -215,7 +211,7 @@ describe('StructuredOutputContext', () => {
       context.registerTool(registry)
       context.cleanup(registry)
       expect(registry.values().length).toBe(0)
-      
+
       context.cleanup(registry)
       expect(registry.values().length).toBe(0)
     })
