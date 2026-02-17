@@ -6,13 +6,16 @@ import { zodSchemaToJsonSchema } from '../utils/zod-utils.js'
 /**
  * Converts a Zod schema to a complete tool specification.
  *
+ * Validates that the schema doesn't contain refinements or transforms, which cannot be
+ * properly represented in JSON Schema. Refinements are silently dropped by z.toJSONSchema(),
+ * creating a mismatch between what the LLM sees and what validation enforces.
+ *
  * @param schema - The Zod schema to convert
  * @param toolName - The name to use for the tool
  * @returns Complete tool specification
  * @throws StructuredOutputException if the schema contains unsupported features
  */
 export function convertSchemaToToolSpec(schema: z.ZodSchema, toolName: string): ToolSpec {
-  // Check for unsupported features (refinements and transforms)
   if (hasUnsupportedFeatures(schema)) {
     throw new StructuredOutputException(
       'Zod refinements and transforms are not supported in structured output schemas. Please use basic validation types only.'
@@ -52,6 +55,7 @@ export function getSchemaDescription(schema: z.ZodSchema): string {
 
 /**
  * Checks if a Zod schema contains unsupported features like refinements or transforms.
+ * These features cannot be properly represented in JSON Schema for the LLM.
  *
  * @param schema - The Zod schema to check
  * @returns true if unsupported features are detected
@@ -64,69 +68,49 @@ function hasUnsupportedFeatures(schema: z.ZodSchema): boolean {
     return false
   }
 
-  // Check for transforms (pipe type in Zod v4)
-  if (def.type === 'pipe') {
-    // Check if the output is a transform
-    if (def.out && def.out.type === 'transform') {
+  // Check for transforms
+  if (def.type === 'pipe' || def.type === 'transform') {
+    return true
+  }
+
+  // Check for refinements
+  if (def.checks?.length > 0) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const check of def.checks as any[]) {
+      if (check.type === 'custom') {
+        return true
+      }
+    }
+
+    // superRefine() creates checks without 'type' at object/array level
+    if ((def.type === 'object' || def.type === 'array') && def.checks.some((c: any) => !c.type)) {
       return true
     }
   }
 
-  // Check for transforms directly
-  if (def.type === 'transform') {
-    return true
-  }
+  // Collect nested schemas to check recursively
+  const nested: unknown[] = []
 
-  // Check for refinements (custom checks in Zod v4)
-  if (def.checks && Array.isArray(def.checks)) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    for (const check of def.checks as any[]) {
-      if (check.type === 'custom' || check.def?.type === 'custom') {
-        return true
-      }
-    }
-  }
+  if (def.innerType) nested.push(def.innerType)
+  if (def.in) nested.push(def.in)
+  if (def.out) nested.push(def.out)
+  if (def.element) nested.push(def.element)
+  if (def.type) nested.push(def.type)
 
-  // Check for ZodEffects (legacy Zod v3 style)
-  if (def.typeName === 'ZodEffects') {
-    return true
-  }
-
-  // Recursively check wrapped/inner types
-  if (def.innerType && typeof def.innerType === 'object' && '_def' in def.innerType) {
-    return hasUnsupportedFeatures(def.innerType)
-  }
-
-  // Check pipe input/output
-  if (def.in && typeof def.in === 'object' && '_def' in def.in) {
-    if (hasUnsupportedFeatures(def.in)) return true
-  }
-  if (def.out && typeof def.out === 'object' && '_def' in def.out) {
-    if (hasUnsupportedFeatures(def.out)) return true
-  }
-
-  // Check array element type
-  if (def.type && typeof def.type === 'object' && '_def' in def.type) {
-    return hasUnsupportedFeatures(def.type)
-  }
-
-  // Check object properties
   if (def.shape) {
     const shape = typeof def.shape === 'function' ? def.shape() : def.shape
-    for (const key in shape) {
-      const property = shape[key]
-      if (property && typeof property === 'object' && '_def' in property) {
-        if (hasUnsupportedFeatures(property)) {
-          return true
-        }
-      }
-    }
+    nested.push(...Object.values(shape))
   }
 
-  // Check union options
-  if (def.options && Array.isArray(def.options)) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return (def.options as any[]).some((option) => hasUnsupportedFeatures(option))
+  if (def.options) {
+    nested.push(...def.options)
+  }
+
+  // Check all nested schemas
+  for (const item of nested) {
+    if (item && typeof item === 'object' && '_def' in item && hasUnsupportedFeatures(item as z.ZodSchema)) {
+      return true
+    }
   }
 
   return false
