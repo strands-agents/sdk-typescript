@@ -23,6 +23,7 @@ export {
   MaxTokensError,
   JsonValidationError,
   ConcurrentInvocationError,
+  ModelThrottledError,
 } from './errors.js'
 
 // JSON types
@@ -148,6 +149,7 @@ export type { AgentStreamEvent } from './types/agent.js'
 export {
   HookRegistry,
   HookEvent,
+  InitializedEvent,
   BeforeInvocationEvent,
   AfterInvocationEvent,
   MessageAddedEvent,

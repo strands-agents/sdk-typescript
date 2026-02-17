@@ -41,7 +41,7 @@ import type { ContentBlock, Message, StopReason, ToolUseBlock } from '../types/m
 import type { ImageSource, VideoSource, DocumentSource } from '../types/media.js'
 import type { ModelStreamEvent, ReasoningContentDelta, Usage } from '../models/streaming.js'
 import type { JSONValue } from '../types/json.js'
-import { ContextWindowOverflowError, normalizeError } from '../errors.js'
+import { ContextWindowOverflowError, ModelThrottledError, normalizeError } from '../errors.js'
 import { ensureDefined } from '../types/validation.js'
 import { logger } from '../logging/logger.js'
 
@@ -197,6 +197,13 @@ export interface BedrockModelOptions extends BedrockModelConfig {
    * Configuration for the Bedrock Runtime client.
    */
   clientConfig?: BedrockRuntimeClientConfig
+
+  /**
+   * Amazon Bedrock API key for bearer token authentication.
+   * When provided, requests use the API key instead of SigV4 signing.
+   * @see https://docs.aws.amazon.com/bedrock/latest/userguide/api-keys.html
+   */
+  apiKey?: string
 }
 
 /**
@@ -266,7 +273,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
   constructor(options?: BedrockModelOptions) {
     super()
 
-    const { region, clientConfig, ...modelConfig } = options ?? {}
+    const { region, clientConfig, apiKey, ...modelConfig } = options ?? {}
 
     // Initialize model config with default model ID if not provided
     this._config = {
@@ -286,6 +293,10 @@ export class BedrockModel extends Model<BedrockModelConfig> {
       ...(region ? { region: region } : {}),
       customUserAgent,
     })
+
+    if (apiKey) {
+      applyApiKey(this._client, apiKey)
+    }
 
     applyDefaultRegion(this._client.config)
   }
@@ -985,9 +996,13 @@ export class BedrockModel extends Model<BedrockModelConfig> {
       case 'internalServerException':
       case 'modelStreamErrorException':
       case 'serviceUnavailableException':
-      case 'validationException':
-      case 'throttlingException': {
+      case 'validationException': {
         throw eventData
+      }
+      case 'throttlingException': {
+        const message = (eventData as { message?: string }).message ?? 'Request was throttled by the model provider'
+        logger.debug(`throttled | error_message=<${message}>`)
+        throw new ModelThrottledError(message, { cause: eventData })
       }
       default:
         // Log warning for unsupported event types (for forward compatibility)
@@ -1034,6 +1049,29 @@ export class BedrockModel extends Model<BedrockModelConfig> {
 
     return mappedStopReason
   }
+}
+
+/**
+ * Adds middleware to override the Authorization header with a Bearer token.
+ * Runs after SigV4 signing to replace the signature with the API key.
+ *
+ * @param client - BedrockRuntimeClient instance
+ * @param apiKey - Bedrock API key
+ */
+function applyApiKey(client: BedrockRuntimeClient, apiKey: string): void {
+  client.middlewareStack.add(
+    // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
+    (next) => async (args) => {
+      const request = args.request as { headers: Record<string, string> }
+      request.headers['authorization'] = `Bearer ${apiKey}`
+      return next(args)
+    },
+    {
+      step: 'finalizeRequest',
+      priority: 'low',
+      name: 'bedrockApiKeyMiddleware',
+    }
+  )
 }
 
 /**

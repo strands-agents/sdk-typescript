@@ -8,6 +8,7 @@
 // Event classes
 export {
   HookEvent,
+  InitializedEvent,
   BeforeInvocationEvent,
   AfterInvocationEvent,
   MessageAddedEvent,

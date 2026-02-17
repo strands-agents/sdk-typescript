@@ -30,6 +30,7 @@ import { SlidingWindowConversationManager } from '../conversation-manager/slidin
 import { HookRegistryImplementation } from '../hooks/registry.js'
 import {
   HookEvent,
+  InitializedEvent,
   AfterInvocationEvent,
   AfterModelCallEvent,
   AfterToolCallEvent,
@@ -206,6 +207,8 @@ export class Agent implements AgentData {
         this._toolRegistry.addAll(tools)
       })
     )
+
+    await this.hooks.invokeCallbacks(new InitializedEvent({ agent: this }))
 
     this._initialized = true
   }

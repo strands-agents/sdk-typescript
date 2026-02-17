@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { BedrockRuntimeClient } from '@aws-sdk/client-bedrock-runtime'
 import { isNode } from '../../__fixtures__/environment.js'
 import { BedrockModel } from '../bedrock.js'
-import { ContextWindowOverflowError } from '../../errors.js'
+import { ContextWindowOverflowError, ModelThrottledError } from '../../errors.js'
 import type { Message } from '../../types/messages.js'
 import { TextBlock, GuardContentBlock, CachePointBlock } from '../../types/messages.js'
 import type { StreamOptions } from '../model.js'
@@ -41,6 +41,7 @@ function mockBedrockClientImplementation(options?: {
 
     return {
       send: mockSend,
+      middlewareStack: { add: vi.fn() },
       config: {
         region: mockRegion,
         useFipsEndpoint: mockUseFipsEndpoint,
@@ -122,6 +123,7 @@ vi.mock('@aws-sdk/client-bedrock-runtime', async (importOriginal) => {
     BedrockRuntimeClient: vi.fn(function () {
       return {
         send: mockSend,
+        middlewareStack: { add: vi.fn() },
         config: {
           region: vi.fn(async () => 'us-east-1'),
           useFipsEndpoint: vi.fn(async () => false),
@@ -137,6 +139,15 @@ vi.mock('@aws-sdk/client-bedrock-runtime', async (importOriginal) => {
 describe('BedrockModel', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // Reset mock to a working implementation to ensure test isolation
+    setupMockSend(async function* () {
+      yield { messageStart: { role: 'assistant' } }
+      yield { contentBlockStart: {} }
+      yield { contentBlockDelta: { delta: { text: 'Hello' } } }
+      yield { contentBlockStop: {} }
+      yield { messageStop: { stopReason: 'end_turn' } }
+      yield { metadata: { usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } } }
+    })
     // Clean up AWS_REGION env var in Node.js only
     if (isNode && process.env) {
       delete process.env.AWS_REGION
@@ -202,6 +213,47 @@ describe('BedrockModel', () => {
         region,
         credentials,
         customUserAgent: 'strands-agents-ts-sdk',
+      })
+    })
+
+    it('adds api key middleware when apiKey is provided', () => {
+      const provider = new BedrockModel({ region: 'us-east-1', apiKey: 'br-test-key' })
+      const mockAdd = provider['_client'].middlewareStack.add as ReturnType<typeof vi.fn>
+      expect(mockAdd).toHaveBeenCalledWith(expect.any(Function), {
+        step: 'finalizeRequest',
+        priority: 'low',
+        name: 'bedrockApiKeyMiddleware',
+      })
+    })
+
+    it('does not add api key middleware when apiKey is not provided', () => {
+      const provider = new BedrockModel({ region: 'us-east-1' })
+      const mockAdd = provider['_client'].middlewareStack.add as ReturnType<typeof vi.fn>
+      expect(mockAdd).not.toHaveBeenCalled()
+    })
+
+    it('api key middleware sets authorization header', async () => {
+      const provider = new BedrockModel({ region: 'us-east-1', apiKey: 'br-test-key' })
+      const mockAdd = provider['_client'].middlewareStack.add as ReturnType<typeof vi.fn>
+      const middlewareFn = mockAdd.mock.calls[0]![0] as (
+        next: (args: unknown) => Promise<unknown>
+      ) => (args: unknown) => Promise<unknown>
+
+      const mockNext = vi.fn(async (args: unknown) => args)
+      const handler = middlewareFn(mockNext)
+      const args = { request: { headers: { authorization: 'AWS4-HMAC-SHA256 ...' } } }
+      await handler(args)
+
+      expect(args.request.headers['authorization']).toBe('Bearer br-test-key')
+      expect(mockNext).toHaveBeenCalledWith(args)
+    })
+
+    it('does not include apiKey in model config', () => {
+      const provider = new BedrockModel({ region: 'us-east-1', apiKey: 'br-test-key', temperature: 0.5 })
+      const config = provider.getConfig()
+      expect(config).toStrictEqual({
+        modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
+        temperature: 0.5,
       })
     })
   })
@@ -1012,6 +1064,56 @@ describe('BedrockModel', () => {
           }
         })
       }
+    })
+
+    describe('throttling', () => {
+      it('throws ModelThrottledError when throttlingException is received', async () => {
+        setupMockSend(async function* () {
+          yield { messageStart: { role: 'assistant' } }
+          yield { throttlingException: { message: 'Rate exceeded' } }
+        })
+
+        const provider = new BedrockModel()
+        const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+
+        await expect(async () => {
+          for await (const _ of provider.stream(messages)) {
+            // consume stream
+          }
+        }).rejects.toThrow(ModelThrottledError)
+      })
+
+      it('includes throttling message in ModelThrottledError', async () => {
+        setupMockSend(async function* () {
+          yield { messageStart: { role: 'assistant' } }
+          yield { throttlingException: { message: 'Too many requests' } }
+        })
+
+        const provider = new BedrockModel()
+        const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+
+        await expect(async () => {
+          for await (const _ of provider.stream(messages)) {
+            // consume stream
+          }
+        }).rejects.toThrow('Too many requests')
+      })
+
+      it('uses default message when throttlingException has no message', async () => {
+        setupMockSend(async function* () {
+          yield { messageStart: { role: 'assistant' } }
+          yield { throttlingException: {} }
+        })
+
+        const provider = new BedrockModel()
+        const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+
+        await expect(async () => {
+          for await (const _ of provider.stream(messages)) {
+            // consume stream
+          }
+        }).rejects.toThrow('Request was throttled by the model provider')
+      })
     })
   })
 

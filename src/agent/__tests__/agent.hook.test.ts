@@ -9,6 +9,7 @@ import {
   BeforeToolCallEvent,
   MessageAddedEvent,
   ModelStreamEventHook,
+  InitializedEvent,
 } from '../../hooks/index.js'
 import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
 import { MockHookProvider } from '../../__fixtures__/mock-hook-provider.js'
@@ -31,14 +32,15 @@ describe('Agent Hooks Integration', () => {
 
       await agent.invoke('Hi')
 
-      expect(lifecycleProvider.invocations).toHaveLength(6)
+      expect(lifecycleProvider.invocations).toHaveLength(7)
 
-      expect(lifecycleProvider.invocations[0]).toEqual(new BeforeInvocationEvent({ agent: agent }))
-      expect(lifecycleProvider.invocations[1]).toEqual(
-        new MessageAddedEvent({ agent: agent, message: new Message({ role: 'user', content: [new TextBlock('Hi')] }) })
+      expect(lifecycleProvider.invocations[0]).toEqual(new InitializedEvent({ agent }))
+      expect(lifecycleProvider.invocations[1]).toEqual(new BeforeInvocationEvent({ agent }))
+      expect(lifecycleProvider.invocations[2]).toEqual(
+        new MessageAddedEvent({ agent, message: new Message({ role: 'user', content: [new TextBlock('Hi')] }) })
       )
-      expect(lifecycleProvider.invocations[2]).toEqual(new BeforeModelCallEvent({ agent: agent }))
-      expect(lifecycleProvider.invocations[3]).toEqual(
+      expect(lifecycleProvider.invocations[3]).toEqual(new BeforeModelCallEvent({ agent }))
+      expect(lifecycleProvider.invocations[4]).toEqual(
         new AfterModelCallEvent({
           agent,
           stopData: {
@@ -47,13 +49,13 @@ describe('Agent Hooks Integration', () => {
           },
         })
       )
-      expect(lifecycleProvider.invocations[4]).toEqual(
+      expect(lifecycleProvider.invocations[5]).toEqual(
         new MessageAddedEvent({
           agent,
           message: new Message({ role: 'assistant', content: [new TextBlock('Hello')] }),
         })
       )
-      expect(lifecycleProvider.invocations[5]).toEqual(new AfterInvocationEvent({ agent }))
+      expect(lifecycleProvider.invocations[6]).toEqual(new AfterInvocationEvent({ agent }))
     })
 
     it('fires hooks during stream', async () => {
@@ -63,17 +65,18 @@ describe('Agent Hooks Integration', () => {
 
       await collectIterator(agent.stream('Hi'))
 
-      expect(lifecycleProvider.invocations).toHaveLength(6)
+      expect(lifecycleProvider.invocations).toHaveLength(7)
 
-      expect(lifecycleProvider.invocations[0]).toEqual(new BeforeInvocationEvent({ agent: agent }))
-      expect(lifecycleProvider.invocations[1]).toEqual(
+      expect(lifecycleProvider.invocations[0]).toEqual(new InitializedEvent({ agent }))
+      expect(lifecycleProvider.invocations[1]).toEqual(new BeforeInvocationEvent({ agent }))
+      expect(lifecycleProvider.invocations[2]).toEqual(
         new MessageAddedEvent({
-          agent: agent,
+          agent,
           message: new Message({ role: 'user', content: [new TextBlock('Hi')] }),
         })
       )
-      expect(lifecycleProvider.invocations[2]).toEqual(new BeforeModelCallEvent({ agent: agent }))
-      expect(lifecycleProvider.invocations[3]).toEqual(
+      expect(lifecycleProvider.invocations[3]).toEqual(new BeforeModelCallEvent({ agent }))
+      expect(lifecycleProvider.invocations[4]).toEqual(
         new AfterModelCallEvent({
           agent,
           stopData: {
@@ -82,13 +85,13 @@ describe('Agent Hooks Integration', () => {
           },
         })
       )
-      expect(lifecycleProvider.invocations[4]).toEqual(
+      expect(lifecycleProvider.invocations[5]).toEqual(
         new MessageAddedEvent({
           agent,
           message: new Message({ role: 'assistant', content: [new TextBlock('Hello')] }),
         })
       )
-      expect(lifecycleProvider.invocations[5]).toEqual(new AfterInvocationEvent({ agent }))
+      expect(lifecycleProvider.invocations[6]).toEqual(new AfterInvocationEvent({ agent }))
     })
   })
 
@@ -103,9 +106,9 @@ describe('Agent Hooks Integration', () => {
       await agent.invoke('Hi')
 
       // Should have all lifecycle events
-      expect(lifecycleProvider.invocations).toHaveLength(6)
-      expect(lifecycleProvider.invocations[0]).toEqual(new BeforeInvocationEvent({ agent }))
-      expect(lifecycleProvider.invocations[5]).toEqual(new AfterInvocationEvent({ agent }))
+      expect(lifecycleProvider.invocations).toHaveLength(7)
+      expect(lifecycleProvider.invocations[1]).toEqual(new BeforeInvocationEvent({ agent }))
+      expect(lifecycleProvider.invocations[6]).toEqual(new AfterInvocationEvent({ agent }))
     })
   })
 
@@ -120,13 +123,13 @@ describe('Agent Hooks Integration', () => {
 
       await agent.invoke('First message')
 
-      // First turn should have: BeforeInvocation, MessageAdded, BeforeModelCall, AfterModelCall, MessageAdded, AfterInvocation
-      expect(lifecycleProvider.invocations).toHaveLength(6)
+      // First turn: InitializedEvent + BeforeInvocation, MessageAdded, BeforeModelCall, AfterModelCall, MessageAdded, AfterInvocation
+      expect(lifecycleProvider.invocations).toHaveLength(7)
 
       await agent.invoke('Second message')
 
-      // Should have 10 events total (6 for each turn)
-      expect(lifecycleProvider.invocations).toHaveLength(12)
+      // Should have 13 events total (7 for first turn + 6 for second turn, no InitializedEvent on second)
+      expect(lifecycleProvider.invocations).toHaveLength(13)
 
       // Filter for just Invocation events to verify they fire for each turn
       const invocationEvents = lifecycleProvider.invocations.filter(
