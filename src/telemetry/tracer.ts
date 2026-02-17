@@ -134,7 +134,7 @@ export class Tracer {
       if (modelId) attributes['gen_ai.request.model'] = modelId
 
       if (tools && tools.length > 0) {
-        const toolNames = tools.map((t) => this._extractToolName(t))
+        const toolNames = tools.map((t) => t.name)
         attributes['gen_ai.agent.tools'] = JSON.stringify(toolNames, jsonReplacer)
       }
 
@@ -215,7 +215,7 @@ export class Tracer {
     const { usage, metrics, error, output, stopReason } = options
 
     try {
-      if (this._isMessageLike(output)) this._addOutputEvent(span, output, stopReason)
+      if (output !== undefined) this._addOutputEvent(span, output, stopReason)
 
       const attributes: Record<string, AttributeValue> = {}
       if (usage) {
@@ -529,20 +529,6 @@ export class Tracer {
     if (metrics.latencyMs !== undefined && metrics.latencyMs > 0) {
       attributes['gen_ai.server.request.duration'] = metrics.latencyMs
     }
-  }
-
-  /**
-   * Check if a value is a message-like object with content and role.
-   */
-  private _isMessageLike(value: Message | undefined): value is Message {
-    return value !== undefined && value !== null
-  }
-
-  /**
-   * Extract tool name from a tool object.
-   */
-  private _extractToolName(tool: { name: string }): string {
-    return tool.name
   }
 
   /**

@@ -1,121 +1,20 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import type { Span, SpanContext, SpanStatus } from '@opentelemetry/api'
-import type { SpanAttributes, SpanAttributeValue } from '@opentelemetry/api'
-import type { TimeInput } from '@opentelemetry/api'
-import type { Exception } from '@opentelemetry/api'
-import type { Link } from '@opentelemetry/api'
+import type { Span, SpanAttributeValue } from '@opentelemetry/api'
 import { SpanStatusCode, trace } from '@opentelemetry/api'
 import { Tracer } from '../tracer.js'
 import { Message, TextBlock, ToolResultBlock, ToolUseBlock } from '../../types/messages.js'
+import { MockSpan, eventAttr } from '../../__fixtures__/mock-span.js'
+import { userMessage, assistantMessage } from '../../__fixtures__/agent-helpers.js'
 
-// Mock the OTel API — vi.mock is hoisted, so the top-level `trace` import receives the mock
-vi.mock('@opentelemetry/api', async () => {
-  const actual = await vi.importActual<typeof import('@opentelemetry/api')>('@opentelemetry/api')
-  return {
-    ...actual,
-    context: { active: vi.fn(() => ({})) },
-    trace: {
-      getTracer: vi.fn(),
-      setSpan: vi.fn(),
-    },
-  }
-})
-
-/**
- * Concrete mock implementing the Span interface.
- * Chainable methods return `this` to satisfy the `Span` contract.
- */
-class MockSpan implements Span {
-  readonly calls = {
-    setAttribute: [] as Array<{ key: string; value: SpanAttributeValue }>,
-    setAttributes: [] as Array<{ attributes: SpanAttributes }>,
-    addEvent: [] as Array<{
-      name: string
-      attributes: SpanAttributes | TimeInput | undefined
-      startTime: TimeInput | undefined
-    }>,
-    setStatus: [] as Array<{ status: SpanStatus }>,
-    updateName: [] as Array<{ name: string }>,
-    end: [] as Array<{ endTime: TimeInput | undefined }>,
-    recordException: [] as Array<{ exception: Exception; time: TimeInput | undefined }>,
-  }
-
-  spanContext(): SpanContext {
-    return { traceId: 'trace-1', spanId: 'span-1', traceFlags: 1 }
-  }
-
-  setAttribute(key: string, value: SpanAttributeValue): this {
-    this.calls.setAttribute.push({ key, value })
-    return this
-  }
-
-  setAttributes(attributes: SpanAttributes): this {
-    this.calls.setAttributes.push({ attributes })
-    return this
-  }
-
-  addEvent(name: string, attributesOrStartTime?: SpanAttributes | TimeInput, startTime?: TimeInput): this {
-    this.calls.addEvent.push({ name, attributes: attributesOrStartTime, startTime })
-    return this
-  }
-
-  addLink(_link: Link): this {
-    return this
-  }
-
-  addLinks(_links: Link[]): this {
-    return this
-  }
-
-  setStatus(status: SpanStatus): this {
-    this.calls.setStatus.push({ status })
-    return this
-  }
-
-  updateName(name: string): this {
-    this.calls.updateName.push({ name })
-    return this
-  }
-
-  end(endTime?: TimeInput): void {
-    this.calls.end.push({ endTime })
-  }
-
-  isRecording(): boolean {
-    return true
-  }
-
-  recordException(exception: Exception, time?: TimeInput): void {
-    this.calls.recordException.push({ exception, time })
-  }
-
-  // Helpers for assertions
-
-  getAttributeValue(key: string): SpanAttributeValue | undefined {
-    const entry = this.calls.setAttribute.find((c) => c.key === key)
-    return entry?.value
-  }
-
-  getEvents(name: string): Array<{ name: string; attributes: SpanAttributes | TimeInput | undefined }> {
-    return this.calls.addEvent.filter((c) => c.name === name)
-  }
-
-  getEventAttribute(eventName: string, attrKey: string): string | undefined {
-    const event = this.calls.addEvent.find((c) => c.name === eventName)
-    if (event?.attributes && typeof event.attributes === 'object' && attrKey in event.attributes) {
-      return (event.attributes as Record<string, string>)[attrKey]
-    }
-    return undefined
-  }
-}
-
-function userMessage(text: string): Message {
-  return new Message({ role: 'user', content: [new TextBlock(text)] })
-}
-
-function assistantMessage(text: string): Message {
-  return new Message({ role: 'assistant', content: [new TextBlock(text)] })
-}
+// Partial mock: keep real SpanStatusCode etc., replace context and trace
+vi.mock('@opentelemetry/api', async (importOriginal) => ({
+  ...(await importOriginal()),
+  context: { active: vi.fn(() => ({})) },
+  trace: {
+    getTracer: vi.fn(),
+    setSpan: vi.fn(),
+  },
+}))
 
 describe('Tracer', () => {
   let mockSpan: MockSpan
@@ -129,18 +28,14 @@ describe('Tracer', () => {
       startSpan: mockStartSpan,
       startActiveSpan: vi.fn(),
     })
+
+    // Default to stable conventions; tests needing latest override this
+    vi.stubEnv('OTEL_SEMCONV_STABILITY_OPT_IN', '')
   })
 
   /** Get the [spanName, options] from the first startSpan call. */
   function getStartSpanCall(): [string, { attributes: Record<string, SpanAttributeValue | undefined> }] {
-    const call = mockStartSpan.mock.calls[0] as [string, { attributes: Record<string, SpanAttributeValue | undefined> }]
-    return call
-  }
-
-  /** Extract a string attribute from a mock span event's attributes. */
-  function eventAttr(event: { attributes: SpanAttributes | TimeInput | undefined }, key: string): string {
-    const attrs = event.attributes as Record<string, string>
-    return attrs[key]!
+    return mockStartSpan.mock.calls[0] as [string, { attributes: Record<string, SpanAttributeValue | undefined> }]
   }
 
   describe('constructor', () => {
@@ -163,7 +58,6 @@ describe('Tracer', () => {
 
   describe('startAgentSpan', () => {
     it('creates span with correct name and standard attributes', () => {
-      vi.stubEnv('OTEL_SEMCONV_STABILITY_OPT_IN', '')
       const tracer = new Tracer()
 
       tracer.startAgentSpan({
@@ -184,7 +78,6 @@ describe('Tracer', () => {
     })
 
     it('includes agent id when provided', () => {
-      vi.stubEnv('OTEL_SEMCONV_STABILITY_OPT_IN', '')
       const tracer = new Tracer()
 
       tracer.startAgentSpan({
@@ -198,7 +91,6 @@ describe('Tracer', () => {
     })
 
     it('serializes tool names into gen_ai.agent.tools', () => {
-      vi.stubEnv('OTEL_SEMCONV_STABILITY_OPT_IN', '')
       const tracer = new Tracer()
 
       tracer.startAgentSpan({
@@ -227,7 +119,6 @@ describe('Tracer', () => {
     })
 
     it('serializes system prompt into attribute', () => {
-      vi.stubEnv('OTEL_SEMCONV_STABILITY_OPT_IN', '')
       const tracer = new Tracer()
 
       tracer.startAgentSpan({
@@ -241,7 +132,6 @@ describe('Tracer', () => {
     })
 
     it('merges constructor-level and call-level trace attributes', () => {
-      vi.stubEnv('OTEL_SEMCONV_STABILITY_OPT_IN', '')
       const tracer = new Tracer({ 'global.attr': 'global-val' })
 
       tracer.startAgentSpan({
@@ -256,7 +146,6 @@ describe('Tracer', () => {
     })
 
     it('adds separate stable message events per message', () => {
-      vi.stubEnv('OTEL_SEMCONV_STABILITY_OPT_IN', '')
       const tracer = new Tracer()
 
       tracer.startAgentSpan({
@@ -264,14 +153,11 @@ describe('Tracer', () => {
         agentName: 'test-agent',
       })
 
-      const userEvents = mockSpan.getEvents('gen_ai.user.message')
-      const assistantEvents = mockSpan.getEvents('gen_ai.assistant.message')
-      expect(userEvents).toHaveLength(1)
-      expect(assistantEvents).toHaveLength(1)
+      expect(mockSpan.getEvents('gen_ai.user.message')).toHaveLength(1)
+      expect(mockSpan.getEvents('gen_ai.assistant.message')).toHaveLength(1)
     })
 
     it('classifies tool result messages as gen_ai.tool.message', () => {
-      vi.stubEnv('OTEL_SEMCONV_STABILITY_OPT_IN', '')
       const tracer = new Tracer()
 
       const toolResultMsg = new Message({
@@ -315,7 +201,6 @@ describe('Tracer', () => {
     })
 
     it('uses gen_ai.system with stable conventions', () => {
-      vi.stubEnv('OTEL_SEMCONV_STABILITY_OPT_IN', '')
       const tracer = new Tracer()
 
       tracer.startAgentSpan({ messages: [userMessage('Hello')], agentName: 'test-agent' })
@@ -328,7 +213,6 @@ describe('Tracer', () => {
 
   describe('endAgentSpan', () => {
     it('sets OK status and ends span on success', () => {
-      vi.stubEnv('OTEL_SEMCONV_STABILITY_OPT_IN', '')
       const tracer = new Tracer()
       const span = tracer.startAgentSpan({ messages: [userMessage('Hi')], agentName: 'agent' })
 
@@ -339,7 +223,6 @@ describe('Tracer', () => {
     })
 
     it('sets ERROR status and records exception on error', () => {
-      vi.stubEnv('OTEL_SEMCONV_STABILITY_OPT_IN', '')
       const tracer = new Tracer()
       const span = tracer.startAgentSpan({ messages: [userMessage('Hi')], agentName: 'agent' })
       const error = new Error('agent failed')
@@ -353,7 +236,6 @@ describe('Tracer', () => {
     })
 
     it('sets accumulated usage attributes', () => {
-      vi.stubEnv('OTEL_SEMCONV_STABILITY_OPT_IN', '')
       const tracer = new Tracer()
       const span = tracer.startAgentSpan({ messages: [userMessage('Hi')], agentName: 'agent' })
 
@@ -369,7 +251,6 @@ describe('Tracer', () => {
     })
 
     it('adds response event with stable conventions', () => {
-      vi.stubEnv('OTEL_SEMCONV_STABILITY_OPT_IN', '')
       const tracer = new Tracer()
       const span = tracer.startAgentSpan({ messages: [userMessage('Hi')], agentName: 'agent' })
 
@@ -400,7 +281,6 @@ describe('Tracer', () => {
     })
 
     it('handles null span gracefully', () => {
-      vi.stubEnv('OTEL_SEMCONV_STABILITY_OPT_IN', '')
       const tracer = new Tracer()
 
       expect(() => tracer.endAgentSpan(null)).not.toThrow()
@@ -410,7 +290,6 @@ describe('Tracer', () => {
 
   describe('startModelInvokeSpan', () => {
     it('creates span with chat operation name and model id', () => {
-      vi.stubEnv('OTEL_SEMCONV_STABILITY_OPT_IN', '')
       const tracer = new Tracer()
 
       tracer.startModelInvokeSpan({ messages: [userMessage('Hello')], modelId: 'claude-3' })
@@ -424,7 +303,6 @@ describe('Tracer', () => {
     })
 
     it('adds message events to span', () => {
-      vi.stubEnv('OTEL_SEMCONV_STABILITY_OPT_IN', '')
       const tracer = new Tracer()
 
       tracer.startModelInvokeSpan({ messages: [userMessage('Hello')] })
@@ -435,7 +313,6 @@ describe('Tracer', () => {
 
   describe('endModelInvokeSpan', () => {
     it('sets usage and metrics attributes', () => {
-      vi.stubEnv('OTEL_SEMCONV_STABILITY_OPT_IN', '')
       const tracer = new Tracer()
       const span = tracer.startModelInvokeSpan({ messages: [userMessage('Hi')], modelId: 'model-1' })
 
@@ -451,7 +328,6 @@ describe('Tracer', () => {
     })
 
     it('sets cache token attributes when provided', () => {
-      vi.stubEnv('OTEL_SEMCONV_STABILITY_OPT_IN', '')
       const tracer = new Tracer()
       const span = tracer.startModelInvokeSpan({ messages: [userMessage('Hi')] })
 
@@ -470,7 +346,6 @@ describe('Tracer', () => {
     })
 
     it('skips cache token attributes when zero', () => {
-      vi.stubEnv('OTEL_SEMCONV_STABILITY_OPT_IN', '')
       const tracer = new Tracer()
       const span = tracer.startModelInvokeSpan({ messages: [userMessage('Hi')] })
 
@@ -482,7 +357,6 @@ describe('Tracer', () => {
     })
 
     it('skips latency attribute when zero', () => {
-      vi.stubEnv('OTEL_SEMCONV_STABILITY_OPT_IN', '')
       const tracer = new Tracer()
       const span = tracer.startModelInvokeSpan({ messages: [userMessage('Hi')] })
 
@@ -495,7 +369,6 @@ describe('Tracer', () => {
     })
 
     it('adds output event with stable conventions for mixed content', () => {
-      vi.stubEnv('OTEL_SEMCONV_STABILITY_OPT_IN', '')
       const tracer = new Tracer()
       const span = tracer.startModelInvokeSpan({ messages: [userMessage('Hi')] })
 
@@ -552,7 +425,6 @@ describe('Tracer', () => {
     })
 
     it('records error on model invocation failure', () => {
-      vi.stubEnv('OTEL_SEMCONV_STABILITY_OPT_IN', '')
       const tracer = new Tracer()
       const span = tracer.startModelInvokeSpan({ messages: [userMessage('Hi')] })
       const error = new Error('model timeout')
@@ -566,7 +438,6 @@ describe('Tracer', () => {
     })
 
     it('handles null span gracefully', () => {
-      vi.stubEnv('OTEL_SEMCONV_STABILITY_OPT_IN', '')
       const tracer = new Tracer()
 
       expect(() => tracer.endModelInvokeSpan(null)).not.toThrow()
@@ -575,7 +446,6 @@ describe('Tracer', () => {
 
   describe('startToolCallSpan', () => {
     it('creates span with tool name and call id', () => {
-      vi.stubEnv('OTEL_SEMCONV_STABILITY_OPT_IN', '')
       const tracer = new Tracer()
 
       tracer.startToolCallSpan({
@@ -592,7 +462,6 @@ describe('Tracer', () => {
     })
 
     it('adds stable tool message event with serialized input', () => {
-      vi.stubEnv('OTEL_SEMCONV_STABILITY_OPT_IN', '')
       const tracer = new Tracer()
 
       tracer.startToolCallSpan({
@@ -628,7 +497,6 @@ describe('Tracer', () => {
 
   describe('endToolCallSpan', () => {
     it('sets tool status attribute and adds stable result event', () => {
-      vi.stubEnv('OTEL_SEMCONV_STABILITY_OPT_IN', '')
       const tracer = new Tracer()
       const span = tracer.startToolCallSpan({
         tool: { name: 'calc', toolUseId: 'call-1', input: {} },
@@ -674,7 +542,6 @@ describe('Tracer', () => {
     })
 
     it('records error on tool failure', () => {
-      vi.stubEnv('OTEL_SEMCONV_STABILITY_OPT_IN', '')
       const tracer = new Tracer()
       const span = tracer.startToolCallSpan({
         tool: { name: 'calc', toolUseId: 'call-1', input: {} },
@@ -690,7 +557,6 @@ describe('Tracer', () => {
     })
 
     it('handles null span gracefully', () => {
-      vi.stubEnv('OTEL_SEMCONV_STABILITY_OPT_IN', '')
       const tracer = new Tracer()
 
       expect(() => tracer.endToolCallSpan(null)).not.toThrow()
@@ -699,7 +565,6 @@ describe('Tracer', () => {
 
   describe('startAgentLoopSpan', () => {
     it('creates span with cycle id attribute', () => {
-      vi.stubEnv('OTEL_SEMCONV_STABILITY_OPT_IN', '')
       const tracer = new Tracer()
 
       tracer.startAgentLoopSpan({ cycleId: 'cycle-42', messages: [userMessage('Hi')] })
@@ -710,7 +575,6 @@ describe('Tracer', () => {
     })
 
     it('adds message events to loop span', () => {
-      vi.stubEnv('OTEL_SEMCONV_STABILITY_OPT_IN', '')
       const tracer = new Tracer()
 
       tracer.startAgentLoopSpan({ cycleId: 'cycle-1', messages: [userMessage('Hello')] })
@@ -721,7 +585,6 @@ describe('Tracer', () => {
 
   describe('endAgentLoopSpan', () => {
     it('ends span with OK status', () => {
-      vi.stubEnv('OTEL_SEMCONV_STABILITY_OPT_IN', '')
       const tracer = new Tracer()
       const span = tracer.startAgentLoopSpan({ cycleId: 'cycle-1', messages: [userMessage('Hi')] })
 
@@ -732,7 +595,6 @@ describe('Tracer', () => {
     })
 
     it('records error on loop failure', () => {
-      vi.stubEnv('OTEL_SEMCONV_STABILITY_OPT_IN', '')
       const tracer = new Tracer()
       const span = tracer.startAgentLoopSpan({ cycleId: 'cycle-1', messages: [userMessage('Hi')] })
       const error = new Error('loop failed')
@@ -746,7 +608,6 @@ describe('Tracer', () => {
     })
 
     it('handles null span gracefully', () => {
-      vi.stubEnv('OTEL_SEMCONV_STABILITY_OPT_IN', '')
       const tracer = new Tracer()
 
       expect(() => tracer.endAgentLoopSpan(null)).not.toThrow()
@@ -797,7 +658,6 @@ describe('Tracer', () => {
     })
 
     it('serializes text block content in stable convention events', () => {
-      vi.stubEnv('OTEL_SEMCONV_STABILITY_OPT_IN', '')
       const tracer = new Tracer()
 
       tracer.startModelInvokeSpan({ messages: [userMessage('Hello world')] })
@@ -810,48 +670,33 @@ describe('Tracer', () => {
   })
 
   describe('error resilience', () => {
-    it('returns null when startAgentSpan throws internally', () => {
-      vi.stubEnv('OTEL_SEMCONV_STABILITY_OPT_IN', '')
+    it.each([
+      {
+        method: 'startAgentSpan',
+        call: (tracer: Tracer) => tracer.startAgentSpan({ messages: [userMessage('Hi')], agentName: 'agent' }),
+      },
+      {
+        method: 'startModelInvokeSpan',
+        call: (tracer: Tracer) => tracer.startModelInvokeSpan({ messages: [userMessage('Hi')] }),
+      },
+      {
+        method: 'startToolCallSpan',
+        call: (tracer: Tracer) => tracer.startToolCallSpan({ tool: { name: 'x', toolUseId: 'y', input: {} } }),
+      },
+      {
+        method: 'startAgentLoopSpan',
+        call: (tracer: Tracer) => tracer.startAgentLoopSpan({ cycleId: 'c', messages: [userMessage('Hi')] }),
+      },
+    ])('returns null when $method throws internally', ({ call }) => {
       mockStartSpan.mockImplementation(() => {
         throw new Error('otel failure')
       })
       const tracer = new Tracer()
 
-      expect(tracer.startAgentSpan({ messages: [userMessage('Hi')], agentName: 'agent' })).toBeNull()
-    })
-
-    it('returns null when startModelInvokeSpan throws internally', () => {
-      vi.stubEnv('OTEL_SEMCONV_STABILITY_OPT_IN', '')
-      mockStartSpan.mockImplementation(() => {
-        throw new Error('otel failure')
-      })
-      const tracer = new Tracer()
-
-      expect(tracer.startModelInvokeSpan({ messages: [userMessage('Hi')] })).toBeNull()
-    })
-
-    it('returns null when startToolCallSpan throws internally', () => {
-      vi.stubEnv('OTEL_SEMCONV_STABILITY_OPT_IN', '')
-      mockStartSpan.mockImplementation(() => {
-        throw new Error('otel failure')
-      })
-      const tracer = new Tracer()
-
-      expect(tracer.startToolCallSpan({ tool: { name: 'x', toolUseId: 'y', input: {} } })).toBeNull()
-    })
-
-    it('returns null when startAgentLoopSpan throws internally', () => {
-      vi.stubEnv('OTEL_SEMCONV_STABILITY_OPT_IN', '')
-      mockStartSpan.mockImplementation(() => {
-        throw new Error('otel failure')
-      })
-      const tracer = new Tracer()
-
-      expect(tracer.startAgentLoopSpan({ cycleId: 'c', messages: [userMessage('Hi')] })).toBeNull()
+      expect(call(tracer)).toBeNull()
     })
 
     it('does not throw when ending null spans with errors', () => {
-      vi.stubEnv('OTEL_SEMCONV_STABILITY_OPT_IN', '')
       const tracer = new Tracer()
 
       expect(() => {
@@ -887,7 +732,6 @@ describe('Tracer', () => {
     })
 
     it('defaults to stable conventions when env var is empty', () => {
-      vi.stubEnv('OTEL_SEMCONV_STABILITY_OPT_IN', '')
       const tracer = new Tracer()
 
       tracer.startAgentSpan({ messages: [userMessage('Hi')], agentName: 'agent' })
