@@ -16,7 +16,11 @@ export {
   AfterToolCallEvent,
   BeforeModelCallEvent,
   AfterModelCallEvent,
-  ModelStreamEventHook,
+  ModelStreamObserverEvent,
+  ContentBlockCompleteEvent,
+  ModelMessageEvent,
+  ToolResultEvent,
+  AgentResultEvent,
   BeforeToolsEvent,
   AfterToolsEvent,
 } from './events.js'

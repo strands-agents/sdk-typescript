@@ -8,7 +8,7 @@ import {
   BeforeModelCallEvent,
   BeforeToolCallEvent,
   MessageAddedEvent,
-  ModelStreamEventHook,
+  ModelStreamObserverEvent,
   InitializedEvent,
 } from '../../hooks/index.js'
 import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
@@ -236,7 +236,7 @@ describe('Agent Hooks Integration', () => {
     })
   })
 
-  describe('ModelStreamEventHook', () => {
+  describe('ModelStreamObserverEvent', () => {
     it('fires for each streaming event from the model', async () => {
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
 
@@ -251,14 +251,14 @@ describe('Agent Hooks Integration', () => {
         allStreamEvents.push(event)
       }
 
-      const streamEventHooks = mockProvider.invocations.filter((e) => e instanceof ModelStreamEventHook)
+      const streamObserverEvents = mockProvider.invocations.filter((e) => e instanceof ModelStreamObserverEvent)
 
       // Should have events
-      expect(streamEventHooks.length).toBeGreaterThan(0)
+      expect(streamObserverEvents.length).toBeGreaterThan(0)
 
       // Verify each hook event matches a stream event
-      for (const hookEvent of streamEventHooks) {
-        const event = (hookEvent as ModelStreamEventHook).event
+      for (const hookEvent of streamObserverEvents) {
+        const event = (hookEvent as ModelStreamObserverEvent).event
         expect(allStreamEvents).toContain(event)
       }
     })

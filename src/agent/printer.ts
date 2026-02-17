@@ -77,7 +77,7 @@ export class AgentPrinter implements Printer {
         this.handleContentBlockStop()
         break
 
-      case 'toolResultBlock':
+      case 'toolResultEvent':
         this.handleToolResult(event)
         break
 
@@ -172,10 +172,10 @@ export class AgentPrinter implements Printer {
    * Handle tool result events.
    * Outputs completion status.
    */
-  private handleToolResult(event: { status: string }): void {
-    if (event.status === 'success') {
+  private handleToolResult(event: { toolResult: { status: string } }): void {
+    if (event.toolResult.status === 'success') {
       this.write('✓ Tool completed\n')
-    } else if (event.status === 'error') {
+    } else if (event.toolResult.status === 'error') {
       this.write('✗ Tool failed\n')
     }
   }

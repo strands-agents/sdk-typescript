@@ -10,9 +10,14 @@ import {
   BeforeToolCallEvent,
   BeforeToolsEvent,
   MessageAddedEvent,
-  ModelStreamEventHook,
+  ModelStreamObserverEvent,
+  ContentBlockCompleteEvent,
+  ModelMessageEvent,
+  ToolResultEvent,
+  AgentResultEvent,
 } from '../events.js'
 import { Agent } from '../../agent/agent.js'
+import { AgentResult } from '../../types/agent.js'
 import { Message, TextBlock, ToolResultBlock, ToolUseBlock } from '../../types/messages.js'
 import { FunctionTool } from '../../tools/function-tool.js'
 
@@ -354,17 +359,17 @@ describe('AfterModelCallEvent', () => {
   })
 })
 
-describe('ModelStreamEventHook', () => {
+describe('ModelStreamObserverEvent', () => {
   it('creates instance with correct properties', () => {
     const agent = new Agent()
     const streamEvent = {
       type: 'modelMessageStartEvent' as const,
       role: 'assistant' as const,
     }
-    const hookEvent = new ModelStreamEventHook({ agent, event: streamEvent })
+    const hookEvent = new ModelStreamObserverEvent({ agent, event: streamEvent })
 
     expect(hookEvent).toEqual({
-      type: 'modelStreamEventHook',
+      type: 'modelStreamObserverEvent',
       agent: agent,
       event: streamEvent,
     })
@@ -380,8 +385,120 @@ describe('ModelStreamEventHook', () => {
       type: 'modelMessageStartEvent' as const,
       role: 'assistant' as const,
     }
-    const hookEvent = new ModelStreamEventHook({ agent, event: streamEvent })
+    const hookEvent = new ModelStreamObserverEvent({ agent, event: streamEvent })
     expect(hookEvent._shouldReverseCallbacks()).toBe(false)
+  })
+})
+
+describe('ContentBlockCompleteEvent', () => {
+  it('creates instance with correct properties', () => {
+    const agent = new Agent()
+    const contentBlock = new TextBlock('Hello')
+    const event = new ContentBlockCompleteEvent({ agent, contentBlock })
+
+    expect(event).toEqual({
+      type: 'contentBlockCompleteEvent',
+      agent: agent,
+      contentBlock: contentBlock,
+    })
+    // @ts-expect-error verifying that property is readonly
+    event.agent = new Agent()
+    // @ts-expect-error verifying that property is readonly
+    event.contentBlock = contentBlock
+  })
+
+  it('returns false for _shouldReverseCallbacks', () => {
+    const agent = new Agent()
+    const event = new ContentBlockCompleteEvent({ agent, contentBlock: new TextBlock('test') })
+    expect(event._shouldReverseCallbacks()).toBe(false)
+  })
+})
+
+describe('ModelMessageEvent', () => {
+  it('creates instance with correct properties', () => {
+    const agent = new Agent()
+    const message = new Message({ role: 'assistant', content: [new TextBlock('Hello')] })
+    const event = new ModelMessageEvent({ agent, message, stopReason: 'endTurn' })
+
+    expect(event).toEqual({
+      type: 'modelMessageEvent',
+      agent: agent,
+      message: message,
+      stopReason: 'endTurn',
+    })
+    // @ts-expect-error verifying that property is readonly
+    event.agent = new Agent()
+    // @ts-expect-error verifying that property is readonly
+    event.message = message
+    // @ts-expect-error verifying that property is readonly
+    event.stopReason = 'endTurn'
+  })
+
+  it('returns false for _shouldReverseCallbacks', () => {
+    const agent = new Agent()
+    const message = new Message({ role: 'assistant', content: [] })
+    const event = new ModelMessageEvent({ agent, message, stopReason: 'endTurn' })
+    expect(event._shouldReverseCallbacks()).toBe(false)
+  })
+})
+
+describe('ToolResultEvent', () => {
+  it('creates instance with correct properties', () => {
+    const agent = new Agent()
+    const toolResult = new ToolResultBlock({
+      toolUseId: 'test-id',
+      status: 'success',
+      content: [new TextBlock('Result')],
+    })
+    const event = new ToolResultEvent({ agent, toolResult })
+
+    expect(event).toEqual({
+      type: 'toolResultEvent',
+      agent: agent,
+      toolResult: toolResult,
+    })
+    // @ts-expect-error verifying that property is readonly
+    event.agent = new Agent()
+    // @ts-expect-error verifying that property is readonly
+    event.toolResult = toolResult
+  })
+
+  it('returns false for _shouldReverseCallbacks', () => {
+    const agent = new Agent()
+    const toolResult = new ToolResultBlock({ toolUseId: 'id', status: 'success', content: [] })
+    const event = new ToolResultEvent({ agent, toolResult })
+    expect(event._shouldReverseCallbacks()).toBe(false)
+  })
+})
+
+describe('AgentResultEvent', () => {
+  it('creates instance with correct properties', () => {
+    const agent = new Agent()
+    const result = new AgentResult({
+      stopReason: 'endTurn',
+      lastMessage: new Message({ role: 'assistant', content: [new TextBlock('Done')] }),
+    })
+    const event = new AgentResultEvent({ agent, result })
+
+    expect(event).toEqual({
+      type: 'agentResultEvent',
+      agent: agent,
+      result: result,
+    })
+    // @ts-expect-error verifying that property is readonly
+    event.agent = new Agent()
+    // @ts-expect-error verifying that property is readonly
+    event.result = result
+  })
+
+  it('returns false for _shouldReverseCallbacks', () => {
+    const agent = new Agent()
+    const result = new AgentResult({
+      stopReason: 'endTurn',
+      lastMessage: new Message({ role: 'assistant', content: [] }),
+    })
+    const event = new AgentResultEvent({ agent, result })
+    expect(event._shouldReverseCallbacks()).toBe(false)
   })
 })
 

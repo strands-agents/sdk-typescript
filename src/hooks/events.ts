@@ -1,4 +1,4 @@
-import type { AgentData } from '../types/agent.js'
+import type { AgentData, AgentResult } from '../types/agent.js'
 import type { ContentBlock, Message, StopReason, ToolResultBlock } from '../types/messages.js'
 import type { Tool } from '../tools/tool.js'
 import type { JSONValue } from '../types/json.js'
@@ -224,15 +224,81 @@ export class AfterModelCallEvent extends HookEvent {
  *
  * Currently private pending https://github.com/strands-agents/sdk-typescript/issues/288
  */
-export class ModelStreamEventHook extends HookEvent {
-  readonly type = 'modelStreamEventHook' as const
+export class ModelStreamObserverEvent extends HookEvent {
+  readonly type = 'modelStreamObserverEvent' as const
   readonly agent: AgentData
-  readonly event: ModelStreamEvent | ContentBlock
+  readonly event: ModelStreamEvent
 
-  constructor(data: { agent: AgentData; event: ModelStreamEvent | ContentBlock }) {
+  constructor(data: { agent: AgentData; event: ModelStreamEvent }) {
     super()
     this.agent = data.agent
     this.event = data.event
+  }
+}
+
+/**
+ * Event triggered when a content block completes during model inference.
+ * Wraps completed content blocks (TextBlock, ToolUseBlock, ReasoningBlock) from model streaming.
+ */
+export class ContentBlockCompleteEvent extends HookEvent {
+  readonly type = 'contentBlockCompleteEvent' as const
+  readonly agent: AgentData
+  readonly contentBlock: ContentBlock
+
+  constructor(data: { agent: AgentData; contentBlock: ContentBlock }) {
+    super()
+    this.agent = data.agent
+    this.contentBlock = data.contentBlock
+  }
+}
+
+/**
+ * Event triggered when the model completes a full message.
+ * Wraps the assembled message and stop reason after model streaming finishes.
+ */
+export class ModelMessageEvent extends HookEvent {
+  readonly type = 'modelMessageEvent' as const
+  readonly agent: AgentData
+  readonly message: Message
+  readonly stopReason: StopReason
+
+  constructor(data: { agent: AgentData; message: Message; stopReason: StopReason }) {
+    super()
+    this.agent = data.agent
+    this.message = data.message
+    this.stopReason = data.stopReason
+  }
+}
+
+/**
+ * Event triggered when a tool execution completes.
+ * Wraps the tool result block after a tool finishes execution.
+ */
+export class ToolResultEvent extends HookEvent {
+  readonly type = 'toolResultEvent' as const
+  readonly agent: AgentData
+  readonly toolResult: ToolResultBlock
+
+  constructor(data: { agent: AgentData; toolResult: ToolResultBlock }) {
+    super()
+    this.agent = data.agent
+    this.toolResult = data.toolResult
+  }
+}
+
+/**
+ * Event triggered as the final event in the agent stream.
+ * Wraps the agent result containing the stop reason and last message.
+ */
+export class AgentResultEvent extends HookEvent {
+  readonly type = 'agentResultEvent' as const
+  readonly agent: AgentData
+  readonly result: AgentResult
+
+  constructor(data: { agent: AgentData; result: AgentResult }) {
+    super()
+    this.agent = data.agent
+    this.result = data.result
   }
 }
 

@@ -159,7 +159,11 @@ export {
   AfterModelCallEvent,
   BeforeToolsEvent,
   AfterToolsEvent,
-  // ModelStreamEventHook # Disabled for now https://github.com/strands-agents/sdk-typescript/issues/288
+  ContentBlockCompleteEvent,
+  ModelMessageEvent,
+  ToolResultEvent,
+  AgentResultEvent,
+  // ModelStreamObserverEvent # Disabled for now https://github.com/strands-agents/sdk-typescript/issues/288
 } from './hooks/index.js'
 export type { HookCallback, HookProvider, HookEventConstructor, ModelStopResponse } from './hooks/index.js'
 

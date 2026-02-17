@@ -2,7 +2,6 @@ import type { AgentState } from '../agent/state.js'
 import type { Message, StopReason } from './messages.js'
 import type { ModelStreamEvent } from '../models/streaming.js'
 import { ToolStreamEvent } from '../tools/tool.js'
-import type { ContentBlock } from './messages.js'
 import type {
   BeforeInvocationEvent,
   AfterInvocationEvent,
@@ -13,7 +12,11 @@ import type {
   BeforeToolCallEvent,
   AfterToolCallEvent,
   MessageAddedEvent,
-  ModelStreamEventHook,
+  ModelStreamObserverEvent,
+  ContentBlockCompleteEvent,
+  ModelMessageEvent,
+  ToolResultEvent,
+  AgentResultEvent,
 } from '../hooks/events.js'
 import type { z } from 'zod'
 
@@ -106,8 +109,10 @@ export class AgentResult {
  */
 export type AgentStreamEvent =
   | ModelStreamEvent
-  | ContentBlock
+  | ContentBlockCompleteEvent
+  | ModelMessageEvent
   | ToolStreamEvent
+  | ToolResultEvent
   | BeforeInvocationEvent
   | AfterInvocationEvent
   | BeforeModelCallEvent
@@ -117,5 +122,5 @@ export type AgentStreamEvent =
   | BeforeToolCallEvent
   | AfterToolCallEvent
   | MessageAddedEvent
-  | ModelStreamEventHook
-  | AgentResult
+  | ModelStreamObserverEvent
+  | AgentResultEvent

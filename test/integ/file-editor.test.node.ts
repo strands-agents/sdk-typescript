@@ -50,7 +50,9 @@ describe.skipIf(bedrock.skip)('FileEditor Tool Integration', () => {
     const { items: events } = await collectGenerator(agent.stream(`View the file at ${testFile}`))
 
     // The agent should have received the file content
-    const textBlocks = events.filter((e: any) => e.type === 'textBlock')
+    const textBlocks = events.filter(
+      (e: any) => e.type === 'contentBlockCompleteEvent' && e.contentBlock.type === 'textBlock'
+    )
     expect(textBlocks.length).toBeGreaterThan(0)
   }, 60000)
 
@@ -93,11 +95,13 @@ describe.skipIf(bedrock.skip)('FileEditor Tool Integration', () => {
     const { items: events } = await collectGenerator(agent.stream(`View the file at ${nonExistentFile}`))
 
     // The agent should handle the error and provide a reasonable response
-    const toolResults = events.filter((e: any) => e.type === 'toolResultBlock')
+    const toolResults = events.filter((e: any) => e.type === 'toolResultEvent')
     expect(toolResults.length).toBeGreaterThan(0)
 
     // The model should have handled the error gracefully
-    const textBlocks = events.filter((e: any) => e.type === 'textBlock')
+    const textBlocks = events.filter(
+      (e: any) => e.type === 'contentBlockCompleteEvent' && e.contentBlock.type === 'textBlock'
+    )
     expect(textBlocks.length).toBeGreaterThan(0)
   }, 60000)
 
@@ -114,7 +118,9 @@ describe.skipIf(bedrock.skip)('FileEditor Tool Integration', () => {
     const { items: events } = await collectGenerator(agent.stream(`List the files in directory ${testDir}`))
 
     // The agent should have received the directory listing
-    const textBlocks = events.filter((e: any) => e.type === 'textBlock')
+    const textBlocks = events.filter(
+      (e: any) => e.type === 'contentBlockCompleteEvent' && e.contentBlock.type === 'textBlock'
+    )
     expect(textBlocks.length).toBeGreaterThan(0)
   }, 60000)
 
@@ -158,7 +164,7 @@ Line 3" with "Replaced Lines"`)
     const { items: events } = await collectGenerator(agent.stream(`View lines 2 to 4 of file ${testFile}`))
 
     // The agent should have used view_range parameter
-    const toolResults = events.filter((e: any) => e.type === 'toolResultBlock')
+    const toolResults = events.filter((e: any) => e.type === 'toolResultEvent')
     expect(toolResults.length).toBeGreaterThan(0)
   }, 60000)
 })

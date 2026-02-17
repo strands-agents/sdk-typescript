@@ -22,6 +22,7 @@ import {
 import { systemPromptFromData } from '../types/messages.js'
 import { normalizeError, ConcurrentInvocationError, MaxTokensError } from '../errors.js'
 import type { BaseModelConfig, Model, StreamOptions } from '../models/model.js'
+import type { ModelStreamEvent } from '../models/streaming.js'
 import { ToolRegistry } from '../registry/tool-registry.js'
 import { AgentState } from './state.js'
 import type { AgentData } from '../types/agent.js'
@@ -41,7 +42,11 @@ import {
   BeforeToolCallEvent,
   BeforeToolsEvent,
   MessageAddedEvent,
-  ModelStreamEventHook,
+  ModelStreamObserverEvent,
+  ContentBlockCompleteEvent,
+  ModelMessageEvent,
+  ToolResultEvent,
+  AgentResultEvent,
 } from '../hooks/events.js'
 import { createStructuredOutputContext } from '../structured-output/context.js'
 import { StructuredOutputException } from '../structured-output/exceptions.js'
@@ -336,7 +341,10 @@ export class Agent implements AgentData {
     }
 
     // Yield final result as last event
-    yield result.value
+    const agentResultEvent = new AgentResultEvent({ agent: this, result: result.value })
+    await this.hooks.invokeCallbacks(agentResultEvent)
+    this._printer?.processEvent(agentResultEvent)
+    yield agentResultEvent
 
     return result.value
   }
@@ -509,6 +517,8 @@ export class Agent implements AgentData {
     try {
       const { message, stopReason } = yield* this._streamFromModel(this.messages, streamOptions)
 
+      yield new ModelMessageEvent({ agent: this, message, stopReason })
+
       const afterModelCallEvent = new AfterModelCallEvent({ agent: this, stopData: { message, stopReason } })
       yield afterModelCallEvent
 
@@ -537,7 +547,7 @@ export class Agent implements AgentData {
   }
 
   /**
-   * Streams events from the model and fires ModelStreamEventHook for each event.
+   * Streams events from the model and fires observer events for each streaming event.
    *
    * @param messages - Messages to send to the model
    * @param streamOptions - Options for streaming
@@ -553,11 +563,15 @@ export class Agent implements AgentData {
     while (!result.done) {
       const event = result.value
 
-      // Yield hook event for observability
-      yield new ModelStreamEventHook({ agent: this, event })
-
-      // Yield the actual model event
-      yield event
+      if (event.type.startsWith('model')) {
+        // ModelStreamEvent: yield observer hook event + raw event
+        const modelEvent = event as ModelStreamEvent
+        yield new ModelStreamObserverEvent({ agent: this, event: modelEvent })
+        yield modelEvent
+      } else {
+        // ContentBlock: wrap in ContentBlockCompleteEvent
+        yield new ContentBlockCompleteEvent({ agent: this, contentBlock: event as ContentBlock })
+      }
       result = await streamGenerator.next()
     }
 
@@ -594,8 +608,8 @@ export class Agent implements AgentData {
       const toolResultBlock = yield* this.executeTool(toolUseBlock, toolRegistry)
       toolResultBlocks.push(toolResultBlock)
 
-      // Yield the tool result block as it's created
-      yield toolResultBlock
+      // Yield the tool result event as it's created
+      yield new ToolResultEvent({ agent: this, toolResult: toolResultBlock })
     }
 
     // Create user message with tool results
