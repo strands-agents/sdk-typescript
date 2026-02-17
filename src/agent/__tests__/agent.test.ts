@@ -878,4 +878,154 @@ describe('Agent', () => {
       })
     })
   })
+
+  describe('structured output', () => {
+    it('returns structured output when schema provided and tool used', async () => {
+      const { z } = await import('zod')
+      const schema = z.object({ name: z.string(), age: z.number() })
+
+      const model = new MockMessageModel()
+        .addTurn({ type: 'toolUseBlock', name: 'StructuredOutput', toolUseId: 'tool-1', input: { name: 'John', age: 30 } })
+        .addTurn({ type: 'textBlock', text: 'Done' })
+
+      const agent = new Agent({ model, structuredOutputSchema: schema })
+
+      const result = await agent.invoke('Test')
+
+      expect(result.structuredOutput).toEqual({ name: 'John', age: 30 })
+    })
+
+    it('forces structured output tool when model does not use it', async () => {
+      const { z } = await import('zod')
+      const schema = z.object({ value: z.number() })
+
+      const model = new MockMessageModel()
+        .addTurn({ type: 'textBlock', text: 'First response' })
+        .addTurn({ type: 'toolUseBlock', name: 'StructuredOutput', toolUseId: 'tool-1', input: { value: 42 } })
+        .addTurn({ type: 'textBlock', text: 'Done' })
+
+      const agent = new Agent({ model, structuredOutputSchema: schema })
+
+      const result = await agent.invoke('Test')
+
+      expect(result.structuredOutput).toEqual({ value: 42 })
+    })
+
+    it('throws StructuredOutputException when model refuses to use tool after forcing', async () => {
+      const { z } = await import('zod')
+      const { StructuredOutputException } = await import('../../structured-output/exceptions.js')
+      const schema = z.object({ value: z.number() })
+
+      // Model returns text twice - once normally, once when forced
+      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Response' })
+
+      const agent = new Agent({ model, structuredOutputSchema: schema })
+
+      await expect(agent.invoke('Test')).rejects.toThrow(StructuredOutputException)
+    })
+
+    it('throws error message when maxTokens reached before structured output', async () => {
+      const { z } = await import('zod')
+      const schema = z.object({ value: z.number() })
+
+      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Partial...' }, 'maxTokens')
+
+      const agent = new Agent({ model, structuredOutputSchema: schema })
+
+      await expect(agent.invoke('Test')).rejects.toThrow('maximum token limit')
+    })
+
+    it('retries with validation feedback when structured output tool returns error', async () => {
+      const { z } = await import('zod')
+      const schema = z.object({ name: z.string(), age: z.number() })
+
+      const model = new MockMessageModel()
+        .addTurn({ type: 'toolUseBlock', name: 'StructuredOutput', toolUseId: 'tool-1', input: { name: 'John', age: 'invalid' } })
+        .addTurn({ type: 'toolUseBlock', name: 'StructuredOutput', toolUseId: 'tool-2', input: { name: 'John', age: 30 } })
+        .addTurn({ type: 'textBlock', text: 'Done' })
+
+      const agent = new Agent({ model, structuredOutputSchema: schema })
+
+      const result = await agent.invoke('Test')
+
+      expect(result.structuredOutput).toEqual({ name: 'John', age: 30 })
+    })
+
+    it('works without structured output schema', async () => {
+      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
+
+      const agent = new Agent({ model })
+
+      const result = await agent.invoke('Test')
+
+      expect(result.structuredOutput).toBeUndefined()
+    })
+
+    it('cleans up structured output tool after invocation', async () => {
+      const { z } = await import('zod')
+      const schema = z.object({ value: z.number() })
+
+      const model = new MockMessageModel()
+        .addTurn({ type: 'toolUseBlock', name: 'StructuredOutput', toolUseId: 'tool-1', input: { value: 42 } })
+        .addTurn({ type: 'textBlock', text: 'Done' })
+
+      const agent = new Agent({ model, structuredOutputSchema: schema })
+
+      await agent.invoke('Test')
+
+      const toolNames = agent.tools.map((t) => t.name)
+      expect(toolNames).not.toContain('StructuredOutput')
+    })
+
+    it('cleans up structured output tool even when error occurs', async () => {
+      const { z } = await import('zod')
+      const schema = z.object({ value: z.number() })
+
+      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Partial...' }, 'maxTokens')
+
+      const agent = new Agent({ model, structuredOutputSchema: schema })
+
+      await expect(agent.invoke('Test')).rejects.toThrow()
+
+      const toolNames = agent.tools.map((t) => t.name)
+      expect(toolNames).not.toContain('StructuredOutput')
+    })
+
+    it('validates nested objects in structured output', async () => {
+      const { z } = await import('zod')
+      const schema = z.object({
+        user: z.object({
+          name: z.string(),
+          age: z.number(),
+        }),
+      })
+
+      const model = new MockMessageModel()
+        .addTurn({ type: 'toolUseBlock', name: 'StructuredOutput', toolUseId: 'tool-1', input: { user: { name: 'Alice', age: 25 } } })
+        .addTurn({ type: 'textBlock', text: 'Done' })
+
+      const agent = new Agent({ model, structuredOutputSchema: schema })
+
+      const result = await agent.invoke('Test')
+
+      expect(result.structuredOutput).toEqual({ user: { name: 'Alice', age: 25 } })
+    })
+
+    it('validates arrays in structured output', async () => {
+      const { z } = await import('zod')
+      const schema = z.object({
+        items: z.array(z.string()),
+      })
+
+      const model = new MockMessageModel()
+        .addTurn({ type: 'toolUseBlock', name: 'StructuredOutput', toolUseId: 'tool-1', input: { items: ['a', 'b', 'c'] } })
+        .addTurn({ type: 'textBlock', text: 'Done' })
+
+      const agent = new Agent({ model, structuredOutputSchema: schema })
+
+      const result = await agent.invoke('Test')
+
+      expect(result.structuredOutput).toEqual({ items: ['a', 'b', 'c'] })
+    })
+  })
 })
