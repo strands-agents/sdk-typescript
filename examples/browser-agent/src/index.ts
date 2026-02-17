@@ -1,13 +1,44 @@
 import { Agent, BedrockModel } from '@strands-agents/sdk';
 import { OpenAIModel } from '@strands-agents/sdk/openai';
+import { AnthropicModel } from '@strands-agents/sdk/anthropic';
 import { updateCanvasTool } from './tools';
+import { marked } from 'marked';
 
 const messagesDiv = document.getElementById('messages')!;
 const inputForm = document.getElementById('input-area') as HTMLFormElement;
 const userInput = document.getElementById('user-input') as HTMLInputElement;
 const sendBtn = document.getElementById('send-btn') as HTMLButtonElement;
+const clearBtn = document.getElementById('clear-btn') as HTMLButtonElement;
+const settingsBtn = document.getElementById('settings-btn') as HTMLButtonElement;
+const settingsModal = document.getElementById('settings-modal')!;
+const providerSelect = document.getElementById('provider-select') as HTMLSelectElement;
+const saveSettingsBtn = document.getElementById('save-settings-btn') as HTMLButtonElement;
+const cancelSettingsBtn = document.getElementById('cancel-settings-btn') as HTMLButtonElement;
 
-// Helper to add message to UI
+// Cache settings input elements
+const openaiKeyInput = document.getElementById('openai-key') as HTMLInputElement;
+const anthropicKeyInput = document.getElementById('anthropic-key') as HTMLInputElement;
+const bedrockRegionInput = document.getElementById('bedrock-region') as HTMLInputElement;
+const bedrockAccessKeyInput = document.getElementById('bedrock-access-key') as HTMLInputElement;
+const bedrockSecretKeyInput = document.getElementById('bedrock-secret-key') as HTMLInputElement;
+const openaiFields = document.querySelector('.openai-fields') as HTMLElement;
+const anthropicFields = document.querySelector('.anthropic-fields') as HTMLElement;
+const bedrockFields = document.querySelector('.bedrock-fields') as HTMLElement;
+
+function showToast(message: string): void {
+    const toast = document.createElement('div');
+    toast.textContent = message;
+    toast.style.cssText = 'position:fixed;top:2rem;left:50%;transform:translateX(-50%);background:#1d1d1f;color:white;padding:1rem 2rem;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.3);z-index:2000;';
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+}
+
+function toggleProviderFields(provider: string): void {
+    openaiFields.style.display = provider === 'openai' ? 'block' : 'none';
+    anthropicFields.style.display = provider === 'anthropic' ? 'block' : 'none';
+    bedrockFields.classList.toggle('show', provider === 'bedrock');
+}
+
 function addMessage(role: 'user' | 'agent' | 'tool', text: string): HTMLDivElement {
     const div = document.createElement('div');
     div.className = `message ${role}`;
@@ -17,146 +48,176 @@ function addMessage(role: 'user' | 'agent' | 'tool', text: string): HTMLDivEleme
     return div;
 }
 
-// Helper to initialize model based on user selection
-async function getModel() {
-    const savedProvider = localStorage.getItem('agent_provider');
-    // Default to openai if not set, but allow changing via prompt if we want to be fancy.
-    // For simplicity, we'll check if we have keys for one or the other, or ask.
-
-    let provider = savedProvider;
-    if (!provider) {
-        provider = prompt('Choose model provider: "openai" or "bedrock"', 'openai') || 'openai';
-        localStorage.setItem('agent_provider', provider);
+function getCredential(key: string, providerName: string): string {
+    const value = localStorage.getItem(key);
+    if (!value) {
+        throw new Error(`${providerName} credentials not configured. Click Settings to configure.`);
     }
+    return value;
+}
 
-    if (provider.toLowerCase() === 'bedrock') {
-        const savedRegion = localStorage.getItem('bedrock_region');
-        const savedAccessKey = localStorage.getItem('bedrock_access_key');
-        const savedSecretKey = localStorage.getItem('bedrock_secret_key');
+function getModel(): BedrockModel | AnthropicModel | OpenAIModel {
+    const provider = localStorage.getItem('agent_provider') || 'openai';
 
-        if (savedRegion && savedAccessKey && savedSecretKey) {
-            return new BedrockModel({
-                region: savedRegion,
-                clientConfig: {
-                    credentials: {
-                        accessKeyId: savedAccessKey,
-                        secretAccessKey: savedSecretKey
-                    }
-                }
-            });
-        }
-
-        const region = prompt('Enter AWS Region (e.g., us-west-2):', 'us-west-2');
-        const accessKey = prompt('Enter AWS Access Key ID:');
-        const secretKey = prompt('Enter AWS Secret Access Key:');
-
-        if (!region || !accessKey || !secretKey) {
-            addMessage('agent', '⚠️ AWS Credentials are required for Bedrock. Please reload.');
-            throw new Error('Missing AWS Credentials');
-        }
-
-        localStorage.setItem('bedrock_region', region);
-        localStorage.setItem('bedrock_access_key', accessKey);
-        localStorage.setItem('bedrock_secret_key', secretKey);
-
+    if (provider === 'bedrock') {
         return new BedrockModel({
-            region,
+            region: getCredential('bedrock_region', 'AWS'),
             clientConfig: {
                 credentials: {
-                    accessKeyId: accessKey,
-                    secretAccessKey: secretKey
+                    accessKeyId: getCredential('bedrock_access_key', 'AWS'),
+                    secretAccessKey: getCredential('bedrock_secret_key', 'AWS')
                 }
             }
         });
-    } else {
-        // OpenAI default
-        const savedKey = localStorage.getItem('openai_api_key');
-        let apiKey = savedKey;
-
-        if (!apiKey) {
-            apiKey = prompt('Please enter your OpenAI API Key (saved in localStorage):');
-            if (!apiKey) {
-                addMessage('agent', '⚠️ API Key is required. Please reload.');
-                throw new Error('No API Key provided');
-            }
-            localStorage.setItem('openai_api_key', apiKey);
-        }
-
-        return new OpenAIModel({
-            apiKey: apiKey!,
-            modelId: 'gpt-4o',
+    }
+    
+    if (provider === 'anthropic') {
+        return new AnthropicModel({
+            apiKey: getCredential('anthropic_api_key', 'Anthropic'),
             clientConfig: {
                 dangerouslyAllowBrowser: true
             }
         });
     }
+    
+    return new OpenAIModel({
+        apiKey: getCredential('openai_api_key', 'OpenAI'),
+        modelId: 'gpt-4o',
+        clientConfig: {
+            dangerouslyAllowBrowser: true
+        }
+    });
 }
 
 
-async function main() {
-    try {
-        const model = await getModel();
+async function main(): Promise<void> {
+    let agent: Agent;
 
-        const agent = new Agent({
-            model,
-            systemPrompt: `You are a creative and helpful browser assistant. 
-You can modify the style and content of the "canvas" element on the page using the update_canvas tool.
+    function initializeAgent(): void {
+        try {
+            const model = getModel();
+            agent = new Agent({
+                model,
+                systemPrompt: `You are a creative and helpful browser assistant. 
+You can modify the html, script, and style of the sandboxed canvas iframe on the page using the update_canvas tool.
+The canvas is isolated in an iframe for security. Scripts run in the iframe context with access to document.body.
 Always use the tool when the user asks for visual changes.
 Be concise in your text responses.`,
-            tools: [updateCanvasTool],
-        });
+                tools: [updateCanvasTool],
+            });
+            console.log('Agent initialized');
+        } catch (error) {
+            addMessage('agent', '⚠️ ' + (error as Error).message);
+            throw error;
+        }
+    }
 
-        // Handle user input
-        inputForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const text = userInput.value.trim();
-            if (!text) return;
+    initializeAgent();
 
-            addMessage('user', text);
-            userInput.value = '';
-            userInput.disabled = true;
-            sendBtn.disabled = true;
+    // Settings UI handlers
+    settingsBtn.addEventListener('click', () => {
+        const provider = localStorage.getItem('agent_provider') || 'openai';
+        providerSelect.value = provider;
+        
+        openaiKeyInput.value = localStorage.getItem('openai_api_key') || '';
+        anthropicKeyInput.value = localStorage.getItem('anthropic_api_key') || '';
+        bedrockRegionInput.value = localStorage.getItem('bedrock_region') || 'us-west-2';
+        bedrockAccessKeyInput.value = localStorage.getItem('bedrock_access_key') || '';
+        bedrockSecretKeyInput.value = localStorage.getItem('bedrock_secret_key') || '';
+        
+        toggleProviderFields(provider);
+        settingsModal.classList.add('show');
+    });
 
-            try {
-                // Stream the response
-                let fullText = '';
-                const messageDiv = addMessage('agent', '');
+    cancelSettingsBtn.addEventListener('click', () => {
+        settingsModal.classList.remove('show');
+    });
 
-                // We will update this div as tokens come in
-                for await (const event of agent.stream(text)) {
-                    if (event.type === 'modelContentBlockDeltaEvent' && event.delta.type === 'textDelta') {
-                        fullText += event.delta.text;
-                        messageDiv.textContent = fullText;
-                        messagesDiv.scrollTop = messagesDiv.scrollHeight;
-                    } else if (event.type === 'modelContentBlockStartEvent' && event.start.type === 'toolUseStart') {
-                        // Indicate tool use
+    saveSettingsBtn.addEventListener('click', () => {
+        const provider = providerSelect.value;
+        localStorage.setItem('agent_provider', provider);
+        
+        if (provider === 'openai') {
+            const key = openaiKeyInput.value;
+            if (key) localStorage.setItem('openai_api_key', key);
+        } else if (provider === 'anthropic') {
+            const key = anthropicKeyInput.value;
+            if (key) localStorage.setItem('anthropic_api_key', key);
+        } else {
+            const region = bedrockRegionInput.value;
+            const accessKey = bedrockAccessKeyInput.value;
+            const secretKey = bedrockSecretKeyInput.value;
+            if (region) localStorage.setItem('bedrock_region', region);
+            if (accessKey) localStorage.setItem('bedrock_access_key', accessKey);
+            if (secretKey) localStorage.setItem('bedrock_secret_key', secretKey);
+        }
+        
+        settingsModal.classList.remove('show');
+        
+        try {
+            initializeAgent();
+            messagesDiv.innerHTML = '<div class="message agent">Hello! I can modify the canvas above. Try asking me "change background to blue" or "make it a circle".</div>';
+            showToast('Settings saved!');
+        } catch {
+            showToast('Failed to initialize agent. Check your credentials.');
+        }
+    });
+
+    providerSelect.addEventListener('change', (e) => {
+        toggleProviderFields((e.target as HTMLSelectElement).value);
+    });
+
+    // Clear chat button
+    clearBtn.addEventListener('click', () => {
+        messagesDiv.innerHTML = '<div class="message agent">Hello! I can modify the canvas above. Try asking me "change background to blue" or "make it a circle".</div>';
+        agent.messages.length = 0;
+    });
+
+    // Handle user input
+    inputForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const text = userInput.value.trim();
+        if (!text) return;
+
+        addMessage('user', text);
+        userInput.value = '';
+        userInput.disabled = true;
+        sendBtn.disabled = true;
+
+        try {
+            let fullText = '';
+            let messageDiv: HTMLDivElement | null = null;
+
+            for await (const event of agent.stream(text)) {
+                if (event.type === 'modelContentBlockStartEvent') {
+                    if (event.start?.type === 'toolUseStart') {
                         const toolMsg = document.createElement('div');
                         toolMsg.className = 'message tool';
                         toolMsg.style.fontSize = '0.8em';
                         toolMsg.style.color = '#666';
                         toolMsg.textContent = `🛠️ Using tool: ${event.start.name}...`;
-                        // Insert before the current agent message or append?
-                        // If we append, it might appear after partial text.
-                        // Let's just append it to the main container for now.
-                        messagesDiv.insertBefore(toolMsg, messageDiv);
+                        messagesDiv.appendChild(toolMsg);
+                        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+                    } else {
+                        fullText = '';
+                        messageDiv = addMessage('agent', '');
                     }
+                } else if (event.type === 'modelContentBlockDeltaEvent' && event.delta.type === 'textDelta') {
+                    if (!messageDiv) messageDiv = addMessage('agent', '');
+                    fullText += event.delta.text;
+                    messageDiv.innerHTML = marked.parse(fullText) as string;
+                    messagesDiv.scrollTop = messagesDiv.scrollHeight;
                 }
-
-            } catch (err) {
-                console.error(err);
-                addMessage('agent', 'Error: ' + (err as Error).message);
-            } finally {
-                userInput.disabled = false;
-                sendBtn.disabled = false;
-                userInput.focus();
             }
-        });
-
-        console.log('Agent initialized');
-
-    } catch (error) {
-        console.error('Failed to initialize agent:', error);
-    }
+        } catch (err) {
+            console.error(err);
+            addMessage('agent', 'Error: ' + (err as Error).message);
+        } finally {
+            userInput.disabled = false;
+            sendBtn.disabled = false;
+            userInput.focus();
+        }
+    });
 }
 
 main();

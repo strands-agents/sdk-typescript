@@ -10,40 +10,41 @@
         display: flex;
         flex-direction: column;
         align-items: center;
-        padding: 2rem;
+        padding: 0;
+        margin: 0;
         background-color: #f5f5f7;
         color: #1d1d1f;
+        height: 100vh;
+        overflow: hidden;
       }
       h1 {
-        margin-bottom: 2rem;
+        margin: 1rem 0;
         font-weight: 600;
       }
-      #canvas {
+      #canvas-container {
         width: 300px;
-        height: 300px;
-        background-color: white;
+        height: 200px;
+        margin-bottom: 1rem;
+        resize: both;
+        overflow: hidden;
+      }
+      #canvas {
+        width: 100%;
+        height: 100%;
         border: 1px solid #d2d2d7;
         border-radius: 12px;
-        margin-bottom: 2rem;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        font-size: 1.5rem;
         box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
-        transition: all 0.5s cubic-bezier(0.25, 1, 0.5, 1);
-        text-align: center;
-        padding: 1rem;
       }
       #chat-container {
-        width: 100%;
-        max-width: 600px;
         background: white;
         border-radius: 12px;
+        border: 1px solid #d2d2d7;
         box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
         display: flex;
         flex-direction: column;
-        height: 500px;
+        flex: 1;
         overflow: hidden;
+        margin: 1rem 2rem;
       }
       #messages {
         flex: 1;
@@ -58,6 +59,7 @@
         border-radius: 18px;
         max-width: 80%;
         line-height: 1.4;
+        white-space: pre-wrap;
       }
       .user {
         background-color: #0071e3;
@@ -100,6 +102,7 @@
         font-size: 1rem;
         font-weight: 500;
         transition: background-color 0.2s;
+        margin-left: 0.5rem;
       }
       button:hover {
         background-color: #0077ed;
@@ -109,17 +112,79 @@
         cursor: not-allowed;
       }
       .setup-hint {
-        margin-top: 1rem;
-        font-size: 0.875rem;
-        color: #86868b;
+        display: none;
+      }
+      #settings-btn {
+        position: absolute;
+        top: 1rem;
+        right: 1rem;
+        background-color: #f5f5f7;
+        color: #1d1d1f;
+        border: 1px solid #d2d2d7;
+      }
+      #settings-btn:hover {
+        background-color: #e8e8ed;
+      }
+      #settings-modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+        z-index: 1000;
+        justify-content: center;
+        align-items: center;
+      }
+      #settings-modal.show {
+        display: flex;
+      }
+      #settings-content {
+        background: white;
+        border-radius: 12px;
+        padding: 2rem;
+        max-width: 500px;
+        width: 90%;
+      }
+      #settings-content h2 {
+        margin-top: 0;
+      }
+      #settings-content label {
+        display: block;
+        margin: 1rem 0 0.5rem;
+        font-weight: 500;
+      }
+      #settings-content input, #settings-content select {
+        width: 100%;
+        padding: 0.75rem;
+        border: 1px solid #d2d2d7;
+        border-radius: 8px;
+        font-size: 1rem;
+        box-sizing: border-box;
+      }
+      #settings-content .button-group {
+        display: flex;
+        gap: 0.5rem;
+        margin-top: 1.5rem;
+      }
+      #settings-content .button-group button {
+        flex: 1;
+      }
+      .anthropic-fields, .bedrock-fields {
+        display: none;
+      }
+      .bedrock-fields.show {
+        display: block;
       }
     </style>
   </head>
   <body>
+    <button type="button" id="settings-btn">⚙️ Settings</button>
     <h1>Browser Agent Example</h1>
     
-    <div id="canvas">
-      I am a canvas. change me!
+    <div id="canvas-container">
+      <iframe id="canvas" sandbox="allow-scripts allow-same-origin" srcdoc="<!DOCTYPE html><html><head><style>html,body{margin:0;padding:1rem;background:white;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:1.5rem;text-align:center;overflow:hidden;width:fit-content;height:fit-content}</style></head><body>I am a canvas. change me!</body></html>"></iframe>
     </div>
 
     <div id="chat-container">
@@ -129,10 +194,49 @@
       <form id="input-area">
         <input type="text" id="user-input" placeholder="Message the agent..." autocomplete="off">
         <button type="submit" id="send-btn">Send</button>
+        <button type="button" id="clear-btn">Clear</button>
       </form>
     </div>
     <div class="setup-hint">
         Note: Requires OpenAI API Key. You will be prompted on load if not saved.
+    </div>
+
+    <div id="settings-modal">
+      <div id="settings-content">
+        <h2>Settings</h2>
+        <label for="provider-select">Model Provider</label>
+        <select id="provider-select">
+          <option value="openai">OpenAI</option>
+          <option value="anthropic">Anthropic</option>
+          <option value="bedrock">AWS Bedrock</option>
+        </select>
+        
+        <div class="openai-fields">
+          <label for="openai-key">OpenAI API Key</label>
+          <input type="password" id="openai-key" placeholder="sk-...">
+        </div>
+        
+        <div class="anthropic-fields">
+          <label for="anthropic-key">Anthropic API Key</label>
+          <input type="password" id="anthropic-key" placeholder="sk-ant-...">
+        </div>
+        
+        <div class="bedrock-fields">
+          <label for="bedrock-region">AWS Region</label>
+          <input type="text" id="bedrock-region" placeholder="us-west-2">
+          
+          <label for="bedrock-access-key">AWS Access Key ID</label>
+          <input type="password" id="bedrock-access-key">
+          
+          <label for="bedrock-secret-key">AWS Secret Access Key</label>
+          <input type="password" id="bedrock-secret-key">
+        </div>
+        
+        <div class="button-group">
+          <button type="button" id="save-settings-btn">Save</button>
+          <button type="button" id="cancel-settings-btn">Cancel</button>
+        </div>
+      </div>
     </div>
 
     <script type="module" src="/src/index.ts"></script>
