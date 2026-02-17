@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import type { ToolRegistry } from '../registry/tool-registry.js'
-import { StructuredOutputTool } from './structured-output-tool.js'
-import { getToolNameFromSchema } from './structured-output-utils.js'
+import { StructuredOutputTool } from './tool.js'
+import { getToolNameFromSchema } from './utils.js'
 
 /**
  * Interface for structured output context operations.

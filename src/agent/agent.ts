@@ -43,7 +43,7 @@ import {
   MessageAddedEvent,
   ModelStreamEventHook,
 } from '../hooks/events.js'
-import { createStructuredOutputContext } from '../structured-output/structured-output-context.js'
+import { createStructuredOutputContext } from '../structured-output/context.js'
 import { StructuredOutputException } from '../structured-output/exceptions.js'
 import type { z } from 'zod'
 

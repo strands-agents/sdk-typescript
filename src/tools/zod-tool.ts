@@ -4,7 +4,7 @@ import type { ToolSpec } from './types.js'
 import type { JSONSchema, JSONValue } from '../types/json.js'
 import { FunctionTool } from './function-tool.js'
 import { z, ZodVoid } from 'zod'
-import { zodSchemaToJsonSchema } from '../utils/zod-utils.js'
+import { zodSchemaToJsonSchema } from '../utils/zod.js'
 
 /**
  * Helper type to infer input type from Zod schema or default to never.

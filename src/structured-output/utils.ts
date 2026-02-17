@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import type { ToolSpec } from '../tools/types.js'
 import { StructuredOutputException } from './exceptions.js'
-import { zodSchemaToJsonSchema } from '../utils/zod-utils.js'
+import { zodSchemaToJsonSchema } from '../utils/zod.js'
 
 /**
  * Converts a Zod schema to a complete tool specification.

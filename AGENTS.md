@@ -58,14 +58,10 @@ sdk-typescript/
 │   │   └── streaming.ts          # Streaming event types
 │   │
 │   ├── structured-output/        # Structured output with Zod schemas
-│   │   ├── __tests__/            # Unit tests for structured output
-│   │   │   ├── exceptions.test.ts           # Tests for StructuredOutputException
-│   │   │   ├── schema_converter.test.ts     # Tests for Zod to JSON Schema conversion
-│   │   │   ├── structured-output-tool.test.ts      # Tests for StructuredOutputTool
-│   │   ├── exceptions.ts                    # StructuredOutputException
-│   │   ├── structured-output-utils.ts       # Zod to JSON Schema conversion
-│   │   ├── structured-output-tool.ts        # Tool implementation for validation
-│   │   └── structured-output-context.ts     # Per-invocation context management
+│   │   ├── exceptions.ts         # StructuredOutputException
+│   │   ├── utils.ts              # Zod to JSON Schema conversion
+│   │   ├── tool.ts               # Tool implementation for validation
+│   │   └── context.ts            # Per-invocation context management
 │   │
 │   ├── tools/                    # Tool definitions and types
 │   │   ├── __tests__/            # Unit tests for tools

@@ -2,9 +2,9 @@ import { z } from 'zod'
 import { Tool, type ToolContext, type ToolStreamGenerator } from '../tools/tool.js'
 import type { ToolSpec } from '../tools/types.js'
 import { TextBlock, ToolResultBlock } from '../types/messages.js'
-import { convertSchemaToToolSpec } from './structured-output-utils.js'
+import { convertSchemaToToolSpec } from './utils.js'
 import { formatValidationErrors } from './exceptions.js'
-import type { StructuredOutputContext } from './structured-output-context.js'
+import type { StructuredOutputContext } from './context.js'
 
 /**
  * Tool implementation that validates LLM output against a Zod schema.
