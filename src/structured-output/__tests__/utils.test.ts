@@ -76,17 +76,18 @@ describe('convertSchemaToToolSpec', () => {
 
     const toolSpec = convertSchemaToToolSpec(schema, 'TestTool')
 
-    expect(toolSpec.inputSchema.type).toBe('object')
-    expect(toolSpec.inputSchema.properties).toBeDefined()
-    expect(toolSpec.inputSchema.properties?.name).toMatchObject({
+    expect(toolSpec.inputSchema).toBeDefined()
+    expect(toolSpec.inputSchema?.type).toBe('object')
+    expect(toolSpec.inputSchema?.properties).toBeDefined()
+    expect(toolSpec.inputSchema?.properties?.name).toMatchObject({
       type: 'string',
       minLength: 1,
       maxLength: 100,
     })
-    expect(toolSpec.inputSchema.properties?.age).toMatchObject({
+    expect(toolSpec.inputSchema?.properties?.age).toMatchObject({
       type: 'integer',
     })
-    expect(toolSpec.inputSchema.properties?.email).toMatchObject({
+    expect(toolSpec.inputSchema?.properties?.email).toMatchObject({
       type: 'string',
       format: 'email',
     })
