@@ -48,7 +48,7 @@ export interface SnapshotTriggerParams {
   /** Number of agent invocations (turns) since session started */
   turnCount: number
   /** Timestamp (ms) of last immutable snapshot creation, undefined if no snapshot yet */
-  lastSnapshotMs?: number
+  lastSnapshotAt?: number
   /** Current agent data including messages and state */
   agentData: AgentData
 }
@@ -66,9 +66,9 @@ export interface SnapshotTriggerParams {
  * const trigger: SnapshotTriggerCallback = ({ turnCount }) => turnCount % 5 === 0
  *
  * // Snapshot every 60 seconds
- * const trigger: SnapshotTriggerCallback = ({ lastSnapshotMs }) => {
- *   if (!lastSnapshotMs) return false
- *   return Date.now() - lastSnapshotMs > 60000
+ * const trigger: SnapshotTriggerCallback = ({ lastSnapshotAt }) => {
+ *   if (!lastSnapshotAt) return false
+ *   return Date.now() - lastSnapshotAt > 60000
  * }
  *
  * // Snapshot when conversation exceeds 10 messages

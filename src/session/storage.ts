@@ -42,7 +42,7 @@ export interface SnapshotStorage {
   /**
    * Loads a snapshot from storage.
    */
-  loadSnapshot(params: { sessionId: string; scope: Scope; snapshotId: string | undefined }): Promise<Snapshot | null>
+  loadSnapshot(params: { sessionId: string; scope: Scope; snapshotId?: string }): Promise<Snapshot | null>
 
   /**
    * Lists all available snapshot IDs for a session scope.

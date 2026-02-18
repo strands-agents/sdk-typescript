@@ -2,8 +2,8 @@ import { S3Client, PutObjectCommand, GetObjectCommand, ListObjectsV2Command } fr
 import type { ListObjectsV2CommandOutput } from '@aws-sdk/client-s3/dist-types/commands/ListObjectsV2Command.js'
 import type { SnapshotStorage } from './storage.js'
 import type { Scope, Snapshot, SnapshotManifest } from './types.js'
-import { validateIdentifier } from '../types/validation.js'
 import { SessionError } from '../errors.js'
+import { validateIdentifier } from './validation.js'
 
 const MANIFEST = 'manifest.json'
 const SNAPSHOT_LATEST = 'snapshot_latest.json'
@@ -54,7 +54,7 @@ export class S3Storage implements SnapshotStorage {
   /**
    * Generates S3 key path for session scope snapshots
    */
-  private getKey(sessionId: string, scope: Scope, path: string): string {
+  private _getKey(sessionId: string, scope: Scope, path: string): string {
     validateIdentifier(sessionId)
     const scopeId = scope.kind === 'agent' ? scope.agentId : scope.multiAgentId
     validateIdentifier(scopeId)
@@ -72,28 +72,24 @@ export class S3Storage implements SnapshotStorage {
     isLatest: boolean
     snapshot: Snapshot
   }): Promise<void> {
-    await this.writeJSON(
-      this.getHistorySnapshotKey(params.sessionId, params.scope, params.snapshot.snapshotId),
+    await this._writeJSON(
+      this._getHistorySnapshotKey(params.sessionId, params.scope, params.snapshot.snapshotId),
       params.snapshot
     )
     if (params.isLatest) {
-      await this.writeJSON(this.getLatestSnapshotKey(params.sessionId, params.scope), params.snapshot)
+      await this._writeJSON(this._getLatestSnapshotKey(params.sessionId, params.scope), params.snapshot)
     }
   }
 
   /**
    * Loads snapshot by ID or latest if undefined
    */
-  async loadSnapshot(params: {
-    sessionId: string
-    scope: Scope
-    snapshotId: string | undefined
-  }): Promise<Snapshot | null> {
+  async loadSnapshot(params: { sessionId: string; scope: Scope; snapshotId?: string }): Promise<Snapshot | null> {
     const key =
       params.snapshotId === undefined
-        ? this.getLatestSnapshotKey(params.sessionId, params.scope)
-        : this.getHistorySnapshotKey(params.sessionId, params.scope, params.snapshotId)
-    return this.readJSON<Snapshot>(key)
+        ? this._getLatestSnapshotKey(params.sessionId, params.scope)
+        : this._getHistorySnapshotKey(params.sessionId, params.scope, params.snapshotId)
+    return this._readJSON<Snapshot>(key)
   }
 
   /**
@@ -111,7 +107,7 @@ export class S3Storage implements SnapshotStorage {
    * ```
    */
   async listSnapshotIds(params: { sessionId: string; scope: Scope }): Promise<string[]> {
-    const prefix = this.getKey(params.sessionId, params.scope, IMMUTABLE_HISTORY)
+    const prefix = this._getKey(params.sessionId, params.scope, IMMUTABLE_HISTORY)
     try {
       const response: ListObjectsV2CommandOutput = await this._s3.send(
         new ListObjectsV2Command({ Bucket: this._bucket, Prefix: prefix })
@@ -130,8 +126,8 @@ export class S3Storage implements SnapshotStorage {
    * Loads manifest or returns default if not found
    */
   async loadManifest(params: { sessionId: string; scope: Scope }): Promise<SnapshotManifest> {
-    const key = this.getKey(params.sessionId, params.scope, MANIFEST)
-    const manifest = await this.readJSON<SnapshotManifest>(key)
+    const key = this._getKey(params.sessionId, params.scope, MANIFEST)
+    const manifest = await this._readJSON<SnapshotManifest>(key)
 
     return (
       manifest ?? {
@@ -146,14 +142,14 @@ export class S3Storage implements SnapshotStorage {
    * Saves manifest to S3
    */
   async saveManifest(params: { sessionId: string; scope: Scope; manifest: SnapshotManifest }): Promise<void> {
-    const key = this.getKey(params.sessionId, params.scope, MANIFEST)
-    await this.writeJSON(key, params.manifest)
+    const key = this._getKey(params.sessionId, params.scope, MANIFEST)
+    await this._writeJSON(key, params.manifest)
   }
 
   /**
    * Writes JSON data to S3
    */
-  private async writeJSON(key: string, data: unknown): Promise<void> {
+  private async _writeJSON(key: string, data: unknown): Promise<void> {
     try {
       await this._s3.send(
         new PutObjectCommand({
@@ -171,7 +167,7 @@ export class S3Storage implements SnapshotStorage {
   /**
    * Reads and parses JSON from S3
    */
-  private async readJSON<T>(key: string): Promise<T | null> {
+  private async _readJSON<T>(key: string): Promise<T | null> {
     try {
       const response = await this._s3.send(new GetObjectCommand({ Bucket: this._bucket, Key: key }))
       const body = await response.Body?.transformToString()
@@ -188,11 +184,11 @@ export class S3Storage implements SnapshotStorage {
     }
   }
 
-  private getLatestSnapshotKey(sessionId: string, scope: Scope): string {
-    return this.getKey(sessionId, scope, SNAPSHOT_LATEST)
+  private _getLatestSnapshotKey(sessionId: string, scope: Scope): string {
+    return this._getKey(sessionId, scope, SNAPSHOT_LATEST)
   }
 
-  private getHistorySnapshotKey(sessionId: string, scope: Scope, snapshotId: string): string {
-    return this.getKey(sessionId, scope, `${IMMUTABLE_HISTORY}snapshot_${String(snapshotId).padStart(5, '0')}.json`)
+  private _getHistorySnapshotKey(sessionId: string, scope: Scope, snapshotId: string): string {
+    return this._getKey(sessionId, scope, `${IMMUTABLE_HISTORY}snapshot_${String(snapshotId).padStart(5, '0')}.json`)
   }
 }

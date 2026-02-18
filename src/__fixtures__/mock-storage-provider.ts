@@ -62,11 +62,7 @@ export class MockSnapshotStorage implements SnapshotStorage {
     }
   }
 
-  async loadSnapshot(params: {
-    sessionId: string
-    scope: Scope
-    snapshotId: string | undefined
-  }): Promise<Snapshot | null> {
+  async loadSnapshot(params: { sessionId: string; scope: Scope; snapshotId?: string }): Promise<Snapshot | null> {
     if (this.shouldThrowErrors) throw new Error('Mock load error')
 
     const key =

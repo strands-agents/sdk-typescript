@@ -2,8 +2,9 @@ import { promises as fs } from 'fs'
 import { join, dirname } from 'path'
 import type { SnapshotStorage } from './storage.js'
 import type { Scope, Snapshot, SnapshotManifest } from './types.js'
-import { validateIdentifier } from '../types/validation.js'
+
 import { SessionError } from '../errors.js'
+import { validateIdentifier } from './validation.js'
 
 const MANIFEST = 'manifest.json'
 const SNAPSHOT_LATEST = 'snapshot_latest.json'
@@ -30,7 +31,7 @@ export class FileStorage implements SnapshotStorage {
   /**
    * Generates file path for session scope snapshots
    */
-  private getPath(sessionId: string, scope: Scope, filename: string): string {
+  private _getPath(sessionId: string, scope: Scope, filename: string): string {
     validateIdentifier(sessionId)
     const scopeId = scope.kind === 'agent' ? scope.agentId : scope.multiAgentId
     validateIdentifier(scopeId)
@@ -47,28 +48,31 @@ export class FileStorage implements SnapshotStorage {
     isLatest: boolean
     snapshot: Snapshot
   }): Promise<void> {
-    await this.writeJSON(
-      this.getHistorySnapshotPath(params.sessionId, params.scope, params.snapshot.snapshotId),
+    await this._writeJSON(
+      this._getHistorySnapshotPath(params.sessionId, params.scope, params.snapshot.snapshotId),
       params.snapshot
     )
     if (params.isLatest) {
-      await this.writeJSON(this.getLatestSnapshotPath(params.sessionId, params.scope), params.snapshot)
+      await this._writeJSON(this._getLatestSnapshotPath(params.sessionId, params.scope), params.snapshot)
     }
   }
 
   /**
    * Loads snapshot by ID or latest if null
    */
-  async loadSnapshot(params: {
-    sessionId: string
-    scope: Scope
-    snapshotId: string | undefined
-  }): Promise<Snapshot | null> {
+  async loadSnapshot(params: { sessionId: string; scope: Scope; snapshotId?: string }): Promise<Snapshot | null> {
     const path =
       params.snapshotId === undefined
-        ? this.getLatestSnapshotPath(params.sessionId, params.scope)
-        : this.getHistorySnapshotPath(params.sessionId, params.scope, params.snapshotId)
-    return this.readJSON<Snapshot>(path)
+        ? this._getLatestSnapshotPath(params.sessionId, params.scope)
+        : this._getHistorySnapshotPath(params.sessionId, params.scope, params.snapshotId)
+    return this._readJSON<Snapshot>(path)
+  }
+
+  /**
+   * Checks if an error is a file not found error (ENOENT)
+   */
+  private _isFileNotFoundError(error: unknown): boolean {
+    return error !== null && typeof error === 'object' && 'code' in error && error.code === 'ENOENT'
   }
 
   /**
@@ -86,7 +90,7 @@ export class FileStorage implements SnapshotStorage {
    * ```
    */
   async listSnapshotIds(params: { sessionId: string; scope: Scope }): Promise<string[]> {
-    const dirPath = this.getPath(params.sessionId, params.scope, IMMUTABLE_HISTORY)
+    const dirPath = this._getPath(params.sessionId, params.scope, IMMUTABLE_HISTORY)
     try {
       const files = await fs.readdir(dirPath)
       return files
@@ -94,7 +98,7 @@ export class FileStorage implements SnapshotStorage {
         .filter((id): id is string => id !== undefined)
         .sort((a, b) => parseInt(a) - parseInt(b))
     } catch (error: unknown) {
-      if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
+      if (this._isFileNotFoundError(error)) {
         return []
       }
       throw new SessionError(`Failed to list snapshots for session ${params.sessionId}`, { cause: error })
@@ -105,8 +109,8 @@ export class FileStorage implements SnapshotStorage {
    * Loads manifest or returns default if not found
    */
   async loadManifest(params: { sessionId: string; scope: Scope }): Promise<SnapshotManifest> {
-    const path = this.getPath(params.sessionId, params.scope, MANIFEST)
-    const manifest = await this.readJSON<SnapshotManifest>(path)
+    const path = this._getPath(params.sessionId, params.scope, MANIFEST)
+    const manifest = await this._readJSON<SnapshotManifest>(path)
 
     return (
       manifest ?? {
@@ -121,14 +125,14 @@ export class FileStorage implements SnapshotStorage {
    * Saves manifest to file
    */
   async saveManifest(params: { sessionId: string; scope: Scope; manifest: SnapshotManifest }): Promise<void> {
-    const path = this.getPath(params.sessionId, params.scope, MANIFEST)
-    await this.writeJSON(path, params.manifest)
+    const path = this._getPath(params.sessionId, params.scope, MANIFEST)
+    await this._writeJSON(path, params.manifest)
   }
 
   /**
    * Writes JSON data to file atomically
    */
-  private async writeJSON(path: string, data: unknown): Promise<void> {
+  private async _writeJSON(path: string, data: unknown): Promise<void> {
     try {
       await fs.mkdir(dirname(path), { recursive: true })
       const tmpPath = `${path}.tmp`
@@ -142,12 +146,12 @@ export class FileStorage implements SnapshotStorage {
   /**
    * Reads and parses JSON from file
    */
-  private async readJSON<T>(path: string): Promise<T | null> {
+  private async _readJSON<T>(path: string): Promise<T | null> {
     try {
       const content = await fs.readFile(path, 'utf8')
       return JSON.parse(content)
     } catch (error: unknown) {
-      if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
+      if (this._isFileNotFoundError(error)) {
         return null
       }
       if (error instanceof SyntaxError) {
@@ -157,11 +161,11 @@ export class FileStorage implements SnapshotStorage {
     }
   }
 
-  private getLatestSnapshotPath(sessionId: string, scope: Scope): string {
-    return this.getPath(sessionId, scope, SNAPSHOT_LATEST)
+  private _getLatestSnapshotPath(sessionId: string, scope: Scope): string {
+    return this._getPath(sessionId, scope, SNAPSHOT_LATEST)
   }
 
-  private getHistorySnapshotPath(sessionId: string, scope: Scope, snapshotId: string): string {
-    return this.getPath(sessionId, scope, `${IMMUTABLE_HISTORY}/snapshot_${String(snapshotId).padStart(5, '0')}.json`)
+  private _getHistorySnapshotPath(sessionId: string, scope: Scope, snapshotId: string): string {
+    return this._getPath(sessionId, scope, `${IMMUTABLE_HISTORY}/snapshot_${String(snapshotId).padStart(5, '0')}.json`)
   }
 }

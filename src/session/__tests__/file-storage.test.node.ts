@@ -29,16 +29,6 @@ describe('FileStorage', () => {
     }
   })
 
-  describe('constructor', () => {
-    describe('FileSnapshotStorage_When_ValidBaseDir_Then_CreatesInstance', () => {
-      it('creates instance with valid base directory', () => {
-        const baseDir = '/test/path'
-        const instance = new FileStorage(baseDir)
-        expect(instance).toBeInstanceOf(FileStorage)
-      })
-    })
-  })
-
   describe('saveSnapshot', () => {
     describe('FileSnapshotStorage_When_saveSnapshot_Then_CreatesFiles', () => {
       it('saves snapshot to history file', async () => {
@@ -132,7 +122,7 @@ describe('FileStorage', () => {
         const snapshot = createTestSnapshot({ snapshotId: '1' })
         await storage.saveSnapshot({ sessionId, scope, isLatest: true, snapshot })
 
-        const result = await storage.loadSnapshot({ sessionId, scope, snapshotId: undefined })
+        const result = await storage.loadSnapshot({ sessionId, scope })
 
         expect(result).toEqual(snapshot)
       })
@@ -156,7 +146,7 @@ describe('FileStorage', () => {
         const sessionId = 'nonexistent-session'
         const scope = createTestScope()
 
-        const result = await storage.loadSnapshot({ sessionId, scope, snapshotId: undefined })
+        const result = await storage.loadSnapshot({ sessionId, scope })
 
         expect(result).toBeNull()
       })
@@ -171,7 +161,7 @@ describe('FileStorage', () => {
         await fs.mkdir(join(testDir, sessionId, 'scopes', 'agent', 'test-id', 'snapshots'), { recursive: true })
         await fs.writeFile(filePath, 'invalid json', 'utf8')
 
-        await expect(storage.loadSnapshot({ sessionId, scope, snapshotId: undefined })).rejects.toThrow(SessionError)
+        await expect(storage.loadSnapshot({ sessionId, scope })).rejects.toThrow(SessionError)
       })
     })
 
@@ -182,7 +172,7 @@ describe('FileStorage', () => {
 
         vi.spyOn(fs, 'readFile').mockRejectedValueOnce(new Error('Permission denied'))
 
-        await expect(storage.loadSnapshot({ sessionId, scope, snapshotId: undefined })).rejects.toThrow(SessionError)
+        await expect(storage.loadSnapshot({ sessionId, scope })).rejects.toThrow(SessionError)
       })
     })
   })
