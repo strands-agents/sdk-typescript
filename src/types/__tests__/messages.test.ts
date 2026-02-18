@@ -408,126 +408,60 @@ describe('systemPromptFromData', () => {
   })
 })
 
-describe('Message toJSON/fromJSON', () => {
-  it('round-trips user message with text content', () => {
-    const original = new Message({
-      role: 'user',
-      content: [new TextBlock('Hello')],
-    })
-    const restored = Message.fromJSON(original.toJSON())
+describe('toJSON/fromJSON round-trips', () => {
+  // prettier-ignore
+  const roundTripCases = [
+    ['TextBlock',                              () => new TextBlock('Hello world')],
+    ['ToolUseBlock without reasoningSignature',() => new ToolUseBlock({ name: 'test-tool', toolUseId: '123', input: { param: 'value' } })],
+    ['ToolUseBlock with reasoningSignature',   () => new ToolUseBlock({ name: 'test-tool', toolUseId: '123', input: { param: 'value' }, reasoningSignature: 'sig123' })],
+    ['ToolResultBlock with text content',      () => new ToolResultBlock({ toolUseId: '123', status: 'success', content: [new TextBlock('Result text')] })],
+    ['ToolResultBlock with json content',      () => new ToolResultBlock({ toolUseId: '456', status: 'success', content: [new JsonBlock({ json: { result: 'data' } })] })],
+    ['ToolResultBlock with error status',      () => new ToolResultBlock({ toolUseId: '789', status: 'error', content: [new TextBlock('Error message')] })],
+    ['ReasoningBlock with text only',          () => new ReasoningBlock({ text: 'Thinking...' })],
+    ['ReasoningBlock with signature',          () => new ReasoningBlock({ text: 'Thinking...', signature: 'sig123' })],
+    ['ReasoningBlock with redactedContent',    () => new ReasoningBlock({ redactedContent: new Uint8Array([1, 2, 3]) })],
+    ['CachePointBlock',                        () => new CachePointBlock({ cacheType: 'default' })],
+    ['JsonBlock',                              () => new JsonBlock({ json: { key: 'value', nested: { a: 1 } } })],
+    ['GuardContentBlock with text',            () => new GuardContentBlock({ text: { text: 'Guard this', qualifiers: ['guard_content'] } })],
+    ['GuardContentBlock with image',           () => new GuardContentBlock({ image: { format: 'png', source: { bytes: new Uint8Array([1, 2, 3]) } } })],
+    ['Message with text content',              () => new Message({ role: 'user', content: [new TextBlock('Hello')] })],
+    ['Message with multiple content blocks',   () => new Message({ role: 'assistant', content: [new TextBlock('Here is the result'), new ToolUseBlock({ name: 'test-tool', toolUseId: '123', input: { key: 'value' } })] })],
+    ['Message with image content',             () => new Message({ role: 'user', content: [new TextBlock('Check this image'), new ImageBlock({ format: 'png', source: { bytes: new Uint8Array([1, 2, 3]) } })] })],
+  ] as const
+
+  it.each(roundTripCases)('%s', (_name, createBlock) => {
+    const original = createBlock()
+    // Use duck-typing here
+    const BlockClass = original.constructor as unknown as { fromJSON(json: unknown): unknown }
+    const restored = BlockClass.fromJSON(original.toJSON())
     expect(restored).toEqual(original)
   })
 
-  it('round-trips assistant message with multiple content blocks', () => {
-    const original = new Message({
-      role: 'assistant',
-      content: [
-        new TextBlock('Here is the result'),
-        new ToolUseBlock({ name: 'test-tool', toolUseId: '123', input: { key: 'value' } }),
-      ],
-    })
-    const restored = Message.fromJSON(original.toJSON())
-    expect(restored).toEqual(original)
-  })
-
-  it('works with JSON.stringify', () => {
-    const original = new Message({
-      role: 'user',
-      content: [new TextBlock('Test')],
-    })
+  it('Message works with JSON.stringify', () => {
+    const original = new Message({ role: 'user', content: [new TextBlock('Test')] })
     const jsonString = JSON.stringify(original)
     const restored = Message.fromJSON(JSON.parse(jsonString))
     expect(restored).toEqual(original)
   })
-
-  it('round-trips message with image content', () => {
-    const bytes = new Uint8Array([1, 2, 3])
-    const original = new Message({
-      role: 'user',
-      content: [new TextBlock('Check this image'), new ImageBlock({ format: 'png', source: { bytes } })],
-    })
-    const restored = Message.fromJSON(original.toJSON())
-    expect(restored).toEqual(original)
-  })
 })
 
-describe('TextBlock toJSON/fromJSON', () => {
-  it('round-trips text content', () => {
-    const original = new TextBlock('Hello world')
-    const restored = TextBlock.fromJSON(original.toJSON())
-    expect(restored).toEqual(original)
-  })
-
-  it('returns unwrapped format', () => {
+describe('toJSON format', () => {
+  it('TextBlock returns unwrapped format', () => {
     const block = new TextBlock('Test')
     expect(block.toJSON()).toStrictEqual({ text: 'Test' })
   })
-})
 
-describe('ToolUseBlock toJSON/fromJSON', () => {
-  it('round-trips without reasoningSignature', () => {
-    const original = new ToolUseBlock({
-      name: 'test-tool',
-      toolUseId: '123',
-      input: { param: 'value' },
-    })
-    const restored = ToolUseBlock.fromJSON(original.toJSON())
-    expect(restored).toEqual(original)
+  it('JsonBlock returns unwrapped format', () => {
+    const block = new JsonBlock({ json: { test: true } })
+    expect(block.toJSON()).toStrictEqual({ json: { test: true } })
   })
 
-  it('round-trips with reasoningSignature', () => {
-    const original = new ToolUseBlock({
-      name: 'test-tool',
-      toolUseId: '123',
-      input: { param: 'value' },
-      reasoningSignature: 'sig123',
-    })
-    const restored = ToolUseBlock.fromJSON(original.toJSON())
-    expect(restored).toEqual(original)
-  })
-
-  it('omits undefined reasoningSignature from JSON', () => {
-    const block = new ToolUseBlock({
-      name: 'test-tool',
-      toolUseId: '123',
-      input: {},
-    })
+  it('ToolUseBlock omits undefined reasoningSignature', () => {
+    const block = new ToolUseBlock({ name: 'test-tool', toolUseId: '123', input: {} })
     expect('reasoningSignature' in block.toJSON().toolUse).toBe(false)
   })
-})
 
-describe('ToolResultBlock toJSON/fromJSON', () => {
-  it('round-trips with text content', () => {
-    const original = new ToolResultBlock({
-      toolUseId: '123',
-      status: 'success',
-      content: [new TextBlock('Result text')],
-    })
-    const restored = ToolResultBlock.fromJSON(original.toJSON())
-    expect(restored).toEqual(original)
-  })
-
-  it('round-trips with json content', () => {
-    const original = new ToolResultBlock({
-      toolUseId: '456',
-      status: 'success',
-      content: [new JsonBlock({ json: { result: 'data' } })],
-    })
-    const restored = ToolResultBlock.fromJSON(original.toJSON())
-    expect(restored).toEqual(original)
-  })
-
-  it('round-trips with error status', () => {
-    const original = new ToolResultBlock({
-      toolUseId: '789',
-      status: 'error',
-      content: [new TextBlock('Error message')],
-    })
-    const restored = ToolResultBlock.fromJSON(original.toJSON())
-    expect(restored).toEqual(original)
-  })
-
-  it('does not serialize error field', () => {
+  it('ToolResultBlock does not serialize error field', () => {
     const block = new ToolResultBlock({
       toolUseId: '123',
       status: 'error',
@@ -536,79 +470,20 @@ describe('ToolResultBlock toJSON/fromJSON', () => {
     })
     expect('error' in block.toJSON().toolResult).toBe(false)
   })
-})
 
-describe('ReasoningBlock toJSON/fromJSON', () => {
-  it('round-trips with text only', () => {
-    const original = new ReasoningBlock({ text: 'Thinking...' })
-    const restored = ReasoningBlock.fromJSON(original.toJSON())
-    expect(restored).toEqual(original)
-  })
-
-  it('round-trips with signature', () => {
-    const original = new ReasoningBlock({ text: 'Thinking...', signature: 'sig123' })
-    const restored = ReasoningBlock.fromJSON(original.toJSON())
-    expect(restored).toEqual(original)
-  })
-
-  it('round-trips with redactedContent', () => {
-    const original = new ReasoningBlock({ redactedContent: new Uint8Array([1, 2, 3]) })
-    const restored = ReasoningBlock.fromJSON(original.toJSON())
-    expect(restored).toEqual(original)
-  })
-
-  it('encodes redactedContent as base64 in JSON', () => {
+  it('ReasoningBlock encodes redactedContent as base64', () => {
     const block = new ReasoningBlock({ redactedContent: new Uint8Array([1, 2, 3]) })
     expect(typeof block.toJSON().reasoning.redactedContent).toBe('string')
   })
 
-  it('omits undefined fields from JSON', () => {
+  it('ReasoningBlock omits undefined fields', () => {
     const block = new ReasoningBlock({ text: 'Test' })
     const json = block.toJSON()
     expect('signature' in json.reasoning).toBe(false)
     expect('redactedContent' in json.reasoning).toBe(false)
   })
-})
 
-describe('CachePointBlock toJSON/fromJSON', () => {
-  it('round-trips cache point', () => {
-    const original = new CachePointBlock({ cacheType: 'default' })
-    const restored = CachePointBlock.fromJSON(original.toJSON())
-    expect(restored).toEqual(original)
-  })
-})
-
-describe('JsonBlock toJSON/fromJSON', () => {
-  it('round-trips json content', () => {
-    const original = new JsonBlock({ json: { key: 'value', nested: { a: 1 } } })
-    const restored = JsonBlock.fromJSON(original.toJSON())
-    expect(restored).toEqual(original)
-  })
-
-  it('returns unwrapped format', () => {
-    const block = new JsonBlock({ json: { test: true } })
-    expect(block.toJSON()).toStrictEqual({ json: { test: true } })
-  })
-})
-
-describe('GuardContentBlock toJSON/fromJSON', () => {
-  it('round-trips with text content', () => {
-    const original = new GuardContentBlock({
-      text: { text: 'Guard this', qualifiers: ['guard_content'] },
-    })
-    const restored = GuardContentBlock.fromJSON(original.toJSON())
-    expect(restored).toEqual(original)
-  })
-
-  it('round-trips with image content', () => {
-    const original = new GuardContentBlock({
-      image: { format: 'png', source: { bytes: new Uint8Array([1, 2, 3]) } },
-    })
-    const restored = GuardContentBlock.fromJSON(original.toJSON())
-    expect(restored).toEqual(original)
-  })
-
-  it('encodes image bytes as base64 in JSON', () => {
+  it('GuardContentBlock encodes image bytes as base64', () => {
     const block = new GuardContentBlock({
       image: { format: 'jpeg', source: { bytes: new Uint8Array([1, 2, 3]) } },
     })
