@@ -163,7 +163,7 @@ export {
   ModelMessageEvent,
   ToolResultEvent,
   AgentResultEvent,
-  // ModelStreamObserverEvent # Disabled for now https://github.com/strands-agents/sdk-typescript/issues/288
+  ModelStreamObserverEvent,
 } from './hooks/index.js'
 export type { HookCallback, HookProvider, HookEventConstructor, ModelStopResponse } from './hooks/index.js'
 

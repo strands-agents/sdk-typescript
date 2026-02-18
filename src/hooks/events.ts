@@ -222,7 +222,8 @@ export class AfterModelCallEvent extends HookEvent {
  * Allows hooks to observe individual streaming events during model inference.
  * Provides read-only access to streaming events.
  *
- * Currently private pending https://github.com/strands-agents/sdk-typescript/issues/288
+ * This event is fired only through the hook system (not yielded in the agent stream)
+ * to avoid duplicating the raw {@link ModelStreamEvent} that is already in the stream.
  */
 export class ModelStreamObserverEvent extends HookEvent {
   readonly type = 'modelStreamObserverEvent' as const

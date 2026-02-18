@@ -564,9 +564,9 @@ export class Agent implements AgentData {
       const event = result.value
 
       if (event.type.startsWith('model')) {
-        // ModelStreamEvent: yield observer hook event + raw event
+        // ModelStreamEvent: fire observer hook + yield raw event
         const modelEvent = event as ModelStreamEvent
-        yield new ModelStreamObserverEvent({ agent: this, event: modelEvent })
+        await this.hooks.invokeCallbacks(new ModelStreamObserverEvent({ agent: this, event: modelEvent }))
         yield modelEvent
       } else {
         // ContentBlock: wrap in ContentBlockCompleteEvent
