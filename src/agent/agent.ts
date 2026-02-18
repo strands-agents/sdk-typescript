@@ -547,7 +547,17 @@ export class Agent implements AgentData {
   }
 
   /**
-   * Streams events from the model and fires observer events for each streaming event.
+   * Streams events from the model and dispatches appropriate events for each.
+   *
+   * The model's `streamAggregated()` yields two kinds of output:
+   * - **ModelStreamEvent**: Transient streaming deltas (partial data while generating).
+   *   These are yielded raw in the stream for consumers/printer. A ModelStreamObserverEvent
+   *   is fired hook-only (via invokeCallbacks, not yielded) so hook providers can observe
+   *   streaming without duplicating events in the stream.
+   * - **ContentBlock**: Fully assembled results (after all deltas accumulate).
+   *   These are wrapped in ContentBlockCompleteEvent, which is both yielded in the stream
+   *   and hookable. They are kept separate from ModelStreamObserverEvent because they
+   *   represent different granularities — partial deltas vs finished blocks.
    *
    * @param messages - Messages to send to the model
    * @param streamOptions - Options for streaming
@@ -564,12 +574,12 @@ export class Agent implements AgentData {
       const event = result.value
 
       if (event.type.startsWith('model')) {
-        // ModelStreamEvent: fire observer hook + yield raw event
+        // ModelStreamEvent: fire observer hook (hook-only, not yielded) + yield raw event
         const modelEvent = event as ModelStreamEvent
         await this.hooks.invokeCallbacks(new ModelStreamObserverEvent({ agent: this, event: modelEvent }))
         yield modelEvent
       } else {
-        // ContentBlock: wrap in ContentBlockCompleteEvent
+        // ContentBlock: wrap in ContentBlockCompleteEvent (yielded + hookable)
         yield new ContentBlockCompleteEvent({ agent: this, contentBlock: event as ContentBlock })
       }
       result = await streamGenerator.next()
