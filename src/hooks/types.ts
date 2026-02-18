@@ -35,8 +35,8 @@ export type HookCleanup = () => void
  * ```typescript
  * class MyHooks implements HookProvider {
  *   registerCallbacks(registry: HookRegistry): void {
- *     registry.addCallback(BeforeInvocationEvent, this.onStart)
- *     registry.addCallback(AfterInvocationEvent, this.onEnd)
+ *     registry.addCallback(this.onStart, BeforeInvocationEvent)
+ *     registry.addCallback(this.onEnd, AfterInvocationEvent)
  *   }
  *
  *   private onStart = (event: BeforeInvocationEvent): void => {

@@ -17,11 +17,11 @@ export interface HookRegistry {
   /**
    * Register a callback function for a specific event type.
    *
-   * @param eventType - The event class constructor to register the callback for
    * @param callback - The callback function to invoke when the event occurs
+   * @param eventType - The event class constructor to register the callback for
    * @returns Cleanup function that removes the callback when invoked
    */
-  addCallback<T extends HookEvent>(eventType: HookEventConstructor<T>, callback: HookCallback<T>): HookCleanup
+  addCallback<T extends HookEvent>(callback: HookCallback<T>, eventType: HookEventConstructor<T>): HookCleanup
 
   /**
    * Register all callbacks from a hook provider.
@@ -54,11 +54,11 @@ export class HookRegistryImplementation implements HookRegistry {
   /**
    * Register a callback function for a specific event type.
    *
-   * @param eventType - The event class constructor to register the callback for
    * @param callback - The callback function to invoke when the event occurs
+   * @param eventType - The event class constructor to register the callback for
    * @returns Cleanup function that removes the callback when invoked
    */
-  addCallback<T extends HookEvent>(eventType: HookEventConstructor<T>, callback: HookCallback<T>): HookCleanup {
+  addCallback<T extends HookEvent>(callback: HookCallback<T>, eventType: HookEventConstructor<T>): HookCleanup {
     const entry: CallbackEntry = { callback: callback as HookCallback<HookEvent>, source: this._currentProvider }
     const callbacks = this._callbacks.get(eventType) ?? []
     callbacks.push(entry)

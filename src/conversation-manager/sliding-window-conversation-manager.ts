@@ -65,17 +65,17 @@ export class SlidingWindowConversationManager implements HookProvider {
    */
   public registerCallbacks(registry: HookRegistry): void {
     // Apply sliding window management after each invocation
-    registry.addCallback(AfterInvocationEvent, (event) => {
+    registry.addCallback((event) => {
       this.applyManagement(event.agent.messages)
-    })
+    }, AfterInvocationEvent)
 
     // Handle context overflow errors
-    registry.addCallback(AfterModelCallEvent, (event) => {
+    registry.addCallback((event) => {
       if (event.error instanceof ContextWindowOverflowError) {
         this.reduceContext(event.agent.messages, event.error)
         event.retry = true
       }
-    })
+    }, AfterModelCallEvent)
   }
 
   /**

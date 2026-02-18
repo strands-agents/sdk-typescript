@@ -321,12 +321,12 @@ When testing hook behavior, you **MUST** use `agent.hooks.addCallback()` for reg
 // ✅ CORRECT - Use agent.hooks.addCallback() for single callbacks
 const agent = new Agent({ model, tools: [tool] })
 
-agent.hooks.addCallback(BeforeToolCallEvent, (event: BeforeToolCallEvent) => {
+agent.hooks.addCallback((event: BeforeToolCallEvent) => {
   event.toolUse = {
     ...event.toolUse,
     input: { value: 42 },
   }
-})
+}, BeforeToolCallEvent)
 
 // ✅ CORRECT - Use MockHookProvider to record and verify hook invocations
 const hookProvider = new MockHookProvider()
@@ -337,11 +337,11 @@ expect(hookProvider.invocations).toContainEqual(new BeforeInvocationEvent({ agen
 // ❌ WRONG - Do NOT create inline HookProvider objects
 const switchToolHook = {
   registerCallbacks: (registry: HookRegistry) => {
-    registry.addCallback(BeforeToolCallEvent, (event: BeforeToolCallEvent) => {
+    registry.addCallback((event: BeforeToolCallEvent) => {
       if (event.toolUse.name === 'tool1') {
         event.tool = tool2
       }
-    })
+    }, BeforeToolCallEvent)
   },
 }
 ```
