@@ -26,6 +26,7 @@ function createTestServer(): McpServer {
     {
       capabilities: {
         tools: {},
+        elicitation: { form: {} },
       },
     }
   )
@@ -125,6 +126,63 @@ function createTestServer(): McpServer {
     }
   )
 
+  // Register elicitation tool
+  server.registerTool(
+    'confirm_action',
+    {
+      title: 'Confirm Action Tool',
+      description: 'Requests user confirmation before performing an action',
+      inputSchema: {
+        action: z.string(),
+      },
+      outputSchema: {
+        confirmed: z.boolean(),
+        action: z.string(),
+      },
+    },
+    async ({ action }) => {
+      // Request user confirmation via elicitation
+      const result = await server.server.elicitInput({
+        message: `Do you want to proceed with: ${action}?`,
+        requestedSchema: {
+          type: 'object',
+          properties: {
+            confirmed: {
+              type: 'boolean',
+              title: 'Confirm action',
+              description: 'Confirm whether to proceed',
+            },
+          },
+          required: ['confirmed'],
+        },
+      })
+
+      if (result.action === 'accept' && result.content?.confirmed) {
+        const output = { confirmed: true, action }
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Action confirmed: ${action}`,
+            },
+          ],
+          structuredContent: output,
+        }
+      }
+
+      const output = { confirmed: false, action }
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Action declined: ${action}`,
+          },
+        ],
+        structuredContent: output,
+      }
+    }
+  )
+
   return server
 }
 
@@ -164,6 +222,7 @@ export async function startHTTPServer(): Promise<HttpServerInfo> {
         // Create a new transport for each request (stateless mode)
         const transport = new StreamableHTTPServerTransport({
           enableJsonResponse: true,
+          sessionIdGenerator: undefined,
         })
 
         res.on('close', async () => {

@@ -116,4 +116,123 @@ describe('MCP Integration Tests', () => {
       expect(hasErrorResult).toBe(true)
     }, 30000)
   })
+
+  describe('elicitation callback', () => {
+    it('handles elicitation requests with accept action', async () => {
+      let elicitationCalled = false
+      let elicitationMessage = ''
+
+      const client = new McpClient({
+        applicationName: 'test-mcp-elicitation',
+        transport: new StdioClientTransport({
+          command: 'npx',
+          args: ['tsx', serverPath],
+        }),
+        elicitationCallback: async (_context, params) => {
+          elicitationCalled = true
+          elicitationMessage = params.message
+          return {
+            action: 'accept',
+            content: { confirmed: true },
+          }
+        },
+      })
+
+      const model = bedrock.createModel({ maxTokens: 200 })
+
+      const agent = new Agent({
+        systemPrompt: 'You are a helpful assistant. Use the confirm_action tool when asked.',
+        tools: [client],
+        model,
+      })
+
+      const result = await agent.invoke('Use the confirm_action tool to delete a file.')
+
+      expect(result).toBeDefined()
+      expect(elicitationCalled).toBe(true)
+      expect(elicitationMessage).toContain('delete a file')
+
+      // Verify the tool was used and completed
+      const hasConfirmUse = agent.messages.some((msg) =>
+        msg.content.some((block) => block.type === 'toolUseBlock' && block.name === 'confirm_action')
+      )
+      expect(hasConfirmUse).toBe(true)
+
+      await client.disconnect()
+    }, 30000)
+
+    it('handles elicitation requests with decline action', async () => {
+      let elicitationCalled = false
+
+      const client = new McpClient({
+        applicationName: 'test-mcp-elicitation-decline',
+        transport: new StdioClientTransport({
+          command: 'npx',
+          args: ['tsx', serverPath],
+        }),
+        elicitationCallback: async (_context, _params) => {
+          elicitationCalled = true
+          return {
+            action: 'decline',
+          }
+        },
+      })
+
+      const model = bedrock.createModel({ maxTokens: 200 })
+
+      const agent = new Agent({
+        systemPrompt: 'You are a helpful assistant. Use the confirm_action tool when asked.',
+        tools: [client],
+        model,
+      })
+
+      const result = await agent.invoke('Use the confirm_action tool to update settings.')
+
+      expect(result).toBeDefined()
+      expect(elicitationCalled).toBe(true)
+
+      // Verify the tool was used
+      const hasConfirmUse = agent.messages.some((msg) =>
+        msg.content.some((block) => block.type === 'toolUseBlock' && block.name === 'confirm_action')
+      )
+      expect(hasConfirmUse).toBe(true)
+
+      await client.disconnect()
+    }, 30000)
+
+    it('handles elicitation with requested schema', async () => {
+      let receivedSchema: unknown
+
+      const client = new McpClient({
+        applicationName: 'test-mcp-elicitation-schema',
+        transport: new StdioClientTransport({
+          command: 'npx',
+          args: ['tsx', serverPath],
+        }),
+        elicitationCallback: async (_context, params) => {
+          receivedSchema = params.requestedSchema
+          return {
+            action: 'accept',
+            content: { confirmed: true },
+          }
+        },
+      })
+
+      const model = bedrock.createModel({ maxTokens: 200 })
+
+      const agent = new Agent({
+        systemPrompt: 'You are a helpful assistant. Use the confirm_action tool when asked.',
+        tools: [client],
+        model,
+      })
+
+      await agent.invoke('Use the confirm_action tool to restart the system.')
+
+      expect(receivedSchema).toBeDefined()
+      expect(receivedSchema).toHaveProperty('type', 'object')
+      expect(receivedSchema).toHaveProperty('properties')
+
+      await client.disconnect()
+    }, 30000)
+  })
 })
