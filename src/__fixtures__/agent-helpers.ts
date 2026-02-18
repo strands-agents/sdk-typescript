@@ -5,6 +5,7 @@
 
 import type { Agent } from '../agent/agent.js'
 import { Message, TextBlock } from '../types/messages.js'
+import type { Role } from '../types/messages.js'
 import { AgentState } from '../agent/state.js'
 import type { JSONValue } from '../types/json.js'
 
@@ -37,21 +38,12 @@ export function createMockAgent(data?: MockAgentData): Agent {
 }
 
 /**
- * Creates a user Message containing a single TextBlock.
+ * Creates a Message with the given role containing a single TextBlock.
  *
+ * @param role - The message role
  * @param text - The text content
- * @returns A user Message
+ * @returns A Message with the specified role
  */
-export function userMessage(text: string): Message {
-  return new Message({ role: 'user', content: [new TextBlock(text)] })
-}
-
-/**
- * Creates an assistant Message containing a single TextBlock.
- *
- * @param text - The text content
- * @returns An assistant Message
- */
-export function assistantMessage(text: string): Message {
-  return new Message({ role: 'assistant', content: [new TextBlock(text)] })
+export function textMessage(role: Role, text: string): Message {
+  return new Message({ role, content: [new TextBlock(text)] })
 }

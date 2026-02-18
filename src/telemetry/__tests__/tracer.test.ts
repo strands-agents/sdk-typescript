@@ -4,7 +4,7 @@ import { SpanStatusCode, trace } from '@opentelemetry/api'
 import { Tracer } from '../tracer.js'
 import { Message, TextBlock, ToolResultBlock, ToolUseBlock } from '../../types/messages.js'
 import { MockSpan, eventAttr } from '../../__fixtures__/mock-span.js'
-import { userMessage, assistantMessage } from '../../__fixtures__/agent-helpers.js'
+import { textMessage } from '../../__fixtures__/agent-helpers.js'
 
 // Partial mock: keep real SpanStatusCode etc., replace context and trace
 vi.mock('@opentelemetry/api', async (importOriginal) => ({
@@ -61,7 +61,7 @@ describe('Tracer', () => {
       const tracer = new Tracer()
 
       tracer.startAgentSpan({
-        messages: [userMessage('Hello')],
+        messages: [textMessage('user', 'Hello')],
         agentName: 'test-agent',
         modelId: 'model-123',
       })
@@ -81,7 +81,7 @@ describe('Tracer', () => {
       const tracer = new Tracer()
 
       tracer.startAgentSpan({
-        messages: [userMessage('Hello')],
+        messages: [textMessage('user', 'Hello')],
         agentName: 'test-agent',
         agentId: 'agent-42',
       })
@@ -94,7 +94,7 @@ describe('Tracer', () => {
       const tracer = new Tracer()
 
       tracer.startAgentSpan({
-        messages: [userMessage('Hello')],
+        messages: [textMessage('user', 'Hello')],
         agentName: 'test-agent',
         tools: [{ name: 'calculator' }, { name: 'search' }],
       })
@@ -109,7 +109,7 @@ describe('Tracer', () => {
       const toolsConfig = { calc: { name: 'calc', description: 'Calculator' } }
 
       tracer.startAgentSpan({
-        messages: [userMessage('Hello')],
+        messages: [textMessage('user', 'Hello')],
         agentName: 'test-agent',
         toolsConfig,
       })
@@ -122,7 +122,7 @@ describe('Tracer', () => {
       const tracer = new Tracer()
 
       tracer.startAgentSpan({
-        messages: [userMessage('Hello')],
+        messages: [textMessage('user', 'Hello')],
         agentName: 'test-agent',
         systemPrompt: 'You are a helpful assistant',
       })
@@ -135,7 +135,7 @@ describe('Tracer', () => {
       const tracer = new Tracer({ 'global.attr': 'global-val' })
 
       tracer.startAgentSpan({
-        messages: [userMessage('Hello')],
+        messages: [textMessage('user', 'Hello')],
         agentName: 'test-agent',
         traceAttributes: { 'custom.session': 'sess-1' },
       })
@@ -149,7 +149,7 @@ describe('Tracer', () => {
       const tracer = new Tracer()
 
       tracer.startAgentSpan({
-        messages: [userMessage('Hello'), assistantMessage('Hi')],
+        messages: [textMessage('user', 'Hello'), textMessage('assistant', 'Hi')],
         agentName: 'test-agent',
       })
 
@@ -175,7 +175,7 @@ describe('Tracer', () => {
       const tracer = new Tracer()
 
       tracer.startAgentSpan({
-        messages: [userMessage('Hello'), assistantMessage('Hi')],
+        messages: [textMessage('user', 'Hello'), textMessage('assistant', 'Hi')],
         agentName: 'test-agent',
       })
 
@@ -193,7 +193,7 @@ describe('Tracer', () => {
       vi.stubEnv('OTEL_SEMCONV_STABILITY_OPT_IN', 'gen_ai_latest_experimental')
       const tracer = new Tracer()
 
-      tracer.startAgentSpan({ messages: [userMessage('Hello')], agentName: 'test-agent' })
+      tracer.startAgentSpan({ messages: [textMessage('user', 'Hello')], agentName: 'test-agent' })
 
       const [, options] = getStartSpanCall()
       expect(options.attributes['gen_ai.provider.name']).toBeDefined()
@@ -203,7 +203,7 @@ describe('Tracer', () => {
     it('uses gen_ai.system with stable conventions', () => {
       const tracer = new Tracer()
 
-      tracer.startAgentSpan({ messages: [userMessage('Hello')], agentName: 'test-agent' })
+      tracer.startAgentSpan({ messages: [textMessage('user', 'Hello')], agentName: 'test-agent' })
 
       const [, options] = getStartSpanCall()
       expect(options.attributes['gen_ai.system']).toBeDefined()
@@ -214,7 +214,7 @@ describe('Tracer', () => {
   describe('endAgentSpan', () => {
     it('sets OK status and ends span on success', () => {
       const tracer = new Tracer()
-      const span = tracer.startAgentSpan({ messages: [userMessage('Hi')], agentName: 'agent' })
+      const span = tracer.startAgentSpan({ messages: [textMessage('user', 'Hi')], agentName: 'agent' })
 
       tracer.endAgentSpan(span)
 
@@ -224,7 +224,7 @@ describe('Tracer', () => {
 
     it('sets ERROR status and records exception on error', () => {
       const tracer = new Tracer()
-      const span = tracer.startAgentSpan({ messages: [userMessage('Hi')], agentName: 'agent' })
+      const span = tracer.startAgentSpan({ messages: [textMessage('user', 'Hi')], agentName: 'agent' })
       const error = new Error('agent failed')
 
       tracer.endAgentSpan(span, { error })
@@ -237,7 +237,7 @@ describe('Tracer', () => {
 
     it('sets accumulated usage attributes', () => {
       const tracer = new Tracer()
-      const span = tracer.startAgentSpan({ messages: [userMessage('Hi')], agentName: 'agent' })
+      const span = tracer.startAgentSpan({ messages: [textMessage('user', 'Hi')], agentName: 'agent' })
 
       tracer.endAgentSpan(span, {
         accumulatedUsage: { inputTokens: 100, outputTokens: 200, totalTokens: 300 },
@@ -252,7 +252,7 @@ describe('Tracer', () => {
 
     it('adds response event with stable conventions', () => {
       const tracer = new Tracer()
-      const span = tracer.startAgentSpan({ messages: [userMessage('Hi')], agentName: 'agent' })
+      const span = tracer.startAgentSpan({ messages: [textMessage('user', 'Hi')], agentName: 'agent' })
 
       const response = new Message({ role: 'assistant', content: [new TextBlock('Hello back')] })
       tracer.endAgentSpan(span, { response, stopReason: 'end_turn' })
@@ -266,7 +266,7 @@ describe('Tracer', () => {
     it('adds response event with latest conventions', () => {
       vi.stubEnv('OTEL_SEMCONV_STABILITY_OPT_IN', 'gen_ai_latest_experimental')
       const tracer = new Tracer()
-      const span = tracer.startAgentSpan({ messages: [userMessage('Hi')], agentName: 'agent' })
+      const span = tracer.startAgentSpan({ messages: [textMessage('user', 'Hi')], agentName: 'agent' })
 
       const response = new Message({ role: 'assistant', content: [new TextBlock('Hello back')] })
       tracer.endAgentSpan(span, { response, stopReason: 'end_turn' })
@@ -292,7 +292,7 @@ describe('Tracer', () => {
     it('creates span with chat operation name and model id', () => {
       const tracer = new Tracer()
 
-      tracer.startModelInvokeSpan({ messages: [userMessage('Hello')], modelId: 'claude-3' })
+      tracer.startModelInvokeSpan({ messages: [textMessage('user', 'Hello')], modelId: 'claude-3' })
 
       const [spanName, options] = getStartSpanCall()
       expect(spanName).toBe('chat')
@@ -305,7 +305,7 @@ describe('Tracer', () => {
     it('adds message events to span', () => {
       const tracer = new Tracer()
 
-      tracer.startModelInvokeSpan({ messages: [userMessage('Hello')] })
+      tracer.startModelInvokeSpan({ messages: [textMessage('user', 'Hello')] })
 
       expect(mockSpan.getEvents('gen_ai.user.message')).toHaveLength(1)
     })
@@ -314,7 +314,7 @@ describe('Tracer', () => {
   describe('endModelInvokeSpan', () => {
     it('sets usage and metrics attributes', () => {
       const tracer = new Tracer()
-      const span = tracer.startModelInvokeSpan({ messages: [userMessage('Hi')], modelId: 'model-1' })
+      const span = tracer.startModelInvokeSpan({ messages: [textMessage('user', 'Hi')], modelId: 'model-1' })
 
       tracer.endModelInvokeSpan(span, {
         usage: { inputTokens: 10, outputTokens: 20, totalTokens: 30 },
@@ -329,7 +329,7 @@ describe('Tracer', () => {
 
     it('sets cache token attributes when provided', () => {
       const tracer = new Tracer()
-      const span = tracer.startModelInvokeSpan({ messages: [userMessage('Hi')] })
+      const span = tracer.startModelInvokeSpan({ messages: [textMessage('user', 'Hi')] })
 
       tracer.endModelInvokeSpan(span, {
         usage: {
@@ -347,7 +347,7 @@ describe('Tracer', () => {
 
     it('skips cache token attributes when zero', () => {
       const tracer = new Tracer()
-      const span = tracer.startModelInvokeSpan({ messages: [userMessage('Hi')] })
+      const span = tracer.startModelInvokeSpan({ messages: [textMessage('user', 'Hi')] })
 
       tracer.endModelInvokeSpan(span, {
         usage: { inputTokens: 10, outputTokens: 20, totalTokens: 30, cacheReadInputTokens: 0 },
@@ -358,7 +358,7 @@ describe('Tracer', () => {
 
     it('skips latency attribute when zero', () => {
       const tracer = new Tracer()
-      const span = tracer.startModelInvokeSpan({ messages: [userMessage('Hi')] })
+      const span = tracer.startModelInvokeSpan({ messages: [textMessage('user', 'Hi')] })
 
       tracer.endModelInvokeSpan(span, {
         usage: { inputTokens: 10, outputTokens: 20, totalTokens: 30 },
@@ -370,7 +370,7 @@ describe('Tracer', () => {
 
     it('adds output event with stable conventions for mixed content', () => {
       const tracer = new Tracer()
-      const span = tracer.startModelInvokeSpan({ messages: [userMessage('Hi')] })
+      const span = tracer.startModelInvokeSpan({ messages: [textMessage('user', 'Hi')] })
 
       const output = new Message({
         role: 'assistant',
@@ -396,7 +396,7 @@ describe('Tracer', () => {
     it('adds output event with latest conventions for mixed content', () => {
       vi.stubEnv('OTEL_SEMCONV_STABILITY_OPT_IN', 'gen_ai_latest_experimental')
       const tracer = new Tracer()
-      const span = tracer.startModelInvokeSpan({ messages: [userMessage('Hi')] })
+      const span = tracer.startModelInvokeSpan({ messages: [textMessage('user', 'Hi')] })
 
       const output = new Message({
         role: 'assistant',
@@ -426,7 +426,7 @@ describe('Tracer', () => {
 
     it('records error on model invocation failure', () => {
       const tracer = new Tracer()
-      const span = tracer.startModelInvokeSpan({ messages: [userMessage('Hi')] })
+      const span = tracer.startModelInvokeSpan({ messages: [textMessage('user', 'Hi')] })
       const error = new Error('model timeout')
 
       tracer.endModelInvokeSpan(span, { error })
@@ -567,7 +567,7 @@ describe('Tracer', () => {
     it('creates span with cycle id attribute', () => {
       const tracer = new Tracer()
 
-      tracer.startAgentLoopSpan({ cycleId: 'cycle-42', messages: [userMessage('Hi')] })
+      tracer.startAgentLoopSpan({ cycleId: 'cycle-42', messages: [textMessage('user', 'Hi')] })
 
       const [spanName, options] = getStartSpanCall()
       expect(spanName).toBe('execute_agent_loop_cycle')
@@ -577,7 +577,7 @@ describe('Tracer', () => {
     it('adds message events to loop span', () => {
       const tracer = new Tracer()
 
-      tracer.startAgentLoopSpan({ cycleId: 'cycle-1', messages: [userMessage('Hello')] })
+      tracer.startAgentLoopSpan({ cycleId: 'cycle-1', messages: [textMessage('user', 'Hello')] })
 
       expect(mockSpan.getEvents('gen_ai.user.message')).toHaveLength(1)
     })
@@ -586,7 +586,7 @@ describe('Tracer', () => {
   describe('endAgentLoopSpan', () => {
     it('ends span with OK status', () => {
       const tracer = new Tracer()
-      const span = tracer.startAgentLoopSpan({ cycleId: 'cycle-1', messages: [userMessage('Hi')] })
+      const span = tracer.startAgentLoopSpan({ cycleId: 'cycle-1', messages: [textMessage('user', 'Hi')] })
 
       tracer.endAgentLoopSpan(span)
 
@@ -596,7 +596,7 @@ describe('Tracer', () => {
 
     it('records error on loop failure', () => {
       const tracer = new Tracer()
-      const span = tracer.startAgentLoopSpan({ cycleId: 'cycle-1', messages: [userMessage('Hi')] })
+      const span = tracer.startAgentLoopSpan({ cycleId: 'cycle-1', messages: [textMessage('user', 'Hi')] })
       const error = new Error('loop failed')
 
       tracer.endAgentLoopSpan(span, { error })
@@ -660,7 +660,7 @@ describe('Tracer', () => {
     it('serializes text block content in stable convention events', () => {
       const tracer = new Tracer()
 
-      tracer.startModelInvokeSpan({ messages: [userMessage('Hello world')] })
+      tracer.startModelInvokeSpan({ messages: [textMessage('user', 'Hello world')] })
 
       const userEvents = mockSpan.getEvents('gen_ai.user.message')
       const parsed = JSON.parse(eventAttr(userEvents[0]!, 'content'))
@@ -673,11 +673,11 @@ describe('Tracer', () => {
     it.each([
       {
         method: 'startAgentSpan',
-        call: (tracer: Tracer) => tracer.startAgentSpan({ messages: [userMessage('Hi')], agentName: 'agent' }),
+        call: (tracer: Tracer) => tracer.startAgentSpan({ messages: [textMessage('user', 'Hi')], agentName: 'agent' }),
       },
       {
         method: 'startModelInvokeSpan',
-        call: (tracer: Tracer) => tracer.startModelInvokeSpan({ messages: [userMessage('Hi')] }),
+        call: (tracer: Tracer) => tracer.startModelInvokeSpan({ messages: [textMessage('user', 'Hi')] }),
       },
       {
         method: 'startToolCallSpan',
@@ -685,7 +685,7 @@ describe('Tracer', () => {
       },
       {
         method: 'startAgentLoopSpan',
-        call: (tracer: Tracer) => tracer.startAgentLoopSpan({ cycleId: 'c', messages: [userMessage('Hi')] }),
+        call: (tracer: Tracer) => tracer.startAgentLoopSpan({ cycleId: 'c', messages: [textMessage('user', 'Hi')] }),
       },
     ])('returns null when $method throws internally', ({ call }) => {
       mockStartSpan.mockImplementation(() => {
@@ -714,7 +714,7 @@ describe('Tracer', () => {
       const tracer = new Tracer()
       const toolsConfig = { calc: { name: 'calc', description: 'Calculator' } }
 
-      tracer.startAgentSpan({ messages: [userMessage('Hi')], agentName: 'agent', toolsConfig })
+      tracer.startAgentSpan({ messages: [textMessage('user', 'Hi')], agentName: 'agent', toolsConfig })
 
       const [, options] = getStartSpanCall()
       expect(options.attributes['gen_ai.provider.name']).toBeDefined()
@@ -725,7 +725,7 @@ describe('Tracer', () => {
       vi.stubEnv('OTEL_SEMCONV_STABILITY_OPT_IN', ' gen_ai_latest_experimental , gen_ai_tool_definitions ')
       const tracer = new Tracer()
 
-      tracer.startAgentSpan({ messages: [userMessage('Hi')], agentName: 'agent' })
+      tracer.startAgentSpan({ messages: [textMessage('user', 'Hi')], agentName: 'agent' })
 
       const [, options] = getStartSpanCall()
       expect(options.attributes['gen_ai.provider.name']).toBeDefined()
@@ -734,7 +734,7 @@ describe('Tracer', () => {
     it('defaults to stable conventions when env var is empty', () => {
       const tracer = new Tracer()
 
-      tracer.startAgentSpan({ messages: [userMessage('Hi')], agentName: 'agent' })
+      tracer.startAgentSpan({ messages: [textMessage('user', 'Hi')], agentName: 'agent' })
 
       const [, options] = getStartSpanCall()
       expect(options.attributes['gen_ai.system']).toBeDefined()

@@ -42,7 +42,7 @@ import type {
   Metrics,
 } from './types.js'
 import type { ContentBlock, Message } from '../types/messages.js'
-import { jsonReplacer } from '../types/json.js'
+import { jsonReplacer } from './json.js'
 import { getServiceName } from './config.js'
 
 /**
@@ -172,7 +172,7 @@ export class Tracer {
     try {
       const attributes: Record<string, AttributeValue> = {}
       if (accumulatedUsage) this._setUsageAttributes(attributes, accumulatedUsage)
-      if (response !== undefined && response !== null) this._addResponseEvent(span, response, stopReason)
+      if (response !== undefined) this._addResponseEvent(span, response, stopReason)
 
       this._endSpan(span, attributes, error)
     } catch (err) {

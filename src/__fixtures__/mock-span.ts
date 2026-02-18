@@ -107,24 +107,6 @@ export class MockSpan implements Span {
   getEvents(name: string): Array<{ name: string; attributes: SpanAttributes | TimeInput | undefined }> {
     return this.calls.addEvent.filter((c) => c.name === name)
   }
-
-  /**
-   * Get the attributes from the first startSpan call (via the mock tracer).
-   * Convenience for reading span options from the mock.
-   */
-  getStartSpanAttributes(mockStartSpan: {
-    mock: { calls: unknown[][] }
-  }): Record<string, SpanAttributeValue | undefined> {
-    const call = mockStartSpan.mock.calls[0] as [string, { attributes: Record<string, SpanAttributeValue | undefined> }]
-    return call[1].attributes
-  }
-
-  /**
-   * Get the span name from the first startSpan call.
-   */
-  getStartSpanName(mockStartSpan: { mock: { calls: unknown[][] } }): string {
-    return mockStartSpan.mock.calls[0]![0] as string
-  }
 }
 
 /**
