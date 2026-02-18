@@ -846,29 +846,18 @@ export function contentBlockFromData(data: ContentBlockData): ContentBlock {
       }),
     })
   } else if ('reasoning' in data) {
-    return ReasoningBlock.fromJSON({ reasoning: data.reasoning })
+    return ReasoningBlock.fromJSON(data)
   } else if ('cachePoint' in data) {
-    return new CachePointBlock(data.cachePoint)
+    return CachePointBlock.fromJSON(data)
   } else if ('guardContent' in data) {
-    return GuardContentBlock.fromJSON({ guardContent: data.guardContent })
+    return GuardContentBlock.fromJSON(data)
   } else if ('image' in data) {
-    return ImageBlock.fromJSON({ image: data.image })
+    return ImageBlock.fromJSON(data)
   } else if ('video' in data) {
-    return VideoBlock.fromJSON({ video: data.video })
+    return VideoBlock.fromJSON(data)
   } else if ('document' in data) {
-    return DocumentBlock.fromJSON({ document: data.document })
+    return DocumentBlock.fromJSON(data)
   } else {
     throw new Error('Unknown ContentBlockData type')
   }
-}
-
-/**
- * Converts a ContentBlock instance to its ContentBlockData representation.
- * Calls the block's toJSON() method to serialize it.
- *
- * @param block - The ContentBlock instance to convert
- * @returns The ContentBlockData representation
- */
-export function contentBlockToData(block: ContentBlock): ContentBlockData {
-  return block.toJSON() as ContentBlockData
 }

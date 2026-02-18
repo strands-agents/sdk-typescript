@@ -448,8 +448,7 @@ describe('AnthropicModel', () => {
         const provider = new AnthropicModel({ client: mockClient })
         const pdfBytes = new Uint8Array([1, 2, 3])
         const messages = [
-          {
-            type: 'message',
+          new Message({
             role: 'user',
             content: [
               new DocumentBlock({
@@ -458,8 +457,8 @@ describe('AnthropicModel', () => {
                 source: { bytes: pdfBytes },
               }),
             ],
-          },
-        ] as Message[]
+          }),
+        ]
 
         await collectIterator(provider.stream(messages))
 
@@ -473,16 +472,15 @@ describe('AnthropicModel', () => {
         const { captured, mockClient } = setupCapture()
         const provider = new AnthropicModel({ client: mockClient })
         const messages = [
-          {
-            type: 'message',
+          new Message({
             role: 'user',
             content: [
               new GuardContentBlock({
                 text: { text: 'guard', qualifiers: ['query'] },
               }),
             ],
-          },
-        ] as Message[]
+          }),
+        ]
 
         await collectIterator(provider.stream(messages))
 
