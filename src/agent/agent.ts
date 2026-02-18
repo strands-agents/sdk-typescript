@@ -47,6 +47,7 @@ import {
   ModelMessageEvent,
   ToolResultEvent,
   AgentResultEvent,
+  ToolStreamObserverEvent,
 } from '../hooks/events.js'
 import { createStructuredOutputContext } from '../structured-output/context.js'
 import { StructuredOutputException } from '../structured-output/exceptions.js'
@@ -679,7 +680,16 @@ export class Agent implements AgentData {
         }
 
         try {
-          const result = yield* tool.stream(toolContext)
+          // Manually iterate tool stream to wrap each ToolStreamEvent in ToolStreamObserverEvent.
+          // This keeps the tool authoring interface unchanged — tools construct ToolStreamEvent
+          // without knowledge of agents or hooks, and we wrap at the boundary.
+          const toolGenerator = tool.stream(toolContext)
+          let toolNext = await toolGenerator.next()
+          while (!toolNext.done) {
+            yield new ToolStreamObserverEvent({ agent: this, toolStreamEvent: toolNext.value })
+            toolNext = await toolGenerator.next()
+          }
+          const result = toolNext.value
 
           if (!result) {
             // Tool didn't return a result

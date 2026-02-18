@@ -12,6 +12,7 @@ import {
   ContentBlockCompleteEvent,
   ModelMessageEvent,
   ToolResultEvent,
+  ToolStreamObserverEvent,
   AgentResultEvent,
 } from '../hooks/index.js'
 import type { HookEventConstructor } from '../hooks/types.js'
@@ -44,6 +45,7 @@ export class MockHookProvider implements HookProvider {
       ContentBlockCompleteEvent,
       ModelMessageEvent,
       ToolResultEvent,
+      ToolStreamObserverEvent,
       AgentResultEvent,
     ]
 

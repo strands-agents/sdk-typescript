@@ -162,6 +162,7 @@ export {
   ContentBlockCompleteEvent,
   ModelMessageEvent,
   ToolResultEvent,
+  ToolStreamObserverEvent,
   AgentResultEvent,
   ModelStreamObserverEvent,
 } from './hooks/index.js'

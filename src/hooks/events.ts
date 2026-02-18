@@ -1,6 +1,6 @@
 import type { AgentData, AgentResult } from '../types/agent.js'
 import type { ContentBlock, Message, StopReason, ToolResultBlock } from '../types/messages.js'
-import type { Tool } from '../tools/tool.js'
+import { type Tool, ToolStreamEvent } from '../tools/tool.js'
 import type { JSONValue } from '../types/json.js'
 import type { ModelStreamEvent } from '../models/streaming.js'
 
@@ -294,6 +294,27 @@ export class ToolResultEvent extends HookEvent {
     super()
     this.agent = data.agent
     this.toolResult = data.toolResult
+  }
+}
+
+/**
+ * Event triggered for each streaming progress event from a tool during execution.
+ * Wraps a {@link ToolStreamEvent} with agent context, keeping the tool authoring
+ * interface unchanged — tools construct `ToolStreamEvent` without knowledge of agents
+ * or hooks, and the agent layer wraps them at the boundary.
+ *
+ * Both yielded in the agent stream and hookable, consistent with
+ * {@link ModelStreamObserverEvent} which wraps model streaming events the same way.
+ */
+export class ToolStreamObserverEvent extends HookEvent {
+  readonly type = 'toolStreamObserverEvent' as const
+  readonly agent: AgentData
+  readonly toolStreamEvent: ToolStreamEvent
+
+  constructor(data: { agent: AgentData; toolStreamEvent: ToolStreamEvent }) {
+    super()
+    this.agent = data.agent
+    this.toolStreamEvent = data.toolStreamEvent
   }
 }
 

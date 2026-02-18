@@ -20,6 +20,7 @@ export {
   ContentBlockCompleteEvent,
   ModelMessageEvent,
   ToolResultEvent,
+  ToolStreamObserverEvent,
   AgentResultEvent,
   BeforeToolsEvent,
   AfterToolsEvent,

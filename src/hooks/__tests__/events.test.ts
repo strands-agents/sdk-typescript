@@ -14,12 +14,14 @@ import {
   ContentBlockCompleteEvent,
   ModelMessageEvent,
   ToolResultEvent,
+  ToolStreamObserverEvent,
   AgentResultEvent,
 } from '../events.js'
 import { Agent } from '../../agent/agent.js'
 import { AgentResult } from '../../types/agent.js'
 import { Message, TextBlock, ToolResultBlock, ToolUseBlock } from '../../types/messages.js'
 import { FunctionTool } from '../../tools/function-tool.js'
+import { ToolStreamEvent } from '../../tools/tool.js'
 
 describe('InitializedEvent', () => {
   it('creates instance with correct properties', () => {
@@ -467,6 +469,31 @@ describe('ToolResultEvent', () => {
     const agent = new Agent()
     const toolResult = new ToolResultBlock({ toolUseId: 'id', status: 'success', content: [] })
     const event = new ToolResultEvent({ agent, toolResult })
+    expect(event._shouldReverseCallbacks()).toBe(false)
+  })
+})
+
+describe('ToolStreamObserverEvent', () => {
+  it('creates instance with correct properties', () => {
+    const agent = new Agent()
+    const toolStreamEvent = new ToolStreamEvent({ data: 'progress' })
+    const event = new ToolStreamObserverEvent({ agent, toolStreamEvent })
+
+    expect(event).toEqual({
+      type: 'toolStreamObserverEvent',
+      agent: agent,
+      toolStreamEvent: toolStreamEvent,
+    })
+    // @ts-expect-error verifying that property is readonly
+    event.agent = new Agent()
+    // @ts-expect-error verifying that property is readonly
+    event.toolStreamEvent = toolStreamEvent
+  })
+
+  it('returns false for _shouldReverseCallbacks', () => {
+    const agent = new Agent()
+    const toolStreamEvent = new ToolStreamEvent({ data: 'test' })
+    const event = new ToolStreamObserverEvent({ agent, toolStreamEvent })
     expect(event._shouldReverseCallbacks()).toBe(false)
   })
 })
