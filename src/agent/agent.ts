@@ -551,13 +551,12 @@ export class Agent implements AgentData {
    *
    * The model's `streamAggregated()` yields two kinds of output:
    * - **ModelStreamEvent**: Transient streaming deltas (partial data while generating).
-   *   These are yielded raw in the stream for consumers/printer. A ModelStreamObserverEvent
-   *   is fired hook-only (via invokeCallbacks, not yielded) so hook providers can observe
-   *   streaming without duplicating events in the stream.
+   *   Wrapped in {@link ModelStreamObserverEvent} before yielding.
    * - **ContentBlock**: Fully assembled results (after all deltas accumulate).
-   *   These are wrapped in ContentBlockCompleteEvent, which is both yielded in the stream
-   *   and hookable. They are kept separate from ModelStreamObserverEvent because they
-   *   represent different granularities — partial deltas vs finished blocks.
+   *   Wrapped in {@link ContentBlockCompleteEvent} before yielding.
+   *
+   * These are separate event classes because they represent different granularities
+   * (partial deltas vs finished blocks). Both are yielded in the stream and hookable.
    *
    * @param messages - Messages to send to the model
    * @param streamOptions - Options for streaming
@@ -574,12 +573,10 @@ export class Agent implements AgentData {
       const event = result.value
 
       if (event.type.startsWith('model')) {
-        // ModelStreamEvent: fire observer hook (hook-only, not yielded) + yield raw event
-        const modelEvent = event as ModelStreamEvent
-        await this.hooks.invokeCallbacks(new ModelStreamObserverEvent({ agent: this, event: modelEvent }))
-        yield modelEvent
+        // ModelStreamEvent: wrap in ModelStreamObserverEvent
+        yield new ModelStreamObserverEvent({ agent: this, event: event as ModelStreamEvent })
       } else {
-        // ContentBlock: wrap in ContentBlockCompleteEvent (yielded + hookable)
+        // ContentBlock: wrap in ContentBlockCompleteEvent
         yield new ContentBlockCompleteEvent({ agent: this, contentBlock: event as ContentBlock })
       }
       result = await streamGenerator.next()

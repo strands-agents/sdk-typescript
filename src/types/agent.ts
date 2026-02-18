@@ -1,6 +1,5 @@
 import type { AgentState } from '../agent/state.js'
 import type { Message, StopReason } from './messages.js'
-import type { ModelStreamEvent } from '../models/streaming.js'
 import { ToolStreamEvent } from '../tools/tool.js'
 import type {
   BeforeInvocationEvent,
@@ -12,6 +11,7 @@ import type {
   BeforeToolCallEvent,
   AfterToolCallEvent,
   MessageAddedEvent,
+  ModelStreamObserverEvent,
   ContentBlockCompleteEvent,
   ModelMessageEvent,
   ToolResultEvent,
@@ -107,7 +107,7 @@ export class AgentResult {
  * consistent structure with agent reference and extensibility features.
  */
 export type AgentStreamEvent =
-  | ModelStreamEvent
+  | ModelStreamObserverEvent
   | ContentBlockCompleteEvent
   | ModelMessageEvent
   | ToolStreamEvent

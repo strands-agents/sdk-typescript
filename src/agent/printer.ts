@@ -65,16 +65,8 @@ export class AgentPrinter implements Printer {
    */
   public processEvent(event: AgentStreamEvent): void {
     switch (event.type) {
-      case 'modelContentBlockDeltaEvent':
-        this.handleContentBlockDelta(event)
-        break
-
-      case 'modelContentBlockStartEvent':
-        this.handleContentBlockStart(event)
-        break
-
-      case 'modelContentBlockStopEvent':
-        this.handleContentBlockStop()
+      case 'modelStreamObserverEvent':
+        this.handleModelStreamEvent(event.event)
         break
 
       case 'toolResultEvent':
@@ -82,6 +74,25 @@ export class AgentPrinter implements Printer {
         break
 
       // Ignore other event types
+      default:
+        break
+    }
+  }
+
+  /**
+   * Handle raw model stream events unwrapped from ModelStreamObserverEvent.
+   */
+  private handleModelStreamEvent(event: { type: string; delta?: unknown; start?: unknown }): void {
+    switch (event.type) {
+      case 'modelContentBlockDeltaEvent':
+        this.handleContentBlockDelta(event as { delta: { type: string; text?: string; input?: string } })
+        break
+      case 'modelContentBlockStartEvent':
+        this.handleContentBlockStart(event as { start?: { type: string; name?: string; toolUseId?: string } })
+        break
+      case 'modelContentBlockStopEvent':
+        this.handleContentBlockStop()
+        break
       default:
         break
     }

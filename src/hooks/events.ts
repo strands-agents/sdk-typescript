@@ -219,17 +219,13 @@ export class AfterModelCallEvent extends HookEvent {
 
 /**
  * Event triggered for each streaming event from the model.
- * Allows hooks to observe individual streaming events during model inference.
- * Provides read-only access to streaming events.
+ * Wraps a {@link ModelStreamEvent} (transient streaming delta) during model inference.
+ * Both yielded in the agent stream and hookable.
  *
- * This event is **hook-only** — fired through the hook system via `invokeCallbacks`,
- * not yielded in the agent stream. Raw {@link ModelStreamEvent} objects are yielded
- * directly in the stream for consumers and the printer. This avoids duplicating
- * the same streaming data in two forms within the stream.
- *
- * This event wraps only {@link ModelStreamEvent} (transient streaming deltas).
- * Completed content blocks are handled separately by {@link ContentBlockCompleteEvent}.
- * See {@link ContentBlockCompleteEvent} for why these are distinct events.
+ * This event wraps only {@link ModelStreamEvent} (transient streaming deltas — partial
+ * data arriving while the model generates). Completed content blocks are handled
+ * separately by {@link ContentBlockCompleteEvent} because they represent different
+ * granularities: partial deltas vs fully assembled results.
  */
 export class ModelStreamObserverEvent extends HookEvent {
   readonly type = 'modelStreamObserverEvent' as const
@@ -246,6 +242,7 @@ export class ModelStreamObserverEvent extends HookEvent {
 /**
  * Event triggered when a content block completes during model inference.
  * Wraps completed content blocks (TextBlock, ToolUseBlock, ReasoningBlock) from model streaming.
+ * Both yielded in the agent stream and hookable.
  *
  * This is intentionally separate from {@link ModelStreamObserverEvent}. The model's
  * `streamAggregated()` yields two kinds of output: {@link ModelStreamEvent} (transient
@@ -253,9 +250,6 @@ export class ModelStreamObserverEvent extends HookEvent {
  * {@link ContentBlock} (fully assembled results after all deltas accumulate).
  * These represent different granularities with different semantics, so they are
  * wrapped in distinct event classes rather than combined into a single event.
- *
- * Unlike {@link ModelStreamObserverEvent} (hook-only), this event is both yielded
- * in the agent stream and fired through the hook system.
  */
 export class ContentBlockCompleteEvent extends HookEvent {
   readonly type = 'contentBlockCompleteEvent' as const

@@ -237,7 +237,7 @@ describe('Agent Hooks Integration', () => {
   })
 
   describe('ModelStreamObserverEvent', () => {
-    it('fires as hook for each streaming event from the model', async () => {
+    it('fires for each streaming event from the model', async () => {
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
 
       const agent = new Agent({
@@ -251,19 +251,16 @@ describe('Agent Hooks Integration', () => {
         allStreamEvents.push(event)
       }
 
-      const streamObserverEvents = mockProvider.invocations.filter((e) => e instanceof ModelStreamObserverEvent)
-
-      // Should have hook events fired
+      // Should be yielded in the stream
+      const streamObserverEvents = allStreamEvents.filter((e) => e instanceof ModelStreamObserverEvent)
       expect(streamObserverEvents.length).toBeGreaterThan(0)
 
-      // Verify observer events are NOT yielded in the stream (hook-only)
-      expect(allStreamEvents.filter((e) => e instanceof ModelStreamObserverEvent)).toHaveLength(0)
+      // Should also fire as hook
+      const hookObserverEvents = mockProvider.invocations.filter((e) => e instanceof ModelStreamObserverEvent)
+      expect(hookObserverEvents.length).toBeGreaterThan(0)
 
-      // Verify each hook event wraps a raw model stream event that IS in the stream
-      for (const hookEvent of streamObserverEvents) {
-        const event = (hookEvent as ModelStreamObserverEvent).event
-        expect(allStreamEvents).toContain(event)
-      }
+      // Stream and hook should receive the same event instances
+      expect(streamObserverEvents).toStrictEqual(hookObserverEvents)
     })
   })
 
