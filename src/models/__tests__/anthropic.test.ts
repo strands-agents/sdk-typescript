@@ -4,8 +4,14 @@ import { isNode } from '../../__fixtures__/environment.js'
 import { AnthropicModel } from '../anthropic.js'
 import { ContextWindowOverflowError, ModelThrottledError } from '../../errors.js'
 import { collectIterator } from '../../__fixtures__/model-test-helpers.js'
-import type { Message } from '../../types/messages.js'
-import { TextBlock, CachePointBlock, GuardContentBlock } from '../../types/messages.js'
+import {
+  Message,
+  TextBlock,
+  CachePointBlock,
+  GuardContentBlock,
+  ToolResultBlock,
+  JsonBlock,
+} from '../../types/messages.js'
 import { ImageBlock, DocumentBlock } from '../../types/media.js'
 
 /**
@@ -117,7 +123,7 @@ describe('AnthropicModel', () => {
       })
 
       const provider = new AnthropicModel({ client: mockClient })
-      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+      const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
 
       const events = await collectIterator(provider.stream(messages))
 
@@ -152,7 +158,7 @@ describe('AnthropicModel', () => {
       })
 
       const provider = new AnthropicModel({ client: mockClient })
-      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+      const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
 
       const events = await collectIterator(provider.stream(messages))
 
@@ -189,7 +195,7 @@ describe('AnthropicModel', () => {
       })
 
       const provider = new AnthropicModel({ client: mockClient })
-      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+      const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
 
       const events = await collectIterator(provider.stream(messages))
 
@@ -218,7 +224,7 @@ describe('AnthropicModel', () => {
       })
 
       const provider = new AnthropicModel({ client: mockClient })
-      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+      const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
 
       const events = await collectIterator(provider.stream(messages))
 
@@ -238,7 +244,7 @@ describe('AnthropicModel', () => {
       })
 
       const provider = new AnthropicModel({ client: mockClient })
-      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+      const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
 
       const events = await collectIterator(provider.stream(messages))
 
@@ -254,7 +260,7 @@ describe('AnthropicModel', () => {
         throw new Error('API Error')
       })
       const provider = new AnthropicModel({ client: mockClient })
-      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+      const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
 
       await expect(collectIterator(provider.stream(messages))).rejects.toThrow('API Error')
     })
@@ -265,7 +271,7 @@ describe('AnthropicModel', () => {
         throw new Error('prompt is too long')
       })
       const provider = new AnthropicModel({ client: mockClient })
-      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+      const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
 
       await expect(collectIterator(provider.stream(messages))).rejects.toThrow(ContextWindowOverflowError)
     })
@@ -277,7 +283,7 @@ describe('AnthropicModel', () => {
         throw rateLimitError
       })
       const provider = new AnthropicModel({ client: mockClient })
-      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+      const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
 
       await expect(collectIterator(provider.stream(messages))).rejects.toThrow(ModelThrottledError)
       await expect(collectIterator(provider.stream(messages))).rejects.toThrow('Rate limit exceeded')
@@ -307,7 +313,7 @@ describe('AnthropicModel', () => {
         temperature: 0.7,
         client: mockClient,
       })
-      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+      const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
 
       await collectIterator(provider.stream(messages))
 
@@ -323,7 +329,7 @@ describe('AnthropicModel', () => {
     it('formats tools correctly', async () => {
       const { captured, mockClient } = setupCapture()
       const provider = new AnthropicModel({ client: mockClient })
-      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+      const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
       const toolSpecs = [
         {
           name: 'calc',
@@ -347,9 +353,8 @@ describe('AnthropicModel', () => {
       it('attaches cache control to message content block followed by cache point', async () => {
         const { captured, mockClient } = setupCapture()
         const provider = new AnthropicModel({ client: mockClient })
-        const messages: Message[] = [
-          {
-            type: 'message',
+        const messages = [
+          new Message({
             role: 'user',
             content: [
               new TextBlock('Cached content'),
@@ -357,7 +362,7 @@ describe('AnthropicModel', () => {
               new CachePointBlock({ cacheType: 'default' }),
               new TextBlock('Non-cached content'),
             ],
-          },
+          }),
         ]
 
         await collectIterator(provider.stream(messages))
@@ -378,7 +383,7 @@ describe('AnthropicModel', () => {
       it('formats system prompt string without cache', async () => {
         const { captured, mockClient } = setupCapture()
         const provider = new AnthropicModel({ client: mockClient })
-        const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+        const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
 
         await collectIterator(provider.stream(messages, { systemPrompt: 'System instruction' }))
 
@@ -388,7 +393,7 @@ describe('AnthropicModel', () => {
       it('formats system prompt array with cache points', async () => {
         const { captured, mockClient } = setupCapture()
         const provider = new AnthropicModel({ client: mockClient })
-        const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+        const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
         const systemPrompt = [
           new TextBlock('Heavy context'),
           new CachePointBlock({ cacheType: 'default' }),
@@ -417,9 +422,8 @@ describe('AnthropicModel', () => {
         const { captured, mockClient } = setupCapture()
         const provider = new AnthropicModel({ client: mockClient })
         const imageBytes = new Uint8Array([72, 101, 108, 108, 111]) // "Hello"
-        const messages: Message[] = [
-          {
-            type: 'message',
+        const messages = [
+          new Message({
             role: 'user',
             content: [
               new ImageBlock({
@@ -427,7 +431,7 @@ describe('AnthropicModel', () => {
                 source: { bytes: imageBytes },
               }),
             ],
-          },
+          }),
         ]
 
         await collectIterator(provider.stream(messages))
@@ -443,7 +447,7 @@ describe('AnthropicModel', () => {
         const { captured, mockClient } = setupCapture()
         const provider = new AnthropicModel({ client: mockClient })
         const pdfBytes = new Uint8Array([1, 2, 3])
-        const messages: Message[] = [
+        const messages = [
           {
             type: 'message',
             role: 'user',
@@ -455,7 +459,7 @@ describe('AnthropicModel', () => {
               }),
             ],
           },
-        ]
+        ] as Message[]
 
         await collectIterator(provider.stream(messages))
 
@@ -468,7 +472,7 @@ describe('AnthropicModel', () => {
         const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {}) // Spy on console.warn (via logger)
         const { captured, mockClient } = setupCapture()
         const provider = new AnthropicModel({ client: mockClient })
-        const messages: Message[] = [
+        const messages = [
           {
             type: 'message',
             role: 'user',
@@ -478,7 +482,7 @@ describe('AnthropicModel', () => {
               }),
             ],
           },
-        ]
+        ] as Message[]
 
         await collectIterator(provider.stream(messages))
 
@@ -492,19 +496,17 @@ describe('AnthropicModel', () => {
       it('formats simple text tool result', async () => {
         const { captured, mockClient } = setupCapture()
         const provider = new AnthropicModel({ client: mockClient })
-        const messages: Message[] = [
-          {
-            type: 'message',
+        const messages = [
+          new Message({
             role: 'user',
             content: [
-              {
-                type: 'toolResultBlock',
+              new ToolResultBlock({
                 toolUseId: 't1',
                 status: 'success',
-                content: [{ type: 'textBlock', text: '42' }],
-              },
+                content: [new TextBlock('42')],
+              }),
             ],
-          },
+          }),
         ]
 
         await collectIterator(provider.stream(messages))
@@ -519,22 +521,17 @@ describe('AnthropicModel', () => {
       it('formats mixed tool result (json/image)', async () => {
         const { captured, mockClient } = setupCapture()
         const provider = new AnthropicModel({ client: mockClient })
-        const messages: Message[] = [
-          {
-            type: 'message',
+        const messages = [
+          new Message({
             role: 'user',
             content: [
-              {
-                type: 'toolResultBlock',
+              new ToolResultBlock({
                 toolUseId: 't1',
                 status: 'error',
-                content: [
-                  { type: 'jsonBlock', json: { error: 'failed' } },
-                  { type: 'textBlock', text: 'Details here' },
-                ],
-              },
+                content: [new JsonBlock({ json: { error: 'failed' } }), new TextBlock('Details here')],
+              }),
             ],
-          },
+          }),
         ]
 
         await collectIterator(provider.stream(messages))

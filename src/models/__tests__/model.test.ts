@@ -51,7 +51,7 @@ describe('Model', () => {
           }
         })
 
-        const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+        const messages = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }] as Message[]
 
         const { items, result } = await collectGenerator(provider.streamAggregated(messages))
 
@@ -103,7 +103,7 @@ describe('Model', () => {
           }
         })
 
-        const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+        const messages = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }] as Message[]
 
         await expect(async () => await collectGenerator(provider.streamAggregated(messages))).rejects.toThrow(
           'Model reached maximum token limit. This is an unrecoverable state that requires intervention.'
@@ -134,7 +134,7 @@ describe('Model', () => {
           }
         })
 
-        const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+        const messages = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }] as Message[]
 
         const { items, result } = await collectGenerator(provider.streamAggregated(messages))
 
@@ -187,7 +187,7 @@ describe('Model', () => {
           }
         })
 
-        const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+        const messages = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }] as Message[]
 
         const { items, result } = await collectGenerator(provider.streamAggregated(messages))
 
@@ -242,7 +242,7 @@ describe('Model', () => {
           }
         })
 
-        const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+        const messages = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }] as Message[]
 
         const { items, result } = await collectGenerator(provider.streamAggregated(messages))
 
@@ -296,7 +296,7 @@ describe('Model', () => {
           }
         })
 
-        const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+        const messages = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }] as Message[]
 
         await expect(async () => await collectGenerator(provider.streamAggregated(messages))).rejects.toThrow(
           MaxTokensError
@@ -325,7 +325,7 @@ describe('Model', () => {
           }
         })
 
-        const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+        const messages = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }] as Message[]
 
         const { items, result } = await collectGenerator(provider.streamAggregated(messages))
 
@@ -375,7 +375,7 @@ describe('Model', () => {
           }
         })
 
-        const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+        const messages = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }] as Message[]
 
         const { items, result } = await collectGenerator(provider.streamAggregated(messages))
 
@@ -423,7 +423,7 @@ describe('Model', () => {
           }
         })
 
-        const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+        const messages = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }] as Message[]
 
         const { items, result } = await collectGenerator(provider.streamAggregated(messages))
 
@@ -488,7 +488,7 @@ describe('Model', () => {
           }
         })
 
-        const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+        const messages = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }] as Message[]
 
         const { items, result } = await collectGenerator(provider.streamAggregated(messages))
 
@@ -546,7 +546,7 @@ describe('Model', () => {
           }
         })
 
-        const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+        const messages = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }] as Message[]
 
         const { items, result } = await collectGenerator(provider.streamAggregated(messages))
 
@@ -591,7 +591,7 @@ describe('Model', () => {
           yield { type: 'modelMessageStopEvent', stopReason: 'endTurn' }
         })
 
-        const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+        const messages = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }] as Message[]
 
         const { items, result } = await collectGenerator(provider.streamAggregated(messages))
 
@@ -616,7 +616,7 @@ describe('Model', () => {
         const originalError = new Error('API connection failed')
         const provider = new ErrorThrowingModelProvider(originalError)
 
-        const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }]
+        const messages = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi' }] }] as Message[]
 
         try {
           await collectGenerator(provider.streamAggregated(messages))

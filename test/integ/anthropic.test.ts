@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { Message, ImageBlock, TextBlock } from '@strands-agents/sdk'
+import { Message, ImageBlock, TextBlock, CachePointBlock } from '@strands-agents/sdk'
+import type { SystemContentBlock } from '@strands-agents/sdk'
 import { collectIterator } from '$/sdk/__fixtures__/model-test-helpers.js'
 import { loadFixture } from './__fixtures__/test-helpers.js'
 import { anthropic } from './__fixtures__/model-providers.js'
@@ -10,12 +11,11 @@ describe.skipIf(anthropic.skip)('AnthropicModel Integration Tests', () => {
   describe('Configuration', () => {
     it.concurrent('respects maxTokens configuration', async () => {
       const provider = anthropic.createModel({ maxTokens: 20 })
-      const messages: Message[] = [
-        {
-          type: 'message',
+      const messages = [
+        new Message({
           role: 'user',
-          content: [{ type: 'textBlock', text: 'Write a very long story about space exploration.' }],
-        },
+          content: [new TextBlock('Write a very long story about space exploration.')],
+        }),
       ]
 
       const events = await collectIterator(provider.stream(messages))
@@ -34,14 +34,14 @@ describe.skipIf(anthropic.skip)('AnthropicModel Integration Tests', () => {
 
       const largeContext = `Context information: ${'repeat '.repeat(5000)} [${Date.now()}]`
 
-      const cachedSystemPrompt = [
+      const cachedSystemPrompt: SystemContentBlock[] = [
         new TextBlock('You are a helpful assistant.'),
         new TextBlock(largeContext),
-        { type: 'cachePointBlock' as const, cacheType: 'default' as const },
+        new CachePointBlock({ cacheType: 'default' }),
       ]
 
       const events1 = await collectIterator(
-        provider.stream([{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }], {
+        provider.stream([new Message({ role: 'user', content: [new TextBlock('Hello')] })], {
           systemPrompt: cachedSystemPrompt,
         })
       )
@@ -53,7 +53,7 @@ describe.skipIf(anthropic.skip)('AnthropicModel Integration Tests', () => {
       }
 
       const events2 = await collectIterator(
-        provider.stream([{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hi again' }] }], {
+        provider.stream([new Message({ role: 'user', content: [new TextBlock('Hi again')] })], {
           systemPrompt: cachedSystemPrompt,
         })
       )
@@ -70,15 +70,10 @@ describe.skipIf(anthropic.skip)('AnthropicModel Integration Tests', () => {
       const largeContext = `Context information: ${'repeat '.repeat(5000)} [${Date.now()}]`
 
       const messagesWithCache = (text: string): Message[] => [
-        {
-          type: 'message',
+        new Message({
           role: 'user',
-          content: [
-            { type: 'textBlock', text: largeContext },
-            { type: 'cachePointBlock', cacheType: 'default' },
-            { type: 'textBlock', text },
-          ],
-        },
+          content: [new TextBlock(largeContext), new CachePointBlock({ cacheType: 'default' }), new TextBlock(text)],
+        }),
       ]
 
       const events1 = await collectIterator(provider.stream(messagesWithCache('Question 1')))
@@ -103,18 +98,17 @@ describe.skipIf(anthropic.skip)('AnthropicModel Integration Tests', () => {
 
       const imageBytes = await loadFixture(yellowPngUrl)
 
-      const messages: Message[] = [
-        {
-          type: 'message',
+      const messages = [
+        new Message({
           role: 'user',
           content: [
             new ImageBlock({
               format: 'png',
               source: { bytes: imageBytes },
             }),
-            { type: 'textBlock', text: 'What color is this image? Reply with just the color name.' },
+            new TextBlock('What color is this image? Reply with just the color name.'),
           ],
-        },
+        }),
       ]
 
       const events = await collectIterator(provider.stream(messages))
@@ -145,12 +139,11 @@ describe.skipIf(anthropic.skip)('AnthropicModel Integration Tests', () => {
         },
       })
 
-      const messages: Message[] = [
-        {
-          type: 'message',
+      const messages = [
+        new Message({
           role: 'user',
-          content: [{ type: 'textBlock', text: 'Explain the theory of relativity step-by-step.' }],
-        },
+          content: [new TextBlock('Explain the theory of relativity step-by-step.')],
+        }),
       ]
 
       const events = await collectIterator(provider.stream(messages))

@@ -1,6 +1,7 @@
 import type { JSONValue } from './json.js'
+import { omitUndefined } from './json.js'
 import type { ImageBlockData, VideoBlockData, DocumentBlockData } from './media.js'
-import { ImageBlock, VideoBlock, DocumentBlock } from './media.js'
+import { ImageBlock, VideoBlock, DocumentBlock, encodeBase64, decodeBase64 } from './media.js'
 
 /**
  * Message types and content blocks for conversational AI interactions.
@@ -60,6 +61,28 @@ export class Message {
       role: data.role,
       content: contentBlocks,
     })
+  }
+
+  /**
+   * Serializes the Message to a JSON-compatible MessageData object.
+   * Called automatically by JSON.stringify().
+   */
+  toJSON(): MessageData {
+    return {
+      role: this.role,
+      content: this.content.map((block) => block.toJSON() as ContentBlockData),
+    }
+  }
+
+  /**
+   * Creates a Message instance from MessageData.
+   * Alias for fromMessageData for API consistency.
+   *
+   * @param data - MessageData to deserialize
+   * @returns Message instance
+   */
+  static fromJSON(data: MessageData): Message {
+    return Message.fromMessageData(data)
   }
 }
 
@@ -131,6 +154,24 @@ export class TextBlock implements TextBlockData {
   constructor(data: string) {
     this.text = data
   }
+
+  /**
+   * Serializes the TextBlock to a JSON-compatible TextBlockData object.
+   * Called automatically by JSON.stringify().
+   */
+  toJSON(): TextBlockData {
+    return { text: this.text }
+  }
+
+  /**
+   * Creates a TextBlock instance from TextBlockData.
+   *
+   * @param data - TextBlockData to deserialize
+   * @returns TextBlock instance
+   */
+  static fromJSON(data: TextBlockData): TextBlock {
+    return new TextBlock(data.text)
+  }
 }
 
 /**
@@ -198,6 +239,31 @@ export class ToolUseBlock implements ToolUseBlockData {
     if (data.reasoningSignature !== undefined) {
       this.reasoningSignature = data.reasoningSignature
     }
+  }
+
+  /**
+   * Serializes the ToolUseBlock to a JSON-compatible ContentBlockData object.
+   * Called automatically by JSON.stringify().
+   */
+  toJSON(): { toolUse: ToolUseBlockData } {
+    return {
+      toolUse: omitUndefined({
+        name: this.name,
+        toolUseId: this.toolUseId,
+        input: this.input,
+        reasoningSignature: this.reasoningSignature,
+      }),
+    }
+  }
+
+  /**
+   * Creates a ToolUseBlock instance from its wrapped data format.
+   *
+   * @param data - Wrapped ToolUseBlockData to deserialize
+   * @returns ToolUseBlock instance
+   */
+  static fromJSON(data: { toolUse: ToolUseBlockData }): ToolUseBlock {
+    return new ToolUseBlock(data.toolUse)
   }
 }
 
@@ -277,6 +343,44 @@ export class ToolResultBlock implements ToolResultBlockData {
       this.error = data.error
     }
   }
+
+  /**
+   * Serializes the ToolResultBlock to a JSON-compatible ContentBlockData object.
+   * Called automatically by JSON.stringify().
+   * Note: The error field is not serialized (deferred for future implementation).
+   */
+  toJSON(): { toolResult: ToolResultBlockData } {
+    return {
+      toolResult: {
+        toolUseId: this.toolUseId,
+        status: this.status,
+        content: this.content.map((block) => block.toJSON()),
+      },
+    }
+  }
+
+  /**
+   * Creates a ToolResultBlock instance from its wrapped data format.
+   *
+   * @param data - Wrapped ToolResultBlockData to deserialize
+   * @returns ToolResultBlock instance
+   */
+  static fromJSON(data: { toolResult: ToolResultBlockData }): ToolResultBlock {
+    const content = data.toolResult.content.map((contentItem) => {
+      if ('text' in contentItem) {
+        return new TextBlock(contentItem.text)
+      } else if ('json' in contentItem) {
+        return new JsonBlock(contentItem)
+      } else {
+        throw new Error('Unknown ToolResultContentData type')
+      }
+    })
+    return new ToolResultBlock({
+      toolUseId: data.toolResult.toolUseId,
+      status: data.toolResult.status,
+      content,
+    })
+  }
 }
 
 /**
@@ -334,6 +438,46 @@ export class ReasoningBlock implements ReasoningBlockData {
       this.redactedContent = data.redactedContent
     }
   }
+
+  /**
+   * Serializes the ReasoningBlock to a JSON-compatible ContentBlockData object.
+   * Called automatically by JSON.stringify().
+   * Uint8Array redactedContent is encoded as base64 string.
+   */
+  toJSON(): { reasoning: ReasoningBlockData } {
+    return {
+      reasoning: omitUndefined({
+        text: this.text,
+        signature: this.signature,
+        redactedContent: this.redactedContent ? encodeBase64(this.redactedContent) : undefined,
+      }) as unknown as ReasoningBlockData,
+    }
+  }
+
+  /**
+   * Creates a ReasoningBlock instance from its wrapped data format.
+   * Base64-encoded redactedContent is decoded back to Uint8Array.
+   *
+   * @param data - Wrapped ReasoningBlockData to deserialize
+   * @returns ReasoningBlock instance
+   */
+  static fromJSON(data: { reasoning: ReasoningBlockData }): ReasoningBlock {
+    const reasoning = data.reasoning
+    const result: ReasoningBlockData = {}
+    if (reasoning.text !== undefined) {
+      result.text = reasoning.text
+    }
+    if (reasoning.signature !== undefined) {
+      result.signature = reasoning.signature
+    }
+    if (reasoning.redactedContent !== undefined) {
+      result.redactedContent =
+        typeof reasoning.redactedContent === 'string'
+          ? decodeBase64(reasoning.redactedContent)
+          : reasoning.redactedContent
+    }
+    return new ReasoningBlock(result)
+  }
 }
 
 /**
@@ -364,6 +508,28 @@ export class CachePointBlock implements CachePointBlockData {
   constructor(data: CachePointBlockData) {
     this.cacheType = data.cacheType
   }
+
+  /**
+   * Serializes the CachePointBlock to a JSON-compatible ContentBlockData object.
+   * Called automatically by JSON.stringify().
+   */
+  toJSON(): { cachePoint: CachePointBlockData } {
+    return {
+      cachePoint: {
+        cacheType: this.cacheType,
+      },
+    }
+  }
+
+  /**
+   * Creates a CachePointBlock instance from its wrapped data format.
+   *
+   * @param data - Wrapped CachePointBlockData to deserialize
+   * @returns CachePointBlock instance
+   */
+  static fromJSON(data: { cachePoint: CachePointBlockData }): CachePointBlock {
+    return new CachePointBlock(data.cachePoint)
+  }
 }
 
 /**
@@ -393,6 +559,24 @@ export class JsonBlock implements JsonBlockData {
 
   constructor(data: JsonBlockData) {
     this.json = data.json
+  }
+
+  /**
+   * Serializes the JsonBlock to a JSON-compatible JsonBlockData object.
+   * Called automatically by JSON.stringify().
+   */
+  toJSON(): JsonBlockData {
+    return { json: this.json }
+  }
+
+  /**
+   * Creates a JsonBlock instance from JsonBlockData.
+   *
+   * @param data - JsonBlockData to deserialize
+   * @returns JsonBlock instance
+   */
+  static fromJSON(data: JsonBlockData): JsonBlock {
+    return new JsonBlock(data)
   }
 }
 
@@ -588,6 +772,50 @@ export class GuardContentBlock implements GuardContentBlockData {
       this.image = data.image
     }
   }
+
+  /**
+   * Serializes the GuardContentBlock to a JSON-compatible ContentBlockData object.
+   * Called automatically by JSON.stringify().
+   * Uint8Array image bytes are encoded as base64 string.
+   */
+  toJSON(): { guardContent: GuardContentBlockData } {
+    const data: GuardContentBlockData = {}
+    if (this.text) {
+      data.text = this.text
+    }
+    if (this.image) {
+      data.image = {
+        format: this.image.format,
+        source: { bytes: encodeBase64(this.image.source.bytes) as unknown as Uint8Array },
+      }
+    }
+    return { guardContent: data }
+  }
+
+  /**
+   * Creates a GuardContentBlock instance from its wrapped data format.
+   * Base64-encoded image bytes are decoded back to Uint8Array.
+   *
+   * @param data - Wrapped GuardContentBlockData to deserialize
+   * @returns GuardContentBlock instance
+   */
+  static fromJSON(data: { guardContent: GuardContentBlockData }): GuardContentBlock {
+    const guardContent = data.guardContent
+    const result: GuardContentBlockData = {}
+    if (guardContent.text) {
+      result.text = guardContent.text
+    }
+    if (guardContent.image) {
+      const bytes = guardContent.image.source.bytes
+      result.image = {
+        format: guardContent.image.format,
+        source: {
+          bytes: typeof bytes === 'string' ? decodeBase64(bytes) : bytes,
+        },
+      }
+    }
+    return new GuardContentBlock(result)
+  }
 }
 
 /**
@@ -618,18 +846,29 @@ export function contentBlockFromData(data: ContentBlockData): ContentBlock {
       }),
     })
   } else if ('reasoning' in data) {
-    return new ReasoningBlock(data.reasoning)
+    return ReasoningBlock.fromJSON({ reasoning: data.reasoning })
   } else if ('cachePoint' in data) {
     return new CachePointBlock(data.cachePoint)
   } else if ('guardContent' in data) {
-    return new GuardContentBlock(data.guardContent)
+    return GuardContentBlock.fromJSON({ guardContent: data.guardContent })
   } else if ('image' in data) {
-    return new ImageBlock(data.image)
+    return ImageBlock.fromJSON({ image: data.image })
   } else if ('video' in data) {
-    return new VideoBlock(data.video)
+    return VideoBlock.fromJSON({ video: data.video })
   } else if ('document' in data) {
-    return new DocumentBlock(data.document)
+    return DocumentBlock.fromJSON({ document: data.document })
   } else {
     throw new Error('Unknown ContentBlockData type')
   }
+}
+
+/**
+ * Converts a ContentBlock instance to its ContentBlockData representation.
+ * Calls the block's toJSON() method to serialize it.
+ *
+ * @param block - The ContentBlock instance to convert
+ * @returns The ContentBlockData representation
+ */
+export function contentBlockToData(block: ContentBlock): ContentBlockData {
+  return block.toJSON() as ContentBlockData
 }

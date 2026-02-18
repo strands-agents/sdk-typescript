@@ -111,3 +111,27 @@ export function deepCopyWithValidation(value: unknown, contextPath: string = 'va
     throw new Error(`Unable to serialize value: ${errorMessage}`)
   }
 }
+
+/**
+ * Removes undefined values from an object.
+ * Useful for JSON serialization to avoid including undefined fields in output.
+ *
+ * @param obj - Object with potentially undefined values
+ * @returns New object with undefined values removed
+ *
+ * @example
+ * ```typescript
+ * const data = { name: 'test', value: undefined, count: 0 }
+ * const clean = omitUndefined(data)
+ * // Result: { name: 'test', count: 0 }
+ * ```
+ */
+export function omitUndefined<T extends object>(obj: T): { [K in keyof T]: Exclude<T[K], undefined> } {
+  const result = {} as { [K in keyof T]: Exclude<T[K], undefined> }
+  for (const [key, value] of Object.entries(obj)) {
+    if (value !== undefined) {
+      ;(result as Record<string, unknown>)[key] = value
+    }
+  }
+  return result
+}

@@ -6,7 +6,9 @@ import {
   SlidingWindowConversationManager,
   TextBlock,
   FunctionTool,
+  CachePointBlock,
 } from '@strands-agents/sdk'
+import type { SystemContentBlock } from '@strands-agents/sdk'
 
 import { collectIterator } from '$/sdk/__fixtures__/model-test-helpers.js'
 import { bedrock } from '../__fixtures__/model-providers.js'
@@ -16,12 +18,11 @@ describe.skipIf(bedrock.skip)('BedrockModel Integration Tests', () => {
     describe('Configuration', () => {
       it.concurrent('respects maxTokens configuration', async () => {
         const provider = bedrock.createModel({ maxTokens: 20 })
-        const messages: Message[] = [
-          {
-            type: 'message',
+        const messages = [
+          new Message({
             role: 'user',
-            content: [{ type: 'textBlock', text: 'Write a long story about dragons.' }],
-          },
+            content: [new TextBlock('Write a long story about dragons.')],
+          }),
         ]
 
         const events = await collectIterator(provider.stream(messages))
@@ -36,15 +37,15 @@ describe.skipIf(bedrock.skip)('BedrockModel Integration Tests', () => {
       it.concurrent('uses system prompt cache on subsequent requests', async () => {
         const provider = bedrock.createModel({ maxTokens: 100 })
         const largeContext = `Context information: ${'hello '.repeat(2000)} [test-${Date.now()}-${Math.random()}]`
-        const cachedSystemPrompt = [
-          { type: 'textBlock' as const, text: 'You are a helpful assistant.' },
-          { type: 'textBlock' as const, text: largeContext },
-          { type: 'cachePointBlock' as const, cacheType: 'default' as const },
+        const cachedSystemPrompt: SystemContentBlock[] = [
+          new TextBlock('You are a helpful assistant.'),
+          new TextBlock(largeContext),
+          new CachePointBlock({ cacheType: 'default' }),
         ]
 
         // First request - creates cache
         const events1 = await collectIterator(
-          provider.stream([{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Say hello' }] }], {
+          provider.stream([new Message({ role: 'user', content: [new TextBlock('Say hello')] })], {
             systemPrompt: cachedSystemPrompt,
           })
         )
@@ -53,7 +54,7 @@ describe.skipIf(bedrock.skip)('BedrockModel Integration Tests', () => {
 
         // Second request - should use cache
         const events2 = await collectIterator(
-          provider.stream([{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Say goodbye' }] }], {
+          provider.stream([new Message({ role: 'user', content: [new TextBlock('Say goodbye')] })], {
             systemPrompt: cachedSystemPrompt,
           })
         )
@@ -65,15 +66,10 @@ describe.skipIf(bedrock.skip)('BedrockModel Integration Tests', () => {
         const provider = bedrock.createModel({ maxTokens: 100 })
         const largeContext = `Context information: ${'hello '.repeat(2000)} [test-${Date.now()}-${Math.random()}]`
         const messagesWithCachePoint = (text: string): Message[] => [
-          {
-            type: 'message',
+          new Message({
             role: 'user',
-            content: [
-              { type: 'textBlock', text: largeContext },
-              { type: 'cachePointBlock', cacheType: 'default' },
-              { type: 'textBlock', text },
-            ],
-          },
+            content: [new TextBlock(largeContext), new CachePointBlock({ cacheType: 'default' }), new TextBlock(text)],
+          }),
         ]
 
         // First request - creates cache
@@ -91,7 +87,7 @@ describe.skipIf(bedrock.skip)('BedrockModel Integration Tests', () => {
     describe('Error Handling', () => {
       it.concurrent('handles invalid model ID gracefully', async () => {
         const provider = bedrock.createModel({ modelId: 'invalid-model-id-that-does-not-exist' })
-        const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+        const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
         await expect(collectIterator(provider.stream(messages))).rejects.toThrow()
       })
     })
