@@ -7,14 +7,20 @@ import { startHTTPServer, type HttpServerInfo } from './__fixtures__/test-mcp-se
 import { bedrock } from './__fixtures__/model-providers.js'
 import { hasToolUse, countToolResults } from './__fixtures__/test-helpers.js'
 
+import type { TasksConfig } from '@strands-agents/sdk'
+
 /**
  * Creates a connected McpClient for the given server URL.
  * Returns the client - caller is responsible for disconnecting.
+ * @param serverUrl - The URL of the MCP server
+ * @param appName - The application name for the client
+ * @param tasksConfig - Optional tasks configuration. When provided, enables task-based tool invocation.
  */
-function createClient(serverUrl: string, appName: string): McpClient {
+function createClient(serverUrl: string, appName: string, tasksConfig?: TasksConfig): McpClient {
   return new McpClient({
     applicationName: appName,
     transport: new StreamableHTTPClientTransport(new URL(serverUrl)) as Transport,
+    ...(tasksConfig !== undefined && { tasksConfig }),
   })
 }
 
@@ -36,7 +42,7 @@ describe('MCP Task Integration Tests', () => {
     it('extracts result from task tool that completes immediately', async () => {
       if (!taskServerInfo) throw new Error('Task server not started')
 
-      const client = createClient(taskServerInfo.url, 'test-task-client')
+      const client = createClient(taskServerInfo.url, 'test-task-client', {})
       try {
         await client.connect()
         const tools = await client.listTools()
@@ -57,7 +63,7 @@ describe('MCP Task Integration Tests', () => {
     it('extracts result from long-running task with progress updates', async () => {
       if (!taskServerInfo) throw new Error('Task server not started')
 
-      const client = createClient(taskServerInfo.url, 'test-task-client')
+      const client = createClient(taskServerInfo.url, 'test-task-client', {})
       try {
         await client.connect()
         const tools = await client.listTools()
@@ -83,7 +89,7 @@ describe('MCP Task Integration Tests', () => {
     it('throws error for failed tasks (MCP SDK behavior)', async () => {
       if (!taskServerInfo) throw new Error('Task server not started')
 
-      const client = createClient(taskServerInfo.url, 'test-task-client')
+      const client = createClient(taskServerInfo.url, 'test-task-client', {})
       try {
         await client.connect()
         const tools = await client.listTools()
@@ -146,7 +152,7 @@ describe('MCP Task Integration Tests', () => {
     it('agent can use task tools in a conversation', async () => {
       if (!taskServerInfo) throw new Error('Task server not started')
 
-      const client = createClient(taskServerInfo.url, 'test-agent-task-client')
+      const client = createClient(taskServerInfo.url, 'test-agent-task-client', {})
       try {
         const model = bedrock.createModel({ maxTokens: 300 })
         const agent = new Agent({
@@ -170,7 +176,7 @@ describe('MCP Task Integration Tests', () => {
     it('agent handles task tool errors gracefully', async () => {
       if (!taskServerInfo) throw new Error('Task server not started')
 
-      const client = createClient(taskServerInfo.url, 'test-agent-task-client')
+      const client = createClient(taskServerInfo.url, 'test-agent-task-client', {})
       try {
         const model = bedrock.createModel({ maxTokens: 300 })
         const agent = new Agent({
@@ -192,7 +198,7 @@ describe('MCP Task Integration Tests', () => {
     it('agent can use multiple task tools in a multi-turn conversation', async () => {
       if (!taskServerInfo) throw new Error('Task server not started')
 
-      const client = createClient(taskServerInfo.url, 'test-agent-multi-task-client')
+      const client = createClient(taskServerInfo.url, 'test-agent-multi-task-client', {})
       try {
         const model = bedrock.createModel({ maxTokens: 300 })
         const agent = new Agent({
