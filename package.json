@@ -114,7 +114,9 @@
   },
   "homepage": "https://github.com/strands-agents/sdk-typescript#readme",
   "dependencies": {
-    "@aws-sdk/client-bedrock-runtime": "^3.943.0"
+    "@aws-sdk/client-bedrock-runtime": "^3.993.0",
+    "@aws-sdk/core": "^3.973.11",
+    "@aws-sdk/xml-builder": "^3.972.5"
   },
   "peerDependencies": {
     "@anthropic-ai/sdk": "^0.71.2",
@@ -136,6 +138,6 @@
   },
   "overrides": {
     "rollup": "4.52.5",
-    "fast-xml-parser": "5.3.4"
+    "fast-xml-parser": "5.3.6"
   }
 }
