@@ -42,6 +42,10 @@ import {
   MessageAddedEvent,
   ModelStreamEventHook,
 } from '../hooks/events.js'
+import { Tracer } from '../telemetry/tracer.js'
+import { createEmptyUsage, accumulateUsage, type Usage } from '../models/streaming.js'
+import { getModelId } from '../models/model.js'
+import type { AttributeValue } from '@opentelemetry/api'
 
 /**
  * Recursive type definition for nested tool arrays.
@@ -105,6 +109,21 @@ export type AgentConfig = {
    * Hooks enable observing and extending agent behavior.
    */
   hooks?: HookProvider[]
+  /**
+   * Custom trace attributes to include in all spans.
+   * These attributes are merged with standard attributes in telemetry spans.
+   * Telemetry must be enabled globally via telemetry.setupTracer() for these to take effect.
+   */
+  traceAttributes?: Record<string, AttributeValue>
+  /**
+   * Optional name for the agent. Defaults to "Strands Agent".
+   */
+  name?: string
+  /**
+   * Optional unique identifier for the agent.
+   * If not provided, a random identifier will be generated.
+   */
+  agentId?: string
 }
 
 /**
@@ -116,6 +135,16 @@ export type AgentConfig = {
  * - `Message[]` | `MessageData[]` - Array of messages (appends all to conversation)
  */
 export type InvokeArgs = string | ContentBlock[] | ContentBlockData[] | Message[] | MessageData[]
+
+/** Fallback name used when no agent name is provided in the config. */
+const DEFAULT_AGENT_NAME = 'Strands Agent'
+
+/**
+ * Generates a random agent ID.
+ */
+function generateAgentId(): string {
+  return `agent-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
+}
 
 /**
  * Orchestrates the interaction between a model, a set of tools, and MCP clients.
@@ -152,11 +181,25 @@ export class Agent implements AgentData {
    */
   public systemPrompt?: SystemPrompt
 
+  /**
+   * The name of the agent.
+   */
+  public readonly name: string
+
+  /**
+   * The unique identifier of the agent instance.
+   */
+  public readonly agentId: string
+
   private _toolRegistry: ToolRegistry
   private _mcpClients: McpClient[]
   private _initialized: boolean
   private _isInvoking: boolean = false
   private _printer?: Printer
+  /** Tracer instance for creating and managing OpenTelemetry spans. */
+  private _tracer: Tracer
+  /** Running total of token usage across all model invocations in the current invocation. */
+  private _accumulatedTokenUsage: Usage = createEmptyUsage()
 
   /**
    * Creates an instance of the Agent.
@@ -167,6 +210,8 @@ export class Agent implements AgentData {
     this.messages = (config?.messages ?? []).map((msg) => (msg instanceof Message ? msg : Message.fromMessageData(msg)))
     this.state = new AgentState(config?.state)
     this.conversationManager = config?.conversationManager ?? new SlidingWindowConversationManager({ windowSize: 40 })
+    this.name = config?.name ?? DEFAULT_AGENT_NAME
+    this.agentId = config?.agentId ?? generateAgentId()
 
     // Initialize hooks and register conversation manager hooks
     this.hooks = new HookRegistryImplementation()
@@ -192,6 +237,9 @@ export class Agent implements AgentData {
     if (printer) {
       this._printer = new AgentPrinter(getDefaultAppender())
     }
+
+    // Initialize tracer - OTEL returns no-op tracer if not configured
+    this._tracer = new Tracer(config?.traceAttributes)
 
     this._initialized = false
   }
@@ -337,20 +385,79 @@ export class Agent implements AgentData {
    * @returns Async generator that yields AgentStreamEvent objects and returns AgentResult
    */
   private async *_stream(args: InvokeArgs): AsyncGenerator<AgentStreamEvent, AgentResult, undefined> {
-    let currentArgs: InvokeArgs | undefined = args
+    let result: AgentResult | undefined
 
     // Emit event before the loop starts
     yield new BeforeInvocationEvent({ agent: this })
 
+    // Normalize input to get the user messages for telemetry
+    const inputMessages = this._normalizeInput(args)
+
+    // Start agent trace span
+    this._accumulatedTokenUsage = createEmptyUsage()
+    const agentModelId = getModelId(this.model)
+    const agentSpanOptions: Parameters<Tracer['startAgentSpan']>[0] = {
+      messages: inputMessages,
+      agentName: this.name,
+      agentId: this.agentId,
+      tools: this.tools,
+    }
+    if (agentModelId) agentSpanOptions.modelId = agentModelId
+    if (this.systemPrompt) agentSpanOptions.systemPrompt = this.systemPrompt
+    const agentSpan = this._tracer.startAgentSpan(agentSpanOptions)
+
+    let caughtError: Error | undefined
     try {
-      // Main agent loop - continues until model stops without requesting tools
-      while (true) {
+      // Execute agent loop - child spans will be linked to agent span via context stack
+      result = yield* this._executeAgentLoop(args)
+
+      return result
+    } catch (error) {
+      caughtError = error as Error
+      throw error
+    } finally {
+      this._tracer.endAgentSpan(agentSpan, {
+        ...(caughtError && { error: caughtError }),
+        ...(result?.lastMessage && { response: result.lastMessage }),
+        accumulatedUsage: this._accumulatedTokenUsage,
+        ...(result?.stopReason && { stopReason: result.stopReason }),
+      })
+      yield new AfterInvocationEvent({ agent: this })
+    }
+  }
+
+  /**
+   * Execute the main agent loop within the agent span context.
+   *
+   * @param initialArgs - Arguments for the first invocation
+   * @returns Async generator that yields AgentStreamEvent objects and returns AgentResult
+   */
+  private async *_executeAgentLoop(initialArgs?: InvokeArgs): AsyncGenerator<AgentStreamEvent, AgentResult, undefined> {
+    let currentArgs: InvokeArgs | undefined = initialArgs
+
+    // Main agent loop - continues until model stops without requesting tools
+    let cycleCount = 0
+    while (true) {
+      cycleCount++
+      const cycleId = `cycle-${cycleCount}`
+
+      // Create agent loop cycle span within agent span context
+      const cycleSpan = this._tracer.startAgentLoopSpan({
+        cycleId,
+        messages: this.messages,
+      })
+
+      try {
         const modelResult = yield* this.invokeModel(currentArgs)
         currentArgs = undefined // Only pass args on first invocation
         if (modelResult.stopReason !== 'toolUse') {
           // Loop terminates - no tool use requested
           // Add assistant message now that we're returning
           yield await this._appendMessage(modelResult.message)
+
+          // End cycle span
+          this._tracer.endAgentLoopSpan(cycleSpan)
+
           return new AgentResult({
             stopReason: modelResult.stopReason,
             lastMessage: modelResult.message,
@@ -365,11 +472,15 @@ export class Agent implements AgentData {
         yield await this._appendMessage(modelResult.message)
         yield await this._appendMessage(toolResultMessage)
 
+        // End cycle span
+        this._tracer.endAgentLoopSpan(cycleSpan)
+
         // Continue loop
+      } catch (error) {
+        // End cycle span with error
+        this._tracer.endAgentLoopSpan(cycleSpan, { error: error as Error })
+        throw error
       }
-    } finally {
-      // Always emit final event
-      yield new AfterInvocationEvent({ agent: this })
     }
   }
 
@@ -450,8 +561,23 @@ export class Agent implements AgentData {
 
     yield new BeforeModelCallEvent({ agent: this })
 
+    // Start model span within loop span context
+    const modelId = getModelId(this.model)
+    const modelSpan = this._tracer.startModelInvokeSpan({
+      messages: this.messages,
+      ...(modelId && { modelId }),
+    })
+
     try {
-      const { message, stopReason } = yield* this._streamFromModel(this.messages, streamOptions)
+      const { message, stopReason, usage } = yield* this._streamFromModel(this.messages, streamOptions)
+
+      // Accumulate token usage
+      if (usage) {
+        accumulateUsage(this._accumulatedTokenUsage, usage)
+      }
+
+      // End model span with usage
+      this._tracer.endModelInvokeSpan(modelSpan, { output: message, stopReason, ...(usage && { usage }) })
 
       const afterModelCallEvent = new AfterModelCallEvent({ agent: this, stopData: { message, stopReason } })
       yield afterModelCallEvent
@@ -463,6 +589,9 @@ export class Agent implements AgentData {
       return { message, stopReason }
     } catch (error) {
       const modelError = normalizeError(error)
+
+      // End model span with error
+      this._tracer.endModelInvokeSpan(modelSpan, { error: modelError })
 
       // Create error event
       const errorEvent = new AfterModelCallEvent({ agent: this, error: modelError })
@@ -490,7 +619,7 @@ export class Agent implements AgentData {
   private async *_streamFromModel(
     messages: Message[],
     streamOptions: StreamOptions
-  ): AsyncGenerator<AgentStreamEvent, { message: Message; stopReason: StopReason }, undefined> {
+  ): AsyncGenerator<AgentStreamEvent, { message: Message; stopReason: StopReason; usage?: Usage }, undefined> {
     const streamGenerator = this.model.streamAggregated(messages, streamOptions)
     let result = await streamGenerator.next()
 
@@ -506,7 +635,10 @@ export class Agent implements AgentData {
     }
 
     // result.done is true, result.value contains the return value
-    return result.value
+    const { message, stopReason, metadata } = result.value
+    const returnValue: { message: Message; stopReason: StopReason; usage?: Usage } = { message, stopReason }
+    if (metadata?.usage) returnValue.usage = metadata.usage
+    return returnValue
   }
 
   /**
@@ -569,7 +701,7 @@ export class Agent implements AgentData {
   ): AsyncGenerator<AgentStreamEvent, ToolResultBlock, undefined> {
     const tool = toolRegistry.find((t) => t.name === toolUseBlock.name)
 
-    // Create toolUse object for hook events
+    // Create toolUse object for hook events and telemetry
     const toolUse = {
       name: toolUseBlock.name,
       toolUseId: toolUseBlock.toolUseId,
@@ -579,6 +711,11 @@ export class Agent implements AgentData {
     // Retry loop for tool execution
     while (true) {
       yield new BeforeToolCallEvent({ agent: this, toolUse, tool })
+
+      // Start tool span within loop span context
+      const toolSpan = this._tracer.startToolCallSpan({
+        tool: toolUse,
+      })
 
       let toolResult: ToolResultBlock
       let error: Error | undefined
@@ -626,6 +763,9 @@ export class Agent implements AgentData {
           })
         }
       }
+
+      // End tool span
+      this._tracer.endToolCallSpan(toolSpan, { toolResult, ...(error && { error }) })
 
       // Single point for AfterToolCallEvent
       const afterToolCallEvent = new AfterToolCallEvent({

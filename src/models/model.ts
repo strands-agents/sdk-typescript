@@ -340,3 +340,13 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
     }
   }
 }
+
+/**
+ * Extracts the model ID from a Model instance.
+ *
+ * @param model - The model instance to extract the ID from
+ * @returns The model ID string, or undefined if not configured
+ */
+export function getModelId(model: Model): string | undefined {
+  return model.getConfig().modelId
+}

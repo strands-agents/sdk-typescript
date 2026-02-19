@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import type { Message } from '../../types/messages.js'
 import { TestModelProvider, collectGenerator } from '../../__fixtures__/model-test-helpers.js'
 import { MaxTokensError, ModelError } from '../../errors.js'
-import { Model } from '../model.js'
+import { Model, getModelId } from '../model.js'
 import type { BaseModelConfig, StreamOptions } from '../model.js'
 import type { ModelStreamEvent } from '../streaming.js'
 
@@ -628,5 +628,14 @@ describe('Model', () => {
         }
       })
     })
+  })
+})
+
+describe('getModelId', () => {
+  it('returns modelId from model config', () => {
+    const provider = new TestModelProvider()
+    provider.updateConfig({ modelId: 'my-model' })
+
+    expect(getModelId(provider)).toBe('my-model')
   })
 })
