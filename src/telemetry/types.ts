@@ -2,7 +2,7 @@
  * Type definitions for OpenTelemetry telemetry support.
  */
 
-import type { AttributeValue, Span } from '@opentelemetry/api'
+import type { AttributeValue } from '@opentelemetry/api'
 import type { Message, SystemPrompt, ToolResultBlock } from '../types/messages.js'
 import type { ToolSpec, ToolUse } from '../tools/types.js'
 import type { Usage, Metrics } from '../models/streaming.js'
@@ -54,8 +54,6 @@ export interface StartModelInvokeSpanOptions {
   messages: Message[]
   /** Model identifier being invoked. */
   modelId?: string
-  /** Parent span to set as active context for this span. */
-  parentSpan?: Span
 }
 
 /**
@@ -80,8 +78,6 @@ export interface EndModelSpanOptions {
 export interface StartToolCallSpanOptions {
   /** Tool use request containing name, id, and input arguments. */
   tool: ToolUse
-  /** Parent span to set as active context for this span. */
-  parentSpan?: Span
 }
 
 /**
@@ -102,8 +98,6 @@ export interface StartAgentLoopSpanOptions {
   cycleId: string
   /** Conversation messages at the start of this cycle. */
   messages: Message[]
-  /** Parent span to set as active context for this span. */
-  parentSpan?: Span
 }
 
 /**

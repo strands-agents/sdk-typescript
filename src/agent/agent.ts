@@ -45,7 +45,7 @@ import {
 import { Tracer } from '../telemetry/tracer.js'
 import { createEmptyUsage, accumulateUsage, type Usage } from '../models/streaming.js'
 import { getModelId } from '../models/model.js'
-import type { AttributeValue, Span } from '@opentelemetry/api'
+import type { AttributeValue } from '@opentelemetry/api'
 
 /**
  * Recursive type definition for nested tool arrays.
@@ -136,6 +136,7 @@ export type AgentConfig = {
  */
 export type InvokeArgs = string | ContentBlock[] | ContentBlockData[] | Message[] | MessageData[]
 
+/** Fallback name used when no agent name is provided in the config. */
 const DEFAULT_AGENT_NAME = 'Strands Agent'
 
 /**
@@ -195,9 +196,9 @@ export class Agent implements AgentData {
   private _initialized: boolean
   private _isInvoking: boolean = false
   private _printer?: Printer
+  /** Tracer instance for creating and managing OpenTelemetry spans. */
   private _tracer: Tracer
-  private _traceSpan: Span | undefined
-  private _currentLoopSpan: Span | null | undefined
+  /** Running total of token usage across all model invocations in the current invocation. */
   private _accumulatedTokenUsage: Usage = createEmptyUsage()
 
   /**
@@ -403,7 +404,7 @@ export class Agent implements AgentData {
     }
     if (agentModelId) agentSpanOptions.modelId = agentModelId
     if (this.systemPrompt) agentSpanOptions.systemPrompt = this.systemPrompt
-    this._traceSpan = this._tracer.startAgentSpan(agentSpanOptions) ?? undefined
+    const agentSpan = this._tracer.startAgentSpan(agentSpanOptions)
 
     let caughtError: Error | undefined
     try {
@@ -415,16 +416,12 @@ export class Agent implements AgentData {
       caughtError = error as Error
       throw error
     } finally {
-      if (this._traceSpan) {
-        const span = this._traceSpan
-        this._traceSpan = undefined
-        this._tracer.endAgentSpan(span, {
-          ...(caughtError && { error: caughtError }),
-          ...(result?.lastMessage && { response: result.lastMessage }),
-          accumulatedUsage: this._accumulatedTokenUsage,
-          ...(result?.stopReason && { stopReason: result.stopReason }),
-        })
-      }
+      this._tracer.endAgentSpan(agentSpan, {
+        ...(caughtError && { error: caughtError }),
+        ...(result?.lastMessage && { response: result.lastMessage }),
+        accumulatedUsage: this._accumulatedTokenUsage,
+        ...(result?.stopReason && { stopReason: result.stopReason }),
+      })
       yield new AfterInvocationEvent({ agent: this })
     }
   }
@@ -448,9 +445,7 @@ export class Agent implements AgentData {
       const cycleSpan = this._tracer.startAgentLoopSpan({
         cycleId,
         messages: this.messages,
-        ...(this._traceSpan && { parentSpan: this._traceSpan }),
       })
-      this._currentLoopSpan = cycleSpan
 
       try {
         const modelResult = yield* this.invokeModel(currentArgs)
@@ -571,7 +566,6 @@ export class Agent implements AgentData {
     const modelSpan = this._tracer.startModelInvokeSpan({
       messages: this.messages,
       ...(modelId && { modelId }),
-      ...(this._currentLoopSpan && { parentSpan: this._currentLoopSpan }),
     })
 
     try {
@@ -721,7 +715,6 @@ export class Agent implements AgentData {
       // Start tool span within loop span context
       const toolSpan = this._tracer.startToolCallSpan({
         tool: toolUse,
-        ...(this._currentLoopSpan && { parentSpan: this._currentLoopSpan }),
       })
 
       let toolResult: ToolResultBlock

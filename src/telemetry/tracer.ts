@@ -95,6 +95,12 @@ export class Tracer {
    */
   private readonly _traceAttributes: Record<string, AttributeValue>
 
+  /** Root span for the current agent invocation. */
+  private _agentSpan: Span | undefined
+
+  /** Span for the current agent loop cycle, used to parent model and tool spans. */
+  private _loopSpan: Span | undefined
+
   /**
    * Initialize the tracer with OpenTelemetry configuration.
    * Reads OTEL_SEMCONV_STABILITY_OPT_IN to determine convention version.
@@ -151,6 +157,7 @@ export class Tracer {
 
       this._addEventMessages(span, messages)
 
+      this._agentSpan = span
       return span
     } catch (error) {
       logger.warn(`error=<${error}> | failed to start agent span`)
@@ -175,6 +182,7 @@ export class Tracer {
       if (response !== undefined) this._addResponseEvent(span, response, stopReason)
 
       this._endSpan(span, attributes, error)
+      this._agentSpan = undefined
     } catch (err) {
       logger.warn(`error=<${err}> | failed to end agent span`)
     }
@@ -187,7 +195,7 @@ export class Tracer {
    * @param options - Options for starting the model invocation span
    */
   startModelInvokeSpan(options: StartModelInvokeSpanOptions): Span | null {
-    const { messages, modelId, parentSpan } = options
+    const { messages, modelId } = options
 
     try {
       const attributes = this._getCommonAttributes('chat')
@@ -197,7 +205,7 @@ export class Tracer {
         name: 'chat',
         attributes,
         spanKind: SpanKind.INTERNAL,
-        ...(parentSpan && { parentSpan }),
+        ...(this._loopSpan && { parentSpan: this._loopSpan }),
       })
       this._addEventMessages(span, messages)
 
@@ -241,7 +249,7 @@ export class Tracer {
    * @param options - Options for starting the tool call span
    */
   startToolCallSpan(options: StartToolCallSpanOptions): Span | null {
-    const { tool, parentSpan } = options
+    const { tool } = options
 
     try {
       const attributes = this._getCommonAttributes('execute_tool')
@@ -252,7 +260,7 @@ export class Tracer {
         name: `execute_tool ${tool.name}`,
         attributes,
         spanKind: SpanKind.INTERNAL,
-        ...(parentSpan && { parentSpan }),
+        ...(this._loopSpan && { parentSpan: this._loopSpan }),
       })
 
       if (this._useLatestConventions) {
@@ -333,12 +341,17 @@ export class Tracer {
    * @param options - Options for starting the agent loop span
    */
   startAgentLoopSpan(options: StartAgentLoopSpanOptions): Span | null {
-    const { cycleId, messages, parentSpan } = options
+    const { cycleId, messages } = options
 
     try {
       const attributes: Record<string, AttributeValue> = { 'agent_loop.cycle_id': cycleId }
-      const span = this._startSpan({ name: 'execute_agent_loop_cycle', attributes, ...(parentSpan && { parentSpan }) })
+      const span = this._startSpan({
+        name: 'execute_agent_loop_cycle',
+        attributes,
+        ...(this._agentSpan && { parentSpan: this._agentSpan }),
+      })
       this._addEventMessages(span, messages)
+      this._loopSpan = span
       return span
     } catch (error) {
       logger.warn(`error=<${error}> | failed to start agent loop cycle span`)
@@ -356,6 +369,7 @@ export class Tracer {
     if (!span) return
     try {
       this._endSpan(span, {}, options.error)
+      this._loopSpan = undefined
     } catch (err) {
       logger.warn(`error=<${err}> | failed to end agent loop cycle span`)
     }

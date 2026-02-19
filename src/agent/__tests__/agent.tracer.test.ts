@@ -302,7 +302,6 @@ describe('Agent tracer integration', () => {
           toolUseId: 'tool-1',
           input: { key: 'val' },
         }),
-        parentSpan: { mock: 'loopSpan' },
       })
       expect(tracer.endToolCallSpan).toHaveBeenCalledTimes(1)
       expect(tracer.endToolCallSpan).toHaveBeenCalledWith(
@@ -422,7 +421,7 @@ describe('Agent tracer integration', () => {
       const result = await agent.invoke('Hi')
 
       expect(result.stopReason).toBe('endTurn')
-      expect(tracer.endAgentSpan).not.toHaveBeenCalled()
+      expect(tracer.endAgentSpan).toHaveBeenCalledWith(null, expect.any(Object))
     })
 
     it('completes successfully when startAgentLoopSpan returns null', async () => {
