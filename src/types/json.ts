@@ -135,3 +135,48 @@ export function omitUndefined<T extends object>(obj: T): { [K in keyof T]: Exclu
   }
   return result
 }
+/**
+ * Recursively transforms a type by converting all Uint8Array properties to strings.
+ * Used for JSON serialization where binary data is encoded as base64 strings.
+ *
+ * @example
+ * ```typescript
+ * interface Data {
+ *   name: string
+ *   bytes: Uint8Array
+ *   nested: { content: Uint8Array }
+ * }
+ *
+ * type SerializedData = Serialized<Data>
+ * // Result: { name: string; bytes: string; nested: { content: string } }
+ * ```
+ */
+export type Serialized<T> = T extends Uint8Array
+  ? string
+  : T extends (infer U)[]
+    ? Serialized<U>[]
+    : T extends object
+      ? { [K in keyof T]: Serialized<T[K]> }
+      : T
+
+/**
+ * Represents data that may contain either Uint8Array (runtime) or string (serialized) for binary fields.
+ * Used for deserialization where input may come from JSON (strings) or direct construction (Uint8Array).
+ *
+ * @example
+ * ```typescript
+ * interface Data {
+ *   bytes: Uint8Array
+ * }
+ *
+ * type InputData = MaybeSerializedInput<Data>
+ * // Result: { bytes: Uint8Array | string }
+ * ```
+ */
+export type MaybeSerializedInput<T> = T extends Uint8Array
+  ? Uint8Array | string
+  : T extends (infer U)[]
+    ? MaybeSerializedInput<U>[]
+    : T extends object
+      ? { [K in keyof T]: MaybeSerializedInput<T[K]> }
+      : T

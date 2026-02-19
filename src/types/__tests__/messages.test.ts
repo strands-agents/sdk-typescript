@@ -445,6 +445,46 @@ describe('toJSON/fromJSON round-trips', () => {
   })
 })
 
+describe('fromJSON with serialized (base64 string) input', () => {
+  it('ReasoningBlock.fromJSON accepts base64 string for redactedContent', () => {
+    const originalBytes = new Uint8Array([1, 2, 3, 4, 5])
+    const base64String = globalThis.Buffer.from(originalBytes).toString('base64')
+    const block = ReasoningBlock.fromJSON({
+      reasoning: { redactedContent: base64String },
+    })
+    expect(block.redactedContent).toEqual(originalBytes)
+  })
+
+  it('ReasoningBlock.fromJSON accepts Uint8Array for redactedContent', () => {
+    const originalBytes = new Uint8Array([1, 2, 3, 4, 5])
+    const block = ReasoningBlock.fromJSON({
+      reasoning: { redactedContent: originalBytes },
+    })
+    expect(block.redactedContent).toEqual(originalBytes)
+  })
+
+  it('GuardContentBlock.fromJSON accepts base64 string for image bytes', () => {
+    const originalBytes = new Uint8Array([10, 20, 30])
+    const base64String = globalThis.Buffer.from(originalBytes).toString('base64')
+    const block = GuardContentBlock.fromJSON({
+      guardContent: {
+        image: { format: 'png', source: { bytes: base64String } },
+      },
+    })
+    expect(block.image?.source.bytes).toEqual(originalBytes)
+  })
+
+  it('GuardContentBlock.fromJSON accepts Uint8Array for image bytes', () => {
+    const originalBytes = new Uint8Array([10, 20, 30])
+    const block = GuardContentBlock.fromJSON({
+      guardContent: {
+        image: { format: 'png', source: { bytes: originalBytes } },
+      },
+    })
+    expect(block.image?.source.bytes).toEqual(originalBytes)
+  })
+})
+
 describe('toJSON format', () => {
   it('TextBlock returns unwrapped format', () => {
     const block = new TextBlock('Test')

@@ -1,4 +1,4 @@
-import type { JSONValue } from './json.js'
+import type { JSONValue, Serialized, MaybeSerializedInput } from './json.js'
 import { omitUndefined } from './json.js'
 import type { ImageBlockData, VideoBlockData, DocumentBlockData } from './media.js'
 import { ImageBlock, VideoBlock, DocumentBlock, encodeBase64, decodeBase64 } from './media.js'
@@ -444,13 +444,13 @@ export class ReasoningBlock implements ReasoningBlockData {
    * Called automatically by JSON.stringify().
    * Uint8Array redactedContent is encoded as base64 string.
    */
-  toJSON(): { reasoning: ReasoningBlockData } {
+  toJSON(): { reasoning: Serialized<ReasoningBlockData> } {
     return {
       reasoning: omitUndefined({
         text: this.text,
         signature: this.signature,
         redactedContent: this.redactedContent ? encodeBase64(this.redactedContent) : undefined,
-      }) as unknown as ReasoningBlockData,
+      }),
     }
   }
 
@@ -458,10 +458,10 @@ export class ReasoningBlock implements ReasoningBlockData {
    * Creates a ReasoningBlock instance from its wrapped data format.
    * Base64-encoded redactedContent is decoded back to Uint8Array.
    *
-   * @param data - Wrapped ReasoningBlockData to deserialize
+   * @param data - Wrapped ReasoningBlockData to deserialize (accepts both string and Uint8Array for redactedContent)
    * @returns ReasoningBlock instance
    */
-  static fromJSON(data: { reasoning: ReasoningBlockData }): ReasoningBlock {
+  static fromJSON(data: { reasoning: MaybeSerializedInput<ReasoningBlockData> }): ReasoningBlock {
     const reasoning = data.reasoning
     const result: ReasoningBlockData = {}
     if (reasoning.text !== undefined) {
@@ -778,15 +778,15 @@ export class GuardContentBlock implements GuardContentBlockData {
    * Called automatically by JSON.stringify().
    * Uint8Array image bytes are encoded as base64 string.
    */
-  toJSON(): { guardContent: GuardContentBlockData } {
-    const data: GuardContentBlockData = {}
+  toJSON(): { guardContent: Serialized<GuardContentBlockData> } {
+    const data: Serialized<GuardContentBlockData> = {}
     if (this.text) {
       data.text = this.text
     }
     if (this.image) {
       data.image = {
         format: this.image.format,
-        source: { bytes: encodeBase64(this.image.source.bytes) as unknown as Uint8Array },
+        source: { bytes: encodeBase64(this.image.source.bytes) },
       }
     }
     return { guardContent: data }
@@ -796,10 +796,10 @@ export class GuardContentBlock implements GuardContentBlockData {
    * Creates a GuardContentBlock instance from its wrapped data format.
    * Base64-encoded image bytes are decoded back to Uint8Array.
    *
-   * @param data - Wrapped GuardContentBlockData to deserialize
+   * @param data - Wrapped GuardContentBlockData to deserialize (accepts both string and Uint8Array for image bytes)
    * @returns GuardContentBlock instance
    */
-  static fromJSON(data: { guardContent: GuardContentBlockData }): GuardContentBlock {
+  static fromJSON(data: { guardContent: MaybeSerializedInput<GuardContentBlockData> }): GuardContentBlock {
     const guardContent = data.guardContent
     const result: GuardContentBlockData = {}
     if (guardContent.text) {

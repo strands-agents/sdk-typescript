@@ -5,6 +5,7 @@
  * with support for multiple sources (bytes, S3, URLs, files).
  */
 
+import type { Serialized, MaybeSerializedInput } from './json.js'
 import { omitUndefined } from './json.js'
 import { TextBlock, type TextBlockData } from './messages.js'
 
@@ -249,10 +250,10 @@ export class ImageBlock implements ImageBlockData {
    * Called automatically by JSON.stringify().
    * Uint8Array bytes are encoded as base64 string.
    */
-  toJSON(): { image: ImageBlockData } {
-    let source: ImageSourceData
+  toJSON(): { image: Serialized<ImageBlockData> } {
+    let source: Serialized<ImageSourceData>
     if (this.source.type === 'imageSourceBytes') {
-      source = { bytes: encodeBase64(this.source.bytes) as unknown as Uint8Array }
+      source = { bytes: encodeBase64(this.source.bytes) }
     } else if (this.source.type === 'imageSourceUrl') {
       source = { url: this.source.url }
     } else {
@@ -270,10 +271,10 @@ export class ImageBlock implements ImageBlockData {
    * Creates an ImageBlock instance from its wrapped data format.
    * Base64-encoded bytes are decoded back to Uint8Array.
    *
-   * @param data - Wrapped ImageBlockData to deserialize
+   * @param data - Wrapped ImageBlockData to deserialize (accepts both string and Uint8Array for bytes)
    * @returns ImageBlock instance
    */
-  static fromJSON(data: { image: ImageBlockData }): ImageBlock {
+  static fromJSON(data: { image: MaybeSerializedInput<ImageBlockData> }): ImageBlock {
     const image = data.image
     let source: ImageSourceData
     if ('bytes' in image.source) {
@@ -365,10 +366,10 @@ export class VideoBlock implements VideoBlockData {
    * Called automatically by JSON.stringify().
    * Uint8Array bytes are encoded as base64 string.
    */
-  toJSON(): { video: VideoBlockData } {
-    let source: VideoSourceData
+  toJSON(): { video: Serialized<VideoBlockData> } {
+    let source: Serialized<VideoSourceData>
     if (this.source.type === 'videoSourceBytes') {
-      source = { bytes: encodeBase64(this.source.bytes) as unknown as Uint8Array }
+      source = { bytes: encodeBase64(this.source.bytes) }
     } else {
       source = { s3Location: this.source.s3Location.toJSON() }
     }
@@ -384,10 +385,10 @@ export class VideoBlock implements VideoBlockData {
    * Creates a VideoBlock instance from its wrapped data format.
    * Base64-encoded bytes are decoded back to Uint8Array.
    *
-   * @param data - Wrapped VideoBlockData to deserialize
+   * @param data - Wrapped VideoBlockData to deserialize (accepts both string and Uint8Array for bytes)
    * @returns VideoBlock instance
    */
-  static fromJSON(data: { video: VideoBlockData }): VideoBlock {
+  static fromJSON(data: { video: MaybeSerializedInput<VideoBlockData> }): VideoBlock {
     const video = data.video
     let source: VideoSourceData
     if ('bytes' in video.source) {
@@ -543,10 +544,10 @@ export class DocumentBlock implements DocumentBlockData {
    * Called automatically by JSON.stringify().
    * Uint8Array bytes are encoded as base64 string.
    */
-  toJSON(): { document: DocumentBlockData } {
-    let source: DocumentSourceData
+  toJSON(): { document: Serialized<DocumentBlockData> } {
+    let source: Serialized<DocumentSourceData>
     if (this.source.type === 'documentSourceBytes') {
-      source = { bytes: encodeBase64(this.source.bytes) as unknown as Uint8Array }
+      source = { bytes: encodeBase64(this.source.bytes) }
     } else if (this.source.type === 'documentSourceText') {
       source = { text: this.source.text }
     } else if (this.source.type === 'documentSourceContentBlock') {
@@ -569,10 +570,10 @@ export class DocumentBlock implements DocumentBlockData {
    * Creates a DocumentBlock instance from its wrapped data format.
    * Base64-encoded bytes are decoded back to Uint8Array.
    *
-   * @param data - Wrapped DocumentBlockData to deserialize
+   * @param data - Wrapped DocumentBlockData to deserialize (accepts both string and Uint8Array for bytes)
    * @returns DocumentBlock instance
    */
-  static fromJSON(data: { document: DocumentBlockData }): DocumentBlock {
+  static fromJSON(data: { document: MaybeSerializedInput<DocumentBlockData> }): DocumentBlock {
     const doc = data.document
     let source: DocumentSourceData
     if ('bytes' in doc.source) {

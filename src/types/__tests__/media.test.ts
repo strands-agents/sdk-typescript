@@ -315,6 +315,59 @@ describe('encodeBase64 and decodeBase64', () => {
   })
 })
 
+describe('fromJSON with serialized (base64 string) input', () => {
+  it('ImageBlock.fromJSON accepts base64 string for bytes', () => {
+    const originalBytes = new Uint8Array([1, 2, 3, 4, 5])
+    const base64String = globalThis.Buffer.from(originalBytes).toString('base64')
+    const block = ImageBlock.fromJSON({
+      image: { format: 'jpeg', source: { bytes: base64String } },
+    })
+    expect((block.source as { type: 'imageSourceBytes'; bytes: Uint8Array }).bytes).toEqual(originalBytes)
+  })
+
+  it('ImageBlock.fromJSON accepts Uint8Array for bytes', () => {
+    const originalBytes = new Uint8Array([1, 2, 3, 4, 5])
+    const block = ImageBlock.fromJSON({
+      image: { format: 'jpeg', source: { bytes: originalBytes } },
+    })
+    expect((block.source as { type: 'imageSourceBytes'; bytes: Uint8Array }).bytes).toEqual(originalBytes)
+  })
+
+  it('VideoBlock.fromJSON accepts base64 string for bytes', () => {
+    const originalBytes = new Uint8Array([10, 20, 30])
+    const base64String = globalThis.Buffer.from(originalBytes).toString('base64')
+    const block = VideoBlock.fromJSON({
+      video: { format: 'mp4', source: { bytes: base64String } },
+    })
+    expect((block.source as { type: 'videoSourceBytes'; bytes: Uint8Array }).bytes).toEqual(originalBytes)
+  })
+
+  it('VideoBlock.fromJSON accepts Uint8Array for bytes', () => {
+    const originalBytes = new Uint8Array([10, 20, 30])
+    const block = VideoBlock.fromJSON({
+      video: { format: 'mp4', source: { bytes: originalBytes } },
+    })
+    expect((block.source as { type: 'videoSourceBytes'; bytes: Uint8Array }).bytes).toEqual(originalBytes)
+  })
+
+  it('DocumentBlock.fromJSON accepts base64 string for bytes', () => {
+    const originalBytes = new Uint8Array([100, 200])
+    const base64String = globalThis.Buffer.from(originalBytes).toString('base64')
+    const block = DocumentBlock.fromJSON({
+      document: { name: 'doc.pdf', format: 'pdf', source: { bytes: base64String } },
+    })
+    expect((block.source as { type: 'documentSourceBytes'; bytes: Uint8Array }).bytes).toEqual(originalBytes)
+  })
+
+  it('DocumentBlock.fromJSON accepts Uint8Array for bytes', () => {
+    const originalBytes = new Uint8Array([100, 200])
+    const block = DocumentBlock.fromJSON({
+      document: { name: 'doc.pdf', format: 'pdf', source: { bytes: originalBytes } },
+    })
+    expect((block.source as { type: 'documentSourceBytes'; bytes: Uint8Array }).bytes).toEqual(originalBytes)
+  })
+})
+
 describe('S3Location toJSON/fromJSON', () => {
   it('round-trips with uri only', () => {
     const original = new S3Location({ uri: 's3://bucket/key.jpg' })
