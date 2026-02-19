@@ -92,15 +92,17 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel, mode
           (item) => item.type === 'modelStreamObserverEvent' && item.event.type === 'modelMetadataEvent'
         )
         expect(observerEvent).toBeDefined()
-        const metadataEvent = observerEvent?.type === 'modelStreamObserverEvent' ? observerEvent.event : undefined
-        expect(metadataEvent).toBeDefined()
-        expect((metadataEvent as any)?.usage).toBeDefined()
-        expect((metadataEvent as any)?.usage?.inputTokens).toBeGreaterThan(0)
-        expect((metadataEvent as any)?.usage?.outputTokens).toBeGreaterThan(0)
+        if (observerEvent?.type !== 'modelStreamObserverEvent' || observerEvent.event.type !== 'modelMetadataEvent') {
+          throw new Error('Expected modelStreamObserverEvent wrapping modelMetadataEvent')
+        }
+        const metadataEvent = observerEvent.event
+        expect(metadataEvent.usage).toBeDefined()
+        expect(metadataEvent.usage?.inputTokens).toBeGreaterThan(0)
+        expect(metadataEvent.usage?.outputTokens).toBeGreaterThan(0)
 
         // Bedrock includes latencyMs in metrics, OpenAI does not
         if (name === 'BedrockModel') {
-          expect((metadataEvent as any)?.metrics?.latencyMs).toBeGreaterThan(0)
+          expect(metadataEvent.metrics?.latencyMs).toBeGreaterThan(0)
         }
 
         // Verify result structure
@@ -353,8 +355,7 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel, mode
         (item) =>
           item.type === 'modelStreamObserverEvent' &&
           item.event.type === 'modelContentBlockDeltaEvent' &&
-          'delta' in item.event &&
-          (item.event as any).delta.type === 'reasoningContentDelta'
+          item.event.delta.type === 'reasoningContentDelta'
       )
       expect(reasoningDeltas.length).toBeGreaterThan(0)
 
@@ -380,8 +381,7 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel, mode
         (item) =>
           item.type === 'modelStreamObserverEvent' &&
           item.event.type === 'modelContentBlockDeltaEvent' &&
-          'delta' in item.event &&
-          (item.event as any).delta.type === 'reasoningContentDelta'
+          item.event.delta.type === 'reasoningContentDelta'
       )
       expect(reasoningDeltas.length).toBeGreaterThan(0)
 
