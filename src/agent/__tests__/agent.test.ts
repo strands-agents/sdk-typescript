@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { z } from 'zod'
 import { Agent, type ToolList } from '../agent.js'
 import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
 import { collectGenerator } from '../../__fixtures__/model-test-helpers.js'
@@ -21,6 +22,7 @@ import {
 import { AgentPrinter } from '../printer.js'
 import { BeforeInvocationEvent, BeforeToolsEvent } from '../../hooks/events.js'
 import { BedrockModel } from '../../models/bedrock.js'
+import { StructuredOutputException } from '../../structured-output/exceptions.js'
 
 describe('Agent', () => {
   describe('stream', () => {
@@ -881,13 +883,12 @@ describe('Agent', () => {
 
   describe('structured output', () => {
     it('returns structured output when schema provided and tool used', async () => {
-      const { z } = await import('zod')
       const schema = z.object({ name: z.string(), age: z.number() })
 
       const model = new MockMessageModel()
         .addTurn({
           type: 'toolUseBlock',
-          name: 'StructuredOutput',
+          name: 'strands_structured_output',
           toolUseId: 'tool-1',
           input: { name: 'John', age: 30 },
         })
@@ -901,12 +902,11 @@ describe('Agent', () => {
     })
 
     it('forces structured output tool when model does not use it', async () => {
-      const { z } = await import('zod')
       const schema = z.object({ value: z.number() })
 
       const model = new MockMessageModel()
         .addTurn({ type: 'textBlock', text: 'First response' })
-        .addTurn({ type: 'toolUseBlock', name: 'StructuredOutput', toolUseId: 'tool-1', input: { value: 42 } })
+        .addTurn({ type: 'toolUseBlock', name: 'strands_structured_output', toolUseId: 'tool-1', input: { value: 42 } })
         .addTurn({ type: 'textBlock', text: 'Done' })
 
       const agent = new Agent({ model, structuredOutputSchema: schema })
@@ -917,8 +917,6 @@ describe('Agent', () => {
     })
 
     it('throws StructuredOutputException when model refuses to use tool after forcing', async () => {
-      const { z } = await import('zod')
-      const { StructuredOutputException } = await import('../../structured-output/exceptions.js')
       const schema = z.object({ value: z.number() })
 
       // Model returns text twice - once normally, once when forced
@@ -929,31 +927,30 @@ describe('Agent', () => {
       await expect(agent.invoke('Test')).rejects.toThrow(StructuredOutputException)
     })
 
-    it('throws error message when maxTokens reached before structured output', async () => {
-      const { z } = await import('zod')
+    it('throws MaxTokensError when maxTokens reached before structured output', async () => {
       const schema = z.object({ value: z.number() })
 
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Partial...' }, 'maxTokens')
 
       const agent = new Agent({ model, structuredOutputSchema: schema })
 
-      await expect(agent.invoke('Test')).rejects.toThrow('maximum token limit')
+      await expect(agent.invoke('Test')).rejects.toThrow(MaxTokensError)
     })
 
     it('retries with validation feedback when structured output tool returns error', async () => {
-      const { z } = await import('zod')
+      
       const schema = z.object({ name: z.string(), age: z.number() })
 
       const model = new MockMessageModel()
         .addTurn({
           type: 'toolUseBlock',
-          name: 'StructuredOutput',
+          name: 'strands_structured_output',
           toolUseId: 'tool-1',
           input: { name: 'John', age: 'invalid' },
         })
         .addTurn({
           type: 'toolUseBlock',
-          name: 'StructuredOutput',
+          name: 'strands_structured_output',
           toolUseId: 'tool-2',
           input: { name: 'John', age: 30 },
         })
@@ -977,11 +974,11 @@ describe('Agent', () => {
     })
 
     it('cleans up structured output tool after invocation', async () => {
-      const { z } = await import('zod')
+      
       const schema = z.object({ value: z.number() })
 
       const model = new MockMessageModel()
-        .addTurn({ type: 'toolUseBlock', name: 'StructuredOutput', toolUseId: 'tool-1', input: { value: 42 } })
+        .addTurn({ type: 'toolUseBlock', name: 'strands_structured_output', toolUseId: 'tool-1', input: { value: 42 } })
         .addTurn({ type: 'textBlock', text: 'Done' })
 
       const agent = new Agent({ model, structuredOutputSchema: schema })
@@ -989,11 +986,11 @@ describe('Agent', () => {
       await agent.invoke('Test')
 
       const toolNames = agent.tools.map((t) => t.name)
-      expect(toolNames).not.toContain('StructuredOutput')
+      expect(toolNames).not.toContain('strands_structured_output')
     })
 
     it('cleans up structured output tool even when error occurs', async () => {
-      const { z } = await import('zod')
+      
       const schema = z.object({ value: z.number() })
 
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Partial...' }, 'maxTokens')
@@ -1003,11 +1000,11 @@ describe('Agent', () => {
       await expect(agent.invoke('Test')).rejects.toThrow()
 
       const toolNames = agent.tools.map((t) => t.name)
-      expect(toolNames).not.toContain('StructuredOutput')
+      expect(toolNames).not.toContain('strands_structured_output')
     })
 
     it('validates nested objects in structured output', async () => {
-      const { z } = await import('zod')
+      
       const schema = z.object({
         user: z.object({
           name: z.string(),
@@ -1018,7 +1015,7 @@ describe('Agent', () => {
       const model = new MockMessageModel()
         .addTurn({
           type: 'toolUseBlock',
-          name: 'StructuredOutput',
+          name: 'strands_structured_output',
           toolUseId: 'tool-1',
           input: { user: { name: 'Alice', age: 25 } },
         })
@@ -1032,7 +1029,7 @@ describe('Agent', () => {
     })
 
     it('validates arrays in structured output', async () => {
-      const { z } = await import('zod')
+      
       const schema = z.object({
         items: z.array(z.string()),
       })
@@ -1040,7 +1037,7 @@ describe('Agent', () => {
       const model = new MockMessageModel()
         .addTurn({
           type: 'toolUseBlock',
-          name: 'StructuredOutput',
+          name: 'strands_structured_output',
           toolUseId: 'tool-1',
           input: { items: ['a', 'b', 'c'] },
         })

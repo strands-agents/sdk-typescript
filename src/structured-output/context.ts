@@ -1,7 +1,6 @@
 import { z } from 'zod'
 import type { ToolRegistry } from '../registry/tool-registry.js'
 import { StructuredOutputTool } from './tool.js'
-import { getToolNameFromSchema } from './utils.js'
 
 /**
  * Interface for structured output context operations.
@@ -41,7 +40,7 @@ export class NullStructuredOutputContext implements IStructuredOutputContext {
   }
 
   getToolName(): string {
-    return 'StructuredOutput'
+    return 'strands_structured_output'
   }
 
   cleanup(_registry: ToolRegistry): void {
@@ -76,8 +75,7 @@ export class StructuredOutputContext implements IStructuredOutputContext {
    * @param registry - The tool registry to register with
    */
   registerTool(registry: ToolRegistry): void {
-    const toolName = getToolNameFromSchema(this._schema)
-    this._tool = new StructuredOutputTool(this._schema, toolName, this)
+    this._tool = new StructuredOutputTool(this._schema, 'strands_structured_output', this)
 
     // Register tool (will be removed in cleanup)
     registry.add(this._tool)
@@ -115,10 +113,10 @@ export class StructuredOutputContext implements IStructuredOutputContext {
   /**
    * Gets the tool name for forcing.
    *
-   * @returns The tool name or 'StructuredOutput' as fallback
+   * @returns The tool name or 'strands_structured_output' as fallback
    */
   getToolName(): string {
-    return this._tool?.name ?? 'StructuredOutput'
+    return this._tool?.name ?? 'strands_structured_output'
   }
 
   /**

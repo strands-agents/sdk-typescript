@@ -20,7 +20,7 @@ import {
   ToolUseBlock,
 } from '../index.js'
 import { systemPromptFromData } from '../types/messages.js'
-import { normalizeError, ConcurrentInvocationError } from '../errors.js'
+import { normalizeError, ConcurrentInvocationError, MaxTokensError } from '../errors.js'
 import type { BaseModelConfig, Model, StreamOptions } from '../models/model.js'
 import { ToolRegistry } from '../registry/tool-registry.js'
 import { AgentState } from './state.js'
@@ -371,15 +371,16 @@ export class Agent implements AgentData {
         forcedToolChoice = undefined // Clear after use
 
         if (modelResult.stopReason !== 'toolUse') {
+          // Special handling for maxTokens - always fail regardless of whether we have structured output
+          if (modelResult.stopReason === 'maxTokens') {
+            throw new MaxTokensError(
+              'The model reached maxTokens before producing structured output. Consider increasing maxTokens in your model configuration.',
+              modelResult.message
+            )
+          }
+
           // Check if we need to force structured output tool
           if (!context.hasResult()) {
-            // Special handling for maxTokens - don't try to force tool
-            if (modelResult.stopReason === 'maxTokens') {
-              throw new StructuredOutputException(
-                'The model reached maxTokens before producing structured output. Consider increasing maxTokens in your model configuration.'
-              )
-            }
-
             if (wasForced) {
               // Already tried forcing - LLM refused to use the tool
               throw new StructuredOutputException(

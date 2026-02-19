@@ -116,21 +116,3 @@ function hasUnsupportedFeatures(schema: z.ZodSchema): boolean {
 
   return false
 }
-
-/**
- * Extracts the tool name from a Zod schema variable name or uses a fallback.
- * This is a best-effort approach since JavaScript doesn't preserve variable names.
- *
- * @param schema - The Zod schema
- * @returns The extracted tool name or 'StructuredOutput' as fallback
- */
-export function getToolNameFromSchema(schema: z.ZodSchema): string {
-  // Try to get name from schema metadata
-  const def = (schema as { _def?: { name?: string } })._def
-  if (def && typeof def.name === 'string' && def.name.length > 0) {
-    return def.name
-  }
-
-  // Fallback to generic name
-  return 'StructuredOutput'
-}

@@ -40,7 +40,7 @@ describe('NullStructuredOutputContext', () => {
   it('getToolName returns default name', () => {
     const context = new NullStructuredOutputContext()
 
-    expect(context.getToolName()).toBe('StructuredOutput')
+    expect(context.getToolName()).toBe('strands_structured_output')
   })
 
   it('cleanup does nothing', () => {
@@ -72,7 +72,7 @@ describe('StructuredOutputContext', () => {
       const tools = registry.values()
       expect(tools.length).toBe(1)
       expect(tools[0]).toBeInstanceOf(StructuredOutputTool)
-      expect(tools[0]?.name).toBe('StructuredOutput')
+      expect(tools[0]?.name).toBe('strands_structured_output')
     })
 
     it('does not register duplicate tools on multiple calls', () => {
@@ -84,18 +84,6 @@ describe('StructuredOutputContext', () => {
       expect(registry.values().length).toBe(1)
 
       expect(() => context.registerTool(registry)).toThrow('already registered')
-    })
-
-    it('uses tool name from schema metadata', () => {
-      const schema = z.object({ name: z.string() })
-      ;(schema as any)._def.name = 'CustomTool'
-      const context = new StructuredOutputContext(schema)
-      const registry = new ToolRegistry()
-
-      context.registerTool(registry)
-
-      const tools = registry.values()
-      expect(tools[0]?.name).toBe('CustomTool')
     })
   })
 
@@ -168,25 +156,14 @@ describe('StructuredOutputContext', () => {
 
       context.registerTool(registry)
 
-      expect(context.getToolName()).toBe('StructuredOutput')
+      expect(context.getToolName()).toBe('strands_structured_output')
     })
 
     it('returns fallback before registration', () => {
       const schema = z.object({ name: z.string() })
       const context = new StructuredOutputContext(schema)
 
-      expect(context.getToolName()).toBe('StructuredOutput')
-    })
-
-    it('returns custom tool name from schema', () => {
-      const schema = z.object({ name: z.string() })
-      ;(schema as any)._def.name = 'CustomTool'
-      const context = new StructuredOutputContext(schema)
-      const registry = new ToolRegistry()
-
-      context.registerTool(registry)
-
-      expect(context.getToolName()).toBe('CustomTool')
+      expect(context.getToolName()).toBe('strands_structured_output')
     })
   })
 

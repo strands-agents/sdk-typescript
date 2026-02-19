@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { convertSchemaToToolSpec, getSchemaDescription, getToolNameFromSchema } from '../utils.js'
+import { convertSchemaToToolSpec, getSchemaDescription } from '../utils.js'
 import { StructuredOutputException } from '../exceptions.js'
 
 describe('convertSchemaToToolSpec', () => {
@@ -76,20 +76,24 @@ describe('convertSchemaToToolSpec', () => {
 
     const toolSpec = convertSchemaToToolSpec(schema, 'TestTool')
 
-    expect(toolSpec.inputSchema).toBeDefined()
-    expect(toolSpec.inputSchema?.type).toBe('object')
-    expect(toolSpec.inputSchema?.properties).toBeDefined()
-    expect(toolSpec.inputSchema?.properties?.name).toMatchObject({
-      type: 'string',
-      minLength: 1,
-      maxLength: 100,
-    })
-    expect(toolSpec.inputSchema?.properties?.age).toMatchObject({
-      type: 'integer',
-    })
-    expect(toolSpec.inputSchema?.properties?.email).toMatchObject({
-      type: 'string',
-      format: 'email',
+    expect(toolSpec.inputSchema).toMatchObject({
+      type: 'object',
+      properties: {
+        name: {
+          type: 'string',
+          minLength: 1,
+          maxLength: 100,
+        },
+        age: {
+          type: 'integer',
+        },
+        email: {
+          type: 'string',
+          format: 'email',
+        },
+      },
+      required: ['name', 'age', 'email'],
+      additionalProperties: false,
     })
   })
 
@@ -223,34 +227,5 @@ describe('getSchemaDescription', () => {
     const description = getSchemaDescription(schema)
 
     expect(description).toBe('Description in _def')
-  })
-})
-
-describe('getToolNameFromSchema', () => {
-  it('returns fallback name when no metadata', () => {
-    const schema = z.object({ name: z.string() })
-
-    const toolName = getToolNameFromSchema(schema)
-
-    expect(toolName).toBe('StructuredOutput')
-  })
-
-  it('returns name from _def metadata', () => {
-    const schema = z.object({ name: z.string() })
-    // Manually set name in _def
-    ;(schema as any)._def.name = 'CustomName'
-
-    const toolName = getToolNameFromSchema(schema)
-
-    expect(toolName).toBe('CustomName')
-  })
-
-  it('returns fallback when name is empty string', () => {
-    const schema = z.object({ name: z.string() })
-    ;(schema as any)._def.name = ''
-
-    const toolName = getToolNameFromSchema(schema)
-
-    expect(toolName).toBe('StructuredOutput')
   })
 })
