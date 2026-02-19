@@ -39,6 +39,10 @@ export abstract class Node {
   /** Optional per-node configuration. */
   readonly config?: NodeConfig
 
+  /**
+   * @param id - Unique identifier for this node within the orchestration
+   * @param config - Optional per-node configuration
+   */
   constructor(id: string, config?: NodeConfig) {
     this.id = id
     if (config) this.config = config
@@ -71,7 +75,7 @@ export abstract class Node {
         nodeId: this.id,
         status: Status.FAILED,
         duration: (Date.now() - startTime) / 1000,
-        error: error as Error,
+        error: error instanceof Error ? error : new Error(String(error)),
         content: [],
       })
     }
@@ -101,6 +105,11 @@ export class AgentNode extends Node {
   readonly type = 'agentNode' as const
   private readonly _agent: Agent
 
+  /**
+   * @param id - Unique identifier for this node within the orchestration
+   * @param agent - The Agent instance to wrap
+   * @param config - Optional per-node configuration
+   */
   constructor(id: string, agent: Agent, config?: NodeConfig) {
     super(id, config)
     this._agent = agent

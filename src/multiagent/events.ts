@@ -1,4 +1,5 @@
 import type { AgentStreamEvent } from '../types/agent.js'
+import type { NodeType } from './types.js'
 
 /**
  * Wraps an inner streaming event from a node with the node's identity.
@@ -8,12 +9,12 @@ import type { AgentStreamEvent } from '../types/agent.js'
 export class MultiAgentNodeStreamEvent {
   readonly type = 'multiAgentNodeStreamEvent' as const
   readonly nodeId: string
-  readonly nodeType: string
+  readonly nodeType: NodeType
   readonly event: AgentStreamEvent | Exclude<MultiAgentStreamEvent, MultiAgentNodeStreamEvent>
 
   constructor(data: {
     nodeId: string
-    nodeType: string
+    nodeType: NodeType
     event: AgentStreamEvent | Exclude<MultiAgentStreamEvent, MultiAgentNodeStreamEvent>
   }) {
     this.nodeId = data.nodeId
