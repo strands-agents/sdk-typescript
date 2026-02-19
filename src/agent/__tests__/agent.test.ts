@@ -938,7 +938,6 @@ describe('Agent', () => {
     })
 
     it('retries with validation feedback when structured output tool returns error', async () => {
-      
       const schema = z.object({ name: z.string(), age: z.number() })
 
       const model = new MockMessageModel()
@@ -974,7 +973,6 @@ describe('Agent', () => {
     })
 
     it('cleans up structured output tool after invocation', async () => {
-      
       const schema = z.object({ value: z.number() })
 
       const model = new MockMessageModel()
@@ -990,7 +988,6 @@ describe('Agent', () => {
     })
 
     it('cleans up structured output tool even when error occurs', async () => {
-      
       const schema = z.object({ value: z.number() })
 
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Partial...' }, 'maxTokens')
@@ -1004,7 +1001,6 @@ describe('Agent', () => {
     })
 
     it('validates nested objects in structured output', async () => {
-      
       const schema = z.object({
         user: z.object({
           name: z.string(),
@@ -1029,7 +1025,6 @@ describe('Agent', () => {
     })
 
     it('validates arrays in structured output', async () => {
-      
       const schema = z.object({
         items: z.array(z.string()),
       })

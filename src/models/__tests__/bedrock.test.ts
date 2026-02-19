@@ -302,7 +302,6 @@ describe('BedrockModel', () => {
   })
 
   describe('format_message', async () => {
-    
     const mockConverseStreamCommand = vi.mocked(ConverseStreamCommand)
     it('formats the request to bedrock properly', async () => {
       const provider = new BedrockModel({
@@ -374,7 +373,6 @@ describe('BedrockModel', () => {
     })
 
     it('formats tool use messages', async () => {
-      
       const mockConverseStreamCommand = vi.mocked(ConverseStreamCommand)
       const provider = new BedrockModel()
       const messages: Message[] = [
@@ -783,7 +781,6 @@ describe('BedrockModel', () => {
     })
 
     describe('error handling', async () => {
-      
       it.each([
         {
           name: 'ContextWindowOverflowError for context overflow',
@@ -1118,7 +1115,6 @@ describe('BedrockModel', () => {
   })
 
   describe('system prompt formatting', async () => {
-    
     const mockConverseStreamCommand = vi.mocked(ConverseStreamCommand)
 
     beforeEach(() => {
@@ -1412,7 +1408,6 @@ describe('BedrockModel', () => {
   })
 
   describe('guard content in messages', async () => {
-    
     const mockConverseStreamCommand = vi.mocked(ConverseStreamCommand)
 
     beforeEach(() => {
@@ -1504,7 +1499,6 @@ describe('BedrockModel', () => {
   })
 
   describe('includeToolResultStatus configuration', async () => {
-    
     const mockConverseStreamCommand = vi.mocked(ConverseStreamCommand)
 
     describe('when includeToolResultStatus is true', () => {
