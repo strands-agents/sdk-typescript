@@ -414,8 +414,20 @@ export class Agent implements AgentData {
         // Execute tools sequentially
         const toolResultMessage = yield* this.executeTools(modelResult.message, this._toolRegistry)
 
-        // Add assistant message with tool uses right before adding tool results
-        // This ensures we don't have dangling tool use messages if tool execution fails
+        /**
+         * Deferred append: both messages are added AFTER tool execution completes.
+         * This keeps agent.messages in a valid, reinvokable state at all times:
+         *
+         * - If interrupted during tool execution, messages has no dangling toolUse
+         *   without a matching toolResult, so the agent can be reinvoked cleanly.
+         * - The Python SDK appends the assistant message BEFORE tool execution,
+         *   requiring recovery logic (generate_missing_tool_result_content) on
+         *   interrupts. We avoid that by deferring.
+         * - Trade-off: MessageAddedEvent for the assistant message fires after tools
+         *   complete (not before as in Python), and agent.messages is incomplete
+         *   during tool execution. Events like BeforeToolsEvent.message and
+         *   BeforeToolCallEvent.toolUse provide the data directly.
+         */
         yield this._appendMessage(modelResult.message)
         yield this._appendMessage(toolResultMessage)
       }
