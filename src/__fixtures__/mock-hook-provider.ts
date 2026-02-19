@@ -40,9 +40,9 @@ export class MockHookProvider implements HookProvider {
     const eventTypes = this.includeModelEvents ? [...lifecycleEvents, ...modelEvents] : lifecycleEvents
 
     for (const eventType of eventTypes) {
-      registry.addCallback(eventType, (e) => {
+      registry.addCallback((e) => {
         this.invocations.push(e)
-      })
+      }, eventType)
     }
   }
 

@@ -306,12 +306,12 @@ describe('Agent Hooks Integration', () => {
         .addTurn({ type: 'textBlock', text: 'Success after retry' })
 
       const agent = new Agent({ model })
-      agent.hooks.addCallback(AfterModelCallEvent, (event: AfterModelCallEvent) => {
+      agent.hooks.addCallback((event: AfterModelCallEvent) => {
         callCount++
         if (callCount === 1 && event.error) {
           event.retry = true
         }
-      })
+      }, AfterModelCallEvent)
 
       const result = await agent.invoke('Test')
 
@@ -333,12 +333,12 @@ describe('Agent Hooks Integration', () => {
         .addTurn({ type: 'textBlock', text: 'Second response after retry' })
 
       const agent = new Agent({ model })
-      agent.hooks.addCallback(AfterModelCallEvent, (event: AfterModelCallEvent) => {
+      agent.hooks.addCallback((event: AfterModelCallEvent) => {
         callCount++
         if (callCount === 1 && !event.error) {
           event.retry = true
         }
-      })
+      }, AfterModelCallEvent)
 
       const result = await agent.invoke('Test')
 
@@ -364,12 +364,12 @@ describe('Agent Hooks Integration', () => {
         .addTurn({ type: 'textBlock', text: 'Done' })
 
       const agent = new Agent({ model, tools: [tool] })
-      agent.hooks.addCallback(AfterToolCallEvent, (event: AfterToolCallEvent) => {
+      agent.hooks.addCallback((event: AfterToolCallEvent) => {
         hookCallCount++
         if (hookCallCount === 1 && event.error) {
           event.retry = true
         }
-      })
+      }, AfterToolCallEvent)
 
       const result = await agent.invoke('Test')
 
@@ -414,15 +414,15 @@ describe('Agent Hooks Integration', () => {
         .addTurn({ type: 'textBlock', text: 'Done' })
 
       const agent = new Agent({ model, tools: [tool] })
-      agent.hooks.addCallback(BeforeToolCallEvent, () => {
+      agent.hooks.addCallback(() => {
         beforeCount++
-      })
-      agent.hooks.addCallback(AfterToolCallEvent, (event: AfterToolCallEvent) => {
+      }, BeforeToolCallEvent)
+      agent.hooks.addCallback((event: AfterToolCallEvent) => {
         afterCount++
         if (afterCount === 1) {
           event.retry = true
         }
-      })
+      }, AfterToolCallEvent)
 
       await agent.invoke('Test')
 
@@ -448,12 +448,12 @@ describe('Agent Hooks Integration', () => {
         .addTurn({ type: 'textBlock', text: 'Done' })
 
       const agent = new Agent({ model, tools: [tool] })
-      agent.hooks.addCallback(AfterToolCallEvent, (event: AfterToolCallEvent) => {
+      agent.hooks.addCallback((event: AfterToolCallEvent) => {
         hookCallCount++
         if (hookCallCount === 1) {
           event.retry = true
         }
-      })
+      }, AfterToolCallEvent)
 
       const result = await agent.invoke('Test')
 
