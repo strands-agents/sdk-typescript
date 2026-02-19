@@ -31,7 +31,6 @@ import type { HookProvider } from '../hooks/types.js'
 import { SlidingWindowConversationManager } from '../conversation-manager/sliding-window-conversation-manager.js'
 import { HookRegistryImplementation } from '../hooks/registry.js'
 import {
-  HookEvent,
   InitializedEvent,
   AfterInvocationEvent,
   AfterModelCallEvent,
@@ -331,10 +330,8 @@ export class Agent implements AgentData {
     while (!result.done) {
       const event = result.value
 
-      // Invoke hook callbacks for Hook Events (except MessageAddedEvent which invokes in _appendMessage)
-      if (event instanceof HookEvent && !(event instanceof MessageAddedEvent)) {
-        await this.hooks.invokeCallbacks(event)
-      }
+      // Invoke hook callbacks for all events
+      await this.hooks.invokeCallbacks(event)
 
       this._printer?.processEvent(event)
       yield event
@@ -404,10 +401,9 @@ export class Agent implements AgentData {
           }
 
           // Loop terminates - no tool use requested (and structured output satisfied if needed)
-          yield await this._appendMessage(modelResult.message)
+          yield this._appendMessage(modelResult.message)
 
           const structuredOutput = context.getResult()
-
           return new AgentResult({
             stopReason: modelResult.stopReason,
             lastMessage: modelResult.message,
@@ -419,8 +415,9 @@ export class Agent implements AgentData {
         const toolResultMessage = yield* this.executeTools(modelResult.message, this._toolRegistry)
 
         // Add assistant message with tool uses right before adding tool results
-        yield await this._appendMessage(modelResult.message)
-        yield await this._appendMessage(toolResultMessage)
+        // This ensures we don't have dangling tool use messages if tool execution fails
+        yield this._appendMessage(modelResult.message)
+        yield this._appendMessage(toolResultMessage)
       }
     } finally {
       // Cleanup structured output context
@@ -499,7 +496,7 @@ export class Agent implements AgentData {
     // Normalize input and append messages to conversation
     const messagesToAppend = this._normalizeInput(args)
     for (const message of messagesToAppend) {
-      yield await this._appendMessage(message)
+      yield this._appendMessage(message)
     }
 
     const toolSpecs = this._toolRegistry.values().map((tool) => tool.toolSpec)
@@ -733,19 +730,14 @@ export class Agent implements AgentData {
   }
 
   /**
-   * Appends a message to the conversation history, invokes MessageAddedEvent hook,
-   * and returns the event for yielding.
+   * Appends a message to the conversation history and returns the event for yielding.
    *
    * @param message - The message to append
-   * @returns MessageAddedEvent to be yielded (hook already invoked)
+   * @returns MessageAddedEvent to be yielded
    */
-  private async _appendMessage(message: Message): Promise<MessageAddedEvent> {
+  private _appendMessage(message: Message): MessageAddedEvent {
     this.messages.push(message)
-    const event = new MessageAddedEvent({ agent: this, message })
-    // Invoke hooks immediately for message tracking
-    await this.hooks.invokeCallbacks(event)
-    // Return event for yielding (stream will skip hook invocation for MessageAddedEvent)
-    return event
+    return new MessageAddedEvent({ agent: this, message })
   }
 }
 
