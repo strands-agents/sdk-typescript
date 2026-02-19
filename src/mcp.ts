@@ -12,7 +12,12 @@ export interface RuntimeConfig {
 }
 
 /** Arguments for configuring an MCP Client. */
-export type McpClientConfig = RuntimeConfig & { transport: Transport }
+export type McpClientConfig = RuntimeConfig & {
+  transport: Transport
+
+  /** Disable OpenTelemetry MCP instrumentation. */
+  disableMcpInstrumentation?: boolean
+}
 
 /** MCP Client for interacting with Model Context Protocol servers. */
 export class McpClient {
@@ -32,9 +37,8 @@ export class McpClient {
       version: this._clientVersion,
     })
 
-    // Skip MCP instrumentation when STRANDS_OTEL_DISABLE_MCP_INSTRUMENTATION is set
-    if (!globalThis?.process?.env?.STRANDS_OTEL_DISABLE_MCP_INSTRUMENTATION) {
-      // This will inject OpenTelemetry context into distributed MCP requests
+    // Skip MCP instrumentation when disabled via config
+    if (!args.disableMcpInstrumentation) {
       instrumentMcpClient(this)
     }
   }

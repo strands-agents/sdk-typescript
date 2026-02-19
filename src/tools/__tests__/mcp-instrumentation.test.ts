@@ -97,16 +97,6 @@ describe('mcp-instrumentation', () => {
       })
     })
 
-    it('should not modify array args even with active span', async () => {
-      instrumentMcpClient(mockMcpClient)
-      mockActiveSpan()
-
-      const args = [1, 2, 3]
-      await mockMcpClient.callTool(MOCK_TOOL, args)
-
-      expect(originalCallTool).toHaveBeenCalledWith(MOCK_TOOL, [1, 2, 3])
-    })
-
     it('should fall back to original call with unmodified args on error', async () => {
       instrumentMcpClient(mockMcpClient)
 

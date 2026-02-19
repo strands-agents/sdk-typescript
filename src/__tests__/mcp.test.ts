@@ -99,14 +99,12 @@ describe('MCP Integration', () => {
       expect(instrumentMcpClient).toHaveBeenCalledWith(client)
     })
 
-    it('skips MCP instrumentation when STRANDS_OTEL_DISABLE_MCP_INSTRUMENTATION is set', () => {
+    it('skips MCP instrumentation when disableMcpInstrumentation config is true', () => {
       vi.mocked(instrumentMcpClient).mockClear()
-      process.env.STRANDS_OTEL_DISABLE_MCP_INSTRUMENTATION = 'true'
 
-      new McpClient({ applicationName: 'TestApp', transport: mockTransport })
+      new McpClient({ applicationName: 'TestApp', transport: mockTransport, disableMcpInstrumentation: true })
 
       expect(instrumentMcpClient).not.toHaveBeenCalled()
-      delete process.env.STRANDS_OTEL_DISABLE_MCP_INSTRUMENTATION
     })
 
     it('manages connection state lazily', async () => {

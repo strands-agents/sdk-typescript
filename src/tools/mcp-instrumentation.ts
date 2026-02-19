@@ -60,7 +60,7 @@ export function instrumentMcpClient(mcpClient: McpClient): void {
 
         if (args === null || args === undefined) {
           enhancedArgs = { _meta: carrier as unknown as JSONValue }
-        } else if (typeof args === 'object' && !Array.isArray(args)) {
+        } else if (typeof args === 'object') {
           enhancedArgs = {
             ...args,
             _meta: carrier as unknown as JSONValue,
