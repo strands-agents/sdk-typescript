@@ -121,7 +121,7 @@
     "@google/genai": "^1.40.0",
     "@modelcontextprotocol/sdk": "^1.25.2",
     "openai": "^6.7.0",
-    "zod": "^4.3.6"
+    "zod": "^4.1.12"
   },
   "peerDependenciesMeta": {
     "@anthropic-ai/sdk": {
