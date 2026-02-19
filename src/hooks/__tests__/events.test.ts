@@ -86,6 +86,18 @@ describe('AfterInvocationEvent', () => {
     const event = new AfterInvocationEvent({ agent })
     expect(event._shouldReverseCallbacks()).toBe(true)
   })
+
+  it('creates instance with invocationState', () => {
+    const agent = new Agent()
+    const invocationState = { userId: '123', sessionId: 'abc' }
+    const event = new AfterInvocationEvent({ agent, invocationState })
+
+    expect(event).toEqual({
+      type: 'afterInvocationEvent',
+      agent: agent,
+      invocationState: { userId: '123', sessionId: 'abc' },
+    })
+  })
 })
 
 describe('MessageAddedEvent', () => {
@@ -165,6 +177,21 @@ describe('BeforeToolCallEvent', () => {
     const toolUse = { name: 'test', toolUseId: 'id', input: {} }
     const event = new BeforeToolCallEvent({ agent, toolUse, tool: undefined })
     expect(event._shouldReverseCallbacks()).toBe(false)
+  })
+
+  it('creates instance with invocationState', () => {
+    const agent = new Agent()
+    const toolUse = { name: 'test', toolUseId: 'id', input: {} }
+    const invocationState = { userId: '123', sessionId: 'abc' }
+    const event = new BeforeToolCallEvent({ agent, toolUse, tool: undefined, invocationState })
+
+    expect(event).toEqual({
+      type: 'beforeToolCallEvent',
+      agent: agent,
+      toolUse: toolUse,
+      tool: undefined,
+      invocationState: { userId: '123', sessionId: 'abc' },
+    })
   })
 })
 
@@ -275,6 +302,27 @@ describe('AfterToolCallEvent', () => {
     event.retry = true
     expect(event.retry).toBe(true)
   })
+
+  it('creates instance with invocationState', () => {
+    const agent = new Agent()
+    const toolUse = { name: 'test', toolUseId: 'id', input: {} }
+    const result = new ToolResultBlock({
+      toolUseId: 'id',
+      status: 'success',
+      content: [new TextBlock('Success')],
+    })
+    const invocationState = { userId: '123', sessionId: 'abc' }
+    const event = new AfterToolCallEvent({ agent, toolUse, tool: undefined, result, invocationState })
+
+    expect(event).toEqual({
+      type: 'afterToolCallEvent',
+      agent: agent,
+      toolUse: toolUse,
+      tool: undefined,
+      result: result,
+      invocationState: { userId: '123', sessionId: 'abc' },
+    })
+  })
 })
 
 describe('BeforeModelCallEvent', () => {
@@ -294,6 +342,18 @@ describe('BeforeModelCallEvent', () => {
     const agent = new Agent()
     const event = new BeforeModelCallEvent({ agent })
     expect(event._shouldReverseCallbacks()).toBe(false)
+  })
+
+  it('creates instance with invocationState', () => {
+    const agent = new Agent()
+    const invocationState = { userId: '123', sessionId: 'abc' }
+    const event = new BeforeModelCallEvent({ agent, invocationState })
+
+    expect(event).toEqual({
+      type: 'beforeModelCallEvent',
+      agent: agent,
+      invocationState: { userId: '123', sessionId: 'abc' },
+    })
   })
 })
 
@@ -363,6 +423,23 @@ describe('AfterModelCallEvent', () => {
     const event = new AfterModelCallEvent({ agent, error })
 
     expect(event.retry).toBeUndefined()
+  })
+
+  it('creates instance with invocationState', () => {
+    const agent = new Agent()
+    const message = new Message({ role: 'assistant', content: [{ type: 'textBlock', text: 'Response' }] })
+    const stopReason = 'endTurn'
+    const response = { message, stopReason }
+    const invocationState = { userId: '123', sessionId: 'abc' }
+    const event = new AfterModelCallEvent({ agent, stopData: response, invocationState })
+
+    expect(event).toEqual({
+      type: 'afterModelCallEvent',
+      agent: agent,
+      stopData: response,
+      error: undefined,
+      invocationState: { userId: '123', sessionId: 'abc' },
+    })
   })
 })
 

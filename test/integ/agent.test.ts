@@ -14,8 +14,8 @@ import {
 import { notebook } from '@strands-agents/sdk/vended_tools/notebook'
 import { httpRequest } from '@strands-agents/sdk/vended_tools/http_request'
 import { z } from 'zod'
-import type { HookRegistry } from '../../src/hooks/index.js'
-import { BeforeInvocationEvent, BeforeToolCallEvent } from '../../src/hooks/events.js'
+import type { HookRegistry } from '@strands-agents/sdk'
+import { BeforeInvocationEvent, BeforeToolCallEvent } from '@strands-agents/sdk'
 
 import { collectGenerator } from '$/sdk/__fixtures__/model-test-helpers.js'
 import { loadFixture } from './__fixtures__/test-helpers.js'

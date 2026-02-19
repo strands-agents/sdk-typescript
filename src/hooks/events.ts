@@ -59,10 +59,14 @@ export class BeforeInvocationEvent extends HookEvent {
 export class AfterInvocationEvent extends HookEvent {
   readonly type = 'afterInvocationEvent' as const
   readonly agent: AgentData
+  readonly invocationState?: Record<string, unknown>
 
-  constructor(data: { agent: AgentData }) {
+  constructor(data: { agent: AgentData; invocationState?: Record<string, unknown> }) {
     super()
     this.agent = data.agent
+    if (data.invocationState !== undefined) {
+      this.invocationState = data.invocationState
+    }
   }
 
   override _shouldReverseCallbacks(): boolean {

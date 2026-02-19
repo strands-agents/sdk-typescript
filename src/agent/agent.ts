@@ -364,11 +364,10 @@ export class Agent implements AgentData {
     let currentArgs: InvokeArgs | undefined = args
 
     // Emit event before the loop starts
-    const eventData: { agent: AgentData; invocationState?: Record<string, unknown> } = { agent: this }
-    if (invocationState !== undefined) {
-      eventData.invocationState = invocationState
-    }
-    yield new BeforeInvocationEvent(eventData)
+    yield new BeforeInvocationEvent({
+      agent: this,
+      ...(invocationState !== undefined && { invocationState: { ...invocationState } }),
+    })
 
     try {
       // Main agent loop - continues until model stops without requesting tools
@@ -397,7 +396,10 @@ export class Agent implements AgentData {
       }
     } finally {
       // Always emit final event
-      yield new AfterInvocationEvent({ agent: this })
+      yield new AfterInvocationEvent({
+        agent: this,
+        ...(invocationState !== undefined && { invocationState: { ...invocationState } }),
+      })
     }
   }
 
@@ -478,11 +480,10 @@ export class Agent implements AgentData {
       streamOptions.systemPrompt = this.systemPrompt
     }
 
-    const modelEventData: { agent: AgentData; invocationState?: Record<string, unknown> } = { agent: this }
-    if (invocationState !== undefined) {
-      modelEventData.invocationState = invocationState
-    }
-    yield new BeforeModelCallEvent(modelEventData)
+    yield new BeforeModelCallEvent({
+      agent: this,
+      ...(invocationState !== undefined && { invocationState: { ...invocationState } }),
+    })
 
     try {
       const { message, stopReason } = yield* this._streamFromModel(this.messages, streamOptions)
@@ -490,7 +491,7 @@ export class Agent implements AgentData {
       const afterModelCallEvent = new AfterModelCallEvent({
         agent: this,
         stopData: { message, stopReason },
-        ...(invocationState !== undefined && { invocationState }),
+        ...(invocationState !== undefined && { invocationState: { ...invocationState } }),
       })
       yield afterModelCallEvent
 
@@ -503,14 +504,11 @@ export class Agent implements AgentData {
       const modelError = normalizeError(error)
 
       // Create error event
-      const errorEventData: { agent: AgentData; error: Error; invocationState?: Record<string, unknown> } = {
-        agent: this as AgentData,
+      const errorEvent = new AfterModelCallEvent({
+        agent: this,
         error: modelError,
-      }
-      if (invocationState !== undefined) {
-        errorEventData.invocationState = invocationState
-      }
-      const errorEvent = new AfterModelCallEvent(errorEventData)
+        ...(invocationState !== undefined && { invocationState: { ...invocationState } }),
+      })
 
       // Yield error event - stream will invoke hooks
       yield errorEvent
@@ -631,7 +629,7 @@ export class Agent implements AgentData {
         agent: this,
         toolUse,
         tool,
-        ...(invocationState !== undefined && { invocationState }),
+        ...(invocationState !== undefined && { invocationState: { ...invocationState } }),
       })
 
       let toolResult: ToolResultBlock
@@ -653,7 +651,7 @@ export class Agent implements AgentData {
             input: toolUseBlock.input,
           },
           agent: this,
-          ...(invocationState !== undefined && { invocationState }),
+          ...(invocationState !== undefined && { invocationState: { ...invocationState } }),
         }
 
         try {
@@ -689,7 +687,7 @@ export class Agent implements AgentData {
         tool,
         result: toolResult,
         ...(error !== undefined && { error }),
-        ...(invocationState !== undefined && { invocationState }),
+        ...(invocationState !== undefined && { invocationState: { ...invocationState } }),
       })
       yield afterToolCallEvent
 
