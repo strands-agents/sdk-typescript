@@ -207,9 +207,14 @@ export class ToolUseBlock implements ToolUseBlockData {
  *
  * This is a discriminated union where the object key determines the content format.
  */
-export type ToolResultContentData = TextBlockData | JsonBlockData
+export type ToolResultContentData =
+  | TextBlockData
+  | JsonBlockData
+  | { document: DocumentBlockData }
+  | { image: ImageBlockData }
+  | { video: VideoBlockData }
 
-export type ToolResultContent = TextBlock | JsonBlock
+export type ToolResultContent = TextBlock | JsonBlock | DocumentBlock | ImageBlock | VideoBlock
 
 /**
  * Data for a tool result block.
@@ -241,7 +246,7 @@ export interface ToolResultBlockData {
 /**
  * Tool result content block.
  */
-export class ToolResultBlock implements ToolResultBlockData {
+export class ToolResultBlock {
   /**
    * Discriminator for tool result content.
    */
@@ -612,6 +617,12 @@ export function contentBlockFromData(data: ContentBlockData): ContentBlock {
           return new TextBlock(contentItem.text)
         } else if ('json' in contentItem) {
           return new JsonBlock(contentItem)
+        } else if ('document' in contentItem) {
+          return new DocumentBlock(contentItem.document as DocumentBlockData)
+        } else if ('image' in contentItem) {
+          return new ImageBlock(contentItem.image as ImageBlockData)
+        } else if ('video' in contentItem) {
+          return new VideoBlock(contentItem.video as VideoBlockData)
         } else {
           throw new Error('Unknown ToolResultContentData type')
         }

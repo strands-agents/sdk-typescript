@@ -5,6 +5,7 @@ import type { ToolSpec } from './types.js'
 import type { JSONSchema, JSONValue } from '../types/json.js'
 import { deepCopy } from '../types/json.js'
 import { JsonBlock, TextBlock, ToolResultBlock } from '../types/messages.js'
+import { DocumentBlock, ImageBlock, VideoBlock } from '../types/media.js'
 
 /**
  * Callback function for FunctionTool implementations.
@@ -218,6 +219,15 @@ export class FunctionTool extends Tool {
    */
   private _wrapInToolResult(value: unknown, toolUseId: string): ToolResultBlock {
     try {
+      // Handle DocumentBlock, ImageBlock, VideoBlock directly
+      if (value instanceof DocumentBlock || value instanceof ImageBlock || value instanceof VideoBlock) {
+        return new ToolResultBlock({
+          toolUseId,
+          status: 'success',
+          content: [value],
+        })
+      }
+
       // Handle null with special string representation as text content
       if (value === null) {
         return new ToolResultBlock({

@@ -4,6 +4,13 @@ import type { ToolSpec } from './types.js'
 import type { JSONSchema, JSONValue } from '../types/json.js'
 import { FunctionTool } from './function-tool.js'
 import { z, ZodVoid } from 'zod'
+import { DocumentBlock, ImageBlock, VideoBlock } from '../types/media.js'
+
+/**
+ * Valid return types for tool callbacks.
+ * Includes JSON-serializable values and media blocks.
+ */
+export type ToolReturnValue = JSONValue | DocumentBlock | ImageBlock | VideoBlock
 
 /**
  * Helper type to infer input type from Zod schema or default to never.
@@ -16,7 +23,7 @@ type ZodInferred<TInput> = TInput extends z.ZodType ? z.infer<TInput> : never
  * @typeParam TInput - Zod schema type for input validation
  * @typeParam TReturn - Return type of the callback function
  */
-export interface ToolConfig<TInput extends z.ZodType | undefined, TReturn extends JSONValue = JSONValue> {
+export interface ToolConfig<TInput extends z.ZodType | undefined, TReturn extends ToolReturnValue = JSONValue> {
   /** The name of the tool */
   name: string
 
@@ -46,7 +53,7 @@ export interface ToolConfig<TInput extends z.ZodType | undefined, TReturn extend
  * Internal implementation of a Zod-based tool.
  * Extends Tool abstract class and implements InvokableTool interface.
  */
-class ZodTool<TInput extends z.ZodType | undefined, TReturn extends JSONValue = JSONValue>
+class ZodTool<TInput extends z.ZodType | undefined, TReturn extends ToolReturnValue = JSONValue>
   extends Tool
   implements InvokableTool<ZodInferred<TInput>, TReturn>
 {
@@ -231,7 +238,7 @@ class ZodTool<TInput extends z.ZodType | undefined, TReturn extends JSONValue = 
  * @param config - Tool configuration
  * @returns An InvokableTool that implements the Tool interface with invoke() method
  */
-export function tool<TInput extends z.ZodType | undefined, TReturn extends JSONValue = JSONValue>(
+export function tool<TInput extends z.ZodType | undefined, TReturn extends ToolReturnValue = JSONValue>(
   config: ToolConfig<TInput, TReturn>
 ): InvokableTool<ZodInferred<TInput>, TReturn> {
   return new ZodTool(config)

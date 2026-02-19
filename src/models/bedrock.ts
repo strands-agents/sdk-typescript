@@ -569,6 +569,33 @@ export class BedrockModel extends Model<BedrockModelConfig> {
               return { text: content.text }
             case 'jsonBlock':
               return { json: content.json }
+            case 'documentBlock':
+              return {
+                document: {
+                  name: content.name,
+                  format: content.format as BedrockContentBlock.DocumentMember['document']['format'],
+                  source: this._formatDocumentSource(content.source),
+                  ...(content.citations && { citations: content.citations }),
+                  ...(content.context && { context: content.context }),
+                },
+              }
+            case 'imageBlock':
+              return {
+                image: {
+                  format: content.format as BedrockContentBlock.ImageMember['image']['format'],
+                  source: this._formatMediaSource(content.source),
+                },
+              }
+            case 'videoBlock':
+              return {
+                video: {
+                  format: content.format as BedrockContentBlock.VideoMember['video']['format'],
+                  source: this._formatMediaSource(content.source),
+                },
+              }
+            default:
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              return { text: `[Unsupported content type: ${(content as any).type}]` }
           }
         })
 
