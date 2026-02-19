@@ -5,7 +5,7 @@
  * with support for multiple sources (bytes, S3, URLs, files).
  */
 
-import type { Serialized, MaybeSerializedInput } from './json.js'
+import type { Serialized, MaybeSerializedInput, JSONSerializable } from './json.js'
 import { omitUndefined } from './json.js'
 import { TextBlock, type TextBlockData } from './messages.js'
 
@@ -129,7 +129,7 @@ export interface S3LocationData {
 /**
  * S3 location for Bedrock media and document sources.
  */
-export class S3Location implements S3LocationData {
+export class S3Location implements S3LocationData, JSONSerializable<S3LocationData> {
   readonly uri: string
   readonly bucketOwner?: string
 
@@ -202,7 +202,7 @@ export interface ImageBlockData {
 /**
  * Image content block.
  */
-export class ImageBlock implements ImageBlockData {
+export class ImageBlock implements ImageBlockData, JSONSerializable<{ image: Serialized<ImageBlockData> }> {
   /**
    * Discriminator for image content.
    */
@@ -327,7 +327,7 @@ export interface VideoBlockData {
 /**
  * Video content block.
  */
-export class VideoBlock implements VideoBlockData {
+export class VideoBlock implements VideoBlockData, JSONSerializable<{ video: Serialized<VideoBlockData> }> {
   /**
    * Discriminator for video content.
    */
@@ -468,7 +468,7 @@ export interface DocumentBlockData {
 /**
  * Document content block.
  */
-export class DocumentBlock implements DocumentBlockData {
+export class DocumentBlock implements DocumentBlockData, JSONSerializable<{ document: Serialized<DocumentBlockData> }> {
   /**
    * Discriminator for document content.
    */

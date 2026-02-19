@@ -1,4 +1,4 @@
-import type { JSONValue, Serialized, MaybeSerializedInput } from './json.js'
+import type { JSONValue, Serialized, MaybeSerializedInput, JSONSerializable } from './json.js'
 import { omitUndefined } from './json.js'
 import type { ImageBlockData, VideoBlockData, DocumentBlockData } from './media.js'
 import { ImageBlock, VideoBlock, DocumentBlock, encodeBase64, decodeBase64 } from './media.js'
@@ -30,7 +30,7 @@ export interface MessageData {
  * A message in a conversation between user and assistant.
  * Each message has a role (user or assistant) and an array of content blocks.
  */
-export class Message {
+export class Message implements JSONSerializable<MessageData> {
   /**
    * Discriminator for message type.
    */
@@ -140,7 +140,7 @@ export interface TextBlockData {
 /**
  * Text content block within a message.
  */
-export class TextBlock implements TextBlockData {
+export class TextBlock implements TextBlockData, JSONSerializable<TextBlockData> {
   /**
    * Discriminator for text content.
    */
@@ -204,7 +204,7 @@ export interface ToolUseBlockData {
 /**
  * Tool use content block.
  */
-export class ToolUseBlock implements ToolUseBlockData {
+export class ToolUseBlock implements ToolUseBlockData, JSONSerializable<{ toolUse: ToolUseBlockData }> {
   /**
    * Discriminator for tool use content.
    */
@@ -307,7 +307,7 @@ export interface ToolResultBlockData {
 /**
  * Tool result content block.
  */
-export class ToolResultBlock implements ToolResultBlockData {
+export class ToolResultBlock implements ToolResultBlockData, JSONSerializable<{ toolResult: ToolResultBlockData }> {
   /**
    * Discriminator for tool result content.
    */
@@ -406,7 +406,9 @@ export interface ReasoningBlockData {
 /**
  * Reasoning content block within a message.
  */
-export class ReasoningBlock implements ReasoningBlockData {
+export class ReasoningBlock
+  implements ReasoningBlockData, JSONSerializable<{ reasoning: Serialized<ReasoningBlockData> }>
+{
   /**
    * Discriminator for reasoning content.
    */
@@ -494,7 +496,7 @@ export interface CachePointBlockData {
  * Cache point block for prompt caching.
  * Marks a position in a message or system prompt where caching should occur.
  */
-export class CachePointBlock implements CachePointBlockData {
+export class CachePointBlock implements CachePointBlockData, JSONSerializable<{ cachePoint: CachePointBlockData }> {
   /**
    * Discriminator for cache point.
    */
@@ -546,7 +548,7 @@ export interface JsonBlockData {
  * JSON content block within a message.
  * Used for structured data returned from tools or model responses.
  */
-export class JsonBlock implements JsonBlockData {
+export class JsonBlock implements JsonBlockData, JSONSerializable<JsonBlockData> {
   /**
    * Discriminator for JSON content.
    */
@@ -742,7 +744,9 @@ export interface GuardContentBlockData {
  * Marks content that should be evaluated by guardrails for safety, grounding, or other policies.
  * Can be used in both message content and system prompts.
  */
-export class GuardContentBlock implements GuardContentBlockData {
+export class GuardContentBlock
+  implements GuardContentBlockData, JSONSerializable<{ guardContent: Serialized<GuardContentBlockData> }>
+{
   /**
    * Discriminator for guard content.
    */

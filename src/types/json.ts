@@ -1,4 +1,13 @@
 import type { JSONSchema7 } from 'json-schema'
+/**
+ * Interface for objects that can be serialized to JSON via `toJSON()`.
+ *
+ * @typeParam T - The type returned by `toJSON()`.
+ */
+export interface JSONSerializable<T = unknown> {
+  toJSON(): T
+}
+
 import { JsonValidationError } from '../errors.js'
 
 /**

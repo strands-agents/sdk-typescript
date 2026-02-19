@@ -318,7 +318,7 @@ describe('encodeBase64 and decodeBase64', () => {
 describe('fromJSON with serialized (base64 string) input', () => {
   it('ImageBlock.fromJSON accepts base64 string for bytes', () => {
     const originalBytes = new Uint8Array([1, 2, 3, 4, 5])
-    const base64String = globalThis.Buffer.from(originalBytes).toString('base64')
+    const base64String = encodeBase64(originalBytes)
     const block = ImageBlock.fromJSON({
       image: { format: 'jpeg', source: { bytes: base64String } },
     })
@@ -335,7 +335,7 @@ describe('fromJSON with serialized (base64 string) input', () => {
 
   it('VideoBlock.fromJSON accepts base64 string for bytes', () => {
     const originalBytes = new Uint8Array([10, 20, 30])
-    const base64String = globalThis.Buffer.from(originalBytes).toString('base64')
+    const base64String = encodeBase64(originalBytes)
     const block = VideoBlock.fromJSON({
       video: { format: 'mp4', source: { bytes: base64String } },
     })
@@ -352,7 +352,7 @@ describe('fromJSON with serialized (base64 string) input', () => {
 
   it('DocumentBlock.fromJSON accepts base64 string for bytes', () => {
     const originalBytes = new Uint8Array([100, 200])
-    const base64String = globalThis.Buffer.from(originalBytes).toString('base64')
+    const base64String = encodeBase64(originalBytes)
     const block = DocumentBlock.fromJSON({
       document: { name: 'doc.pdf', format: 'pdf', source: { bytes: base64String } },
     })
