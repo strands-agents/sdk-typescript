@@ -48,13 +48,15 @@ export class ToolRegistry extends Registry<Tool, Tool> {
     }
 
     // Check for duplicate names
-    if (this.values().some((t) => t.name === tool.name)) {
+    const hasDuplicate = this.values().some((t) => t.name === tool.name)
+    if (hasDuplicate) {
       throw new ValidationError(`Tool with name '${tool.name}' already registered`)
     }
   }
 
   /**
    * Retrieves the first tool that matches the given name.
+   *
    * @param name - The name of the tool to retrieve.
    * @returns The tool if found, otherwise undefined.
    */
@@ -64,7 +66,7 @@ export class ToolRegistry extends Registry<Tool, Tool> {
 
   /**
    * Finds and removes the first tool that matches the given name.
-   * If multiple tools have the same name, only the first one found is removed.
+   *
    * @param name - The name of the tool to remove.
    */
   public removeByName(name: string): void {

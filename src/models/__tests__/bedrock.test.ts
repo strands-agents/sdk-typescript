@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { BedrockRuntimeClient } from '@aws-sdk/client-bedrock-runtime'
+import { BedrockRuntimeClient, ConverseStreamCommand, ValidationException } from '@aws-sdk/client-bedrock-runtime'
 import { isNode } from '../../__fixtures__/environment.js'
 import { BedrockModel } from '../bedrock.js'
 import { ContextWindowOverflowError, ModelThrottledError } from '../../errors.js'
@@ -302,7 +302,6 @@ describe('BedrockModel', () => {
   })
 
   describe('format_message', async () => {
-    const { ConverseStreamCommand } = await import('@aws-sdk/client-bedrock-runtime')
     const mockConverseStreamCommand = vi.mocked(ConverseStreamCommand)
     it('formats the request to bedrock properly', async () => {
       const provider = new BedrockModel({
@@ -374,7 +373,6 @@ describe('BedrockModel', () => {
     })
 
     it('formats tool use messages', async () => {
-      const { ConverseStreamCommand } = await import('@aws-sdk/client-bedrock-runtime')
       const mockConverseStreamCommand = vi.mocked(ConverseStreamCommand)
       const provider = new BedrockModel()
       const messages: Message[] = [
@@ -783,7 +781,6 @@ describe('BedrockModel', () => {
     })
 
     describe('error handling', async () => {
-      const { ValidationException } = await import('@aws-sdk/client-bedrock-runtime')
       it.each([
         {
           name: 'ContextWindowOverflowError for context overflow',
@@ -1118,7 +1115,6 @@ describe('BedrockModel', () => {
   })
 
   describe('system prompt formatting', async () => {
-    const { ConverseStreamCommand } = await import('@aws-sdk/client-bedrock-runtime')
     const mockConverseStreamCommand = vi.mocked(ConverseStreamCommand)
 
     beforeEach(() => {
@@ -1412,7 +1408,6 @@ describe('BedrockModel', () => {
   })
 
   describe('guard content in messages', async () => {
-    const { ConverseStreamCommand } = await import('@aws-sdk/client-bedrock-runtime')
     const mockConverseStreamCommand = vi.mocked(ConverseStreamCommand)
 
     beforeEach(() => {
@@ -1504,7 +1499,6 @@ describe('BedrockModel', () => {
   })
 
   describe('includeToolResultStatus configuration', async () => {
-    const { ConverseStreamCommand } = await import('@aws-sdk/client-bedrock-runtime')
     const mockConverseStreamCommand = vi.mocked(ConverseStreamCommand)
 
     describe('when includeToolResultStatus is true', () => {

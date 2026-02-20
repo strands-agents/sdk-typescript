@@ -57,6 +57,12 @@ sdk-typescript/
 │   │   ├── model.ts              # Base model provider interface
 │   │   └── streaming.ts          # Streaming event types
 │   │
+│   ├── structured-output/        # Structured output with Zod schemas
+│   │   ├── exceptions.ts         # StructuredOutputException
+│   │   ├── utils.ts              # Zod to JSON Schema conversion
+│   │   ├── tool.ts               # Tool implementation for validation
+│   │   └── context.ts            # Per-invocation context management
+│   │
 │   ├── tools/                    # Tool definitions and types
 │   │   ├── __tests__/            # Unit tests for tools
 │   │   │   ├── registry.test.ts  # Tests for ToolRegistry
@@ -137,6 +143,7 @@ sdk-typescript/
 - **`src/agent/conversation-manager/`**: Conversation history management strategies
 - **`src/hooks/`**: Hooks system for event-driven extensibility
 - **`src/models/`**: Model provider implementations (Bedrock, OpenAI, future providers)
+- **`src/structured-output/`**: Structured output with Zod schema validation and automatic retry logic
 - **`src/tools/`**: Tool definitions and types for agent tool use
 - **`src/types/`**: Core type definitions used across the SDK
 - **`vended_tools/`**: Optional vended tools (not part of core SDK, independently importable)
