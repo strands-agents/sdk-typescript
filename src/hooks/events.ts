@@ -7,14 +7,18 @@ import type { ModelStreamEvent } from '../models/streaming.js'
 /**
  * Agent hook events.
  *
- * All events extend {@link StreamEvent}, carry `readonly agent: AgentData`, and use a
+ * All events extend {@link StreamEvent} and carry `readonly agent: AgentData` with a
  * `readonly type` discriminator (camelCase of the class name) for switch-based narrowing.
  * Constructor takes a single data-object parameter. All properties are readonly except
  * explicit mutable flags (`retry`).
  *
+ * Events that should be subscribable via the hook system extend {@link HookableEvent}
+ * (which itself extends StreamEvent). Data wrapper events extend StreamEvent directly
+ * and are only available through `agent.stream()`, not via hook callbacks.
+ *
  * ## Event categories
  *
- * **Lifecycle events** — Before/After pairs that bracket agent operations.
+ * **Lifecycle events** (extend {@link HookableEvent}) — Before/After pairs that bracket agent operations.
  * - Naming: `Before<Noun>Event` / `After<Noun>Event`
  * - `After*` events override `_shouldReverseCallbacks()` → `true` for cleanup ordering.
  * - Examples: {@link BeforeInvocationEvent}/{@link AfterInvocationEvent},
@@ -22,11 +26,12 @@ import type { ModelStreamEvent } from '../models/streaming.js'
  *   {@link BeforeToolsEvent}/{@link AfterToolsEvent},
  *   {@link BeforeToolCallEvent}/{@link AfterToolCallEvent}
  *
- * **State-change events** — Signal that agent state was mutated.
+ * **State-change events** (extend {@link HookableEvent}) — Signal that agent state was mutated.
  * - Naming: `<Noun><PastTense>Event`
  * - Examples: {@link InitializedEvent}, {@link MessageAddedEvent}
  *
- * **Data events** — Wrap data objects produced during agent execution.
+ * **Data events** (extend {@link StreamEvent} directly) — Wrap data objects produced during
+ * agent execution. Available via `agent.stream()` only, not hookable.
  * Two sub-categories:
  *
  *   *Update events* — wrap transient streaming data from lower layers.
@@ -51,10 +56,17 @@ import type { ModelStreamEvent } from '../models/streaming.js'
  */
 
 /**
- * Base class for all hook events.
- * Hook events are emitted at specific points in the agent lifecycle.
+ * Base class for all events yielded by `agent.stream()`.
+ * Carries no hookability — subclasses that should be hookable extend {@link HookableEvent} instead.
  */
-export abstract class StreamEvent {
+export abstract class StreamEvent {}
+
+/**
+ * Base class for events that can be subscribed to via the hook system.
+ * Only events extending this class are dispatched to {@link HookRegistry} callbacks.
+ * Lifecycle and state-change events extend this; data wrapper events extend {@link StreamEvent} directly.
+ */
+export abstract class HookableEvent extends StreamEvent {
   /**
    * @internal
    * Check if callbacks should be reversed for this event.
@@ -69,7 +81,7 @@ export abstract class StreamEvent {
  * Event triggered when an agent has finished initialization.
  * Fired after the agent has been fully constructed and all built-in components have been initialized.
  */
-export class InitializedEvent extends StreamEvent {
+export class InitializedEvent extends HookableEvent {
   readonly type = 'initializedEvent' as const
   readonly agent: AgentData
 
@@ -83,7 +95,7 @@ export class InitializedEvent extends StreamEvent {
  * Event triggered at the beginning of a new agent request.
  * Fired before any model inference or tool execution occurs.
  */
-export class BeforeInvocationEvent extends StreamEvent {
+export class BeforeInvocationEvent extends HookableEvent {
   readonly type = 'beforeInvocationEvent' as const
   readonly agent: AgentData
 
@@ -98,7 +110,7 @@ export class BeforeInvocationEvent extends StreamEvent {
  * Fired after all processing completes, regardless of success or error.
  * Uses reverse callback ordering for proper cleanup semantics.
  */
-export class AfterInvocationEvent extends StreamEvent {
+export class AfterInvocationEvent extends HookableEvent {
   readonly type = 'afterInvocationEvent' as const
   readonly agent: AgentData
 
@@ -117,7 +129,7 @@ export class AfterInvocationEvent extends StreamEvent {
  * Fired during the agent loop execution for framework-generated messages.
  * Does not fire for initial messages from AgentConfig or user input messages.
  */
-export class MessageAddedEvent extends StreamEvent {
+export class MessageAddedEvent extends HookableEvent {
   readonly type = 'messageAddedEvent' as const
   readonly agent: AgentData
   readonly message: Message
@@ -133,7 +145,7 @@ export class MessageAddedEvent extends StreamEvent {
  * Event triggered just before a tool is executed.
  * Fired after tool lookup but before execution begins.
  */
-export class BeforeToolCallEvent extends StreamEvent {
+export class BeforeToolCallEvent extends HookableEvent {
   readonly type = 'beforeToolCallEvent' as const
   readonly agent: AgentData
   readonly toolUse: {
@@ -160,7 +172,7 @@ export class BeforeToolCallEvent extends StreamEvent {
  * Fired after tool execution finishes, whether successful or failed.
  * Uses reverse callback ordering for proper cleanup semantics.
  */
-export class AfterToolCallEvent extends StreamEvent {
+export class AfterToolCallEvent extends HookableEvent {
   readonly type = 'afterToolCallEvent' as const
   readonly agent: AgentData
   readonly toolUse: {
@@ -204,7 +216,7 @@ export class AfterToolCallEvent extends StreamEvent {
  * Event triggered just before the model is invoked.
  * Fired before sending messages to the model for inference.
  */
-export class BeforeModelCallEvent extends StreamEvent {
+export class BeforeModelCallEvent extends HookableEvent {
   readonly type = 'beforeModelCallEvent' as const
   readonly agent: AgentData
 
@@ -235,7 +247,7 @@ export interface ModelStopData {
  *
  * Note: stopData may be undefined if an error occurs before the model completes.
  */
-export class AfterModelCallEvent extends StreamEvent {
+export class AfterModelCallEvent extends HookableEvent {
   readonly type = 'afterModelCallEvent' as const
   readonly agent: AgentData
   readonly stopData?: ModelStopData
@@ -384,7 +396,7 @@ export class AgentResultEvent extends StreamEvent {
  * Event triggered before executing tools.
  * Fired when the model returns tool use blocks that need to be executed.
  */
-export class BeforeToolsEvent extends StreamEvent {
+export class BeforeToolsEvent extends HookableEvent {
   readonly type = 'beforeToolsEvent' as const
   readonly agent: AgentData
   readonly message: Message
@@ -401,7 +413,7 @@ export class BeforeToolsEvent extends StreamEvent {
  * Fired after tool results are collected and ready to be added to conversation.
  * Uses reverse callback ordering for proper cleanup semantics.
  */
-export class AfterToolsEvent extends StreamEvent {
+export class AfterToolsEvent extends HookableEvent {
   readonly type = 'afterToolsEvent' as const
   readonly agent: AgentData
   readonly message: Message

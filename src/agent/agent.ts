@@ -40,6 +40,7 @@ import {
   BeforeModelCallEvent,
   BeforeToolCallEvent,
   BeforeToolsEvent,
+  HookableEvent,
   MessageAddedEvent,
   ModelStreamUpdateEvent,
   ContentBlockCompleteEvent,
@@ -330,17 +331,18 @@ export class Agent implements AgentData {
     while (!result.done) {
       const event = result.value
 
-      // Invoke hook callbacks for all events
-      await this.hooks.invokeCallbacks(event)
+      // Invoke hook callbacks only for hookable events (lifecycle and state-change)
+      if (event instanceof HookableEvent) {
+        await this.hooks.invokeCallbacks(event)
+      }
 
       this._printer?.processEvent(event)
       yield event
       result = await streamGenerator.next()
     }
 
-    // Yield final result as last event
+    // Yield final result as last event (data event, not hookable)
     const agentResultEvent = new AgentResultEvent({ agent: this, result: result.value })
-    await this.hooks.invokeCallbacks(agentResultEvent)
     this._printer?.processEvent(agentResultEvent)
     yield agentResultEvent
 

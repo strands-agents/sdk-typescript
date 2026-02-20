@@ -150,6 +150,7 @@ export type { AgentStreamEvent } from './types/agent.js'
 export {
   HookRegistry,
   StreamEvent,
+  HookableEvent,
   InitializedEvent,
   BeforeInvocationEvent,
   AfterInvocationEvent,
@@ -167,7 +168,7 @@ export {
   AgentResultEvent,
   ModelStreamUpdateEvent,
 } from './hooks/index.js'
-export type { HookCallback, HookProvider, StreamEventConstructor, ModelStopResponse } from './hooks/index.js'
+export type { HookCallback, HookProvider, HookableEventConstructor, ModelStopResponse } from './hooks/index.js'
 
 // Conversation Manager
 export { NullConversationManager } from './conversation-manager/null-conversation-manager.js'

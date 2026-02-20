@@ -26,7 +26,7 @@ describe('Agent Hooks Integration', () => {
 
   describe('invocation lifecycle', () => {
     it('fires hooks during invoke', async () => {
-      const lifecycleProvider = new MockHookProvider({ includeModelEvents: false })
+      const lifecycleProvider = new MockHookProvider()
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
       const agent = new Agent({ model, hooks: [lifecycleProvider] })
 
@@ -59,7 +59,7 @@ describe('Agent Hooks Integration', () => {
     })
 
     it('fires hooks during stream', async () => {
-      const lifecycleProvider = new MockHookProvider({ includeModelEvents: false })
+      const lifecycleProvider = new MockHookProvider()
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
       const agent = new Agent({ model, hooks: [lifecycleProvider] })
 
@@ -97,7 +97,7 @@ describe('Agent Hooks Integration', () => {
 
   describe('runtime hook registration', () => {
     it('allows adding hooks after agent creation', async () => {
-      const lifecycleProvider = new MockHookProvider({ includeModelEvents: false })
+      const lifecycleProvider = new MockHookProvider()
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
       const agent = new Agent({ model })
 
@@ -114,7 +114,7 @@ describe('Agent Hooks Integration', () => {
 
   describe('multi-turn conversations', () => {
     it('fires hooks for each invoke call', async () => {
-      const lifecycleProvider = new MockHookProvider({ includeModelEvents: false })
+      const lifecycleProvider = new MockHookProvider()
       const model = new MockMessageModel()
         .addTurn({ type: 'textBlock', text: 'First response' })
         .addTurn({ type: 'textBlock', text: 'Second response' })
@@ -237,7 +237,7 @@ describe('Agent Hooks Integration', () => {
   })
 
   describe('ModelStreamUpdateEvent', () => {
-    it('fires for each streaming event from the model', async () => {
+    it('is yielded in the stream but not dispatched to hooks', async () => {
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
 
       const agent = new Agent({
@@ -255,12 +255,9 @@ describe('Agent Hooks Integration', () => {
       const streamUpdateEvents = allStreamEvents.filter((e) => e instanceof ModelStreamUpdateEvent)
       expect(streamUpdateEvents.length).toBeGreaterThan(0)
 
-      // Should also fire as hook
+      // Should NOT fire as hook (data events are not hookable)
       const hookUpdateEvents = mockProvider.invocations.filter((e) => e instanceof ModelStreamUpdateEvent)
-      expect(hookUpdateEvents.length).toBeGreaterThan(0)
-
-      // Stream and hook should receive the same event instances
-      expect(streamUpdateEvents).toStrictEqual(hookUpdateEvents)
+      expect(hookUpdateEvents).toHaveLength(0)
     })
   })
 

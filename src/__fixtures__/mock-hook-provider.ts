@@ -1,4 +1,4 @@
-import type { StreamEvent, HookProvider, HookRegistry } from '../hooks/index.js'
+import type { HookableEvent, HookProvider, HookRegistry } from '../hooks/index.js'
 import {
   InitializedEvent,
   BeforeInvocationEvent,
@@ -8,28 +8,17 @@ import {
   AfterToolCallEvent,
   BeforeModelCallEvent,
   AfterModelCallEvent,
-  ModelStreamUpdateEvent,
-  ContentBlockCompleteEvent,
-  ModelMessageEvent,
-  ToolResultEvent,
-  ToolStreamUpdateEvent,
-  AgentResultEvent,
 } from '../hooks/index.js'
-import type { StreamEventConstructor } from '../hooks/types.js'
+import type { HookableEventConstructor } from '../hooks/types.js'
 
 /**
- * Mock hook provider that records all hook invocations for testing.
+ * Mock hook provider that records all hookable event invocations for testing.
  */
 export class MockHookProvider implements HookProvider {
-  invocations: StreamEvent[] = []
-  private includeModelEvents: boolean
-
-  constructor(options: { includeModelEvents?: boolean } = {}) {
-    this.includeModelEvents = options.includeModelEvents ?? true
-  }
+  invocations: HookableEvent[] = []
 
   registerCallbacks(registry: HookRegistry): void {
-    const lifecycleEvents: StreamEventConstructor[] = [
+    const eventTypes: HookableEventConstructor[] = [
       InitializedEvent,
       BeforeInvocationEvent,
       AfterInvocationEvent,
@@ -39,17 +28,6 @@ export class MockHookProvider implements HookProvider {
       BeforeModelCallEvent,
       AfterModelCallEvent,
     ]
-
-    const modelEvents: StreamEventConstructor[] = [
-      ModelStreamUpdateEvent,
-      ContentBlockCompleteEvent,
-      ModelMessageEvent,
-      ToolResultEvent,
-      ToolStreamUpdateEvent,
-      AgentResultEvent,
-    ]
-
-    const eventTypes = this.includeModelEvents ? [...lifecycleEvents, ...modelEvents] : lifecycleEvents
 
     for (const eventType of eventTypes) {
       registry.addCallback(eventType, (e) => {

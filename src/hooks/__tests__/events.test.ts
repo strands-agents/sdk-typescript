@@ -380,16 +380,6 @@ describe('ModelStreamUpdateEvent', () => {
     // @ts-expect-error verifying that property is readonly
     hookEvent.event = streamEvent
   })
-
-  it('returns false for _shouldReverseCallbacks', () => {
-    const agent = new Agent()
-    const streamEvent = {
-      type: 'modelMessageStartEvent' as const,
-      role: 'assistant' as const,
-    }
-    const hookEvent = new ModelStreamUpdateEvent({ agent, event: streamEvent })
-    expect(hookEvent._shouldReverseCallbacks()).toBe(false)
-  })
 })
 
 describe('ContentBlockCompleteEvent', () => {
@@ -407,12 +397,6 @@ describe('ContentBlockCompleteEvent', () => {
     event.agent = new Agent()
     // @ts-expect-error verifying that property is readonly
     event.contentBlock = contentBlock
-  })
-
-  it('returns false for _shouldReverseCallbacks', () => {
-    const agent = new Agent()
-    const event = new ContentBlockCompleteEvent({ agent, contentBlock: new TextBlock('test') })
-    expect(event._shouldReverseCallbacks()).toBe(false)
   })
 })
 
@@ -434,13 +418,6 @@ describe('ModelMessageEvent', () => {
     event.message = message
     // @ts-expect-error verifying that property is readonly
     event.stopReason = 'endTurn'
-  })
-
-  it('returns false for _shouldReverseCallbacks', () => {
-    const agent = new Agent()
-    const message = new Message({ role: 'assistant', content: [] })
-    const event = new ModelMessageEvent({ agent, message, stopReason: 'endTurn' })
-    expect(event._shouldReverseCallbacks()).toBe(false)
   })
 })
 
@@ -464,13 +441,6 @@ describe('ToolResultEvent', () => {
     // @ts-expect-error verifying that property is readonly
     event.result = toolResult
   })
-
-  it('returns false for _shouldReverseCallbacks', () => {
-    const agent = new Agent()
-    const toolResult = new ToolResultBlock({ toolUseId: 'id', status: 'success', content: [] })
-    const event = new ToolResultEvent({ agent, result: toolResult })
-    expect(event._shouldReverseCallbacks()).toBe(false)
-  })
 })
 
 describe('ToolStreamUpdateEvent', () => {
@@ -488,13 +458,6 @@ describe('ToolStreamUpdateEvent', () => {
     event.agent = new Agent()
     // @ts-expect-error verifying that property is readonly
     event.event = toolStreamEvent
-  })
-
-  it('returns false for _shouldReverseCallbacks', () => {
-    const agent = new Agent()
-    const toolStreamEvent = new ToolStreamEvent({ data: 'test' })
-    const event = new ToolStreamUpdateEvent({ agent, event: toolStreamEvent })
-    expect(event._shouldReverseCallbacks()).toBe(false)
   })
 })
 
@@ -516,16 +479,6 @@ describe('AgentResultEvent', () => {
     event.agent = new Agent()
     // @ts-expect-error verifying that property is readonly
     event.result = result
-  })
-
-  it('returns false for _shouldReverseCallbacks', () => {
-    const agent = new Agent()
-    const result = new AgentResult({
-      stopReason: 'endTurn',
-      lastMessage: new Message({ role: 'assistant', content: [] }),
-    })
-    const event = new AgentResultEvent({ agent, result })
-    expect(event._shouldReverseCallbacks()).toBe(false)
   })
 })
 
