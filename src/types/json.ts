@@ -1,4 +1,13 @@
 import type { JSONSchema7 } from 'json-schema'
+/**
+ * Interface for objects that can be serialized to JSON via `toJSON()`.
+ *
+ * @typeParam T - The type returned by `toJSON()`.
+ */
+export interface JSONSerializable<T = unknown> {
+  toJSON(): T
+}
+
 import { JsonValidationError } from '../errors.js'
 
 /**
@@ -111,3 +120,72 @@ export function deepCopyWithValidation(value: unknown, contextPath: string = 'va
     throw new Error(`Unable to serialize value: ${errorMessage}`)
   }
 }
+
+/**
+ * Removes undefined values from an object.
+ * Useful for JSON serialization to avoid including undefined fields in output.
+ *
+ * @param obj - Object with potentially undefined values
+ * @returns New object with undefined values removed
+ *
+ * @example
+ * ```typescript
+ * const data = { name: 'test', value: undefined, count: 0 }
+ * const clean = omitUndefined(data)
+ * // Result: { name: 'test', count: 0 }
+ * ```
+ */
+export function omitUndefined<T extends object>(obj: T): { [K in keyof T]: Exclude<T[K], undefined> } {
+  const result = {} as { [K in keyof T]: Exclude<T[K], undefined> }
+  for (const [key, value] of Object.entries(obj)) {
+    if (value !== undefined) {
+      ;(result as Record<string, unknown>)[key] = value
+    }
+  }
+  return result
+}
+/**
+ * Recursively transforms a type by converting all Uint8Array properties to strings.
+ * Used for JSON serialization where binary data is encoded as base64 strings.
+ *
+ * @example
+ * ```typescript
+ * interface Data {
+ *   name: string
+ *   bytes: Uint8Array
+ *   nested: { content: Uint8Array }
+ * }
+ *
+ * type SerializedData = Serialized<Data>
+ * // Result: { name: string; bytes: string; nested: { content: string } }
+ * ```
+ */
+export type Serialized<T> = T extends Uint8Array
+  ? string
+  : T extends (infer U)[]
+    ? Serialized<U>[]
+    : T extends object
+      ? { [K in keyof T]: Serialized<T[K]> }
+      : T
+
+/**
+ * Represents data that may contain either Uint8Array (runtime) or string (serialized) for binary fields.
+ * Used for deserialization where input may come from JSON (strings) or direct construction (Uint8Array).
+ *
+ * @example
+ * ```typescript
+ * interface Data {
+ *   bytes: Uint8Array
+ * }
+ *
+ * type InputData = MaybeSerializedInput<Data>
+ * // Result: { bytes: Uint8Array | string }
+ * ```
+ */
+export type MaybeSerializedInput<T> = T extends Uint8Array
+  ? Uint8Array | string
+  : T extends (infer U)[]
+    ? MaybeSerializedInput<U>[]
+    : T extends object
+      ? { [K in keyof T]: MaybeSerializedInput<T[K]> }
+      : T

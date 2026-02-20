@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ToolSpec } from '@strands-agents/sdk'
-import { Message } from '@strands-agents/sdk'
+import { Message, TextBlock } from '@strands-agents/sdk'
 
 import { collectIterator } from '$/sdk/__fixtures__/model-test-helpers.js'
 
@@ -17,7 +17,7 @@ describe.skipIf(openai.skip)('OpenAIModel Integration Tests', () => {
       const messages: Message[] = [
         new Message({
           role: 'user',
-          content: [{ type: 'textBlock', text: 'Write a long story about dragons.' }],
+          content: [new TextBlock('Write a long story about dragons.')],
         }),
       ]
 
@@ -42,7 +42,7 @@ describe.skipIf(openai.skip)('OpenAIModel Integration Tests', () => {
       const messages: Message[] = [
         new Message({
           role: 'user',
-          content: [{ type: 'textBlock', text: 'Say "hello world" exactly.' }],
+          content: [new TextBlock('Say "hello world" exactly.')],
         }),
       ]
 
@@ -83,7 +83,7 @@ describe.skipIf(openai.skip)('OpenAIModel Integration Tests', () => {
       const messages: Message[] = [
         new Message({
           role: 'user',
-          content: [{ type: 'textBlock', text: 'Hello' }],
+          content: [new TextBlock('Hello')],
         }),
       ]
 
@@ -106,7 +106,7 @@ describe.skipIf(openai.skip)('OpenAIModel Integration Tests', () => {
       const messages: Message[] = [
         new Message({
           role: 'user',
-          content: [{ type: 'textBlock', text: 'Say hello.' }],
+          content: [new TextBlock('Say hello.')],
         }),
       ]
 
@@ -146,7 +146,7 @@ describe.skipIf(openai.skip)('OpenAIModel Integration Tests', () => {
       const messages: Message[] = [
         new Message({
           role: 'user',
-          content: [{ type: 'textBlock', text: 'Say hi.' }],
+          content: [new TextBlock('Say hi.')],
         }),
       ]
 
@@ -166,7 +166,7 @@ describe.skipIf(openai.skip)('OpenAIModel Integration Tests', () => {
       const messages: Message[] = [
         new Message({
           role: 'user',
-          content: [{ type: 'textBlock', text: 'Write a very long story about dragons.' }],
+          content: [new TextBlock('Write a very long story about dragons.')],
         }),
       ]
 
@@ -198,7 +198,7 @@ describe.skipIf(openai.skip)('OpenAIModel Integration Tests', () => {
       const messages: Message[] = [
         new Message({
           role: 'user',
-          content: [{ type: 'textBlock', text: 'Calculate 42 times 7 please.' }],
+          content: [new TextBlock('Calculate 42 times 7 please.')],
         }),
       ]
 
