@@ -49,7 +49,7 @@ import type { ModelStreamEvent } from '../models/streaming.js'
  * | Field          | Usage                                       |
  * |----------------|---------------------------------------------|
  * | `agent`        | Present on every event (`AgentData`)         |
- * | `.event`       | Inner event in observer wrappers             |
+ * | `.event`       | Inner event in update wrappers               |
  * | `.result`      | Finished result object                       |
  * | `.message`     | Message object                               |
  * | `.contentBlock`| Content block object                         |
@@ -278,12 +278,8 @@ export class AfterModelCallEvent extends HookableEvent {
 /**
  * Event triggered for each streaming event from the model.
  * Wraps a {@link ModelStreamEvent} (transient streaming delta) during model inference.
- * Both yielded in the agent stream and hookable.
- *
- * This event wraps only {@link ModelStreamEvent} (transient streaming deltas — partial
- * data arriving while the model generates). Completed content blocks are handled
- * separately by {@link ContentBlockCompleteEvent} because they represent different
- * granularities: partial deltas vs fully assembled results.
+ * Completed content blocks are handled separately by {@link ContentBlockCompleteEvent}
+ * because they represent different granularities: partial deltas vs fully assembled results.
  */
 export class ModelStreamUpdateEvent extends StreamEvent {
   readonly type = 'modelStreamUpdateEvent' as const
@@ -300,8 +296,6 @@ export class ModelStreamUpdateEvent extends StreamEvent {
 /**
  * Event triggered when a content block completes during model inference.
  * Wraps completed content blocks (TextBlock, ToolUseBlock, ReasoningBlock) from model streaming.
- * Both yielded in the agent stream and hookable.
- *
  * This is intentionally separate from {@link ModelStreamUpdateEvent}. The model's
  * `streamAggregated()` yields two kinds of output: {@link ModelStreamEvent} (transient
  * streaming deltas — partial data arriving while the model generates) and
@@ -361,8 +355,8 @@ export class ToolResultEvent extends StreamEvent {
  * interface unchanged — tools construct `ToolStreamEvent` without knowledge of agents
  * or hooks, and the agent layer wraps them at the boundary.
  *
- * Both yielded in the agent stream and hookable, consistent with
- * {@link ModelStreamUpdateEvent} which wraps model streaming events the same way.
+ * Consistent with {@link ModelStreamUpdateEvent} which wraps model streaming events
+ * the same way.
  */
 export class ToolStreamUpdateEvent extends StreamEvent {
   readonly type = 'toolStreamUpdateEvent' as const
