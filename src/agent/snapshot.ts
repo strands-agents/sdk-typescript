@@ -162,6 +162,10 @@ export function takeSnapshot(agent: Agent, options: TakeSnapshotOptions): Snapsh
  * @param snapshot - The snapshot to load
  */
 export function loadSnapshot(agent: Agent, snapshot: Snapshot): void {
+  if (snapshot.version !== SNAPSHOT_VERSION) {
+    throw new Error(`Unsupported snapshot version: ${snapshot.version}. Current version: ${SNAPSHOT_VERSION}`)
+  }
+
   const { messages, state, conversationManagerState, systemPrompt } = snapshot.data
 
   if (messages !== undefined) {

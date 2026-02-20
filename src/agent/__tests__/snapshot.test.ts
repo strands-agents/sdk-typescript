@@ -190,6 +190,18 @@ describe('Snapshot API', () => {
       agent = createTestAgent()
     })
 
+    it('throws error for incompatible snapshot version', () => {
+      const snapshot: Snapshot = {
+        type: 'agent',
+        version: '2.0',
+        timestamp: createTimestamp(),
+        data: {},
+        appData: {},
+      }
+
+      expect(() => loadSnapshot(agent, snapshot)).toThrow('Unsupported snapshot version: 2.0. Current version: 1.0')
+    })
+
     it('restores messages from snapshot', () => {
       const snapshot: Snapshot = {
         type: 'agent',
@@ -247,7 +259,7 @@ describe('Snapshot API', () => {
         version: '1.0',
         timestamp: createTimestamp(),
         data: {
-          systemPrompt: null as any,
+          systemPrompt: null,
         },
         appData: {},
       }
