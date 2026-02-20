@@ -1,4 +1,5 @@
 import { deepCopy, deepCopyWithValidation, type JSONValue } from '../types/json.js'
+import type { StateSerializable } from '../types/serializable.js'
 
 /**
  * Agent state provides key-value storage outside conversation context.
@@ -15,7 +16,7 @@ import { deepCopy, deepCopyWithValidation, type JSONValue } from '../types/json.
  * const userId = state.get('userId') // 'user-123'
  * ```
  */
-export class AgentState {
+export class AgentState implements StateSerializable {
   private _state: Record<string, JSONValue>
 
   /**
@@ -136,5 +137,27 @@ export class AgentState {
    */
   keys(): string[] {
     return Object.keys(this._state)
+  }
+
+  /**
+   * Returns the serialized state as JSON value.
+   *
+   * @returns Deep copy of all state
+   */
+  toJSON(): JSONValue {
+    return deepCopy(this._state) as JSONValue
+  }
+
+  /**
+   * Loads state from a previously serialized JSON value.
+   *
+   * @param json - The serialized state to load
+   */
+  loadStateFromJson(json: JSONValue): void {
+    if (json !== null && typeof json === 'object' && !Array.isArray(json)) {
+      this._state = deepCopy(json) as Record<string, JSONValue>
+    } else {
+      this._state = {}
+    }
   }
 }

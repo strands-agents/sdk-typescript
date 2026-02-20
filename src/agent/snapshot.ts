@@ -14,6 +14,7 @@
 import type { JSONValue } from '../types/json.js'
 import type { MessageData, SystemPromptData } from '../types/messages.js'
 import { Message, systemPromptFromData, systemPromptToData } from '../types/messages.js'
+import { isStateSerializable } from '../types/serializable.js'
 import type { Agent } from './agent.js'
 
 /**
@@ -84,6 +85,109 @@ export function createTimestamp(): string {
 }
 
 /**
+ * Options for taking a snapshot of agent state.
+ */
+export type TakeSnapshotOptions = {
+  /**
+   * Preset to use as the starting set of fields.
+   * If not specified, starts with an empty set (unless include is specified).
+   */
+  preset?: SnapshotPreset
+  /**
+   * Fields to add to the snapshot.
+   * These are added to the preset fields (if any).
+   */
+  include?: SnapshotField[]
+  /**
+   * Fields to exclude from the snapshot.
+   * Applied after preset and include to filter out specific fields.
+   */
+  exclude?: SnapshotField[]
+  /**
+   * Application-owned data to store in the snapshot.
+   * Strands does not read or modify this data.
+   */
+  appData?: Record<string, JSONValue>
+}
+
+/**
+ * Takes a snapshot of the agent's current state.
+ *
+ * NOTE: This is currently an internal implementation detail. We anticipate
+ * exposing this as a public Agent method in a future release after API review.
+ *
+ * @param agent - The agent to snapshot
+ * @param options - Snapshot options
+ * @returns A snapshot of the agent's state
+ */
+export function takeSnapshot(agent: Agent, options: TakeSnapshotOptions): Snapshot {
+  const fields = resolveSnapshotFields(options)
+
+  const data: Record<string, JSONValue> = {}
+
+  if (fields.has('messages')) {
+    data.messages = agent.messages.map((msg) => msg.toJSON()) as unknown as JSONValue
+  }
+
+  if (fields.has('state')) {
+    data.state = agent.state.toJSON()
+  }
+
+  if (fields.has('conversationManagerState')) {
+    data.conversationManagerState = isStateSerializable(agent.conversationManager)
+      ? agent.conversationManager.toJSON()
+      : {}
+  }
+
+  if (fields.has('systemPrompt')) {
+    data.systemPrompt = agent.systemPrompt !== undefined ? (systemPromptToData(agent.systemPrompt) as JSONValue) : null
+  }
+
+  return {
+    type: 'agent',
+    version: SNAPSHOT_VERSION,
+    timestamp: createTimestamp(),
+    data,
+    appData: options.appData ?? {},
+  }
+}
+
+/**
+ * Loads a snapshot into the agent, restoring its state.
+ *
+ * NOTE: This is currently an internal implementation detail. We anticipate
+ * exposing this as a public Agent method in a future release after API review.
+ *
+ * @param agent - The agent to restore state into
+ * @param snapshot - The snapshot to load
+ */
+export function loadSnapshot(agent: Agent, snapshot: Snapshot): void {
+  const { messages, state, conversationManagerState, systemPrompt } = snapshot.data
+
+  if (messages !== undefined) {
+    agent.messages.length = 0
+    for (const msgData of messages as unknown as MessageData[]) {
+      agent.messages.push(Message.fromJSON(msgData))
+    }
+  }
+
+  if (state !== undefined) {
+    agent.state.loadStateFromJson(state)
+  }
+
+  if (conversationManagerState !== undefined) {
+    if (isStateSerializable(agent.conversationManager)) {
+      agent.conversationManager.loadStateFromJson(conversationManagerState)
+    }
+  }
+
+  // Only restore systemPrompt if explicitly present and non-null in the snapshot
+  if (systemPrompt !== undefined && systemPrompt !== null) {
+    agent.systemPrompt = systemPromptFromData(systemPrompt as SystemPromptData)
+  }
+}
+
+/**
  * Resolves snapshot fields based on preset/include/exclude parameters.
  *
  * Order of operations:
@@ -91,17 +195,12 @@ export function createTimestamp(): string {
  * 2. Add include fields
  * 3. Remove exclude fields
  *
- * @param preset - Preset to use as starting set
- * @param include - Fields to add
- * @param exclude - Fields to exclude
+ * @param options - Snapshot options containing preset, include, and exclude fields
  * @returns Set of resolved field names
  * @throws Error if no fields would be included
  */
-export function resolveSnapshotFields(
-  preset?: SnapshotPreset,
-  include?: SnapshotField[],
-  exclude?: SnapshotField[]
-): Set<SnapshotField> {
+export function resolveSnapshotFields(options: TakeSnapshotOptions): Set<SnapshotField> {
+  const { preset, include, exclude } = options
   let fields: Set<SnapshotField>
 
   // Start with preset fields or empty set
@@ -147,112 +246,5 @@ function validateSnapshotFields(fields: string[]): void {
     if (!validFields.has(field)) {
       throw new Error(`Invalid snapshot field: ${field}. Valid fields are: ${ALL_SNAPSHOT_FIELDS.join(', ')}`)
     }
-  }
-}
-
-/**
- * Options for taking a snapshot of agent state.
- */
-export type TakeSnapshotOptions = {
-  /**
-   * Preset to use as the starting set of fields.
-   * If not specified, starts with an empty set (unless include is specified).
-   */
-  preset?: SnapshotPreset
-  /**
-   * Fields to add to the snapshot.
-   * These are added to the preset fields (if any).
-   */
-  include?: SnapshotField[]
-  /**
-   * Fields to exclude from the snapshot.
-   * Applied after preset and include to filter out specific fields.
-   */
-  exclude?: SnapshotField[]
-  /**
-   * Application-owned data to store in the snapshot.
-   * Strands does not read or modify this data.
-   */
-  appData?: Record<string, JSONValue>
-}
-
-/**
- * Takes a snapshot of the agent's current state.
- *
- * NOTE: This is currently an internal implementation detail. We anticipate
- * exposing this as a public Agent method in a future release after API review.
- *
- * @param agent - The agent to snapshot
- * @param options - Snapshot options
- * @returns A snapshot of the agent's state
- */
-export function takeSnapshot(agent: Agent, options: TakeSnapshotOptions): Snapshot {
-  const fields = resolveSnapshotFields(options.preset, options.include, options.exclude)
-
-  const data: Record<string, JSONValue> = {}
-
-  if (fields.has('messages')) {
-    data.messages = agent.messages.map((msg) => msg.toJSON()) as unknown as JSONValue
-  }
-
-  if (fields.has('state')) {
-    data.state = agent.state.getAll()
-  }
-
-  if (fields.has('conversationManagerState')) {
-    data.conversationManagerState = (agent.conversationManager as { toJSON?: () => JSONValue }).toJSON?.() ?? {}
-  }
-
-  if (fields.has('systemPrompt')) {
-    data.systemPrompt = agent.systemPrompt !== undefined ? (systemPromptToData(agent.systemPrompt) as JSONValue) : null
-  }
-
-  return {
-    type: 'agent',
-    version: SNAPSHOT_VERSION,
-    timestamp: createTimestamp(),
-    data,
-    appData: options.appData ?? {},
-  }
-}
-
-/**
- * Loads a snapshot into the agent, restoring its state.
- *
- * NOTE: This is currently an internal implementation detail. We anticipate
- * exposing this as a public Agent method in a future release after API review.
- *
- * @param agent - The agent to restore state into
- * @param snapshot - The snapshot to load
- */
-export function loadSnapshot(agent: Agent, snapshot: Snapshot): void {
-  const { data } = snapshot
-
-  if ('messages' in data && data.messages !== undefined) {
-    agent.messages.length = 0
-    const messagesData = data.messages as unknown as MessageData[]
-    for (const msgData of messagesData) {
-      agent.messages.push(Message.fromJSON(msgData))
-    }
-  }
-
-  if ('state' in data && data.state !== undefined) {
-    agent.state.clear()
-    const stateData = data.state as Record<string, JSONValue>
-    for (const [key, value] of Object.entries(stateData)) {
-      agent.state.set(key, value)
-    }
-  }
-
-  if ('conversationManagerState' in data && data.conversationManagerState !== undefined) {
-    ;(agent.conversationManager as { loadFromJSON?: (state: JSONValue) => void }).loadFromJSON?.(
-      data.conversationManagerState
-    )
-  }
-
-  // Only restore systemPrompt if explicitly present and non-null in the snapshot
-  // If not present or null, leave the current systemPrompt unchanged
-  if ('systemPrompt' in data && data.systemPrompt !== null && data.systemPrompt !== undefined) {
-    agent.systemPrompt = systemPromptFromData(data.systemPrompt as SystemPromptData)
   }
 }

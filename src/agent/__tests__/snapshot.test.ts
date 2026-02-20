@@ -55,47 +55,47 @@ describe('Snapshot API', () => {
 
   describe('resolveSnapshotFields', () => {
     it('throws error when no fields would be included', () => {
-      expect(() => resolveSnapshotFields()).toThrow('No fields to include in snapshot')
+      expect(() => resolveSnapshotFields({})).toThrow('No fields to include in snapshot')
     })
 
     it('returns session preset fields when preset is "session"', () => {
-      const fields = resolveSnapshotFields('session')
+      const fields = resolveSnapshotFields({ preset: 'session' })
       expect(fields).toEqual(new Set(['messages', 'state', 'conversationManagerState', 'systemPrompt']))
     })
 
     it('returns explicit fields when include is specified', () => {
-      const fields = resolveSnapshotFields(undefined, ['messages', 'state'])
+      const fields = resolveSnapshotFields({ include: ['messages', 'state'] })
       expect(fields).toEqual(new Set(['messages', 'state']))
     })
 
     it('combines preset and include fields', () => {
       // Start with a hypothetical smaller preset, add more
-      const fields = resolveSnapshotFields('session', ['messages'])
+      const fields = resolveSnapshotFields({ preset: 'session', include: ['messages'] })
       expect(fields).toEqual(new Set(['messages', 'state', 'conversationManagerState', 'systemPrompt']))
     })
 
     it('applies exclude after preset and include', () => {
-      const fields = resolveSnapshotFields('session', undefined, ['state'])
+      const fields = resolveSnapshotFields({ preset: 'session', exclude: ['state'] })
       expect(fields).toEqual(new Set(['messages', 'conversationManagerState', 'systemPrompt']))
     })
 
     it('does not throw when excluding a field not in include', () => {
-      const fields = resolveSnapshotFields(undefined, ['messages'], ['state'])
+      const fields = resolveSnapshotFields({ include: ['messages'], exclude: ['state'] })
       expect(fields).toEqual(new Set(['messages']))
     })
 
     it('throws error for invalid preset', () => {
-      expect(() => resolveSnapshotFields('invalid' as any)).toThrow('Invalid preset: invalid')
+      expect(() => resolveSnapshotFields({ preset: 'invalid' as any })).toThrow('Invalid preset: invalid')
     })
 
     it('throws error for invalid field names in include', () => {
-      expect(() => resolveSnapshotFields(undefined, ['invalidField' as any])).toThrow(
+      expect(() => resolveSnapshotFields({ include: ['invalidField' as any] })).toThrow(
         'Invalid snapshot field: invalidField'
       )
     })
 
     it('throws error for invalid field names in exclude', () => {
-      expect(() => resolveSnapshotFields('session', undefined, ['invalidField' as any])).toThrow(
+      expect(() => resolveSnapshotFields({ preset: 'session', exclude: ['invalidField' as any] })).toThrow(
         'Invalid snapshot field: invalidField'
       )
     })
