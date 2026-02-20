@@ -103,9 +103,8 @@ export class AgentResult {
  * This is a discriminated union where each event has a unique type field,
  * allowing for type-safe event handling using switch statements.
  *
- * Every member extends {@link StreamEvent}. Lifecycle and state-change events
- * extend {@link HookableEvent} (subscribable via hook callbacks). Data wrapper
- * events extend StreamEvent directly (stream-only, not hookable).
+ * Every member extends {@link HookableEvent} (which extends {@link StreamEvent}),
+ * making all events both streamable and subscribable via hook callbacks.
  * Raw data objects from lower layers (model, tools) should be wrapped
  * in a StreamEvent subclass at the agent boundary rather than added directly.
  */

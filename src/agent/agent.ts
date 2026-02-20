@@ -331,7 +331,8 @@ export class Agent implements AgentData {
     while (!result.done) {
       const event = result.value
 
-      // Invoke hook callbacks only for hookable events (lifecycle and state-change)
+      // Invoke hook callbacks for hookable events (all current events are hookable;
+      // the guard exists for future StreamEvent subclasses that may not be)
       if (event instanceof HookableEvent) {
         await this.hooks.invokeCallbacks(event)
       }
@@ -341,8 +342,9 @@ export class Agent implements AgentData {
       result = await streamGenerator.next()
     }
 
-    // Yield final result as last event (data event, not hookable)
+    // Yield final result as last event
     const agentResultEvent = new AgentResultEvent({ agent: this, result: result.value })
+    await this.hooks.invokeCallbacks(agentResultEvent)
     this._printer?.processEvent(agentResultEvent)
     yield agentResultEvent
 

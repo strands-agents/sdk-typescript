@@ -12,13 +12,13 @@ import type { ModelStreamEvent } from '../models/streaming.js'
  * Constructor takes a single data-object parameter. All properties are readonly except
  * explicit mutable flags (`retry`).
  *
- * Events that should be subscribable via the hook system extend {@link HookableEvent}
- * (which itself extends StreamEvent). Data wrapper events extend StreamEvent directly
- * and are only available through `agent.stream()`, not via hook callbacks.
+ * All current events extend {@link HookableEvent} (which itself extends {@link StreamEvent}),
+ * making them both streamable and subscribable via hook callbacks. {@link StreamEvent} exists
+ * as the base class for potential future events that should be stream-only without hookability.
  *
  * ## Event categories
  *
- * **Lifecycle events** (extend {@link HookableEvent}) — Before/After pairs that bracket agent operations.
+ * **Lifecycle events** — Before/After pairs that bracket agent operations.
  * - Naming: `Before<Noun>Event` / `After<Noun>Event`
  * - `After*` events override `_shouldReverseCallbacks()` → `true` for cleanup ordering.
  * - Examples: {@link BeforeInvocationEvent}/{@link AfterInvocationEvent},
@@ -26,12 +26,11 @@ import type { ModelStreamEvent } from '../models/streaming.js'
  *   {@link BeforeToolsEvent}/{@link AfterToolsEvent},
  *   {@link BeforeToolCallEvent}/{@link AfterToolCallEvent}
  *
- * **State-change events** (extend {@link HookableEvent}) — Signal that agent state was mutated.
+ * **State-change events** — Signal that agent state was mutated.
  * - Naming: `<Noun><PastTense>Event`
  * - Examples: {@link InitializedEvent}, {@link MessageAddedEvent}
  *
- * **Data events** (extend {@link StreamEvent} directly) — Wrap data objects produced during
- * agent execution. Available via `agent.stream()` only, not hookable.
+ * **Data events** — Wrap data objects produced during agent execution.
  * Two sub-categories:
  *
  *   *Update events* — wrap transient streaming data from lower layers.
@@ -64,7 +63,8 @@ export abstract class StreamEvent {}
 /**
  * Base class for events that can be subscribed to via the hook system.
  * Only events extending this class are dispatched to {@link HookRegistry} callbacks.
- * Lifecycle and state-change events extend this; data wrapper events extend {@link StreamEvent} directly.
+ * All current events extend this class. {@link StreamEvent} exists as the base for
+ * potential future stream-only events that should not be hookable.
  */
 export abstract class HookableEvent extends StreamEvent {
   /**
@@ -281,7 +281,7 @@ export class AfterModelCallEvent extends HookableEvent {
  * Completed content blocks are handled separately by {@link ContentBlockCompleteEvent}
  * because they represent different granularities: partial deltas vs fully assembled results.
  */
-export class ModelStreamUpdateEvent extends StreamEvent {
+export class ModelStreamUpdateEvent extends HookableEvent {
   readonly type = 'modelStreamUpdateEvent' as const
   readonly agent: AgentData
   readonly event: ModelStreamEvent
@@ -303,7 +303,7 @@ export class ModelStreamUpdateEvent extends StreamEvent {
  * These represent different granularities with different semantics, so they are
  * wrapped in distinct event classes rather than combined into a single event.
  */
-export class ContentBlockCompleteEvent extends StreamEvent {
+export class ContentBlockCompleteEvent extends HookableEvent {
   readonly type = 'contentBlockCompleteEvent' as const
   readonly agent: AgentData
   readonly contentBlock: ContentBlock
@@ -319,7 +319,7 @@ export class ContentBlockCompleteEvent extends StreamEvent {
  * Event triggered when the model completes a full message.
  * Wraps the assembled message and stop reason after model streaming finishes.
  */
-export class ModelMessageEvent extends StreamEvent {
+export class ModelMessageEvent extends HookableEvent {
   readonly type = 'modelMessageEvent' as const
   readonly agent: AgentData
   readonly message: Message
@@ -337,7 +337,7 @@ export class ModelMessageEvent extends StreamEvent {
  * Event triggered when a tool execution completes.
  * Wraps the tool result block after a tool finishes execution.
  */
-export class ToolResultEvent extends StreamEvent {
+export class ToolResultEvent extends HookableEvent {
   readonly type = 'toolResultEvent' as const
   readonly agent: AgentData
   readonly result: ToolResultBlock
@@ -358,7 +358,7 @@ export class ToolResultEvent extends StreamEvent {
  * Consistent with {@link ModelStreamUpdateEvent} which wraps model streaming events
  * the same way.
  */
-export class ToolStreamUpdateEvent extends StreamEvent {
+export class ToolStreamUpdateEvent extends HookableEvent {
   readonly type = 'toolStreamUpdateEvent' as const
   readonly agent: AgentData
   readonly event: ToolStreamEvent
@@ -374,7 +374,7 @@ export class ToolStreamUpdateEvent extends StreamEvent {
  * Event triggered as the final event in the agent stream.
  * Wraps the agent result containing the stop reason and last message.
  */
-export class AgentResultEvent extends StreamEvent {
+export class AgentResultEvent extends HookableEvent {
   readonly type = 'agentResultEvent' as const
   readonly agent: AgentData
   readonly result: AgentResult

@@ -5,7 +5,7 @@
  *
  * - **Events** (`StreamEvent` and subclasses) — the data objects yielded by `agent.stream()`.
  *   Named `Stream*` because they are members of the agent stream.
- *   {@link HookableEvent} is the subset subscribable via hook callbacks.
+ *   All current events extend {@link HookableEvent}, making them subscribable via hook callbacks.
  *   See {@link StreamEvent} and `events.ts` for the full taxonomy.
  *
  * - **Hook infrastructure** (`HookProvider`, `HookCallback`, `HookRegistry`, `HookCleanup`) —
