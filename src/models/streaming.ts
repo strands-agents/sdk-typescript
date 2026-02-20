@@ -22,6 +22,7 @@ export type ModelStreamEvent =
   | ModelContentBlockStopEventData
   | ModelMessageStopEventData
   | ModelMetadataEventData
+  | ModelRedactContentEventData
 
 /**
  * Data for a message start event.
@@ -262,6 +263,56 @@ export class ModelMetadataEvent implements ModelMetadataEventData {
     }
     if (data.trace !== undefined) {
       this.trace = data.trace
+    }
+  }
+}
+
+/**
+ * Data for a redact content event.
+ * Emitted when guardrails block content and redaction is enabled.
+ */
+export interface ModelRedactContentEventData {
+  /**
+   * Discriminator for redact content events.
+   */
+  type: 'modelRedactContentEvent'
+
+  /**
+   * Redaction message for user input (when input is blocked).
+   */
+  redactUserContentMessage?: string
+
+  /**
+   * Redaction message for assistant output (when output is blocked).
+   */
+  redactAssistantContentMessage?: string
+}
+
+/**
+ * Event emitted when guardrails block content and trigger redaction.
+ */
+export class ModelRedactContentEvent implements ModelRedactContentEventData {
+  /**
+   * Discriminator for redact content events.
+   */
+  readonly type = 'modelRedactContentEvent' as const
+
+  /**
+   * Redaction message for user input (when input is blocked).
+   */
+  readonly redactUserContentMessage?: string
+
+  /**
+   * Redaction message for assistant output (when output is blocked).
+   */
+  readonly redactAssistantContentMessage?: string
+
+  constructor(data: ModelRedactContentEventData) {
+    if (data.redactUserContentMessage !== undefined) {
+      this.redactUserContentMessage = data.redactUserContentMessage
+    }
+    if (data.redactAssistantContentMessage !== undefined) {
+      this.redactAssistantContentMessage = data.redactAssistantContentMessage
     }
   }
 }

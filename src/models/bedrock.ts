@@ -84,6 +84,67 @@ const STOP_REASON_MAP = {
 } as const
 
 /**
+ * Default message for redacted user input.
+ */
+const DEFAULT_REDACT_INPUT_MESSAGE = '[User input redacted.]'
+
+/**
+ * Default message for redacted assistant output.
+ */
+const DEFAULT_REDACT_OUTPUT_MESSAGE = '[Assistant output redacted.]'
+
+/**
+ * Configuration for Bedrock guardrails.
+ * @see https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails.html
+ */
+export interface GuardrailConfig {
+  /**
+   * ID of the guardrail to apply.
+   */
+  guardrailIdentifier: string
+
+  /**
+   * Version of the guardrail (e.g., "1", "DRAFT").
+   */
+  guardrailVersion: string
+
+  /**
+   * Trace mode for guardrail evaluation.
+   * @defaultValue 'enabled'
+   */
+  trace?: 'enabled' | 'disabled' | 'enabled_full'
+
+  /**
+   * Stream processing mode for guardrail evaluation.
+   */
+  streamProcessingMode?: 'sync' | 'async'
+
+  /**
+   * Redact user input when guardrail blocks it.
+   * @defaultValue true
+   */
+  redactInput?: boolean
+
+  /**
+   * Custom message to replace redacted user input.
+   * @defaultValue '[User input redacted.]'
+   */
+  redactInputMessage?: string
+
+  /**
+   * Redact assistant output when guardrail blocks it.
+   * @defaultValue false
+   */
+  redactOutput?: boolean
+
+  /**
+   * Custom message to replace redacted assistant output.
+   * @defaultValue '[Assistant output redacted.]'
+   */
+  redactOutputMessage?: string
+}
+
+/**
  * Converts a snake_case string to camelCase.
  * Used for mapping unknown stop reasons from Bedrock to SDK format.
  *
@@ -182,6 +243,12 @@ export interface BedrockModelConfig extends BaseModelConfig {
    * - `'auto'`: Automatically determine based on model ID (default)
    */
   includeToolResultStatus?: 'auto' | boolean
+
+  /**
+   * Guardrail configuration for content filtering and safety controls.
+   * @see https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails.html
+   */
+  guardrailConfig?: GuardrailConfig
 }
 
 /**
@@ -490,6 +557,18 @@ export class BedrockModel extends Model<BedrockModelConfig> {
     // Add additional args (spread them into the request for forward compatibility)
     if (this._config.additionalArgs) {
       Object.assign(request, this._config.additionalArgs)
+    }
+
+    // Add guardrail configuration
+    if (this._config.guardrailConfig) {
+      request.guardrailConfig = {
+        guardrailIdentifier: this._config.guardrailConfig.guardrailIdentifier,
+        guardrailVersion: this._config.guardrailConfig.guardrailVersion,
+        trace: this._config.guardrailConfig.trace ?? 'enabled',
+        ...(this._config.guardrailConfig.streamProcessingMode && {
+          streamProcessingMode: this._config.guardrailConfig.streamProcessingMode,
+        }),
+      }
     }
 
     return request
@@ -839,6 +918,23 @@ export class BedrockModel extends Model<BedrockModelConfig> {
       }
     }
 
+    // Handle trace and guardrail check for non-streaming responses
+    const trace = (event as { trace?: unknown }).trace
+    if (trace) {
+      metadataEvent.trace = trace
+
+      // Check for blocked guardrails and emit redaction events
+      if (
+        this._config.guardrailConfig &&
+        (trace as { guardrail?: unknown }).guardrail &&
+        this._hasBlockedGuardrail((trace as { guardrail: unknown }).guardrail)
+      ) {
+        for (const redactionEvent of this._generateRedactionEvents()) {
+          events.push(redactionEvent)
+        }
+      }
+    }
+
     events.push(metadataEvent)
 
     return events
@@ -988,6 +1084,17 @@ export class BedrockModel extends Model<BedrockModelConfig> {
 
         if (data.trace) {
           event.trace = data.trace
+
+          // Check for blocked guardrails in trace and emit redaction events
+          if (
+            this._config.guardrailConfig &&
+            (data.trace as { guardrail?: unknown }).guardrail &&
+            this._hasBlockedGuardrail((data.trace as { guardrail: unknown }).guardrail)
+          ) {
+            for (const redactionEvent of this._generateRedactionEvents()) {
+              events.push(redactionEvent)
+            }
+          }
         }
 
         events.push(event)
@@ -1048,6 +1155,79 @@ export class BedrockModel extends Model<BedrockModelConfig> {
     }
 
     return mappedStopReason
+  }
+
+  /**
+   * Check if guardrail data contains any blocked policies.
+   * Recursively checks inputAssessment and outputAssessments for action: 'BLOCKED'.
+   *
+   * @param guardrailData - Guardrail data from trace information
+   * @returns True if any blocked guardrail is detected
+   */
+  private _hasBlockedGuardrail(guardrailData: unknown): boolean {
+    return this._findDetectedAndBlockedPolicy(guardrailData)
+  }
+
+  /**
+   * Recursively checks if the input contains a detected and blocked guardrail.
+   *
+   * @param input - The data to check for blocked policies
+   * @returns True if the input contains a detected and blocked guardrail
+   */
+  private _findDetectedAndBlockedPolicy(input: unknown): boolean {
+    // Check if input is an object
+    if (input !== null && typeof input === 'object') {
+      const obj = input as Record<string, unknown>
+
+      // Check if current object has action: BLOCKED and detected: true
+      if (obj.action === 'BLOCKED' && obj.detected === true) {
+        return true
+      }
+
+      // Recursively check all values in the object
+      for (const value of Object.values(obj)) {
+        if (this._findDetectedAndBlockedPolicy(value)) {
+          return true
+        }
+      }
+    }
+
+    // Handle arrays
+    if (Array.isArray(input)) {
+      return input.some((item) => this._findDetectedAndBlockedPolicy(item))
+    }
+
+    return false
+  }
+
+  /**
+   * Generate redaction events based on guardrail configuration.
+   *
+   * @returns Array of redaction events to emit
+   */
+  private _generateRedactionEvents(): ModelStreamEvent[] {
+    const events: ModelStreamEvent[] = []
+
+    // Default: redactInput is true unless explicitly set to false
+    if (this._config.guardrailConfig?.redactInput !== false) {
+      logger.debug('redacting user input due to guardrail')
+      events.push({
+        type: 'modelRedactContentEvent',
+        redactUserContentMessage: this._config.guardrailConfig?.redactInputMessage ?? DEFAULT_REDACT_INPUT_MESSAGE,
+      })
+    }
+
+    // Only redact output if explicitly enabled
+    if (this._config.guardrailConfig?.redactOutput) {
+      logger.debug('redacting assistant output due to guardrail')
+      events.push({
+        type: 'modelRedactContentEvent',
+        redactAssistantContentMessage:
+          this._config.guardrailConfig?.redactOutputMessage ?? DEFAULT_REDACT_OUTPUT_MESSAGE,
+      })
+    }
+
+    return events
   }
 }
 
