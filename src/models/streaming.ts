@@ -23,6 +23,25 @@ export type ModelStreamEvent =
   | ModelMessageStopEventData
   | ModelMetadataEventData
 
+/** Set of all ModelStreamEvent type discriminators. */
+const modelStreamEventTypes: ReadonlySet<string> = new Set<ModelStreamEvent['type']>([
+  'modelMessageStartEvent',
+  'modelContentBlockStartEvent',
+  'modelContentBlockDeltaEvent',
+  'modelContentBlockStopEvent',
+  'modelMessageStopEvent',
+  'modelMetadataEvent',
+])
+
+/**
+ * Type guard to check if an event with a type discriminator is a ModelStreamEvent.
+ * @param event - The event to check
+ * @returns true if the event is a ModelStreamEvent
+ */
+export function isModelStreamEvent(event: { type: string }): event is ModelStreamEvent {
+  return modelStreamEventTypes.has(event.type)
+}
+
 /**
  * Data for a message start event.
  */

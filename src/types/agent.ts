@@ -1,8 +1,5 @@
 import type { AgentState } from '../agent/state.js'
 import type { Message, StopReason } from './messages.js'
-import type { ModelStreamEvent } from '../models/streaming.js'
-import { ToolStreamEvent } from '../tools/tool.js'
-import type { ContentBlock } from './messages.js'
 import type {
   BeforeInvocationEvent,
   AfterInvocationEvent,
@@ -13,7 +10,12 @@ import type {
   BeforeToolCallEvent,
   AfterToolCallEvent,
   MessageAddedEvent,
-  ModelStreamEventHook,
+  ModelStreamUpdateEvent,
+  ContentBlockCompleteEvent,
+  ModelMessageEvent,
+  ToolResultEvent,
+  ToolStreamUpdateEvent,
+  AgentResultEvent,
 } from '../hooks/events.js'
 import type { z } from 'zod'
 
@@ -101,13 +103,17 @@ export class AgentResult {
  * This is a discriminated union where each event has a unique type field,
  * allowing for type-safe event handling using switch statements.
  *
- * Note: All agent lifecycle events are Hook Event instances, providing
- * consistent structure with agent reference and extensibility features.
+ * Every member extends {@link HookableEvent} (which extends {@link StreamEvent}),
+ * making all events both streamable and subscribable via hook callbacks.
+ * Raw data objects from lower layers (model, tools) should be wrapped
+ * in a StreamEvent subclass at the agent boundary rather than added directly.
  */
 export type AgentStreamEvent =
-  | ModelStreamEvent
-  | ContentBlock
-  | ToolStreamEvent
+  | ModelStreamUpdateEvent
+  | ContentBlockCompleteEvent
+  | ModelMessageEvent
+  | ToolStreamUpdateEvent
+  | ToolResultEvent
   | BeforeInvocationEvent
   | AfterInvocationEvent
   | BeforeModelCallEvent
@@ -117,5 +123,4 @@ export type AgentStreamEvent =
   | BeforeToolCallEvent
   | AfterToolCallEvent
   | MessageAddedEvent
-  | ModelStreamEventHook
-  | AgentResult
+  | AgentResultEvent

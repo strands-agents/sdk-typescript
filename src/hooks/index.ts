@@ -1,13 +1,22 @@
 /**
  * Hooks module for event-driven extensibility.
  *
- * Hooks provide a composable mechanism for extending agent functionality
- * by subscribing to events throughout the agent lifecycle.
+ * This module has two concerns with distinct naming:
+ *
+ * - **Events** (`StreamEvent` and subclasses) — the data objects yielded by `agent.stream()`.
+ *   Named `Stream*` because they are members of the agent stream.
+ *   All current events extend {@link HookableEvent}, making them subscribable via hook callbacks.
+ *   See {@link StreamEvent} and `events.ts` for the full taxonomy.
+ *
+ * - **Hook infrastructure** (`HookProvider`, `HookCallback`, `HookRegistry`, `HookCleanup`) —
+ *   the subscription mechanism that lets providers register callbacks for {@link HookableEvent} types.
+ *   Named `Hook*` because they describe the hooking/subscription pattern, not the events themselves.
  */
 
 // Event classes
 export {
-  HookEvent,
+  StreamEvent,
+  HookableEvent,
   InitializedEvent,
   BeforeInvocationEvent,
   AfterInvocationEvent,
@@ -16,7 +25,12 @@ export {
   AfterToolCallEvent,
   BeforeModelCallEvent,
   AfterModelCallEvent,
-  ModelStreamEventHook,
+  ModelStreamUpdateEvent,
+  ContentBlockCompleteEvent,
+  ModelMessageEvent,
+  ToolResultEvent,
+  ToolStreamUpdateEvent,
+  AgentResultEvent,
   BeforeToolsEvent,
   AfterToolsEvent,
 } from './events.js'
@@ -28,4 +42,4 @@ export type { ModelStopData as ModelStopResponse } from './events.js'
 export { HookRegistryImplementation as HookRegistry } from './registry.js'
 
 // Types
-export type { HookCallback, HookProvider, HookEventConstructor, HookCleanup } from './types.js'
+export type { HookCallback, HookProvider, HookableEventConstructor, HookCleanup } from './types.js'

@@ -1,14 +1,14 @@
-import type { HookEvent } from './events.js'
+import type { HookableEvent } from './events.js'
 import type { HookRegistry } from './registry.js'
 
 /**
- * Type for a constructor function that creates HookEvent instances.
+ * Type for a constructor function that creates HookableEvent instances.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type HookEventConstructor<T extends HookEvent = HookEvent> = new (...args: any[]) => T
+export type HookableEventConstructor<T extends HookableEvent = HookableEvent> = new (...args: any[]) => T
 
 /**
- * Type for callback functions that handle hook events.
+ * Type for callback functions that handle hookable events.
  * Callbacks can be synchronous or asynchronous.
  *
  * @example
@@ -18,7 +18,7 @@ export type HookEventConstructor<T extends HookEvent = HookEvent> = new (...args
  * }
  * ```
  */
-export type HookCallback<T extends HookEvent> = (event: T) => void | Promise<void>
+export type HookCallback<T extends HookableEvent> = (event: T) => void | Promise<void>
 
 /**
  * Function that removes a previously registered hook callback.

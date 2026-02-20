@@ -41,8 +41,10 @@ describe.skipIf(bedrock.skip)('Notebook Tool Integration', () => {
       agent.stream('Read the test notebook')
     )
 
-    // Find the last text block in events to get agent's response
-    const textBlocks = events3.filter((e) => e.type === 'textBlock')
+    // Find the last content block complete event with a text block to get agent's response
+    const textBlocks = events3.filter(
+      (e) => e.type === 'contentBlockCompleteEvent' && e.contentBlock.type === 'textBlock'
+    )
     expect(textBlocks.length).toBeGreaterThan(0)
 
     // The notebook should still contain both pieces of content
@@ -92,12 +94,14 @@ describe.skipIf(bedrock.skip)('Notebook Tool Integration', () => {
     const { items: events } = await collectGenerator(agent.stream('Read a notebook called "nonexistent"'))
 
     // The agent should handle the error and provide a reasonable response
-    // Check that we got tool result blocks (indicating tool was called)
-    const toolResults = events.filter((e) => e.type === 'toolResultBlock')
+    // Check that we got tool result events (indicating tool was called)
+    const toolResults = events.filter((e) => e.type === 'toolResultEvent')
     expect(toolResults.length).toBeGreaterThan(0)
 
     // The model should have handled the error gracefully
-    const textBlocks = events.filter((e) => e.type === 'textBlock')
+    const textBlocks = events.filter(
+      (e) => e.type === 'contentBlockCompleteEvent' && e.contentBlock.type === 'textBlock'
+    )
     expect(textBlocks.length).toBeGreaterThan(0)
   }, 30000)
 })

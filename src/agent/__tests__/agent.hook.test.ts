@@ -8,7 +8,7 @@ import {
   BeforeModelCallEvent,
   BeforeToolCallEvent,
   MessageAddedEvent,
-  ModelStreamEventHook,
+  ModelStreamUpdateEvent,
   InitializedEvent,
 } from '../../hooks/index.js'
 import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
@@ -26,7 +26,7 @@ describe('Agent Hooks Integration', () => {
 
   describe('invocation lifecycle', () => {
     it('fires hooks during invoke', async () => {
-      const lifecycleProvider = new MockHookProvider({ includeModelEvents: false })
+      const lifecycleProvider = new MockHookProvider()
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
       const agent = new Agent({ model, hooks: [lifecycleProvider] })
 
@@ -59,7 +59,7 @@ describe('Agent Hooks Integration', () => {
     })
 
     it('fires hooks during stream', async () => {
-      const lifecycleProvider = new MockHookProvider({ includeModelEvents: false })
+      const lifecycleProvider = new MockHookProvider()
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
       const agent = new Agent({ model, hooks: [lifecycleProvider] })
 
@@ -97,7 +97,7 @@ describe('Agent Hooks Integration', () => {
 
   describe('runtime hook registration', () => {
     it('allows adding hooks after agent creation', async () => {
-      const lifecycleProvider = new MockHookProvider({ includeModelEvents: false })
+      const lifecycleProvider = new MockHookProvider()
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
       const agent = new Agent({ model })
 
@@ -114,7 +114,7 @@ describe('Agent Hooks Integration', () => {
 
   describe('multi-turn conversations', () => {
     it('fires hooks for each invoke call', async () => {
-      const lifecycleProvider = new MockHookProvider({ includeModelEvents: false })
+      const lifecycleProvider = new MockHookProvider()
       const model = new MockMessageModel()
         .addTurn({ type: 'textBlock', text: 'First response' })
         .addTurn({ type: 'textBlock', text: 'Second response' })
@@ -236,13 +236,14 @@ describe('Agent Hooks Integration', () => {
     })
   })
 
-  describe('ModelStreamEventHook', () => {
-    it('fires for each streaming event from the model', async () => {
+  describe('ModelStreamUpdateEvent', () => {
+    it('is yielded in the stream and dispatched to hooks', async () => {
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
 
-      const agent = new Agent({
-        model,
-        hooks: [mockProvider],
+      const streamUpdateEvents: ModelStreamUpdateEvent[] = []
+      const agent = new Agent({ model })
+      agent.hooks.addCallback(ModelStreamUpdateEvent, (event: ModelStreamUpdateEvent) => {
+        streamUpdateEvents.push(event)
       })
 
       // Collect all stream events
@@ -251,16 +252,15 @@ describe('Agent Hooks Integration', () => {
         allStreamEvents.push(event)
       }
 
-      const streamEventHooks = mockProvider.invocations.filter((e) => e instanceof ModelStreamEventHook)
+      // Should be yielded in the stream
+      const streamUpdates = allStreamEvents.filter((e) => e instanceof ModelStreamUpdateEvent)
+      expect(streamUpdates.length).toBeGreaterThan(0)
 
-      // Should have events
-      expect(streamEventHooks.length).toBeGreaterThan(0)
+      // Should also fire as hook
+      expect(streamUpdateEvents.length).toBeGreaterThan(0)
 
-      // Verify each hook event matches a stream event
-      for (const hookEvent of streamEventHooks) {
-        const event = (hookEvent as ModelStreamEventHook).event
-        expect(allStreamEvents).toContain(event)
-      }
+      // Stream and hook should receive the same event instances
+      expect(streamUpdates).toStrictEqual(streamUpdateEvents)
     })
   })
 

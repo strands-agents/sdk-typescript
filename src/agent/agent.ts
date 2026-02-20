@@ -22,6 +22,7 @@ import {
 import { systemPromptFromData } from '../types/messages.js'
 import { normalizeError, ConcurrentInvocationError, MaxTokensError } from '../errors.js'
 import type { BaseModelConfig, Model, StreamOptions } from '../models/model.js'
+import { isModelStreamEvent } from '../models/streaming.js'
 import { ToolRegistry } from '../registry/tool-registry.js'
 import { AgentState } from './state.js'
 import type { AgentData } from '../types/agent.js'
@@ -30,7 +31,6 @@ import type { HookProvider } from '../hooks/types.js'
 import { SlidingWindowConversationManager } from '../conversation-manager/sliding-window-conversation-manager.js'
 import { HookRegistryImplementation } from '../hooks/registry.js'
 import {
-  HookEvent,
   InitializedEvent,
   AfterInvocationEvent,
   AfterModelCallEvent,
@@ -40,8 +40,14 @@ import {
   BeforeModelCallEvent,
   BeforeToolCallEvent,
   BeforeToolsEvent,
+  HookableEvent,
   MessageAddedEvent,
-  ModelStreamEventHook,
+  ModelStreamUpdateEvent,
+  ContentBlockCompleteEvent,
+  ModelMessageEvent,
+  ToolResultEvent,
+  AgentResultEvent,
+  ToolStreamUpdateEvent,
 } from '../hooks/events.js'
 import { createStructuredOutputContext } from '../structured-output/context.js'
 import { StructuredOutputException } from '../structured-output/exceptions.js'
@@ -325,8 +331,9 @@ export class Agent implements AgentData {
     while (!result.done) {
       const event = result.value
 
-      // Invoke hook callbacks for Hook Events (except MessageAddedEvent which invokes in _appendMessage)
-      if (event instanceof HookEvent && !(event instanceof MessageAddedEvent)) {
+      // Invoke hook callbacks for hookable events (all current events are hookable;
+      // the guard exists for future StreamEvent subclasses that may not be)
+      if (event instanceof HookableEvent) {
         await this.hooks.invokeCallbacks(event)
       }
 
@@ -336,7 +343,10 @@ export class Agent implements AgentData {
     }
 
     // Yield final result as last event
-    yield result.value
+    const agentResultEvent = new AgentResultEvent({ agent: this, result: result.value })
+    await this.hooks.invokeCallbacks(agentResultEvent)
+    this._printer?.processEvent(agentResultEvent)
+    yield agentResultEvent
 
     return result.value
   }
@@ -395,10 +405,9 @@ export class Agent implements AgentData {
           }
 
           // Loop terminates - no tool use requested (and structured output satisfied if needed)
-          yield await this._appendMessage(modelResult.message)
+          yield this._appendMessage(modelResult.message)
 
           const structuredOutput = context.getResult()
-
           return new AgentResult({
             stopReason: modelResult.stopReason,
             lastMessage: modelResult.message,
@@ -409,9 +418,22 @@ export class Agent implements AgentData {
         // Execute tools sequentially
         const toolResultMessage = yield* this.executeTools(modelResult.message, this._toolRegistry)
 
-        // Add assistant message with tool uses right before adding tool results
-        yield await this._appendMessage(modelResult.message)
-        yield await this._appendMessage(toolResultMessage)
+        /**
+         * Deferred append: both messages are added AFTER tool execution completes.
+         * This keeps agent.messages in a valid, reinvokable state at all times:
+         *
+         * - If interrupted during tool execution, messages has no dangling toolUse
+         *   without a matching toolResult, so the agent can be reinvoked cleanly.
+         * - The Python SDK appends the assistant message BEFORE tool execution,
+         *   requiring recovery logic (generate_missing_tool_result_content) on
+         *   interrupts. We avoid that by deferring.
+         * - Trade-off: MessageAddedEvent for the assistant message fires after tools
+         *   complete (not before as in Python), and agent.messages is incomplete
+         *   during tool execution. Events like BeforeToolsEvent.message and
+         *   BeforeToolCallEvent.toolUse provide the data directly.
+         */
+        yield this._appendMessage(modelResult.message)
+        yield this._appendMessage(toolResultMessage)
       }
     } finally {
       // Cleanup structured output context
@@ -490,7 +512,7 @@ export class Agent implements AgentData {
     // Normalize input and append messages to conversation
     const messagesToAppend = this._normalizeInput(args)
     for (const message of messagesToAppend) {
-      yield await this._appendMessage(message)
+      yield this._appendMessage(message)
     }
 
     const toolSpecs = this._toolRegistry.values().map((tool) => tool.toolSpec)
@@ -508,6 +530,8 @@ export class Agent implements AgentData {
 
     try {
       const { message, stopReason } = yield* this._streamFromModel(this.messages, streamOptions)
+
+      yield new ModelMessageEvent({ agent: this, message, stopReason })
 
       const afterModelCallEvent = new AfterModelCallEvent({ agent: this, stopData: { message, stopReason } })
       yield afterModelCallEvent
@@ -537,7 +561,16 @@ export class Agent implements AgentData {
   }
 
   /**
-   * Streams events from the model and fires ModelStreamEventHook for each event.
+   * Streams events from the model and dispatches appropriate events for each.
+   *
+   * The model's `streamAggregated()` yields two kinds of output:
+   * - **ModelStreamEvent**: Transient streaming deltas (partial data while generating).
+   *   Wrapped in {@link ModelStreamUpdateEvent} before yielding.
+   * - **ContentBlock**: Fully assembled results (after all deltas accumulate).
+   *   Wrapped in {@link ContentBlockCompleteEvent} before yielding.
+   *
+   * These are separate event classes because they represent different granularities
+   * (partial deltas vs finished blocks). Both are yielded in the stream and hookable.
    *
    * @param messages - Messages to send to the model
    * @param streamOptions - Options for streaming
@@ -553,11 +586,13 @@ export class Agent implements AgentData {
     while (!result.done) {
       const event = result.value
 
-      // Yield hook event for observability
-      yield new ModelStreamEventHook({ agent: this, event })
-
-      // Yield the actual model event
-      yield event
+      if (isModelStreamEvent(event)) {
+        // ModelStreamEvent: wrap in ModelStreamUpdateEvent
+        yield new ModelStreamUpdateEvent({ agent: this, event })
+      } else {
+        // ContentBlock: wrap in ContentBlockCompleteEvent
+        yield new ContentBlockCompleteEvent({ agent: this, contentBlock: event })
+      }
       result = await streamGenerator.next()
     }
 
@@ -594,8 +629,8 @@ export class Agent implements AgentData {
       const toolResultBlock = yield* this.executeTool(toolUseBlock, toolRegistry)
       toolResultBlocks.push(toolResultBlock)
 
-      // Yield the tool result block as it's created
-      yield toolResultBlock
+      // Yield the tool result event as it's created
+      yield new ToolResultEvent({ agent: this, result: toolResultBlock })
     }
 
     // Create user message with tool results
@@ -658,7 +693,16 @@ export class Agent implements AgentData {
         }
 
         try {
-          const result = yield* tool.stream(toolContext)
+          // Manually iterate tool stream to wrap each ToolStreamEvent in ToolStreamUpdateEvent.
+          // This keeps the tool authoring interface unchanged — tools construct ToolStreamEvent
+          // without knowledge of agents or hooks, and we wrap at the boundary.
+          const toolGenerator = tool.stream(toolContext)
+          let toolNext = await toolGenerator.next()
+          while (!toolNext.done) {
+            yield new ToolStreamUpdateEvent({ agent: this, event: toolNext.value })
+            toolNext = await toolGenerator.next()
+          }
+          const result = toolNext.value
 
           if (!result) {
             // Tool didn't return a result
@@ -702,19 +746,14 @@ export class Agent implements AgentData {
   }
 
   /**
-   * Appends a message to the conversation history, invokes MessageAddedEvent hook,
-   * and returns the event for yielding.
+   * Appends a message to the conversation history and returns the event for yielding.
    *
    * @param message - The message to append
-   * @returns MessageAddedEvent to be yielded (hook already invoked)
+   * @returns MessageAddedEvent to be yielded
    */
-  private async _appendMessage(message: Message): Promise<MessageAddedEvent> {
+  private _appendMessage(message: Message): MessageAddedEvent {
     this.messages.push(message)
-    const event = new MessageAddedEvent({ agent: this, message })
-    // Invoke hooks immediately for message tracking
-    await this.hooks.invokeCallbacks(event)
-    // Return event for yielding (stream will skip hook invocation for MessageAddedEvent)
-    return event
+    return new MessageAddedEvent({ agent: this, message })
   }
 }
 
