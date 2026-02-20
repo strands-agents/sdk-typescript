@@ -237,12 +237,13 @@ describe('Agent Hooks Integration', () => {
   })
 
   describe('ModelStreamUpdateEvent', () => {
-    it('is yielded in the stream but not dispatched to hooks', async () => {
+    it('is yielded in the stream and dispatched to hooks', async () => {
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
 
-      const agent = new Agent({
-        model,
-        hooks: [mockProvider],
+      const streamUpdateEvents: ModelStreamUpdateEvent[] = []
+      const agent = new Agent({ model })
+      agent.hooks.addCallback(ModelStreamUpdateEvent, (event: ModelStreamUpdateEvent) => {
+        streamUpdateEvents.push(event)
       })
 
       // Collect all stream events
@@ -252,12 +253,14 @@ describe('Agent Hooks Integration', () => {
       }
 
       // Should be yielded in the stream
-      const streamUpdateEvents = allStreamEvents.filter((e) => e instanceof ModelStreamUpdateEvent)
+      const streamUpdates = allStreamEvents.filter((e) => e instanceof ModelStreamUpdateEvent)
+      expect(streamUpdates.length).toBeGreaterThan(0)
+
+      // Should also fire as hook
       expect(streamUpdateEvents.length).toBeGreaterThan(0)
 
-      // Should NOT fire as hook (data events are not hookable)
-      const hookUpdateEvents = mockProvider.invocations.filter((e) => e instanceof ModelStreamUpdateEvent)
-      expect(hookUpdateEvents).toHaveLength(0)
+      // Stream and hook should receive the same event instances
+      expect(streamUpdates).toStrictEqual(streamUpdateEvents)
     })
   })
 
