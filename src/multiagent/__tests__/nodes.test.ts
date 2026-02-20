@@ -4,11 +4,10 @@ import type { InvokeArgs } from '../../agent/agent.js'
 import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
 import { collectGenerator } from '../../__fixtures__/model-test-helpers.js'
 import { TextBlock } from '../../types/messages.js'
-import { MultiAgentState } from '../base.js'
+import { MultiAgentState, Status } from '../state.js'
 import type { MultiAgentStreamEvent } from '../events.js'
 import { AgentNode, Node } from '../nodes.js'
-import type { NodeResultUpdate } from '../results.js'
-import { Status } from '../status.js'
+import type { NodeResultUpdate } from '../state.js'
 
 /**
  * Concrete Node subclass for testing the abstract base class.

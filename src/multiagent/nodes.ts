@@ -1,12 +1,10 @@
 import type { Agent, InvokeArgs } from '../agent/agent.js'
 import type { JSONValue } from '../types/json.js'
 import type { Message } from '../types/messages.js'
-import type { MultiAgentState } from './base.js'
 import type { MultiAgentStreamEvent } from './events.js'
 import { MultiAgentNodeStreamEvent } from './events.js'
-import { NodeResult } from './results.js'
-import type { NodeResultUpdate } from './results.js'
-import { Status } from './status.js'
+import { MultiAgentState, NodeResult, Status } from './state.js'
+import type { NodeResultUpdate } from './state.js'
 
 /**
  * Captured snapshot of an agent's mutable state.
