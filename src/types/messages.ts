@@ -659,6 +659,20 @@ export function systemPromptFromData(data: SystemPromptData | SystemPrompt): Sys
 }
 
 /**
+ * Converts a SystemPrompt to its data representation for serialization.
+ *
+ * @param prompt - System prompt to convert (string or content block array)
+ * @returns SystemPromptData suitable for JSON serialization
+ */
+export function systemPromptToData(prompt: SystemPrompt): SystemPromptData {
+  if (typeof prompt === 'string') {
+    return prompt
+  }
+  // Convert content blocks to their data representation
+  return prompt.map((block: SystemContentBlock) => block.toJSON()) as SystemContentBlockData[]
+}
+
+/**
  * A block of content within a system prompt.
  * Supports text content, cache points, and guard content for prompt caching and guardrail evaluation.
  *
