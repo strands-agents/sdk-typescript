@@ -1,4 +1,10 @@
 import type { AgentStreamEvent } from '../types/agent.js'
+import type {
+  ModelStreamEvent,
+  ModelContentBlockDeltaEventData,
+  ModelContentBlockStartEventData,
+} from '../models/streaming.js'
+import type { ToolResultEvent } from '../hooks/events.js'
 
 /**
  * Creates a default appender function for the current environment.
@@ -82,13 +88,13 @@ export class AgentPrinter implements Printer {
   /**
    * Handle raw model stream events unwrapped from ModelStreamObserverEvent.
    */
-  private handleModelStreamEvent(event: { type: string; delta?: unknown; start?: unknown }): void {
+  private handleModelStreamEvent(event: ModelStreamEvent): void {
     switch (event.type) {
       case 'modelContentBlockDeltaEvent':
-        this.handleContentBlockDelta(event as { delta: { type: string; text?: string; input?: string } })
+        this.handleContentBlockDelta(event)
         break
       case 'modelContentBlockStartEvent':
-        this.handleContentBlockStart(event as { start?: { type: string; name?: string; toolUseId?: string } })
+        this.handleContentBlockStart(event)
         break
       case 'modelContentBlockStopEvent':
         this.handleContentBlockStop()
@@ -101,7 +107,7 @@ export class AgentPrinter implements Printer {
   /**
    * Handle content block delta events (text or reasoning).
    */
-  private handleContentBlockDelta(event: { delta: { type: string; text?: string; input?: string } }): void {
+  private handleContentBlockDelta(event: ModelContentBlockDeltaEventData): void {
     const { delta } = event
 
     if (delta.type === 'textDelta') {
@@ -155,7 +161,7 @@ export class AgentPrinter implements Printer {
    * Handle content block start events.
    * Detects tool use starts.
    */
-  private handleContentBlockStart(event: { start?: { type: string; name?: string; toolUseId?: string } }): void {
+  private handleContentBlockStart(event: ModelContentBlockStartEventData): void {
     if (event.start?.type === 'toolUseStart') {
       // Tool execution starting
       this._toolCount++
@@ -183,7 +189,7 @@ export class AgentPrinter implements Printer {
    * Handle tool result events.
    * Outputs completion status.
    */
-  private handleToolResult(event: { toolResult: { status: string } }): void {
+  private handleToolResult(event: ToolResultEvent): void {
     if (event.toolResult.status === 'success') {
       this.write('✓ Tool completed\n')
     } else if (event.toolResult.status === 'error') {
