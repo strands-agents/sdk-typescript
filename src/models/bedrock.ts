@@ -95,6 +95,38 @@ function snakeToCamel(str: string): string {
 }
 
 /**
+ * Guardrail configuration for content filtering and safety controls.
+ * @see https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails.html
+ */
+export interface GuardrailConfig {
+  /**
+   * ID of the guardrail to apply.
+   * @see https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails.html
+   */
+  guardrailIdentifier: string
+
+  /**
+   * Version of the guardrail (e.g., "1", "DRAFT").
+   */
+  guardrailVersion: string
+
+  /**
+   * Trace mode for guardrail evaluation.
+   * - 'enabled': Include trace in response (default)
+   * - 'disabled': No trace information
+   * - 'enabled_full': Full trace with all details
+   */
+  trace?: 'enabled' | 'disabled' | 'enabled_full'
+
+  /**
+   * Stream processing mode for guardrail evaluation.
+   * - 'sync': Synchronous processing
+   * - 'async': Asynchronous processing
+   */
+  streamProcessingMode?: 'sync' | 'async'
+}
+
+/**
  * Configuration interface for AWS Bedrock model provider.
  *
  * Extends BaseModelConfig with Bedrock-specific configuration options
@@ -182,6 +214,12 @@ export interface BedrockModelConfig extends BaseModelConfig {
    * - `'auto'`: Automatically determine based on model ID (default)
    */
   includeToolResultStatus?: 'auto' | boolean
+
+  /**
+   * Guardrail configuration for content filtering and safety controls.
+   * @see https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails.html
+   */
+  guardrailConfig?: GuardrailConfig
 }
 
 /**
@@ -485,6 +523,18 @@ export class BedrockModel extends Model<BedrockModelConfig> {
     // Add additional response field paths
     if (this._config.additionalResponseFieldPaths) {
       request.additionalModelResponseFieldPaths = this._config.additionalResponseFieldPaths
+    }
+
+    // Add guardrail configuration
+    if (this._config.guardrailConfig) {
+      request.guardrailConfig = {
+        guardrailIdentifier: this._config.guardrailConfig.guardrailIdentifier,
+        guardrailVersion: this._config.guardrailConfig.guardrailVersion,
+        trace: this._config.guardrailConfig.trace ?? 'enabled',
+        ...(this._config.guardrailConfig.streamProcessingMode && {
+          streamProcessingMode: this._config.guardrailConfig.streamProcessingMode,
+        }),
+      }
     }
 
     // Add additional args (spread them into the request for forward compatibility)

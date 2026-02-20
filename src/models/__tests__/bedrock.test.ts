@@ -1682,4 +1682,184 @@ describe('BedrockModel', () => {
       await expect(provider['_client'].config.region()).rejects.toThrow('Network error')
     })
   })
+
+  describe('guardrailConfig', () => {
+    const mockConverseStreamCommand = vi.mocked(ConverseStreamCommand)
+
+    beforeEach(() => {
+      vi.clearAllMocks()
+    })
+
+    describe('getConfig', () => {
+      it('returns guardrailConfig when configured with all options', () => {
+        const provider = new BedrockModel({
+          region: 'us-west-2',
+          guardrailConfig: {
+            guardrailIdentifier: 'my-guardrail-id',
+            guardrailVersion: '1',
+            trace: 'enabled',
+            streamProcessingMode: 'sync',
+          },
+        })
+
+        expect(provider.getConfig()).toStrictEqual({
+          modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
+          guardrailConfig: {
+            guardrailIdentifier: 'my-guardrail-id',
+            guardrailVersion: '1',
+            trace: 'enabled',
+            streamProcessingMode: 'sync',
+          },
+        })
+      })
+
+      it('returns guardrailConfig when configured with required options only', () => {
+        const provider = new BedrockModel({
+          region: 'us-west-2',
+          guardrailConfig: {
+            guardrailIdentifier: 'my-guardrail-id',
+            guardrailVersion: 'DRAFT',
+          },
+        })
+
+        expect(provider.getConfig()).toStrictEqual({
+          modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
+          guardrailConfig: {
+            guardrailIdentifier: 'my-guardrail-id',
+            guardrailVersion: 'DRAFT',
+          },
+        })
+      })
+    })
+
+    describe('updateConfig', () => {
+      it('updates guardrailConfig', () => {
+        const provider = new BedrockModel({ region: 'us-west-2' })
+        provider.updateConfig({
+          guardrailConfig: {
+            guardrailIdentifier: 'new-guardrail-id',
+            guardrailVersion: '2',
+          },
+        })
+
+        expect(provider.getConfig()).toStrictEqual({
+          modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
+          guardrailConfig: {
+            guardrailIdentifier: 'new-guardrail-id',
+            guardrailVersion: '2',
+          },
+        })
+      })
+
+      it('preserves existing config when updating guardrailConfig', () => {
+        const provider = new BedrockModel({
+          region: 'us-west-2',
+          temperature: 0.5,
+          maxTokens: 1024,
+        })
+        provider.updateConfig({
+          guardrailConfig: {
+            guardrailIdentifier: 'my-guardrail-id',
+            guardrailVersion: '1',
+          },
+        })
+
+        expect(provider.getConfig()).toStrictEqual({
+          modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
+          temperature: 0.5,
+          maxTokens: 1024,
+          guardrailConfig: {
+            guardrailIdentifier: 'my-guardrail-id',
+            guardrailVersion: '1',
+          },
+        })
+      })
+    })
+
+    describe('request formatting', () => {
+      it('includes guardrailConfig with all options in request', async () => {
+        const provider = new BedrockModel({
+          region: 'us-west-2',
+          guardrailConfig: {
+            guardrailIdentifier: 'my-guardrail-id',
+            guardrailVersion: '1',
+            trace: 'enabled_full',
+            streamProcessingMode: 'async',
+          },
+        })
+
+        const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
+        collectIterator(provider.stream(messages))
+
+        expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
+          modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
+          messages: [{ role: 'user', content: [{ text: 'Hello' }] }],
+          guardrailConfig: {
+            guardrailIdentifier: 'my-guardrail-id',
+            guardrailVersion: '1',
+            trace: 'enabled_full',
+            streamProcessingMode: 'async',
+          },
+        })
+      })
+
+      it('includes guardrailConfig with required options and default trace in request', async () => {
+        const provider = new BedrockModel({
+          region: 'us-west-2',
+          guardrailConfig: {
+            guardrailIdentifier: 'my-guardrail-id',
+            guardrailVersion: '1',
+          },
+        })
+
+        const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
+        collectIterator(provider.stream(messages))
+
+        expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
+          modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
+          messages: [{ role: 'user', content: [{ text: 'Hello' }] }],
+          guardrailConfig: {
+            guardrailIdentifier: 'my-guardrail-id',
+            guardrailVersion: '1',
+            trace: 'enabled',
+          },
+        })
+      })
+
+      it('omits streamProcessingMode when not specified', async () => {
+        const provider = new BedrockModel({
+          region: 'us-west-2',
+          guardrailConfig: {
+            guardrailIdentifier: 'my-guardrail-id',
+            guardrailVersion: '1',
+            trace: 'disabled',
+          },
+        })
+
+        const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
+        collectIterator(provider.stream(messages))
+
+        expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
+          modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
+          messages: [{ role: 'user', content: [{ text: 'Hello' }] }],
+          guardrailConfig: {
+            guardrailIdentifier: 'my-guardrail-id',
+            guardrailVersion: '1',
+            trace: 'disabled',
+          },
+        })
+      })
+
+      it('does not include guardrailConfig when not configured', async () => {
+        const provider = new BedrockModel({ region: 'us-west-2' })
+        const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
+        collectIterator(provider.stream(messages))
+
+        expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
+          modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
+          messages: [{ role: 'user', content: [{ text: 'Hello' }] }],
+        })
+      })
+    })
+  })
 })
