@@ -8,18 +8,23 @@ export class MultiAgentState {}
 /**
  * Execution lifecycle status shared across all multi-agent patterns.
  */
-export enum Status {
+export const Status = {
   /** Execution has not yet started. */
-  PENDING = 'PENDING',
+  PENDING: 'PENDING',
   /** Execution is currently in progress. */
-  EXECUTING = 'EXECUTING',
+  EXECUTING: 'EXECUTING',
   /** Execution finished successfully. */
-  COMPLETED = 'COMPLETED',
+  COMPLETED: 'COMPLETED',
   /** Execution encountered an error. */
-  FAILED = 'FAILED',
+  FAILED: 'FAILED',
   /** Execution was cancelled before or during processing. */
-  CANCELLED = 'CANCELLED',
-}
+  CANCELLED: 'CANCELLED',
+} as const
+
+/**
+ * Union of all valid status values.
+ */
+export type Status = (typeof Status)[keyof typeof Status]
 
 /**
  * Result of executing a single node.
