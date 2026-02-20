@@ -95,9 +95,8 @@ export abstract class Node {
 /**
  * Node that wraps an Agent instance for multi-agent orchestration.
  *
- * Snapshots and restores the agent's messages and state around each
- * execution to ensure invocation isolation — the wrapped agent is
- * unchanged after the node completes.
+ * Each execution is isolated — the wrapped agent's internal state
+ * is unchanged after the node completes.
  */
 export class AgentNode extends Node {
   readonly type = 'agentNode' as const
