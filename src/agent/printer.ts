@@ -71,7 +71,7 @@ export class AgentPrinter implements Printer {
    */
   public processEvent(event: AgentStreamEvent): void {
     switch (event.type) {
-      case 'modelStreamObserverEvent':
+      case 'modelStreamUpdateEvent':
         this.handleModelStreamEvent(event.event)
         break
 
@@ -86,7 +86,7 @@ export class AgentPrinter implements Printer {
   }
 
   /**
-   * Handle raw model stream events unwrapped from ModelStreamObserverEvent.
+   * Handle raw model stream events unwrapped from ModelStreamUpdateEvent.
    */
   private handleModelStreamEvent(event: ModelStreamEvent): void {
     switch (event.type) {
@@ -190,9 +190,9 @@ export class AgentPrinter implements Printer {
    * Outputs completion status.
    */
   private handleToolResult(event: ToolResultEvent): void {
-    if (event.toolResult.status === 'success') {
+    if (event.result.status === 'success') {
       this.write('✓ Tool completed\n')
-    } else if (event.toolResult.status === 'error') {
+    } else if (event.result.status === 'error') {
       this.write('✗ Tool failed\n')
     }
   }

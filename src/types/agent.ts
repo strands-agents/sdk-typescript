@@ -10,11 +10,11 @@ import type {
   BeforeToolCallEvent,
   AfterToolCallEvent,
   MessageAddedEvent,
-  ModelStreamObserverEvent,
+  ModelStreamUpdateEvent,
   ContentBlockCompleteEvent,
   ModelMessageEvent,
   ToolResultEvent,
-  ToolStreamObserverEvent,
+  ToolStreamUpdateEvent,
   AgentResultEvent,
 } from '../hooks/events.js'
 import type { z } from 'zod'
@@ -103,17 +103,17 @@ export class AgentResult {
  * This is a discriminated union where each event has a unique type field,
  * allowing for type-safe event handling using switch statements.
  *
- * Every member extends {@link HookEvent}, providing consistent structure
+ * Every member extends {@link StreamEvent}, providing consistent structure
  * with agent reference and hookability for all events in the stream.
- * New event types added to this union must also extend HookEvent.
+ * New event types added to this union must also extend StreamEvent.
  * Raw data objects from lower layers (model, tools) should be wrapped
- * in a HookEvent subclass at the agent boundary rather than added directly.
+ * in a StreamEvent subclass at the agent boundary rather than added directly.
  */
 export type AgentStreamEvent =
-  | ModelStreamObserverEvent
+  | ModelStreamUpdateEvent
   | ContentBlockCompleteEvent
   | ModelMessageEvent
-  | ToolStreamObserverEvent
+  | ToolStreamUpdateEvent
   | ToolResultEvent
   | BeforeInvocationEvent
   | AfterInvocationEvent

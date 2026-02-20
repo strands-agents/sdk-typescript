@@ -22,7 +22,7 @@ import {
 import { systemPromptFromData } from '../types/messages.js'
 import { normalizeError, ConcurrentInvocationError, MaxTokensError } from '../errors.js'
 import type { BaseModelConfig, Model, StreamOptions } from '../models/model.js'
-import type { ModelStreamEvent } from '../models/streaming.js'
+import { isModelStreamEvent } from '../models/streaming.js'
 import { ToolRegistry } from '../registry/tool-registry.js'
 import { AgentState } from './state.js'
 import type { AgentData } from '../types/agent.js'
@@ -41,12 +41,12 @@ import {
   BeforeToolCallEvent,
   BeforeToolsEvent,
   MessageAddedEvent,
-  ModelStreamObserverEvent,
+  ModelStreamUpdateEvent,
   ContentBlockCompleteEvent,
   ModelMessageEvent,
   ToolResultEvent,
   AgentResultEvent,
-  ToolStreamObserverEvent,
+  ToolStreamUpdateEvent,
 } from '../hooks/events.js'
 import { createStructuredOutputContext } from '../structured-output/context.js'
 import { StructuredOutputException } from '../structured-output/exceptions.js'
@@ -561,7 +561,7 @@ export class Agent implements AgentData {
    *
    * The model's `streamAggregated()` yields two kinds of output:
    * - **ModelStreamEvent**: Transient streaming deltas (partial data while generating).
-   *   Wrapped in {@link ModelStreamObserverEvent} before yielding.
+   *   Wrapped in {@link ModelStreamUpdateEvent} before yielding.
    * - **ContentBlock**: Fully assembled results (after all deltas accumulate).
    *   Wrapped in {@link ContentBlockCompleteEvent} before yielding.
    *
@@ -582,12 +582,12 @@ export class Agent implements AgentData {
     while (!result.done) {
       const event = result.value
 
-      if (event.type.startsWith('model')) {
-        // ModelStreamEvent: wrap in ModelStreamObserverEvent
-        yield new ModelStreamObserverEvent({ agent: this, event: event as ModelStreamEvent })
+      if (isModelStreamEvent(event)) {
+        // ModelStreamEvent: wrap in ModelStreamUpdateEvent
+        yield new ModelStreamUpdateEvent({ agent: this, event })
       } else {
         // ContentBlock: wrap in ContentBlockCompleteEvent
-        yield new ContentBlockCompleteEvent({ agent: this, contentBlock: event as ContentBlock })
+        yield new ContentBlockCompleteEvent({ agent: this, contentBlock: event })
       }
       result = await streamGenerator.next()
     }
@@ -626,7 +626,7 @@ export class Agent implements AgentData {
       toolResultBlocks.push(toolResultBlock)
 
       // Yield the tool result event as it's created
-      yield new ToolResultEvent({ agent: this, toolResult: toolResultBlock })
+      yield new ToolResultEvent({ agent: this, result: toolResultBlock })
     }
 
     // Create user message with tool results
@@ -689,13 +689,13 @@ export class Agent implements AgentData {
         }
 
         try {
-          // Manually iterate tool stream to wrap each ToolStreamEvent in ToolStreamObserverEvent.
+          // Manually iterate tool stream to wrap each ToolStreamEvent in ToolStreamUpdateEvent.
           // This keeps the tool authoring interface unchanged — tools construct ToolStreamEvent
           // without knowledge of agents or hooks, and we wrap at the boundary.
           const toolGenerator = tool.stream(toolContext)
           let toolNext = await toolGenerator.next()
           while (!toolNext.done) {
-            yield new ToolStreamObserverEvent({ agent: this, toolStreamEvent: toolNext.value })
+            yield new ToolStreamUpdateEvent({ agent: this, event: toolNext.value })
             toolNext = await toolGenerator.next()
           }
           const result = toolNext.value

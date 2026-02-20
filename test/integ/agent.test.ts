@@ -87,15 +87,15 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel, mode
         // Test streaming with event collection
         const { items, result } = await collectGenerator(agent.stream('Say hello'))
 
-        // Verify metadata event is yielded through the agent (wrapped in ModelStreamObserverEvent)
-        const observerEvent = items.find(
-          (item) => item.type === 'modelStreamObserverEvent' && item.event.type === 'modelMetadataEvent'
+        // Verify metadata event is yielded through the agent (wrapped in ModelStreamUpdateEvent)
+        const updateEvent = items.find(
+          (item) => item.type === 'modelStreamUpdateEvent' && item.event.type === 'modelMetadataEvent'
         )
-        expect(observerEvent).toBeDefined()
-        if (observerEvent?.type !== 'modelStreamObserverEvent' || observerEvent.event.type !== 'modelMetadataEvent') {
-          throw new Error('Expected modelStreamObserverEvent wrapping modelMetadataEvent')
+        expect(updateEvent).toBeDefined()
+        if (updateEvent?.type !== 'modelStreamUpdateEvent' || updateEvent.event.type !== 'modelMetadataEvent') {
+          throw new Error('Expected modelStreamUpdateEvent wrapping modelMetadataEvent')
         }
-        const metadataEvent = observerEvent.event
+        const metadataEvent = updateEvent.event
         expect(metadataEvent.usage).toBeDefined()
         expect(metadataEvent.usage?.inputTokens).toBeGreaterThan(0)
         expect(metadataEvent.usage?.outputTokens).toBeGreaterThan(0)
@@ -353,7 +353,7 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel, mode
       // Should have reasoning content deltas
       const reasoningDeltas = items.filter(
         (item) =>
-          item.type === 'modelStreamObserverEvent' &&
+          item.type === 'modelStreamUpdateEvent' &&
           item.event.type === 'modelContentBlockDeltaEvent' &&
           item.event.delta.type === 'reasoningContentDelta'
       )
@@ -379,7 +379,7 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel, mode
       // Should have reasoning content deltas
       const reasoningDeltas = items.filter(
         (item) =>
-          item.type === 'modelStreamObserverEvent' &&
+          item.type === 'modelStreamUpdateEvent' &&
           item.event.type === 'modelContentBlockDeltaEvent' &&
           item.event.delta.type === 'reasoningContentDelta'
       )

@@ -1,4 +1,4 @@
-import type { HookEvent, HookProvider, HookRegistry } from '../hooks/index.js'
+import type { StreamEvent, HookProvider, HookRegistry } from '../hooks/index.js'
 import {
   InitializedEvent,
   BeforeInvocationEvent,
@@ -8,20 +8,20 @@ import {
   AfterToolCallEvent,
   BeforeModelCallEvent,
   AfterModelCallEvent,
-  ModelStreamObserverEvent,
+  ModelStreamUpdateEvent,
   ContentBlockCompleteEvent,
   ModelMessageEvent,
   ToolResultEvent,
-  ToolStreamObserverEvent,
+  ToolStreamUpdateEvent,
   AgentResultEvent,
 } from '../hooks/index.js'
-import type { HookEventConstructor } from '../hooks/types.js'
+import type { StreamEventConstructor } from '../hooks/types.js'
 
 /**
  * Mock hook provider that records all hook invocations for testing.
  */
 export class MockHookProvider implements HookProvider {
-  invocations: HookEvent[] = []
+  invocations: StreamEvent[] = []
   private includeModelEvents: boolean
 
   constructor(options: { includeModelEvents?: boolean } = {}) {
@@ -29,7 +29,7 @@ export class MockHookProvider implements HookProvider {
   }
 
   registerCallbacks(registry: HookRegistry): void {
-    const lifecycleEvents: HookEventConstructor[] = [
+    const lifecycleEvents: StreamEventConstructor[] = [
       InitializedEvent,
       BeforeInvocationEvent,
       AfterInvocationEvent,
@@ -40,12 +40,12 @@ export class MockHookProvider implements HookProvider {
       AfterModelCallEvent,
     ]
 
-    const modelEvents: HookEventConstructor[] = [
-      ModelStreamObserverEvent,
+    const modelEvents: StreamEventConstructor[] = [
+      ModelStreamUpdateEvent,
       ContentBlockCompleteEvent,
       ModelMessageEvent,
       ToolResultEvent,
-      ToolStreamObserverEvent,
+      ToolStreamUpdateEvent,
       AgentResultEvent,
     ]
 
