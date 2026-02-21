@@ -86,7 +86,7 @@ function getModel(): BedrockModel | AnthropicModel | OpenAIModel {
 
     return new OpenAIModel({
         apiKey: openaiKey,
-        modelId: 'minimax/minimax-m2.5',
+        modelId: 'gpt-5.1-codex-mini',
         clientConfig: {
             dangerouslyAllowBrowser: true,
             ...(openaiUrl ? { baseURL: openaiUrl } : {})
