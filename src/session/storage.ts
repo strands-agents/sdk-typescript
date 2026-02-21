@@ -1,6 +1,18 @@
 import type { Scope, Snapshot, SnapshotManifest } from './types.js'
 
 /**
+ * Identifies the location of a snapshot within the storage hierarchy.
+ */
+export type SnapshotLocation = {
+  /** Session identifier */
+  sessionId: string
+  /** Scope of the snapshot (agent or multi-agent) */
+  scope: Scope
+  /** Scope-specific identifier (agentId or multiAgentId) */
+  scopeId: string
+}
+
+/**
  * SessionStorage configuration for pluggable storage backends.
  * Allows users to configure snapshot and transcript storage independently.
  *
@@ -24,7 +36,7 @@ export type SessionStorage = {
  * ```
  * sessions/<session_id>/
  *   scopes/
- *     agent/<agent_id>/
+ *     agent/<scope_id>/
  *       snapshots/
  *         snapshot_latest.json
  *         manifest.json
@@ -37,12 +49,17 @@ export interface SnapshotStorage {
   /**
    * Persists a snapshot to storage.
    */
-  saveSnapshot(params: { sessionId: string; scope: Scope; isLatest: boolean; snapshot: Snapshot }): Promise<void>
+  saveSnapshot(params: {
+    location: SnapshotLocation
+    snapshotId: string
+    isLatest: boolean
+    snapshot: Snapshot
+  }): Promise<void>
 
   /**
    * Loads a snapshot from storage.
    */
-  loadSnapshot(params: { sessionId: string; scope: Scope; snapshotId?: string }): Promise<Snapshot | null>
+  loadSnapshot(params: { location: SnapshotLocation; snapshotId?: string }): Promise<Snapshot | null>
 
   /**
    * Lists all available snapshot IDs for a session scope.
@@ -51,22 +68,21 @@ export interface SnapshotStorage {
    * Future signature could be:
    * ```typescript
    * listSnapshots(params: {
-   *   sessionId: string
-   *   scope: Scope
+   *   location: SnapshotLocation
    *   limit?: number        // Max results to return (e.g., 100)
    *   startAfter?: string   // Snapshot ID to start after (for cursor-based pagination)
    * }): Promise<{ snapshotIds: string[]; nextToken?: string }>
    * ```
    */
-  listSnapshotIds(params: { sessionId: string; scope: Scope }): Promise<string[]>
+  listSnapshotIds(params: { location: SnapshotLocation }): Promise<string[]>
 
   /**
    * Loads the snapshot manifest.
    */
-  loadManifest(params: { sessionId: string; scope: Scope }): Promise<SnapshotManifest>
+  loadManifest(params: { location: SnapshotLocation }): Promise<SnapshotManifest>
 
   /**
    * Saves the snapshot manifest.
    */
-  saveManifest(params: { sessionId: string; scope: Scope; manifest: SnapshotManifest }): Promise<void>
+  saveManifest(params: { location: SnapshotLocation; manifest: SnapshotManifest }): Promise<void>
 }

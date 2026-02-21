@@ -11,6 +11,7 @@ import {
   type MessageData,
   type SystemPromptData,
   systemPromptFromData,
+  systemPromptToData,
 } from '../messages.js'
 import { ImageBlock, VideoBlock, DocumentBlock, encodeBase64 } from '../media.js'
 
@@ -404,6 +405,110 @@ describe('systemPromptFromData', () => {
       const systemPrompt = [new TextBlock('prompt'), new CachePointBlock({ cacheType: 'default' })]
       const result = systemPromptFromData(systemPrompt)
       expect(result).toEqual(systemPrompt)
+    })
+  })
+})
+
+describe('systemPromptToData', () => {
+  describe('when called with string', () => {
+    it('returns the string unchanged', () => {
+      const prompt = 'You are a helpful assistant'
+      const result = systemPromptToData(prompt)
+      expect(result).toBe('You are a helpful assistant')
+    })
+  })
+
+  describe('when called with TextBlock array', () => {
+    it('converts to TextBlockData array', () => {
+      const prompt = [new TextBlock('System prompt text')]
+      const result = systemPromptToData(prompt)
+      expect(result).toEqual([{ text: 'System prompt text' }])
+    })
+  })
+
+  describe('when called with CachePointBlock array', () => {
+    it('converts to CachePointBlockData array', () => {
+      const prompt = [new TextBlock('prompt'), new CachePointBlock({ cacheType: 'default' })]
+      const result = systemPromptToData(prompt)
+      expect(result).toEqual([{ text: 'prompt' }, { cachePoint: { cacheType: 'default' } }])
+    })
+  })
+
+  describe('when called with GuardContentBlock array', () => {
+    it('converts to GuardContentBlockData array', () => {
+      const prompt = [
+        new GuardContentBlock({
+          text: {
+            text: 'guard this content',
+            qualifiers: ['guard_content'],
+          },
+        }),
+      ]
+      const result = systemPromptToData(prompt)
+      expect(result).toEqual([
+        {
+          guardContent: {
+            text: {
+              text: 'guard this content',
+              qualifiers: ['guard_content'],
+            },
+          },
+        },
+      ])
+    })
+  })
+
+  describe('when called with mixed content blocks', () => {
+    it('converts all block types correctly', () => {
+      const prompt = [
+        new TextBlock('First text block'),
+        new CachePointBlock({ cacheType: 'default' }),
+        new TextBlock('Second text block'),
+        new GuardContentBlock({
+          text: {
+            text: 'guard content',
+            qualifiers: ['guard_content'],
+          },
+        }),
+      ]
+      const result = systemPromptToData(prompt)
+      expect(result).toEqual([
+        { text: 'First text block' },
+        { cachePoint: { cacheType: 'default' } },
+        { text: 'Second text block' },
+        {
+          guardContent: {
+            text: {
+              text: 'guard content',
+              qualifiers: ['guard_content'],
+            },
+          },
+        },
+      ])
+    })
+  })
+
+  describe('when called with empty array', () => {
+    it('returns empty array', () => {
+      const prompt: (TextBlock | CachePointBlock | GuardContentBlock)[] = []
+      const result = systemPromptToData(prompt)
+      expect(result).toEqual([])
+    })
+  })
+
+  describe('round-trip conversion', () => {
+    it('preserves data through toData/fromData cycle', () => {
+      const original = [new TextBlock('prompt text'), new CachePointBlock({ cacheType: 'default' })]
+      const data = systemPromptToData(original)
+      const restored = systemPromptFromData(data)
+      expect(restored).toEqual(original)
+    })
+
+    it('preserves string through toData/fromData cycle', () => {
+      const original = 'Simple string prompt'
+      const data = systemPromptToData(original)
+      const restored = systemPromptFromData(data)
+      expect(restored).toBe(original)
     })
   })
 })

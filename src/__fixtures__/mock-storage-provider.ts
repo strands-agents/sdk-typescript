@@ -1,15 +1,17 @@
 import type { Scope, Snapshot, SnapshotManifest } from '../session/types.js'
-import type { SnapshotStorage } from '../session/index.js'
+import type { SnapshotStorage, SnapshotLocation } from '../session/index.js'
 
 export function createTestSnapshot(overrides: Partial<Snapshot> = {}): Snapshot {
   return {
     schemaVersion: '1.0',
-    scope: { kind: 'agent', agentId: 'test-agent' },
-    snapshotId: '1',
-    messages: [],
-    state: { testKey: 'testValue' },
-    systemPrompt: 'You are a test assistant',
+    scope: 'agent',
     createdAt: '2024-01-01T00:00:00.000Z',
+    data: {
+      messages: [],
+      state: { testKey: 'testValue' },
+      systemPrompt: 'You are a test assistant',
+    },
+    appData: {},
     ...overrides,
   }
 }
@@ -23,15 +25,14 @@ export function createTestManifest(overrides: Partial<SnapshotManifest> = {}): S
   }
 }
 
-export function createTestScope(kind: 'agent' | 'multiAgent' = 'agent', id = 'test-id'): Scope {
-  return kind === 'agent' ? { kind: 'agent', agentId: id } : { kind: 'multiAgent', multiAgentId: id }
+export function createTestScope(kind: 'agent' | 'multiAgent' = 'agent'): Scope {
+  return kind
 }
 
 export function createTestSnapshots(count: number, baseSnapshot?: Partial<Snapshot>): Snapshot[] {
   return Array.from({ length: count }, (_, i) =>
     createTestSnapshot({
       ...baseSnapshot,
-      snapshotId: String(i + 1),
       createdAt: new Date(2024, 0, 1, 0, i).toISOString(),
     })
   )
@@ -46,61 +47,55 @@ export class MockSnapshotStorage implements SnapshotStorage {
   public shouldThrowErrors = false
 
   async saveSnapshot(params: {
-    sessionId: string
-    scope: Scope
+    location: SnapshotLocation
+    snapshotId: string
     isLatest: boolean
     snapshot: Snapshot
   }): Promise<void> {
     if (this.shouldThrowErrors) throw new Error('Mock save error')
 
-    const key = this.getKey(params.sessionId, params.scope, params.snapshot.snapshotId)
-    this.snapshots.set(key, params.snapshot)
+    const { location, snapshotId, isLatest, snapshot } = params
+    const key = this.getKey(location, snapshotId)
+    this.snapshots.set(key, snapshot)
 
-    if (params.isLatest) {
-      const latestKey = this.getKey(params.sessionId, params.scope, 'latest')
-      this.snapshots.set(latestKey, params.snapshot)
+    if (isLatest) {
+      this.snapshots.set(this.getKey(location, 'latest'), snapshot)
     }
   }
 
-  async loadSnapshot(params: { sessionId: string; scope: Scope; snapshotId?: string }): Promise<Snapshot | null> {
+  async loadSnapshot(params: { location: SnapshotLocation; snapshotId?: string }): Promise<Snapshot | null> {
     if (this.shouldThrowErrors) throw new Error('Mock load error')
 
-    const key =
-      params.snapshotId === undefined
-        ? this.getKey(params.sessionId, params.scope, 'latest')
-        : this.getKey(params.sessionId, params.scope, params.snapshotId)
-
-    return this.snapshots.get(key) ?? null
+    if (params.snapshotId === undefined) {
+      return this.snapshots.get(this.getKey(params.location, 'latest')) ?? null
+    }
+    return this.snapshots.get(this.getKey(params.location, params.snapshotId)) ?? null
   }
 
-  async listSnapshotIds(params: { sessionId: string; scope: Scope }): Promise<string[]> {
+  async listSnapshotIds(params: { location: SnapshotLocation }): Promise<string[]> {
     if (this.shouldThrowErrors) throw new Error('Mock list error')
 
-    const scopeId: string = params.scope.kind === 'agent' ? params.scope.agentId! : params.scope.multiAgentId!
-    if (!scopeId) {
-      throw new Error(`Invalid scope: missing ${params.scope.kind === 'agent' ? 'agentId' : 'multiAgentId'}`)
-    }
-    const prefix = `${params.sessionId}::${params.scope.kind}::${scopeId}::`
+    const prefix = `${params.location.sessionId}::${params.location.scope}::${params.location.scopeId}::`
     const ids: string[] = []
 
-    for (const [key] of this.snapshots) {
-      if (key.startsWith(prefix) && !key.endsWith('latest')) {
-        const match = key.match(/::([^:]+)$/)
-        if (match && match[1]) ids.push(match[1])
+    for (const [key, _snapshot] of this.snapshots) {
+      if (key.startsWith(prefix) && !key.endsWith('::latest')) {
+        ids.push(key.slice(prefix.length))
       }
     }
 
     return ids.sort()
   }
 
-  async loadManifest(params: { sessionId: string; scope: Scope }): Promise<SnapshotManifest> {
+  async loadManifest(params: { location: SnapshotLocation }): Promise<SnapshotManifest> {
     if (this.shouldThrowErrors) throw new Error('Mock manifest load error')
 
-    if (!params.sessionId) {
+    const { sessionId } = params.location
+    if (!sessionId) {
       throw new Error('Invalid sessionId: cannot be empty or undefined')
     }
 
-    const key = this.getManifestKey(params.sessionId, params.scope)
+    const key = this.getManifestKey(params.location)
     return (
       this.manifests.get(key) ?? {
         schemaVersion: '1',
@@ -110,36 +105,28 @@ export class MockSnapshotStorage implements SnapshotStorage {
     )
   }
 
-  async saveManifest(params: { sessionId: string; scope: Scope; manifest: SnapshotManifest }): Promise<void> {
+  async saveManifest(params: { location: SnapshotLocation; manifest: SnapshotManifest }): Promise<void> {
     if (this.shouldThrowErrors) throw new Error('Mock manifest save error')
 
-    if (!params.sessionId) {
-      throw new Error('Invalid sessionId: cannot be empty or undefined')
-    }
-
-    const key = this.getManifestKey(params.sessionId, params.scope)
-    this.manifests.set(key, params.manifest)
-  }
-
-  private getKey(sessionId: string, scope: Scope, snapshotId: number | string): string {
+    const { sessionId } = params.location
     if (!sessionId) {
       throw new Error('Invalid sessionId: cannot be empty or undefined')
     }
-    const scopeId: string = scope.kind === 'agent' ? scope.agentId! : scope.multiAgentId!
-    if (!scopeId) {
-      throw new Error(`Invalid scope: missing ${scope.kind === 'agent' ? 'agentId' : 'multiAgentId'}`)
-    }
-    return `${sessionId}::${scope.kind}::${scopeId}::${snapshotId}`
+
+    this.manifests.set(this.getManifestKey(params.location), params.manifest)
   }
 
-  private getManifestKey(sessionId: string, scope: Scope): string {
-    if (!sessionId) {
+  private getKey(location: SnapshotLocation, snapshotId: string): string {
+    if (!location.sessionId) {
       throw new Error('Invalid sessionId: cannot be empty or undefined')
     }
-    const scopeId: string = scope.kind === 'agent' ? scope.agentId! : scope.multiAgentId!
-    if (!scopeId) {
-      throw new Error(`Invalid scope: missing ${scope.kind === 'agent' ? 'agentId' : 'multiAgentId'}`)
+    return `${location.sessionId}::${location.scope}::${location.scopeId}::${snapshotId}`
+  }
+
+  private getManifestKey(location: SnapshotLocation): string {
+    if (!location.sessionId) {
+      throw new Error('Invalid sessionId: cannot be empty or undefined')
     }
-    return `${sessionId}::${scope.kind}::${scopeId}::manifest`
+    return `${location.sessionId}::${location.scope}::${location.scopeId}::manifest`
   }
 }
