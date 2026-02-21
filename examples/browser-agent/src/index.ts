@@ -17,6 +17,7 @@ const cancelSettingsBtn = document.getElementById('cancel-settings-btn') as HTML
 
 // Cache settings input elements
 const openaiKeyInput = document.getElementById('openai-key') as HTMLInputElement;
+const openaiUrlInput = document.getElementById('openai-url') as HTMLInputElement;
 const anthropicKeyInput = document.getElementById('anthropic-key') as HTMLInputElement;
 const bedrockRegionInput = document.getElementById('bedrock-region') as HTMLInputElement;
 const bedrockAccessKeyInput = document.getElementById('bedrock-access-key') as HTMLInputElement;
@@ -70,7 +71,7 @@ function getModel(): BedrockModel | AnthropicModel | OpenAIModel {
             }
         });
     }
-    
+
     if (provider === 'anthropic') {
         return new AnthropicModel({
             apiKey: getCredential('anthropic_api_key', 'Anthropic'),
@@ -79,12 +80,16 @@ function getModel(): BedrockModel | AnthropicModel | OpenAIModel {
             }
         });
     }
-    
+
+    const openaiKey = getCredential('openai_api_key', 'OpenAI');
+    const openaiUrl = localStorage.getItem('openai_base_url');
+
     return new OpenAIModel({
-        apiKey: getCredential('openai_api_key', 'OpenAI'),
-        modelId: 'gpt-4o',
+        apiKey: openaiKey,
+        modelId: 'minimax/minimax-m2.5',
         clientConfig: {
-            dangerouslyAllowBrowser: true
+            dangerouslyAllowBrowser: true,
+            ...(openaiUrl ? { baseURL: openaiUrl } : {})
         }
     });
 }
@@ -99,8 +104,8 @@ async function main(): Promise<void> {
             agent = new Agent({
                 model,
                 systemPrompt: `You are a creative and helpful browser assistant. 
-You can modify the html, script, and style of the sandboxed canvas iframe on the page using the update_canvas tool.
-The canvas is isolated in an iframe for security. Scripts run in the iframe context with access to document.body.
+You can modify the html and style of the sandboxed canvas iframe on the page using the update_canvas tool.
+The canvas is isolated in an iframe for security. Only visual updates via html and style changes are permitted.
 Always use the tool when the user asks for visual changes.
 Be concise in your text responses.`,
                 tools: [updateCanvasTool],
@@ -112,19 +117,24 @@ Be concise in your text responses.`,
         }
     }
 
-    initializeAgent();
+    try {
+        initializeAgent();
+    } catch (e) {
+        console.warn('Initial agent setup pending configuration');
+    }
 
     // Settings UI handlers
     settingsBtn.addEventListener('click', () => {
         const provider = localStorage.getItem('agent_provider') || 'openai';
         providerSelect.value = provider;
-        
+
         openaiKeyInput.value = localStorage.getItem('openai_api_key') || '';
+        openaiUrlInput.value = localStorage.getItem('openai_base_url') || '';
         anthropicKeyInput.value = localStorage.getItem('anthropic_api_key') || '';
         bedrockRegionInput.value = localStorage.getItem('bedrock_region') || 'us-west-2';
         bedrockAccessKeyInput.value = localStorage.getItem('bedrock_access_key') || '';
         bedrockSecretKeyInput.value = localStorage.getItem('bedrock_secret_key') || '';
-        
+
         toggleProviderFields(provider);
         settingsModal.classList.add('show');
     });
@@ -136,10 +146,14 @@ Be concise in your text responses.`,
     saveSettingsBtn.addEventListener('click', () => {
         const provider = providerSelect.value;
         localStorage.setItem('agent_provider', provider);
-        
+
         if (provider === 'openai') {
             const key = openaiKeyInput.value;
+            const url = openaiUrlInput.value;
             if (key) localStorage.setItem('openai_api_key', key);
+
+            // Allow storing an empty string to clear the base URL setting
+            localStorage.setItem('openai_base_url', url);
         } else if (provider === 'anthropic') {
             const key = anthropicKeyInput.value;
             if (key) localStorage.setItem('anthropic_api_key', key);
@@ -151,12 +165,12 @@ Be concise in your text responses.`,
             if (accessKey) localStorage.setItem('bedrock_access_key', accessKey);
             if (secretKey) localStorage.setItem('bedrock_secret_key', secretKey);
         }
-        
+
         settingsModal.classList.remove('show');
-        
+
         try {
             initializeAgent();
-            messagesDiv.innerHTML = '<div class="message agent">Hello! I can modify the canvas above. Try asking me "change background to blue" or "make it a circle".</div>';
+            messagesDiv.innerHTML = '<div class="message agent">Hello! I can modify the canvas on the left. 👈<br />Try asking me "change background to blue" or "make it a circle".</div>';
             showToast('Settings saved!');
         } catch {
             showToast('Failed to initialize agent. Check your credentials.');
@@ -169,8 +183,10 @@ Be concise in your text responses.`,
 
     // Clear chat button
     clearBtn.addEventListener('click', () => {
-        messagesDiv.innerHTML = '<div class="message agent">Hello! I can modify the canvas above. Try asking me "change background to blue" or "make it a circle".</div>';
-        agent.messages.length = 0;
+        messagesDiv.innerHTML = '<div class="message agent">Hello! I can modify the canvas on the left. 👈<br />Try asking me "change background to blue" or "make it a circle".</div>';
+        if (agent) {
+            agent.messages.length = 0;
+        }
     });
 
     // Handle user input
@@ -183,6 +199,13 @@ Be concise in your text responses.`,
         userInput.value = '';
         userInput.disabled = true;
         sendBtn.disabled = true;
+
+        if (!agent) {
+            addMessage('agent', 'Error: Agent not initialized. Please configure settings first.');
+            userInput.disabled = false;
+            sendBtn.disabled = false;
+            return;
+        }
 
         try {
             let fullText = '';
@@ -205,7 +228,11 @@ Be concise in your text responses.`,
                 } else if (event.type === 'modelContentBlockDeltaEvent' && event.delta.type === 'textDelta') {
                     if (!messageDiv) messageDiv = addMessage('agent', '');
                     fullText += event.delta.text;
-                    messageDiv.innerHTML = marked.parse(fullText) as string;
+                    try {
+                        messageDiv.innerHTML = marked.parse(fullText) as string;
+                    } catch {
+                        messageDiv.textContent = fullText;
+                    }
                     messagesDiv.scrollTop = messagesDiv.scrollHeight;
                 }
             }

@@ -10,8 +10,7 @@
     },
     "dependencies": {
         "@strands-agents/sdk": "*",
-        "marked": "^17.0.3",
-        "zod": "^4.1.12"
+        "marked": "^17.0.3"
     },
     "devDependencies": {
         "typescript": "^5.5.0",

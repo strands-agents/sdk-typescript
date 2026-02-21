@@ -7,7 +7,6 @@ export const updateCanvasTool = tool({
     inputSchema: z.object({
         html: z.string().optional().describe('HTML content to set as innerHTML of the canvas body element'),
         style: z.record(z.string(), z.string()).optional().describe('JSON object containing CSS properties to apply to the canvas body element (e.g. {"backgroundColor": "red", "fontSize": "20px"})'),
-        script: z.string().optional().describe('JavaScript code to execute in the sandboxed canvas iframe'),
     }),
     callback: (input): string => {
         const canvas = document.getElementById('canvas') as HTMLIFrameElement;
@@ -27,15 +26,6 @@ export const updateCanvasTool = tool({
         if (input.style) {
             Object.assign(body.style, input.style);
             updates.push('style updated');
-        }
-
-        if (input.script) {
-            try {
-                canvas.contentWindow.eval(input.script);
-                updates.push('script executed');
-            } catch (err) {
-                updates.push(`script error: ${(err as Error).message}`);
-            }
         }
 
         if (updates.length === 0) {
