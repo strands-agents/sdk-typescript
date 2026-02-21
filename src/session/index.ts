@@ -18,7 +18,7 @@
 export type { Scope, Snapshot, SnapshotManifest, SnapshotTriggerCallback } from './types.js'
 
 // Storage layer
-export type { SessionStorage, SnapshotStorage } from './storage.js'
+export type { SessionStorage, SnapshotStorage, SnapshotLocation } from './storage.js'
 
 // Storage implementations
 export { FileStorage } from './file-storage.js'

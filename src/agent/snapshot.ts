@@ -14,25 +14,24 @@
 import type { JSONValue } from '../types/json.js'
 import type { MessageData, SystemPromptData } from '../types/messages.js'
 import { Message, systemPromptFromData, systemPromptToData } from '../types/messages.js'
-import { isStateSerializable } from '../types/serializable.js'
 import type { Agent } from './agent.js'
 
 /**
- * Current version of the snapshot format.
+ * Current schema version of the snapshot format.
  */
-export const SNAPSHOT_VERSION = '1.0'
+export const SNAPSHOT_SCHEMA_VERSION = '1.0'
 
 /**
  * All available fields that can be included in a snapshot.
  */
-export const ALL_SNAPSHOT_FIELDS = ['messages', 'state', 'conversationManagerState', 'systemPrompt'] as const
+export const ALL_SNAPSHOT_FIELDS = ['messages', 'state', 'systemPrompt'] as const
 
 /**
  * Strongly typed preset definitions for snapshot field selection.
  * This object allows easy evolution of presets and type-safe access.
  */
 export const SNAPSHOT_PRESETS = {
-  session: ['messages', 'state', 'conversationManagerState', 'systemPrompt'] as const,
+  session: ['messages', 'state', 'systemPrompt'] as const,
 } as const
 
 /**
@@ -46,26 +45,31 @@ export type SnapshotPreset = keyof typeof SNAPSHOT_PRESETS
 export type SnapshotField = (typeof ALL_SNAPSHOT_FIELDS)[number]
 
 /**
+ * Scope defines the context for snapshot data.
+ */
+export type Scope = 'agent' | 'multiAgent'
+
+/**
  * Point-in-time capture of agent state.
  */
 export interface Snapshot {
   /**
-   * String identifying the snapshot type (e.g., "agent"). Strands-owned.
+   * Scope identifying the snapshot context (agent or multi-agent).
    */
-  type: string
+  scope: Scope
 
   /**
-   * Version string for forward compatibility. Strands-owned.
+   * Schema version string for forward compatibility.
    */
-  version: string
+  schemaVersion: string
 
   /**
-   * ISO 8601 timestamp of when snapshot was taken. Strands-owned.
+   * ISO 8601 timestamp of when snapshot was created.
    */
-  timestamp: string
+  createdAt: string
 
   /**
-   * Agent's evolving state (opaque to callers). Strands-owned.
+   * Agent's evolving state (messages, state, systemPrompt). Strands-owned.
    */
   data: Record<string, JSONValue>
 
@@ -133,20 +137,14 @@ export function takeSnapshot(agent: Agent, options: TakeSnapshotOptions): Snapsh
     data.state = agent.state.toJSON()
   }
 
-  if (fields.has('conversationManagerState')) {
-    data.conversationManagerState = isStateSerializable(agent.conversationManager)
-      ? agent.conversationManager.toJSON()
-      : {}
-  }
-
   if (fields.has('systemPrompt')) {
     data.systemPrompt = agent.systemPrompt !== undefined ? (systemPromptToData(agent.systemPrompt) as JSONValue) : null
   }
 
   return {
-    type: 'agent',
-    version: SNAPSHOT_VERSION,
-    timestamp: createTimestamp(),
+    scope: 'agent',
+    schemaVersion: SNAPSHOT_SCHEMA_VERSION,
+    createdAt: createTimestamp(),
     data,
     appData: options.appData ?? {},
   }
@@ -162,11 +160,13 @@ export function takeSnapshot(agent: Agent, options: TakeSnapshotOptions): Snapsh
  * @param snapshot - The snapshot to load
  */
 export function loadSnapshot(agent: Agent, snapshot: Snapshot): void {
-  if (snapshot.version !== SNAPSHOT_VERSION) {
-    throw new Error(`Unsupported snapshot version: ${snapshot.version}. Current version: ${SNAPSHOT_VERSION}`)
+  if (snapshot.schemaVersion !== SNAPSHOT_SCHEMA_VERSION) {
+    throw new Error(
+      `Unsupported snapshot schema version: ${snapshot.schemaVersion}. Current version: ${SNAPSHOT_SCHEMA_VERSION}`
+    )
   }
 
-  const { messages, state, conversationManagerState, systemPrompt } = snapshot.data
+  const { messages, state, systemPrompt } = snapshot.data
 
   if (messages !== undefined) {
     agent.messages.length = 0
@@ -177,12 +177,6 @@ export function loadSnapshot(agent: Agent, snapshot: Snapshot): void {
 
   if (state !== undefined) {
     agent.state.loadStateFromJson(state)
-  }
-
-  if (conversationManagerState !== undefined) {
-    if (isStateSerializable(agent.conversationManager)) {
-      agent.conversationManager.loadStateFromJson(conversationManagerState)
-    }
   }
 
   // Only restore systemPrompt if explicitly present and non-null in the snapshot
@@ -203,7 +197,7 @@ export function loadSnapshot(agent: Agent, snapshot: Snapshot): void {
  * @returns Set of resolved field names
  * @throws Error if no fields would be included
  */
-export function resolveSnapshotFields(options: TakeSnapshotOptions): Set<SnapshotField> {
+export function resolveSnapshotFields(options: TakeSnapshotOptions = {}): Set<SnapshotField> {
   const { preset, include, exclude } = options
   let fields: Set<SnapshotField>
 

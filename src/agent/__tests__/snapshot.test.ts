@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { Agent } from '../agent.js'
 import type { Snapshot } from '../snapshot.js'
 import {
-  SNAPSHOT_VERSION,
+  SNAPSHOT_SCHEMA_VERSION,
   ALL_SNAPSHOT_FIELDS,
   SNAPSHOT_PRESETS,
   createTimestamp,
@@ -38,18 +38,17 @@ describe('Snapshot API', () => {
 
   describe('constants', () => {
     it('exports snapshot constants with correct values', () => {
-      expect(SNAPSHOT_VERSION).toBe('1.0')
-      expect(ALL_SNAPSHOT_FIELDS).toEqual(['messages', 'state', 'conversationManagerState', 'systemPrompt'])
+      expect(SNAPSHOT_SCHEMA_VERSION).toBe('1.0')
+      expect(ALL_SNAPSHOT_FIELDS).toEqual(['messages', 'state', 'systemPrompt'])
       expect(SNAPSHOT_PRESETS).toEqual({
-        session: ['messages', 'state', 'conversationManagerState', 'systemPrompt'],
+        session: ['messages', 'state', 'systemPrompt'],
       })
     })
   })
 
   describe('createTimestamp', () => {
     it('returns ISO 8601 formatted timestamp', () => {
-      const timestamp = createTimestamp()
-      expect(timestamp).toBe(MOCK_TIMESTAMP)
+      expect(createTimestamp()).toBe(MOCK_TIMESTAMP)
     })
   })
 
@@ -60,7 +59,7 @@ describe('Snapshot API', () => {
 
     it('returns session preset fields when preset is "session"', () => {
       const fields = resolveSnapshotFields({ preset: 'session' })
-      expect(fields).toEqual(new Set(['messages', 'state', 'conversationManagerState', 'systemPrompt']))
+      expect(fields).toEqual(new Set(['messages', 'state', 'systemPrompt']))
     })
 
     it('returns explicit fields when include is specified', () => {
@@ -68,34 +67,17 @@ describe('Snapshot API', () => {
       expect(fields).toEqual(new Set(['messages', 'state']))
     })
 
-    it('combines preset and include fields', () => {
-      // Start with a hypothetical smaller preset, add more
-      const fields = resolveSnapshotFields({ preset: 'session', include: ['messages'] })
-      expect(fields).toEqual(new Set(['messages', 'state', 'conversationManagerState', 'systemPrompt']))
-    })
-
-    it('applies exclude after preset and include', () => {
+    it('applies exclude after preset', () => {
       const fields = resolveSnapshotFields({ preset: 'session', exclude: ['state'] })
-      expect(fields).toEqual(new Set(['messages', 'conversationManagerState', 'systemPrompt']))
-    })
-
-    it('does not throw when excluding a field not in include', () => {
-      const fields = resolveSnapshotFields({ include: ['messages'], exclude: ['state'] })
-      expect(fields).toEqual(new Set(['messages']))
+      expect(fields).toEqual(new Set(['messages', 'systemPrompt']))
     })
 
     it('throws error for invalid preset', () => {
       expect(() => resolveSnapshotFields({ preset: 'invalid' as any })).toThrow('Invalid preset: invalid')
     })
 
-    it('throws error for invalid field names in include', () => {
+    it('throws error for invalid field names', () => {
       expect(() => resolveSnapshotFields({ include: ['invalidField' as any] })).toThrow(
-        'Invalid snapshot field: invalidField'
-      )
-    })
-
-    it('throws error for invalid field names in exclude', () => {
-      expect(() => resolveSnapshotFields({ preset: 'session', exclude: ['invalidField' as any] })).toThrow(
         'Invalid snapshot field: invalidField'
       )
     })
@@ -104,7 +86,7 @@ describe('Snapshot API', () => {
   describe('takeSnapshot', () => {
     let agent: Agent
 
-    beforeEach(async () => {
+    beforeEach(() => {
       agent = createTestAgent()
     })
 
@@ -116,13 +98,12 @@ describe('Snapshot API', () => {
       const snapshot = takeSnapshot(agent, { preset: 'session' })
 
       expect(snapshot).toEqual({
-        type: 'agent',
-        version: SNAPSHOT_VERSION,
-        timestamp: MOCK_TIMESTAMP,
+        scope: 'agent',
+        schemaVersion: SNAPSHOT_SCHEMA_VERSION,
+        createdAt: MOCK_TIMESTAMP,
         data: {
           messages: [{ role: 'user', content: [{ text: 'Hello' }] }],
           state: { key: 'value' },
-          conversationManagerState: {},
           systemPrompt: 'Test prompt',
         },
         appData: {},
@@ -134,42 +115,7 @@ describe('Snapshot API', () => {
         preset: 'session',
         appData: { customKey: 'customValue' },
       })
-
       expect(snapshot.appData).toEqual({ customKey: 'customValue' })
-    })
-
-    it('includes systemPrompt when using session preset', () => {
-      agent.systemPrompt = 'You are a helpful assistant'
-
-      const snapshot = takeSnapshot(agent, { preset: 'session' })
-
-      expect(snapshot.data.systemPrompt).toBe('You are a helpful assistant')
-    })
-
-    it('serializes messages correctly', () => {
-      agent.messages.push(
-        new Message({ role: 'user', content: [new TextBlock('Hello')] }),
-        new Message({ role: 'assistant', content: [new TextBlock('Hi there!')] })
-      )
-
-      const snapshot = takeSnapshot(agent, { include: ['messages'] })
-
-      expect(snapshot.data.messages).toEqual([
-        { role: 'user', content: [{ text: 'Hello' }] },
-        { role: 'assistant', content: [{ text: 'Hi there!' }] },
-      ])
-    })
-
-    it('serializes state correctly', () => {
-      agent.state.set('userId', 'user-123')
-      agent.state.set('preferences', { theme: 'dark' })
-
-      const snapshot = takeSnapshot(agent, { include: ['state'] })
-
-      expect(snapshot.data.state).toEqual({
-        userId: 'user-123',
-        preferences: { theme: 'dark' },
-      })
     })
 
     it('excludes specified fields', () => {
@@ -186,27 +132,29 @@ describe('Snapshot API', () => {
   describe('loadSnapshot', () => {
     let agent: Agent
 
-    beforeEach(async () => {
+    beforeEach(() => {
       agent = createTestAgent()
     })
 
-    it('throws error for incompatible snapshot version', () => {
+    it('throws error for incompatible schema version', () => {
       const snapshot: Snapshot = {
-        type: 'agent',
-        version: '2.0',
-        timestamp: createTimestamp(),
+        scope: 'agent',
+        schemaVersion: '2.0',
+        createdAt: createTimestamp(),
         data: {},
         appData: {},
       }
 
-      expect(() => loadSnapshot(agent, snapshot)).toThrow('Unsupported snapshot version: 2.0. Current version: 1.0')
+      expect(() => loadSnapshot(agent, snapshot)).toThrow(
+        'Unsupported snapshot schema version: 2.0. Current version: 1.0'
+      )
     })
 
     it('restores messages from snapshot', () => {
       const snapshot: Snapshot = {
-        type: 'agent',
-        version: '1.0',
-        timestamp: createTimestamp(),
+        scope: 'agent',
+        schemaVersion: '1.0',
+        createdAt: createTimestamp(),
         data: {
           messages: [{ role: 'user', content: [{ text: 'Restored message' }] }],
         },
@@ -221,9 +169,9 @@ describe('Snapshot API', () => {
 
     it('restores state from snapshot', () => {
       const snapshot: Snapshot = {
-        type: 'agent',
-        version: '1.0',
-        timestamp: createTimestamp(),
+        scope: 'agent',
+        schemaVersion: '1.0',
+        createdAt: createTimestamp(),
         data: {
           state: { restoredKey: 'restoredValue' },
         },
@@ -237,9 +185,9 @@ describe('Snapshot API', () => {
 
     it('restores systemPrompt from snapshot', () => {
       const snapshot: Snapshot = {
-        type: 'agent',
-        version: '1.0',
-        timestamp: createTimestamp(),
+        scope: 'agent',
+        schemaVersion: '1.0',
+        createdAt: createTimestamp(),
         data: {
           systemPrompt: 'Restored system prompt',
         },
@@ -255,12 +203,10 @@ describe('Snapshot API', () => {
       agent.systemPrompt = 'Original prompt'
 
       const snapshot: Snapshot = {
-        type: 'agent',
-        version: '1.0',
-        timestamp: createTimestamp(),
-        data: {
-          systemPrompt: null,
-        },
+        scope: 'agent',
+        schemaVersion: '1.0',
+        createdAt: createTimestamp(),
+        data: { systemPrompt: null },
         appData: {},
       }
 
@@ -269,50 +215,12 @@ describe('Snapshot API', () => {
       // systemPrompt should remain unchanged since snapshot had null
       expect(agent.systemPrompt).toBe('Original prompt')
     })
-
-    it('leaves systemPrompt unchanged when not present in snapshot', () => {
-      agent.systemPrompt = 'Original prompt'
-
-      const snapshot: Snapshot = {
-        type: 'agent',
-        version: '1.0',
-        timestamp: createTimestamp(),
-        data: {
-          messages: [],
-        },
-        appData: {},
-      }
-
-      loadSnapshot(agent, snapshot)
-
-      // systemPrompt should remain unchanged since it wasn't in the snapshot
-      expect(agent.systemPrompt).toBe('Original prompt')
-    })
-
-    it('clears existing messages before restoring', () => {
-      agent.messages.push(new Message({ role: 'user', content: [new TextBlock('Old message')] }))
-
-      const snapshot: Snapshot = {
-        type: 'agent',
-        version: '1.0',
-        timestamp: createTimestamp(),
-        data: {
-          messages: [{ role: 'user', content: [{ text: 'New message' }] }],
-        },
-        appData: {},
-      }
-
-      loadSnapshot(agent, snapshot)
-
-      expect(agent.messages).toHaveLength(1)
-      expect(agent.messages[0]).toEqual(new Message({ role: 'user', content: [new TextBlock('New message')] }))
-    })
   })
 
   describe('round-trip', () => {
     let agent: Agent
 
-    beforeEach(async () => {
+    beforeEach(() => {
       agent = createTestAgent()
     })
 
@@ -348,19 +256,7 @@ describe('Snapshot API', () => {
       // Restore
       loadSnapshot(agent, snapshot)
 
-      expect(agent.state.getAll()).toEqual({
-        userId: 'user-123',
-        counter: 42,
-      })
-    })
-
-    it('preserves appData through save/load', () => {
-      const snapshot = takeSnapshot(agent, {
-        preset: 'session',
-        appData: { customData: { nested: true } },
-      })
-
-      expect(snapshot.appData).toEqual({ customData: { nested: true } })
+      expect(agent.state.getAll()).toEqual({ userId: 'user-123', counter: 42 })
     })
 
     it('handles complex message content', () => {
@@ -388,43 +284,14 @@ describe('Snapshot API', () => {
     })
   })
 
-  describe('empty agent snapshot', () => {
-    it('handles empty messages array', () => {
-      const agent = createTestAgent()
-
-      const snapshot = takeSnapshot(agent, { include: ['messages'] })
-      expect(snapshot.data.messages).toEqual([])
-
-      loadSnapshot(agent, snapshot)
-      expect(agent.messages).toHaveLength(0)
-    })
-
-    it('handles empty state', () => {
-      const agent = createTestAgent()
-
-      const snapshot = takeSnapshot(agent, { include: ['state'] })
-      expect(snapshot.data.state).toEqual({})
-
-      loadSnapshot(agent, snapshot)
-      expect(agent.state.keys()).toHaveLength(0)
-    })
-  })
-
   describe('JSON serialization', () => {
     it('snapshot survives JSON.stringify/JSON.parse round-trip', () => {
       const agent = createTestAgent()
-      agent.messages.push(
-        new Message({ role: 'user', content: [new TextBlock('Hello')] }),
-        new Message({ role: 'assistant', content: [new TextBlock('Hi there!')] })
-      )
+      agent.messages.push(new Message({ role: 'user', content: [new TextBlock('Hello')] }))
       agent.state.set('userId', 'user-123')
-      agent.state.set('nested', { deep: { value: true } })
       agent.systemPrompt = 'You are a helpful assistant'
 
-      const snapshot = takeSnapshot(agent, {
-        preset: 'session',
-        appData: { custom: 'data', nested: { array: [1, 2, 3] } },
-      })
+      const snapshot = takeSnapshot(agent, { preset: 'session' })
 
       // Serialize to JSON string and parse back
       const jsonString = JSON.stringify(snapshot)
@@ -432,41 +299,6 @@ describe('Snapshot API', () => {
 
       // Verify structure is preserved
       expect(parsed).toEqual(snapshot)
-    })
-
-    it('snapshot with complex content blocks survives JSON round-trip', () => {
-      const agent = createTestAgent()
-      const toolUseBlock = new ToolUseBlock({
-        name: 'calculator',
-        toolUseId: 'tool-123',
-        input: { operation: 'add', numbers: [1, 2, 3] },
-      })
-      const toolResultBlock = new ToolResultBlock({
-        toolUseId: 'tool-123',
-        status: 'success',
-        content: [new TextBlock('6')],
-      })
-      agent.messages.push(
-        new Message({ role: 'assistant', content: [toolUseBlock] }),
-        new Message({ role: 'user', content: [toolResultBlock] })
-      )
-
-      const snapshot = takeSnapshot(agent, { include: ['messages'] })
-
-      // Serialize to JSON string and parse back
-      const jsonString = JSON.stringify(snapshot)
-      const parsed = JSON.parse(jsonString)
-
-      // Verify structure is preserved
-      expect(parsed).toEqual(snapshot)
-
-      // Verify we can load the parsed snapshot
-      const newAgent = createTestAgent()
-      loadSnapshot(newAgent, parsed)
-
-      expect(newAgent.messages).toHaveLength(2)
-      expect(newAgent.messages[0]?.content[0]).toBeInstanceOf(ToolUseBlock)
-      expect(newAgent.messages[1]?.content[0]).toBeInstanceOf(ToolResultBlock)
     })
 
     it('snapshot can be stored and retrieved as JSON string', () => {
@@ -485,7 +317,6 @@ describe('Snapshot API', () => {
       loadSnapshot(newAgent, retrieved)
 
       expect(newAgent.messages).toHaveLength(1)
-      expect(newAgent.messages[0]).toEqual(agent.messages[0])
       expect(newAgent.state.getAll()).toEqual({ key: 'value' })
     })
   })

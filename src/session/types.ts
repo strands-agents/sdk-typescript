@@ -1,32 +1,7 @@
-import type { Message, SystemPrompt } from '../types/messages.js'
 import type { AgentData } from '../types/agent.js'
 
-/**
- * Scope defines the context for session data.
- * Sessions can be scoped to a single agent or a multi-agent system.
- */
-export type Scope = { kind: 'agent'; agentId: string } | { kind: 'multiAgent'; multiAgentId: string }
-
-/**
- * Snapshot represents a point-in-time capture of agent runtime state.
- * Contains all data needed to restore an agent to a specific conversation state.
- */
-export interface Snapshot {
-  /** Schema version for forward/backward compatibility */
-  schemaVersion: string
-  /** Scope of the snapshot (agent or multi-agent) */
-  scope: Scope
-  /** Snapshot identifier (e.g., "1", "2", or custom string IDs for future extensibility) */
-  snapshotId: string
-  /** Conversation history */
-  messages: Message[]
-  /** Agent state key-value pairs */
-  state: Record<string, unknown>
-  /** System prompt for agent behavior */
-  systemPrompt?: SystemPrompt
-  /** ISO 8601 timestamp of snapshot creation */
-  createdAt: string
-}
+// Re-export Snapshot and Scope from the canonical location
+export type { Snapshot, Scope } from '../agent/snapshot.js'
 
 /**
  * Manifest tracks snapshot metadata and ID allocation.
