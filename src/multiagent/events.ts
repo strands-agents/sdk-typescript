@@ -1,3 +1,4 @@
+import { StreamEvent } from '../hooks/events.js'
 import type { AgentStreamEvent } from '../types/agent.js'
 import type { NodeType } from './types.js'
 
@@ -6,17 +7,18 @@ import type { NodeType } from './types.js'
  * Emitted during node execution to propagate agent-level or nested
  * multi-agent events up to the orchestration layer.
  */
-export class MultiAgentNodeStreamEvent {
-  readonly type = 'multiAgentNodeStreamEvent' as const
+export class NodeStreamUpdateEvent extends StreamEvent {
+  readonly type = 'nodeStreamUpdateEvent' as const
   readonly nodeId: string
   readonly nodeType: NodeType
-  readonly event: AgentStreamEvent | Exclude<MultiAgentStreamEvent, MultiAgentNodeStreamEvent>
+  readonly event: AgentStreamEvent | Exclude<MultiAgentStreamEvent, NodeStreamUpdateEvent>
 
   constructor(data: {
     nodeId: string
     nodeType: NodeType
-    event: AgentStreamEvent | Exclude<MultiAgentStreamEvent, MultiAgentNodeStreamEvent>
+    event: AgentStreamEvent | Exclude<MultiAgentStreamEvent, NodeStreamUpdateEvent>
   }) {
+    super()
     this.nodeId = data.nodeId
     this.nodeType = data.nodeType
     this.event = data.event
@@ -26,4 +28,4 @@ export class MultiAgentNodeStreamEvent {
 /**
  * Union of all multi-agent streaming events.
  */
-export type MultiAgentStreamEvent = MultiAgentNodeStreamEvent
+export type MultiAgentStreamEvent = NodeStreamUpdateEvent

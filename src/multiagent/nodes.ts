@@ -1,7 +1,7 @@
 import type { Agent, InvokeArgs } from '../agent/agent.js'
 import { takeSnapshot, loadSnapshot } from '../agent/snapshot.js'
 import type { MultiAgentStreamEvent } from './events.js'
-import { MultiAgentNodeStreamEvent } from './events.js'
+import { NodeStreamUpdateEvent } from './events.js'
 import { MultiAgentState, NodeResult, Status } from './state.js'
 import type { NodeResultUpdate } from './state.js'
 
@@ -124,7 +124,7 @@ export class AgentNode extends Node {
       const gen = this._agent.stream(args)
       let next = await gen.next()
       while (!next.done) {
-        yield new MultiAgentNodeStreamEvent({ nodeId: this.id, nodeType: this.type, event: next.value })
+        yield new NodeStreamUpdateEvent({ nodeId: this.id, nodeType: this.type, event: next.value })
         next = await gen.next()
       }
       return { content: next.value.lastMessage.content }

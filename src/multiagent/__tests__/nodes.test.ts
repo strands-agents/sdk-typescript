@@ -99,7 +99,7 @@ describe('AgentNode', () => {
       expect(items.length).toBeGreaterThan(0)
       for (const event of items) {
         expect(event).toEqual(
-          expect.objectContaining({ type: 'multiAgentNodeStreamEvent', nodeId: 'agent-1', nodeType: 'agentNode' })
+          expect.objectContaining({ type: 'nodeStreamUpdateEvent', nodeId: 'agent-1', nodeType: 'agentNode' })
         )
       }
 
