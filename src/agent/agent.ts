@@ -431,14 +431,10 @@ export class Agent implements AgentData {
     let currentArgs: InvokeArgs | undefined = initialArgs
 
     // Main agent loop - continues until model stops without requesting tools
-    let cycleCount = 0
-    while (true) {
-      cycleCount++
-      const cycleId = `cycle-${cycleCount}`
-
+    for (let cycleCount = 1; ; cycleCount++) {
       // Create agent loop cycle span within agent span context
       const cycleSpan = this._tracer.startAgentLoopSpan({
-        cycleId,
+        cycleId: `cycle-${cycleCount}`,
         messages: this.messages,
       })
 
