@@ -4,12 +4,10 @@ Send traces from a Strands agent to a local [Jaeger](https://www.jaegertracing.i
 
 ## Architecture
 
-```
-┌───────────────┐       ┌──────────────────┐       ┌────────────┐
-│ Strands Agent  │──────▶│  OTel Collector   │──────▶│   Jaeger   │
-│  (your code)   │ OTLP  │ (batch + export)  │ OTLP  │  (traces)  │
-└───────────────┘       └──────────────────┘       └────────────┘
-                          localhost:4318              localhost:16686
+```mermaid
+flowchart LR
+    A["Strands Agent<br/>(your code)"] -- OTLP --> B["OTel Collector<br/>(batch + export)<br/>localhost:4318"]
+    B -- OTLP --> C["Jaeger<br/>(traces)<br/>localhost:16686"]
 ```
 
 The agent exports spans over OTLP HTTP to an OpenTelemetry Collector, which
