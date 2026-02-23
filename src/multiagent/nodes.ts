@@ -1,18 +1,9 @@
 import type { Agent, InvokeArgs } from '../agent/agent.js'
-import type { JSONValue } from '../types/json.js'
-import type { Message } from '../types/messages.js'
+import { takeSnapshot, loadSnapshot } from '../agent/snapshot.js'
 import type { MultiAgentStreamEvent } from './events.js'
 import { MultiAgentNodeStreamEvent } from './events.js'
 import { MultiAgentState, NodeResult, Status } from './state.js'
 import type { NodeResultUpdate } from './state.js'
-
-/**
- * Captured snapshot of an agent's mutable state.
- */
-interface AgentSnapshot {
-  readonly messages: Message[]
-  readonly state: Record<string, JSONValue>
-}
 
 /**
  * Configuration for a node execution.
@@ -128,7 +119,7 @@ export class AgentNode extends Node {
     args: InvokeArgs,
     _state: MultiAgentState
   ): AsyncGenerator<MultiAgentStreamEvent, NodeResultUpdate, undefined> {
-    const snapshot = this._snapshot()
+    const snapshot = takeSnapshot(this._agent, { include: ['messages', 'state'] })
     try {
       const gen = this._agent.stream(args)
       let next = await gen.next()
@@ -138,29 +129,7 @@ export class AgentNode extends Node {
       }
       return { content: next.value.lastMessage.content }
     } finally {
-      this._restore(snapshot)
-    }
-  }
-
-  /**
-   * Captures mutable agent state for later restoration.
-   */
-  private _snapshot(): AgentSnapshot {
-    return {
-      messages: [...this._agent.messages],
-      state: this._agent.state.getAll(),
-    }
-  }
-
-  /**
-   * Restores mutable agent state from a snapshot.
-   */
-  private _restore(snapshot: AgentSnapshot): void {
-    this._agent.messages.length = 0
-    this._agent.messages.push(...snapshot.messages)
-    this._agent.state.clear()
-    for (const [k, v] of Object.entries(snapshot.state)) {
-      this._agent.state.set(k, v)
+      loadSnapshot(this._agent, snapshot)
     }
   }
 }
