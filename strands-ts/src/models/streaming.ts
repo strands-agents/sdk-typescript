@@ -1,5 +1,8 @@
+/// <reference path="../../generated/index.d.ts" />
+
 import type { Role, StopReason } from '../types/messages.js'
 import type { JSONValue } from '../types/json.js'
+import type { Usage, Metrics } from 'strands:agent/types'
 
 /**
  * ModelStreamEvent types for Model interactions.
@@ -22,25 +25,6 @@ export type ModelStreamEvent =
   | ModelContentBlockStopEventData
   | ModelMessageStopEventData
   | ModelMetadataEventData
-
-/** Set of all ModelStreamEvent type discriminators. */
-const modelStreamEventTypes: ReadonlySet<string> = new Set<ModelStreamEvent['type']>([
-  'modelMessageStartEvent',
-  'modelContentBlockStartEvent',
-  'modelContentBlockDeltaEvent',
-  'modelContentBlockStopEvent',
-  'modelMessageStopEvent',
-  'modelMetadataEvent',
-])
-
-/**
- * Type guard to check if an event with a type discriminator is a ModelStreamEvent.
- * @param event - The event to check
- * @returns true if the event is a ModelStreamEvent
- */
-export function isModelStreamEvent(event: { type: string }): event is ModelStreamEvent {
-  return modelStreamEventTypes.has(event.type)
-}
 
 /**
  * Data for a message start event.
@@ -383,45 +367,7 @@ export interface ReasoningContentDelta {
   redactedContent?: Uint8Array
 }
 
-/**
- * Token usage statistics for a model invocation.
- * Tracks input, output, and total tokens, plus cache-related metrics.
- */
-export interface Usage {
-  /**
-   * Number of tokens in the input (prompt).
-   */
-  inputTokens: number
-
-  /**
-   * Number of tokens in the output (completion).
-   */
-  outputTokens: number
-
-  /**
-   * Total number of tokens (input + output).
-   */
-  totalTokens: number
-
-  /**
-   * Number of input tokens read from cache.
-   * This can reduce latency and cost.
-   */
-  cacheReadInputTokens?: number
-
-  /**
-   * Number of input tokens written to cache.
-   * These tokens can be reused in future requests.
-   */
-  cacheWriteInputTokens?: number
-}
-
-/**
- * Performance metrics for a model invocation.
- */
-export interface Metrics {
-  /**
-   * Latency in milliseconds.
-   */
-  latencyMs: number
-}
+// Usage and Metrics are defined by the WIT contract (wit/agent.wit) and
+// imported from the generated ambient declarations.  Re-export them so
+// downstream imports from this module continue to work unchanged.
+export type { Usage, Metrics } from 'strands:agent/types'
