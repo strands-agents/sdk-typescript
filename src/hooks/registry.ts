@@ -1,11 +1,11 @@
-import type { HookEvent } from './events.js'
-import type { HookCallback, HookProvider, HookEventConstructor, HookCleanup } from './types.js'
+import type { HookableEvent } from './events.js'
+import type { HookCallback, HookProvider, HookableEventConstructor, HookCleanup } from './types.js'
 
 /**
  * Represents a callback entry with its source provider.
  */
 type CallbackEntry = {
-  callback: HookCallback<HookEvent>
+  callback: HookCallback<HookableEvent>
   source: HookProvider | undefined
 }
 
@@ -21,7 +21,7 @@ export interface HookRegistry {
    * @param callback - The callback function to invoke when the event occurs
    * @returns Cleanup function that removes the callback when invoked
    */
-  addCallback<T extends HookEvent>(eventType: HookEventConstructor<T>, callback: HookCallback<T>): HookCleanup
+  addCallback<T extends HookableEvent>(eventType: HookableEventConstructor<T>, callback: HookCallback<T>): HookCleanup
 
   /**
    * Register all callbacks from a hook provider.
@@ -43,7 +43,7 @@ export interface HookRegistry {
  * Maintains mappings between event types and callback functions.
  */
 export class HookRegistryImplementation implements HookRegistry {
-  private readonly _callbacks: Map<HookEventConstructor, CallbackEntry[]>
+  private readonly _callbacks: Map<HookableEventConstructor, CallbackEntry[]>
   private _currentProvider: HookProvider | undefined
 
   constructor() {
@@ -58,8 +58,8 @@ export class HookRegistryImplementation implements HookRegistry {
    * @param callback - The callback function to invoke when the event occurs
    * @returns Cleanup function that removes the callback when invoked
    */
-  addCallback<T extends HookEvent>(eventType: HookEventConstructor<T>, callback: HookCallback<T>): HookCleanup {
-    const entry: CallbackEntry = { callback: callback as HookCallback<HookEvent>, source: this._currentProvider }
+  addCallback<T extends HookableEvent>(eventType: HookableEventConstructor<T>, callback: HookCallback<T>): HookCleanup {
+    const entry: CallbackEntry = { callback: callback as HookCallback<HookableEvent>, source: this._currentProvider }
     const callbacks = this._callbacks.get(eventType) ?? []
     callbacks.push(entry)
     this._callbacks.set(eventType, callbacks)
@@ -127,7 +127,7 @@ export class HookRegistryImplementation implements HookRegistry {
    * @param event - The event to invoke callbacks for
    * @returns The event after all callbacks have been invoked
    */
-  async invokeCallbacks<T extends HookEvent>(event: T): Promise<T> {
+  async invokeCallbacks<T extends HookableEvent>(event: T): Promise<T> {
     const callbacks = this.getCallbacksFor(event)
     for (const callback of callbacks) {
       await callback(event)
@@ -142,8 +142,8 @@ export class HookRegistryImplementation implements HookRegistry {
    * @param event - The event to get callbacks for
    * @returns Array of callbacks for the event
    */
-  private getCallbacksFor<T extends HookEvent>(event: T): HookCallback<T>[] {
-    const entries = this._callbacks.get(event.constructor as HookEventConstructor<T>) ?? []
+  private getCallbacksFor<T extends HookableEvent>(event: T): HookCallback<T>[] {
+    const entries = this._callbacks.get(event.constructor as HookableEventConstructor<T>) ?? []
     const callbacks = entries.map((entry) => entry.callback)
     return (event._shouldReverseCallbacks() ? [...callbacks].reverse() : callbacks) as HookCallback<T>[]
   }

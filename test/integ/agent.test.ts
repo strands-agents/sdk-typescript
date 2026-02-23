@@ -87,16 +87,22 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel, mode
         // Test streaming with event collection
         const { items, result } = await collectGenerator(agent.stream('Say hello'))
 
-        // Verify metadata event is yielded through the agent
-        const metadataEvent = items.find((item) => item.type === 'modelMetadataEvent')
-        expect(metadataEvent).toBeDefined()
-        expect(metadataEvent?.usage).toBeDefined()
-        expect(metadataEvent?.usage?.inputTokens).toBeGreaterThan(0)
-        expect(metadataEvent?.usage?.outputTokens).toBeGreaterThan(0)
+        // Verify metadata event is yielded through the agent (wrapped in ModelStreamUpdateEvent)
+        const updateEvent = items.find(
+          (item) => item.type === 'modelStreamUpdateEvent' && item.event.type === 'modelMetadataEvent'
+        )
+        expect(updateEvent).toBeDefined()
+        if (updateEvent?.type !== 'modelStreamUpdateEvent' || updateEvent.event.type !== 'modelMetadataEvent') {
+          throw new Error('Expected modelStreamUpdateEvent wrapping modelMetadataEvent')
+        }
+        const metadataEvent = updateEvent.event
+        expect(metadataEvent.usage).toBeDefined()
+        expect(metadataEvent.usage?.inputTokens).toBeGreaterThan(0)
+        expect(metadataEvent.usage?.outputTokens).toBeGreaterThan(0)
 
         // Bedrock includes latencyMs in metrics, OpenAI does not
         if (name === 'BedrockModel') {
-          expect(metadataEvent?.metrics?.latencyMs).toBeGreaterThan(0)
+          expect(metadataEvent.metrics?.latencyMs).toBeGreaterThan(0)
         }
 
         // Verify result structure
@@ -347,7 +353,9 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel, mode
       // Should have reasoning content deltas
       const reasoningDeltas = items.filter(
         (item) =>
-          item.type === 'modelContentBlockDeltaEvent' && 'delta' in item && item.delta.type === 'reasoningContentDelta'
+          item.type === 'modelStreamUpdateEvent' &&
+          item.event.type === 'modelContentBlockDeltaEvent' &&
+          item.event.delta.type === 'reasoningContentDelta'
       )
       expect(reasoningDeltas.length).toBeGreaterThan(0)
 
@@ -371,7 +379,9 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel, mode
       // Should have reasoning content deltas
       const reasoningDeltas = items.filter(
         (item) =>
-          item.type === 'modelContentBlockDeltaEvent' && 'delta' in item && item.delta.type === 'reasoningContentDelta'
+          item.type === 'modelStreamUpdateEvent' &&
+          item.event.type === 'modelContentBlockDeltaEvent' &&
+          item.event.delta.type === 'reasoningContentDelta'
       )
       expect(reasoningDeltas.length).toBeGreaterThan(0)
 

@@ -391,7 +391,7 @@ const events = await collectIterator(agent.stream('Hi'))
 ### Hook Fixtures (`mock-hook-provider.ts`)
 
 - **`MockHookProvider`** - Records all hook invocations for verification. Pass to `Agent({ hooks: [provider] })`.
-  - Use `{ includeModelEvents: false }` to exclude `ModelStreamEventHook` from recordings.
+  - Use `{ includeModelEvents: false }` to exclude model streaming and result events from recordings.
   - Access `provider.invocations` to verify hook events fired.
 
 ```typescript
