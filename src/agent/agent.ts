@@ -20,7 +20,8 @@ import {
 } from '../index.js'
 import { systemPromptFromData } from '../types/messages.js'
 import { normalizeError, ConcurrentInvocationError } from '../errors.js'
-import type { BaseModelConfig, Model, StreamOptions } from '../models/model.js'
+import { Model } from '../models/model.js'
+import type { BaseModelConfig, StreamOptions } from '../models/model.js'
 import { ToolRegistry } from '../registry/tool-registry.js'
 import { AgentState } from './state.js'
 import type { AgentData } from '../types/agent.js'
@@ -43,8 +44,7 @@ import {
   ModelStreamEventHook,
 } from '../hooks/events.js'
 import { Tracer } from '../telemetry/tracer.js'
-import { createEmptyUsage, accumulateUsage, type Usage } from '../models/streaming.js'
-import { getModelId } from '../models/model.js'
+import type { Usage } from '../models/streaming.js'
 import type { AttributeValue } from '@opentelemetry/api'
 
 /**
@@ -120,8 +120,7 @@ export type AgentConfig = {
    */
   name?: string
   /**
-   * Optional unique identifier for the agent.
-   * If not provided, a random identifier will be generated.
+   * Optional unique identifier for the agent. Defaults to "default".
    */
   agentId?: string
 }
@@ -139,12 +138,8 @@ export type InvokeArgs = string | ContentBlock[] | ContentBlockData[] | Message[
 /** Fallback name used when no agent name is provided in the config. */
 const DEFAULT_AGENT_NAME = 'Strands Agent'
 
-/**
- * Generates a random agent ID.
- */
-function generateAgentId(): string {
-  return `agent-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
-}
+/** Fallback agent ID used when no agent ID is provided in the config. */
+const DEFAULT_AGENT_ID = 'default'
 
 /**
  * Orchestrates the interaction between a model, a set of tools, and MCP clients.
@@ -199,7 +194,7 @@ export class Agent implements AgentData {
   /** Tracer instance for creating and managing OpenTelemetry spans. */
   private _tracer: Tracer
   /** Running total of token usage across all model invocations in the current invocation. */
-  private _accumulatedTokenUsage: Usage = createEmptyUsage()
+  private _accumulatedTokenUsage: Usage = Model.createEmptyUsage()
 
   /**
    * Creates an instance of the Agent.
@@ -211,7 +206,7 @@ export class Agent implements AgentData {
     this.state = new AgentState(config?.state)
     this.conversationManager = config?.conversationManager ?? new SlidingWindowConversationManager({ windowSize: 40 })
     this.name = config?.name ?? DEFAULT_AGENT_NAME
-    this.agentId = config?.agentId ?? generateAgentId()
+    this.agentId = config?.agentId ?? DEFAULT_AGENT_ID
 
     // Initialize hooks and register conversation manager hooks
     this.hooks = new HookRegistryImplementation()
@@ -394,8 +389,8 @@ export class Agent implements AgentData {
     const inputMessages = this._normalizeInput(args)
 
     // Start agent trace span
-    this._accumulatedTokenUsage = createEmptyUsage()
-    const agentModelId = getModelId(this.model)
+    this._accumulatedTokenUsage = Model.createEmptyUsage()
+    const agentModelId = this.model.modelId
     const agentSpanOptions: Parameters<Tracer['startAgentSpan']>[0] = {
       messages: inputMessages,
       agentName: this.name,
@@ -562,7 +557,7 @@ export class Agent implements AgentData {
     yield new BeforeModelCallEvent({ agent: this })
 
     // Start model span within loop span context
-    const modelId = getModelId(this.model)
+    const modelId = this.model.modelId
     const modelSpan = this._tracer.startModelInvokeSpan({
       messages: this.messages,
       ...(modelId && { modelId }),
@@ -573,7 +568,7 @@ export class Agent implements AgentData {
 
       // Accumulate token usage
       if (usage) {
-        accumulateUsage(this._accumulatedTokenUsage, usage)
+        Model.accumulateUsage(this._accumulatedTokenUsage, usage)
       }
 
       // End model span with usage

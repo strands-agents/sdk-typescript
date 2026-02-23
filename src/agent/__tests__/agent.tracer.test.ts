@@ -68,10 +68,10 @@ describe('Agent tracer integration', () => {
       expect(agent.name).toBe('My Agent')
     })
 
-    it('generates agentId when not provided', () => {
+    it('defaults agentId to "default"', () => {
       const agent = new Agent()
 
-      expect(agent.agentId).toMatch(/^agent-\d+-[a-z0-9]+$/)
+      expect(agent.agentId).toBe('default')
     })
 
     it('uses provided agentId', () => {
