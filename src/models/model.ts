@@ -17,6 +17,7 @@ import {
   ModelMessageStopEvent,
   ModelMetadataEvent,
   type ModelStreamEvent,
+  type Usage,
 } from './streaming.js'
 import { MaxTokensError, ModelError, normalizeError } from '../errors.js'
 
@@ -122,6 +123,44 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
    * @returns The current configuration object
    */
   abstract getConfig(): T
+
+  /**
+   * The model ID from the current configuration, if configured.
+   */
+  get modelId(): string | undefined {
+    return this.getConfig().modelId
+  }
+
+  /**
+   * Creates an empty Usage object with all counters set to zero.
+   *
+   * @returns A Usage object with zeroed counters
+   */
+  static createEmptyUsage(): Usage {
+    return {
+      inputTokens: 0,
+      outputTokens: 0,
+      totalTokens: 0,
+    }
+  }
+
+  /**
+   * Accumulates token usage from a source into a target Usage object.
+   *
+   * @param target - The Usage object to accumulate into (mutated in place)
+   * @param source - The Usage object to accumulate from
+   */
+  static accumulateUsage(target: Usage, source: Usage): void {
+    target.inputTokens += source.inputTokens
+    target.outputTokens += source.outputTokens
+    target.totalTokens += source.totalTokens
+    if (source.cacheReadInputTokens !== undefined) {
+      target.cacheReadInputTokens = (target.cacheReadInputTokens ?? 0) + source.cacheReadInputTokens
+    }
+    if (source.cacheWriteInputTokens !== undefined) {
+      target.cacheWriteInputTokens = (target.cacheWriteInputTokens ?? 0) + source.cacheWriteInputTokens
+    }
+  }
 
   /**
    * Streams a conversation with the model.

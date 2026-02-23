@@ -4,7 +4,7 @@ import { TestModelProvider, collectGenerator } from '../../__fixtures__/model-te
 import { MaxTokensError, ModelError } from '../../errors.js'
 import { Model } from '../model.js'
 import type { BaseModelConfig, StreamOptions } from '../model.js'
-import type { ModelStreamEvent } from '../streaming.js'
+import type { ModelStreamEvent, Usage } from '../streaming.js'
 
 /**
  * Test model provider that throws an error from stream().
@@ -628,5 +628,115 @@ describe('Model', () => {
         }
       })
     })
+  })
+})
+
+describe('Model.modelId', () => {
+  it('returns modelId from model config', () => {
+    const provider = new TestModelProvider()
+    provider.updateConfig({ modelId: 'my-model' })
+
+    expect(provider.modelId).toBe('my-model')
+  })
+})
+
+describe('Model.createEmptyUsage', () => {
+  it('returns a Usage object with all counters at zero', () => {
+    expect(Model.createEmptyUsage()).toStrictEqual({
+      inputTokens: 0,
+      outputTokens: 0,
+      totalTokens: 0,
+    })
+  })
+
+  it('returns independent instances', () => {
+    const a = Model.createEmptyUsage()
+    const b = Model.createEmptyUsage()
+    a.inputTokens = 99
+
+    expect(b.inputTokens).toBe(0)
+  })
+})
+
+describe('Model.accumulateUsage', () => {
+  it('accumulates basic token counts', () => {
+    const target = Model.createEmptyUsage()
+    const source: Usage = { inputTokens: 10, outputTokens: 5, totalTokens: 15 }
+
+    Model.accumulateUsage(target, source)
+
+    expect(target).toStrictEqual({
+      inputTokens: 10,
+      outputTokens: 5,
+      totalTokens: 15,
+    })
+  })
+
+  it('accumulates across multiple calls', () => {
+    const target = Model.createEmptyUsage()
+
+    Model.accumulateUsage(target, { inputTokens: 10, outputTokens: 5, totalTokens: 15 })
+    Model.accumulateUsage(target, { inputTokens: 20, outputTokens: 10, totalTokens: 30 })
+
+    expect(target).toStrictEqual({
+      inputTokens: 30,
+      outputTokens: 15,
+      totalTokens: 45,
+    })
+  })
+
+  it('accumulates cache token counts when present in source', () => {
+    const target = Model.createEmptyUsage()
+    const source: Usage = {
+      inputTokens: 10,
+      outputTokens: 5,
+      totalTokens: 15,
+      cacheReadInputTokens: 3,
+      cacheWriteInputTokens: 2,
+    }
+
+    Model.accumulateUsage(target, source)
+
+    expect(target).toStrictEqual({
+      inputTokens: 10,
+      outputTokens: 5,
+      totalTokens: 15,
+      cacheReadInputTokens: 3,
+      cacheWriteInputTokens: 2,
+    })
+  })
+
+  it('accumulates cache tokens across multiple calls', () => {
+    const target = Model.createEmptyUsage()
+
+    Model.accumulateUsage(target, {
+      inputTokens: 10,
+      outputTokens: 5,
+      totalTokens: 15,
+      cacheReadInputTokens: 3,
+    })
+    Model.accumulateUsage(target, {
+      inputTokens: 5,
+      outputTokens: 2,
+      totalTokens: 7,
+      cacheReadInputTokens: 4,
+    })
+
+    expect(target).toStrictEqual({
+      inputTokens: 15,
+      outputTokens: 7,
+      totalTokens: 22,
+      cacheReadInputTokens: 7,
+    })
+  })
+
+  it('does not add cache fields when source has no cache tokens', () => {
+    const target = Model.createEmptyUsage()
+    const source: Usage = { inputTokens: 10, outputTokens: 5, totalTokens: 15 }
+
+    Model.accumulateUsage(target, source)
+
+    expect(target).not.toHaveProperty('cacheReadInputTokens')
+    expect(target).not.toHaveProperty('cacheWriteInputTokens')
   })
 })

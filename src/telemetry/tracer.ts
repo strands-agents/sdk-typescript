@@ -95,6 +95,12 @@ export class Tracer {
    */
   private readonly _traceAttributes: Record<string, AttributeValue>
 
+  /** Root span for the current agent invocation. */
+  private _agentSpan: Span | undefined
+
+  /** Span for the current agent loop cycle, used to parent model and tool spans. */
+  private _loopSpan: Span | undefined
+
   /**
    * Initialize the tracer with OpenTelemetry configuration.
    * Reads OTEL_SEMCONV_STABILITY_OPT_IN to determine convention version.
@@ -147,10 +153,11 @@ export class Tracer {
       }
 
       const mergedAttributes = { ...attributes, ...this._traceAttributes, ...traceAttributes }
-      const span = this._startSpan(spanName, mergedAttributes, SpanKind.INTERNAL)
+      const span = this._startSpan({ name: spanName, attributes: mergedAttributes, spanKind: SpanKind.INTERNAL })
 
       this._addEventMessages(span, messages)
 
+      this._agentSpan = span
       return span
     } catch (error) {
       logger.warn(`error=<${error}> | failed to start agent span`)
@@ -175,6 +182,7 @@ export class Tracer {
       if (response !== undefined) this._addResponseEvent(span, response, stopReason)
 
       this._endSpan(span, attributes, error)
+      this._agentSpan = undefined
     } catch (err) {
       logger.warn(`error=<${err}> | failed to end agent span`)
     }
@@ -193,7 +201,12 @@ export class Tracer {
       const attributes = this._getCommonAttributes('chat')
       if (modelId) attributes['gen_ai.request.model'] = modelId
 
-      const span = this._startSpan('chat', attributes, SpanKind.INTERNAL)
+      const span = this._startSpan({
+        name: 'chat',
+        attributes,
+        spanKind: SpanKind.INTERNAL,
+        ...(this._loopSpan && { parentSpan: this._loopSpan }),
+      })
       this._addEventMessages(span, messages)
 
       return span
@@ -243,7 +256,12 @@ export class Tracer {
       attributes['gen_ai.tool.name'] = tool.name
       attributes['gen_ai.tool.call.id'] = tool.toolUseId
 
-      const span = this._startSpan(`execute_tool ${tool.name}`, attributes, SpanKind.INTERNAL)
+      const span = this._startSpan({
+        name: `execute_tool ${tool.name}`,
+        attributes,
+        spanKind: SpanKind.INTERNAL,
+        ...(this._loopSpan && { parentSpan: this._loopSpan }),
+      })
 
       if (this._useLatestConventions) {
         this._addEvent(span, 'gen_ai.client.inference.operation.details', {
@@ -327,8 +345,13 @@ export class Tracer {
 
     try {
       const attributes: Record<string, AttributeValue> = { 'agent_loop.cycle_id': cycleId }
-      const span = this._startSpan('execute_agent_loop_cycle', attributes)
+      const span = this._startSpan({
+        name: 'execute_agent_loop_cycle',
+        attributes,
+        ...(this._agentSpan && { parentSpan: this._agentSpan }),
+      })
       this._addEventMessages(span, messages)
+      this._loopSpan = span
       return span
     } catch (error) {
       logger.warn(`error=<${error}> | failed to start agent loop cycle span`)
@@ -346,6 +369,7 @@ export class Tracer {
     if (!span) return
     try {
       this._endSpan(span, {}, options.error)
+      this._loopSpan = undefined
     } catch (err) {
       logger.warn(`error=<${err}> | failed to end agent loop cycle span`)
     }
@@ -354,20 +378,26 @@ export class Tracer {
   /**
    * Create a span parented to the current active context.
    */
-  private _startSpan(spanName: string, attributes?: Record<string, AttributeValue>, spanKind?: SpanKind): Span {
-    const options: SpanOptions = {}
+  private _startSpan(options: {
+    name: string
+    attributes?: Record<string, AttributeValue>
+    spanKind?: SpanKind
+    parentSpan?: Span
+  }): Span {
+    const spanOptions: SpanOptions = {}
 
-    if (attributes) {
+    if (options.attributes) {
       const otelAttributes: Record<string, AttributeValue | undefined> = {}
-      for (const [key, value] of Object.entries(attributes)) {
+      for (const [key, value] of Object.entries(options.attributes)) {
         if (value !== undefined && value !== null) otelAttributes[key] = value
       }
-      options.attributes = otelAttributes
+      spanOptions.attributes = otelAttributes
     }
 
-    if (spanKind !== undefined) options.kind = spanKind
+    if (options.spanKind !== undefined) spanOptions.kind = options.spanKind
 
-    const span = this._tracer.startSpan(spanName, options, context.active())
+    const ctx = options.parentSpan ? trace.setSpan(context.active(), options.parentSpan) : context.active()
+    const span = this._tracer.startSpan(options.name, spanOptions, ctx)
 
     try {
       span.setAttribute('gen_ai.event.start_time', new Date().toISOString())
