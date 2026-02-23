@@ -5,6 +5,14 @@ import tsdoc from 'eslint-plugin-tsdoc'
 
 export default [
   eslint.configs.recommended,
+  {
+    rules: {
+      // Disabled: TypeScript compiler catches all redeclaration cases and
+      // understands value/type namespace merging (e.g., const + type with
+      // same name). See https://typescript-eslint.io/rules/no-redeclare/
+      'no-redeclare': 'off',
+    },
+  },
   // Apply SDK rules to src files
   sdkRules({
     files: ['src/**/*.ts'],
