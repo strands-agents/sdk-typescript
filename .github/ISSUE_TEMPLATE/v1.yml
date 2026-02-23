@@ -1,0 +1,31 @@
+name: V1 Release
+description: Item associated with the release of Strands TypeScript SDK V1.
+labels:
+- milestone:v1
+projects: strands-agents/17
+title: "[V1] <COMPONENT> - <SUBCOMPONENT> - <DESCRIPTION>"
+type: Feature
+body:
+- type: textarea
+  attributes:
+    label: Summary
+    description: Summary of the feature.
+  validations:
+    required: true
+- type: textarea
+  attributes:
+    label: Usage
+    description: Usage examples.
+- type: input
+  attributes:
+    label: Documentation
+    description: Link to feature page in Strands documentation.
+  validations:
+    required: true
+- type: input
+  attributes:
+    label: Reference
+    description: Link to feature code in Python SDK.
+  validations:
+    required: true
+    

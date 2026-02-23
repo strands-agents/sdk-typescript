@@ -1,0 +1,126 @@
+import type { AgentState } from '../agent/state.js'
+import type { Message, StopReason } from './messages.js'
+import type {
+  BeforeInvocationEvent,
+  AfterInvocationEvent,
+  BeforeModelCallEvent,
+  AfterModelCallEvent,
+  BeforeToolsEvent,
+  AfterToolsEvent,
+  BeforeToolCallEvent,
+  AfterToolCallEvent,
+  MessageAddedEvent,
+  ModelStreamUpdateEvent,
+  ContentBlockEvent,
+  ModelMessageEvent,
+  ToolResultEvent,
+  ToolStreamUpdateEvent,
+  AgentResultEvent,
+} from '../hooks/events.js'
+import type { z } from 'zod'
+
+/**
+ * Interface for objects that provide agent state.
+ * Allows ToolContext to work with different agent types.
+ */
+export interface AgentData {
+  /**
+   * Agent state storage accessible to tools and application logic.
+   */
+  state: AgentState
+
+  /**
+   * The conversation history of messages between user and assistant.
+   */
+  messages: Message[]
+}
+
+/**
+ * Result returned by the agent loop.
+ */
+export class AgentResult {
+  readonly type = 'agentResult' as const
+
+  /**
+   * The stop reason from the final model response.
+   */
+  readonly stopReason: StopReason
+
+  /**
+   * The last message added to the messages array.
+   */
+  readonly lastMessage: Message
+
+  /**
+   * The validated structured output from the LLM, if a schema was provided.
+   * Type represents any validated Zod schema output.
+   */
+  readonly structuredOutput?: z.output<z.ZodType>
+
+  constructor(data: { stopReason: StopReason; lastMessage: Message; structuredOutput?: z.output<z.ZodType> }) {
+    this.stopReason = data.stopReason
+    this.lastMessage = data.lastMessage
+    if (data.structuredOutput !== undefined) {
+      this.structuredOutput = data.structuredOutput
+    }
+  }
+
+  /**
+   * Extracts and concatenates all text content from the last message.
+   * Includes text from TextBlock and ReasoningBlock content blocks.
+   *
+   * @returns The agent's last message as a string, with multiple blocks joined by newlines.
+   */
+  public toString(): string {
+    const textParts: string[] = []
+
+    for (const block of this.lastMessage.content) {
+      switch (block.type) {
+        case 'textBlock':
+          textParts.push(block.text)
+          break
+        case 'reasoningBlock':
+          if (block.text) {
+            // Add indentation to reasoning content
+            const indentedText = block.text.replace(/\n/g, '\n   ')
+            textParts.push(`💭 Reasoning:\n   ${indentedText}`)
+          }
+          break
+        default:
+          console.debug(`Skipping content block type: ${block.type}`)
+          break
+      }
+    }
+
+    return textParts.join('\n')
+  }
+}
+
+/**
+ * Union type representing all possible streaming events from an agent.
+ * This includes model events, tool events, and agent-specific lifecycle events.
+ *
+ * This is a discriminated union where each event has a unique type field,
+ * allowing for type-safe event handling using switch statements.
+ *
+ * Every member extends {@link HookableEvent} (which extends {@link StreamEvent}),
+ * making all events both streamable and subscribable via hook callbacks.
+ * Raw data objects from lower layers (model, tools) should be wrapped
+ * in a StreamEvent subclass at the agent boundary rather than added directly.
+ */
+export type AgentStreamEvent =
+  | ModelStreamUpdateEvent
+  | ContentBlockEvent
+  | ModelMessageEvent
+  | ToolStreamUpdateEvent
+  | ToolResultEvent
+  | BeforeInvocationEvent
+  | AfterInvocationEvent
+  | BeforeModelCallEvent
+  | AfterModelCallEvent
+  | BeforeToolsEvent
+  | AfterToolsEvent
+  | BeforeToolCallEvent
+  | AfterToolCallEvent
+  | MessageAddedEvent
+  | AgentResultEvent

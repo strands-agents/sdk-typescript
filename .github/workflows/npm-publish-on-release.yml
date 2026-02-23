@@ -1,0 +1,82 @@
+name: Publish NPM Package
+
+on:
+  release:
+    types:
+      - published
+
+jobs:
+  call-code-quality:
+    uses: ./.github/workflows/code-quality.yml
+    permissions:
+      contents: read
+    with:
+      ref: ${{ github.event.release.target_commitish }}
+
+  call-test:
+    uses: ./.github/workflows/test.yml
+    permissions:
+      contents: read
+    with:
+      ref: ${{ github.event.release.target_commitish }}
+
+  publish:
+    name: Build and publish to NPM
+    needs:
+      - call-code-quality
+      - call-test
+    runs-on: ubuntu-latest
+
+    environment:
+      name: npm
+      url: https://www.npmjs.com/package/@strands-agents/sdk
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+    - uses: actions/checkout@v6
+      with:
+        persist-credentials: false
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v6
+      with:
+        node-version: '20'
+        registry-url: 'https://registry.npmjs.org'
+
+    - name: Update npm to latest
+      run: npm install -g npm@latest
+
+    - name: Extract version from tag
+      id: version
+      run: |
+        VERSION=${GITHUB_REF#refs/tags/v}
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Extracted version: $VERSION"
+
+    - name: Validate version
+      run: |
+        if [[ ${{ steps.version.outputs.version }} =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Valid version format"
+            exit 0
+        else
+            echo "Invalid version format"
+            exit 1
+        fi
+
+    - name: Update package.json version
+      run: |
+        npm version ${{ steps.version.outputs.version }} --no-git-tag-version
+
+    - name: Install dependencies and build
+      run: npm ci
+
+    - name: Store the distribution packages
+      uses: actions/upload-artifact@v6
+      with:
+        name: npm-package-distributions
+        path: .
+
+    - name: Publish to NPM
+      run: npm publish --access public
