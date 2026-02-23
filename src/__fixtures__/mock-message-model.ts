@@ -6,15 +6,21 @@
  */
 
 import { Model } from '../models/model.js'
-import type { Message, ContentBlock, StopReason } from '../types/messages.js'
+import type { Message, StopReason } from '../types/messages.js'
 import type { ModelStreamEvent } from '../models/streaming.js'
 import type { BaseModelConfig, StreamOptions } from '../models/model.js'
+import type { PlainContentBlock } from './slim-types.js'
+
+/**
+ * Input type for addTurn - accepts plain objects or class instances.
+ */
+type ContentBlockInput = PlainContentBlock | PlainContentBlock[] | Error
 
 /**
  * Represents a single turn in the test sequence.
  * Can be either content blocks with stopReason, or an Error to throw.
  */
-type Turn = { type: 'content'; content: ContentBlock[]; stopReason: StopReason } | { type: 'error'; error: Error }
+type Turn = { type: 'content'; content: PlainContentBlock[]; stopReason: StopReason } | { type: 'error'; error: Error }
 
 /**
  * Test model provider that operates at the content block level.
@@ -60,7 +66,7 @@ export class MockMessageModel extends Model<BaseModelConfig> {
    *   .addTurn(new Error('Failed'))  // Error turn
    * ```
    */
-  addTurn(turn: ContentBlock | ContentBlock[] | Error, stopReason?: StopReason): this {
+  addTurn(turn: ContentBlockInput, stopReason?: StopReason): this {
     this._turns.push(this._createTurn(turn, stopReason))
     return this
   }
@@ -127,7 +133,7 @@ export class MockMessageModel extends Model<BaseModelConfig> {
    * All messages have role 'assistant' since this is for testing model responses.
    */
   private async *_generateEventsForContent(
-    content: ContentBlock[],
+    content: PlainContentBlock[],
     stopReason: StopReason
   ): AsyncGenerator<ModelStreamEvent> {
     // Yield message start event (always assistant role)
@@ -146,7 +152,7 @@ export class MockMessageModel extends Model<BaseModelConfig> {
   /**
    * Creates a Turn object from ContentBlock(s) or Error.
    */
-  private _createTurn(turn: ContentBlock | ContentBlock[] | Error, explicitStopReason?: StopReason): Turn {
+  private _createTurn(turn: ContentBlockInput, explicitStopReason?: StopReason): Turn {
     if (turn instanceof Error) {
       return { type: 'error', error: turn }
     }
@@ -165,7 +171,7 @@ export class MockMessageModel extends Model<BaseModelConfig> {
    * Auto-derives stopReason from content blocks.
    * Returns 'toolUse' if content contains any ToolUseBlock, otherwise 'endTurn'.
    */
-  private _deriveStopReason(content: ContentBlock[]): StopReason {
+  private _deriveStopReason(content: PlainContentBlock[]): StopReason {
     const hasToolUse = content.some((block) => block.type === 'toolUseBlock')
     return hasToolUse ? 'toolUse' : 'endTurn'
   }
@@ -190,7 +196,7 @@ export class MockMessageModel extends Model<BaseModelConfig> {
   /**
    * Generates appropriate ModelStreamEvents for a content block.
    */
-  private async *_generateEventsForBlock(block: ContentBlock): AsyncGenerator<ModelStreamEvent> {
+  private async *_generateEventsForBlock(block: PlainContentBlock): AsyncGenerator<ModelStreamEvent> {
     switch (block.type) {
       case 'textBlock':
         yield { type: 'modelContentBlockStartEvent' }
@@ -260,13 +266,14 @@ export class MockMessageModel extends Model<BaseModelConfig> {
       case 'imageBlock':
       case 'videoBlock':
       case 'documentBlock':
+      case 'jsonBlock':
         // These blocks don't generate events in mock - just skip them
         break
 
       default: {
         // Exhaustive check
         const _exhaustive: never = block
-        throw new Error(`Unknown content block type: ${(_exhaustive as ContentBlock).type}`)
+        throw new Error(`Unknown content block type: ${(_exhaustive as PlainContentBlock).type}`)
       }
     }
   }

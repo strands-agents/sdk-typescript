@@ -4,7 +4,7 @@ import { Agent } from '../agent.js'
 import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
 import { collectGenerator } from '../../__fixtures__/model-test-helpers.js'
 import { createMockTool } from '../../__fixtures__/tool-helpers.js'
-import { TextBlock } from '../../types/messages.js'
+import { TextBlock, ToolResultBlock } from '../../types/messages.js'
 
 describe('AgentPrinter', () => {
   describe('end-to-end scenarios', () => {
@@ -85,12 +85,15 @@ describe('AgentPrinter', () => {
         .addTurn({ type: 'toolUseBlock', name: 'calc', toolUseId: 'tool-1', input: {} })
         .addTurn({ type: 'textBlock', text: 'Result: 4' })
 
-      const tool = createMockTool('calc', () => ({
-        type: 'toolResultBlock',
-        toolUseId: 'tool-1',
-        status: 'success' as const,
-        content: [new TextBlock('4')],
-      }))
+      const tool = createMockTool(
+        'calc',
+        () =>
+          new ToolResultBlock({
+            toolUseId: 'tool-1',
+            status: 'success' as const,
+            content: [new TextBlock('4')],
+          })
+      )
 
       const outputs: string[] = []
       const mockAppender = (text: string) => outputs.push(text)
@@ -109,12 +112,15 @@ describe('AgentPrinter', () => {
         .addTurn({ type: 'toolUseBlock', name: 'bad_tool', toolUseId: 'tool-1', input: {} })
         .addTurn({ type: 'textBlock', text: 'Error handled' })
 
-      const tool = createMockTool('bad_tool', () => ({
-        type: 'toolResultBlock',
-        toolUseId: 'tool-1',
-        status: 'error' as const,
-        content: [new TextBlock('Failed')],
-      }))
+      const tool = createMockTool(
+        'bad_tool',
+        () =>
+          new ToolResultBlock({
+            toolUseId: 'tool-1',
+            status: 'error' as const,
+            content: [new TextBlock('Failed')],
+          })
+      )
 
       const outputs: string[] = []
       const mockAppender = (text: string) => outputs.push(text)
@@ -145,19 +151,25 @@ describe('AgentPrinter', () => {
           { type: 'reasoningBlock', text: 'Task completed successfully' },
         ])
 
-      const calcTool = createMockTool('calculator', () => ({
-        type: 'toolResultBlock',
-        toolUseId: 'tool-1',
-        status: 'success' as const,
-        content: [new TextBlock('4')],
-      }))
+      const calcTool = createMockTool(
+        'calculator',
+        () =>
+          new ToolResultBlock({
+            toolUseId: 'tool-1',
+            status: 'success' as const,
+            content: [new TextBlock('4')],
+          })
+      )
 
-      const validatorTool = createMockTool('validator', () => ({
-        type: 'toolResultBlock',
-        toolUseId: 'tool-2',
-        status: 'error' as const,
-        content: [new TextBlock('Validation failed')],
-      }))
+      const validatorTool = createMockTool(
+        'validator',
+        () =>
+          new ToolResultBlock({
+            toolUseId: 'tool-2',
+            status: 'error' as const,
+            content: [new TextBlock('Validation failed')],
+          })
+      )
 
       const outputs: string[] = []
       const mockAppender = (text: string) => outputs.push(text)

@@ -4,6 +4,7 @@ import type { ToolSpec } from './types.js'
 import type { JSONSchema, JSONValue } from '../types/json.js'
 import { FunctionTool } from './function-tool.js'
 import { z, ZodVoid } from 'zod'
+import { zodSchemaToJsonSchema } from '../utils/zod.js'
 
 /**
  * Helper type to infer input type from Zod schema or default to never.
@@ -87,11 +88,7 @@ class ZodTool<TInput extends z.ZodType | undefined, TReturn extends JSONValue = 
         additionalProperties: false,
       }
     } else {
-      // Generate JSON Schema from Zod and strip $schema property to reduce token usage
-      const schema = z.toJSONSchema(this._inputSchema) as JSONSchema & { $schema?: string }
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { $schema, ...schemaWithoutMeta } = schema
-      generatedSchema = schemaWithoutMeta as JSONSchema
+      generatedSchema = zodSchemaToJsonSchema(this._inputSchema)
     }
 
     // Create a FunctionTool with a validation wrapper

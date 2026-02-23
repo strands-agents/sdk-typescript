@@ -322,4 +322,26 @@ describe('AgentState', () => {
       expect(keys1).not.toBe(keys2)
     })
   })
+
+  describe('toJSON', () => {
+    it('returns deep copy of state', () => {
+      const state = new AgentState({ key1: 'value1', nested: { deep: true } })
+      const json = state.toJSON()
+      expect(json).toEqual({ key1: 'value1', nested: { deep: true } })
+    })
+  })
+
+  describe('loadStateFromJson', () => {
+    it('replaces state with json data', () => {
+      const state = new AgentState({ old: 'data' })
+      state.loadStateFromJson({ new: 'data', count: 42 })
+      expect(state.getAll()).toEqual({ new: 'data', count: 42 })
+    })
+
+    it('clears state when given non-object', () => {
+      const state = new AgentState({ key: 'value' })
+      state.loadStateFromJson(null)
+      expect(state.getAll()).toEqual({})
+    })
+  })
 })

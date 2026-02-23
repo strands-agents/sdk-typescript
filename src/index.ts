@@ -176,3 +176,6 @@ export type { Logger } from './logging/types.js'
 
 // MCP Client types and implementations
 export { type McpClientConfig, McpClient } from './mcp.js'
+
+// Structured output
+export { StructuredOutputException } from './structured-output/exceptions.js'

@@ -15,6 +15,7 @@ import type {
   MessageAddedEvent,
   ModelStreamEventHook,
 } from '../hooks/events.js'
+import type { z } from 'zod'
 
 /**
  * Interface for objects that provide agent state.
@@ -48,9 +49,18 @@ export class AgentResult {
    */
   readonly lastMessage: Message
 
-  constructor(data: { stopReason: StopReason; lastMessage: Message }) {
+  /**
+   * The validated structured output from the LLM, if a schema was provided.
+   * Type represents any validated Zod schema output.
+   */
+  readonly structuredOutput?: z.output<z.ZodType>
+
+  constructor(data: { stopReason: StopReason; lastMessage: Message; structuredOutput?: z.output<z.ZodType> }) {
     this.stopReason = data.stopReason
     this.lastMessage = data.lastMessage
+    if (data.structuredOutput !== undefined) {
+      this.structuredOutput = data.structuredOutput
+    }
   }
 
   /**

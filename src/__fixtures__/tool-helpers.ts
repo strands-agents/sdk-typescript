@@ -7,6 +7,7 @@ import type { Tool, ToolContext } from '../tools/tool.js'
 import { ToolResultBlock } from '../types/messages.js'
 import type { JSONValue } from '../types/json.js'
 import { AgentState } from '../agent/state.js'
+import type { PlainToolResultBlock } from './slim-types.js'
 
 /**
  * Helper to create a mock ToolContext for testing.
@@ -29,16 +30,18 @@ export function createMockContext(
 }
 
 /**
+ * Result function type for createMockTool - accepts plain objects or class instances.
+ */
+type ToolResultFn = () => PlainToolResultBlock | AsyncGenerator<never, PlainToolResultBlock, never>
+
+/**
  * Helper to create a mock tool for testing.
  *
  * @param name - The name of the mock tool
- * @param resultFn - Function that returns a ToolResultBlock or an AsyncGenerator that yields nothing and returns a ToolResultBlock
+ * @param resultFn - Function that returns a ToolResultBlock (plain object or class instance) or an AsyncGenerator
  * @returns Mock Tool object
  */
-export function createMockTool(
-  name: string,
-  resultFn: () => ToolResultBlock | AsyncGenerator<never, ToolResultBlock, never>
-): Tool {
+export function createMockTool(name: string, resultFn: ToolResultFn): Tool {
   return {
     name,
     description: `Mock tool ${name}`,

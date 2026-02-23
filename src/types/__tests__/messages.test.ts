@@ -11,8 +11,9 @@ import {
   type MessageData,
   type SystemPromptData,
   systemPromptFromData,
+  systemPromptToData,
 } from '../messages.js'
-import { ImageBlock, VideoBlock, DocumentBlock } from '../media.js'
+import { ImageBlock, VideoBlock, DocumentBlock, encodeBase64 } from '../media.js'
 
 describe('Message', () => {
   test('creates message with role and content', () => {
@@ -60,14 +61,14 @@ describe('ToolResultBlock', () => {
     const block = new ToolResultBlock({
       toolUseId: '123',
       status: 'success',
-      content: [{ type: 'textBlock', text: 'result' }],
+      content: [new TextBlock('result')],
     })
 
     expect(block).toEqual({
       type: 'toolResultBlock',
       toolUseId: '123',
       status: 'success',
-      content: [{ type: 'textBlock', text: 'result' }],
+      content: [new TextBlock('result')],
     })
   })
 })
@@ -405,5 +406,214 @@ describe('systemPromptFromData', () => {
       const result = systemPromptFromData(systemPrompt)
       expect(result).toEqual(systemPrompt)
     })
+  })
+})
+
+describe('systemPromptToData', () => {
+  describe('when called with string', () => {
+    it('returns the string unchanged', () => {
+      const prompt = 'You are a helpful assistant'
+      const result = systemPromptToData(prompt)
+      expect(result).toBe('You are a helpful assistant')
+    })
+  })
+
+  describe('when called with TextBlock array', () => {
+    it('converts to TextBlockData array', () => {
+      const prompt = [new TextBlock('System prompt text')]
+      const result = systemPromptToData(prompt)
+      expect(result).toEqual([{ text: 'System prompt text' }])
+    })
+  })
+
+  describe('when called with CachePointBlock array', () => {
+    it('converts to CachePointBlockData array', () => {
+      const prompt = [new TextBlock('prompt'), new CachePointBlock({ cacheType: 'default' })]
+      const result = systemPromptToData(prompt)
+      expect(result).toEqual([{ text: 'prompt' }, { cachePoint: { cacheType: 'default' } }])
+    })
+  })
+
+  describe('when called with GuardContentBlock array', () => {
+    it('converts to GuardContentBlockData array', () => {
+      const prompt = [
+        new GuardContentBlock({
+          text: {
+            text: 'guard this content',
+            qualifiers: ['guard_content'],
+          },
+        }),
+      ]
+      const result = systemPromptToData(prompt)
+      expect(result).toEqual([
+        {
+          guardContent: {
+            text: {
+              text: 'guard this content',
+              qualifiers: ['guard_content'],
+            },
+          },
+        },
+      ])
+    })
+  })
+
+  describe('when called with mixed content blocks', () => {
+    it('converts all block types correctly', () => {
+      const prompt = [
+        new TextBlock('First text block'),
+        new CachePointBlock({ cacheType: 'default' }),
+        new TextBlock('Second text block'),
+        new GuardContentBlock({
+          text: {
+            text: 'guard content',
+            qualifiers: ['guard_content'],
+          },
+        }),
+      ]
+      const result = systemPromptToData(prompt)
+      expect(result).toEqual([
+        { text: 'First text block' },
+        { cachePoint: { cacheType: 'default' } },
+        { text: 'Second text block' },
+        {
+          guardContent: {
+            text: {
+              text: 'guard content',
+              qualifiers: ['guard_content'],
+            },
+          },
+        },
+      ])
+    })
+  })
+
+  describe('when called with empty array', () => {
+    it('returns empty array', () => {
+      const prompt: (TextBlock | CachePointBlock | GuardContentBlock)[] = []
+      const result = systemPromptToData(prompt)
+      expect(result).toEqual([])
+    })
+  })
+
+  describe('round-trip conversion', () => {
+    it('preserves data through toData/fromData cycle', () => {
+      const original = [new TextBlock('prompt text'), new CachePointBlock({ cacheType: 'default' })]
+      const data = systemPromptToData(original)
+      const restored = systemPromptFromData(data)
+      expect(restored).toEqual(original)
+    })
+
+    it('preserves string through toData/fromData cycle', () => {
+      const original = 'Simple string prompt'
+      const data = systemPromptToData(original)
+      const restored = systemPromptFromData(data)
+      expect(restored).toBe(original)
+    })
+  })
+})
+
+describe('toJSON/fromJSON round-trips', () => {
+  // prettier-ignore
+  const roundTripCases = [
+    ['TextBlock',                              () => new TextBlock('Hello world')],
+    ['ToolUseBlock without reasoningSignature',() => new ToolUseBlock({ name: 'test-tool', toolUseId: '123', input: { param: 'value' } })],
+    ['ToolUseBlock with reasoningSignature',   () => new ToolUseBlock({ name: 'test-tool', toolUseId: '123', input: { param: 'value' }, reasoningSignature: 'sig123' })],
+    ['ToolResultBlock with text content',      () => new ToolResultBlock({ toolUseId: '123', status: 'success', content: [new TextBlock('Result text')] })],
+    ['ToolResultBlock with json content',      () => new ToolResultBlock({ toolUseId: '456', status: 'success', content: [new JsonBlock({ json: { result: 'data' } })] })],
+    ['ToolResultBlock with error status',      () => new ToolResultBlock({ toolUseId: '789', status: 'error', content: [new TextBlock('Error message')] })],
+    ['ReasoningBlock with text only',          () => new ReasoningBlock({ text: 'Thinking...' })],
+    ['ReasoningBlock with signature',          () => new ReasoningBlock({ text: 'Thinking...', signature: 'sig123' })],
+    ['ReasoningBlock with redactedContent',    () => new ReasoningBlock({ redactedContent: new Uint8Array([1, 2, 3]) })],
+    ['CachePointBlock',                        () => new CachePointBlock({ cacheType: 'default' })],
+    ['JsonBlock',                              () => new JsonBlock({ json: { key: 'value', nested: { a: 1 } } })],
+    ['GuardContentBlock with text',            () => new GuardContentBlock({ text: { text: 'Guard this', qualifiers: ['guard_content'] } })],
+    ['GuardContentBlock with image',           () => new GuardContentBlock({ image: { format: 'png', source: { bytes: new Uint8Array([1, 2, 3]) } } })],
+    ['Message with text content',              () => new Message({ role: 'user', content: [new TextBlock('Hello')] })],
+    ['Message with multiple content blocks',   () => new Message({ role: 'assistant', content: [new TextBlock('Here is the result'), new ToolUseBlock({ name: 'test-tool', toolUseId: '123', input: { key: 'value' } })] })],
+    ['Message with image content',             () => new Message({ role: 'user', content: [new TextBlock('Check this image'), new ImageBlock({ format: 'png', source: { bytes: new Uint8Array([1, 2, 3]) } })] })],
+  ] as const
+
+  it.each(roundTripCases)('%s', (_name, createBlock) => {
+    const original = createBlock()
+    // Use duck-typing here
+    const BlockClass = original.constructor as unknown as { fromJSON(json: unknown): unknown }
+    const restored = BlockClass.fromJSON(original.toJSON())
+    expect(restored).toEqual(original)
+  })
+
+  it('Message works with JSON.stringify', () => {
+    const original = new Message({ role: 'user', content: [new TextBlock('Test')] })
+    const jsonString = JSON.stringify(original)
+    const restored = Message.fromJSON(JSON.parse(jsonString))
+    expect(restored).toEqual(original)
+  })
+})
+
+describe('fromJSON with serialized (base64 string) input', () => {
+  it('ReasoningBlock.fromJSON accepts base64 string for redactedContent', () => {
+    const originalBytes = new Uint8Array([1, 2, 3, 4, 5])
+    const base64String = encodeBase64(originalBytes)
+    const block = ReasoningBlock.fromJSON({
+      reasoning: { redactedContent: base64String },
+    })
+    expect(block.redactedContent).toEqual(originalBytes)
+  })
+
+  it('GuardContentBlock.fromJSON accepts base64 string for image bytes', () => {
+    const originalBytes = new Uint8Array([10, 20, 30])
+    const base64String = encodeBase64(originalBytes)
+    const block = GuardContentBlock.fromJSON({
+      guardContent: {
+        image: { format: 'png', source: { bytes: base64String } },
+      },
+    })
+    expect(block.image?.source.bytes).toEqual(originalBytes)
+  })
+})
+
+describe('toJSON format', () => {
+  it('TextBlock returns unwrapped format', () => {
+    const block = new TextBlock('Test')
+    expect(block.toJSON()).toStrictEqual({ text: 'Test' })
+  })
+
+  it('JsonBlock returns unwrapped format', () => {
+    const block = new JsonBlock({ json: { test: true } })
+    expect(block.toJSON()).toStrictEqual({ json: { test: true } })
+  })
+
+  it('ToolUseBlock omits undefined reasoningSignature', () => {
+    const block = new ToolUseBlock({ name: 'test-tool', toolUseId: '123', input: {} })
+    expect('reasoningSignature' in block.toJSON().toolUse).toBe(false)
+  })
+
+  it('ToolResultBlock does not serialize error field', () => {
+    const block = new ToolResultBlock({
+      toolUseId: '123',
+      status: 'error',
+      content: [new TextBlock('Error')],
+      error: new Error('Test error'),
+    })
+    expect('error' in block.toJSON().toolResult).toBe(false)
+  })
+
+  it('ReasoningBlock encodes redactedContent as base64', () => {
+    const block = new ReasoningBlock({ redactedContent: new Uint8Array([1, 2, 3]) })
+    expect(typeof block.toJSON().reasoning.redactedContent).toBe('string')
+  })
+
+  it('ReasoningBlock omits undefined fields', () => {
+    const block = new ReasoningBlock({ text: 'Test' })
+    const json = block.toJSON()
+    expect('signature' in json.reasoning).toBe(false)
+    expect('redactedContent' in json.reasoning).toBe(false)
+  })
+
+  it('GuardContentBlock encodes image bytes as base64', () => {
+    const block = new GuardContentBlock({
+      image: { format: 'jpeg', source: { bytes: new Uint8Array([1, 2, 3]) } },
+    })
+    expect(typeof block.toJSON().guardContent.image?.source.bytes).toBe('string')
   })
 })

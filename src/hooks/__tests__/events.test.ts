@@ -13,7 +13,7 @@ import {
   ModelStreamEventHook,
 } from '../events.js'
 import { Agent } from '../../agent/agent.js'
-import { Message, TextBlock, ToolResultBlock } from '../../types/messages.js'
+import { Message, TextBlock, ToolResultBlock, ToolUseBlock } from '../../types/messages.js'
 import { FunctionTool } from '../../tools/function-tool.js'
 
 describe('InitializedEvent', () => {
@@ -79,7 +79,7 @@ describe('AfterInvocationEvent', () => {
 describe('MessageAddedEvent', () => {
   it('creates instance with correct properties', () => {
     const agent = new Agent()
-    const message = new Message({ role: 'assistant', content: [{ type: 'textBlock', text: 'Hello' }] })
+    const message = new Message({ role: 'assistant', content: [new TextBlock('Hello')] })
     const event = new MessageAddedEvent({ agent, message })
 
     expect(event).toEqual({
@@ -288,7 +288,7 @@ describe('BeforeModelCallEvent', () => {
 describe('AfterModelCallEvent', () => {
   it('creates instance with correct properties on success', () => {
     const agent = new Agent()
-    const message = new Message({ role: 'assistant', content: [{ type: 'textBlock', text: 'Response' }] })
+    const message = new Message({ role: 'assistant', content: [new TextBlock('Response')] })
     const stopReason = 'endTurn'
     const response = { message, stopReason }
     const event = new AfterModelCallEvent({ agent, stopData: response })
@@ -391,12 +391,11 @@ describe('BeforeToolsEvent', () => {
     const message = new Message({
       role: 'assistant',
       content: [
-        {
-          type: 'toolUseBlock',
+        new ToolUseBlock({
           name: 'testTool',
           toolUseId: 'test-id',
           input: { arg: 'value' },
-        },
+        }),
       ],
     })
     const event = new BeforeToolsEvent({ agent, message })
@@ -426,12 +425,11 @@ describe('AfterToolsEvent', () => {
     const message = new Message({
       role: 'user',
       content: [
-        {
-          type: 'toolResultBlock',
+        new ToolResultBlock({
           toolUseId: 'test-id',
           status: 'success',
-          content: [{ type: 'textBlock', text: 'Result' }],
-        },
+          content: [new TextBlock('Result')],
+        }),
       ],
     })
     const event = new AfterToolsEvent({ agent, message })

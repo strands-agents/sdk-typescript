@@ -4,6 +4,8 @@ import {
   ImageBlock,
   VideoBlock,
   DocumentBlock,
+  encodeBase64,
+  decodeBase64,
   type ImageBlockData,
   type VideoBlockData,
   type DocumentBlockData,
@@ -277,5 +279,246 @@ describe('DocumentBlock', () => {
       source: {},
     } as DocumentBlockData
     expect(() => new DocumentBlock(data)).toThrow('Invalid document source')
+  })
+})
+
+describe('encodeBase64 and decodeBase64', () => {
+  it('round-trips empty array', () => {
+    const original = new Uint8Array([])
+    const encoded = encodeBase64(original)
+    const decoded = decodeBase64(encoded)
+    expect(decoded).toEqual(original)
+  })
+
+  it('round-trips single byte', () => {
+    const original = new Uint8Array([42])
+    const encoded = encodeBase64(original)
+    const decoded = decodeBase64(encoded)
+    expect(decoded).toEqual(original)
+  })
+
+  it('round-trips multi-byte array', () => {
+    const original = new Uint8Array([1, 2, 3, 255, 0, 128])
+    const encoded = encodeBase64(original)
+    const decoded = decodeBase64(encoded)
+    expect(decoded).toEqual(original)
+  })
+
+  it('round-trips large array', () => {
+    const original = new Uint8Array(1000)
+    for (let i = 0; i < original.length; i++) {
+      original[i] = i % 256
+    }
+    const encoded = encodeBase64(original)
+    const decoded = decodeBase64(encoded)
+    expect(decoded).toEqual(original)
+  })
+})
+
+describe('fromJSON with serialized (base64 string) input', () => {
+  it('ImageBlock.fromJSON accepts base64 string for bytes', () => {
+    const originalBytes = new Uint8Array([1, 2, 3, 4, 5])
+    const base64String = encodeBase64(originalBytes)
+    const block = ImageBlock.fromJSON({
+      image: { format: 'jpeg', source: { bytes: base64String } },
+    })
+    expect((block.source as { type: 'imageSourceBytes'; bytes: Uint8Array }).bytes).toEqual(originalBytes)
+  })
+
+  it('ImageBlock.fromJSON accepts Uint8Array for bytes', () => {
+    const originalBytes = new Uint8Array([1, 2, 3, 4, 5])
+    const block = ImageBlock.fromJSON({
+      image: { format: 'jpeg', source: { bytes: originalBytes } },
+    })
+    expect((block.source as { type: 'imageSourceBytes'; bytes: Uint8Array }).bytes).toEqual(originalBytes)
+  })
+
+  it('VideoBlock.fromJSON accepts base64 string for bytes', () => {
+    const originalBytes = new Uint8Array([10, 20, 30])
+    const base64String = encodeBase64(originalBytes)
+    const block = VideoBlock.fromJSON({
+      video: { format: 'mp4', source: { bytes: base64String } },
+    })
+    expect((block.source as { type: 'videoSourceBytes'; bytes: Uint8Array }).bytes).toEqual(originalBytes)
+  })
+
+  it('VideoBlock.fromJSON accepts Uint8Array for bytes', () => {
+    const originalBytes = new Uint8Array([10, 20, 30])
+    const block = VideoBlock.fromJSON({
+      video: { format: 'mp4', source: { bytes: originalBytes } },
+    })
+    expect((block.source as { type: 'videoSourceBytes'; bytes: Uint8Array }).bytes).toEqual(originalBytes)
+  })
+
+  it('DocumentBlock.fromJSON accepts base64 string for bytes', () => {
+    const originalBytes = new Uint8Array([100, 200])
+    const base64String = encodeBase64(originalBytes)
+    const block = DocumentBlock.fromJSON({
+      document: { name: 'doc.pdf', format: 'pdf', source: { bytes: base64String } },
+    })
+    expect((block.source as { type: 'documentSourceBytes'; bytes: Uint8Array }).bytes).toEqual(originalBytes)
+  })
+
+  it('DocumentBlock.fromJSON accepts Uint8Array for bytes', () => {
+    const originalBytes = new Uint8Array([100, 200])
+    const block = DocumentBlock.fromJSON({
+      document: { name: 'doc.pdf', format: 'pdf', source: { bytes: originalBytes } },
+    })
+    expect((block.source as { type: 'documentSourceBytes'; bytes: Uint8Array }).bytes).toEqual(originalBytes)
+  })
+})
+
+describe('S3Location toJSON/fromJSON', () => {
+  it('round-trips with uri only', () => {
+    const original = new S3Location({ uri: 's3://bucket/key.jpg' })
+    const json = original.toJSON()
+    const restored = S3Location.fromJSON(json)
+    expect(restored).toEqual(original)
+  })
+
+  it('round-trips with uri and bucketOwner', () => {
+    const original = new S3Location({ uri: 's3://bucket/key.jpg', bucketOwner: '123456789012' })
+    const json = original.toJSON()
+    const restored = S3Location.fromJSON(json)
+    expect(restored).toEqual(original)
+  })
+
+  it('omits undefined bucketOwner from JSON', () => {
+    const location = new S3Location({ uri: 's3://bucket/key.jpg' })
+    const json = location.toJSON()
+    expect(json).toStrictEqual({ uri: 's3://bucket/key.jpg' })
+    expect('bucketOwner' in json).toBe(false)
+  })
+})
+
+describe('ImageBlock toJSON/fromJSON', () => {
+  it('round-trips with bytes source', () => {
+    const original = new ImageBlock({
+      format: 'jpeg',
+      source: { bytes: new Uint8Array([1, 2, 3]) },
+    })
+    const restored = ImageBlock.fromJSON(original.toJSON())
+    expect(restored).toEqual(original)
+  })
+
+  it('round-trips with url source', () => {
+    const original = new ImageBlock({
+      format: 'png',
+      source: { url: 'https://example.com/image.png' },
+    })
+    const restored = ImageBlock.fromJSON(original.toJSON())
+    expect(restored).toEqual(original)
+  })
+
+  it('round-trips with s3Location source', () => {
+    const original = new ImageBlock({
+      format: 'webp',
+      source: { s3Location: { uri: 's3://bucket/image.webp', bucketOwner: '123456789012' } },
+    })
+    const restored = ImageBlock.fromJSON(original.toJSON())
+    expect(restored).toEqual(original)
+  })
+
+  it('encodes bytes as base64 in JSON output', () => {
+    const block = new ImageBlock({
+      format: 'jpeg',
+      source: { bytes: new Uint8Array([1, 2, 3]) },
+    })
+    const json = block.toJSON()
+    expect(typeof (json.image.source as { bytes: unknown }).bytes).toBe('string')
+  })
+})
+
+describe('VideoBlock toJSON/fromJSON', () => {
+  it('round-trips with bytes source', () => {
+    const original = new VideoBlock({
+      format: 'mp4',
+      source: { bytes: new Uint8Array([10, 20, 30]) },
+    })
+    const restored = VideoBlock.fromJSON(original.toJSON())
+    expect(restored).toEqual(original)
+  })
+
+  it('round-trips with s3Location source', () => {
+    const original = new VideoBlock({
+      format: 'webm',
+      source: { s3Location: { uri: 's3://bucket/video.webm' } },
+    })
+    const restored = VideoBlock.fromJSON(original.toJSON())
+    expect(restored).toEqual(original)
+  })
+
+  it('encodes bytes as base64 in JSON output', () => {
+    const block = new VideoBlock({
+      format: 'mp4',
+      source: { bytes: new Uint8Array([1, 2, 3]) },
+    })
+    const json = block.toJSON()
+    expect(typeof (json.video.source as { bytes: unknown }).bytes).toBe('string')
+  })
+})
+
+describe('DocumentBlock toJSON/fromJSON', () => {
+  it('round-trips with bytes source', () => {
+    const original = new DocumentBlock({
+      name: 'doc.pdf',
+      format: 'pdf',
+      source: { bytes: new Uint8Array([100, 200]) },
+    })
+    const restored = DocumentBlock.fromJSON(original.toJSON())
+    expect(restored).toEqual(original)
+  })
+
+  it('round-trips with text source', () => {
+    const original = new DocumentBlock({
+      name: 'note.txt',
+      format: 'txt',
+      source: { text: 'Hello world' },
+    })
+    const restored = DocumentBlock.fromJSON(original.toJSON())
+    expect(restored).toEqual(original)
+  })
+
+  it('round-trips with content source', () => {
+    const original = new DocumentBlock({
+      name: 'report.html',
+      format: 'html',
+      source: { content: [{ text: 'Introduction' }, { text: 'Conclusion' }] },
+    })
+    const restored = DocumentBlock.fromJSON(original.toJSON())
+    expect(restored).toEqual(original)
+  })
+
+  it('round-trips with s3Location source', () => {
+    const original = new DocumentBlock({
+      name: 'report.pdf',
+      format: 'pdf',
+      source: { s3Location: { uri: 's3://bucket/report.pdf', bucketOwner: '123456789012' } },
+    })
+    const restored = DocumentBlock.fromJSON(original.toJSON())
+    expect(restored).toEqual(original)
+  })
+
+  it('round-trips with citations and context', () => {
+    const original = new DocumentBlock({
+      name: 'research.pdf',
+      format: 'pdf',
+      source: { bytes: new Uint8Array([1, 2, 3]) },
+      citations: { enabled: true },
+      context: 'Research paper about AI',
+    })
+    const restored = DocumentBlock.fromJSON(original.toJSON())
+    expect(restored).toEqual(original)
+  })
+
+  it('omits undefined citations and context from JSON', () => {
+    const block = new DocumentBlock({
+      name: 'doc.pdf',
+      format: 'pdf',
+      source: { bytes: new Uint8Array([1]) },
+    })
+    const json = block.toJSON()
+    expect('citations' in json.document).toBe(false)
+    expect('context' in json.document).toBe(false)
   })
 })

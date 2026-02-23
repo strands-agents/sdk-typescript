@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { BedrockRuntimeClient } from '@aws-sdk/client-bedrock-runtime'
+import { BedrockRuntimeClient, ConverseStreamCommand, ValidationException } from '@aws-sdk/client-bedrock-runtime'
 import { isNode } from '../../__fixtures__/environment.js'
 import { BedrockModel } from '../bedrock.js'
 import { ContextWindowOverflowError, ModelThrottledError } from '../../errors.js'
-import type { Message } from '../../types/messages.js'
+import { Message, ReasoningBlock, ToolUseBlock, ToolResultBlock, JsonBlock } from '../../types/messages.js'
+import type { SystemContentBlock } from '../../types/messages.js'
 import { TextBlock, GuardContentBlock, CachePointBlock } from '../../types/messages.js'
 import type { StreamOptions } from '../model.js'
 import { collectIterator } from '../../__fixtures__/model-test-helpers.js'
@@ -302,7 +303,6 @@ describe('BedrockModel', () => {
   })
 
   describe('format_message', async () => {
-    const { ConverseStreamCommand } = await import('@aws-sdk/client-bedrock-runtime')
     const mockConverseStreamCommand = vi.mocked(ConverseStreamCommand)
     it('formats the request to bedrock properly', async () => {
       const provider = new BedrockModel({
@@ -321,7 +321,7 @@ describe('BedrockModel', () => {
         },
       })
 
-      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+      const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
 
       const options: StreamOptions = {
         systemPrompt: 'You are a helpful assistant',
@@ -374,22 +374,19 @@ describe('BedrockModel', () => {
     })
 
     it('formats tool use messages', async () => {
-      const { ConverseStreamCommand } = await import('@aws-sdk/client-bedrock-runtime')
       const mockConverseStreamCommand = vi.mocked(ConverseStreamCommand)
       const provider = new BedrockModel()
-      const messages: Message[] = [
-        {
-          type: 'message',
+      const messages = [
+        new Message({
           role: 'assistant',
           content: [
-            {
-              type: 'toolUseBlock',
+            new ToolUseBlock({
               name: 'calculator',
               toolUseId: 'tool-123',
               input: { a: 5, b: 3 },
-            },
+            }),
           ],
-        },
+        }),
       ]
 
       // Run the stream but ignore the output
@@ -418,22 +415,17 @@ describe('BedrockModel', () => {
 
     it('formats tool result messages', async () => {
       const provider = new BedrockModel()
-      const messages: Message[] = [
-        {
-          type: 'message',
+      const messages = [
+        new Message({
           role: 'user',
           content: [
-            {
-              type: 'toolResultBlock',
+            new ToolResultBlock({
               toolUseId: 'tool-123',
               status: 'success',
-              content: [
-                { type: 'textBlock', text: 'Result: 8' },
-                { type: 'jsonBlock', json: { hello: 'world' } },
-              ],
-            },
+              content: [new TextBlock('Result: 8'), new JsonBlock({ json: { hello: 'world' } })],
+            }),
           ],
-        },
+        }),
       ]
 
       // Start the stream
@@ -470,22 +462,19 @@ describe('BedrockModel', () => {
 
     it('formats reasoning messages properly', async () => {
       const provider = new BedrockModel()
-      const messages: Message[] = [
-        {
-          type: 'message',
+      const messages = [
+        new Message({
           role: 'user',
           content: [
-            {
-              type: 'reasoningBlock',
+            new ReasoningBlock({
               text: 'Hello',
               signature: 'World',
-            },
-            {
-              type: 'reasoningBlock',
+            }),
+            new ReasoningBlock({
               redactedContent: new Uint8Array(1),
-            },
+            }),
           ],
-        },
+        }),
       ]
 
       // Start the stream but don't await it
@@ -519,15 +508,11 @@ describe('BedrockModel', () => {
 
     it('formats cache point blocks in messages', async () => {
       const provider = new BedrockModel()
-      const messages: Message[] = [
-        {
-          type: 'message',
+      const messages = [
+        new Message({
           role: 'user',
-          content: [
-            { type: 'textBlock', text: 'Message with cache point' },
-            { type: 'cachePointBlock', cacheType: 'default' },
-          ],
-        },
+          content: [new TextBlock('Message with cache point'), new CachePointBlock({ cacheType: 'default' })],
+        }),
       ]
 
       collectIterator(provider.stream(messages))
@@ -577,7 +562,7 @@ describe('BedrockModel', () => {
       mockBedrockClientImplementation({ send: mockSend })
 
       const provider = new BedrockModel({ stream })
-      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+      const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
       const events = await collectIterator(provider.stream(messages))
 
       expect(events).toContainEqual({ role: 'assistant', type: 'modelMessageStartEvent' })
@@ -640,9 +625,7 @@ describe('BedrockModel', () => {
       mockBedrockClientImplementation({ send: mockSend })
 
       const provider = new BedrockModel({ stream })
-      const messages: Message[] = [
-        { type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Weather?' }] },
-      ]
+      const messages = [new Message({ role: 'user', content: [new TextBlock('Weather?')] })]
       const events = await collectIterator(provider.stream(messages))
       const startEvent = events.find((e) => e.type === 'modelContentBlockStartEvent')
       const inputDeltaEvent = events.find(
@@ -704,9 +687,7 @@ describe('BedrockModel', () => {
       mockBedrockClientImplementation({ send: mockSend })
 
       const provider = new BedrockModel({ stream })
-      const messages: Message[] = [
-        { type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'A question.' }] },
-      ]
+      const messages = [new Message({ role: 'user', content: [new TextBlock('A question.')] })]
       const events = await collectIterator(provider.stream(messages))
 
       expect(events).toContainEqual({ role: 'assistant', type: 'modelMessageStartEvent' })
@@ -762,9 +743,7 @@ describe('BedrockModel', () => {
       mockBedrockClientImplementation({ send: mockSend })
 
       const provider = new BedrockModel({ stream })
-      const messages: Message[] = [
-        { type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'A sensitive question.' }] },
-      ]
+      const messages = [new Message({ role: 'user', content: [new TextBlock('A sensitive question.')] })]
       const events = await collectIterator(provider.stream(messages))
 
       expect(events).toContainEqual({ role: 'assistant', type: 'modelMessageStartEvent' })
@@ -783,7 +762,6 @@ describe('BedrockModel', () => {
     })
 
     describe('error handling', async () => {
-      const { ValidationException } = await import('@aws-sdk/client-bedrock-runtime')
       it.each([
         {
           name: 'ContextWindowOverflowError for context overflow',
@@ -801,7 +779,7 @@ describe('BedrockModel', () => {
         mockBedrockClientImplementation({ send: mockSendError })
 
         const provider = new BedrockModel()
-        const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+        const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
 
         await expect(collectIterator(provider.stream(messages))).rejects.toThrow(expected)
       })
@@ -822,7 +800,7 @@ describe('BedrockModel', () => {
       })
 
       const provider = new BedrockModel()
-      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+      const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
 
       const events = await collectIterator(provider.stream(messages))
 
@@ -855,7 +833,7 @@ describe('BedrockModel', () => {
       })
 
       const provider = new BedrockModel()
-      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+      const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
 
       const events = await collectIterator(provider.stream(messages))
 
@@ -897,7 +875,7 @@ describe('BedrockModel', () => {
       })
 
       const provider = new BedrockModel()
-      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+      const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
 
       const events = await collectIterator(provider.stream(messages))
 
@@ -929,7 +907,7 @@ describe('BedrockModel', () => {
       })
 
       const provider = new BedrockModel()
-      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+      const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
 
       const events = await collectIterator(provider.stream(messages))
 
@@ -967,7 +945,7 @@ describe('BedrockModel', () => {
       })
 
       const provider = new BedrockModel()
-      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+      const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
 
       const events = await collectIterator(provider.stream(messages))
 
@@ -995,7 +973,7 @@ describe('BedrockModel', () => {
       })
 
       const provider = new BedrockModel()
-      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+      const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
 
       const events = await collectIterator(provider.stream(messages))
 
@@ -1017,7 +995,7 @@ describe('BedrockModel', () => {
       })
 
       const provider = new BedrockModel()
-      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+      const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
 
       const events = await collectIterator(provider.stream(messages))
 
@@ -1048,9 +1026,7 @@ describe('BedrockModel', () => {
           })
 
           const provider = new BedrockModel()
-          const messages: Message[] = [
-            { type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] },
-          ]
+          const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
 
           const events = []
           for await (const event of provider.stream(messages)) {
@@ -1074,7 +1050,7 @@ describe('BedrockModel', () => {
         })
 
         const provider = new BedrockModel()
-        const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+        const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
 
         await expect(async () => {
           for await (const _ of provider.stream(messages)) {
@@ -1090,7 +1066,7 @@ describe('BedrockModel', () => {
         })
 
         const provider = new BedrockModel()
-        const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+        const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
 
         await expect(async () => {
           for await (const _ of provider.stream(messages)) {
@@ -1106,7 +1082,7 @@ describe('BedrockModel', () => {
         })
 
         const provider = new BedrockModel()
-        const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+        const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
 
         await expect(async () => {
           for await (const _ of provider.stream(messages)) {
@@ -1118,7 +1094,6 @@ describe('BedrockModel', () => {
   })
 
   describe('system prompt formatting', async () => {
-    const { ConverseStreamCommand } = await import('@aws-sdk/client-bedrock-runtime')
     const mockConverseStreamCommand = vi.mocked(ConverseStreamCommand)
 
     beforeEach(() => {
@@ -1127,7 +1102,7 @@ describe('BedrockModel', () => {
 
     it('formats string system prompt with cachePrompt config', async () => {
       const provider = new BedrockModel({ cachePrompt: 'default' })
-      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+      const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
       const options: StreamOptions = {
         systemPrompt: 'You are a helpful assistant',
       }
@@ -1148,12 +1123,12 @@ describe('BedrockModel', () => {
 
     it('formats array system prompt with text blocks only', async () => {
       const provider = new BedrockModel()
-      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+      const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
       const options: StreamOptions = {
         systemPrompt: [
           { type: 'textBlock', text: 'You are a helpful assistant' },
           { type: 'textBlock', text: 'Additional context here' },
-        ],
+        ] as SystemContentBlock[],
       }
 
       collectIterator(provider.stream(messages, options))
@@ -1172,13 +1147,13 @@ describe('BedrockModel', () => {
 
     it('formats array system prompt with cache points', async () => {
       const provider = new BedrockModel()
-      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+      const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
       const options: StreamOptions = {
         systemPrompt: [
           { type: 'textBlock', text: 'You are a helpful assistant' },
           { type: 'textBlock', text: 'Large context document' },
           { type: 'cachePointBlock', cacheType: 'default' },
-        ],
+        ] as SystemContentBlock[],
       }
 
       collectIterator(provider.stream(messages, options))
@@ -1202,12 +1177,12 @@ describe('BedrockModel', () => {
     it('warns when both array system prompt and cachePrompt config are provided', async () => {
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
       const provider = new BedrockModel({ cachePrompt: 'default' })
-      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+      const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
       const options: StreamOptions = {
         systemPrompt: [
           { type: 'textBlock', text: 'You are a helpful assistant' },
           { type: 'cachePointBlock', cacheType: 'default' },
-        ],
+        ] as SystemContentBlock[],
       }
 
       collectIterator(provider.stream(messages, options))
@@ -1234,7 +1209,7 @@ describe('BedrockModel', () => {
 
     it('handles empty array system prompt', async () => {
       const provider = new BedrockModel()
-      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+      const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
       const options: StreamOptions = {
         systemPrompt: [],
       }
@@ -1255,7 +1230,7 @@ describe('BedrockModel', () => {
 
     it('formats array system prompt with guard content', async () => {
       const provider = new BedrockModel()
-      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+      const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
       const options: StreamOptions = {
         systemPrompt: [
           new TextBlock('You are a helpful assistant'),
@@ -1294,7 +1269,7 @@ describe('BedrockModel', () => {
 
     it('formats mixed system prompt with text, guard content, and cache points', async () => {
       const provider = new BedrockModel()
-      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+      const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
       const options: StreamOptions = {
         systemPrompt: [
           new TextBlock('You are a helpful assistant'),
@@ -1337,7 +1312,7 @@ describe('BedrockModel', () => {
 
     it('formats guard content with all qualifier types', async () => {
       const provider = new BedrockModel()
-      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+      const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
       const options: StreamOptions = {
         systemPrompt: [
           new GuardContentBlock({
@@ -1374,7 +1349,7 @@ describe('BedrockModel', () => {
 
     it('formats guard content with image in system prompt', async () => {
       const provider = new BedrockModel()
-      const messages: Message[] = [{ type: 'message', role: 'user', content: [{ type: 'textBlock', text: 'Hello' }] }]
+      const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
       const imageBytes = new Uint8Array([1, 2, 3, 4])
       const options: StreamOptions = {
         systemPrompt: [
@@ -1412,7 +1387,6 @@ describe('BedrockModel', () => {
   })
 
   describe('guard content in messages', async () => {
-    const { ConverseStreamCommand } = await import('@aws-sdk/client-bedrock-runtime')
     const mockConverseStreamCommand = vi.mocked(ConverseStreamCommand)
 
     beforeEach(() => {
@@ -1421,9 +1395,8 @@ describe('BedrockModel', () => {
 
     it('formats guard content with text in message', async () => {
       const provider = new BedrockModel()
-      const messages: Message[] = [
-        {
-          type: 'message',
+      const messages = [
+        new Message({
           role: 'user',
           content: [
             new TextBlock('Verify this information:'),
@@ -1434,7 +1407,7 @@ describe('BedrockModel', () => {
               },
             }),
           ],
-        },
+        }),
       ]
 
       collectIterator(provider.stream(messages))
@@ -1463,9 +1436,8 @@ describe('BedrockModel', () => {
     it('formats guard content with image in message', async () => {
       const provider = new BedrockModel()
       const imageBytes = new Uint8Array([1, 2, 3, 4])
-      const messages: Message[] = [
-        {
-          type: 'message',
+      const messages = [
+        new Message({
           role: 'user',
           content: [
             new TextBlock('Is this image safe?'),
@@ -1476,7 +1448,7 @@ describe('BedrockModel', () => {
               },
             }),
           ],
-        },
+        }),
       ]
 
       collectIterator(provider.stream(messages))
@@ -1504,25 +1476,22 @@ describe('BedrockModel', () => {
   })
 
   describe('includeToolResultStatus configuration', async () => {
-    const { ConverseStreamCommand } = await import('@aws-sdk/client-bedrock-runtime')
     const mockConverseStreamCommand = vi.mocked(ConverseStreamCommand)
 
     describe('when includeToolResultStatus is true', () => {
       it('always includes status field in tool results', async () => {
         const provider = new BedrockModel({ includeToolResultStatus: true })
-        const messages: Message[] = [
-          {
-            type: 'message',
+        const messages = [
+          new Message({
             role: 'user',
             content: [
-              {
-                type: 'toolResultBlock',
+              new ToolResultBlock({
                 toolUseId: 'tool-123',
                 status: 'success',
-                content: [{ type: 'textBlock', text: 'Result' }],
-              },
+                content: [new TextBlock('Result')],
+              }),
             ],
-          },
+          }),
         ]
 
         collectIterator(provider.stream(messages))
@@ -1550,19 +1519,17 @@ describe('BedrockModel', () => {
     describe('when includeToolResultStatus is false', () => {
       it('never includes status field in tool results', async () => {
         const provider = new BedrockModel({ includeToolResultStatus: false })
-        const messages: Message[] = [
-          {
-            type: 'message',
+        const messages = [
+          new Message({
             role: 'user',
             content: [
-              {
-                type: 'toolResultBlock',
+              new ToolResultBlock({
                 toolUseId: 'tool-123',
                 status: 'success',
-                content: [{ type: 'textBlock', text: 'Result' }],
-              },
+                content: [new TextBlock('Result')],
+              }),
             ],
-          },
+          }),
         ]
 
         collectIterator(provider.stream(messages))
@@ -1592,19 +1559,17 @@ describe('BedrockModel', () => {
           modelId: 'anthropic.claude-3-5-sonnet-20241022-v2:0',
           includeToolResultStatus: 'auto',
         })
-        const messages: Message[] = [
-          {
-            type: 'message',
+        const messages = [
+          new Message({
             role: 'user',
             content: [
-              {
-                type: 'toolResultBlock',
+              new ToolResultBlock({
                 toolUseId: 'tool-123',
                 status: 'success',
-                content: [{ type: 'textBlock', text: 'Result' }],
-              },
+                content: [new TextBlock('Result')],
+              }),
             ],
-          },
+          }),
         ]
 
         collectIterator(provider.stream(messages))
@@ -1634,19 +1599,17 @@ describe('BedrockModel', () => {
         const provider = new BedrockModel({
           modelId: 'amazon.nova-lite-v1:0',
         })
-        const messages: Message[] = [
-          {
-            type: 'message',
+        const messages = [
+          new Message({
             role: 'user',
             content: [
-              {
-                type: 'toolResultBlock',
+              new ToolResultBlock({
                 toolUseId: 'tool-123',
                 status: 'success',
-                content: [{ type: 'textBlock', text: 'Result' }],
-              },
+                content: [new TextBlock('Result')],
+              }),
             ],
-          },
+          }),
         ]
 
         collectIterator(provider.stream(messages))

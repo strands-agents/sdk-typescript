@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { Message } from '@strands-agents/sdk'
+import { Message, TextBlock } from '@strands-agents/sdk'
 import type { ModelStreamEvent } from '$/sdk/models/streaming.js'
 
 import { collectIterator } from '$/sdk/__fixtures__/model-test-helpers.js'
@@ -25,7 +25,7 @@ describe.skipIf(gemini.skip)('GeminiModel Integration Tests', () => {
         const messages: Message[] = [
           new Message({
             role: 'user',
-            content: [{ type: 'textBlock', text: 'Say "hello world" exactly.' }],
+            content: [new TextBlock('Say "hello world" exactly.')],
           }),
         ]
 
@@ -63,7 +63,7 @@ describe.skipIf(gemini.skip)('GeminiModel Integration Tests', () => {
         const messages: Message[] = [
           new Message({
             role: 'user',
-            content: [{ type: 'textBlock', text: 'Hello' }],
+            content: [new TextBlock('Hello')],
           }),
         ]
 
@@ -81,7 +81,7 @@ describe.skipIf(gemini.skip)('GeminiModel Integration Tests', () => {
         const messages: Message[] = [
           new Message({
             role: 'user',
-            content: [{ type: 'textBlock', text: 'Say hello.' }],
+            content: [new TextBlock('Say hello.')],
           }),
         ]
 
@@ -118,7 +118,7 @@ describe.skipIf(gemini.skip)('GeminiModel Integration Tests', () => {
         const messages: Message[] = [
           new Message({
             role: 'user',
-            content: [{ type: 'textBlock', text: 'Say hi.' }],
+            content: [new TextBlock('Say hi.')],
           }),
         ]
 
