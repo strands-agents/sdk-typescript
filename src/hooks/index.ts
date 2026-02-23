@@ -26,7 +26,7 @@ export {
   BeforeModelCallEvent,
   AfterModelCallEvent,
   ModelStreamUpdateEvent,
-  ContentBlockCompleteEvent,
+  ContentBlockEvent,
   ModelMessageEvent,
   ToolResultEvent,
   ToolStreamUpdateEvent,

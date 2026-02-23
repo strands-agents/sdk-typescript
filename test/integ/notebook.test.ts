@@ -42,9 +42,7 @@ describe.skipIf(bedrock.skip)('Notebook Tool Integration', () => {
     )
 
     // Find the last content block complete event with a text block to get agent's response
-    const textBlocks = events3.filter(
-      (e) => e.type === 'contentBlockCompleteEvent' && e.contentBlock.type === 'textBlock'
-    )
+    const textBlocks = events3.filter((e) => e.type === 'contentBlockEvent' && e.contentBlock.type === 'textBlock')
     expect(textBlocks.length).toBeGreaterThan(0)
 
     // The notebook should still contain both pieces of content
@@ -99,9 +97,7 @@ describe.skipIf(bedrock.skip)('Notebook Tool Integration', () => {
     expect(toolResults.length).toBeGreaterThan(0)
 
     // The model should have handled the error gracefully
-    const textBlocks = events.filter(
-      (e) => e.type === 'contentBlockCompleteEvent' && e.contentBlock.type === 'textBlock'
-    )
+    const textBlocks = events.filter((e) => e.type === 'contentBlockEvent' && e.contentBlock.type === 'textBlock')
     expect(textBlocks.length).toBeGreaterThan(0)
   }, 30000)
 })

@@ -43,7 +43,7 @@ import {
   HookableEvent,
   MessageAddedEvent,
   ModelStreamUpdateEvent,
-  ContentBlockCompleteEvent,
+  ContentBlockEvent,
   ModelMessageEvent,
   ToolResultEvent,
   AgentResultEvent,
@@ -567,7 +567,7 @@ export class Agent implements AgentData {
    * - **ModelStreamEvent**: Transient streaming deltas (partial data while generating).
    *   Wrapped in {@link ModelStreamUpdateEvent} before yielding.
    * - **ContentBlock**: Fully assembled results (after all deltas accumulate).
-   *   Wrapped in {@link ContentBlockCompleteEvent} before yielding.
+   *   Wrapped in {@link ContentBlockEvent} before yielding.
    *
    * These are separate event classes because they represent different granularities
    * (partial deltas vs finished blocks). Both are yielded in the stream and hookable.
@@ -590,8 +590,8 @@ export class Agent implements AgentData {
         // ModelStreamEvent: wrap in ModelStreamUpdateEvent
         yield new ModelStreamUpdateEvent({ agent: this, event })
       } else {
-        // ContentBlock: wrap in ContentBlockCompleteEvent
-        yield new ContentBlockCompleteEvent({ agent: this, contentBlock: event })
+        // ContentBlock: wrap in ContentBlockEvent
+        yield new ContentBlockEvent({ agent: this, contentBlock: event })
       }
       result = await streamGenerator.next()
     }

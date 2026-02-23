@@ -50,9 +50,7 @@ describe.skipIf(bedrock.skip)('FileEditor Tool Integration', () => {
     const { items: events } = await collectGenerator(agent.stream(`View the file at ${testFile}`))
 
     // The agent should have received the file content
-    const textBlocks = events.filter(
-      (e: any) => e.type === 'contentBlockCompleteEvent' && e.contentBlock.type === 'textBlock'
-    )
+    const textBlocks = events.filter((e: any) => e.type === 'contentBlockEvent' && e.contentBlock.type === 'textBlock')
     expect(textBlocks.length).toBeGreaterThan(0)
   }, 60000)
 
@@ -99,9 +97,7 @@ describe.skipIf(bedrock.skip)('FileEditor Tool Integration', () => {
     expect(toolResults.length).toBeGreaterThan(0)
 
     // The model should have handled the error gracefully
-    const textBlocks = events.filter(
-      (e: any) => e.type === 'contentBlockCompleteEvent' && e.contentBlock.type === 'textBlock'
-    )
+    const textBlocks = events.filter((e: any) => e.type === 'contentBlockEvent' && e.contentBlock.type === 'textBlock')
     expect(textBlocks.length).toBeGreaterThan(0)
   }, 60000)
 
@@ -118,9 +114,7 @@ describe.skipIf(bedrock.skip)('FileEditor Tool Integration', () => {
     const { items: events } = await collectGenerator(agent.stream(`List the files in directory ${testDir}`))
 
     // The agent should have received the directory listing
-    const textBlocks = events.filter(
-      (e: any) => e.type === 'contentBlockCompleteEvent' && e.contentBlock.type === 'textBlock'
-    )
+    const textBlocks = events.filter((e: any) => e.type === 'contentBlockEvent' && e.contentBlock.type === 'textBlock')
     expect(textBlocks.length).toBeGreaterThan(0)
   }, 60000)
 

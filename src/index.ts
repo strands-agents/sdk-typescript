@@ -161,7 +161,7 @@ export {
   AfterModelCallEvent,
   BeforeToolsEvent,
   AfterToolsEvent,
-  ContentBlockCompleteEvent,
+  ContentBlockEvent,
   ModelMessageEvent,
   ToolResultEvent,
   ToolStreamUpdateEvent,

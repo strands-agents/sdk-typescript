@@ -40,7 +40,7 @@ import type { ModelStreamEvent } from '../models/streaming.js'
  *   *Completion events* — wrap finished data after processing completes.
  *   - Naming: descriptive `<Noun>Event`, payload field matches data type
  *     (`.result` for results, `.message` for messages, `.contentBlock` for content blocks).
- *   - Examples: {@link ContentBlockCompleteEvent}, {@link ModelMessageEvent},
+ *   - Examples: {@link ContentBlockEvent}, {@link ModelMessageEvent},
  *     {@link ToolResultEvent}, {@link AgentResultEvent}
  *
  * ## Field naming conventions
@@ -278,7 +278,7 @@ export class AfterModelCallEvent extends HookableEvent {
 /**
  * Event triggered for each streaming event from the model.
  * Wraps a {@link ModelStreamEvent} (transient streaming delta) during model inference.
- * Completed content blocks are handled separately by {@link ContentBlockCompleteEvent}
+ * Completed content blocks are handled separately by {@link ContentBlockEvent}
  * because they represent different granularities: partial deltas vs fully assembled results.
  */
 export class ModelStreamUpdateEvent extends HookableEvent {
@@ -303,8 +303,8 @@ export class ModelStreamUpdateEvent extends HookableEvent {
  * These represent different granularities with different semantics, so they are
  * wrapped in distinct event classes rather than combined into a single event.
  */
-export class ContentBlockCompleteEvent extends HookableEvent {
-  readonly type = 'contentBlockCompleteEvent' as const
+export class ContentBlockEvent extends HookableEvent {
+  readonly type = 'contentBlockEvent' as const
   readonly agent: AgentData
   readonly contentBlock: ContentBlock
 

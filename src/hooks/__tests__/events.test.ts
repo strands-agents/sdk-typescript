@@ -11,7 +11,7 @@ import {
   BeforeToolsEvent,
   MessageAddedEvent,
   ModelStreamUpdateEvent,
-  ContentBlockCompleteEvent,
+  ContentBlockEvent,
   ModelMessageEvent,
   ToolResultEvent,
   ToolStreamUpdateEvent,
@@ -382,14 +382,14 @@ describe('ModelStreamUpdateEvent', () => {
   })
 })
 
-describe('ContentBlockCompleteEvent', () => {
+describe('ContentBlockEvent', () => {
   it('creates instance with correct properties', () => {
     const agent = new Agent()
     const contentBlock = new TextBlock('Hello')
-    const event = new ContentBlockCompleteEvent({ agent, contentBlock })
+    const event = new ContentBlockEvent({ agent, contentBlock })
 
     expect(event).toEqual({
-      type: 'contentBlockCompleteEvent',
+      type: 'contentBlockEvent',
       agent: agent,
       contentBlock: contentBlock,
     })
