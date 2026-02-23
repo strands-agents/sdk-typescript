@@ -33,6 +33,9 @@ export class NodeResult {
   readonly type = 'nodeResult' as const
   readonly nodeId: string
   readonly status: Status
+  /**
+   * Execution time in milliseconds.
+   */
   readonly duration: number
   readonly content: ContentBlock[]
   readonly error?: Error

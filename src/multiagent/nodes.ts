@@ -19,7 +19,7 @@ interface AgentSnapshot {
  */
 export interface NodeConfig {
   /**
-   * Maximum execution time for this node in seconds.
+   * Maximum execution time for this node in milliseconds.
    */
   timeout?: number
 }
@@ -64,7 +64,7 @@ export abstract class Node {
       return new NodeResult({
         nodeId: this.id,
         status: Status.COMPLETED,
-        duration: (Date.now() - startTime) / 1000,
+        duration: Date.now() - startTime,
         content: [],
         ...update,
       })
@@ -72,7 +72,7 @@ export abstract class Node {
       return new NodeResult({
         nodeId: this.id,
         status: Status.FAILED,
-        duration: (Date.now() - startTime) / 1000,
+        duration: Date.now() - startTime,
         error: error instanceof Error ? error : new Error(String(error)),
         content: [],
       })
