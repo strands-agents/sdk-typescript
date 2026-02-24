@@ -633,9 +633,26 @@ export class BedrockModel extends Model<BedrockModelConfig> {
           },
         }
 
-      case 'citationsBlock':
-        // Citations are output-only blocks, not sent back to models
-        return undefined
+      case 'citationsBlock': {
+        const filteredCitations = block.citations.map((citation) => {
+          const filtered: Record<string, unknown> = {}
+          if (citation.location) filtered.location = citation.location
+          if (citation.sourceContent) {
+            const filteredSource = citation.sourceContent.filter((sc) => sc.text).map((sc) => ({ text: sc.text }))
+            if (filteredSource.length > 0) filtered.sourceContent = filteredSource
+          }
+          if (citation.title) filtered.title = citation.title
+          return filtered
+        })
+        const filteredContent = block.content.filter((gc) => gc.text).map((gc) => ({ text: gc.text }))
+
+        return {
+          citationsContent: {
+            citations: filteredCitations,
+            ...(filteredContent.length > 0 && { content: filteredContent }),
+          },
+        }
+      }
 
       case 'guardContentBlock': {
         if (block.text) {

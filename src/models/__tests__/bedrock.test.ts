@@ -6,6 +6,7 @@ import { ContextWindowOverflowError, ModelThrottledError } from '../../errors.js
 import { Message, ReasoningBlock, ToolUseBlock, ToolResultBlock, JsonBlock } from '../../types/messages.js'
 import type { SystemContentBlock } from '../../types/messages.js'
 import { TextBlock, GuardContentBlock, CachePointBlock } from '../../types/messages.js'
+import { CitationsBlock } from '../../types/citations.js'
 import type { StreamOptions } from '../model.js'
 import { collectIterator } from '../../__fixtures__/model-test-helpers.js'
 
@@ -1536,6 +1537,114 @@ describe('BedrockModel', () => {
           },
         ],
       })
+    })
+  })
+
+  describe('citations content block formatting', () => {
+    const mockConverseStreamCommand = vi.mocked(ConverseStreamCommand)
+
+    it('formats citations block with filtered fields in request', async () => {
+      const provider = new BedrockModel()
+      const messages = [
+        new Message({
+          role: 'assistant',
+          content: [
+            new CitationsBlock({
+              citations: [
+                {
+                  location: { documentChar: { documentIndex: 0, start: 10, end: 50 } },
+                  sourceContent: [{ text: 'source text' }],
+                  title: 'Test Doc',
+                },
+              ],
+              content: [{ text: 'generated text' }],
+            }),
+          ],
+        }),
+        new Message({
+          role: 'user',
+          content: [new TextBlock('Follow up')],
+        }),
+      ]
+
+      collectIterator(provider.stream(messages))
+
+      expect(mockConverseStreamCommand).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          messages: [
+            {
+              role: 'assistant',
+              content: [
+                {
+                  citationsContent: {
+                    citations: [
+                      {
+                        location: { documentChar: { documentIndex: 0, start: 10, end: 50 } },
+                        sourceContent: [{ text: 'source text' }],
+                        title: 'Test Doc',
+                      },
+                    ],
+                    content: [{ text: 'generated text' }],
+                  },
+                },
+              ],
+            },
+            {
+              role: 'user',
+              content: [{ text: 'Follow up' }],
+            },
+          ],
+        })
+      )
+    })
+
+    it('formats citations block without optional title', async () => {
+      const provider = new BedrockModel()
+      const messages = [
+        new Message({
+          role: 'assistant',
+          content: [
+            new CitationsBlock({
+              citations: [
+                {
+                  location: { web: { url: 'https://example.com' } },
+                  sourceContent: [{ text: 'web source' }],
+                },
+              ],
+              content: [{ text: 'cited text' }],
+            }),
+          ],
+        }),
+        new Message({
+          role: 'user',
+          content: [new TextBlock('Thanks')],
+        }),
+      ]
+
+      collectIterator(provider.stream(messages))
+
+      expect(mockConverseStreamCommand).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          messages: expect.arrayContaining([
+            expect.objectContaining({
+              role: 'assistant',
+              content: [
+                {
+                  citationsContent: {
+                    citations: [
+                      {
+                        location: { web: { url: 'https://example.com' } },
+                        sourceContent: [{ text: 'web source' }],
+                      },
+                    ],
+                    content: [{ text: 'cited text' }],
+                  },
+                },
+              ],
+            }),
+          ]),
+        })
+      )
     })
   })
 
