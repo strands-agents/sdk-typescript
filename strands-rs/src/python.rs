@@ -12,7 +12,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use crate::{Metrics_, ResourceAny, StopData_, StopReason_, StreamEvent_, Usage_};
+use crate::{ResourceAny, StreamEvent_};
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 
@@ -22,22 +22,16 @@ fn get_rt() -> &'static tokio::runtime::Runtime {
     pyo3_async_runtimes::tokio::get_runtime()
 }
 
-// ── Shared state ────────────────────────────────────────────────────
-
 struct Shared {
     agent: Mutex<crate::Agent>,
     // std::sync, not tokio: never held across an await point.
     handlers: Arc<std::sync::Mutex<HashMap<String, Py<PyAny>>>>,
 }
 
-// ── StreamHandle — opaque wrapper for WASM resource ─────────────────
-
 #[pyclass(frozen)]
-struct StreamHandle {
+pub struct StreamHandle {
     handle: ResourceAny,
 }
-
-// ── Agent ───────────────────────────────────────────────────────────
 
 fn extract_model_params(obj: &Bound<'_, PyAny>) -> PyResult<crate::ModelParams> {
     crate::ModelParams::from_py_dict(obj)
@@ -82,7 +76,7 @@ fn build_model_config(obj: &Bound<'_, PyAny>) -> PyResult<crate::ModelConfig> {
 }
 
 #[pyclass]
-struct Agent {
+pub struct Agent {
     shared: Arc<Shared>,
 }
 
@@ -323,27 +317,37 @@ impl Agent {
     }
 }
 
-// ── Module registration ─────────────────────────────────────────────
-
-pub fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_class::<Agent>()?;
-    m.add_class::<StreamHandle>()?;
-    m.add_class::<StreamEvent_>()?;
-    m.add_class::<StopReason_>()?;
-    m.add_class::<StopData_>()?;
-    m.add_class::<Usage_>()?;
-    m.add_class::<Metrics_>()?;
-    m.add_class::<crate::MetadataEvent_>()?;
-    m.add_class::<crate::ToolUseEvent_>()?;
-    m.add_class::<crate::ToolResultEvent_>()?;
-    Ok(())
-}
-
 #[pymodule(name = "_strands")]
-fn _strands_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    let _ = tracing_subscriber::fmt()
-        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-        .with_target(true)
-        .try_init();
-    register(m)
+pub mod _strands {
+    use super::*;
+
+    #[pymodule_export]
+    use super::Agent;
+    #[pymodule_export]
+    use super::StreamHandle;
+    #[pymodule_export]
+    use crate::MetadataEvent_;
+    #[pymodule_export]
+    use crate::Metrics_;
+    #[pymodule_export]
+    use crate::StopData_;
+    #[pymodule_export]
+    use crate::StopReason_;
+    #[pymodule_export]
+    use crate::StreamEvent_;
+    #[pymodule_export]
+    use crate::ToolResultEvent_;
+    #[pymodule_export]
+    use crate::ToolUseEvent_;
+    #[pymodule_export]
+    use crate::Usage_;
+
+    #[pymodule_init]
+    fn init(_m: &Bound<'_, PyModule>) -> PyResult<()> {
+        let _ = tracing_subscriber::fmt()
+            .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+            .with_target(true)
+            .try_init();
+        Ok(())
+    }
 }

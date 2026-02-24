@@ -28,6 +28,7 @@ module-name = "strands._strands"
 [tool.pytest.ini_options]
 testpaths = ["tests_integ"]
 asyncio_mode = "auto"
+cache_dir = ".pytest_cache"
 
 [tool.ruff]
 exclude = ["strands/generated"]

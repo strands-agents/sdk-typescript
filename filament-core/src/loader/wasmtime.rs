@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use async_trait::async_trait;
 use tracing::error;
 use wasmtime::component::{Component, HasSelf, Linker, Resource, ResourceAny, ResourceTable};
@@ -7,7 +5,6 @@ use wasmtime::{Config, Engine, Store};
 use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 
-use crate::bindings::BlobStore;
 use crate::loader::Loader;
 use crate::module::{LoadArgs, Module, ModuleManifest, SchedulingPolicy};
 use crate::plugin::{Plugin, Signal, WeaveArgs};
@@ -665,12 +662,12 @@ impl Loader for WasmtimeLoader {
                 }
             };
 
-            if let wasmparser::Payload::CustomSection(section) = &payload {
-                if section.name() == "filament/manifest" {
-                    tracing::info!("Found filament/manifest custom section");
-                    manifest_toml = Some(section.data().to_vec());
-                    break;
-                }
+            if let wasmparser::Payload::CustomSection(section) = &payload
+                && section.name() == "filament/manifest"
+            {
+                tracing::info!("Found filament/manifest custom section");
+                manifest_toml = Some(section.data().to_vec());
+                break;
             }
         }
 

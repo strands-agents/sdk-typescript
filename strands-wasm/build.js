@@ -3,7 +3,7 @@
  *
  * Steps:
  *   1. esbuild – bundle entry.ts + full SDK into a single ESM file
- *   2. jco componentize – compile the bundle into a WASM component
+ *   2. componentize – compile the bundle into a WASM component
  *      targeting the `agent` world (exports strands:agent/api directly)
  *
  * Prerequisites:
@@ -18,15 +18,10 @@
  *                          for in-source tests that must be eliminated.
  */
 
-import { execSync } from 'node:child_process';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { build } from 'esbuild';
-
-const run = (cmd) => {
-  console.log(`> ${cmd}`);
-  execSync(cmd, { stdio: 'inherit', cwd: import.meta.dirname });
-};
+import { componentize } from '@bytecodealliance/componentize-js';
 
 mkdirSync('dist', { recursive: true });
 
@@ -65,13 +60,11 @@ await build({
 });
 
 // 2. Componentize: compile the bundle into a WASM component.
-run(
-  [
-    'npx jco componentize dist/bundle.js',
-    `--wit ${witDir}`,
-    '--world-name agent',
-    '--out dist/strands-agent.wasm',
-  ].join(' '),
-);
+const source = readFileSync('dist/bundle.js', 'utf-8');
+const { component } = await componentize(source, {
+  witPath: witDir,
+  worldName: 'agent',
+});
+writeFileSync('dist/strands-agent.wasm', component);
 
 console.log('\n✓ strands-ts-wasm/dist/strands-agent.wasm');

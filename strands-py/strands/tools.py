@@ -3,10 +3,14 @@ from __future__ import annotations
 import functools
 import inspect
 import json
+import logging
 import types as _types
-from typing import Any, Callable, TypeVar, overload
+from collections.abc import Callable
+from typing import Any, TypeVar, overload
 
 from strands.types.tools import ToolContext
+
+log = logging.getLogger(__name__)
 
 T = TypeVar("T", bound=Callable[..., Any])
 
@@ -25,7 +29,7 @@ def _json_schema_type(annotation: Any) -> dict[str, Any]:
         return {}
     origin = getattr(annotation, "__origin__", None)
     args = getattr(annotation, "__args__", None)
-    if origin is _types.UnionType:
+    if origin is _types.UnionType and args is not None:
         non_none = [a for a in args if a is not type(None)]
         if len(non_none) == 1:
             return _json_schema_type(non_none[0])
@@ -54,7 +58,7 @@ def _build_input_schema(func: Callable[..., Any], skip: set[str]) -> dict[str, A
     try:
         hints = inspect.get_annotations(func, eval_str=True)
     except Exception:
-        pass
+        log.debug("failed to evaluate type annotations for %s", func.__name__, exc_info=True)
 
     properties: dict[str, Any] = {}
     required: list[str] = []
@@ -91,7 +95,7 @@ def _extract_description(func: Callable[..., Any]) -> str:
     except ImportError:
         pass
     lines = raw.strip().split("\n")
-    result = []
+    result: list[str] = []
     for line in lines:
         if line.strip().lower().startswith(("args:", "arguments:", "parameters:")):
             break
@@ -102,12 +106,19 @@ def _extract_description(func: Callable[..., Any]) -> str:
 class DecoratedTool:
     """A @tool-decorated function -- callable as normal, passable to Agent(tools=[...])."""
 
-    def __init__(self, func, name, description, input_schema, context_param=None):
-        self._func = func
+    def __init__(
+        self,
+        func: Callable[..., Any],
+        name: str,
+        description: str,
+        input_schema: dict[str, Any],
+        context_param: str | None = None,
+    ):
+        self.func = func
+        self.context_param = context_param
         self._name = name
         self._description = description
         self._input_schema = input_schema
-        self._context_param = context_param
         functools.update_wrapper(self, func)
 
     @property
@@ -122,12 +133,12 @@ class DecoratedTool:
             "inputSchema": self._input_schema,
         }
 
-    def __call__(self, *args, **kwargs):
-        return self._func(*args, **kwargs)
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        return self.func(*args, **kwargs)
 
-    def _make_handler(self, agent_ref=None):
-        func = self._func
-        ctx_param = self._context_param
+    def make_handler(self, agent_ref: Any = None) -> Callable[[str, str], str]:
+        func = self.func
+        ctx_param = self.context_param
 
         def handler(input_json: str, tool_use_id: str = "") -> str:
             data = json.loads(input_json)
@@ -150,7 +161,7 @@ def _wrap_result(result: Any) -> str:
         return json.dumps({"status": "success", "content": [{"text": str(result)}]})
     try:
         return json.dumps(
-            {"status": "success", "content": [{"text": json.dumps(result)}]}
+            {"status": "success", "content": [{"text": json.dumps(result)}]},
         )
     except (TypeError, ValueError):
         return json.dumps({"status": "success", "content": [{"text": str(result)}]})
@@ -166,15 +177,21 @@ def tool(
     name: str | None = None,
     context: bool | str = False,
 ) -> Callable[[T], T]: ...
-def tool(func=None, description=None, inputSchema=None, name=None, context=False):  # type: ignore[misc]
+def tool(  # type: ignore[misc]
+    func: Callable[..., Any] | None = None,
+    description: str | None = None,
+    inputSchema: Any = None,
+    name: str | None = None,
+    context: bool | str = False,
+) -> Any:
     """Decorator: transform a Python function into a Strands tool."""
 
-    def decorator(f):
-        ctx = None
-        if isinstance(context, bool) and context:
-            ctx = "tool_context"
-        elif isinstance(context, str) and context:
+    def decorator(f: Callable[..., Any]) -> DecoratedTool:
+        ctx: str | None = None
+        if isinstance(context, str) and context:
             ctx = context
+        elif context:
+            ctx = "tool_context"
         skip = {"self", "cls", "agent"}
         if ctx:
             skip.add(ctx)

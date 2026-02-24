@@ -1,4 +1,4 @@
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use clap::Parser;
 use cliclack::{intro, outro, spinner};
 use std::borrow::Cow;
@@ -71,10 +71,7 @@ impl BuildCommand {
         s.stop("Compilation complete");
         s.start("Embedding module manifest...");
 
-        let final_output = self
-            .output
-            .clone()
-            .unwrap_or_else(|| artifact_path.clone());
+        let final_output = self.output.clone().unwrap_or_else(|| artifact_path.clone());
 
         embed_manifest(&artifact_path, &final_output, &manifest_content)?;
 
@@ -183,7 +180,9 @@ fn build_typescript(dir: &Path) -> Result<PathBuf> {
             let mut compile = Command::new("npm");
             compile.arg("run").arg("compile").current_dir(dir);
 
-            let output = compile.output().context("Failed to execute npm run compile")?;
+            let output = compile
+                .output()
+                .context("Failed to execute npm run compile")?;
             if !output.status.success() {
                 bail!(
                     "TypeScript compilation failed:\n{}",
@@ -258,7 +257,6 @@ fn embed_manifest(input: &Path, output: &Path, manifest: &str) -> Result<()> {
 
     // Append the section bytes to the file
     let mut file = fs::OpenOptions::new()
-        .write(true)
         .append(true)
         .open(output)
         .context("Failed to open WASM for appending")?;

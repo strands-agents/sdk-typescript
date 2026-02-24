@@ -50,16 +50,12 @@ use bindings::strands::agent::types::AgentConfig as WitAgentConfig;
 
 pub use wasmtime::component::ResourceAny;
 
-// ── Types ───────────────────────────────────────────────────────────
-
 /// A function that dispatches tool calls from the guest.
 /// Receives `(tool_name, input_json, tool_use_id)` and returns `Ok(result_json)` or `Err(error_message)`.
 type ToolHandlerFn = Box<dyn Fn(&str, &str, &str) -> Result<String, String> + Send + Sync>;
 
 /// Receives `(level, message, optional_context_json)`.
 type LogHandlerFn = Box<dyn Fn(&str, &str, Option<&str>) + Send + Sync>;
-
-// ── Host state (WASI + HTTP + tool dispatch) ────────────────────────
 
 struct HostState {
     ctx: WasiCtx,
@@ -116,11 +112,10 @@ impl bindings::strands::agent::tool_provider::Host for HostState {
         &mut self,
         args: bindings::strands::agent::types::CallToolArgs,
     ) -> Result<String, String> {
-        let result = match &self.tool_dispatch {
+        match &self.tool_dispatch {
             Some(dispatch) => dispatch(&args.name, &args.input, &args.tool_use_id),
             None => Err(format!("no handler for tool '{}'", args.name)),
-        };
-        result
+        }
     }
 
     fn call_tools(
@@ -142,8 +137,6 @@ impl bindings::strands::agent::tool_provider::Host for HostState {
     }
 }
 
-// ── AgentBuilder ────────────────────────────────────────────────────
-
 /// Builder for configuring and constructing an [`Agent`].
 pub struct AgentBuilder {
     model_config: Option<ModelConfig>,
@@ -155,6 +148,7 @@ pub struct AgentBuilder {
     tool_dispatch: Option<ToolHandlerFn>,
     log_handler: Option<LogHandlerFn>,
     trace_context: Option<String>,
+    use_jit: bool,
 }
 
 impl AgentBuilder {
@@ -222,6 +216,14 @@ impl AgentBuilder {
         self
     }
 
+    /// Use JIT compilation instead of the AOT-precompiled component.
+    /// Loads `strands-wasm/dist/strands-agent.wasm` directly at runtime.
+    /// Slower startup but picks up WASM changes without a Rust rebuild.
+    pub fn use_jit(mut self) -> Self {
+        self.use_jit = true;
+        self
+    }
+
     /// Set a handler for structured log entries from the WASM guest.
     /// Receives `(level, message, optional_context_json)`.
     pub fn log_handler(
@@ -265,12 +267,11 @@ impl AgentBuilder {
             tool_dispatch,
             self.log_handler,
             self.trace_context,
+            self.use_jit,
         )
         .await
     }
 }
-
-// ── Agent ───────────────────────────────────────────────────────────
 
 /// A Strands agent backed by a WASM component.
 ///
@@ -321,6 +322,7 @@ impl Agent {
             tool_dispatch: None,
             log_handler: None,
             trace_context: None,
+            use_jit: false,
         }
     }
 
@@ -333,6 +335,7 @@ impl Agent {
         tool_dispatch: Option<ToolHandlerFn>,
         log_handler: Option<LogHandlerFn>,
         trace_context: Option<String>,
+        use_jit: bool,
     ) -> Result<Self> {
         let mut wasm_config = Config::new();
         wasm_config.async_support(true);
@@ -342,13 +345,20 @@ impl Agent {
 
         let engine = Engine::new(&wasm_config)?;
 
-        let component = unsafe {
-            Component::deserialize(
-                &engine,
-                include_bytes!(concat!(env!("OUT_DIR"), "/strands-agent.cwasm")),
-            )
-        }
-        .with_context(|| "failed to load precompiled strands component")?;
+        let component = if use_jit {
+            let wasm_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("../strands-wasm/dist/strands-agent.wasm");
+            Component::from_file(&engine, &wasm_path)
+                .with_context(|| format!("JIT: failed to load {}", wasm_path.display()))?
+        } else {
+            unsafe {
+                Component::deserialize(
+                    &engine,
+                    include_bytes!(concat!(env!("OUT_DIR"), "/strands-agent.cwasm")),
+                )
+            }
+            .with_context(|| "failed to load precompiled strands component")?
+        };
 
         let mut linker = Linker::<HostState>::new(&engine);
         wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
@@ -507,8 +517,6 @@ impl Agent {
     }
 }
 
-// ── Handle-based pull API (used by FFI wrappers like PyO3) ──────────
-
 impl Agent {
     /// Begin a new response stream. Returns a handle for use with [`next_events`].
     pub async fn start_stream(&mut self, input: &str) -> Result<ResourceAny> {
@@ -590,8 +598,6 @@ impl Agent {
     }
 }
 
-// ── AgentResult ─────────────────────────────────────────────────────
-
 /// The collected result of an agent invocation.
 #[derive(Debug, Clone)]
 pub struct AgentResult {
@@ -604,8 +610,6 @@ pub struct AgentResult {
     /// Optional latency metrics.
     pub metrics: Option<Metrics>,
 }
-
-// ── AWS credential injection ────────────────────────────────────────
 
 /// If the model config targets Bedrock and has no explicit credentials, try to
 /// resolve them from env vars or `~/.aws/credentials` and inject them into the config.
@@ -628,6 +632,7 @@ fn inject_aws_credentials(config: Option<ModelConfig>) -> Option<ModelConfig> {
                     access_key_id: Some(key_id),
                     secret_access_key: Some(secret),
                     session_token: token,
+                    additional_config: None,
                 }))
             } else {
                 None

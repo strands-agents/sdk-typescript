@@ -31,8 +31,6 @@ import { AnthropicModel } from '@strands-agents/sdk/anthropic';
 import { BedrockModel } from '@strands-agents/sdk/bedrock';
 import type { StopReason, AgentStreamEvent, Model, BaseModelConfig } from '@strands-agents/sdk';
 
-// ── Guest logger ────────────────────────────────────────────────────
-//
 // All log calls go through `hostLog` (the WIT import).  The host can
 // route them to Python `logging`, Rust `tracing`, or whatever fits.
 
@@ -47,8 +45,6 @@ function errContext(err: unknown, extra?: Record<string, unknown>): Record<strin
   const e = err instanceof Error ? err : new Error(String(err));
   return { error: e.message, stack: e.stack, ...extra };
 }
-
-// ── Helpers ─────────────────────────────────────────────────────────
 
 function mapUsage(src: any): import('strands:agent/types').Usage | undefined {
   if (src == null) return undefined;
@@ -103,6 +99,18 @@ function mapEvent(event: AgentStreamEvent): StreamEvent | null {
     return null;
   }
 
+  if (ev.type === 'modelStreamUpdateEvent' && ev.event) {
+    return mapEvent(ev.event);
+  }
+
+  if (ev.type === 'contentBlockEvent' && ev.contentBlock) {
+    return mapEvent(ev.contentBlock);
+  }
+
+  if (ev.type === 'toolResultEvent' && ev.result) {
+    return mapEvent(ev.result);
+  }
+
   if (ev.type === 'toolUseBlock' || (ev.type === 'modelContentBlockStartEvent' && ev.contentBlock?.type === 'tool_use')) {
     const block = ev.type === 'toolUseBlock' ? ev : ev.contentBlock;
     if (block?.name) {
@@ -145,7 +153,7 @@ function mapEvent(event: AgentStreamEvent): StreamEvent | null {
     return { tag: 'metadata', val: { usage: mapUsage(ev.usage), metrics: mapMetrics(ev.metrics) } };
   }
 
-  glog('warn', 'mapEvent: unhandled event type', { type: ev.type });
+  glog('debug', 'mapEvent: unhandled event type', { type: ev.type });
   return null;
 }
 
@@ -167,16 +175,20 @@ function createModel(config?: ModelConfig, params?: ModelParams): Model<BaseMode
   }
 
   switch (config.tag) {
-    case 'anthropic':
+    case 'anthropic': {
       glog('info', 'createModel: Anthropic', { modelId: config.val.modelId });
+      const extra = config.val.additionalConfig ? JSON.parse(config.val.additionalConfig) : {};
       return new AnthropicModel({
         ...base,
         ...(config.val.modelId ? { modelId: config.val.modelId } : {}),
         ...(config.val.apiKey ? { apiKey: config.val.apiKey } : {}),
+        ...extra,
       });
+    }
     case 'bedrock': {
       glog('info', 'createModel: Bedrock', { modelId: config.val.modelId, region: config.val.region });
-      const clientConfig: Record<string, unknown> = {};
+      const extra = config.val.additionalConfig ? JSON.parse(config.val.additionalConfig) : {};
+      const clientConfig: Record<string, unknown> = extra.clientConfig ?? {};
       if (config.val.accessKeyId && config.val.secretAccessKey) {
         clientConfig.credentials = {
           accessKeyId: config.val.accessKeyId,
@@ -189,6 +201,7 @@ function createModel(config?: ModelConfig, params?: ModelParams): Model<BaseMode
         ...(config.val.modelId ? { modelId: config.val.modelId } : {}),
         ...(config.val.region ? { region: config.val.region } : {}),
         clientConfig,
+        ...extra,
       });
     }
     default:
@@ -265,6 +278,40 @@ function createToolChoiceProxy(baseModel: any, toolChoice: any): any {
   });
 }
 
+import type { HookProvider, HookRegistry } from '@strands-agents/sdk';
+import {
+  AfterInvocationEvent,
+  AfterModelCallEvent,
+  AfterToolCallEvent,
+  InitializedEvent,
+  BeforeInvocationEvent,
+  BeforeModelCallEvent,
+  BeforeToolCallEvent,
+  MessageAddedEvent,
+} from '@strands-agents/sdk';
+
+class LifecycleBridge implements HookProvider {
+  queue: StreamEvent[] = [];
+
+  registerCallbacks(registry: HookRegistry): void {
+    const push = (type: string) => () => {
+      this.queue.push({ tag: 'lifecycle', val: JSON.stringify({ type }) } as any);
+    };
+    registry.addCallback(InitializedEvent, push('agentInitializedEvent'));
+    registry.addCallback(BeforeInvocationEvent, push('beforeInvocationEvent'));
+    registry.addCallback(AfterInvocationEvent, push('afterInvocationEvent'));
+    registry.addCallback(BeforeModelCallEvent, push('beforeModelCallEvent'));
+    registry.addCallback(AfterModelCallEvent, push('afterModelCallEvent'));
+    registry.addCallback(BeforeToolCallEvent, push('beforeToolCallEvent'));
+    registry.addCallback(AfterToolCallEvent, push('afterToolCallEvent'));
+    registry.addCallback(MessageAddedEvent, push('messageAddedEvent'));
+  }
+
+  drain(): StreamEvent[] {
+    return this.queue.splice(0);
+  }
+}
+
 function parseInput(input: string): any {
   try {
     const parsed = JSON.parse(input);
@@ -273,11 +320,10 @@ function parseInput(input: string): any {
   return input;
 }
 
-// ── Agent resource ──────────────────────────────────────────────────
-
 class AgentImpl {
   private agent: Agent;
   private defaultTools: FunctionTool[] | undefined;
+  private lifecycleBridge: LifecycleBridge;
 
   constructor(config: AgentConfig) {
     glog('info', 'AgentImpl: constructing', {
@@ -288,11 +334,13 @@ class AgentImpl {
 
     const model = createModel(config.model, config.modelParams);
     this.defaultTools = createTools(config.tools);
+    this.lifecycleBridge = new LifecycleBridge();
 
     this.agent = new Agent({
       model,
       systemPrompt: buildSystemPrompt(config),
       tools: this.defaultTools,
+      hooks: [this.lifecycleBridge],
       printer: false,
     });
   }
@@ -319,7 +367,7 @@ class AgentImpl {
       (this.agent as any).model = createToolChoiceProxy(originalModel, tc);
     }
 
-    return new ResponseStreamImpl(this.agent, args.input, this.defaultTools, originalModel);
+    return new ResponseStreamImpl(this.agent, args.input, this.lifecycleBridge, this.defaultTools, originalModel);
   }
 
   getMessages(): string {
@@ -332,19 +380,19 @@ class AgentImpl {
   }
 }
 
-// ── ResponseStream resource ─────────────────────────────────────────
-
 class ResponseStreamImpl {
   private done = false;
   private generator: AsyncGenerator<AgentStreamEvent, any, undefined>;
   private interruptResolve: ((payload: string) => void) | null = null;
   private agent: Agent;
+  private bridge: LifecycleBridge;
   private defaultTools: FunctionTool[] | undefined;
   private originalModel: any;
   private eventIndex = 0;
 
-  constructor(agent: Agent, input: string, defaultTools?: FunctionTool[], originalModel?: any) {
+  constructor(agent: Agent, input: string, bridge: LifecycleBridge, defaultTools?: FunctionTool[], originalModel?: any) {
     this.agent = agent;
+    this.bridge = bridge;
     this.defaultTools = defaultTools;
     this.originalModel = originalModel;
     this.generator = agent.stream(parseInput(input) as any);
@@ -365,25 +413,28 @@ class ResponseStreamImpl {
 
     try {
       const result = await this.generator.next();
+      const lifecycle = this.bridge.drain();
 
       if (result.done) {
         this.done = true;
         this.restoreDefaults();
         const agentResult = result.value;
         if (agentResult) {
-          return [{ tag: 'stop', val: mapStopReason(agentResult.stopReason, agentResult) }];
+          return [...lifecycle, { tag: 'stop', val: mapStopReason(agentResult.stopReason, agentResult) }];
         }
-        return undefined;
+        return lifecycle.length > 0 ? lifecycle : undefined;
       }
 
       this.eventIndex++;
       const mapped = mapEvent(result.value);
-      return mapped ? [mapped] : [];
+      if (mapped) lifecycle.push(mapped);
+      return lifecycle.length > 0 ? lifecycle : [];
     } catch (err: any) {
       this.done = true;
       this.restoreDefaults();
+      const lifecycle = this.bridge.drain();
       const msg = String(err?.message ?? err);
-      return [{ tag: 'error', val: msg }];
+      return [...lifecycle, { tag: 'error', val: msg }];
     }
   }
 
@@ -399,8 +450,6 @@ class ResponseStreamImpl {
     this.generator.return(undefined);
   }
 }
-
-// ── Component Model export ──────────────────────────────────────────
 
 export const api = {
   Agent: AgentImpl,

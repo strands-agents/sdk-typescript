@@ -12,6 +12,7 @@
     "build": "npm run build --workspaces",
     "build:sdk": "npm run build -w strands-ts",
     "build:wasm": "npm run build -w strands-wasm",
-    "clean": "npm run clean --workspaces"
+    "clean": "npm run clean --workspaces",
+    "postinstall": "rm -rf node_modules/@bytecodealliance/componentize-js && ln -s ../../../../bytecodealliance/ComponentizeJS node_modules/@bytecodealliance/componentize-js"
   }
 }

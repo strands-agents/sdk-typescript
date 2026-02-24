@@ -1,5 +1,8 @@
-class FileSessionManager:
-    """Stub for file-based session persistence."""
+from typing import Any
 
-    def __init__(self, **kwargs):
+
+class FileSessionManager:
+    """Stub for file-based session persistence (not yet implemented)."""
+
+    def __init__(self, **_kwargs: Any) -> None:
         pass

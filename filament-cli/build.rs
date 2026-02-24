@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
-use flate2::write::GzEncoder;
 use flate2::Compression;
+use flate2::write::GzEncoder;
 use std::env;
 use std::fs::{self, File};
 use std::path::{Path, PathBuf};
@@ -13,7 +13,10 @@ fn main() -> Result<()> {
     println!("cargo:rerun-if-changed=templates");
 
     // Bundle the WIT file
-    let wit_dir = PathBuf::from(&manifest_dir).parent().unwrap().join("filament-wit");
+    let wit_dir = PathBuf::from(&manifest_dir)
+        .parent()
+        .unwrap()
+        .join("filament-wit");
     println!("cargo:rerun-if-changed=../filament-wit/filament.wit");
 
     let wit_path = wit_dir.join("filament.wit");
@@ -43,7 +46,10 @@ fn main() -> Result<()> {
         let bundle_path = PathBuf::from(&out_dir).join(format!("{}.tar.gz", template_name));
         bundle_template(&template_dir, &bundle_path)?;
 
-        println!("✓ Template '{}' validated and bundled successfully", template_name);
+        println!(
+            "✓ Template '{}' validated and bundled successfully",
+            template_name
+        );
     }
 
     Ok(())
@@ -62,10 +68,10 @@ fn discover_templates(templates_dir: &Path) -> Result<Vec<String>> {
         let path = entry.path();
 
         // Only include directories (ignore files like .DS_Store)
-        if path.is_dir() {
-            if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                templates.push(name.to_string());
-            }
+        if path.is_dir()
+            && let Some(name) = path.file_name().and_then(|n| n.to_str())
+        {
+            templates.push(name.to_string());
         }
     }
 
@@ -83,10 +89,9 @@ fn validate_template(template_dir: &Path, template_name: &str) -> Result<()> {
     }
 
     // Validate filament.toml parses
-    let content = fs::read_to_string(&filament_toml)
-        .context("Failed to read template filament.toml")?;
-    toml::from_str::<toml::Value>(&content)
-        .context("Template filament.toml is not valid TOML")?;
+    let content =
+        fs::read_to_string(&filament_toml).context("Failed to read template filament.toml")?;
+    toml::from_str::<toml::Value>(&content).context("Template filament.toml is not valid TOML")?;
 
     // Validate based on project type
     if template_dir.join("Cargo.toml").exists() {
@@ -96,7 +101,10 @@ fn validate_template(template_dir: &Path, template_name: &str) -> Result<()> {
     } else if template_dir.join("pyproject.toml").exists() {
         validate_python_template(template_dir)?;
     } else {
-        println!("cargo:warning=Template '{}' has unknown project type", template_name);
+        println!(
+            "cargo:warning=Template '{}' has unknown project type",
+            template_name
+        );
     }
 
     println!("✓ Template '{}' validation passed", template_name);
@@ -138,8 +146,7 @@ fn validate_python_template(template_dir: &Path) -> Result<()> {
 
     // Validate pyproject.toml parses
     let content = fs::read_to_string(&pyproject_toml)?;
-    toml::from_str::<toml::Value>(&content)
-        .context("Template pyproject.toml is not valid TOML")?;
+    toml::from_str::<toml::Value>(&content).context("Template pyproject.toml is not valid TOML")?;
 
     Ok(())
 }

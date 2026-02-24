@@ -58,6 +58,8 @@
 #     Changes cascade to strands-rs (re-derives all WIT types).
 # ═══════════════════════════════════════════════════════════════════════
 
+export PYTHONPYCACHEPREFIX := ".pycache"
+
 # ── Setup ────────────────────────────────────────────────────────────
 
 # Install everything needed to build and test all layers

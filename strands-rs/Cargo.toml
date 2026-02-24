@@ -7,7 +7,7 @@ version.workspace = true
 
 [features]
 default = []
-pyo3 = ["dep:pyo3", "dep:pyo3-async-runtimes", "dep:tokio", "dep:tracing-subscriber"]
+pyo3 = ["dep:pyo3", "dep:pyo3-async-runtimes", "dep:tokio", "dep:tracing-subscriber", "pyo3/experimental-inspect"]
 uniffi = ["dep:uniffi"]
 
 [dependencies]
@@ -33,6 +33,7 @@ wasmtime = { workspace = true, features = ["component-model", "async"] }
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync"] }
 tokio-stream.workspace = true
+tracing-subscriber = { workspace = true }
 
 [[example]]
 name = "anthropic"
@@ -53,6 +54,10 @@ path = "examples/session.rs"
 [[example]]
 name = "tools"
 path = "examples/tools.rs"
+
+[[example]]
+name = "multi_stream"
+path = "examples/multi_stream.rs"
 
 [lints]
 workspace = true

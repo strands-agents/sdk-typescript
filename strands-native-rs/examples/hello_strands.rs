@@ -1,5 +1,5 @@
 use futures::StreamExt;
-use strands::{
+use strands_native::{
     agent::{Agent, AgentArgs},
     message::{Message, SystemPrompt},
     model::anthropic::{AnthropicModelProvider, ApiVersion, Model},

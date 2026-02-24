@@ -5,15 +5,15 @@ Three representations coexist:
   2. Generated WIT dataclasses (StreamEvent_TextDelta) — typed, used internally
   3. Legacy dicts ({"event": {...}}) — used by stream_async() for SDK compat
 
-Functions prefixed _event_from_pyo3 / _usage_from_pyo3 convert 1→2.
-Functions prefixed _event_to_dict convert 1→3.
+Functions prefixed event_from_pyo3 / _usage_from_pyo3 convert 1→2.
+Functions prefixed event_to_dict convert 1→3.
 """
 
 from __future__ import annotations
 
 import json
 import logging
-from typing import Any
+from typing import Any, cast
 
 from strands.generated.wit_world.imports.types import (
     MetadataEvent,
@@ -32,11 +32,55 @@ from strands.generated.wit_world.imports.types import (
     ToolUseEvent,
     Usage,
 )
+from strands.hooks import (
+    AfterInvocationEvent,
+    AfterModelCallEvent,
+    AfterToolCallEvent,
+    AgentInitializedEvent,
+    BeforeInvocationEvent,
+    BeforeModelCallEvent,
+    BeforeToolCallEvent,
+    MessageAddedEvent,
+)
 
 log = logging.getLogger(__name__)
 
 
-# ── PyO3 string → WIT StopReason enum ──────────────────────────────
+def _safe_json_loads(s: str | None, default: Any = None) -> Any:
+    """Parse JSON, returning *default* on failure or empty input."""
+    if not s:
+        return default
+    try:
+        return json.loads(s)
+    except (json.JSONDecodeError, TypeError):
+        log.debug("malformed JSON: %s", s[:120] if s else "")
+        return default
+
+
+_LIFECYCLE_EVENT_MAP: dict[str, type] = {
+    "initializedEvent": AgentInitializedEvent,
+    "agentInitializedEvent": AgentInitializedEvent,
+    "beforeInvocationEvent": BeforeInvocationEvent,
+    "afterInvocationEvent": AfterInvocationEvent,
+    "beforeModelCallEvent": BeforeModelCallEvent,
+    "afterModelCallEvent": AfterModelCallEvent,
+    "beforeToolCallEvent": BeforeToolCallEvent,
+    "afterToolCallEvent": AfterToolCallEvent,
+    "messageAddedEvent": MessageAddedEvent,
+}
+
+
+def lifecycle_event_from_json(payload: str) -> object | None:
+    """Parse a lifecycle JSON payload into a hook event instance, or None."""
+    data = _safe_json_loads(payload)
+    if not isinstance(data, dict):
+        return None
+    event_type = cast(dict[str, Any], data).get("type", "")
+    cls = _LIFECYCLE_EVENT_MAP.get(event_type)
+    if cls is None:
+        return None
+    return cls()
+
 
 _STOP_REASON_MAP: dict[str, StopReason] = {
     "end-turn": StopReason.END_TURN,
@@ -58,19 +102,15 @@ def _stop_reason_from_pyo3(pyo3_stop: Any) -> StopReason:
     return StopReason.END_TURN
 
 
-def _stop_reason_to_snake(reason: StopReason) -> str:
+def stop_reason_to_snake(reason: StopReason) -> str:
     """Convert a WIT StopReason enum to the snake_case string the Python SDK uses."""
     return reason.name.lower()
 
 
 def _stop_reason_str(stop: Any) -> str:
-    """Convert a PyO3 stop payload to a snake_case string. Legacy helper."""
-    if stop and stop.reason:
-        return stop.reason.value.replace("-", "_")
-    return "end_turn"
-
-
-# ── PyO3 flat types → generated WIT dataclasses ────────────────────
+    """Convert a PyO3 stop payload to a snake_case string via the canonical map."""
+    reason = _stop_reason_from_pyo3(stop.reason if stop else None)
+    return reason.name.lower()
 
 
 def _usage_from_pyo3(u: Any) -> Usage | None:
@@ -93,7 +133,7 @@ def _metrics_from_pyo3(m: Any) -> Metrics | None:
     return Metrics(latency_ms=m.latency_ms)
 
 
-def _event_from_pyo3(event: Any) -> StreamEvent | None:
+def event_from_pyo3(event: Any) -> StreamEvent | None:
     """Convert a PyO3 StreamEvent_ (flat struct) to a generated StreamEvent (union).
 
     Returns None for unrecognized event kinds.
@@ -111,7 +151,7 @@ def _event_from_pyo3(event: Any) -> StreamEvent | None:
                 reason=reason,
                 usage=_usage_from_pyo3(stop.usage) if stop else None,
                 metrics=_metrics_from_pyo3(stop.metrics) if stop else None,
-            )
+            ),
         )
 
     if kind == "tool-use":
@@ -122,7 +162,7 @@ def _event_from_pyo3(event: Any) -> StreamEvent | None:
                     name=tu.name,
                     tool_use_id=tu.tool_use_id,
                     input=tu.input,
-                )
+                ),
             )
         return None
 
@@ -134,7 +174,7 @@ def _event_from_pyo3(event: Any) -> StreamEvent | None:
                     tool_use_id=tr.tool_use_id,
                     status=tr.status,
                     content=tr.content,
-                )
+                ),
             )
         return None
 
@@ -145,7 +185,7 @@ def _event_from_pyo3(event: Any) -> StreamEvent | None:
                 value=MetadataEvent(
                     usage=_usage_from_pyo3(me.usage),
                     metrics=_metrics_from_pyo3(me.metrics),
-                )
+                ),
             )
         return None
 
@@ -159,10 +199,7 @@ def _event_from_pyo3(event: Any) -> StreamEvent | None:
     return None
 
 
-# ── Legacy dict conversion (for stream_async compatibility) ─────────
-
-
-def _event_to_dict(event: Any) -> dict[str, Any]:
+def event_to_dict(event: Any) -> dict[str, Any]:
     """Convert a Rust StreamEvent into the dict format the Python SDK expects.
 
     Returns a plain dict. The "stop" branch returns a partial result dict —
@@ -172,7 +209,7 @@ def _event_to_dict(event: Any) -> dict[str, Any]:
 
     if event.kind == "text-delta":
         return {
-            "event": {"contentBlockDelta": {"delta": {"text": event.text_delta or ""}}}
+            "event": {"contentBlockDelta": {"delta": {"text": event.text_delta or ""}}},
         }
 
     if event.kind == "stop":
@@ -181,17 +218,17 @@ def _event_to_dict(event: Any) -> dict[str, Any]:
         metrics = event.stop.metrics if event.stop else None
         return {
             "result": AgentResult(
-                text="", stop_reason=stop_reason, usage=usage, metrics=metrics
-            )
+                text="", stop_reason=stop_reason, usage=usage, metrics=metrics,
+            ),
         }
 
     if event.kind == "tool-use":
         tu = event.tool_use
-        tool_use_data = (
+        tool_use_data: dict[str, Any] = (
             {
                 "name": tu.name,
                 "toolUseId": tu.tool_use_id,
-                "input": json.loads(tu.input) if tu.input else {},
+                "input": _safe_json_loads(tu.input, {}),
             }
             if tu
             else {}
@@ -199,18 +236,18 @@ def _event_to_dict(event: Any) -> dict[str, Any]:
         return {
             "event": {
                 "contentBlockStart": {
-                    "contentBlock": {"type": "tool_use", **tool_use_data}
-                }
-            }
+                    "contentBlock": {"type": "tool_use", **tool_use_data},
+                },
+            },
         }
 
     if event.kind == "tool-result":
         tr = event.tool_result
-        tool_result_data = (
+        tool_result_data: dict[str, Any] = (
             {
                 "toolUseId": tr.tool_use_id,
                 "status": tr.status,
-                "content": json.loads(tr.content) if tr.content else [],
+                "content": _safe_json_loads(tr.content, []),
             }
             if tr
             else {}
@@ -240,10 +277,7 @@ def _event_to_dict(event: Any) -> dict[str, Any]:
     return {}
 
 
-# ── Message format conversion (TS SDK ↔ Python SDK) ────────────────
-
-
-def _convert_message(msg: dict[str, Any]) -> dict[str, Any]:
+def convert_message(msg: dict[str, Any]) -> dict[str, Any]:
     """Convert a single message from TS SDK format to Python SDK format."""
     if "content" not in msg:
         return msg
@@ -261,7 +295,7 @@ def _convert_block(block: dict[str, Any]) -> dict[str, Any]:
                 "name": block.get("name", ""),
                 "toolUseId": block.get("toolUseId", ""),
                 "input": block.get("input", {}),
-            }
+            },
         }
     if block_type == "toolResultBlock":
         return {
@@ -269,25 +303,26 @@ def _convert_block(block: dict[str, Any]) -> dict[str, Any]:
                 "toolUseId": block.get("toolUseId", ""),
                 "status": block.get("status", "success"),
                 "content": _unwrap_tool_content(block.get("content", [])),
-            }
+            },
         }
+    if "toolResult" in block:
+        tr = block["toolResult"]
+        tr["content"] = _unwrap_tool_content(tr.get("content", []))
+        return block
     return block
 
 
-def _unwrap_tool_content(content: list[Any]) -> list[dict[str, Any]]:
+def _unwrap_tool_content(content: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Unwrap TS SDK tool result content to Python SDK format."""
     result: list[dict[str, Any]] = []
     for item in content:
-        if not isinstance(item, dict):
-            result.append(item)
-            continue
-        item_type = item.get("type")
-        if item_type == "jsonBlock":
-            json_val = item.get("json", {})
+        item_type: str | None = item.get("type")
+        if item_type == "jsonBlock" or (item_type is None and "json" in item):
+            json_val: Any = item.get("json", {})
             if isinstance(json_val, dict) and "$value" in json_val:
-                for inner in json_val["$value"]:
+                for inner in cast(list[Any], json_val["$value"]):
                     if isinstance(inner, dict):
-                        result.append(inner)
+                        result.append(cast(dict[str, Any], inner))
                     else:
                         result.append({"text": str(inner)})
             else:
@@ -299,31 +334,33 @@ def _unwrap_tool_content(content: list[Any]) -> list[dict[str, Any]]:
     return result
 
 
-def _flatten_pydantic_schema(schema: dict[str, Any]) -> dict[str, Any]:
+def flatten_pydantic_schema(schema: dict[str, Any]) -> dict[str, Any]:
     """Flatten a pydantic JSON schema by resolving all $ref/$defs inline."""
-    defs = schema.get("$defs", {})
+    defs: dict[str, Any] = schema.get("$defs", {})
 
     def resolve(obj: Any) -> Any:
         if not isinstance(obj, dict):
             return obj
-        if "$ref" in obj:
-            ref_name = obj["$ref"].rsplit("/", 1)[-1]
+        d = cast(dict[str, Any], obj)
+        if "$ref" in d:
+            ref_name: str = d["$ref"].rsplit("/", 1)[-1]
             return resolve(defs.get(ref_name, {}))
-        return {k: resolve(v) for k, v in obj.items() if k != "$defs"}
+        return {k: resolve(v) for k, v in d.items() if k != "$defs"}
 
-    resolved = resolve(schema)
+    resolved: dict[str, Any] = resolve(schema)
     resolved.pop("$defs", None)
     return resolved
 
 
-def _resolve_model(model: Any) -> dict[str, Any] | None:
+def resolve_model(model: Any) -> dict[str, Any] | None:
     """Normalize a model argument into a config dict (or None for default)."""
     if model is None:
         return None
     if isinstance(model, dict):
-        return model
+        return cast(dict[str, Any], model)
     if isinstance(model, str):
         return {"provider": "bedrock", "model_id": model}
     if hasattr(model, "_to_config_dict"):
-        return model._to_config_dict()
+        config: dict[str, Any] = model._to_config_dict()
+        return config
     return None

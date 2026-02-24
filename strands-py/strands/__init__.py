@@ -7,9 +7,9 @@ re-exports the public API from its submodules.
 from strands._strands import StopReason, StreamEvent
 from strands.agent import Agent, AgentResult
 from strands.hooks import HookRegistry
-from strands.models.bedrock import BedrockModel
 from strands.models.anthropic import AnthropicModel
-from strands.tools import tool, DecoratedTool
+from strands.models.bedrock import BedrockModel
+from strands.tools import DecoratedTool, tool
 from strands.types.content import Messages
 from strands.types.exceptions import MaxTokensReachedException
 from strands.types.tools import ToolContext, ToolResult
@@ -17,8 +17,8 @@ from strands.types.tools import ToolContext, ToolResult
 __all__ = [
     "Agent",
     "AgentResult",
-    "BedrockModel",
     "AnthropicModel",
+    "BedrockModel",
     "DecoratedTool",
     "HookRegistry",
     "MaxTokensReachedException",

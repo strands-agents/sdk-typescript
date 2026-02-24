@@ -1,10 +1,10 @@
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 use dashmap::DashMap;
 use tokio::sync::{Mutex, Notify};
 
-use crate::bindings::{BlobStore, Timeline};
+use crate::bindings::Timeline;
 use crate::loader::Loader;
 use crate::pipeline::PipelineManifest;
 use crate::plugin::{Plugin, Signal, WeaveArgs};
@@ -198,9 +198,8 @@ impl Pipeline {
                 std::mem::take(&mut *lock)
             };
 
-            // Convert Events to WeaveArgs
             tracing::info!(input_count = inputs.len(), "Processing events");
-            let triggers = inputs; // Already GuestBoundEvent, no conversion needed
+            let triggers = inputs;
 
             tracing::info!(trigger_count = triggers.len(), "Creating WeaveArgs");
             let weave_args = WeaveArgs {

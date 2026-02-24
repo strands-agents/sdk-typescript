@@ -1,10 +1,10 @@
 use anyhow::Result;
 use chrono::{DateTime, Datelike, Utc};
-use http::header::ACCEPT;
 use http::StatusCode;
+use http::header::ACCEPT;
 use indicatif::ProgressBar;
-use octocrab::{models, Octocrab, OctocrabBuilder};
-use rusqlite::{params, Connection};
+use octocrab::{Octocrab, OctocrabBuilder, models};
+use rusqlite::{Connection, params};
 use serde::Deserialize;
 use serde_json::Value;
 use std::collections::HashSet;
@@ -420,11 +420,11 @@ impl<'a> GitHubClient<'a> {
         loop {
             let next_page = page.next;
             for pr in page.items {
-                if let Some(updated) = pr.updated_at {
-                    if updated < since {
-                        keep_fetching = false;
-                        break;
-                    }
+                if let Some(updated) = pr.updated_at
+                    && updated < since
+                {
+                    keep_fetching = false;
+                    break;
                 }
 
                 let json = serde_json::to_string(&pr)?;
@@ -452,7 +452,7 @@ impl<'a> GitHubClient<'a> {
                     ],
                 )?;
 
-                if pr.updated_at.map(|t| t >= since).unwrap_or(false) {
+                if pr.updated_at.is_some_and(|t| t >= since) {
                     self.sync_reviews(org, repo, pr.number).await?;
                 }
             }
@@ -484,10 +484,10 @@ impl<'a> GitHubClient<'a> {
                 let json = serde_json::to_string(&review)?;
                 let review_id = review.id.0 as i64;
                 let pr_num = pr_number as i64;
-                let state_str = review
-                    .state
-                    .map(|s| format!("{:?}", s).to_uppercase())
-                    .unwrap_or_else(|| "UNKNOWN".to_string());
+                let state_str = review.state.map_or_else(
+                    || "UNKNOWN".to_string(),
+                    |s| format!("{:?}", s).to_uppercase(),
+                );
 
                 self.db.execute(
                     "INSERT OR REPLACE INTO pr_reviews (id, repo, pr_number, state, author, submitted_at, data)
@@ -524,9 +524,14 @@ impl<'a> GitHubClient<'a> {
             }))).await?
         } else {
             // First sync: don't pass since parameter to avoid GitHub API bug
-            self.gh.get(&route, Some(&serde_json::json!({
-                "state": "all", "sort": "updated", "direction": "desc", "per_page": 100
-            }))).await?
+            self.gh
+                .get(
+                    &route,
+                    Some(&serde_json::json!({
+                        "state": "all", "sort": "updated", "direction": "desc", "per_page": 100
+                    })),
+                )
+                .await?
         };
 
         let mut keep_fetching = true;
@@ -538,8 +543,7 @@ impl<'a> GitHubClient<'a> {
                     .and_then(|v| v.as_str())
                     .unwrap_or("");
                 let updated_at = DateTime::parse_from_rfc3339(updated_at_str)
-                    .map(|dt| dt.with_timezone(&Utc))
-                    .unwrap_or_else(|_| Utc::now());
+                    .map_or_else(|_| Utc::now(), |dt| dt.with_timezone(&Utc));
 
                 if updated_at < since {
                     keep_fetching = false;
@@ -604,8 +608,7 @@ impl<'a> GitHubClient<'a> {
                     .and_then(|v| v.as_str())
                     .unwrap_or("");
                 let updated_at = DateTime::parse_from_rfc3339(updated_at_str)
-                    .map(|dt| dt.with_timezone(&Utc))
-                    .unwrap_or_else(|_| Utc::now());
+                    .map_or_else(|_| Utc::now(), |dt| dt.with_timezone(&Utc));
 
                 if updated_at < since {
                     keep_fetching = false;
@@ -668,8 +671,7 @@ impl<'a> GitHubClient<'a> {
                     .and_then(|v| v.as_str())
                     .unwrap_or("");
                 let updated_at = DateTime::parse_from_rfc3339(updated_at_str)
-                    .map(|dt| dt.with_timezone(&Utc))
-                    .unwrap_or_else(|_| Utc::now());
+                    .map_or_else(|_| Utc::now(), |dt| dt.with_timezone(&Utc));
 
                 if updated_at < since {
                     keep_fetching = false;

@@ -62,11 +62,13 @@ interface types {
     stop(stop-data),
     error(string),
     interrupt(string),
+    lifecycle(string),
   }
 
   record anthropic-config {
     model-id: option<string>,
     api-key: option<string>,
+    additional-config: option<string>,
   }
 
   record bedrock-config {
@@ -75,6 +77,7 @@ interface types {
     access-key-id: option<string>,
     secret-access-key: option<string>,
     session-token: option<string>,
+    additional-config: option<string>,
   }
 
   variant model-config {

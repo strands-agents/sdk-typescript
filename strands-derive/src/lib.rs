@@ -2,8 +2,8 @@ use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
 use syn::{
-    parse_macro_input, Attribute, Data, DeriveInput, Field, Fields, GenericArgument, Ident,
-    PathArguments, Type,
+    Attribute, Data, DeriveInput, Field, Fields, GenericArgument, Ident, PathArguments, Type,
+    parse_macro_input,
 };
 
 /// Derive macro that auto-generates FFI wrapper types from `wasmtime::component::bindgen!` output.
@@ -334,17 +334,15 @@ fn get_name(attrs: &[Attribute]) -> syn::Result<Option<String>> {
 }
 
 fn unpack<'a>(ty: &'a Type, container: &str) -> Option<&'a Type> {
-    if let Type::Path(p) = ty {
-        if let Some(s) = p.path.segments.last() {
-            if s.ident == container {
-                if let PathArguments::AngleBracketed(args) = &s.arguments {
-                    if let Some(GenericArgument::Type(t)) = args.args.first() {
-                        return Some(t);
-                    }
-                }
-            }
-        }
+    if let Type::Path(p) = ty
+        && let Some(s) = p.path.segments.last()
+        && s.ident == container
+        && let PathArguments::AngleBracketed(args) = &s.arguments
+        && let Some(GenericArgument::Type(t)) = args.args.first()
+    {
+        return Some(t);
     }
+
     None
 }
 

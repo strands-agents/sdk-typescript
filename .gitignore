@@ -20,5 +20,11 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 
+# Bytecode prefix dir
+.pycache/
+
+# Demo
+demo/
+
 # Misc
 *.log

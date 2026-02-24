@@ -1,5 +1,5 @@
 use futures::StreamExt;
-use strands::{
+use strands_native::{
     agent::{Agent, AgentArgs},
     mcp_client::{McpClient, McpClientArgs, TransportArgs},
     message::{Message, SystemPrompt},

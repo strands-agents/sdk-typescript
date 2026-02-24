@@ -1,4 +1,4 @@
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use clap::Parser;
 use cliclack::{confirm, input, intro, outro, outro_cancel, select, spinner};
 use flate2::read::GzDecoder;
@@ -74,7 +74,7 @@ impl NewCommand {
         let s = spinner();
         s.start("Generating project files...");
 
-        match self.extract_template(&target_path, &name, &template) {
+        match self.extract_template(&target_path, &name, template) {
             Ok(count) => {
                 s.stop(format!("Created {} files", count));
                 outro(format!("Created {}", name))?;
@@ -92,7 +92,10 @@ impl NewCommand {
     /// Determines the template based on CLI arguments or interactive prompt
     fn resolve_template(&self) -> Result<&'static Template> {
         if let Some(ref name) = self.template {
-            if let Some(template) = TEMPLATES.iter().find(|t| t.name == name && !t.bundle.is_empty()) {
+            if let Some(template) = TEMPLATES
+                .iter()
+                .find(|t| t.name == name && !t.bundle.is_empty())
+            {
                 return Ok(template);
             } else {
                 outro_cancel(format!(
@@ -150,12 +153,7 @@ impl NewCommand {
     }
 
     /// Extracts the selected template to the target directory, handling variable replacement and file permissions
-    fn extract_template(
-        &self,
-        target_path: &Path,
-        name: &str,
-        template: &Template,
-    ) -> Result<u64> {
+    fn extract_template(&self, target_path: &Path, name: &str, template: &Template) -> Result<u64> {
         let bundle = template.bundle();
 
         fs::create_dir_all(target_path)
@@ -227,7 +225,7 @@ fn validate_name(input: &str) -> Result<(), &'static str> {
     if input.is_empty() {
         return Err("Name cannot be empty");
     }
-    
+
     if !input
         .chars()
         .all(|c| c.is_alphanumeric() || c == '_' || c == '-')
@@ -238,6 +236,6 @@ fn validate_name(input: &str) -> Result<(), &'static str> {
     if input.starts_with(|c: char| c.is_numeric()) {
         return Err("Name cannot start with a digit");
     }
-    
+
     Ok(())
 }

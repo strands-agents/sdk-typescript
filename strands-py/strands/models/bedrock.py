@@ -1,26 +1,65 @@
+import json
 from dataclasses import fields as dc_fields
+from typing import Any
 
-from strands.generated.wit_world.imports.types import BedrockConfig
+from strands.generated.wit_world.imports.types import BedrockConfig, ModelParams
 
-# Fields derived from the generated WIT dataclass — stays in sync automatically.
-_WIT_FIELDS = {f.name for f in dc_fields(BedrockConfig)}
+_CONFIG_FIELDS = {f.name for f in dc_fields(BedrockConfig)}
+_PARAM_FIELDS = {f.name for f in dc_fields(ModelParams)}
+_KNOWN_FIELDS = _CONFIG_FIELDS | _PARAM_FIELDS
+
+# Fields that are not JSON-serializable and must be handled specially.
+_NON_SERIALIZABLE = {"boto_session"}
 
 
 class BedrockModel:
     """Config wrapper for Bedrock models.
 
-    Keyword arguments match the fields of the WIT bedrock-config record.
+    Known fields (model_id, region, max_tokens, temperature, top_p) are
+    passed through the typed WIT contract. All other kwargs are forwarded
+    as JSON via additional_config to the TS SDK's BedrockModel constructor.
     """
 
     def __init__(
-        self, model_id: str = "us.anthropic.claude-sonnet-4-20250514", **kwargs
-    ):
+        self, model_id: str = "us.anthropic.claude-sonnet-4-20250514-v1:0", **kwargs: Any,
+    ) -> None:
         if "region_name" in kwargs:
             kwargs["region"] = kwargs.pop("region_name")
-        self._config = {"provider": "bedrock", "model_id": model_id}
-        for k, v in kwargs.items():
-            if k in _WIT_FIELDS and v is not None:
-                self._config[k] = v
 
-    def _to_config_dict(self):
+        boto_session = kwargs.pop("boto_session", None)
+        if boto_session is not None:
+            if "region" not in kwargs:
+                region = getattr(boto_session, "region_name", None)
+                if region:
+                    kwargs["region"] = region
+            get_creds = getattr(boto_session, "get_credentials", None)
+            raw_creds = get_creds() if get_creds else None
+            if raw_creds is not None:
+                freeze = getattr(raw_creds, "get_frozen_credentials", None)
+                frozen = freeze() if freeze else raw_creds
+                ak = getattr(frozen, "access_key", None)
+                sk = getattr(frozen, "secret_key", None)
+                tk = getattr(frozen, "token", None)
+                if "access_key_id" not in kwargs and ak:
+                    kwargs["access_key_id"] = ak
+                if "secret_access_key" not in kwargs and sk:
+                    kwargs["secret_access_key"] = sk
+                if "session_token" not in kwargs and tk:
+                    kwargs["session_token"] = tk
+
+        self._config: dict[str, Any] = {"provider": "bedrock", "model_id": model_id}
+        extra: dict[str, Any] = {}
+
+        for k, v in kwargs.items():
+            if v is None or k in _NON_SERIALIZABLE:
+                continue
+            if k in _KNOWN_FIELDS:
+                self._config[k] = v
+            else:
+                extra[k] = v
+
+        if extra:
+            self._config["additional_config"] = json.dumps(extra)
+
+    def _to_config_dict(self) -> dict[str, Any]:
         return self._config

@@ -1,5 +1,8 @@
-class S3SessionManager:
-    """Stub for S3-based session persistence."""
+from typing import Any
 
-    def __init__(self, **kwargs):
+
+class S3SessionManager:
+    """Stub for S3-based session persistence (not yet implemented)."""
+
+    def __init__(self, **_kwargs: Any) -> None:
         pass
