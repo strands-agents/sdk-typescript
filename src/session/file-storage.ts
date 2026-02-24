@@ -46,8 +46,9 @@ export class FileStorage implements SnapshotStorage {
     isLatest: boolean
     snapshot: Snapshot
   }): Promise<void> {
-    await this._writeJSON(this._getHistorySnapshotPath(params.location, params.snapshotId), params.snapshot)
-    if (params.isLatest) {
+    if (!params.isLatest) {
+      await this._writeJSON(this._getHistorySnapshotPath(params.location, params.snapshotId), params.snapshot)
+    } else {
       await this._writeJSON(this._getLatestSnapshotPath(params.location), params.snapshot)
     }
   }

@@ -20,6 +20,12 @@ vi.mock('@aws-sdk/client-s3', () => ({
   ListObjectsV2Command: vi.fn().mockImplementation(function (input) {
     return { input }
   }),
+  HeadBucketCommand: vi.fn().mockImplementation(function (input) {
+    return { input }
+  }),
+  CreateBucketCommand: vi.fn().mockImplementation(function (input) {
+    return { input }
+  }),
 }))
 
 const SCOPE_ID = 'test-agent'
@@ -61,6 +67,64 @@ describe('S3Storage', () => {
     })
   })
 
+  describe('_ensureBucket', () => {
+    it('calls HeadBucketCommand on first write', async () => {
+      mockS3Client.send.mockResolvedValue({})
+      const location: SnapshotLocation = { sessionId: 'test-session', scope: 'agent', scopeId: SCOPE_ID }
+      await storage.saveSnapshot({ location, snapshotId: '1', isLatest: false, snapshot: createTestSnapshot() })
+      expect(mockS3Client.send).toHaveBeenCalledWith(expect.objectContaining({ input: { Bucket: 'test-bucket' } }))
+    })
+
+    it('skips HeadBucketCommand on subsequent writes', async () => {
+      mockS3Client.send.mockResolvedValue({})
+      const location: SnapshotLocation = { sessionId: 'test-session', scope: 'agent', scopeId: SCOPE_ID }
+      await storage.saveSnapshot({ location, snapshotId: '1', isLatest: false, snapshot: createTestSnapshot() })
+      const callsAfterFirst = mockS3Client.send.mock.calls.length
+      await storage.saveSnapshot({ location, snapshotId: '2', isLatest: false, snapshot: createTestSnapshot() })
+      // Second call should have exactly 1 more send (PutObject only, no HeadBucket)
+      expect(mockS3Client.send.mock.calls.length).toBe(callsAfterFirst + 1)
+    })
+
+    it('creates bucket when HeadBucket returns NoSuchBucket', async () => {
+      const noSuchBucket = Object.assign(new Error('NoSuchBucket'), { name: 'NoSuchBucket' })
+      mockS3Client.send.mockRejectedValueOnce(noSuchBucket) // HeadBucket fails
+      mockS3Client.send.mockResolvedValue({}) // CreateBucket + PutObject succeed
+      const location: SnapshotLocation = { sessionId: 'test-session', scope: 'agent', scopeId: SCOPE_ID }
+      await expect(
+        storage.saveSnapshot({ location, snapshotId: '1', isLatest: false, snapshot: createTestSnapshot() })
+      ).resolves.not.toThrow()
+    })
+
+    it('creates bucket when HeadBucket returns NotFound', async () => {
+      const notFound = Object.assign(new Error('NotFound'), { name: 'NotFound' })
+      mockS3Client.send.mockRejectedValueOnce(notFound)
+      mockS3Client.send.mockResolvedValue({})
+      const location: SnapshotLocation = { sessionId: 'test-session', scope: 'agent', scopeId: SCOPE_ID }
+      await expect(
+        storage.saveSnapshot({ location, snapshotId: '1', isLatest: false, snapshot: createTestSnapshot() })
+      ).resolves.not.toThrow()
+    })
+
+    it('proceeds when HeadBucket returns BucketAlreadyOwnedByYou', async () => {
+      const alreadyOwned = Object.assign(new Error('BucketAlreadyOwnedByYou'), { name: 'BucketAlreadyOwnedByYou' })
+      mockS3Client.send.mockRejectedValueOnce(alreadyOwned)
+      mockS3Client.send.mockResolvedValue({})
+      const location: SnapshotLocation = { sessionId: 'test-session', scope: 'agent', scopeId: SCOPE_ID }
+      await expect(
+        storage.saveSnapshot({ location, snapshotId: '1', isLatest: false, snapshot: createTestSnapshot() })
+      ).resolves.not.toThrow()
+    })
+
+    it('rethrows unexpected errors from HeadBucket', async () => {
+      const unexpected = Object.assign(new Error('AccessDenied'), { name: 'AccessDenied' })
+      mockS3Client.send.mockRejectedValueOnce(unexpected)
+      const location: SnapshotLocation = { sessionId: 'test-session', scope: 'agent', scopeId: SCOPE_ID }
+      await expect(
+        storage.saveSnapshot({ location, snapshotId: '1', isLatest: false, snapshot: createTestSnapshot() })
+      ).rejects.toThrow('AccessDenied')
+    })
+  })
+
   describe('saveSnapshot', () => {
     describe('S3SnapshotStorage_When_saveSnapshot_Then_PutsObjects', () => {
       it('saves snapshot to S3 history', async () => {
@@ -89,7 +153,6 @@ describe('S3Storage', () => {
 
         await storage.saveSnapshot({ location, snapshotId: '1', isLatest: true, snapshot })
 
-        expect(mockS3Client.send).toHaveBeenCalledTimes(2)
         expect(mockS3Client.send).toHaveBeenCalledWith(
           expect.objectContaining({
             input: expect.objectContaining({
@@ -122,6 +185,7 @@ describe('S3Storage', () => {
       it('throws SessionError when S3 put fails', async () => {
         const location: SnapshotLocation = { sessionId: 'test-session', scope: 'agent', scopeId: SCOPE_ID }
         const snapshot = createTestSnapshot()
+        mockS3Client.send.mockResolvedValueOnce({}) // HeadBucketCommand succeeds
         mockS3Client.send.mockRejectedValue(new Error('S3 error'))
 
         await expect(storage.saveSnapshot({ location, snapshotId: '1', isLatest: false, snapshot })).rejects.toThrow(
@@ -389,6 +453,7 @@ describe('S3Storage', () => {
 
     describe('S3SnapshotStorage_When_SaveManifestFails_Then_ThrowsSessionError', () => {
       it('throws SessionError when S3 put fails', async () => {
+        mockS3Client.send.mockResolvedValueOnce({}) // HeadBucketCommand succeeds
         mockS3Client.send.mockRejectedValue(new Error('S3 error'))
         await expect(
           storage.saveManifest({

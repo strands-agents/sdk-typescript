@@ -51,6 +51,7 @@ import {
 import { createStructuredOutputContext } from '../structured-output/context.js'
 import { StructuredOutputException } from '../structured-output/exceptions.js'
 import type { z } from 'zod'
+import type { SessionManager } from '../session/session-manager.js'
 import { Tracer } from '../telemetry/tracer.js'
 import type { Usage } from '../models/streaming.js'
 import type { AttributeValue } from '@opentelemetry/api'
@@ -121,6 +122,10 @@ export type AgentConfig = {
    * Zod schema for structured output validation.
    */
   structuredOutputSchema?: z.ZodSchema
+  /**
+   * Session manager for saving snapshots.
+   */
+  sessionManager?: SessionManager
   /**
    * Custom trace attributes to include in all spans.
    * These attributes are merged with standard attributes in telemetry spans.
@@ -261,6 +266,10 @@ export class Agent implements AgentData {
 
     // Initialize tracer - OTEL returns no-op tracer if not configured
     this._tracer = new Tracer(config?.traceAttributes)
+
+    if (config?.sessionManager) {
+      this.hooks.addHook(config.sessionManager)
+    }
 
     this._initialized = false
   }
