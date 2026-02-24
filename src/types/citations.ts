@@ -1,4 +1,4 @@
-import type { JSONSerializable } from './json.js'
+import type { JSONSerializable, Serialized } from './json.js'
 
 /**
  * Citation types for document citation content blocks.
@@ -168,7 +168,9 @@ export interface CitationsBlockData {
  * Returned by models when document citations are enabled.
  * This is an output-only block — users do not construct these directly.
  */
-export class CitationsBlock implements CitationsBlockData, JSONSerializable<{ citationsContent: CitationsBlockData }> {
+export class CitationsBlock
+  implements CitationsBlockData, JSONSerializable<{ citationsContent: Serialized<CitationsBlockData> }>
+{
   /**
    * Discriminator for citations content.
    */
@@ -193,7 +195,7 @@ export class CitationsBlock implements CitationsBlockData, JSONSerializable<{ ci
    * Serializes the CitationsBlock to a JSON-compatible ContentBlockData object.
    * Called automatically by JSON.stringify().
    */
-  toJSON(): { citationsContent: CitationsBlockData } {
+  toJSON(): { citationsContent: Serialized<CitationsBlockData> } {
     return {
       citationsContent: {
         citations: this.citations,
@@ -208,7 +210,7 @@ export class CitationsBlock implements CitationsBlockData, JSONSerializable<{ ci
    * @param data - Wrapped CitationsBlockData to deserialize
    * @returns CitationsBlock instance
    */
-  static fromJSON(data: { citationsContent: CitationsBlockData }): CitationsBlock {
+  static fromJSON(data: { citationsContent: Serialized<CitationsBlockData> }): CitationsBlock {
     return new CitationsBlock(data.citationsContent)
   }
 }
