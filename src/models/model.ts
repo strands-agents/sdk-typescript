@@ -8,6 +8,8 @@ import {
   TextBlock,
   ToolUseBlock,
 } from '../types/messages.js'
+import { CitationsBlock } from '../types/citations.js'
+import type { Citation, CitationGeneratedContent } from '../types/citations.js'
 import type { ToolChoice, ToolSpec } from '../tools/types.js'
 import {
   ModelContentBlockDeltaEvent,
@@ -210,6 +212,9 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
         signature?: string
         redactedContent?: Uint8Array
       } = {}
+      let accumulatedCitationsList: Citation[] = []
+      let accumulatedCitationsContent: CitationGeneratedContent[] = []
+      let hasCitations = false
       let errorToThrow: Error | undefined = undefined
       let stoppedMessage: Message | null = null
       let finalStopReason: StopReason | null = null
@@ -235,23 +240,28 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
             accumulatedToolInput = ''
             accumulatedText = ''
             accumulatedReasoning = {}
+            accumulatedCitationsList = []
+            accumulatedCitationsContent = []
+            hasCitations = false
             break
 
-          case 'modelContentBlockDeltaEvent':
-            switch (event.delta.type) {
-              case 'textDelta':
-                accumulatedText += event.delta.text
-                break
-              case 'toolUseInputDelta':
-                accumulatedToolInput += event.delta.input
-                break
-              case 'reasoningContentDelta':
-                if (event.delta.text) accumulatedReasoning.text = (accumulatedReasoning.text ?? '') + event.delta.text
-                if (event.delta.signature) accumulatedReasoning.signature = event.delta.signature
-                if (event.delta.redactedContent) accumulatedReasoning.redactedContent = event.delta.redactedContent
-                break
+          case 'modelContentBlockDeltaEvent': {
+            const delta = event.delta
+            if (delta.type === 'textDelta') {
+              accumulatedText += delta.text
+            } else if (delta.type === 'toolUseInputDelta') {
+              accumulatedToolInput += delta.input
+            } else if (delta.type === 'reasoningContentDelta') {
+              if (delta.text) accumulatedReasoning.text = (accumulatedReasoning.text ?? '') + delta.text
+              if (delta.signature) accumulatedReasoning.signature = delta.signature
+              if (delta.redactedContent) accumulatedReasoning.redactedContent = delta.redactedContent
+            } else if (delta.type === 'citationsContentDelta') {
+              accumulatedCitationsList.push(...delta.citations)
+              accumulatedCitationsContent.push(...delta.content)
+              hasCitations = true
             }
             break
+          }
 
           case 'modelContentBlockStopEvent': {
             // Finalize and emit complete ContentBlock
@@ -272,6 +282,12 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
                   ...accumulatedReasoning,
                 })
                 accumulatedReasoning = {} // Reset after creating reasoning block
+              } else if (hasCitations) {
+                block = new CitationsBlock({
+                  citations: accumulatedCitationsList,
+                  content: accumulatedCitationsContent,
+                })
+                hasCitations = false
               } else {
                 block = new TextBlock(accumulatedText)
               }

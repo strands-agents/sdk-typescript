@@ -39,7 +39,8 @@ import {
 import { type BaseModelConfig, Model, type StreamOptions } from '../models/model.js'
 import type { ContentBlock, Message, StopReason, ToolUseBlock } from '../types/messages.js'
 import type { ImageSource, VideoSource, DocumentSource } from '../types/media.js'
-import type { ModelStreamEvent, ReasoningContentDelta, Usage } from '../models/streaming.js'
+import type { CitationsContentDelta, ModelStreamEvent, ReasoningContentDelta, Usage } from '../models/streaming.js'
+import type { CitationsBlockData } from '../types/citations.js'
 import type { JSONValue } from '../types/json.js'
 import { ContextWindowOverflowError, ModelThrottledError, normalizeError } from '../errors.js'
 import { ensureDefined } from '../types/validation.js'
@@ -632,6 +633,10 @@ export class BedrockModel extends Model<BedrockModelConfig> {
           },
         }
 
+      case 'citationsBlock':
+        // Citations are output-only blocks, not sent back to models
+        return undefined
+
       case 'guardContentBlock': {
         if (block.text) {
           return {
@@ -802,6 +807,18 @@ export class BedrockModel extends Model<BedrockModelConfig> {
 
         events.push({ type: 'modelContentBlockStopEvent' })
       },
+      citationsContent: (block: CitationsBlockData): void => {
+        if (!block) return
+        events.push({ type: 'modelContentBlockStartEvent' })
+
+        const delta: CitationsContentDelta = {
+          type: 'citationsContentDelta',
+          citations: block.citations,
+          content: block.content,
+        }
+        events.push({ type: 'modelContentBlockDeltaEvent', delta })
+        events.push({ type: 'modelContentBlockStopEvent' })
+      },
     }
 
     const content = ensureDefined(message.content, 'message.content')
@@ -914,6 +931,15 @@ export class BedrockModel extends Model<BedrockModelConfig> {
             if (Object.keys(reasoningDelta).length > 1) {
               events.push({ type: 'modelContentBlockDeltaEvent', delta: reasoningDelta })
             }
+          },
+          citationsContent: (block: CitationsBlockData): void => {
+            if (!block) return
+            const delta: CitationsContentDelta = {
+              type: 'citationsContentDelta',
+              citations: block.citations,
+              content: block.content,
+            }
+            events.push({ type: 'modelContentBlockDeltaEvent', delta })
           },
         }
 

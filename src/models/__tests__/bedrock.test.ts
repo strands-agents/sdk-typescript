@@ -761,6 +761,70 @@ describe('BedrockModel', () => {
       })
     })
 
+    it('yields and validates citationsContent events correctly', async () => {
+      const citationsData = {
+        citations: [
+          {
+            location: { documentChar: { documentIndex: 0, start: 10, end: 50 } },
+            sourceContent: [{ text: 'source text' }],
+            title: 'Test Doc',
+          },
+        ],
+        content: [{ text: 'generated text' }],
+      }
+
+      const mockSend = vi.fn(async () => {
+        if (stream) {
+          return {
+            stream: (async function* (): AsyncGenerator<unknown> {
+              yield { messageStart: { role: 'assistant' } }
+              yield { contentBlockStart: {} }
+              yield {
+                contentBlockDelta: {
+                  delta: { citationsContent: citationsData },
+                },
+              }
+              yield { contentBlockStop: {} }
+              yield { messageStop: { stopReason: 'end_turn' } }
+              yield {
+                metadata: { usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 }, metrics: { latencyMs: 100 } },
+              }
+            })(),
+          }
+        } else {
+          return {
+            output: {
+              message: {
+                role: 'assistant',
+                content: [{ citationsContent: citationsData }],
+              },
+            },
+            stopReason: 'end_turn',
+            usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+            metrics: { latencyMs: 100 },
+          }
+        }
+      })
+      mockBedrockClientImplementation({ send: mockSend })
+
+      const provider = new BedrockModel({ stream })
+      const messages = [new Message({ role: 'user', content: [new TextBlock('Cite this.')] })]
+      const events = await collectIterator(provider.stream(messages))
+
+      expect(events).toContainEqual({ role: 'assistant', type: 'modelMessageStartEvent' })
+      expect(events).toContainEqual({ type: 'modelContentBlockStartEvent' })
+      expect(events).toContainEqual({
+        type: 'modelContentBlockDeltaEvent',
+        delta: {
+          type: 'citationsContentDelta',
+          citations: citationsData.citations,
+          content: citationsData.content,
+        },
+      })
+      expect(events).toContainEqual({ type: 'modelContentBlockStopEvent' })
+      expect(events).toContainEqual({ stopReason: 'endTurn', type: 'modelMessageStopEvent' })
+    })
+
     describe('error handling', async () => {
       it.each([
         {

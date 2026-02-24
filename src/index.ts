@@ -66,6 +66,23 @@ export {
   contentBlockFromData,
 } from './types/messages.js'
 
+// Citation types
+export type {
+  CitationsBlockData,
+  Citation,
+  CitationLocation,
+  CitationSourceContent,
+  CitationGeneratedContent,
+  DocumentCharLocation,
+  DocumentPageLocation,
+  DocumentChunkLocation,
+  SearchResultLocation,
+  WebLocation,
+} from './types/citations.js'
+
+// Citation class
+export { CitationsBlock } from './types/citations.js'
+
 // Media classes
 export { S3Location, ImageBlock, VideoBlock, DocumentBlock } from './types/media.js'
 
@@ -122,6 +139,7 @@ export type {
   TextDelta,
   ToolUseInputDelta,
   ReasoningContentDelta,
+  CitationsContentDelta,
   ContentBlockDelta,
   ModelContentBlockDeltaEventData,
   ModelContentBlockDeltaEvent,

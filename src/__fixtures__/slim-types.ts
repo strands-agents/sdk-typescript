@@ -14,6 +14,7 @@ import type {
   JsonBlock,
 } from '../types/messages.js'
 import type { ImageBlock, VideoBlock, DocumentBlock } from '../types/media.js'
+import type { CitationsBlock } from '../types/citations.js'
 
 /**
  * Strips the toJSON method from a type, allowing plain objects to be used in tests.
@@ -42,6 +43,7 @@ export type PlainContentBlock =
   | NoJSON<ImageBlock>
   | NoJSON<VideoBlock>
   | NoJSON<DocumentBlock>
+  | NoJSON<CitationsBlock>
 
 /**
  * Plain system content block without toJSON method.

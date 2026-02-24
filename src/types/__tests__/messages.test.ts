@@ -14,6 +14,7 @@ import {
   systemPromptToData,
 } from '../messages.js'
 import { ImageBlock, VideoBlock, DocumentBlock, encodeBase64 } from '../media.js'
+import { CitationsBlock } from '../citations.js'
 
 describe('Message', () => {
   test('creates message with role and content', () => {
@@ -281,6 +282,30 @@ describe('Message.fromMessageData', () => {
     expect(message.content[0]!.type).toBe('documentBlock')
   })
 
+  it('converts citations content block data to CitationsBlock', () => {
+    const messageData: MessageData = {
+      role: 'assistant',
+      content: [
+        {
+          citationsContent: {
+            citations: [
+              {
+                location: { documentChar: { documentIndex: 0, start: 10, end: 50 } },
+                sourceContent: [{ text: 'source text' }],
+                title: 'Test Doc',
+              },
+            ],
+            content: [{ text: 'generated text' }],
+          },
+        },
+      ],
+    }
+    const message = Message.fromMessageData(messageData)
+    expect(message.content).toHaveLength(1)
+    expect(message.content[0]).toBeInstanceOf(CitationsBlock)
+    expect(message.content[0]!.type).toBe('citationsBlock')
+  })
+
   it('converts multiple content blocks', () => {
     const messageData: MessageData = {
       role: 'user',
@@ -532,6 +557,7 @@ describe('toJSON/fromJSON round-trips', () => {
     ['Message with text content',              () => new Message({ role: 'user', content: [new TextBlock('Hello')] })],
     ['Message with multiple content blocks',   () => new Message({ role: 'assistant', content: [new TextBlock('Here is the result'), new ToolUseBlock({ name: 'test-tool', toolUseId: '123', input: { key: 'value' } })] })],
     ['Message with image content',             () => new Message({ role: 'user', content: [new TextBlock('Check this image'), new ImageBlock({ format: 'png', source: { bytes: new Uint8Array([1, 2, 3]) } })] })],
+    ['CitationsBlock',                         () => new CitationsBlock({ citations: [{ location: { documentChar: { documentIndex: 0, start: 0, end: 10 } }, sourceContent: [{ text: 'source' }] }], content: [{ text: 'generated' }] })],
   ] as const
 
   it.each(roundTripCases)('%s', (_name, createBlock) => {

@@ -2,6 +2,8 @@ import type { JSONValue, Serialized, MaybeSerializedInput, JSONSerializable } fr
 import { omitUndefined } from './json.js'
 import type { ImageBlockData, VideoBlockData, DocumentBlockData } from './media.js'
 import { ImageBlock, VideoBlock, DocumentBlock, encodeBase64, decodeBase64 } from './media.js'
+import type { CitationsBlockData } from './citations.js'
+import { CitationsBlock } from './citations.js'
 
 /**
  * Message types and content blocks for conversational AI interactions.
@@ -115,6 +117,7 @@ export type ContentBlockData =
   | { image: ImageBlockData }
   | { video: VideoBlockData }
   | { document: DocumentBlockData }
+  | { citationsContent: CitationsBlockData }
 
 export type ContentBlock =
   | TextBlock
@@ -126,6 +129,7 @@ export type ContentBlock =
   | ImageBlock
   | VideoBlock
   | DocumentBlock
+  | CitationsBlock
 
 /**
  * Data for a text block.
@@ -875,6 +879,8 @@ export function contentBlockFromData(data: ContentBlockData): ContentBlock {
     return VideoBlock.fromJSON(data)
   } else if ('document' in data) {
     return DocumentBlock.fromJSON(data)
+  } else if ('citationsContent' in data) {
+    return CitationsBlock.fromJSON(data)
   } else {
     throw new Error('Unknown ContentBlockData type')
   }
