@@ -95,6 +95,11 @@ export interface WebLocation {
    * The URL of the web source.
    */
   url: string
+
+  /**
+   * The domain of the web source.
+   */
+  domain?: string
 }
 
 /**
@@ -105,7 +110,7 @@ export type CitationLocation =
   | { documentChar: DocumentCharLocation }
   | { documentPage: DocumentPageLocation }
   | { documentChunk: DocumentChunkLocation }
-  | { searchResult: SearchResultLocation }
+  | { searchResultLocation: SearchResultLocation }
   | { web: WebLocation }
 
 /**
@@ -136,6 +141,11 @@ export interface Citation {
    * The location of the cited source.
    */
   location: CitationLocation
+
+  /**
+   * The source identifier string.
+   */
+  source?: string
 
   /**
    * The source content referenced by this citation.

@@ -61,11 +61,11 @@ describe('CitationsBlock', () => {
       expect(restored).toEqual(original)
     })
 
-    it('round-trips with searchResult location', () => {
+    it('round-trips with searchResultLocation location', () => {
       const data: CitationsBlockData = {
         citations: [
           {
-            location: { searchResult: { searchResultIndex: 2, start: 0, end: 100 } },
+            location: { searchResultLocation: { searchResultIndex: 2, start: 0, end: 100 } },
             sourceContent: [{ text: 'search result content' }],
           },
         ],

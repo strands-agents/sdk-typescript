@@ -641,6 +641,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
             const filteredSource = citation.sourceContent.filter((sc) => sc.text).map((sc) => ({ text: sc.text }))
             if (filteredSource.length > 0) filtered.sourceContent = filteredSource
           }
+          if (citation.source) filtered.source = citation.source
           if (citation.title) filtered.title = citation.title
           return filtered
         })

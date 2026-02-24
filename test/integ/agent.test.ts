@@ -263,40 +263,122 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel, mode
       expect(textContent?.text).toMatch(/yellow/i)
     })
 
-    it.skipIf(!supports.citations)('returns citations from document and preserves them in multi-turn', async () => {
-      const docBlock = new DocumentBlock({
+    describe.skipIf(!supports.citations)('Citations', () => {
+      const textDocBlock = new DocumentBlock({
         name: 'test-document',
         format: 'txt',
         source: { text: 'The capital of France is Paris. It is known as the City of Light.' },
         citations: { enabled: true },
       })
 
-      const agent = new Agent({
-        model: createModel(),
-        printer: false,
+      const textDocPrompt = new TextBlock('What is the capital of France according to the document? Answer briefly.')
+
+      describe.each([
+        { label: 'streaming', modelOptions: {} },
+        { label: 'non-streaming', modelOptions: { stream: false } },
+      ])('$label', ({ modelOptions }) => {
+        it('returns documentChar citations from text document and preserves them in multi-turn', async () => {
+          const agent = new Agent({
+            model: createModel(modelOptions),
+            printer: false,
+          })
+
+          const result = await agent.invoke([textDocBlock, textDocPrompt])
+
+          expect(result.stopReason).toBe('endTurn')
+
+          const citationsBlock = result.lastMessage.content.find(
+            (block): block is CitationsBlock => block.type === 'citationsBlock'
+          )
+          expect(citationsBlock).toBeDefined()
+          expect(citationsBlock!.citations.length).toBeGreaterThan(0)
+          expect(citationsBlock!.content.length).toBeGreaterThan(0)
+          expect(citationsBlock!.content[0]!.text).toBeDefined()
+
+          const citation = citationsBlock!.citations[0]!
+          expect(citation.location).toBeDefined()
+          expect('documentChar' in citation.location).toBe(true)
+          expect(citation.sourceContent.length).toBeGreaterThan(0)
+          expect(citation.sourceContent[0]!.text).toBeDefined()
+
+          // Second turn: verify citations survive in conversation history
+          const followUp = await agent.invoke('What else does the document say about that city?')
+          expect(followUp.stopReason).toBe('endTurn')
+          expect(followUp.lastMessage.role).toBe('assistant')
+          expect(followUp.lastMessage.content.length).toBeGreaterThan(0)
+        })
+
+        it('returns documentPage citations from PDF document and preserves them in multi-turn', async () => {
+          const pdfBytes = await loadFixture(letterPdfUrl)
+
+          const agent = new Agent({
+            model: createModel(modelOptions),
+            printer: false,
+          })
+
+          const result = await agent.invoke([
+            new DocumentBlock({
+              name: 'letter',
+              format: 'pdf',
+              source: { bytes: pdfBytes },
+              citations: { enabled: true },
+            }),
+            new TextBlock('Summarize this document briefly.'),
+          ])
+
+          expect(result.stopReason).toBe('endTurn')
+
+          const citationsBlock = result.lastMessage.content.find(
+            (block): block is CitationsBlock => block.type === 'citationsBlock'
+          )
+          expect(citationsBlock).toBeDefined()
+          expect(citationsBlock!.citations.length).toBeGreaterThan(0)
+          expect(citationsBlock!.content.length).toBeGreaterThan(0)
+          expect(citationsBlock!.content[0]!.text).toBeDefined()
+
+          const citation = citationsBlock!.citations[0]!
+          expect(citation.location).toBeDefined()
+          expect('documentPage' in citation.location).toBe(true)
+          expect(citation.sourceContent.length).toBeGreaterThan(0)
+          expect(citation.sourceContent[0]!.text).toBeDefined()
+
+          // Second turn: verify citations survive in conversation history
+          const followUp = await agent.invoke('What else can you tell me about this document?')
+          expect(followUp.stopReason).toBe('endTurn')
+          expect(followUp.lastMessage.role).toBe('assistant')
+          expect(followUp.lastMessage.content.length).toBeGreaterThan(0)
+        })
       })
 
-      // First turn: send document with citations enabled
-      const result = await agent.invoke([
-        docBlock,
-        new TextBlock('What is the capital of France according to the document? Answer briefly.'),
-      ])
+      it('emits citationsContentDelta events during streaming', async () => {
+        const agent = new Agent({
+          model: createModel(),
+          printer: false,
+        })
 
-      expect(result.stopReason).toBe('endTurn')
+        const { items, result } = await collectGenerator(agent.stream([textDocBlock, textDocPrompt]))
 
-      // Verify citations block is present in the response
-      const citationsBlock = result.lastMessage.content.find(
-        (block): block is CitationsBlock => block.type === 'citationsBlock'
-      )
-      expect(citationsBlock).toBeDefined()
-      expect(citationsBlock!.citations.length).toBeGreaterThan(0)
+        expect(result.stopReason).toBe('endTurn')
 
-      // Second turn: verify conversation continues with citations in history
-      const followUp = await agent.invoke('What else does the document say about that city?')
+        // Verify citationsContentDelta events were emitted during streaming
+        const citationDeltas = items.filter(
+          (item) =>
+            item.type === 'modelStreamUpdateEvent' &&
+            item.event.type === 'modelContentBlockDeltaEvent' &&
+            item.event.delta.type === 'citationsContentDelta'
+        )
+        expect(citationDeltas.length).toBeGreaterThan(0)
 
-      expect(followUp.stopReason).toBe('endTurn')
-      expect(followUp.lastMessage.role).toBe('assistant')
-      expect(followUp.lastMessage.content.length).toBeGreaterThan(0)
+        // Verify the aggregated result also contains the CitationsBlock
+        const citationsBlock = result.lastMessage.content.find(
+          (block): block is CitationsBlock => block.type === 'citationsBlock'
+        )
+        expect(citationsBlock).toBeDefined()
+        expect(citationsBlock!.citations.length).toBeGreaterThan(0)
+      })
+
+      // Note: documentChunk, searchResultLocation, and web citation location variants
+      // require RAG/search integration and cannot be triggered from document uploads alone.
     })
 
     describe.skipIf(!supports.images)('multimodal input', () => {
