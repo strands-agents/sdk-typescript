@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   Agent,
+  CitationsBlock,
   DocumentBlock,
   ImageBlock,
   Message,
@@ -260,6 +261,42 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel, mode
       const textContent = result.lastMessage.content.find((block) => block.type === 'textBlock')
       expect(textContent).toBeDefined()
       expect(textContent?.text).toMatch(/yellow/i)
+    })
+
+    it.skipIf(!supports.citations)('returns citations from document and preserves them in multi-turn', async () => {
+      const docBlock = new DocumentBlock({
+        name: 'test-document',
+        format: 'txt',
+        source: { text: 'The capital of France is Paris. It is known as the City of Light.' },
+        citations: { enabled: true },
+      })
+
+      const agent = new Agent({
+        model: createModel(),
+        printer: false,
+      })
+
+      // First turn: send document with citations enabled
+      const result = await agent.invoke([
+        docBlock,
+        new TextBlock('What is the capital of France according to the document? Answer briefly.'),
+      ])
+
+      expect(result.stopReason).toBe('endTurn')
+
+      // Verify citations block is present in the response
+      const citationsBlock = result.lastMessage.content.find(
+        (block): block is CitationsBlock => block.type === 'citationsBlock'
+      )
+      expect(citationsBlock).toBeDefined()
+      expect(citationsBlock!.citations.length).toBeGreaterThan(0)
+
+      // Second turn: verify conversation continues with citations in history
+      const followUp = await agent.invoke('What else does the document say about that city?')
+
+      expect(followUp.stopReason).toBe('endTurn')
+      expect(followUp.lastMessage.role).toBe('assistant')
+      expect(followUp.lastMessage.content.length).toBeGreaterThan(0)
     })
 
     describe.skipIf(!supports.images)('multimodal input', () => {
