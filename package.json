@@ -1,10 +1,12 @@
 {
-  "name": "strands-poly",
+  "name": "strands",
   "version": "0.0.1",
   "private": true,
   "workspaces": [
     "strands-ts",
-    "strands-wasm"
+    "strands-wasm",
+    "filament-sdk-js",
+    "strands-filament"
   ],
   "scripts": {
     "build": "npm run build --workspaces",

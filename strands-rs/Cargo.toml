@@ -1,9 +1,9 @@
 [package]
 name = "strands"
-version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
+version.workspace = true
 
 [features]
 default = []
@@ -16,13 +16,12 @@ async-stream.workspace = true
 futures-core.workspace = true
 pyo3 = { workspace = true, optional = true }
 pyo3-async-runtimes = { workspace = true, optional = true }
-serde.workspace = true
 serde_json.workspace = true
 strands-derive.workspace = true
-uniffi = { workspace = true, optional = true }
-tokio = { workspace = true, optional = true, features = ["rt-multi-thread"] }
+tokio = { workspace = true, optional = true, features = ["macros", "rt-multi-thread", "sync"] }
 tracing.workspace = true
 tracing-subscriber = { workspace = true, optional = true }
+uniffi = { workspace = true, optional = true }
 wasmtime = { workspace = true, features = ["component-model", "async"] }
 wasmtime-wasi.workspace = true
 wasmtime-wasi-http.workspace = true
@@ -32,25 +31,28 @@ anyhow.workspace = true
 wasmtime = { workspace = true, features = ["component-model", "async"] }
 
 [dev-dependencies]
-tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync"] }
 tokio-stream.workspace = true
-
-[[example]]
-name = "chat"
-path = "examples/chat.rs"
-
-[[example]]
-name = "tools"
-path = "examples/tools.rs"
-
-[[example]]
-name = "multi_turn"
-path = "examples/multi_turn.rs"
 
 [[example]]
 name = "anthropic"
 path = "examples/anthropic.rs"
 
 [[example]]
+name = "chat"
+path = "examples/chat.rs"
+
+[[example]]
+name = "multi_turn"
+path = "examples/multi_turn.rs"
+
+[[example]]
 name = "session"
 path = "examples/session.rs"
+
+[[example]]
+name = "tools"
+path = "examples/tools.rs"
+
+[lints]
+workspace = true

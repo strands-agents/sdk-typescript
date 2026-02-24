@@ -1,0 +1,30 @@
+[package]
+name = "strands-native"
+description = "Native Rust implementation of Strands SDK"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+version.workspace = true
+
+[features]
+serde = ["dep:serde"]
+
+[dependencies]
+anthropik.workspace = true
+async-stream.workspace = true
+async-trait.workspace = true
+futures.workspace = true
+rmcp.workspace = true
+serde = { workspace = true, optional = true }
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["macros", "process", "rt-multi-thread"] }
+tracing.workspace = true
+
+[dev-dependencies]
+anyhow.workspace = true
+tracing-subscriber.workspace = true
+
+[lints]
+workspace = true

@@ -1,82 +1,143 @@
 [workspace]
 resolver = "3"
 members = [
-    # Strands agent SDK
-    "strands-derive",
-    "strands-rs",
-    "strands-rs-native",
-    # Filament runtime
-    "filament-core",
     "filament-cli",
+    "filament-core",
     "filament-sdk-rs",
-    # Tooling
+    "strands-derive",
     "strands-metrics",
+    "strands-rs",
+    "strands-native-rs",
 ]
 
 [workspace.package]
 authors = ["Filament Working Group <nabochay@amazon.com>"]
-version = "0.0.1"
-edition = "2021"
-license = "Apache-2.0"
-repository = "https://github.com/strands-agents/strands-poly"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+publish = false
+repository = "https://github.com/chaynabors/strands"
+version = "0.1.0"
 
 [workspace.dependencies]
-# Workspace crates
-filament = { path = "filament-core", default-features = false }
-filament-sdk = { path = "filament-sdk-rs", default-features = false }
-strands-derive = { path = "strands-derive" }
-
-# Async
+anyhow = "1"
+anthropik = "0.1"
 async-stream = "0.3"
 async-trait = "0.1"
+chrono = { version = "0.4", features = ["serde"] }
+clap = { version = "4", features = ["derive"] }
+cliclack = "0.3"
+dashmap = "6"
+filament = { path = "filament-core", default-features = false }
+filament-sdk = { path = "filament-sdk-rs", default-features = false }
+flate2 = "1"
+futures = "0.3"
 futures-core = "0.3"
-tokio = { version = "1", features = ["full"] }
+hex = "0.4"
+http = "1"
+indicatif = "0.18"
+js-sys = "0.3"
+napi = { version = "3.8", features = ["tokio_rt", "async"] }
+napi-build = "2.3"
+napi-derive = "3.5"
+octocrab = "0.49"
+proc-macro2 = "1"
+pyo3 = "0.28"
+pyo3-async-runtimes = { version = "0.28", features = ["tokio-runtime"] }
+quote = "1"
+reqwest = "0.13"
+rmcp = { version = "0.16", features = ["base64", "client", "macros", "server", "transport-async-rw", "transport-child-process", "transport-streamable-http-client", "transport-streamable-http-client-reqwest"], default-features = false }
+rusqlite = { version = "0.38", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde-wasm-bindgen = "0.6"
+sha2 = "0.10"
+strands-derive = { path = "strands-derive" }
+syn = "2"
+tar = "0.4"
+thiserror = "2"
+tokio = "1"
 tokio-stream = "0.1"
-
-# WASM host
-wasmparser = "0.243"
+toml = "1.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+uniffi = "0.31"
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+wasm-encoder = "0.245"
+wasm-metadata = "0.245"
+wasmparser = "0.245"
 wasmtime = "41"
 wasmtime-wasi = "41"
 wasmtime-wasi-http = "41"
-wasm-encoder = "0.243"
-wit-bindgen = "0.52"
-
-# Web
-js-sys = "0.3"
-serde-wasm-bindgen = "0.6"
-wasm-bindgen = "0.2"
-wasm-bindgen-futures = "0.4"
 web-sys = { version = "0.3", features = ["Window", "Response", "Headers", "RequestInit"] }
+wit-bindgen = "0.53"
 
-# FFI
-napi = { version = "2.14", features = ["tokio_rt", "async"] }
-napi-build = "2.0"
-napi-derive = "2.14"
-pyo3 = "0.28"
-pyo3-async-runtimes = { version = "0.28", features = ["tokio-runtime"] }
-uniffi = "0.29"
+[workspace.lints.rust]
+future_incompatible = "warn"
+nonstandard_style = "warn"
+rust_2018_idioms = "warn"
 
-# Proc macros
-proc-macro2 = "1"
-quote = "1"
-syn = "2"
-
-# Serialization
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-toml = "0.9"
-
-# CLI
-clap = { version = "4", features = ["derive"] }
-cliclack = "0.3"
-
-# Util
-anyhow = "1"
-dashmap = "6"
-flate2 = "1"
-hex = "0.4"
-sha2 = "0.10"
-tar = "0.4"
-thiserror = "1"
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+[workspace.lints.clippy]
+await_holding_lock = "warn"
+char_lit_as_u8 = "warn"
+checked_conversions = "warn"
+dbg_macro = "warn"
+debug_assert_with_mut_call = "warn"
+empty_enum = "warn"
+enum_glob_use = "warn"
+exit = "warn"
+expl_impl_clone_on_copy = "warn"
+explicit_deref_methods = "warn"
+explicit_into_iter_loop = "warn"
+fallible_impl_from = "warn"
+filter_map_next = "warn"
+flat_map_option = "warn"
+float_cmp_const = "warn"
+fn_params_excessive_bools = "warn"
+from_iter_instead_of_collect = "warn"
+if_let_mutex = "warn"
+implicit_clone = "warn"
+imprecise_flops = "warn"
+inefficient_to_string = "warn"
+invalid_upcast_comparisons = "warn"
+large_digit_groups = "warn"
+large_stack_arrays = "warn"
+large_types_passed_by_value = "warn"
+let_unit_value = "warn"
+linkedlist = "warn"
+lossy_float_literal = "warn"
+macro_use_imports = "warn"
+manual_ok_or = "warn"
+map_err_ignore = "warn"
+map_flatten = "warn"
+map_unwrap_or = "warn"
+match_on_vec_items = "warn"
+match_wild_err_arm = "warn"
+match_wildcard_for_single_variants = "warn"
+mem_forget = "warn"
+missing_enforced_import_renames = "warn"
+mut_mut = "warn"
+mutex_integer = "warn"
+needless_borrow = "warn"
+needless_continue = "warn"
+needless_for_each = "warn"
+option_option = "warn"
+path_buf_push_overwrite = "warn"
+ptr_as_ptr = "warn"
+rc_mutex = "warn"
+ref_option_ref = "warn"
+rest_pat_in_fully_bound_structs = "warn"
+same_functions_in_if_condition = "warn"
+semicolon_if_nothing_returned = "warn"
+string_add = "warn"
+string_add_assign = "warn"
+string_lit_as_bytes = "warn"
+string_to_string = "warn"
+todo = "warn"
+trait_duplication_in_bounds = "warn"
+unimplemented = "warn"
+unnested_or_patterns = "warn"
+unused_self = "warn"
+useless_transmute = "warn"
+verbose_file_reads = "warn"
+zero_sized_map_values = "warn"

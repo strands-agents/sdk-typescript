@@ -3,6 +3,8 @@ name = "filament"
 authors.workspace = true
 edition.workspace = true
 license.workspace = true
+publish = true
+repository.workspace = true
 version.workspace = true
 
 [lib]
@@ -18,28 +20,22 @@ wasmtime = ["dep:toml", "dep:wasmparser", "dep:wasmtime", "dep:wasmtime-wasi", "
 web = ["dep:wasm-bindgen", "dep:js-sys", "dep:web-sys", "dep:wasm-bindgen-futures", "dep:serde-wasm-bindgen"]
 
 [dependencies]
-# Shared
 async-trait.workspace = true
 dashmap.workspace = true
-hex.workspace = true
-sha2.workspace = true
+js-sys = { workspace = true, optional = true }
+serde = { workspace = true, optional = true }
+serde-wasm-bindgen = { workspace = true, optional = true }
 thiserror.workspace = true
-tracing.workspace = true
-
-# Native Optional
-tokio = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true, features = ["rt", "sync"] }
 toml = { workspace = true, optional = true }
+tracing.workspace = true
+wasm-bindgen = { workspace = true, optional = true }
+wasm-bindgen-futures = { workspace = true, optional = true }
 wasmparser = { workspace = true, optional = true }
 wasmtime = { workspace = true, optional = true }
 wasmtime-wasi = { workspace = true, optional = true }
 wasmtime-wasi-http = { workspace = true, optional = true }
-
-# Web Optional
-js-sys = { workspace = true, optional = true }
-serde-wasm-bindgen = { workspace = true, optional = true }
-wasm-bindgen = { workspace = true, optional = true }
-wasm-bindgen-futures = { workspace = true, optional = true }
 web-sys = { workspace = true, optional = true }
 
-# Serde Optional
-serde = { workspace = true, optional = true }
+[lints]
+workspace = true

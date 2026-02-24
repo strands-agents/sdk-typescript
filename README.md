@@ -24,38 +24,8 @@ Both approaches are under active development. The polyglot SDK in this repo prov
 ## Architecture
 
 ```mermaid
-graph TD
-    subgraph "Source of Truth"
-        WIT["wit/agent.wit"]
-    end
-
-    subgraph "Type Generation"
-        WIT -->|"jco guest-types"| TS_GEN["strands-ts/generated/"]
-        WIT -->|"jco guest-types"| WASM_GEN["strands-wasm/generated/"]
-        WIT -->|"wasmtime bindgen!"| RS_GEN["strands-rs types/traits"]
-        WIT -->|"componentize-py"| PY_GEN["strands-py/generated/"]
-    end
-
-    subgraph "Implementation"
-        TS_GEN --> TS["strands-ts<br/>TypeScript SDK"]
-        WASM_GEN --> ENTRY["strands-wasm/entry.ts"]
-        TS --> ENTRY
-    end
-
-    subgraph "Compilation"
-        ENTRY -->|"esbuild +<br/>componentize-js"| WASM["strands-wasm<br/>.wasm component"]
-        WASM -->|"Wasmtime AOT"| CWASM[".cwasm<br/>precompiled"]
-    end
-
-    subgraph "Host SDKs"
-        CWASM --> RS["strands-rs<br/>Rust host"]
-        RS -->|"PyO3 + maturin"| PY["strands-py<br/>Python host"]
-        DERIVE["strands-derive"] -.->|"proc macro"| RS
-    end
-
-    subgraph "Standalone"
-        NATIVE["strands-rs-native<br/>Pure Rust SDK<br/>(no WASM)"]
-    end
+graph LR
+    WIT[wit/agent.wit] --> TS[strands-ts] --> WASM[strands-wasm] --> RS[strands-rs] --> PY[strands-py]
 ```
 
 ### Data Flow
@@ -95,7 +65,7 @@ The agent loop runs entirely inside the WASM guest. The host observes stream eve
 | **strands-rs/**        | Rust       | WASM host. Embeds the AOT-precompiled component and runs it in Wasmtime with async support. Provides `AgentBuilder`, streaming, session persistence, and AWS credential injection. Has optional `pyo3` and `uniffi` features for FFI.       |
 | **strands-py/**        | Python     | Python SDK. A PyO3 wrapper around `strands-rs` built via maturin. Adds the `Agent` class, `@tool` decorator with schema generation from type hints and docstrings, hooks, structured output (Pydantic), and hot tool reloading.             |
 | **strands-derive/**    | Rust       | Proc macro crate. `#[derive(Export)]` generates PyO3/UniFFI wrapper types and `from_py_dict` extractors from WIT bindgen output.                                                                                                            |
-| **strands-rs-native/** | Rust       | Standalone native Rust SDK with no WASM. Uses `anthropik` for direct Anthropic API access and `rmcp` for MCP. A simpler alternative when cross-language portability is not needed.                                                          |
+| **strands-native-rs/** | Rust       | Standalone native Rust SDK with no WASM. Uses `anthropik` for direct Anthropic API access and `rmcp` for MCP. A simpler alternative when cross-language portability is not needed.                                                          |
 
 ### Filament
 

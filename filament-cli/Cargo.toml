@@ -2,6 +2,8 @@
 name = "filament-cli"
 authors.workspace = true
 edition.workspace = true
+license.workspace = true
+repository.workspace = true
 version.workspace = true
 
 [[bin]]
@@ -13,18 +15,16 @@ anyhow.workspace = true
 async-trait.workspace = true
 clap.workspace = true
 cliclack.workspace = true
-filament = { workspace = true, default_features = true, features = ["serde"] }
+filament = { workspace = true, default-features = true, features = ["serde"] }
 flate2.workspace = true
 hex.workspace = true
 sha2.workspace = true
 tar.workspace = true
-tokio.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal", "sync"] }
 toml.workspace = true
-tracing-subscriber.workspace = true
 tracing.workspace = true
+tracing-subscriber.workspace = true
 wasm-encoder.workspace = true
-wasmparser.workspace = true
-wasm-metadata = "0.245.1"
 
 [build-dependencies]
 anyhow.workspace = true
@@ -32,3 +32,6 @@ flate2.workspace = true
 serde_json.workspace = true
 tar.workspace = true
 toml.workspace = true
+
+[lints]
+workspace = true
