@@ -81,7 +81,7 @@ export class SlidingWindowConversationManager implements HookProvider {
   /**
    * Apply the sliding window to the messages array to maintain a manageable history size.
    *
-   * This method is called after every event loop cycle to apply a sliding window if the message
+   * This method is called after every agent loop cycle to apply a sliding window if the message
    * count exceeds the window size. If the number of messages is within the window size, no action
    * is taken.
    *

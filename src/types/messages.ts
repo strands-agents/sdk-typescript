@@ -298,7 +298,7 @@ export interface ToolResultBlockData {
 
   /**
    * The original error object when status is 'error'.
-   * Available for inspection by hooks, error handlers, and event loop.
+   * Available for inspection by hooks, error handlers, and agent loop.
    * Tools must wrap non-Error thrown values into Error objects.
    */
   error?: Error
@@ -330,7 +330,7 @@ export class ToolResultBlock implements ToolResultBlockData, JSONSerializable<{ 
 
   /**
    * The original error object when status is 'error'.
-   * Available for inspection by hooks, error handlers, and event loop.
+   * Available for inspection by hooks, error handlers, and agent loop.
    * Tools must wrap non-Error thrown values into Error objects.
    */
   readonly error?: Error

@@ -170,7 +170,7 @@ export interface InvokableTool<TInput, TReturn> extends Tool {
 /**
  * Creates an error ToolResultBlock from an error object.
  * Ensures all errors are normalized to Error objects and includes the original error
- * in the ToolResultBlock for inspection by hooks, error handlers, and event loop.
+ * in the ToolResultBlock for inspection by hooks, error handlers, and agent loop.
  *
  * TODO: Implement consistent logging format as defined in #30
  * This error should be logged to the caller using the established logging pattern.
