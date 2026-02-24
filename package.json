@@ -22,6 +22,10 @@
     "check": "strands-dev check",
     "fmt": "strands-dev fmt",
     "ci": "strands-dev ci",
-    "clean": "strands-dev clean"
+    "clean": "strands-dev clean",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7"
   }
 }
