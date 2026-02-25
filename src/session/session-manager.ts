@@ -8,7 +8,6 @@ import { join } from 'path'
 import { tmpdir } from 'os'
 import type { Agent } from '../agent/agent.js'
 import { takeSnapshot, loadSnapshot } from '../agent/snapshot.js'
-import type { AgentData } from '../types/agent.js'
 
 const SCHEMA_VERSION = '1.0'
 
@@ -86,8 +85,7 @@ export class SessionManager implements HookProvider {
   private readonly _idAllocator: SnapshotIdAllocator
 
   private _turnCount = 0
-  private _lastSnapshotMs?: number
-  private _currentAgent?: AgentData
+  private _lastSnapshotAt?: number
 
   /** Creates a new SessionManager with the given configuration. */
   constructor(config?: SessionManagerConfig) {
@@ -149,7 +147,6 @@ export class SessionManager implements HookProvider {
 
   /** Restores session state on agent initialization and advances the manifest when loading a specific snapshot. */
   private async _onAgentInitialized(event: InitializedEvent): Promise<void> {
-    this._currentAgent = event.agent
     const loaded = await this.restoreSnapshot({
       target: event.agent as Agent,
       ...(this._loadSnapshotId !== undefined && { snapshotId: this._loadSnapshotId }),
@@ -160,7 +157,7 @@ export class SessionManager implements HookProvider {
       return
     }
 
-    if (this._loadSnapshotId && parseInt(this._loadSnapshotId) > 0) {
+    if (this._loadSnapshotId !== undefined && parseInt(this._loadSnapshotId) > 0) {
       await this._advanceManifestPastSnapshot(parseInt(this._loadSnapshotId))
     }
   }
@@ -189,12 +186,12 @@ export class SessionManager implements HookProvider {
     if (
       this._snapshotTrigger?.({
         turnCount: this._turnCount,
-        ...(this._lastSnapshotMs !== undefined && { lastSnapshotAt: this._lastSnapshotMs }),
+        ...(this._lastSnapshotAt !== undefined && { lastSnapshotAt: this._lastSnapshotAt }),
         agentData: { state: agent.state, messages: agent.messages },
       })
     ) {
       await this._saveImmutableAndLatest(agent)
-      this._lastSnapshotMs = Date.now()
+      this._lastSnapshotAt = Date.now()
     }
   }
 
@@ -204,9 +201,13 @@ export class SessionManager implements HookProvider {
     await this.saveSnapshot({ target: agent, isLatest: true })
   }
 
-  /** Saves both an immutable snapshot and updates snapshot_latest in a single operation. */
+  /** Captures one snapshot and writes it to both immutable history and snapshot_latest. */
   private async _saveImmutableAndLatest(agent: Agent): Promise<void> {
-    await this.saveSnapshot({ target: agent, isLatest: false })
-    await this.saveSnapshot({ target: agent, isLatest: true })
+    const snapshot = takeSnapshot(agent, { preset: 'session' })
+    const snapshotId = (await this._idAllocator.allocate(this._location)).toString()
+    await Promise.all([
+      this._storage.snapshot.saveSnapshot({ location: this._location, snapshotId, isLatest: false, snapshot }),
+      this._storage.snapshot.saveSnapshot({ location: this._location, snapshotId: 'latest', isLatest: true, snapshot }),
+    ])
   }
 }
