@@ -18,12 +18,10 @@ let provider: NodeTracerProvider
 let exporter: InMemorySpanExporter
 
 function getSpans(): ReadableSpan[] {
-  return [...exporter.getFinishedSpans()].sort((a, b) => {
-    // OTel HrTime is [seconds, nanoseconds]; convert to single nanosecond value for sorting
-    const aTime = a.startTime[0] * 1e9 + a.startTime[1]
-    const bTime = b.startTime[0] * 1e9 + b.startTime[1]
-    return aTime - bTime
-  })
+  return [...exporter.getFinishedSpans()].sort(
+    // Compare OTel HrTime [seconds, nanoseconds] — seconds first, then nanoseconds as tiebreaker
+    (a, b) => a.startTime[0] - b.startTime[0] || a.startTime[1] - b.startTime[1]
+  )
 }
 
 function findSpans(spans: ReadableSpan[], prefix: string): ReadableSpan[] {
