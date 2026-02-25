@@ -71,15 +71,35 @@ _LIFECYCLE_EVENT_MAP: dict[str, type] = {
 
 
 def lifecycle_event_from_json(payload: str) -> object | None:
-    """Parse a lifecycle JSON payload into a hook event instance, or None."""
+    """Parse a lifecycle JSON payload into a hook event instance, or None.
+
+    Tool events carry extra data (toolUse, result) which is injected into the
+    event instance so the host-side hooks see the same context the guest had.
+    """
     data = _safe_json_loads(payload)
     if not isinstance(data, dict):
         return None
-    event_type = cast(dict[str, Any], data).get("type", "")
+    d = cast(dict[str, Any], data)
+    event_type = d.get("type", "")
     cls = _LIFECYCLE_EVENT_MAP.get(event_type)
     if cls is None:
         return None
-    return cls()
+    event = cls()
+
+    # Populate tool context from bridge payload
+    if event_type == "beforeToolCallEvent":
+        tool_use = d.get("toolUse")
+        if tool_use and hasattr(event, "tool_use"):
+            event.tool_use = tool_use
+    elif event_type == "afterToolCallEvent":
+        tool_use = d.get("toolUse")
+        result = d.get("result")
+        if tool_use and hasattr(event, "tool_use"):
+            event.tool_use = tool_use
+        if result and hasattr(event, "result"):
+            event.result = result
+
+    return event
 
 
 _STOP_REASON_MAP: dict[str, StopReason] = {

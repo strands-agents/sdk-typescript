@@ -26,7 +26,7 @@ from strands.generated.wit_world.imports.types import (
 )
 from strands.hooks import AfterToolCallEvent, HookProvider, HookRegistry
 from strands.tools import DecoratedTool
-from strands.types.exceptions import ContextOverflowError, MaxTokensReachedException
+from strands.types.exceptions import ContextOverflowError, MaxTokensReachedException, ToolProviderException
 from strands.types.tools import ToolContext
 
 log = logging.getLogger(__name__)
@@ -56,6 +56,31 @@ class Metrics:
     tool_metrics: list[dict[str, Any]] | None = None
 
 
+class _ToolMetric:
+    """Tracks call/success/error counts for a single tool."""
+
+    def __init__(self) -> None:
+        self.call_count = 0
+        self.success_count = 0
+        self.error_count = 0
+
+
+class _EventLoopMetrics:
+    """Tracks per-tool execution metrics."""
+
+    def __init__(self) -> None:
+        self.tool_metrics: dict[str, _ToolMetric] = {}
+
+    def record_call(self, tool_name: str, success: bool) -> None:
+        if tool_name not in self.tool_metrics:
+            self.tool_metrics[tool_name] = _ToolMetric()
+        self.tool_metrics[tool_name].call_count += 1
+        if success:
+            self.tool_metrics[tool_name].success_count += 1
+        else:
+            self.tool_metrics[tool_name].error_count += 1
+
+
 @dataclass
 class StreamResult:
     """Structured return value from a streaming invocation."""
@@ -77,6 +102,7 @@ class AgentResult:
         metrics: Any = None,
         structured_output: Any = None,
         message: dict[str, Any] | None = None,
+        interrupts: list[Any] | None = None,
     ):
         self.text = text
         self.stop_reason = stop_reason
@@ -87,6 +113,7 @@ class AgentResult:
             "role": "assistant",
             "content": [{"text": text}],
         }
+        self.interrupts: list[Any] = interrupts or []
 
     def __str__(self) -> str:
         return self.text
@@ -181,8 +208,11 @@ class Agent:
 
         self.agent_id = agent_id
         self._tool_map: dict[str, ToolEntry] = {}
+        self._mcp_clients: list[Any] = []
         self.state = AgentState()
         self.hooks = HookRegistry()
+        self.event_loop_metrics = _EventLoopMetrics()
+        self._last_tool_result: dict[str, Any] = {}
 
         if hooks:
             for provider in hooks:
@@ -198,16 +228,21 @@ class Agent:
             self._scan_tools_directory()
 
         sp_blocks = None
+        sp_str = system_prompt
         if system_prompt_blocks is not None:
             sp_blocks = (
                 system_prompt_blocks
                 if isinstance(system_prompt_blocks, str)
                 else json.dumps(system_prompt_blocks)
             )
+        elif isinstance(system_prompt, list):
+            # List system_prompt = content blocks, not a string
+            sp_blocks = json.dumps(system_prompt)
+            sp_str = None
 
         self._rust_agent = _RustAgent(
             model=resolve_model(model),
-            system_prompt=system_prompt,
+            system_prompt=sp_str,
             system_prompt_blocks=sp_blocks,
             tools=rust_tools,
         )
@@ -216,7 +251,11 @@ class Agent:
             self._rust_agent.set_messages(json.dumps(messages))
 
     def _register_tools(self, tools: list[Any]) -> list[dict[str, Any]]:
-        """Parse a tools list into the local tool map and Rust-side specs."""
+        """Parse a tools list into the local tool map and Rust-side specs.
+
+        Handles DecoratedTool, dict specs, and MCPClient/ToolProvider instances
+        (which are expanded via list_tools_sync()).
+        """
         rust_tools: list[dict[str, Any]] = []
         for t in tools:
             if isinstance(t, DecoratedTool):
@@ -237,6 +276,75 @@ class Agent:
                     spec = {k: v for k, v in td.items() if k != "handler"}
                     self._tool_map[td["name"]] = ToolEntry(func=td["handler"], spec=spec)
                 rust_tools.append({k: v for k, v in td.items() if k != "handler"})
+            elif hasattr(t, "tool_name") and hasattr(t, "tool_spec") and callable(t):
+                # _MCPTool or any tool-like object with tool_name, tool_spec, and __call__
+                name = t.tool_name
+                spec = t.tool_spec
+                agent_ref = self
+
+                def _make_tool_callable(tool_obj: Any) -> Callable[..., Any]:
+                    def func(**kwargs: Any) -> Any:
+                        return tool_obj(**kwargs)
+                    return func
+
+                def _make_tool_handler(tool_obj: Any, agent: Any) -> Callable[[str, str], str]:
+                    def handler(input_json: str, tool_use_id: str = "") -> str:
+                        data = json.loads(input_json)
+                        result = tool_obj(**data)
+                        if isinstance(result, dict):
+                            agent._last_tool_result = result
+                            return json.dumps(result)
+                        wrapped = {"status": "success", "content": [{"text": str(result)}]}
+                        agent._last_tool_result = wrapped
+                        return json.dumps(wrapped)
+                    return handler
+
+                self._tool_map[name] = ToolEntry(func=_make_tool_callable(t), spec=spec)
+                rust_tools.append({
+                    "name": name,
+                    "description": spec.get("description", ""),
+                    "inputSchema": spec.get("inputSchema", {}),
+                    "handler": _make_tool_handler(t, agent_ref),
+                })
+            elif hasattr(t, "list_tools_sync"):
+                # MCPClient or ToolProvider — expand into individual tools.
+                # Auto-start if not already started (upstream Agent manages the lifecycle).
+                if hasattr(t, "start") and hasattr(t, "_tool_provider_started") and not t._tool_provider_started:
+                    try:
+                        t.start()
+                    except Exception as exc:
+                        tp_exc = ToolProviderException(f"Failed to start tool provider: {exc}")
+                        tp_exc.__cause__ = exc
+                        raise ValueError(f"Failed to load tools from provider: {exc}") from tp_exc
+                self._mcp_clients.append(t)
+                if hasattr(t, "_consumers"):
+                    t._consumers.add(id(self))
+                mcp_tools = t.list_tools_sync()
+                for mt in mcp_tools:
+                    name = mt.tool_name
+                    spec = mt.tool_spec
+
+                    def _make_mcp_callable(mcp_tool: Any) -> Callable[..., Any]:
+                        """For direct tool access via agent.tool.<name>(**kwargs)."""
+                        def func(**kwargs: Any) -> Any:
+                            return mcp_tool(**kwargs)
+                        return func
+
+                    def _make_mcp_rust_handler(mcp_tool: Any) -> Callable[[str, str], str]:
+                        """For Rust-side dispatch: handler(input_json, tool_use_id) -> result_json."""
+                        def handler(input_json: str, tool_use_id: str = "") -> str:
+                            data = json.loads(input_json)
+                            result = mcp_tool(**data)
+                            return json.dumps(result) if isinstance(result, dict) else json.dumps({"status": "success", "content": [{"text": str(result)}]})
+                        return handler
+
+                    self._tool_map[name] = ToolEntry(func=_make_mcp_callable(mt), spec=spec)
+                    rust_tools.append({
+                        "name": name,
+                        "description": spec.get("description", ""),
+                        "inputSchema": spec.get("inputSchema", {}),
+                        "handler": _make_mcp_rust_handler(mt),
+                    })
         return rust_tools
 
     def _scan_tools_directory(self) -> None:
@@ -308,6 +416,8 @@ class Agent:
         result = StreamResult()
         tool_metrics: list[dict[str, Any]] = []
         pending_tool_start: dict[str, float] = {}
+        current_tool_use: dict[str, Any] = {}
+        current_tool_result: dict[str, Any] = {}
 
         stream = await self._rust_agent.start_stream(
             prompt, tools=tools, tool_choice=tool_choice,
@@ -321,6 +431,14 @@ class Agent:
                     if raw_event.kind == "lifecycle":
                         hook_event = lifecycle_event_from_json(raw_event.lifecycle or "")
                         if hook_event is not None:
+                            # For AfterToolCallEvent: merge handler-captured result
+                            # (has MCP structuredContent/metadata) with bridge data
+                            if isinstance(hook_event, AfterToolCallEvent) and self._last_tool_result:
+                                merged = dict(self._last_tool_result)
+                                if hasattr(hook_event, "tool_use") and hook_event.tool_use:
+                                    merged.setdefault("toolUseId", hook_event.tool_use.get("toolUseId", ""))
+                                hook_event.result = merged
+                                self._last_tool_result = {}
                             await self.hooks.fire_async(hook_event)
                         continue
 
@@ -343,9 +461,24 @@ class Agent:
 
                     elif isinstance(event, StreamEvent_ToolUse):
                         pending_tool_start[event.value.tool_use_id] = _time.monotonic()
+                        pending_tool_start[f"{event.value.tool_use_id}:name"] = event.value.name
+                        current_tool_use = {
+                            "name": event.value.name,
+                            "toolUseId": event.value.tool_use_id,
+                        }
 
                     elif isinstance(event, StreamEvent_ToolResult):
                         tid = event.value.tool_use_id
+                        tool_name = pending_tool_start.pop(f"{tid}:name", "")
+                        try:
+                            content = json.loads(event.value.content) if isinstance(event.value.content, str) else event.value.content
+                        except (json.JSONDecodeError, TypeError):
+                            content = [{"text": str(event.value.content)}]
+                        current_tool_result = {
+                            "toolUseId": tid,
+                            "status": event.value.status,
+                            "content": content,
+                        }
                         if tid in pending_tool_start:
                             duration = _time.monotonic() - pending_tool_start.pop(tid)
                             tool_metrics.append({
@@ -353,6 +486,9 @@ class Agent:
                                 "duration": duration,
                                 "status": event.value.status,
                             })
+                        success = event.value.status == "success"
+                        if tool_name:
+                            self.event_loop_metrics.record_call(tool_name, success)
 
                     elif isinstance(event, StreamEvent_Error):
                         err_msg = event.value
@@ -469,7 +605,7 @@ class Agent:
         if prompt is None:
             prompt = ""
         if isinstance(prompt, list):
-            prompt = json.dumps(prompt)
+            prompt = json.dumps(prompt, default=self._json_default)
         prompt = str(prompt)
         return asyncio.run(self._call_async(prompt, **kwargs))
 
@@ -483,6 +619,18 @@ class Agent:
 
     async def invoke_async(self, prompt: str, **kwargs: Any) -> AgentResult:
         return await self._call_async(str(prompt), **kwargs)
+
+    def structured_output(self, output_model: type, prompt: Any, **kwargs: Any) -> Any:
+        """Invoke the agent with structured output validation. Returns the parsed model instance."""
+        result = self(prompt, structured_output_model=output_model, **kwargs)
+        return result.structured_output if result.structured_output is not None else result
+
+    async def structured_output_async(self, output_model: type, prompt: Any, **kwargs: Any) -> Any:
+        """Invoke the agent with structured output validation (async). Returns the parsed model instance."""
+        if isinstance(prompt, list):
+            prompt = json.dumps(prompt)
+        result = await self._call_async(str(prompt), structured_output_model=output_model, **kwargs)
+        return result.structured_output if result.structured_output is not None else result
 
     async def stream_async(self, prompt: Any, **kwargs: Any) -> Any:
         structured_output_model = kwargs.pop("structured_output_model", None)
@@ -509,11 +657,35 @@ class Agent:
         finally:
             await self._rust_agent.close_stream(stream)
 
+    @staticmethod
+    def _json_default(obj: Any) -> Any:
+        """JSON serializer for objects not serializable by default (e.g., bytes → base64)."""
+        import base64
+
+        if isinstance(obj, (bytes, bytearray)):
+            return base64.b64encode(obj).decode("ascii")
+        raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
+
     def get_messages(self) -> str:
         return self._rust_agent.get_messages()
 
     def set_messages(self, json_str: str) -> None:
         self._rust_agent.set_messages(json_str)
+
+    def cleanup(self) -> None:
+        """Clean up resources (MCP clients, etc.).
+
+        Uses consumer counting: only stops a client when no other agents hold it.
+        """
+        for client in self._mcp_clients:
+            if hasattr(client, "_consumers"):
+                client._consumers.discard(id(self))
+                if not client._consumers:
+                    if hasattr(client, "stop"):
+                        client.stop()
+            elif hasattr(client, "stop"):
+                client.stop()
+        self._mcp_clients.clear()
 
 
 # Re-export for test compatibility

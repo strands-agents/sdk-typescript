@@ -28,8 +28,8 @@ mod bindings {
 }
 
 pub use bindings::strands::agent::types::{
-    AnthropicConfig, BedrockConfig, MetadataEvent, Metrics, ModelConfig, ModelParams, StopData,
-    StopReason, StreamEvent, ToolResultEvent, ToolSpec, ToolUseEvent, Usage,
+    AnthropicConfig, BedrockConfig, GeminiConfig, MetadataEvent, Metrics, ModelConfig, ModelParams,
+    OpenaiConfig, StopData, StopReason, StreamEvent, ToolResultEvent, ToolSpec, ToolUseEvent, Usage,
 };
 
 /// Auto-generated wrapper types (available with `pyo3` or `uniffi` features).
@@ -620,6 +620,8 @@ fn inject_aws_credentials(config: Option<ModelConfig>) -> Option<ModelConfig> {
                 None
             }
         }
+        // OpenAI and Gemini configs pass through unchanged.
+        Some(ModelConfig::Openai(_)) | Some(ModelConfig::Gemini(_)) => config,
         other => other,
     }
 }

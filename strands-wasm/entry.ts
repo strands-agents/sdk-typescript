@@ -29,6 +29,8 @@ import { log as hostLog } from 'strands:agent/host-log';
 import { Agent, FunctionTool } from '@strands-agents/sdk';
 import { AnthropicModel } from '@strands-agents/sdk/anthropic';
 import { BedrockModel } from '@strands-agents/sdk/bedrock';
+import { OpenAIModel } from '@strands-agents/sdk/openai';
+import { GeminiModel } from '@strands-agents/sdk/gemini';
 import type { StopReason, AgentStreamEvent, Model, BaseModelConfig } from '@strands-agents/sdk';
 
 // All log calls go through `hostLog` (the WIT import).  The host can
@@ -204,6 +206,26 @@ function createModel(config?: ModelConfig, params?: ModelParams): Model<BaseMode
         ...extra,
       });
     }
+    case 'openai': {
+      glog('info', 'createModel: OpenAI', { modelId: config.val.modelId });
+      const extra = config.val.additionalConfig ? JSON.parse(config.val.additionalConfig) : {};
+      return new OpenAIModel({
+        ...base,
+        ...(config.val.modelId ? { modelId: config.val.modelId } : {}),
+        ...(config.val.apiKey ? { apiKey: config.val.apiKey } : {}),
+        ...extra,
+      });
+    }
+    case 'gemini': {
+      glog('info', 'createModel: Gemini', { modelId: config.val.modelId });
+      const extra = config.val.additionalConfig ? JSON.parse(config.val.additionalConfig) : {};
+      return new GeminiModel({
+        ...base,
+        ...(config.val.modelId ? { modelId: config.val.modelId } : {}),
+        ...(config.val.apiKey ? { apiKey: config.val.apiKey } : {}),
+        ...extra,
+      });
+    }
     default:
       throw new Error(`Unknown model provider: ${(config as any).tag}`);
   }
@@ -293,18 +315,35 @@ import {
 class LifecycleBridge implements HookProvider {
   queue: StreamEvent[] = [];
 
+  private pushEvent(payload: Record<string, unknown>): void {
+    this.queue.push({ tag: 'lifecycle', val: JSON.stringify(payload) } as any);
+  }
+
   registerCallbacks(registry: HookRegistry): void {
-    const push = (type: string) => () => {
-      this.queue.push({ tag: 'lifecycle', val: JSON.stringify({ type }) } as any);
-    };
+    const push = (type: string) => () => this.pushEvent({ type });
+
     registry.addCallback(InitializedEvent, push('agentInitializedEvent'));
     registry.addCallback(BeforeInvocationEvent, push('beforeInvocationEvent'));
     registry.addCallback(AfterInvocationEvent, push('afterInvocationEvent'));
     registry.addCallback(BeforeModelCallEvent, push('beforeModelCallEvent'));
     registry.addCallback(AfterModelCallEvent, push('afterModelCallEvent'));
-    registry.addCallback(BeforeToolCallEvent, push('beforeToolCallEvent'));
-    registry.addCallback(AfterToolCallEvent, push('afterToolCallEvent'));
     registry.addCallback(MessageAddedEvent, push('messageAddedEvent'));
+
+    // Tool events carry payload so the host can reconstruct full hook event data.
+    registry.addCallback(BeforeToolCallEvent, (event: InstanceType<typeof BeforeToolCallEvent>) => {
+      this.pushEvent({
+        type: 'beforeToolCallEvent',
+        toolUse: event.toolUse,
+      });
+    });
+
+    registry.addCallback(AfterToolCallEvent, (event: InstanceType<typeof AfterToolCallEvent>) => {
+      this.pushEvent({
+        type: 'afterToolCallEvent',
+        toolUse: event.toolUse,
+        result: event.result,
+      });
+    });
   }
 
   drain(): StreamEvent[] {

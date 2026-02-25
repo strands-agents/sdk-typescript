@@ -69,6 +69,12 @@ fn build_model_config(obj: &Bound<'_, PyAny>) -> PyResult<crate::ModelConfig> {
         "bedrock" => Ok(crate::ModelConfig::Bedrock(
             crate::BedrockConfig::from_py_dict(obj)?,
         )),
+        "openai" => Ok(crate::ModelConfig::Openai(
+            crate::OpenaiConfig::from_py_dict(obj)?,
+        )),
+        "gemini" => Ok(crate::ModelConfig::Gemini(
+            crate::GeminiConfig::from_py_dict(obj)?,
+        )),
         other => Err(PyRuntimeError::new_err(format!(
             "unknown model provider: {other}"
         ))),

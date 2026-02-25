@@ -80,9 +80,23 @@ interface types {
     additional-config: option<string>,
   }
 
+  record openai-config {
+    model-id: option<string>,
+    api-key: option<string>,
+    additional-config: option<string>,
+  }
+
+  record gemini-config {
+    model-id: option<string>,
+    api-key: option<string>,
+    additional-config: option<string>,
+  }
+
   variant model-config {
     anthropic(anthropic-config),
     bedrock(bedrock-config),
+    openai(openai-config),
+    gemini(gemini-config),
   }
 
   record model-params {

@@ -9,6 +9,7 @@ from strands.agent import Agent, AgentResult
 from strands.hooks import HookRegistry
 from strands.models.anthropic import AnthropicModel
 from strands.models.bedrock import BedrockModel
+from strands.models.openai import OpenAIModel
 from strands.tools import DecoratedTool, tool
 from strands.types.content import Messages
 from strands.types.exceptions import MaxTokensReachedException
@@ -23,6 +24,7 @@ __all__ = [
     "HookRegistry",
     "MaxTokensReachedException",
     "Messages",
+    "OpenAIModel",
     "StopReason",
     "StreamEvent",
     "ToolContext",

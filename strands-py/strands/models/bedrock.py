@@ -12,7 +12,10 @@ _KNOWN_FIELDS = _CONFIG_FIELDS | _PARAM_FIELDS
 _NON_SERIALIZABLE = {"boto_session"}
 
 
-class BedrockModel:
+from strands.models.model import Model
+
+
+class BedrockModel(Model):
     """Config wrapper for Bedrock models.
 
     Known fields (model_id, region, max_tokens, temperature, top_p) are

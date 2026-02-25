@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import inspect
 from collections.abc import Callable
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
+
+if TYPE_CHECKING:
+    from strands.interrupt import Interrupt
 
 
 class HookRegistry:
@@ -60,7 +63,18 @@ class AfterInvocationEvent:
 
 
 class BeforeToolCallEvent:
-    pass
+    def __init__(self) -> None:
+        self.tool_use: dict[str, Any] = {}
+        self.cancel_tool: str | None = None
+        self._interrupts: list[Interrupt] = []
+
+    def interrupt(self, name: str, reason: str = "") -> str:
+        """Pause execution with an interrupt. Returns the response when resumed."""
+        from strands.interrupt import Interrupt as _Interrupt
+
+        intr = _Interrupt(name=name, reason=reason)
+        self._interrupts.append(intr)
+        return ""
 
 
 class AgentInitializedEvent:
@@ -69,6 +83,23 @@ class AgentInitializedEvent:
 
 class MessageAddedEvent:
     pass
+
+
+class BeforeNodeCallEvent:
+    """Fired before a multiagent graph executes a node."""
+
+    def __init__(self, node_id: str = "") -> None:
+        self.node_id = node_id
+        self.cancel_node: str | None = None
+        self._interrupts: list[Interrupt] = []
+
+    def interrupt(self, name: str, reason: str = "") -> str:
+        """Pause execution with an interrupt. Returns the response when resumed."""
+        from strands.interrupt import Interrupt as _Interrupt
+
+        intr = _Interrupt(name=name, reason=reason)
+        self._interrupts.append(intr)
+        return ""
 
 
 class HookProvider:

@@ -1,15 +1,11 @@
-from typing import Any
+from strands.agent.conversation_manager.sliding_window_conversation_manager import (
+    SlidingWindowConversationManager,
+)
+from strands.hooks import HookProvider
 
 
-class NullConversationManager:
-    """Stub for null conversation manager."""
-
-
-class SlidingWindowConversationManager:
-    """Stub for sliding window conversation manager."""
-
-    def __init__(self, **_kwargs: Any) -> None:
-        pass
+class NullConversationManager(HookProvider):
+    """No-op conversation manager."""
 
 
 __all__ = ["NullConversationManager", "SlidingWindowConversationManager"]
