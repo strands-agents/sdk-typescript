@@ -19,6 +19,7 @@ let exporter: InMemorySpanExporter
 
 function getSpans(): ReadableSpan[] {
   return [...exporter.getFinishedSpans()].sort((a, b) => {
+    // OTel HrTime is [seconds, nanoseconds]; convert to single nanosecond value for sorting
     const aTime = a.startTime[0] * 1e9 + a.startTime[1]
     const bTime = b.startTime[0] * 1e9 + b.startTime[1]
     return aTime - bTime
@@ -54,7 +55,7 @@ const failingTool = tool({
   },
 })
 
-describe('Telemetry Integration', () => {
+describe.sequential('Telemetry Integration', () => {
   beforeAll(() => {
     exporter = new InMemorySpanExporter()
     provider = new NodeTracerProvider()
@@ -661,6 +662,49 @@ describe('Telemetry Integration', () => {
         assertParentChild(agentSpan, traceCycles[0]!)
         assertParentChild(traceCycles[0]!, traceModels[0]!)
       }
+    })
+
+    it('creates isolated traces for same-named concurrent agents', async () => {
+      const model1 = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Response A' })
+      const model2 = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Response B' })
+
+      const agent1 = new Agent({ model: model1, printer: false, name: 'shared-name' })
+      const agent2 = new Agent({ model: model2, printer: false, name: 'shared-name' })
+
+      await Promise.all([agent1.invoke('Hello 1'), agent2.invoke('Hello 2')])
+
+      const spans = await flush()
+      const agentSpans = findSpans(spans, AGENT_SPAN_PREFIX)
+
+      expect(agentSpans).toHaveLength(2)
+      expect(agentSpans.every((s) => s.name === 'invoke_agent shared-name')).toBe(true)
+
+      // Same name but distinct traces
+      const traceIds = new Set(agentSpans.map((s) => s.spanContext().traceId))
+      expect(traceIds.size).toBe(2)
+
+      // Each trace still has a complete hierarchy with correct output
+      const expectedResponses = new Set(['Response A', 'Response B'])
+      for (const agentSpan of agentSpans) {
+        const traceId = agentSpan.spanContext().traceId
+        const traceSpans = spans.filter((s) => s.spanContext().traceId === traceId)
+        const traceCycles = findSpans(traceSpans, CYCLE_SPAN_NAME)
+        const traceModels = findSpans(traceSpans, MODEL_SPAN_NAME)
+
+        expect(traceCycles).toHaveLength(1)
+        expect(traceModels).toHaveLength(1)
+        assertParentChild(agentSpan, traceCycles[0]!)
+        assertParentChild(traceCycles[0]!, traceModels[0]!)
+
+        const choiceEvent = agentSpan.events.find((e) => e.name === 'gen_ai.choice')
+        expect(choiceEvent).toBeDefined()
+        const message = choiceEvent!.attributes!['message'] as string
+        expect(expectedResponses.has(message)).toBe(true)
+        expectedResponses.delete(message)
+      }
+
+      // Both responses were seen
+      expect(expectedResponses.size).toBe(0)
     })
   })
 })
