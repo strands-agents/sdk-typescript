@@ -1095,7 +1095,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
    * @param bedrockLocation - Bedrock citation location with object-key discrimination
    * @returns SDK CitationLocation with type field discrimination
    */
-  private _mapBedrockCitationLocation(bedrockLocation: BedrockCitationLocation): CitationLocation {
+  private _mapBedrockCitationLocation(bedrockLocation: BedrockCitationLocation): CitationLocation | undefined {
     if (bedrockLocation.documentChar) {
       const loc = bedrockLocation.documentChar
       return { type: 'documentChar', documentIndex: loc.documentIndex!, start: loc.start!, end: loc.end! }
@@ -1117,7 +1117,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
       return { type: 'web', url: loc.url!, ...(loc.domain && { domain: loc.domain }) }
     }
     logger.warn(`citation_location=<${JSON.stringify(bedrockLocation)}> | unknown citation location type`)
-    return bedrockLocation as unknown as CitationLocation
+    return undefined
   }
 
   /**
@@ -1128,12 +1128,18 @@ export class BedrockModel extends Model<BedrockModelConfig> {
    */
   private _mapBedrockCitationsData(bedrockData: BedrockCitationsContentBlock): CitationsBlockData {
     return {
-      citations: (bedrockData.citations ?? []).map((citation) => ({
-        source: citation.source ?? '',
-        title: citation.title ?? '',
-        sourceContent: (citation.sourceContent ?? []).map((sc) => ({ text: sc.text! })),
-        location: this._mapBedrockCitationLocation(citation.location!),
-      })),
+      citations: (bedrockData.citations ?? [])
+        .map((citation) => {
+          const location = citation.location ? this._mapBedrockCitationLocation(citation.location) : undefined
+          if (!location) return undefined
+          return {
+            source: citation.source ?? '',
+            title: citation.title ?? '',
+            sourceContent: (citation.sourceContent ?? []).map((sc) => ({ text: sc.text! })),
+            location,
+          }
+        })
+        .filter((c) => c !== undefined),
       content: (bedrockData.content ?? []).map((gc) => ({ text: gc.text! })),
     }
   }
