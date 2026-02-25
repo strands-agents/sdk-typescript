@@ -1,11 +1,4 @@
-import {
-  S3Client,
-  PutObjectCommand,
-  GetObjectCommand,
-  ListObjectsV2Command,
-  CreateBucketCommand,
-  HeadBucketCommand,
-} from '@aws-sdk/client-s3'
+import { S3Client, PutObjectCommand, GetObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3'
 import type { ListObjectsV2CommandOutput } from '@aws-sdk/client-s3/dist-types/commands/ListObjectsV2Command.js'
 import type { SnapshotStorage, SnapshotLocation } from './storage.js'
 import type { Snapshot, SnapshotManifest } from './types.js'
@@ -43,8 +36,6 @@ export class S3Storage implements SnapshotStorage {
   private readonly _bucket: string
   /** Key prefix for all objects */
   private readonly _prefix: string
-  private _bucketReady = false
-
   /**
    * Creates new S3Storage instance
    * @param config - Configuration options
@@ -150,32 +141,10 @@ export class S3Storage implements SnapshotStorage {
     await this._writeJSON(key, params.manifest)
   }
 
-  private async _ensureBucket(): Promise<void> {
-    if (this._bucketReady) return
-    try {
-      await this._s3.send(new HeadBucketCommand({ Bucket: this._bucket }))
-    } catch (error: unknown) {
-      if (
-        error &&
-        typeof error === 'object' &&
-        'name' in error &&
-        (error.name === 'NotFound' || error.name === 'NoSuchBucket')
-      ) {
-        await this._s3.send(new CreateBucketCommand({ Bucket: this._bucket }))
-      } else if (error && typeof error === 'object' && 'name' in error && error.name === 'BucketAlreadyOwnedByYou') {
-        // bucket exists and is owned by us, proceed
-      } else {
-        throw error
-      }
-    }
-    this._bucketReady = true
-  }
-
   /**
    * Writes JSON data to S3
    */
   private async _writeJSON(key: string, data: unknown): Promise<void> {
-    await this._ensureBucket()
     try {
       await this._s3.send(
         new PutObjectCommand({

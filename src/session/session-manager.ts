@@ -67,6 +67,16 @@ export interface SessionManagerConfig {
   snapshotTrigger?: SnapshotTriggerCallback
 }
 
+/**
+ * Manages session persistence for agents, enabling conversation state
+ * to be saved and restored across invocations.
+ *
+ * @example
+ * ```typescript
+ * const session = new SessionManager({ sessionId: 'my-session' })
+ * const agent = new Agent({ sessionManager: session })
+ * ```
+ */
 export class SessionManager implements HookProvider {
   private readonly _location: SnapshotLocation
   private readonly _storage: { snapshot: SnapshotStorage }
@@ -93,8 +103,8 @@ export class SessionManager implements HookProvider {
     }
 
     this._saveLatestOn = config?.saveLatestOn ?? 'message'
-    this._snapshotTrigger = config?.snapshotTrigger ?? undefined
-    this._loadSnapshotId = config?.loadSnapshotId ?? undefined
+    this._snapshotTrigger = config?.snapshotTrigger
+    this._loadSnapshotId = config?.loadSnapshotId
     this._idAllocator = new SnapshotIdAllocator(this._storage.snapshot)
   }
 
