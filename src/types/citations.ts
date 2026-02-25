@@ -115,23 +115,15 @@ export type CitationLocation =
 
 /**
  * Source content referenced by a citation.
+ * Modeled as a union type for future extensibility (Bedrock UNION type).
  */
-export interface CitationSourceContent {
-  /**
-   * The text content from the source.
-   */
-  text: string
-}
+export type CitationSourceContent = { text: string }
 
 /**
  * Generated content associated with a citation.
+ * Modeled as a union type for future extensibility (Bedrock UNION type).
  */
-export interface CitationGeneratedContent {
-  /**
-   * The generated text content.
-   */
-  text: string
-}
+export type CitationGeneratedContent = { text: string }
 
 /**
  * A single citation linking generated content to a source location.
