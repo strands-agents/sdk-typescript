@@ -31,7 +31,7 @@ export abstract class Node {
   readonly type: string = 'node'
   /** Unique identifier for this node within the orchestration. */
   readonly id: string
-  /** Optional per-node configuration. */
+  /** Per-node configuration. */
   readonly config: NodeConfig
 
   /**
