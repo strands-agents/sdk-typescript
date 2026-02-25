@@ -73,11 +73,6 @@ export type {
   CitationLocation,
   CitationSourceContent,
   CitationGeneratedContent,
-  DocumentCharLocation,
-  DocumentPageLocation,
-  DocumentChunkLocation,
-  SearchResultLocation,
-  WebLocation,
 } from './types/citations.js'
 
 // Citation class

@@ -3,125 +3,125 @@ import type { JSONSerializable, Serialized } from './json.js'
 /**
  * Citation types for document citation content blocks.
  *
- * Citations are returned by models (particularly Bedrock) when document citations
- * are enabled. They are output-only blocks that appear in conversation history.
+ * Citations are returned by models when document citations are enabled.
+ * They are output-only blocks that appear in conversation history.
  */
-
-/**
- * Location referencing character positions within a document.
- */
-export interface DocumentCharLocation {
-  /**
-   * Index of the source document.
-   */
-  documentIndex: number
-
-  /**
-   * Start character position.
-   */
-  start: number
-
-  /**
-   * End character position.
-   */
-  end: number
-}
-
-/**
- * Location referencing page positions within a document.
- */
-export interface DocumentPageLocation {
-  /**
-   * Index of the source document.
-   */
-  documentIndex: number
-
-  /**
-   * Start page number.
-   */
-  start: number
-
-  /**
-   * End page number.
-   */
-  end: number
-}
-
-/**
- * Location referencing chunk positions within a document.
- */
-export interface DocumentChunkLocation {
-  /**
-   * Index of the source document.
-   */
-  documentIndex: number
-
-  /**
-   * Start chunk index.
-   */
-  start: number
-
-  /**
-   * End chunk index.
-   */
-  end: number
-}
-
-/**
- * Location referencing a search result.
- */
-export interface SearchResultLocation {
-  /**
-   * Index of the search result.
-   */
-  searchResultIndex: number
-
-  /**
-   * Start position within the search result.
-   */
-  start: number
-
-  /**
-   * End position within the search result.
-   */
-  end: number
-}
-
-/**
- * Location referencing a web URL.
- */
-export interface WebLocation {
-  /**
-   * The URL of the web source.
-   */
-  url: string
-
-  /**
-   * The domain of the web source.
-   */
-  domain?: string
-}
 
 /**
  * Discriminated union of citation location types.
- * Each variant uses a unique object key to identify the location type.
+ * Each variant uses a `type` field to identify the location kind.
  */
 export type CitationLocation =
-  | { documentChar: DocumentCharLocation }
-  | { documentPage: DocumentPageLocation }
-  | { documentChunk: DocumentChunkLocation }
-  | { searchResultLocation: SearchResultLocation }
-  | { web: WebLocation }
+  | {
+      /**
+       * Location referencing character positions within a document.
+       */
+      type: 'documentChar'
+
+      /**
+       * Index of the source document.
+       */
+      documentIndex: number
+
+      /**
+       * Start character position.
+       */
+      start: number
+
+      /**
+       * End character position.
+       */
+      end: number
+    }
+  | {
+      /**
+       * Location referencing page positions within a document.
+       */
+      type: 'documentPage'
+
+      /**
+       * Index of the source document.
+       */
+      documentIndex: number
+
+      /**
+       * Start page number.
+       */
+      start: number
+
+      /**
+       * End page number.
+       */
+      end: number
+    }
+  | {
+      /**
+       * Location referencing chunk positions within a document.
+       */
+      type: 'documentChunk'
+
+      /**
+       * Index of the source document.
+       */
+      documentIndex: number
+
+      /**
+       * Start chunk index.
+       */
+      start: number
+
+      /**
+       * End chunk index.
+       */
+      end: number
+    }
+  | {
+      /**
+       * Location referencing a search result.
+       */
+      type: 'searchResult'
+
+      /**
+       * Index of the search result.
+       */
+      searchResultIndex: number
+
+      /**
+       * Start position within the search result.
+       */
+      start: number
+
+      /**
+       * End position within the search result.
+       */
+      end: number
+    }
+  | {
+      /**
+       * Location referencing a web URL.
+       */
+      type: 'web'
+
+      /**
+       * The URL of the web source.
+       */
+      url: string
+
+      /**
+       * The domain of the web source.
+       */
+      domain?: string
+    }
 
 /**
  * Source content referenced by a citation.
- * Modeled as a union type for future extensibility (Bedrock UNION type).
+ * Modeled as a union type for future extensibility.
  */
 export type CitationSourceContent = { text: string }
 
 /**
  * Generated content associated with a citation.
- * Modeled as a union type for future extensibility (Bedrock UNION type).
+ * Modeled as a union type for future extensibility.
  */
 export type CitationGeneratedContent = { text: string }
 

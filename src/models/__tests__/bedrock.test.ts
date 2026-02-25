@@ -763,7 +763,8 @@ describe('BedrockModel', () => {
     })
 
     it('yields and validates citationsContent events correctly', async () => {
-      const citationsData = {
+      // Bedrock wire format uses object-key discrimination
+      const bedrockCitationsData = {
         citations: [
           {
             location: { documentChar: { documentIndex: 0, start: 10, end: 50 } },
@@ -782,7 +783,7 @@ describe('BedrockModel', () => {
               yield { contentBlockStart: {} }
               yield {
                 contentBlockDelta: {
-                  delta: { citationsContent: citationsData },
+                  delta: { citationsContent: bedrockCitationsData },
                 },
               }
               yield { contentBlockStop: {} }
@@ -797,7 +798,7 @@ describe('BedrockModel', () => {
             output: {
               message: {
                 role: 'assistant',
-                content: [{ citationsContent: citationsData }],
+                content: [{ citationsContent: bedrockCitationsData }],
               },
             },
             stopReason: 'end_turn',
@@ -812,14 +813,21 @@ describe('BedrockModel', () => {
       const messages = [new Message({ role: 'user', content: [new TextBlock('Cite this.')] })]
       const events = await collectIterator(provider.stream(messages))
 
+      // SDK events should use type-field discrimination
       expect(events).toContainEqual({ role: 'assistant', type: 'modelMessageStartEvent' })
       expect(events).toContainEqual({ type: 'modelContentBlockStartEvent' })
       expect(events).toContainEqual({
         type: 'modelContentBlockDeltaEvent',
         delta: {
           type: 'citationsContentDelta',
-          citations: citationsData.citations,
-          content: citationsData.content,
+          citations: [
+            {
+              location: { type: 'documentChar', documentIndex: 0, start: 10, end: 50 },
+              sourceContent: [{ text: 'source text' }],
+              title: 'Test Doc',
+            },
+          ],
+          content: [{ text: 'generated text' }],
         },
       })
       expect(events).toContainEqual({ type: 'modelContentBlockStopEvent' })
@@ -1543,31 +1551,32 @@ describe('BedrockModel', () => {
   describe('citations content block formatting', () => {
     const mockConverseStreamCommand = vi.mocked(ConverseStreamCommand)
 
-    it('preserves all CitationLocation union variants through formatting pipeline', async () => {
+    it('maps SDK CitationLocation types to Bedrock object-key format through formatting pipeline', async () => {
       const provider = new BedrockModel()
-      const citations = [
+      // SDK format uses type-field discrimination
+      const sdkCitations = [
         {
-          location: { documentChar: { documentIndex: 0, start: 150, end: 300 } },
+          location: { type: 'documentChar' as const, documentIndex: 0, start: 150, end: 300 },
           sourceContent: [{ text: 'char source' }],
           title: 'Text Document',
         },
         {
-          location: { documentPage: { documentIndex: 0, start: 2, end: 3 } },
+          location: { type: 'documentPage' as const, documentIndex: 0, start: 2, end: 3 },
           sourceContent: [{ text: 'page source' }],
           title: 'PDF Document',
         },
         {
-          location: { documentChunk: { documentIndex: 1, start: 5, end: 8 } },
+          location: { type: 'documentChunk' as const, documentIndex: 1, start: 5, end: 8 },
           sourceContent: [{ text: 'chunk source' }],
           title: 'Chunked Document',
         },
         {
-          location: { searchResultLocation: { searchResultIndex: 0, start: 25, end: 150 } },
+          location: { type: 'searchResult' as const, searchResultIndex: 0, start: 25, end: 150 },
           sourceContent: [{ text: 'search source' }],
           title: 'Search Result',
         },
         {
-          location: { web: { url: 'https://example.com/doc', domain: 'example.com' } },
+          location: { type: 'web' as const, url: 'https://example.com/doc', domain: 'example.com' },
           sourceContent: [{ text: 'web source' }],
           title: 'Web Page',
         },
@@ -1578,7 +1587,7 @@ describe('BedrockModel', () => {
           role: 'assistant',
           content: [
             new CitationsBlock({
-              citations,
+              citations: sdkCitations,
               content: [{ text: 'generated text with all citation types' }],
             }),
           ],
@@ -1591,6 +1600,7 @@ describe('BedrockModel', () => {
 
       collectIterator(provider.stream(messages))
 
+      // Bedrock wire format uses object-key discrimination
       expect(mockConverseStreamCommand).toHaveBeenLastCalledWith(
         expect.objectContaining({
           messages: [
@@ -1616,7 +1626,9 @@ describe('BedrockModel', () => {
                         title: 'Chunked Document',
                       },
                       {
-                        location: { searchResultLocation: { searchResultIndex: 0, start: 25, end: 150 } },
+                        location: {
+                          searchResultLocation: { searchResultIndex: 0, start: 25, end: 150 },
+                        },
                         sourceContent: [{ text: 'search source' }],
                         title: 'Search Result',
                       },
@@ -1649,7 +1661,7 @@ describe('BedrockModel', () => {
             new CitationsBlock({
               citations: [
                 {
-                  location: { web: { url: 'https://example.com' } },
+                  location: { type: 'web', url: 'https://example.com' },
                   sourceContent: [{ text: 'web source' }],
                 },
               ],

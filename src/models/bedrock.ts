@@ -40,7 +40,7 @@ import { type BaseModelConfig, Model, type StreamOptions } from '../models/model
 import type { ContentBlock, Message, StopReason, ToolUseBlock } from '../types/messages.js'
 import type { ImageSource, VideoSource, DocumentSource } from '../types/media.js'
 import type { CitationsContentDelta, ModelStreamEvent, ReasoningContentDelta, Usage } from '../models/streaming.js'
-import type { CitationsBlockData } from '../types/citations.js'
+import type { CitationLocation, CitationsBlockData } from '../types/citations.js'
 import type { JSONValue } from '../types/json.js'
 import { ContextWindowOverflowError, ModelThrottledError, normalizeError } from '../errors.js'
 import { ensureDefined } from '../types/validation.js'
@@ -636,7 +636,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
       case 'citationsBlock': {
         const filteredCitations = block.citations.map((citation) => {
           const filtered: Record<string, unknown> = {}
-          if (citation.location) filtered.location = citation.location
+          if (citation.location) filtered.location = this._mapCitationLocationToBedrock(citation.location)
           if (citation.sourceContent) {
             const filteredSource = citation.sourceContent.filter((sc) => sc.text).map((sc) => ({ text: sc.text }))
             if (filteredSource.length > 0) filtered.sourceContent = filteredSource
@@ -829,10 +829,11 @@ export class BedrockModel extends Model<BedrockModelConfig> {
         if (!block) return
         events.push({ type: 'modelContentBlockStartEvent' })
 
+        const mapped = this._mapBedrockCitationsData(block)
         const delta: CitationsContentDelta = {
           type: 'citationsContentDelta',
-          citations: block.citations,
-          content: block.content,
+          citations: mapped.citations,
+          content: mapped.content,
         }
         events.push({ type: 'modelContentBlockDeltaEvent', delta })
         events.push({ type: 'modelContentBlockStopEvent' })
@@ -952,10 +953,11 @@ export class BedrockModel extends Model<BedrockModelConfig> {
           },
           citationsContent: (block: CitationsBlockData): void => {
             if (!block) return
+            const mapped = this._mapBedrockCitationsData(block)
             const delta: CitationsContentDelta = {
               type: 'citationsContentDelta',
-              citations: block.citations,
-              content: block.content,
+              citations: mapped.citations,
+              content: mapped.content,
             }
             events.push({ type: 'modelContentBlockDeltaEvent', delta })
           },
@@ -1092,6 +1094,91 @@ export class BedrockModel extends Model<BedrockModelConfig> {
     }
 
     return mappedStopReason
+  }
+
+  /**
+   * Maps a Bedrock object-key citation location to the SDK's type-discriminated format.
+   *
+   * @param bedrockLocation - Bedrock citation location with object-key discrimination
+   * @returns SDK CitationLocation with type field discrimination
+   */
+  private _mapBedrockCitationLocation(bedrockLocation: Record<string, unknown>): CitationLocation {
+    if ('documentChar' in bedrockLocation) {
+      const loc = bedrockLocation.documentChar as { documentIndex: number; start: number; end: number }
+      return { type: 'documentChar', documentIndex: loc.documentIndex, start: loc.start, end: loc.end }
+    }
+    if ('documentPage' in bedrockLocation) {
+      const loc = bedrockLocation.documentPage as { documentIndex: number; start: number; end: number }
+      return { type: 'documentPage', documentIndex: loc.documentIndex, start: loc.start, end: loc.end }
+    }
+    if ('documentChunk' in bedrockLocation) {
+      const loc = bedrockLocation.documentChunk as { documentIndex: number; start: number; end: number }
+      return { type: 'documentChunk', documentIndex: loc.documentIndex, start: loc.start, end: loc.end }
+    }
+    if ('searchResultLocation' in bedrockLocation) {
+      const loc = bedrockLocation.searchResultLocation as {
+        searchResultIndex: number
+        start: number
+        end: number
+      }
+      return {
+        type: 'searchResult',
+        searchResultIndex: loc.searchResultIndex,
+        start: loc.start,
+        end: loc.end,
+      }
+    }
+    if ('web' in bedrockLocation) {
+      const loc = bedrockLocation.web as { url: string; domain?: string }
+      return { type: 'web', url: loc.url, ...(loc.domain && { domain: loc.domain }) }
+    }
+    logger.warn(`citation_location=<${JSON.stringify(bedrockLocation)}> | unknown citation location type`)
+    return bedrockLocation as CitationLocation
+  }
+
+  /**
+   * Maps Bedrock citation data to SDK Citation objects.
+   *
+   * @param bedrockData - Raw Bedrock CitationsBlockData
+   * @returns CitationsBlockData with SDK-format CitationLocations
+   */
+  private _mapBedrockCitationsData(bedrockData: CitationsBlockData): CitationsBlockData {
+    return {
+      citations: bedrockData.citations.map((citation) => ({
+        ...citation,
+        location: this._mapBedrockCitationLocation(citation.location as unknown as Record<string, unknown>),
+      })),
+      content: bedrockData.content,
+    }
+  }
+
+  /**
+   * Maps an SDK CitationLocation back to Bedrock's object-key format.
+   *
+   * @param location - SDK CitationLocation with type field
+   * @returns Bedrock object-key citation location
+   */
+  private _mapCitationLocationToBedrock(location: CitationLocation): Record<string, unknown> {
+    switch (location.type) {
+      case 'documentChar':
+        return { documentChar: { documentIndex: location.documentIndex, start: location.start, end: location.end } }
+      case 'documentPage':
+        return { documentPage: { documentIndex: location.documentIndex, start: location.start, end: location.end } }
+      case 'documentChunk':
+        return { documentChunk: { documentIndex: location.documentIndex, start: location.start, end: location.end } }
+      case 'searchResult':
+        return {
+          searchResultLocation: {
+            searchResultIndex: location.searchResultIndex,
+            start: location.start,
+            end: location.end,
+          },
+        }
+      case 'web':
+        return { web: { url: location.url, ...(location.domain && { domain: location.domain }) } }
+      default:
+        return location as unknown as Record<string, unknown>
+    }
   }
 }
 

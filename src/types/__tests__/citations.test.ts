@@ -5,7 +5,7 @@ describe('CitationsBlock', () => {
   const documentCharData: CitationsBlockData = {
     citations: [
       {
-        location: { documentChar: { documentIndex: 0, start: 10, end: 50 } },
+        location: { type: 'documentChar', documentIndex: 0, start: 10, end: 50 },
         sourceContent: [{ text: 'source text from document' }],
         title: 'Test Document',
       },
@@ -35,7 +35,7 @@ describe('CitationsBlock', () => {
       const data: CitationsBlockData = {
         citations: [
           {
-            location: { documentPage: { documentIndex: 1, start: 3, end: 7 } },
+            location: { type: 'documentPage', documentIndex: 1, start: 3, end: 7 },
             sourceContent: [{ text: 'page content' }],
           },
         ],
@@ -50,7 +50,7 @@ describe('CitationsBlock', () => {
       const data: CitationsBlockData = {
         citations: [
           {
-            location: { documentChunk: { documentIndex: 0, start: 0, end: 2 } },
+            location: { type: 'documentChunk', documentIndex: 0, start: 0, end: 2 },
             sourceContent: [{ text: 'chunk content' }],
           },
         ],
@@ -61,11 +61,11 @@ describe('CitationsBlock', () => {
       expect(restored).toEqual(original)
     })
 
-    it('round-trips with searchResultLocation location', () => {
+    it('round-trips with searchResult location', () => {
       const data: CitationsBlockData = {
         citations: [
           {
-            location: { searchResultLocation: { searchResultIndex: 2, start: 0, end: 100 } },
+            location: { type: 'searchResult', searchResultIndex: 2, start: 0, end: 100 },
             sourceContent: [{ text: 'search result content' }],
           },
         ],
@@ -80,7 +80,7 @@ describe('CitationsBlock', () => {
       const data: CitationsBlockData = {
         citations: [
           {
-            location: { web: { url: 'https://example.com/article' } },
+            location: { type: 'web', url: 'https://example.com/article' },
             sourceContent: [{ text: 'web content' }],
             title: 'Example Article',
           },
@@ -100,7 +100,7 @@ describe('CitationsBlock', () => {
     const withoutTitle = new CitationsBlock({
       citations: [
         {
-          location: { documentChar: { documentIndex: 0, start: 0, end: 10 } },
+          location: { type: 'documentChar', documentIndex: 0, start: 0, end: 10 },
           sourceContent: [{ text: 'source' }],
         },
       ],
@@ -144,12 +144,12 @@ describe('CitationsBlock', () => {
     const data: CitationsBlockData = {
       citations: [
         {
-          location: { documentChar: { documentIndex: 0, start: 0, end: 50 } },
+          location: { type: 'documentChar', documentIndex: 0, start: 0, end: 50 },
           sourceContent: [{ text: 'first source' }],
           title: 'Doc 1',
         },
         {
-          location: { documentPage: { documentIndex: 1, start: 1, end: 3 } },
+          location: { type: 'documentPage', documentIndex: 1, start: 1, end: 3 },
           sourceContent: [{ text: 'second source' }, { text: 'additional source' }],
         },
       ],
@@ -164,27 +164,27 @@ describe('CitationsBlock', () => {
     const data: CitationsBlockData = {
       citations: [
         {
-          location: { documentChar: { documentIndex: 0, start: 150, end: 300 } },
+          location: { type: 'documentChar', documentIndex: 0, start: 150, end: 300 },
           sourceContent: [{ text: 'char source' }],
           title: 'Text Document',
         },
         {
-          location: { documentPage: { documentIndex: 0, start: 2, end: 3 } },
+          location: { type: 'documentPage', documentIndex: 0, start: 2, end: 3 },
           sourceContent: [{ text: 'page source' }],
           title: 'PDF Document',
         },
         {
-          location: { documentChunk: { documentIndex: 1, start: 5, end: 8 } },
+          location: { type: 'documentChunk', documentIndex: 1, start: 5, end: 8 },
           sourceContent: [{ text: 'chunk source' }],
           title: 'Chunked Document',
         },
         {
-          location: { searchResultLocation: { searchResultIndex: 0, start: 25, end: 150 } },
+          location: { type: 'searchResult', searchResultIndex: 0, start: 25, end: 150 },
           sourceContent: [{ text: 'search source' }],
           title: 'Search Result',
         },
         {
-          location: { web: { url: 'https://example.com/doc', domain: 'example.com' } },
+          location: { type: 'web', url: 'https://example.com/doc', domain: 'example.com' },
           sourceContent: [{ text: 'web source' }],
           title: 'Web Page',
         },
@@ -198,19 +198,19 @@ describe('CitationsBlock', () => {
     expect(restored).toEqual(original)
     expect(restored.citations).toHaveLength(5)
 
-    // Verify each variant has exactly one wrapper key with inner fields preserved
-    expect('documentChar' in restored.citations[0]!.location).toBe(true)
-    expect('documentPage' in restored.citations[1]!.location).toBe(true)
-    expect('documentChunk' in restored.citations[2]!.location).toBe(true)
-    expect('searchResultLocation' in restored.citations[3]!.location).toBe(true)
-    expect('web' in restored.citations[4]!.location).toBe(true)
+    // Verify each variant has the correct type discriminator
+    expect(restored.citations[0]!.location.type).toBe('documentChar')
+    expect(restored.citations[1]!.location.type).toBe('documentPage')
+    expect(restored.citations[2]!.location.type).toBe('documentChunk')
+    expect(restored.citations[3]!.location.type).toBe('searchResult')
+    expect(restored.citations[4]!.location.type).toBe('web')
   })
 
   it('preserves optional source and domain fields', () => {
     const data: CitationsBlockData = {
       citations: [
         {
-          location: { web: { url: 'https://example.com', domain: 'example.com' } },
+          location: { type: 'web', url: 'https://example.com', domain: 'example.com' },
           source: 'web-source-id',
           sourceContent: [{ text: 'web content' }],
           title: 'Example',
@@ -223,6 +223,10 @@ describe('CitationsBlock', () => {
 
     const restored = CitationsBlock.fromJSON(block.toJSON())
     expect(restored.citations[0]!.source).toBe('web-source-id')
-    expect((restored.citations[0]!.location as { web: { url: string; domain: string } }).web.domain).toBe('example.com')
+    const loc = restored.citations[0]!.location
+    expect(loc.type).toBe('web')
+    if (loc.type === 'web') {
+      expect(loc.domain).toBe('example.com')
+    }
   })
 })

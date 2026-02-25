@@ -290,7 +290,7 @@ describe('Message.fromMessageData', () => {
           citationsContent: {
             citations: [
               {
-                location: { documentChar: { documentIndex: 0, start: 10, end: 50 } },
+                location: { type: 'documentChar', documentIndex: 0, start: 10, end: 50 },
                 sourceContent: [{ text: 'source text' }],
                 title: 'Test Doc',
               },
@@ -557,7 +557,7 @@ describe('toJSON/fromJSON round-trips', () => {
     ['Message with text content',              () => new Message({ role: 'user', content: [new TextBlock('Hello')] })],
     ['Message with multiple content blocks',   () => new Message({ role: 'assistant', content: [new TextBlock('Here is the result'), new ToolUseBlock({ name: 'test-tool', toolUseId: '123', input: { key: 'value' } })] })],
     ['Message with image content',             () => new Message({ role: 'user', content: [new TextBlock('Check this image'), new ImageBlock({ format: 'png', source: { bytes: new Uint8Array([1, 2, 3]) } })] })],
-    ['CitationsBlock',                         () => new CitationsBlock({ citations: [{ location: { documentChar: { documentIndex: 0, start: 0, end: 10 } }, sourceContent: [{ text: 'source' }] }], content: [{ text: 'generated' }] })],
+    ['CitationsBlock',                         () => new CitationsBlock({ citations: [{ location: { type: 'documentChar', documentIndex: 0, start: 0, end: 10 }, sourceContent: [{ text: 'source' }] }], content: [{ text: 'generated' }] })],
   ] as const
 
   it.each(roundTripCases)('%s', (_name, createBlock) => {

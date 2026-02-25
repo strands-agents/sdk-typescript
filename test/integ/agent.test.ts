@@ -297,14 +297,14 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel, mode
 
           const citation = citationsBlock!.citations[0]!
           expect(citation.location).toBeDefined()
-          expect('documentChar' in citation.location).toBe(true)
+          expect(citation.location.type).toBe('documentChar')
 
           // Verify all inner fields are present (Bedrock docs say "Not Required" but we expect them)
-          const charLoc = (citation.location as { documentChar: { documentIndex: number; start: number; end: number } })
-            .documentChar
-          expect(typeof charLoc.documentIndex).toBe('number')
-          expect(typeof charLoc.start).toBe('number')
-          expect(typeof charLoc.end).toBe('number')
+          if (citation.location.type === 'documentChar') {
+            expect(typeof citation.location.documentIndex).toBe('number')
+            expect(typeof citation.location.start).toBe('number')
+            expect(typeof citation.location.end).toBe('number')
+          }
 
           expect(citation.sourceContent.length).toBeGreaterThan(0)
           expect(citation.sourceContent[0]!.text).toBeDefined()
@@ -346,14 +346,14 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel, mode
 
           const citation = citationsBlock!.citations[0]!
           expect(citation.location).toBeDefined()
-          expect('documentPage' in citation.location).toBe(true)
+          expect(citation.location.type).toBe('documentPage')
 
           // Verify all inner fields are present (Bedrock docs say "Not Required" but we expect them)
-          const pageLoc = (citation.location as { documentPage: { documentIndex: number; start: number; end: number } })
-            .documentPage
-          expect(typeof pageLoc.documentIndex).toBe('number')
-          expect(typeof pageLoc.start).toBe('number')
-          expect(typeof pageLoc.end).toBe('number')
+          if (citation.location.type === 'documentPage') {
+            expect(typeof citation.location.documentIndex).toBe('number')
+            expect(typeof citation.location.start).toBe('number')
+            expect(typeof citation.location.end).toBe('number')
+          }
 
           expect(citation.sourceContent.length).toBeGreaterThan(0)
           expect(citation.sourceContent[0]!.text).toBeDefined()
@@ -411,27 +411,27 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel, mode
               new CitationsBlock({
                 citations: [
                   {
-                    location: { documentChar: { documentIndex: 0, start: 150, end: 300 } },
+                    location: { type: 'documentChar', documentIndex: 0, start: 150, end: 300 },
                     sourceContent: [{ text: 'char source content' }],
                     title: 'Text Document',
                   },
                   {
-                    location: { documentPage: { documentIndex: 0, start: 2, end: 3 } },
+                    location: { type: 'documentPage', documentIndex: 0, start: 2, end: 3 },
                     sourceContent: [{ text: 'page source content' }],
                     title: 'PDF Document',
                   },
                   {
-                    location: { documentChunk: { documentIndex: 1, start: 5, end: 8 } },
+                    location: { type: 'documentChunk', documentIndex: 1, start: 5, end: 8 },
                     sourceContent: [{ text: 'chunk source content' }],
                     title: 'Chunked Document',
                   },
                   {
-                    location: { searchResultLocation: { searchResultIndex: 0, start: 25, end: 150 } },
+                    location: { type: 'searchResult', searchResultIndex: 0, start: 25, end: 150 },
                     sourceContent: [{ text: 'search source content' }],
                     title: 'Search Result',
                   },
                   {
-                    location: { web: { url: 'https://example.com/doc', domain: 'example.com' } },
+                    location: { type: 'web', url: 'https://example.com/doc', domain: 'example.com' },
                     sourceContent: [{ text: 'web source content' }],
                     title: 'Web Page',
                   },
