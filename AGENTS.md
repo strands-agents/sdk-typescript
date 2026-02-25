@@ -581,6 +581,47 @@ export class CachePointBlock {
 
 **Rationale**: This consistent naming makes discriminated unions predictable and improves code readability. Developers can easily understand the relationship between the type value and the class.
 
+### API Union Types (Bedrock Pattern)
+
+When the upstream API (e.g., Bedrock) defines a type as a **UNION** ("only one member can be specified"), model it as a TypeScript `type` union with each variant's field **required** — not an `interface` with optional fields. This allows non-breaking expansion when new variants are added.
+
+The Bedrock API marks all fields in union types as "Not Required" as a mechanism for future extensibility. In TypeScript, encode the mutual exclusivity using `|` with each variant having its field required. The "not required" from the API docs means "this field won't be present if a different variant is active."
+
+```typescript
+// ✅ Correct: type union — each variant has its field required
+// Adding a new variant later (e.g., | { image: ImageData }) is non-breaking
+export type CitationSourceContent = { text: string }
+
+// ✅ Correct: multi-variant union with object-key discrimination
+export type DocumentSourceData =
+  | { bytes: Uint8Array }
+  | { text: string }
+  | { content: DocumentContentBlockData[] }
+  | { s3Location: S3LocationData }
+
+// ✅ Correct: multi-variant union for citation locations
+export type CitationLocation =
+  | { documentChar: DocumentCharLocation }
+  | { documentPage: DocumentPageLocation }
+  | { web: WebLocation }
+
+// ❌ Wrong: interface with optional fields — cannot expand without breaking
+export interface CitationSourceContent {
+  text?: string
+}
+
+// ❌ Wrong: interface with required field — changing to union later is breaking
+export interface CitationSourceContent {
+  text: string
+}
+```
+
+**Key points**:
+- Use `type` alias (not `interface`) so it can be expanded to a union later
+- Each variant's field is **required** within that variant
+- Use object-key discrimination (`'text' in source`) to narrow variants at runtime
+- See `DocumentSourceData` in `src/types/media.ts` and `CitationLocation` in `src/types/citations.ts` for reference implementations
+
 ### Error Handling
 
 ```typescript
