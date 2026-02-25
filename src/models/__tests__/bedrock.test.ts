@@ -1543,21 +1543,43 @@ describe('BedrockModel', () => {
   describe('citations content block formatting', () => {
     const mockConverseStreamCommand = vi.mocked(ConverseStreamCommand)
 
-    it('formats citations block with filtered fields in request', async () => {
+    it('preserves all CitationLocation union variants through formatting pipeline', async () => {
       const provider = new BedrockModel()
+      const citations = [
+        {
+          location: { documentChar: { documentIndex: 0, start: 150, end: 300 } },
+          sourceContent: [{ text: 'char source' }],
+          title: 'Text Document',
+        },
+        {
+          location: { documentPage: { documentIndex: 0, start: 2, end: 3 } },
+          sourceContent: [{ text: 'page source' }],
+          title: 'PDF Document',
+        },
+        {
+          location: { documentChunk: { documentIndex: 1, start: 5, end: 8 } },
+          sourceContent: [{ text: 'chunk source' }],
+          title: 'Chunked Document',
+        },
+        {
+          location: { searchResultLocation: { searchResultIndex: 0, start: 25, end: 150 } },
+          sourceContent: [{ text: 'search source' }],
+          title: 'Search Result',
+        },
+        {
+          location: { web: { url: 'https://example.com/doc', domain: 'example.com' } },
+          sourceContent: [{ text: 'web source' }],
+          title: 'Web Page',
+        },
+      ]
+
       const messages = [
         new Message({
           role: 'assistant',
           content: [
             new CitationsBlock({
-              citations: [
-                {
-                  location: { documentChar: { documentIndex: 0, start: 10, end: 50 } },
-                  sourceContent: [{ text: 'source text' }],
-                  title: 'Test Doc',
-                },
-              ],
-              content: [{ text: 'generated text' }],
+              citations,
+              content: [{ text: 'generated text with all citation types' }],
             }),
           ],
         }),
@@ -1579,12 +1601,32 @@ describe('BedrockModel', () => {
                   citationsContent: {
                     citations: [
                       {
-                        location: { documentChar: { documentIndex: 0, start: 10, end: 50 } },
-                        sourceContent: [{ text: 'source text' }],
-                        title: 'Test Doc',
+                        location: { documentChar: { documentIndex: 0, start: 150, end: 300 } },
+                        sourceContent: [{ text: 'char source' }],
+                        title: 'Text Document',
+                      },
+                      {
+                        location: { documentPage: { documentIndex: 0, start: 2, end: 3 } },
+                        sourceContent: [{ text: 'page source' }],
+                        title: 'PDF Document',
+                      },
+                      {
+                        location: { documentChunk: { documentIndex: 1, start: 5, end: 8 } },
+                        sourceContent: [{ text: 'chunk source' }],
+                        title: 'Chunked Document',
+                      },
+                      {
+                        location: { searchResultLocation: { searchResultIndex: 0, start: 25, end: 150 } },
+                        sourceContent: [{ text: 'search source' }],
+                        title: 'Search Result',
+                      },
+                      {
+                        location: { web: { url: 'https://example.com/doc', domain: 'example.com' } },
+                        sourceContent: [{ text: 'web source' }],
+                        title: 'Web Page',
                       },
                     ],
-                    content: [{ text: 'generated text' }],
+                    content: [{ text: 'generated text with all citation types' }],
                   },
                 },
               ],
@@ -1598,7 +1640,7 @@ describe('BedrockModel', () => {
       )
     })
 
-    it('formats citations block without optional title', async () => {
+    it('formats citations block without optional title or source', async () => {
       const provider = new BedrockModel()
       const messages = [
         new Message({

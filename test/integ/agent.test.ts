@@ -298,6 +298,14 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel, mode
           const citation = citationsBlock!.citations[0]!
           expect(citation.location).toBeDefined()
           expect('documentChar' in citation.location).toBe(true)
+
+          // Verify all inner fields are present (Bedrock docs say "Not Required" but we expect them)
+          const charLoc = (citation.location as { documentChar: { documentIndex: number; start: number; end: number } })
+            .documentChar
+          expect(typeof charLoc.documentIndex).toBe('number')
+          expect(typeof charLoc.start).toBe('number')
+          expect(typeof charLoc.end).toBe('number')
+
           expect(citation.sourceContent.length).toBeGreaterThan(0)
           expect(citation.sourceContent[0]!.text).toBeDefined()
 
@@ -339,6 +347,14 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel, mode
           const citation = citationsBlock!.citations[0]!
           expect(citation.location).toBeDefined()
           expect('documentPage' in citation.location).toBe(true)
+
+          // Verify all inner fields are present (Bedrock docs say "Not Required" but we expect them)
+          const pageLoc = (citation.location as { documentPage: { documentIndex: number; start: number; end: number } })
+            .documentPage
+          expect(typeof pageLoc.documentIndex).toBe('number')
+          expect(typeof pageLoc.start).toBe('number')
+          expect(typeof pageLoc.end).toBe('number')
+
           expect(citation.sourceContent.length).toBeGreaterThan(0)
           expect(citation.sourceContent[0]!.text).toBeDefined()
 
@@ -377,8 +393,63 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel, mode
         expect(citationsBlock!.citations.length).toBeGreaterThan(0)
       })
 
-      // Note: documentChunk, searchResultLocation, and web citation location variants
-      // require RAG/search integration and cannot be triggered from document uploads alone.
+      it('preserves all CitationLocation variants in multi-turn conversation history', async () => {
+        const agent = new Agent({
+          model: createModel(),
+          printer: false,
+        })
+
+        // Seed conversation with an assistant message containing all 5 citation location variants
+        agent.messages.push(
+          new Message({
+            role: 'user',
+            content: [new TextBlock('Tell me about these sources.')],
+          }),
+          new Message({
+            role: 'assistant',
+            content: [
+              new CitationsBlock({
+                citations: [
+                  {
+                    location: { documentChar: { documentIndex: 0, start: 150, end: 300 } },
+                    sourceContent: [{ text: 'char source content' }],
+                    title: 'Text Document',
+                  },
+                  {
+                    location: { documentPage: { documentIndex: 0, start: 2, end: 3 } },
+                    sourceContent: [{ text: 'page source content' }],
+                    title: 'PDF Document',
+                  },
+                  {
+                    location: { documentChunk: { documentIndex: 1, start: 5, end: 8 } },
+                    sourceContent: [{ text: 'chunk source content' }],
+                    title: 'Chunked Document',
+                  },
+                  {
+                    location: { searchResultLocation: { searchResultIndex: 0, start: 25, end: 150 } },
+                    sourceContent: [{ text: 'search source content' }],
+                    title: 'Search Result',
+                  },
+                  {
+                    location: { web: { url: 'https://example.com/doc', domain: 'example.com' } },
+                    sourceContent: [{ text: 'web source content' }],
+                    title: 'Web Page',
+                  },
+                ],
+                content: [{ text: 'Here is information from all five source types.' }],
+              }),
+              new TextBlock('I found information from multiple source types.'),
+            ],
+          })
+        )
+
+        // Follow-up turn forces Bedrock to accept all 5 variants in conversation history
+        const result = await agent.invoke('Can you summarize what you told me?')
+
+        expect(result.stopReason).toBe('endTurn')
+        expect(result.lastMessage.role).toBe('assistant')
+        expect(result.lastMessage.content.length).toBeGreaterThan(0)
+      })
     })
 
     describe.skipIf(!supports.images)('multimodal input', () => {

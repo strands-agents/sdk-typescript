@@ -159,4 +159,70 @@ describe('CitationsBlock', () => {
     const restored = CitationsBlock.fromJSON(original.toJSON())
     expect(restored).toEqual(original)
   })
+
+  it('round-trips all CitationLocation union variants in a single block', () => {
+    const data: CitationsBlockData = {
+      citations: [
+        {
+          location: { documentChar: { documentIndex: 0, start: 150, end: 300 } },
+          sourceContent: [{ text: 'char source' }],
+          title: 'Text Document',
+        },
+        {
+          location: { documentPage: { documentIndex: 0, start: 2, end: 3 } },
+          sourceContent: [{ text: 'page source' }],
+          title: 'PDF Document',
+        },
+        {
+          location: { documentChunk: { documentIndex: 1, start: 5, end: 8 } },
+          sourceContent: [{ text: 'chunk source' }],
+          title: 'Chunked Document',
+        },
+        {
+          location: { searchResultLocation: { searchResultIndex: 0, start: 25, end: 150 } },
+          sourceContent: [{ text: 'search source' }],
+          title: 'Search Result',
+        },
+        {
+          location: { web: { url: 'https://example.com/doc', domain: 'example.com' } },
+          sourceContent: [{ text: 'web source' }],
+          title: 'Web Page',
+        },
+      ],
+      content: [{ text: 'generated text referencing all sources' }],
+    }
+    const original = new CitationsBlock(data)
+    const json = original.toJSON()
+    const restored = CitationsBlock.fromJSON(json)
+
+    expect(restored).toEqual(original)
+    expect(restored.citations).toHaveLength(5)
+
+    // Verify each variant has exactly one wrapper key with inner fields preserved
+    expect('documentChar' in restored.citations[0]!.location).toBe(true)
+    expect('documentPage' in restored.citations[1]!.location).toBe(true)
+    expect('documentChunk' in restored.citations[2]!.location).toBe(true)
+    expect('searchResultLocation' in restored.citations[3]!.location).toBe(true)
+    expect('web' in restored.citations[4]!.location).toBe(true)
+  })
+
+  it('preserves optional source and domain fields', () => {
+    const data: CitationsBlockData = {
+      citations: [
+        {
+          location: { web: { url: 'https://example.com', domain: 'example.com' } },
+          source: 'web-source-id',
+          sourceContent: [{ text: 'web content' }],
+          title: 'Example',
+        },
+      ],
+      content: [{ text: 'generated' }],
+    }
+    const block = new CitationsBlock(data)
+    expect(block.citations[0]!.source).toBe('web-source-id')
+
+    const restored = CitationsBlock.fromJSON(block.toJSON())
+    expect(restored.citations[0]!.source).toBe('web-source-id')
+    expect((restored.citations[0]!.location as { web: { url: string; domain: string } }).web.domain).toBe('example.com')
+  })
 })
