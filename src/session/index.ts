@@ -13,9 +13,10 @@
  * ```
  */
 
-// TODO: add these to top level index
 // Core types
-export type { Scope, Snapshot, SnapshotManifest, SnapshotTriggerCallback } from './types.js'
+export { SessionManager } from './session-manager.js'
+export type { SessionManagerConfig, SaveLatestStrategy } from './session-manager.js'
+export type { SnapshotManifest, SnapshotTriggerCallback, SnapshotTriggerParams } from './types.js'
 
 // Storage layer
 export type { SessionStorage, SnapshotStorage, SnapshotLocation } from './storage.js'
@@ -23,3 +24,5 @@ export type { SessionStorage, SnapshotStorage, SnapshotLocation } from './storag
 // Storage implementations
 export { FileStorage } from './file-storage.js'
 export { S3Storage, type S3StorageConfig } from './s3-storage.js'
+
+export type { Scope, Snapshot } from '../agent/snapshot.js'
