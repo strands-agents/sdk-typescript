@@ -308,6 +308,8 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel, mode
 
           expect(citation.sourceContent.length).toBeGreaterThan(0)
           expect(citation.sourceContent[0]!.text).toBeDefined()
+          expect(typeof citation.source).toBe('string')
+          expect(typeof citation.title).toBe('string')
 
           // Second turn: verify citations survive in conversation history
           const followUp = await agent.invoke('What else does the document say about that city?')
@@ -357,6 +359,8 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel, mode
 
           expect(citation.sourceContent.length).toBeGreaterThan(0)
           expect(citation.sourceContent[0]!.text).toBeDefined()
+          expect(typeof citation.source).toBe('string')
+          expect(typeof citation.title).toBe('string')
 
           // Second turn: verify citations survive in conversation history
           const followUp = await agent.invoke('What else can you tell me about this document?')
@@ -412,26 +416,31 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel, mode
                 citations: [
                   {
                     location: { type: 'documentChar', documentIndex: 0, start: 150, end: 300 },
+                    source: 'doc-0',
                     sourceContent: [{ text: 'char source content' }],
                     title: 'Text Document',
                   },
                   {
                     location: { type: 'documentPage', documentIndex: 0, start: 2, end: 3 },
+                    source: 'doc-0',
                     sourceContent: [{ text: 'page source content' }],
                     title: 'PDF Document',
                   },
                   {
                     location: { type: 'documentChunk', documentIndex: 1, start: 5, end: 8 },
+                    source: 'doc-1',
                     sourceContent: [{ text: 'chunk source content' }],
                     title: 'Chunked Document',
                   },
                   {
                     location: { type: 'searchResult', searchResultIndex: 0, start: 25, end: 150 },
+                    source: 'search-0',
                     sourceContent: [{ text: 'search source content' }],
                     title: 'Search Result',
                   },
                   {
                     location: { type: 'web', url: 'https://example.com/doc', domain: 'example.com' },
+                    source: 'web-0',
                     sourceContent: [{ text: 'web source content' }],
                     title: 'Web Page',
                   },

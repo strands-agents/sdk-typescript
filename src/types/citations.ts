@@ -137,7 +137,7 @@ export interface Citation {
   /**
    * The source identifier string.
    */
-  source?: string
+  source: string
 
   /**
    * The source content referenced by this citation.
@@ -145,9 +145,9 @@ export interface Citation {
   sourceContent: CitationSourceContent[]
 
   /**
-   * Optional title of the cited source.
+   * Title of the cited source.
    */
-  title?: string
+  title: string
 }
 
 /**

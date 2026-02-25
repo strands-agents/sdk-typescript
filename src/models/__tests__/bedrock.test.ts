@@ -1557,26 +1557,31 @@ describe('BedrockModel', () => {
       const sdkCitations = [
         {
           location: { type: 'documentChar' as const, documentIndex: 0, start: 150, end: 300 },
+          source: 'doc-0',
           sourceContent: [{ text: 'char source' }],
           title: 'Text Document',
         },
         {
           location: { type: 'documentPage' as const, documentIndex: 0, start: 2, end: 3 },
+          source: 'doc-0',
           sourceContent: [{ text: 'page source' }],
           title: 'PDF Document',
         },
         {
           location: { type: 'documentChunk' as const, documentIndex: 1, start: 5, end: 8 },
+          source: 'doc-1',
           sourceContent: [{ text: 'chunk source' }],
           title: 'Chunked Document',
         },
         {
           location: { type: 'searchResult' as const, searchResultIndex: 0, start: 25, end: 150 },
+          source: 'search-0',
           sourceContent: [{ text: 'search source' }],
           title: 'Search Result',
         },
         {
           location: { type: 'web' as const, url: 'https://example.com/doc', domain: 'example.com' },
+          source: 'web-0',
           sourceContent: [{ text: 'web source' }],
           title: 'Web Page',
         },
@@ -1612,16 +1617,19 @@ describe('BedrockModel', () => {
                     citations: [
                       {
                         location: { documentChar: { documentIndex: 0, start: 150, end: 300 } },
+                        source: 'doc-0',
                         sourceContent: [{ text: 'char source' }],
                         title: 'Text Document',
                       },
                       {
                         location: { documentPage: { documentIndex: 0, start: 2, end: 3 } },
+                        source: 'doc-0',
                         sourceContent: [{ text: 'page source' }],
                         title: 'PDF Document',
                       },
                       {
                         location: { documentChunk: { documentIndex: 1, start: 5, end: 8 } },
+                        source: 'doc-1',
                         sourceContent: [{ text: 'chunk source' }],
                         title: 'Chunked Document',
                       },
@@ -1629,11 +1637,13 @@ describe('BedrockModel', () => {
                         location: {
                           searchResultLocation: { searchResultIndex: 0, start: 25, end: 150 },
                         },
+                        source: 'search-0',
                         sourceContent: [{ text: 'search source' }],
                         title: 'Search Result',
                       },
                       {
                         location: { web: { url: 'https://example.com/doc', domain: 'example.com' } },
+                        source: 'web-0',
                         sourceContent: [{ text: 'web source' }],
                         title: 'Web Page',
                       },
@@ -1648,55 +1658,6 @@ describe('BedrockModel', () => {
               content: [{ text: 'Follow up' }],
             },
           ],
-        })
-      )
-    })
-
-    it('formats citations block without optional title or source', async () => {
-      const provider = new BedrockModel()
-      const messages = [
-        new Message({
-          role: 'assistant',
-          content: [
-            new CitationsBlock({
-              citations: [
-                {
-                  location: { type: 'web', url: 'https://example.com' },
-                  sourceContent: [{ text: 'web source' }],
-                },
-              ],
-              content: [{ text: 'cited text' }],
-            }),
-          ],
-        }),
-        new Message({
-          role: 'user',
-          content: [new TextBlock('Thanks')],
-        }),
-      ]
-
-      collectIterator(provider.stream(messages))
-
-      expect(mockConverseStreamCommand).toHaveBeenLastCalledWith(
-        expect.objectContaining({
-          messages: expect.arrayContaining([
-            expect.objectContaining({
-              role: 'assistant',
-              content: [
-                {
-                  citationsContent: {
-                    citations: [
-                      {
-                        location: { web: { url: 'https://example.com' } },
-                        sourceContent: [{ text: 'web source' }],
-                      },
-                    ],
-                    content: [{ text: 'cited text' }],
-                  },
-                },
-              ],
-            }),
-          ]),
         })
       )
     })
