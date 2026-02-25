@@ -22,7 +22,7 @@ class TestNode extends Node {
     id: string,
     fn: (args: InvokeArgs, state: MultiAgentState) => AsyncGenerator<MultiAgentStreamEvent, NodeResultUpdate, undefined>
   ) {
-    super(id)
+    super(id, {})
     this._fn = fn
   }
 
@@ -88,7 +88,7 @@ describe('AgentNode', () => {
   beforeEach(() => {
     const model = new MockMessageModel().addTurn(new TextBlock('reply'))
     agent = new Agent({ model, printer: false, state: { key1: 'value1' } })
-    node = new AgentNode('agent-1', agent)
+    node = new AgentNode({ id: 'agent-1', agent })
     state = new MultiAgentState()
   })
 
@@ -96,12 +96,18 @@ describe('AgentNode', () => {
     it('wraps agent events and returns content', async () => {
       const { items, result } = await collectGenerator(node.stream([new TextBlock('prompt')], state))
 
-      expect(items.length).toBeGreaterThan(0)
-      for (const event of items) {
+      const streamEvents = items.filter((e) => e.type === 'nodeStreamUpdateEvent')
+      expect(streamEvents.length).toBeGreaterThan(0)
+      for (const event of streamEvents) {
         expect(event).toEqual(
           expect.objectContaining({ type: 'nodeStreamUpdateEvent', nodeId: 'agent-1', nodeType: 'agentNode' })
         )
       }
+
+      const resultEvent = items.find((e) => e.type === 'nodeResultEvent')
+      expect(resultEvent).toEqual(
+        expect.objectContaining({ type: 'nodeResultEvent', nodeId: 'agent-1', nodeType: 'agentNode', result })
+      )
 
       expect(result).toEqual({
         type: 'nodeResult',

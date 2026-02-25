@@ -1,9 +1,14 @@
 import type { Agent, InvokeArgs } from '../agent/agent.js'
 import { takeSnapshot, loadSnapshot } from '../agent/snapshot.js'
 import type { MultiAgentStreamEvent } from './events.js'
-import { NodeStreamUpdateEvent } from './events.js'
+import { NodeStreamUpdateEvent, NodeResultEvent } from './events.js'
 import { MultiAgentState, NodeResult, Status } from './state.js'
 import type { NodeResultUpdate } from './state.js'
+
+/**
+ * Known node type identifiers with extensibility for custom nodes.
+ */
+export type NodeType = 'agentNode' | (string & {})
 
 /**
  * Configuration for a node execution.
@@ -23,18 +28,19 @@ export interface NodeConfig {
  * delegates to {@link handle} for node-specific execution logic.
  */
 export abstract class Node {
+  readonly type: string = 'node'
   /** Unique identifier for this node within the orchestration. */
   readonly id: string
   /** Optional per-node configuration. */
-  readonly config?: NodeConfig
+  readonly config: NodeConfig
 
   /**
    * @param id - Unique identifier for this node within the orchestration
-   * @param config - Optional per-node configuration
+   * @param config - Per-node configuration
    */
-  constructor(id: string, config?: NodeConfig) {
+  constructor(id: string, config: NodeConfig) {
     this.id = id
-    if (config) this.config = config
+    this.config = config
   }
 
   /**
@@ -50,9 +56,11 @@ export abstract class Node {
     state: MultiAgentState
   ): AsyncGenerator<MultiAgentStreamEvent, NodeResult, undefined> {
     const startTime = Date.now()
+
+    let result: NodeResult
     try {
       const update = yield* this.handle(args, state)
-      return new NodeResult({
+      result = new NodeResult({
         nodeId: this.id,
         status: Status.COMPLETED,
         duration: Date.now() - startTime,
@@ -60,14 +68,16 @@ export abstract class Node {
         ...update,
       })
     } catch (error) {
-      return new NodeResult({
+      result = new NodeResult({
         nodeId: this.id,
         status: Status.FAILED,
         duration: Date.now() - startTime,
         error: error instanceof Error ? error : new Error(String(error)),
-        content: [],
       })
     }
+
+    yield new NodeResultEvent({ nodeId: this.id, nodeType: this.type, result })
+    return result
   }
 
   /**
@@ -84,6 +94,16 @@ export abstract class Node {
 }
 
 /**
+ * Options for creating an {@link AgentNode}.
+ */
+export interface AgentNodeOptions extends NodeConfig {
+  /** Unique node identifier. */
+  id: string
+  /** The agent to wrap as a node. */
+  agent: Agent
+}
+
+/**
  * Node that wraps an Agent instance for multi-agent orchestration.
  *
  * Each execution is isolated — the wrapped agent's internal state
@@ -93,12 +113,8 @@ export class AgentNode extends Node {
   readonly type = 'agentNode' as const
   private readonly _agent: Agent
 
-  /**
-   * @param id - Unique identifier for this node within the orchestration
-   * @param agent - The Agent instance to wrap
-   * @param config - Optional per-node configuration
-   */
-  constructor(id: string, agent: Agent, config?: NodeConfig) {
+  constructor(options: AgentNodeOptions) {
+    const { id, agent, ...config } = options
     super(id, config)
     this._agent = agent
   }
@@ -133,3 +149,8 @@ export class AgentNode extends Node {
     }
   }
 }
+
+/**
+ * A node definition accepted by orchestration constructors.
+ */
+export type NodeDefinition = Node | AgentNodeOptions
