@@ -628,6 +628,150 @@ describe('Model', () => {
         }
       })
     })
+
+    describe('when receiving redact content events', () => {
+      it('redacts last user message when redactUserContentMessage is present', async () => {
+        const provider = new TestModelProvider(async function* () {
+          yield { type: 'modelMessageStartEvent', role: 'assistant' }
+          yield { type: 'modelContentBlockStartEvent' }
+          yield {
+            type: 'modelContentBlockDeltaEvent',
+            delta: { type: 'textDelta', text: 'Hello' },
+          }
+          yield { type: 'modelContentBlockStopEvent' }
+          yield { type: 'modelMessageStopEvent', stopReason: 'guardrailIntervened' }
+          yield {
+            type: 'modelMetadataEvent',
+            usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+          }
+          yield {
+            type: 'modelRedactContentEvent',
+            redactUserContentMessage: '[User input redacted.]',
+          }
+        })
+
+        const messages = [
+          new Message({ role: 'user', content: [new TextBlock('Sensitive content')] }),
+        ]
+
+        await collectGenerator(provider.streamAggregated(messages))
+
+        // Verify the user message was redacted in the messages array
+        expect(messages[0]!.role).toBe('user')
+        expect(messages[0]!.content).toEqual([{ type: 'textBlock', text: '[User input redacted.]' }])
+      })
+
+      it('redacts assistant content when redactAssistantContentMessage is present', async () => {
+        const provider = new TestModelProvider(async function* () {
+          yield { type: 'modelMessageStartEvent', role: 'assistant' }
+          yield { type: 'modelContentBlockStartEvent' }
+          yield {
+            type: 'modelContentBlockDeltaEvent',
+            delta: { type: 'textDelta', text: 'Harmful content' },
+          }
+          yield { type: 'modelContentBlockStopEvent' }
+          yield { type: 'modelMessageStopEvent', stopReason: 'guardrailIntervened' }
+          yield {
+            type: 'modelMetadataEvent',
+            usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+          }
+          yield {
+            type: 'modelRedactContentEvent',
+            redactAssistantContentMessage: '[Assistant output redacted.]',
+          }
+        })
+
+        const messages = [
+          new Message({ role: 'user', content: [new TextBlock('Tell me something')] }),
+        ]
+
+        const { result } = await collectGenerator(provider.streamAggregated(messages))
+
+        // Verify the assistant message content was replaced with the redaction message
+        expect(result.message.role).toBe('assistant')
+        expect(result.message.content).toEqual([{ type: 'textBlock', text: '[Assistant output redacted.]' }])
+      })
+
+      it('redacts both user and assistant content when both are present', async () => {
+        const provider = new TestModelProvider(async function* () {
+          yield { type: 'modelMessageStartEvent', role: 'assistant' }
+          yield { type: 'modelContentBlockStartEvent' }
+          yield {
+            type: 'modelContentBlockDeltaEvent',
+            delta: { type: 'textDelta', text: 'Response' },
+          }
+          yield { type: 'modelContentBlockStopEvent' }
+          yield { type: 'modelMessageStopEvent', stopReason: 'guardrailIntervened' }
+          yield {
+            type: 'modelMetadataEvent',
+            usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+          }
+          yield {
+            type: 'modelRedactContentEvent',
+            redactUserContentMessage: '[User input redacted.]',
+          }
+          yield {
+            type: 'modelRedactContentEvent',
+            redactAssistantContentMessage: '[Assistant output redacted.]',
+          }
+        })
+
+        const messages = [
+          new Message({ role: 'user', content: [new TextBlock('Input')] }),
+        ]
+
+        const { result } = await collectGenerator(provider.streamAggregated(messages))
+
+        // Verify user message was redacted
+        expect(messages[0]!.role).toBe('user')
+        expect(messages[0]!.content).toEqual([{ type: 'textBlock', text: '[User input redacted.]' }])
+
+        // Verify assistant message was redacted
+        expect(result.message.role).toBe('assistant')
+        expect(result.message.content).toEqual([{ type: 'textBlock', text: '[Assistant output redacted.]' }])
+      })
+
+      it('finds and redacts only the last user message in multi-turn conversation', async () => {
+        const provider = new TestModelProvider(async function* () {
+          yield { type: 'modelMessageStartEvent', role: 'assistant' }
+          yield { type: 'modelContentBlockStartEvent' }
+          yield {
+            type: 'modelContentBlockDeltaEvent',
+            delta: { type: 'textDelta', text: 'Response' },
+          }
+          yield { type: 'modelContentBlockStopEvent' }
+          yield { type: 'modelMessageStopEvent', stopReason: 'guardrailIntervened' }
+          yield {
+            type: 'modelMetadataEvent',
+            usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+          }
+          yield {
+            type: 'modelRedactContentEvent',
+            redactUserContentMessage: '[User input redacted.]',
+          }
+        })
+
+        const messages = [
+          new Message({ role: 'user', content: [new TextBlock('First user message')] }),
+          new Message({ role: 'assistant', content: [new TextBlock('Assistant response')] }),
+          new Message({ role: 'user', content: [new TextBlock('Sensitive second message')] }),
+        ]
+
+        await collectGenerator(provider.streamAggregated(messages))
+
+        // First user message should NOT be modified
+        expect(messages[0]!.role).toBe('user')
+        expect(messages[0]!.content).toEqual([{ type: 'textBlock', text: 'First user message' }])
+
+        // Assistant message should NOT be modified
+        expect(messages[1]!.role).toBe('assistant')
+        expect(messages[1]!.content).toEqual([{ type: 'textBlock', text: 'Assistant response' }])
+
+        // Last user message SHOULD be redacted
+        expect(messages[2]!.role).toBe('user')
+        expect(messages[2]!.content).toEqual([{ type: 'textBlock', text: '[User input redacted.]' }])
+      })
+    })
   })
 })
 

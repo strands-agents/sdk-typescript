@@ -18,6 +18,7 @@ import {
   ModelMessageStartEvent,
   ModelMessageStopEvent,
   ModelMetadataEvent,
+  ModelRedactContentEvent,
   type ModelStreamEvent,
 } from './streaming.js'
 import { MaxTokensError, ModelError, normalizeError } from '../errors.js'
@@ -181,6 +182,8 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
         return new ModelMessageStopEvent(event_data)
       case 'modelMetadataEvent':
         return new ModelMetadataEvent(event_data)
+      case 'modelRedactContentEvent':
+        return new ModelRedactContentEvent(event_data)
       default:
         throw new Error(`Unsupported event type: ${event_data}`)
     }
@@ -333,6 +336,35 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
           case 'modelMetadataEvent':
             // Store metadata, keeping the last one if multiple events occur
             metadata = event
+            break
+
+          case 'modelRedactContentEvent':
+            // Handle content redaction when guardrails block content
+            if (event.redactUserContentMessage) {
+              // Find and redact the last user message in the input messages array
+              for (let i = messages.length - 1; i >= 0; i--) {
+                const message = messages[i]
+                if (message && message.role === 'user') {
+                  messages[i] = new Message({
+                    role: 'user',
+                    content: [new TextBlock(event.redactUserContentMessage)],
+                  })
+                  break
+                }
+              }
+            }
+            if (event.redactAssistantContentMessage) {
+              // Replace the current assistant content blocks with the redaction message
+              contentBlocks.length = 0
+              contentBlocks.push(new TextBlock(event.redactAssistantContentMessage))
+              // Recreate the stoppedMessage with the redacted content
+              if (messageRole && stoppedMessage) {
+                stoppedMessage = new Message({
+                  role: messageRole,
+                  content: [...contentBlocks],
+                })
+              }
+            }
             break
 
           default:
