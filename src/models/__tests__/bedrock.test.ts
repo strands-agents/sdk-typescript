@@ -769,6 +769,7 @@ describe('BedrockModel', () => {
           {
             location: { documentChar: { documentIndex: 0, start: 10, end: 50 } },
             sourceContent: [{ text: 'source text' }],
+            source: 'doc-0',
             title: 'Test Doc',
           },
         ],
@@ -824,6 +825,7 @@ describe('BedrockModel', () => {
             {
               location: { type: 'documentChar', documentIndex: 0, start: 10, end: 50 },
               sourceContent: [{ text: 'source text' }],
+              source: 'doc-0',
               title: 'Test Doc',
             },
           ],
