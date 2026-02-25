@@ -2,7 +2,7 @@
  * Multi-agent orchestration module.
  */
 
-export { Status, NodeResult, MultiAgentResult } from './state.js'
+export { MultiAgentState, NodeState, Status, NodeResult, MultiAgentResult } from './state.js'
 export type { NodeResultUpdate, ResultStatus } from './state.js'
 
 export { Node, AgentNode } from './nodes.js'
