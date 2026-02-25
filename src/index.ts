@@ -186,3 +186,6 @@ export { type McpClientConfig, McpClient } from './mcp.js'
 
 // Structured output
 export { StructuredOutputException } from './structured-output/exceptions.js'
+
+// Telemetry
+export * as telemetry from './telemetry/index.js'

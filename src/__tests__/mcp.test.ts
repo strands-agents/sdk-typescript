@@ -3,6 +3,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
 import { McpClient } from '../mcp.js'
 import { McpTool } from '../tools/mcp-tool.js'
+import { instrumentMcpClient } from '../tools/mcp-instrumentation.js'
 import { JsonBlock, type TextBlock, type ToolResultBlock } from '../types/messages.js'
 import type { AgentData } from '../types/agent.js'
 import type { ToolContext } from '../tools/tool.js'
@@ -16,6 +17,10 @@ function createMockCallToolStream(result: unknown) {
     yield { type: 'result', result }
   }
 }
+
+vi.mock('../tools/mcp-instrumentation.js', () => ({
+  instrumentMcpClient: vi.fn(),
+}))
 
 vi.mock('@modelcontextprotocol/sdk/client/index.js', () => ({
   Client: vi.fn(function () {
@@ -44,8 +49,6 @@ vi.mock('../tools/tool.js', () => ({
   }),
 }))
 
-vi.mock('../../__fixtures__/environment.js', () => ({ isNode: true }))
-
 /**
  * Executes a tool stream to completion and returns the final result.
  * We use a Generic <T> and cast the return value to ensure TypeScript
@@ -73,7 +76,12 @@ describe('MCP Integration', () => {
 
   describe('McpClient', () => {
     let client: McpClient
-    let sdkClientMock: any
+    let sdkClientMock: {
+      connect: ReturnType<typeof vi.fn>
+      close: ReturnType<typeof vi.fn>
+      listTools: ReturnType<typeof vi.fn>
+      experimental: { tasks: { callToolStream: ReturnType<typeof vi.fn> } }
+    }
 
     beforeEach(() => {
       client = new McpClient({
@@ -85,6 +93,18 @@ describe('MCP Integration', () => {
 
     it('initializes SDK client with correct configuration', () => {
       expect(Client).toHaveBeenCalledWith({ name: 'TestApp', version: '0.0.1' })
+    })
+
+    it('applies MCP instrumentation by default', () => {
+      expect(instrumentMcpClient).toHaveBeenCalledWith(client)
+    })
+
+    it('skips MCP instrumentation when disableMcpInstrumentation config is true', () => {
+      vi.mocked(instrumentMcpClient).mockClear()
+
+      new McpClient({ applicationName: 'TestApp', transport: mockTransport, disableMcpInstrumentation: true })
+
+      expect(instrumentMcpClient).not.toHaveBeenCalled()
     })
 
     it('manages connection state lazily', async () => {

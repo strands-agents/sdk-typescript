@@ -21,7 +21,8 @@ import {
 } from '../index.js'
 import { systemPromptFromData } from '../types/messages.js'
 import { normalizeError, ConcurrentInvocationError, MaxTokensError } from '../errors.js'
-import type { BaseModelConfig, Model, StreamOptions } from '../models/model.js'
+import { Model } from '../models/model.js'
+import type { BaseModelConfig, StreamOptions } from '../models/model.js'
 import { isModelStreamEvent } from '../models/streaming.js'
 import { ToolRegistry } from '../registry/tool-registry.js'
 import { AgentState } from './state.js'
@@ -52,6 +53,9 @@ import {
 import { createStructuredOutputContext } from '../structured-output/context.js'
 import { StructuredOutputException } from '../structured-output/exceptions.js'
 import type { z } from 'zod'
+import { Tracer } from '../telemetry/tracer.js'
+import type { Usage } from '../models/streaming.js'
+import type { AttributeValue } from '@opentelemetry/api'
 
 /**
  * Recursive type definition for nested tool arrays.
@@ -119,6 +123,20 @@ export type AgentConfig = {
    * Zod schema for structured output validation.
    */
   structuredOutputSchema?: z.ZodSchema
+  /**
+   * Custom trace attributes to include in all spans.
+   * These attributes are merged with standard attributes in telemetry spans.
+   * Telemetry must be enabled globally via telemetry.setupTracer() for these to take effect.
+   */
+  traceAttributes?: Record<string, AttributeValue>
+  /**
+   * Optional name for the agent. Defaults to "Strands Agent".
+   */
+  name?: string
+  /**
+   * Optional unique identifier for the agent. Defaults to "default".
+   */
+  agentId?: string
 }
 
 /**
@@ -130,6 +148,12 @@ export type AgentConfig = {
  * - `Message[]` | `MessageData[]` - Array of messages (appends all to conversation)
  */
 export type InvokeArgs = string | ContentBlock[] | ContentBlockData[] | Message[] | MessageData[]
+
+/** Fallback name used when no agent name is provided in the config. */
+const DEFAULT_AGENT_NAME = 'Strands Agent'
+
+/** Fallback agent ID used when no agent ID is provided in the config. */
+const DEFAULT_AGENT_ID = 'default'
 
 /**
  * Orchestrates the interaction between a model, a set of tools, and MCP clients.
@@ -166,12 +190,26 @@ export class Agent implements AgentData {
    */
   public systemPrompt?: SystemPrompt
 
+  /**
+   * The name of the agent.
+   */
+  public readonly name: string
+
+  /**
+   * The unique identifier of the agent instance.
+   */
+  public readonly agentId: string
+
   private _toolRegistry: ToolRegistry
   private _mcpClients: McpClient[]
   private _initialized: boolean
   private _isInvoking: boolean = false
   private _printer?: Printer
   private _structuredOutputSchema?: z.ZodSchema | undefined
+  /** Tracer instance for creating and managing OpenTelemetry spans. */
+  private _tracer: Tracer
+  /** Running total of token usage across all model invocations in the current invocation. */
+  private _accumulatedTokenUsage: Usage = Model.createEmptyUsage()
 
   /**
    * Creates an instance of the Agent.
@@ -182,6 +220,8 @@ export class Agent implements AgentData {
     this.messages = (config?.messages ?? []).map((msg) => (msg instanceof Message ? msg : Message.fromMessageData(msg)))
     this.state = new AgentState(config?.state)
     this.conversationManager = config?.conversationManager ?? new SlidingWindowConversationManager({ windowSize: 40 })
+    this.name = config?.name ?? DEFAULT_AGENT_NAME
+    this.agentId = config?.agentId ?? DEFAULT_AGENT_ID
 
     // Initialize hooks and register conversation manager hooks
     this.hooks = new HookRegistryImplementation()
@@ -210,6 +250,9 @@ export class Agent implements AgentData {
 
     // Store structured output schema
     this._structuredOutputSchema = config?.structuredOutputSchema
+
+    // Initialize tracer - OTEL returns no-op tracer if not configured
+    this._tracer = new Tracer(config?.traceAttributes)
 
     this._initialized = false
   }
@@ -361,6 +404,7 @@ export class Agent implements AgentData {
   private async *_stream(args: InvokeArgs): AsyncGenerator<AgentStreamEvent, AgentResult, undefined> {
     let currentArgs: InvokeArgs | undefined = args
     let forcedToolChoice: ToolChoice | undefined = undefined
+    let result: AgentResult | undefined
 
     // Create structured output context (uses null object pattern when no schema)
     const schema = this._structuredOutputSchema
@@ -369,73 +413,121 @@ export class Agent implements AgentData {
     // Emit event before the try block
     yield new BeforeInvocationEvent({ agent: this })
 
+    // Normalize input to get the user messages for telemetry
+    const inputMessages = this._normalizeInput(args)
+
+    // Start agent trace span
+    this._accumulatedTokenUsage = Model.createEmptyUsage()
+    const agentModelId = this.model.modelId
+    const agentSpanOptions: Parameters<Tracer['startAgentSpan']>[0] = {
+      messages: inputMessages,
+      agentName: this.name,
+      agentId: this.agentId,
+      tools: this.tools,
+    }
+    if (agentModelId) agentSpanOptions.modelId = agentModelId
+    if (this.systemPrompt) agentSpanOptions.systemPrompt = this.systemPrompt
+    const agentSpan = this._tracer.startAgentSpan(agentSpanOptions)
+
+    let caughtError: Error | undefined
     try {
       // Register structured output tool
       context.registerTool(this._toolRegistry)
 
       // Main agent loop - continues until model stops without requesting tools
-      while (true) {
-        const modelResult = yield* this.invokeModel(currentArgs, forcedToolChoice)
-        currentArgs = undefined // Only pass args on first invocation
-        const wasForced = forcedToolChoice !== undefined
-        forcedToolChoice = undefined // Clear after use
+      for (let cycleCount = 1; ; cycleCount++) {
+        // Create agent loop cycle span within agent span context
+        const cycleSpan = this._tracer.startAgentLoopSpan({
+          cycleId: `cycle-${cycleCount}`,
+          messages: this.messages,
+        })
 
-        if (modelResult.stopReason !== 'toolUse') {
-          // Special handling for maxTokens - always fail regardless of whether we have structured output
-          if (modelResult.stopReason === 'maxTokens') {
-            throw new MaxTokensError(
-              'The model reached maxTokens before producing structured output. Consider increasing maxTokens in your model configuration.',
-              modelResult.message
-            )
-          }
+        try {
+          const modelResult = yield* this.invokeModel(currentArgs, forcedToolChoice)
+          currentArgs = undefined // Only pass args on first invocation
+          const wasForced = forcedToolChoice !== undefined
+          forcedToolChoice = undefined // Clear after use
 
-          // Check if we need to force structured output tool
-          if (!context.hasResult()) {
-            if (wasForced) {
-              // Already tried forcing - LLM refused to use the tool
-              throw new StructuredOutputException(
-                'The model failed to invoke the structured output tool even after it was forced.'
+          if (modelResult.stopReason !== 'toolUse') {
+            // Special handling for maxTokens - always fail regardless of whether we have structured output
+            if (modelResult.stopReason === 'maxTokens') {
+              throw new MaxTokensError(
+                'The model reached maxTokens before producing structured output. Consider increasing maxTokens in your model configuration.',
+                modelResult.message
               )
             }
 
-            // Force the model to use the structured output tool
-            const toolName = context.getToolName()
-            forcedToolChoice = { tool: { name: toolName } }
-            continue
+            // Check if we need to force structured output tool
+            if (!context.hasResult()) {
+              if (wasForced) {
+                // Already tried forcing - LLM refused to use the tool
+                throw new StructuredOutputException(
+                  'The model failed to invoke the structured output tool even after it was forced.'
+                )
+              }
+
+              // Force the model to use the structured output tool
+              const toolName = context.getToolName()
+              forcedToolChoice = { tool: { name: toolName } }
+              continue
+            }
+
+            // Loop terminates - no tool use requested (and structured output satisfied if needed)
+            yield await this._appendMessage(modelResult.message)
+
+            // End cycle span
+            this._tracer.endAgentLoopSpan(cycleSpan)
+
+            const structuredOutput = context.getResult()
+            result = new AgentResult({
+              stopReason: modelResult.stopReason,
+              lastMessage: modelResult.message,
+              structuredOutput,
+            })
+            return result
           }
 
-          // Loop terminates - no tool use requested (and structured output satisfied if needed)
-          yield this._appendMessage(modelResult.message)
+          // Execute tools sequentially
+          const toolResultMessage = yield* this.executeTools(modelResult.message, this._toolRegistry)
 
-          const structuredOutput = context.getResult()
-          return new AgentResult({
-            stopReason: modelResult.stopReason,
-            lastMessage: modelResult.message,
-            structuredOutput,
-          })
+          /**
+           * Deferred append: both messages are added AFTER tool execution completes.
+           * This keeps agent.messages in a valid, reinvokable state at all times:
+           *
+           * - If interrupted during tool execution, messages has no dangling toolUse
+           *   without a matching toolResult, so the agent can be reinvoked cleanly.
+           * - The Python SDK appends the assistant message BEFORE tool execution,
+           *   requiring recovery logic (generate_missing_tool_result_content) on
+           *   interrupts. We avoid that by deferring.
+           * - Trade-off: MessageAddedEvent for the assistant message fires after tools
+           *   complete (not before as in Python), and agent.messages is incomplete
+           *   during tool execution. Events like BeforeToolsEvent.message and
+           *   BeforeToolCallEvent.toolUse provide the data directly.
+           */
+          yield await this._appendMessage(modelResult.message)
+          yield await this._appendMessage(toolResultMessage)
+
+          // End cycle span
+          this._tracer.endAgentLoopSpan(cycleSpan)
+
+          // Continue loop
+        } catch (error) {
+          // End cycle span with error
+          this._tracer.endAgentLoopSpan(cycleSpan, { error: error as Error })
+          throw error
         }
-
-        // Execute tools sequentially
-        const toolResultMessage = yield* this.executeTools(modelResult.message, this._toolRegistry)
-
-        /**
-         * Deferred append: both messages are added AFTER tool execution completes.
-         * This keeps agent.messages in a valid, reinvokable state at all times:
-         *
-         * - If interrupted during tool execution, messages has no dangling toolUse
-         *   without a matching toolResult, so the agent can be reinvoked cleanly.
-         * - The Python SDK appends the assistant message BEFORE tool execution,
-         *   requiring recovery logic (generate_missing_tool_result_content) on
-         *   interrupts. We avoid that by deferring.
-         * - Trade-off: MessageAddedEvent for the assistant message fires after tools
-         *   complete (not before as in Python), and agent.messages is incomplete
-         *   during tool execution. Events like BeforeToolsEvent.message and
-         *   BeforeToolCallEvent.toolUse provide the data directly.
-         */
-        yield this._appendMessage(modelResult.message)
-        yield this._appendMessage(toolResultMessage)
       }
+    } catch (error) {
+      caughtError = error as Error
+      throw error
     } finally {
+      this._tracer.endAgentSpan(agentSpan, {
+        ...(caughtError && { error: caughtError }),
+        ...(result?.lastMessage && { response: result.lastMessage }),
+        accumulatedUsage: this._accumulatedTokenUsage,
+        ...(result?.stopReason && { stopReason: result.stopReason }),
+      })
+
       // Cleanup structured output context
       context.cleanup(this._toolRegistry)
 
@@ -528,8 +620,23 @@ export class Agent implements AgentData {
 
     yield new BeforeModelCallEvent({ agent: this })
 
+    // Start model span within loop span context
+    const modelId = this.model.modelId
+    const modelSpan = this._tracer.startModelInvokeSpan({
+      messages: this.messages,
+      ...(modelId && { modelId }),
+    })
+
     try {
-      const { message, stopReason } = yield* this._streamFromModel(this.messages, streamOptions)
+      const { message, stopReason, usage } = yield* this._streamFromModel(this.messages, streamOptions)
+
+      // Accumulate token usage
+      if (usage) {
+        Model.accumulateUsage(this._accumulatedTokenUsage, usage)
+      }
+
+      // End model span with usage
+      this._tracer.endModelInvokeSpan(modelSpan, { output: message, stopReason, ...(usage && { usage }) })
 
       yield new ModelMessageEvent({ agent: this, message, stopReason })
 
@@ -543,6 +650,9 @@ export class Agent implements AgentData {
       return { message, stopReason }
     } catch (error) {
       const modelError = normalizeError(error)
+
+      // End model span with error
+      this._tracer.endModelInvokeSpan(modelSpan, { error: modelError })
 
       // Create error event
       const errorEvent = new AfterModelCallEvent({ agent: this, error: modelError })
@@ -579,7 +689,7 @@ export class Agent implements AgentData {
   private async *_streamFromModel(
     messages: Message[],
     streamOptions: StreamOptions
-  ): AsyncGenerator<AgentStreamEvent, { message: Message; stopReason: StopReason }, undefined> {
+  ): AsyncGenerator<AgentStreamEvent, { message: Message; stopReason: StopReason; usage?: Usage }, undefined> {
     const streamGenerator = this.model.streamAggregated(messages, streamOptions)
     let result = await streamGenerator.next()
 
@@ -597,7 +707,10 @@ export class Agent implements AgentData {
     }
 
     // result.done is true, result.value contains the return value
-    return result.value
+    const { message, stopReason, metadata } = result.value
+    const returnValue: { message: Message; stopReason: StopReason; usage?: Usage } = { message, stopReason }
+    if (metadata?.usage) returnValue.usage = metadata.usage
+    return returnValue
   }
 
   /**
@@ -660,7 +773,7 @@ export class Agent implements AgentData {
   ): AsyncGenerator<AgentStreamEvent, ToolResultBlock, undefined> {
     const tool = toolRegistry.find((t) => t.name === toolUseBlock.name)
 
-    // Create toolUse object for hook events
+    // Create toolUse object for hook events and telemetry
     const toolUse = {
       name: toolUseBlock.name,
       toolUseId: toolUseBlock.toolUseId,
@@ -670,6 +783,11 @@ export class Agent implements AgentData {
     // Retry loop for tool execution
     while (true) {
       yield new BeforeToolCallEvent({ agent: this, toolUse, tool })
+
+      // Start tool span within loop span context
+      const toolSpan = this._tracer.startToolCallSpan({
+        tool: toolUse,
+      })
 
       let toolResult: ToolResultBlock
       let error: Error | undefined
@@ -726,6 +844,9 @@ export class Agent implements AgentData {
           })
         }
       }
+
+      // End tool span
+      this._tracer.endToolCallSpan(toolSpan, { toolResult, ...(error && { error }) })
 
       // Single point for AfterToolCallEvent
       const afterToolCallEvent = new AfterToolCallEvent({

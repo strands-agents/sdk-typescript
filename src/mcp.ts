@@ -3,6 +3,7 @@ import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
 import { takeResult } from '@modelcontextprotocol/sdk/shared/responseMessage.js'
 import type { JSONSchema, JSONValue } from './types/json.js'
 import { McpTool } from './tools/mcp-tool.js'
+import { instrumentMcpClient } from './tools/mcp-instrumentation.js'
 
 /** Temporary placeholder for RuntimeConfig */
 export interface RuntimeConfig {
@@ -11,7 +12,12 @@ export interface RuntimeConfig {
 }
 
 /** Arguments for configuring an MCP Client. */
-export type McpClientConfig = RuntimeConfig & { transport: Transport }
+export type McpClientConfig = RuntimeConfig & {
+  transport: Transport
+
+  /** Disable OpenTelemetry MCP instrumentation. */
+  disableMcpInstrumentation?: boolean
+}
 
 /** MCP Client for interacting with Model Context Protocol servers. */
 export class McpClient {
@@ -30,6 +36,11 @@ export class McpClient {
       name: this._clientName,
       version: this._clientVersion,
     })
+
+    // Skip MCP instrumentation when disabled via config
+    if (!args.disableMcpInstrumentation) {
+      instrumentMcpClient(this)
+    }
   }
 
   get client(): Client {
