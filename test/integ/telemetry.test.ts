@@ -206,6 +206,10 @@ describe('Telemetry Integration', () => {
 
       expect(attr(modelSpan, 'gen_ai.operation.name')).toBe('chat')
       expect(attr(modelSpan, 'gen_ai.request.model')).toBe('test-model')
+
+      const choiceEvent = modelSpan.events.find((e) => e.name === 'gen_ai.choice')
+      expect(choiceEvent).toBeDefined()
+      expect(JSON.parse(choiceEvent!.attributes!['message'] as string)).toStrictEqual([{ text: 'Response' }])
     })
 
     it('sets tool span attributes correctly', async () => {
@@ -223,6 +227,13 @@ describe('Telemetry Integration', () => {
       expect(attr(toolSpan, 'gen_ai.operation.name')).toBe('execute_tool')
       expect(attr(toolSpan, 'gen_ai.tool.name')).toBe('calculator')
       expect(attr(toolSpan, 'gen_ai.tool.call.id')).toBe('tool-42')
+
+      const choiceEvent = toolSpan.events.find((e) => e.name === 'gen_ai.choice')
+      expect(choiceEvent).toBeDefined()
+      expect(choiceEvent!.attributes!['id']).toBe('tool-42')
+      expect(JSON.parse(choiceEvent!.attributes!['message'] as string)).toStrictEqual([
+        { type: 'textBlock', text: '8' },
+      ])
     })
 
     it('sets cycle span attributes correctly', async () => {
@@ -255,6 +266,24 @@ describe('Telemetry Integration', () => {
 
       expect(attr(agentSpan, 'app.module')).toBe('weather')
       expect(attr(agentSpan, 'app.version')).toBe('1.0.0')
+    })
+
+    it('traceAttributes override SDK-computed attributes for colliding keys', async () => {
+      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hi' })
+      const agent = new Agent({
+        model,
+        printer: false,
+        name: 'override-agent',
+        traceAttributes: { 'gen_ai.agent.name': 'custom-name', 'gen_ai.request.model': 'custom-model' },
+      })
+
+      await agent.invoke('Hello')
+
+      const spans = await flush()
+      const agentSpan = findSpans(spans, AGENT_SPAN_PREFIX)[0]!
+
+      expect(attr(agentSpan, 'gen_ai.agent.name')).toBe('custom-name')
+      expect(attr(agentSpan, 'gen_ai.request.model')).toBe('custom-model')
     })
   })
 
@@ -430,6 +459,14 @@ describe('Telemetry Integration', () => {
       for (const span of spans) {
         expect(span.status.code).toBe(SpanStatusCode.OK)
       }
+
+      // Verify tool output content
+      const toolSpan = toolSpans[0]!
+      const toolChoiceEvent = toolSpan.events.find((e) => e.name === 'gen_ai.choice')
+      expect(toolChoiceEvent).toBeDefined()
+      expect(JSON.parse(toolChoiceEvent!.attributes!['message'] as string)).toStrictEqual([
+        { type: 'textBlock', text: '5' },
+      ])
     })
   })
 
@@ -494,6 +531,9 @@ describe('Telemetry Integration', () => {
       const toolOutputEvent = toolSpan.events.find((e) => e.name === 'gen_ai.choice')
       expect(toolOutputEvent).toBeDefined()
       expect(toolOutputEvent!.attributes!['id']).toBe('tool-1')
+      expect(JSON.parse(toolOutputEvent!.attributes!['message'] as string)).toStrictEqual([
+        { type: 'textBlock', text: '30' },
+      ])
     })
   })
 
