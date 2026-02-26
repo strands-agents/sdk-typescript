@@ -20,7 +20,7 @@ import type { ToolChoice } from '../tools/types.js'
 import { systemPromptFromData } from '../types/messages.js'
 import { normalizeError, ConcurrentInvocationError, MaxTokensError } from '../errors.js'
 import { Model } from '../models/model.js'
-import type { BaseModelConfig, StreamOptions } from '../models/model.js'
+import type { BaseModelConfig, StreamAggregatedResult, StreamOptions } from '../models/model.js'
 import { isModelStreamEvent } from '../models/streaming.js'
 import { ToolRegistry } from '../registry/tool-registry.js'
 import { AppState } from '../app-state.js'
@@ -473,6 +473,11 @@ export class Agent implements AgentData {
           currentArgs = undefined // Only pass args on first invocation
           const wasForced = forcedToolChoice !== undefined
           forcedToolChoice = undefined // Clear after use
+          
+          // Handle user content redaction if guardrails blocked input
+          if (modelResult.redactContent?.redactUserContentMessage) {
+            this._redactLastUserMessage(modelResult.redactContent.redactUserContentMessage)
+          }
 
           if (modelResult.stopReason !== 'toolUse') {
             // Special handling for maxTokens - always fail regardless of whether we have structured output
@@ -622,12 +627,16 @@ export class Agent implements AgentData {
    *
    * @param args - Optional arguments for invoking the model
    * @param toolChoice - Optional tool choice to force specific tool usage
-   * @returns Object containing the assistant message and stop reason
+   * @returns Object containing the assistant message, stop reason, and optional redaction info
    */
   private async *invokeModel(
     args?: InvokeArgs,
     forcedToolChoice?: ToolChoice
-  ): AsyncGenerator<AgentStreamEvent, { message: Message; stopReason: StopReason }, undefined> {
+  ): AsyncGenerator<
+    AgentStreamEvent,
+    { message: Message; stopReason: StopReason; redactContent?: StreamAggregatedResult['redactContent'] },
+    undefined
+  > {
     // Normalize input and append messages to conversation
     const messagesToAppend = this._normalizeInput(args)
     for (const message of messagesToAppend) {
@@ -655,7 +664,7 @@ export class Agent implements AgentData {
     })
 
     try {
-      const { message, stopReason, usage } = yield* this._streamFromModel(this.messages, streamOptions)
+      const { message, stopReason, redactContent, usage } = yield* this._streamFromModel(this.messages, streamOptions)
 
       // Accumulate token usage
       if (usage) {
@@ -674,7 +683,7 @@ export class Agent implements AgentData {
         return yield* this.invokeModel(args)
       }
 
-      return { message, stopReason }
+      return { message, stopReason, redactContent }
     } catch (error) {
       const modelError = normalizeError(error)
 
@@ -711,12 +720,16 @@ export class Agent implements AgentData {
    *
    * @param messages - Messages to send to the model
    * @param streamOptions - Options for streaming
-   * @returns Object containing the assistant message and stop reason
+   * @returns Object containing the assistant message, stop reason, and optional redaction info
    */
   private async *_streamFromModel(
     messages: Message[],
     streamOptions: StreamOptions
-  ): AsyncGenerator<AgentStreamEvent, { message: Message; stopReason: StopReason; usage?: Usage }, undefined> {
+  ): AsyncGenerator<
+    AgentStreamEvent,
+    { message: Message; stopReason: StopReason; redactContent?: StreamAggregatedResult['redactContent']; usage?: Usage },
+    undefined
+  > {
     const streamGenerator = this.model.streamAggregated(messages, streamOptions)
     let result = await streamGenerator.next()
 
@@ -734,8 +747,8 @@ export class Agent implements AgentData {
     }
 
     // result.done is true, result.value contains the return value
-    const { message, stopReason, metadata } = result.value
-    const returnValue: { message: Message; stopReason: StopReason; usage?: Usage } = { message, stopReason }
+    const { message, stopReason, redactContent, metadata } = result.value
+    const returnValue: { message: Message; stopReason: StopReason; redactContent: StreamAggregatedResult['redactContent'], usage?: Usage } = { message, stopReason, redactContent }
     if (metadata?.usage) returnValue.usage = metadata.usage
     return returnValue
   }
@@ -892,6 +905,26 @@ export class Agent implements AgentData {
       }
 
       return toolResult
+    }
+  }
+
+  /**
+   * Redacts the last user message in the conversation history.
+   * Called when guardrails block user input and redaction is enabled.
+   *
+   * @param redactMessage - The redaction message to replace the user content with
+   */
+  private _redactLastUserMessage(redactMessage: string): void {
+    // Find and redact the last user message
+    for (let i = this.messages.length - 1; i >= 0; i--) {
+      const message = this.messages[i]
+      if (message && message.role === 'user') {
+        this.messages[i] = new Message({
+          role: 'user',
+          content: [new TextBlock(redactMessage)],
+        })
+        break
+      }
     }
   }
 

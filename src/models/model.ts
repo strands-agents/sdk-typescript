@@ -118,6 +118,22 @@ export interface StreamAggregatedResult {
    * Optional metadata about the model invocation, including usage statistics and metrics.
    */
   metadata?: ModelMetadataEvent
+
+  /**
+   * Optional redaction info when guardrails block content.
+   * Contains messages to use for redacting user input and/or assistant output.
+   */
+  redactContent?: {
+    /**
+     * Message to replace user input with when input was blocked by guardrails.
+     */
+    redactUserContentMessage?: string
+
+    /**
+     * Message to replace assistant output with when output was blocked by guardrails.
+     */
+    redactAssistantContentMessage?: string
+  }
 }
 
 /**
@@ -239,6 +255,7 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
       let stoppedMessage: Message | null = null
       let finalStopReason: StopReason | null = null
       let metadata: ModelMetadataEvent | undefined = undefined
+      let redactContent: StreamAggregatedResult['redactContent'] = undefined
 
       for await (const event_data of this.stream(messages, options)) {
         const event = this._convert_to_class_event(event_data)
@@ -339,30 +356,24 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
             break
 
           case 'modelRedactContentEvent':
-            // Handle content redaction when guardrails block content
-            if (event.redactUserContentMessage) {
-              // Find and redact the last user message in the input messages array
-              for (let i = messages.length - 1; i >= 0; i--) {
-                const message = messages[i]
-                if (message && message.role === 'user') {
-                  messages[i] = new Message({
-                    role: 'user',
-                    content: [new TextBlock(event.redactUserContentMessage)],
-                  })
-                  break
-                }
+            // Track content redaction info from guardrails
+            if (event.redactUserContentMessage || event.redactAssistantContentMessage) {
+              redactContent = redactContent ?? {}
+              if (event.redactUserContentMessage) {
+                redactContent.redactUserContentMessage = event.redactUserContentMessage
               }
-            }
-            if (event.redactAssistantContentMessage) {
-              // Replace the current assistant content blocks with the redaction message
-              contentBlocks.length = 0
-              contentBlocks.push(new TextBlock(event.redactAssistantContentMessage))
-              // Recreate the stoppedMessage with the redacted content
-              if (messageRole && stoppedMessage) {
-                stoppedMessage = new Message({
-                  role: messageRole,
-                  content: [...contentBlocks],
-                })
+              if (event.redactAssistantContentMessage) {
+                redactContent.redactAssistantContentMessage = event.redactAssistantContentMessage
+                // Replace the current assistant content blocks with the redaction message
+                contentBlocks.length = 0
+                contentBlocks.push(new TextBlock(event.redactAssistantContentMessage))
+                // Recreate the stoppedMessage with the redacted content
+                if (messageRole && stoppedMessage) {
+                  stoppedMessage = new Message({
+                    role: messageRole,
+                    content: [...contentBlocks],
+                  })
+                }
               }
             }
             break
@@ -400,6 +411,9 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
       }
       if (metadata !== undefined) {
         result.metadata = metadata
+      }
+      if (redactContent !== undefined) {
+        result.redactContent = redactContent
       }
       return result
     } catch (error) {
