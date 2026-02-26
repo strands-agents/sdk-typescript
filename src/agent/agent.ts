@@ -473,7 +473,7 @@ export class Agent implements AgentData {
             }
 
             // Loop terminates - no tool use requested (and structured output satisfied if needed)
-            yield await this._appendMessage(modelResult.message)
+            yield this._appendMessage(modelResult.message)
 
             // End cycle span
             this._tracer.endAgentLoopSpan(cycleSpan)
@@ -504,8 +504,8 @@ export class Agent implements AgentData {
            *   during tool execution. Events like BeforeToolsEvent.message and
            *   BeforeToolCallEvent.toolUse provide the data directly.
            */
-          yield await this._appendMessage(modelResult.message)
-          yield await this._appendMessage(toolResultMessage)
+          yield this._appendMessage(modelResult.message)
+          yield this._appendMessage(toolResultMessage)
 
           // End cycle span
           this._tracer.endAgentLoopSpan(cycleSpan)

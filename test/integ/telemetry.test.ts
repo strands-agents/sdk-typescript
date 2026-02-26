@@ -230,9 +230,7 @@ describe.sequential('Telemetry Integration', () => {
       const choiceEvent = toolSpan.events.find((e) => e.name === 'gen_ai.choice')
       expect(choiceEvent).toBeDefined()
       expect(choiceEvent!.attributes!['id']).toBe('tool-42')
-      expect(JSON.parse(choiceEvent!.attributes!['message'] as string)).toStrictEqual([
-        { type: 'textBlock', text: '8' },
-      ])
+      expect(JSON.parse(choiceEvent!.attributes!['message'] as string)).toStrictEqual([{ text: '8' }])
     })
 
     it('sets cycle span attributes correctly', async () => {
@@ -463,9 +461,7 @@ describe.sequential('Telemetry Integration', () => {
       const toolSpan = toolSpans[0]!
       const toolChoiceEvent = toolSpan.events.find((e) => e.name === 'gen_ai.choice')
       expect(toolChoiceEvent).toBeDefined()
-      expect(JSON.parse(toolChoiceEvent!.attributes!['message'] as string)).toStrictEqual([
-        { type: 'textBlock', text: '5' },
-      ])
+      expect(JSON.parse(toolChoiceEvent!.attributes!['message'] as string)).toStrictEqual([{ text: '5' }])
     })
   })
 
@@ -501,7 +497,7 @@ describe.sequential('Telemetry Integration', () => {
       const userEvent = agentSpan.events.find((e) => e.name === 'gen_ai.user.message')
       expect(userEvent).toBeDefined()
       const userContent = JSON.parse(userEvent!.attributes!['content'] as string)
-      expect(userContent).toStrictEqual([{ type: 'textBlock', text: 'Hi' }])
+      expect(userContent).toStrictEqual([{ text: 'Hi' }])
 
       const choiceEvent = agentSpan.events.find((e) => e.name === 'gen_ai.choice')
       expect(choiceEvent).toBeDefined()
@@ -530,9 +526,7 @@ describe.sequential('Telemetry Integration', () => {
       const toolOutputEvent = toolSpan.events.find((e) => e.name === 'gen_ai.choice')
       expect(toolOutputEvent).toBeDefined()
       expect(toolOutputEvent!.attributes!['id']).toBe('tool-1')
-      expect(JSON.parse(toolOutputEvent!.attributes!['message'] as string)).toStrictEqual([
-        { type: 'textBlock', text: '30' },
-      ])
+      expect(JSON.parse(toolOutputEvent!.attributes!['message'] as string)).toStrictEqual([{ text: '30' }])
     })
   })
 
