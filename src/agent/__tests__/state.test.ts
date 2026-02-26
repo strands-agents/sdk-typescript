@@ -302,6 +302,19 @@ describe('AgentState', () => {
       const state = new AgentState()
       expect(state.getAll()).toEqual({})
     })
+
+    it('supports typed usage with generic state interface', () => {
+      interface MyState extends Record<string, number | string> {
+        count: number
+        name: string
+      }
+
+      const state = new AgentState({ count: 10, name: 'test' })
+      const result = state.getAll<MyState>()
+
+      expect(result.count).toBe(10)
+      expect(result.name).toBe('test')
+    })
   })
 
   describe('keys', () => {
