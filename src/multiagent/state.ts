@@ -133,9 +133,9 @@ export class MultiAgentState {
   readonly results: NodeResult[]
   private readonly _nodes: Map<string, NodeState>
 
-  constructor(data?: { startTime?: number; steps?: number; nodeIds?: string[] }) {
-    this.startTime = data?.startTime ?? Date.now()
-    this.steps = data?.steps ?? 0
+  constructor(data?: { nodeIds?: string[] }) {
+    this.startTime = Date.now()
+    this.steps = 0
     this.results = []
     this._nodes = new Map()
     for (const id of data?.nodeIds ?? []) {

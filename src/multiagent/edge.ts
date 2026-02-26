@@ -12,6 +12,7 @@ export type EdgeHandler = (state: MultiAgentState) => boolean | Promise<boolean>
 export class Edge {
   readonly source: Node
   readonly target: Node
+  /** Edge condition. The edge is always traversed when no handler is provided. */
   readonly handler: EdgeHandler
 
   constructor(data: { source: Node; target: Node; handler?: EdgeHandler }) {
