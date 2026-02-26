@@ -238,6 +238,11 @@ export interface ModelStopData {
    * The reason the model stopped generating.
    */
   readonly stopReason: StopReason
+  /**
+   * Optional redaction message when guardrails blocked user input.
+   * When present, indicates the last user message should be redacted.
+   */
+  readonly redactionMessage?: string
 }
 
 /**
