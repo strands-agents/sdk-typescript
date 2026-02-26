@@ -5,10 +5,16 @@ import { describe, expect, it, beforeAll, afterAll } from 'vitest'
 import { promises as fs } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
-import { randomUUID } from 'crypto'
 import { inject } from 'vitest'
+import { v7 as uuidv7 } from 'uuid'
 import { Agent } from '$/sdk/agent/agent.js'
-import { S3Client, CreateBucketCommand, DeleteObjectsCommand, ListObjectsV2Command } from '@aws-sdk/client-s3'
+import {
+  S3Client,
+  CreateBucketCommand,
+  DeleteBucketCommand,
+  DeleteObjectsCommand,
+  ListObjectsV2Command,
+} from '@aws-sdk/client-s3'
 import { STSClient, GetCallerIdentityCommand } from '@aws-sdk/client-sts'
 import { SessionManager } from '$/sdk/session/session-manager.js'
 import { FileStorage } from '$/sdk/session/file-storage.js'
@@ -58,7 +64,7 @@ describe.skipIf(bedrock.skip)('Session Management - FileStorage', () => {
   })
 
   it('persists and restores agent messages across sessions', async () => {
-    const sessionId = randomUUID()
+    const sessionId = uuidv7()
     const model = bedrock.createModel()
 
     const manager1 = makeFileManager(sessionId, tempDir)
@@ -78,7 +84,7 @@ describe.skipIf(bedrock.skip)('Session Management - FileStorage', () => {
   })
 
   it('preserves conversation context across sessions', async () => {
-    const sessionId = randomUUID()
+    const sessionId = uuidv7()
     const model = bedrock.createModel()
 
     const manager1 = makeFileManager(sessionId, tempDir)
@@ -97,47 +103,38 @@ describe.skipIf(bedrock.skip)('Session Management - FileStorage', () => {
     expect(text?.text).toMatch(/Alice/i)
   })
 
-  it('creates immutable snapshots and restores from specific snapshot', async () => {
-    const sessionId = randomUUID()
+  it('creates immutable snapshots, verifies storage layout, and restores from specific snapshot', async () => {
+    const sessionId = uuidv7()
     const model = bedrock.createModel()
+    const storage = new FileStorage(tempDir)
 
-    const manager1 = new SessionManager({
-      sessionId,
-      storage: { snapshot: new FileStorage(tempDir) },
-      snapshotTrigger: () => true,
-    })
+    const manager1 = new SessionManager({ sessionId, storage: { snapshot: storage }, snapshotTrigger: () => true })
     const agent1 = new Agent({ model, sessionManager: manager1, printer: false })
     await agent1.invoke('First message') // snapshot 1: 2 messages
     await agent1.invoke('Second message') // snapshot 2: 4 messages
     expect(agent1.messages).toHaveLength(4)
 
-    // Restore from snapshot 1 — should only have 2 messages
-    const manager2 = new SessionManager({
-      sessionId,
-      storage: { snapshot: new FileStorage(tempDir) },
-      loadSnapshotId: '1',
-    })
-    const agent2 = new Agent({ model, sessionManager: manager2, printer: false })
-    await agent2.initialize()
-    expect(agent2.messages).toHaveLength(2)
-  })
-
-  it('verifies storage layout: snapshot_latest, manifest, and immutable_history', async () => {
-    const sessionId = randomUUID()
-    const model = bedrock.createModel()
-
-    const manager = new SessionManager({
-      sessionId,
-      storage: { snapshot: new FileStorage(tempDir) },
-      snapshotTrigger: () => true,
-    })
-    const agent = new Agent({ model, sessionManager: manager, printer: false })
-    await agent.invoke('Hello!')
-
+    // Verify storage layout
     const base = join(tempDir, sessionId, 'scopes', 'agent', 'default', 'snapshots')
     await expect(fs.access(join(base, 'snapshot_latest.json'))).resolves.toBeUndefined()
-    await expect(fs.access(join(base, 'manifest.json'))).resolves.toBeUndefined()
-    await expect(fs.access(join(base, 'immutable_history', 'snapshot_00001.json'))).resolves.toBeUndefined()
+    const files = await fs.readdir(join(base, 'immutable_history'))
+    expect(files).toHaveLength(2)
+    expect(files.every((f) => /^snapshot_[\w-]+\.json$/.test(f))).toBe(true)
+
+    // Restore from snapshot 1 — should only have 2 messages
+    const snapshotIds = await storage.listSnapshotIds({ location: { sessionId, scope: 'agent', scopeId: 'default' } })
+    expect(snapshotIds[0]).toBeDefined()
+    const agent2 = new Agent({
+      model,
+      sessionManager: new SessionManager({
+        sessionId,
+        storage: { snapshot: storage },
+        loadSnapshotId: snapshotIds[0]!,
+      }),
+      printer: false,
+    })
+    await agent2.initialize()
+    expect(agent2.messages).toHaveLength(2)
   })
 })
 
@@ -147,7 +144,6 @@ describe.skipIf(bedrock.skip)('Session Management - S3Storage', () => {
   let bucket: string
   let credentials: any
   let s3: S3Client
-  const sessionIds: string[] = []
 
   beforeAll(async () => {
     credentials = inject('provider-bedrock')?.credentials
@@ -166,23 +162,19 @@ describe.skipIf(bedrock.skip)('Session Management - S3Storage', () => {
   })
 
   afterAll(async () => {
-    if (!sessionIds.length) return
-    for (const sessionId of sessionIds) {
-      let token: string | undefined
-      do {
-        const list = await s3.send(
-          new ListObjectsV2Command({ Bucket: bucket, Prefix: `${sessionId}/`, ContinuationToken: token })
-        )
-        const objects = list.Contents?.map((o) => ({ Key: o.Key! })) ?? []
-        if (objects.length) await s3.send(new DeleteObjectsCommand({ Bucket: bucket, Delete: { Objects: objects } }))
-        token = list.NextContinuationToken
-      } while (token)
-    }
+    // Delete all objects then the bucket
+    let token: string | undefined
+    do {
+      const list = await s3.send(new ListObjectsV2Command({ Bucket: bucket, ContinuationToken: token }))
+      const objects = list.Contents?.map((o) => ({ Key: o.Key! })) ?? []
+      if (objects.length) await s3.send(new DeleteObjectsCommand({ Bucket: bucket, Delete: { Objects: objects } }))
+      token = list.NextContinuationToken
+    } while (token)
+    await s3.send(new DeleteBucketCommand({ Bucket: bucket }))
   })
 
   it('persists and restores agent messages across sessions', async () => {
-    const sessionId = randomUUID()
-    sessionIds.push(sessionId)
+    const sessionId = uuidv7()
     const model = bedrock.createModel()
 
     const manager1 = makeS3Manager(sessionId, bucket, credentials)
@@ -202,8 +194,7 @@ describe.skipIf(bedrock.skip)('Session Management - S3Storage', () => {
   })
 
   it('preserves conversation context across sessions', async () => {
-    const sessionId = randomUUID()
-    sessionIds.push(sessionId)
+    const sessionId = uuidv7()
     const model = bedrock.createModel()
 
     const manager1 = makeS3Manager(sessionId, bucket, credentials)
@@ -223,8 +214,7 @@ describe.skipIf(bedrock.skip)('Session Management - S3Storage', () => {
   })
 
   it('creates immutable snapshots and supports time-travel restore', async () => {
-    const sessionId = randomUUID()
-    sessionIds.push(sessionId)
+    const sessionId = uuidv7()
     const model = bedrock.createModel()
 
     const manager1 = new SessionManager({
@@ -240,11 +230,16 @@ describe.skipIf(bedrock.skip)('Session Management - S3Storage', () => {
     await agent1.invoke('What is 50 - 15?') // turn 4 — snapshot 2
     expect(agent1.messages).toHaveLength(8)
 
-    // Restore from snapshot 1 (after turn 2) — should have 4 messages
+    // Verify UUID-based S3 key naming and restore from snapshot 1 (after turn 2)
+    const s3Storage = new S3Storage({ bucket, s3Client: new S3Client({ region: AWS_REGION, credentials }) })
+    const snapshotIds = await s3Storage.listSnapshotIds({ location: { sessionId, scope: 'agent', scopeId: 'default' } })
+    expect(snapshotIds).toHaveLength(2)
+    expect(snapshotIds.every((id) => /^[\w-]{36}$/.test(id))).toBe(true)
+    expect(snapshotIds[0]).toBeDefined()
     const manager2 = new SessionManager({
       sessionId,
-      storage: { snapshot: new S3Storage({ bucket, s3Client: new S3Client({ region: AWS_REGION, credentials }) }) },
-      loadSnapshotId: '1',
+      storage: { snapshot: s3Storage },
+      loadSnapshotId: snapshotIds[0]!,
       saveLatestOn: 'never',
     })
     const agent2 = new Agent({ model, sessionManager: manager2, printer: false })

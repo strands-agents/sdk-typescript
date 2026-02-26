@@ -98,6 +98,7 @@
     "@google/genai": "^1.40.0",
     "@types/json-schema": "^7.0.15",
     "@types/node": "^24.6.0",
+    "@types/uuid": "^10.0.0",
     "@typescript-eslint/eslint-plugin": "^8.48.1",
     "@typescript-eslint/parser": "^8.0.0",
     "@vitest/browser": "^4.0.15",
@@ -125,7 +126,8 @@
   },
   "homepage": "https://github.com/strands-agents/sdk-typescript#readme",
   "dependencies": {
-    "@aws-sdk/client-bedrock-runtime": "^3.943.0"
+    "@aws-sdk/client-bedrock-runtime": "^3.943.0",
+    "uuid": "^10.0.0"
   },
   "peerDependencies": {
     "@anthropic-ai/sdk": "^0.71.2",

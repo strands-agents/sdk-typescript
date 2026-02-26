@@ -9,9 +9,8 @@ import { validateIdentifier } from './validation.js'
 const MANIFEST = 'manifest.json'
 const SNAPSHOT_LATEST = 'snapshot_latest.json'
 const IMMUTABLE_HISTORY = 'immutable_history'
-const SNAPSHOT_REGEX = /snapshot_(\d+)\.json$/
+const SNAPSHOT_REGEX = /snapshot_([\w-]+)\.json$/
 const SCHEMA_VERSION = '1.0'
-const DEFAULT_SNAPSHOT_ID = '1'
 
 /**
  * File-based implementation of SnapshotStorage for persisting session snapshots
@@ -92,7 +91,7 @@ export class FileStorage implements SnapshotStorage {
       return files
         .map((file) => file.match(SNAPSHOT_REGEX)?.[1])
         .filter((id): id is string => id !== undefined)
-        .sort((a, b) => parseInt(a) - parseInt(b))
+        .sort()
     } catch (error: unknown) {
       if (this._isFileNotFoundError(error)) {
         return []
@@ -111,7 +110,6 @@ export class FileStorage implements SnapshotStorage {
     return (
       manifest ?? {
         schemaVersion: SCHEMA_VERSION,
-        nextSnapshotId: DEFAULT_SNAPSHOT_ID,
         updatedAt: new Date().toISOString(),
       }
     )
@@ -162,6 +160,6 @@ export class FileStorage implements SnapshotStorage {
   }
 
   private _getHistorySnapshotPath(location: SnapshotLocation, snapshotId: string): string {
-    return this._getPath(location, `${IMMUTABLE_HISTORY}/snapshot_${String(snapshotId).padStart(5, '0')}.json`)
+    return this._getPath(location, `${IMMUTABLE_HISTORY}/snapshot_${snapshotId}.json`)
   }
 }

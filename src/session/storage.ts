@@ -39,10 +39,9 @@ export type SessionStorage = {
  *     agent/<scope_id>/
  *       snapshots/
  *         snapshot_latest.json
- *         manifest.json
  *         immutable_history/
- *           snapshot_00001.json
- *           snapshot_00002.json
+ *           snapshot_<uuid>.json
+ *           snapshot_<uuid>.json
  * ```
  */
 export interface SnapshotStorage {

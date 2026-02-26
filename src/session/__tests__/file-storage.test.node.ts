@@ -48,7 +48,7 @@ describe('FileStorage', () => {
           SCOPE_ID,
           'snapshots',
           'immutable_history',
-          'snapshot_00001.json'
+          'snapshot_1.json'
         )
         const content = await fs.readFile(historyPath, 'utf8')
         expect(JSON.parse(content)).toEqual(snapshot)
@@ -198,7 +198,7 @@ describe('FileStorage', () => {
 
         const result = await storage.listSnapshotIds({ location })
 
-        expect(result).toEqual(['00001', '00002', '00003'])
+        expect(result).toEqual(['1', '2', '3'])
       })
 
       it('returns empty array when no snapshots exist', async () => {
@@ -225,7 +225,7 @@ describe('FileStorage', () => {
         await fs.writeFile(join(historyDir, 'other-file.txt'), 'not a snapshot', 'utf8')
 
         const result = await storage.listSnapshotIds({ location })
-        expect(result).toEqual(['00001'])
+        expect(result).toEqual(['1'])
       })
     })
 
@@ -303,7 +303,6 @@ describe('FileStorage', () => {
         })
         expect(result).toEqual({
           schemaVersion: '1.0',
-          nextSnapshotId: '1',
           updatedAt: expect.any(String),
         })
       })

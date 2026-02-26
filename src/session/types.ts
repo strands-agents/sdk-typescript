@@ -4,14 +4,12 @@ import type { AgentData } from '../types/agent.js'
 export type { Snapshot, Scope } from '../agent/snapshot.js'
 
 /**
- * Manifest tracks snapshot metadata and ID allocation.
- * Stored alongside snapshots to manage versioning.
+ * Manifest tracks snapshot metadata.
+ * Stored alongside snapshots to support versioning and future multi-agent patterns.
  */
 export interface SnapshotManifest {
   /** Schema version for forward/backward compatibility */
   schemaVersion: string
-  /** Next available snapshot ID for allocation */
-  nextSnapshotId: string
   /** ISO 8601 timestamp of last manifest update */
   updatedAt: string
 }

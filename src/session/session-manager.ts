@@ -6,10 +6,9 @@ import { AfterInvocationEvent, InitializedEvent, MessageAddedEvent } from '../ho
 import { FileStorage } from './file-storage.js'
 import { join } from 'path'
 import { tmpdir } from 'os'
+import { v7 as uuidV7 } from 'uuid'
 import type { Agent } from '../agent/agent.js'
 import { takeSnapshot, loadSnapshot } from '../agent/snapshot.js'
-
-const SCHEMA_VERSION = '1.0'
 
 /**
  * Controls when `snapshot_latest` is saved automatically.
@@ -18,36 +17,6 @@ const SCHEMA_VERSION = '1.0'
  * - `'never'`: only when a `snapshotTrigger` fires (or manually via `saveSnapshot`)
  */
 export type SaveLatestStrategy = 'message' | 'invocation' | 'never'
-
-/**
- * Allocates monotonically increasing snapshot IDs and persists the manifest.
- * Caches the next ID in memory to avoid redundant manifest reads within a session.
- */
-class SnapshotIdAllocator {
-  private nextId?: string
-
-  constructor(private readonly snapshotStorage: SnapshotStorage) {}
-
-  /**
-   * Allocates the next snapshot ID and advances the manifest counter.
-   * @returns The allocated numeric snapshot ID
-   */
-  async allocate(location: SnapshotLocation): Promise<number> {
-    if (this.nextId === undefined) {
-      const manifest = await this.snapshotStorage.loadManifest({ location })
-      this.nextId = manifest.nextSnapshotId
-    }
-
-    const id = parseInt(this.nextId)
-    this.nextId = String(id + 1)
-
-    await this.snapshotStorage.saveManifest({
-      location,
-      manifest: { schemaVersion: SCHEMA_VERSION, nextSnapshotId: this.nextId, updatedAt: new Date().toISOString() },
-    })
-    return id
-  }
-}
 
 export interface SessionManagerConfig {
   /** Pluggable storage backends for snapshot persistence. Defaults to FileStorage in the OS temp directory. */
@@ -58,7 +27,7 @@ export interface SessionManagerConfig {
   sessionId?: string
   /** Agent identifier used to scope snapshots within a session. Defaults to `'default'`. */
   agentId?: string
-  /** Snapshot ID to restore on initialization. When set, the manifest is advanced past this ID. */
+  /** Snapshot ID to restore on initialization. */
   loadSnapshotId?: string
   /** When to save snapshot_latest. Default: `'message'` (after each message added). */
   saveLatestOn?: SaveLatestStrategy
@@ -66,34 +35,21 @@ export interface SessionManagerConfig {
   snapshotTrigger?: SnapshotTriggerCallback
 }
 
-/**
- * Manages session persistence for agents, enabling conversation state
- * to be saved and restored across invocations.
- *
- * @example
- * ```typescript
- * const session = new SessionManager({ sessionId: 'my-session' })
- * const agent = new Agent({ sessionManager: session })
- * ```
- */
 export class SessionManager implements HookProvider {
   private readonly _location: SnapshotLocation
   private readonly _storage: { snapshot: SnapshotStorage }
   private readonly _loadSnapshotId?: string | undefined
   private readonly _saveLatestOn: SaveLatestStrategy
   private readonly _snapshotTrigger?: SnapshotTriggerCallback | undefined
-  private readonly _idAllocator: SnapshotIdAllocator
 
   private _turnCount = 0
   private _lastSnapshotAt?: number
 
-  /** Creates a new SessionManager with the given configuration. */
   constructor(config?: SessionManagerConfig) {
-    const agentId = config?.agentId ?? 'default'
     this._location = {
       sessionId: config?.sessionId ?? 'default-session',
       scope: 'agent',
-      scopeId: agentId,
+      scopeId: config?.agentId ?? 'default',
     }
 
     this._storage = {
@@ -103,7 +59,6 @@ export class SessionManager implements HookProvider {
     this._saveLatestOn = config?.saveLatestOn ?? 'message'
     this._snapshotTrigger = config?.snapshotTrigger
     this._loadSnapshotId = config?.loadSnapshotId
-    this._idAllocator = new SnapshotIdAllocator(this._storage.snapshot)
   }
 
   /** Registers lifecycle hook callbacks on the provided registry. */
@@ -121,13 +76,12 @@ export class SessionManager implements HookProvider {
     })
   }
 
-  /** Takes a snapshot of the agent and persists it as latest and/or immutable depending on `isLatest`. */
   async saveSnapshot(params: { target: Agent; isLatest: boolean }): Promise<void> {
     const snapshot = takeSnapshot(params.target, { preset: 'session' })
-    const snapshotId = params.isLatest ? undefined : (await this._idAllocator.allocate(this._location)).toString()
+    const snapshotId = params.isLatest ? 'latest' : uuidV7()
     await this._storage.snapshot.saveSnapshot({
       location: this._location,
-      snapshotId: snapshotId ?? 'latest',
+      snapshotId,
       isLatest: params.isLatest,
       snapshot,
     })
@@ -145,32 +99,11 @@ export class SessionManager implements HookProvider {
     return true
   }
 
-  /** Restores session state on agent initialization and advances the manifest when loading a specific snapshot. */
+  /** Restores session state on agent initialization. */
   private async _onAgentInitialized(event: InitializedEvent): Promise<void> {
-    const loaded = await this.restoreSnapshot({
+    await this.restoreSnapshot({
       target: event.agent as Agent,
       ...(this._loadSnapshotId !== undefined && { snapshotId: this._loadSnapshotId }),
-    })
-
-    // No snapshot found — start fresh
-    if (!loaded) {
-      return
-    }
-
-    if (this._loadSnapshotId !== undefined && parseInt(this._loadSnapshotId) > 0) {
-      await this._advanceManifestPastSnapshot(parseInt(this._loadSnapshotId))
-    }
-  }
-
-  /** Advances the manifest's next snapshot ID to one past the given ID, preventing overwrites. */
-  private async _advanceManifestPastSnapshot(snapshotId: number): Promise<void> {
-    await this._storage.snapshot.saveManifest({
-      location: this._location,
-      manifest: {
-        schemaVersion: SCHEMA_VERSION,
-        nextSnapshotId: String(snapshotId + 1),
-        updatedAt: new Date().toISOString(),
-      },
     })
   }
 
@@ -195,7 +128,6 @@ export class SessionManager implements HookProvider {
     }
   }
 
-  /** Saves snapshot_latest after each message when `saveLatestOn` is `'message'`. */
   private async _onMessageAdded(event: MessageAddedEvent): Promise<void> {
     const agent = event.agent as Agent
     await this.saveSnapshot({ target: agent, isLatest: true })
@@ -204,7 +136,7 @@ export class SessionManager implements HookProvider {
   /** Captures one snapshot and writes it to both immutable history and snapshot_latest. */
   private async _saveImmutableAndLatest(agent: Agent): Promise<void> {
     const snapshot = takeSnapshot(agent, { preset: 'session' })
-    const snapshotId = (await this._idAllocator.allocate(this._location)).toString()
+    const snapshotId = uuidV7()
     await Promise.all([
       this._storage.snapshot.saveSnapshot({ location: this._location, snapshotId, isLatest: false, snapshot }),
       this._storage.snapshot.saveSnapshot({ location: this._location, snapshotId: 'latest', isLatest: true, snapshot }),

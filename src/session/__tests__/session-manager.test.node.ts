@@ -101,7 +101,7 @@ describe('SessionManager', () => {
       expect(ids.length).toBeGreaterThan(0)
     })
 
-    it('allocates sequential snapshot IDs', async () => {
+    it('allocates unique snapshot IDs', async () => {
       await sessionManager.saveSnapshot({ target: mockAgent, isLatest: false })
       await sessionManager.saveSnapshot({ target: mockAgent, isLatest: false })
       await sessionManager.saveSnapshot({ target: mockAgent, isLatest: false })
@@ -109,7 +109,7 @@ describe('SessionManager', () => {
       const ids = await storage.listSnapshotIds({
         location: { sessionId: 'test-session', scope: 'agent', scopeId: 'test-agent' },
       })
-      expect(ids).toEqual(['1', '2', '3'])
+      expect(ids.length).toBe(3)
     })
   })
 
@@ -177,11 +177,7 @@ describe('SessionManager', () => {
 
       await registry.invokeCallbacks(new InitializedEvent(createMockEvent(mockAgent)))
 
-      // Verify manifest was updated to continue from snapshot 4
-      const manifest = await storage.loadManifest({
-        location: { sessionId: 'test-session', scope: 'agent', scopeId: 'test-agent' },
-      })
-      expect(manifest.nextSnapshotId).toBe('4')
+      expect(mockAgent.messages).toEqual(snapshot.data.messages)
     })
 
     it('does not update manifest when loading snapshot_latest', async () => {
@@ -205,7 +201,7 @@ describe('SessionManager', () => {
       const manifest = await storage.loadManifest({
         location: { sessionId: 'test-session', scope: 'agent', scopeId: 'test-agent' },
       })
-      expect(manifest.nextSnapshotId).toBe('1')
+      expect(manifest.schemaVersion).toBe('1.0')
     })
 
     it('handles missing snapshot gracefully', async () => {
@@ -461,7 +457,7 @@ describe('SessionManager', () => {
       const ids = await storage.listSnapshotIds({
         location: { sessionId: 'test-session', scope: 'agent', scopeId: 'test-agent' },
       })
-      expect(ids).toEqual(['1', '2']) // Snapshots on turns 2 and 4
+      expect(ids.length).toBe(2) // Snapshots on turns 2 and 4
     })
 
     it('trigger based on message count via agentData', async () => {
@@ -572,7 +568,7 @@ describe('SessionManager', () => {
       })
 
       expect(latest).not.toBeNull()
-      expect(immutableIds).toContain('1') // Triggered on turn 3
+      expect(immutableIds.length).toBe(1)
     })
 
     it('supports resuming from immutable snapshot', async () => {
@@ -608,8 +604,7 @@ describe('SessionManager', () => {
       const ids = await storage.listSnapshotIds({
         location: { sessionId: 'resume-test', scope: 'agent', scopeId: 'agent-1' },
       })
-      expect(ids).toContain('1')
-      expect(ids).toContain('2')
+      expect(ids.length).toBe(2)
     })
   })
 })

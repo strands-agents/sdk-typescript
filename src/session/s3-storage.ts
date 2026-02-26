@@ -8,9 +8,8 @@ import { validateIdentifier } from './validation.js'
 const MANIFEST = 'manifest.json'
 const SNAPSHOT_LATEST = 'snapshot_latest.json'
 const IMMUTABLE_HISTORY = 'immutable_history/'
-const SNAPSHOT_REGEX = /snapshot_(\d+)\.json$/
 const SCHEMA_VERSION = '1.0'
-const DEFAULT_SNAPSHOT_ID = '1'
+const SNAPSHOT_REGEX = /snapshot_([\w-]+)\.json$/
 
 /**
  * Configuration options for S3Storage
@@ -110,8 +109,7 @@ export class S3Storage implements SnapshotStorage {
       return (response.Contents ?? [])
         .map((obj) => obj.Key?.match(SNAPSHOT_REGEX)?.[1])
         .filter((id): id is string => id !== undefined)
-        .map((id) => String(parseInt(id)))
-        .sort((a, b) => parseInt(a) - parseInt(b))
+        .sort()
     } catch (error) {
       throw new SessionError(`Failed to list snapshots for session ${params.location.sessionId}`, { cause: error })
     }
@@ -127,7 +125,6 @@ export class S3Storage implements SnapshotStorage {
     return (
       manifest ?? {
         schemaVersion: SCHEMA_VERSION,
-        nextSnapshotId: DEFAULT_SNAPSHOT_ID,
         updatedAt: new Date().toISOString(),
       }
     )
@@ -189,6 +186,6 @@ export class S3Storage implements SnapshotStorage {
   }
 
   private _getHistorySnapshotKey(location: SnapshotLocation, snapshotId: string): string {
-    return this._getKey(location, `${IMMUTABLE_HISTORY}snapshot_${String(snapshotId).padStart(5, '0')}.json`)
+    return this._getKey(location, `${IMMUTABLE_HISTORY}snapshot_${snapshotId}.json`)
   }
 }

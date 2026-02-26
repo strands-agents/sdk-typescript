@@ -74,7 +74,7 @@ describe('S3Storage', () => {
           expect.objectContaining({
             input: {
               Bucket: 'test-bucket',
-              Key: `test-session/scopes/agent/${SCOPE_ID}/snapshots/immutable_history/snapshot_00001.json`,
+              Key: `test-session/scopes/agent/${SCOPE_ID}/snapshots/immutable_history/snapshot_1.json`,
               Body: JSON.stringify(snapshot, null, 2),
               ContentType: 'application/json',
             },
@@ -110,7 +110,7 @@ describe('S3Storage', () => {
         expect(mockPrefixS3Client.send).toHaveBeenCalledWith(
           expect.objectContaining({
             input: expect.objectContaining({
-              Key: `my-app/test-session/scopes/agent/${SCOPE_ID}/snapshots/immutable_history/snapshot_00001.json`,
+              Key: `my-app/test-session/scopes/agent/${SCOPE_ID}/snapshots/immutable_history/snapshot_1.json`,
             }),
           })
         )
@@ -185,7 +185,7 @@ describe('S3Storage', () => {
         expect(mockS3Client.send).toHaveBeenCalledWith(
           expect.objectContaining({
             input: expect.objectContaining({
-              Key: `test-session/scopes/agent/${SCOPE_ID}/snapshots/immutable_history/snapshot_00005.json`,
+              Key: `test-session/scopes/agent/${SCOPE_ID}/snapshots/immutable_history/snapshot_5.json`,
             }),
           })
         )
@@ -246,9 +246,9 @@ describe('S3Storage', () => {
       it('returns sorted snapshot IDs', async () => {
         mockS3Client.send.mockResolvedValue({
           Contents: [
-            { Key: `test-session/scopes/agent/${SCOPE_ID}/snapshots/immutable_history/snapshot_00003.json` },
-            { Key: `test-session/scopes/agent/${SCOPE_ID}/snapshots/immutable_history/snapshot_00001.json` },
-            { Key: `test-session/scopes/agent/${SCOPE_ID}/snapshots/immutable_history/snapshot_00002.json` },
+            { Key: `test-session/scopes/agent/${SCOPE_ID}/snapshots/immutable_history/snapshot_3.json` },
+            { Key: `test-session/scopes/agent/${SCOPE_ID}/snapshots/immutable_history/snapshot_1.json` },
+            { Key: `test-session/scopes/agent/${SCOPE_ID}/snapshots/immutable_history/snapshot_2.json` },
           ],
         })
 
@@ -278,9 +278,9 @@ describe('S3Storage', () => {
       it('ignores non-snapshot objects', async () => {
         mockS3Client.send.mockResolvedValue({
           Contents: [
-            { Key: `test-session/scopes/agent/${SCOPE_ID}/snapshots/immutable_history/snapshot_00001.json` },
+            { Key: `test-session/scopes/agent/${SCOPE_ID}/snapshots/immutable_history/snapshot_1.json` },
             { Key: `test-session/scopes/agent/${SCOPE_ID}/snapshots/immutable_history/other-file.txt` },
-            { Key: `test-session/scopes/agent/${SCOPE_ID}/snapshots/immutable_history/snapshot_00002.json` },
+            { Key: `test-session/scopes/agent/${SCOPE_ID}/snapshots/immutable_history/snapshot_2.json` },
           ],
         })
         const result = await storage.listSnapshotIds({
@@ -292,9 +292,9 @@ describe('S3Storage', () => {
       it('handles objects without Key property', async () => {
         mockS3Client.send.mockResolvedValue({
           Contents: [
-            { Key: `test-session/scopes/agent/${SCOPE_ID}/snapshots/immutable_history/snapshot_00001.json` },
+            { Key: `test-session/scopes/agent/${SCOPE_ID}/snapshots/immutable_history/snapshot_1.json` },
             {},
-            { Key: `test-session/scopes/agent/${SCOPE_ID}/snapshots/immutable_history/snapshot_00002.json` },
+            { Key: `test-session/scopes/agent/${SCOPE_ID}/snapshots/immutable_history/snapshot_2.json` },
           ],
         })
         const result = await storage.listSnapshotIds({
@@ -318,7 +318,7 @@ describe('S3Storage', () => {
     describe('S3SnapshotStorage_When_LoadManifest_Then_ReturnsManifest', () => {
       it('loads existing manifest', async () => {
         const location: SnapshotLocation = { sessionId: 'test-session', scope: 'agent', scopeId: SCOPE_ID }
-        const manifest = createTestManifest({ nextSnapshotId: '5' })
+        const manifest = createTestManifest()
         mockS3Client.send.mockResolvedValue({
           Body: { transformToString: () => Promise.resolve(JSON.stringify(manifest)) },
         })
@@ -346,7 +346,6 @@ describe('S3Storage', () => {
         })
         expect(result).toEqual({
           schemaVersion: '1.0',
-          nextSnapshotId: '1',
           updatedAt: expect.any(String),
         })
       })
@@ -368,7 +367,7 @@ describe('S3Storage', () => {
     describe('S3SnapshotStorage_When_SaveManifest_Then_PutsObject', () => {
       it('saves manifest to S3', async () => {
         const location: SnapshotLocation = { sessionId: 'test-session', scope: 'agent', scopeId: SCOPE_ID }
-        const manifest = createTestManifest({ nextSnapshotId: '10' })
+        const manifest = createTestManifest()
         mockS3Client.send.mockResolvedValue({})
 
         await storage.saveManifest({ location, manifest })
