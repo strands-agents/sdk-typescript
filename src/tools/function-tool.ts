@@ -255,6 +255,15 @@ export class FunctionTool extends Tool implements InvokableTool<unknown, JSONVal
    */
   private _wrapInToolResult(value: unknown, toolUseId: string): ToolResultBlock {
     try {
+      // Handle media blocks - pass through directly
+      if (value instanceof DocumentBlock || value instanceof ImageBlock || value instanceof VideoBlock) {
+        return new ToolResultBlock({
+          toolUseId,
+          status: 'success',
+          content: [value],
+        })
+      }
+
       // Handle null with special string representation as text content
       if (value === null) {
         return new ToolResultBlock({

@@ -275,7 +275,7 @@ function formatToolResultBlock(block: ToolResultBlock, toolUseIdToName: Map<stri
         output.push({ json: c.json })
         break
       case 'imageBlock': {
-        const mimeType = getMimeType(c.format) ?? `image/${c.format}`
+        const mimeType = toMimeType(c.format) ?? `image/${c.format}`
         if (c.source.type === 'imageSourceBytes') {
           parts.push({
             inlineData: {
@@ -290,7 +290,7 @@ function formatToolResultBlock(block: ToolResultBlock, toolUseIdToName: Map<stri
         break
       }
       case 'documentBlock': {
-        const mimeType = getMimeType(c.format) ?? `application/${c.format}`
+        const mimeType = toMimeType(c.format) ?? `application/${c.format}`
         if (c.source.type === 'documentSourceBytes') {
           parts.push({
             inlineData: {
