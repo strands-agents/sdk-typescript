@@ -1644,7 +1644,7 @@ describe('BedrockModel', () => {
                         title: 'Search Result',
                       },
                       {
-                        location: { web: { url: 'https://example.com/doc', domain: 'example.com' } },
+                        location: { web: { url: 'https://example.com/doc' } },
                         source: 'web-0',
                         sourceContent: [{ text: 'web source' }],
                         title: 'Web Page',

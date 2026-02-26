@@ -1183,10 +1183,8 @@ export class BedrockModel extends Model<BedrockModelConfig> {
         const { type: _, ...fields } = location
         return { searchResultLocation: fields }
       }
-      case 'web': {
-        const { type: _, ...fields } = location
-        return { web: fields }
-      }
+      case 'web':
+        return { web: { url: location.url } }
       default:
         return location as unknown as BedrockCitationLocation
     }

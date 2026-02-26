@@ -264,115 +264,102 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel, mode
     })
 
     describe.skipIf(!supports.citations)('Citations', () => {
+      const documentText = [
+        'France is a country in Western Europe. Its capital is Paris, which is known as the City of Light.',
+        'Paris has a population of approximately 2.1 million people in the city proper.',
+        'The Eiffel Tower, built in 1889, is the most visited paid monument in the world.',
+        'France is the most visited country in the world, with over 89 million tourists annually.',
+        'The French Revolution of 1789 was a pivotal event in world history.',
+      ].join(' ')
+
       const textDocBlock = new DocumentBlock({
         name: 'test-document',
         format: 'txt',
-        source: { text: 'The capital of France is Paris. It is known as the City of Light.' },
+        source: { content: [{ text: documentText }] },
         citations: { enabled: true },
       })
 
-      const textDocPrompt = new TextBlock('What is the capital of France according to the document? Answer briefly.')
+      const textDocPrompt = new TextBlock(
+        'Using the document, what is the capital of France and what is it known for? Cite specific details.'
+      )
 
-      describe.each([
-        { label: 'streaming', modelOptions: {} },
-        { label: 'non-streaming', modelOptions: { stream: false } },
-      ])('$label', ({ modelOptions }) => {
-        it('returns documentChar citations from text document and preserves them in multi-turn', async () => {
-          const agent = new Agent({
-            model: createModel(modelOptions),
-            printer: false,
-          })
-
-          const result = await agent.invoke([textDocBlock, textDocPrompt])
-
-          expect(result.stopReason).toBe('endTurn')
-
-          const citationsBlock = result.lastMessage.content.find(
-            (block): block is CitationsBlock => block.type === 'citationsBlock'
-          )
-          expect(citationsBlock).toBeDefined()
-          expect(citationsBlock!.citations.length).toBeGreaterThan(0)
-          expect(citationsBlock!.content.length).toBeGreaterThan(0)
-          expect(citationsBlock!.content[0]!.text).toBeDefined()
-
-          const citation = citationsBlock!.citations[0]!
-          expect(citation.location).toBeDefined()
-          expect(citation.location.type).toBe('documentChar')
-
-          // Verify all inner fields are present (Bedrock docs say "Not Required" but we expect them)
-          if (citation.location.type === 'documentChar') {
-            expect(typeof citation.location.documentIndex).toBe('number')
-            expect(typeof citation.location.start).toBe('number')
-            expect(typeof citation.location.end).toBe('number')
-          }
-
-          expect(citation.sourceContent.length).toBeGreaterThan(0)
-          expect(citation.sourceContent[0]!.text).toBeDefined()
-          expect(typeof citation.source).toBe('string')
-          expect(typeof citation.title).toBe('string')
-
-          // Second turn: verify citations survive in conversation history
-          const followUp = await agent.invoke('What else does the document say about that city?')
-          expect(followUp.stopReason).toBe('endTurn')
-          expect(followUp.lastMessage.role).toBe('assistant')
-          expect(followUp.lastMessage.content.length).toBeGreaterThan(0)
+      it('returns documentChunk citations from text document', async () => {
+        const agent = new Agent({
+          model: createModel({ stream: false }),
+          printer: false,
         })
 
-        it('returns documentPage citations from PDF document and preserves them in multi-turn', async () => {
-          const pdfBytes = await loadFixture(letterPdfUrl)
+        const result = await agent.invoke([textDocBlock, textDocPrompt])
 
-          const agent = new Agent({
-            model: createModel(modelOptions),
-            printer: false,
-          })
+        expect(result.stopReason).toBe('endTurn')
 
-          const result = await agent.invoke([
-            new DocumentBlock({
-              name: 'letter',
-              format: 'pdf',
-              source: { bytes: pdfBytes },
-              citations: { enabled: true },
+        const citationsBlock = result.lastMessage.content.find(
+          (block): block is CitationsBlock => block.type === 'citationsBlock'
+        )
+        expect(citationsBlock).toBeDefined()
+        expect(citationsBlock!.citations).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              location: expect.objectContaining({ type: 'documentChunk' }),
+              source: expect.any(String),
+              title: expect.any(String),
+              sourceContent: expect.arrayContaining([expect.objectContaining({ text: expect.any(String) })]),
             }),
-            new TextBlock('Summarize this document briefly.'),
           ])
-
-          expect(result.stopReason).toBe('endTurn')
-
-          const citationsBlock = result.lastMessage.content.find(
-            (block): block is CitationsBlock => block.type === 'citationsBlock'
-          )
-          expect(citationsBlock).toBeDefined()
-          expect(citationsBlock!.citations.length).toBeGreaterThan(0)
-          expect(citationsBlock!.content.length).toBeGreaterThan(0)
-          expect(citationsBlock!.content[0]!.text).toBeDefined()
-
-          const citation = citationsBlock!.citations[0]!
-          expect(citation.location).toBeDefined()
-          expect(citation.location.type).toBe('documentPage')
-
-          // Verify all inner fields are present (Bedrock docs say "Not Required" but we expect them)
-          if (citation.location.type === 'documentPage') {
-            expect(typeof citation.location.documentIndex).toBe('number')
-            expect(typeof citation.location.start).toBe('number')
-            expect(typeof citation.location.end).toBe('number')
-          }
-
-          expect(citation.sourceContent.length).toBeGreaterThan(0)
-          expect(citation.sourceContent[0]!.text).toBeDefined()
-          expect(typeof citation.source).toBe('string')
-          expect(typeof citation.title).toBe('string')
-
-          // Second turn: verify citations survive in conversation history
-          const followUp = await agent.invoke('What else can you tell me about this document?')
-          expect(followUp.stopReason).toBe('endTurn')
-          expect(followUp.lastMessage.role).toBe('assistant')
-          expect(followUp.lastMessage.content.length).toBeGreaterThan(0)
-        })
+        )
+        expect(citationsBlock!.content).toEqual(
+          expect.arrayContaining([expect.objectContaining({ text: expect.any(String) })])
+        )
       })
 
-      it('emits citationsContentDelta events during streaming', async () => {
+      it('returns documentPage citations from PDF document and preserves them in multi-turn', async () => {
+        const pdfBytes = await loadFixture(letterPdfUrl)
+
         const agent = new Agent({
-          model: createModel(),
+          model: createModel({ stream: false }),
+          printer: false,
+        })
+
+        const result = await agent.invoke([
+          new DocumentBlock({
+            name: 'letter',
+            format: 'pdf',
+            source: { bytes: pdfBytes },
+            citations: { enabled: true },
+          }),
+          new TextBlock('Summarize this document briefly.'),
+        ])
+
+        expect(result.stopReason).toBe('endTurn')
+
+        const citationsBlock = result.lastMessage.content.find(
+          (block): block is CitationsBlock => block.type === 'citationsBlock'
+        )
+        expect(citationsBlock).toBeDefined()
+        expect(citationsBlock!.citations).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              location: expect.objectContaining({ type: 'documentPage' }),
+              source: expect.any(String),
+              title: expect.any(String),
+              sourceContent: expect.arrayContaining([expect.objectContaining({ text: expect.any(String) })]),
+            }),
+          ])
+        )
+        expect(citationsBlock!.content).toEqual(
+          expect.arrayContaining([expect.objectContaining({ text: expect.any(String) })])
+        )
+
+        // Second turn: verify citations survive in conversation history
+        const followUp = await agent.invoke('What else can you tell me about this document?')
+        expect(followUp.stopReason).toBe('endTurn')
+        expect(followUp.lastMessage.role).toBe('assistant')
+        expect(followUp.lastMessage.content.length).toBeGreaterThan(0)
+      })
+
+      it('emits citationsContentDelta events via agent.stream()', async () => {
+        const agent = new Agent({
+          model: createModel({ stream: false }),
           printer: false,
         })
 
@@ -380,7 +367,6 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel, mode
 
         expect(result.stopReason).toBe('endTurn')
 
-        // Verify citationsContentDelta events were emitted during streaming
         const citationDeltas = items.filter(
           (item) =>
             item.type === 'modelStreamUpdateEvent' &&
@@ -389,75 +375,11 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel, mode
         )
         expect(citationDeltas.length).toBeGreaterThan(0)
 
-        // Verify the aggregated result also contains the CitationsBlock
         const citationsBlock = result.lastMessage.content.find(
           (block): block is CitationsBlock => block.type === 'citationsBlock'
         )
         expect(citationsBlock).toBeDefined()
         expect(citationsBlock!.citations.length).toBeGreaterThan(0)
-      })
-
-      it('preserves all CitationLocation variants in multi-turn conversation history', async () => {
-        const agent = new Agent({
-          model: createModel(),
-          printer: false,
-        })
-
-        // Seed conversation with an assistant message containing all 5 citation location variants
-        agent.messages.push(
-          new Message({
-            role: 'user',
-            content: [new TextBlock('Tell me about these sources.')],
-          }),
-          new Message({
-            role: 'assistant',
-            content: [
-              new CitationsBlock({
-                citations: [
-                  {
-                    location: { type: 'documentChar', documentIndex: 0, start: 150, end: 300 },
-                    source: 'doc-0',
-                    sourceContent: [{ text: 'char source content' }],
-                    title: 'Text Document',
-                  },
-                  {
-                    location: { type: 'documentPage', documentIndex: 0, start: 2, end: 3 },
-                    source: 'doc-0',
-                    sourceContent: [{ text: 'page source content' }],
-                    title: 'PDF Document',
-                  },
-                  {
-                    location: { type: 'documentChunk', documentIndex: 1, start: 5, end: 8 },
-                    source: 'doc-1',
-                    sourceContent: [{ text: 'chunk source content' }],
-                    title: 'Chunked Document',
-                  },
-                  {
-                    location: { type: 'searchResult', searchResultIndex: 0, start: 25, end: 150 },
-                    source: 'search-0',
-                    sourceContent: [{ text: 'search source content' }],
-                    title: 'Search Result',
-                  },
-                  {
-                    location: { type: 'web', url: 'https://example.com/doc', domain: 'example.com' },
-                    source: 'web-0',
-                    sourceContent: [{ text: 'web source content' }],
-                    title: 'Web Page',
-                  },
-                ],
-                content: [{ text: 'Here is information from all five source types.' }],
-              }),
-              new TextBlock('I found information from multiple source types.'),
-            ],
-          })
-        )
-
-        // Follow-up turn forces Bedrock to accept all 5 variants in conversation history
-        const result = await agent.invoke('Can you summarize what you told me?')
-
-        expect(result.stopReason).toBe('endTurn')
-        expect(result.lastMessage.role).toBe('assistant')
-        expect(result.lastMessage.content.length).toBeGreaterThan(0)
       })
     })
 

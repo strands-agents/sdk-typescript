@@ -241,20 +241,20 @@ logger.warn(`field=<${value}> | statement one | statement two`)
 **Examples**:
 
 ```typescript
-// ✅ Good: Context fields with message
+// Good: Context fields with message
 logger.warn(`stop_reason=<${stopReason}>, fallback=<${fallback}> | unknown stop reason, converting to camelCase`)
 logger.warn(`event_type=<${eventType}> | unsupported bedrock event type`)
 
-// ✅ Good: Simple message without context fields
+// Good: Simple message without context fields
 logger.warn('cache points are not supported in openai system prompts, ignoring cache points')
 
-// ✅ Good: Multiple statements separated by pipes
+// Good: Multiple statements separated by pipes
 logger.warn(`request_id=<${id}> | processing request | starting validation`)
 
-// ❌ Bad: Not using angle brackets for values
+// Bad: Not using angle brackets for values
 logger.warn(`stop_reason=${stopReason} | unknown stop reason`)
 
-// ❌ Bad: Using punctuation
+// Bad: Using punctuation
 logger.warn(`event_type=<${eventType}> | Unsupported event type.`)
 ```
 
@@ -289,7 +289,7 @@ src/
 
 **Example**:
 ```typescript
-// ✅ Good: Main function first, helpers follow
+// Good: Main function first, helpers follow
 export async function* mainFunction() {
   const result = await helperFunction1()
   return helperFunction2(result)
@@ -303,7 +303,7 @@ function helperFunction2(input: string) {
   // Implementation
 }
 
-// ❌ Bad: Helpers before main function
+// Bad: Helpers before main function
 async function helperFunction1() {
   // Implementation
 }
@@ -325,10 +325,10 @@ test/integ/
 **Optional chaining for null safety**: Prefer optional chaining over verbose `typeof` checks when accessing potentially undefined properties:
 
 ```typescript
-// ✅ Good: Optional chaining
+// Good: Optional chaining
 return globalThis?.process?.env?.API_KEY
 
-// ❌ Bad: Verbose typeof checks
+// Bad: Verbose typeof checks
 if (typeof process !== 'undefined' && typeof process.env !== 'undefined') {
   return process.env.API_KEY
 }
@@ -369,7 +369,7 @@ export function getData(): any {
 **Private fields**: Use underscore prefix for private class fields to improve readability and distinguish them from public members.
 
 ```typescript
-// ✅ Good: Private fields with underscore prefix
+// Good: Private fields with underscore prefix
 export class Example {
   private readonly _config: Config
   private _state: State
@@ -384,7 +384,7 @@ export class Example {
   }
 }
 
-// ❌ Bad: No underscore for private fields
+// Bad: No underscore for private fields
 export class Example {
   private readonly config: Config  // Missing underscore
 
@@ -497,7 +497,7 @@ import type { Options, Config } from '../types'
 **When defining interfaces or types, organize them so the top-level interface comes first, followed by its dependencies, and then all nested dependencies.**
 
 ```typescript
-// ✅ Correct - Top-level first, then dependencies
+// Correct - Top-level first, then dependencies
 export interface Message {
   role: Role
   content: ContentBlock[]
@@ -537,7 +537,7 @@ export class ToolResultBlock {
   }
 }
 
-// ❌ Wrong - Dependencies before top-level
+// Wrong - Dependencies before top-level
 export type Role = 'user' | 'assistant'
 
 export interface TextBlockData {
@@ -557,7 +557,7 @@ export interface Message {  // Top-level should come first
 **When creating discriminated unions with a `type` field, the type value MUST match the interface name with the first letter lowercase.**
 
 ```typescript
-// ✅ Correct - type matches class name (first letter lowercase)
+// Correct - type matches class name (first letter lowercase)
 export class TextBlock {
   readonly type = 'textBlock' as const  // Matches 'TextBlock' class name
   readonly text: string
@@ -572,7 +572,7 @@ export class CachePointBlock {
 
 export type ContentBlock = TextBlock | ToolUseBlock | CachePointBlock
 
-// ❌ Wrong - type doesn't match class name
+// Wrong - type doesn't match class name
 export class CachePointBlock {
   readonly type = 'cachePoint' as const  // Should be 'cachePointBlock'
   readonly cacheType: 'default'
@@ -588,29 +588,29 @@ When the upstream API (e.g., Bedrock) defines a type as a **UNION** ("only one m
 The Bedrock API marks all fields in union types as "Not Required" as a mechanism for future extensibility. In TypeScript, encode the mutual exclusivity using `|` with each variant having its field required. The "not required" from the API docs means "this field won't be present if a different variant is active."
 
 ```typescript
-// ✅ Correct: type union — each variant has its field required
+// Correct: type union — each variant has its field required
 // Adding a new variant later (e.g., | { image: ImageData }) is non-breaking
 export type CitationSourceContent = { text: string }
 
-// ✅ Correct: multi-variant union with object-key discrimination
+// Correct: multi-variant union with object-key discrimination
 export type DocumentSourceData =
   | { bytes: Uint8Array }
   | { text: string }
   | { content: DocumentContentBlockData[] }
   | { s3Location: S3LocationData }
 
-// ✅ Correct: multi-variant union for citation locations
+// Correct: multi-variant union for citation locations
 export type CitationLocation =
   | { documentChar: DocumentCharLocation }
   | { documentPage: DocumentPageLocation }
   | { web: WebLocation }
 
-// ❌ Wrong: interface with optional fields — cannot expand without breaking
+// Wrong: interface with optional fields — cannot expand without breaking
 export interface CitationSourceContent {
   text?: string
 }
 
-// ❌ Wrong: interface with required field — changing to union later is breaking
+// Wrong: interface with required field — changing to union later is breaking
 export interface CitationSourceContent {
   text: string
 }
@@ -655,13 +655,13 @@ export class ValidationError extends Error {
 When asserting on objects, prefer `toStrictEqual` for full object comparison rather than checking individual fields:
 
 ```typescript
-// ✅ Good: Full object assertion with toStrictEqual
+// Good: Full object assertion with toStrictEqual
 expect(provider.getConfig()).toStrictEqual({
   modelId: 'gemini-2.5-flash',
   params: { temperature: 0.5 },
 })
 
-// ❌ Bad: Checking individual fields
+// Bad: Checking individual fields
 expect(provider.getConfig().modelId).toBe('gemini-2.5-flash')
 expect(provider.getConfig().params.temperature).toBe(0.5)
 ```
@@ -680,7 +680,7 @@ When adding or modifying dependencies, you **MUST** follow the guidelines in [do
 
 ## Things to Do
 
-✅ **Do**:
+**Do**:
 - Use relative imports for internal modules
 - Co-locate unit tests with source under `__tests__` directories
 - Follow nested describe pattern for test organization
@@ -693,7 +693,7 @@ When adding or modifying dependencies, you **MUST** follow the guidelines in [do
 
 ## Things NOT to Do
 
-❌ **Don't**:
+**Don't**:
 - Use `any` type (enforced by ESLint)
 - Put unit tests in separate `tests/` directory (use `src/**/__tests__/**`)
 - Skip documentation for exported functions
