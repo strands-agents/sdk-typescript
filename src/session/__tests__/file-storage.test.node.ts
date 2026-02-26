@@ -191,14 +191,19 @@ describe('FileStorage', () => {
       it('returns sorted snapshot IDs', async () => {
         const location: SnapshotLocation = { sessionId: 'test-session', scope: createTestScope(), scopeId: SCOPE_ID }
         const snapshots = createTestSnapshots(3)
+        const ids = [
+          '019c9bf1-14e5-7eef-96fb-cc07ae54210f',
+          '019c9bf1-1d34-7eef-96fb-d1be20fd7bbd',
+          '019c9bf1-24bb-7eef-96fb-ddcc943cd859',
+        ]
 
-        await storage.saveSnapshot({ location, snapshotId: '3', isLatest: false, snapshot: snapshots[2]! })
-        await storage.saveSnapshot({ location, snapshotId: '1', isLatest: false, snapshot: snapshots[0]! })
-        await storage.saveSnapshot({ location, snapshotId: '2', isLatest: false, snapshot: snapshots[1]! })
+        await storage.saveSnapshot({ location, snapshotId: ids[2]!, isLatest: false, snapshot: snapshots[2]! })
+        await storage.saveSnapshot({ location, snapshotId: ids[0]!, isLatest: false, snapshot: snapshots[0]! })
+        await storage.saveSnapshot({ location, snapshotId: ids[1]!, isLatest: false, snapshot: snapshots[1]! })
 
         const result = await storage.listSnapshotIds({ location })
 
-        expect(result).toEqual(['1', '2', '3'])
+        expect(result).toEqual(ids)
       })
 
       it('returns empty array when no snapshots exist', async () => {
@@ -211,7 +216,8 @@ describe('FileStorage', () => {
       it('ignores non-snapshot files', async () => {
         const location: SnapshotLocation = { sessionId: 'test-session', scope: createTestScope(), scopeId: SCOPE_ID }
         const snapshot = createTestSnapshot()
-        await storage.saveSnapshot({ location, snapshotId: '1', isLatest: false, snapshot })
+        const id = '019c9bf1-14e5-7eef-96fb-cc07ae54210f'
+        await storage.saveSnapshot({ location, snapshotId: id, isLatest: false, snapshot })
 
         const historyDir = join(
           testDir,
@@ -225,7 +231,7 @@ describe('FileStorage', () => {
         await fs.writeFile(join(historyDir, 'other-file.txt'), 'not a snapshot', 'utf8')
 
         const result = await storage.listSnapshotIds({ location })
-        expect(result).toEqual(['1'])
+        expect(result).toEqual([id])
       })
     })
 
