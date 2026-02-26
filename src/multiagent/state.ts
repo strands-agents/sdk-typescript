@@ -72,8 +72,8 @@ export class NodeState {
   terminus: boolean
   readonly results: NodeResult[]
 
-  constructor(data?: { status?: Status }) {
-    this.status = data?.status ?? Status.PENDING
+  constructor() {
+    this.status = Status.PENDING
     this.terminus = false
     this.results = []
   }
