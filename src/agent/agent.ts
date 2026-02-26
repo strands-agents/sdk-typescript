@@ -469,6 +469,7 @@ export class Agent implements AgentData {
               // Force the model to use the structured output tool
               const toolName = context.getToolName()
               forcedToolChoice = { tool: { name: toolName } }
+              this._tracer.endAgentLoopSpan(cycleSpan)
               continue
             }
 
