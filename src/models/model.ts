@@ -356,7 +356,7 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
             break
 
           case 'modelRedactContentEvent':
-            // Track content redaction info from guardrails
+            // Track content redaction info from guardrails - agent handles actual redaction
             if (event.redactUserContentMessage || event.redactAssistantContentMessage) {
               redactContent = redactContent ?? {}
               if (event.redactUserContentMessage) {
@@ -364,16 +364,6 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
               }
               if (event.redactAssistantContentMessage) {
                 redactContent.redactAssistantContentMessage = event.redactAssistantContentMessage
-                // Replace the current assistant content blocks with the redaction message
-                contentBlocks.length = 0
-                contentBlocks.push(new TextBlock(event.redactAssistantContentMessage))
-                // Recreate the stoppedMessage with the redacted content
-                if (messageRole && stoppedMessage) {
-                  stoppedMessage = new Message({
-                    role: messageRole,
-                    content: [...contentBlocks],
-                  })
-                }
               }
             }
             break

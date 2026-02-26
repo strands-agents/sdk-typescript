@@ -665,7 +665,7 @@ describe('Model', () => {
         expect(messages[0]!.content).toEqual([{ type: 'textBlock', text: 'Sensitive content' }])
       })
 
-      it('redacts assistant content and returns redactContent when redactAssistantContentMessage is present', async () => {
+      it('returns redactContent with assistant message when redactAssistantContentMessage is present', async () => {
         const provider = new TestModelProvider(async function* () {
           yield { type: 'modelMessageStartEvent', role: 'assistant' }
           yield { type: 'modelContentBlockStartEvent' }
@@ -691,14 +691,14 @@ describe('Model', () => {
 
         const { result } = await collectGenerator(provider.streamAggregated(messages))
 
-        // Verify the assistant message content was replaced with the redaction message
-        expect(result.message.role).toBe('assistant')
-        expect(result.message.content).toEqual([{ type: 'textBlock', text: '[Assistant output redacted.]' }])
-
         // Verify redactContent is returned
         expect(result.redactContent).toStrictEqual({
           redactAssistantContentMessage: '[Assistant output redacted.]',
         })
+
+        // Message is NOT modified by model - agent handles redaction
+        expect(result.message.role).toBe('assistant')
+        expect(result.message.content).toEqual([{ type: 'textBlock', text: 'Harmful content' }])
       })
 
       it('returns both redaction messages when both are present', async () => {
@@ -737,9 +737,9 @@ describe('Model', () => {
           redactAssistantContentMessage: '[Assistant output redacted.]',
         })
 
-        // Verify assistant message was redacted
+        // Message is NOT modified by model - agent handles redaction
         expect(result.message.role).toBe('assistant')
-        expect(result.message.content).toEqual([{ type: 'textBlock', text: '[Assistant output redacted.]' }])
+        expect(result.message.content).toEqual([{ type: 'textBlock', text: 'Response' }])
       })
 
       it('does not include redactContent when no redact events are received', async () => {
