@@ -21,7 +21,7 @@ const DEFAULT_DEPLOYMENT_ENVIRONMENT = 'development'
  * @returns The service name from OTEL_SERVICE_NAME or the default 'strands-agents'
  */
 export function getServiceName(): string {
-  return process.env.OTEL_SERVICE_NAME || DEFAULT_SERVICE_NAME
+  return globalThis?.process?.env?.OTEL_SERVICE_NAME || DEFAULT_SERVICE_NAME
 }
 
 /**
