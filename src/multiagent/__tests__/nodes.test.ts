@@ -56,6 +56,7 @@ describe('Node', () => {
         nodeId: 'test-node',
         status: Status.COMPLETED,
         content,
+        terminus: false,
         duration: expect.any(Number),
       })
     })
@@ -73,6 +74,7 @@ describe('Node', () => {
         nodeId: 'fail-node',
         status: Status.FAILED,
         content: [],
+        terminus: false,
         duration: expect.any(Number),
         error: expect.objectContaining({ message: 'boom' }),
       })
@@ -114,6 +116,7 @@ describe('AgentNode', () => {
         nodeId: 'agent-1',
         status: Status.COMPLETED,
         content: expect.arrayContaining([expect.objectContaining({ type: 'textBlock', text: 'reply' })]),
+        terminus: false,
         duration: expect.any(Number),
       })
     })

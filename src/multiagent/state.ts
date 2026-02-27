@@ -36,6 +36,8 @@ export class NodeResult {
   /** Execution time in milliseconds. */
   readonly duration: number
   readonly content: ContentBlock[]
+  /** Whether this node was the last executed in its execution path. */
+  readonly terminus: boolean
   readonly error?: Error
 
   constructor(data: {
@@ -43,12 +45,14 @@ export class NodeResult {
     status: ResultStatus
     duration: number
     content?: ContentBlock[]
+    terminus?: boolean
     error?: Error
   }) {
     this.nodeId = data.nodeId
     this.status = data.status
     this.duration = data.duration
     this.content = data.content ?? []
+    this.terminus = data.terminus ?? false
     if (data.error) this.error = data.error
   }
 }
@@ -92,23 +96,22 @@ export class MultiAgentResult {
   readonly type = 'multiAgentResult' as const
   readonly status: ResultStatus
   readonly results: NodeResult[]
-  /** Combined content from all terminal nodes, in completion order. */
+  /** Combined content from terminus nodes, in completion order. */
   readonly content: ContentBlock[]
   readonly duration: number
   readonly error?: Error
 
-  constructor(data: {
-    status?: ResultStatus
-    results: NodeResult[]
-    content: ContentBlock[]
-    duration: number
-    error?: Error
-  }) {
+  constructor(data: { status?: ResultStatus; results: NodeResult[]; duration: number; error?: Error }) {
     this.status = data.status ?? this._resolveStatus(data.results)
     this.results = data.results
-    this.content = data.content
+    this.content = this._resolveContent(data.results)
     this.duration = data.duration
     if (data.error) this.error = data.error
+  }
+
+  /** Derives content from terminus node results, in completion order. */
+  private _resolveContent(results: NodeResult[]): ContentBlock[] {
+    return results.filter((r) => r.terminus).flatMap((r) => r.content)
   }
 
   /** Derives the aggregate status from individual node results. */
