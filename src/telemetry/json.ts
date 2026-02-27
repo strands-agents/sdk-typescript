@@ -14,7 +14,6 @@ export function jsonReplacer(_key: string, value: unknown): unknown {
     case typeof value === 'bigint':
     case typeof value === 'function':
     case typeof value === 'symbol':
-      return '<replaced>'
     case value instanceof ArrayBuffer:
     case value instanceof Uint8Array:
     case ArrayBuffer.isView(value):

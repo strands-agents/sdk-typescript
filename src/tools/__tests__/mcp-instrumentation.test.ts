@@ -97,7 +97,7 @@ describe('mcp-instrumentation', () => {
       })
     })
 
-    it('should fall back to original call with unmodified args on error', async () => {
+    it('should fall back to original call with unmodified args when context injection fails', async () => {
       instrumentMcpClient(mockMcpClient)
 
       vi.spyOn(context, 'active').mockImplementation(() => {
@@ -106,7 +106,45 @@ describe('mcp-instrumentation', () => {
 
       await mockMcpClient.callTool(MOCK_TOOL, { key: 'value' })
 
+      expect(originalCallTool).toHaveBeenCalledOnce()
       expect(originalCallTool).toHaveBeenCalledWith(MOCK_TOOL, { key: 'value' })
+    })
+
+    it('should call originalCallTool exactly once with original args when propagation.inject throws', async () => {
+      instrumentMcpClient(mockMcpClient)
+      mockActiveSpan()
+
+      vi.spyOn(propagation, 'inject').mockImplementation(() => {
+        throw new Error('Inject error')
+      })
+
+      await mockMcpClient.callTool(MOCK_TOOL, { key: 'value' })
+
+      expect(originalCallTool).toHaveBeenCalledOnce()
+      expect(originalCallTool).toHaveBeenCalledWith(MOCK_TOOL, { key: 'value' })
+    })
+
+    it('should propagate originalCallTool errors without retrying', async () => {
+      instrumentMcpClient(mockMcpClient)
+      mockActiveSpan()
+
+      const toolError = new Error('MCP server unavailable')
+      originalCallTool.mockRejectedValueOnce(toolError)
+
+      await expect(mockMcpClient.callTool(MOCK_TOOL, { key: 'value' })).rejects.toThrow('MCP server unavailable')
+
+      expect(originalCallTool).toHaveBeenCalledOnce()
+    })
+
+    it('should propagate originalCallTool errors without retrying when no active span', async () => {
+      instrumentMcpClient(mockMcpClient)
+
+      const toolError = new Error('MCP server unavailable')
+      originalCallTool.mockRejectedValueOnce(toolError)
+
+      await expect(mockMcpClient.callTool(MOCK_TOOL, { key: 'value' })).rejects.toThrow('MCP server unavailable')
+
+      expect(originalCallTool).toHaveBeenCalledOnce()
     })
 
     it('should skip context injection when span has empty trace ID', async () => {

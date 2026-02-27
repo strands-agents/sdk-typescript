@@ -209,7 +209,7 @@ export class Agent implements AgentData {
   /** Tracer instance for creating and managing OpenTelemetry spans. */
   private _tracer: Tracer
   /** Running total of token usage across all model invocations in the current invocation. */
-  private _accumulatedTokenUsage: Usage = Model.createEmptyUsage()
+  private _accumulatedTokenUsage: Usage = Agent._createEmptyUsage()
 
   /**
    * Creates an instance of the Agent.
@@ -417,7 +417,7 @@ export class Agent implements AgentData {
     const inputMessages = this._normalizeInput(args)
 
     // Start agent trace span
-    this._accumulatedTokenUsage = Model.createEmptyUsage()
+    this._accumulatedTokenUsage = Agent._createEmptyUsage()
     const agentModelId = this.model.modelId
     const agentSpanOptions: Parameters<Tracer['startAgentSpan']>[0] = {
       messages: inputMessages,
@@ -633,7 +633,7 @@ export class Agent implements AgentData {
 
       // Accumulate token usage
       if (usage) {
-        Model.accumulateUsage(this._accumulatedTokenUsage, usage)
+        Agent._accumulateUsage(this._accumulatedTokenUsage, usage)
       }
 
       // End model span with usage
@@ -876,6 +876,37 @@ export class Agent implements AgentData {
   private _appendMessage(message: Message): MessageAddedEvent {
     this.messages.push(message)
     return new MessageAddedEvent({ agent: this, message })
+  }
+
+  /**
+   * Creates an empty Usage object with all counters set to zero.
+   *
+   * @returns A Usage object with zeroed counters
+   */
+  private static _createEmptyUsage(): Usage {
+    return {
+      inputTokens: 0,
+      outputTokens: 0,
+      totalTokens: 0,
+    }
+  }
+
+  /**
+   * Accumulates token usage from a source into a target Usage object.
+   *
+   * @param target - The Usage object to accumulate into (mutated in place)
+   * @param source - The Usage object to accumulate from
+   */
+  private static _accumulateUsage(target: Usage, source: Usage): void {
+    target.inputTokens += source.inputTokens
+    target.outputTokens += source.outputTokens
+    target.totalTokens += source.totalTokens
+    if (source.cacheReadInputTokens !== undefined) {
+      target.cacheReadInputTokens = (target.cacheReadInputTokens ?? 0) + source.cacheReadInputTokens
+    }
+    if (source.cacheWriteInputTokens !== undefined) {
+      target.cacheWriteInputTokens = (target.cacheWriteInputTokens ?? 0) + source.cacheWriteInputTokens
+    }
   }
 }
 

@@ -47,6 +47,9 @@ export class MockSpan implements Span {
   /** Records a batch of attributes. */
   setAttributes(attributes: SpanAttributes): this {
     this.calls.setAttributes.push({ attributes })
+    for (const [key, value] of Object.entries(attributes)) {
+      if (value !== undefined) this.setAttribute(key, value)
+    }
     return this
   }
 

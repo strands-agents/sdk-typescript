@@ -40,6 +40,8 @@ export function instrumentMcpClient(mcpClient: McpClient): void {
 
   // Patch callTool to inject tracing context
   mcpClient.callTool = async function (tool: McpTool, args: JSONValue): Promise<JSONValue> {
+    let enhancedArgs = args
+
     try {
       const currentContext = context.active()
       const currentSpan = trace.getSpan(currentContext)
@@ -56,8 +58,6 @@ export function instrumentMcpClient(mcpClient: McpClient): void {
         // This follows the convention for propagating trace context
         // to MCP servers. Servers that support distributed tracing can extract
         // the context from _meta; others will ignore it.
-        let enhancedArgs = args
-
         if (args === null || args === undefined) {
           enhancedArgs = { _meta: carrier as unknown as JSONValue }
         } else if (typeof args === 'object') {
@@ -66,16 +66,11 @@ export function instrumentMcpClient(mcpClient: McpClient): void {
             _meta: carrier as unknown as JSONValue,
           }
         }
-
-        return await originalCallTool(tool, enhancedArgs)
       }
-
-      // No active span, call without context injection
-      return await originalCallTool(tool, args)
     } catch (error) {
       logger.warn(`error=<${error}> | failed to inject context into mcp tool call`)
-      // Fall back to original call on error
-      return await originalCallTool(tool, args)
     }
+
+    return await originalCallTool(tool, enhancedArgs)
   }
 }

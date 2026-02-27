@@ -416,7 +416,7 @@ export class Tracer {
       const endAttributes: Record<string, AttributeValue> = { 'gen_ai.event.end_time': new Date().toISOString() }
       if (attributes) Object.assign(endAttributes, attributes)
 
-      this._setAttributes(span, endAttributes)
+      span.setAttributes(endAttributes)
 
       if (error) {
         span.setStatus({ code: SpanStatusCode.ERROR, message: error.message })
@@ -428,21 +428,6 @@ export class Tracer {
       span.end()
     } catch (err) {
       logger.warn(`error=<${err}> | failed to end span`)
-    }
-  }
-
-  /**
-   * Set attributes on a span.
-   */
-  private _setAttributes(span: Span, attributes: Record<string, AttributeValue>): void {
-    for (const [key, value] of Object.entries(attributes)) {
-      if (value !== undefined && value !== null) {
-        try {
-          span.setAttribute(key, value)
-        } catch (err) {
-          logger.warn(`error=<${err}>, key=<${key}> | failed to set span attribute`)
-        }
-      }
     }
   }
 
