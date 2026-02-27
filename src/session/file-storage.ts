@@ -160,6 +160,11 @@ export class FileStorage implements SnapshotStorage {
   }
 
   private _getHistorySnapshotPath(location: SnapshotLocation, snapshotId: string): string {
-    return this._getPath(location, `${IMMUTABLE_HISTORY}/snapshot_${snapshotId}.json`)
+    validateIdentifier(snapshotId)
+    const resolved = this._getPath(location, `${IMMUTABLE_HISTORY}/snapshot_${snapshotId}.json`)
+    if (!resolved.startsWith(this._baseDir)) {
+      throw new SessionError(`Invalid snapshotId '${snapshotId}': resolves outside storage directory`)
+    }
+    return resolved
   }
 }

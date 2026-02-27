@@ -186,6 +186,7 @@ export class S3Storage implements SnapshotStorage {
   }
 
   private _getHistorySnapshotKey(location: SnapshotLocation, snapshotId: string): string {
+    validateIdentifier(snapshotId)
     return this._getKey(location, `${IMMUTABLE_HISTORY}snapshot_${snapshotId}.json`)
   }
 }
