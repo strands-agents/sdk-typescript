@@ -13,6 +13,7 @@ import type { HookRegistry } from '../hooks/registry.js'
 import { AfterModelCallEvent } from '../hooks/events.js'
 import { Message, TextBlock } from '../types/messages.js'
 import type { StreamOptions } from '../models/model.js'
+import { findValidSplitPoint } from './utils.js'
 
 const DEFAULT_SUMMARIZATION_PROMPT = `You are a conversation summarizer. Provide a concise summary of the conversation history.
 
@@ -86,7 +87,6 @@ export class SummarizingConversationManager implements HookProvider {
   private readonly _preserveRecentMessages: number
   private readonly _summarizationAgent?: Agent
   private readonly _summarizationSystemPrompt?: string
-  private _summaryMessage?: Message
 
   /**
    * Initialize the summarizing conversation manager.
@@ -143,7 +143,7 @@ export class SummarizingConversationManager implements HookProvider {
       throw new ContextWindowOverflowError('Cannot summarize: insufficient messages for summarization')
     }
 
-    const adjustedCount = this.adjustSplitPointForToolPairs(agent.messages, messagesToSummarizeCount)
+    const adjustedCount = findValidSplitPoint(agent.messages, messagesToSummarizeCount)
 
     if (adjustedCount <= 0) {
       throw new ContextWindowOverflowError('Cannot summarize: insufficient messages for summarization')
@@ -152,9 +152,9 @@ export class SummarizingConversationManager implements HookProvider {
     const messagesToSummarize = agent.messages.slice(0, adjustedCount)
     const remainingMessages = agent.messages.slice(adjustedCount)
 
-    this._summaryMessage = await this.generateSummary(messagesToSummarize, agent)
+    const summaryMessage = await this.generateSummary(messagesToSummarize, agent)
 
-    agent.messages.splice(0, agent.messages.length, this._summaryMessage, ...remainingMessages)
+    agent.messages.splice(0, agent.messages.length, summaryMessage, ...remainingMessages)
   }
 
   /**
@@ -166,57 +166,6 @@ export class SummarizingConversationManager implements HookProvider {
   private calculateSummarizeCount(totalMessages: number): number {
     const count = Math.max(1, Math.floor(totalMessages * this._summaryRatio))
     return Math.max(0, Math.min(count, totalMessages - this._preserveRecentMessages))
-  }
-
-  /**
-   * Adjust the split point to avoid breaking ToolUse/ToolResult pairs.
-   *
-   * @param messages - The full list of messages.
-   * @param splitPoint - The initially calculated split point.
-   * @returns The adjusted split point that doesn't break ToolUse/ToolResult pairs.
-   *
-   * @throws ContextWindowOverflowError If no valid split point can be found.
-   */
-  private adjustSplitPointForToolPairs(messages: Message[], splitPoint: number): number {
-    if (splitPoint > messages.length) {
-      throw new ContextWindowOverflowError('Split point exceeds message array length')
-    }
-
-    if (splitPoint === messages.length) {
-      return splitPoint
-    }
-
-    while (splitPoint < messages.length) {
-      const message = messages[splitPoint]
-      if (!message) {
-        break
-      }
-
-      const hasToolResult = message.content.some((block) => block.type === 'toolResultBlock')
-      if (hasToolResult) {
-        splitPoint++
-        continue
-      }
-
-      const hasToolUse = message.content.some((block) => block.type === 'toolUseBlock')
-      if (hasToolUse) {
-        const nextMessage = messages[splitPoint + 1]
-        const nextHasToolResult = nextMessage?.content.some((block) => block.type === 'toolResultBlock')
-
-        if (!nextHasToolResult) {
-          splitPoint++
-          continue
-        }
-      }
-
-      break
-    }
-
-    if (splitPoint >= messages.length) {
-      throw new ContextWindowOverflowError('Unable to trim conversation context!')
-    }
-
-    return splitPoint
   }
 
   /**
@@ -246,6 +195,8 @@ export class SummarizingConversationManager implements HookProvider {
     try {
       summarizationAgent.messages.splice(0, summarizationAgent.messages.length, ...messages)
       const result = await summarizationAgent.invoke('Please summarize this conversation.')
+      // Summary injected as 'user' role for Python SDK parity and to ensure
+      // the model treats it as conversation context rather than its own output.
       return new Message({
         role: 'user',
         content: result.lastMessage.content,
@@ -286,6 +237,8 @@ export class SummarizingConversationManager implements HookProvider {
 
     const { message } = result.value
 
+    // Summary injected as 'user' role for Python SDK parity and to ensure
+    // the model treats it as conversation context rather than its own output.
     return new Message({
       role: 'user',
       content: message.content,

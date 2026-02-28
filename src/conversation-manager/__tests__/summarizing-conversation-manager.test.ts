@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { SummarizingConversationManager } from '../summarizing-conversation-manager.js'
-import { ContextWindowOverflowError, Message, TextBlock, ToolUseBlock, ToolResultBlock } from '../../index.js'
+import { ContextWindowOverflowError, Message, TextBlock } from '../../index.js'
 import { HookRegistryImplementation } from '../../hooks/registry.js'
 import { AfterModelCallEvent } from '../../hooks/events.js'
 import { createMockAgent } from '../../__fixtures__/agent-helpers.js'
@@ -84,92 +84,6 @@ describe('SummarizingConversationManager', () => {
       const manager = new SummarizingConversationManager({ summaryRatio: 0.1, preserveRecentMessages: 10 })
       const count = (manager as any).calculateSummarizeCount(5)
       expect(count).toBe(0) // 5 - 10 = -5, clamped to 0
-    })
-  })
-
-  describe('adjustSplitPointForToolPairs', () => {
-    it('returns split point when no tool blocks present', () => {
-      const manager = new SummarizingConversationManager()
-      const messages = [
-        new Message({ role: 'user', content: [new TextBlock('Message 1')] }),
-        new Message({ role: 'assistant', content: [new TextBlock('Response 1')] }),
-        new Message({ role: 'user', content: [new TextBlock('Message 2')] }),
-      ]
-      const adjusted = (manager as any).adjustSplitPointForToolPairs(messages, 1)
-      expect(adjusted).toBe(1)
-    })
-
-    it('skips toolResult at split point', () => {
-      const manager = new SummarizingConversationManager()
-      const messages = [
-        new Message({ role: 'user', content: [new TextBlock('Message 1')] }),
-        new Message({
-          role: 'user',
-          content: [
-            new ToolResultBlock({ toolUseId: 'tool-1', status: 'success', content: [new TextBlock('Result')] }),
-          ],
-        }),
-        new Message({ role: 'user', content: [new TextBlock('Message 2')] }),
-      ]
-      const adjusted = (manager as any).adjustSplitPointForToolPairs(messages, 1)
-      expect(adjusted).toBe(2) // Skip the toolResult
-    })
-
-    it('skips toolUse without following toolResult', () => {
-      const manager = new SummarizingConversationManager()
-      const messages = [
-        new Message({ role: 'user', content: [new TextBlock('Message 1')] }),
-        new Message({
-          role: 'assistant',
-          content: [new ToolUseBlock({ name: 'tool', toolUseId: 'tool-1', input: {} })],
-        }),
-        new Message({ role: 'user', content: [new TextBlock('Message 2')] }),
-      ]
-      const adjusted = (manager as any).adjustSplitPointForToolPairs(messages, 1)
-      expect(adjusted).toBe(2) // Skip the toolUse without result
-    })
-
-    it('allows toolUse with following toolResult', () => {
-      const manager = new SummarizingConversationManager()
-      const messages = [
-        new Message({ role: 'user', content: [new TextBlock('Message 1')] }),
-        new Message({
-          role: 'assistant',
-          content: [new ToolUseBlock({ name: 'tool', toolUseId: 'tool-1', input: {} })],
-        }),
-        new Message({
-          role: 'user',
-          content: [
-            new ToolResultBlock({ toolUseId: 'tool-1', status: 'success', content: [new TextBlock('Result')] }),
-          ],
-        }),
-        new Message({ role: 'user', content: [new TextBlock('Message 2')] }),
-      ]
-      const adjusted = (manager as any).adjustSplitPointForToolPairs(messages, 1)
-      expect(adjusted).toBe(1) // Valid split point
-    })
-
-    it('throws when no valid split point found', () => {
-      const manager = new SummarizingConversationManager()
-      const messages = [
-        new Message({
-          role: 'user',
-          content: [
-            new ToolResultBlock({ toolUseId: 'tool-1', status: 'success', content: [new TextBlock('Result')] }),
-          ],
-        }),
-      ]
-      expect(() => (manager as any).adjustSplitPointForToolPairs(messages, 0)).toThrow(
-        'Unable to trim conversation context!'
-      )
-    })
-
-    it('throws when split point exceeds message length', () => {
-      const manager = new SummarizingConversationManager()
-      const messages = [new Message({ role: 'user', content: [new TextBlock('Message 1')] })]
-      expect(() => (manager as any).adjustSplitPointForToolPairs(messages, 5)).toThrow(
-        'Split point exceeds message array length'
-      )
     })
   })
 
