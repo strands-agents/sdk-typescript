@@ -110,7 +110,10 @@ export class S3Storage implements SnapshotStorage {
         .map((obj) => obj.Key?.match(SNAPSHOT_REGEX)?.[1])
         .filter((id): id is string => id !== undefined)
         .sort()
-    } catch (error) {
+    } catch (error: unknown) {
+      if (this._isNotFoundError(error)) {
+        return []
+      }
       throw new SessionError(`Failed to list snapshots for session ${params.location.sessionId}`, { cause: error })
     }
   }
@@ -157,6 +160,19 @@ export class S3Storage implements SnapshotStorage {
   }
 
   /**
+   * Checks if error is a missing S3 object/bucket error
+   */
+  private _isNotFoundError(error: unknown): error is { name: string } {
+    return (
+      error !== null &&
+      typeof error === 'object' &&
+      'name' in error &&
+      typeof (error as { name: unknown }).name === 'string' &&
+      ((error as { name: string }).name === 'NoSuchKey' || (error as { name: string }).name === 'NoSuchBucket')
+    )
+  }
+
+  /**
    * Reads and parses JSON from S3
    */
   private async _readJSON<T>(key: string): Promise<T | null> {
@@ -166,12 +182,7 @@ export class S3Storage implements SnapshotStorage {
       if (!body) return null
       return JSON.parse(body)
     } catch (error: unknown) {
-      if (
-        error &&
-        typeof error === 'object' &&
-        'name' in error &&
-        (error.name === 'NoSuchKey' || error.name === 'NoSuchBucket')
-      ) {
+      if (this._isNotFoundError(error)) {
         return null
       }
       if (error instanceof SyntaxError) {

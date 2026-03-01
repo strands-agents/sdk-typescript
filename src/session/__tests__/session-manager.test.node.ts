@@ -258,7 +258,7 @@ describe('SessionManager', () => {
         sessionId: 'test-session',
         agentId: 'test-agent',
         storage: { snapshot: storage },
-        saveLatestOn: 'never',
+        saveLatestOn: 'trigger',
         snapshotTrigger: ({ turnCount }) => turnCount === 2,
       })
       sessionManager.registerCallbacks(registry)
@@ -291,12 +291,12 @@ describe('SessionManager', () => {
       expect(snapshot).not.toBeNull()
     })
 
-    it('does not save snapshot_latest when saveLatestOn is never', async () => {
+    it('does not save snapshot_latest when saveLatestOn is trigger', async () => {
       sessionManager = new SessionManager({
         sessionId: 'test-session',
         agentId: 'test-agent',
         storage: { snapshot: storage },
-        saveLatestOn: 'never',
+        saveLatestOn: 'trigger',
       })
       sessionManager.registerCallbacks(registry)
       await registry.invokeCallbacks(new InitializedEvent(createMockEvent(mockAgent)))
@@ -316,7 +316,7 @@ describe('SessionManager', () => {
         sessionId: 'test-session',
         agentId: 'test-agent',
         storage: { snapshot: storage },
-        saveLatestOn: 'never',
+        saveLatestOn: 'trigger',
         snapshotTrigger: () => true,
       })
       sessionManager.registerCallbacks(registry)
@@ -335,7 +335,7 @@ describe('SessionManager', () => {
         sessionId: 'test-session',
         agentId: 'test-agent',
         storage: { snapshot: storage },
-        saveLatestOn: 'never',
+        saveLatestOn: 'trigger',
         snapshotTrigger: () => false,
       })
       sessionManager.registerCallbacks(registry)
@@ -355,7 +355,7 @@ describe('SessionManager', () => {
         sessionId: 'test-session',
         agentId: 'test-agent',
         storage: { snapshot: storage },
-        saveLatestOn: 'never',
+        saveLatestOn: 'trigger',
         snapshotTrigger: triggerSpy,
       })
       sessionManager.registerCallbacks(registry)
@@ -377,7 +377,7 @@ describe('SessionManager', () => {
         sessionId: 'test-session',
         agentId: 'test-agent',
         storage: { snapshot: storage },
-        saveLatestOn: 'never',
+        saveLatestOn: 'trigger',
         snapshotTrigger: triggerSpy,
       })
       sessionManager.registerCallbacks(registry)
@@ -396,7 +396,7 @@ describe('SessionManager', () => {
         sessionId: 'test-session',
         agentId: 'test-agent',
         storage: { snapshot: storage },
-        saveLatestOn: 'never',
+        saveLatestOn: 'trigger',
         snapshotTrigger: triggerSpy,
       })
       sessionManager.registerCallbacks(registry)
@@ -419,7 +419,7 @@ describe('SessionManager', () => {
         sessionId: 'test-session',
         agentId: 'test-agent',
         storage: { snapshot: storage },
-        saveLatestOn: 'never',
+        saveLatestOn: 'trigger',
         snapshotTrigger: () => true,
       })
       sessionManager.registerCallbacks(registry)
@@ -443,7 +443,7 @@ describe('SessionManager', () => {
         sessionId: 'test-session',
         agentId: 'test-agent',
         storage: { snapshot: storage },
-        saveLatestOn: 'never',
+        saveLatestOn: 'trigger',
         snapshotTrigger: ({ turnCount }) => turnCount % 2 === 0,
       })
       sessionManager.registerCallbacks(registry)
@@ -465,7 +465,7 @@ describe('SessionManager', () => {
         sessionId: 'test-session',
         agentId: 'test-agent',
         storage: { snapshot: storage },
-        saveLatestOn: 'never',
+        saveLatestOn: 'trigger',
         snapshotTrigger: ({ agentData }) => agentData.messages.length >= 2,
       })
       sessionManager.registerCallbacks(registry)
@@ -490,7 +490,7 @@ describe('SessionManager', () => {
         sessionId: 'test-session',
         agentId: 'test-agent',
         storage: { snapshot: storage },
-        saveLatestOn: 'never',
+        saveLatestOn: 'trigger',
         snapshotTrigger: ({ agentData }) => (agentData.state as AgentState).get('checkpoint') === true,
       })
       sessionManager.registerCallbacks(registry)
@@ -522,7 +522,7 @@ describe('SessionManager', () => {
         sessionId: 'test-session',
         agentId: 'test-agent',
         storage: { snapshot: storage },
-        saveLatestOn: 'never',
+        saveLatestOn: 'trigger',
         snapshotTrigger: triggerSpy,
       })
       sessionManager.registerCallbacks(registry)

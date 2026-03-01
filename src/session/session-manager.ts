@@ -14,9 +14,9 @@ import { takeSnapshot, loadSnapshot } from '../agent/snapshot.js'
  * Controls when `snapshot_latest` is saved automatically.
  * - `'message'`: after every message added to the conversation
  * - `'invocation'`: after every agent invocation completes
- * - `'never'`: only when a `snapshotTrigger` fires (or manually via `saveSnapshot`)
+ * - `'trigger'`: only when a `snapshotTrigger` fires (or manually via `saveSnapshot`)
  */
-export type SaveLatestStrategy = 'message' | 'invocation' | 'never'
+export type SaveLatestStrategy = 'message' | 'invocation' | 'trigger'
 
 export interface SessionManagerConfig {
   /** Pluggable storage backends for snapshot persistence. Defaults to FileStorage in the OS temp directory. */
