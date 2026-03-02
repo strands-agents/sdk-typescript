@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import type { Span, SpanAttributeValue } from '@opentelemetry/api'
-import { SpanStatusCode, trace } from '@opentelemetry/api'
+import { SpanStatusCode, trace, context } from '@opentelemetry/api'
 import { Tracer } from '../tracer.js'
 import { Message, TextBlock, ToolResultBlock, ToolUseBlock } from '../../types/messages.js'
 import { MockSpan, eventAttr } from '../../__fixtures__/mock-span.js'
@@ -9,7 +9,7 @@ import { textMessage } from '../../__fixtures__/agent-helpers.js'
 // Partial mock: keep real SpanStatusCode etc., replace context and trace
 vi.mock('@opentelemetry/api', async (importOriginal) => ({
   ...(await importOriginal()),
-  context: { active: vi.fn(() => ({})) },
+  context: { active: vi.fn(() => ({})), with: vi.fn((_ctx: unknown, fn: () => unknown) => fn()) },
   trace: {
     getTracer: vi.fn(),
     setSpan: vi.fn(),
@@ -611,6 +611,40 @@ describe('Tracer', () => {
       const tracer = new Tracer()
 
       expect(() => tracer.endAgentLoopSpan(null)).not.toThrow()
+    })
+  })
+
+  describe('withSpanContext', () => {
+    it('executes callback directly when span is null', () => {
+      const tracer = new Tracer()
+      const fn = vi.fn(() => 'result')
+
+      const result = tracer.withSpanContext(null, fn)
+
+      expect(result).toBe('result')
+      expect(fn).toHaveBeenCalledOnce()
+      expect(context.with).not.toHaveBeenCalled()
+    })
+
+    it('executes callback within span context when span is provided', () => {
+      const tracer = new Tracer()
+      const span = tracer.startAgentSpan({ messages: [textMessage('user', 'Hi')], agentName: 'agent' })
+      const mockContext = { spanContext: true }
+      vi.mocked(trace.setSpan).mockReturnValue(mockContext as never)
+
+      tracer.withSpanContext(span, () => 'inside')
+
+      expect(trace.setSpan).toHaveBeenCalledWith({}, span)
+      expect(context.with).toHaveBeenCalledWith(mockContext, expect.any(Function))
+    })
+
+    it('propagates return value from callback', () => {
+      const tracer = new Tracer()
+      const span = tracer.startAgentSpan({ messages: [textMessage('user', 'Hi')], agentName: 'agent' })
+
+      const result = tracer.withSpanContext(span, () => 42)
+
+      expect(result).toBe(42)
     })
   })
 
