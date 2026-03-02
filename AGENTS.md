@@ -19,16 +19,15 @@ sdk-typescript/
 ├── src/                          # Source code (all production code)
 │   ├── __tests__/                # Unit tests for root-level source files
 │   │   ├── errors.test.ts        # Tests for error classes
-│   │   └── index.test.ts         # Tests for main entry point
+│   │   ├── index.test.ts         # Tests for main entry point
+│   │   └── user-state.test.ts    # Tests for user state
 │   │
 │   ├── agent/                    # Agent loop and streaming
 │   │   ├── __tests__/            # Unit tests for agent loop
 │   │   │   ├── agent.test.ts     # Tests for agent implementation
-│   │   │   ├── state.test.ts     # Tests for agent state
 │   │   │   └── printer.test.ts   # Tests for printer
 │   │   ├── agent.ts              # Core agent implementation
 │   │   ├── printer.ts            # Agent output printing
-│   │   ├── state.ts              # Agent state implementation
 │   │   └── streaming.ts          # Agent streaming event types
 │   │
 │   ├── conversation-manager/ # Conversation management implementations
@@ -84,6 +83,7 @@ sdk-typescript/
 │   │
 │   ├── mcp.ts                    # MCP client implementation
 │   ├── errors.ts                 # Custom error classes
+│   ├── user-state.ts             # User state implementation
 │   └── index.ts                  # Main SDK entry point (single export point)
 │
 ├── vended_tools/                  # Optional vended tools (not part of core SDK)
