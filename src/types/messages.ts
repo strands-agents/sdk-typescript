@@ -371,6 +371,12 @@ export class ToolResultBlock implements ToolResultBlockData, JSONSerializable<{ 
         return new TextBlock(contentItem.text)
       } else if ('json' in contentItem) {
         return new JsonBlock(contentItem)
+      } else if ('image' in contentItem) {
+        return ImageBlock.fromJSON(contentItem as { image: ImageBlockData })
+      } else if ('document' in contentItem) {
+        return DocumentBlock.fromJSON(contentItem as { document: DocumentBlockData })
+      } else if ('video' in contentItem) {
+        return VideoBlock.fromJSON(contentItem as { video: VideoBlockData })
       } else {
         throw new Error('Unknown ToolResultContentData type')
       }

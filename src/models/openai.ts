@@ -774,7 +774,9 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
    * @param imageBlock - Image block to format
    * @returns OpenAI image_url content part, or undefined if unsupported
    */
-  private _formatImageBlock(imageBlock: ImageBlock): OpenAI.Chat.Completions.ChatCompletionContentPartImage | undefined {
+  private _formatImageBlock(
+    imageBlock: ImageBlock
+  ): OpenAI.Chat.Completions.ChatCompletionContentPartImage | undefined {
     if (imageBlock.source.type === 'imageSourceBytes') {
       const base64 = encodeBase64(imageBlock.source.bytes)
       const mimeType = getMimeType(imageBlock.format) || `image/${imageBlock.format}`
