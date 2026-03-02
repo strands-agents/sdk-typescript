@@ -25,7 +25,7 @@ import { Model } from '../models/model.js'
 import type { BaseModelConfig, StreamOptions } from '../models/model.js'
 import { isModelStreamEvent } from '../models/streaming.js'
 import { ToolRegistry } from '../registry/tool-registry.js'
-import { AgentState } from './state.js'
+import { UserState } from '../user-state.js'
 import type { AgentData } from '../types/agent.js'
 import { AgentPrinter, getDefaultAppender, type Printer } from './printer.js'
 import type { HookProvider } from '../hooks/types.js'
@@ -166,10 +166,10 @@ export class Agent implements AgentData {
    */
   public readonly messages: Message[]
   /**
-   * Agent state storage accessible to tools and application logic.
+   * User state storage accessible to tools and application logic.
    * State is not passed to the model during inference.
    */
-  public readonly state: AgentState
+  public readonly state: UserState
   /**
    * Conversation manager for handling message history and context overflow.
    */
@@ -218,7 +218,7 @@ export class Agent implements AgentData {
   constructor(config?: AgentConfig) {
     // Initialize public fields
     this.messages = (config?.messages ?? []).map((msg) => (msg instanceof Message ? msg : Message.fromMessageData(msg)))
-    this.state = new AgentState(config?.state)
+    this.state = new UserState(config?.state)
     this.conversationManager = config?.conversationManager ?? new SlidingWindowConversationManager({ windowSize: 40 })
     this.name = config?.name ?? DEFAULT_AGENT_NAME
     this.agentId = config?.agentId ?? DEFAULT_AGENT_ID

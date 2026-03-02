@@ -6,7 +6,7 @@
 import type { Tool, ToolContext } from '../tools/tool.js'
 import { ToolResultBlock } from '../types/messages.js'
 import type { JSONValue } from '../types/json.js'
-import { AgentState } from '../agent/state.js'
+import { UserState } from '../user-state.js'
 import type { PlainToolResultBlock } from './slim-types.js'
 
 /**
@@ -23,7 +23,7 @@ export function createMockContext(
   return {
     toolUse,
     agent: {
-      state: new AgentState(agentState),
+      state: new UserState(agentState),
       messages: [],
     },
   }
