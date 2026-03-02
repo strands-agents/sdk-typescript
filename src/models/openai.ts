@@ -584,35 +584,9 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
                 break
               }
               case 'imageBlock': {
-                const imageBlock = block as ImageBlock
-                switch (imageBlock.source.type) {
-                  case 'imageSourceUrl': {
-                    contentParts.push({
-                      type: 'image_url',
-                      image_url: {
-                        url: imageBlock.source.url,
-                      },
-                    })
-                    break
-                  }
-                  case 'imageSourceBytes': {
-                    const base64 = encodeBase64(imageBlock.source.bytes)
-                    const mimeType = getMimeType(imageBlock.format) || `image/${imageBlock.format}`
-
-                    contentParts.push({
-                      type: 'image_url',
-                      image_url: {
-                        url: `data:${mimeType};base64,${base64}`,
-                      },
-                    })
-                    break
-                  }
-                  default: {
-                    console.warn(
-                      `OpenAI ChatCompletions API does not support image block type: ${imageBlock.source.type}.`
-                    )
-                    break
-                  }
+                const formatted = this._formatImageBlock(block as ImageBlock)
+                if (formatted) {
+                  contentParts.push(formatted)
                 }
                 break
               }
@@ -795,12 +769,32 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
   }
 
   /**
-   * Splits a tool result into text-only content and media content.
-   * OpenAI API restricts media to user role messages only.
+   * Formats an image block to OpenAI image_url format.
    *
-   * @param toolResult - Tool result block to split
-   * @returns Tuple of [textContent, mediaContentParts]
+   * @param imageBlock - Image block to format
+   * @returns OpenAI image_url content part, or undefined if unsupported
    */
+  private _formatImageBlock(imageBlock: ImageBlock): OpenAI.Chat.Completions.ChatCompletionContentPartImage | undefined {
+    if (imageBlock.source.type === 'imageSourceBytes') {
+      const base64 = encodeBase64(imageBlock.source.bytes)
+      const mimeType = getMimeType(imageBlock.format) || `image/${imageBlock.format}`
+      return {
+        type: 'image_url',
+        image_url: {
+          url: `data:${mimeType};base64,${base64}`,
+        },
+      }
+    } else if (imageBlock.source.type === 'imageSourceUrl') {
+      return {
+        type: 'image_url',
+        image_url: {
+          url: imageBlock.source.url,
+        },
+      }
+    }
+    return undefined
+  }
+
   /**
    * Splits tool result content into text and image parts.
    * OpenAI API restricts images to user role messages only.
@@ -830,23 +824,9 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
           }
         }
       } else if (c.type === 'imageBlock') {
-        const imageBlock = c as ImageBlock
-        if (imageBlock.source.type === 'imageSourceBytes') {
-          const base64 = encodeBase64(imageBlock.source.bytes)
-          const mimeType = getMimeType(imageBlock.format) || `image/${imageBlock.format}`
-          imageParts.push({
-            type: 'image_url',
-            image_url: {
-              url: `data:${mimeType};base64,${base64}`,
-            },
-          })
-        } else if (imageBlock.source.type === 'imageSourceUrl') {
-          imageParts.push({
-            type: 'image_url',
-            image_url: {
-              url: imageBlock.source.url,
-            },
-          })
+        const formatted = this._formatImageBlock(c as ImageBlock)
+        if (formatted) {
+          imageParts.push(formatted)
         }
       } else if (c.type === 'documentBlock') {
         logger.warn('block_type=<documentBlock> | documents not supported in openai tool results, skipping')
