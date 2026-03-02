@@ -273,12 +273,7 @@ export class ToolUseBlock implements ToolUseBlockData, JSONSerializable<{ toolUs
  *
  * This is a discriminated union where the object key determines the content format.
  */
-export type ToolResultContentData =
-  | TextBlockData
-  | JsonBlockData
-  | ImageBlockData
-  | VideoBlockData
-  | DocumentBlockData
+export type ToolResultContentData = TextBlockData | JsonBlockData | ImageBlockData | VideoBlockData | DocumentBlockData
 
 export type ToolResultContent = TextBlock | JsonBlock | ImageBlock | VideoBlock | DocumentBlock
 
