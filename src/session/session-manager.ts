@@ -35,6 +35,21 @@ export interface SessionManagerConfig {
   snapshotTrigger?: SnapshotTriggerCallback
 }
 
+/**
+ * Manages session persistence for agents, enabling conversation state
+ * to be saved and restored across invocations using pluggable storage backends.
+ *
+ * @example
+ * ```typescript
+ * import { SessionManager, FileStorage } from '@strands-agents/sdk/session'
+ *
+ * const session = new SessionManager({
+ *   sessionId: 'my-session',
+ *   storage: { snapshot: new FileStorage() },
+ * })
+ * const agent = new Agent({ sessionManager: session })
+ * ```
+ */
 export class SessionManager implements HookProvider {
   private readonly _location: SnapshotLocation
   private readonly _storage: { snapshot: SnapshotStorage }
