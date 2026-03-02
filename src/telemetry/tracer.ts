@@ -172,6 +172,10 @@ export class Tracer {
    * @param options - Options for ending the span including response, error, and usage data
    */
   endAgentSpan(span: Span | null, options: EndAgentSpanOptions = {}): void {
+    // Clear stale state from any previous invocation
+    this._agentSpan = undefined
+    this._loopSpan = undefined
+
     if (!span) return
 
     const { response, error, accumulatedUsage, stopReason } = options
@@ -182,7 +186,6 @@ export class Tracer {
       if (response !== undefined) this._addResponseEvent(span, response, stopReason)
 
       this._endSpan(span, attributes, error)
-      this._agentSpan = undefined
     } catch (err) {
       logger.warn(`error=<${err}> | failed to end agent span`)
     }

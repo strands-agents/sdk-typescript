@@ -126,6 +126,23 @@ describe('MCP Integration', () => {
       })
     })
 
+    it('merges trace context with existing _meta field', async () => {
+      mockActiveSpan()
+      const tool = new McpTool({ name: 'calc', description: '', inputSchema: {}, client })
+      sdkClientMock.experimental.tasks.callToolStream.mockReturnValue(createMockCallToolStream({ content: [] })())
+
+      await client.callTool(tool, { op: 'add', _meta: { progressToken: 'tok-1' } })
+
+      const callArgs = sdkClientMock.experimental.tasks.callToolStream.mock.calls[0]![0]
+      expect(callArgs.arguments).toStrictEqual({
+        op: 'add',
+        _meta: {
+          progressToken: 'tok-1',
+          traceparent: '00-1234567890abcdef1234567890abcdef-1234567890abcdef-01',
+        },
+      })
+    })
+
     it('passes args unchanged when no active span exists', async () => {
       const tool = new McpTool({ name: 'calc', description: '', inputSchema: {}, client })
       sdkClientMock.experimental.tasks.callToolStream.mockReturnValue(createMockCallToolStream({ content: [] })())

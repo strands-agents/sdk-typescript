@@ -163,9 +163,15 @@ function injectTraceContext(args: JSONValue): JSONValue {
     const carrier: ContextCarrier = {}
     propagation.inject(currentContext, carrier)
 
+    const existingMeta = (args as Record<string, unknown>)._meta
+    const mergedMeta =
+      existingMeta && typeof existingMeta === 'object' && !Array.isArray(existingMeta)
+        ? { ...existingMeta, ...carrier }
+        : carrier
+
     return {
       ...(args as Record<string, unknown>),
-      _meta: carrier as unknown as JSONValue,
+      _meta: mergedMeta as unknown as JSONValue,
     }
   } catch (error) {
     logger.warn(`error=<${error}> | failed to inject trace context into mcp tool call args`)
