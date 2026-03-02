@@ -124,8 +124,20 @@ export class AgentState implements StateSerializable {
   /**
    * Get a copy of all state as an object.
    *
+   * @typeParam TState - Optional state interface type for typed returns
    * @returns Deep copy of all state
+   *
+   * @example
+   * ```typescript
+   * // Typed usage
+   * const all = state.getAll<AppState>()   // AppState
+   *
+   * // Untyped usage
+   * const raw = state.getAll()             // Record<string, JSONValue>
+   * ```
    */
+  getAll<TState extends Record<string, JSONValue>>(): TState
+  getAll(): Record<string, JSONValue>
   getAll(): Record<string, JSONValue> {
     return deepCopy(this._state) as Record<string, JSONValue>
   }
