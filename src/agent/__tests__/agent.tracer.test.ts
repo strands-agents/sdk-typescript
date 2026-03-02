@@ -15,6 +15,7 @@ interface MockTracerInstance {
   endModelInvokeSpan: MockInstance
   startToolCallSpan: MockInstance
   endToolCallSpan: MockInstance
+  withSpanContext: MockInstance
 }
 
 vi.mock('../../telemetry/tracer.js', () => ({
@@ -28,6 +29,7 @@ vi.mock('../../telemetry/tracer.js', () => ({
       endModelInvokeSpan: vi.fn(),
       startToolCallSpan: vi.fn().mockReturnValue({ mock: 'toolSpan' }),
       endToolCallSpan: vi.fn(),
+      withSpanContext: vi.fn((_span, fn) => fn()),
     }
   }),
 }))

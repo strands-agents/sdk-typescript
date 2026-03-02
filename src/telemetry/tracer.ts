@@ -333,6 +333,19 @@ export class Tracer {
       logger.warn(`error=<${err}> | failed to end tool call span`)
     }
   }
+  /**
+   * Runs a callback with the given span set as the active OpenTelemetry context.
+   * Downstream code (e.g., MCP clients) can read the span from context.active()
+   * for distributed trace propagation. No-ops if span is null.
+   *
+   * @param span - The span to set as active, or null if span creation failed
+   * @param fn - The callback to run within the span's context
+   * @returns The return value of the callback
+   */
+  withSpanContext<T>(span: Span | null, fn: () => T): T {
+    if (!span) return fn()
+    return context.with(trace.setSpan(context.active(), span), fn)
+  }
 
   /**
    * Start an agent loop cycle span.

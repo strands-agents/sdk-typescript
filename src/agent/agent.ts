@@ -801,7 +801,7 @@ export class Agent implements AgentData {
           content: [new TextBlock(`Tool '${toolUseBlock.name}' not found in registry`)],
         })
       } else {
-        // Execute tool and collect result
+        // Execute tool within the tool span context
         const toolContext: ToolContext = {
           toolUse: {
             name: toolUseBlock.name,
@@ -815,11 +815,13 @@ export class Agent implements AgentData {
           // Manually iterate tool stream to wrap each ToolStreamEvent in ToolStreamUpdateEvent.
           // This keeps the tool authoring interface unchanged — tools construct ToolStreamEvent
           // without knowledge of agents or hooks, and we wrap at the boundary.
-          const toolGenerator = tool.stream(toolContext)
-          let toolNext = await toolGenerator.next()
+          // Tool execution is ran within the tool span's context so that
+          // downstream calls (e.g., MCP clients) can propagate trace context
+          const toolGenerator = this._tracer.withSpanContext(toolSpan, () => tool.stream(toolContext))
+          let toolNext = await this._tracer.withSpanContext(toolSpan, () => toolGenerator.next())
           while (!toolNext.done) {
             yield new ToolStreamUpdateEvent({ agent: this, event: toolNext.value })
-            toolNext = await toolGenerator.next()
+            toolNext = await this._tracer.withSpanContext(toolSpan, () => toolGenerator.next())
           }
           const result = toolNext.value
 
