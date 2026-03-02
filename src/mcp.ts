@@ -5,6 +5,7 @@ import { context, propagation, trace } from '@opentelemetry/api'
 import type { JSONSchema, JSONValue } from './types/json.js'
 import { McpTool } from './tools/mcp-tool.js'
 import { logger } from './logging/index.js'
+import { instrumentMcpClient } from './tools/mcp-instrumentation.js'
 
 /** Temporary placeholder for RuntimeConfig */
 export interface RuntimeConfig {
@@ -79,6 +80,11 @@ export class McpClient {
     })
 
     this._disableMcpInstrumentation = args.disableMcpInstrumentation ?? false
+
+    // Skip MCP instrumentation when disabled via config
+    if (!args.disableMcpInstrumentation) {
+      instrumentMcpClient(this)
+    }
   }
 
   get client(): Client {

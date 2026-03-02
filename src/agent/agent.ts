@@ -153,6 +153,12 @@ export type AgentConfig = {
  */
 export type InvokeArgs = string | ContentBlock[] | ContentBlockData[] | Message[] | MessageData[]
 
+/** Fallback name used when no agent name is provided in the config. */
+const DEFAULT_AGENT_NAME = 'Strands Agent'
+
+/** Fallback agent ID used when no agent ID is provided in the config. */
+const DEFAULT_AGENT_ID = 'default'
+
 /**
  * Options for a single agent invocation.
  */

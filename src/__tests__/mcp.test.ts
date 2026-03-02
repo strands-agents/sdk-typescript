@@ -3,6 +3,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
 import { McpClient } from '../mcp.js'
 import { McpTool } from '../tools/mcp-tool.js'
+import { instrumentMcpClient } from '../tools/mcp-instrumentation.js'
 import { JsonBlock, type TextBlock, type ToolResultBlock } from '../types/messages.js'
 import type { AgentData } from '../types/agent.js'
 import type { ToolContext } from '../tools/tool.js'
@@ -18,6 +19,10 @@ function createMockCallToolStream(result: unknown) {
     yield { type: 'result', result }
   }
 }
+
+vi.mock('../tools/mcp-instrumentation.js', () => ({
+  instrumentMcpClient: vi.fn(),
+}))
 
 vi.mock('@modelcontextprotocol/sdk/client/index.js', () => ({
   Client: vi.fn(function () {
@@ -195,6 +200,18 @@ describe('MCP Integration', () => {
 
       const callArgs = noInstrSdkMock.callTool.mock.calls[0]![0]
       expect(callArgs.arguments).toStrictEqual({ op: 'add' })
+    })
+
+    it('applies MCP instrumentation by default', () => {
+      expect(instrumentMcpClient).toHaveBeenCalledWith(client)
+    })
+
+    it('skips MCP instrumentation when disableMcpInstrumentation config is true', () => {
+      vi.mocked(instrumentMcpClient).mockClear()
+
+      new McpClient({ applicationName: 'TestApp', transport: mockTransport, disableMcpInstrumentation: true })
+
+      expect(instrumentMcpClient).not.toHaveBeenCalled()
     })
 
     it('manages connection state lazily', async () => {
