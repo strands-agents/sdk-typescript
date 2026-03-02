@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { Queue } from '../queue.js'
-import type { QueueItem } from '../queue.js'
+import type { QueueData } from '../queue.js'
 import type { Node } from '../nodes.js'
 import { NodeResult, Status } from '../state.js'
 
@@ -14,28 +14,58 @@ describe('Queue', () => {
   })
 
   describe('push and shift', () => {
-    it('dequeues items in FIFO order', () => {
-      const item1: QueueItem = {
+    it('dequeues in FIFO order', () => {
+      const data1: QueueData = {
         type: 'result',
         node: mockNode,
         result: new NodeResult({ nodeId: 'node-1', status: Status.COMPLETED, duration: 10 }),
       }
-      const item2: QueueItem = { type: 'error', node: mockNode, error: new Error('fail') }
+      const data2: QueueData = { type: 'error', node: mockNode, error: new Error('fail') }
 
-      queue.push(item1)
-      queue.push(item2)
+      queue.push(data1)
+      queue.push(data2)
 
-      expect(queue.shift()).toBe(item1)
-      expect(queue.shift()).toBe(item2)
+      expect(queue.shift()?.data).toBe(data1)
+      expect(queue.shift()?.data).toBe(data2)
     })
 
     it('returns undefined when empty', () => {
       expect(queue.shift()).toBeUndefined()
     })
+
+    it('provides a no-op ack for fire-and-forget pushes', () => {
+      queue.push({ type: 'error', node: mockNode, error: new Error('a') })
+      const entry = queue.shift()!
+      expect(() => entry.ack()).not.toThrow()
+    })
+  })
+
+  describe('send', () => {
+    it('resolves when consumer calls ack', async () => {
+      const data: QueueData = { type: 'error', node: mockNode, error: new Error('a') }
+      let resolved = false
+
+      const waiting = queue.send(data).then(() => {
+        resolved = true
+      })
+
+      await Promise.resolve()
+      expect(resolved).toBe(false)
+
+      const entry = queue.shift()!
+      expect(entry.data).toBe(data)
+
+      await Promise.resolve()
+      expect(resolved).toBe(false)
+
+      entry.ack()
+      await waiting
+      expect(resolved).toBe(true)
+    })
   })
 
   describe('size', () => {
-    it('reflects the current number of items', () => {
+    it('reflects the current number of entries', () => {
       expect(queue.size).toBe(0)
 
       queue.push({ type: 'error', node: mockNode, error: new Error('a') })
@@ -48,7 +78,7 @@ describe('Queue', () => {
   })
 
   describe('wait', () => {
-    it('resolves immediately when items are available', async () => {
+    it('resolves immediately when entries are available', async () => {
       queue.push({ type: 'error', node: mockNode, error: new Error('a') })
 
       await queue.wait()
@@ -56,7 +86,7 @@ describe('Queue', () => {
       expect(queue.size).toBe(1)
     })
 
-    it('blocks until an item is pushed', async () => {
+    it('blocks until data is pushed', async () => {
       let resolved = false
 
       const waiting = queue.wait().then(() => {
@@ -70,6 +100,28 @@ describe('Queue', () => {
 
       await waiting
       expect(resolved).toBe(true)
+    })
+
+    it('blocks until data is sent', async () => {
+      let resolved = false
+
+      const waiting = queue.wait().then(() => {
+        resolved = true
+      })
+
+      await Promise.resolve()
+      expect(resolved).toBe(false)
+
+      const data: QueueData = { type: 'error', node: mockNode, error: new Error('a') }
+      // Don't await send — it won't resolve until ack
+      const sending = queue.send(data)
+
+      await waiting
+      expect(resolved).toBe(true)
+
+      // Clean up: ack so send resolves
+      queue.shift()!.ack()
+      await sending
     })
   })
 })

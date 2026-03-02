@@ -4,7 +4,7 @@ import type { InvokeArgs } from '../../agent/agent.js'
 import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
 import { collectGenerator } from '../../__fixtures__/model-test-helpers.js'
 import { TextBlock } from '../../types/messages.js'
-import { MultiAgentState, Status } from '../state.js'
+import { Status } from '../state.js'
 import type { MultiAgentStreamEvent } from '../events.js'
 import { AgentNode, Node } from '../nodes.js'
 import type { NodeResultUpdate } from '../state.js'
@@ -13,34 +13,22 @@ import type { NodeResultUpdate } from '../state.js'
  * Concrete Node subclass for testing the abstract base class.
  */
 class TestNode extends Node {
-  private readonly _fn: (
-    args: InvokeArgs,
-    state: MultiAgentState
-  ) => AsyncGenerator<MultiAgentStreamEvent, NodeResultUpdate, undefined>
+  private readonly _fn: (args: InvokeArgs) => AsyncGenerator<MultiAgentStreamEvent, NodeResultUpdate, undefined>
 
   constructor(
     id: string,
-    fn: (args: InvokeArgs, state: MultiAgentState) => AsyncGenerator<MultiAgentStreamEvent, NodeResultUpdate, undefined>
+    fn: (args: InvokeArgs) => AsyncGenerator<MultiAgentStreamEvent, NodeResultUpdate, undefined>
   ) {
     super(id, {})
     this._fn = fn
   }
 
-  async *handle(
-    args: InvokeArgs,
-    state: MultiAgentState
-  ): AsyncGenerator<MultiAgentStreamEvent, NodeResultUpdate, undefined> {
-    return yield* this._fn(args, state)
+  async *handle(args: InvokeArgs): AsyncGenerator<MultiAgentStreamEvent, NodeResultUpdate, undefined> {
+    return yield* this._fn(args)
   }
 }
 
 describe('Node', () => {
-  let state: MultiAgentState
-
-  beforeEach(() => {
-    state = new MultiAgentState()
-  })
-
   describe('stream', () => {
     it('returns COMPLETED NodeResult on successful execution', async () => {
       const content = [new TextBlock('result')]
@@ -49,7 +37,7 @@ describe('Node', () => {
         return { content }
       })
 
-      const { result } = await collectGenerator(node.stream([], state))
+      const { result } = await collectGenerator(node.stream([]))
 
       expect(result).toEqual({
         type: 'nodeResult',
@@ -67,7 +55,7 @@ describe('Node', () => {
         throw new Error('boom')
       })
 
-      const { result } = await collectGenerator(node.stream([], state))
+      const { result } = await collectGenerator(node.stream([]))
 
       expect(result).toEqual({
         type: 'nodeResult',
@@ -85,18 +73,16 @@ describe('Node', () => {
 describe('AgentNode', () => {
   let agent: Agent
   let node: AgentNode
-  let state: MultiAgentState
 
   beforeEach(() => {
     const model = new MockMessageModel().addTurn(new TextBlock('reply'))
     agent = new Agent({ model, printer: false, state: { key1: 'value1' } })
     node = new AgentNode({ id: 'agent-1', agent })
-    state = new MultiAgentState()
   })
 
   describe('handle', () => {
     it('wraps agent events and returns content', async () => {
-      const { items, result } = await collectGenerator(node.stream([new TextBlock('prompt')], state))
+      const { items, result } = await collectGenerator(node.stream([new TextBlock('prompt')]))
 
       const streamEvents = items.filter((e) => e.type === 'nodeStreamUpdateEvent')
       expect(streamEvents.length).toBeGreaterThan(0)
@@ -125,7 +111,7 @@ describe('AgentNode', () => {
       const messagesBefore = [...agent.messages]
       const stateBefore = agent.state.getAll()
 
-      await collectGenerator(node.stream([new TextBlock('prompt')], state))
+      await collectGenerator(node.stream([new TextBlock('prompt')]))
 
       expect(agent.messages).toStrictEqual(messagesBefore)
       expect(agent.state.getAll()).toStrictEqual(stateBefore)
