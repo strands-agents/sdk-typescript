@@ -6,7 +6,7 @@
  *
  * @example
  * ```typescript
- * import { FileStorage, SnapshotStorage } from '@strands/agents/session'
+ * import { FileStorage, SnapshotStorage } from '@strands-agents/sdk/session'
  *
  * const storage = new FileStorage('./sessions')
  * await storage.saveSnapshot({ sessionId, scope, isLatest: true, snapshot })
