@@ -20,7 +20,7 @@ sdk-typescript/
 │   ├── __tests__/                # Unit tests for root-level source files
 │   │   ├── errors.test.ts        # Tests for error classes
 │   │   ├── index.test.ts         # Tests for main entry point
-│   │   └── user-state.test.ts    # Tests for user state
+│   │   └── app-state.test.ts     # Tests for app state
 │   │
 │   ├── agent/                    # Agent loop and streaming
 │   │   ├── __tests__/            # Unit tests for agent loop
@@ -83,7 +83,7 @@ sdk-typescript/
 │   │
 │   ├── mcp.ts                    # MCP client implementation
 │   ├── errors.ts                 # Custom error classes
-│   ├── user-state.ts             # User state implementation
+│   ├── app-state.ts              # App state implementation
 │   └── index.ts                  # Main SDK entry point (single export point)
 │
 ├── vended_tools/                  # Optional vended tools (not part of core SDK)

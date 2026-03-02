@@ -8,8 +8,8 @@
 // Agent class
 export { Agent } from './agent/agent.js'
 
-// User state type
-export type { UserState } from './user-state.js'
+// App state
+export { AppState } from './app-state.js'
 
 // Agent types
 export type { AgentData } from './types/agent.js'

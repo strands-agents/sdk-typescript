@@ -6,7 +6,7 @@
 import type { Agent } from '../agent/agent.js'
 import { Message, TextBlock } from '../types/messages.js'
 import type { Role } from '../types/messages.js'
-import { UserState } from '../user-state.js'
+import { AppState } from '../app-state.js'
 import type { JSONValue } from '../types/json.js'
 
 /**
@@ -33,7 +33,7 @@ export interface MockAgentData {
 export function createMockAgent(data?: MockAgentData): Agent {
   return {
     messages: data?.messages ?? [],
-    state: new UserState(data?.state ?? {}),
+    state: new AppState(data?.state ?? {}),
   } as unknown as Agent
 }
 

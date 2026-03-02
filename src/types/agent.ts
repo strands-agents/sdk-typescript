@@ -1,4 +1,4 @@
-import type { UserState } from '../user-state.js'
+import type { AppState } from '../app-state.js'
 import type { Message, StopReason } from './messages.js'
 import type {
   BeforeInvocationEvent,
@@ -25,9 +25,9 @@ import type { z } from 'zod'
  */
 export interface AgentData {
   /**
-   * User state storage accessible to tools and application logic.
+   * App state storage accessible to tools and application logic.
    */
-  state: UserState
+  state: AppState
 
   /**
    * The conversation history of messages between user and assistant.

@@ -116,9 +116,9 @@ You can also use the notebook tool directly without an agent:
 
 ```typescript
 import { notebook } from '@strands-agents/sdk/vended_tools/notebook'
-import { UserState } from '@strands-agents/sdk'
+import { AppState } from '@strands-agents/sdk'
 
-const state = new UserState({ notebooks: {} })
+const state = new AppState({ notebooks: {} })
 const agent = { state }
 const context = {
   agent,

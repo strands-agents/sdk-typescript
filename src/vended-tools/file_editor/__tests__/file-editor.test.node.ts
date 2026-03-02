@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { fileEditor } from '../file-editor.js'
 import type { ToolContext } from '../../../index.js'
-import { UserState } from '../../../user-state.js'
+import { AppState } from '../../../app-state.js'
 import { promises as fs } from 'fs'
 import * as path from 'path'
 import { tmpdir } from 'os'
@@ -11,8 +11,8 @@ describe('fileEditor tool', () => {
   let context: ToolContext
 
   // Helper to create fresh state and context for each test
-  const createFreshContext = (): { state: UserState; context: ToolContext } => {
-    const agentState = new UserState({})
+  const createFreshContext = (): { state: AppState; context: ToolContext } => {
+    const agentState = new AppState({})
     const toolContext: ToolContext = {
       toolUse: {
         name: 'fileEditor',

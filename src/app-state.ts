@@ -2,7 +2,7 @@ import { deepCopy, deepCopyWithValidation, type JSONValue } from './types/json.j
 import type { StateSerializable } from './types/serializable.js'
 
 /**
- * User state provides key-value storage outside conversation context.
+ * App state provides key-value storage outside conversation context.
  * State is not passed to the model during inference but is accessible
  * by tools (via ToolContext) and application logic.
  *
@@ -11,16 +11,16 @@ import type { StateSerializable } from './types/serializable.js'
  *
  * @example
  * ```typescript
- * const state = new UserState({ userId: 'user-123' })
+ * const state = new AppState({ userId: 'user-123' })
  * state.set('sessionId', 'session-456')
  * const userId = state.get('userId') // 'user-123'
  * ```
  */
-export class UserState implements StateSerializable {
+export class AppState implements StateSerializable {
   private _state: Record<string, JSONValue>
 
   /**
-   * Creates a new UserState instance.
+   * Creates a new AppState instance.
    *
    * @param initialState - Optional initial state values
    * @throws Error if initialState is not JSON serializable
