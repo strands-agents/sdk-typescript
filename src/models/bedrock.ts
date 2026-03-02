@@ -37,7 +37,7 @@ import {
   VideoFormat,
   type BedrockRuntimeClientResolvedConfig,
 } from '@aws-sdk/client-bedrock-runtime'
-import { type BaseModelConfig, Model, type StreamOptions } from '../models/model.js'
+import { type BaseModelConfig, type CacheConfig, Model, type StreamOptions } from '../models/model.js'
 import type { ContentBlock, Message, StopReason, ToolUseBlock } from '../types/messages.js'
 import type { ImageSource, VideoSource, DocumentSource } from '../types/media.js'
 import type { ModelStreamEvent, ReasoningContentDelta, Usage } from '../models/streaming.js'
@@ -140,15 +140,23 @@ export interface BedrockModelConfig extends BaseModelConfig {
 
   /**
    * Cache point type for the system prompt.
+   * @deprecated Use cacheConfig instead
    * @see https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-caching.html
    */
   cachePrompt?: string
 
   /**
    * Cache point type for tools.
+   * @deprecated Use cacheConfig instead
    * @see https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-caching.html
    */
   cacheTools?: string
+
+  /**
+   * Configuration for prompt caching. Use CacheConfig with strategy="auto" for automatic caching.
+   * @see https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-caching.html
+   */
+  cacheConfig?: CacheConfig
 
   /**
    * Additional fields to include in the Bedrock request.
@@ -303,6 +311,17 @@ export class BedrockModel extends Model<BedrockModelConfig> {
   }
 
   /**
+   * Whether this model supports prompt caching.
+   * Returns true for Claude models on Bedrock.
+   *
+   * @returns True if the model supports caching
+   */
+  private _supportsCaching(): boolean {
+    const modelId = this._config.modelId?.toLowerCase() ?? ''
+    return modelId.includes('claude') || modelId.includes('anthropic')
+  }
+
+  /**
    * Updates the model configuration.
    * Merges the provided configuration with existing settings.
    *
@@ -423,6 +442,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
         const system: BedrockContentBlock[] = [{ text: options.systemPrompt }]
 
         if (this._config.cachePrompt) {
+          logger.warn('cachePrompt is deprecated, use cacheConfig instead')
           system.push({ cachePoint: { type: this._config.cachePrompt as 'default' } })
         }
 
@@ -451,6 +471,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
       )
 
       if (this._config.cacheTools) {
+        logger.warn('cacheTools is deprecated, use cacheConfig instead')
         tools.push({
           cachePoint: { type: this._config.cacheTools as 'default' },
         } as Tool)
@@ -503,7 +524,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
    * @returns Bedrock-formatted messages
    */
   private _formatMessages(messages: Message[]): BedrockMessage[] {
-    return messages.reduce<BedrockMessage[]>((acc, message) => {
+    const formattedMessages = messages.reduce<BedrockMessage[]>((acc, message) => {
       const content = message.content
         .map((block) => this._formatContentBlock(block))
         .filter((block) => block !== undefined)
@@ -514,6 +535,64 @@ export class BedrockModel extends Model<BedrockModelConfig> {
 
       return acc
     }, [])
+
+    // Inject cache point if cacheConfig is set with strategy="auto"
+    if (this._config.cacheConfig?.strategy === 'auto') {
+      if (this._supportsCaching()) {
+        this._injectCachePoint(formattedMessages)
+      } else {
+        logger.warn(
+          `model_id=<${this._config.modelId}> | cache_config is enabled but this model does not support caching`
+        )
+      }
+    }
+
+    return formattedMessages
+  }
+
+  /**
+   * Inject a cache point at the end of the last assistant message.
+   * Strips any existing cache points from all messages first.
+   *
+   * @param messages - List of messages to inject cache point into (modified in place)
+   */
+  private _injectCachePoint(messages: BedrockMessage[]): void {
+    if (messages.length === 0) {
+      return
+    }
+
+    let lastAssistantIdx: number | null = null
+
+    // Strip existing cache points and find last assistant message
+    for (let msgIdx = 0; msgIdx < messages.length; msgIdx++) {
+      const msg = messages[msgIdx]
+      if (!msg) continue
+
+      const content = msg.content ?? []
+
+      for (let blockIdx = content.length - 1; blockIdx >= 0; blockIdx--) {
+        const block = content[blockIdx]
+        if (block && 'cachePoint' in block) {
+          content.splice(blockIdx, 1)
+          logger.warn(
+            `msg_idx=<${msgIdx}>, block_idx=<${blockIdx}> | stripped existing cache point (auto mode manages cache points)`
+          )
+        }
+      }
+
+      if (msg.role === 'assistant') {
+        lastAssistantIdx = msgIdx
+      }
+    }
+
+    // Add cache point to last assistant message
+    if (lastAssistantIdx !== null) {
+      const lastMsg = messages[lastAssistantIdx]
+      if (lastMsg && lastMsg.content) {
+        lastMsg.content.push({ cachePoint: { type: 'default' } })
+        logger.debug(`msg_idx=<${lastAssistantIdx}> | added cache point to last assistant message`)
+      }
+    }
   }
 
   /**
