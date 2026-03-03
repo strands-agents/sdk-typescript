@@ -13,3 +13,6 @@ export type { MultiAgentStreamEvent } from './events.js'
 
 export { Edge } from './edge.js'
 export type { EdgeHandler, EdgeDefinition } from './edge.js'
+
+export { Graph, GraphError } from './graph.js'
+export type { GraphOptions, GraphResult } from './graph.js'
