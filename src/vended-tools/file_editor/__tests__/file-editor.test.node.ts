@@ -12,16 +12,16 @@ describe('fileEditor tool', () => {
 
   // Helper to create fresh state and context for each test
   const createFreshContext = (): { state: AppState; context: ToolContext } => {
-    const agentState = new AppState({})
+    const appState = new AppState({})
     const toolContext: ToolContext = {
       toolUse: {
         name: 'fileEditor',
         toolUseId: 'test-id',
         input: {},
       },
-      agent: { state: agentState, messages: [] },
+      agent: { state: appState, messages: [] },
     }
-    return { state: agentState, context: toolContext }
+    return { state: appState, context: toolContext }
   }
 
   // Helper to create a test file
