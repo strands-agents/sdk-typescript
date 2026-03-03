@@ -16,7 +16,9 @@ import type {
   ToolResultEvent,
   ToolStreamUpdateEvent,
   AgentResultEvent,
+  InterruptEvent,
 } from '../hooks/events.js'
+import type { Interrupt } from '../interrupt.js'
 import type { z } from 'zod'
 
 /**
@@ -57,11 +59,25 @@ export class AgentResult {
    */
   readonly structuredOutput?: z.output<z.ZodType>
 
-  constructor(data: { stopReason: StopReason; lastMessage: Message; structuredOutput?: z.output<z.ZodType> }) {
+  /**
+   * Interrupts that paused the agent loop, if stopReason is "interrupt".
+   * The caller should provide responses and re-invoke the agent to resume.
+   */
+  readonly interrupts?: Interrupt[]
+
+  constructor(data: {
+    stopReason: StopReason
+    lastMessage: Message
+    structuredOutput?: z.output<z.ZodType>
+    interrupts?: Interrupt[]
+  }) {
     this.stopReason = data.stopReason
     this.lastMessage = data.lastMessage
     if (data.structuredOutput !== undefined) {
       this.structuredOutput = data.structuredOutput
+    }
+    if (data.interrupts !== undefined) {
+      this.interrupts = data.interrupts
     }
   }
 
@@ -124,3 +140,4 @@ export type AgentStreamEvent =
   | AfterToolCallEvent
   | MessageAddedEvent
   | AgentResultEvent
+  | InterruptEvent
