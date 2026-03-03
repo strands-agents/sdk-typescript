@@ -21,6 +21,17 @@ import {
 import { MaxTokensError, ModelError, normalizeError } from '../errors.js'
 
 /**
+ * Configuration for prompt caching.
+ */
+export interface CacheConfig {
+  /**
+   * Caching strategy to use.
+   * - "auto": Automatically inject cachePoint at optimal positions
+   */
+  strategy: 'auto'
+}
+
+/**
  * Base configuration interface for all model providers.
  *
  * This interface defines the common configuration properties that all
