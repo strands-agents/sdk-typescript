@@ -149,6 +149,16 @@ export type AgentConfig = {
  */
 export type InvokeArgs = string | ContentBlock[] | ContentBlockData[] | Message[] | MessageData[]
 
+/**
+ * Options for a single agent invocation.
+ */
+export interface InvokeOptions {
+  /**
+   * Zod schema for structured output validation, overriding the constructor-provided schema for this invocation only.
+   */
+  structuredOutputSchema?: z.ZodSchema
+}
+
 /** Fallback name used when no agent name is provided in the config. */
 const DEFAULT_AGENT_NAME = 'Strands Agent'
 
@@ -315,6 +325,7 @@ export class Agent implements AgentData {
    * streaming events.
    *
    * @param args - Arguments for invoking the agent
+   * @param options - Optional per-invocation options
    * @returns Promise that resolves to the final AgentResult
    *
    * @example
@@ -324,8 +335,8 @@ export class Agent implements AgentData {
    * console.log(result.lastMessage) // Agent's response
    * ```
    */
-  public async invoke(args: InvokeArgs): Promise<AgentResult> {
-    const gen = this.stream(args)
+  public async invoke(args: InvokeArgs, options?: InvokeOptions): Promise<AgentResult> {
+    const gen = this.stream(args, options)
     let result = await gen.next()
     while (!result.done) {
       result = await gen.next()
@@ -350,6 +361,7 @@ export class Agent implements AgentData {
    * with valid toolResponses
    *
    * @param args - Arguments for invoking the agent
+   * @param options - Optional per-invocation options
    * @returns Async generator that yields AgentStreamEvent objects and returns AgentResult
    *
    * @example
@@ -362,13 +374,16 @@ export class Agent implements AgentData {
    * // Messages array is mutated in place and contains the full conversation
    * ```
    */
-  public async *stream(args: InvokeArgs): AsyncGenerator<AgentStreamEvent, AgentResult, undefined> {
+  public async *stream(
+    args: InvokeArgs,
+    options?: InvokeOptions
+  ): AsyncGenerator<AgentStreamEvent, AgentResult, undefined> {
     using _lock = this.acquireLock()
 
     await this.initialize()
 
     // Delegate to _stream and process events through printer and hooks
-    const streamGenerator = this._stream(args)
+    const streamGenerator = this._stream(args, options)
     let result = await streamGenerator.next()
 
     while (!result.done) {
@@ -399,15 +414,19 @@ export class Agent implements AgentData {
    * Separated to centralize printer event processing in the public stream method.
    *
    * @param args - Arguments for invoking the agent
+   * @param options - Optional per-invocation options
    * @returns Async generator that yields AgentStreamEvent objects and returns AgentResult
    */
-  private async *_stream(args: InvokeArgs): AsyncGenerator<AgentStreamEvent, AgentResult, undefined> {
+  private async *_stream(
+    args: InvokeArgs,
+    options?: InvokeOptions
+  ): AsyncGenerator<AgentStreamEvent, AgentResult, undefined> {
     let currentArgs: InvokeArgs | undefined = args
     let forcedToolChoice: ToolChoice | undefined = undefined
     let result: AgentResult | undefined
 
     // Create structured output context (uses null object pattern when no schema)
-    const schema = this._structuredOutputSchema
+    const schema = options?.structuredOutputSchema ?? this._structuredOutputSchema
     const context = createStructuredOutputContext(schema)
 
     // Emit event before the try block

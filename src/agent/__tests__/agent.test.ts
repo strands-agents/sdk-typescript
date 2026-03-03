@@ -1057,6 +1057,35 @@ describe('Agent', () => {
 
       expect(result.structuredOutput).toEqual({ items: ['a', 'b', 'c'] })
     })
+
+    it('uses per-invocation override schema and restores constructor schema on next call', async () => {
+      const constructorSchema = z.object({ name: z.string() })
+      const overrideSchema = z.object({ value: z.number() })
+
+      const model = new MockMessageModel()
+        .addTurn({
+          type: 'toolUseBlock',
+          name: 'strands_structured_output',
+          toolUseId: 'tool-1',
+          input: { value: 99 },
+        })
+        .addTurn({ type: 'textBlock', text: 'Done' })
+        .addTurn({
+          type: 'toolUseBlock',
+          name: 'strands_structured_output',
+          toolUseId: 'tool-2',
+          input: { name: 'Bob' },
+        })
+        .addTurn({ type: 'textBlock', text: 'Done' })
+
+      const agent = new Agent({ model, structuredOutputSchema: constructorSchema })
+
+      const first = await agent.invoke('First', { structuredOutputSchema: overrideSchema })
+      expect(first.structuredOutput).toEqual({ value: 99 })
+
+      const second = await agent.invoke('Second')
+      expect(second.structuredOutput).toEqual({ name: 'Bob' })
+    })
   })
 })
 
