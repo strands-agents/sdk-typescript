@@ -62,6 +62,13 @@ const DEFAULT_BEDROCK_REGION_SUPPORTS_FIP = false
 const MODELS_INCLUDE_STATUS = ['anthropic.claude']
 
 /**
+ * Models that support prompt caching.
+ * Currently only Anthropic Claude models on Bedrock support prompt caching.
+ * @see https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-caching.html
+ */
+const MODELS_SUPPORTING_CACHING = ['anthropic.claude']
+
+/**
  * Error messages that indicate context window overflow.
  * Used to detect when input exceeds the model's context window.
  */
@@ -138,21 +145,12 @@ export interface BedrockModelConfig extends BaseModelConfig {
   stopSequences?: string[]
 
   /**
-   * Cache point type for the system prompt.
-   * @deprecated Use cacheConfig instead
-   * @see https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-caching.html
-   */
-  cachePrompt?: string
-
-  /**
-   * Cache point type for tools.
-   * @deprecated Use cacheConfig instead
-   * @see https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-caching.html
-   */
-  cacheTools?: string
-
-  /**
-   * Configuration for prompt caching. Use CacheConfig with strategy="auto" for automatic caching.
+   * Configuration for prompt caching.
+   * When strategy is 'auto', cache points are automatically placed after:
+   * - System prompt (if provided as string)
+   * - Tool definitions (if provided)
+   * - Last assistant message in conversation
+   *
    * @see https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-caching.html
    */
   cacheConfig?: CacheConfig
@@ -311,13 +309,31 @@ export class BedrockModel extends Model<BedrockModelConfig> {
 
   /**
    * Whether this model supports prompt caching.
-   * Returns true for Claude models on Bedrock.
+   * Returns true for models in MODELS_SUPPORTING_CACHING.
    *
    * @returns True if the model supports caching
    */
   private _supportsCaching(): boolean {
-    const modelId = this._config.modelId?.toLowerCase() ?? ''
-    return modelId.includes('claude') || modelId.includes('anthropic')
+    return MODELS_SUPPORTING_CACHING.some((pattern) => this._config.modelId?.includes(pattern))
+  }
+
+  /**
+   * Determines if caching should be enabled.
+   * Returns true when auto strategy is configured and model supports caching.
+   *
+   * @returns True if caching should be enabled
+   */
+  private _shouldEnableCaching(): boolean {
+    if (this._config.cacheConfig?.strategy === 'auto') {
+      if (!this._supportsCaching()) {
+        logger.warn(
+          `model_id=<${this._config.modelId}> | cache_config is enabled but this model does not support caching`
+        )
+        return false
+      }
+      return true
+    }
+    return false
   }
 
   /**
@@ -437,21 +453,14 @@ export class BedrockModel extends Model<BedrockModelConfig> {
     // Add system prompt with optional caching
     if (options?.systemPrompt !== undefined) {
       if (typeof options.systemPrompt === 'string') {
-        // String path: apply cachePrompt config if set
         const system: BedrockContentBlock[] = [{ text: options.systemPrompt }]
 
-        if (this._config.cachePrompt) {
-          logger.warn('cachePrompt is deprecated, use cacheConfig instead')
-          system.push({ cachePoint: { type: this._config.cachePrompt as 'default' } })
+        if (this._shouldEnableCaching()) {
+          system.push({ cachePoint: { type: 'default' } })
         }
 
         request.system = system
       } else if (options.systemPrompt.length > 0) {
-        // Array path: use as-is, but warn if cachePrompt config is also set
-        if (this._config.cachePrompt) {
-          logger.warn('cachePrompt config is ignored when systemPrompt is an array, use explicit cache points instead')
-        }
-
         request.system = options.systemPrompt.map((block) => this._formatContentBlock(block) as SystemContentBlock)
       }
     }
@@ -469,11 +478,8 @@ export class BedrockModel extends Model<BedrockModelConfig> {
           }) as Tool
       )
 
-      if (this._config.cacheTools) {
-        logger.warn('cacheTools is deprecated, use cacheConfig instead')
-        tools.push({
-          cachePoint: { type: this._config.cacheTools as 'default' },
-        } as Tool)
+      if (this._shouldEnableCaching()) {
+        tools.push({ cachePoint: { type: 'default' } } as Tool)
       }
 
       const toolConfig: ToolConfiguration = {
@@ -535,15 +541,9 @@ export class BedrockModel extends Model<BedrockModelConfig> {
       return acc
     }, [])
 
-    // Inject cache point if cacheConfig is set with strategy="auto"
-    if (this._config.cacheConfig?.strategy === 'auto') {
-      if (this._supportsCaching()) {
-        this._injectCachePoint(formattedMessages)
-      } else {
-        logger.warn(
-          `model_id=<${this._config.modelId}> | cache_config is enabled but this model does not support caching`
-        )
-      }
+    // Inject cache point if caching is enabled
+    if (this._shouldEnableCaching()) {
+      this._injectCachePoint(formattedMessages)
     }
 
     return formattedMessages

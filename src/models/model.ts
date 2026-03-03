@@ -26,7 +26,8 @@ import { MaxTokensError, ModelError, normalizeError } from '../errors.js'
 export interface CacheConfig {
   /**
    * Caching strategy to use.
-   * - "auto": Automatically inject cachePoint at optimal positions
+   * - "auto": Automatically inject cache points at optimal positions
+   *   (after system prompt, after tools, after last assistant message)
    */
   strategy: 'auto'
 }

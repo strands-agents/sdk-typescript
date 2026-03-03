@@ -307,13 +307,12 @@ describe('BedrockModel', () => {
     it('formats the request to bedrock properly', async () => {
       const provider = new BedrockModel({
         region: 'us-west-2',
-        modelId: 'test-model',
+        modelId: 'anthropic.claude-test-model',
         maxTokens: 1024,
         temperature: 0.7,
         topP: 0.9,
         stopSequences: ['STOP'],
-        cachePrompt: 'default',
-        cacheTools: 'default',
+        cacheConfig: { strategy: 'auto' },
         additionalResponseFieldPaths: ['Hello!'],
         additionalRequestFields: ['World!'],
         additionalArgs: {
@@ -343,7 +342,7 @@ describe('BedrockModel', () => {
         MyExtraArg: 'ExtraArg',
         additionalModelRequestFields: ['World!'],
         additionalModelResponseFieldPaths: ['Hello!'],
-        modelId: 'test-model',
+        modelId: 'anthropic.claude-test-model',
         messages: [
           {
             role: 'user',
@@ -1100,8 +1099,8 @@ describe('BedrockModel', () => {
       vi.clearAllMocks()
     })
 
-    it('formats string system prompt with cachePrompt config', async () => {
-      const provider = new BedrockModel({ cachePrompt: 'default' })
+    it('formats string system prompt with cacheConfig', async () => {
+      const provider = new BedrockModel({ cacheConfig: { strategy: 'auto' } })
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
       const options: StreamOptions = {
         systemPrompt: 'You are a helpful assistant',
@@ -1174,9 +1173,9 @@ describe('BedrockModel', () => {
       })
     })
 
-    it('warns when both array system prompt and cachePrompt config are provided', async () => {
+    it('does not warn when array system prompt is provided without cacheConfig', async () => {
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-      const provider = new BedrockModel({ cachePrompt: 'default' })
+      const provider = new BedrockModel()
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
       const options: StreamOptions = {
         systemPrompt: [
@@ -1187,12 +1186,10 @@ describe('BedrockModel', () => {
 
       collectIterator(provider.stream(messages, options))
 
-      // Verify warning was logged
-      expect(warnSpy).toHaveBeenCalledWith(
-        'cachePrompt config is ignored when systemPrompt is an array, use explicit cache points instead'
-      )
+      // Verify no warning was logged
+      expect(warnSpy).not.toHaveBeenCalled()
 
-      // Verify array is used as-is (cachePrompt config ignored)
+      // Verify array is used as-is
       expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
         modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
         messages: [
@@ -1205,6 +1202,87 @@ describe('BedrockModel', () => {
       })
 
       warnSpy.mockRestore()
+    })
+
+    it('adds cache point after tools when cacheConfig enabled', async () => {
+      const provider = new BedrockModel({ cacheConfig: { strategy: 'auto' } })
+      const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
+      const options: StreamOptions = {
+        toolSpecs: [
+          {
+            name: 'calculator',
+            description: 'Calculate',
+            inputSchema: { type: 'object' },
+          },
+        ],
+      }
+
+      collectIterator(provider.stream(messages, options))
+
+      expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
+        modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
+        messages: [
+          {
+            role: 'user',
+            content: [{ text: 'Hello' }],
+          },
+        ],
+        toolConfig: {
+          tools: [
+            {
+              toolSpec: {
+                name: 'calculator',
+                description: 'Calculate',
+                inputSchema: { json: { type: 'object' } },
+              },
+            },
+            { cachePoint: { type: 'default' } },
+          ],
+        },
+      })
+    })
+
+    it('adds cache points to system prompt, tools, and messages when cacheConfig enabled', async () => {
+      const provider = new BedrockModel({ cacheConfig: { strategy: 'auto' } })
+      const messages = [
+        new Message({ role: 'user', content: [new TextBlock('Hello')] }),
+        new Message({ role: 'assistant', content: [new TextBlock('Hi')] }),
+      ]
+      const options: StreamOptions = {
+        systemPrompt: 'You are a helpful assistant',
+        toolSpecs: [
+          {
+            name: 'calculator',
+            description: 'Calculate',
+            inputSchema: { type: 'object' },
+          },
+        ],
+      }
+
+      collectIterator(provider.stream(messages, options))
+
+      const call = mockConverseStreamCommand.mock.lastCall?.[0]
+      expect(call?.system?.[1]).toStrictEqual({ cachePoint: { type: 'default' } })
+      expect(call?.toolConfig?.tools?.[1]).toStrictEqual({ cachePoint: { type: 'default' } })
+      const lastMsg = call?.messages?.[call.messages.length - 1]
+      const lastBlock = lastMsg?.content?.[lastMsg.content.length - 1]
+      expect(lastBlock).toStrictEqual({ cachePoint: { type: 'default' } })
+    })
+
+    it('does not mutate the original messages array', async () => {
+      const provider = new BedrockModel({ cacheConfig: { strategy: 'auto' } })
+      const originalMessages = [
+        new Message({ role: 'user', content: [new TextBlock('Hello')] }),
+        new Message({ role: 'assistant', content: [new TextBlock('Hi')] }),
+      ]
+
+      // Create a deep copy to compare against
+      const messagesCopy = JSON.parse(JSON.stringify(originalMessages))
+
+      collectIterator(provider.stream(originalMessages))
+
+      // Verify original messages are unchanged
+      expect(JSON.stringify(originalMessages)).toBe(JSON.stringify(messagesCopy))
     })
 
     it('handles empty array system prompt', async () => {
