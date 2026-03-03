@@ -113,7 +113,7 @@ function snakeToCamel(str: string): string {
  *   modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
  *   maxTokens: 1024,
  *   temperature: 0.7,
- *   cachePrompt: 'ephemeral'
+ *   cacheConfig: { strategy: 'auto' }
  * }
  * ```
  */
@@ -264,7 +264,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
    *   modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
    *   maxTokens: 2048,
    *   temperature: 0.8,
-   *   cachePrompt: 'ephemeral'
+   *   cacheConfig: { strategy: 'auto' }
    * })
    *
    * // With client configuration

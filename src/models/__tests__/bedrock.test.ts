@@ -1285,6 +1285,37 @@ describe('BedrockModel', () => {
       expect(JSON.stringify(originalMessages)).toBe(JSON.stringify(messagesCopy))
     })
 
+    it('logs warning and disables caching for non-caching models', async () => {
+      const warnSpy = vi.spyOn(console, 'warn')
+      const provider = new BedrockModel({
+        modelId: 'amazon.titan-text-express-v1',
+        cacheConfig: { strategy: 'auto' },
+      })
+      const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
+      const options: StreamOptions = {
+        systemPrompt: 'You are a helpful assistant',
+      }
+
+      collectIterator(provider.stream(messages, options))
+
+      // Verify warning was logged
+      expect(warnSpy).toHaveBeenCalled()
+
+      // Verify no cache points were added
+      expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
+        modelId: 'amazon.titan-text-express-v1',
+        messages: [
+          {
+            role: 'user',
+            content: [{ text: 'Hello' }],
+          },
+        ],
+        system: [{ text: 'You are a helpful assistant' }],
+      })
+
+      warnSpy.mockRestore()
+    })
+
     it('handles empty array system prompt', async () => {
       const provider = new BedrockModel()
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
