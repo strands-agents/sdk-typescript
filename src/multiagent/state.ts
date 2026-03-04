@@ -54,8 +54,8 @@ export class NodeResult {
     this.status = data.status
     this.duration = data.duration
     this.content = data.content ?? []
-    if (data.error) this.error = data.error
-    if (data.structuredOutput !== undefined) this.structuredOutput = data.structuredOutput
+    if ('error' in data) this.error = data.error
+    if ('structuredOutput' in data) this.structuredOutput = data.structuredOutput
   }
 }
 
@@ -114,7 +114,7 @@ export class MultiAgentResult {
     this.results = data.results
     this.content = data.content ?? []
     this.duration = data.duration
-    if (data.error) this.error = data.error
+    if ('error' in data) this.error = data.error
   }
 
   /** Derives the aggregate status from individual node results. */
