@@ -15,7 +15,7 @@ import type { InvokeArgs } from '../agent/agent.js'
 import { AgentResult, type AgentStreamEvent } from '../types/agent.js'
 import { Message, TextBlock, type ContentBlock, type ContentBlockData, type MessageData } from '../types/messages.js'
 import { AgentResultEvent } from '../hooks/events.js'
-import { AgentState } from '../agent/state.js'
+import { AppState } from '../app-state.js'
 import { logger } from '../logging/logger.js'
 
 let _experimentalWarningLogged = false
@@ -97,7 +97,7 @@ export class A2AClient implements AgentBase {
    */
   async *stream(args: InvokeArgs): AsyncGenerator<AgentStreamEvent, AgentResult, undefined> {
     const result = await this.invoke(args)
-    yield new AgentResultEvent({ agent: { state: new AgentState(), messages: [result.lastMessage] }, result })
+    yield new AgentResultEvent({ agent: { state: new AppState(), messages: [result.lastMessage] }, result })
     return result
   }
 
