@@ -15,7 +15,7 @@ export type MediaFormats = DocumentFormat | ImageFormat | VideoFormat
  * MIME type mappings for supported media formats.
  * Browser-compatible (no external dependencies).
  */
-const MIME_TYPES: Record<MediaFormats, string> = {
+export const MIME_TYPES: Record<MediaFormats, string> = {
   // Images
   png: 'image/png',
   jpg: 'image/jpeg',

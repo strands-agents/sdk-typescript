@@ -24,6 +24,7 @@ import { isModelStreamEvent } from '../models/streaming.js'
 import { ToolRegistry } from '../registry/tool-registry.js'
 import { AppState } from '../app-state.js'
 import type { AgentData } from '../types/agent.js'
+import type { AgentBase } from './agent-base.js'
 import { AgentPrinter, getDefaultAppender, type Printer } from './printer.js'
 import { Plugin } from '../plugins/plugin.js'
 import { PluginRegistry } from '../plugins/registry.js'
@@ -63,7 +64,7 @@ import { logger } from '../logging/logger.js'
  * Recursive type definition for nested tool arrays.
  * Allows tools to be organized in nested arrays of any depth.
  */
-export type ToolList = (Tool | McpClient | ToolList)[]
+export type ToolList = (Tool | McpClient | ToolProvider | ToolList)[]
 
 /**
  * Configuration object for creating a new Agent.
@@ -179,7 +180,7 @@ const DEFAULT_AGENT_ID = 'default'
  * The Agent is responsible for managing the lifecycle of tools and clients
  * and invoking the core decision-making loop.
  */
-export class Agent implements AgentData {
+export class Agent implements AgentData, AgentBase {
   /**
    * The conversation history of messages between user and assistant.
    */
@@ -220,6 +221,7 @@ export class Agent implements AgentData {
   private readonly _pluginRegistry: PluginRegistry
   private _toolRegistry: ToolRegistry
   private _mcpClients: McpClient[]
+  private _toolProviders: ToolProvider[]
   private _initialized: boolean
   private _isInvoking: boolean = false
   private _printer?: Printer
@@ -248,9 +250,10 @@ export class Agent implements AgentData {
       this.model = config?.model ?? new BedrockModel()
     }
 
-    const { tools, mcpClients } = flattenTools(config?.tools ?? [])
+    const { tools, mcpClients, toolProviders } = flattenTools(config?.tools ?? [])
     this._toolRegistry = new ToolRegistry(tools)
     this._mcpClients = mcpClients
+    this._toolProviders = toolProviders
 
     // Initialize hooks registry
     this._hooksRegistry = new HookRegistryImplementation()
@@ -1028,25 +1031,50 @@ export class Agent implements AgentData {
 }
 
 /**
+ * Checks whether an item implements the ToolProvider interface via duck typing.
+ * McpClient is excluded since it is handled separately for backward compatibility.
+ *
+ * @param item - The item to check
+ * @returns True if the item is a ToolProvider
+ */
+function isToolProvider(item: unknown): item is ToolProvider {
+  return (
+    typeof item === 'object' &&
+    item !== null &&
+    'listTools' in item &&
+    typeof (item as ToolProvider).listTools === 'function' &&
+    !(item instanceof McpClient)
+  )
+}
+
+/**
  * Recursively flattens nested arrays of tools into a single flat array.
  * @param tools - Tools or nested arrays of tools
- * @returns Flat array of tools and MCP clients
+ * @returns Flat array of tools, MCP clients, and tool providers
  */
-function flattenTools(toolList: ToolList): { tools: Tool[]; mcpClients: McpClient[] } {
+function flattenTools(toolList: ToolList): { tools: Tool[]; mcpClients: McpClient[]; toolProviders: ToolProvider[] } {
   const tools: Tool[] = []
   const mcpClients: McpClient[] = []
+  const toolProviders: ToolProvider[] = []
 
   for (const item of toolList) {
     if (Array.isArray(item)) {
-      const { tools: nestedTools, mcpClients: nestedMcpClients } = flattenTools(item)
+      const {
+        tools: nestedTools,
+        mcpClients: nestedMcpClients,
+        toolProviders: nestedToolProviders,
+      } = flattenTools(item)
       tools.push(...nestedTools)
       mcpClients.push(...nestedMcpClients)
+      toolProviders.push(...nestedToolProviders)
     } else if (item instanceof McpClient) {
       mcpClients.push(item)
+    } else if (isToolProvider(item)) {
+      toolProviders.push(item)
     } else {
       tools.push(item)
     }
   }
 
-  return { tools, mcpClients }
+  return { tools, mcpClients, toolProviders }
 }

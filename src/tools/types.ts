@@ -1,4 +1,5 @@
 import type { JSONSchema, JSONValue } from '../types/json.js'
+import type { Tool } from './tool.js'
 
 /**
  * Status of a tool execution.
@@ -60,3 +61,16 @@ export interface ToolUse {
  * - `{ tool: { name: 'name' } }` - Force the model to use a specific tool
  */
 export type ToolChoice = { auto: Record<string, never> } | { any: Record<string, never> } | { tool: { name: string } }
+
+/**
+ * Interface for objects that provide tools dynamically.
+ * Implementations can supply tools from external sources such as remote A2A agents.
+ */
+export interface ToolProvider {
+  /**
+   * Lists the tools provided by this source.
+   *
+   * @returns A promise that resolves with an array of Tool instances
+   */
+  listTools(): Promise<Tool[]>
+}

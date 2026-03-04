@@ -3,7 +3,7 @@ import type { AgentResult, AgentStreamEvent } from '$/sdk/index.js'
 import { Agent } from '$/sdk/index.js'
 import { notebook } from '$/sdk/vended-tools/notebook/index.js'
 import { collectGenerator } from '$/sdk/__fixtures__/model-test-helpers.js'
-import { bedrock } from './__fixtures__/model-providers.js'
+import { bedrock } from '../__fixtures__/model-providers.js'
 
 describe.skipIf(bedrock.skip)('Notebook Tool Integration', () => {
   // Shared agent configuration for all tests
