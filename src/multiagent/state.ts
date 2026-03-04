@@ -138,7 +138,7 @@ export class MultiAgentState {
   /** App-level key-value state accessible from hooks, edge handlers, and custom nodes. */
   readonly app: AppState
   /** Structured output schema to apply to node invocations. */
-  structuredOutputSchema?: z.ZodSchema
+  readonly structuredOutputSchema?: z.ZodSchema
   private readonly _nodes: Map<string, NodeState>
 
   constructor(data?: { nodeIds?: string[]; structuredOutputSchema?: z.ZodSchema }) {
