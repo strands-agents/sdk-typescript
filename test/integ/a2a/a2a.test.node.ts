@@ -4,13 +4,13 @@ import { join } from 'node:path'
 import { Agent } from '@strands-agents/sdk'
 import type { Task } from '@a2a-js/sdk'
 import { ClientFactory } from '@a2a-js/sdk/client'
-import { A2AServer, A2AClient } from '$/sdk/a2a/index.js'
+import { A2AServer, A2AAgent } from '$/sdk/a2a/index.js'
 import { encodeBase64 } from '$/sdk/types/media.js'
 import { collectGenerator } from '$/sdk/__fixtures__/model-test-helpers.js'
 import { bedrock } from '../__fixtures__/model-providers.js'
 
 describe.skipIf(bedrock.skip)('A2A', () => {
-  let client: A2AClient
+  let a2aAgent: A2AAgent
   let a2aServer: A2AServer
   let abortController: AbortController
 
@@ -31,20 +31,21 @@ describe.skipIf(bedrock.skip)('A2A', () => {
     abortController = new AbortController()
     await a2aServer.serve({ signal: abortController.signal })
 
-    client = new A2AClient({ url: `http://127.0.0.1:${a2aServer.port}` })
+    a2aAgent = new A2AAgent({ url: `http://127.0.0.1:${a2aServer.port}` })
   })
 
   afterAll(async () => {
-    await client?.disconnect()
     abortController?.abort()
   })
 
-  describe('sendMessage', () => {
+  describe('invoke', () => {
     it('receives a text response', async () => {
-      const response = await client.sendMessage('What is 2+2? Reply with just the number.')
+      const result = await a2aAgent.invoke('What is 2+2? Reply with just the number.')
 
-      expect(response.length).toBeGreaterThan(0)
-      expect(response).toMatch(/4/)
+      expect(result.stopReason).toBe('endTurn')
+      expect(result.lastMessage.role).toBe('assistant')
+      expect(result.lastMessage.content.length).toBeGreaterThan(0)
+      expect(result.toString()).toMatch(/4/)
     })
 
     it('processes an image sent as a file part', async () => {
@@ -83,21 +84,9 @@ describe.skipIf(bedrock.skip)('A2A', () => {
     })
   })
 
-  describe('invoke', () => {
-    it('returns AgentResult with correct structure', async () => {
-      const result = await client.invoke('Say hello')
-
-      expect(result.stopReason).toBe('endTurn')
-      expect(result.lastMessage.role).toBe('assistant')
-      expect(result.lastMessage.content.length).toBeGreaterThan(0)
-      expect(result.lastMessage.content[0]!.type).toBe('textBlock')
-      expect((result.lastMessage.content[0] as { text: string }).text.length).toBeGreaterThan(0)
-    })
-  })
-
   describe('stream', () => {
     it('yields events and returns final result', async () => {
-      const { items, result } = await collectGenerator(client.stream('Say the word test'))
+      const { items, result } = await collectGenerator(a2aAgent.stream('Say the word test'))
 
       expect(items.length).toBeGreaterThan(0)
       expect(result.stopReason).toBe('endTurn')

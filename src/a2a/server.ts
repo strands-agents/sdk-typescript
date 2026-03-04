@@ -14,9 +14,8 @@ import type { UserBuilder } from '@a2a-js/sdk/server/express'
 import { DefaultRequestHandler, InMemoryTaskStore } from '@a2a-js/sdk/server'
 import type { Agent } from '../agent/agent.js'
 import { StrandsA2AExecutor } from './executor.js'
+import { logExperimentalWarning } from './experimental.js'
 import { logger } from '../logging/logger.js'
-
-let _experimentalWarningLogged = false
 
 /**
  * Configuration options for creating an A2AServer.
@@ -131,7 +130,7 @@ export class A2AServer {
    * @returns An Express Router
    */
   async createMiddleware(): Promise<Router> {
-    this._logExperimentalWarning()
+    logExperimentalWarning()
 
     const express = (await import('express')).default
     const { agentCardHandler, jsonRpcHandler, UserBuilder } = await import('@a2a-js/sdk/server/express')
@@ -181,14 +180,5 @@ export class A2AServer {
         )
       }
     })
-  }
-
-  private _logExperimentalWarning(): void {
-    if (!_experimentalWarningLogged) {
-      _experimentalWarningLogged = true
-      logger.warn(
-        'The A2A protocol is experimental. Breaking changes in the underlying SDK may require breaking changes in this module.'
-      )
-    }
   }
 }
