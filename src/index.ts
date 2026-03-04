@@ -104,7 +104,7 @@ export type {
 } from './types/media.js'
 
 // Tool types
-export type { ToolSpec, ToolUse, ToolResultStatus, ToolChoice, ToolProvider } from './tools/types.js'
+export type { ToolSpec, ToolUse, ToolResultStatus, ToolChoice } from './tools/types.js'
 
 // Tool interface and related types
 export type {
