@@ -88,7 +88,7 @@ export class A2AAgent implements AgentBase {
    * @returns Promise that resolves to the AgentResult
    */
   async invoke(args: InvokeArgs): Promise<AgentResult> {
-    const text = this._extractTextFromA2AResponseFromArgs(args)
+    const text = this._extractTextFromArgs(args)
     const responseText = await this._sendMessage(text)
 
     const lastMessage = new Message({
@@ -166,7 +166,7 @@ export class A2AAgent implements AgentBase {
    * @param args - The invocation arguments
    * @returns The extracted text string
    */
-  private _extractTextFromA2AResponseFromArgs(args: InvokeArgs): string {
+  private _extractTextFromArgs(args: InvokeArgs): string {
     if (typeof args === 'string') return args
     if (!Array.isArray(args) || args.length === 0) return ''
 
@@ -198,7 +198,7 @@ export class A2AAgent implements AgentBase {
  * @param result - The A2A response
  * @returns Extracted text content
  */
-export function extractTextFromA2AResponse(result: Task | A2AMessage): string {
+function extractTextFromA2AResponse(result: Task | A2AMessage): string {
   if (result.kind !== 'task') {
     return _textFromParts(result.parts)
   }

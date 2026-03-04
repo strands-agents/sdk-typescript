@@ -121,7 +121,7 @@ export class StrandsA2AExecutor implements AgentExecutor {
         artifact: {
           artifactId,
           // If no deltas were streamed, publish the full result; otherwise empty to close the artifact
-          parts: [{ kind: 'text', text: isFirstChunk && next.value ? String(next.value) : '' }],
+          parts: [{ kind: 'text', text: isFirstChunk && next.value ? next.value.toString() : '' }],
         },
         append: !isFirstChunk, // false for new artifact, true to append to streamed chunks
         lastChunk: true, // Always true — this runs after the stream loop ends

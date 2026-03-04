@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { A2AAgent, extractTextFromA2AResponse } from '../a2a-agent.js'
+import { A2AAgent } from '../a2a-agent.js'
 import type { AgentCard, Task, Message as A2AMessage } from '@a2a-js/sdk'
 import { TextBlock, Message } from '../../types/messages.js'
 import type { InvokeArgs } from '../../agent/agent.js'
@@ -184,79 +184,94 @@ describe('A2AAgent', () => {
   })
 })
 
-describe('extractTextFromA2AResponse', () => {
-  it.each<{ desc: string; result: Task | A2AMessage; expected: string }>([
-    {
-      desc: 'extracts text from Task artifacts',
-      result: {
-        kind: 'task',
-        id: 'task-1',
-        contextId: 'ctx-1',
-        status: { state: 'completed' },
-        artifacts: [
-          {
-            artifactId: 'art-1',
-            parts: [
-              { kind: 'text', text: 'Part 1' },
-              { kind: 'text', text: 'Part 2' },
-            ],
-          },
-        ],
-      } as Task,
-      expected: 'Part 1\nPart 2',
-    },
-    {
-      desc: 'extracts text from multiple Task artifacts',
-      result: {
-        kind: 'task',
-        id: 'task-1',
-        contextId: 'ctx-1',
-        status: { state: 'completed' },
-        artifacts: [
-          { artifactId: 'art-1', parts: [{ kind: 'text', text: 'First' }] },
-          { artifactId: 'art-2', parts: [{ kind: 'text', text: 'Second' }] },
-        ],
-      } as Task,
-      expected: 'First\nSecond',
-    },
-    {
-      desc: 'falls back to Task status message when no artifacts',
-      result: {
-        kind: 'task',
-        id: 'task-1',
-        contextId: 'ctx-1',
-        status: {
-          state: 'completed',
-          message: {
-            kind: 'message',
-            messageId: 'msg-1',
-            role: 'agent',
-            parts: [{ kind: 'text', text: 'Status text' }],
-          },
+describe('response text extraction via invoke', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockGetAgentCard.mockResolvedValue(mockAgentCard)
+  })
+
+  it('joins multiple text parts from Task artifacts', async () => {
+    mockSendMessage.mockResolvedValue({
+      kind: 'task',
+      id: 'task-1',
+      contextId: 'ctx-1',
+      status: { state: 'completed' },
+      artifacts: [
+        {
+          artifactId: 'art-1',
+          parts: [
+            { kind: 'text', text: 'Part 1' },
+            { kind: 'text', text: 'Part 2' },
+          ],
         },
-      } as Task,
-      expected: 'Status text',
-    },
-    {
-      desc: 'returns empty string for Task with no text content',
-      result: { kind: 'task', id: 'task-1', contextId: 'ctx-1', status: { state: 'completed' } } as Task,
-      expected: '',
-    },
-    {
-      desc: 'extracts text from Message parts, ignoring non-text parts',
-      result: {
-        kind: 'message',
-        messageId: 'msg-1',
-        role: 'agent',
-        parts: [
-          { kind: 'text', text: 'Hello' },
-          { kind: 'file', file: { uri: 'file://test.txt' } },
-          { kind: 'text', text: 'World' },
-        ],
-      } as A2AMessage,
-      expected: 'Hello\nWorld',
-    },
-  ])('$desc', ({ result, expected }) => {
-    expect(extractTextFromA2AResponse(result)).toBe(expected)
+      ],
+    } as Task)
+    const agent = new A2AAgent({ url: 'http://localhost:9000' })
+    const result = await agent.invoke('Hello')
+    expect((result.lastMessage.content[0] as TextBlock).text).toBe('Part 1\nPart 2')
+  })
+
+  it('joins text from multiple Task artifacts', async () => {
+    mockSendMessage.mockResolvedValue({
+      kind: 'task',
+      id: 'task-1',
+      contextId: 'ctx-1',
+      status: { state: 'completed' },
+      artifacts: [
+        { artifactId: 'art-1', parts: [{ kind: 'text', text: 'First' }] },
+        { artifactId: 'art-2', parts: [{ kind: 'text', text: 'Second' }] },
+      ],
+    } as Task)
+    const agent = new A2AAgent({ url: 'http://localhost:9000' })
+    const result = await agent.invoke('Hello')
+    expect((result.lastMessage.content[0] as TextBlock).text).toBe('First\nSecond')
+  })
+
+  it('falls back to Task status message when no artifacts', async () => {
+    mockSendMessage.mockResolvedValue({
+      kind: 'task',
+      id: 'task-1',
+      contextId: 'ctx-1',
+      status: {
+        state: 'completed',
+        message: {
+          kind: 'message',
+          messageId: 'msg-1',
+          role: 'agent',
+          parts: [{ kind: 'text', text: 'Status text' }],
+        },
+      },
+    } as Task)
+    const agent = new A2AAgent({ url: 'http://localhost:9000' })
+    const result = await agent.invoke('Hello')
+    expect((result.lastMessage.content[0] as TextBlock).text).toBe('Status text')
+  })
+
+  it('returns empty text for Task with no text content', async () => {
+    mockSendMessage.mockResolvedValue({
+      kind: 'task',
+      id: 'task-1',
+      contextId: 'ctx-1',
+      status: { state: 'completed' },
+    } as Task)
+    const agent = new A2AAgent({ url: 'http://localhost:9000' })
+    const result = await agent.invoke('Hello')
+    expect((result.lastMessage.content[0] as TextBlock).text).toBe('')
+  })
+
+  it('extracts text from Message parts, ignoring non-text parts', async () => {
+    mockSendMessage.mockResolvedValue({
+      kind: 'message',
+      messageId: 'msg-1',
+      role: 'agent',
+      parts: [
+        { kind: 'text', text: 'Hello' },
+        { kind: 'file', file: { uri: 'file://test.txt' } },
+        { kind: 'text', text: 'World' },
+      ],
+    } as A2AMessage)
+    const agent = new A2AAgent({ url: 'http://localhost:9000' })
+    const result = await agent.invoke('Hello')
+    expect((result.lastMessage.content[0] as TextBlock).text).toBe('Hello\nWorld')
   })
 })
