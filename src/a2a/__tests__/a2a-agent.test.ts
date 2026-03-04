@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { A2AClient, sanitizeToolName, extractText } from '../client.js'
+import { A2AAgent, extractTextFromA2AResponse } from '../a2a-agent.js'
 import type { AgentCard, Task, Message as A2AMessage } from '@a2a-js/sdk'
 import { TextBlock, Message } from '../../types/messages.js'
 import type { InvokeArgs } from '../../agent/agent.js'
@@ -45,48 +45,16 @@ const mockTaskResponse: Task = {
   ],
 }
 
-describe('A2AClient', () => {
+describe('A2AAgent', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockGetAgentCard.mockResolvedValue(mockAgentCard)
     mockSendMessage.mockResolvedValue(mockTaskResponse)
   })
 
-  describe('connect', () => {
-    it('creates client and fetches agent card', async () => {
-      const client = new A2AClient({ url: 'http://localhost:9000' })
-      await client.connect()
-      expect(mockGetAgentCard).toHaveBeenCalledOnce()
-    })
-
-    it('does not reconnect when already connected', async () => {
-      const client = new A2AClient({ url: 'http://localhost:9000' })
-      await client.connect()
-      await client.connect()
-      expect(mockGetAgentCard).toHaveBeenCalledOnce()
-    })
-
-    it('reconnects when reconnect flag is true', async () => {
-      const client = new A2AClient({ url: 'http://localhost:9000' })
-      await client.connect()
-      await client.connect(true)
-      expect(mockGetAgentCard).toHaveBeenCalledTimes(2)
-    })
-  })
-
-  describe('disconnect', () => {
-    it('clears client state so next connect re-fetches', async () => {
-      const client = new A2AClient({ url: 'http://localhost:9000' })
-      await client.connect()
-      await client.disconnect()
-      await client.connect()
-      expect(mockGetAgentCard).toHaveBeenCalledTimes(2)
-    })
-  })
-
   describe('invoke', () => {
     it('returns AgentResult with response text', async () => {
-      const client = new A2AClient({ url: 'http://localhost:9000' })
+      const client = new A2AAgent({ url: 'http://localhost:9000' })
 
       const result = await client.invoke('Hello')
 
@@ -127,7 +95,7 @@ describe('A2AClient', () => {
       },
       { desc: 'empty array', args: [] as TextBlock[], expectedText: '' },
     ])('sends correct parts for $desc input', async ({ args, expectedText }) => {
-      const client = new A2AClient({ url: 'http://localhost:9000' })
+      const client = new A2AAgent({ url: 'http://localhost:9000' })
 
       await client.invoke(args as InvokeArgs)
 
@@ -141,7 +109,7 @@ describe('A2AClient', () => {
     })
 
     it('auto-connects on first invoke', async () => {
-      const client = new A2AClient({ url: 'http://localhost:9000' })
+      const client = new A2AAgent({ url: 'http://localhost:9000' })
       await client.invoke('Hello')
       expect(mockGetAgentCard).toHaveBeenCalledOnce()
     })
@@ -149,7 +117,7 @@ describe('A2AClient', () => {
 
   describe('stream', () => {
     it('yields AgentResultEvent and returns AgentResult', async () => {
-      const client = new A2AClient({ url: 'http://localhost:9000' })
+      const client = new A2AAgent({ url: 'http://localhost:9000' })
       const generator = client.stream('Hello')
 
       const events: unknown[] = []
@@ -167,52 +135,56 @@ describe('A2AClient', () => {
     })
   })
 
-  describe('sendMessage', () => {
-    it('sends A2A message and extracts response text from Task', async () => {
-      const client = new A2AClient({ url: 'http://localhost:9000' })
-
-      const result = await client.sendMessage('Hello')
-
-      expect(result).toBe('Agent response')
-      expect(mockSendMessage).toHaveBeenCalledWith(
-        expect.objectContaining({
-          message: expect.objectContaining({
-            kind: 'message',
-            role: 'user',
-            parts: [{ kind: 'text', text: 'Hello' }],
-          }),
-        })
-      )
+  describe('name and description', () => {
+    it('returns undefined before first invocation', () => {
+      const agent = new A2AAgent({ url: 'http://localhost:9000' })
+      expect(agent.name).toBeUndefined()
+      expect(agent.description).toBeUndefined()
     })
 
-    it('extracts response text from Message response', async () => {
+    it('populates from agent card after first invocation', async () => {
+      const agent = new A2AAgent({ url: 'http://localhost:9000' })
+      await agent.invoke('Hello')
+      expect(agent.name).toBe('Remote Agent')
+      expect(agent.description).toBe('A remote agent for testing')
+    })
+
+    it('prefers config overrides over agent card values', async () => {
+      const agent = new A2AAgent({ url: 'http://localhost:9000', name: 'Custom', description: 'Override' })
+      await agent.invoke('Hello')
+      expect(agent.name).toBe('Custom')
+      expect(agent.description).toBe('Override')
+    })
+
+    it('returns config values even before first invocation', () => {
+      const agent = new A2AAgent({ url: 'http://localhost:9000', name: 'Custom', description: 'Override' })
+      expect(agent.name).toBe('Custom')
+      expect(agent.description).toBe('Override')
+    })
+  })
+
+  describe('response extraction', () => {
+    it('extracts text from Task response', async () => {
+      const agent = new A2AAgent({ url: 'http://localhost:9000' })
+      const result = await agent.invoke('Hello')
+      expect((result.lastMessage.content[0] as TextBlock).text).toBe('Agent response')
+    })
+
+    it('extracts text from Message response', async () => {
       mockSendMessage.mockResolvedValue({
         kind: 'message',
         messageId: 'msg-1',
         role: 'agent',
         parts: [{ kind: 'text', text: 'Direct response' }],
       })
-      const client = new A2AClient({ url: 'http://localhost:9000' })
-
-      expect(await client.sendMessage('Hello')).toBe('Direct response')
+      const agent = new A2AAgent({ url: 'http://localhost:9000' })
+      const result = await agent.invoke('Hello')
+      expect((result.lastMessage.content[0] as TextBlock).text).toBe('Direct response')
     })
   })
 })
 
-describe('sanitizeToolName', () => {
-  it.each([
-    { input: 'My Agent!', expected: 'My_Agent', desc: 'replaces special characters' },
-    { input: 'my---agent', expected: 'my_agent', desc: 'collapses multiple underscores' },
-    { input: '_my_agent_', expected: 'my_agent', desc: 'removes leading/trailing underscores' },
-    { input: 'a'.repeat(100), expected: 'a'.repeat(64), desc: 'truncates to 64 characters' },
-    { input: '!!!', expected: 'a2a_agent', desc: 'falls back for empty result' },
-    { input: 'agent_123', expected: 'agent_123', desc: 'preserves valid characters' },
-  ])('$desc', ({ input, expected }) => {
-    expect(sanitizeToolName(input)).toBe(expected)
-  })
-})
-
-describe('extractText', () => {
+describe('extractTextFromA2AResponse', () => {
   it.each<{ desc: string; result: Task | A2AMessage; expected: string }>([
     {
       desc: 'extracts text from Task artifacts',
@@ -285,6 +257,6 @@ describe('extractText', () => {
       expected: 'Hello\nWorld',
     },
   ])('$desc', ({ result, expected }) => {
-    expect(extractText(result)).toBe(expected)
+    expect(extractTextFromA2AResponse(result)).toBe(expected)
   })
 })

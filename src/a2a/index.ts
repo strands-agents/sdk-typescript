@@ -10,6 +10,6 @@
  */
 
 export { A2AServer, type A2AServerConfig } from './server.js'
-export { A2AClient, type A2AClientConfig } from './client.js'
+export { A2AAgent, type A2AAgentConfig } from './a2a-agent.js'
 export { StrandsA2AExecutor } from './executor.js'
 export { partsToContentBlocks, contentBlocksToParts } from './converters.js'
