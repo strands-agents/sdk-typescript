@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it } from 'vitest'
+import { z } from 'zod'
 import { Agent } from '../../agent/agent.js'
 import type { InvokeArgs } from '../../agent/agent.js'
 import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
 import { collectGenerator } from '../../__fixtures__/model-test-helpers.js'
 import { TextBlock } from '../../types/messages.js'
-import { MultiAgentResult, NodeResult, Status } from '../state.js'
+import { MultiAgentResult, MultiAgentState, NodeResult, Status } from '../state.js'
 import type { MultiAgentStreamEvent } from '../events.js'
 import { MultiAgentHandoffEvent, NodeStreamUpdateEvent } from '../events.js'
 import { AgentNode, MultiAgentNode, Node } from '../nodes.js'
@@ -15,22 +16,34 @@ import type { NodeResultUpdate } from '../state.js'
  * Concrete Node subclass for testing the abstract base class.
  */
 class TestNode extends Node {
-  private readonly _fn: (args: InvokeArgs) => AsyncGenerator<MultiAgentStreamEvent, NodeResultUpdate, undefined>
+  private readonly _fn: (
+    args: InvokeArgs,
+    state: MultiAgentState
+  ) => AsyncGenerator<MultiAgentStreamEvent, NodeResultUpdate, undefined>
 
   constructor(
     id: string,
-    fn: (args: InvokeArgs) => AsyncGenerator<MultiAgentStreamEvent, NodeResultUpdate, undefined>
+    fn: (args: InvokeArgs, state: MultiAgentState) => AsyncGenerator<MultiAgentStreamEvent, NodeResultUpdate, undefined>
   ) {
     super(id, {})
     this._fn = fn
   }
 
-  async *handle(args: InvokeArgs): AsyncGenerator<MultiAgentStreamEvent, NodeResultUpdate, undefined> {
-    return yield* this._fn(args)
+  async *handle(
+    args: InvokeArgs,
+    state: MultiAgentState
+  ): AsyncGenerator<MultiAgentStreamEvent, NodeResultUpdate, undefined> {
+    return yield* this._fn(args, state)
   }
 }
 
 describe('Node', () => {
+  let state: MultiAgentState
+
+  beforeEach(() => {
+    state = new MultiAgentState()
+  })
+
   describe('stream', () => {
     it('returns COMPLETED NodeResult on successful execution', async () => {
       const content = [new TextBlock('result')]
@@ -39,14 +52,13 @@ describe('Node', () => {
         return { content }
       })
 
-      const { result } = await collectGenerator(node.stream([]))
+      const { result } = await collectGenerator(node.stream([], state))
 
       expect(result).toEqual({
         type: 'nodeResult',
         nodeId: 'test-node',
         status: Status.COMPLETED,
         content,
-        terminus: false,
         duration: expect.any(Number),
       })
     })
@@ -57,14 +69,13 @@ describe('Node', () => {
         throw new Error('boom')
       })
 
-      const { result } = await collectGenerator(node.stream([]))
+      const { result } = await collectGenerator(node.stream([], state))
 
       expect(result).toEqual({
         type: 'nodeResult',
         nodeId: 'fail-node',
         status: Status.FAILED,
         content: [],
-        terminus: false,
         duration: expect.any(Number),
         error: expect.objectContaining({ message: 'boom' }),
       })
@@ -75,16 +86,18 @@ describe('Node', () => {
 describe('AgentNode', () => {
   let agent: Agent
   let node: AgentNode
+  let state: MultiAgentState
 
   beforeEach(() => {
     const model = new MockMessageModel().addTurn(new TextBlock('reply'))
     agent = new Agent({ model, printer: false, state: { key1: 'value1' } })
     node = new AgentNode({ id: 'agent-1', agent })
+    state = new MultiAgentState()
   })
 
   describe('handle', () => {
     it('wraps agent events and returns content', async () => {
-      const { items, result } = await collectGenerator(node.stream([new TextBlock('prompt')]))
+      const { items, result } = await collectGenerator(node.stream([new TextBlock('prompt')], state))
 
       const streamEvents = items.filter((e) => e.type === 'nodeStreamUpdateEvent')
       expect(streamEvents.length).toBeGreaterThan(0)
@@ -104,7 +117,6 @@ describe('AgentNode', () => {
         nodeId: 'agent-1',
         status: Status.COMPLETED,
         content: expect.arrayContaining([expect.objectContaining({ type: 'textBlock', text: 'reply' })]),
-        terminus: false,
         duration: expect.any(Number),
       })
     })
@@ -113,10 +125,31 @@ describe('AgentNode', () => {
       const messagesBefore = [...agent.messages]
       const stateBefore = agent.state.getAll()
 
-      await collectGenerator(node.stream([new TextBlock('prompt')]))
+      await collectGenerator(node.stream([new TextBlock('prompt')], state))
 
       expect(agent.messages).toStrictEqual(messagesBefore)
       expect(agent.state.getAll()).toStrictEqual(stateBefore)
+    })
+
+    it('passes structuredOutputSchema from state to the agent', async () => {
+      const schema = z.object({ agentName: z.string().optional(), message: z.string() })
+
+      const model = new MockMessageModel()
+        .addTurn({
+          type: 'toolUseBlock',
+          name: 'strands_structured_output',
+          toolUseId: 'tool-1',
+          input: { message: 'hello' },
+        })
+        .addTurn({ type: 'textBlock', text: 'Done' })
+
+      agent = new Agent({ model, printer: false })
+      node = new AgentNode({ id: 'schema-agent', agent })
+      state = new MultiAgentState({ structuredOutputSchema: schema })
+
+      const { result } = await collectGenerator(node.stream('test', state))
+
+      expect(result.structuredOutput).toStrictEqual({ message: 'hello' })
     })
   })
 
@@ -142,7 +175,8 @@ describe('MultiAgentNode', () => {
           yield event
         }
         return new MultiAgentResult({
-          results: [new NodeResult({ nodeId: id, status: Status.COMPLETED, duration: 0, content, terminus: true })],
+          results: [new NodeResult({ nodeId: id, status: Status.COMPLETED, duration: 0, content })],
+          content,
           duration: 0,
         })
       },
@@ -150,10 +184,18 @@ describe('MultiAgentNode', () => {
   }
 
   let node: MultiAgentNode
+  let state: MultiAgentState
 
   beforeEach(() => {
     const orchestrator = mockOrchestrator('inner', [])
     node = new MultiAgentNode({ orchestrator })
+    state = new MultiAgentState()
+  })
+
+  describe('constructor', () => {
+    it('derives id from orchestrator', () => {
+      expect(node.id).toBe('inner')
+    })
   })
 
   describe('handle', () => {
@@ -167,7 +209,7 @@ describe('MultiAgentNode', () => {
       const orchestrator = mockOrchestrator('inner', [innerEvent])
       node = new MultiAgentNode({ orchestrator })
 
-      const { items } = await collectGenerator(node.stream([]))
+      const { items } = await collectGenerator(node.stream([], state))
 
       const streamEvents = items.filter((e) => e.type === 'nodeStreamUpdateEvent') as NodeStreamUpdateEvent[]
       const passthrough = streamEvents.find((e) => e.nodeId === 'deep-node')
@@ -179,7 +221,7 @@ describe('MultiAgentNode', () => {
       const orchestrator = mockOrchestrator('inner', [handoff])
       node = new MultiAgentNode({ orchestrator })
 
-      const { items } = await collectGenerator(node.stream([]))
+      const { items } = await collectGenerator(node.stream([], state))
 
       const streamEvents = items.filter((e) => e.type === 'nodeStreamUpdateEvent') as NodeStreamUpdateEvent[]
       const wrapped = streamEvents.find((e) => e.nodeId === 'inner' && e.event === handoff)
@@ -188,7 +230,7 @@ describe('MultiAgentNode', () => {
     })
 
     it('returns orchestrator content', async () => {
-      const { result } = await collectGenerator(node.stream([]))
+      const { result } = await collectGenerator(node.stream([], state))
 
       expect(result).toEqual(
         expect.objectContaining({

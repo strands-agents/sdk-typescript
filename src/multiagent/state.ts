@@ -1,5 +1,6 @@
 import { AppState } from '../app-state.js'
 import type { ContentBlock } from '../types/messages.js'
+import type { z } from 'zod'
 
 /**
  * Execution lifecycle status shared across all multi-agent patterns.
@@ -37,24 +38,24 @@ export class NodeResult {
   /** Execution time in milliseconds. */
   readonly duration: number
   readonly content: ContentBlock[]
-  /** Whether this node was the last executed in its execution path. */
-  readonly terminus: boolean
   readonly error?: Error
+  /** Validated structured output, if a schema was provided. */
+  readonly structuredOutput?: z.output<z.ZodType>
 
   constructor(data: {
     nodeId: string
     status: ResultStatus
     duration: number
     content?: ContentBlock[]
-    terminus?: boolean
     error?: Error
+    structuredOutput?: z.output<z.ZodType>
   }) {
     this.nodeId = data.nodeId
     this.status = data.status
     this.duration = data.duration
     this.content = data.content ?? []
-    this.terminus = data.terminus ?? false
     if (data.error) this.error = data.error
+    if (data.structuredOutput !== undefined) this.structuredOutput = data.structuredOutput
   }
 }
 
@@ -102,17 +103,18 @@ export class MultiAgentResult {
   readonly duration: number
   readonly error?: Error
 
-  constructor(data: { status?: ResultStatus; results: NodeResult[]; duration: number; error?: Error }) {
+  constructor(data: {
+    status?: ResultStatus
+    results: NodeResult[]
+    content?: ContentBlock[]
+    duration: number
+    error?: Error
+  }) {
     this.status = data.status ?? this._resolveStatus(data.results)
     this.results = data.results
-    this.content = this._resolveContent(data.results)
+    this.content = data.content ?? []
     this.duration = data.duration
     if (data.error) this.error = data.error
-  }
-
-  /** Derives content from terminus node results, in completion order. */
-  private _resolveContent(results: NodeResult[]): ContentBlock[] {
-    return results.filter((r) => r.terminus).flatMap((r) => r.content)
   }
 
   /** Derives the aggregate status from individual node results. */
@@ -133,15 +135,18 @@ export class MultiAgentState {
   steps: number
   /** All node results in completion order. */
   readonly results: NodeResult[]
-  /** User-defined key-value state accessible from hooks, edge handlers, and custom nodes. */
-  readonly user: AppState
+  /** App-level key-value state accessible from hooks, edge handlers, and custom nodes. */
+  readonly app: AppState
+  /** Structured output schema to apply to node invocations. */
+  structuredOutputSchema?: z.ZodSchema
   private readonly _nodes: Map<string, NodeState>
 
-  constructor(data?: { nodeIds?: string[] }) {
+  constructor(data?: { nodeIds?: string[]; structuredOutputSchema?: z.ZodSchema }) {
     this.startTime = Date.now()
     this.steps = 0
     this.results = []
-    this.user = new AppState()
+    this.app = new AppState()
+    if (data?.structuredOutputSchema) this.structuredOutputSchema = data.structuredOutputSchema
     this._nodes = new Map()
     for (const id of data?.nodeIds ?? []) {
       this._nodes.set(id, new NodeState())
