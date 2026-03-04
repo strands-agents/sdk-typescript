@@ -268,7 +268,7 @@ export class MockMessageModel extends Model<BaseModelConfig> {
         yield {
           type: 'modelContentBlockDeltaEvent',
           delta: {
-            type: 'citationsContentDelta',
+            type: 'citationsDelta',
             citations: block.citations,
             content: block.content,
           },

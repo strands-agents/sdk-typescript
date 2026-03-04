@@ -22,6 +22,25 @@ import {
 } from './streaming.js'
 import { MaxTokensError, ModelError, normalizeError } from '../errors.js'
 
+class CitationAccumulator {
+  citations: Citation[] = []
+  content: CitationGeneratedContent[] = []
+
+  push(citations: Citation[], content: CitationGeneratedContent[]): void {
+    this.citations.push(...citations)
+    this.content.push(...content)
+  }
+
+  hasData(): boolean {
+    return this.citations.length > 0
+  }
+
+  reset(): void {
+    this.citations = []
+    this.content = []
+  }
+}
+
 /**
  * Base configuration interface for all model providers.
  *
@@ -212,9 +231,7 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
         signature?: string
         redactedContent?: Uint8Array
       } = {}
-      let accumulatedCitationsList: Citation[] = []
-      let accumulatedCitationsContent: CitationGeneratedContent[] = []
-      let hasCitations = false
+      const accumulatedCitations = new CitationAccumulator()
       let errorToThrow: Error | undefined = undefined
       let stoppedMessage: Message | null = null
       let finalStopReason: StopReason | null = null
@@ -240,25 +257,25 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
             accumulatedToolInput = ''
             accumulatedText = ''
             accumulatedReasoning = {}
-            accumulatedCitationsList = []
-            accumulatedCitationsContent = []
-            hasCitations = false
+            accumulatedCitations.reset()
             break
 
           case 'modelContentBlockDeltaEvent': {
-            const delta = event.delta
-            if (delta.type === 'textDelta') {
-              accumulatedText += delta.text
-            } else if (delta.type === 'toolUseInputDelta') {
-              accumulatedToolInput += delta.input
-            } else if (delta.type === 'reasoningContentDelta') {
-              if (delta.text) accumulatedReasoning.text = (accumulatedReasoning.text ?? '') + delta.text
-              if (delta.signature) accumulatedReasoning.signature = delta.signature
-              if (delta.redactedContent) accumulatedReasoning.redactedContent = delta.redactedContent
-            } else if (delta.type === 'citationsContentDelta') {
-              accumulatedCitationsList.push(...delta.citations)
-              accumulatedCitationsContent.push(...delta.content)
-              hasCitations = true
+            switch (event.delta.type) {
+              case 'textDelta':
+                accumulatedText += event.delta.text
+                break
+              case 'toolUseInputDelta':
+                accumulatedToolInput += event.delta.input
+                break
+              case 'reasoningContentDelta':
+                if (event.delta.text) accumulatedReasoning.text = (accumulatedReasoning.text ?? '') + event.delta.text
+                if (event.delta.signature) accumulatedReasoning.signature = event.delta.signature
+                if (event.delta.redactedContent) accumulatedReasoning.redactedContent = event.delta.redactedContent
+                break
+              case 'citationsDelta':
+                accumulatedCitations.push(event.delta.citations, event.delta.content)
+                break
             }
             break
           }
@@ -282,12 +299,12 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
                   ...accumulatedReasoning,
                 })
                 accumulatedReasoning = {} // Reset after creating reasoning block
-              } else if (hasCitations) {
+              } else if (accumulatedCitations.hasData()) {
                 block = new CitationsBlock({
-                  citations: accumulatedCitationsList,
-                  content: accumulatedCitationsContent,
+                  citations: accumulatedCitations.citations,
+                  content: accumulatedCitations.content,
                 })
-                hasCitations = false
+                accumulatedCitations.reset()
               } else {
                 block = new TextBlock(accumulatedText)
               }

@@ -820,7 +820,7 @@ describe('BedrockModel', () => {
       expect(events).toContainEqual({
         type: 'modelContentBlockDeltaEvent',
         delta: {
-          type: 'citationsContentDelta',
+          type: 'citationsDelta',
           citations: [
             {
               location: { type: 'documentChar', documentIndex: 0, start: 10, end: 50 },
@@ -1644,7 +1644,7 @@ describe('BedrockModel', () => {
                         title: 'Search Result',
                       },
                       {
-                        location: { web: { url: 'https://example.com/doc' } },
+                        location: { web: { url: 'https://example.com/doc', domain: 'example.com' } },
                         source: 'web-0',
                         sourceContent: [{ text: 'web source' }],
                         title: 'Web Page',

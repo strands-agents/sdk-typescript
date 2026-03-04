@@ -357,7 +357,7 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel, mode
         expect(followUp.lastMessage.content.length).toBeGreaterThan(0)
       })
 
-      it('emits citationsContentDelta events via agent.stream()', async () => {
+      it('emits citationsDelta events via agent.stream()', async () => {
         const agent = new Agent({
           model: createModel({ stream: false }),
           printer: false,
@@ -371,7 +371,7 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel, mode
           (item) =>
             item.type === 'modelStreamUpdateEvent' &&
             item.event.type === 'modelContentBlockDeltaEvent' &&
-            item.event.delta.type === 'citationsContentDelta'
+            item.event.delta.type === 'citationsDelta'
         )
         expect(citationDeltas.length).toBeGreaterThan(0)
 

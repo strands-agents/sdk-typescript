@@ -134,7 +134,7 @@ export type {
   TextDelta,
   ToolUseInputDelta,
   ReasoningContentDelta,
-  CitationsContentDelta,
+  CitationsDelta,
   ContentBlockDelta,
   ModelContentBlockDeltaEventData,
   ModelContentBlockDeltaEvent,

@@ -117,7 +117,7 @@ export type ContentBlockData =
   | { image: ImageBlockData }
   | { video: VideoBlockData }
   | { document: DocumentBlockData }
-  | { citationsContent: CitationsBlockData }
+  | { citations: CitationsBlockData }
 
 export type ContentBlock =
   | TextBlock
@@ -879,7 +879,7 @@ export function contentBlockFromData(data: ContentBlockData): ContentBlock {
     return VideoBlock.fromJSON(data)
   } else if ('document' in data) {
     return DocumentBlock.fromJSON(data)
-  } else if ('citationsContent' in data) {
+  } else if ('citations' in data) {
     return CitationsBlock.fromJSON(data)
   } else {
     throw new Error('Unknown ContentBlockData type')

@@ -42,7 +42,7 @@ import {
 import { type BaseModelConfig, Model, type StreamOptions } from '../models/model.js'
 import type { ContentBlock, Message, StopReason, ToolUseBlock } from '../types/messages.js'
 import type { ImageSource, VideoSource, DocumentSource } from '../types/media.js'
-import type { CitationsContentDelta, ModelStreamEvent, ReasoningContentDelta, Usage } from '../models/streaming.js'
+import type { CitationsDelta, ModelStreamEvent, ReasoningContentDelta, Usage } from '../models/streaming.js'
 import type { Citation, CitationLocation, CitationsBlockData } from '../types/citations.js'
 import type { JSONValue } from '../types/json.js'
 import { ContextWindowOverflowError, ModelThrottledError, normalizeError } from '../errors.js'
@@ -819,8 +819,8 @@ export class BedrockModel extends Model<BedrockModelConfig> {
         events.push({ type: 'modelContentBlockStartEvent' })
 
         const mapped = this._mapBedrockCitationsData(block)
-        const delta: CitationsContentDelta = {
-          type: 'citationsContentDelta',
+        const delta: CitationsDelta = {
+          type: 'citationsDelta',
           citations: mapped.citations,
           content: mapped.content,
         }
@@ -943,8 +943,8 @@ export class BedrockModel extends Model<BedrockModelConfig> {
           citationsContent: (block: BedrockCitationsContentBlock): void => {
             if (!block) return
             const mapped = this._mapBedrockCitationsData(block)
-            const delta: CitationsContentDelta = {
-              type: 'citationsContentDelta',
+            const delta: CitationsDelta = {
+              type: 'citationsDelta',
               citations: mapped.citations,
               content: mapped.content,
             }
@@ -1184,7 +1184,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
         return { searchResultLocation: fields }
       }
       case 'web':
-        return { web: { url: location.url } }
+        return { web: { url: location.url, ...(location.domain && { domain: location.domain }) } }
       default:
         return location as unknown as BedrockCitationLocation
     }

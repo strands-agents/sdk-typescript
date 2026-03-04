@@ -324,7 +324,7 @@ export interface ToolUseStart {
  *
  * This is a discriminated union for type-safe delta handling.
  */
-export type ContentBlockDelta = TextDelta | ToolUseInputDelta | ReasoningContentDelta | CitationsContentDelta
+export type ContentBlockDelta = TextDelta | ToolUseInputDelta | ReasoningContentDelta | CitationsDelta
 
 /**
  * Text delta within a content block.
@@ -388,11 +388,11 @@ export interface ReasoningContentDelta {
  * Citations content delta within a content block.
  * Represents a citations content block from the model.
  */
-export interface CitationsContentDelta {
+export interface CitationsDelta {
   /**
    * Discriminator for citations content delta.
    */
-  type: 'citationsContentDelta'
+  type: 'citationsDelta'
 
   /**
    * Array of citations linking generated content to source locations.

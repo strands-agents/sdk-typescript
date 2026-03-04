@@ -99,7 +99,7 @@ describe('CitationsBlock', () => {
     const block = new CitationsBlock(singleCitationData)
     const json = block.toJSON()
     expect(json).toStrictEqual({
-      citationsContent: {
+      citations: {
         citations: singleCitationData.citations,
         content: singleCitationData.content,
       },

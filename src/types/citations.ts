@@ -171,7 +171,7 @@ export interface CitationsBlockData {
  * This is an output-only block — users do not construct these directly.
  */
 export class CitationsBlock
-  implements CitationsBlockData, JSONSerializable<{ citationsContent: Serialized<CitationsBlockData> }>
+  implements CitationsBlockData, JSONSerializable<{ citations: Serialized<CitationsBlockData> }>
 {
   /**
    * Discriminator for citations content.
@@ -197,9 +197,9 @@ export class CitationsBlock
    * Serializes the CitationsBlock to a JSON-compatible ContentBlockData object.
    * Called automatically by JSON.stringify().
    */
-  toJSON(): { citationsContent: Serialized<CitationsBlockData> } {
+  toJSON(): { citations: Serialized<CitationsBlockData> } {
     return {
-      citationsContent: {
+      citations: {
         citations: this.citations,
         content: this.content,
       },
@@ -212,7 +212,7 @@ export class CitationsBlock
    * @param data - Wrapped CitationsBlockData to deserialize
    * @returns CitationsBlock instance
    */
-  static fromJSON(data: { citationsContent: Serialized<CitationsBlockData> }): CitationsBlock {
-    return new CitationsBlock(data.citationsContent)
+  static fromJSON(data: { citations: Serialized<CitationsBlockData> }): CitationsBlock {
+    return new CitationsBlock(data.citations)
   }
 }

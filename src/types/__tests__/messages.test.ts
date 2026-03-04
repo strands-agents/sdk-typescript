@@ -287,7 +287,7 @@ describe('Message.fromMessageData', () => {
       role: 'assistant',
       content: [
         {
-          citationsContent: {
+          citations: {
             citations: [
               {
                 location: { type: 'documentChar', documentIndex: 0, start: 10, end: 50 },
