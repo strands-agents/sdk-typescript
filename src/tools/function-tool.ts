@@ -4,7 +4,7 @@ import { ToolStreamEvent } from './tool.js'
 import type { ToolSpec } from './types.js'
 import type { JSONSchema, JSONValue } from '../types/json.js'
 import { deepCopy } from '../types/json.js'
-import { JsonBlock, TextBlock, ToolResultBlock } from '../types/messages.js'
+import { JsonBlock, TextBlock, ToolResultBlock, type ToolResultContent } from '../types/messages.js'
 import { DocumentBlock, ImageBlock, VideoBlock } from '../types/media.js'
 
 /**
@@ -207,12 +207,13 @@ export class FunctionTool extends Tool {
    *
    * Due to AWS Bedrock limitations (only accepts objects as JSON content), the following
    * rules are applied:
-   * - Media blocks (DocumentBlock, ImageBlock, VideoBlock) → passed through directly
+   * - Content blocks (TextBlock, JsonBlock, ImageBlock, VideoBlock, DocumentBlock) → passed through directly
+   * - Arrays of content blocks → used directly as content array
    * - Strings → TextBlock
    * - Numbers, Booleans → TextBlock (converted to string)
    * - null, undefined → TextBlock (special string representation)
    * - Objects → JsonBlock (with deep copy)
-   * - Arrays → JsonBlock wrapped in \{ $value: array \} (with deep copy)
+   * - Arrays (non-content blocks) → JsonBlock wrapped in \{ $value: array \} (with deep copy)
    *
    * @param value - The value to wrap (can be any type)
    * @param toolUseId - The tool use ID for the ToolResultBlock
@@ -220,8 +221,8 @@ export class FunctionTool extends Tool {
    */
   private _wrapInToolResult(value: unknown, toolUseId: string): ToolResultBlock {
     try {
-      // Handle media blocks - pass through directly
-      if (value instanceof DocumentBlock || value instanceof ImageBlock || value instanceof VideoBlock) {
+      // Handle content blocks - pass through directly
+      if (this._isToolResultContent(value)) {
         return new ToolResultBlock({
           toolUseId,
           status: 'success',
@@ -257,8 +258,18 @@ export class FunctionTool extends Tool {
         })
       }
 
-      // Handle arrays by wrapping in object { $value: array }
+      // Handle arrays
       if (Array.isArray(value)) {
+        // Check if array contains only ToolResultContent instances
+        if (value.length > 0 && value.every((item) => this._isToolResultContent(item))) {
+          return new ToolResultBlock({
+            toolUseId,
+            status: 'success',
+            content: value,
+          })
+        }
+
+        // Otherwise wrap in object { $value: array }
         const copiedValue = deepCopy(value)
         return new ToolResultBlock({
           toolUseId,
@@ -278,5 +289,21 @@ export class FunctionTool extends Tool {
       // If deep copy fails (circular references, non-serializable values), return error result
       return createErrorResult(error, toolUseId)
     }
+  }
+
+  /**
+   * Type guard to check if a value is a ToolResultContent instance.
+   *
+   * @param value - Value to check
+   * @returns True if value is a ToolResultContent instance
+   */
+  private _isToolResultContent(value: unknown): value is ToolResultContent {
+    return (
+      value instanceof TextBlock ||
+      value instanceof JsonBlock ||
+      value instanceof ImageBlock ||
+      value instanceof VideoBlock ||
+      value instanceof DocumentBlock
+    )
   }
 }
