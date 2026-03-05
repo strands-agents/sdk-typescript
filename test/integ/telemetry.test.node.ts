@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest'
+import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from 'vitest'
 import { Agent, telemetry, tool } from '@strands-agents/sdk'
 import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node'
 import { InMemorySpanExporter, SimpleSpanProcessor } from '@opentelemetry/sdk-trace-base'
@@ -723,6 +723,19 @@ describe.sequential('Telemetry Integration', () => {
       const scopeSpan = spans.find((s) => s.name === 'scope-check')!
 
       expect(scopeSpan.instrumentationLibrary.name).toBe('strands-agents')
+    })
+
+    it('respects OTEL_SERVICE_NAME for the instrumentation scope', async () => {
+      vi.stubEnv('OTEL_SERVICE_NAME', 'my-weather-app')
+
+      const tracer = telemetry.getTracer()
+      const span = tracer.startSpan('custom-scope-check')
+      span.end()
+
+      const spans = await flush()
+      const scopeSpan = spans.find((s) => s.name === 'custom-scope-check')!
+
+      expect(scopeSpan.instrumentationLibrary.name).toBe('my-weather-app')
     })
 
     it('creates spans that nest correctly under agent spans', async () => {
