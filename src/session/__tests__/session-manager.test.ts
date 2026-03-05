@@ -3,7 +3,6 @@ import { SessionManager } from '../session-manager.js'
 import { MockSnapshotStorage, createTestSnapshot } from '../../__fixtures__/mock-storage-provider.js'
 import { HookRegistry, InitializedEvent, MessageAddedEvent, AfterInvocationEvent } from '../../hooks/index.js'
 import { Agent } from '../../agent/agent.js'
-import { AgentState } from '../../agent/state.js'
 import { Message, TextBlock } from '../../types/messages.js'
 
 // Test fixtures
@@ -11,7 +10,21 @@ function createMockAgent(agentId = 'default'): Agent {
   const agent = {
     agentId,
     messages: [],
-    state: new AgentState(),
+    state: {
+      _m: new Map(),
+      get(k: string) {
+        return this._m.get(k)
+      },
+      set(k: string, v: unknown) {
+        this._m.set(k, v)
+      },
+      toJSON() {
+        return Object.fromEntries(this._m)
+      },
+      loadStateFromJson(json: Record<string, unknown>) {
+        Object.entries(json).forEach(([k, v]) => this._m.set(k, v))
+      },
+    } as any,
     systemPrompt: 'Test prompt',
   } as unknown as Agent
   return agent
@@ -368,7 +381,7 @@ describe('SessionManager', () => {
         sessionId: 'test-session',
         storage: { snapshot: storage },
         saveLatestOn: 'trigger',
-        snapshotTrigger: ({ agentData }) => (agentData.state as AgentState).get('checkpoint') === true,
+        snapshotTrigger: ({ agentData }) => (agentData.state as any).get('checkpoint') === true,
       })
       sessionManager.registerCallbacks(registry)
       await registry.invokeCallbacks(new InitializedEvent(createMockEvent(mockAgent)))
