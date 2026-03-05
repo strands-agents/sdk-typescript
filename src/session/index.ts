@@ -1,18 +1,6 @@
 /**
- * Session management module for conversation persistence and restoration.
- *
- * Exported as a separate entry point (`@strands-agents/sdk/session`) rather than
- * from the main index to avoid a circular dependency:
- * session-manager.ts → agent.ts (for takeSnapshot/loadSnapshot) → session-manager.ts.
- * This will be resolved when the stateless AgentSpec proposal lands.
- *
- * @example
- * ```typescript
- * import { FileStorage, SnapshotStorage } from '@strands-agents/sdk/session'
- *
- * const storage = new FileStorage('./sessions')
- * await storage.saveSnapshot({ sessionId, scope, isLatest: true, snapshot })
- * ```
+ * Session management module re-exports.
+ * These are exported from the main `@strands-agents/sdk` entry point.
  */
 
 // Core types

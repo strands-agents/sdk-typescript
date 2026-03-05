@@ -46,7 +46,7 @@ export interface SessionManagerConfig {
  *
  * @example
  * ```typescript
- * import { SessionManager, FileStorage } from '@strands-agents/sdk/session'
+ * import { SessionManager, FileStorage } from '@strands-agents/sdk'
  *
  * const session = new SessionManager({
  *   sessionId: 'my-session',

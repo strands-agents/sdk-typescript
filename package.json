@@ -14,10 +14,6 @@
       "types": "./dist/src/index.d.ts",
       "default": "./dist/src/index.js"
     },
-    "./session": {
-      "types": "./dist/src/session/index.d.ts",
-      "default": "./dist/src/session/index.js"
-    },
     "./anthropic": {
       "types": "./dist/src/models/anthropic.d.ts",
       "default": "./dist/src/models/anthropic.js"
