@@ -33,6 +33,21 @@ export function getServiceName(): string {
  * configured service name.
  *
  * @returns An OTel Tracer instance from the global tracer provider
+ *
+ * @example
+ * ```typescript
+ * import { telemetry } from '@strands-agents/sdk'
+ *
+ * // Set up telemetry first
+ * telemetry.setupTracer({ exporters: { otlp: true } })
+ *
+ * // Get a tracer and create custom spans
+ * const tracer = telemetry.getTracer()
+ * const span = tracer.startSpan('my-custom-operation')
+ * span.setAttribute('custom.key', 'value')
+ * // ... do work ...
+ * span.end()
+ * ```
  */
 export function getTracer(): OtelTracer {
   return trace.getTracer(getServiceName())

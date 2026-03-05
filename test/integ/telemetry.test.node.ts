@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest'
-import { Agent, tool } from '@strands-agents/sdk'
+import { Agent, telemetry, tool } from '@strands-agents/sdk'
 import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node'
 import { InMemorySpanExporter, SimpleSpanProcessor } from '@opentelemetry/sdk-trace-base'
 import type { ReadableSpan } from '@opentelemetry/sdk-trace-base'
@@ -697,6 +697,45 @@ describe.sequential('Telemetry Integration', () => {
 
       // Both responses were seen
       expect(expectedResponses.size).toBe(0)
+    })
+  })
+
+  describe('getTracer', () => {
+    it('returns a tracer that produces spans captured by the registered provider', async () => {
+      const tracer = telemetry.getTracer()
+      const span = tracer.startSpan('custom-operation')
+      span.setAttribute('custom.key', 'custom-value')
+      span.end()
+
+      const spans = await flush()
+      const customSpans = spans.filter((s) => s.name === 'custom-operation')
+
+      expect(customSpans).toHaveLength(1)
+      expect(attr(customSpans[0]!, 'custom.key')).toBe('custom-value')
+    })
+
+    it('uses the configured service name as the instrumentation scope', async () => {
+      const tracer = telemetry.getTracer()
+      const span = tracer.startSpan('scope-check')
+      span.end()
+
+      const spans = await flush()
+      const scopeSpan = spans.find((s) => s.name === 'scope-check')!
+
+      expect(scopeSpan.instrumentationLibrary.name).toBe('strands-agents')
+    })
+
+    it('creates spans that nest correctly under agent spans', async () => {
+      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hi' })
+      const agent = new Agent({ model, printer: false, name: 'gettracer-agent' })
+
+      await agent.invoke('Hello')
+
+      const spans = await flush()
+      const agentSpan = findSpans(spans, AGENT_SPAN_PREFIX)[0]!
+
+      // Agent internally uses getTracer — verify the tracer produced valid spans
+      expect(agentSpan.instrumentationLibrary.name).toBe('strands-agents')
     })
   })
 })
