@@ -425,5 +425,54 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel, mode
       // Validate multi-turn works after built-in tool use
       await collectGenerator(agent.stream('What was the result?'))
     })
+
+    describe.skipIf(!supports.tools)('Structured Output', () => {
+      it('returns typed result matching zod schema', async () => {
+        const schema = z.object({
+          city: z.string(),
+          country: z.string(),
+          population_millions: z.number(),
+        })
+
+        const agent = new Agent({
+          model: createModel(),
+          structuredOutputSchema: schema,
+          printer: false,
+        })
+
+        const result = await agent.invoke('What is the capital of France? Include approximate population in millions.')
+
+        expect(result.stopReason).toBe('endTurn')
+        expect(result.structuredOutput).toBeDefined()
+
+        const output = result.structuredOutput as z.infer<typeof schema>
+        expect(typeof output.city).toBe('string')
+        expect(typeof output.country).toBe('string')
+        expect(typeof output.population_millions).toBe('number')
+        expect(output.city).toMatch(/Paris/i)
+      })
+
+      it('returns structured output via streaming', async () => {
+        const schema = z.object({
+          animal: z.string(),
+          legs: z.number(),
+        })
+
+        const agent = new Agent({
+          model: createModel(),
+          structuredOutputSchema: schema,
+          printer: false,
+        })
+
+        const { result } = await collectGenerator(agent.stream('Describe a cat with number of legs.'))
+
+        expect(result.stopReason).toBe('endTurn')
+        expect(result.structuredOutput).toBeDefined()
+
+        const output = result.structuredOutput as z.infer<typeof schema>
+        expect(typeof output.animal).toBe('string')
+        expect(typeof output.legs).toBe('number')
+      })
+    })
   })
 })
