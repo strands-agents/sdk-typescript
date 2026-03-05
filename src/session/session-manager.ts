@@ -62,9 +62,6 @@ export class SessionManager implements HookProvider {
   private readonly _saveLatestOn: SaveLatestStrategy
   private readonly _snapshotTrigger?: SnapshotTriggerCallback | undefined
 
-  private _turnCount = 0
-  private _lastSnapshotAt?: number
-
   constructor(config: SessionManagerConfig) {
     this._sessionId = config.sessionId ?? 'default-session'
     this._storage = { snapshot: config.storage.snapshot }
@@ -126,21 +123,13 @@ export class SessionManager implements HookProvider {
   /** Saves latest on invocation and fires the snapshot trigger if configured. */
   private async _onAfterAgentInvocation(event: AfterInvocationEvent): Promise<void> {
     const agent = event.agent as Agent
-    this._turnCount += 1
 
     if (this._saveLatestOn === 'invocation') {
       await this.saveSnapshot({ target: agent, isLatest: true })
     }
 
-    if (
-      this._snapshotTrigger?.({
-        turnCount: this._turnCount,
-        ...(this._lastSnapshotAt !== undefined && { lastSnapshotAt: this._lastSnapshotAt }),
-        agentData: { state: agent.state, messages: agent.messages },
-      })
-    ) {
+    if (this._snapshotTrigger?.({ agentData: { state: agent.state, messages: agent.messages } })) {
       await this._saveImmutableAndLatest(agent)
-      this._lastSnapshotAt = Date.now()
     }
   }
 

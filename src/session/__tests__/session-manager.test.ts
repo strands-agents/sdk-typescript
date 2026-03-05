@@ -428,16 +428,16 @@ describe('SessionManager', () => {
     })
 
     it('supports resuming from immutable snapshot', async () => {
-      // First session - create one immutable snapshot at turn 2
+      // First session - snapshot fires when messages.length === 2 (after turn 1)
       sessionManager = new SessionManager({
         sessionId: 'resume-test',
         storage: { snapshot: storage },
         saveLatestOn: 'trigger',
-        snapshotTrigger: ({ turnCount }) => turnCount === 2,
+        snapshotTrigger: ({ agentData }) => agentData.messages.length === 2,
       })
       sessionManager.registerCallbacks(registry)
       await registry.invokeCallbacks(new InitializedEvent(createMockEvent(mockAgent)))
-      await registry.invokeCallbacks(new AfterInvocationEvent(createMockEvent(mockAgent)))
+      mockAgent.messages.push(MOCK_MESSAGE, MOCK_MESSAGE)
       await registry.invokeCallbacks(new AfterInvocationEvent(createMockEvent(mockAgent)))
 
       const ids = await storage.listSnapshotIds({
