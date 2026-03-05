@@ -26,10 +26,11 @@ import { MaxTokensError, ModelError, normalizeError } from '../errors.js'
 export interface CacheConfig {
   /**
    * Caching strategy to use.
-   * - "auto": Automatically inject cache points at optimal positions
+   * - "auto": Automatically inject cache points at optimal positions based on model ID detection
    *   (after system prompt, after tools, after last assistant message)
+   * - "anthropic": Force enable Anthropic-style caching (useful for application inference profiles)
    */
-  strategy: 'auto'
+  strategy: 'auto' | 'anthropic'
 }
 
 /**

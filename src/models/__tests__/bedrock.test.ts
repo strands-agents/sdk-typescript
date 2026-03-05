@@ -349,7 +349,7 @@ describe('BedrockModel', () => {
             content: [{ text: 'Hello' }],
           },
         ],
-        system: [{ text: 'You are a helpful assistant' }, { cachePoint: { type: 'default' } }],
+        system: [{ text: 'You are a helpful assistant' }],
         toolConfig: {
           toolChoice: { auto: {} },
           tools: [
@@ -360,7 +360,6 @@ describe('BedrockModel', () => {
                 inputSchema: { json: { type: 'object', properties: { expression: { type: 'string' } } } },
               },
             },
-            { cachePoint: { type: 'default' } },
           ],
         },
         inferenceConfig: {
@@ -1099,7 +1098,7 @@ describe('BedrockModel', () => {
       vi.clearAllMocks()
     })
 
-    it('formats string system prompt with cacheConfig', async () => {
+    it('does not add cache points to string system prompt with cacheConfig', async () => {
       const provider = new BedrockModel({ cacheConfig: { strategy: 'auto' } })
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
       const options: StreamOptions = {
@@ -1116,7 +1115,7 @@ describe('BedrockModel', () => {
             content: [{ text: 'Hello' }],
           },
         ],
-        system: [{ text: 'You are a helpful assistant' }, { cachePoint: { type: 'default' } }],
+        system: [{ text: 'You are a helpful assistant' }],
       })
     })
 
@@ -1204,7 +1203,7 @@ describe('BedrockModel', () => {
       warnSpy.mockRestore()
     })
 
-    it('adds cache point after tools when cacheConfig enabled', async () => {
+    it('does not add cache point after tools when cacheConfig enabled', async () => {
       const provider = new BedrockModel({ cacheConfig: { strategy: 'auto' } })
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
       const options: StreamOptions = {
@@ -1236,13 +1235,12 @@ describe('BedrockModel', () => {
                 inputSchema: { json: { type: 'object' } },
               },
             },
-            { cachePoint: { type: 'default' } },
           ],
         },
       })
     })
 
-    it('adds cache points to system prompt, tools, and messages when cacheConfig enabled', async () => {
+    it('adds cache points only to messages when cacheConfig enabled', async () => {
       const provider = new BedrockModel({ cacheConfig: { strategy: 'auto' } })
       const messages = [
         new Message({ role: 'user', content: [new TextBlock('Hello')] }),
@@ -1262,8 +1260,16 @@ describe('BedrockModel', () => {
       collectIterator(provider.stream(messages, options))
 
       const call = mockConverseStreamCommand.mock.lastCall?.[0]
-      expect(call?.system?.[1]).toStrictEqual({ cachePoint: { type: 'default' } })
-      expect(call?.toolConfig?.tools?.[1]).toStrictEqual({ cachePoint: { type: 'default' } })
+      expect(call?.system).toStrictEqual([{ text: 'You are a helpful assistant' }])
+      expect(call?.toolConfig?.tools).toStrictEqual([
+        {
+          toolSpec: {
+            name: 'calculator',
+            description: 'Calculate',
+            inputSchema: { json: { type: 'object' } },
+          },
+        },
+      ])
       const lastMsg = call?.messages?.[call.messages.length - 1]
       const lastBlock = lastMsg?.content?.[lastMsg.content.length - 1]
       expect(lastBlock).toStrictEqual({ cachePoint: { type: 'default' } })
@@ -1314,6 +1320,24 @@ describe('BedrockModel', () => {
       })
 
       warnSpy.mockRestore()
+    })
+
+    it('enables caching with anthropic strategy for application inference profiles', async () => {
+      const provider = new BedrockModel({
+        modelId: 'arn:aws:bedrock:us-east-1:123456789012:application-inference-profile/abc123',
+        cacheConfig: { strategy: 'anthropic' },
+      })
+      const messages = [
+        new Message({ role: 'user', content: [new TextBlock('Hello')] }),
+        new Message({ role: 'assistant', content: [new TextBlock('Hi')] }),
+      ]
+
+      collectIterator(provider.stream(messages))
+
+      const call = mockConverseStreamCommand.mock.lastCall?.[0]
+      const lastMsg = call?.messages?.[call.messages.length - 1]
+      const lastBlock = lastMsg?.content?.[lastMsg.content.length - 1]
+      expect(lastBlock).toStrictEqual({ cachePoint: { type: 'default' } })
     })
 
     it('handles empty array system prompt', async () => {

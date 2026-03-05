@@ -66,7 +66,7 @@ const MODELS_INCLUDE_STATUS = ['anthropic.claude']
  * Currently only Anthropic Claude models on Bedrock support prompt caching.
  * @see https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-caching.html
  */
-const MODELS_SUPPORTING_CACHING = ['anthropic.claude']
+const MODELS_SUPPORTING_CACHING = ['anthropic', 'claude']
 
 /**
  * Error messages that indicate context window overflow.
@@ -308,32 +308,43 @@ export class BedrockModel extends Model<BedrockModelConfig> {
   }
 
   /**
-   * Whether this model supports prompt caching.
-   * Returns true for models in MODELS_SUPPORTING_CACHING.
+   * Returns the cache strategy for this model based on its model ID.
+   * Returns the appropriate cache strategy name, or null if automatic caching is not supported.
    *
-   * @returns True if the model supports caching
+   * @returns Cache strategy name or null
    */
-  private _supportsCaching(): boolean {
-    return MODELS_SUPPORTING_CACHING.some((pattern) => this._config.modelId?.includes(pattern))
+  private _getCacheStrategy(): 'anthropic' | null {
+    return MODELS_SUPPORTING_CACHING.some((pattern) => this._config.modelId?.includes(pattern)) ? 'anthropic' : null
   }
 
   /**
    * Determines if caching should be enabled.
-   * Returns true when auto strategy is configured and model supports caching.
+   * Returns true when:
+   * - strategy is 'anthropic' (explicit enable)
+   * - strategy is 'auto' and model supports caching (auto-detect)
    *
    * @returns True if caching should be enabled
    */
   private _shouldEnableCaching(): boolean {
-    if (this._config.cacheConfig?.strategy === 'auto') {
-      if (!this._supportsCaching()) {
+    const cacheConfig = this._config.cacheConfig
+    if (!cacheConfig) {
+      return false
+    }
+
+    let strategy = cacheConfig.strategy
+
+    if (strategy === 'auto') {
+      const detectedStrategy = this._getCacheStrategy()
+      if (!detectedStrategy) {
         logger.warn(
-          `model_id=<${this._config.modelId}> | cache_config is enabled but this model does not support caching`
+          `model_id=<${this._config.modelId}> | cache_config is enabled but this model does not support automatic caching`
         )
         return false
       }
-      return true
+      strategy = detectedStrategy
     }
-    return false
+
+    return strategy === 'anthropic'
   }
 
   /**
@@ -450,16 +461,10 @@ export class BedrockModel extends Model<BedrockModelConfig> {
       messages: this._formatMessages(messages),
     }
 
-    // Add system prompt with optional caching
+    // Add system prompt
     if (options?.systemPrompt !== undefined) {
       if (typeof options.systemPrompt === 'string') {
-        const system: BedrockContentBlock[] = [{ text: options.systemPrompt }]
-
-        if (this._shouldEnableCaching()) {
-          system.push({ cachePoint: { type: 'default' } })
-        }
-
-        request.system = system
+        request.system = [{ text: options.systemPrompt }]
       } else if (options.systemPrompt.length > 0) {
         request.system = options.systemPrompt.map((block) => this._formatContentBlock(block) as SystemContentBlock)
       }
@@ -477,10 +482,6 @@ export class BedrockModel extends Model<BedrockModelConfig> {
             },
           }) as Tool
       )
-
-      if (this._shouldEnableCaching()) {
-        tools.push({ cachePoint: { type: 'default' } } as Tool)
-      }
 
       const toolConfig: ToolConfiguration = {
         tools: tools,
