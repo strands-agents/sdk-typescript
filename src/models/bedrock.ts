@@ -63,10 +63,10 @@ const MODELS_INCLUDE_STATUS = ['anthropic.claude']
 
 /**
  * Models that support prompt caching.
- * Currently only Anthropic Claude models on Bedrock support prompt caching.
+ * Anthropic Claude and Amazon Nova models on Bedrock support prompt caching.
  * @see https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-caching.html
  */
-const MODELS_SUPPORTING_CACHING = ['anthropic', 'claude']
+const MODELS_SUPPORTING_CACHING = ['anthropic', 'claude', 'nova']
 
 /**
  * Error messages that indicate context window overflow.
