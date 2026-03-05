@@ -1,24 +1,22 @@
+import { AgentResult, type AgentStreamEvent } from '../types/agent.js'
+import { BedrockModel } from '../models/bedrock.js'
 import {
-  AgentResult,
-  type AgentStreamEvent,
-  BedrockModel,
   contentBlockFromData,
   type ContentBlock,
   type ContentBlockData,
-  type JSONValue,
-  McpClient,
   Message,
   type MessageData,
   type StopReason,
   type SystemPrompt,
   type SystemPromptData,
   TextBlock,
-  type Tool,
-  type ToolChoice,
-  type ToolContext,
   ToolResultBlock,
   ToolUseBlock,
-} from '../index.js'
+} from '../types/messages.js'
+import type { JSONValue } from '../types/json.js'
+import { McpClient } from '../mcp.js'
+import { type Tool, type ToolContext } from '../tools/tool.js'
+import type { ToolChoice } from '../tools/types.js'
 import { systemPromptFromData } from '../types/messages.js'
 import { normalizeError, ConcurrentInvocationError, MaxTokensError } from '../errors.js'
 import { Model } from '../models/model.js'
