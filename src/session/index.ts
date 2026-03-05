@@ -1,8 +1,10 @@
 /**
  * Session management module for conversation persistence and restoration.
  *
- * Provides snapshot-based session management with pluggable storage backends.
- * Supports conversation history, state persistence, and branching.
+ * Exported as a separate entry point (`@strands-agents/sdk/session`) rather than
+ * from the main index to avoid a circular dependency:
+ * session-manager.ts → agent.ts (for takeSnapshot/loadSnapshot) → session-manager.ts.
+ * This will be resolved when the stateless AgentSpec proposal lands.
  *
  * @example
  * ```typescript

@@ -123,7 +123,7 @@ export type AgentConfig = {
    */
   structuredOutputSchema?: z.ZodSchema
   /**
-   * Session manager for saving snapshots.
+   * Session manager for saving and restoring agent sessions
    */
   sessionManager?: SessionManager
   /**

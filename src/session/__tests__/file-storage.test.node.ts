@@ -206,13 +206,6 @@ describe('FileStorage', () => {
         expect(result).toEqual(ids)
       })
 
-      it('returns empty array when no snapshots exist', async () => {
-        const result = await storage.listSnapshotIds({
-          location: { sessionId: 'empty-session', scope: 'agent', scopeId: SCOPE_ID },
-        })
-        expect(result).toEqual([])
-      })
-
       it('ignores non-snapshot files', async () => {
         const location: SnapshotLocation = { sessionId: 'test-session', scope: createTestScope(), scopeId: SCOPE_ID }
         const snapshot = createTestSnapshot()

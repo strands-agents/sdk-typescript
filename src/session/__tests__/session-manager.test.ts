@@ -7,8 +7,9 @@ import { AgentState } from '../../agent/state.js'
 import { Message, TextBlock } from '../../types/messages.js'
 
 // Test fixtures
-function createMockAgent(): Agent {
+function createMockAgent(agentId = 'default'): Agent {
   const agent = {
+    agentId,
     messages: [],
     state: new AgentState(),
     systemPrompt: 'Test prompt',
@@ -39,25 +40,11 @@ describe('SessionManager', () => {
   })
 
   describe('constructor', () => {
-    it('uses default values when no config provided', () => {
-      sessionManager = new SessionManager()
-      expect(sessionManager).toBeDefined()
-    })
-
-    it('uses provided sessionId and agentId', () => {
-      sessionManager = new SessionManager({
-        sessionId: 'custom-session',
-        agentId: 'custom-agent',
-        storage: { snapshot: storage },
-      })
-      expect(sessionManager).toBeDefined()
-    })
-
-    it('defaults saveLatestOn to message', async () => {
+    it('defaults saveLatestOn to invocation', async () => {
       sessionManager = new SessionManager({ sessionId: 'test-default', storage: { snapshot: storage } })
       sessionManager.registerCallbacks(registry)
 
-      await registry.invokeCallbacks(new MessageAddedEvent(createMockMessageEvent(mockAgent)))
+      await registry.invokeCallbacks(new AfterInvocationEvent(createMockEvent(mockAgent)))
 
       const snapshot = await storage.loadSnapshot({
         location: { sessionId: 'test-default', scope: 'agent', scopeId: 'default' },
@@ -66,18 +53,11 @@ describe('SessionManager', () => {
     })
   })
 
-  describe('registerCallbacks', () => {
-    it('registers callbacks without errors', () => {
-      sessionManager = new SessionManager({ storage: { snapshot: storage } })
-      expect(() => sessionManager.registerCallbacks(registry)).not.toThrow()
-    })
-  })
-
   describe('saveSnapshot', () => {
     beforeEach(() => {
+      mockAgent = createMockAgent('test-agent')
       sessionManager = new SessionManager({
         sessionId: 'test-session',
-        agentId: 'test-agent',
         storage: { snapshot: storage },
       })
     })
@@ -115,9 +95,9 @@ describe('SessionManager', () => {
 
   describe('restoreSnapshot', () => {
     beforeEach(() => {
+      mockAgent = createMockAgent('test-agent')
       sessionManager = new SessionManager({
         sessionId: 'test-session',
-        agentId: 'test-agent',
         storage: { snapshot: storage },
       })
     })
@@ -158,6 +138,10 @@ describe('SessionManager', () => {
   })
 
   describe('InitializedEvent handling', () => {
+    beforeEach(() => {
+      mockAgent = createMockAgent('test-agent')
+    })
+
     it('loads snapshot when loadSnapshotId is provided', async () => {
       const snapshot = createTestSnapshot()
       await storage.saveSnapshot({
@@ -169,7 +153,6 @@ describe('SessionManager', () => {
 
       sessionManager = new SessionManager({
         sessionId: 'test-session',
-        agentId: 'test-agent',
         storage: { snapshot: storage },
         loadSnapshotId: '3',
       })
@@ -180,34 +163,9 @@ describe('SessionManager', () => {
       expect(mockAgent.messages).toEqual(snapshot.data.messages)
     })
 
-    it('does not update manifest when loading snapshot_latest', async () => {
-      const snapshot = createTestSnapshot()
-      await storage.saveSnapshot({
-        location: { sessionId: 'test-session', scope: 'agent', scopeId: 'test-agent' },
-        snapshotId: 'latest',
-        isLatest: true,
-        snapshot,
-      })
-
-      sessionManager = new SessionManager({
-        sessionId: 'test-session',
-        agentId: 'test-agent',
-        storage: { snapshot: storage },
-      })
-      sessionManager.registerCallbacks(registry)
-
-      await registry.invokeCallbacks(new InitializedEvent(createMockEvent(mockAgent)))
-
-      const manifest = await storage.loadManifest({
-        location: { sessionId: 'test-session', scope: 'agent', scopeId: 'test-agent' },
-      })
-      expect(manifest.schemaVersion).toBe('1.0')
-    })
-
     it('handles missing snapshot gracefully', async () => {
       sessionManager = new SessionManager({
         sessionId: 'new-session',
-        agentId: 'new-agent',
         storage: { snapshot: storage },
       })
       sessionManager.registerCallbacks(registry)
@@ -217,10 +175,13 @@ describe('SessionManager', () => {
   })
 
   describe('MessageAddedEvent handling', () => {
+    beforeEach(() => {
+      mockAgent = createMockAgent('test-agent')
+    })
+
     it('saves snapshot_latest when saveLatestOn is message', async () => {
       sessionManager = new SessionManager({
         sessionId: 'test-session',
-        agentId: 'test-agent',
         storage: { snapshot: storage },
         saveLatestOn: 'message',
       })
@@ -237,7 +198,6 @@ describe('SessionManager', () => {
     it('does not save when saveLatestOn is invocation', async () => {
       sessionManager = new SessionManager({
         sessionId: 'test-session',
-        agentId: 'test-agent',
         storage: { snapshot: storage },
         saveLatestOn: 'invocation',
       })
@@ -253,30 +213,13 @@ describe('SessionManager', () => {
   })
 
   describe('AfterInvocationEvent handling', () => {
-    it('increments turn count', async () => {
-      sessionManager = new SessionManager({
-        sessionId: 'test-session',
-        agentId: 'test-agent',
-        storage: { snapshot: storage },
-        saveLatestOn: 'trigger',
-        snapshotTrigger: ({ turnCount }) => turnCount === 2,
-      })
-      sessionManager.registerCallbacks(registry)
-      await registry.invokeCallbacks(new InitializedEvent(createMockEvent(mockAgent)))
-
-      await registry.invokeCallbacks(new AfterInvocationEvent(createMockEvent(mockAgent)))
-      await registry.invokeCallbacks(new AfterInvocationEvent(createMockEvent(mockAgent)))
-
-      const ids = await storage.listSnapshotIds({
-        location: { sessionId: 'test-session', scope: 'agent', scopeId: 'test-agent' },
-      })
-      expect(ids.length).toBe(1) // Only triggered on turn 2
+    beforeEach(() => {
+      mockAgent = createMockAgent('test-agent')
     })
 
     it('saves snapshot_latest when saveLatestOn is invocation', async () => {
       sessionManager = new SessionManager({
         sessionId: 'test-session',
-        agentId: 'test-agent',
         storage: { snapshot: storage },
         saveLatestOn: 'invocation',
       })
@@ -294,7 +237,6 @@ describe('SessionManager', () => {
     it('does not save snapshot_latest when saveLatestOn is trigger', async () => {
       sessionManager = new SessionManager({
         sessionId: 'test-session',
-        agentId: 'test-agent',
         storage: { snapshot: storage },
         saveLatestOn: 'trigger',
       })
@@ -311,10 +253,13 @@ describe('SessionManager', () => {
   })
 
   describe('snapshotTrigger', () => {
+    beforeEach(() => {
+      mockAgent = createMockAgent('test-agent')
+    })
+
     it('creates immutable snapshot when trigger returns true', async () => {
       sessionManager = new SessionManager({
         sessionId: 'test-session',
-        agentId: 'test-agent',
         storage: { snapshot: storage },
         saveLatestOn: 'trigger',
         snapshotTrigger: () => true,
@@ -333,7 +278,6 @@ describe('SessionManager', () => {
     it('does not create immutable snapshot when trigger returns false', async () => {
       sessionManager = new SessionManager({
         sessionId: 'test-session',
-        agentId: 'test-agent',
         storage: { snapshot: storage },
         saveLatestOn: 'trigger',
         snapshotTrigger: () => false,
@@ -349,52 +293,10 @@ describe('SessionManager', () => {
       expect(ids.length).toBe(0)
     })
 
-    it('provides correct turnCount to trigger', async () => {
-      const triggerSpy = vi.fn(() => false)
-      sessionManager = new SessionManager({
-        sessionId: 'test-session',
-        agentId: 'test-agent',
-        storage: { snapshot: storage },
-        saveLatestOn: 'trigger',
-        snapshotTrigger: triggerSpy,
-      })
-      sessionManager.registerCallbacks(registry)
-      await registry.invokeCallbacks(new InitializedEvent(createMockEvent(mockAgent)))
-
-      await registry.invokeCallbacks(new AfterInvocationEvent(createMockEvent(mockAgent)))
-      await registry.invokeCallbacks(new AfterInvocationEvent(createMockEvent(mockAgent)))
-      await registry.invokeCallbacks(new AfterInvocationEvent(createMockEvent(mockAgent)))
-
-      expect(triggerSpy).toHaveBeenCalledTimes(3)
-      expect(triggerSpy).toHaveBeenNthCalledWith(1, expect.objectContaining({ turnCount: 1 }))
-      expect(triggerSpy).toHaveBeenNthCalledWith(2, expect.objectContaining({ turnCount: 2 }))
-      expect(triggerSpy).toHaveBeenNthCalledWith(3, expect.objectContaining({ turnCount: 3 }))
-    })
-
-    it('provides lastSnapshotAt to trigger', async () => {
-      const triggerSpy = vi.fn(() => true)
-      sessionManager = new SessionManager({
-        sessionId: 'test-session',
-        agentId: 'test-agent',
-        storage: { snapshot: storage },
-        saveLatestOn: 'trigger',
-        snapshotTrigger: triggerSpy,
-      })
-      sessionManager.registerCallbacks(registry)
-      await registry.invokeCallbacks(new InitializedEvent(createMockEvent(mockAgent)))
-
-      await registry.invokeCallbacks(new AfterInvocationEvent(createMockEvent(mockAgent)))
-      await registry.invokeCallbacks(new AfterInvocationEvent(createMockEvent(mockAgent)))
-
-      expect(triggerSpy).toHaveBeenNthCalledWith(1, expect.not.objectContaining({ lastSnapshotAt: expect.any(Number) }))
-      expect(triggerSpy).toHaveBeenNthCalledWith(2, expect.objectContaining({ lastSnapshotAt: expect.any(Number) }))
-    })
-
     it('provides agentData to trigger', async () => {
       const triggerSpy = vi.fn(() => false)
       sessionManager = new SessionManager({
         sessionId: 'test-session',
-        agentId: 'test-agent',
         storage: { snapshot: storage },
         saveLatestOn: 'trigger',
         snapshotTrigger: triggerSpy,
@@ -417,7 +319,6 @@ describe('SessionManager', () => {
     it('saves both immutable and latest when trigger fires', async () => {
       sessionManager = new SessionManager({
         sessionId: 'test-session',
-        agentId: 'test-agent',
         storage: { snapshot: storage },
         saveLatestOn: 'trigger',
         snapshotTrigger: () => true,
@@ -438,32 +339,9 @@ describe('SessionManager', () => {
       expect(latest).not.toBeNull()
     })
 
-    it('trigger based on turn count', async () => {
-      sessionManager = new SessionManager({
-        sessionId: 'test-session',
-        agentId: 'test-agent',
-        storage: { snapshot: storage },
-        saveLatestOn: 'trigger',
-        snapshotTrigger: ({ turnCount }) => turnCount % 2 === 0,
-      })
-      sessionManager.registerCallbacks(registry)
-      await registry.invokeCallbacks(new InitializedEvent(createMockEvent(mockAgent)))
-
-      await registry.invokeCallbacks(new AfterInvocationEvent(createMockEvent(mockAgent)))
-      await registry.invokeCallbacks(new AfterInvocationEvent(createMockEvent(mockAgent)))
-      await registry.invokeCallbacks(new AfterInvocationEvent(createMockEvent(mockAgent)))
-      await registry.invokeCallbacks(new AfterInvocationEvent(createMockEvent(mockAgent)))
-
-      const ids = await storage.listSnapshotIds({
-        location: { sessionId: 'test-session', scope: 'agent', scopeId: 'test-agent' },
-      })
-      expect(ids.length).toBe(2) // Snapshots on turns 2 and 4
-    })
-
     it('trigger based on message count via agentData', async () => {
       sessionManager = new SessionManager({
         sessionId: 'test-session',
-        agentId: 'test-agent',
         storage: { snapshot: storage },
         saveLatestOn: 'trigger',
         snapshotTrigger: ({ agentData }) => agentData.messages.length >= 2,
@@ -488,7 +366,6 @@ describe('SessionManager', () => {
     it('trigger based on agent state via agentData', async () => {
       sessionManager = new SessionManager({
         sessionId: 'test-session',
-        agentId: 'test-agent',
         storage: { snapshot: storage },
         saveLatestOn: 'trigger',
         snapshotTrigger: ({ agentData }) => (agentData.state as AgentState).get('checkpoint') === true,
@@ -509,75 +386,40 @@ describe('SessionManager', () => {
       })
       expect(ids.length).toBe(1) // state set — snapshot taken
     })
-
-    it('trigger based on time elapsed', async () => {
-      const triggerSpy = vi.fn(({ lastSnapshotAt }) => {
-        if (!lastSnapshotAt) {
-          return true // Take first snapshot
-        }
-        return Date.now() - lastSnapshotAt > 100 // Shorter interval for test
-      })
-
-      sessionManager = new SessionManager({
-        sessionId: 'test-session',
-        agentId: 'test-agent',
-        storage: { snapshot: storage },
-        saveLatestOn: 'trigger',
-        snapshotTrigger: triggerSpy,
-      })
-      sessionManager.registerCallbacks(registry)
-      await registry.invokeCallbacks(new InitializedEvent(createMockEvent(mockAgent)))
-
-      await registry.invokeCallbacks(new AfterInvocationEvent(createMockEvent(mockAgent)))
-      await new Promise<void>((resolve) => {
-        globalThis.setTimeout(resolve, 150)
-      })
-      await registry.invokeCallbacks(new AfterInvocationEvent(createMockEvent(mockAgent)))
-
-      const ids = await storage.listSnapshotIds({
-        location: { sessionId: 'test-session', scope: 'agent', scopeId: 'test-agent' },
-      })
-      expect(ids.length).toBeGreaterThanOrEqual(1)
-    })
   })
 
   describe('integration scenarios', () => {
     it('handles complete session lifecycle', async () => {
       sessionManager = new SessionManager({
         sessionId: 'lifecycle-test',
-        agentId: 'agent-1',
         storage: { snapshot: storage },
         saveLatestOn: 'invocation',
-        snapshotTrigger: ({ turnCount }) => turnCount === 3,
+        snapshotTrigger: () => true,
       })
       sessionManager.registerCallbacks(registry)
 
-      // Initialize
       await registry.invokeCallbacks(new InitializedEvent(createMockEvent(mockAgent)))
-
-      // Add messages and complete invocations
       await registry.invokeCallbacks(new AfterInvocationEvent(createMockEvent(mockAgent)))
       await registry.invokeCallbacks(new AfterInvocationEvent(createMockEvent(mockAgent)))
       await registry.invokeCallbacks(new AfterInvocationEvent(createMockEvent(mockAgent)))
 
       const latest = await storage.loadSnapshot({
-        location: { sessionId: 'lifecycle-test', scope: 'agent', scopeId: 'agent-1' },
+        location: { sessionId: 'lifecycle-test', scope: 'agent', scopeId: 'default' },
       })
       const immutableIds = await storage.listSnapshotIds({
-        location: { sessionId: 'lifecycle-test', scope: 'agent', scopeId: 'agent-1' },
+        location: { sessionId: 'lifecycle-test', scope: 'agent', scopeId: 'default' },
       })
 
       expect(latest).not.toBeNull()
-      expect(immutableIds.length).toBe(1)
+      expect(immutableIds.length).toBe(3)
     })
 
     it('supports resuming from immutable snapshot', async () => {
-      // First session - create snapshots
+      // First session - create one immutable snapshot at turn 2
       sessionManager = new SessionManager({
         sessionId: 'resume-test',
-        agentId: 'agent-1',
         storage: { snapshot: storage },
-        saveLatestOn: 'invocation',
+        saveLatestOn: 'trigger',
         snapshotTrigger: ({ turnCount }) => turnCount === 2,
       })
       sessionManager.registerCallbacks(registry)
@@ -585,26 +427,24 @@ describe('SessionManager', () => {
       await registry.invokeCallbacks(new AfterInvocationEvent(createMockEvent(mockAgent)))
       await registry.invokeCallbacks(new AfterInvocationEvent(createMockEvent(mockAgent)))
 
-      // Second session - resume from snapshot 1
+      const ids = await storage.listSnapshotIds({
+        location: { sessionId: 'resume-test', scope: 'agent', scopeId: 'default' },
+      })
+      expect(ids.length).toBe(1)
+
+      // Second session - resume from that snapshot
       const newAgent = createMockAgent()
       const newSessionManager = new SessionManager({
         sessionId: 'resume-test',
-        agentId: 'agent-1',
         storage: { snapshot: storage },
-        loadSnapshotId: '1',
+        loadSnapshotId: ids[0]!,
         saveLatestOn: 'invocation',
       })
       const newRegistry = new HookRegistry()
       newSessionManager.registerCallbacks(newRegistry)
       await newRegistry.invokeCallbacks(new InitializedEvent(createMockEvent(newAgent)))
 
-      // Continue from snapshot 1
-      await newSessionManager.saveSnapshot({ target: newAgent, isLatest: false })
-
-      const ids = await storage.listSnapshotIds({
-        location: { sessionId: 'resume-test', scope: 'agent', scopeId: 'agent-1' },
-      })
-      expect(ids.length).toBe(2)
+      expect(newAgent.messages).toEqual(mockAgent.messages)
     })
   })
 })

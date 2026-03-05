@@ -44,7 +44,7 @@ function makeS3Manager(sessionId: string, bucket: string, credentials: any): Ses
 
 async function getPersistedMessageCount(manager: SessionManager): Promise<number> {
   const snap = await (manager as any)._storage.snapshot.loadSnapshot({
-    location: (manager as any)._location,
+    location: (manager as any)._location({ agentId: 'default' }),
   })
   return (snap?.data?.messages as unknown[])?.length ?? 0
 }
@@ -220,20 +220,20 @@ describe.skipIf(bedrock.skip)('Session Management - S3Storage', () => {
     const manager1 = new SessionManager({
       sessionId,
       storage: { snapshot: new S3Storage({ bucket, s3Client: new S3Client({ region: AWS_REGION, credentials }) }) },
-      snapshotTrigger: ({ turnCount }) => turnCount % 2 === 0,
+      snapshotTrigger: ({ agentData }) => agentData.messages.length === 4,
       saveLatestOn: 'invocation',
     })
     const agent1 = new Agent({ model, sessionManager: manager1, printer: false })
-    await agent1.invoke('What is 10 + 5?') // turn 1 — no snapshot
-    await agent1.invoke('What is 20 * 3?') // turn 2 — snapshot 1
-    await agent1.invoke('What is 100 / 4?') // turn 3 — no snapshot
-    await agent1.invoke('What is 50 - 15?') // turn 4 — snapshot 2
+    await agent1.invoke('What is 10 + 5?') // 2 messages — no snapshot
+    await agent1.invoke('What is 20 * 3?') // 4 messages — snapshot 1
+    await agent1.invoke('What is 100 / 4?') // 6 messages — no snapshot
+    await agent1.invoke('What is 50 - 15?') // 8 messages — no snapshot
     expect(agent1.messages).toHaveLength(8)
 
     // Verify UUID-based S3 key naming and restore from snapshot 1 (after turn 2)
     const s3Storage = new S3Storage({ bucket, s3Client: new S3Client({ region: AWS_REGION, credentials }) })
     const snapshotIds = await s3Storage.listSnapshotIds({ location: { sessionId, scope: 'agent', scopeId: 'default' } })
-    expect(snapshotIds).toHaveLength(2)
+    expect(snapshotIds).toHaveLength(1)
     expect(snapshotIds.every((id) => /^[\w-]{36}$/.test(id))).toBe(true)
     expect(snapshotIds[0]).toBeDefined()
     const manager2 = new SessionManager({
