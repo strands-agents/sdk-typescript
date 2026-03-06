@@ -264,11 +264,11 @@ export class AgentMetrics {
   }
 
   /**
-   * Record metrics for a tool invocation.
+   * Record metrics for a completed tool invocation.
    *
    * @param options - Tool usage recording options
    */
-  addToolUsage(options: ToolUsageOptions): void {
+  endToolCall(options: ToolUsageOptions): void {
     const { tool, duration, success } = options
     const toolName = tool.name
 

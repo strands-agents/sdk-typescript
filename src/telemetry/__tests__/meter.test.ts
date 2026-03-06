@@ -40,7 +40,7 @@ describe('AgentLoopMetrics', () => {
         usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
         metrics: { latencyMs: 100 },
       })
-      metrics.addToolUsage({
+      metrics.endToolCall({
         tool: makeTool('search', 'tid-1'),
         duration: 0.5,
         success: true,
@@ -55,7 +55,7 @@ describe('AgentLoopMetrics', () => {
         usage: { inputTokens: 20, outputTokens: 10, totalTokens: 30 },
         metrics: { latencyMs: 250 },
       })
-      metrics.addToolUsage({
+      metrics.endToolCall({
         tool: makeTool('search', 'tid-2'),
         duration: 1.5,
         success: false,
@@ -177,9 +177,9 @@ describe('AgentLoopMetrics', () => {
     })
   })
 
-  describe('addToolUsage', () => {
+  describe('endToolCall', () => {
     it('records success', () => {
-      metrics.addToolUsage({
+      metrics.endToolCall({
         tool: makeTool('myTool', 'id-1'),
         duration: 1.5,
         success: true,
@@ -191,7 +191,7 @@ describe('AgentLoopMetrics', () => {
     })
 
     it('records failure', () => {
-      metrics.addToolUsage({
+      metrics.endToolCall({
         tool: makeTool('myTool', 'id-1'),
         duration: 0.5,
         success: false,
@@ -203,12 +203,12 @@ describe('AgentLoopMetrics', () => {
     })
 
     it('accumulates across multiple calls to the same tool', () => {
-      metrics.addToolUsage({
+      metrics.endToolCall({
         tool: makeTool('myTool', 'id-1'),
         duration: 1.0,
         success: true,
       })
-      metrics.addToolUsage({
+      metrics.endToolCall({
         tool: makeTool('myTool', 'id-2'),
         duration: 2.0,
         success: false,
@@ -220,12 +220,12 @@ describe('AgentLoopMetrics', () => {
     })
 
     it('tracks different tools independently', () => {
-      metrics.addToolUsage({
+      metrics.endToolCall({
         tool: makeTool('toolA', 'id-1'),
         duration: 1.0,
         success: true,
       })
-      metrics.addToolUsage({
+      metrics.endToolCall({
         tool: makeTool('toolB', 'id-2'),
         duration: 2.0,
         success: false,
