@@ -375,7 +375,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
       if (this._config.stream !== false) {
         // Create and send the command
         const command = new ConverseStreamCommand(request)
-        const response = await this._client.send(command)
+        const response = await this._client.send(command, ...(options?.signal ? [{ abortSignal: options.signal }] : []))
         // Stream the response
         if (response.stream) {
           for await (const chunk of response.stream) {
@@ -388,7 +388,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
         }
       } else {
         const command = new ConverseCommand(request)
-        const response = await this._client.send(command)
+        const response = await this._client.send(command, ...(options?.signal ? [{ abortSignal: options.signal }] : []))
         for (const event of this._mapBedrockEventToSDKEvent(response)) {
           yield event
         }
