@@ -202,3 +202,21 @@ export { StructuredOutputException } from './structured-output/exceptions.js'
 
 // Telemetry
 export * as telemetry from './telemetry/index.js'
+
+// Multi-agent orchestration
+export { Swarm, SwarmNode, SharedContext, SwarmError } from './multiagent/swarm.js'
+export type { SwarmOptions, SwarmInvokeOptions, SwarmResult, SwarmState } from './multiagent/swarm.js'
+export {
+  MultiAgentState,
+  MultiAgentResult,
+  NodeResult,
+  NodeState,
+  Status,
+  Node,
+  AgentNode,
+  NodeStreamUpdateEvent,
+  NodeResultEvent,
+  MultiAgentHandoffEvent,
+  MultiAgentResultEvent,
+} from './multiagent/index.js'
+export type { MultiAgentStreamEvent, NodeConfig, AgentNodeOptions } from './multiagent/index.js'

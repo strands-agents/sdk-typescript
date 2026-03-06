@@ -25,3 +25,6 @@ export type { MultiAgentStreamEvent } from './events.js'
 
 export { Edge } from './edge.js'
 export type { EdgeHandler, EdgeDefinition } from './edge.js'
+
+export { Swarm, SwarmNode, SharedContext, SwarmError } from './swarm.js'
+export type { SwarmOptions, SwarmInvokeOptions, SwarmResult, SwarmState, SwarmEvent } from './swarm.js'
