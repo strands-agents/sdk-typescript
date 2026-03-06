@@ -33,6 +33,7 @@ const modelStreamEventTypes: ReadonlySet<string> = new Set<ModelStreamEvent['typ
   'modelContentBlockStopEvent',
   'modelMessageStopEvent',
   'modelMetadataEvent',
+  'modelRedactContentEvent',
 ])
 
 /**

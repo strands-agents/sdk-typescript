@@ -474,7 +474,7 @@ export class Agent implements AgentData {
           currentArgs = undefined // Only pass args on first invocation
           const wasForced = forcedToolChoice !== undefined
           forcedToolChoice = undefined // Clear after use
-          
+
           // Handle user content redaction if guardrails blocked input
           if (modelResult.redactionMessage) {
             const redactionEvent = this._redactLastMessage(modelResult.redactionMessage)
@@ -664,7 +664,10 @@ export class Agent implements AgentData {
     })
 
     try {
-      const { message, stopReason, redactionMessage, metadata } = yield* this._streamFromModel(this.messages, streamOptions)
+      const { message, stopReason, redactionMessage, metadata } = yield* this._streamFromModel(
+        this.messages,
+        streamOptions
+      )
       const usage = metadata?.usage
       // Accumulate token usage
       if (usage) {
@@ -924,9 +927,9 @@ export class Agent implements AgentData {
     const lastIndex = this.messages.length - 1
     if (lastIndex >= 0) {
       const lastMessage = this.messages[lastIndex]
-      if (lastMessage) {
+      if (lastMessage && lastMessage.role === 'user') {
         const updatedMessage = new Message({
-          role: lastMessage.role,
+          role: 'user',
           content: [new TextBlock(redactMessage)],
         })
         this.messages[lastIndex] = updatedMessage

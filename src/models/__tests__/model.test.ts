@@ -650,9 +650,7 @@ describe('Model', () => {
           }
         })
 
-        const messages = [
-          new Message({ role: 'user', content: [new TextBlock('Sensitive content')] }),
-        ]
+        const messages = [new Message({ role: 'user', content: [new TextBlock('Sensitive content')] })]
 
         const { result } = await collectGenerator(provider.streamAggregated(messages))
 
@@ -683,9 +681,7 @@ describe('Model', () => {
           }
         })
 
-        const messages = [
-          new Message({ role: 'user', content: [new TextBlock('Tell me something')] }),
-        ]
+        const messages = [new Message({ role: 'user', content: [new TextBlock('Tell me something')] })]
 
         const { result } = await collectGenerator(provider.streamAggregated(messages))
 
@@ -721,9 +717,7 @@ describe('Model', () => {
           }
         })
 
-        const messages = [
-          new Message({ role: 'user', content: [new TextBlock('Input')] }),
-        ]
+        const messages = [new Message({ role: 'user', content: [new TextBlock('Input')] })]
 
         const { result } = await collectGenerator(provider.streamAggregated(messages))
 
@@ -751,9 +745,7 @@ describe('Model', () => {
           }
         })
 
-        const messages = [
-          new Message({ role: 'user', content: [new TextBlock('Hello')] }),
-        ]
+        const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
 
         const { result } = await collectGenerator(provider.streamAggregated(messages))
 

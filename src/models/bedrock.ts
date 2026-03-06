@@ -1315,6 +1315,11 @@ export class BedrockModel extends Model<BedrockModelConfig> {
    * @returns True if the input contains a detected and blocked guardrail
    */
   private _findDetectedAndBlockedPolicy(input: unknown): boolean {
+    // Handle arrays first
+    if (Array.isArray(input)) {
+      return input.some((item) => this._findDetectedAndBlockedPolicy(item))
+    }
+
     // Check if input is an object
     if (input !== null && typeof input === 'object') {
       const obj = input as Record<string, unknown>
@@ -1325,16 +1330,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
       }
 
       // Recursively check all values in the object
-      for (const value of Object.values(obj)) {
-        if (this._findDetectedAndBlockedPolicy(value)) {
-          return true
-        }
-      }
-    }
-
-    // Handle arrays
-    if (Array.isArray(input)) {
-      return input.some((item) => this._findDetectedAndBlockedPolicy(item))
+      return Object.values(obj).some((v) => this._findDetectedAndBlockedPolicy(v))
     }
 
     return false
