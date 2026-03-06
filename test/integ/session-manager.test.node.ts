@@ -124,16 +124,17 @@ describe.skipIf(bedrock.skip)('Session Management - FileStorage', () => {
     // Restore from snapshot 1 — should only have 2 messages
     const snapshotIds = await storage.listSnapshotIds({ location: { sessionId, scope: 'agent', scopeId: 'default' } })
     expect(snapshotIds[0]).toBeDefined()
+    const sessionManager2 = new SessionManager({
+      sessionId,
+      storage: { snapshot: storage },
+    })
     const agent2 = new Agent({
       model,
-      sessionManager: new SessionManager({
-        sessionId,
-        storage: { snapshot: storage },
-        loadSnapshotId: snapshotIds[0]!,
-      }),
+      sessionManager: sessionManager2,
       printer: false,
     })
     await agent2.initialize()
+    await sessionManager2.restoreSnapshot({ target: agent2, snapshotId: snapshotIds[0]! })
     expect(agent2.messages).toHaveLength(2)
   })
 })
@@ -236,14 +237,14 @@ describe.skipIf(bedrock.skip)('Session Management - S3Storage', () => {
     expect(snapshotIds).toHaveLength(1)
     expect(snapshotIds.every((id) => /^[\w-]{36}$/.test(id))).toBe(true)
     expect(snapshotIds[0]).toBeDefined()
-    const manager2 = new SessionManager({
+    const s3Manager2 = new SessionManager({
       sessionId,
       storage: { snapshot: s3Storage },
-      loadSnapshotId: snapshotIds[0]!,
       saveLatestOn: 'trigger',
     })
-    const agent2 = new Agent({ model, sessionManager: manager2, printer: false })
+    const agent2 = new Agent({ model, sessionManager: s3Manager2, printer: false })
     await agent2.initialize()
+    await s3Manager2.restoreSnapshot({ target: agent2, snapshotId: snapshotIds[0]! })
     expect(agent2.messages).toHaveLength(4)
 
     const result = await agent2.invoke('What was my last question?')

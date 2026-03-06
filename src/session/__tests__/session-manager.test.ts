@@ -155,19 +155,18 @@ describe('SessionManager', () => {
       mockAgent = createMockAgent('test-agent')
     })
 
-    it('loads snapshot when loadSnapshotId is provided', async () => {
+    it('loads snapshot_latest on initialization', async () => {
       const snapshot = createTestSnapshot()
       await storage.saveSnapshot({
         location: { sessionId: 'test-session', scope: 'agent', scopeId: 'test-agent' },
-        snapshotId: '3',
-        isLatest: false,
+        snapshotId: 'latest',
+        isLatest: true,
         snapshot,
       })
 
       sessionManager = new SessionManager({
         sessionId: 'test-session',
         storage: { snapshot: storage },
-        loadSnapshotId: '3',
       })
       sessionManager.registerCallbacks(registry)
 
@@ -450,12 +449,12 @@ describe('SessionManager', () => {
       const newSessionManager = new SessionManager({
         sessionId: 'resume-test',
         storage: { snapshot: storage },
-        loadSnapshotId: ids[0]!,
         saveLatestOn: 'invocation',
       })
       const newRegistry = new HookRegistry()
       newSessionManager.registerCallbacks(newRegistry)
       await newRegistry.invokeCallbacks(new InitializedEvent(createMockEvent(newAgent)))
+      await newSessionManager.restoreSnapshot({ target: newAgent, snapshotId: ids[0]! })
 
       expect(newAgent.messages).toEqual(mockAgent.messages)
     })

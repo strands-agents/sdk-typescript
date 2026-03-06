@@ -32,8 +32,6 @@ export interface SessionManagerConfig {
   }
   /** Unique session identifier. Defaults to `'default-session'`. */
   sessionId?: string
-  /** Snapshot ID to restore on initialization. */
-  loadSnapshotId?: string
   /** When to save snapshot_latest. Default: `'invocation'` (after each agent invocation completes). See {@link SaveLatestStrategy} for details. */
   saveLatestOn?: SaveLatestStrategy
   /** Callback invoked after each invocation to decide whether to create an immutable snapshot. */
@@ -58,7 +56,6 @@ export interface SessionManagerConfig {
 export class SessionManager implements HookProvider {
   private readonly _sessionId: string
   private readonly _storage: { snapshot: SnapshotStorage }
-  private readonly _loadSnapshotId?: string | undefined
   private readonly _saveLatestOn: SaveLatestStrategy
   private readonly _snapshotTrigger?: SnapshotTriggerCallback | undefined
 
@@ -67,7 +64,6 @@ export class SessionManager implements HookProvider {
     this._storage = { snapshot: config.storage.snapshot }
     this._saveLatestOn = config.saveLatestOn ?? 'invocation'
     this._snapshotTrigger = config.snapshotTrigger
-    this._loadSnapshotId = config.loadSnapshotId
   }
 
   /** Registers lifecycle hook callbacks on the provided registry. */
@@ -114,10 +110,7 @@ export class SessionManager implements HookProvider {
 
   /** Restores session state on agent initialization. */
   private async _onAgentInitialized(event: InitializedEvent): Promise<void> {
-    await this.restoreSnapshot({
-      target: event.agent as Agent,
-      ...(this._loadSnapshotId !== undefined && { snapshotId: this._loadSnapshotId }),
-    })
+    await this.restoreSnapshot({ target: event.agent as Agent })
   }
 
   /** Saves latest on invocation and fires the snapshot trigger if configured. */
