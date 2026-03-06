@@ -265,7 +265,6 @@ export class Swarm {
           status: Status.COMPLETED,
           duration: Date.now() - startTime,
           content: lastContent,
-          terminus: true,
         })
         yield new NodeResultEvent({ nodeId: currentNodeId, nodeType: 'agentNode', result: nodeResult })
         completed = true
