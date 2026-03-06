@@ -5,14 +5,14 @@ import { collectGenerator } from '$/sdk/__fixtures__/model-test-helpers.js'
 import { bedrock } from '../__fixtures__/model-providers.js'
 
 describe.skipIf(bedrock.skip)('Swarm', () => {
-  const createModel = () => bedrock.createModel({ maxTokens: 200 })
+  const createModel = (maxTokens = 1024) => bedrock.createModel({ maxTokens })
 
   it('completes single-agent execution with lifecycle events', async () => {
     const agent = new Agent({
       model: createModel(),
       printer: false,
       agentId: 'assistant',
-      description: 'Answers questions in one word.',
+      description: 'Answers questions briefly.',
       systemPrompt: 'Answer in one word only.',
     })
 
@@ -44,27 +44,29 @@ describe.skipIf(bedrock.skip)('Swarm', () => {
 
   it('hands off between agents with handoff event', async () => {
     const researcher = new Agent({
-      model: bedrock.createModel({ maxTokens: 512 }),
+      model: createModel(),
       printer: false,
       agentId: 'researcher',
-      description: 'Gathers a fact then hands off to the writer.',
-      systemPrompt: 'You are a researcher. Always hand off to the writer after stating one fact. Be brief.',
+      description: 'Researches a topic then hands off to the writer.',
+      systemPrompt:
+        'You are a researcher. Look up the answer, then always hand off to the writer agent. Never produce a final response yourself.',
     })
 
     const writer = new Agent({
       model: createModel(),
       printer: false,
       agentId: 'writer',
-      description: 'Presents the answer in one sentence.',
-      systemPrompt: 'Present the answer in one sentence.',
+      description: 'Writes a final one-sentence answer.',
+      systemPrompt: 'Write the final answer in one sentence. Do not hand off to another agent.',
     })
 
     const swarm = new Swarm({
       nodes: [{ agent: researcher }, { agent: writer }],
       start: 'researcher',
+      maxSteps: 4,
     })
 
-    const { items, result } = await collectGenerator(swarm.stream('What is the largest ocean? Have the writer answer.'))
+    const { items, result } = await collectGenerator(swarm.stream('What is the largest ocean?'))
 
     expect(result.status).toBe(Status.COMPLETED)
     expect(result.results.length).toBeGreaterThanOrEqual(2)
