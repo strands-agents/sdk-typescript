@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest'
-import { Agent, tool } from '@strands-agents/sdk'
+import { Agent, telemetry, tool } from '@strands-agents/sdk'
 import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node'
 import { InMemorySpanExporter, SimpleSpanProcessor } from '@opentelemetry/sdk-trace-base'
 import type { ReadableSpan } from '@opentelemetry/sdk-trace-base'
-import { SpanStatusCode } from '@opentelemetry/api'
+import { SpanStatusCode, trace, context } from '@opentelemetry/api'
 import { z } from 'zod'
 import { MockMessageModel } from '$/sdk/__fixtures__/mock-message-model.js'
 import { TestModelProvider, collectGenerator } from '$/sdk/__fixtures__/model-test-helpers.js'
@@ -697,6 +697,101 @@ describe.sequential('Telemetry Integration', () => {
 
       // Both responses were seen
       expect(expectedResponses.size).toBe(0)
+    })
+  })
+
+  describe('getTracer', () => {
+    it('returns a tracer that produces spans captured by the registered provider', async () => {
+      const tracer = telemetry.getTracer()
+      const span = tracer.startSpan('custom-operation')
+      span.setAttribute('custom.key', 'custom-value')
+      span.end()
+
+      const spans = await flush()
+      const customSpans = spans.filter((s) => s.name === 'custom-operation')
+
+      expect(customSpans).toHaveLength(1)
+      expect(attr(customSpans[0]!, 'custom.key')).toBe('custom-value')
+    })
+
+    // The OTel global tracer provider can only be set once per process via register().
+    // Subsequent register() calls are no-ops and emit a warning. All spans always
+    // land in the first registered provider.
+
+    it('ignores later register() calls — spans stay in the first registered provider', async () => {
+      const userExporter = new InMemorySpanExporter()
+      const userProvider = new NodeTracerProvider()
+      userProvider.addSpanProcessor(new SimpleSpanProcessor(userExporter))
+      userProvider.register() // no-op: global provider already set in beforeAll
+
+      const tracer = telemetry.getTracer()
+      const span = tracer.startSpan('user-provider-span')
+      span.setAttribute('source', 'custom-provider')
+      span.end()
+
+      // Span lands in the original shared provider, not the user's
+      const spans = await flush()
+      const sharedSpan = spans.find((s) => s.name === 'user-provider-span')
+      expect(sharedSpan).toBeDefined()
+      expect(sharedSpan!.attributes['source']).toBe('custom-provider')
+
+      // The user's exporter never receives the span
+      await userProvider.forceFlush()
+      const userSpans = userExporter.getFinishedSpans()
+      expect(userSpans.find((s) => s.name === 'user-provider-span')).toBeUndefined()
+    })
+
+    it('all spans land in the first registered provider even when multiple providers call register()', async () => {
+      const exporterA = new InMemorySpanExporter()
+      const providerA = new NodeTracerProvider()
+      providerA.addSpanProcessor(new SimpleSpanProcessor(exporterA))
+      providerA.register() // no-op
+
+      const exporterB = new InMemorySpanExporter()
+      const providerB = new NodeTracerProvider()
+      providerB.addSpanProcessor(new SimpleSpanProcessor(exporterB))
+      providerB.register() // no-op
+
+      const tracer = telemetry.getTracer()
+      const span = tracer.startSpan('multi-register-span')
+      span.end()
+
+      // Span lands in the original shared provider
+      const spans = await flush()
+      expect(spans.find((s) => s.name === 'multi-register-span')).toBeDefined()
+
+      // Neither late provider receives the span
+      await providerA.forceFlush()
+      await providerB.forceFlush()
+      expect(exporterA.getFinishedSpans().find((s) => s.name === 'multi-register-span')).toBeUndefined()
+      expect(exporterB.getFinishedSpans().find((s) => s.name === 'multi-register-span')).toBeUndefined()
+    })
+
+    it('creates custom spans that nest under agent spans via context propagation', async () => {
+      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hi' })
+      const agent = new Agent({ model, printer: false, name: 'gettracer-nest-agent' })
+
+      await agent.invoke('Hello')
+
+      const allSpans = await flush()
+      const agentReadableSpan = findSpans(allSpans, AGENT_SPAN_PREFIX)[0]!
+
+      // Wrap the ReadableSpan's context into a live span reference for context propagation
+      const agentSpanRef = trace.wrapSpanContext(agentReadableSpan.spanContext())
+
+      // Create a custom span parented to the agent span via context
+      const tracer = telemetry.getTracer()
+      context.with(trace.setSpan(context.active(), agentSpanRef), () => {
+        const childSpan = tracer.startSpan('custom-child')
+        childSpan.end()
+      })
+
+      const spansAfter = await flush()
+      const childSpan = spansAfter.find((s) => s.name === 'custom-child')!
+
+      expect(childSpan).toBeDefined()
+      expect(childSpan.spanContext().traceId).toBe(agentReadableSpan.spanContext().traceId)
+      expect(childSpan.parentSpanId).toBe(agentReadableSpan.spanContext().spanId)
     })
   })
 })

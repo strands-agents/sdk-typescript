@@ -30,5 +30,5 @@
  * ```
  */
 
-export { setupTracer } from './config.js'
+export { setupTracer, getTracer } from './config.js'
 export type { TracerConfig } from './config.js'
