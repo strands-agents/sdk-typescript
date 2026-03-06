@@ -98,6 +98,7 @@ describe('MCP Integration', () => {
       connect: ReturnType<typeof vi.fn>
       close: ReturnType<typeof vi.fn>
       listTools: ReturnType<typeof vi.fn>
+      callTool: ReturnType<typeof vi.fn>
       experimental: { tasks: { callToolStream: ReturnType<typeof vi.fn> } }
     }
 
@@ -116,11 +117,11 @@ describe('MCP Integration', () => {
     it('injects trace context into tool arguments when active span exists', async () => {
       mockActiveSpan()
       const tool = new McpTool({ name: 'calc', description: '', inputSchema: {}, client })
-      sdkClientMock.experimental.tasks.callToolStream.mockReturnValue(createMockCallToolStream({ content: [] })())
+      sdkClientMock.callTool.mockResolvedValue({ content: [] })
 
       await client.callTool(tool, { op: 'add' })
 
-      const callArgs = sdkClientMock.experimental.tasks.callToolStream.mock.calls[0]![0]
+      const callArgs = sdkClientMock.callTool.mock.calls[0]![0]
       expect(callArgs.arguments).toStrictEqual({
         op: 'add',
         _meta: { traceparent: '00-1234567890abcdef1234567890abcdef-1234567890abcdef-01' },
@@ -130,11 +131,11 @@ describe('MCP Integration', () => {
     it('merges trace context with existing _meta field', async () => {
       mockActiveSpan()
       const tool = new McpTool({ name: 'calc', description: '', inputSchema: {}, client })
-      sdkClientMock.experimental.tasks.callToolStream.mockReturnValue(createMockCallToolStream({ content: [] })())
+      sdkClientMock.callTool.mockResolvedValue({ content: [] })
 
       await client.callTool(tool, { op: 'add', _meta: { progressToken: 'tok-1' } })
 
-      const callArgs = sdkClientMock.experimental.tasks.callToolStream.mock.calls[0]![0]
+      const callArgs = sdkClientMock.callTool.mock.calls[0]![0]
       expect(callArgs.arguments).toStrictEqual({
         op: 'add',
         _meta: {
@@ -146,22 +147,22 @@ describe('MCP Integration', () => {
 
     it('passes args unchanged when no active span exists', async () => {
       const tool = new McpTool({ name: 'calc', description: '', inputSchema: {}, client })
-      sdkClientMock.experimental.tasks.callToolStream.mockReturnValue(createMockCallToolStream({ content: [] })())
+      sdkClientMock.callTool.mockResolvedValue({ content: [] })
 
       await client.callTool(tool, { op: 'add' })
 
-      const callArgs = sdkClientMock.experimental.tasks.callToolStream.mock.calls[0]![0]
+      const callArgs = sdkClientMock.callTool.mock.calls[0]![0]
       expect(callArgs.arguments).toStrictEqual({ op: 'add' })
     })
 
     it('passes args unchanged when span has empty trace ID', async () => {
       mockActiveSpan('', TraceFlags.NONE)
       const tool = new McpTool({ name: 'calc', description: '', inputSchema: {}, client })
-      sdkClientMock.experimental.tasks.callToolStream.mockReturnValue(createMockCallToolStream({ content: [] })())
+      sdkClientMock.callTool.mockResolvedValue({ content: [] })
 
       await client.callTool(tool, { op: 'add' })
 
-      const callArgs = sdkClientMock.experimental.tasks.callToolStream.mock.calls[0]![0]
+      const callArgs = sdkClientMock.callTool.mock.calls[0]![0]
       expect(callArgs.arguments).toStrictEqual({ op: 'add' })
     })
 
@@ -170,11 +171,11 @@ describe('MCP Integration', () => {
         throw new Error('Context error')
       })
       const tool = new McpTool({ name: 'calc', description: '', inputSchema: {}, client })
-      sdkClientMock.experimental.tasks.callToolStream.mockReturnValue(createMockCallToolStream({ content: [] })())
+      sdkClientMock.callTool.mockResolvedValue({ content: [] })
 
       await client.callTool(tool, { op: 'add' })
 
-      const callArgs = sdkClientMock.experimental.tasks.callToolStream.mock.calls[0]![0]
+      const callArgs = sdkClientMock.callTool.mock.calls[0]![0]
       expect(callArgs.arguments).toStrictEqual({ op: 'add' })
     })
 
@@ -186,13 +187,13 @@ describe('MCP Integration', () => {
         disableMcpInstrumentation: true,
       })
       const noInstrSdkMock = vi.mocked(Client).mock.results.at(-1)!.value
-      noInstrSdkMock.experimental.tasks.callToolStream.mockReturnValue(createMockCallToolStream({ content: [] })())
+      noInstrSdkMock.callTool.mockResolvedValue({ content: [] })
 
       const tool = new McpTool({ name: 'calc', description: '', inputSchema: {}, client: noInstrClient })
 
       await noInstrClient.callTool(tool, { op: 'add' })
 
-      const callArgs = noInstrSdkMock.experimental.tasks.callToolStream.mock.calls[0]![0]
+      const callArgs = noInstrSdkMock.callTool.mock.calls[0]![0]
       expect(callArgs.arguments).toStrictEqual({ op: 'add' })
     })
 
