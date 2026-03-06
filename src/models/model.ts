@@ -112,6 +112,11 @@ export interface StreamOptions {
    * Controls how the model selects tools to use.
    */
   toolChoice?: ToolChoice
+
+  /**
+   * AbortSignal to cancel the model stream.
+   */
+  signal?: AbortSignal
 }
 
 /**

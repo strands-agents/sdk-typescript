@@ -43,6 +43,10 @@ export interface InvokeOptions {
    * Zod schema for structured output validation, overriding the constructor-provided schema for this invocation only.
    */
   structuredOutputSchema?: z.ZodSchema
+  /**
+   * AbortSignal to cancel the invocation.
+   */
+  signal?: AbortSignal
 }
 
 /**

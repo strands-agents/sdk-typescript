@@ -506,7 +506,7 @@ export class Agent implements LocalAgent, InvokableAgent {
             currentArgs = undefined
           }
 
-          const modelResult = yield* this._invokeModel(structuredOutputChoice)
+          const modelResult = yield* this._invokeModel(structuredOutputChoice, options?.signal)
 
           if (modelResult.stopReason !== 'toolUse') {
             // If structured output is required, force it
@@ -679,7 +679,8 @@ export class Agent implements LocalAgent, InvokableAgent {
    * @returns Object containing the assistant message, stop reason, and optional redaction message
    */
   private async *_invokeModel(
-    toolChoice?: ToolChoice
+    toolChoice?: ToolChoice,
+    signal?: AbortSignal
   ): AsyncGenerator<AgentStreamEvent, StreamAggregatedResult, undefined> {
     const toolSpecs = this._toolRegistry.list().map((tool) => tool.toolSpec)
     const streamOptions: StreamOptions = { toolSpecs }
@@ -690,6 +691,11 @@ export class Agent implements LocalAgent, InvokableAgent {
     // Add tool choice if provided
     if (toolChoice) {
       streamOptions.toolChoice = toolChoice
+    }
+
+    // Pass abort signal through to model
+    if (signal) {
+      streamOptions.signal = signal
     }
 
     yield new BeforeModelCallEvent({ agent: this })
@@ -735,7 +741,7 @@ export class Agent implements LocalAgent, InvokableAgent {
       yield afterModelCallEvent
 
       if (afterModelCallEvent.retry) {
-        return yield* this._invokeModel(toolChoice)
+        return yield* this._invokeModel(toolChoice, signal)
       }
 
       return result
@@ -753,7 +759,7 @@ export class Agent implements LocalAgent, InvokableAgent {
 
       // After yielding, hooks have been invoked and may have set retry
       if (errorEvent.retry) {
-        return yield* this._invokeModel(toolChoice)
+        return yield* this._invokeModel(toolChoice, signal)
       }
 
       // Re-throw error
