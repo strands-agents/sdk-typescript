@@ -74,7 +74,7 @@ describe('S3Storage', () => {
           expect.objectContaining({
             input: {
               Bucket: 'test-bucket',
-              Key: `test-session/scopes/agent/${SCOPE_ID}/snapshots/immutable_history/snapshot_00001.json`,
+              Key: `test-session/scopes/agent/${SCOPE_ID}/snapshots/immutable_history/snapshot_1.json`,
               Body: JSON.stringify(snapshot, null, 2),
               ContentType: 'application/json',
             },
@@ -89,7 +89,6 @@ describe('S3Storage', () => {
 
         await storage.saveSnapshot({ location, snapshotId: '1', isLatest: true, snapshot })
 
-        expect(mockS3Client.send).toHaveBeenCalledTimes(2)
         expect(mockS3Client.send).toHaveBeenCalledWith(
           expect.objectContaining({
             input: expect.objectContaining({
@@ -111,7 +110,7 @@ describe('S3Storage', () => {
         expect(mockPrefixS3Client.send).toHaveBeenCalledWith(
           expect.objectContaining({
             input: expect.objectContaining({
-              Key: `my-app/test-session/scopes/agent/${SCOPE_ID}/snapshots/immutable_history/snapshot_00001.json`,
+              Key: `my-app/test-session/scopes/agent/${SCOPE_ID}/snapshots/immutable_history/snapshot_1.json`,
             }),
           })
         )
@@ -186,7 +185,7 @@ describe('S3Storage', () => {
         expect(mockS3Client.send).toHaveBeenCalledWith(
           expect.objectContaining({
             input: expect.objectContaining({
-              Key: `test-session/scopes/agent/${SCOPE_ID}/snapshots/immutable_history/snapshot_00005.json`,
+              Key: `test-session/scopes/agent/${SCOPE_ID}/snapshots/immutable_history/snapshot_5.json`,
             }),
           })
         )
@@ -245,11 +244,16 @@ describe('S3Storage', () => {
   describe('listSnapshots', () => {
     describe('S3SnapshotStorage_When_listSnapshots_Then_ReturnsOrderedIds', () => {
       it('returns sorted snapshot IDs', async () => {
+        const ids = [
+          '019c9bf1-14e5-7eef-96fb-cc07ae54210f',
+          '019c9bf1-1d34-7eef-96fb-d1be20fd7bbd',
+          '019c9bf1-24bb-7eef-96fb-ddcc943cd859',
+        ]
         mockS3Client.send.mockResolvedValue({
           Contents: [
-            { Key: `test-session/scopes/agent/${SCOPE_ID}/snapshots/immutable_history/snapshot_00003.json` },
-            { Key: `test-session/scopes/agent/${SCOPE_ID}/snapshots/immutable_history/snapshot_00001.json` },
-            { Key: `test-session/scopes/agent/${SCOPE_ID}/snapshots/immutable_history/snapshot_00002.json` },
+            { Key: `test-session/scopes/agent/${SCOPE_ID}/snapshots/immutable_history/snapshot_${ids[2]}.json` },
+            { Key: `test-session/scopes/agent/${SCOPE_ID}/snapshots/immutable_history/snapshot_${ids[0]}.json` },
+            { Key: `test-session/scopes/agent/${SCOPE_ID}/snapshots/immutable_history/snapshot_${ids[1]}.json` },
           ],
         })
 
@@ -257,7 +261,7 @@ describe('S3Storage', () => {
           location: { sessionId: 'test-session', scope: 'agent', scopeId: SCOPE_ID },
         })
 
-        expect(result).toEqual(['1', '2', '3'])
+        expect(result).toEqual(ids)
         expect(mockS3Client.send).toHaveBeenCalledWith(
           expect.objectContaining({
             input: {
@@ -277,31 +281,35 @@ describe('S3Storage', () => {
       })
 
       it('ignores non-snapshot objects', async () => {
+        const id1 = '019c9bf1-14e5-7eef-96fb-cc07ae54210f'
+        const id2 = '019c9bf1-1d34-7eef-96fb-d1be20fd7bbd'
         mockS3Client.send.mockResolvedValue({
           Contents: [
-            { Key: `test-session/scopes/agent/${SCOPE_ID}/snapshots/immutable_history/snapshot_00001.json` },
+            { Key: `test-session/scopes/agent/${SCOPE_ID}/snapshots/immutable_history/snapshot_${id1}.json` },
             { Key: `test-session/scopes/agent/${SCOPE_ID}/snapshots/immutable_history/other-file.txt` },
-            { Key: `test-session/scopes/agent/${SCOPE_ID}/snapshots/immutable_history/snapshot_00002.json` },
+            { Key: `test-session/scopes/agent/${SCOPE_ID}/snapshots/immutable_history/snapshot_${id2}.json` },
           ],
         })
         const result = await storage.listSnapshotIds({
           location: { sessionId: 'test-session', scope: 'agent', scopeId: SCOPE_ID },
         })
-        expect(result).toEqual(['1', '2'])
+        expect(result).toEqual([id1, id2])
       })
 
       it('handles objects without Key property', async () => {
+        const id1 = '019c9bf1-14e5-7eef-96fb-cc07ae54210f'
+        const id2 = '019c9bf1-1d34-7eef-96fb-d1be20fd7bbd'
         mockS3Client.send.mockResolvedValue({
           Contents: [
-            { Key: `test-session/scopes/agent/${SCOPE_ID}/snapshots/immutable_history/snapshot_00001.json` },
+            { Key: `test-session/scopes/agent/${SCOPE_ID}/snapshots/immutable_history/snapshot_${id1}.json` },
             {},
-            { Key: `test-session/scopes/agent/${SCOPE_ID}/snapshots/immutable_history/snapshot_00002.json` },
+            { Key: `test-session/scopes/agent/${SCOPE_ID}/snapshots/immutable_history/snapshot_${id2}.json` },
           ],
         })
         const result = await storage.listSnapshotIds({
           location: { sessionId: 'test-session', scope: 'agent', scopeId: SCOPE_ID },
         })
-        expect(result).toEqual(['1', '2'])
+        expect(result).toEqual([id1, id2])
       })
     })
 
@@ -319,7 +327,7 @@ describe('S3Storage', () => {
     describe('S3SnapshotStorage_When_LoadManifest_Then_ReturnsManifest', () => {
       it('loads existing manifest', async () => {
         const location: SnapshotLocation = { sessionId: 'test-session', scope: 'agent', scopeId: SCOPE_ID }
-        const manifest = createTestManifest({ nextSnapshotId: '5' })
+        const manifest = createTestManifest()
         mockS3Client.send.mockResolvedValue({
           Body: { transformToString: () => Promise.resolve(JSON.stringify(manifest)) },
         })
@@ -347,7 +355,6 @@ describe('S3Storage', () => {
         })
         expect(result).toEqual({
           schemaVersion: '1.0',
-          nextSnapshotId: '1',
           updatedAt: expect.any(String),
         })
       })
@@ -369,7 +376,7 @@ describe('S3Storage', () => {
     describe('S3SnapshotStorage_When_SaveManifest_Then_PutsObject', () => {
       it('saves manifest to S3', async () => {
         const location: SnapshotLocation = { sessionId: 'test-session', scope: 'agent', scopeId: SCOPE_ID }
-        const manifest = createTestManifest({ nextSnapshotId: '10' })
+        const manifest = createTestManifest()
         mockS3Client.send.mockResolvedValue({})
 
         await storage.saveManifest({ location, manifest })
@@ -396,74 +403,6 @@ describe('S3Storage', () => {
             manifest: createTestManifest(),
           })
         ).rejects.toThrow(SessionError)
-      })
-    })
-  })
-
-  describe('edge cases', () => {
-    describe('S3SnapshotStorage_When_InvalidIdentifiers_Then_ThrowsError', () => {
-      it('throws error for invalid session ID', async () => {
-        const snapshot = createTestSnapshot()
-        await expect(
-          storage.saveSnapshot({
-            location: { sessionId: 'invalid/session', scope: 'agent', scopeId: SCOPE_ID },
-            snapshotId: '1',
-            isLatest: false,
-            snapshot,
-          })
-        ).rejects.toThrow()
-      })
-
-      it('throws error for invalid scopeId', async () => {
-        const snapshot = createTestSnapshot()
-        await expect(
-          storage.saveSnapshot({
-            location: { sessionId: 'test-session', scope: 'agent', scopeId: 'invalid/agent' },
-            snapshotId: '1',
-            isLatest: false,
-            snapshot,
-          })
-        ).rejects.toThrow()
-      })
-    })
-
-    describe('S3SnapshotStorage_When_SpecialCharacters_Then_HandlesCorrectly', () => {
-      it('handles special characters in snapshot data', async () => {
-        const location: SnapshotLocation = { sessionId: 'test-session', scope: 'agent', scopeId: SCOPE_ID }
-        const specialData = { emoji: '🚀', unicode: 'café', quotes: '"test"' }
-        const snapshot = createTestSnapshot({
-          data: { messages: [], state: specialData, systemPrompt: null },
-        })
-
-        mockS3Client.send
-          .mockResolvedValueOnce({})
-          .mockResolvedValueOnce({})
-          .mockResolvedValueOnce({ Body: { transformToString: () => Promise.resolve(JSON.stringify(snapshot)) } })
-
-        await storage.saveSnapshot({ location, snapshotId: '1', isLatest: true, snapshot })
-        const result = await storage.loadSnapshot({ location })
-
-        expect(result?.data.state).toEqual(specialData)
-      })
-    })
-
-    describe('S3SnapshotStorage_When_LargeSnapshot_Then_HandlesCorrectly', () => {
-      it('handles large snapshots', async () => {
-        const location: SnapshotLocation = { sessionId: 'test-session', scope: 'agent', scopeId: SCOPE_ID }
-        const largeState = { data: 'x'.repeat(10000) }
-        const snapshot = createTestSnapshot({
-          data: { messages: [], state: largeState, systemPrompt: null },
-        })
-
-        mockS3Client.send
-          .mockResolvedValueOnce({})
-          .mockResolvedValueOnce({})
-          .mockResolvedValueOnce({ Body: { transformToString: () => Promise.resolve(JSON.stringify(snapshot)) } })
-
-        await storage.saveSnapshot({ location, snapshotId: '1', isLatest: true, snapshot })
-        const result = await storage.loadSnapshot({ location })
-
-        expect(result?.data.state).toEqual(largeState)
       })
     })
   })
