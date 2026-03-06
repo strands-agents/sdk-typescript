@@ -76,11 +76,14 @@ export class NodeState {
   status: Status
   /** Marks this node as the last one executed in an execution path. */
   terminus: boolean
+  /** Node execution start time in milliseconds since epoch. */
+  startTime: number
   readonly results: NodeResult[]
 
   constructor() {
     this.status = Status.PENDING
     this.terminus = false
+    this.startTime = Date.now()
     this.results = []
   }
 

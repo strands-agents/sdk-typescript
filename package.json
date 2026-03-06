@@ -30,6 +30,10 @@
       "types": "./dist/src/models/gemini/model.d.ts",
       "default": "./dist/src/models/gemini/model.js"
     },
+    "./multiagent": {
+      "types": "./dist/src/multiagent/index.d.ts",
+      "default": "./dist/src/multiagent/index.js"
+    },
     "./vended_tools/notebook": {
       "types": "./dist/src/vended-tools/notebook/index.d.ts",
       "default": "./dist/src/vended-tools/notebook/index.js"

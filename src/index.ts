@@ -211,3 +211,6 @@ export type { Scope, Snapshot } from './agent/snapshot.js'
 
 // Telemetry
 export * as telemetry from './telemetry/index.js'
+
+// Multi-agent orchestration
+export { Swarm } from './multiagent/index.js'
