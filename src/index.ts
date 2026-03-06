@@ -148,7 +148,7 @@ export type {
 export { isModelStreamEvent } from './models/streaming.js'
 
 // Model provider types
-export type { BaseModelConfig, StreamOptions } from './models/model.js'
+export type { BaseModelConfig, StreamOptions, CacheConfig } from './models/model.js'
 
 export { Model } from './models/model.js'
 

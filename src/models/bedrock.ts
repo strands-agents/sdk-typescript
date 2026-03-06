@@ -39,7 +39,7 @@ import {
   type Citation as BedrockCitation,
   type CitationsContentBlock as BedrockCitationsContentBlock,
 } from '@aws-sdk/client-bedrock-runtime'
-import { type BaseModelConfig, Model, type StreamOptions } from '../models/model.js'
+import { type BaseModelConfig, type CacheConfig, Model, type StreamOptions } from '../models/model.js'
 import type { ContentBlock, Message, StopReason, ToolUseBlock } from '../types/messages.js'
 import type { ImageSource, VideoSource, DocumentSource } from '../types/media.js'
 import type { CitationsDelta, ModelStreamEvent, ReasoningContentDelta, Usage } from '../models/streaming.js'
@@ -64,6 +64,13 @@ const DEFAULT_BEDROCK_REGION_SUPPORTS_FIP = false
  * @see https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_ToolResultBlock.html
  */
 const MODELS_INCLUDE_STATUS = ['anthropic.claude']
+
+/**
+ * Models that support prompt caching.
+ * Anthropic Claude and Amazon Nova models on Bedrock support prompt caching.
+ * @see https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-caching.html
+ */
+const MODELS_SUPPORTING_CACHING = ['anthropic', 'claude', 'nova']
 
 /**
  * Error messages that indicate context window overflow.
@@ -110,7 +117,7 @@ function snakeToCamel(str: string): string {
  *   modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
  *   maxTokens: 1024,
  *   temperature: 0.7,
- *   cachePrompt: 'ephemeral'
+ *   cacheConfig: { strategy: 'auto' }
  * }
  * ```
  */
@@ -142,16 +149,12 @@ export interface BedrockModelConfig extends BaseModelConfig {
   stopSequences?: string[]
 
   /**
-   * Cache point type for the system prompt.
+   * Configuration for prompt caching.
+   * When strategy is 'auto', cache points are automatically placed after the last assistant message.
+   *
    * @see https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-caching.html
    */
-  cachePrompt?: string
-
-  /**
-   * Cache point type for tools.
-   * @see https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-caching.html
-   */
-  cacheTools?: string
+  cacheConfig?: CacheConfig
 
   /**
    * Additional fields to include in the Bedrock request.
@@ -262,7 +265,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
    *   modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
    *   maxTokens: 2048,
    *   temperature: 0.8,
-   *   cachePrompt: 'ephemeral'
+   *   cacheConfig: { strategy: 'auto' }
    * })
    *
    * // With client configuration
@@ -303,6 +306,46 @@ export class BedrockModel extends Model<BedrockModelConfig> {
     }
 
     applyDefaultRegion(this._client.config)
+  }
+
+  /**
+   * Returns the cache strategy for this model based on its model ID.
+   * Returns the appropriate cache strategy name, or null if automatic caching is not supported.
+   *
+   * @returns Cache strategy name or null
+   */
+  private _getCacheStrategy(): 'anthropic' | null {
+    return MODELS_SUPPORTING_CACHING.some((pattern) => this._config.modelId?.includes(pattern)) ? 'anthropic' : null
+  }
+
+  /**
+   * Determines if caching should be enabled.
+   * Returns true when:
+   * - strategy is 'anthropic' (explicit enable)
+   * - strategy is 'auto' and model supports caching (auto-detect)
+   *
+   * @returns True if caching should be enabled
+   */
+  private _shouldEnableCaching(): boolean {
+    const cacheConfig = this._config.cacheConfig
+    if (!cacheConfig) {
+      return false
+    }
+
+    let strategy = cacheConfig.strategy
+
+    if (strategy === 'auto') {
+      const detectedStrategy = this._getCacheStrategy()
+      if (!detectedStrategy) {
+        logger.warn(
+          `model_id=<${this._config.modelId}> | cache_config is enabled but this model does not support automatic caching`
+        )
+        return false
+      }
+      strategy = detectedStrategy
+    }
+
+    return strategy === 'anthropic'
   }
 
   /**
@@ -419,23 +462,11 @@ export class BedrockModel extends Model<BedrockModelConfig> {
       messages: this._formatMessages(messages),
     }
 
-    // Add system prompt with optional caching
+    // Add system prompt
     if (options?.systemPrompt !== undefined) {
       if (typeof options.systemPrompt === 'string') {
-        // String path: apply cachePrompt config if set
-        const system: BedrockContentBlock[] = [{ text: options.systemPrompt }]
-
-        if (this._config.cachePrompt) {
-          system.push({ cachePoint: { type: this._config.cachePrompt as 'default' } })
-        }
-
-        request.system = system
+        request.system = [{ text: options.systemPrompt }]
       } else if (options.systemPrompt.length > 0) {
-        // Array path: use as-is, but warn if cachePrompt config is also set
-        if (this._config.cachePrompt) {
-          logger.warn('cachePrompt config is ignored when systemPrompt is an array, use explicit cache points instead')
-        }
-
         request.system = options.systemPrompt.map((block) => this._formatContentBlock(block) as SystemContentBlock)
       }
     }
@@ -452,12 +483,6 @@ export class BedrockModel extends Model<BedrockModelConfig> {
             },
           }) as Tool
       )
-
-      if (this._config.cacheTools) {
-        tools.push({
-          cachePoint: { type: this._config.cacheTools as 'default' },
-        } as Tool)
-      }
 
       const toolConfig: ToolConfiguration = {
         tools: tools,
@@ -506,7 +531,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
    * @returns Bedrock-formatted messages
    */
   private _formatMessages(messages: Message[]): BedrockMessage[] {
-    return messages.reduce<BedrockMessage[]>((acc, message) => {
+    const formattedMessages = messages.reduce<BedrockMessage[]>((acc, message) => {
       const content = message.content
         .map((block) => this._formatContentBlock(block))
         .filter((block) => block !== undefined)
@@ -517,6 +542,58 @@ export class BedrockModel extends Model<BedrockModelConfig> {
 
       return acc
     }, [])
+
+    // Inject cache point if caching is enabled
+    if (this._shouldEnableCaching()) {
+      this._injectCachePoint(formattedMessages)
+    }
+
+    return formattedMessages
+  }
+
+  /**
+   * Inject a cache point at the end of the last assistant message.
+   * Strips any existing cache points from all messages first.
+   *
+   * @param messages - List of messages to inject cache point into (modified in place)
+   */
+  private _injectCachePoint(messages: BedrockMessage[]): void {
+    if (messages.length === 0) {
+      return
+    }
+
+    let lastAssistantIdx: number | null = null
+
+    // Strip existing cache points and find last assistant message
+    for (let msgIdx = 0; msgIdx < messages.length; msgIdx++) {
+      const msg = messages[msgIdx]
+      if (!msg) continue
+
+      const content = msg.content ?? []
+
+      for (let blockIdx = content.length - 1; blockIdx >= 0; blockIdx--) {
+        const block = content[blockIdx]
+        if (block && 'cachePoint' in block) {
+          content.splice(blockIdx, 1)
+          logger.warn(
+            `msg_idx=<${msgIdx}>, block_idx=<${blockIdx}> | stripped existing cache point (auto mode manages cache points)`
+          )
+        }
+      }
+
+      if (msg.role === 'assistant') {
+        lastAssistantIdx = msgIdx
+      }
+    }
+
+    // Add cache point to last assistant message
+    if (lastAssistantIdx !== null) {
+      const lastMsg = messages[lastAssistantIdx]
+      if (lastMsg && lastMsg.content) {
+        lastMsg.content.push({ cachePoint: { type: 'default' } })
+        logger.debug(`msg_idx=<${lastAssistantIdx}> | added cache point to last assistant message`)
+      }
+    }
   }
 
   /**

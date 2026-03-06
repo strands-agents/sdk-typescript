@@ -42,6 +42,19 @@ class CitationAccumulator {
 }
 
 /**
+ * Configuration for prompt caching.
+ */
+export interface CacheConfig {
+  /**
+   * Caching strategy to use.
+   * - "auto": Automatically inject cache points at optimal positions based on model ID detection
+   *   (after last assistant message)
+   * - "anthropic": Force enable Anthropic-style caching (useful for application inference profiles)
+   */
+  strategy: 'auto' | 'anthropic'
+}
+
+/**
  * Base configuration interface for all model providers.
  *
  * This interface defines the common configuration properties that all
