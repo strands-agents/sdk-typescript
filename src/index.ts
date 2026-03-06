@@ -211,3 +211,30 @@ export type { Scope, Snapshot } from './agent/snapshot.js'
 
 // Telemetry
 export * as telemetry from './telemetry/index.js'
+
+// Multi-agent orchestration
+export { Graph, GraphError } from './multiagent/graph.js'
+export type { GraphOptions, GraphResult } from './multiagent/graph.js'
+export {
+  MultiAgentState,
+  MultiAgentResult,
+  NodeResult,
+  NodeState,
+  Status,
+  Node,
+  AgentNode,
+  Edge,
+  NodeStreamUpdateEvent,
+  NodeResultEvent,
+  MultiAgentHandoffEvent,
+  MultiAgentResultEvent,
+} from './multiagent/index.js'
+export type {
+  MultiAgentStreamEvent,
+  NodeConfig,
+  AgentNodeOptions,
+  EdgeHandler,
+  EdgeDefinition,
+  NodeDefinition,
+  NodeType,
+} from './multiagent/index.js'
