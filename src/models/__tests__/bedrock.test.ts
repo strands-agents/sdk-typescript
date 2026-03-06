@@ -1901,10 +1901,12 @@ describe('BedrockModel', () => {
             guardrailVersion: '1',
             trace: 'enabled_full',
             streamProcessingMode: 'sync',
-            redactInput: true,
-            redactInputMessage: '[Custom input redacted.]',
-            redactOutput: true,
-            redactOutputMessage: '[Custom output redacted.]',
+            redaction: {
+              input: true,
+              inputMessage: '[Custom input redacted.]',
+              output: true,
+              outputMessage: '[Custom output redacted.]',
+            },
           },
         })
         expect(provider.getConfig().guardrailConfig).toStrictEqual({
@@ -1912,10 +1914,12 @@ describe('BedrockModel', () => {
           guardrailVersion: '1',
           trace: 'enabled_full',
           streamProcessingMode: 'sync',
-          redactInput: true,
-          redactInputMessage: '[Custom input redacted.]',
-          redactOutput: true,
-          redactOutputMessage: '[Custom output redacted.]',
+          redaction: {
+            input: true,
+            inputMessage: '[Custom input redacted.]',
+            output: true,
+            outputMessage: '[Custom output redacted.]',
+          },
         })
       })
     })
@@ -2210,7 +2214,9 @@ describe('BedrockModel', () => {
           guardrailConfig: {
             guardrailIdentifier: 'id',
             guardrailVersion: '1',
-            redactInputMessage: '[Custom input message]',
+            redaction: {
+              inputMessage: '[Custom input message]',
+            },
           },
         })
         const events = await collectIterator(
@@ -2243,7 +2249,9 @@ describe('BedrockModel', () => {
           guardrailConfig: {
             guardrailIdentifier: 'id',
             guardrailVersion: '1',
-            redactInput: false,
+            redaction: {
+              input: false,
+            },
           },
         })
         const events = await collectIterator(
@@ -2276,7 +2284,9 @@ describe('BedrockModel', () => {
           guardrailConfig: {
             guardrailIdentifier: 'id',
             guardrailVersion: '1',
-            redactOutput: true,
+            redaction: {
+              output: true,
+            },
           },
         })
         const events = await collectIterator(
@@ -2309,8 +2319,10 @@ describe('BedrockModel', () => {
           guardrailConfig: {
             guardrailIdentifier: 'id',
             guardrailVersion: '1',
-            redactOutput: true,
-            redactOutputMessage: '[Custom output message]',
+            redaction: {
+              output: true,
+              outputMessage: '[Custom output message]',
+            },
           },
         })
         const events = await collectIterator(
@@ -2343,8 +2355,10 @@ describe('BedrockModel', () => {
           guardrailConfig: {
             guardrailIdentifier: 'id',
             guardrailVersion: '1',
-            redactInput: true,
-            redactOutput: true,
+            redaction: {
+              input: true,
+              output: true,
+            },
           },
         })
         const events = await collectIterator(

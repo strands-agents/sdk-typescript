@@ -116,6 +116,55 @@ const DEFAULT_REDACT_OUTPUT_MESSAGE = '[Assistant output redacted.]'
  *
  * @see https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails.html
  */
+export interface GuardrailRedactionConfig {
+  /**
+   * Redact user input when guardrail blocks it.
+   * When undefined or true, user input will be redacted.
+   * Set to false to disable user input redaction.
+   * @defaultValue true
+   */
+  input?: boolean
+
+  /**
+   * Custom message to replace redacted user input.
+   * @defaultValue '[User input redacted.]'
+   */
+  inputMessage?: string
+
+  /**
+   * Redact assistant output when guardrail blocks it.
+   * When undefined or false, assistant output will not be redacted.
+   * Set to true to enable assistant output redaction.
+   * @defaultValue false
+   */
+  output?: boolean
+
+  /**
+   * Custom message to replace redacted assistant output.
+   * @defaultValue '[Assistant output redacted.]'
+   */
+  outputMessage?: string
+}
+
+/**
+ * Configuration for Bedrock guardrails.
+ *
+ * **Session Persistence Considerations:**
+ *
+ * When using SessionManager with guardrails, redacted messages are persisted based on
+ * the `saveLatestOn` strategy:
+ * - `'invocation'` (default): Redacted messages are saved at the end of each invocation.
+ *   If the process crashes during invocation, un-redacted content may remain in storage.
+ * - `'message'`: Redacted messages are saved immediately when MessageUpdatedEvent fires,
+ *   providing the most durable protection for sensitive content.
+ * - `'trigger'`: Redaction is only saved when the trigger condition fires or via manual
+ *   saveSnapshot calls.
+ *
+ * For production use with sensitive content, consider using `saveLatestOn: 'message'`
+ * to ensure redactions are persisted immediately.
+ *
+ * @see https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails.html
+ */
 export interface GuardrailConfig {
   /**
    * ID of the guardrail to apply.
@@ -139,32 +188,10 @@ export interface GuardrailConfig {
   streamProcessingMode?: 'sync' | 'async'
 
   /**
-   * Redact user input when guardrail blocks it.
-   * When undefined or true, user input will be redacted.
-   * Set to false to disable user input redaction.
-   * @defaultValue true
+   * SDK redaction behavior configuration.
+   * Controls how the SDK handles content blocked by guardrails.
    */
-  redactInput?: boolean
-
-  /**
-   * Custom message to replace redacted user input.
-   * @defaultValue '[User input redacted.]'
-   */
-  redactInputMessage?: string
-
-  /**
-   * Redact assistant output when guardrail blocks it.
-   * When undefined or false, assistant output will not be redacted.
-   * Set to true to enable assistant output redaction.
-   * @defaultValue false
-   */
-  redactOutput?: boolean
-
-  /**
-   * Custom message to replace redacted assistant output.
-   * @defaultValue '[Assistant output redacted.]'
-   */
-  redactOutputMessage?: string
+  redaction?: GuardrailRedactionConfig
 }
 
 /**
@@ -1367,23 +1394,23 @@ export class BedrockModel extends Model<BedrockModelConfig> {
    */
   private _generateRedactionEvents(): ModelStreamEvent[] {
     const events: ModelStreamEvent[] = []
+    const redaction = this._config.guardrailConfig?.redaction
 
-    // Default: redactInput is true unless explicitly set to false
-    if (this._config.guardrailConfig?.redactInput !== false) {
+    // Default: redact input is true unless explicitly set to false
+    if (redaction?.input !== false) {
       logger.debug('redacting user input due to guardrail')
       events.push({
         type: 'modelRedactContentEvent',
-        redactUserContentMessage: this._config.guardrailConfig?.redactInputMessage ?? DEFAULT_REDACT_INPUT_MESSAGE,
+        redactUserContentMessage: redaction?.inputMessage ?? DEFAULT_REDACT_INPUT_MESSAGE,
       })
     }
 
     // Only redact output if explicitly enabled
-    if (this._config.guardrailConfig?.redactOutput) {
+    if (redaction?.output) {
       logger.debug('redacting assistant output due to guardrail')
       events.push({
         type: 'modelRedactContentEvent',
-        redactAssistantContentMessage:
-          this._config.guardrailConfig?.redactOutputMessage ?? DEFAULT_REDACT_OUTPUT_MESSAGE,
+        redactAssistantContentMessage: redaction?.outputMessage ?? DEFAULT_REDACT_OUTPUT_MESSAGE,
       })
     }
 
