@@ -202,3 +202,6 @@ export { StructuredOutputException } from './structured-output/exceptions.js'
 
 // Telemetry
 export * as telemetry from './telemetry/index.js'
+
+// Multi-agent orchestration
+export { Swarm } from './multiagent/index.js'

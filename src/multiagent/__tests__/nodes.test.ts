@@ -41,7 +41,7 @@ describe('Node', () => {
   let state: MultiAgentState
 
   beforeEach(() => {
-    state = new MultiAgentState()
+    state = new MultiAgentState({ nodeIds: ['test-node', 'fail-node'] })
   })
 
   describe('stream', () => {
@@ -90,9 +90,9 @@ describe('AgentNode', () => {
 
   beforeEach(() => {
     const model = new MockMessageModel().addTurn(new TextBlock('reply'))
-    agent = new Agent({ model, printer: false, state: { key1: 'value1' } })
-    node = new AgentNode({ id: 'agent-1', agent })
-    state = new MultiAgentState()
+    agent = new Agent({ model, printer: false, state: { key1: 'value1' }, agentId: 'agent-1' })
+    node = new AgentNode({ agent })
+    state = new MultiAgentState({ nodeIds: ['agent-1'] })
   })
 
   describe('handle', () => {
@@ -143,9 +143,9 @@ describe('AgentNode', () => {
         })
         .addTurn({ type: 'textBlock', text: 'Done' })
 
-      agent = new Agent({ model, printer: false })
-      node = new AgentNode({ id: 'schema-agent', agent })
-      state = new MultiAgentState({ structuredOutputSchema: schema })
+      agent = new Agent({ model, printer: false, agentId: 'schema-agent' })
+      node = new AgentNode({ agent })
+      state = new MultiAgentState({ nodeIds: ['schema-agent'], structuredOutputSchema: schema })
 
       const { result } = await collectGenerator(node.stream('test', state))
 
@@ -189,7 +189,7 @@ describe('MultiAgentNode', () => {
   beforeEach(() => {
     const orchestrator = mockOrchestrator('inner', [])
     node = new MultiAgentNode({ orchestrator })
-    state = new MultiAgentState()
+    state = new MultiAgentState({ nodeIds: ['inner'] })
   })
 
   describe('constructor', () => {

@@ -154,6 +154,21 @@ export class MultiAgentHandoffEvent extends HookableEvent {
 }
 
 /**
+ * Event triggered when a node is cancelled via {@link BeforeNodeCallEvent.cancel}.
+ */
+export class NodeCancelEvent extends HookableEvent {
+  readonly type = 'nodeCancelEvent' as const
+  readonly nodeId: string
+  readonly message: string
+
+  constructor(data: { nodeId: string; message: string }) {
+    super()
+    this.nodeId = data.nodeId
+    this.message = data.message
+  }
+}
+
+/**
  * Event triggered as the final event in the multi-agent stream.
  * Wraps the {@link MultiAgentResult} containing the aggregate outcome.
  */
@@ -177,5 +192,6 @@ export type MultiAgentStreamEvent =
   | AfterNodeCallEvent
   | NodeStreamUpdateEvent
   | NodeResultEvent
+  | NodeCancelEvent
   | MultiAgentHandoffEvent
   | MultiAgentResultEvent
