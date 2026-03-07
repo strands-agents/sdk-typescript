@@ -8,6 +8,9 @@
 // Agent class
 export { Agent } from './agent/agent.js'
 
+// Agent base interface
+export type { AgentBase } from './agent/agent-base.js'
+
 // App state
 export { AppState } from './app-state.js'
 

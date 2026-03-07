@@ -25,6 +25,7 @@ import { isModelStreamEvent } from '../models/streaming.js'
 import { ToolRegistry } from '../registry/tool-registry.js'
 import { AppState } from '../app-state.js'
 import type { AgentData } from '../types/agent.js'
+import type { AgentBase } from './agent-base.js'
 import { AgentPrinter, getDefaultAppender, type Printer } from './printer.js'
 import type { HookProvider } from '../hooks/types.js'
 import { SlidingWindowConversationManager } from '../conversation-manager/sliding-window-conversation-manager.js'
@@ -152,6 +153,12 @@ export type AgentConfig = {
  */
 export type InvokeArgs = string | ContentBlock[] | ContentBlockData[] | Message[] | MessageData[]
 
+/** Fallback name used when no agent name is provided in the config. */
+const DEFAULT_AGENT_NAME = 'Strands Agent'
+
+/** Fallback agent ID used when no agent ID is provided in the config. */
+const DEFAULT_AGENT_ID = 'default'
+
 /**
  * Options for a single agent invocation.
  */
@@ -173,7 +180,7 @@ const DEFAULT_AGENT_ID = 'default'
  * The Agent is responsible for managing the lifecycle of tools and clients
  * and invoking the core decision-making loop.
  */
-export class Agent implements AgentData {
+export class Agent implements AgentData, AgentBase {
   /**
    * The conversation history of messages between user and assistant.
    */

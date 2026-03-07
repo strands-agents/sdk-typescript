@@ -5,7 +5,7 @@ import { collectGenerator } from '$/sdk/__fixtures__/model-test-helpers.js'
 import { promises as fs } from 'fs'
 import * as path from 'path'
 import { tmpdir } from 'os'
-import { bedrock } from './__fixtures__/model-providers.js'
+import { bedrock } from '../__fixtures__/model-providers.js'
 
 describe.skipIf(bedrock.skip)('FileEditor Tool Integration', () => {
   let testDir: string
