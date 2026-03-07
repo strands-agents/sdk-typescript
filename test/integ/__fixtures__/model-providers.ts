@@ -7,6 +7,9 @@ import { BedrockModel, type BedrockModelOptions } from '$/sdk/models/bedrock.js'
 import { OpenAIModel, type OpenAIModelOptions } from '$/sdk/models/openai.js'
 import { AnthropicModel, type AnthropicModelOptions } from '$/sdk/models/anthropic.js'
 import { GoogleModel, type GoogleModelOptions } from '$/sdk/models/google/model.js'
+import { VercelModel, type VercelModelConfig } from '$/sdk/models/vercel.js'
+import { createAmazonBedrock } from '@ai-sdk/amazon-bedrock'
+import { createOpenAI } from '@ai-sdk/openai'
 
 /**
  * Feature support flags for model providers.
@@ -169,4 +172,83 @@ export const gemini = {
   },
 }
 
-export const allProviders = [bedrock, openai, anthropic, gemini]
+export const vercelBedrock = {
+  name: 'VercelModel (Bedrock)',
+  supports: {
+    reasoning: true,
+    tools: true,
+    toolThinking: false,
+    builtInTools: false,
+    images: true,
+    documents: true,
+    video: false,
+    citations: false,
+  } satisfies ProviderFeatures,
+  models: {
+    default: {},
+    reasoning: {
+      providerOptions: {
+        bedrock: { reasoningConfig: { type: 'enabled', budgetTokens: 1024 } },
+      },
+    },
+    video: {},
+  },
+  get skip() {
+    return inject('provider-bedrock').shouldSkip
+  },
+  createModel: (config: Partial<VercelModelConfig> = {}): VercelModel => {
+    const credentials = inject('provider-bedrock')?.credentials
+    if (!credentials) {
+      throw new Error('No Bedrock credentials provided')
+    }
+    const provider = createAmazonBedrock({
+      ...(!credentials.expiration && { region: 'us-west-2' }),
+      credentialProvider: () => Promise.resolve(credentials),
+    })
+    const { providerOptions, ...rest } = config as Partial<VercelModelConfig> & {
+      providerOptions?: Record<string, unknown>
+    }
+    return new VercelModel(provider('us.anthropic.claude-sonnet-4-20250514-v1:0'), {
+      ...rest,
+      ...(providerOptions && { providerOptions }),
+    })
+  },
+}
+
+export const vercelOpenAI = {
+  name: 'VercelModel (OpenAI)',
+  supports: {
+    reasoning: false,
+    tools: true,
+    toolThinking: false,
+    builtInTools: false,
+    images: true,
+    documents: true,
+    video: false,
+    citations: false,
+  } satisfies ProviderFeatures,
+  models: {
+    default: {},
+    reasoning: { modelId: 'o1-mini' },
+    video: {},
+  },
+  get skip() {
+    return inject('provider-openai').shouldSkip
+  },
+  createModel: (config: Partial<VercelModelConfig> = {}): VercelModel => {
+    const apiKey = inject('provider-openai')?.apiKey
+    if (!apiKey) {
+      throw new Error('No OpenAI apiKey provided')
+    }
+    const provider = createOpenAI({ apiKey })
+    const { providerOptions, ...rest } = config as Partial<VercelModelConfig> & {
+      providerOptions?: Record<string, unknown>
+    }
+    return new VercelModel(provider('gpt-4o'), {
+      ...rest,
+      ...(providerOptions && { providerOptions }),
+    })
+  },
+}
+
+export const allProviders = [bedrock, openai, anthropic, gemini, vercelBedrock, vercelOpenAI]
