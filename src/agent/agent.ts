@@ -20,7 +20,7 @@ import type { ToolChoice } from '../tools/types.js'
 import { systemPromptFromData } from '../types/messages.js'
 import { normalizeError, ConcurrentInvocationError, MaxTokensError } from '../errors.js'
 import { Model } from '../models/model.js'
-import type { BaseModelConfig, StreamOptions } from '../models/model.js'
+import type { BaseModelConfig, StreamAggregatedResult, StreamOptions } from '../models/model.js'
 import { isModelStreamEvent } from '../models/streaming.js'
 import { ToolRegistry } from '../registry/tool-registry.js'
 import { AppState } from '../app-state.js'
@@ -53,7 +53,7 @@ import { StructuredOutputException } from '../structured-output/exceptions.js'
 import type { z } from 'zod'
 import type { SessionManager } from '../session/session-manager.js'
 import { Tracer } from '../telemetry/tracer.js'
-import type { Usage } from '../models/streaming.js'
+import { AgentMetrics } from '../telemetry/meter.js'
 import type { AttributeValue } from '@opentelemetry/api'
 
 /**
@@ -219,10 +219,10 @@ export class Agent implements AgentData {
   private _isInvoking: boolean = false
   private _printer?: Printer
   private _structuredOutputSchema?: z.ZodSchema | undefined
-  /** Tracer instance for creating and managing OpenTelemetry spans. */
+  /** Tracer instance for OTel spans and local execution traces. */
   private _tracer: Tracer
-  /** Running total of token usage across all model invocations in the current invocation. */
-  private _accumulatedTokenUsage: Usage = Agent._createEmptyUsage()
+  /** Loop metrics tracking for agent execution. */
+  private _loopMetrics: AgentMetrics = new AgentMetrics()
 
   /**
    * Creates an instance of the Agent.
@@ -443,7 +443,7 @@ export class Agent implements AgentData {
     const inputMessages = this._normalizeInput(args)
 
     // Start agent trace span
-    this._accumulatedTokenUsage = Agent._createEmptyUsage()
+    this._loopMetrics.startNewInvocation()
     const agentModelId = this.model.modelId
     const agentSpanOptions: Parameters<Tracer['startAgentSpan']>[0] = {
       messages: inputMessages,
@@ -461,10 +461,13 @@ export class Agent implements AgentData {
       context.registerTool(this._toolRegistry)
 
       // Main agent loop - continues until model stops without requesting tools
-      for (let cycleCount = 1; ; cycleCount++) {
+      while (true) {
+        // Start metrics cycle tracking
+        const { cycleId, startTime: cycleStartTime } = this._loopMetrics.startCycle()
+
         // Create agent loop cycle span within agent span context
         const cycleSpan = this._tracer.startAgentLoopSpan({
-          cycleId: `cycle-${cycleCount}`,
+          cycleId,
           messages: this.messages,
         })
 
@@ -495,12 +498,16 @@ export class Agent implements AgentData {
               // Force the model to use the structured output tool
               const toolName = context.getToolName()
               forcedToolChoice = { tool: { name: toolName } }
+              this._loopMetrics.endCycle(cycleStartTime)
               this._tracer.endAgentLoopSpan(cycleSpan)
               continue
             }
 
             // Loop terminates - no tool use requested (and structured output satisfied if needed)
             yield this._appendMessage(modelResult.message)
+
+            // End cycle tracking
+            this._loopMetrics.endCycle(cycleStartTime)
 
             // End cycle span
             this._tracer.endAgentLoopSpan(cycleSpan)
@@ -510,6 +517,7 @@ export class Agent implements AgentData {
               stopReason: modelResult.stopReason,
               lastMessage: modelResult.message,
               structuredOutput,
+              metrics: this._loopMetrics,
             })
             return result
           }
@@ -534,6 +542,9 @@ export class Agent implements AgentData {
           yield this._appendMessage(modelResult.message)
           yield this._appendMessage(toolResultMessage)
 
+          // End cycle tracking
+          this._loopMetrics.endCycle(cycleStartTime)
+
           // End cycle span
           this._tracer.endAgentLoopSpan(cycleSpan)
 
@@ -551,7 +562,7 @@ export class Agent implements AgentData {
       this._tracer.endAgentSpan(agentSpan, {
         ...(caughtError && { error: caughtError }),
         ...(result?.lastMessage && { response: result.lastMessage }),
-        accumulatedUsage: this._accumulatedTokenUsage,
+        accumulatedUsage: this._loopMetrics.accumulatedUsage,
         ...(result?.stopReason && { stopReason: result.stopReason }),
       })
 
@@ -655,15 +666,20 @@ export class Agent implements AgentData {
     })
 
     try {
-      const { message, stopReason, usage } = yield* this._streamFromModel(this.messages, streamOptions)
+      const { message, stopReason, metadata } = yield* this._streamFromModel(this.messages, streamOptions)
 
-      // Accumulate token usage
-      if (usage) {
-        Agent._accumulateUsage(this._accumulatedTokenUsage, usage)
+      // Accumulate token usage and model latency metrics
+      if (metadata) {
+        this._loopMetrics.updateFromMetadata(metadata)
       }
 
-      // End model span with usage
-      this._tracer.endModelInvokeSpan(modelSpan, { output: message, stopReason, ...(usage && { usage }) })
+      // End model span and its local trace (attaches output message automatically)
+      this._tracer.endModelInvokeSpan(modelSpan, {
+        output: message,
+        stopReason,
+        ...(metadata?.usage && { usage: metadata.usage }),
+        ...(metadata?.metrics && { metrics: metadata.metrics }),
+      })
 
       yield new ModelMessageEvent({ agent: this, message, stopReason })
 
@@ -716,7 +732,7 @@ export class Agent implements AgentData {
   private async *_streamFromModel(
     messages: Message[],
     streamOptions: StreamOptions
-  ): AsyncGenerator<AgentStreamEvent, { message: Message; stopReason: StopReason; usage?: Usage }, undefined> {
+  ): AsyncGenerator<AgentStreamEvent, StreamAggregatedResult, undefined> {
     const streamGenerator = this.model.streamAggregated(messages, streamOptions)
     let result = await streamGenerator.next()
 
@@ -733,11 +749,7 @@ export class Agent implements AgentData {
       result = await streamGenerator.next()
     }
 
-    // result.done is true, result.value contains the return value
-    const { message, stopReason, metadata } = result.value
-    const returnValue: { message: Message; stopReason: StopReason; usage?: Usage } = { message, stopReason }
-    if (metadata?.usage) returnValue.usage = metadata.usage
-    return returnValue
+    return result.value
   }
 
   /**
@@ -816,6 +828,9 @@ export class Agent implements AgentData {
         tool: toolUse,
       })
 
+      // Track tool execution time for metrics
+      const toolStartTime = Date.now()
+
       let toolResult: ToolResultBlock
       let error: Error | undefined
 
@@ -877,6 +892,13 @@ export class Agent implements AgentData {
       // End tool span
       this._tracer.endToolCallSpan(toolSpan, { toolResult, ...(error && { error }) })
 
+      // End tool metrics tracking
+      this._loopMetrics.endToolCall({
+        tool: toolUse,
+        duration: Date.now() - toolStartTime,
+        success: toolResult.status === 'success',
+      })
+
       // Single point for AfterToolCallEvent
       const afterToolCallEvent = new AfterToolCallEvent({
         agent: this,
@@ -904,37 +926,6 @@ export class Agent implements AgentData {
   private _appendMessage(message: Message): MessageAddedEvent {
     this.messages.push(message)
     return new MessageAddedEvent({ agent: this, message })
-  }
-
-  /**
-   * Creates an empty Usage object with all counters set to zero.
-   *
-   * @returns A Usage object with zeroed counters
-   */
-  private static _createEmptyUsage(): Usage {
-    return {
-      inputTokens: 0,
-      outputTokens: 0,
-      totalTokens: 0,
-    }
-  }
-
-  /**
-   * Accumulates token usage from a source into a target Usage object.
-   *
-   * @param target - The Usage object to accumulate into (mutated in place)
-   * @param source - The Usage object to accumulate from
-   */
-  private static _accumulateUsage(target: Usage, source: Usage): void {
-    target.inputTokens += source.inputTokens
-    target.outputTokens += source.outputTokens
-    target.totalTokens += source.totalTokens
-    if (source.cacheReadInputTokens !== undefined) {
-      target.cacheReadInputTokens = (target.cacheReadInputTokens ?? 0) + source.cacheReadInputTokens
-    }
-    if (source.cacheWriteInputTokens !== undefined) {
-      target.cacheWriteInputTokens = (target.cacheWriteInputTokens ?? 0) + source.cacheWriteInputTokens
-    }
   }
 }
 
