@@ -10,6 +10,7 @@ import { Message, TextBlock, ToolResultBlock } from '../types/messages.js'
 import type { HookProvider } from '../hooks/types.js'
 import type { HookRegistry } from '../hooks/registry.js'
 import { AfterInvocationEvent, AfterModelCallEvent } from '../hooks/events.js'
+import { findValidSplitPoint } from './utils.js'
 
 /**
  * Configuration for the sliding window conversation manager.
@@ -125,42 +126,13 @@ export class SlidingWindowConversationManager implements HookProvider {
 
     // Try to trim messages when tool result cannot be truncated anymore
     // If the number of messages is less than the window_size, then we default to 2, otherwise, trim to window size
-    let trimIndex = messages.length <= this._windowSize ? 2 : messages.length - this._windowSize
+    const initialTrimIndex = messages.length <= this._windowSize ? 2 : messages.length - this._windowSize
 
     // Find the next valid trim_index
-    while (trimIndex < messages.length) {
-      const oldestMessage = messages[trimIndex]
-      if (!oldestMessage) {
-        break
-      }
-
-      // Check if oldest message would be a toolResult (invalid - needs preceding toolUse)
-      const hasToolResult = oldestMessage.content.some((block) => block.type === 'toolResultBlock')
-      if (hasToolResult) {
-        trimIndex++
-        continue
-      }
-
-      // Check if oldest message would be a toolUse without immediately following toolResult
-      const hasToolUse = oldestMessage.content.some((block) => block.type === 'toolUseBlock')
-      if (hasToolUse) {
-        // Check if next message has toolResult
-        const nextMessage = messages[trimIndex + 1]
-        const nextHasToolResult = nextMessage && nextMessage.content.some((block) => block.type === 'toolResultBlock')
-
-        if (!nextHasToolResult) {
-          // toolUse without following toolResult - invalid trim point
-          trimIndex++
-          continue
-        }
-      }
-
-      // Valid trim point found
-      break
-    }
+    const trimIndex = findValidSplitPoint(messages, initialTrimIndex)
 
     // If we didn't find a valid trim_index, then we throw
-    if (trimIndex >= messages.length) {
+    if (trimIndex < 0) {
       throw new ContextWindowOverflowError('Unable to trim conversation context!')
     }
 
