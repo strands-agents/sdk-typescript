@@ -28,4 +28,4 @@ export { Edge } from './edge.js'
 export type { EdgeHandler, EdgeDefinition } from './edge.js'
 
 export { Swarm } from './swarm.js'
-export type { SwarmConfig, SwarmOptions } from './swarm.js'
+export type { SwarmConfig, SwarmNodeDefinition, SwarmOptions } from './swarm.js'

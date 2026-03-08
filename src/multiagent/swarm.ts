@@ -1,4 +1,5 @@
 import { logger } from '../logging/logger.js'
+import { Agent } from '../agent/agent.js'
 import type { InvokeArgs } from '../agent/agent.js'
 import { z } from 'zod'
 import { HookableEvent } from '../hooks/events.js'
@@ -52,11 +53,17 @@ interface HandoffResult {
 /**
  * Options for creating a Swarm instance.
  */
+/**
+ * Input type for swarm nodes. Pass an {@link Agent} directly for the simple case,
+ * or {@link AgentNodeOptions} when per-node configuration (e.g. timeout) is needed.
+ */
+export type SwarmNodeDefinition = Agent | AgentNodeOptions
+
 export interface SwarmOptions extends SwarmConfig {
   /** Unique identifier. Defaults to `'swarm'`. */
   id?: string
-  /** Node definitions for the swarm agents. */
-  nodes: AgentNodeOptions[]
+  /** Swarm agents. Pass agents directly or use {@link AgentNodeOptions} for per-node config. */
+  nodes: SwarmNodeDefinition[]
   /** Agent id that receives the initial input. */
   start: string
   /** Hook providers for event-driven extensibility. */
@@ -260,10 +267,10 @@ export class Swarm implements MultiAgentBase {
     }
   }
 
-  private _resolveNodes(definitions: AgentNodeOptions[]): Map<string, AgentNode> {
+  private _resolveNodes(definitions: SwarmNodeDefinition[]): Map<string, AgentNode> {
     const nodes = new Map<string, AgentNode>()
     for (const definition of definitions) {
-      const node = new AgentNode(definition)
+      const node = definition instanceof Agent ? new AgentNode({ agent: definition }) : new AgentNode(definition)
       if (nodes.has(node.id)) {
         throw new Error(`agent_id=<${node.id}> | duplicate agent id`)
       }

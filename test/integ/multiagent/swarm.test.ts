@@ -17,7 +17,7 @@ describe.skipIf(bedrock.skip)('Swarm', () => {
     })
 
     const swarm = new Swarm({
-      nodes: [{ agent }],
+      nodes: [agent],
       start: 'assistant',
     })
 
@@ -61,7 +61,7 @@ describe.skipIf(bedrock.skip)('Swarm', () => {
     })
 
     const swarm = new Swarm({
-      nodes: [{ agent: researcher }, { agent: writer }],
+      nodes: [researcher, writer],
       start: 'researcher',
       maxSteps: 4,
     })

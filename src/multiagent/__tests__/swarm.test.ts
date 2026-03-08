@@ -41,7 +41,7 @@ describe('Swarm', () => {
   describe('constructor', () => {
     it('defaults id to "swarm"', () => {
       const swarm = new Swarm({
-        nodes: [{ agent: createFinalAgent('a', 'hi') }],
+        nodes: [createFinalAgent('a', 'hi')],
         start: 'a',
       })
       expect(swarm.id).toBe('swarm')
@@ -49,18 +49,26 @@ describe('Swarm', () => {
 
     it('accepts a custom id', () => {
       const swarm = new Swarm({
-        nodes: [{ agent: createFinalAgent('a', 'hi') }],
+        nodes: [createFinalAgent('a', 'hi')],
         start: 'a',
         id: 'my-swarm',
       })
       expect(swarm.id).toBe('my-swarm')
     })
 
+    it('accepts AgentNodeOptions with per-node config', () => {
+      const swarm = new Swarm({
+        nodes: [{ agent: createFinalAgent('a', 'hi') }],
+        start: 'a',
+      })
+      expect(swarm.id).toBe('swarm')
+    })
+
     it('throws when start references unknown agent', () => {
       expect(
         () =>
           new Swarm({
-            nodes: [{ agent: createFinalAgent('a', 'hi') }],
+            nodes: [createFinalAgent('a', 'hi')],
             start: 'missing',
           })
       ).toThrow('start=<missing> | start references unknown agent')
@@ -71,7 +79,7 @@ describe('Swarm', () => {
       expect(
         () =>
           new Swarm({
-            nodes: [{ agent }, { agent }],
+            nodes: [agent, agent],
             start: 'a',
           })
       ).toThrow('agent_id=<a> | duplicate agent id')
@@ -81,7 +89,7 @@ describe('Swarm', () => {
       expect(
         () =>
           new Swarm({
-            nodes: [{ agent: createFinalAgent('a', 'hi') }],
+            nodes: [createFinalAgent('a', 'hi')],
             start: 'a',
             maxSteps: 0,
           })
@@ -92,7 +100,7 @@ describe('Swarm', () => {
       expect(
         () =>
           new Swarm({
-            nodes: [{ agent: createFinalAgent('a', 'hi') }],
+            nodes: [createFinalAgent('a', 'hi')],
             start: 'a',
             timeout: 0,
           })
@@ -103,7 +111,7 @@ describe('Swarm', () => {
       expect(
         () =>
           new Swarm({
-            nodes: [{ agent: createFinalAgent('a', 'hi') }],
+            nodes: [createFinalAgent('a', 'hi')],
             start: 'a',
             nodeTimeout: 0,
           })
@@ -115,7 +123,7 @@ describe('Swarm', () => {
       expect(
         () =>
           new Swarm({
-            nodes: [{ agent }],
+            nodes: [agent],
             start: 'a',
           })
       ).toThrow('agent_id=<a> | agent description is required for swarm routing')
@@ -125,7 +133,7 @@ describe('Swarm', () => {
   describe('invoke', () => {
     it('returns completed result with content and duration', async () => {
       const swarm = new Swarm({
-        nodes: [{ agent: createFinalAgent('a', 'final answer') }],
+        nodes: [createFinalAgent('a', 'final answer')],
         start: 'a',
       })
 
@@ -144,8 +152,8 @@ describe('Swarm', () => {
     it('hands off from A to B and returns final output', async () => {
       const swarm = new Swarm({
         nodes: [
-          { agent: createHandoffAgent('a', { agentId: 'b', message: 'please handle this' }) },
-          { agent: createFinalAgent('b', 'done by b') },
+          createHandoffAgent('a', { agentId: 'b', message: 'please handle this' }),
+          createFinalAgent('b', 'done by b'),
         ],
         start: 'a',
       })
@@ -159,9 +167,9 @@ describe('Swarm', () => {
     it('chains handoffs across multiple agents (A → B → C)', async () => {
       const swarm = new Swarm({
         nodes: [
-          { agent: createHandoffAgent('a', { agentId: 'b', message: 'go to b' }) },
-          { agent: createHandoffAgent('b', { agentId: 'c', message: 'go to c' }) },
-          { agent: createFinalAgent('c', 'final from c') },
+          createHandoffAgent('a', { agentId: 'b', message: 'go to b' }),
+          createHandoffAgent('b', { agentId: 'c', message: 'go to c' }),
+          createFinalAgent('c', 'final from c'),
         ],
         start: 'a',
       })
@@ -178,10 +186,7 @@ describe('Swarm', () => {
       const streamSpy = vi.spyOn(agentB, 'stream')
 
       const swarm = new Swarm({
-        nodes: [
-          { agent: createHandoffAgent('a', { agentId: 'b', message: 'handle this', context: contextData }) },
-          { agent: agentB },
-        ],
+        nodes: [createHandoffAgent('a', { agentId: 'b', message: 'handle this', context: contextData }), agentB],
         start: 'a',
       })
 
@@ -196,10 +201,7 @@ describe('Swarm', () => {
 
     it('stops execution at maxSteps and returns last result', async () => {
       const swarm = new Swarm({
-        nodes: [
-          { agent: createHandoffAgent('a', { agentId: 'b', message: 'to b' }) },
-          { agent: createFinalAgent('b', 'done') },
-        ],
+        nodes: [createHandoffAgent('a', { agentId: 'b', message: 'to b' }), createFinalAgent('b', 'done')],
         start: 'a',
         maxSteps: 1,
       })
@@ -221,7 +223,7 @@ describe('Swarm', () => {
       }
 
       const swarm = new Swarm({
-        nodes: [{ agent: createFinalAgent('a', 'hi') }],
+        nodes: [createFinalAgent('a', 'hi')],
         start: 'a',
         hooks: [provider],
       })
@@ -246,7 +248,7 @@ describe('Swarm', () => {
       }
 
       const swarm = new Swarm({
-        nodes: [{ agent: createFinalAgent('a', 'hi') }],
+        nodes: [createFinalAgent('a', 'hi')],
         start: 'a',
         hooks: [provider],
       })
@@ -286,7 +288,7 @@ describe('Swarm', () => {
       }
 
       const swarm = new Swarm({
-        nodes: [{ agent: createFinalAgent('a', 'hi') }],
+        nodes: [createFinalAgent('a', 'hi')],
         start: 'a',
         hooks: [provider],
       })
@@ -311,10 +313,7 @@ describe('Swarm', () => {
         })
 
         const swarm = new Swarm({
-          nodes: [
-            { agent: createHandoffAgent('a', { agentId: 'b', message: 'to b' }) },
-            { agent: createFinalAgent('b', 'done') },
-          ],
+          nodes: [createHandoffAgent('a', { agentId: 'b', message: 'to b' }), createFinalAgent('b', 'done')],
           start: 'a',
           timeout: 100,
         })
@@ -330,7 +329,7 @@ describe('Swarm', () => {
         })
 
         const swarm = new Swarm({
-          nodes: [{ agent: createFinalAgent('a', 'hi') }],
+          nodes: [createFinalAgent('a', 'hi')],
           start: 'a',
           nodeTimeout: 100,
         })
@@ -345,7 +344,7 @@ describe('Swarm', () => {
       const stateBefore = agent.state.getAll()
 
       const swarm = new Swarm({
-        nodes: [{ agent }],
+        nodes: [agent],
         start: 'a',
       })
 
@@ -359,7 +358,7 @@ describe('Swarm', () => {
   describe('stream', () => {
     it('yields lifecycle events in correct order for single agent', async () => {
       const swarm = new Swarm({
-        nodes: [{ agent: createFinalAgent('a', 'reply') }],
+        nodes: [createFinalAgent('a', 'reply')],
         start: 'a',
       })
 
@@ -382,10 +381,7 @@ describe('Swarm', () => {
 
     it('yields handoff event between agents', async () => {
       const swarm = new Swarm({
-        nodes: [
-          { agent: createHandoffAgent('a', { agentId: 'b', message: 'go' }) },
-          { agent: createFinalAgent('b', 'done') },
-        ],
+        nodes: [createHandoffAgent('a', { agentId: 'b', message: 'go' }), createFinalAgent('b', 'done')],
         start: 'a',
       })
 
