@@ -73,9 +73,29 @@ export interface SwarmOptions extends SwarmConfig {
 /**
  * Swarm multi-agent orchestration pattern.
  *
- * Executes agents sequentially with structured output handoffs.
- * Each agent decides whether to hand off to another agent or produce
- * a final response via structured output containing `agentId` and `message`.
+ * Agents execute sequentially, each deciding whether to hand off to another agent or
+ * produce a final response. Routing is driven by structured output: each agent receives
+ * a Zod schema with `agentId`, `message`, and optional `context` fields. When `agentId`
+ * is present, the swarm hands off to that agent with `message` as input. When omitted,
+ * `message` becomes the final response.
+ *
+ * Key design choices vs the Python SDK:
+ * - Handoffs use structured output rather than an injected `handoff_to_agent` tool.
+ *   Routing logic stays in the orchestrator, not inside tool callbacks.
+ * - Context is passed as serialized JSON text blocks rather than a mutable SharedContext.
+ * - A single `maxSteps` limit replaces Python's separate `max_handoffs`/`max_iterations`.
+ * - Agent descriptions are embedded in the structured output schema for routing decisions.
+ *
+ * @example
+ * ```typescript
+ * const swarm = new Swarm({
+ *   nodes: [researcher, writer],
+ *   start: 'researcher',
+ *   maxSteps: 10,
+ * })
+ *
+ * const result = await swarm.invoke('Explain quantum computing')
+ * ```
  */
 export class Swarm implements MultiAgentBase {
   readonly id: string
