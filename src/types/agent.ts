@@ -10,6 +10,7 @@ import type {
   BeforeToolCallEvent,
   AfterToolCallEvent,
   MessageAddedEvent,
+  MessageUpdatedEvent,
   ModelStreamUpdateEvent,
   ContentBlockEvent,
   ModelMessageEvent,
@@ -123,4 +124,5 @@ export type AgentStreamEvent =
   | BeforeToolCallEvent
   | AfterToolCallEvent
   | MessageAddedEvent
+  | MessageUpdatedEvent
   | AgentResultEvent

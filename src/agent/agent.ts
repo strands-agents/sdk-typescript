@@ -6,7 +6,6 @@ import {
   type ContentBlockData,
   Message,
   type MessageData,
-  type StopReason,
   type SystemPrompt,
   type SystemPromptData,
   TextBlock,
@@ -20,7 +19,7 @@ import type { ToolChoice } from '../tools/types.js'
 import { systemPromptFromData } from '../types/messages.js'
 import { normalizeError, ConcurrentInvocationError, MaxTokensError } from '../errors.js'
 import { Model } from '../models/model.js'
-import type { BaseModelConfig, StreamOptions } from '../models/model.js'
+import type { BaseModelConfig, StreamAggregatedResult, StreamOptions } from '../models/model.js'
 import { isModelStreamEvent } from '../models/streaming.js'
 import { ToolRegistry } from '../registry/tool-registry.js'
 import { AppState } from '../app-state.js'
@@ -41,12 +40,14 @@ import {
   BeforeToolsEvent,
   HookableEvent,
   MessageAddedEvent,
+  MessageUpdatedEvent,
   ModelStreamUpdateEvent,
   ContentBlockEvent,
   ModelMessageEvent,
   ToolResultEvent,
   AgentResultEvent,
   ToolStreamUpdateEvent,
+  type ModelStopData,
 } from '../hooks/events.js'
 import { createStructuredOutputContext } from '../structured-output/context.js'
 import { StructuredOutputException } from '../structured-output/exceptions.js'
@@ -55,6 +56,7 @@ import type { SessionManager } from '../session/session-manager.js'
 import { Tracer } from '../telemetry/tracer.js'
 import type { Usage } from '../models/streaming.js'
 import type { AttributeValue } from '@opentelemetry/api'
+import { logger } from '../logging/logger.js'
 
 /**
  * Recursive type definition for nested tool arrays.
@@ -474,6 +476,14 @@ export class Agent implements AgentData {
           const wasForced = forcedToolChoice !== undefined
           forcedToolChoice = undefined // Clear after use
 
+          // Handle user content redaction if guardrails blocked input
+          if (modelResult.redactionMessage) {
+            const redactionEvent = this._redactLastMessage(modelResult.redactionMessage)
+            if (redactionEvent) {
+              yield redactionEvent
+            }
+          }
+
           if (modelResult.stopReason !== 'toolUse') {
             // Special handling for maxTokens - always fail regardless of whether we have structured output
             if (modelResult.stopReason === 'maxTokens') {
@@ -622,12 +632,12 @@ export class Agent implements AgentData {
    *
    * @param args - Optional arguments for invoking the model
    * @param toolChoice - Optional tool choice to force specific tool usage
-   * @returns Object containing the assistant message and stop reason
+   * @returns Object containing the assistant message, stop reason, and optional redaction message
    */
   private async *invokeModel(
     args?: InvokeArgs,
     forcedToolChoice?: ToolChoice
-  ): AsyncGenerator<AgentStreamEvent, { message: Message; stopReason: StopReason }, undefined> {
+  ): AsyncGenerator<AgentStreamEvent, StreamAggregatedResult, undefined> {
     // Normalize input and append messages to conversation
     const messagesToAppend = this._normalizeInput(args)
     for (const message of messagesToAppend) {
@@ -655,8 +665,11 @@ export class Agent implements AgentData {
     })
 
     try {
-      const { message, stopReason, usage } = yield* this._streamFromModel(this.messages, streamOptions)
-
+      const { message, stopReason, redactionMessage, metadata } = yield* this._streamFromModel(
+        this.messages,
+        streamOptions
+      )
+      const usage = metadata?.usage
       // Accumulate token usage
       if (usage) {
         Agent._accumulateUsage(this._accumulatedTokenUsage, usage)
@@ -667,14 +680,25 @@ export class Agent implements AgentData {
 
       yield new ModelMessageEvent({ agent: this, message, stopReason })
 
-      const afterModelCallEvent = new AfterModelCallEvent({ agent: this, stopData: { message, stopReason } })
+      const stopData: ModelStopData = {
+        message,
+        stopReason,
+        ...(redactionMessage && { redaction: { message: redactionMessage } }),
+      }
+
+      const afterModelCallEvent = new AfterModelCallEvent({ agent: this, stopData })
       yield afterModelCallEvent
 
       if (afterModelCallEvent.retry) {
         return yield* this.invokeModel(args)
       }
 
-      return { message, stopReason }
+      return {
+        message,
+        stopReason,
+        ...(metadata && { metadata }),
+        ...(redactionMessage && { redactionMessage }),
+      }
     } catch (error) {
       const modelError = normalizeError(error)
 
@@ -711,12 +735,12 @@ export class Agent implements AgentData {
    *
    * @param messages - Messages to send to the model
    * @param streamOptions - Options for streaming
-   * @returns Object containing the assistant message and stop reason
+   * @returns StreamAggregatedResult containing message, stop reason, and optional redaction message
    */
   private async *_streamFromModel(
     messages: Message[],
     streamOptions: StreamOptions
-  ): AsyncGenerator<AgentStreamEvent, { message: Message; stopReason: StopReason; usage?: Usage }, undefined> {
+  ): AsyncGenerator<AgentStreamEvent, StreamAggregatedResult, undefined> {
     const streamGenerator = this.model.streamAggregated(messages, streamOptions)
     let result = await streamGenerator.next()
 
@@ -734,10 +758,7 @@ export class Agent implements AgentData {
     }
 
     // result.done is true, result.value contains the return value
-    const { message, stopReason, metadata } = result.value
-    const returnValue: { message: Message; stopReason: StopReason; usage?: Usage } = { message, stopReason }
-    if (metadata?.usage) returnValue.usage = metadata.usage
-    return returnValue
+    return result.value
   }
 
   /**
@@ -893,6 +914,35 @@ export class Agent implements AgentData {
 
       return toolResult
     }
+  }
+
+  /**
+   * Redacts the last message in the conversation history.
+   * Called when guardrails block user input and redaction is enabled.
+   *
+   * @param redactMessage - The redaction message to replace the content with
+   * @returns MessageUpdatedEvent to be yielded, or undefined if no message to redact
+   */
+  private _redactLastMessage(redactMessage: string): MessageUpdatedEvent | undefined {
+    // Find and redact the last message
+    const lastIndex = this.messages.length - 1
+    if (lastIndex >= 0) {
+      const lastMessage = this.messages[lastIndex]
+      if (lastMessage && lastMessage.role === 'user') {
+        const updatedMessage = new Message({
+          role: 'user',
+          content: [new TextBlock(redactMessage)],
+        })
+        this.messages[lastIndex] = updatedMessage
+        return new MessageUpdatedEvent({ agent: this, message: updatedMessage, index: lastIndex })
+      } else if (lastMessage) {
+        // Unexpected state: redaction requested but last message is not from user
+        logger.warn(
+          `role=<${lastMessage.role}> | Received user input redaction but last message is not from user. Redaction skipped.`
+        )
+      }
+    }
+    return undefined
   }
 
   /**

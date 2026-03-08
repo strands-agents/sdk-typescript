@@ -1,7 +1,13 @@
 import { describe, expect, it, beforeEach, vi } from 'vitest'
 import { SessionManager } from '../session-manager.js'
 import { MockSnapshotStorage, createTestSnapshot } from '../../__fixtures__/mock-storage-provider.js'
-import { HookRegistry, InitializedEvent, MessageAddedEvent, AfterInvocationEvent } from '../../hooks/index.js'
+import {
+  HookRegistry,
+  InitializedEvent,
+  MessageAddedEvent,
+  MessageUpdatedEvent,
+  AfterInvocationEvent,
+} from '../../hooks/index.js'
 import { Agent } from '../../agent/agent.js'
 import { Message, TextBlock } from '../../types/messages.js'
 
@@ -457,6 +463,50 @@ describe('SessionManager', () => {
       await newSessionManager.restoreSnapshot({ target: newAgent, snapshotId: ids[0]! })
 
       expect(newAgent.messages).toEqual(mockAgent.messages)
+    })
+  })
+
+  describe('MessageUpdatedEvent handling', () => {
+    beforeEach(() => {
+      mockAgent = createMockAgent('test-agent')
+    })
+
+    it('saves snapshot_latest when saveLatestOn is message', async () => {
+      sessionManager = new SessionManager({
+        sessionId: 'test-session',
+        storage: { snapshot: storage },
+        saveLatestOn: 'message',
+      })
+      sessionManager.registerCallbacks(registry)
+
+      const redactedMessage = new Message({ role: 'user', content: [new TextBlock('[User input redacted.]')] })
+      const event = { agent: mockAgent, message: redactedMessage, index: 0 } as any
+
+      await registry.invokeCallbacks(new MessageUpdatedEvent(event))
+
+      const snapshot = await storage.loadSnapshot({
+        location: { sessionId: 'test-session', scope: 'agent', scopeId: 'test-agent' },
+      })
+      expect(snapshot).not.toBeNull()
+    })
+
+    it('does not save when saveLatestOn is invocation', async () => {
+      sessionManager = new SessionManager({
+        sessionId: 'test-session',
+        storage: { snapshot: storage },
+        saveLatestOn: 'invocation',
+      })
+      sessionManager.registerCallbacks(registry)
+
+      const redactedMessage = new Message({ role: 'user', content: [new TextBlock('[User input redacted.]')] })
+      const event = { agent: mockAgent, message: redactedMessage, index: 0 } as any
+
+      await registry.invokeCallbacks(new MessageUpdatedEvent(event))
+
+      const snapshot = await storage.loadSnapshot({
+        location: { sessionId: 'test-session', scope: 'agent', scopeId: 'test-agent' },
+      })
+      expect(snapshot).toBeNull()
     })
   })
 })

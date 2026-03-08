@@ -88,6 +88,113 @@ const STOP_REASON_MAP = {
 } as const
 
 /**
+ * Default message for redacted user input.
+ */
+const DEFAULT_REDACT_INPUT_MESSAGE = '[User input redacted.]'
+
+/**
+ * Default message for redacted assistant output.
+ */
+const DEFAULT_REDACT_OUTPUT_MESSAGE = '[Assistant output redacted.]'
+
+/**
+ * Configuration for Bedrock guardrails.
+ *
+ * **Session Persistence Considerations:**
+ *
+ * When using SessionManager with guardrails, redacted messages are persisted based on
+ * the `saveLatestOn` strategy:
+ * - `'invocation'` (default): Redacted messages are saved at the end of each invocation.
+ *   If the process crashes during invocation, un-redacted content may remain in storage.
+ * - `'message'`: Redacted messages are saved immediately when MessageUpdatedEvent fires,
+ *   providing the most durable protection for sensitive content.
+ * - `'trigger'`: Redaction is only saved when the trigger condition fires or via manual
+ *   saveSnapshot calls.
+ *
+ * For production use with sensitive content, consider using `saveLatestOn: 'message'`
+ * to ensure redactions are persisted immediately.
+ *
+ * @see https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails.html
+ */
+export interface GuardrailRedactionConfig {
+  /**
+   * Redact user input when guardrail blocks it.
+   * When undefined or true, user input will be redacted.
+   * Set to false to disable user input redaction.
+   * @defaultValue true
+   */
+  input?: boolean
+
+  /**
+   * Custom message to replace redacted user input.
+   * @defaultValue '[User input redacted.]'
+   */
+  inputMessage?: string
+
+  /**
+   * Redact assistant output when guardrail blocks it.
+   * When undefined or false, assistant output will not be redacted.
+   * Set to true to enable assistant output redaction.
+   * @defaultValue false
+   */
+  output?: boolean
+
+  /**
+   * Custom message to replace redacted assistant output.
+   * @defaultValue '[Assistant output redacted.]'
+   */
+  outputMessage?: string
+}
+
+/**
+ * Configuration for Bedrock guardrails.
+ *
+ * **Session Persistence Considerations:**
+ *
+ * When using SessionManager with guardrails, redacted messages are persisted based on
+ * the `saveLatestOn` strategy:
+ * - `'invocation'` (default): Redacted messages are saved at the end of each invocation.
+ *   If the process crashes during invocation, un-redacted content may remain in storage.
+ * - `'message'`: Redacted messages are saved immediately when MessageUpdatedEvent fires,
+ *   providing the most durable protection for sensitive content.
+ * - `'trigger'`: Redaction is only saved when the trigger condition fires or via manual
+ *   saveSnapshot calls.
+ *
+ * For production use with sensitive content, consider using `saveLatestOn: 'message'`
+ * to ensure redactions are persisted immediately.
+ *
+ * @see https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails.html
+ */
+export interface GuardrailConfig {
+  /**
+   * ID of the guardrail to apply.
+   */
+  guardrailIdentifier: string
+
+  /**
+   * Version of the guardrail (e.g., "1", "DRAFT").
+   */
+  guardrailVersion: string
+
+  /**
+   * Trace mode for guardrail evaluation.
+   * @defaultValue 'enabled'
+   */
+  trace?: 'enabled' | 'disabled' | 'enabled_full'
+
+  /**
+   * Stream processing mode for guardrail evaluation.
+   */
+  streamProcessingMode?: 'sync' | 'async'
+
+  /**
+   * SDK redaction behavior configuration.
+   * Controls how the SDK handles content blocked by guardrails.
+   */
+  redaction?: GuardrailRedactionConfig
+}
+
+/**
  * Converts a snake_case string to camelCase.
  * Used for mapping unknown stop reasons from Bedrock to SDK format.
  *
@@ -186,6 +293,12 @@ export interface BedrockModelConfig extends BaseModelConfig {
    * - `'auto'`: Automatically determine based on model ID (default)
    */
   includeToolResultStatus?: 'auto' | boolean
+
+  /**
+   * Guardrail configuration for content filtering and safety controls.
+   * @see https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails.html
+   */
+  guardrailConfig?: GuardrailConfig
 }
 
 /**
@@ -494,6 +607,18 @@ export class BedrockModel extends Model<BedrockModelConfig> {
     // Add additional args (spread them into the request for forward compatibility)
     if (this._config.additionalArgs) {
       Object.assign(request, this._config.additionalArgs)
+    }
+
+    // Add guardrail configuration
+    if (this._config.guardrailConfig) {
+      request.guardrailConfig = {
+        guardrailIdentifier: this._config.guardrailConfig.guardrailIdentifier,
+        guardrailVersion: this._config.guardrailConfig.guardrailVersion,
+        trace: this._config.guardrailConfig.trace ?? 'enabled',
+        ...(this._config.guardrailConfig.streamProcessingMode && {
+          streamProcessingMode: this._config.guardrailConfig.streamProcessingMode,
+        }),
+      }
     }
 
     return request
@@ -864,6 +989,23 @@ export class BedrockModel extends Model<BedrockModelConfig> {
       }
     }
 
+    // Handle trace and guardrail check for non-streaming responses
+    const trace = (event as { trace?: unknown }).trace
+    if (trace) {
+      metadataEvent.trace = trace
+
+      // Check for blocked guardrails and emit redaction events
+      if (
+        this._config.guardrailConfig &&
+        (trace as { guardrail?: unknown }).guardrail &&
+        this._hasBlockedGuardrail((trace as { guardrail: unknown }).guardrail)
+      ) {
+        for (const redactionEvent of this._generateRedactionEvents()) {
+          events.push(redactionEvent)
+        }
+      }
+    }
+
     events.push(metadataEvent)
 
     return events
@@ -1023,6 +1165,17 @@ export class BedrockModel extends Model<BedrockModelConfig> {
 
         if (data.trace) {
           event.trace = data.trace
+
+          // Check for blocked guardrails in trace and emit redaction events
+          if (
+            this._config.guardrailConfig &&
+            (data.trace as { guardrail?: unknown }).guardrail &&
+            this._hasBlockedGuardrail((data.trace as { guardrail: unknown }).guardrail)
+          ) {
+            for (const redactionEvent of this._generateRedactionEvents()) {
+              events.push(redactionEvent)
+            }
+          }
         }
 
         events.push(event)
@@ -1188,6 +1341,80 @@ export class BedrockModel extends Model<BedrockModelConfig> {
       default:
         return location as unknown as BedrockCitationLocation
     }
+  }
+
+  /*
+   * Check if guardrail data contains any blocked policies.
+   * Recursively checks inputAssessment and outputAssessments for action: 'BLOCKED'.
+   *
+   * @param guardrailData - Guardrail data from trace information
+   * @returns True if any blocked guardrail is detected
+   */
+  private _hasBlockedGuardrail(guardrailData: unknown): boolean {
+    // Validate guardrail data structure before processing
+    if (!guardrailData || typeof guardrailData !== 'object') {
+      logger.warn('guardrail_data=<invalid> | Invalid guardrail data received from trace')
+      return false
+    }
+    return this._findDetectedAndBlockedPolicy(guardrailData)
+  }
+
+  /**
+   * Recursively checks if the input contains a detected and blocked guardrail.
+   *
+   * @param input - The data to check for blocked policies
+   * @returns True if the input contains a detected and blocked guardrail
+   */
+  private _findDetectedAndBlockedPolicy(input: unknown): boolean {
+    // Handle arrays first
+    if (Array.isArray(input)) {
+      return input.some((item) => this._findDetectedAndBlockedPolicy(item))
+    }
+
+    // Check if input is an object
+    if (input !== null && typeof input === 'object') {
+      const obj = input as Record<string, unknown>
+
+      // Check if current object has action: BLOCKED and detected: true
+      if (obj.action === 'BLOCKED' && obj.detected === true) {
+        return true
+      }
+
+      // Recursively check all values in the object
+      return Object.values(obj).some((v) => this._findDetectedAndBlockedPolicy(v))
+    }
+
+    return false
+  }
+
+  /**
+   * Generate redaction events based on guardrail configuration.
+   *
+   * @returns Array of redaction events to emit
+   */
+  private _generateRedactionEvents(): ModelStreamEvent[] {
+    const events: ModelStreamEvent[] = []
+    const redaction = this._config.guardrailConfig?.redaction
+
+    // Default: redact input is true unless explicitly set to false
+    if (redaction?.input !== false) {
+      logger.debug('redacting user input due to guardrail')
+      events.push({
+        type: 'modelRedactContentEvent',
+        redactUserContentMessage: redaction?.inputMessage ?? DEFAULT_REDACT_INPUT_MESSAGE,
+      })
+    }
+
+    // Only redact output if explicitly enabled
+    if (redaction?.output) {
+      logger.debug('redacting assistant output due to guardrail')
+      events.push({
+        type: 'modelRedactContentEvent',
+        redactAssistantContentMessage: redaction?.outputMessage ?? DEFAULT_REDACT_OUTPUT_MESSAGE,
+      })
+    }
+
+    return events
   }
 }
 

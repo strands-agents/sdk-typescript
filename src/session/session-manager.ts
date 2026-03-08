@@ -2,7 +2,7 @@ import type { SnapshotStorage, SnapshotLocation } from './storage.js'
 import type { SnapshotTriggerCallback } from './types.js'
 import type { HookProvider } from '../hooks/index.js'
 import type { HookRegistry } from '../hooks/registry.js'
-import { AfterInvocationEvent, InitializedEvent, MessageAddedEvent } from '../hooks/events.js'
+import { AfterInvocationEvent, InitializedEvent, MessageAddedEvent, MessageUpdatedEvent } from '../hooks/events.js'
 import { v7 as uuidV7 } from 'uuid'
 import type { Agent } from '../agent/agent.js'
 import { takeSnapshot, loadSnapshot } from '../agent/snapshot.js'
@@ -20,7 +20,7 @@ import { takeSnapshot, loadSnapshot } from '../agent/snapshot.js'
  *
  * `SaveLatestStrategy` controls how frequently `snapshot_latest` is updated:
  * - `'invocation'`: after every agent invocation completes (default; balances durability and I/O)
- * - `'message'`: after every message added to the conversation (most durable, highest I/O)
+ * - `'message'`: after every message added or updated (most durable, highest I/O; includes guardrail redactions)
  * - `'trigger'`: only when a `snapshotTrigger` fires (or manually via `saveSnapshot`)
  */
 export type SaveLatestStrategy = 'message' | 'invocation' | 'trigger'
@@ -75,6 +75,11 @@ export class SessionManager implements HookProvider {
       registry.addCallback(MessageAddedEvent, async (event) => {
         await this._onMessageAdded(event)
       })
+      // Also listen to MessageUpdatedEvent when saving per-message to ensure
+      // message modifications (e.g., guardrail redactions) are persisted immediately
+      registry.addCallback(MessageUpdatedEvent, async (event) => {
+        await this._onMessageUpdated(event)
+      })
     }
     registry.addCallback(AfterInvocationEvent, async (event) => {
       await this._onAfterAgentInvocation(event)
@@ -127,6 +132,15 @@ export class SessionManager implements HookProvider {
   }
 
   private async _onMessageAdded(event: MessageAddedEvent): Promise<void> {
+    const agent = event.agent as Agent
+    await this.saveSnapshot({ target: agent, isLatest: true })
+  }
+
+  /**
+   * Saves snapshot when a message is updated.
+   * Critical for ensuring guardrail redactions are persisted immediately.
+   */
+  private async _onMessageUpdated(event: MessageUpdatedEvent): Promise<void> {
     const agent = event.agent as Agent
     await this.saveSnapshot({ target: agent, isLatest: true })
   }

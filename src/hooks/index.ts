@@ -21,6 +21,7 @@ export {
   BeforeInvocationEvent,
   AfterInvocationEvent,
   MessageAddedEvent,
+  MessageUpdatedEvent,
   BeforeToolCallEvent,
   AfterToolCallEvent,
   BeforeModelCallEvent,
@@ -36,7 +37,7 @@ export {
 } from './events.js'
 
 // Event types
-export type { ModelStopData as ModelStopResponse } from './events.js'
+export type { ModelStopData as ModelStopResponse, Redaction } from './events.js'
 
 // Registry
 export { HookRegistryImplementation as HookRegistry } from './registry.js'

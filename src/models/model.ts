@@ -18,6 +18,7 @@ import {
   ModelMessageStartEvent,
   ModelMessageStopEvent,
   ModelMetadataEvent,
+  ModelRedactContentEvent,
   type ModelStreamEvent,
 } from './streaming.js'
 import { MaxTokensError, ModelError, normalizeError } from '../errors.js'
@@ -117,6 +118,13 @@ export interface StreamAggregatedResult {
    * Optional metadata about the model invocation, including usage statistics and metrics.
    */
   metadata?: ModelMetadataEvent
+
+  /**
+   * Optional redaction message when guardrails blocked user input.
+   * When present, indicates the last message should be redacted with this text.
+   * Assistant output redaction is handled by updating the message directly.
+   */
+  redactionMessage?: string
 }
 
 /**
@@ -181,6 +189,8 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
         return new ModelMessageStopEvent(event_data)
       case 'modelMetadataEvent':
         return new ModelMetadataEvent(event_data)
+      case 'modelRedactContentEvent':
+        return new ModelRedactContentEvent(event_data)
       default:
         throw new Error(`Unsupported event type: ${event_data}`)
     }
@@ -236,6 +246,7 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
       let stoppedMessage: Message | null = null
       let finalStopReason: StopReason | null = null
       let metadata: ModelMetadataEvent | undefined = undefined
+      let redactionMessage: string | undefined = undefined
 
       for await (const event_data of this.stream(messages, options)) {
         const event = this._convert_to_class_event(event_data)
@@ -335,6 +346,25 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
             metadata = event
             break
 
+          case 'modelRedactContentEvent':
+            // Handle content redaction from guardrails
+            if (event.redactUserContentMessage) {
+              // Store redaction message for agent to handle user message redaction
+              redactionMessage = event.redactUserContentMessage
+            }
+            if (event.redactAssistantContentMessage) {
+              // Update assistant message directly with redacted content
+              contentBlocks.length = 0
+              contentBlocks.push(new TextBlock(event.redactAssistantContentMessage))
+              if (messageRole) {
+                stoppedMessage = new Message({
+                  role: messageRole,
+                  content: [...contentBlocks],
+                })
+              }
+            }
+            break
+
           default:
             break
         }
@@ -368,6 +398,9 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
       }
       if (metadata !== undefined) {
         result.metadata = metadata
+      }
+      if (redactionMessage !== undefined) {
+        result.redactionMessage = redactionMessage
       }
       return result
     } catch (error) {
