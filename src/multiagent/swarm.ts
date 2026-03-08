@@ -46,7 +46,7 @@ interface HandoffResult {
   agentId?: string
   /** Instructions for the next agent, or the final response if no handoff. */
   message: string
-  /** Additional data to pass to the next agent. */
+  /** Structured data to pass to the next agent. Serialized as a JSON text block alongside the handoff message. */
   context?: Record<string, unknown>
 }
 
