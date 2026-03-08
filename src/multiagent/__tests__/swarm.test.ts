@@ -117,17 +117,6 @@ describe('Swarm', () => {
           })
       ).toThrow('node_timeout=<0> | must be at least 1')
     })
-
-    it('throws when agent is missing a description', () => {
-      const agent = new Agent({ model: new MockMessageModel(), printer: false, agentId: 'a' })
-      expect(
-        () =>
-          new Swarm({
-            nodes: [agent],
-            start: 'a',
-          })
-      ).toThrow('agent_id=<a> | agent description is required for swarm routing')
-    })
   })
 
   describe('invoke', () => {

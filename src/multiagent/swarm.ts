@@ -101,7 +101,6 @@ export class Swarm implements MultiAgentBase {
 
     this._nodes = this._resolveNodes(nodes)
     this._start = this._resolveStart(start)
-    this._validateNodes()
 
     this._handoffSchema = this._buildHandoffSchema()
 
@@ -259,14 +258,6 @@ export class Swarm implements MultiAgentBase {
     }
   }
 
-  private _validateNodes(): void {
-    for (const [id, node] of this._nodes) {
-      if (!node.config.description) {
-        throw new Error(`agent_id=<${id}> | agent description is required for swarm routing`)
-      }
-    }
-  }
-
   private _resolveNodes(definitions: SwarmNodeDefinition[]): Map<string, AgentNode> {
     const nodes = new Map<string, AgentNode>()
     for (const definition of definitions) {
@@ -319,7 +310,12 @@ export class Swarm implements MultiAgentBase {
 
   private _buildHandoffSchema(): z.ZodType<HandoffResult> {
     const agentIds = [...this._nodes.keys()]
-    const agentDescriptions = agentIds.map((id) => `- ${id}: ${this._nodes.get(id)!.config.description}`).join('\n')
+    const agentDescriptions = agentIds
+      .map((id) => {
+        const desc = this._nodes.get(id)!.config.description
+        return desc ? `- ${id}: ${desc}` : `- ${id}`
+      })
+      .join('\n')
 
     return z
       .object({
