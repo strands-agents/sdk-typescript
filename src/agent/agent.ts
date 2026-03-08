@@ -169,12 +169,6 @@ export interface InvokeOptions {
   structuredOutputSchema?: z.ZodSchema
 }
 
-/** Fallback name used when no agent name is provided in the config. */
-const DEFAULT_AGENT_NAME = 'Strands Agent'
-
-/** Fallback agent ID used when no agent ID is provided in the config. */
-const DEFAULT_AGENT_ID = 'default'
-
 /**
  * Orchestrates the interaction between a model, a set of tools, and MCP clients.
  * The Agent is responsible for managing the lifecycle of tools and clients
