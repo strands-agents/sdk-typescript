@@ -73,7 +73,7 @@ jobs:
       run: npm ci
 
     - name: Store the distribution packages
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         name: npm-package-distributions
         path: .
