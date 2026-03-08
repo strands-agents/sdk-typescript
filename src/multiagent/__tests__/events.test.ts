@@ -135,13 +135,15 @@ describe('BeforeNodeCallEvent', () => {
 describe('AfterNodeCallEvent', () => {
   it('creates instance with correct properties', () => {
     const state = new MultiAgentState()
-    const event = new AfterNodeCallEvent({ orchestrator: mockOrchestrator, state, nodeId: 'node-1' })
+    const error = new Error('node failed')
+    const event = new AfterNodeCallEvent({ orchestrator: mockOrchestrator, state, nodeId: 'node-1', error })
 
     expect(event).toEqual({
       type: 'afterNodeCallEvent',
       orchestrator: mockOrchestrator,
       state,
       nodeId: 'node-1',
+      error,
     })
     // @ts-expect-error verifying that property is readonly
     event.orchestrator = mockOrchestrator

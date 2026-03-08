@@ -84,12 +84,16 @@ export class AfterNodeCallEvent extends HookableEvent {
   readonly orchestrator: MultiAgentBase
   readonly state: MultiAgentState
   readonly nodeId: string
+  readonly error?: Error
 
-  constructor(data: { orchestrator: MultiAgentBase; state: MultiAgentState; nodeId: string }) {
+  constructor(data: { orchestrator: MultiAgentBase; state: MultiAgentState; nodeId: string; error?: Error }) {
     super()
     this.orchestrator = data.orchestrator
     this.state = data.state
     this.nodeId = data.nodeId
+    if (data.error !== undefined) {
+      this.error = data.error
+    }
   }
 
   override _shouldReverseCallbacks(): boolean {

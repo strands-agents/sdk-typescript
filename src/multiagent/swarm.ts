@@ -241,7 +241,12 @@ export class Swarm implements MultiAgentBase {
       yield new AfterNodeCallEvent({ orchestrator: this, state, nodeId: node.id })
       return next.value
     } catch (error) {
-      yield new AfterNodeCallEvent({ orchestrator: this, state, nodeId: node.id })
+      yield new AfterNodeCallEvent({
+        orchestrator: this,
+        state,
+        nodeId: node.id,
+        error: error instanceof Error ? error : new Error(String(error)),
+      })
       throw error
     }
   }
