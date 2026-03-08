@@ -273,13 +273,13 @@ export class ToolUseBlock implements ToolUseBlockData, JSONSerializable<{ toolUs
 
 /**
  * Content within a tool result.
- * Can be either text or structured JSON data.
+ * Can be text, structured JSON data, or media blocks (image, video, document).
  *
  * This is a discriminated union where the object key determines the content format.
  */
-export type ToolResultContentData = TextBlockData | JsonBlockData
+export type ToolResultContentData = TextBlockData | JsonBlockData | ImageBlockData | VideoBlockData | DocumentBlockData
 
-export type ToolResultContent = TextBlock | JsonBlock
+export type ToolResultContent = TextBlock | JsonBlock | ImageBlock | VideoBlock | DocumentBlock
 
 /**
  * Data for a tool result block.
@@ -358,7 +358,7 @@ export class ToolResultBlock implements ToolResultBlockData, JSONSerializable<{ 
       toolResult: {
         toolUseId: this.toolUseId,
         status: this.status,
-        content: this.content.map((block) => block.toJSON()),
+        content: this.content.map((block) => block.toJSON() as ToolResultContentData),
       },
     }
   }
@@ -375,6 +375,12 @@ export class ToolResultBlock implements ToolResultBlockData, JSONSerializable<{ 
         return new TextBlock(contentItem.text)
       } else if ('json' in contentItem) {
         return new JsonBlock(contentItem)
+      } else if ('image' in contentItem) {
+        return ImageBlock.fromJSON(contentItem as { image: ImageBlockData })
+      } else if ('document' in contentItem) {
+        return DocumentBlock.fromJSON(contentItem as { document: DocumentBlockData })
+      } else if ('video' in contentItem) {
+        return VideoBlock.fromJSON(contentItem as { video: VideoBlockData })
       } else {
         throw new Error('Unknown ToolResultContentData type')
       }
