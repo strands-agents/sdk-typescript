@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { tool } from '../zod-tool.js'
+import { tool } from '../tool-factory.js'
 import { Tool } from '../tool.js'
 import { createMockContext } from '../../__fixtures__/tool-helpers.js'
 import { collectGenerator } from '../../__fixtures__/model-test-helpers.js'

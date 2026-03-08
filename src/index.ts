@@ -119,7 +119,7 @@ export { Tool } from './tools/tool.js'
 export { FunctionTool } from './tools/function-tool.js'
 
 // Tool factory function
-export { tool } from './tools/zod-tool.js'
+export { tool } from './tools/tool-factory.js'
 
 // Streaming event types
 export type {

@@ -22,7 +22,7 @@ import yellowPngUrl from './__resources__/yellow.png?url'
 import letterPdfUrl from './__resources__/letter.pdf?url'
 import { allProviders } from './__fixtures__/model-providers.js'
 
-// Calculator tool for testing
+// Calculator tool using Zod schema
 const calculatorTool = tool({
   name: 'calculator',
   description: 'Performs basic arithmetic operations',
@@ -32,6 +32,31 @@ const calculatorTool = tool({
     b: z.number(),
   }),
   callback: async ({ operation, a, b }) => {
+    const ops = {
+      add: a + b,
+      subtract: a - b,
+      multiply: a * b,
+      divide: a / b,
+    }
+    return `Result: ${ops[operation]}`
+  },
+})
+
+// Calculator tool using JSON schema
+const jsonCalculatorTool = tool({
+  name: 'calculator',
+  description: 'Performs basic arithmetic operations',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      operation: { type: 'string', enum: ['add', 'subtract', 'multiply', 'divide'] },
+      a: { type: 'number' },
+      b: { type: 'number' },
+    },
+    required: ['operation', 'a', 'b'],
+  },
+  callback: async (input) => {
+    const { operation, a, b } = input as { operation: 'add' | 'subtract' | 'multiply' | 'divide'; a: number; b: number }
     const ops = {
       add: a + b,
       subtract: a - b,
@@ -76,6 +101,26 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel, mode
 
         // Validate multi-turn works after tool use
         await collectGenerator(agent.stream('What was the result?'))
+      })
+
+      it.skipIf(!supports.tools)('handles tool use with JSON schema tool', async () => {
+        const agent = new Agent({
+          model: createModel(),
+          printer: false,
+          systemPrompt: 'Use the calculator tool to solve math problems. Respond with only the numeric result.',
+          tools: [jsonCalculatorTool],
+        })
+
+        const result = await agent.invoke('What is 25 * 48?')
+
+        expect(result.stopReason).toBe('endTurn')
+
+        const toolUseMessage = agent.messages.find((msg) => msg.content.some((block) => block.type === 'toolUseBlock'))
+        expect(toolUseMessage).toBeDefined()
+
+        const textContent = result.lastMessage.content.find((block) => block.type === 'textBlock')
+        expect(textContent).toBeDefined()
+        expect(textContent?.text).toMatch(/1200/)
       })
 
       it('yields metadata events through the agent stream', async () => {
