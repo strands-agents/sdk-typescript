@@ -81,4 +81,12 @@ export class Queue {
   get size(): number {
     return this._entries.length
   }
+
+  /**
+   * Wake any consumer waiting in {@link wait} without pushing data.
+   */
+  notify(): void {
+    this._notify?.()
+    this._notify = undefined
+  }
 }
