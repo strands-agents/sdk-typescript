@@ -9,3 +9,7 @@ export {
   SlidingWindowConversationManager,
   type SlidingWindowConversationManagerConfig,
 } from './sliding-window-conversation-manager.js'
+export {
+  SummarizingConversationManager,
+  type SummarizingConversationManagerConfig,
+} from './summarizing-conversation-manager.js'
