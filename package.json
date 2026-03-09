@@ -155,9 +155,6 @@
       "optional": true
     }
   },
-  "browser": {
-    "./dist/src/telemetry/config.js": "./dist/src/telemetry/config.browser.js"
-  },
   "overrides": {
     "fast-xml-parser": ">=5.3.6"
   }

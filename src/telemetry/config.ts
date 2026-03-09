@@ -1,13 +1,21 @@
 /**
  * OpenTelemetry configuration and setup utilities for Strands agents.
  *
- * This module provides centralized configuration and initialization functionality
- * for OpenTelemetry components and other telemetry infrastructure shared across Strands applications.
+ * Uses BasicTracerProvider from `@opentelemetry/sdk-trace-base` which works in
+ * Node.js, browser, and WASM environments. For Node.js-specific features like
+ * automatic async context propagation, pass a NodeTracerProvider via the
+ * `provider` config option.
+ *
+ * @see https://github.com/strands-agents/sdk-typescript/issues/447
  */
 
 import { Resource, envDetectorSync } from '@opentelemetry/resources'
-import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node'
-import { ConsoleSpanExporter, SimpleSpanProcessor, BatchSpanProcessor } from '@opentelemetry/sdk-trace-base'
+import {
+  BasicTracerProvider,
+  ConsoleSpanExporter,
+  SimpleSpanProcessor,
+  BatchSpanProcessor,
+} from '@opentelemetry/sdk-trace-base'
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http'
 import { logger } from '../logging/index.js'
 
@@ -29,10 +37,17 @@ export function getServiceName(): string {
  */
 export interface TracerConfig {
   /**
-   * Custom NodeTracerProvider instance. If not provided, one will be
-   * created with default configuration.
+   * Custom TracerProvider instance. If not provided, a BasicTracerProvider
+   * will be created with default configuration.
+   *
+   * For Node.js-specific async context propagation, pass a NodeTracerProvider:
+   * @example
+   * ```typescript
+   * import { NodeTracerProvider } from '\@opentelemetry/sdk-trace-node'
+   * telemetry.setupTracer({ provider: new NodeTracerProvider() })
+   * ```
    */
-  provider?: NodeTracerProvider
+  provider?: BasicTracerProvider
 
   /**
    * Exporter configuration.
@@ -50,38 +65,39 @@ export interface TracerConfig {
   }
 }
 
-let _provider: NodeTracerProvider | null = null
+let _provider: BasicTracerProvider | null = null
 
 /**
  * Set up the tracer provider with the given configuration.
  *
  * @param config - Tracer configuration options
- * @returns The configured NodeTracerProvider
+ * @returns The configured BasicTracerProvider
  *
  * @example
  * ```typescript
- * import { telemetry } from '@strands-agents/sdk'
+ * import { telemetry } from '\@strands-agents/sdk'
  *
- * // Simple setup with defaults
+ * // Simple setup with defaults (works in Node, browser, and WASM)
  * const provider = telemetry.setupTracer({
  *   exporters: { otlp: true }
  * })
  *
- * // Custom provider
+ * // Node.js with async context propagation
+ * import { NodeTracerProvider } from '\@opentelemetry/sdk-trace-node'
  * telemetry.setupTracer({
  *   provider: new NodeTracerProvider({ resource: myResource }),
  *   exporters: { otlp: true, console: true }
  * })
  * ```
  */
-export function setupTracer(config: TracerConfig = {}): NodeTracerProvider {
+export function setupTracer(config: TracerConfig = {}): BasicTracerProvider {
   if (_provider) {
     logger.warn('tracer provider already initialized, returning existing provider')
     return _provider
   }
 
   // Use provided provider or create default
-  _provider = config.provider ?? new NodeTracerProvider({ resource: getOtelResource() })
+  _provider = config.provider ?? new BasicTracerProvider({ resource: getOtelResource() })
 
   // Add exporters if requested
   if (config.exporters?.otlp) addOtlpExporter(_provider)
@@ -90,19 +106,21 @@ export function setupTracer(config: TracerConfig = {}): NodeTracerProvider {
   // register() sets up global tracer provider, context manager, and propagators
   _provider.register()
 
-  // Flush pending spans on exit for short-lived scripts using BatchSpanProcessor
-  process.once('beforeExit', () => {
-    if (_provider) {
-      _provider.forceFlush().catch((err: unknown) => {
-        logger.warn(`error=<${err}> | failed to flush tracer provider on exit`)
-      })
-    }
-  })
+  // Flush pending spans on exit for short-lived scripts (Node.js only)
+  if (typeof globalThis?.process?.once === 'function') {
+    globalThis.process.once('beforeExit', () => {
+      if (_provider) {
+        _provider.forceFlush().catch((err: unknown) => {
+          logger.warn(`error=<${err}> | failed to flush tracer provider on exit`)
+        })
+      }
+    })
+  }
 
   return _provider
 }
 
-function addOtlpExporter(provider: NodeTracerProvider): void {
+function addOtlpExporter(provider: BasicTracerProvider): void {
   try {
     provider.addSpanProcessor(new BatchSpanProcessor(new OTLPTraceExporter()))
   } catch (error) {
@@ -110,7 +128,7 @@ function addOtlpExporter(provider: NodeTracerProvider): void {
   }
 }
 
-function addConsoleExporter(provider: NodeTracerProvider): void {
+function addConsoleExporter(provider: BasicTracerProvider): void {
   try {
     provider.addSpanProcessor(new SimpleSpanProcessor(new ConsoleSpanExporter()))
   } catch (error) {
@@ -120,8 +138,8 @@ function addConsoleExporter(provider: NodeTracerProvider): void {
 
 function getOtelResource(): Resource {
   const serviceName = getServiceName()
-  const serviceNamespace = process.env.OTEL_SERVICE_NAMESPACE || DEFAULT_SERVICE_NAMESPACE
-  const deploymentEnvironment = process.env.OTEL_DEPLOYMENT_ENVIRONMENT || DEFAULT_DEPLOYMENT_ENVIRONMENT
+  const serviceNamespace = globalThis?.process?.env?.OTEL_SERVICE_NAMESPACE || DEFAULT_SERVICE_NAMESPACE
+  const deploymentEnvironment = globalThis?.process?.env?.OTEL_DEPLOYMENT_ENVIRONMENT || DEFAULT_DEPLOYMENT_ENVIRONMENT
 
   const defaultResource = new Resource({
     'service.name': serviceName,

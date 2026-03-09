@@ -1,5 +1,19 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node'
+import { ConsoleSpanExporter } from '@opentelemetry/sdk-trace-base'
+import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http'
+
+vi.mock('@opentelemetry/exporter-trace-otlp-http', () => ({
+  OTLPTraceExporter: vi.fn(),
+}))
+
+vi.mock('@opentelemetry/sdk-trace-base', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@opentelemetry/sdk-trace-base')>()
+  return {
+    ...actual,
+    ConsoleSpanExporter: vi.fn(),
+  }
+})
 
 describe('setupTracer (node-specific)', () => {
   const originalEnv = { ...process.env }
@@ -14,13 +28,58 @@ describe('setupTracer (node-specific)', () => {
   })
 
   describe('custom provider', () => {
-    it('should use custom NodeTracerProvider instead of creating a new one', async () => {
+    it('should accept NodeTracerProvider as custom provider', async () => {
       const telemetry = await import('../index.js')
       const customProvider = new NodeTracerProvider()
 
       const provider = telemetry.setupTracer({ provider: customProvider })
 
       expect(provider).toBe(customProvider)
+    })
+  })
+
+  describe('exporter configuration', () => {
+    it('should add OTLP exporter when exporters.otlp is true', async () => {
+      const telemetry = await import('../index.js')
+
+      telemetry.setupTracer({ exporters: { otlp: true } })
+
+      expect(OTLPTraceExporter).toHaveBeenCalled()
+    })
+
+    it('should add console exporter when exporters.console is true', async () => {
+      const telemetry = await import('../index.js')
+
+      telemetry.setupTracer({ exporters: { console: true } })
+
+      expect(ConsoleSpanExporter).toHaveBeenCalled()
+    })
+
+    it('should add both exporters when both are true', async () => {
+      const telemetry = await import('../index.js')
+
+      telemetry.setupTracer({ exporters: { otlp: true, console: true } })
+
+      expect(OTLPTraceExporter).toHaveBeenCalled()
+      expect(ConsoleSpanExporter).toHaveBeenCalled()
+    })
+
+    it('should add no exporters when both are false', async () => {
+      const telemetry = await import('../index.js')
+
+      telemetry.setupTracer({ exporters: { otlp: false, console: false } })
+
+      expect(OTLPTraceExporter).not.toHaveBeenCalled()
+      expect(ConsoleSpanExporter).not.toHaveBeenCalled()
+    })
+
+    it('should add no exporters when exporters config is empty', async () => {
+      const telemetry = await import('../index.js')
+
+      telemetry.setupTracer({})
+
+      expect(OTLPTraceExporter).not.toHaveBeenCalled()
+      expect(ConsoleSpanExporter).not.toHaveBeenCalled()
     })
   })
 
