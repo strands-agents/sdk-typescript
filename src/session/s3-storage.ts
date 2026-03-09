@@ -8,9 +8,8 @@ import { validateIdentifier } from './validation.js'
 const MANIFEST = 'manifest.json'
 const SNAPSHOT_LATEST = 'snapshot_latest.json'
 const IMMUTABLE_HISTORY = 'immutable_history/'
-const SNAPSHOT_REGEX = /snapshot_(\d+)\.json$/
 const SCHEMA_VERSION = '1.0'
-const DEFAULT_SNAPSHOT_ID = '1'
+const SNAPSHOT_REGEX = /snapshot_([\w-]+)\.json$/
 
 /**
  * Configuration options for S3Storage
@@ -36,7 +35,6 @@ export class S3Storage implements SnapshotStorage {
   private readonly _bucket: string
   /** Key prefix for all objects */
   private readonly _prefix: string
-
   /**
    * Creates new S3Storage instance
    * @param config - Configuration options
@@ -70,8 +68,9 @@ export class S3Storage implements SnapshotStorage {
     isLatest: boolean
     snapshot: Snapshot
   }): Promise<void> {
-    await this._writeJSON(this._getHistorySnapshotKey(params.location, params.snapshotId), params.snapshot)
-    if (params.isLatest) {
+    if (!params.isLatest) {
+      await this._writeJSON(this._getHistorySnapshotKey(params.location, params.snapshotId), params.snapshot)
+    } else {
       await this._writeJSON(this._getLatestSnapshotKey(params.location), params.snapshot)
     }
   }
@@ -110,9 +109,11 @@ export class S3Storage implements SnapshotStorage {
       return (response.Contents ?? [])
         .map((obj) => obj.Key?.match(SNAPSHOT_REGEX)?.[1])
         .filter((id): id is string => id !== undefined)
-        .map((id) => String(parseInt(id)))
-        .sort((a, b) => parseInt(a) - parseInt(b))
-    } catch (error) {
+        .sort()
+    } catch (error: unknown) {
+      if (this._isNotFoundError(error)) {
+        return []
+      }
       throw new SessionError(`Failed to list snapshots for session ${params.location.sessionId}`, { cause: error })
     }
   }
@@ -127,7 +128,6 @@ export class S3Storage implements SnapshotStorage {
     return (
       manifest ?? {
         schemaVersion: SCHEMA_VERSION,
-        nextSnapshotId: DEFAULT_SNAPSHOT_ID,
         updatedAt: new Date().toISOString(),
       }
     )
@@ -160,6 +160,19 @@ export class S3Storage implements SnapshotStorage {
   }
 
   /**
+   * Checks if error is a missing S3 object/bucket error
+   */
+  private _isNotFoundError(error: unknown): error is { name: string } {
+    return (
+      error !== null &&
+      typeof error === 'object' &&
+      'name' in error &&
+      typeof (error as { name: unknown }).name === 'string' &&
+      ((error as { name: string }).name === 'NoSuchKey' || (error as { name: string }).name === 'NoSuchBucket')
+    )
+  }
+
+  /**
    * Reads and parses JSON from S3
    */
   private async _readJSON<T>(key: string): Promise<T | null> {
@@ -169,7 +182,7 @@ export class S3Storage implements SnapshotStorage {
       if (!body) return null
       return JSON.parse(body)
     } catch (error: unknown) {
-      if (error && typeof error === 'object' && 'name' in error && error.name === 'NoSuchKey') {
+      if (this._isNotFoundError(error)) {
         return null
       }
       if (error instanceof SyntaxError) {
@@ -184,6 +197,7 @@ export class S3Storage implements SnapshotStorage {
   }
 
   private _getHistorySnapshotKey(location: SnapshotLocation, snapshotId: string): string {
-    return this._getKey(location, `${IMMUTABLE_HISTORY}snapshot_${String(snapshotId).padStart(5, '0')}.json`)
+    validateIdentifier(snapshotId)
+    return this._getKey(location, `${IMMUTABLE_HISTORY}snapshot_${snapshotId}.json`)
   }
 }

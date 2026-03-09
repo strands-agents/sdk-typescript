@@ -195,10 +195,19 @@ export { configureLogging } from './logging/logger.js'
 export type { Logger } from './logging/types.js'
 
 // MCP Client types and implementations
-export { type McpClientConfig, McpClient } from './mcp.js'
+export { type McpClientConfig, type TasksConfig, McpClient } from './mcp.js'
 
 // Structured output
 export { StructuredOutputException } from './structured-output/exceptions.js'
+
+// Session management
+export { SessionManager } from './session/session-manager.js'
+export type { SessionManagerConfig, SaveLatestStrategy } from './session/session-manager.js'
+export type { SnapshotManifest, SnapshotTriggerCallback, SnapshotTriggerParams } from './session/types.js'
+export type { SessionStorage, SnapshotStorage, SnapshotLocation } from './session/storage.js'
+export { FileStorage } from './session/file-storage.js'
+export { S3Storage, type S3StorageConfig } from './session/s3-storage.js'
+export type { Scope, Snapshot } from './agent/snapshot.js'
 
 // Telemetry
 export * as telemetry from './telemetry/index.js'

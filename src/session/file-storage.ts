@@ -1,5 +1,3 @@
-import { promises as fs } from 'fs'
-import { join, dirname } from 'path'
 import type { SnapshotStorage, SnapshotLocation } from './storage.js'
 import type { Snapshot, SnapshotManifest } from './types.js'
 
@@ -9,9 +7,8 @@ import { validateIdentifier } from './validation.js'
 const MANIFEST = 'manifest.json'
 const SNAPSHOT_LATEST = 'snapshot_latest.json'
 const IMMUTABLE_HISTORY = 'immutable_history'
-const SNAPSHOT_REGEX = /snapshot_(\d+)\.json$/
+const SNAPSHOT_REGEX = /snapshot_([\w-]+)\.json$/
 const SCHEMA_VERSION = '1.0'
-const DEFAULT_SNAPSHOT_ID = '1'
 
 /**
  * File-based implementation of SnapshotStorage for persisting session snapshots
@@ -31,7 +28,8 @@ export class FileStorage implements SnapshotStorage {
   /**
    * Generates file path for session scope snapshots
    */
-  private _getPath(location: SnapshotLocation, filename: string): string {
+  private async _getPath(location: SnapshotLocation, filename: string): Promise<string> {
+    const { join } = await import('path')
     validateIdentifier(location.sessionId)
     validateIdentifier(location.scopeId)
     return join(this._baseDir, location.sessionId, 'scopes', location.scope, location.scopeId, 'snapshots', filename)
@@ -46,9 +44,10 @@ export class FileStorage implements SnapshotStorage {
     isLatest: boolean
     snapshot: Snapshot
   }): Promise<void> {
-    await this._writeJSON(this._getHistorySnapshotPath(params.location, params.snapshotId), params.snapshot)
-    if (params.isLatest) {
-      await this._writeJSON(this._getLatestSnapshotPath(params.location), params.snapshot)
+    if (!params.isLatest) {
+      await this._writeJSON(await this._getHistorySnapshotPath(params.location, params.snapshotId), params.snapshot)
+    } else {
+      await this._writeJSON(await this._getLatestSnapshotPath(params.location), params.snapshot)
     }
   }
 
@@ -58,8 +57,8 @@ export class FileStorage implements SnapshotStorage {
   async loadSnapshot(params: { location: SnapshotLocation; snapshotId?: string }): Promise<Snapshot | null> {
     const path =
       params.snapshotId === undefined
-        ? this._getLatestSnapshotPath(params.location)
-        : this._getHistorySnapshotPath(params.location, params.snapshotId)
+        ? await this._getLatestSnapshotPath(params.location)
+        : await this._getHistorySnapshotPath(params.location, params.snapshotId)
     return this._readJSON<Snapshot>(path)
   }
 
@@ -85,13 +84,14 @@ export class FileStorage implements SnapshotStorage {
    * ```
    */
   async listSnapshotIds(params: { location: SnapshotLocation }): Promise<string[]> {
-    const dirPath = this._getPath(params.location, IMMUTABLE_HISTORY)
+    const dirPath = await this._getPath(params.location, IMMUTABLE_HISTORY)
     try {
+      const { promises: fs } = await import('fs')
       const files = await fs.readdir(dirPath)
       return files
         .map((file) => file.match(SNAPSHOT_REGEX)?.[1])
         .filter((id): id is string => id !== undefined)
-        .sort((a, b) => parseInt(a) - parseInt(b))
+        .sort()
     } catch (error: unknown) {
       if (this._isFileNotFoundError(error)) {
         return []
@@ -104,13 +104,12 @@ export class FileStorage implements SnapshotStorage {
    * Loads manifest or returns default if not found
    */
   async loadManifest(params: { location: SnapshotLocation }): Promise<SnapshotManifest> {
-    const path = this._getPath(params.location, MANIFEST)
+    const path = await this._getPath(params.location, MANIFEST)
     const manifest = await this._readJSON<SnapshotManifest>(path)
 
     return (
       manifest ?? {
         schemaVersion: SCHEMA_VERSION,
-        nextSnapshotId: DEFAULT_SNAPSHOT_ID,
         updatedAt: new Date().toISOString(),
       }
     )
@@ -120,7 +119,7 @@ export class FileStorage implements SnapshotStorage {
    * Saves manifest to file
    */
   async saveManifest(params: { location: SnapshotLocation; manifest: SnapshotManifest }): Promise<void> {
-    const path = this._getPath(params.location, MANIFEST)
+    const path = await this._getPath(params.location, MANIFEST)
     await this._writeJSON(path, params.manifest)
   }
 
@@ -129,6 +128,8 @@ export class FileStorage implements SnapshotStorage {
    */
   private async _writeJSON(path: string, data: unknown): Promise<void> {
     try {
+      const { promises: fs } = await import('fs')
+      const { dirname } = await import('path')
       await fs.mkdir(dirname(path), { recursive: true })
       const tmpPath = `${path}.tmp`
       await fs.writeFile(tmpPath, JSON.stringify(data, null, 2), 'utf8')
@@ -143,6 +144,7 @@ export class FileStorage implements SnapshotStorage {
    */
   private async _readJSON<T>(path: string): Promise<T | null> {
     try {
+      const { promises: fs } = await import('fs')
       const content = await fs.readFile(path, 'utf8')
       return JSON.parse(content)
     } catch (error: unknown) {
@@ -156,11 +158,16 @@ export class FileStorage implements SnapshotStorage {
     }
   }
 
-  private _getLatestSnapshotPath(location: SnapshotLocation): string {
+  private async _getLatestSnapshotPath(location: SnapshotLocation): Promise<string> {
     return this._getPath(location, SNAPSHOT_LATEST)
   }
 
-  private _getHistorySnapshotPath(location: SnapshotLocation, snapshotId: string): string {
-    return this._getPath(location, `${IMMUTABLE_HISTORY}/snapshot_${String(snapshotId).padStart(5, '0')}.json`)
+  private async _getHistorySnapshotPath(location: SnapshotLocation, snapshotId: string): Promise<string> {
+    validateIdentifier(snapshotId)
+    const resolved = await this._getPath(location, `${IMMUTABLE_HISTORY}/snapshot_${snapshotId}.json`)
+    if (!resolved.startsWith(this._baseDir)) {
+      throw new SessionError(`Invalid snapshotId '${snapshotId}': resolves outside storage directory`)
+    }
+    return resolved
   }
 }

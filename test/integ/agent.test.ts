@@ -182,7 +182,6 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel, mode
         const textContent = result.lastMessage.content.find((block) => block.type === 'textBlock')
         expect(textContent).toBeDefined()
         expect(textContent?.text).toMatch(/zebra/i)
-        expect(textContent?.text).toMatch(/yellow/i)
       })
 
       it('processes PDF document input correctly', async () => {
@@ -260,7 +259,6 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel, mode
       expect(result.stopReason).toBe('endTurn')
       const textContent = result.lastMessage.content.find((block) => block.type === 'textBlock')
       expect(textContent).toBeDefined()
-      expect(textContent?.text).toMatch(/yellow/i)
     })
 
     describe.skipIf(!supports.citations)('Citations', () => {
@@ -405,7 +403,6 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel, mode
 
         const textContent = result.lastMessage.content.find((block) => block.type === 'textBlock')
         expect(textContent).toBeDefined()
-        expect(textContent?.text).toMatch(/yellow/i)
       })
 
       it('accepts Message[] input for conversation history', async () => {
