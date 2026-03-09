@@ -11,12 +11,12 @@ import type { AgentCard, Part, Task, Message as A2AMessage } from '@a2a-js/sdk'
 import type { Client as A2AClientSdk } from '@a2a-js/sdk/client'
 import { ClientFactory } from '@a2a-js/sdk/client'
 import type { AgentBase } from '../agent/agent-base.js'
-import type { InvokeArgs } from '../agent/agent.js'
+import type { InvokeArgs, InvokeOptions } from '../agent/agent.js'
 import { AgentResult, type AgentStreamEvent } from '../types/agent.js'
 import { Message, TextBlock, type ContentBlock, type ContentBlockData, type MessageData } from '../types/messages.js'
 import { AgentResultEvent } from '../hooks/events.js'
 import { AppState } from '../app-state.js'
-import { logExperimentalWarning } from './experimental.js'
+import { logExperimentalWarning } from './logging.js'
 
 /**
  * Configuration options for creating an A2AAgent.
@@ -85,9 +85,10 @@ export class A2AAgent implements AgentBase {
    * the A2A protocol, and wraps the response in an AgentResult.
    *
    * @param args - Arguments for invoking the agent
+   * @param _options - Optional invocation options (unused for remote agents)
    * @returns Promise that resolves to the AgentResult
    */
-  async invoke(args: InvokeArgs): Promise<AgentResult> {
+  async invoke(args: InvokeArgs, _options?: InvokeOptions): Promise<AgentResult> {
     const text = this._extractTextFromArgs(args)
     const responseText = await this._sendMessage(text)
 
@@ -111,9 +112,10 @@ export class A2AAgent implements AgentBase {
    * as they arrive from the remote agent, matching the Python SDK's `stream_async` behavior.
    *
    * @param args - Arguments for invoking the agent
+   * @param _options - Optional invocation options (unused for remote agents)
    * @returns Async generator that yields AgentStreamEvent objects and returns AgentResult
    */
-  async *stream(args: InvokeArgs): AsyncGenerator<AgentStreamEvent, AgentResult, undefined> {
+  async *stream(args: InvokeArgs, _options?: InvokeOptions): AsyncGenerator<AgentStreamEvent, AgentResult, undefined> {
     const result = await this.invoke(args)
     yield new AgentResultEvent({ agent: { state: new AppState(), messages: [result.lastMessage] }, result })
     return result

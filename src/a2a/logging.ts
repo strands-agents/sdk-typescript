@@ -13,7 +13,7 @@ export function logExperimentalWarning(): void {
   if (!_logged) {
     _logged = true
     logger.warn(
-      'The A2A protocol is experimental. Breaking changes in the underlying SDK may require breaking changes in this module.'
+      'protocol=<a2a> | experimental, breaking changes in the underlying sdk may require breaking changes in this module'
     )
   }
 }

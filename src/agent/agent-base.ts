@@ -1,4 +1,4 @@
-import type { InvokeArgs } from './agent.js'
+import type { InvokeArgs, InvokeOptions } from './agent.js'
 import type { AgentResult, AgentStreamEvent } from '../types/agent.js'
 
 /**
@@ -13,15 +13,17 @@ export interface AgentBase {
    * Invokes the agent and returns the final result.
    *
    * @param args - Arguments for invoking the agent
+   * @param options - Optional invocation options (e.g. structured output schema)
    * @returns Promise that resolves to the final AgentResult
    */
-  invoke(args: InvokeArgs): Promise<AgentResult>
+  invoke(args: InvokeArgs, options?: InvokeOptions): Promise<AgentResult>
 
   /**
    * Streams the agent execution, yielding events and returning the final result.
    *
    * @param args - Arguments for invoking the agent
+   * @param options - Optional invocation options (e.g. structured output schema)
    * @returns Async generator that yields AgentStreamEvent objects and returns AgentResult
    */
-  stream(args: InvokeArgs): AsyncGenerator<AgentStreamEvent, AgentResult, undefined>
+  stream(args: InvokeArgs, options?: InvokeOptions): AsyncGenerator<AgentStreamEvent, AgentResult, undefined>
 }

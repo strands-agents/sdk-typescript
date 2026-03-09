@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { partsToContentBlocks, contentBlocksToParts } from '../converters.js'
+import { partsToContentBlocks, contentBlocksToParts } from '../adapters.js'
 import { TextBlock, ToolUseBlock, ReasoningBlock } from '../../types/messages.js'
 import type { ContentBlock } from '../../types/messages.js'
 import { ImageBlock, VideoBlock, DocumentBlock, encodeBase64 } from '../../types/media.js'
 import type { Part } from '@a2a-js/sdk'
 
-describe('converters', () => {
+describe('adapters', () => {
   describe('partsToContentBlocks', () => {
     it('converts text parts to TextBlocks', () => {
       const parts: Part[] = [

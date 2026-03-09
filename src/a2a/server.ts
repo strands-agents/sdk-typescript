@@ -14,7 +14,7 @@ import type { UserBuilder } from '@a2a-js/sdk/server/express'
 import { DefaultRequestHandler, InMemoryTaskStore } from '@a2a-js/sdk/server'
 import type { Agent } from '../agent/agent.js'
 import { StrandsA2AExecutor } from './executor.js'
-import { logExperimentalWarning } from './experimental.js'
+import { logExperimentalWarning } from './logging.js'
 import { logger } from '../logging/logger.js'
 
 /**

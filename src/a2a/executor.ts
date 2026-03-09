@@ -9,7 +9,7 @@ import type { ExecutionEventBus, RequestContext } from '@a2a-js/sdk/server'
 import type { AgentExecutor } from '@a2a-js/sdk/server'
 import { A2AError } from '@a2a-js/sdk/server'
 import type { AgentBase } from '../agent/agent-base.js'
-import { contentBlocksToParts, partsToContentBlocks } from './converters.js'
+import { contentBlocksToParts, partsToContentBlocks } from './adapters.js'
 import { normalizeError } from '../errors.js'
 import { logger } from '../logging/logger.js'
 
