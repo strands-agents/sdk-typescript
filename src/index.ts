@@ -180,8 +180,13 @@ export {
   ToolStreamUpdateEvent,
   AgentResultEvent,
   ModelStreamUpdateEvent,
+  InterruptEvent,
 } from './hooks/index.js'
 export type { HookCallback, HookProvider, HookableEventConstructor, ModelStopResponse } from './hooks/index.js'
+
+// Interrupt system
+export { Interrupt, InterruptException } from './interrupt.js'
+export type { InterruptResponse, InterruptResponseContent } from './interrupt.js'
 
 // Conversation Manager
 export { NullConversationManager } from './conversation-manager/null-conversation-manager.js'

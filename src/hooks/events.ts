@@ -3,6 +3,8 @@ import type { ContentBlock, Message, StopReason, ToolResultBlock } from '../type
 import { type Tool, ToolStreamEvent } from '../tools/tool.js'
 import type { JSONValue } from '../types/json.js'
 import type { ModelStreamEvent } from '../models/streaming.js'
+import { Interrupt, InterruptException, generateInterruptId } from '../interrupt.js'
+import type { _InterruptState } from '../interrupt.js'
 
 /**
  * Agent hook events.
@@ -67,6 +69,18 @@ export abstract class StreamEvent {}
  * potential future stream-only events that should not be hookable.
  */
 export abstract class HookableEvent extends StreamEvent {
+  /**
+   * @internal
+   * Flag indicating hooks have already been invoked for this event.
+   * Non-enumerable to avoid breaking equality checks.
+   */
+  declare _hooksInvoked: boolean
+
+  constructor() {
+    super()
+    Object.defineProperty(this, '_hooksInvoked', { value: false, writable: true, enumerable: false })
+  }
+
   /**
    * @internal
    * Check if callbacks should be reversed for this event.
@@ -144,6 +158,9 @@ export class MessageAddedEvent extends HookableEvent {
 /**
  * Event triggered just before a tool is executed.
  * Fired after tool lookup but before execution begins.
+ *
+ * Supports human-in-the-loop via the `interrupt()` method and tool cancellation
+ * via the `cancelTool` field.
  */
 export class BeforeToolCallEvent extends HookableEvent {
   readonly type = 'beforeToolCallEvent' as const
@@ -155,6 +172,17 @@ export class BeforeToolCallEvent extends HookableEvent {
   }
   readonly tool: Tool | undefined
 
+  /**
+   * When set, cancels the tool call. The value is used as the error message
+   * in the tool result. Set to `true` for a default cancel message.
+   */
+  declare cancelTool: boolean | string
+
+  /**
+   * @internal Interrupt state from the agent, set by the agent loop.
+   */
+  declare _interruptState: _InterruptState | undefined
+
   constructor(data: {
     agent: AgentData
     toolUse: { name: string; toolUseId: string; input: JSONValue }
@@ -164,6 +192,38 @@ export class BeforeToolCallEvent extends HookableEvent {
     this.agent = data.agent
     this.toolUse = data.toolUse
     this.tool = data.tool
+    Object.defineProperty(this, 'cancelTool', { value: false, writable: true, enumerable: false })
+    Object.defineProperty(this, '_interruptState', { value: undefined, writable: true, enumerable: false })
+  }
+
+  /**
+   * Trigger an interrupt to request human input.
+   *
+   * On first call (not resuming), throws InterruptException to pause the agent loop.
+   * On resume (after human provides response), returns the response value.
+   *
+   * @param name - Unique name for this interrupt within the hook callback
+   * @param reason - Reason for the interrupt (shown to the human)
+   * @returns The human's response when resuming from an interrupt
+   * @throws InterruptException when human input is needed
+   */
+  async interrupt(name: string, reason?: unknown): Promise<unknown> {
+    const state = this._interruptState
+    if (!state) {
+      throw new Error('Interrupt state not available — agent instance not set on event')
+    }
+
+    const id = await generateInterruptId(this.toolUse.toolUseId, name)
+    const existing = state.interrupts.get(id)
+
+    if (existing && existing.response !== undefined) {
+      return existing.response
+    }
+
+    const interrupt = existing ?? new Interrupt({ id, name, reason })
+    state.interrupts.set(id, interrupt)
+
+    throw new InterruptException(interrupt)
   }
 }
 
@@ -420,5 +480,22 @@ export class AfterToolsEvent extends HookableEvent {
 
   override _shouldReverseCallbacks(): boolean {
     return true
+  }
+}
+
+/**
+ * Event triggered when the agent loop is paused due to interrupts.
+ * Fired when one or more hook callbacks raised interrupts during tool execution.
+ * The agent loop stops and returns the interrupts to the caller for human response.
+ */
+export class InterruptEvent extends HookableEvent {
+  readonly type = 'interruptEvent' as const
+  readonly agent: AgentData
+  readonly interrupts: Interrupt[]
+
+  constructor(data: { agent: AgentData; interrupts: Interrupt[] }) {
+    super()
+    this.agent = data.agent
+    this.interrupts = data.interrupts
   }
 }

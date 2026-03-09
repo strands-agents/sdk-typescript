@@ -33,6 +33,7 @@ export {
   AgentResultEvent,
   BeforeToolsEvent,
   AfterToolsEvent,
+  InterruptEvent,
 } from './events.js'
 
 // Event types
