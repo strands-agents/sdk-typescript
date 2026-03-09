@@ -51,7 +51,7 @@ interface HandoffResult {
  */
 /**
  * Input type for swarm nodes. Pass an {@link Agent} directly for the simple case,
- * or {@link AgentNodeOptions} when per-node configuration (e.g. timeout) is needed.
+ * or {@link AgentNodeOptions} for per-node config.
  */
 export type SwarmNodeDefinition = Agent | AgentNodeOptions
 
