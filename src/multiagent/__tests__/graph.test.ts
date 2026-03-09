@@ -5,6 +5,7 @@ import { collectGenerator } from '../../__fixtures__/model-test-helpers.js'
 import { TextBlock } from '../../types/messages.js'
 import { AgentNode } from '../nodes.js'
 import { Graph } from '../graph.js'
+import { Status } from '../state.js'
 
 function makeNode(id: string, reply: string): AgentNode {
   const model = new MockMessageModel().addTurn(new TextBlock(reply))
@@ -92,55 +93,41 @@ describe('Graph', () => {
 
   describe('linear execution', () => {
     it('executes a single node', async () => {
-      const graph = new Graph({
-        nodes: [makeNode('only', 'hello')],
-        edges: [],
-      })
+      const result = await new Graph({ nodes: [makeNode('only', 'hello')], edges: [] }).invoke('go')
 
-      const result = await graph.invokeWithDetails('go')
-
-      expect(result.completedNodes).toBe(1)
-      expect(result.totalNodes).toBe(1)
-      expect(result.executionOrder).toEqual(['only'])
+      expect(result.results).toHaveLength(1)
+      expect(result.results[0]!.nodeId).toBe('only')
+      expect(result.results[0]!.status).toBe(Status.COMPLETED)
     })
 
     it('executes nodes in dependency order', async () => {
-      const graph = new Graph({
+      const result = await new Graph({
         nodes: [makeNode('a', 'first'), makeNode('b', 'second')],
         edges: [{ source: 'a', target: 'b' }],
-      })
+      }).invoke('go')
 
-      const result = await graph.invokeWithDetails('go')
-
-      expect(result.executionOrder).toEqual(['a', 'b'])
-      expect(result.completedNodes).toBe(2)
+      expect(result.results.map((r) => r.nodeId)).toEqual(['a', 'b'])
     })
 
     it('executes a three-node chain', async () => {
-      const graph = new Graph({
+      const result = await new Graph({
         nodes: [makeNode('a', 'one'), makeNode('b', 'two'), makeNode('c', 'three')],
         edges: [
           { source: 'a', target: 'b' },
           { source: 'b', target: 'c' },
         ],
-      })
+      }).invoke('go')
 
-      const result = await graph.invokeWithDetails('go')
-
-      expect(result.executionOrder).toEqual(['a', 'b', 'c'])
+      expect(result.results.map((r) => r.nodeId)).toEqual(['a', 'b', 'c'])
     })
   })
 
-  describe('invoke (MultiAgentBase)', () => {
-    it('returns MultiAgentResult', async () => {
-      const graph = new Graph({
-        nodes: [makeNode('a', 'hello')],
-        edges: [],
-      })
-
-      const result = await graph.invoke('go')
+  describe('result shape', () => {
+    it('returns MultiAgentResult with status, results, duration', async () => {
+      const result = await new Graph({ nodes: [makeNode('a', 'hello')], edges: [] }).invoke('go')
 
       expect(result.type).toBe('multiAgentResult')
+      expect(result.status).toBe(Status.COMPLETED)
       expect(result.results).toHaveLength(1)
       expect(result.results[0]!.nodeId).toBe('a')
       expect(result.duration).toBeGreaterThanOrEqual(0)
@@ -149,75 +136,67 @@ describe('Graph', () => {
 
   describe('parallel execution', () => {
     it('executes independent nodes in parallel', async () => {
-      const graph = new Graph({
+      const result = await new Graph({
         nodes: [makeNode('a', 'one'), makeNode('b', 'two')],
         edges: [],
-      })
+      }).invoke('go')
 
-      const result = await graph.invokeWithDetails('go')
-
-      expect(result.completedNodes).toBe(2)
-      expect(result.executionOrder).toHaveLength(2)
-      expect(result.executionOrder).toContain('a')
-      expect(result.executionOrder).toContain('b')
+      const completed = result.results.filter((r) => r.status === Status.COMPLETED)
+      expect(completed).toHaveLength(2)
+      expect(completed.map((r) => r.nodeId)).toContain('a')
+      expect(completed.map((r) => r.nodeId)).toContain('b')
     })
 
     it('fan-out: one node feeds two parallel nodes', async () => {
-      const graph = new Graph({
+      const result = await new Graph({
         nodes: [makeNode('root', 'start'), makeNode('left', 'l'), makeNode('right', 'r')],
         edges: [
           { source: 'root', target: 'left' },
           { source: 'root', target: 'right' },
         ],
-      })
+      }).invoke('go')
 
-      const result = await graph.invokeWithDetails('go')
-
-      expect(result.executionOrder[0]).toBe('root')
-      expect(result.executionOrder).toContain('left')
-      expect(result.executionOrder).toContain('right')
-      expect(result.completedNodes).toBe(3)
+      expect(result.results[0]!.nodeId).toBe('root')
+      const nodeIds = result.results.map((r) => r.nodeId)
+      expect(nodeIds).toContain('left')
+      expect(nodeIds).toContain('right')
+      expect(result.results).toHaveLength(3)
     })
 
     it('fan-in: two nodes feed one node', async () => {
-      const graph = new Graph({
+      const result = await new Graph({
         nodes: [makeNode('a', 'one'), makeNode('b', 'two'), makeNode('c', 'merged')],
         edges: [
           { source: 'a', target: 'c' },
           { source: 'b', target: 'c' },
         ],
-      })
+      }).invoke('go')
 
-      const result = await graph.invokeWithDetails('go')
-
-      expect(result.executionOrder).toContain('a')
-      expect(result.executionOrder).toContain('b')
-      expect(result.executionOrder[2]).toBe('c')
+      const nodeIds = result.results.map((r) => r.nodeId)
+      expect(nodeIds).toContain('a')
+      expect(nodeIds).toContain('b')
+      expect(nodeIds[2]).toBe('c')
     })
   })
 
   describe('conditional edges', () => {
     it('skips nodes when edge condition returns false', async () => {
-      const graph = new Graph({
+      const result = await new Graph({
         nodes: [makeNode('a', 'start'), makeNode('b', 'skipped')],
         edges: [{ source: 'a', target: 'b', handler: () => false }],
-      })
+      }).invoke('go')
 
-      const result = await graph.invokeWithDetails('go')
-
-      expect(result.executionOrder).toEqual(['a'])
-      expect(result.completedNodes).toBe(1)
+      expect(result.results).toHaveLength(1)
+      expect(result.results[0]!.nodeId).toBe('a')
     })
 
     it('traverses edges when condition returns true', async () => {
-      const graph = new Graph({
+      const result = await new Graph({
         nodes: [makeNode('a', 'start'), makeNode('b', 'reached')],
         edges: [{ source: 'a', target: 'b', handler: () => true }],
-      })
+      }).invoke('go')
 
-      const result = await graph.invokeWithDetails('go')
-
-      expect(result.executionOrder).toEqual(['a', 'b'])
+      expect(result.results.map((r) => r.nodeId)).toEqual(['a', 'b'])
     })
   })
 
@@ -235,12 +214,7 @@ describe('Graph', () => {
 
   describe('streaming', () => {
     it('yields lifecycle events during execution', async () => {
-      const graph = new Graph({
-        nodes: [makeNode('a', 'hello')],
-        edges: [],
-      })
-
-      const { items } = await collectGenerator(graph.stream('go'))
+      const { items } = await collectGenerator(new Graph({ nodes: [makeNode('a', 'hello')], edges: [] }).stream('go'))
 
       const eventTypes = items.map((e) => e.type)
       expect(eventTypes[0]).toBe('beforeMultiAgentInvocationEvent')
@@ -251,12 +225,12 @@ describe('Graph', () => {
     })
 
     it('yields handoff events between batches', async () => {
-      const graph = new Graph({
-        nodes: [makeNode('a', 'first'), makeNode('b', 'second')],
-        edges: [{ source: 'a', target: 'b' }],
-      })
-
-      const { items } = await collectGenerator(graph.stream('go'))
+      const { items } = await collectGenerator(
+        new Graph({
+          nodes: [makeNode('a', 'first'), makeNode('b', 'second')],
+          edges: [{ source: 'a', target: 'b' }],
+        }).stream('go')
+      )
 
       const handoffs = items.filter((e) => e.type === 'multiAgentHandoffEvent')
       expect(handoffs).toHaveLength(1)
@@ -264,16 +238,15 @@ describe('Graph', () => {
   })
 
   describe('error handling', () => {
-    it('propagates node execution errors', async () => {
+    it('captures node failures in results', async () => {
       const model = new MockMessageModel().addTurn(new Error('boom'))
       const failAgent = new Agent({ model, printer: false, agentId: 'fail' })
-      const graph = new Graph({
+      const result = await new Graph({
         nodes: [new AgentNode({ agent: failAgent })],
         edges: [],
-      })
+      }).invoke('go')
 
-      const result = await graph.invokeWithDetails('go')
-      expect(result.failedNodes).toBe(1)
+      expect(result.results.filter((r) => r.status === Status.FAILED)).toHaveLength(1)
     })
   })
 })

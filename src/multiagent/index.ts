@@ -34,4 +34,4 @@ export { createHandoffTool } from './handoff-tool.js'
 export type { HandoffToolOptions, HandoffRequest } from './handoff-tool.js'
 
 export { Graph, GraphError } from './graph.js'
-export type { GraphConfig, GraphOptions, GraphResult } from './graph.js'
+export type { GraphConfig, GraphOptions } from './graph.js'

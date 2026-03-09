@@ -218,7 +218,7 @@ export type { SwarmConfig, SwarmNodeDefinition, SwarmOptions } from './multiagen
 export { createHandoffTool } from './multiagent/handoff-tool.js'
 export type { HandoffToolOptions, HandoffRequest } from './multiagent/handoff-tool.js'
 export { Graph, GraphError } from './multiagent/graph.js'
-export type { GraphConfig, GraphOptions, GraphResult } from './multiagent/graph.js'
+export type { GraphConfig, GraphOptions } from './multiagent/graph.js'
 export {
   MultiAgentState,
   MultiAgentResult,

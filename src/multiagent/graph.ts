@@ -60,6 +60,8 @@ export class GraphError extends Error {
 export interface GraphConfig {
   /** Maximum total node executions before stopping. Defaults to Infinity. */
   maxNodeExecutions?: number
+  /** Max transitions between node batches. Defaults to Infinity. */
+  maxHandoffs?: number
   /** Total execution timeout in milliseconds. Defaults to Infinity. */
   executionTimeout?: number
   /** Individual node execution timeout in milliseconds. Defaults to Infinity. */
@@ -82,17 +84,6 @@ export interface GraphOptions extends GraphConfig {
   entryPoints?: string[]
   /** Hook providers for event-driven extensibility. */
   hooks?: HookProvider[]
-}
-
-/**
- * Extended result metadata from graph execution.
- */
-export interface GraphResult {
-  result: MultiAgentResult
-  executionOrder: string[]
-  totalNodes: number
-  completedNodes: number
-  failedNodes: number
 }
 
 /**
@@ -120,6 +111,7 @@ export class Graph implements MultiAgentBase {
 
     this.config = {
       maxNodeExecutions: Infinity,
+      maxHandoffs: Infinity,
       executionTimeout: Infinity,
       nodeTimeout: Infinity,
       resetOnRevisit: false,
@@ -198,8 +190,8 @@ export class Graph implements MultiAgentBase {
   /**
    * Invoke the graph and return the final result.
    */
-  async invoke(task: InvokeArgs): Promise<MultiAgentResult> {
-    const gen = this.stream(task)
+  async invoke(task: InvokeArgs, signal?: AbortSignal): Promise<MultiAgentResult> {
+    const gen = this.stream(task, signal)
     let next = await gen.next()
     while (!next.done) {
       next = await gen.next()
@@ -210,10 +202,13 @@ export class Graph implements MultiAgentBase {
   /**
    * Stream events during graph execution.
    */
-  async *stream(task: InvokeArgs): AsyncGenerator<MultiAgentStreamEvent, MultiAgentResult, undefined> {
+  async *stream(
+    task: InvokeArgs,
+    signal?: AbortSignal
+  ): AsyncGenerator<MultiAgentStreamEvent, MultiAgentResult, undefined> {
     await this.initialize()
 
-    const gen = this._stream(task)
+    const gen = this._stream(task, signal)
     let next = await gen.next()
     while (!next.done) {
       if (next.value instanceof HookableEvent) {
@@ -228,35 +223,21 @@ export class Graph implements MultiAgentBase {
   /**
    * Invoke the graph and return extended result metadata.
    */
-  async invokeWithDetails(task: InvokeArgs): Promise<GraphResult> {
-    const gen = this._streamWithDetails(task)
-    let last: IteratorResult<MultiAgentStreamEvent, GraphResult>
-    do {
-      last = await gen.next()
-    } while (!last.done)
-    return last.value
-  }
-
-  private async *_stream(task: InvokeArgs): AsyncGenerator<MultiAgentStreamEvent, MultiAgentResult, undefined> {
-    const gen = this._streamWithDetails(task)
-    let next = await gen.next()
-    while (!next.done) {
-      yield next.value
-      next = await gen.next()
-    }
-    return next.value.result
-  }
-
-  private async *_streamWithDetails(task: InvokeArgs): AsyncGenerator<MultiAgentStreamEvent, GraphResult, undefined> {
+  private async *_stream(
+    task: InvokeArgs,
+    signal?: AbortSignal
+  ): AsyncGenerator<MultiAgentStreamEvent, MultiAgentResult, undefined> {
     const state = new MultiAgentState({ nodeIds: [...this._nodes.keys()] })
-    const executionOrder: string[] = []
 
     yield new BeforeMultiAgentInvocationEvent({ orchestrator: this, state })
+
+    let handoffCount = 0
 
     try {
       let readyIds = [...this._entryPoints]
 
       while (readyIds.length > 0) {
+        if (signal?.aborted) break
         if (state.steps >= this.config.maxNodeExecutions) {
           throw new GraphError(`Max node executions reached: ${this.config.maxNodeExecutions}`)
         }
@@ -267,11 +248,15 @@ export class Graph implements MultiAgentBase {
         const currentBatch = readyIds
         readyIds = []
 
-        yield* this._executeBatch(currentBatch, task, state, executionOrder)
+        yield* this._executeBatch(currentBatch, task, state)
 
         const newlyReady = this._findNewlyReady(currentBatch, state)
 
         if (newlyReady.length > 0) {
+          handoffCount++
+          if (handoffCount > this.config.maxHandoffs) {
+            throw new GraphError(`Max handoffs reached: ${this.config.maxHandoffs}`)
+          }
           yield new MultiAgentHandoffEvent({
             source: currentBatch[currentBatch.length - 1]!,
             targets: newlyReady,
@@ -284,20 +269,16 @@ export class Graph implements MultiAgentBase {
       yield new AfterMultiAgentInvocationEvent({ orchestrator: this, state })
     }
 
+    const status = signal?.aborted ? Status.CANCELLED : undefined
     const result = new MultiAgentResult({
       results: state.results,
       duration: Date.now() - state.startTime,
+      ...(status && { status }),
     })
 
     yield new MultiAgentResultEvent({ result })
 
-    return {
-      result,
-      executionOrder,
-      totalNodes: this._nodes.size,
-      completedNodes: state.results.filter((r) => r.status === Status.COMPLETED).length,
-      failedNodes: state.results.filter((r) => r.status === Status.FAILED).length,
-    }
+    return result
   }
 
   /**
@@ -306,8 +287,7 @@ export class Graph implements MultiAgentBase {
   private async *_executeBatch(
     nodeIds: string[],
     task: InvokeArgs,
-    state: MultiAgentState,
-    executionOrder: string[]
+    state: MultiAgentState
   ): AsyncGenerator<MultiAgentStreamEvent, void, undefined> {
     const queue = new Queue()
     let activeCount = nodeIds.length
@@ -343,9 +323,6 @@ export class Graph implements MultiAgentBase {
           if (nodeState) {
             nodeState.status = item.result.status
             nodeState.results.push(item.result)
-            if (item.result.status === Status.COMPLETED) {
-              executionOrder.push(item.node.id)
-            }
           }
           state.results.push(item.result)
         } else if (item.type === 'error') {
