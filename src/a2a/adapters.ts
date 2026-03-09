@@ -172,7 +172,7 @@ function _mediaBlockToFilePart(block: ImageBlock | VideoBlock): Part | undefined
   }
 
   if (block.source.type === 'imageSourceUrl') {
-    return { kind: 'file', file: { uri: (block.source as { type: 'imageSourceUrl'; url: string }).url, mimeType } }
+    return { kind: 'file', file: { uri: block.source.url, mimeType } }
   }
 
   return undefined
