@@ -84,10 +84,17 @@
     "@anthropic-ai/sdk": "^0.71.2",
     "@aws-sdk/client-s3": "^3.943.0",
     "@aws-sdk/client-secrets-manager": "^3.943.0",
+    "@aws-sdk/client-sts": "^3.996.0",
     "@aws-sdk/credential-providers": "^3.943.0",
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.57.2",
+    "@opentelemetry/resources": "^1.30.1",
+    "@opentelemetry/sdk-trace-base": "^1.30.1",
+    "@opentelemetry/sdk-trace-node": "^1.30.1",
     "@google/genai": "^1.40.0",
     "@types/json-schema": "^7.0.15",
     "@types/node": "^24.6.0",
+    "@types/uuid": "^10.0.0",
     "@typescript-eslint/eslint-plugin": "^8.48.1",
     "@typescript-eslint/parser": "^8.0.0",
     "@vitest/browser": "^4.0.15",
@@ -115,13 +122,19 @@
   },
   "homepage": "https://github.com/strands-agents/sdk-typescript#readme",
   "dependencies": {
-    "@aws-sdk/client-bedrock-runtime": "^3.943.0"
+    "@aws-sdk/client-bedrock-runtime": "^3.943.0",
+    "uuid": "^10.0.0"
   },
   "peerDependencies": {
     "@anthropic-ai/sdk": "^0.71.2",
     "@aws-sdk/client-s3": "^3.943.0",
     "@google/genai": "^1.40.0",
     "@modelcontextprotocol/sdk": "^1.25.2",
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.57.2",
+    "@opentelemetry/resources": "^1.30.1",
+    "@opentelemetry/sdk-trace-base": "^1.30.1",
+    "@opentelemetry/sdk-trace-node": "^1.30.1",
     "openai": "^6.7.0",
     "zod": "^4.1.12"
   },
@@ -140,7 +153,6 @@
     }
   },
   "overrides": {
-    "rollup": "4.52.5",
     "fast-xml-parser": ">=5.3.6"
   }
 }

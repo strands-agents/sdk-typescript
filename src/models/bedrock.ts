@@ -35,11 +35,15 @@ import {
   DocumentFormat,
   ImageFormat,
   type BedrockRuntimeClientResolvedConfig,
+  type CitationLocation as BedrockCitationLocation,
+  type Citation as BedrockCitation,
+  type CitationsContentBlock as BedrockCitationsContentBlock,
 } from '@aws-sdk/client-bedrock-runtime'
 import { type BaseModelConfig, Model, type StreamOptions } from '../models/model.js'
 import type { ContentBlock, Message, StopReason, ToolUseBlock } from '../types/messages.js'
 import type { ImageSource, VideoSource, DocumentSource } from '../types/media.js'
-import type { ModelStreamEvent, ReasoningContentDelta, Usage } from '../models/streaming.js'
+import type { CitationsDelta, ModelStreamEvent, ReasoningContentDelta, Usage } from '../models/streaming.js'
+import type { Citation, CitationLocation, CitationsBlockData } from '../types/citations.js'
 import type { JSONValue } from '../types/json.js'
 import { ContextWindowOverflowError, ModelThrottledError, normalizeError } from '../errors.js'
 import { ensureDefined } from '../types/validation.js'
@@ -632,6 +636,14 @@ export class BedrockModel extends Model<BedrockModelConfig> {
           },
         }
 
+      case 'citationsBlock':
+        return {
+          citationsContent: {
+            citations: block.citations.map((c) => this._mapCitationToBedrock(c)),
+            content: block.content,
+          },
+        }
+
       case 'guardContentBlock': {
         if (block.text) {
           return {
@@ -802,6 +814,19 @@ export class BedrockModel extends Model<BedrockModelConfig> {
 
         events.push({ type: 'modelContentBlockStopEvent' })
       },
+      citationsContent: (block: BedrockCitationsContentBlock): void => {
+        if (!block) return
+        events.push({ type: 'modelContentBlockStartEvent' })
+
+        const mapped = this._mapBedrockCitationsData(block)
+        const delta: CitationsDelta = {
+          type: 'citationsDelta',
+          citations: mapped.citations,
+          content: mapped.content,
+        }
+        events.push({ type: 'modelContentBlockDeltaEvent', delta })
+        events.push({ type: 'modelContentBlockStopEvent' })
+      },
     }
 
     const content = ensureDefined(message.content, 'message.content')
@@ -914,6 +939,16 @@ export class BedrockModel extends Model<BedrockModelConfig> {
             if (Object.keys(reasoningDelta).length > 1) {
               events.push({ type: 'modelContentBlockDeltaEvent', delta: reasoningDelta })
             }
+          },
+          citationsContent: (block: BedrockCitationsContentBlock): void => {
+            if (!block) return
+            const mapped = this._mapBedrockCitationsData(block)
+            const delta: CitationsDelta = {
+              type: 'citationsDelta',
+              citations: mapped.citations,
+              content: mapped.content,
+            }
+            events.push({ type: 'modelContentBlockDeltaEvent', delta })
           },
         }
 
@@ -1048,6 +1083,111 @@ export class BedrockModel extends Model<BedrockModelConfig> {
     }
 
     return mappedStopReason
+  }
+
+  /**
+   * Maps a Bedrock object-key citation location to the SDK's type-field format.
+   *
+   * Bedrock uses object-key discrimination (`{ documentChar: { ... } }`) while the SDK uses
+   * type-field discrimination (`{ type: 'documentChar', ... }`). Also normalizes Bedrock's
+   * `searchResultLocation` key to the shorter `searchResult`.
+   *
+   * @param bedrockLocation - Bedrock citation location with object-key discrimination
+   * @returns SDK CitationLocation with type field discrimination
+   */
+  private _mapBedrockCitationLocation(bedrockLocation: BedrockCitationLocation): CitationLocation | undefined {
+    if (bedrockLocation.documentChar) {
+      const loc = bedrockLocation.documentChar
+      return { type: 'documentChar', documentIndex: loc.documentIndex!, start: loc.start!, end: loc.end! }
+    }
+    if (bedrockLocation.documentPage) {
+      const loc = bedrockLocation.documentPage
+      return { type: 'documentPage', documentIndex: loc.documentIndex!, start: loc.start!, end: loc.end! }
+    }
+    if (bedrockLocation.documentChunk) {
+      const loc = bedrockLocation.documentChunk
+      return { type: 'documentChunk', documentIndex: loc.documentIndex!, start: loc.start!, end: loc.end! }
+    }
+    if (bedrockLocation.searchResultLocation) {
+      const loc = bedrockLocation.searchResultLocation
+      return { type: 'searchResult', searchResultIndex: loc.searchResultIndex!, start: loc.start!, end: loc.end! }
+    }
+    if (bedrockLocation.web) {
+      const loc = bedrockLocation.web
+      return { type: 'web', url: loc.url!, ...(loc.domain && { domain: loc.domain }) }
+    }
+    logger.warn(`citation_location=<${JSON.stringify(bedrockLocation)}> | unknown citation location type`)
+    return undefined
+  }
+
+  /**
+   * Maps a Bedrock CitationsContentBlock to SDK CitationsBlockData.
+   *
+   * @param bedrockData - Bedrock CitationsContentBlock
+   * @returns SDK CitationsBlockData with type-field CitationLocations
+   */
+  private _mapBedrockCitationsData(bedrockData: BedrockCitationsContentBlock): CitationsBlockData {
+    return {
+      citations: (bedrockData.citations ?? [])
+        .map((citation) => {
+          const location = citation.location ? this._mapBedrockCitationLocation(citation.location) : undefined
+          if (!location) return undefined
+          return {
+            source: citation.source ?? '',
+            title: citation.title ?? '',
+            sourceContent: (citation.sourceContent ?? []).map((sc) => ({ text: sc.text! })),
+            location,
+          }
+        })
+        .filter((c) => c !== undefined),
+      content: (bedrockData.content ?? []).map((gc) => ({ text: gc.text! })),
+    }
+  }
+
+  /**
+   * Maps an SDK Citation to Bedrock's Citation format.
+   *
+   * @param citation - SDK Citation with type-field location
+   * @returns Bedrock Citation with object-key location
+   */
+  private _mapCitationToBedrock(citation: Citation): BedrockCitation {
+    return {
+      location: this._mapCitationLocationToBedrock(citation.location),
+      sourceContent: citation.sourceContent.map((sc) => ({ text: sc.text })),
+      source: citation.source,
+      title: citation.title,
+    }
+  }
+
+  /**
+   * Maps an SDK CitationLocation to Bedrock's object-key format.
+   *
+   * @param location - SDK CitationLocation with type field
+   * @returns Bedrock CitationLocation with object-key discrimination
+   */
+  private _mapCitationLocationToBedrock(location: CitationLocation): BedrockCitationLocation {
+    switch (location.type) {
+      case 'documentChar': {
+        const { type: _, ...fields } = location
+        return { documentChar: fields }
+      }
+      case 'documentPage': {
+        const { type: _, ...fields } = location
+        return { documentPage: fields }
+      }
+      case 'documentChunk': {
+        const { type: _, ...fields } = location
+        return { documentChunk: fields }
+      }
+      case 'searchResult': {
+        const { type: _, ...fields } = location
+        return { searchResultLocation: fields }
+      }
+      case 'web':
+        return { web: { url: location.url, ...(location.domain && { domain: location.domain }) } }
+      default:
+        return location as unknown as BedrockCitationLocation
+    }
   }
 }
 

@@ -630,3 +630,12 @@ describe('Model', () => {
     })
   })
 })
+
+describe('Model.modelId', () => {
+  it('returns modelId from model config', () => {
+    const provider = new TestModelProvider()
+    provider.updateConfig({ modelId: 'my-model' })
+
+    expect(provider.modelId).toBe('my-model')
+  })
+})

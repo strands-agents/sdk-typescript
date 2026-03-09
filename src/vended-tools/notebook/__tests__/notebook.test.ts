@@ -2,12 +2,12 @@ import { describe, it, expect } from 'vitest'
 import { notebook } from '../notebook.js'
 import type { NotebookState } from '../types.js'
 import type { ToolContext } from '../../../index.js'
-import { AgentState } from '../../../agent/state.js'
+import { AppState } from '../../../app-state.js'
 
 describe('notebook tool', () => {
   // Helper to create fresh state and context for each test
-  const createFreshContext = (): { state: AgentState; context: ToolContext } => {
-    const state = new AgentState({ notebooks: {} })
+  const createFreshContext = (): { state: AppState; context: ToolContext } => {
+    const state = new AppState({ notebooks: {} })
     const context: ToolContext = {
       toolUse: {
         name: 'notebook',

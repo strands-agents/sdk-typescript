@@ -1,10 +1,11 @@
 import type { Role, StopReason } from '../types/messages.js'
 import type { JSONValue } from '../types/json.js'
+import type { Citation, CitationGeneratedContent } from '../types/citations.js'
 
 /**
  * ModelStreamEvent types for Model interactions.
  *
- * This module follows a pattern where <name>Data interfaces define the structure
+ * This module follows a pattern where "Data" interfaces define the structure
  * for objects, while corresponding classes extend those interfaces with additional
  * functionality and type discrimination.
  */
@@ -323,7 +324,7 @@ export interface ToolUseStart {
  *
  * This is a discriminated union for type-safe delta handling.
  */
-export type ContentBlockDelta = TextDelta | ToolUseInputDelta | ReasoningContentDelta
+export type ContentBlockDelta = TextDelta | ToolUseInputDelta | ReasoningContentDelta | CitationsDelta
 
 /**
  * Text delta within a content block.
@@ -381,6 +382,27 @@ export interface ReasoningContentDelta {
    * Incremental redacted content data.
    */
   redactedContent?: Uint8Array
+}
+
+/**
+ * Citations content delta within a content block.
+ * Represents a citations content block from the model.
+ */
+export interface CitationsDelta {
+  /**
+   * Discriminator for citations content delta.
+   */
+  type: 'citationsDelta'
+
+  /**
+   * Array of citations linking generated content to source locations.
+   */
+  citations: Citation[]
+
+  /**
+   * The generated content associated with these citations.
+   */
+  content: CitationGeneratedContent[]
 }
 
 /**

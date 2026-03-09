@@ -6,6 +6,7 @@ import { ContextWindowOverflowError, ModelThrottledError } from '../../errors.js
 import { Message, ReasoningBlock, ToolUseBlock, ToolResultBlock, JsonBlock } from '../../types/messages.js'
 import type { SystemContentBlock } from '../../types/messages.js'
 import { TextBlock, GuardContentBlock, CachePointBlock } from '../../types/messages.js'
+import { CitationsBlock } from '../../types/citations.js'
 import type { StreamOptions } from '../model.js'
 import { collectIterator } from '../../__fixtures__/model-test-helpers.js'
 
@@ -761,6 +762,80 @@ describe('BedrockModel', () => {
       })
     })
 
+    it('yields and validates citationsContent events correctly', async () => {
+      // Bedrock wire format uses object-key discrimination
+      const bedrockCitationsData = {
+        citations: [
+          {
+            location: { documentChar: { documentIndex: 0, start: 10, end: 50 } },
+            sourceContent: [{ text: 'source text' }],
+            source: 'doc-0',
+            title: 'Test Doc',
+          },
+        ],
+        content: [{ text: 'generated text' }],
+      }
+
+      const mockSend = vi.fn(async () => {
+        if (stream) {
+          return {
+            stream: (async function* (): AsyncGenerator<unknown> {
+              yield { messageStart: { role: 'assistant' } }
+              yield { contentBlockStart: {} }
+              yield {
+                contentBlockDelta: {
+                  delta: { citationsContent: bedrockCitationsData },
+                },
+              }
+              yield { contentBlockStop: {} }
+              yield { messageStop: { stopReason: 'end_turn' } }
+              yield {
+                metadata: { usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 }, metrics: { latencyMs: 100 } },
+              }
+            })(),
+          }
+        } else {
+          return {
+            output: {
+              message: {
+                role: 'assistant',
+                content: [{ citationsContent: bedrockCitationsData }],
+              },
+            },
+            stopReason: 'end_turn',
+            usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+            metrics: { latencyMs: 100 },
+          }
+        }
+      })
+      mockBedrockClientImplementation({ send: mockSend })
+
+      const provider = new BedrockModel({ stream })
+      const messages = [new Message({ role: 'user', content: [new TextBlock('Cite this.')] })]
+      const events = await collectIterator(provider.stream(messages))
+
+      // SDK events should use type-field discrimination
+      expect(events).toContainEqual({ role: 'assistant', type: 'modelMessageStartEvent' })
+      expect(events).toContainEqual({ type: 'modelContentBlockStartEvent' })
+      expect(events).toContainEqual({
+        type: 'modelContentBlockDeltaEvent',
+        delta: {
+          type: 'citationsDelta',
+          citations: [
+            {
+              location: { type: 'documentChar', documentIndex: 0, start: 10, end: 50 },
+              sourceContent: [{ text: 'source text' }],
+              source: 'doc-0',
+              title: 'Test Doc',
+            },
+          ],
+          content: [{ text: 'generated text' }],
+        },
+      })
+      expect(events).toContainEqual({ type: 'modelContentBlockStopEvent' })
+      expect(events).toContainEqual({ stopReason: 'endTurn', type: 'modelMessageStopEvent' })
+    })
+
     describe('error handling', async () => {
       it.each([
         {
@@ -1472,6 +1547,121 @@ describe('BedrockModel', () => {
           },
         ],
       })
+    })
+  })
+
+  describe('citations content block formatting', () => {
+    const mockConverseStreamCommand = vi.mocked(ConverseStreamCommand)
+
+    it('maps SDK CitationLocation types to Bedrock object-key format through formatting pipeline', async () => {
+      const provider = new BedrockModel()
+      // SDK format uses type-field discrimination
+      const sdkCitations = [
+        {
+          location: { type: 'documentChar' as const, documentIndex: 0, start: 150, end: 300 },
+          source: 'doc-0',
+          sourceContent: [{ text: 'char source' }],
+          title: 'Text Document',
+        },
+        {
+          location: { type: 'documentPage' as const, documentIndex: 0, start: 2, end: 3 },
+          source: 'doc-0',
+          sourceContent: [{ text: 'page source' }],
+          title: 'PDF Document',
+        },
+        {
+          location: { type: 'documentChunk' as const, documentIndex: 1, start: 5, end: 8 },
+          source: 'doc-1',
+          sourceContent: [{ text: 'chunk source' }],
+          title: 'Chunked Document',
+        },
+        {
+          location: { type: 'searchResult' as const, searchResultIndex: 0, start: 25, end: 150 },
+          source: 'search-0',
+          sourceContent: [{ text: 'search source' }],
+          title: 'Search Result',
+        },
+        {
+          location: { type: 'web' as const, url: 'https://example.com/doc', domain: 'example.com' },
+          source: 'web-0',
+          sourceContent: [{ text: 'web source' }],
+          title: 'Web Page',
+        },
+      ]
+
+      const messages = [
+        new Message({
+          role: 'assistant',
+          content: [
+            new CitationsBlock({
+              citations: sdkCitations,
+              content: [{ text: 'generated text with all citation types' }],
+            }),
+          ],
+        }),
+        new Message({
+          role: 'user',
+          content: [new TextBlock('Follow up')],
+        }),
+      ]
+
+      collectIterator(provider.stream(messages))
+
+      // Bedrock wire format uses object-key discrimination
+      expect(mockConverseStreamCommand).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          messages: [
+            {
+              role: 'assistant',
+              content: [
+                {
+                  citationsContent: {
+                    citations: [
+                      {
+                        location: { documentChar: { documentIndex: 0, start: 150, end: 300 } },
+                        source: 'doc-0',
+                        sourceContent: [{ text: 'char source' }],
+                        title: 'Text Document',
+                      },
+                      {
+                        location: { documentPage: { documentIndex: 0, start: 2, end: 3 } },
+                        source: 'doc-0',
+                        sourceContent: [{ text: 'page source' }],
+                        title: 'PDF Document',
+                      },
+                      {
+                        location: { documentChunk: { documentIndex: 1, start: 5, end: 8 } },
+                        source: 'doc-1',
+                        sourceContent: [{ text: 'chunk source' }],
+                        title: 'Chunked Document',
+                      },
+                      {
+                        location: {
+                          searchResultLocation: { searchResultIndex: 0, start: 25, end: 150 },
+                        },
+                        source: 'search-0',
+                        sourceContent: [{ text: 'search source' }],
+                        title: 'Search Result',
+                      },
+                      {
+                        location: { web: { url: 'https://example.com/doc', domain: 'example.com' } },
+                        source: 'web-0',
+                        sourceContent: [{ text: 'web source' }],
+                        title: 'Web Page',
+                      },
+                    ],
+                    content: [{ text: 'generated text with all citation types' }],
+                  },
+                },
+              ],
+            },
+            {
+              role: 'user',
+              content: [{ text: 'Follow up' }],
+            },
+          ],
+        })
+      )
     })
   })
 

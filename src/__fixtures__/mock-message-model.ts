@@ -263,6 +263,19 @@ export class MockMessageModel extends Model<BaseModelConfig> {
         // This is typically used in system prompts or message content for guardrail evaluation
         break
 
+      case 'citationsBlock':
+        yield { type: 'modelContentBlockStartEvent' }
+        yield {
+          type: 'modelContentBlockDeltaEvent',
+          delta: {
+            type: 'citationsDelta',
+            citations: block.citations,
+            content: block.content,
+          },
+        }
+        yield { type: 'modelContentBlockStopEvent' }
+        break
+
       case 'imageBlock':
       case 'videoBlock':
       case 'documentBlock':

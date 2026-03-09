@@ -8,6 +8,8 @@ import {
   TextBlock,
   ToolUseBlock,
 } from '../types/messages.js'
+import { CitationsBlock } from '../types/citations.js'
+import type { Citation, CitationGeneratedContent } from '../types/citations.js'
 import type { ToolChoice, ToolSpec } from '../tools/types.js'
 import {
   ModelContentBlockDeltaEvent,
@@ -19,6 +21,25 @@ import {
   type ModelStreamEvent,
 } from './streaming.js'
 import { MaxTokensError, ModelError, normalizeError } from '../errors.js'
+
+class CitationAccumulator {
+  citations: Citation[] = []
+  content: CitationGeneratedContent[] = []
+
+  push(citations: Citation[], content: CitationGeneratedContent[]): void {
+    this.citations.push(...citations)
+    this.content.push(...content)
+  }
+
+  hasData(): boolean {
+    return this.citations.length > 0
+  }
+
+  reset(): void {
+    this.citations = []
+    this.content = []
+  }
+}
 
 /**
  * Base configuration interface for all model providers.
@@ -124,6 +145,13 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
   abstract getConfig(): T
 
   /**
+   * The model ID from the current configuration, if configured.
+   */
+  get modelId(): string | undefined {
+    return this.getConfig().modelId
+  }
+
+  /**
    * Streams a conversation with the model.
    * Returns an async iterable that yields streaming events as they occur.
    *
@@ -203,6 +231,7 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
         signature?: string
         redactedContent?: Uint8Array
       } = {}
+      const accumulatedCitations = new CitationAccumulator()
       let errorToThrow: Error | undefined = undefined
       let stoppedMessage: Message | null = null
       let finalStopReason: StopReason | null = null
@@ -228,9 +257,10 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
             accumulatedToolInput = ''
             accumulatedText = ''
             accumulatedReasoning = {}
+            accumulatedCitations.reset()
             break
 
-          case 'modelContentBlockDeltaEvent':
+          case 'modelContentBlockDeltaEvent': {
             switch (event.delta.type) {
               case 'textDelta':
                 accumulatedText += event.delta.text
@@ -243,8 +273,12 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
                 if (event.delta.signature) accumulatedReasoning.signature = event.delta.signature
                 if (event.delta.redactedContent) accumulatedReasoning.redactedContent = event.delta.redactedContent
                 break
+              case 'citationsDelta':
+                accumulatedCitations.push(event.delta.citations, event.delta.content)
+                break
             }
             break
+          }
 
           case 'modelContentBlockStopEvent': {
             // Finalize and emit complete ContentBlock
@@ -265,6 +299,12 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
                   ...accumulatedReasoning,
                 })
                 accumulatedReasoning = {} // Reset after creating reasoning block
+              } else if (accumulatedCitations.hasData()) {
+                block = new CitationsBlock({
+                  citations: accumulatedCitations.citations,
+                  content: accumulatedCitations.content,
+                })
+                accumulatedCitations.reset()
               } else {
                 block = new TextBlock(accumulatedText)
               }

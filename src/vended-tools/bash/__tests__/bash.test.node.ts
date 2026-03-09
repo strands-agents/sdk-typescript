@@ -2,14 +2,14 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 import { bash } from '../index.js'
 import { BashTimeoutError, BashSessionError, type BashOutput } from '../index.js'
 import type { ToolContext } from '../../../index.js'
-import { AgentState } from '../../../agent/state.js'
+import { AppState } from '../../../app-state.js'
 import { realpathSync } from 'fs'
 
 // Skip tests on Windows (bash not available)
 describe.skipIf(process.platform === 'win32')('bash tool', () => {
   // Helper to create fresh context
-  const createFreshContext = (): { state: AgentState; context: ToolContext } => {
-    const state = new AgentState({})
+  const createFreshContext = (): { state: AppState; context: ToolContext } => {
+    const state = new AppState({})
     const context: ToolContext = {
       toolUse: {
         name: 'bash',
