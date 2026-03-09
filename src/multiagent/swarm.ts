@@ -140,8 +140,8 @@ export class Swarm implements MultiAgentBase {
    * @param input - The input to pass to the start agent
    * @returns Promise resolving to the final MultiAgentResult
    */
-  async invoke(input: InvokeArgs): Promise<MultiAgentResult> {
-    const gen = this.stream(input)
+  async invoke(input: InvokeArgs, signal?: AbortSignal): Promise<MultiAgentResult> {
+    const gen = this.stream(input, signal)
     let next = await gen.next()
     while (!next.done) {
       next = await gen.next()
@@ -154,12 +154,16 @@ export class Swarm implements MultiAgentBase {
    * Invokes hook callbacks for each event before yielding.
    *
    * @param input - The input to pass to the start agent
+   * @param signal - Optional AbortSignal to cancel execution
    * @returns Async generator yielding streaming events and returning a MultiAgentResult
    */
-  async *stream(input: InvokeArgs): AsyncGenerator<MultiAgentStreamEvent, MultiAgentResult, undefined> {
+  async *stream(
+    input: InvokeArgs,
+    signal?: AbortSignal
+  ): AsyncGenerator<MultiAgentStreamEvent, MultiAgentResult, undefined> {
     await this.initialize()
 
-    const gen = this._stream(input)
+    const gen = this._stream(input, signal)
     let next = await gen.next()
     while (!next.done) {
       if (next.value instanceof HookableEvent) {
@@ -171,7 +175,10 @@ export class Swarm implements MultiAgentBase {
     return next.value
   }
 
-  private async *_stream(input: InvokeArgs): AsyncGenerator<MultiAgentStreamEvent, MultiAgentResult, undefined> {
+  private async *_stream(
+    input: InvokeArgs,
+    signal?: AbortSignal
+  ): AsyncGenerator<MultiAgentStreamEvent, MultiAgentResult, undefined> {
     const state = new MultiAgentState({
       nodeIds: [...this._nodes.keys()],
       structuredOutputSchema: this._handoffSchema,
@@ -184,15 +191,16 @@ export class Swarm implements MultiAgentBase {
 
     try {
       while (state.steps < this.config.maxSteps) {
+        if (signal?.aborted) break
         state.steps++
 
         // Execute current node
-        const result = yield* this._streamNode(node, input, state, handoff)
+        const result = yield* this._streamNode(node, input, state, handoff, signal)
         handoff = result.structuredOutput as HandoffResult | undefined
         state.results.push(result)
 
         // Check for terminal conditions
-        if (result.status === Status.FAILED || !handoff?.agentId) {
+        if (result.status === Status.FAILED || result.status === Status.CANCELLED || !handoff?.agentId) {
           break
         }
 
@@ -208,10 +216,12 @@ export class Swarm implements MultiAgentBase {
       yield new AfterMultiAgentInvocationEvent({ orchestrator: this, state })
     }
 
+    const status = signal?.aborted ? Status.CANCELLED : undefined
     const result = new MultiAgentResult({
       results: state.results,
       content: this._resolveContent(state),
       duration: Date.now() - state.startTime,
+      ...(status && { status }),
     })
     yield new MultiAgentResultEvent({ result })
     return result
@@ -221,7 +231,8 @@ export class Swarm implements MultiAgentBase {
     node: AgentNode,
     input: InvokeArgs,
     state: MultiAgentState,
-    handoff?: HandoffResult
+    handoff?: HandoffResult,
+    signal?: AbortSignal
   ): AsyncGenerator<MultiAgentStreamEvent, NodeResult, undefined> {
     const nodeState = state.node(node.id)!
 
@@ -241,7 +252,7 @@ export class Swarm implements MultiAgentBase {
     const nodeInput = this._resolveNodeInput(input, handoff)
 
     try {
-      const gen = node.stream(nodeInput, state)
+      const gen = node.stream(nodeInput, state, signal)
       let next = await gen.next()
       while (!next.done) {
         yield next.value

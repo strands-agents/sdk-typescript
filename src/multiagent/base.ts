@@ -16,12 +16,13 @@ export interface MultiAgentBase {
    * @param input - Input to pass to the orchestrator
    * @returns The aggregate result from all executed nodes
    */
-  invoke(input: InvokeArgs): Promise<MultiAgentResult>
+  invoke(input: InvokeArgs, signal?: AbortSignal): Promise<MultiAgentResult>
 
   /**
    * Execute the orchestrator and stream events as they occur.
    * @param input - Input to pass to the orchestrator
+   * @param signal - Optional AbortSignal to cancel execution
    * @returns Async generator yielding events and returning the final result
    */
-  stream(input: InvokeArgs): AsyncGenerator<MultiAgentStreamEvent, MultiAgentResult, undefined>
+  stream(input: InvokeArgs, signal?: AbortSignal): AsyncGenerator<MultiAgentStreamEvent, MultiAgentResult, undefined>
 }

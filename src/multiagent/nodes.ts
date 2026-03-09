@@ -54,7 +54,8 @@ export abstract class Node {
    */
   async *stream(
     args: InvokeArgs,
-    state: MultiAgentState
+    state: MultiAgentState,
+    signal?: AbortSignal
   ): AsyncGenerator<MultiAgentStreamEvent, NodeResult, undefined> {
     const nodeState = state.node(this.id)!
     nodeState.status = Status.EXECUTING
@@ -62,7 +63,7 @@ export abstract class Node {
 
     let result: NodeResult
     try {
-      const update = yield* this.handle(args, state)
+      const update = yield* this.handle(args, state, signal)
       result = new NodeResult({
         nodeId: this.id,
         status: Status.COMPLETED,
@@ -95,7 +96,8 @@ export abstract class Node {
    */
   abstract handle(
     args: InvokeArgs,
-    state: MultiAgentState
+    state: MultiAgentState,
+    signal?: AbortSignal
   ): AsyncGenerator<MultiAgentStreamEvent, NodeResultUpdate, undefined>
 }
 
@@ -142,12 +144,14 @@ export class AgentNode extends Node {
    */
   async *handle(
     args: InvokeArgs,
-    state: MultiAgentState
+    state: MultiAgentState,
+    signal?: AbortSignal
   ): AsyncGenerator<MultiAgentStreamEvent, NodeResultUpdate, undefined> {
     const snapshot = takeSnapshot(this._agent, { include: ['messages', 'state'] })
     try {
       const options: InvokeOptions = {
         ...(state.structuredOutputSchema && { structuredOutputSchema: state.structuredOutputSchema }),
+        ...(signal && { signal }),
       }
 
       const gen = this._agent.stream(args, options)
@@ -207,9 +211,10 @@ export class MultiAgentNode extends Node {
    */
   async *handle(
     args: InvokeArgs,
-    _state: MultiAgentState
+    _state: MultiAgentState,
+    signal?: AbortSignal
   ): AsyncGenerator<MultiAgentStreamEvent, NodeResultUpdate, undefined> {
-    const gen = this._orchestrator.stream(args)
+    const gen = this._orchestrator.stream(args, signal)
     let next = await gen.next()
     while (!next.done) {
       const event = next.value
