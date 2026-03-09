@@ -39,10 +39,10 @@ describe('isModelStreamEvent', () => {
     expect(isModelStreamEvent(event)).toBe(true)
   })
 
-  it('returns true for modelRedactContentEvent', () => {
+  it('returns true for modelRedactEvent', () => {
     const event: ModelStreamEvent = {
-      type: 'modelRedactContentEvent',
-      redactUserContentMessage: '[User input redacted.]',
+      type: 'modelRedactEvent',
+      inputRedaction: { message: '[User input redacted.]' },
     }
     expect(isModelStreamEvent(event)).toBe(true)
   })

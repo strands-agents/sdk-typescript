@@ -630,7 +630,7 @@ describe('Model', () => {
     })
 
     describe('when receiving redact content events', () => {
-      it('returns redactionMessage when redactUserContentMessage is present', async () => {
+      it('returns redaction.userMessage when inputRedaction is present', async () => {
         const provider = new TestModelProvider(async function* () {
           yield { type: 'modelMessageStartEvent', role: 'assistant' }
           yield { type: 'modelContentBlockStartEvent' }
@@ -645,8 +645,8 @@ describe('Model', () => {
             usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
           }
           yield {
-            type: 'modelRedactContentEvent',
-            redactUserContentMessage: '[User input redacted.]',
+            type: 'modelRedactEvent',
+            inputRedaction: { message: '[User input redacted.]' },
           }
         })
 
@@ -654,14 +654,14 @@ describe('Model', () => {
 
         const { result } = await collectGenerator(provider.streamAggregated(messages))
 
-        // Verify redactionMessage is returned for agent to handle
-        expect(result.redactionMessage).toBe('[User input redacted.]')
+        // Verify redaction.userMessage is returned for agent to handle
+        expect(result.redaction?.userMessage).toBe('[User input redacted.]')
 
         // Messages array should NOT be modified (agent handles this)
         expect(messages[0]!.content).toEqual([{ type: 'textBlock', text: 'Sensitive content' }])
       })
 
-      it('redacts assistant message directly when redactAssistantContentMessage is present', async () => {
+      it('redacts assistant message directly when outputRedaction is present', async () => {
         const provider = new TestModelProvider(async function* () {
           yield { type: 'modelMessageStartEvent', role: 'assistant' }
           yield { type: 'modelContentBlockStartEvent' }
@@ -676,8 +676,8 @@ describe('Model', () => {
             usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
           }
           yield {
-            type: 'modelRedactContentEvent',
-            redactAssistantContentMessage: '[Assistant output redacted.]',
+            type: 'modelRedactEvent',
+            outputRedaction: { message: '[Assistant output redacted.]' },
           }
         })
 
@@ -689,8 +689,8 @@ describe('Model', () => {
         expect(result.message.role).toBe('assistant')
         expect(result.message.content).toEqual([{ type: 'textBlock', text: '[Assistant output redacted.]' }])
 
-        // No redactionMessage since assistant redaction is handled directly
-        expect(result.redactionMessage).toBeUndefined()
+        // No redaction.userMessage since assistant redaction is handled directly
+        expect(result.redaction?.userMessage).toBeUndefined()
       })
 
       it('returns redactionMessage and redacts assistant when both are present', async () => {
@@ -708,12 +708,12 @@ describe('Model', () => {
             usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
           }
           yield {
-            type: 'modelRedactContentEvent',
-            redactUserContentMessage: '[User input redacted.]',
+            type: 'modelRedactEvent',
+            inputRedaction: { message: '[User input redacted.]' },
           }
           yield {
-            type: 'modelRedactContentEvent',
-            redactAssistantContentMessage: '[Assistant output redacted.]',
+            type: 'modelRedactEvent',
+            outputRedaction: { message: '[Assistant output redacted.]' },
           }
         })
 
@@ -721,15 +721,15 @@ describe('Model', () => {
 
         const { result } = await collectGenerator(provider.streamAggregated(messages))
 
-        // Verify redactionMessage is returned for agent to handle user redaction
-        expect(result.redactionMessage).toBe('[User input redacted.]')
+        // Verify redaction.userMessage is returned for agent to handle user redaction
+        expect(result.redaction?.userMessage).toBe('[User input redacted.]')
 
         // Assistant message is redacted directly
         expect(result.message.role).toBe('assistant')
         expect(result.message.content).toEqual([{ type: 'textBlock', text: '[Assistant output redacted.]' }])
       })
 
-      it('does not include redactionMessage when no redact events are received', async () => {
+      it('does not include redaction when no redact events are received', async () => {
         const provider = new TestModelProvider(async function* () {
           yield { type: 'modelMessageStartEvent', role: 'assistant' }
           yield { type: 'modelContentBlockStartEvent' }
@@ -749,8 +749,8 @@ describe('Model', () => {
 
         const { result } = await collectGenerator(provider.streamAggregated(messages))
 
-        // Verify redactionMessage is undefined
-        expect(result.redactionMessage).toBeUndefined()
+        // Verify redaction.userMessage is undefined
+        expect(result.redaction?.userMessage).toBeUndefined()
       })
     })
   })

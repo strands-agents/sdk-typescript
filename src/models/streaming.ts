@@ -23,7 +23,7 @@ export type ModelStreamEvent =
   | ModelContentBlockStopEventData
   | ModelMessageStopEventData
   | ModelMetadataEventData
-  | ModelRedactContentEventData
+  | ModelRedactEventData
 
 /** Set of all ModelStreamEvent type discriminators. */
 const modelStreamEventTypes: ReadonlySet<string> = new Set<ModelStreamEvent['type']>([
@@ -33,7 +33,7 @@ const modelStreamEventTypes: ReadonlySet<string> = new Set<ModelStreamEvent['typ
   'modelContentBlockStopEvent',
   'modelMessageStopEvent',
   'modelMetadataEvent',
-  'modelRedactContentEvent',
+  'modelRedactEvent',
 ])
 
 /**
@@ -289,51 +289,80 @@ export class ModelMetadataEvent implements ModelMetadataEventData {
 }
 
 /**
- * Data for a redact content event.
+ * Information about input content redaction.
+ * Does not include redactedContent since the original input is already available
+ * in the messages array from BeforeModelCallEvent.
+ */
+export interface RedactInputContent {
+  /**
+   * The message to replace the redacted input with.
+   */
+  message: string
+}
+
+/**
+ * Information about output content redaction.
+ * May include the original content if captured during streaming.
+ */
+export interface RedactOutputContent {
+  /**
+   * The original content that was blocked by guardrails.
+   * May not be available for all providers.
+   */
+  redactedContent?: string
+
+  /**
+   * The message to replace the redacted output with.
+   */
+  message: string
+}
+
+/**
+ * Data for a redact event.
  * Emitted when guardrails block content and redaction is enabled.
  */
-export interface ModelRedactContentEventData {
+export interface ModelRedactEventData {
   /**
-   * Discriminator for redact content events.
+   * Discriminator for redact events.
    */
-  type: 'modelRedactContentEvent'
+  type: 'modelRedactEvent'
 
   /**
-   * Redaction message for user input (when input is blocked).
+   * Input redaction information (when input is blocked).
    */
-  redactUserContentMessage?: string
+  inputRedaction?: RedactInputContent
 
   /**
-   * Redaction message for assistant output (when output is blocked).
+   * Output redaction information (when output is blocked).
    */
-  redactAssistantContentMessage?: string
+  outputRedaction?: RedactOutputContent
 }
 
 /**
  * Event emitted when guardrails block content and trigger redaction.
  */
-export class ModelRedactContentEvent implements ModelRedactContentEventData {
+export class ModelRedactEvent implements ModelRedactEventData {
   /**
-   * Discriminator for redact content events.
+   * Discriminator for redact events.
    */
-  readonly type = 'modelRedactContentEvent' as const
+  readonly type = 'modelRedactEvent' as const
 
   /**
-   * Redaction message for user input (when input is blocked).
+   * Input redaction information (when input is blocked).
    */
-  readonly redactUserContentMessage?: string
+  readonly inputRedaction?: RedactInputContent
 
   /**
-   * Redaction message for assistant output (when output is blocked).
+   * Output redaction information (when output is blocked).
    */
-  readonly redactAssistantContentMessage?: string
+  readonly outputRedaction?: RedactOutputContent
 
-  constructor(data: ModelRedactContentEventData) {
-    if (data.redactUserContentMessage !== undefined) {
-      this.redactUserContentMessage = data.redactUserContentMessage
+  constructor(data: ModelRedactEventData) {
+    if (data.inputRedaction !== undefined) {
+      this.inputRedaction = data.inputRedaction
     }
-    if (data.redactAssistantContentMessage !== undefined) {
-      this.redactAssistantContentMessage = data.redactAssistantContentMessage
+    if (data.outputRedaction !== undefined) {
+      this.outputRedaction = data.outputRedaction
     }
   }
 }

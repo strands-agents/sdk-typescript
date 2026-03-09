@@ -142,24 +142,6 @@ export class MessageAddedEvent extends HookableEvent {
 }
 
 /**
- * Event triggered when a message in the conversation history is updated.
- * Fired when guardrails trigger content redaction and a message is replaced.
- */
-export class MessageUpdatedEvent extends HookableEvent {
-  readonly type = 'messageUpdatedEvent' as const
-  readonly agent: AgentData
-  readonly message: Message
-  readonly index: number
-
-  constructor(data: { agent: AgentData; message: Message; index: number }) {
-    super()
-    this.agent = data.agent
-    this.message = data.message
-    this.index = data.index
-  }
-}
-
-/**
  * Event triggered just before a tool is executed.
  * Fired after tool lookup but before execution begins.
  */
@@ -245,13 +227,14 @@ export class BeforeModelCallEvent extends HookableEvent {
 }
 
 /**
- * Information about content redaction triggered by guardrails.
+ * Redaction information when guardrails block content.
  */
 export interface Redaction {
   /**
-   * The message to replace the redacted content with.
+   * The text to replace the user message with.
+   * When present, indicates the last user message should be redacted with this text.
    */
-  readonly message: string
+  userMessage: string
 }
 
 /**
@@ -267,8 +250,9 @@ export interface ModelStopData {
    */
   readonly stopReason: StopReason
   /**
-   * Optional redaction info when guardrails blocked user input.
-   * When present, indicates the last message should be redacted.
+   * Optional redaction info when guardrails blocked input.
+   * When present, indicates the last user message was redacted.
+   * The redacted message is available in `agent.messages` (last message).
    */
   readonly redaction?: Redaction
 }

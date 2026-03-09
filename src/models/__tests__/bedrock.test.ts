@@ -2043,11 +2043,11 @@ describe('BedrockModel', () => {
         const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
         const events = await collectIterator(provider.stream(messages))
 
-        const redactEvent = events.find((e) => e.type === 'modelRedactContentEvent')
+        const redactEvent = events.find((e) => e.type === 'modelRedactEvent')
         expect(redactEvent).toBeDefined()
         expect(redactEvent).toStrictEqual({
-          type: 'modelRedactContentEvent',
-          redactUserContentMessage: '[User input redacted.]',
+          type: 'modelRedactEvent',
+          inputRedaction: { message: '[User input redacted.]' },
         })
       })
 
@@ -2085,7 +2085,7 @@ describe('BedrockModel', () => {
         const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
         const events = await collectIterator(provider.stream(messages))
 
-        const redactEvent = events.find((e) => e.type === 'modelRedactContentEvent')
+        const redactEvent = events.find((e) => e.type === 'modelRedactEvent')
         expect(redactEvent).toBeDefined()
       })
 
@@ -2123,7 +2123,7 @@ describe('BedrockModel', () => {
         const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
         const events = await collectIterator(provider.stream(messages))
 
-        const redactEvent = events.find((e) => e.type === 'modelRedactContentEvent')
+        const redactEvent = events.find((e) => e.type === 'modelRedactEvent')
         expect(redactEvent).toBeUndefined()
       })
 
@@ -2156,7 +2156,7 @@ describe('BedrockModel', () => {
         const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
         const events = await collectIterator(provider.stream(messages))
 
-        const redactEvent = events.find((e) => e.type === 'modelRedactContentEvent')
+        const redactEvent = events.find((e) => e.type === 'modelRedactEvent')
         expect(redactEvent).toBeUndefined()
       })
     })
@@ -2189,8 +2189,8 @@ describe('BedrockModel', () => {
         )
 
         expect(events).toContainEqual({
-          type: 'modelRedactContentEvent',
-          redactUserContentMessage: '[User input redacted.]',
+          type: 'modelRedactEvent',
+          inputRedaction: { message: '[User input redacted.]' },
         })
       })
 
@@ -2224,8 +2224,8 @@ describe('BedrockModel', () => {
         )
 
         expect(events).toContainEqual({
-          type: 'modelRedactContentEvent',
-          redactUserContentMessage: '[Custom input message]',
+          type: 'modelRedactEvent',
+          inputRedaction: { message: '[Custom input message]' },
         })
       })
 
@@ -2258,9 +2258,7 @@ describe('BedrockModel', () => {
           provider.stream([new Message({ role: 'user', content: [new TextBlock('Hello')] })])
         )
 
-        const inputRedactEvent = events.find(
-          (e) => e.type === 'modelRedactContentEvent' && 'redactUserContentMessage' in e
-        )
+        const inputRedactEvent = events.find((e) => e.type === 'modelRedactEvent' && 'inputRedaction' in e)
         expect(inputRedactEvent).toBeUndefined()
       })
 
@@ -2294,8 +2292,8 @@ describe('BedrockModel', () => {
         )
 
         expect(events).toContainEqual({
-          type: 'modelRedactContentEvent',
-          redactAssistantContentMessage: '[Assistant output redacted.]',
+          type: 'modelRedactEvent',
+          outputRedaction: { message: '[Assistant output redacted.]' },
         })
       })
 
@@ -2330,8 +2328,8 @@ describe('BedrockModel', () => {
         )
 
         expect(events).toContainEqual({
-          type: 'modelRedactContentEvent',
-          redactAssistantContentMessage: '[Custom output message]',
+          type: 'modelRedactEvent',
+          outputRedaction: { message: '[Custom output message]' },
         })
       })
 
@@ -2366,12 +2364,57 @@ describe('BedrockModel', () => {
         )
 
         expect(events).toContainEqual({
-          type: 'modelRedactContentEvent',
-          redactUserContentMessage: '[User input redacted.]',
+          type: 'modelRedactEvent',
+          inputRedaction: { message: '[User input redacted.]' },
         })
         expect(events).toContainEqual({
-          type: 'modelRedactContentEvent',
-          redactAssistantContentMessage: '[Assistant output redacted.]',
+          type: 'modelRedactEvent',
+          outputRedaction: { message: '[Assistant output redacted.]' },
+        })
+      })
+
+      it('includes redactedContent from modelOutput when available', async () => {
+        setupMockSend(async function* () {
+          yield { messageStart: { role: 'assistant' } }
+          yield { contentBlockStart: {} }
+          yield { contentBlockDelta: { delta: { text: 'This content was blocked' } } }
+          yield { contentBlockStop: {} }
+          yield { messageStop: { stopReason: 'guardrail_intervened' } }
+          yield {
+            metadata: {
+              usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+              trace: {
+                guardrail: {
+                  modelOutput: ['This content ', 'was blocked'],
+                  outputAssessments: {
+                    '0': [{ topicPolicy: { topics: [{ action: 'BLOCKED', detected: true }] } }],
+                  },
+                },
+              },
+            },
+          }
+        })
+
+        const provider = new BedrockModel({
+          guardrailConfig: {
+            guardrailIdentifier: 'id',
+            guardrailVersion: '1',
+            redaction: {
+              output: true,
+              outputMessage: '[Blocked]',
+            },
+          },
+        })
+        const events = await collectIterator(
+          provider.stream([new Message({ role: 'user', content: [new TextBlock('Hello')] })])
+        )
+
+        expect(events).toContainEqual({
+          type: 'modelRedactEvent',
+          outputRedaction: {
+            message: '[Blocked]',
+            redactedContent: 'This content was blocked',
+          },
         })
       })
     })
@@ -2407,8 +2450,8 @@ describe('BedrockModel', () => {
         )
 
         expect(events).toContainEqual({
-          type: 'modelRedactContentEvent',
-          redactUserContentMessage: '[User input redacted.]',
+          type: 'modelRedactEvent',
+          inputRedaction: { message: '[User input redacted.]' },
         })
       })
     })

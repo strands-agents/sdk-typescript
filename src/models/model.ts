@@ -18,10 +18,11 @@ import {
   ModelMessageStartEvent,
   ModelMessageStopEvent,
   ModelMetadataEvent,
-  ModelRedactContentEvent,
+  ModelRedactEvent,
   type ModelStreamEvent,
 } from './streaming.js'
 import { MaxTokensError, ModelError, normalizeError } from '../errors.js'
+import type { Redaction } from '../hooks/events.js'
 
 class CitationAccumulator {
   citations: Citation[] = []
@@ -120,11 +121,10 @@ export interface StreamAggregatedResult {
   metadata?: ModelMetadataEvent
 
   /**
-   * Optional redaction message when guardrails blocked user input.
-   * When present, indicates the last message should be redacted with this text.
-   * Assistant output redaction is handled by updating the message directly.
+   * Optional redaction information when guardrails blocked input.
+   * Output redaction is handled by updating the message directly.
    */
-  redactionMessage?: string
+  redaction?: Redaction
 }
 
 /**
@@ -189,8 +189,8 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
         return new ModelMessageStopEvent(event_data)
       case 'modelMetadataEvent':
         return new ModelMetadataEvent(event_data)
-      case 'modelRedactContentEvent':
-        return new ModelRedactContentEvent(event_data)
+      case 'modelRedactEvent':
+        return new ModelRedactEvent(event_data)
       default:
         throw new Error(`Unsupported event type: ${event_data}`)
     }
@@ -346,22 +346,19 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
             metadata = event
             break
 
-          case 'modelRedactContentEvent':
+          case 'modelRedactEvent':
             // Handle content redaction from guardrails
-            if (event.redactUserContentMessage) {
-              // Store redaction message for agent to handle user message redaction
-              redactionMessage = event.redactUserContentMessage
+            if (event.inputRedaction) {
+              // Store redaction message for agent to handle input message redaction
+              redactionMessage = event.inputRedaction.message
             }
-            if (event.redactAssistantContentMessage) {
-              // Update assistant message directly with redacted content
-              contentBlocks.length = 0
-              contentBlocks.push(new TextBlock(event.redactAssistantContentMessage))
-              if (messageRole) {
-                stoppedMessage = new Message({
-                  role: messageRole,
-                  content: [...contentBlocks],
-                })
-              }
+            if (event.outputRedaction) {
+              // Update output message directly with redacted content
+              // Redaction event comes after modelMessageStopEvent, so we overwrite stoppedMessage
+              stoppedMessage = new Message({
+                role: 'assistant',
+                content: [new TextBlock(event.outputRedaction.message)],
+              })
             }
             break
 
@@ -400,7 +397,7 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
         result.metadata = metadata
       }
       if (redactionMessage !== undefined) {
-        result.redactionMessage = redactionMessage
+        result.redaction = { userMessage: redactionMessage }
       }
       return result
     } catch (error) {

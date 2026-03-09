@@ -40,7 +40,6 @@ import {
   BeforeToolsEvent,
   HookableEvent,
   MessageAddedEvent,
-  MessageUpdatedEvent,
   ModelStreamUpdateEvent,
   ContentBlockEvent,
   ModelMessageEvent,
@@ -486,14 +485,6 @@ export class Agent implements AgentData {
           const wasForced = forcedToolChoice !== undefined
           forcedToolChoice = undefined // Clear after use
 
-          // Handle user content redaction if guardrails blocked input
-          if (modelResult.redactionMessage) {
-            const redactionEvent = this._redactLastMessage(modelResult.redactionMessage)
-            if (redactionEvent) {
-              yield redactionEvent
-            }
-          }
-
           if (modelResult.stopReason !== 'toolUse') {
             // Special handling for maxTokens - always fail regardless of whether we have structured output
             if (modelResult.stopReason === 'maxTokens') {
@@ -675,25 +666,31 @@ export class Agent implements AgentData {
     })
 
     try {
-      const { message, stopReason, redactionMessage, metadata } = yield* this._streamFromModel(
-        this.messages,
-        streamOptions
-      )
-      const usage = metadata?.usage
+      const result = yield* this._streamFromModel(this.messages, streamOptions)
+      const usage = result.metadata?.usage
       // Accumulate token usage
       if (usage) {
         Agent._accumulateUsage(this._accumulatedTokenUsage, usage)
       }
 
       // End model span with usage
-      this._tracer.endModelInvokeSpan(modelSpan, { output: message, stopReason, ...(usage && { usage }) })
+      this._tracer.endModelInvokeSpan(modelSpan, {
+        output: result.message,
+        stopReason: result.stopReason,
+        ...(usage && { usage }),
+      })
 
-      yield new ModelMessageEvent({ agent: this, message, stopReason })
+      yield new ModelMessageEvent({ agent: this, message: result.message, stopReason: result.stopReason })
+
+      // Handle user content redaction if guardrails blocked input
+      if (result.redaction?.userMessage) {
+        this._redactLastMessage(result.redaction.userMessage)
+      }
 
       const stopData: ModelStopData = {
-        message,
-        stopReason,
-        ...(redactionMessage && { redaction: { message: redactionMessage } }),
+        message: result.message,
+        stopReason: result.stopReason,
+        ...(result.redaction && { redaction: result.redaction }),
       }
 
       const afterModelCallEvent = new AfterModelCallEvent({ agent: this, stopData })
@@ -703,12 +700,7 @@ export class Agent implements AgentData {
         return yield* this.invokeModel(args)
       }
 
-      return {
-        message,
-        stopReason,
-        ...(metadata && { metadata }),
-        ...(redactionMessage && { redactionMessage }),
-      }
+      return result
     } catch (error) {
       const modelError = normalizeError(error)
 
@@ -930,29 +922,51 @@ export class Agent implements AgentData {
    * Redacts the last message in the conversation history.
    * Called when guardrails block user input and redaction is enabled.
    *
+   * Follows the redaction strategy:
+   * - If the message contains at least one toolResult block, all toolResult blocks
+   *   are kept with redacted content, and all other blocks are discarded.
+   * - Otherwise, the entire content is replaced with a single text block containing
+   *   the redaction message.
+   *
    * @param redactMessage - The redaction message to replace the content with
-   * @returns MessageUpdatedEvent to be yielded, or undefined if no message to redact
    */
-  private _redactLastMessage(redactMessage: string): MessageUpdatedEvent | undefined {
+  private _redactLastMessage(redactMessage: string): void {
     // Find and redact the last message
     const lastIndex = this.messages.length - 1
     if (lastIndex >= 0) {
       const lastMessage = this.messages[lastIndex]
       if (lastMessage && lastMessage.role === 'user') {
-        const updatedMessage = new Message({
+        // Collect only tool result blocks with redacted content
+        const redactedContent: ContentBlock[] = []
+        for (const block of lastMessage.content) {
+          if (block.type === 'toolResultBlock') {
+            // Preserve tool result block structure, only redact its content
+            redactedContent.push(
+              new ToolResultBlock({
+                toolUseId: block.toolUseId,
+                status: block.status,
+                content: [new TextBlock(redactMessage)],
+              })
+            )
+          }
+        }
+
+        // If no tool result blocks were found, replace entire content with redaction message
+        if (redactedContent.length === 0) {
+          redactedContent.push(new TextBlock(redactMessage))
+        }
+
+        this.messages[lastIndex] = new Message({
           role: 'user',
-          content: [new TextBlock(redactMessage)],
+          content: redactedContent,
         })
-        this.messages[lastIndex] = updatedMessage
-        return new MessageUpdatedEvent({ agent: this, message: updatedMessage, index: lastIndex })
       } else if (lastMessage) {
         // Unexpected state: redaction requested but last message is not from user
         logger.warn(
-          `role=<${lastMessage.role}> | Received user input redaction but last message is not from user. Redaction skipped.`
+          `role=<${lastMessage.role}> | Received input redaction but last message is not from user. Redaction skipped.`
         )
       }
     }
-    return undefined
   }
 
   /**

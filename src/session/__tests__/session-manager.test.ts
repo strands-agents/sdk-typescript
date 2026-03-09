@@ -5,7 +5,7 @@ import {
   HookRegistry,
   InitializedEvent,
   MessageAddedEvent,
-  MessageUpdatedEvent,
+  AfterModelCallEvent,
   AfterInvocationEvent,
 } from '../../hooks/index.js'
 import { Agent } from '../../agent/agent.js'
@@ -466,12 +466,12 @@ describe('SessionManager', () => {
     })
   })
 
-  describe('MessageUpdatedEvent handling', () => {
+  describe('AfterModelCallEvent with redaction handling', () => {
     beforeEach(() => {
       mockAgent = createMockAgent('test-agent')
     })
 
-    it('saves snapshot_latest when saveLatestOn is message', async () => {
+    it('saves snapshot_latest when saveLatestOn is message and redaction occurred', async () => {
       sessionManager = new SessionManager({
         sessionId: 'test-session',
         storage: { snapshot: storage },
@@ -479,15 +479,49 @@ describe('SessionManager', () => {
       })
       sessionManager.registerCallbacks(registry)
 
-      const redactedMessage = new Message({ role: 'user', content: [new TextBlock('[User input redacted.]')] })
-      const event = { agent: mockAgent, message: redactedMessage, index: 0 } as any
+      const assistantMessage = new Message({ role: 'assistant', content: [new TextBlock('Response')] })
+      const event = {
+        agent: mockAgent,
+        stopData: {
+          message: assistantMessage,
+          stopReason: 'endTurn' as const,
+          redaction: {
+            userMessage: '[User input redacted.]',
+          },
+        },
+      } as any
 
-      await registry.invokeCallbacks(new MessageUpdatedEvent(event))
+      await registry.invokeCallbacks(new AfterModelCallEvent(event))
 
       const snapshot = await storage.loadSnapshot({
         location: { sessionId: 'test-session', scope: 'agent', scopeId: 'test-agent' },
       })
       expect(snapshot).not.toBeNull()
+    })
+
+    it('does not save when saveLatestOn is message but no redaction occurred', async () => {
+      sessionManager = new SessionManager({
+        sessionId: 'test-session',
+        storage: { snapshot: storage },
+        saveLatestOn: 'message',
+      })
+      sessionManager.registerCallbacks(registry)
+
+      const assistantMessage = new Message({ role: 'assistant', content: [new TextBlock('Response')] })
+      const event = {
+        agent: mockAgent,
+        stopData: {
+          message: assistantMessage,
+          stopReason: 'endTurn' as const,
+        },
+      } as any
+
+      await registry.invokeCallbacks(new AfterModelCallEvent(event))
+
+      const snapshot = await storage.loadSnapshot({
+        location: { sessionId: 'test-session', scope: 'agent', scopeId: 'test-agent' },
+      })
+      expect(snapshot).toBeNull()
     })
 
     it('does not save when saveLatestOn is invocation', async () => {
@@ -498,10 +532,19 @@ describe('SessionManager', () => {
       })
       sessionManager.registerCallbacks(registry)
 
-      const redactedMessage = new Message({ role: 'user', content: [new TextBlock('[User input redacted.]')] })
-      const event = { agent: mockAgent, message: redactedMessage, index: 0 } as any
+      const assistantMessage = new Message({ role: 'assistant', content: [new TextBlock('Response')] })
+      const event = {
+        agent: mockAgent,
+        stopData: {
+          message: assistantMessage,
+          stopReason: 'endTurn' as const,
+          redaction: {
+            userMessage: '[User input redacted.]',
+          },
+        },
+      } as any
 
-      await registry.invokeCallbacks(new MessageUpdatedEvent(event))
+      await registry.invokeCallbacks(new AfterModelCallEvent(event))
 
       const snapshot = await storage.loadSnapshot({
         location: { sessionId: 'test-session', scope: 'agent', scopeId: 'test-agent' },
