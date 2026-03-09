@@ -1,73 +1,102 @@
-import { Registry, ValidationError } from './registry.js'
 import type { Tool } from '../tools/tool.js'
 
 /**
- * A concrete implementation of the Registry for managing Tool instances.
- * It adds validation for tool properties and ensures unique tool names.
+ * Thrown when a tool fails validation during registration.
  */
-export class ToolRegistry extends Registry<Tool, Tool> {
+export class ToolValidationError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'ToolValidationError'
+  }
+}
+
+/**
+ * Registry for managing Tool instances with name-based CRUDL operations.
+ */
+export class ToolRegistry {
+  private _tools: Map<string, Tool> = new Map()
+
   /**
-   * Generates a unique identifier for a Tool.
-   * @override
-   * @returns The tool itself as the identifier.
+   * Creates a new ToolRegistry, optionally pre-populated with tools.
+   *
+   * @param tools - Optional initial tools to register
    */
-  protected generateId(tool: Tool): Tool {
-    return tool
+  constructor(tools?: Tool[]) {
+    if (tools) {
+      this.add(tools)
+    }
   }
 
   /**
-   * Validates a tool before it is registered.
-   * @override
-   * @param tool - The tool to be validated.
-   * @throws ValidationError If the tool's properties are invalid or its name is already registered.
+   * Registers one or more tools.
+   *
+   * @param tool - A single tool or array of tools to register
+   * @throws ToolValidationError If a tool's properties are invalid or its name is already registered
    */
-  protected validate(tool: Tool): void {
-    // Validate tool name is a string
+  add(tool: Tool | Tool[]): void {
+    const tools = Array.isArray(tool) ? tool : [tool]
+    for (const t of tools) {
+      this._validate(t)
+      this._tools.set(t.name, t)
+    }
+  }
+
+  /**
+   * Retrieves a tool by name.
+   *
+   * @param name - The name of the tool to retrieve
+   * @returns The tool if found, otherwise undefined
+   */
+  get(name: string): Tool | undefined {
+    return this._tools.get(name)
+  }
+
+  /**
+   * Removes a tool by name. No-op if the tool does not exist.
+   *
+   * @param name - The name of the tool to remove
+   */
+  remove(name: string): void {
+    this._tools.delete(name)
+  }
+
+  /**
+   * Returns all registered tools.
+   *
+   * @returns Array of all registered tools
+   */
+  list(): Tool[] {
+    return Array.from(this._tools.values())
+  }
+
+  /**
+   * Validates a tool before registration.
+   *
+   * @param tool - The tool to validate
+   * @throws ToolValidationError If the tool's properties are invalid or its name is already registered
+   */
+  private _validate(tool: Tool): void {
     if (typeof tool.name !== 'string') {
-      throw new ValidationError('Tool name must be a string')
+      throw new ToolValidationError('Tool name must be a string')
     }
 
-    // Validate tool name length (1-64 characters)
     if (tool.name.length < 1 || tool.name.length > 64) {
-      throw new ValidationError('Tool name must be between 1 and 64 characters')
+      throw new ToolValidationError('Tool name must be between 1 and 64 characters')
     }
 
-    // Validate tool name pattern
     const validNamePattern = /^[a-zA-Z0-9_-]+$/
     if (!validNamePattern.test(tool.name)) {
-      throw new ValidationError('Tool name must contain only alphanumeric characters, hyphens, and underscores')
+      throw new ToolValidationError('Tool name must contain only alphanumeric characters, hyphens, and underscores')
     }
 
-    // Validate tool description if present
     if (tool.description !== undefined && tool.description !== null) {
       if (typeof tool.description !== 'string' || tool.description.length < 1) {
-        throw new ValidationError('Tool description must be a non-empty string')
+        throw new ToolValidationError('Tool description must be a non-empty string')
       }
     }
 
-    // Check for duplicate names
-    const hasDuplicate = this.values().some((t) => t.name === tool.name)
-    if (hasDuplicate) {
-      throw new ValidationError(`Tool with name '${tool.name}' already registered`)
+    if (this._tools.has(tool.name)) {
+      throw new ToolValidationError(`Tool with name '${tool.name}' already registered`)
     }
-  }
-
-  /**
-   * Retrieves the first tool that matches the given name.
-   *
-   * @param name - The name of the tool to retrieve.
-   * @returns The tool if found, otherwise undefined.
-   */
-  public getByName(name: string): Tool | undefined {
-    return this.values().find((tool) => tool.name === name)
-  }
-
-  /**
-   * Finds and removes the first tool that matches the given name.
-   *
-   * @param name - The name of the tool to remove.
-   */
-  public removeByName(name: string): void {
-    this.findRemove((tool) => tool.name === name)
   }
 }

@@ -292,7 +292,7 @@ export class Agent implements AgentData {
     await Promise.all(
       this._mcpClients.map(async (client) => {
         const tools = await client.listTools()
-        this._toolRegistry.addAll(tools)
+        this._toolRegistry.add(tools)
       })
     )
 
@@ -324,7 +324,7 @@ export class Agent implements AgentData {
    * The tools this agent can use.
    */
   get tools(): Tool[] {
-    return this._toolRegistry.values()
+    return this._toolRegistry.list()
   }
 
   /**
@@ -644,7 +644,7 @@ export class Agent implements AgentData {
       yield this._appendMessage(message)
     }
 
-    const toolSpecs = this._toolRegistry.values().map((tool) => tool.toolSpec)
+    const toolSpecs = this._toolRegistry.list().map((tool) => tool.toolSpec)
     const streamOptions: StreamOptions = { toolSpecs }
     if (this.systemPrompt !== undefined) {
       streamOptions.systemPrompt = this.systemPrompt
@@ -808,7 +808,7 @@ export class Agent implements AgentData {
     toolUseBlock: ToolUseBlock,
     toolRegistry: ToolRegistry
   ): AsyncGenerator<AgentStreamEvent, ToolResultBlock, undefined> {
-    const tool = toolRegistry.find((t) => t.name === toolUseBlock.name)
+    const tool = toolRegistry.get(toolUseBlock.name)
 
     // Create toolUse object for hook events and telemetry
     const toolUse = {
