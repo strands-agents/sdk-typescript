@@ -96,11 +96,11 @@ export interface SwarmOptions extends SwarmConfig {
  */
 export class Swarm implements MultiAgentBase {
   readonly id: string
+  readonly config: Required<SwarmConfig>
   readonly hooks: HookRegistryImplementation
   private readonly _nodes: Map<string, AgentNode>
   private readonly _start: AgentNode
   private readonly _handoffSchema: z.ZodType<HandoffResult>
-  readonly config: Required<SwarmConfig>
   private _initialized: boolean
 
   constructor(options: SwarmOptions) {
