@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { Agent } from '../../agent/agent.js'
 import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
 import { collectGenerator } from '../../__fixtures__/model-test-helpers.js'
@@ -95,28 +95,6 @@ describe('Swarm', () => {
           })
       ).toThrow('max_steps=<0> | must be at least 1')
     })
-
-    it('throws when timeout < 1', () => {
-      expect(
-        () =>
-          new Swarm({
-            nodes: [createFinalAgent('a', 'hi')],
-            start: 'a',
-            timeout: 0,
-          })
-      ).toThrow('timeout=<0> | must be at least 1')
-    })
-
-    it('throws when nodeTimeout < 1', () => {
-      expect(
-        () =>
-          new Swarm({
-            nodes: [createFinalAgent('a', 'hi')],
-            start: 'a',
-            nodeTimeout: 0,
-          })
-      ).toThrow('node_timeout=<0> | must be at least 1')
-    })
   })
 
   describe('invoke', () => {
@@ -188,18 +166,14 @@ describe('Swarm', () => {
       expect(texts).toContainEqual(expect.stringContaining(JSON.stringify(contextData, null, 2)))
     })
 
-    it('stops execution at maxSteps and returns last result', async () => {
+    it('throws when maxSteps is exceeded', async () => {
       const swarm = new Swarm({
         nodes: [createHandoffAgent('a', { agentId: 'b', message: 'to b' }), createFinalAgent('b', 'done')],
         start: 'a',
         maxSteps: 1,
       })
 
-      const result = await swarm.invoke('start')
-
-      expect(result.status).toBe(Status.FAILED)
-      expect(result.results).toHaveLength(1)
-      expect(result.error?.message).toContain('swarm reached step limit without completing')
+      await expect(swarm.invoke('start')).rejects.toThrow('swarm reached step limit')
     })
 
     it('returns cancelled result with default message when cancel is true', async () => {
@@ -286,45 +260,6 @@ describe('Swarm', () => {
       await swarm.invoke('second')
 
       expect(callCount).toBe(1)
-    })
-
-    describe('timeouts', () => {
-      afterEach(() => {
-        vi.restoreAllMocks()
-      })
-
-      it('throws when global timeout is exceeded', async () => {
-        let callCount = 0
-        vi.spyOn(Date, 'now').mockImplementation(() => {
-          callCount++
-          // First few calls: construction + state init. Later calls: past timeout.
-          return callCount > 5 ? 200 : 0
-        })
-
-        const swarm = new Swarm({
-          nodes: [createHandoffAgent('a', { agentId: 'b', message: 'to b' }), createFinalAgent('b', 'done')],
-          start: 'a',
-          timeout: 100,
-        })
-
-        await expect(swarm.invoke('go')).rejects.toThrow('swarm execution timed out')
-      })
-
-      it('throws when node timeout is exceeded', async () => {
-        let now = 0
-        vi.spyOn(Date, 'now').mockImplementation(() => {
-          now += 200
-          return now
-        })
-
-        const swarm = new Swarm({
-          nodes: [createFinalAgent('a', 'hi')],
-          start: 'a',
-          nodeTimeout: 100,
-        })
-
-        await expect(swarm.invoke('go')).rejects.toThrow('agent_id=<a> | agent timed out')
-      })
     })
 
     it('preserves agent messages and state after execution', async () => {

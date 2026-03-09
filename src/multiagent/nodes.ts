@@ -16,10 +16,6 @@ export type NodeType = 'agentNode' | 'multiAgentNode' | (string & {})
  */
 export interface NodeConfig {
   /**
-   * Maximum execution time for this node in milliseconds.
-   */
-  timeout?: number
-  /**
    * Optional description of what this node does.
    */
   description?: string
@@ -106,7 +102,7 @@ export abstract class Node {
 /**
  * Options for creating an {@link AgentNode}.
  */
-export interface AgentNodeOptions extends Omit<NodeConfig, 'description'> {
+export interface AgentNodeOptions {
   /** The agent to wrap as a node. */
   agent: Agent
 }

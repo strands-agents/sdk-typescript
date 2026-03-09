@@ -29,10 +29,6 @@ import {
 export interface SwarmConfig {
   /** Max total agent executions (including start). Defaults to Infinity. */
   maxSteps?: number
-  /** Total execution timeout in milliseconds. Defaults to Infinity. */
-  timeout?: number
-  /** Per-agent execution timeout in milliseconds. Defaults to Infinity. */
-  nodeTimeout?: number
 }
 
 /**
@@ -85,6 +81,7 @@ export interface SwarmOptions extends SwarmConfig {
  * - Context is passed as serialized JSON text blocks rather than a mutable SharedContext.
  * - A single `maxSteps` limit replaces Python's separate `max_handoffs`/`max_iterations`.
  * - Agent descriptions are embedded in the structured output schema for routing decisions.
+ * - Exceeding `maxSteps` throws an exception. Python returns a FAILED result.
  *
  * @example
  * ```typescript
@@ -103,7 +100,7 @@ export class Swarm implements MultiAgentBase {
   private readonly _nodes: Map<string, AgentNode>
   private readonly _start: AgentNode
   private readonly _handoffSchema: z.ZodType<HandoffResult>
-  private readonly _config: Required<SwarmConfig>
+  readonly config: Required<SwarmConfig>
   private _initialized: boolean
 
   constructor(options: SwarmOptions) {
@@ -111,10 +108,8 @@ export class Swarm implements MultiAgentBase {
 
     this.id = id ?? 'swarm'
 
-    this._config = {
+    this.config = {
       maxSteps: Infinity,
-      timeout: Infinity,
-      nodeTimeout: Infinity,
       ...config,
     }
     this._validateConfig()
@@ -188,8 +183,7 @@ export class Swarm implements MultiAgentBase {
     let handoff: HandoffResult | undefined
 
     try {
-      while (state.steps < this._config.maxSteps) {
-        this._checkTimeout(state)
+      while (state.steps < this.config.maxSteps) {
         state.steps++
 
         // Execute current node
@@ -208,6 +202,8 @@ export class Swarm implements MultiAgentBase {
         logger.debug(`source=<${node.id}>, target=<${target.id}> | swarm handoff`)
         node = target
       }
+
+      this._checkSteps(state)
     } finally {
       yield new AfterMultiAgentInvocationEvent({ orchestrator: this, state })
     }
@@ -216,11 +212,6 @@ export class Swarm implements MultiAgentBase {
       results: state.results,
       content: this._resolveContent(state),
       duration: Date.now() - state.startTime,
-      ...(state.steps >= this._config.maxSteps &&
-        handoff?.agentId && {
-          status: Status.FAILED,
-          error: new Error(`max_steps=<${this._config.maxSteps}> | swarm reached step limit without completing`),
-        }),
     })
     yield new MultiAgentResultEvent({ result })
     return result
@@ -247,13 +238,12 @@ export class Swarm implements MultiAgentBase {
       return result
     }
 
-    const nodeInput = this._buildNodeInput(input, handoff)
+    const nodeInput = this._resolveNodeInput(input, handoff)
 
     try {
       const gen = node.stream(nodeInput, state)
       let next = await gen.next()
       while (!next.done) {
-        this._checkNodeTimeout(node, state)
         yield next.value
         next = await gen.next()
       }
@@ -272,14 +262,8 @@ export class Swarm implements MultiAgentBase {
   }
 
   private _validateConfig(): void {
-    if (this._config.maxSteps < 1) {
-      throw new Error(`max_steps=<${this._config.maxSteps}> | must be at least 1`)
-    }
-    if (this._config.timeout < 1) {
-      throw new Error(`timeout=<${this._config.timeout}> | must be at least 1`)
-    }
-    if (this._config.nodeTimeout < 1) {
-      throw new Error(`node_timeout=<${this._config.nodeTimeout}> | must be at least 1`)
+    if (this.config.maxSteps < 1) {
+      throw new Error(`max_steps=<${this.config.maxSteps}> | must be at least 1`)
     }
   }
 
@@ -309,21 +293,7 @@ export class Swarm implements MultiAgentBase {
     return [...last.content]
   }
 
-  private _checkTimeout(state: MultiAgentState): void {
-    if (Date.now() - state.startTime >= this._config.timeout) {
-      throw new Error('swarm execution timed out')
-    }
-  }
-
-  private _checkNodeTimeout(node: AgentNode, state: MultiAgentState): void {
-    const timeout = node.config.timeout ?? this._config.nodeTimeout
-    const nodeState = state.node(node.id)!
-    if (Date.now() - nodeState.startTime >= timeout) {
-      throw new Error(`agent_id=<${node.id}> | agent timed out`)
-    }
-  }
-
-  private _buildNodeInput(input: InvokeArgs, handoff?: HandoffResult): InvokeArgs {
+  private _resolveNodeInput(input: InvokeArgs, handoff?: HandoffResult): InvokeArgs {
     if (!handoff) return input
 
     const blocks: ContentBlock[] = [new TextBlock(handoff.message)]
@@ -331,6 +301,12 @@ export class Swarm implements MultiAgentBase {
       blocks.push(new TextBlock('Context:\n' + JSON.stringify(handoff.context, null, 2)))
     }
     return blocks
+  }
+
+  private _checkSteps(state: MultiAgentState): void {
+    if (state.steps >= this.config.maxSteps) {
+      throw new Error(`max_steps=<${this.config.maxSteps}> | swarm reached step limit`)
+    }
   }
 
   private _buildHandoffSchema(): z.ZodType<HandoffResult> {
