@@ -1,10 +1,9 @@
 /**
  * OpenTelemetry configuration and setup utilities for Strands agents.
  *
- * Uses BasicTracerProvider from `@opentelemetry/sdk-trace-base` which works in
- * Node.js, browser, and WASM environments. For Node.js-specific features like
- * automatic async context propagation, pass a NodeTracerProvider via the
- * `provider` config option.
+ * Uses NodeTracerProvider when available for async context propagation
+ * across MCP server boundaries. Falls back to BasicTracerProvider in
+ * environments without async_hooks support.
  *
  * @see https://github.com/strands-agents/sdk-typescript/issues/447
  */
@@ -18,6 +17,19 @@ import {
 } from '@opentelemetry/sdk-trace-base'
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http'
 import { logger } from '../logging/index.js'
+
+let DefaultTracerProvider: typeof BasicTracerProvider = BasicTracerProvider
+if (typeof globalThis.process?.getBuiltinModule === 'function') {
+  try {
+    const nodeModule = globalThis.process.getBuiltinModule('node:module') as typeof import('module') | undefined
+    if (nodeModule) {
+      const req = nodeModule.createRequire(import.meta.url)
+      DefaultTracerProvider = req('@opentelemetry/sdk-trace-node').NodeTracerProvider
+    }
+  } catch {
+    logger.info('sdk-trace-node not available; using BasicTracerProvider without async context propagation')
+  }
+}
 
 const DEFAULT_SERVICE_NAME = 'strands-agents'
 const DEFAULT_SERVICE_NAMESPACE = 'strands'
@@ -37,15 +49,8 @@ export function getServiceName(): string {
  */
 export interface TracerConfig {
   /**
-   * Custom TracerProvider instance. If not provided, a BasicTracerProvider
-   * will be created with default configuration.
-   *
-   * For Node.js-specific async context propagation, pass a NodeTracerProvider:
-   * @example
-   * ```typescript
-   * import { NodeTracerProvider } from '\@opentelemetry/sdk-trace-node'
-   * telemetry.setupTracer({ provider: new NodeTracerProvider() })
-   * ```
+   * Custom TracerProvider instance. If not provided, NodeTracerProvider is
+   * used when available, otherwise BasicTracerProvider.
    */
   provider?: BasicTracerProvider
 
@@ -71,23 +76,13 @@ let _provider: BasicTracerProvider | null = null
  * Set up the tracer provider with the given configuration.
  *
  * @param config - Tracer configuration options
- * @returns The configured BasicTracerProvider
+ * @returns The configured tracer provider
  *
  * @example
  * ```typescript
  * import { telemetry } from '\@strands-agents/sdk'
  *
- * // Simple setup with defaults (works in Node, browser, and WASM)
- * const provider = telemetry.setupTracer({
- *   exporters: { otlp: true }
- * })
- *
- * // Node.js with async context propagation
- * import { NodeTracerProvider } from '\@opentelemetry/sdk-trace-node'
- * telemetry.setupTracer({
- *   provider: new NodeTracerProvider({ resource: myResource }),
- *   exporters: { otlp: true, console: true }
- * })
+ * telemetry.setupTracer({ exporters: { otlp: true } })
  * ```
  */
 export function setupTracer(config: TracerConfig = {}): BasicTracerProvider {
@@ -96,17 +91,13 @@ export function setupTracer(config: TracerConfig = {}): BasicTracerProvider {
     return _provider
   }
 
-  // Use provided provider or create default
-  _provider = config.provider ?? new BasicTracerProvider({ resource: getOtelResource() })
+  _provider = config.provider ?? new DefaultTracerProvider({ resource: getOtelResource() })
 
-  // Add exporters if requested
   if (config.exporters?.otlp) addOtlpExporter(_provider)
   if (config.exporters?.console) addConsoleExporter(_provider)
 
-  // register() sets up global tracer provider, context manager, and propagators
   _provider.register()
 
-  // Flush pending spans on exit for short-lived scripts (Node.js only)
   if (typeof globalThis?.process?.once === 'function') {
     globalThis.process.once('beforeExit', () => {
       if (_provider) {
@@ -149,7 +140,6 @@ function getOtelResource(): Resource {
     'telemetry.sdk.language': 'typescript',
   })
 
-  // Merge with OTEL_RESOURCE_ATTRIBUTES env var (env attrs take precedence)
   const envResource = envDetectorSync.detect()
   return defaultResource.merge(envResource)
 }

@@ -27,8 +27,16 @@ describe('setupTracer (node-specific)', () => {
     process.env = { ...originalEnv }
   })
 
-  describe('custom provider', () => {
-    it('should accept NodeTracerProvider as custom provider', async () => {
+  describe('provider auto-detection', () => {
+    it('should use NodeTracerProvider by default for async context support', async () => {
+      const telemetry = await import('../index.js')
+
+      const provider = telemetry.setupTracer()
+
+      expect(provider).toBeInstanceOf(NodeTracerProvider)
+    })
+
+    it('should accept a custom NodeTracerProvider', async () => {
       const telemetry = await import('../index.js')
       const customProvider = new NodeTracerProvider()
 
