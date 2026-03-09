@@ -37,7 +37,7 @@ describe('Meter', () => {
       meter.startNewInvocation()
 
       const c1 = meter.startCycle()
-      meter.updateFromMetadata({
+      meter.updateLoop({
         type: 'modelMetadataEvent',
         usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
         metrics: { latencyMs: 100 },
@@ -52,7 +52,7 @@ describe('Meter', () => {
 
       vi.setSystemTime(200_000)
       const c2 = meter.startCycle()
-      meter.updateFromMetadata({
+      meter.updateLoop({
         type: 'modelMetadataEvent',
         usage: { inputTokens: 20, outputTokens: 10, totalTokens: 30 },
         metrics: { latencyMs: 250 },
@@ -94,11 +94,17 @@ describe('Meter', () => {
     it('tracks multiple invocations independently', () => {
       meter.startNewInvocation()
       meter.startCycle()
-      meter.updateUsage({ inputTokens: 10, outputTokens: 5, totalTokens: 15 })
+      meter.updateLoop({
+        type: 'modelMetadataEvent',
+        usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+      })
 
       meter.startNewInvocation()
       meter.startCycle()
-      meter.updateUsage({ inputTokens: 20, outputTokens: 10, totalTokens: 30 })
+      meter.updateLoop({
+        type: 'modelMetadataEvent',
+        usage: { inputTokens: 20, outputTokens: 10, totalTokens: 30 },
+      })
 
       expect(meter.metrics.agentInvocations).toStrictEqual([
         {
@@ -235,86 +241,14 @@ describe('Meter', () => {
     })
   })
 
-  describe('updateUsage', () => {
-    it('accumulates basic token counts', () => {
-      meter.updateUsage({ inputTokens: 10, outputTokens: 5, totalTokens: 15 })
-      meter.updateUsage({ inputTokens: 20, outputTokens: 10, totalTokens: 30 })
-
-      expect(meter.metrics.accumulatedUsage).toStrictEqual({
-        inputTokens: 30,
-        outputTokens: 15,
-        totalTokens: 45,
-      })
-    })
-
-    it('accumulates cache tokens across calls', () => {
-      meter.updateUsage({
-        inputTokens: 10,
-        outputTokens: 5,
-        totalTokens: 15,
-        cacheReadInputTokens: 3,
-        cacheWriteInputTokens: 2,
-      })
-      meter.updateUsage({
-        inputTokens: 5,
-        outputTokens: 2,
-        totalTokens: 7,
-        cacheReadInputTokens: 4,
-      })
-
-      expect(meter.metrics.accumulatedUsage).toStrictEqual({
-        inputTokens: 15,
-        outputTokens: 7,
-        totalTokens: 22,
-        cacheReadInputTokens: 7,
-        cacheWriteInputTokens: 2,
-      })
-    })
-
-    it('omits cache fields when source has none', () => {
-      meter.updateUsage({ inputTokens: 10, outputTokens: 5, totalTokens: 15 })
-
-      expect(meter.metrics.accumulatedUsage).toStrictEqual({
-        inputTokens: 10,
-        outputTokens: 5,
-        totalTokens: 15,
-      })
-    })
-
-    it('propagates to invocation and current cycle usage', () => {
-      meter.startNewInvocation()
-      meter.startCycle()
-
-      meter.updateUsage({ inputTokens: 10, outputTokens: 5, totalTokens: 15 })
-
-      const invocation = meter.metrics.latestAgentInvocation!
-      expect(invocation).toStrictEqual({
-        usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
-        cycles: [{ agentLoopCycleId: 'cycle-1', usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } }],
-      })
-    })
-
-    it('does not fail when no invocation exists', () => {
-      expect(() => {
-        meter.updateUsage({ inputTokens: 10, outputTokens: 5, totalTokens: 15 })
-      }).not.toThrow()
-
-      expect(meter.metrics.accumulatedUsage).toStrictEqual({
-        inputTokens: 10,
-        outputTokens: 5,
-        totalTokens: 15,
-      })
-    })
-  })
-
-  describe('updateFromMetadata', () => {
+  describe('updateLoop', () => {
     it('accumulates usage and latency from metadata', () => {
-      meter.updateFromMetadata({
+      meter.updateLoop({
         type: 'modelMetadataEvent',
         usage: { inputTokens: 5, outputTokens: 3, totalTokens: 8 },
         metrics: { latencyMs: 100 },
       })
-      meter.updateFromMetadata({
+      meter.updateLoop({
         type: 'modelMetadataEvent',
         usage: { inputTokens: 10, outputTokens: 7, totalTokens: 17 },
         metrics: { latencyMs: 200 },
@@ -328,8 +262,38 @@ describe('Meter', () => {
       expect(meter.metrics.accumulatedMetrics).toStrictEqual({ latencyMs: 300 })
     })
 
+    it('accumulates cache tokens across calls', () => {
+      meter.updateLoop({
+        type: 'modelMetadataEvent',
+        usage: {
+          inputTokens: 10,
+          outputTokens: 5,
+          totalTokens: 15,
+          cacheReadInputTokens: 3,
+          cacheWriteInputTokens: 2,
+        },
+      })
+      meter.updateLoop({
+        type: 'modelMetadataEvent',
+        usage: {
+          inputTokens: 5,
+          outputTokens: 2,
+          totalTokens: 7,
+          cacheReadInputTokens: 4,
+        },
+      })
+
+      expect(meter.metrics.accumulatedUsage).toStrictEqual({
+        inputTokens: 15,
+        outputTokens: 7,
+        totalTokens: 22,
+        cacheReadInputTokens: 7,
+        cacheWriteInputTokens: 2,
+      })
+    })
+
     it('handles usage-only metadata', () => {
-      meter.updateFromMetadata({
+      meter.updateLoop({
         type: 'modelMetadataEvent',
         usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
       })
@@ -343,7 +307,7 @@ describe('Meter', () => {
     })
 
     it('handles metrics-only metadata', () => {
-      meter.updateFromMetadata({
+      meter.updateLoop({
         type: 'modelMetadataEvent',
         metrics: { latencyMs: 250 },
       })
@@ -356,32 +320,20 @@ describe('Meter', () => {
       expect(meter.metrics.accumulatedMetrics).toStrictEqual({ latencyMs: 250 })
     })
 
-    it('is a no-op when metadata has neither usage nor metrics', () => {
-      meter.updateFromMetadata({ type: 'modelMetadataEvent' })
+    it('propagates usage to invocation and current cycle', () => {
+      meter.startNewInvocation()
+      meter.startCycle()
 
-      expect(meter.metrics.accumulatedUsage).toStrictEqual({
-        inputTokens: 0,
-        outputTokens: 0,
-        totalTokens: 0,
-      })
-      expect(meter.metrics.accumulatedMetrics).toStrictEqual({ latencyMs: 0 })
-    })
-  })
-
-  describe('updateLoop', () => {
-    it('delegates to updateFromMetadata when metadata is provided', () => {
       meter.updateLoop({
         type: 'modelMetadataEvent',
         usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
-        metrics: { latencyMs: 100 },
       })
 
-      expect(meter.metrics.accumulatedUsage).toStrictEqual({
-        inputTokens: 10,
-        outputTokens: 5,
-        totalTokens: 15,
+      const invocation = meter.metrics.latestAgentInvocation!
+      expect(invocation).toStrictEqual({
+        usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+        cycles: [{ agentLoopCycleId: 'cycle-1', usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } }],
       })
-      expect(meter.metrics.accumulatedMetrics).toStrictEqual({ latencyMs: 100 })
     })
 
     it('is a no-op when metadata is undefined', () => {
@@ -404,6 +356,32 @@ describe('Meter', () => {
         totalTokens: 0,
       })
       expect(meter.metrics.accumulatedMetrics).toStrictEqual({ latencyMs: 0 })
+    })
+
+    it('is a no-op when metadata has neither usage nor metrics', () => {
+      meter.updateLoop({ type: 'modelMetadataEvent' })
+
+      expect(meter.metrics.accumulatedUsage).toStrictEqual({
+        inputTokens: 0,
+        outputTokens: 0,
+        totalTokens: 0,
+      })
+      expect(meter.metrics.accumulatedMetrics).toStrictEqual({ latencyMs: 0 })
+    })
+
+    it('does not fail when no invocation exists', () => {
+      expect(() => {
+        meter.updateLoop({
+          type: 'modelMetadataEvent',
+          usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+        })
+      }).not.toThrow()
+
+      expect(meter.metrics.accumulatedUsage).toStrictEqual({
+        inputTokens: 10,
+        outputTokens: 5,
+        totalTokens: 15,
+      })
     })
   })
 })
@@ -512,34 +490,6 @@ describe('AgentMetrics', () => {
           successRate: 0.5,
         },
       })
-    })
-  })
-
-  describe('fromJSON', () => {
-    it('round-trips through toJSON and fromJSON', () => {
-      const original = new AgentMetrics({
-        cycleCount: 2,
-        toolMetrics: {
-          search: { callCount: 2, successCount: 1, errorCount: 1, totalTime: 2.0 },
-        },
-        cycleDurations: [3000, 5000],
-        accumulatedUsage: { inputTokens: 30, outputTokens: 15, totalTokens: 45 },
-        accumulatedMetrics: { latencyMs: 350 },
-        agentInvocations: [
-          {
-            usage: { inputTokens: 30, outputTokens: 15, totalTokens: 45 },
-            cycles: [{ agentLoopCycleId: 'cycle-1', usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } }],
-          },
-        ],
-      })
-
-      const restored = AgentMetrics.fromJSON(original.toJSON())
-
-      expect(restored.toJSON()).toStrictEqual(original.toJSON())
-      expect(restored.cycleCount).toBe(original.cycleCount)
-      expect(restored.totalDuration).toBe(original.totalDuration)
-      expect(restored.averageCycleTime).toBe(original.averageCycleTime)
-      expect(restored.toolUsage).toStrictEqual(original.toolUsage)
     })
   })
 })

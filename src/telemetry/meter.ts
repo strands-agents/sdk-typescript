@@ -232,16 +232,6 @@ export class AgentMetrics implements JSONSerializable<AgentMetricsData> {
       accumulatedMetrics: this.accumulatedMetrics,
     }
   }
-
-  /**
-   * Creates an AgentMetrics instance from serialized data.
-   *
-   * @param data - The serialized metrics data
-   * @returns AgentMetrics instance
-   */
-  static fromJSON(data: AgentMetricsData): AgentMetrics {
-    return new AgentMetrics(data)
-  }
 }
 
 /**
@@ -380,7 +370,7 @@ export class Meter {
    *
    * @param usage - The usage data to accumulate
    */
-  updateUsage(usage: Usage): void {
+  private updateUsage(usage: Usage): void {
     Meter.accumulateUsage(this._accumulatedUsage, usage)
 
     const latestInvocation = this._latestAgentInvocation
@@ -399,7 +389,7 @@ export class Meter {
    *
    * @param metadata - The metadata event from a model invocation
    */
-  updateFromMetadata(metadata: ModelMetadataEventData): void {
+  private updateFromMetadata(metadata: ModelMetadataEventData): void {
     if (metadata.usage) {
       this.updateUsage(metadata.usage)
     }

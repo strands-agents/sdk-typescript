@@ -278,12 +278,12 @@ export class Agent implements AgentData {
     // Initialize tracer - OTEL returns no-op tracer if not configured
     this._tracer = new Tracer(config?.traceAttributes)
 
+    // Initialize meter for local metrics accumulation
+    this._meter = new Meter()
+
     if (config?.sessionManager) {
       this.hooks.addHook(config.sessionManager)
     }
-
-    // Initialize meter for local metrics accumulation
-    this._meter = new Meter()
 
     this._initialized = false
   }
