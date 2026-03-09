@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { Agent } from '@strands-agents/sdk'
+import { Agent } from '$/sdk/agent/agent.js'
 import { Swarm, Status } from '$/sdk/multiagent/index.js'
 import { collectGenerator } from '$/sdk/__fixtures__/model-test-helpers.js'
 import { bedrock } from '../__fixtures__/model-providers.js'
