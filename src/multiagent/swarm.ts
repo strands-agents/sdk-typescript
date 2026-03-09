@@ -29,6 +29,8 @@ import {
 export interface SwarmConfig {
   /** Max total agent executions (including start). Defaults to Infinity. */
   maxSteps?: number
+  /** Max transitions to a different agent. Defaults to Infinity. */
+  maxHandoffs?: number
 }
 
 /**
@@ -110,6 +112,7 @@ export class Swarm implements MultiAgentBase {
 
     this.config = {
       maxSteps: Infinity,
+      maxHandoffs: Infinity,
       ...config,
     }
     this._validateConfig()
@@ -181,6 +184,7 @@ export class Swarm implements MultiAgentBase {
 
     let node = this._start
     let handoff: HandoffResult | undefined
+    let handoffCount = 0
 
     try {
       while (state.steps < this.config.maxSteps) {
@@ -198,6 +202,10 @@ export class Swarm implements MultiAgentBase {
 
         // Hand off to next agent
         const target = this._nodes.get(handoff.agentId)!
+        if (target.id !== node.id) handoffCount++
+        if (handoffCount > this.config.maxHandoffs) {
+          throw new Error(`max_handoffs=<${this.config.maxHandoffs}> | swarm reached handoff limit`)
+        }
         yield new MultiAgentHandoffEvent({ source: node.id, targets: [target.id] })
         logger.debug(`source=<${node.id}>, target=<${target.id}> | swarm handoff`)
         node = target
