@@ -68,7 +68,7 @@ export interface SnapshotStorage {
   listSnapshotIds(params: { location: SnapshotLocation; limit?: number; startAfter?: string }): Promise<string[]>
 
   /**
-   * Deletes all snapshots and directories belong to the session id .
+   * Deletes all snapshots and directories belonging to the session ID.
    */
   deleteSession(params: { sessionId: string }): Promise<void>
 

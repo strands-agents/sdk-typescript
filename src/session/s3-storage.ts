@@ -129,18 +129,27 @@ export class S3Storage implements SnapshotStorage {
   }): Promise<string[]> {
     const prefix = this._getKey(params.location, IMMUTABLE_HISTORY)
     try {
-      const response = await this._s3.send(new ListObjectsV2Command({ Bucket: this._bucket, Prefix: prefix }))
-      let ids = (response.Contents ?? [])
-        .map((obj) => obj.Key?.match(SNAPSHOT_REGEX)?.[1])
-        .filter((id): id is string => id !== undefined)
-        .sort()
+      const allIds: string[] = []
+      let continuationToken: string | undefined
+      do {
+        const response = await this._s3.send(
+          new ListObjectsV2Command({ Bucket: this._bucket, Prefix: prefix, ContinuationToken: continuationToken })
+        )
+        const ids = (response.Contents ?? [])
+          .map((obj) => obj.Key?.match(SNAPSHOT_REGEX)?.[1])
+          .filter((id): id is string => id !== undefined)
+        allIds.push(...ids)
+        continuationToken = response.IsTruncated ? response.NextContinuationToken : undefined
+      } while (continuationToken)
+
+      let result = allIds.sort()
       if (params.startAfter) {
-        ids = ids.filter((id) => id > params.startAfter!)
+        result = result.filter((id) => id > params.startAfter!)
       }
       if (params.limit !== undefined) {
-        ids = ids.slice(0, params.limit)
+        result = result.slice(0, params.limit)
       }
-      return ids
+      return result
     } catch (error: unknown) {
       if (this._isNotFoundError(error)) {
         return []
