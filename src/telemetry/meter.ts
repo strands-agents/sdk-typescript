@@ -125,8 +125,7 @@ interface ToolUsageOptions {
  *
  * Returned by {@link Meter.metrics} and stored on {@link AgentResult}.
  * Provides access to cycle counts, tool usage, token consumption,
- * and per-invocation breakdowns. Supports round-trip serialization
- * via {@link toJSON} and {@link fromJSON}.
+ * and per-invocation breakdowns. Supports serialization via {@link toJSON}.
  *
  * @example
  * ```typescript
@@ -238,15 +237,6 @@ export class AgentMetrics implements JSONSerializable<AgentMetricsData> {
  * Use the {@link metrics} getter to obtain a read-only {@link AgentMetrics}
  * snapshot for inclusion in {@link AgentResult}.
  *
- * @example
- * ```typescript
- * const meter = new Meter()
- * meter.startNewInvocation()
- * const { cycleId, startTime } = meter.startCycle()
- * meter.updateFromMetadata(metadata)
- * meter.endCycle(startTime)
- * const snapshot = meter.metrics // AgentMetrics instance
- * ```
  */
 export class Meter {
   /**
@@ -279,26 +269,17 @@ export class Meter {
    */
   private readonly _accumulatedMetrics: Metrics = { latencyMs: 0 }
 
-  /**
-   * Read-only snapshot of the accumulated metrics.
-   * Returns an AgentMetrics instance suitable for inclusion in AgentResult.
-   */
-  get metrics(): AgentMetrics {
-    return new AgentMetrics({
-      cycleCount: this._cycleCount,
-      toolMetrics: this._toolMetrics,
-      cycleDurations: this._cycleDurations,
-      agentInvocations: this._agentInvocations,
-      accumulatedUsage: this._accumulatedUsage,
-      accumulatedMetrics: this._accumulatedMetrics,
-    })
-  }
+  // -- Public API (lifecycle order: invocation → cycle → tool → loop → snapshot) --
 
   /**
-   * The most recent agent invocation, or undefined if none exist.
+   * Begin tracking a new agent invocation.
+   * Creates a new AgentInvocation entry for per-invocation metrics.
    */
-  private get _latestAgentInvocation(): AgentInvocation | undefined {
-    return this._agentInvocations.length > 0 ? this._agentInvocations[this._agentInvocations.length - 1] : undefined
+  startNewInvocation(): void {
+    this._agentInvocations.push({
+      cycles: [],
+      usage: Meter.createEmptyUsage(),
+    })
   }
 
   /**
@@ -329,10 +310,7 @@ export class Meter {
    * @param startTime - The timestamp when the cycle started (milliseconds since epoch)
    */
   endCycle(startTime: number): void {
-    const endTime = Date.now()
-    const duration = endTime - startTime
-
-    this._cycleDurations.push(duration)
+    this._cycleDurations.push(Date.now() - startTime)
   }
 
   /**
@@ -360,6 +338,58 @@ export class Meter {
   }
 
   /**
+   * Update loop-level metrics from a model response.
+   *
+   * Call this after each model invocation within a loop cycle to
+   * accumulate usage and latency.
+   *
+   * @param metadata - The metadata event from a model invocation, or undefined if unavailable
+   */
+  updateLoop(metadata?: ModelMetadataEventData): void {
+    if (metadata) {
+      this.updateFromMetadata(metadata)
+    }
+  }
+
+  /**
+   * Read-only snapshot of the accumulated metrics.
+   * Returns an AgentMetrics instance suitable for inclusion in AgentResult.
+   */
+  get metrics(): AgentMetrics {
+    return new AgentMetrics({
+      cycleCount: this._cycleCount,
+      toolMetrics: this._toolMetrics,
+      cycleDurations: this._cycleDurations,
+      agentInvocations: this._agentInvocations,
+      accumulatedUsage: this._accumulatedUsage,
+      accumulatedMetrics: this._accumulatedMetrics,
+    })
+  }
+
+  // -- Private instance helpers --
+
+  /**
+   * The most recent agent invocation, or undefined if none exist.
+   */
+  private get _latestAgentInvocation(): AgentInvocation | undefined {
+    return this._agentInvocations.length > 0 ? this._agentInvocations[this._agentInvocations.length - 1] : undefined
+  }
+
+  /**
+   * Update accumulated usage and metrics from a model metadata event.
+   *
+   * @param metadata - The metadata event from a model invocation
+   */
+  private updateFromMetadata(metadata: ModelMetadataEventData): void {
+    if (metadata.usage) {
+      this.updateUsage(metadata.usage)
+    }
+    if (metadata.metrics) {
+      this._accumulatedMetrics.latencyMs += metadata.metrics.latencyMs
+    }
+  }
+
+  /**
    * Update the accumulated token usage with new usage data.
    *
    * @param usage - The usage data to accumulate
@@ -379,50 +409,11 @@ export class Meter {
   }
 
   /**
-   * Update accumulated usage and metrics from a model metadata event.
-   *
-   * @param metadata - The metadata event from a model invocation
-   */
-  private updateFromMetadata(metadata: ModelMetadataEventData): void {
-    if (metadata.usage) {
-      this.updateUsage(metadata.usage)
-    }
-    if (metadata.metrics) {
-      this._accumulatedMetrics.latencyMs += metadata.metrics.latencyMs
-    }
-  }
-
-  /**
-   * Convenience method to update loop-level metrics from a model response.
-   *
-   * Call this after each model invocation within a loop cycle to
-   * accumulate usage and latency.
-   *
-   * @param metadata - The metadata event from a model invocation, or undefined if unavailable
-   */
-  updateLoop(metadata?: ModelMetadataEventData): void {
-    if (metadata) {
-      this.updateFromMetadata(metadata)
-    }
-  }
-
-  /**
-   * Begin tracking a new agent invocation.
-   * Creates a new AgentInvocation entry for per-invocation metrics.
-   */
-  startNewInvocation(): void {
-    this._agentInvocations.push({
-      cycles: [],
-      usage: Meter.createEmptyUsage(),
-    })
-  }
-
-  /**
    * Creates an empty Usage object with all counters set to zero.
    *
    * @returns A Usage object with zeroed counters
    */
-  static createEmptyUsage(): Usage {
+  private static createEmptyUsage(): Usage {
     return {
       inputTokens: 0,
       outputTokens: 0,
@@ -436,7 +427,7 @@ export class Meter {
    * @param target - The Usage object to accumulate into (mutated in place)
    * @param source - The Usage object to accumulate from
    */
-  static accumulateUsage(target: Usage, source: Usage): void {
+  private static accumulateUsage(target: Usage, source: Usage): void {
     target.inputTokens += source.inputTokens
     target.outputTokens += source.outputTokens
     target.totalTokens += source.totalTokens
