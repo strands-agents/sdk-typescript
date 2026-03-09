@@ -61,19 +61,16 @@ export interface SnapshotStorage {
   loadSnapshot(params: { location: SnapshotLocation; snapshotId?: string }): Promise<Snapshot | null>
 
   /**
-   * Lists all available snapshot IDs for a session scope.
-   *
-   * TODO: Add pagination support for long-running agents with many snapshots.
-   * Future signature could be:
-   * ```typescript
-   * listSnapshots(params: {
-   *   location: SnapshotLocation
-   *   limit?: number        // Max results to return (e.g., 100)
-   *   startAfter?: string   // Snapshot ID to start after (for cursor-based pagination)
-   * }): Promise<{ snapshotIds: string[]; nextToken?: string }>
-   * ```
+   * Lists all available snapshot IDs for a session scope, sorted chronologically.
+   * Snapshot IDs are UUID v7, so lexicographic sort is chronological order.
+   * `location` identifies the scope. `limit` caps results. `startAfter` is a UUID v7 cursor for pagination.
    */
-  listSnapshotIds(params: { location: SnapshotLocation }): Promise<string[]>
+  listSnapshotIds(params: { location: SnapshotLocation; limit?: number; startAfter?: string }): Promise<string[]>
+
+  /**
+   * Deletes all snapshots and directories belong to the session id .
+   */
+  deleteSession(params: { sessionId: string }): Promise<void>
 
   /**
    * Loads the snapshot manifest.

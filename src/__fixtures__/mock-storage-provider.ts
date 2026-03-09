@@ -71,19 +71,41 @@ export class MockSnapshotStorage implements SnapshotStorage {
     return this.snapshots.get(this.getKey(params.location, params.snapshotId)) ?? null
   }
 
-  async listSnapshotIds(params: { location: SnapshotLocation }): Promise<string[]> {
+  async listSnapshotIds(params: {
+    location: SnapshotLocation
+    limit?: number
+    startAfter?: string
+  }): Promise<string[]> {
     if (this.shouldThrowErrors) throw new Error('Mock list error')
 
     const prefix = `${params.location.sessionId}::${params.location.scope}::${params.location.scopeId}::`
-    const ids: string[] = []
+    let ids: string[] = []
 
-    for (const [key, _snapshot] of this.snapshots) {
+    for (const [key] of this.snapshots) {
       if (key.startsWith(prefix) && !key.endsWith('::latest')) {
         ids.push(key.slice(prefix.length))
       }
     }
 
-    return ids.sort()
+    ids = ids.sort()
+    if (params.startAfter) {
+      ids = ids.filter((id) => id > params.startAfter!)
+    }
+    if (params.limit !== undefined) {
+      ids = ids.slice(0, params.limit)
+    }
+    return ids
+  }
+
+  async deleteSession(params: { sessionId: string }): Promise<void> {
+    if (this.shouldThrowErrors) throw new Error('Mock delete error')
+
+    for (const key of this.snapshots.keys()) {
+      if (key.startsWith(`${params.sessionId}::`)) this.snapshots.delete(key)
+    }
+    for (const key of this.manifests.keys()) {
+      if (key.startsWith(`${params.sessionId}::`)) this.manifests.delete(key)
+    }
   }
 
   async loadManifest(params: { location: SnapshotLocation }): Promise<SnapshotManifest> {

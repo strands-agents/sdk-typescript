@@ -186,7 +186,7 @@ describe('FileStorage', () => {
     })
   })
 
-  describe('listSnapshots', () => {
+  describe('listSnapshotIds', () => {
     describe('FileSnapshotStorage_When_listSnapshots_Then_ReturnsOrderedIds', () => {
       it('returns sorted snapshot IDs', async () => {
         const location: SnapshotLocation = { sessionId: 'test-session', scope: createTestScope(), scopeId: SCOPE_ID }
@@ -226,6 +226,57 @@ describe('FileStorage', () => {
         const result = await storage.listSnapshotIds({ location })
         expect(result).toEqual([id])
       })
+
+      it('filters by startAfter for pagination', async () => {
+        const location: SnapshotLocation = { sessionId: 'test-session', scope: createTestScope(), scopeId: SCOPE_ID }
+        const snapshots = createTestSnapshots(3)
+        const ids = [
+          '019c9bf1-14e5-7eef-96fb-cc07ae54210f',
+          '019c9bf1-1d34-7eef-96fb-d1be20fd7bbd',
+          '019c9bf1-24bb-7eef-96fb-ddcc943cd859',
+        ]
+        for (let i = 0; i < ids.length; i++) {
+          await storage.saveSnapshot({ location, snapshotId: ids[i]!, isLatest: false, snapshot: snapshots[i]! })
+        }
+
+        const result = await storage.listSnapshotIds({ location, startAfter: ids[0]! })
+
+        expect(result).toEqual([ids[1], ids[2]])
+      })
+
+      it('limits results when limit is provided', async () => {
+        const location: SnapshotLocation = { sessionId: 'test-session', scope: createTestScope(), scopeId: SCOPE_ID }
+        const snapshots = createTestSnapshots(3)
+        const ids = [
+          '019c9bf1-14e5-7eef-96fb-cc07ae54210f',
+          '019c9bf1-1d34-7eef-96fb-d1be20fd7bbd',
+          '019c9bf1-24bb-7eef-96fb-ddcc943cd859',
+        ]
+        for (let i = 0; i < ids.length; i++) {
+          await storage.saveSnapshot({ location, snapshotId: ids[i]!, isLatest: false, snapshot: snapshots[i]! })
+        }
+
+        const result = await storage.listSnapshotIds({ location, limit: 2 })
+
+        expect(result).toEqual([ids[0], ids[1]])
+      })
+
+      it('combines startAfter and limit', async () => {
+        const location: SnapshotLocation = { sessionId: 'test-session', scope: createTestScope(), scopeId: SCOPE_ID }
+        const snapshots = createTestSnapshots(3)
+        const ids = [
+          '019c9bf1-14e5-7eef-96fb-cc07ae54210f',
+          '019c9bf1-1d34-7eef-96fb-d1be20fd7bbd',
+          '019c9bf1-24bb-7eef-96fb-ddcc943cd859',
+        ]
+        for (let i = 0; i < ids.length; i++) {
+          await storage.saveSnapshot({ location, snapshotId: ids[i]!, isLatest: false, snapshot: snapshots[i]! })
+        }
+
+        const result = await storage.listSnapshotIds({ location, startAfter: ids[0]!, limit: 1 })
+
+        expect(result).toEqual([ids[1]])
+      })
     })
 
     describe('FileSnapshotStorage_When_DirectoryNotFound_Then_ReturnsEmptyArray', () => {
@@ -243,6 +294,30 @@ describe('FileStorage', () => {
         await expect(
           storage.listSnapshotIds({ location: { sessionId: 'test-session', scope: 'agent', scopeId: SCOPE_ID } })
         ).rejects.toThrow(SessionError)
+      })
+    })
+  })
+
+  describe('deleteSession', () => {
+    describe('FileSnapshotStorage_When_DeleteSession_Then_RemovesDirectory', () => {
+      it('removes the entire session directory', async () => {
+        const location: SnapshotLocation = { sessionId: 'test-session', scope: createTestScope(), scopeId: SCOPE_ID }
+        await storage.saveSnapshot({ location, snapshotId: '1', isLatest: true, snapshot: createTestSnapshot() })
+
+        await storage.deleteSession({ sessionId: 'test-session' })
+
+        await expect(fs.stat(join(testDir, 'test-session'))).rejects.toMatchObject({ code: 'ENOENT' })
+      })
+
+      it('no-ops when session directory does not exist', async () => {
+        await expect(storage.deleteSession({ sessionId: 'nonexistent-session' })).resolves.toBeUndefined()
+      })
+    })
+
+    describe('FileSnapshotStorage_When_DeleteSessionFails_Then_ThrowsSessionError', () => {
+      it('throws SessionError when rm fails', async () => {
+        vi.spyOn(fs, 'rm').mockRejectedValueOnce(new Error('Permission denied'))
+        await expect(storage.deleteSession({ sessionId: 'test-session' })).rejects.toThrow(SessionError)
       })
     })
   })

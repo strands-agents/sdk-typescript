@@ -101,6 +101,11 @@ export class SessionManager implements HookProvider {
     })
   }
 
+  /** Deletes all snapshots and manifests for this session from storage. */
+  async deleteSession(): Promise<void> {
+    await this._storage.snapshot.deleteSession({ sessionId: this._sessionId })
+  }
+
   /** Loads a snapshot from storage and restores it into the target agent. Returns false if no snapshot exists. */
   async restoreSnapshot(params: { target: Agent; snapshotId?: string }): Promise<boolean> {
     const snapshot = await this._storage.snapshot.loadSnapshot({

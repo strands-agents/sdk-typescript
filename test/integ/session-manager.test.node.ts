@@ -28,7 +28,8 @@ const AWS_REGION = process.env.AWS_REGION ?? 'us-east-1'
 async function getBucketName(credentials: any): Promise<string> {
   const sts = new STSClient({ region: AWS_REGION, credentials })
   const { Account } = await sts.send(new GetCallerIdentityCommand({}))
-  return `test-strands-session-bucket-${Account}-${AWS_REGION}`
+  const suffix = Math.random().toString(16).slice(2, 8)
+  return `test-strands-session-${Account}-${AWS_REGION}-${suffix}`
 }
 
 function makeFileManager(sessionId: string, storageDir: string): SessionManager {
@@ -101,6 +102,20 @@ describe.skipIf(bedrock.skip)('Session Management - FileStorage', () => {
     const result = await agent2.invoke('Repeat my name')
     const text = result.lastMessage.content.find((b) => b.type === 'textBlock')
     expect(text?.text).toMatch(/Alice/i)
+  })
+
+  it('deleteSession removes all session data', async () => {
+    const sessionId = uuidv7()
+    const model = bedrock.createModel()
+    const manager = makeFileManager(sessionId, tempDir)
+    const agent = new Agent({ model, sessionManager: manager, printer: false })
+    await agent.invoke('Hello!')
+    expect(await getPersistedMessageCount(manager)).toBe(2)
+
+    await manager.deleteSession()
+
+    const sessionDir = join(tempDir, sessionId)
+    await expect(fs.access(sessionDir)).rejects.toThrow()
   })
 
   it('creates immutable snapshots, verifies storage layout, and restores from specific snapshot', async () => {
@@ -212,6 +227,20 @@ describe.skipIf(bedrock.skip)('Session Management - S3Storage', () => {
     const result = await agent2.invoke('Repeat my name')
     const text = result.lastMessage.content.find((b) => b.type === 'textBlock')
     expect(text?.text).toMatch(/Bob/i)
+  })
+
+  it('deleteSession removes all session data from S3', async () => {
+    const sessionId = uuidv7()
+    const model = bedrock.createModel()
+    const manager = makeS3Manager(sessionId, bucket, credentials)
+    const agent = new Agent({ model, sessionManager: manager, printer: false })
+    await agent.invoke('Hello!')
+    expect(await getPersistedMessageCount(manager)).toBe(2)
+
+    await manager.deleteSession()
+
+    const list = await s3.send(new ListObjectsV2Command({ Bucket: bucket, Prefix: `${sessionId}/` }))
+    expect(list.Contents ?? []).toHaveLength(0)
   })
 
   it('creates immutable snapshots and supports time-travel restore', async () => {
