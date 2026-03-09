@@ -10,6 +10,7 @@ import type { LocalAgent } from '../types/agent.js'
 import { AfterInvocationEvent } from '../hooks/events.js'
 import { ConversationManager, type ConversationManagerReduceOptions } from './conversation-manager.js'
 import { logger } from '../logging/logger.js'
+import { findValidSplitPoint } from './utils.js'
 
 /**
  * Configuration for the sliding window conversation manager.
@@ -132,42 +133,13 @@ export class SlidingWindowConversationManager extends ConversationManager {
 
     // Try to trim messages when tool result cannot be truncated anymore
     // If the number of messages is less than the window_size, then we default to 2, otherwise, trim to window size
-    let trimIndex = messages.length <= this._windowSize ? 2 : messages.length - this._windowSize
+    const initialTrimIndex = messages.length <= this._windowSize ? 2 : messages.length - this._windowSize
 
     // Find the next valid trim_index
-    while (trimIndex < messages.length) {
-      const oldestMessage = messages[trimIndex]
-      if (!oldestMessage) {
-        break
-      }
-
-      // Check if oldest message would be a toolResult (invalid - needs preceding toolUse)
-      const hasToolResult = oldestMessage.content.some((block) => block.type === 'toolResultBlock')
-      if (hasToolResult) {
-        trimIndex++
-        continue
-      }
-
-      // Check if oldest message would be a toolUse without immediately following toolResult
-      const hasToolUse = oldestMessage.content.some((block) => block.type === 'toolUseBlock')
-      if (hasToolUse) {
-        // Check if next message has toolResult
-        const nextMessage = messages[trimIndex + 1]
-        const nextHasToolResult = nextMessage && nextMessage.content.some((block) => block.type === 'toolResultBlock')
-
-        if (!nextHasToolResult) {
-          // toolUse without following toolResult - invalid trim point
-          trimIndex++
-          continue
-        }
-      }
-
-      // Valid trim point found
-      break
-    }
+    const trimIndex = findValidSplitPoint(messages, initialTrimIndex)
 
     // If no valid trim point was found, return false and let the caller handle it
-    if (trimIndex >= messages.length) {
+    if (trimIndex < 0 || trimIndex >= messages.length) {
       logger.warn(
         `window_size=<${this._windowSize}>, messages=<${messages.length}> | unable to trim conversation context, no valid trim point found`
       )
