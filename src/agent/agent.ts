@@ -53,7 +53,7 @@ import { StructuredOutputException } from '../structured-output/exceptions.js'
 import type { z } from 'zod'
 import type { SessionManager } from '../session/session-manager.js'
 import { Tracer } from '../telemetry/tracer.js'
-import { AgentMetrics } from '../telemetry/meter.js'
+import { Meter } from '../telemetry/meter.js'
 import type { AttributeValue } from '@opentelemetry/api'
 import { logger } from '../logging/logger.js'
 
@@ -231,8 +231,8 @@ export class Agent implements AgentData {
   private _structuredOutputSchema?: z.ZodSchema | undefined
   /** Tracer instance for OTel spans and local execution traces. */
   private _tracer: Tracer
-  /** Loop metrics tracking for agent execution. */
-  private _loopMetrics: AgentMetrics = new AgentMetrics()
+  /** Meter instance for accumulating loop metrics during invocation. */
+  private _meter: Meter
 
   /**
    * Creates an instance of the Agent.
@@ -281,6 +281,9 @@ export class Agent implements AgentData {
     if (config?.sessionManager) {
       this.hooks.addHook(config.sessionManager)
     }
+
+    // Initialize meter for local metrics accumulation
+    this._meter = new Meter()
 
     this._initialized = false
   }
@@ -454,7 +457,7 @@ export class Agent implements AgentData {
     const inputMessages = this._normalizeInput(args)
 
     // Start agent trace span
-    this._loopMetrics.startNewInvocation()
+    this._meter.startNewInvocation()
     const agentModelId = this.model.modelId
     const agentSpanOptions: Parameters<Tracer['startAgentSpan']>[0] = {
       messages: inputMessages,
@@ -474,7 +477,7 @@ export class Agent implements AgentData {
       // Main agent loop - continues until model stops without requesting tools
       while (true) {
         // Start metrics cycle tracking
-        const { cycleId, startTime: cycleStartTime } = this._loopMetrics.startCycle()
+        const { cycleId, startTime: cycleStartTime } = this._meter.startCycle()
 
         // Create agent loop cycle span within agent span context
         const cycleSpan = this._tracer.startAgentLoopSpan({
@@ -509,7 +512,7 @@ export class Agent implements AgentData {
               // Force the model to use the structured output tool
               const toolName = context.getToolName()
               forcedToolChoice = { tool: { name: toolName } }
-              this._loopMetrics.endCycle(cycleStartTime)
+              this._meter.endCycle(cycleStartTime)
               this._tracer.endAgentLoopSpan(cycleSpan)
               continue
             }
@@ -518,7 +521,7 @@ export class Agent implements AgentData {
             yield this._appendMessage(modelResult.message)
 
             // End cycle tracking
-            this._loopMetrics.endCycle(cycleStartTime)
+            this._meter.endCycle(cycleStartTime)
 
             // End cycle span
             this._tracer.endAgentLoopSpan(cycleSpan)
@@ -528,7 +531,7 @@ export class Agent implements AgentData {
               stopReason: modelResult.stopReason,
               lastMessage: modelResult.message,
               structuredOutput,
-              metrics: this._loopMetrics,
+              metrics: this._meter.metrics,
             })
             return result
           }
@@ -554,14 +557,15 @@ export class Agent implements AgentData {
           yield this._appendMessage(toolResultMessage)
 
           // End cycle tracking
-          this._loopMetrics.endCycle(cycleStartTime)
+          this._meter.endCycle(cycleStartTime)
 
           // End cycle span
           this._tracer.endAgentLoopSpan(cycleSpan)
 
           // Continue loop
         } catch (error) {
-          // End cycle span with error
+          // End cycle tracking and span with error
+          this._meter.endCycle(cycleStartTime)
           this._tracer.endAgentLoopSpan(cycleSpan, { error: error as Error })
           throw error
         }
@@ -573,7 +577,7 @@ export class Agent implements AgentData {
       this._tracer.endAgentSpan(agentSpan, {
         ...(caughtError && { error: caughtError }),
         ...(result?.lastMessage && { response: result.lastMessage }),
-        accumulatedUsage: this._loopMetrics.accumulatedUsage,
+        accumulatedUsage: this._meter.metrics.accumulatedUsage,
         ...(result?.stopReason && { stopReason: result.stopReason }),
       })
 
@@ -679,10 +683,8 @@ export class Agent implements AgentData {
     try {
       const { message, stopReason, usage } = yield* this._streamFromModel(this.messages, streamOptions)
 
-      // Accumulate token usage
-      if (usage) {
-        Agent._accumulateUsage(this._accumulatedTokenUsage, usage)
-      }
+      // Accumulate token usage and model latency metrics
+      this._meter.updateLoop(metadata)
 
       // End model span with usage
       this._tracer.endModelInvokeSpan(modelSpan, { output: message, stopReason, ...(usage && { usage }) })
@@ -914,7 +916,7 @@ export class Agent implements AgentData {
       this._tracer.endToolCallSpan(toolSpan, { toolResult, ...(error && { error }) })
 
       // End tool metrics tracking
-      this._loopMetrics.endToolCall({
+      this._meter.endToolCall({
         tool: toolUse,
         duration: Date.now() - toolStartTime,
         success: toolResult.status === 'success',

@@ -1,43 +1,17 @@
 /**
  * Agent loop metrics tracking.
  *
- * Provides local metrics accumulation for cycle counts, token usage,
- * tool execution stats, and model latency.
+ * The {@link Meter} accumulates quantitative metrics during agent invocation.
+ * Symmetric with {@link Tracer}: the Meter tracks metrics while the Tracer
+ * tracks trace spans. Both are private fields on the Agent class.
+ *
+ * Use the {@link Meter.metrics} getter to obtain a read-only
+ * {@link AgentMetrics} snapshot for inclusion in {@link AgentResult}.
  */
 
 import type { Usage, Metrics, ModelMetadataEventData } from '../models/streaming.js'
 import type { ToolUse } from '../tools/types.js'
-
-/**
- * Creates an empty Usage object with all counters set to zero.
- *
- * @returns A Usage object with zeroed counters
- */
-function createEmptyUsage(): Usage {
-  return {
-    inputTokens: 0,
-    outputTokens: 0,
-    totalTokens: 0,
-  }
-}
-
-/**
- * Accumulates token usage from a source into a target Usage object.
- *
- * @param target - The Usage object to accumulate into (mutated in place)
- * @param source - The Usage object to accumulate from
- */
-function accumulateUsage(target: Usage, source: Usage): void {
-  target.inputTokens += source.inputTokens
-  target.outputTokens += source.outputTokens
-  target.totalTokens += source.totalTokens
-  if (source.cacheReadInputTokens !== undefined) {
-    target.cacheReadInputTokens = (target.cacheReadInputTokens ?? 0) + source.cacheReadInputTokens
-  }
-  if (source.cacheWriteInputTokens !== undefined) {
-    target.cacheWriteInputTokens = (target.cacheWriteInputTokens ?? 0) + source.cacheWriteInputTokens
-  }
-}
+import type { JSONSerializable } from '../types/json.js'
 
 /**
  * Per-tool execution metrics.
@@ -62,21 +36,6 @@ export interface ToolMetricsData {
    * Total execution time in seconds.
    */
   totalTime: number
-}
-
-/**
- * Per-tool summary with computed statistics.
- */
-export interface ToolUsageSummary extends ToolMetricsData {
-  /**
-   * Average execution time per call in seconds.
-   */
-  averageTime: number
-
-  /**
-   * Ratio of successful calls to total calls.
-   */
-  successRate: number
 }
 
 /**
@@ -110,6 +69,41 @@ export interface AgentInvocation {
 }
 
 /**
+ * JSON-serializable representation of AgentMetrics.
+ */
+export interface AgentMetricsData {
+  /**
+   * Number of agent loop cycles executed.
+   */
+  cycleCount: number
+
+  /**
+   * Per-tool execution metrics keyed by tool name.
+   */
+  toolMetrics: Record<string, ToolMetricsData>
+
+  /**
+   * Duration of each cycle in milliseconds.
+   */
+  cycleDurations: number[]
+
+  /**
+   * Per-invocation metrics.
+   */
+  agentInvocations: AgentInvocation[]
+
+  /**
+   * Accumulated token usage across all model invocations.
+   */
+  accumulatedUsage: Usage
+
+  /**
+   * Accumulated performance metrics across all model invocations.
+   */
+  accumulatedMetrics: Metrics
+}
+
+/**
  * Options for recording tool usage.
  */
 interface ToolUsageOptions {
@@ -130,50 +124,12 @@ interface ToolUsageOptions {
 }
 
 /**
- * Summary of all collected metrics.
- */
-export interface AgentLoopMetricsSummary {
-  /**
-   * Total number of agent loop cycles.
-   */
-  totalCycles: number
-
-  /**
-   * Total duration of all cycles in seconds.
-   */
-  totalDuration: number
-
-  /**
-   * Average cycle time in seconds.
-   */
-  averageCycleTime: number
-
-  /**
-   * Per-tool execution statistics.
-   */
-  toolUsage: Record<string, ToolUsageSummary>
-
-  /**
-   * Accumulated token usage across all invocations.
-   */
-  accumulatedUsage: Usage
-
-  /**
-   * Accumulated model latency metrics across all invocations.
-   */
-  accumulatedMetrics: Metrics
-
-  /**
-   * Per-invocation metrics.
-   */
-  agentInvocations: AgentInvocation[]
-}
-
-/**
- * Aggregated metrics for an agent's loop execution.
+ * Read-only snapshot of aggregated agent metrics.
  *
- * Tracks cycle counts, tool usage, execution durations, and token consumption
- * across all model invocations.
+ * Returned by {@link Meter.metrics} and stored on {@link AgentResult}.
+ * Provides access to cycle counts, tool usage, token consumption,
+ * and per-invocation breakdowns. Supports round-trip serialization
+ * via {@link toJSON} and {@link fromJSON}.
  *
  * @example
  * ```typescript
@@ -181,10 +137,134 @@ export interface AgentLoopMetricsSummary {
  * console.log(result.metrics.cycleCount)
  * console.log(result.metrics.accumulatedUsage)
  * console.log(result.metrics.toolMetrics)
- * console.log(result.metrics.getSummary())
+ * console.log(JSON.stringify(result.metrics))
  * ```
  */
-export class AgentMetrics {
+export class AgentMetrics implements JSONSerializable<AgentMetricsData> {
+  /**
+   * Number of agent loop cycles executed.
+   */
+  readonly cycleCount: number
+
+  /**
+   * Per-tool execution metrics keyed by tool name.
+   */
+  readonly toolMetrics: Record<string, ToolMetricsData>
+
+  /**
+   * Duration of each cycle in milliseconds.
+   */
+  readonly cycleDurations: number[]
+
+  /**
+   * Per-invocation metrics.
+   */
+  readonly agentInvocations: AgentInvocation[]
+
+  /**
+   * Accumulated token usage across all model invocations.
+   */
+  readonly accumulatedUsage: Usage
+
+  /**
+   * Accumulated performance metrics across all model invocations.
+   */
+  readonly accumulatedMetrics: Metrics
+
+  constructor(data?: Partial<AgentMetricsData>) {
+    this.cycleCount = data?.cycleCount ?? 0
+    this.toolMetrics = data?.toolMetrics ?? {}
+    this.cycleDurations = data?.cycleDurations ?? []
+    this.agentInvocations = data?.agentInvocations ?? []
+    this.accumulatedUsage = data?.accumulatedUsage ?? { inputTokens: 0, outputTokens: 0, totalTokens: 0 }
+    this.accumulatedMetrics = data?.accumulatedMetrics ?? { latencyMs: 0 }
+  }
+
+  /**
+   * The most recent agent invocation, or undefined if none exist.
+   */
+  get latestAgentInvocation(): AgentInvocation | undefined {
+    return this.agentInvocations.length > 0 ? this.agentInvocations[this.agentInvocations.length - 1] : undefined
+  }
+
+  /**
+   * Total duration of all cycles in milliseconds.
+   */
+  get totalDuration(): number {
+    return this.cycleDurations.reduce((sum, d) => sum + d, 0)
+  }
+
+  /**
+   * Average cycle time in milliseconds.
+   */
+  get averageCycleTime(): number {
+    return this.cycleCount > 0 ? this.totalDuration / this.cycleCount : 0
+  }
+
+  /**
+   * Per-tool execution statistics with computed averages and rates.
+   */
+  get toolUsage(): Record<string, ToolMetricsData & { averageTime: number; successRate: number }> {
+    const usage: Record<string, ToolMetricsData & { averageTime: number; successRate: number }> = {}
+    for (const [toolName, toolEntry] of Object.entries(this.toolMetrics)) {
+      usage[toolName] = {
+        ...toolEntry,
+        averageTime: toolEntry.callCount > 0 ? toolEntry.totalTime / toolEntry.callCount : 0,
+        successRate: toolEntry.callCount > 0 ? toolEntry.successCount / toolEntry.callCount : 0,
+      }
+    }
+    return usage
+  }
+
+  /**
+   * Returns a JSON-serializable representation of all collected metrics.
+   * Called automatically by JSON.stringify().
+   *
+   * @returns A plain object suitable for round-trip serialization
+   */
+  toJSON(): AgentMetricsData {
+    return {
+      cycleCount: this.cycleCount,
+      toolMetrics: this.toolMetrics,
+      cycleDurations: this.cycleDurations,
+      agentInvocations: this.agentInvocations,
+      accumulatedUsage: this.accumulatedUsage,
+      accumulatedMetrics: this.accumulatedMetrics,
+    }
+  }
+
+  /**
+   * Creates an AgentMetrics instance from serialized data.
+   *
+   * @param data - The serialized metrics data
+   * @returns AgentMetrics instance
+   */
+  static fromJSON(data: AgentMetricsData): AgentMetrics {
+    return new AgentMetrics(data)
+  }
+}
+
+/**
+ * Accumulates metrics during agent invocation.
+ *
+ * Symmetric with {@link Tracer} — the Meter tracks quantitative metrics
+ * while the Tracer tracks qualitative trace spans. Both are private fields
+ * on the Agent class and accumulate data during invocation.
+ *
+ * Use the {@link metrics} getter to obtain a read-only {@link AgentMetrics}
+ * snapshot for inclusion in {@link AgentResult}.
+ *
+ * @example
+ * ```typescript
+ * const meter = new Meter()
+ * meter.startNewInvocation()
+ * const { cycleId, startTime } = meter.startCycle()
+ * meter.updateFromMetadata(metadata)
+ * meter.endCycle(startTime)
+ * const snapshot = meter.metrics // AgentMetrics instance
+ * ```
+ */
+export class Meter {
   /**
    * Number of agent loop cycles executed.
    */
@@ -193,40 +273,48 @@ export class AgentMetrics {
   /**
    * Per-tool execution metrics keyed by tool name.
    */
-  readonly toolMetrics: Record<string, ToolMetricsData> = {}
+  private readonly _toolMetrics: Record<string, ToolMetricsData> = {}
 
   /**
-   * Duration of each cycle in seconds.
+   * Duration of each cycle in milliseconds.
    */
-  readonly cycleDurations: number[] = []
+  private readonly _cycleDurations: number[] = []
 
   /**
    * Per-invocation metrics.
    */
-  readonly agentInvocations: AgentInvocation[] = []
+  private readonly _agentInvocations: AgentInvocation[] = []
 
   /**
    * Accumulated token usage across all model invocations.
    */
-  readonly accumulatedUsage: Usage = createEmptyUsage()
+  private readonly _accumulatedUsage: Usage = Meter.createEmptyUsage()
 
   /**
    * Accumulated performance metrics across all model invocations.
    */
-  readonly accumulatedMetrics: Metrics = { latencyMs: 0 }
+  private readonly _accumulatedMetrics: Metrics = { latencyMs: 0 }
 
   /**
-   * Number of agent loop cycles executed.
+   * Read-only snapshot of the accumulated metrics.
+   * Returns an AgentMetrics instance suitable for inclusion in AgentResult.
    */
-  get cycleCount(): number {
-    return this._cycleCount
+  get metrics(): AgentMetrics {
+    return new AgentMetrics({
+      cycleCount: this._cycleCount,
+      toolMetrics: this._toolMetrics,
+      cycleDurations: this._cycleDurations,
+      agentInvocations: this._agentInvocations,
+      accumulatedUsage: this._accumulatedUsage,
+      accumulatedMetrics: this._accumulatedMetrics,
+    })
   }
 
   /**
    * The most recent agent invocation, or undefined if none exist.
    */
-  get latestAgentInvocation(): AgentInvocation | undefined {
-    return this.agentInvocations.length > 0 ? this.agentInvocations[this.agentInvocations.length - 1] : undefined
+  private get _latestAgentInvocation(): AgentInvocation | undefined {
+    return this._agentInvocations.length > 0 ? this._agentInvocations[this._agentInvocations.length - 1] : undefined
   }
 
   /**
@@ -240,11 +328,11 @@ export class AgentMetrics {
     const cycleId = `cycle-${this._cycleCount}`
     const startTime = Date.now()
 
-    const latestInvocation = this.latestAgentInvocation
+    const latestInvocation = this._latestAgentInvocation
     if (latestInvocation) {
       latestInvocation.cycles.push({
         agentLoopCycleId: cycleId,
-        usage: createEmptyUsage(),
+        usage: Meter.createEmptyUsage(),
       })
     }
 
@@ -260,7 +348,7 @@ export class AgentMetrics {
     const endTime = Date.now()
     const duration = endTime - startTime
 
-    this.cycleDurations.push(duration)
+    this._cycleDurations.push(duration)
   }
 
   /**
@@ -272,12 +360,11 @@ export class AgentMetrics {
     const { tool, duration, success } = options
     const toolName = tool.name
 
-    // Update local tool metrics
-    if (!this.toolMetrics[toolName]) {
-      this.toolMetrics[toolName] = { callCount: 0, successCount: 0, errorCount: 0, totalTime: 0 }
+    if (!this._toolMetrics[toolName]) {
+      this._toolMetrics[toolName] = { callCount: 0, successCount: 0, errorCount: 0, totalTime: 0 }
     }
 
-    const toolEntry = this.toolMetrics[toolName]!
+    const toolEntry = this._toolMetrics[toolName]!
     toolEntry.callCount++
     toolEntry.totalTime += duration
 
@@ -294,15 +381,15 @@ export class AgentMetrics {
    * @param usage - The usage data to accumulate
    */
   updateUsage(usage: Usage): void {
-    accumulateUsage(this.accumulatedUsage, usage)
+    Meter.accumulateUsage(this._accumulatedUsage, usage)
 
-    const latestInvocation = this.latestAgentInvocation
+    const latestInvocation = this._latestAgentInvocation
     if (latestInvocation) {
-      accumulateUsage(latestInvocation.usage, usage)
+      Meter.accumulateUsage(latestInvocation.usage, usage)
 
       const cycles = latestInvocation.cycles
       if (cycles.length > 0) {
-        accumulateUsage(cycles[cycles.length - 1]!.usage, usage)
+        Meter.accumulateUsage(cycles[cycles.length - 1]!.usage, usage)
       }
     }
   }
@@ -317,7 +404,21 @@ export class AgentMetrics {
       this.updateUsage(metadata.usage)
     }
     if (metadata.metrics) {
-      this.accumulatedMetrics.latencyMs += metadata.metrics.latencyMs
+      this._accumulatedMetrics.latencyMs += metadata.metrics.latencyMs
+    }
+  }
+
+  /**
+   * Convenience method to update loop-level metrics from a model response.
+   *
+   * Symmetric with {@link Tracer.endModelInvokeSpan} — call this after each
+   * model invocation within a loop cycle to accumulate usage and latency.
+   *
+   * @param metadata - The metadata event from a model invocation, or undefined if unavailable
+   */
+  updateLoop(metadata?: ModelMetadataEventData): void {
+    if (metadata) {
+      this.updateFromMetadata(metadata)
     }
   }
 
@@ -326,37 +427,40 @@ export class AgentMetrics {
    * Creates a new AgentInvocation entry for per-invocation metrics.
    */
   startNewInvocation(): void {
-    this.agentInvocations.push({
+    this._agentInvocations.push({
       cycles: [],
-      usage: createEmptyUsage(),
+      usage: Meter.createEmptyUsage(),
     })
   }
 
   /**
-   * Generate a comprehensive summary of all collected metrics.
+   * Creates an empty Usage object with all counters set to zero.
    *
-   * @returns A dictionary containing summarized metrics data
+   * @returns A Usage object with zeroed counters
    */
-  getSummary(): AgentLoopMetricsSummary {
-    const totalDuration = this.cycleDurations.reduce((sum, d) => sum + d, 0)
-
-    const toolUsage: AgentLoopMetricsSummary['toolUsage'] = {}
-    for (const [toolName, toolEntry] of Object.entries(this.toolMetrics)) {
-      toolUsage[toolName] = {
-        ...toolEntry,
-        averageTime: toolEntry.callCount > 0 ? toolEntry.totalTime / toolEntry.callCount : 0,
-        successRate: toolEntry.callCount > 0 ? toolEntry.successCount / toolEntry.callCount : 0,
-      }
-    }
-
+  static createEmptyUsage(): Usage {
     return {
-      totalCycles: this._cycleCount,
-      totalDuration,
-      averageCycleTime: this._cycleCount > 0 ? totalDuration / this._cycleCount : 0,
-      toolUsage,
-      accumulatedUsage: this.accumulatedUsage,
-      accumulatedMetrics: this.accumulatedMetrics,
-      agentInvocations: this.agentInvocations,
+      inputTokens: 0,
+      outputTokens: 0,
+      totalTokens: 0,
+    }
+  }
+
+  /**
+   * Accumulates token usage from a source into a target Usage object.
+   *
+   * @param target - The Usage object to accumulate into (mutated in place)
+   * @param source - The Usage object to accumulate from
+   */
+  static accumulateUsage(target: Usage, source: Usage): void {
+    target.inputTokens += source.inputTokens
+    target.outputTokens += source.outputTokens
+    target.totalTokens += source.totalTokens
+    if (source.cacheReadInputTokens !== undefined) {
+      target.cacheReadInputTokens = (target.cacheReadInputTokens ?? 0) + source.cacheReadInputTokens
+    }
+    if (source.cacheWriteInputTokens !== undefined) {
+      target.cacheWriteInputTokens = (target.cacheWriteInputTokens ?? 0) + source.cacheWriteInputTokens
     }
   }
 }
