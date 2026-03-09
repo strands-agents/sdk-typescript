@@ -168,6 +168,7 @@ export {
   BeforeInvocationEvent,
   AfterInvocationEvent,
   MessageAddedEvent,
+  MessageUpdatedEvent,
   BeforeToolCallEvent,
   AfterToolCallEvent,
   BeforeModelCallEvent,

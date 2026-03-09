@@ -142,6 +142,24 @@ export class MessageAddedEvent extends HookableEvent {
 }
 
 /**
+ * Event triggered when a message in the conversation history is updated.
+ * Fired when a message is modified after being added to the conversation.
+ */
+export class MessageUpdatedEvent extends HookableEvent {
+  readonly type = 'messageUpdatedEvent' as const
+  readonly agent: AgentData
+  readonly message: Message
+  readonly index: number
+
+  constructor(data: { agent: AgentData; message: Message; index: number }) {
+    super()
+    this.agent = data.agent
+    this.message = data.message
+    this.index = data.index
+  }
+}
+
+/**
  * Event triggered just before a tool is executed.
  * Fired after tool lookup but before execution begins.
  */
