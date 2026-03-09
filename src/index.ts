@@ -117,6 +117,7 @@ export { Tool } from './tools/tool.js'
 
 // FunctionTool implementation
 export { FunctionTool } from './tools/function-tool.js'
+export type { FunctionToolConfig, FunctionToolCallback } from './tools/function-tool.js'
 
 // Tool factory function
 export { tool } from './tools/tool-factory.js'

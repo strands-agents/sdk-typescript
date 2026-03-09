@@ -96,7 +96,7 @@ describe('tool', () => {
         })
 
         const result = await myTool.invoke({ count: 3 })
-        expect(result).toBe(3)
+        expect(result).toBe(0)
       })
     })
 
@@ -533,8 +533,7 @@ describe('tool', () => {
         })
 
         const result = await myTool.invoke({})
-        // invoke() returns the last yielded value, not the return value
-        expect(result).toBe('Processing...')
+        expect(result).toBe('Complete!')
       })
     })
 

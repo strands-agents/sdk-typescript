@@ -1,5 +1,5 @@
 import { createErrorResult, Tool } from './tool.js'
-import type { ToolContext } from './tool.js'
+import type { InvokableTool, ToolContext } from './tool.js'
 import { ToolStreamEvent } from './tool.js'
 import type { ToolSpec } from './types.js'
 import type { JSONSchema, JSONValue } from '../types/json.js'
@@ -88,7 +88,7 @@ export interface FunctionToolConfig {
  * })
  * ```
  */
-export class FunctionTool extends Tool {
+export class FunctionTool extends Tool implements InvokableTool<unknown, JSONValue> {
   /**
    * The unique name of the tool.
    */
@@ -199,6 +199,33 @@ export class FunctionTool extends Tool {
       // Handle any errors and yield as error ToolResultBlock
       return createErrorResult(error, toolUse.toolUseId)
     }
+  }
+
+  /**
+   * Invokes the tool directly with raw input and returns the unwrapped result.
+   *
+   * Unlike stream(), this method:
+   * - Returns the raw result (not wrapped in ToolResult)
+   * - Consumes async generators and returns the generator's return value
+   * - Lets errors throw naturally (not wrapped in error ToolResult)
+   *
+   * @param input - The input parameters for the tool
+   * @param context - Optional tool execution context
+   * @returns The unwrapped result
+   */
+  async invoke(input: unknown, context?: ToolContext): Promise<JSONValue> {
+    const result = this._callback(input, context as ToolContext)
+
+    if (result && typeof result === 'object' && Symbol.asyncIterator in result) {
+      const generator = result as AsyncGenerator<unknown, JSONValue, undefined>
+      let iterResult = await generator.next()
+      while (!iterResult.done) {
+        iterResult = await generator.next()
+      }
+      return iterResult.value
+    }
+
+    return (await result) as JSONValue
   }
 
   /**

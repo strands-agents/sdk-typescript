@@ -164,12 +164,12 @@ export class ZodTool<TInput extends z.ZodType | undefined, TReturn extends JSONV
 
     // Handle different return types
     if (result && typeof result === 'object' && Symbol.asyncIterator in result) {
-      // AsyncGenerator - consume all yielded values and return the last one
-      let lastValue: TReturn | undefined = undefined
-      for await (const value of result as AsyncGenerator<unknown, TReturn, undefined>) {
-        lastValue = value as TReturn
+      const generator = result as AsyncGenerator<unknown, TReturn, undefined>
+      let iterResult = await generator.next()
+      while (!iterResult.done) {
+        iterResult = await generator.next()
       }
-      return lastValue as TReturn
+      return iterResult.value
     } else {
       // Regular value or Promise - return directly
       return await result

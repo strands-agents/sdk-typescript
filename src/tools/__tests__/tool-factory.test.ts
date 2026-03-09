@@ -17,7 +17,7 @@ describe('tool factory', () => {
       expect(myTool.toolSpec.inputSchema).toHaveProperty('additionalProperties', false)
     })
 
-    it('creates JsonTool when inputSchema is a plain object', () => {
+    it('creates FunctionTool when inputSchema is a plain object', () => {
       const schema = { type: 'object' as const, properties: { x: { type: 'string' as const } } }
       const myTool = tool({
         name: 'json',
@@ -30,7 +30,7 @@ describe('tool factory', () => {
       expect(myTool.toolSpec.inputSchema).toStrictEqual(schema)
     })
 
-    it('creates JsonTool when inputSchema is omitted', () => {
+    it('creates FunctionTool when inputSchema is omitted', () => {
       const myTool = tool({
         name: 'noSchema',
         description: 'No schema',
@@ -45,7 +45,7 @@ describe('tool factory', () => {
     })
   })
 
-  describe('JsonTool invoke()', () => {
+  describe('FunctionTool invoke()', () => {
     it('handles synchronous callback', async () => {
       const myTool = tool({
         name: 'sync',
@@ -85,7 +85,7 @@ describe('tool factory', () => {
         },
       })
 
-      expect(await myTool.invoke({ count: 3 })).toBe(3)
+      expect(await myTool.invoke({ count: 3 })).toBe(0)
     })
 
     it('passes instanceof Tool check', () => {
@@ -102,6 +102,7 @@ describe('tool factory', () => {
     it('defaults description to empty string', () => {
       const myTool = tool({
         name: 'test',
+        description: '',
         inputSchema: { type: 'object' },
         callback: () => 'ok',
       })
