@@ -7,6 +7,7 @@ import {
   AfterNodeCallEvent,
   NodeStreamUpdateEvent,
   NodeResultEvent,
+  NodeCancelEvent,
   MultiAgentHandoffEvent,
   MultiAgentResultEvent,
 } from '../events.js'
@@ -134,13 +135,15 @@ describe('BeforeNodeCallEvent', () => {
 describe('AfterNodeCallEvent', () => {
   it('creates instance with correct properties', () => {
     const state = new MultiAgentState()
-    const event = new AfterNodeCallEvent({ orchestrator: mockOrchestrator, state, nodeId: 'node-1' })
+    const error = new Error('node failed')
+    const event = new AfterNodeCallEvent({ orchestrator: mockOrchestrator, state, nodeId: 'node-1', error })
 
     expect(event).toEqual({
       type: 'afterNodeCallEvent',
       orchestrator: mockOrchestrator,
       state,
       nodeId: 'node-1',
+      error,
     })
     // @ts-expect-error verifying that property is readonly
     event.orchestrator = mockOrchestrator
@@ -194,6 +197,22 @@ describe('NodeResultEvent', () => {
     event.nodeType = 'agentNode'
     // @ts-expect-error verifying that property is readonly
     event.result = result
+  })
+})
+
+describe('NodeCancelEvent', () => {
+  it('creates instance with correct properties', () => {
+    const event = new NodeCancelEvent({ nodeId: 'node-1', message: 'cancelled by hook' })
+
+    expect(event).toEqual({
+      type: 'nodeCancelEvent',
+      nodeId: 'node-1',
+      message: 'cancelled by hook',
+    })
+    // @ts-expect-error verifying that property is readonly
+    event.nodeId = 'node-1'
+    // @ts-expect-error verifying that property is readonly
+    event.message = 'cancelled by hook'
   })
 })
 

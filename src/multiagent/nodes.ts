@@ -16,9 +16,9 @@ export type NodeType = 'agentNode' | 'multiAgentNode' | (string & {})
  */
 export interface NodeConfig {
   /**
-   * Maximum execution time for this node in milliseconds.
+   * Optional description of what this node does.
    */
-  timeout?: number
+  description?: string
 }
 
 /**
@@ -56,7 +56,9 @@ export abstract class Node {
     args: InvokeArgs,
     state: MultiAgentState
   ): AsyncGenerator<MultiAgentStreamEvent, NodeResult, undefined> {
-    const startTime = Date.now()
+    const nodeState = state.node(this.id)!
+    nodeState.status = Status.EXECUTING
+    nodeState.startTime = Date.now()
 
     let result: NodeResult
     try {
@@ -64,7 +66,7 @@ export abstract class Node {
       result = new NodeResult({
         nodeId: this.id,
         status: Status.COMPLETED,
-        duration: Date.now() - startTime,
+        duration: Date.now() - nodeState.startTime,
         content: [],
         ...update,
       })
@@ -72,9 +74,12 @@ export abstract class Node {
       result = new NodeResult({
         nodeId: this.id,
         status: Status.FAILED,
-        duration: Date.now() - startTime,
+        duration: Date.now() - nodeState.startTime,
         error: error instanceof Error ? error : new Error(String(error)),
       })
+    } finally {
+      nodeState.status = result!.status
+      nodeState.results.push(result!)
     }
 
     yield new NodeResultEvent({ nodeId: this.id, nodeType: this.type, result })
@@ -97,9 +102,7 @@ export abstract class Node {
 /**
  * Options for creating an {@link AgentNode}.
  */
-export interface AgentNodeOptions extends NodeConfig {
-  /** Unique node identifier. */
-  id: string
+export interface AgentNodeOptions {
   /** The agent to wrap as a node. */
   agent: Agent
 }
@@ -115,8 +118,13 @@ export class AgentNode extends Node {
   private readonly _agent: Agent
 
   constructor(options: AgentNodeOptions) {
-    const { id, agent, ...config } = options
-    super(id, config)
+    const { agent, ...config } = options
+
+    super(agent.agentId, {
+      ...config,
+      ...(agent.description !== undefined && { description: agent.description }),
+    })
+
     this._agent = agent
   }
 

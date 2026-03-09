@@ -1,21 +1,21 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { NodeTracerProvider, ConsoleSpanExporter } from '@opentelemetry/sdk-trace-node'
+import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node'
+import { ConsoleSpanExporter } from '@opentelemetry/sdk-trace-base'
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http'
 
-// Mock the exporters
 vi.mock('@opentelemetry/exporter-trace-otlp-http', () => ({
   OTLPTraceExporter: vi.fn(),
 }))
 
-vi.mock('@opentelemetry/sdk-trace-node', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@opentelemetry/sdk-trace-node')>()
+vi.mock('@opentelemetry/sdk-trace-base', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@opentelemetry/sdk-trace-base')>()
   return {
     ...actual,
     ConsoleSpanExporter: vi.fn(),
   }
 })
 
-describe('setupTracer', () => {
+describe('setupTracer (node-specific)', () => {
   const originalEnv = { ...process.env }
 
   beforeEach(() => {
@@ -27,31 +27,16 @@ describe('setupTracer', () => {
     process.env = { ...originalEnv }
   })
 
-  describe('singleton behavior', () => {
-    it('should return the same provider instance when called twice', async () => {
+  describe('provider auto-detection', () => {
+    it('should use NodeTracerProvider by default for async context support', async () => {
       const telemetry = await import('../index.js')
 
-      const provider1 = telemetry.setupTracer({ exporters: { console: true } })
-      const provider2 = telemetry.setupTracer({ exporters: { otlp: true } })
+      const provider = telemetry.setupTracer()
 
-      expect(provider1).toBe(provider2)
+      expect(provider).toBeInstanceOf(NodeTracerProvider)
     })
 
-    it('should log a warning when called twice', async () => {
-      // Must dynamically import logger to get the same instance used by the fresh telemetry module
-      const { logger } = await import('../../logging/index.js')
-      const warnSpy = vi.spyOn(logger, 'warn')
-      const telemetry = await import('../index.js')
-
-      telemetry.setupTracer()
-      telemetry.setupTracer()
-
-      expect(warnSpy).toHaveBeenCalledWith('tracer provider already initialized, returning existing provider')
-    })
-  })
-
-  describe('custom provider', () => {
-    it('should use custom provider instead of creating a new one', async () => {
+    it('should accept a custom NodeTracerProvider', async () => {
       const telemetry = await import('../index.js')
       const customProvider = new NodeTracerProvider()
 
@@ -106,15 +91,7 @@ describe('setupTracer', () => {
     })
   })
 
-  describe('resource attributes', () => {
-    it('should use strands-agents as default service name', async () => {
-      const telemetry = await import('../index.js')
-
-      const provider = telemetry.setupTracer()
-
-      expect(provider.resource.attributes['service.name']).toBe('strands-agents')
-    })
-
+  describe('resource attributes from environment', () => {
     it('should use OTEL_SERVICE_NAME when set', async () => {
       process.env.OTEL_SERVICE_NAME = 'my-custom-service'
       const telemetry = await import('../index.js')
@@ -140,18 +117,6 @@ describe('setupTracer', () => {
       const provider = telemetry.setupTracer()
 
       expect(provider.resource.attributes['deployment.environment']).toBe('production')
-    })
-
-    it('should include default resource attributes', async () => {
-      const telemetry = await import('../index.js')
-
-      const provider = telemetry.setupTracer()
-
-      expect(provider.resource.attributes['service.name']).toBe('strands-agents')
-      expect(provider.resource.attributes['service.namespace']).toBe('strands')
-      expect(provider.resource.attributes['deployment.environment']).toBe('development')
-      expect(provider.resource.attributes['telemetry.sdk.name']).toBe('opentelemetry')
-      expect(provider.resource.attributes['telemetry.sdk.language']).toBe('typescript')
     })
 
     it('should merge OTEL_RESOURCE_ATTRIBUTES with defaults', async () => {

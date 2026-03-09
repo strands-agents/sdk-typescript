@@ -29,7 +29,6 @@ export default defineConfig({
             'src/vended-tools/**/__tests__/**/*.test.ts',
             'src/vended-tools/**/__tests__/**/*.test.node.ts',
           ],
-          includeSource: ['src/**/*.{js,ts}'],
           name: { label: 'unit-node', color: 'green' },
           typecheck: {
             enabled: true,
@@ -122,8 +121,5 @@ export default defineConfig({
       },
     },
     environment: 'node',
-  },
-  define: {
-    'import.meta.vitest': 'undefined',
   },
 })

@@ -18,6 +18,7 @@ export {
   AfterNodeCallEvent,
   NodeStreamUpdateEvent,
   NodeResultEvent,
+  NodeCancelEvent,
   MultiAgentHandoffEvent,
   MultiAgentResultEvent,
 } from './events.js'
@@ -25,3 +26,6 @@ export type { MultiAgentStreamEvent } from './events.js'
 
 export { Edge } from './edge.js'
 export type { EdgeHandler, EdgeDefinition } from './edge.js'
+
+export { Swarm } from './swarm.js'
+export type { SwarmConfig, SwarmNodeDefinition, SwarmOptions } from './swarm.js'

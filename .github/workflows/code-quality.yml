@@ -37,3 +37,6 @@ jobs:
 
       - name: Run type checking
         run: npm run type-check
+
+      - name: Verify browser bundle
+        run: npm run check:browser-bundle

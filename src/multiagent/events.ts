@@ -84,12 +84,16 @@ export class AfterNodeCallEvent extends HookableEvent {
   readonly orchestrator: MultiAgentBase
   readonly state: MultiAgentState
   readonly nodeId: string
+  readonly error?: Error
 
-  constructor(data: { orchestrator: MultiAgentBase; state: MultiAgentState; nodeId: string }) {
+  constructor(data: { orchestrator: MultiAgentBase; state: MultiAgentState; nodeId: string; error?: Error }) {
     super()
     this.orchestrator = data.orchestrator
     this.state = data.state
     this.nodeId = data.nodeId
+    if (data.error !== undefined) {
+      this.error = data.error
+    }
   }
 
   override _shouldReverseCallbacks(): boolean {
@@ -154,6 +158,21 @@ export class MultiAgentHandoffEvent extends HookableEvent {
 }
 
 /**
+ * Event triggered when a node is cancelled via {@link BeforeNodeCallEvent.cancel}.
+ */
+export class NodeCancelEvent extends HookableEvent {
+  readonly type = 'nodeCancelEvent' as const
+  readonly nodeId: string
+  readonly message: string
+
+  constructor(data: { nodeId: string; message: string }) {
+    super()
+    this.nodeId = data.nodeId
+    this.message = data.message
+  }
+}
+
+/**
  * Event triggered as the final event in the multi-agent stream.
  * Wraps the {@link MultiAgentResult} containing the aggregate outcome.
  */
@@ -177,5 +196,6 @@ export type MultiAgentStreamEvent =
   | AfterNodeCallEvent
   | NodeStreamUpdateEvent
   | NodeResultEvent
+  | NodeCancelEvent
   | MultiAgentHandoffEvent
   | MultiAgentResultEvent
