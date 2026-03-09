@@ -24,6 +24,7 @@ export {
   JsonValidationError,
   ConcurrentInvocationError,
   ModelThrottledError,
+  ToolValidationError,
 } from './errors.js'
 
 // JSON types

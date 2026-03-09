@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { ToolRegistry, ToolValidationError } from '../tool-registry.js'
+import { ToolRegistry } from '../tool-registry.js'
+import { ToolValidationError } from '../../errors.js'
 import type { Tool, ToolStreamGenerator } from '../../tools/tool.js'
 import { ToolStreamEvent } from '../../tools/tool.js'
 import { ToolResultBlock } from '../../types/messages.js'

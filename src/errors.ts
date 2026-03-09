@@ -162,3 +162,13 @@ export class SessionError extends Error {
     this.name = 'SessionError'
   }
 }
+
+/**
+ * Thrown when a tool fails validation during registration.
+ */
+export class ToolValidationError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'ToolValidationError'
+  }
+}

@@ -1,14 +1,5 @@
 import type { Tool } from '../tools/tool.js'
-
-/**
- * Thrown when a tool fails validation during registration.
- */
-export class ToolValidationError extends Error {
-  constructor(message: string) {
-    super(message)
-    this.name = 'ToolValidationError'
-  }
-}
+import { ToolValidationError } from '../errors.js'
 
 /**
  * Registry for managing Tool instances with name-based CRUDL operations.
