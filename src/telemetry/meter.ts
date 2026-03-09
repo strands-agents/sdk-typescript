@@ -1,12 +1,9 @@
 /**
  * Agent loop metrics tracking.
  *
- * The {@link Meter} accumulates quantitative metrics during agent invocation.
- * Symmetric with {@link Tracer}: the Meter tracks metrics while the Tracer
- * tracks trace spans. Both are private fields on the Agent class.
- *
- * Use the {@link Meter.metrics} getter to obtain a read-only
- * {@link AgentMetrics} snapshot for inclusion in {@link AgentResult}.
+ * The {@link Meter} accumulates local metrics during agent invocation and
+ * provides them as a read-only {@link AgentMetrics} snapshot via the
+ * {@link Meter.metrics} getter for inclusion in {@link AgentResult}.
  */
 
 import type { Usage, Metrics, ModelMetadataEventData } from '../models/streaming.js'
@@ -235,12 +232,9 @@ export class AgentMetrics implements JSONSerializable<AgentMetricsData> {
 }
 
 /**
- * Accumulates metrics during agent invocation.
+ * Accumulates local metrics during agent invocation.
  *
- * Symmetric with {@link Tracer} — the Meter tracks quantitative metrics
- * while the Tracer tracks qualitative trace spans. Both are private fields
- * on the Agent class and accumulate data during invocation.
- *
+ * Tracks cycle counts, token usage, tool execution stats, and model latency.
  * Use the {@link metrics} getter to obtain a read-only {@link AgentMetrics}
  * snapshot for inclusion in {@link AgentResult}.
  *
@@ -401,8 +395,8 @@ export class Meter {
   /**
    * Convenience method to update loop-level metrics from a model response.
    *
-   * Symmetric with {@link Tracer.endModelInvokeSpan} — call this after each
-   * model invocation within a loop cycle to accumulate usage and latency.
+   * Call this after each model invocation within a loop cycle to
+   * accumulate usage and latency.
    *
    * @param metadata - The metadata event from a model invocation, or undefined if unavailable
    */
