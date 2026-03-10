@@ -173,11 +173,8 @@ export class Graph implements MultiAgentBase {
 
     try {
       while (targets.length > 0 || streams.size > 0) {
-        for (const node of targets.splice(0)) {
-          if (streams.size >= this.config.maxConcurrency) {
-            targets.push(node)
-            continue
-          }
+        while (targets.length > 0 && streams.size < this.config.maxConcurrency) {
+          const node = targets.shift()!
 
           this._checkSteps(state)
           state.steps++
@@ -215,8 +212,6 @@ export class Graph implements MultiAgentBase {
             })
             targets.push(...ready)
           }
-
-          if (targets.length > 0) break
         }
       }
     } catch (error) {
