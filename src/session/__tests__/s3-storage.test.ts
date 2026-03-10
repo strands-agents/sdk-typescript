@@ -252,11 +252,12 @@ describe('S3Storage', () => {
           '019c9bf1-1d34-7eef-96fb-d1be20fd7bbd',
           '019c9bf1-24bb-7eef-96fb-ddcc943cd859',
         ]
+        // S3 returns objects in lexicographic key order — mock reflects that contract
         mockS3Client.send.mockResolvedValue({
           Contents: [
-            { Key: `test-session/scopes/agent/${SCOPE_ID}/snapshots/immutable_history/snapshot_${ids[2]}.json` },
             { Key: `test-session/scopes/agent/${SCOPE_ID}/snapshots/immutable_history/snapshot_${ids[0]}.json` },
             { Key: `test-session/scopes/agent/${SCOPE_ID}/snapshots/immutable_history/snapshot_${ids[1]}.json` },
+            { Key: `test-session/scopes/agent/${SCOPE_ID}/snapshots/immutable_history/snapshot_${ids[2]}.json` },
           ],
         })
 
@@ -267,10 +268,11 @@ describe('S3Storage', () => {
         expect(result).toEqual(ids)
         expect(mockS3Client.send).toHaveBeenCalledWith(
           expect.objectContaining({
-            input: {
+            input: expect.objectContaining({
               Bucket: 'test-bucket',
               Prefix: `test-session/scopes/agent/${SCOPE_ID}/snapshots/immutable_history/`,
-            },
+              MaxKeys: 1000,
+            }),
           })
         )
       })
@@ -321,8 +323,9 @@ describe('S3Storage', () => {
           '019c9bf1-1d34-7eef-96fb-d1be20fd7bbd',
           '019c9bf1-24bb-7eef-96fb-ddcc943cd859',
         ]
+        // Simulate S3 server-side StartAfter: only return objects after ids[0]
         mockS3Client.send.mockResolvedValue({
-          Contents: ids.map((id) => ({
+          Contents: [ids[1], ids[2]].map((id) => ({
             Key: `test-session/scopes/agent/${SCOPE_ID}/snapshots/immutable_history/snapshot_${id}.json`,
           })),
         })
@@ -333,6 +336,13 @@ describe('S3Storage', () => {
         })
 
         expect(result).toEqual([ids[1], ids[2]])
+        expect(mockS3Client.send).toHaveBeenCalledWith(
+          expect.objectContaining({
+            input: expect.objectContaining({
+              StartAfter: `test-session/scopes/agent/${SCOPE_ID}/snapshots/immutable_history/snapshot_${ids[0]}.json`,
+            }),
+          })
+        )
       })
 
       it('limits results when limit is provided', async () => {
@@ -361,8 +371,9 @@ describe('S3Storage', () => {
           '019c9bf1-1d34-7eef-96fb-d1be20fd7bbd',
           '019c9bf1-24bb-7eef-96fb-ddcc943cd859',
         ]
+        // Simulate S3 server-side StartAfter: only return objects after ids[0]
         mockS3Client.send.mockResolvedValue({
-          Contents: ids.map((id) => ({
+          Contents: [ids[1], ids[2]].map((id) => ({
             Key: `test-session/scopes/agent/${SCOPE_ID}/snapshots/immutable_history/snapshot_${id}.json`,
           })),
         })

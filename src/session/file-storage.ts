@@ -2,7 +2,7 @@ import type { SnapshotStorage, SnapshotLocation } from './storage.js'
 import type { Snapshot, SnapshotManifest } from './types.js'
 
 import { SessionError } from '../errors.js'
-import { validateIdentifier } from './validation.js'
+import { validateIdentifier, validateUuidV7 } from './validation.js'
 
 const MANIFEST = 'manifest.json'
 const SNAPSHOT_LATEST = 'snapshot_latest.json'
@@ -105,6 +105,7 @@ export class FileStorage implements SnapshotStorage {
         .filter((id): id is string => id !== undefined)
         .sort()
       if (params.startAfter) {
+        validateUuidV7(params.startAfter)
         ids = ids.filter((id) => id > params.startAfter!)
       }
       if (params.limit !== undefined) {

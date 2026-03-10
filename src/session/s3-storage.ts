@@ -8,13 +8,14 @@ import {
 import type { SnapshotStorage, SnapshotLocation } from './storage.js'
 import type { Snapshot, SnapshotManifest } from './types.js'
 import { SessionError } from '../errors.js'
-import { validateIdentifier } from './validation.js'
+import { validateIdentifier, validateUuidV7 } from './validation.js'
 
 const MANIFEST = 'manifest.json'
 const SNAPSHOT_LATEST = 'snapshot_latest.json'
 const IMMUTABLE_HISTORY = 'immutable_history/'
 const SCHEMA_VERSION = '1.0'
 const SNAPSHOT_REGEX = /snapshot_([\w-]+)\.json$/
+const S3_PAGE_SIZE = 1000
 
 /**
  * Configuration options for S3Storage
@@ -118,8 +119,8 @@ export class S3Storage implements SnapshotStorage {
   /**
    * Lists immutable snapshot IDs for a scope, sorted chronologically.
    * Since IDs are UUID v7, lexicographic sort equals chronological order.
-   * `startAfter` filters to IDs after the given UUID v7 (exclusive cursor).
-   * `limit` caps the number of returned IDs.
+   * Pushes `startAfter` and `limit` down to S3 via `StartAfter` and `MaxKeys`
+   * to avoid fetching unnecessary objects.
    * Returns an empty array if no snapshots exist yet.
    */
   async listSnapshotIds(params: {
@@ -127,33 +128,45 @@ export class S3Storage implements SnapshotStorage {
     limit?: number
     startAfter?: string
   }): Promise<string[]> {
+    if (params.limit !== undefined && params.limit <= 0) return []
+    if (params.startAfter) validateUuidV7(params.startAfter)
+
     const prefix = this._getKey(params.location, IMMUTABLE_HISTORY)
+    // S3 StartAfter is a full object key; construct it from the UUID cursor.
+    // Exclusive: objects after this key are returned, matching our pagination contract.
+    const startAfterKey = params.startAfter
+      ? this._getHistorySnapshotKey(params.location, params.startAfter)
+      : undefined
     try {
-      const allIds: string[] = []
+      const ids: string[] = []
       let continuationToken: string | undefined
       do {
         const response = await this._s3.send(
-          new ListObjectsV2Command({ Bucket: this._bucket, Prefix: prefix, ContinuationToken: continuationToken })
+          new ListObjectsV2Command({
+            Bucket: this._bucket,
+            Prefix: prefix,
+            StartAfter: continuationToken ? undefined : startAfterKey,
+            MaxKeys: params.limit !== undefined ? Math.min(S3_PAGE_SIZE, params.limit - ids.length) : S3_PAGE_SIZE,
+            ContinuationToken: continuationToken,
+          })
         )
-        const ids = (response.Contents ?? [])
+        const page = (response.Contents ?? [])
           .map((obj) => obj.Key?.match(SNAPSHOT_REGEX)?.[1])
           .filter((id): id is string => id !== undefined)
-        allIds.push(...ids)
-        continuationToken = response.IsTruncated ? response.NextContinuationToken : undefined
-      } while (continuationToken)
-
-      let result = allIds.sort()
-      if (params.startAfter) {
-        result = result.filter((id) => id > params.startAfter!)
-      }
-      if (params.limit !== undefined) {
-        result = result.slice(0, params.limit)
-      }
-      return result
+        ids.push(...page)
+        if (response.IsTruncated) {
+          if (!response.NextContinuationToken) {
+            throw new SessionError('S3 returned truncated response without continuation token')
+          }
+          continuationToken = response.NextContinuationToken
+        } else {
+          continuationToken = undefined
+        }
+      } while (continuationToken && (params.limit === undefined || ids.length < params.limit))
+      return params.limit !== undefined ? ids.slice(0, params.limit) : ids
     } catch (error: unknown) {
-      if (this._isNotFoundError(error)) {
-        return []
-      }
+      if (error instanceof SessionError) throw error
+      if (this._isNotFoundError(error)) return []
       throw new SessionError(`Failed to list snapshots for session ${params.location.sessionId}`, { cause: error })
     }
   }
