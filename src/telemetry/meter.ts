@@ -45,6 +45,11 @@ export interface AgentLoopMetricsData {
   cycleId: string
 
   /**
+   * Duration of this cycle in milliseconds.
+   */
+  duration: number
+
+  /**
    * Token usage for this cycle.
    */
   usage: Usage
@@ -78,11 +83,6 @@ export interface AgentMetricsData {
    * Per-tool execution metrics keyed by tool name.
    */
   toolMetrics: Record<string, ToolMetricsData>
-
-  /**
-   * Duration of each cycle in milliseconds.
-   */
-  cycleDurations: number[]
 
   /**
    * Per-invocation metrics.
@@ -148,11 +148,6 @@ export class AgentMetrics implements JSONSerializable<AgentMetricsData> {
   readonly toolMetrics: Record<string, ToolMetricsData>
 
   /**
-   * Duration of each cycle in milliseconds.
-   */
-  readonly cycleDurations: number[]
-
-  /**
    * Per-invocation metrics.
    */
   readonly agentInvocations: InvocationMetricsData[]
@@ -170,7 +165,6 @@ export class AgentMetrics implements JSONSerializable<AgentMetricsData> {
   constructor(data?: Partial<AgentMetricsData>) {
     this.cycleCount = data?.cycleCount ?? 0
     this.toolMetrics = data?.toolMetrics ?? {}
-    this.cycleDurations = data?.cycleDurations ?? []
     this.agentInvocations = data?.agentInvocations ?? []
     this.accumulatedUsage = data?.accumulatedUsage ?? { inputTokens: 0, outputTokens: 0, totalTokens: 0 }
     this.accumulatedMetrics = data?.accumulatedMetrics ?? { latencyMs: 0 }
@@ -181,6 +175,13 @@ export class AgentMetrics implements JSONSerializable<AgentMetricsData> {
    */
   get latestAgentInvocation(): InvocationMetricsData | undefined {
     return this.agentInvocations.length > 0 ? this.agentInvocations[this.agentInvocations.length - 1] : undefined
+  }
+
+  /**
+   * Duration of each cycle in milliseconds, derived from per-cycle data.
+   */
+  get cycleDurations(): number[] {
+    return this.agentInvocations.flatMap((inv) => inv.cycles.map((c) => c.duration))
   }
 
   /**
@@ -222,7 +223,6 @@ export class AgentMetrics implements JSONSerializable<AgentMetricsData> {
     return {
       cycleCount: this.cycleCount,
       toolMetrics: this.toolMetrics,
-      cycleDurations: this.cycleDurations,
       agentInvocations: this.agentInvocations,
       accumulatedUsage: this.accumulatedUsage,
       accumulatedMetrics: this.accumulatedMetrics,
@@ -248,11 +248,6 @@ export class Meter {
    * Per-tool execution metrics keyed by tool name.
    */
   private readonly _toolMetrics: Record<string, ToolMetricsData> = {}
-
-  /**
-   * Duration of each cycle in milliseconds.
-   */
-  private readonly _cycleDurations: number[] = []
 
   /**
    * Per-invocation metrics.
@@ -295,6 +290,7 @@ export class Meter {
     if (latestInvocation) {
       latestInvocation.cycles.push({
         cycleId: cycleId,
+        duration: 0,
         usage: Meter._createEmptyUsage(),
       })
     }
@@ -308,7 +304,13 @@ export class Meter {
    * @param startTime - The timestamp when the cycle started (milliseconds since epoch)
    */
   endCycle(startTime: number): void {
-    this._cycleDurations.push(Date.now() - startTime)
+    const latestInvocation = this._latestAgentInvocation
+    if (latestInvocation) {
+      const cycles = latestInvocation.cycles
+      if (cycles.length > 0) {
+        cycles[cycles.length - 1]!.duration = Date.now() - startTime
+      }
+    }
   }
 
   /**
@@ -357,7 +359,6 @@ export class Meter {
     return new AgentMetrics({
       cycleCount: this._cycleCount,
       toolMetrics: this._toolMetrics,
-      cycleDurations: this._cycleDurations,
       agentInvocations: this._agentInvocations,
       accumulatedUsage: this._accumulatedUsage,
       accumulatedMetrics: this._accumulatedMetrics,

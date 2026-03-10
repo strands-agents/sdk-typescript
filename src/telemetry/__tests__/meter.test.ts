@@ -82,8 +82,8 @@ describe('Meter', () => {
         {
           usage: { inputTokens: 30, outputTokens: 15, totalTokens: 45 },
           cycles: [
-            { cycleId: 'cycle-1', usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } },
-            { cycleId: 'cycle-2', usage: { inputTokens: 20, outputTokens: 10, totalTokens: 30 } },
+            { cycleId: 'cycle-1', duration: 3000, usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } },
+            { cycleId: 'cycle-2', duration: 5000, usage: { inputTokens: 20, outputTokens: 10, totalTokens: 30 } },
           ],
         },
       ])
@@ -109,11 +109,11 @@ describe('Meter', () => {
       expect(meter.metrics.agentInvocations).toStrictEqual([
         {
           usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
-          cycles: [{ cycleId: 'cycle-1', usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } }],
+          cycles: [{ cycleId: 'cycle-1', duration: 0, usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } }],
         },
         {
           usage: { inputTokens: 20, outputTokens: 10, totalTokens: 30 },
-          cycles: [{ cycleId: 'cycle-2', usage: { inputTokens: 20, outputTokens: 10, totalTokens: 30 } }],
+          cycles: [{ cycleId: 'cycle-2', duration: 0, usage: { inputTokens: 20, outputTokens: 10, totalTokens: 30 } }],
         },
       ])
     })
@@ -157,7 +157,7 @@ describe('Meter', () => {
       meter.startCycle()
 
       expect(meter.metrics.latestAgentInvocation!.cycles).toStrictEqual([
-        { cycleId: 'cycle-1', usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 } },
+        { cycleId: 'cycle-1', duration: 0, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 } },
       ])
     })
 
@@ -170,11 +170,14 @@ describe('Meter', () => {
   })
 
   describe('endCycle', () => {
-    it('records duration', () => {
+    it('records duration on the latest cycle', () => {
       vi.spyOn(Date, 'now').mockReturnValue(200_000)
 
+      meter.startNewInvocation()
+      meter.startCycle()
       meter.endCycle(100_000)
 
+      expect(meter.metrics.latestAgentInvocation!.cycles[0]!.duration).toBe(100_000)
       expect(meter.metrics.cycleDurations).toStrictEqual([100_000])
       vi.restoreAllMocks()
     })
@@ -332,7 +335,7 @@ describe('Meter', () => {
       const invocation = meter.metrics.latestAgentInvocation!
       expect(invocation).toStrictEqual({
         usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
-        cycles: [{ cycleId: 'cycle-1', usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } }],
+        cycles: [{ cycleId: 'cycle-1', duration: 0, usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } }],
       })
     })
 
@@ -393,7 +396,6 @@ describe('AgentMetrics', () => {
       expect(metrics.toJSON()).toStrictEqual({
         cycleCount: 0,
         toolMetrics: {},
-        cycleDurations: [],
         agentInvocations: [],
         accumulatedUsage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
         accumulatedMetrics: { latencyMs: 0 },
@@ -406,15 +408,14 @@ describe('AgentMetrics', () => {
         toolMetrics: {
           search: { callCount: 2, successCount: 1, errorCount: 1, totalTime: 2.0 },
         },
-        cycleDurations: [3000, 5000],
         accumulatedUsage: { inputTokens: 30, outputTokens: 15, totalTokens: 45 },
         accumulatedMetrics: { latencyMs: 350 },
         agentInvocations: [
           {
             usage: { inputTokens: 30, outputTokens: 15, totalTokens: 45 },
             cycles: [
-              { cycleId: 'cycle-1', usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } },
-              { cycleId: 'cycle-2', usage: { inputTokens: 20, outputTokens: 10, totalTokens: 30 } },
+              { cycleId: 'cycle-1', duration: 3000, usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } },
+              { cycleId: 'cycle-2', duration: 5000, usage: { inputTokens: 20, outputTokens: 10, totalTokens: 30 } },
             ],
           },
         ],
@@ -425,15 +426,14 @@ describe('AgentMetrics', () => {
         toolMetrics: {
           search: { callCount: 2, successCount: 1, errorCount: 1, totalTime: 2.0 },
         },
-        cycleDurations: [3000, 5000],
         accumulatedUsage: { inputTokens: 30, outputTokens: 15, totalTokens: 45 },
         accumulatedMetrics: { latencyMs: 350 },
         agentInvocations: [
           {
             usage: { inputTokens: 30, outputTokens: 15, totalTokens: 45 },
             cycles: [
-              { cycleId: 'cycle-1', usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } },
-              { cycleId: 'cycle-2', usage: { inputTokens: 20, outputTokens: 10, totalTokens: 30 } },
+              { cycleId: 'cycle-1', duration: 3000, usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } },
+              { cycleId: 'cycle-2', duration: 5000, usage: { inputTokens: 20, outputTokens: 10, totalTokens: 30 } },
             ],
           },
         ],
@@ -459,12 +459,33 @@ describe('AgentMetrics', () => {
 
   describe('computed getters', () => {
     it('totalDuration sums cycle durations', () => {
-      const metrics = new AgentMetrics({ cycleDurations: [3000, 5000] })
+      const metrics = new AgentMetrics({
+        agentInvocations: [
+          {
+            usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+            cycles: [
+              { cycleId: 'cycle-1', duration: 3000, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 } },
+              { cycleId: 'cycle-2', duration: 5000, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 } },
+            ],
+          },
+        ],
+      })
       expect(metrics.totalDuration).toBe(8000)
     })
 
     it('averageCycleTime computes average', () => {
-      const metrics = new AgentMetrics({ cycleCount: 2, cycleDurations: [3000, 5000] })
+      const metrics = new AgentMetrics({
+        cycleCount: 2,
+        agentInvocations: [
+          {
+            usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+            cycles: [
+              { cycleId: 'cycle-1', duration: 3000, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 } },
+              { cycleId: 'cycle-2', duration: 5000, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 } },
+            ],
+          },
+        ],
+      })
       expect(metrics.averageCycleTime).toBe(4000)
     })
 

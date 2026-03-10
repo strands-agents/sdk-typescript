@@ -42,7 +42,6 @@ export function expectLoopMetrics(options: LoopMetricsMatcher): AgentMetrics {
   return expect.objectContaining({
     cycleCount,
     toolMetrics: toolNames.length > 0 ? expect.objectContaining(expectedToolMetrics) : {},
-    cycleDurations: expect.arrayContaining(Array.from({ length: cycleCount }, () => expect.any(Number))),
     accumulatedUsage: expect.objectContaining({
       inputTokens: expect.any(Number),
       outputTokens: expect.any(Number),
