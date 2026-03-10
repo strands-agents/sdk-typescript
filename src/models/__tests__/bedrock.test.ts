@@ -346,7 +346,7 @@ describe('BedrockModel', () => {
         messages: [
           {
             role: 'user',
-            content: [{ text: 'Hello' }],
+            content: [{ text: 'Hello' }, { cachePoint: { type: 'default' } }],
           },
         ],
         system: [{ text: 'You are a helpful assistant' }],
@@ -1112,7 +1112,7 @@ describe('BedrockModel', () => {
         messages: [
           {
             role: 'user',
-            content: [{ text: 'Hello' }],
+            content: [{ text: 'Hello' }, { cachePoint: { type: 'default' } }],
           },
         ],
         system: [{ text: 'You are a helpful assistant' }],
@@ -1223,7 +1223,7 @@ describe('BedrockModel', () => {
         messages: [
           {
             role: 'user',
-            content: [{ text: 'Hello' }],
+            content: [{ text: 'Hello' }, { cachePoint: { type: 'default' } }],
           },
         ],
         toolConfig: {
@@ -1270,9 +1270,14 @@ describe('BedrockModel', () => {
           },
         },
       ])
-      const lastMsg = call?.messages?.[call.messages.length - 1]
-      const lastBlock = lastMsg?.content?.[lastMsg.content.length - 1]
+      // Cache point should be on the last user message (index 0), not the assistant message
+      const userMsg = call?.messages?.[0]
+      const lastBlock = userMsg?.content?.[userMsg.content.length - 1]
       expect(lastBlock).toStrictEqual({ cachePoint: { type: 'default' } })
+      // Assistant message should not have a cache point
+      const assistantMsg = call?.messages?.[1]
+      const assistantLastBlock = assistantMsg?.content?.[assistantMsg.content.length - 1]
+      expect(assistantLastBlock).not.toStrictEqual({ cachePoint: { type: 'default' } })
     })
 
     it('does not mutate the original messages array', async () => {
@@ -1335,8 +1340,9 @@ describe('BedrockModel', () => {
       collectIterator(provider.stream(messages))
 
       const call = mockConverseStreamCommand.mock.lastCall?.[0]
-      const lastMsg = call?.messages?.[call.messages.length - 1]
-      const lastBlock = lastMsg?.content?.[lastMsg.content.length - 1]
+      // Cache point should be on the user message (index 0)
+      const userMsg = call?.messages?.[0]
+      const lastBlock = userMsg?.content?.[userMsg.content.length - 1]
       expect(lastBlock).toStrictEqual({ cachePoint: { type: 'default' } })
     })
 

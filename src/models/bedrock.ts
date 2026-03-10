@@ -62,11 +62,18 @@ const DEFAULT_BEDROCK_REGION_SUPPORTS_FIP = false
 const MODELS_INCLUDE_STATUS = ['anthropic.claude']
 
 /**
- * Models that support prompt caching.
- * Anthropic Claude and Amazon Nova models on Bedrock support prompt caching.
+ * Models that support the Anthropic-style prompt caching strategy.
+ * Used to auto-detect when `cacheConfig.strategy` is `'auto'`.
  * @see https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-caching.html
  */
-const MODELS_SUPPORTING_CACHING = ['anthropic', 'claude', 'nova']
+const MODELS_SUPPORTING_ANTHROPIC_CACHING = ['anthropic', 'claude']
+
+/**
+ * Models that handle prompt caching automatically without explicit cache points.
+ * These models cache prompts on the server side and do not need SDK-injected cache points.
+ * @see https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-caching.html
+ */
+const MODELS_WITH_AUTOMATIC_CACHING = ['nova']
 
 /**
  * Error messages that indicate context window overflow.
@@ -311,7 +318,9 @@ export class BedrockModel extends Model<BedrockModelConfig> {
    * @returns Cache strategy name or null
    */
   private _getCacheStrategy(): 'anthropic' | null {
-    return MODELS_SUPPORTING_CACHING.some((pattern) => this._config.modelId?.includes(pattern)) ? 'anthropic' : null
+    return MODELS_SUPPORTING_ANTHROPIC_CACHING.some((pattern) => this._config.modelId?.includes(pattern))
+      ? 'anthropic'
+      : null
   }
 
   /**
@@ -333,9 +342,13 @@ export class BedrockModel extends Model<BedrockModelConfig> {
     if (strategy === 'auto') {
       const detectedStrategy = this._getCacheStrategy()
       if (!detectedStrategy) {
-        logger.warn(
-          `model_id=<${this._config.modelId}> | cache_config is enabled but this model does not support automatic caching`
-        )
+        if (MODELS_WITH_AUTOMATIC_CACHING.some((pattern) => this._config.modelId?.includes(pattern))) {
+          logger.info(`model_id=<${this._config.modelId}> | this model handles caching automatically`)
+        } else {
+          logger.warn(
+            `model_id=<${this._config.modelId}> | cache_config is enabled but this model does not support automatic caching`
+          )
+        }
         return false
       }
       strategy = detectedStrategy
@@ -548,7 +561,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
   }
 
   /**
-   * Inject a cache point at the end of the last assistant message.
+   * Inject a cache point at the end of the last user message.
    * Strips any existing cache points from all messages first.
    *
    * @param messages - List of messages to inject cache point into (modified in place)
@@ -558,9 +571,9 @@ export class BedrockModel extends Model<BedrockModelConfig> {
       return
     }
 
-    let lastAssistantIdx: number | null = null
+    let lastUserIdx: number | null = null
 
-    // Strip existing cache points and find last assistant message
+    // Strip existing cache points and find last user message
     for (let msgIdx = 0; msgIdx < messages.length; msgIdx++) {
       const msg = messages[msgIdx]
       if (!msg) continue
@@ -577,17 +590,17 @@ export class BedrockModel extends Model<BedrockModelConfig> {
         }
       }
 
-      if (msg.role === 'assistant') {
-        lastAssistantIdx = msgIdx
+      if (msg.role === 'user') {
+        lastUserIdx = msgIdx
       }
     }
 
-    // Add cache point to last assistant message
-    if (lastAssistantIdx !== null) {
-      const lastMsg = messages[lastAssistantIdx]
+    // Add cache point to last user message
+    if (lastUserIdx !== null) {
+      const lastMsg = messages[lastUserIdx]
       if (lastMsg && lastMsg.content) {
         lastMsg.content.push({ cachePoint: { type: 'default' } })
-        logger.debug(`msg_idx=<${lastAssistantIdx}> | added cache point to last assistant message`)
+        logger.debug(`msg_idx=<${lastUserIdx}> | added cache point to last user message`)
       }
     }
   }
