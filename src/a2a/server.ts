@@ -12,7 +12,7 @@ import type { TaskStore, A2ARequestHandler } from '@a2a-js/sdk/server'
 import { DefaultRequestHandler, InMemoryTaskStore } from '@a2a-js/sdk/server'
 import { agentCardHandler, jsonRpcHandler, UserBuilder } from '@a2a-js/sdk/server/express'
 import type { AgentBase } from '../agent/agent-base.js'
-import { StrandsA2AExecutor } from './executor.js'
+import { A2AExecutor } from './executor.js'
 import { logExperimentalWarning } from './logging.js'
 import { logger } from '../logging/logger.js'
 
@@ -97,7 +97,7 @@ export class A2AServer {
     this._userBuilder = config.userBuilder
 
     const taskStore = config.taskStore ?? new InMemoryTaskStore()
-    const executor = new StrandsA2AExecutor(config.agent)
+    const executor = new A2AExecutor(config.agent)
     this._requestHandler = new DefaultRequestHandler(this._agentCard, taskStore, executor)
   }
 

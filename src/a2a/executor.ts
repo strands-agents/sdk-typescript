@@ -24,17 +24,17 @@ import { logger } from '../logging/logger.js'
  * @example
  * ```typescript
  * import { Agent } from '@strands-agents/sdk'
- * import { StrandsA2AExecutor } from '@strands-agents/sdk/a2a'
+ * import { A2AExecutor } from '@strands-agents/sdk/a2a'
  *
  * const agent = new Agent({ model: 'my-model' })
- * const executor = new StrandsA2AExecutor(agent)
+ * const executor = new A2AExecutor(agent)
  * ```
  */
-export class StrandsA2AExecutor implements AgentExecutor {
+export class A2AExecutor implements AgentExecutor {
   private _agent: AgentBase
 
   /**
-   * Creates a new StrandsA2AExecutor.
+   * Creates a new A2AExecutor.
    *
    * @param agent - The agent to execute for incoming A2A requests
    */

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { StrandsA2AExecutor } from '../executor.js'
+import { A2AExecutor } from '../executor.js'
 import type { AgentExecutionEvent, ExecutionEventBus, RequestContext } from '@a2a-js/sdk/server'
 import type { TaskArtifactUpdateEvent, TaskStatusUpdateEvent } from '@a2a-js/sdk'
 import { Agent } from '../../agent/agent.js'
@@ -40,12 +40,12 @@ function createRequestContext(text: string, taskId: string = 'task-1'): RequestC
   }
 }
 
-describe('StrandsA2AExecutor', () => {
+describe('A2AExecutor', () => {
   describe('execute', () => {
     it('streams text deltas as artifact chunks and publishes completed status', async () => {
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Agent response' })
       const agent = new Agent({ model, printer: false })
-      const executor = new StrandsA2AExecutor(agent)
+      const executor = new A2AExecutor(agent)
       const eventBus = createMockEventBus()
 
       await executor.execute(createRequestContext('Hello agent'), eventBus)
@@ -96,7 +96,7 @@ describe('StrandsA2AExecutor', () => {
         { type: 'textBlock', text: 'Second' },
       ])
       const agent = new Agent({ model, printer: false })
-      const executor = new StrandsA2AExecutor(agent)
+      const executor = new A2AExecutor(agent)
       const eventBus = createMockEventBus()
 
       await executor.execute(createRequestContext('Hello'), eventBus)
@@ -113,7 +113,7 @@ describe('StrandsA2AExecutor', () => {
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Response' })
       const agent = new Agent({ model, printer: false })
       vi.spyOn(agent, 'stream')
-      const executor = new StrandsA2AExecutor(agent)
+      const executor = new A2AExecutor(agent)
       const eventBus = createMockEventBus()
 
       const context: RequestContext = {
@@ -143,7 +143,7 @@ describe('StrandsA2AExecutor', () => {
     it('re-throws when agent throws, publishing only the initial task event', async () => {
       const model = new MockMessageModel().addTurn(new Error('Agent failed'))
       const agent = new Agent({ model, printer: false })
-      const executor = new StrandsA2AExecutor(agent)
+      const executor = new A2AExecutor(agent)
       const eventBus = createMockEventBus()
 
       await expect(executor.execute(createRequestContext('Hello'), eventBus)).rejects.toThrow('Agent failed')
@@ -177,7 +177,7 @@ describe('StrandsA2AExecutor', () => {
         },
       }
 
-      const executor = new StrandsA2AExecutor(mockAgent)
+      const executor = new A2AExecutor(mockAgent)
       const eventBus = createMockEventBus()
 
       await executor.execute(createRequestContext('Generate an image'), eventBus)
@@ -205,7 +205,7 @@ describe('StrandsA2AExecutor', () => {
     it('throws A2AError.invalidRequest when parts produce no content blocks', async () => {
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Response' })
       const agent = new Agent({ model, printer: false })
-      const executor = new StrandsA2AExecutor(agent)
+      const executor = new A2AExecutor(agent)
       const eventBus = createMockEventBus()
 
       const context: RequestContext = {
@@ -223,7 +223,7 @@ describe('StrandsA2AExecutor', () => {
     it('throws A2AError.unsupportedOperation', async () => {
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: '' })
       const agent = new Agent({ model, printer: false })
-      const executor = new StrandsA2AExecutor(agent)
+      const executor = new A2AExecutor(agent)
       const eventBus = createMockEventBus()
 
       await expect(executor.cancelTask('task-1', eventBus)).rejects.toThrow('Task cancellation is not supported')
