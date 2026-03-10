@@ -229,7 +229,7 @@ export class Agent implements AgentData {
   private _isInvoking: boolean = false
   private _printer?: Printer
   private _structuredOutputSchema?: z.ZodSchema | undefined
-  /** Tracer instance for OTel spans and local execution traces. */
+  /** Tracer instance for creating and managing OpenTelemetry spans. */
   private _tracer: Tracer
   /** Meter instance for accumulating loop metrics during invocation. */
   private _meter: Meter
@@ -684,7 +684,7 @@ export class Agent implements AgentData {
       const { message, stopReason, usage } = yield* this._streamFromModel(this.messages, streamOptions)
 
       // Accumulate token usage and model latency metrics
-      this._meter.updateLoop(metadata)
+      this._meter.updateCycle(metadata)
 
       // End model span with usage
       this._tracer.endModelInvokeSpan(modelSpan, { output: message, stopReason, ...(usage && { usage }) })

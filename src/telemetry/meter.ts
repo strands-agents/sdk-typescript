@@ -30,7 +30,7 @@ export interface ToolMetricsData {
   errorCount: number
 
   /**
-   * Total execution time in seconds.
+   * Total execution time in milliseconds.
    */
   totalTime: number
 }
@@ -38,11 +38,11 @@ export interface ToolMetricsData {
 /**
  * Per-cycle usage tracking.
  */
-export interface AgentLoopMetric {
+export interface AgentLoopMetricsData {
   /**
    * Unique identifier for this cycle.
    */
-  agentLoopCycleId: string
+  cycleId: string
 
   /**
    * Token usage for this cycle.
@@ -53,11 +53,11 @@ export interface AgentLoopMetric {
 /**
  * Per-invocation metrics tracking.
  */
-export interface AgentInvocation {
+export interface InvocationMetricsData {
   /**
    * Cycle metrics for this invocation.
    */
-  cycles: AgentLoopMetric[]
+  cycles: AgentLoopMetricsData[]
 
   /**
    * Accumulated token usage for this invocation.
@@ -87,7 +87,7 @@ export interface AgentMetricsData {
   /**
    * Per-invocation metrics.
    */
-  agentInvocations: AgentInvocation[]
+  agentInvocations: InvocationMetricsData[]
 
   /**
    * Accumulated token usage across all model invocations.
@@ -155,7 +155,7 @@ export class AgentMetrics implements JSONSerializable<AgentMetricsData> {
   /**
    * Per-invocation metrics.
    */
-  readonly agentInvocations: AgentInvocation[]
+  readonly agentInvocations: InvocationMetricsData[]
 
   /**
    * Accumulated token usage across all model invocations.
@@ -179,7 +179,7 @@ export class AgentMetrics implements JSONSerializable<AgentMetricsData> {
   /**
    * The most recent agent invocation, or undefined if none exist.
    */
-  get latestAgentInvocation(): AgentInvocation | undefined {
+  get latestAgentInvocation(): InvocationMetricsData | undefined {
     return this.agentInvocations.length > 0 ? this.agentInvocations[this.agentInvocations.length - 1] : undefined
   }
 
@@ -257,28 +257,26 @@ export class Meter {
   /**
    * Per-invocation metrics.
    */
-  private readonly _agentInvocations: AgentInvocation[] = []
+  private readonly _agentInvocations: InvocationMetricsData[] = []
 
   /**
    * Accumulated token usage across all model invocations.
    */
-  private readonly _accumulatedUsage: Usage = Meter.createEmptyUsage()
+  private readonly _accumulatedUsage: Usage = Meter._createEmptyUsage()
 
   /**
    * Accumulated performance metrics across all model invocations.
    */
   private readonly _accumulatedMetrics: Metrics = { latencyMs: 0 }
 
-  // -- Public API (lifecycle order: invocation → cycle → tool → loop → snapshot) --
-
   /**
    * Begin tracking a new agent invocation.
-   * Creates a new AgentInvocation entry for per-invocation metrics.
+   * Creates a new InvocationMetricsData entry for per-invocation metrics.
    */
   startNewInvocation(): void {
     this._agentInvocations.push({
       cycles: [],
-      usage: Meter.createEmptyUsage(),
+      usage: Meter._createEmptyUsage(),
     })
   }
 
@@ -296,8 +294,8 @@ export class Meter {
     const latestInvocation = this._latestAgentInvocation
     if (latestInvocation) {
       latestInvocation.cycles.push({
-        agentLoopCycleId: cycleId,
-        usage: Meter.createEmptyUsage(),
+        cycleId: cycleId,
+        usage: Meter._createEmptyUsage(),
       })
     }
 
@@ -340,14 +338,14 @@ export class Meter {
   /**
    * Update loop-level metrics from a model response.
    *
-   * Call this after each model invocation within a loop cycle to
+   * Call this after each model invocation within a cycle to
    * accumulate usage and latency.
    *
    * @param metadata - The metadata event from a model invocation, or undefined if unavailable
    */
-  updateLoop(metadata?: ModelMetadataEventData): void {
+  updateCycle(metadata?: ModelMetadataEventData): void {
     if (metadata) {
-      this.updateFromMetadata(metadata)
+      this._updateFromMetadata(metadata)
     }
   }
 
@@ -366,12 +364,10 @@ export class Meter {
     })
   }
 
-  // -- Private instance helpers --
-
   /**
    * The most recent agent invocation, or undefined if none exist.
    */
-  private get _latestAgentInvocation(): AgentInvocation | undefined {
+  private get _latestAgentInvocation(): InvocationMetricsData | undefined {
     return this._agentInvocations.length > 0 ? this._agentInvocations[this._agentInvocations.length - 1] : undefined
   }
 
@@ -380,9 +376,9 @@ export class Meter {
    *
    * @param metadata - The metadata event from a model invocation
    */
-  private updateFromMetadata(metadata: ModelMetadataEventData): void {
+  private _updateFromMetadata(metadata: ModelMetadataEventData): void {
     if (metadata.usage) {
-      this.updateUsage(metadata.usage)
+      this._updateUsage(metadata.usage)
     }
     if (metadata.metrics) {
       this._accumulatedMetrics.latencyMs += metadata.metrics.latencyMs
@@ -394,16 +390,16 @@ export class Meter {
    *
    * @param usage - The usage data to accumulate
    */
-  private updateUsage(usage: Usage): void {
-    Meter.accumulateUsage(this._accumulatedUsage, usage)
+  private _updateUsage(usage: Usage): void {
+    Meter._accumulateUsage(this._accumulatedUsage, usage)
 
     const latestInvocation = this._latestAgentInvocation
     if (latestInvocation) {
-      Meter.accumulateUsage(latestInvocation.usage, usage)
+      Meter._accumulateUsage(latestInvocation.usage, usage)
 
       const cycles = latestInvocation.cycles
       if (cycles.length > 0) {
-        Meter.accumulateUsage(cycles[cycles.length - 1]!.usage, usage)
+        Meter._accumulateUsage(cycles[cycles.length - 1]!.usage, usage)
       }
     }
   }
@@ -413,7 +409,7 @@ export class Meter {
    *
    * @returns A Usage object with zeroed counters
    */
-  private static createEmptyUsage(): Usage {
+  private static _createEmptyUsage(): Usage {
     return {
       inputTokens: 0,
       outputTokens: 0,
@@ -427,7 +423,7 @@ export class Meter {
    * @param target - The Usage object to accumulate into (mutated in place)
    * @param source - The Usage object to accumulate from
    */
-  private static accumulateUsage(target: Usage, source: Usage): void {
+  private static _accumulateUsage(target: Usage, source: Usage): void {
     target.inputTokens += source.inputTokens
     target.outputTokens += source.outputTokens
     target.totalTokens += source.totalTokens

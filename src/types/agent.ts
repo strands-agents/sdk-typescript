@@ -67,12 +67,12 @@ export class AgentResult {
   constructor(data: {
     stopReason: StopReason
     lastMessage: Message
-    metrics?: AgentMetrics
+    metrics: AgentMetrics
     structuredOutput?: z.output<z.ZodType>
   }) {
     this.stopReason = data.stopReason
     this.lastMessage = data.lastMessage
-    this.metrics = data.metrics ?? new AgentMetrics()
+    this.metrics = data.metrics
     if (data.structuredOutput !== undefined) {
       this.structuredOutput = data.structuredOutput
     }
