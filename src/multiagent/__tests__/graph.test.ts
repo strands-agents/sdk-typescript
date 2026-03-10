@@ -424,6 +424,50 @@ describe('Graph', () => {
       expect(agent.messages).toStrictEqual(messagesBefore)
       expect(agent.state.getAll()).toStrictEqual(stateBefore)
     })
+
+    it('executes join node exactly once when all parents complete concurrently', async () => {
+      const graph = new Graph({
+        nodes: [makeAgent('a', 'a-reply'), makeAgent('b', 'b-reply'), makeAgent('c', 'c-reply')],
+        edges: [
+          ['a', 'c'],
+          ['b', 'c'],
+        ],
+      })
+
+      const nodeC = graph.nodes.get('c')!
+      const streamSpy = vi.spyOn(nodeC, 'stream')
+
+      const result = await graph.invoke('go')
+
+      expect(result.status).toBe(Status.COMPLETED)
+      expect(streamSpy).toHaveBeenCalledTimes(1)
+    })
+
+    it('re-executes node in a cycle when conditional edge allows re-entry', async () => {
+      let visits = 0
+
+      const graph = new Graph({
+        nodes: [makeAgent('a', 'a-reply')],
+        edges: [
+          {
+            source: 'a',
+            target: 'a',
+            handler: () => {
+              visits++
+              return visits < 2
+            },
+          },
+        ],
+        sources: ['a'],
+      })
+
+      const result = await graph.invoke('go')
+
+      expect(result.status).toBe(Status.COMPLETED)
+      expect(result.results).toHaveLength(2)
+      expect(result.results.map((r) => r.nodeId)).toStrictEqual(['a', 'a'])
+      expect(visits).toBe(2)
+    })
   })
 
   describe('stream', () => {

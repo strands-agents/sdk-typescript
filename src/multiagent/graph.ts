@@ -207,7 +207,7 @@ export class Graph implements MultiAgentBase {
 
           state.results.push(result)
 
-          const ready = await this._findReady(node, state)
+          const ready = await this._findReady(node, state, streams, targets)
           if (ready.length > 0) {
             yield new MultiAgentHandoffEvent({
               source: node.id,
@@ -460,13 +460,20 @@ export class Graph implements MultiAgentBase {
    * Finds downstream nodes that are ready to execute after a node completes.
    * A target is ready when all its incoming edge sources are COMPLETED.
    */
-  private async _findReady(node: Node, state: MultiAgentState): Promise<Node[]> {
+  private async _findReady(
+    node: Node,
+    state: MultiAgentState,
+    streams: ReadonlyMap<string, Promise<void>>,
+    targets: readonly Node[]
+  ): Promise<Node[]> {
     if (state.node(node.id)?.status !== Status.COMPLETED) return []
 
     const ready: Node[] = []
 
     for (const edge of this.edges.filter((e) => e.source.id === node.id)) {
       if (!(await edge.handler(state))) continue
+
+      if (streams.has(edge.target.id) || targets.some((n) => n.id === edge.target.id)) continue
 
       const deps = this.edges.filter((e) => e.target.id === edge.target.id)
       if (deps.every((e) => state.node(e.source.id)?.status === Status.COMPLETED)) {
