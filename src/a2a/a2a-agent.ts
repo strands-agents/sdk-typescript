@@ -109,6 +109,7 @@ export class A2AAgent implements AgentBase {
 
     let lastEvent: A2AEventData | undefined
     let lastCompleteEvent: A2AEventData | undefined
+    const artifactTexts = new Map<string, string[]>()
 
     const eventStream = client.sendMessageStream({
       message: {
@@ -124,11 +125,24 @@ export class A2AAgent implements AgentBase {
       if (this._isCompleteEvent(event)) {
         lastCompleteEvent = event
       }
+      if (event.kind === 'artifact-update') {
+        const id = event.artifact.artifactId
+        if (!event.append) {
+          artifactTexts.set(id, [])
+        }
+        const chunks = artifactTexts.get(id) ?? []
+        const chunkText = this._textFromParts(event.artifact.parts)
+        if (chunkText) {
+          chunks.push(chunkText)
+          artifactTexts.set(id, chunks)
+        }
+      }
       yield new A2AStreamUpdateEvent(event)
     }
 
     const finalEvent = lastCompleteEvent ?? lastEvent
-    const result = this._buildResult(finalEvent)
+    const accumulatedText = [...artifactTexts.values()].map((chunks) => chunks.join('')).join('\n')
+    const result = this._buildResult(finalEvent, accumulatedText)
 
     yield new AgentResultEvent({ agent: { state: new AppState(), messages: [result.lastMessage] }, result })
     return result
@@ -208,8 +222,8 @@ export class A2AAgent implements AgentBase {
    * @param event - The final A2A event, or undefined if no events were received
    * @returns The constructed AgentResult
    */
-  private _buildResult(event: A2AEventData | undefined): AgentResult {
-    const text = event ? this._extractTextFromEvent(event) : ''
+  private _buildResult(event: A2AEventData | undefined, accumulatedText?: string): AgentResult {
+    const text = this._extractTextFromEvent(event) || accumulatedText || ''
     const lastMessage = new Message({
       role: 'assistant',
       content: [new TextBlock(text)],
@@ -223,7 +237,8 @@ export class A2AAgent implements AgentBase {
    * @param event - The A2A streaming event
    * @returns Extracted text content
    */
-  private _extractTextFromEvent(event: A2AEventData): string {
+  private _extractTextFromEvent(event: A2AEventData | undefined): string {
+    if (!event) return ''
     if (event.kind === 'message') {
       return this._textFromParts(event.parts)
     }
