@@ -2,8 +2,6 @@ import { describe, expect, it, vi } from 'vitest'
 import { Agent } from '../../agent/agent.js'
 import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
 import { collectGenerator } from '../../__fixtures__/model-test-helpers.js'
-import type { HookProvider } from '../../hooks/types.js'
-import type { HookRegistry } from '../../hooks/registry.js'
 import { AfterNodeCallEvent, BeforeNodeCallEvent, MultiAgentInitializedEvent } from '../events.js'
 import { TextBlock } from '../../types/messages.js'
 import { Status } from '../state.js'
@@ -368,18 +366,14 @@ describe('Graph', () => {
 
     it('calls initialize only once across invocations', async () => {
       let callCount = 0
-      const provider: HookProvider = {
-        registerCallbacks: (registry: HookRegistry) => {
-          registry.addCallback(MultiAgentInitializedEvent, () => {
-            callCount++
-          })
-        },
-      }
 
       const graph = new Graph({
         nodes: [makeAgent('a')],
         edges: [],
-        hooks: [provider],
+      })
+
+      graph.hooks.addCallback(MultiAgentInitializedEvent, () => {
+        callCount++
       })
 
       await graph.invoke('first')
@@ -392,18 +386,6 @@ describe('Graph', () => {
       let concurrent = 0
       let maxConcurrent = 0
 
-      const provider: HookProvider = {
-        registerCallbacks: (registry: HookRegistry) => {
-          registry.addCallback(BeforeNodeCallEvent, () => {
-            concurrent++
-            maxConcurrent = Math.max(maxConcurrent, concurrent)
-          })
-          registry.addCallback(AfterNodeCallEvent, () => {
-            concurrent--
-          })
-        },
-      }
-
       const graph = new Graph({
         nodes: [makeAgent('a'), makeAgent('b'), makeAgent('c')],
         edges: [
@@ -411,7 +393,14 @@ describe('Graph', () => {
           ['a', 'c'],
         ],
         maxConcurrency: 1,
-        hooks: [provider],
+      })
+
+      graph.hooks.addCallback(BeforeNodeCallEvent, () => {
+        concurrent++
+        maxConcurrent = Math.max(maxConcurrent, concurrent)
+      })
+      graph.hooks.addCallback(AfterNodeCallEvent, () => {
+        concurrent--
       })
 
       const result = await graph.invoke('go')
@@ -481,18 +470,13 @@ describe('Graph', () => {
     })
 
     it('returns cancelled result when cancel is true', async () => {
-      const provider: HookProvider = {
-        registerCallbacks: (registry: HookRegistry) => {
-          registry.addCallback(BeforeNodeCallEvent, (event: BeforeNodeCallEvent) => {
-            event.cancel = true
-          })
-        },
-      }
-
       const graph = new Graph({
         nodes: [makeAgent('a')],
         edges: [],
-        hooks: [provider],
+      })
+
+      graph.hooks.addCallback(BeforeNodeCallEvent, (event: BeforeNodeCallEvent) => {
+        event.cancel = true
       })
 
       const { items, result } = await collectGenerator(graph.stream('go'))
@@ -506,18 +490,13 @@ describe('Graph', () => {
     })
 
     it('returns cancelled result with custom message when cancel is a string', async () => {
-      const provider: HookProvider = {
-        registerCallbacks: (registry: HookRegistry) => {
-          registry.addCallback(BeforeNodeCallEvent, (event: BeforeNodeCallEvent) => {
-            event.cancel = 'node not ready'
-          })
-        },
-      }
-
       const graph = new Graph({
         nodes: [makeAgent('a')],
         edges: [],
-        hooks: [provider],
+      })
+
+      graph.hooks.addCallback(BeforeNodeCallEvent, (event: BeforeNodeCallEvent) => {
+        event.cancel = 'node not ready'
       })
 
       const { items, result } = await collectGenerator(graph.stream('go'))

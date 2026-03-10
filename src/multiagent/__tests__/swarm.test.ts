@@ -2,8 +2,6 @@ import { describe, expect, it, vi } from 'vitest'
 import { Agent } from '../../agent/agent.js'
 import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
 import { collectGenerator } from '../../__fixtures__/model-test-helpers.js'
-import type { HookProvider } from '../../hooks/types.js'
-import type { HookRegistry } from '../../hooks/registry.js'
 import { BeforeNodeCallEvent, MultiAgentInitializedEvent } from '../events.js'
 import type { JSONValue } from '../../types/json.js'
 import { TextBlock } from '../../types/messages.js'
@@ -195,18 +193,14 @@ describe('Swarm', () => {
 
     it('calls initialize only once across invocations', async () => {
       let callCount = 0
-      const provider: HookProvider = {
-        registerCallbacks: (registry: HookRegistry) => {
-          registry.addCallback(MultiAgentInitializedEvent, () => {
-            callCount++
-          })
-        },
-      }
 
       const swarm = new Swarm({
         nodes: [createFinalAgent('a', 'hi')],
         start: 'a',
-        hooks: [provider],
+      })
+
+      swarm.hooks.addCallback(MultiAgentInitializedEvent, () => {
+        callCount++
       })
 
       await swarm.invoke('first')
@@ -276,18 +270,13 @@ describe('Swarm', () => {
     })
 
     it('returns cancelled result with default message when cancel is true', async () => {
-      const provider: HookProvider = {
-        registerCallbacks: (registry: HookRegistry) => {
-          registry.addCallback(BeforeNodeCallEvent, (event: BeforeNodeCallEvent) => {
-            event.cancel = true
-          })
-        },
-      }
-
       const swarm = new Swarm({
         nodes: [createFinalAgent('a', 'hi')],
         start: 'a',
-        hooks: [provider],
+      })
+
+      swarm.hooks.addCallback(BeforeNodeCallEvent, (event: BeforeNodeCallEvent) => {
+        event.cancel = true
       })
 
       const { items, result } = await collectGenerator(swarm.stream('go'))
@@ -301,18 +290,13 @@ describe('Swarm', () => {
     })
 
     it('returns cancelled result with custom message when cancel is a string', async () => {
-      const provider: HookProvider = {
-        registerCallbacks: (registry: HookRegistry) => {
-          registry.addCallback(BeforeNodeCallEvent, (event: BeforeNodeCallEvent) => {
-            event.cancel = 'agent not ready'
-          })
-        },
-      }
-
       const swarm = new Swarm({
         nodes: [createFinalAgent('a', 'hi')],
         start: 'a',
-        hooks: [provider],
+      })
+
+      swarm.hooks.addCallback(BeforeNodeCallEvent, (event: BeforeNodeCallEvent) => {
+        event.cancel = 'agent not ready'
       })
 
       const { items, result } = await collectGenerator(swarm.stream('go'))
