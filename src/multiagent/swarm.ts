@@ -96,9 +96,9 @@ export interface SwarmOptions extends SwarmConfig {
  */
 export class Swarm implements MultiAgentBase {
   readonly id: string
+  readonly nodes: ReadonlyMap<string, AgentNode>
   readonly config: Required<SwarmConfig>
   readonly hooks: HookRegistryImplementation
-  private readonly _nodes: Map<string, AgentNode>
   private readonly _start: AgentNode
   private readonly _handoffSchema: z.ZodType<HandoffResult>
   private _initialized: boolean
@@ -114,7 +114,7 @@ export class Swarm implements MultiAgentBase {
     }
     this._validateConfig()
 
-    this._nodes = this._resolveNodes(nodes)
+    this.nodes = this._resolveNodes(nodes)
     this._start = this._resolveStart(start)
 
     this._handoffSchema = this._buildHandoffSchema()
@@ -173,7 +173,7 @@ export class Swarm implements MultiAgentBase {
 
   private async *_stream(input: InvokeArgs): AsyncGenerator<MultiAgentStreamEvent, MultiAgentResult, undefined> {
     const state = new MultiAgentState({
-      nodeIds: [...this._nodes.keys()],
+      nodeIds: [...this.nodes.keys()],
       structuredOutputSchema: this._handoffSchema,
     })
 
@@ -197,7 +197,7 @@ export class Swarm implements MultiAgentBase {
         }
 
         // Hand off to next agent
-        const target = this._nodes.get(handoff.agentId)!
+        const target = this.nodes.get(handoff.agentId)!
         yield new MultiAgentHandoffEvent({ source: node.id, targets: [target.id] })
         logger.debug(`source=<${node.id}>, target=<${target.id}> | swarm handoff`)
         node = target
@@ -280,7 +280,7 @@ export class Swarm implements MultiAgentBase {
   }
 
   private _resolveStart(start: string): AgentNode {
-    const node = this._nodes.get(start)
+    const node = this.nodes.get(start)
     if (!node) {
       throw new Error(`start=<${start}> | start references unknown agent`)
     }
@@ -310,10 +310,10 @@ export class Swarm implements MultiAgentBase {
   }
 
   private _buildHandoffSchema(): z.ZodType<HandoffResult> {
-    const agentIds = [...this._nodes.keys()]
+    const agentIds = [...this.nodes.keys()]
     const agentDescriptions = agentIds
       .map((id) => {
-        const desc = this._nodes.get(id)!.config.description
+        const desc = this.nodes.get(id)!.config.description
         return desc ? `- ${id}: ${desc}` : `- ${id}`
       })
       .join('\n')

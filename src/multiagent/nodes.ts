@@ -226,8 +226,14 @@ export class MultiAgentNode extends Node {
 
 /**
  * A node definition accepted by orchestration constructors.
+ *
+ * Pass an {@link Agent} or {@link MultiAgentBase} directly for the simple case,
+ * use typed options objects for per-node configuration, or provide pre-built
+ * {@link Node} instances for full control.
  */
 export type NodeDefinition =
+  | Agent
+  | MultiAgentBase
   | Node
   | (AgentNodeOptions & { type: 'agent' })
   | (MultiAgentNodeOptions & { type: 'multiAgent' })
