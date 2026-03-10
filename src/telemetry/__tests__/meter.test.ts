@@ -24,7 +24,6 @@ describe('Meter', () => {
       const snapshot = meter.metrics
       expect(snapshot.cycleCount).toBe(0)
       expect(snapshot.toolMetrics).toStrictEqual({})
-      expect(snapshot.cycleDurations).toStrictEqual([])
       expect(snapshot.agentInvocations).toStrictEqual([])
       expect(snapshot.accumulatedUsage).toStrictEqual({ inputTokens: 0, outputTokens: 0, totalTokens: 0 })
       expect(snapshot.accumulatedMetrics).toStrictEqual({ latencyMs: 0 })
@@ -178,7 +177,6 @@ describe('Meter', () => {
       meter.endCycle(100_000)
 
       expect(meter.metrics.latestAgentInvocation!.cycles[0]!.duration).toBe(100_000)
-      expect(meter.metrics.cycleDurations).toStrictEqual([100_000])
       vi.restoreAllMocks()
     })
   })
@@ -395,10 +393,10 @@ describe('AgentMetrics', () => {
       const metrics = new AgentMetrics()
       expect(metrics.toJSON()).toStrictEqual({
         cycleCount: 0,
-        toolMetrics: {},
-        agentInvocations: [],
         accumulatedUsage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
         accumulatedMetrics: { latencyMs: 0 },
+        agentInvocations: [],
+        toolMetrics: {},
       })
     })
 
@@ -423,9 +421,6 @@ describe('AgentMetrics', () => {
 
       expect(metrics.toJSON()).toStrictEqual({
         cycleCount: 2,
-        toolMetrics: {
-          search: { callCount: 2, successCount: 1, errorCount: 1, totalTime: 2.0 },
-        },
         accumulatedUsage: { inputTokens: 30, outputTokens: 15, totalTokens: 45 },
         accumulatedMetrics: { latencyMs: 350 },
         agentInvocations: [
@@ -437,9 +432,14 @@ describe('AgentMetrics', () => {
             ],
           },
         ],
+        toolMetrics: {
+          search: { callCount: 2, successCount: 1, errorCount: 1, totalTime: 2.0 },
+        },
       })
     })
+  })
 
+  describe('computed getters', () => {
     it('latestAgentInvocation returns the last invocation', () => {
       const metrics = new AgentMetrics({
         agentInvocations: [
@@ -455,9 +455,19 @@ describe('AgentMetrics', () => {
       const metrics = new AgentMetrics()
       expect(metrics.latestAgentInvocation).toBeUndefined()
     })
-  })
 
-  describe('computed getters', () => {
+    it('accumulatedData returns usage and metrics together', () => {
+      const metrics = new AgentMetrics({
+        accumulatedUsage: { inputTokens: 30, outputTokens: 15, totalTokens: 45 },
+        accumulatedMetrics: { latencyMs: 350 },
+      })
+
+      expect(metrics.accumulatedData).toStrictEqual({
+        usage: { inputTokens: 30, outputTokens: 15, totalTokens: 45 },
+        metrics: { latencyMs: 350 },
+      })
+    })
+
     it('totalDuration sums cycle durations', () => {
       const metrics = new AgentMetrics({
         agentInvocations: [

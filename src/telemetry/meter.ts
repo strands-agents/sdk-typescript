@@ -80,16 +80,6 @@ export interface AgentMetricsData {
   cycleCount: number
 
   /**
-   * Per-tool execution metrics keyed by tool name.
-   */
-  toolMetrics: Record<string, ToolMetricsData>
-
-  /**
-   * Per-invocation metrics.
-   */
-  agentInvocations: InvocationMetricsData[]
-
-  /**
    * Accumulated token usage across all model invocations.
    */
   accumulatedUsage: Usage
@@ -98,6 +88,16 @@ export interface AgentMetricsData {
    * Accumulated performance metrics across all model invocations.
    */
   accumulatedMetrics: Metrics
+
+  /**
+   * Per-invocation metrics.
+   */
+  agentInvocations: InvocationMetricsData[]
+
+  /**
+   * Per-tool execution metrics keyed by tool name.
+   */
+  toolMetrics: Record<string, ToolMetricsData>
 }
 
 /**
@@ -131,7 +131,8 @@ interface ToolUsageOptions {
  * ```typescript
  * const result = await agent.invoke('Hello')
  * console.log(result.metrics.cycleCount)
- * console.log(result.metrics.accumulatedUsage)
+ * console.log(result.metrics.totalDuration)
+ * console.log(result.metrics.accumulatedData)
  * console.log(result.metrics.toolMetrics)
  * console.log(JSON.stringify(result.metrics))
  * ```
@@ -143,16 +144,6 @@ export class AgentMetrics implements JSONSerializable<AgentMetricsData> {
   readonly cycleCount: number
 
   /**
-   * Per-tool execution metrics keyed by tool name.
-   */
-  readonly toolMetrics: Record<string, ToolMetricsData>
-
-  /**
-   * Per-invocation metrics.
-   */
-  readonly agentInvocations: InvocationMetricsData[]
-
-  /**
    * Accumulated token usage across all model invocations.
    */
   readonly accumulatedUsage: Usage
@@ -162,12 +153,22 @@ export class AgentMetrics implements JSONSerializable<AgentMetricsData> {
    */
   readonly accumulatedMetrics: Metrics
 
+  /**
+   * Per-invocation metrics.
+   */
+  readonly agentInvocations: InvocationMetricsData[]
+
+  /**
+   * Per-tool execution metrics keyed by tool name.
+   */
+  readonly toolMetrics: Record<string, ToolMetricsData>
+
   constructor(data?: Partial<AgentMetricsData>) {
     this.cycleCount = data?.cycleCount ?? 0
-    this.toolMetrics = data?.toolMetrics ?? {}
-    this.agentInvocations = data?.agentInvocations ?? []
     this.accumulatedUsage = data?.accumulatedUsage ?? { inputTokens: 0, outputTokens: 0, totalTokens: 0 }
     this.accumulatedMetrics = data?.accumulatedMetrics ?? { latencyMs: 0 }
+    this.agentInvocations = data?.agentInvocations ?? []
+    this.toolMetrics = data?.toolMetrics ?? {}
   }
 
   /**
@@ -178,24 +179,25 @@ export class AgentMetrics implements JSONSerializable<AgentMetricsData> {
   }
 
   /**
-   * Duration of each cycle in milliseconds, derived from per-cycle data.
+   * Accumulated usage and performance metrics across all model invocations.
    */
-  get cycleDurations(): number[] {
-    return this.agentInvocations.flatMap((inv) => inv.cycles.map((c) => c.duration))
+  get accumulatedData(): { usage: Usage; metrics: Metrics } {
+    return { usage: this.accumulatedUsage, metrics: this.accumulatedMetrics }
   }
 
   /**
    * Total duration of all cycles in milliseconds.
    */
   get totalDuration(): number {
-    return this.cycleDurations.reduce((sum, d) => sum + d, 0)
+    return this.agentInvocations.flatMap((inv) => inv.cycles.map((c) => c.duration)).reduce((sum, d) => sum + d, 0)
   }
 
   /**
-   * Average cycle time in milliseconds.
+   * Average cycle duration in milliseconds, or 0 if no cycles exist.
    */
   get averageCycleTime(): number {
-    return this.cycleCount > 0 ? this.totalDuration / this.cycleCount : 0
+    const durations = this.agentInvocations.flatMap((inv) => inv.cycles.map((c) => c.duration))
+    return durations.length > 0 ? durations.reduce((sum, d) => sum + d, 0) / durations.length : 0
   }
 
   /**
@@ -222,10 +224,10 @@ export class AgentMetrics implements JSONSerializable<AgentMetricsData> {
   toJSON(): AgentMetricsData {
     return {
       cycleCount: this.cycleCount,
-      toolMetrics: this.toolMetrics,
-      agentInvocations: this.agentInvocations,
       accumulatedUsage: this.accumulatedUsage,
       accumulatedMetrics: this.accumulatedMetrics,
+      agentInvocations: this.agentInvocations,
+      toolMetrics: this.toolMetrics,
     }
   }
 }
@@ -245,16 +247,6 @@ export class Meter {
   private _cycleCount: number = 0
 
   /**
-   * Per-tool execution metrics keyed by tool name.
-   */
-  private readonly _toolMetrics: Record<string, ToolMetricsData> = {}
-
-  /**
-   * Per-invocation metrics.
-   */
-  private readonly _agentInvocations: InvocationMetricsData[] = []
-
-  /**
    * Accumulated token usage across all model invocations.
    */
   private readonly _accumulatedUsage: Usage = Meter._createEmptyUsage()
@@ -263,6 +255,16 @@ export class Meter {
    * Accumulated performance metrics across all model invocations.
    */
   private readonly _accumulatedMetrics: Metrics = { latencyMs: 0 }
+
+  /**
+   * Per-invocation metrics.
+   */
+  private readonly _agentInvocations: InvocationMetricsData[] = []
+
+  /**
+   * Per-tool execution metrics keyed by tool name.
+   */
+  private readonly _toolMetrics: Record<string, ToolMetricsData> = {}
 
   /**
    * Begin tracking a new agent invocation.
@@ -358,10 +360,10 @@ export class Meter {
   get metrics(): AgentMetrics {
     return new AgentMetrics({
       cycleCount: this._cycleCount,
-      toolMetrics: this._toolMetrics,
-      agentInvocations: this._agentInvocations,
       accumulatedUsage: this._accumulatedUsage,
       accumulatedMetrics: this._accumulatedMetrics,
+      agentInvocations: this._agentInvocations,
+      toolMetrics: this._toolMetrics,
     })
   }
 
