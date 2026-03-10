@@ -23,6 +23,7 @@ export type ModelStreamEvent =
   | ModelContentBlockStopEventData
   | ModelMessageStopEventData
   | ModelMetadataEventData
+  | ModelRedactionEventData
 
 /** Set of all ModelStreamEvent type discriminators. */
 const modelStreamEventTypes: ReadonlySet<string> = new Set<ModelStreamEvent['type']>([
@@ -32,6 +33,7 @@ const modelStreamEventTypes: ReadonlySet<string> = new Set<ModelStreamEvent['typ
   'modelContentBlockStopEvent',
   'modelMessageStopEvent',
   'modelMetadataEvent',
+  'modelRedactionEvent',
 ])
 
 /**
@@ -282,6 +284,85 @@ export class ModelMetadataEvent implements ModelMetadataEventData {
     }
     if (data.trace !== undefined) {
       this.trace = data.trace
+    }
+  }
+}
+
+/**
+ * Information about input content redaction.
+ * Does not include redactedContent since the original input is already available
+ * in the messages array from BeforeModelCallEvent.
+ */
+export interface RedactInputContent {
+  /**
+   * The content to replace the redacted input with.
+   */
+  replaceContent: string
+}
+
+/**
+ * Information about output content redaction.
+ * May include the original content if captured during streaming.
+ */
+export interface RedactOutputContent {
+  /**
+   * The original content that was blocked by guardrails.
+   * May not be available for all providers.
+   */
+  redactedContent?: string
+
+  /**
+   * The content to replace the redacted output with.
+   */
+  replaceContent: string
+}
+
+/**
+ * Data for a redact event.
+ * Emitted when guardrails block content and redaction is enabled.
+ */
+export interface ModelRedactionEventData {
+  /**
+   * Discriminator for redact events.
+   */
+  type: 'modelRedactionEvent'
+
+  /**
+   * Input redaction information (when input is blocked).
+   */
+  inputRedaction?: RedactInputContent
+
+  /**
+   * Output redaction information (when output is blocked).
+   */
+  outputRedaction?: RedactOutputContent
+}
+
+/**
+ * Event emitted when guardrails block content and trigger redaction.
+ */
+export class ModelRedactionEvent implements ModelRedactionEventData {
+  /**
+   * Discriminator for redact events.
+   */
+  readonly type = 'modelRedactionEvent' as const
+
+  /**
+   * Input redaction information (when input is blocked).
+   */
+  readonly inputRedaction?: RedactInputContent
+
+  /**
+   * Output redaction information (when output is blocked).
+   */
+  readonly outputRedaction?: RedactOutputContent
+
+  constructor(data: ModelRedactionEventData) {
+    if (data.inputRedaction !== undefined) {
+      this.inputRedaction = data.inputRedaction
+    }
+    if (data.outputRedaction !== undefined) {
+      this.outputRedaction = data.outputRedaction
     }
   }
 }

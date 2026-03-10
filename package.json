@@ -87,6 +87,7 @@
   "license": "Apache-2.0",
   "devDependencies": {
     "@anthropic-ai/sdk": "^0.71.2",
+    "@aws-sdk/client-bedrock": "^3.943.0",
     "@aws-sdk/client-s3": "^3.943.0",
     "@aws-sdk/client-secrets-manager": "^3.943.0",
     "@aws-sdk/client-sts": "^3.996.0",

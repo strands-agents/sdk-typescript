@@ -2,7 +2,7 @@ import type { SnapshotStorage, SnapshotLocation } from './storage.js'
 import type { SnapshotTriggerCallback } from './types.js'
 import { Plugin } from '../plugins/plugin.js'
 import type { AgentData } from '../types/agent.js'
-import { AfterInvocationEvent, InitializedEvent, MessageAddedEvent } from '../hooks/events.js'
+import { AfterInvocationEvent, AfterModelCallEvent, InitializedEvent, MessageAddedEvent } from '../hooks/events.js'
 import { v7 as uuidV7 } from 'uuid'
 import type { Agent } from '../agent/agent.js'
 import { takeSnapshot, loadSnapshot } from '../agent/snapshot.js'
@@ -20,7 +20,7 @@ import { takeSnapshot, loadSnapshot } from '../agent/snapshot.js'
  *
  * `SaveLatestStrategy` controls how frequently `snapshot_latest` is updated:
  * - `'invocation'`: after every agent invocation completes (default; balances durability and I/O)
- * - `'message'`: after every message added to the conversation (most durable, highest I/O)
+ * - `'message'`: after every message added and after model calls with guardrail redactions (most durable, highest I/O)
  * - `'trigger'`: only when a `snapshotTrigger` fires (or manually via `saveSnapshot`)
  */
 export type SaveLatestStrategy = 'message' | 'invocation' | 'trigger'
@@ -83,6 +83,11 @@ export class SessionManager extends Plugin {
       agent.addHook(MessageAddedEvent, async (event) => {
         await this._onMessageAdded(event)
       })
+      // Also listen to AfterModelCallEvent when saving per-message to ensure
+      // message modifications (e.g., guardrail redactions) are persisted immediately
+      agent.addHook(AfterModelCallEvent, async (event) => {
+        await this._onAfterModelCall(event)
+      })
     }
     agent.addHook(AfterInvocationEvent, async (event) => {
       await this._onAfterAgentInvocation(event)
@@ -137,6 +142,18 @@ export class SessionManager extends Plugin {
   private async _onMessageAdded(event: MessageAddedEvent): Promise<void> {
     const agent = event.agent as Agent
     await this.saveSnapshot({ target: agent, isLatest: true })
+  }
+
+  /**
+   * Saves snapshot when a message is redacted after a model call.
+   * Critical for ensuring guardrail redactions are persisted immediately.
+   */
+  private async _onAfterModelCall(event: AfterModelCallEvent): Promise<void> {
+    // Only save if there was a redaction
+    if (event.stopData?.redaction) {
+      const agent = event.agent as Agent
+      await this.saveSnapshot({ target: agent, isLatest: true })
+    }
   }
 
   /** Captures one snapshot and writes it to both immutable history and snapshot_latest. */

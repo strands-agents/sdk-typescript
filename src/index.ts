@@ -149,6 +149,10 @@ export type {
   ModelMessageStopEvent,
   ModelMetadataEventData,
   ModelMetadataEvent,
+  RedactInputContent,
+  RedactOutputContent,
+  ModelRedactionEventData,
+  ModelRedactionEvent,
   ModelStreamEvent,
 } from './models/streaming.js'
 export { isModelStreamEvent } from './models/streaming.js'
@@ -160,7 +164,12 @@ export { Model } from './models/model.js'
 
 // Bedrock model provider
 export { BedrockModel as BedrockModel } from './models/bedrock.js'
-export type { BedrockModelConfig, BedrockModelOptions } from './models/bedrock.js'
+export type {
+  BedrockModelConfig,
+  BedrockModelOptions,
+  BedrockGuardrailConfig,
+  BedrockGuardrailRedactionConfig,
+} from './models/bedrock.js'
 
 // Agent streaming event types
 export type { AgentStreamEvent } from './types/agent.js'
@@ -187,7 +196,7 @@ export {
   AgentResultEvent,
   ModelStreamUpdateEvent,
 } from './hooks/index.js'
-export type { HookCallback, HookableEventConstructor, ModelStopResponse } from './hooks/index.js'
+export type { HookCallback, HookableEventConstructor, ModelStopResponse, Redaction } from './hooks/index.js'
 
 // Plugin system
 export { Plugin } from './plugins/index.js'

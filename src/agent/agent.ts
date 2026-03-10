@@ -6,7 +6,6 @@ import {
   type ContentBlockData,
   Message,
   type MessageData,
-  type StopReason,
   type SystemPrompt,
   type SystemPromptData,
   TextBlock,
@@ -20,7 +19,7 @@ import type { ToolChoice } from '../tools/types.js'
 import { systemPromptFromData } from '../types/messages.js'
 import { normalizeError, ConcurrentInvocationError, MaxTokensError } from '../errors.js'
 import { Model } from '../models/model.js'
-import type { BaseModelConfig, StreamOptions } from '../models/model.js'
+import type { BaseModelConfig, StreamAggregatedResult, StreamOptions } from '../models/model.js'
 import { isModelStreamEvent } from '../models/streaming.js'
 import { ToolRegistry } from '../registry/tool-registry.js'
 import { AppState } from '../app-state.js'
@@ -49,6 +48,7 @@ import {
   ToolResultEvent,
   AgentResultEvent,
   ToolStreamUpdateEvent,
+  type ModelStopData,
 } from '../hooks/events.js'
 import { createStructuredOutputContext } from '../structured-output/context.js'
 import { StructuredOutputException } from '../structured-output/exceptions.js'
@@ -57,6 +57,7 @@ import type { SessionManager } from '../session/session-manager.js'
 import { Tracer } from '../telemetry/tracer.js'
 import type { Usage } from '../models/streaming.js'
 import type { AttributeValue } from '@opentelemetry/api'
+import { logger } from '../logging/logger.js'
 
 /**
  * Recursive type definition for nested tool arrays.
@@ -655,12 +656,12 @@ export class Agent implements AgentData {
    *
    * @param args - Optional arguments for invoking the model
    * @param toolChoice - Optional tool choice to force specific tool usage
-   * @returns Object containing the assistant message and stop reason
+   * @returns Object containing the assistant message, stop reason, and optional redaction message
    */
   private async *invokeModel(
     args?: InvokeArgs,
     forcedToolChoice?: ToolChoice
-  ): AsyncGenerator<AgentStreamEvent, { message: Message; stopReason: StopReason }, undefined> {
+  ): AsyncGenerator<AgentStreamEvent, StreamAggregatedResult, undefined> {
     // Normalize input and append messages to conversation
     const messagesToAppend = this._normalizeInput(args)
     for (const message of messagesToAppend) {
@@ -688,26 +689,41 @@ export class Agent implements AgentData {
     })
 
     try {
-      const { message, stopReason, usage } = yield* this._streamFromModel(this.messages, streamOptions)
-
+      const result = yield* this._streamFromModel(this.messages, streamOptions)
+      const usage = result.metadata?.usage
       // Accumulate token usage
       if (usage) {
         Agent._accumulateUsage(this._accumulatedTokenUsage, usage)
       }
 
       // End model span with usage
-      this._tracer.endModelInvokeSpan(modelSpan, { output: message, stopReason, ...(usage && { usage }) })
+      this._tracer.endModelInvokeSpan(modelSpan, {
+        output: result.message,
+        stopReason: result.stopReason,
+        ...(usage && { usage }),
+      })
 
-      yield new ModelMessageEvent({ agent: this, message, stopReason })
+      yield new ModelMessageEvent({ agent: this, message: result.message, stopReason: result.stopReason })
 
-      const afterModelCallEvent = new AfterModelCallEvent({ agent: this, stopData: { message, stopReason } })
+      // Handle user content redaction if guardrails blocked input
+      if (result.redaction?.userMessage) {
+        this._redactLastMessage(result.redaction.userMessage)
+      }
+
+      const stopData: ModelStopData = {
+        message: result.message,
+        stopReason: result.stopReason,
+        ...(result.redaction && { redaction: result.redaction }),
+      }
+
+      const afterModelCallEvent = new AfterModelCallEvent({ agent: this, stopData })
       yield afterModelCallEvent
 
       if (afterModelCallEvent.retry) {
         return yield* this.invokeModel(args)
       }
 
-      return { message, stopReason }
+      return result
     } catch (error) {
       const modelError = normalizeError(error)
 
@@ -744,12 +760,12 @@ export class Agent implements AgentData {
    *
    * @param messages - Messages to send to the model
    * @param streamOptions - Options for streaming
-   * @returns Object containing the assistant message and stop reason
+   * @returns StreamAggregatedResult containing message, stop reason, and optional redaction message
    */
   private async *_streamFromModel(
     messages: Message[],
     streamOptions: StreamOptions
-  ): AsyncGenerator<AgentStreamEvent, { message: Message; stopReason: StopReason; usage?: Usage }, undefined> {
+  ): AsyncGenerator<AgentStreamEvent, StreamAggregatedResult, undefined> {
     const streamGenerator = this.model.streamAggregated(messages, streamOptions)
     let result = await streamGenerator.next()
 
@@ -767,10 +783,7 @@ export class Agent implements AgentData {
     }
 
     // result.done is true, result.value contains the return value
-    const { message, stopReason, metadata } = result.value
-    const returnValue: { message: Message; stopReason: StopReason; usage?: Usage } = { message, stopReason }
-    if (metadata?.usage) returnValue.usage = metadata.usage
-    return returnValue
+    return result.value
   }
 
   /**
@@ -925,6 +938,57 @@ export class Agent implements AgentData {
       }
 
       return toolResult
+    }
+  }
+
+  /**
+   * Redacts the last message in the conversation history.
+   * Called when guardrails block user input and redaction is enabled.
+   *
+   * Follows the redaction strategy:
+   * - If the message contains at least one toolResult block, all toolResult blocks
+   *   are kept with redacted content, and all other blocks are discarded.
+   * - Otherwise, the entire content is replaced with a single text block containing
+   *   the redaction message.
+   *
+   * @param redactMessage - The redaction message to replace the content with
+   */
+  private _redactLastMessage(redactMessage: string): void {
+    // Find and redact the last message
+    const lastIndex = this.messages.length - 1
+    if (lastIndex >= 0) {
+      const lastMessage = this.messages[lastIndex]
+      if (lastMessage && lastMessage.role === 'user') {
+        // Collect only tool result blocks with redacted content
+        const redactedContent: ContentBlock[] = []
+        for (const block of lastMessage.content) {
+          if (block.type === 'toolResultBlock') {
+            // Preserve tool result block structure, only redact its content
+            redactedContent.push(
+              new ToolResultBlock({
+                toolUseId: block.toolUseId,
+                status: block.status,
+                content: [new TextBlock(redactMessage)],
+              })
+            )
+          }
+        }
+
+        // If no tool result blocks were found, replace entire content with redaction message
+        if (redactedContent.length === 0) {
+          redactedContent.push(new TextBlock(redactMessage))
+        }
+
+        this.messages[lastIndex] = new Message({
+          role: 'user',
+          content: redactedContent,
+        })
+      } else if (lastMessage) {
+        // Unexpected state: redaction requested but last message is not from user
+        logger.warn(
+          `role=<${lastMessage.role}> | received input redaction but last message is not from user | redaction skipped.`
+        )
+      }
     }
   }
 
