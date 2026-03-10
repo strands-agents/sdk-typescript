@@ -96,19 +96,20 @@ describe('Agent Hooks Integration', () => {
   })
 
   describe('runtime hook registration', () => {
-    it('allows adding hooks after agent creation', async () => {
-      const lifecycleProvider = new MockHookProvider()
+    it('allows adding callback hooks after agent creation', async () => {
+      const callbackInvocations: BeforeInvocationEvent[] = []
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
       const agent = new Agent({ model })
 
-      agent.addHook(lifecycleProvider)
+      agent.addHook((event: BeforeInvocationEvent) => {
+        callbackInvocations.push(event)
+      }, BeforeInvocationEvent)
 
       await agent.invoke('Hi')
 
-      // Should have all lifecycle events
-      expect(lifecycleProvider.invocations).toHaveLength(7)
-      expect(lifecycleProvider.invocations[1]).toEqual(new BeforeInvocationEvent({ agent }))
-      expect(lifecycleProvider.invocations[6]).toEqual(new AfterInvocationEvent({ agent }))
+      // Should have captured the BeforeInvocationEvent
+      expect(callbackInvocations).toHaveLength(1)
+      expect(callbackInvocations[0]).toEqual(new BeforeInvocationEvent({ agent }))
     })
   })
 

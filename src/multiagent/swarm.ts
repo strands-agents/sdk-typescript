@@ -125,13 +125,6 @@ export class Swarm implements MultiAgentBase {
   }
 
   /**
-   * Register a hook provider with the swarm.
-   *
-   * @param provider - The hook provider to register
-   */
-  public addHook(provider: HookProvider): void
-
-  /**
    * Register a callback function for a specific event type.
    *
    * @param callback - The callback function to invoke when events of this type occur
@@ -140,7 +133,6 @@ export class Swarm implements MultiAgentBase {
    *
    * @example
    * ```typescript
-   * // With explicit event type
    * swarm.addHook((event: BeforeNodeCallEvent) => {
    *   console.log('Calling node...')
    * }, BeforeNodeCallEvent)
@@ -149,22 +141,8 @@ export class Swarm implements MultiAgentBase {
   public addHook<TEvent extends HookableEvent>(
     callback: HookCallback<TEvent>,
     eventType: HookableEventConstructor<TEvent>
-  ): HookCleanup
-
-  /**
-   * Register a hook provider or callback function.
-   *
-   * @param providerOrCallback - Either a HookProvider or a callback function
-   * @param eventType - The event type (required when first argument is a callback)
-   */
-  public addHook<TEvent extends HookableEvent>(
-    providerOrCallback: HookProvider | HookCallback<TEvent>,
-    eventType?: HookableEventConstructor<TEvent>
-  ): void | HookCleanup {
-    if (eventType !== undefined) {
-      return this._hooks.addCallback(eventType, providerOrCallback as HookCallback<TEvent>)
-    }
-    this._hooks.addHook(providerOrCallback as HookProvider)
+  ): HookCleanup {
+    return this._hooks.addCallback(eventType, callback)
   }
 
   /**
