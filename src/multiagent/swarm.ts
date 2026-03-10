@@ -109,8 +109,7 @@ export class Swarm implements MultiAgentBase {
     this.id = id ?? 'swarm'
 
     this.config = {
-      maxSteps: Infinity,
-      ...config,
+      maxSteps: config.maxSteps ?? Infinity,
     }
     this._validateConfig()
 

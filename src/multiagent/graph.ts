@@ -99,9 +99,8 @@ export class Graph implements MultiAgentBase {
     this.id = id ?? 'graph'
 
     this.config = {
-      maxConcurrency: Infinity,
-      maxSteps: Infinity,
-      ...config,
+      maxConcurrency: config.maxConcurrency ?? Infinity,
+      maxSteps: config.maxSteps ?? Infinity,
     }
     this._validateConfig()
 
