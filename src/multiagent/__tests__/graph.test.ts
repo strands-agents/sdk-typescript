@@ -506,5 +506,20 @@ describe('Graph', () => {
       const cancelEvent = items.find((e) => e.type === 'nodeCancelEvent')
       expect(cancelEvent).toEqual(expect.objectContaining({ nodeId: 'a', message: 'node not ready' }))
     })
+
+    it('cleans up running nodes when consumer breaks mid-stream', async () => {
+      const graph = new Graph({
+        nodes: [makeAgent('a', 'a-reply'), makeAgent('b', 'b-reply')],
+        edges: [['a', 'b']],
+      })
+
+      const gen = graph.stream('go')
+      const first = await gen.next()
+      expect(first.done).toBe(false)
+
+      // Simulates consumer break — should not hang waiting for node streams
+      const result = await gen.return(undefined as never)
+      expect(result.done).toBe(true)
+    })
   })
 })

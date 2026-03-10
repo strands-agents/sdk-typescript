@@ -124,4 +124,33 @@ describe('Queue', () => {
       await sending
     })
   })
+
+  describe('dispose', () => {
+    it('resolves pending send acks and drains entries', async () => {
+      let resolved = false
+      const data: QueueData = { type: 'error', node: mockNode, error: new Error('a') }
+      const sending = queue.send(data).then(() => {
+        resolved = true
+      })
+
+      await Promise.resolve()
+      expect(resolved).toBe(false)
+      expect(queue.size).toBe(1)
+
+      queue.dispose()
+
+      await sending
+      expect(resolved).toBe(true)
+      expect(queue.size).toBe(0)
+    })
+
+    it('causes future send calls to resolve immediately', async () => {
+      queue.dispose()
+
+      const data: QueueData = { type: 'error', node: mockNode, error: new Error('a') }
+      await queue.send(data)
+
+      expect(queue.size).toBe(0)
+    })
+  })
 })

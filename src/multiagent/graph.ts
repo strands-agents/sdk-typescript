@@ -150,15 +150,19 @@ export class Graph implements MultiAgentBase {
     await this.initialize()
 
     const gen = this._stream(input)
-    let next = await gen.next()
-    while (!next.done) {
-      if (next.value instanceof HookableEvent) {
-        await this.hooks.invokeCallbacks(next.value)
+    try {
+      let next = await gen.next()
+      while (!next.done) {
+        if (next.value instanceof HookableEvent) {
+          await this.hooks.invokeCallbacks(next.value)
+        }
+        yield next.value
+        next = await gen.next()
       }
-      yield next.value
-      next = await gen.next()
+      return next.value
+    } finally {
+      await gen.return(undefined as never)
     }
-    return next.value
   }
 
   private async *_stream(input: InvokeArgs): AsyncGenerator<MultiAgentStreamEvent, MultiAgentResult, undefined> {
@@ -214,9 +218,12 @@ export class Graph implements MultiAgentBase {
         }
       }
     } catch (error) {
+      queue.dispose()
       await Promise.allSettled(streams.values())
       throw error
     } finally {
+      queue.dispose()
+      await Promise.allSettled(streams.values())
       yield new AfterMultiAgentInvocationEvent({ orchestrator: this, state })
     }
 
