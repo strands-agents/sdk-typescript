@@ -1,5 +1,6 @@
 import type { AppState } from '../app-state.js'
 import type { Message, StopReason } from './messages.js'
+import type { LocalTrace } from '../telemetry/tracer.js'
 import type {
   BeforeInvocationEvent,
   AfterInvocationEvent,
@@ -52,14 +53,26 @@ export class AgentResult {
   readonly lastMessage: Message
 
   /**
+   * Local execution traces collected during the agent invocation.
+   * Contains timing and hierarchy of operations within the agent loop.
+   */
+  readonly traces: LocalTrace[]
+
+  /**
    * The validated structured output from the LLM, if a schema was provided.
    * Type represents any validated Zod schema output.
    */
   readonly structuredOutput?: z.output<z.ZodType>
 
-  constructor(data: { stopReason: StopReason; lastMessage: Message; structuredOutput?: z.output<z.ZodType> }) {
+  constructor(data: {
+    stopReason: StopReason
+    lastMessage: Message
+    traces: LocalTrace[]
+    structuredOutput?: z.output<z.ZodType>
+  }) {
     this.stopReason = data.stopReason
     this.lastMessage = data.lastMessage
+    this.traces = data.traces
     if (data.structuredOutput !== undefined) {
       this.structuredOutput = data.structuredOutput
     }

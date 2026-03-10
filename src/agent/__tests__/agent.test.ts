@@ -65,15 +65,14 @@ describe('Agent', () => {
 
         const { result } = await collectGenerator(agent.stream('Test prompt'))
 
-        expect(result).toEqual(
-          new AgentResult({
-            stopReason: 'endTurn',
-            lastMessage: expect.objectContaining({
-              role: 'assistant',
-              content: expect.arrayContaining([expect.objectContaining({ type: 'textBlock', text: 'Hello' })]),
-            }),
-          })
-        )
+        expect(result).toBeInstanceOf(AgentResult)
+        expect(result.stopReason).toBe('endTurn')
+        expect(result.lastMessage.role).toBe('assistant')
+        expect(result.lastMessage.content).toEqual([{ type: 'textBlock', text: 'Hello' }])
+        expect(result.traces).toHaveLength(1)
+        expect(result.traces[0]!.name).toBe('Cycle 1')
+        expect(result.traces[0]!.children).toHaveLength(1)
+        expect(result.traces[0]!.children[0]!.name).toBe('stream_messages')
       })
     })
 
@@ -189,15 +188,11 @@ describe('Agent', () => {
 
         const result = await agent.invoke('Test prompt')
 
-        expect(result).toEqual({
-          type: 'agentResult',
-          stopReason: 'endTurn',
-          lastMessage: expect.objectContaining({
-            type: 'message',
-            role: 'assistant',
-            content: expect.arrayContaining([expect.objectContaining({ type: 'textBlock', text: 'Response text' })]),
-          }),
-        })
+        expect(result.stopReason).toBe('endTurn')
+        expect(result.lastMessage.role).toBe('assistant')
+        expect(result.lastMessage.content).toEqual([{ type: 'textBlock', text: 'Response text' }])
+        expect(result.traces).toHaveLength(1)
+        expect(result.traces[0]!.name).toBe('Cycle 1')
       })
 
       it('consumes stream events internally', async () => {
@@ -206,15 +201,10 @@ describe('Agent', () => {
 
         const result = await agent.invoke('Test')
 
-        expect(result).toEqual({
-          type: 'agentResult',
-          stopReason: 'endTurn',
-          lastMessage: expect.objectContaining({
-            type: 'message',
-            role: 'assistant',
-            content: expect.arrayContaining([expect.objectContaining({ type: 'textBlock', text: 'Hello' })]),
-          }),
-        })
+        expect(result.stopReason).toBe('endTurn')
+        expect(result.lastMessage.role).toBe('assistant')
+        expect(result.lastMessage.content).toEqual([{ type: 'textBlock', text: 'Hello' }])
+        expect(result.traces).toHaveLength(1)
       })
     })
 
@@ -238,15 +228,17 @@ describe('Agent', () => {
 
         const result = await agent.invoke('What is 1 + 2?')
 
-        expect(result).toEqual({
-          type: 'agentResult',
-          stopReason: 'endTurn',
-          lastMessage: expect.objectContaining({
-            type: 'message',
-            role: 'assistant',
-            content: expect.arrayContaining([expect.objectContaining({ type: 'textBlock', text: 'The answer is 3' })]),
-          }),
-        })
+        expect(result.stopReason).toBe('endTurn')
+        expect(result.lastMessage.role).toBe('assistant')
+        expect(result.lastMessage.content).toEqual([{ type: 'textBlock', text: 'The answer is 3' }])
+        expect(result.traces).toHaveLength(2)
+        expect(result.traces[0]!.name).toBe('Cycle 1')
+        expect(result.traces[0]!.children).toHaveLength(2)
+        expect(result.traces[0]!.children[0]!.name).toBe('stream_messages')
+        expect(result.traces[0]!.children[1]!.name).toBe('Tool: calc')
+        expect(result.traces[1]!.name).toBe('Cycle 2')
+        expect(result.traces[1]!.children).toHaveLength(1)
+        expect(result.traces[1]!.children[0]!.name).toBe('stream_messages')
       })
     })
 
@@ -303,7 +295,15 @@ describe('Agent', () => {
       const invokeResult = await agent1.invoke('Use tool')
       const { result: streamResult } = await collectGenerator(agent2.stream('Use tool'))
 
-      expect(invokeResult).toEqual(streamResult)
+      // Compare structural equivalence, not identity (traces have unique IDs and timestamps)
+      expect(invokeResult.stopReason).toBe(streamResult.stopReason)
+      expect(invokeResult.lastMessage.role).toBe(streamResult.lastMessage.role)
+      expect(invokeResult.lastMessage.content).toEqual(streamResult.lastMessage.content)
+      expect(invokeResult.traces).toHaveLength(streamResult.traces.length)
+      expect(invokeResult.traces.map((t) => t.name)).toEqual(streamResult.traces.map((t) => t.name))
+      expect(invokeResult.traces.map((t) => t.children.length)).toEqual(
+        streamResult.traces.map((t) => t.children.length)
+      )
     })
   })
 

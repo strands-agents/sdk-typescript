@@ -519,6 +519,7 @@ export class Agent implements AgentData {
             result = new AgentResult({
               stopReason: modelResult.stopReason,
               lastMessage: modelResult.message,
+              traces: this._tracer.localTraces,
               structuredOutput,
             })
             return result
