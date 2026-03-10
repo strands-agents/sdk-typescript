@@ -32,8 +32,8 @@ const mockAgentCardHandler = vi.fn(() => 'agent-card-handler')
 const mockJsonRpcHandler = vi.fn(() => 'json-rpc-handler')
 
 vi.mock('@a2a-js/sdk/server/express', () => ({
-  agentCardHandler: mockAgentCardHandler,
-  jsonRpcHandler: mockJsonRpcHandler,
+  agentCardHandler: (...args: Parameters<typeof mockAgentCardHandler>) => mockAgentCardHandler(...args),
+  jsonRpcHandler: (...args: Parameters<typeof mockJsonRpcHandler>) => mockJsonRpcHandler(...args),
   UserBuilder: { noAuthentication: vi.fn() },
 }))
 
@@ -104,7 +104,7 @@ describe('A2AServer', () => {
   describe('createMiddleware', () => {
     it('returns an express router with SDK middleware', async () => {
       const server = new A2AServer(createTestConfig())
-      const router = await server.createMiddleware()
+      const router = server.createMiddleware()
 
       expect(router).toBeDefined()
       expect(router.use).toHaveBeenCalledTimes(2)

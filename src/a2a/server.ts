@@ -6,13 +6,12 @@
  * may require breaking changes in this module.
  */
 
-import type { AddressInfo } from 'net'
-import type { Router } from 'express'
+import express, { type Router } from 'express'
 import type { AgentCard, AgentSkill } from '@a2a-js/sdk'
 import type { TaskStore, A2ARequestHandler } from '@a2a-js/sdk/server'
-import type { UserBuilder } from '@a2a-js/sdk/server/express'
 import { DefaultRequestHandler, InMemoryTaskStore } from '@a2a-js/sdk/server'
-import type { Agent } from '../agent/agent.js'
+import { agentCardHandler, jsonRpcHandler, UserBuilder } from '@a2a-js/sdk/server/express'
+import type { AgentBase } from '../agent/agent-base.js'
 import { StrandsA2AExecutor } from './executor.js'
 import { logExperimentalWarning } from './logging.js'
 import { logger } from '../logging/logger.js'
@@ -22,7 +21,7 @@ import { logger } from '../logging/logger.js'
  */
 export interface A2AServerConfig {
   /** The Strands Agent to serve via A2A protocol */
-  agent: Agent
+  agent: AgentBase
   /** Human-readable name for the agent */
   name: string
   /** Optional description of the agent's purpose */
@@ -127,13 +126,11 @@ export class A2AServer {
    *
    * Uses the A2A SDK's `agentCardHandler` and `jsonRpcHandler` middleware.
    *
-   * @returns An Express Router
+   * @returns An Express Router with A2A endpoints mounted
    */
-  async createMiddleware(): Promise<Router> {
+  createMiddleware(): Router {
     logExperimentalWarning()
 
-    const express = (await import('express')).default
-    const { agentCardHandler, jsonRpcHandler, UserBuilder } = await import('@a2a-js/sdk/server/express')
     const router = express.Router()
 
     router.use('/.well-known/agent-card.json', agentCardHandler({ agentCardProvider: this._requestHandler }))
@@ -155,15 +152,11 @@ export class A2AServer {
    * @param options - Optional server options
    */
   async serve(options?: { signal?: AbortSignal }): Promise<void> {
-    const express = (await import('express')).default
     const app = express()
-    app.use(await this.createMiddleware())
+    app.use(this.createMiddleware())
 
     return new Promise<void>((resolve, reject) => {
       const server = app.listen(this._port, this._host, () => {
-        const addr = server.address() as AddressInfo
-        this._port = addr.port
-        this._agentCard.url = `http://${this._host}:${this._port}`
         logger.info(`a2a server listening on http://${this._host}:${this._port}`)
         resolve()
       })

@@ -7,7 +7,7 @@
  * may require breaking changes in this module.
  */
 
-import type { AgentCard, Part, Task, Message as A2AMessage } from '@a2a-js/sdk'
+import type { AgentCard, Part } from '@a2a-js/sdk'
 import type { Client as A2AClientSdk } from '@a2a-js/sdk/client'
 import { ClientFactory } from '@a2a-js/sdk/client'
 import type { AgentBase } from '../agent/agent-base.js'
@@ -15,7 +15,9 @@ import type { InvokeArgs, InvokeOptions } from '../agent/agent.js'
 import { AgentResult, type AgentStreamEvent } from '../types/agent.js'
 import { Message, TextBlock, type ContentBlock, type ContentBlockData, type MessageData } from '../types/messages.js'
 import { AgentResultEvent } from '../hooks/events.js'
+import { A2AStreamUpdateEvent, type A2AEventData } from './events.js'
 import { AppState } from '../app-state.js'
+import { logger } from '../logging/logger.js'
 import { logExperimentalWarning } from './logging.js'
 
 /**
@@ -26,10 +28,6 @@ export interface A2AAgentConfig {
   url: string
   /** Path to the agent card endpoint (default: '/.well-known/agent-card.json') */
   agentCardPath?: string
-  /** Override the agent name derived from the agent card */
-  name?: string
-  /** Override the agent description derived from the agent card */
-  description?: string
 }
 
 /**
@@ -63,74 +61,56 @@ export class A2AAgent implements AgentBase {
   }
 
   /**
-   * Returns the agent name. Uses the config override if provided,
-   * otherwise falls back to the name from the remote agent card.
+   * Returns the agent name from the remote agent card.
    */
   get name(): string | undefined {
-    return this._config.name ?? this._agentCard?.name
+    return this._agentCard?.name
   }
 
   /**
-   * Returns the agent description. Uses the config override if provided,
-   * otherwise falls back to the description from the remote agent card.
+   * Returns the agent description from the remote agent card.
    */
   get description(): string | undefined {
-    return this._config.description ?? this._agentCard?.description
+    return this._agentCard?.description
   }
 
   /**
    * Invokes the remote agent and returns the final result.
    *
-   * Extracts text from the input args, sends it to the remote agent via
-   * the A2A protocol, and wraps the response in an AgentResult.
+   * Built on top of `stream()` — consumes the full event stream and returns the final result.
    *
    * @param args - Arguments for invoking the agent
-   * @param _options - Optional invocation options (unused for remote agents)
+   * @param options - Optional invocation options (unused for remote agents)
    * @returns Promise that resolves to the AgentResult
    */
-  async invoke(args: InvokeArgs, _options?: InvokeOptions): Promise<AgentResult> {
-    const text = this._extractTextFromArgs(args)
-    const responseText = await this._sendMessage(text)
-
-    const lastMessage = new Message({
-      role: 'assistant',
-      content: [new TextBlock(responseText)],
-    })
-
-    return new AgentResult({
-      stopReason: 'endTurn',
-      lastMessage,
-    })
+  async invoke(args: InvokeArgs, options?: InvokeOptions): Promise<AgentResult> {
+    const gen = this.stream(args, options)
+    let next = await gen.next()
+    while (!next.done) {
+      next = await gen.next()
+    }
+    return next.value
   }
 
   /**
-   * Streams the remote agent execution, yielding events and returning the final result.
+   * Streams the remote agent execution, yielding A2A events as they arrive.
    *
-   * @remarks
-   * Currently calls invoke() and yields the result as a single AgentResultEvent.
-   * TODO: Yield incremental A2A streaming events (TaskArtifactUpdateEvent, TaskStatusUpdateEvent)
-   * as they arrive from the remote agent, matching the Python SDK's `stream_async` behavior.
+   * Yields `A2AStreamUpdateEvent` for each raw A2A protocol event (Message, Task,
+   * TaskStatusUpdateEvent, TaskArtifactUpdateEvent), followed by an `AgentResultEvent`
+   * containing the final result built from the last complete event.
    *
    * @param args - Arguments for invoking the agent
    * @param _options - Optional invocation options (unused for remote agents)
    * @returns Async generator that yields AgentStreamEvent objects and returns AgentResult
    */
   async *stream(args: InvokeArgs, _options?: InvokeOptions): AsyncGenerator<AgentStreamEvent, AgentResult, undefined> {
-    const result = await this.invoke(args)
-    yield new AgentResultEvent({ agent: { state: new AppState(), messages: [result.lastMessage] }, result })
-    return result
-  }
-
-  /**
-   * Sends a message to the remote A2A agent and returns the text response.
-   *
-   * @param text - The message text to send
-   * @returns The agent's text response
-   */
-  private async _sendMessage(text: string): Promise<string> {
     const client = await this._getClient()
+    const text = this._extractTextFromArgs(args)
 
-    const result = await client.sendMessage({
+    let lastEvent: A2AEventData | undefined
+    let lastCompleteEvent: A2AEventData | undefined
+
+    const eventStream = client.sendMessageStream({
       message: {
         kind: 'message',
         messageId: globalThis.crypto.randomUUID(),
@@ -139,7 +119,19 @@ export class A2AAgent implements AgentBase {
       },
     })
 
-    return extractTextFromA2AResponse(result)
+    for await (const event of eventStream) {
+      lastEvent = event
+      if (this._isCompleteEvent(event)) {
+        lastCompleteEvent = event
+      }
+      yield new A2AStreamUpdateEvent(event)
+    }
+
+    const finalEvent = lastCompleteEvent ?? lastEvent
+    const result = this._buildResult(finalEvent)
+
+    yield new AgentResultEvent({ agent: { state: new AppState(), messages: [result.lastMessage] }, result })
+    return result
   }
 
   /**
@@ -184,41 +176,80 @@ export class A2AAgent implements AgentBase {
     }
 
     // ContentBlock[] or ContentBlockData[] — join text from all text blocks
-    return (args as (ContentBlock | ContentBlockData)[])
+    const blocks = args as (ContentBlock | ContentBlockData)[]
+    const nonTextCount = blocks.filter((b) => ('type' in b ? b.type !== 'textBlock' : !('text' in b))).length
+    if (nonTextCount > 0) {
+      logger.info(`non_text_blocks=<${nonTextCount}> | stripping non-text content blocks, a2a only supports text`)
+    }
+
+    return blocks
       .filter((b): b is TextBlock => ('type' in b ? b.type === 'textBlock' : 'text' in b))
       .map((b) => b.text)
       .join('\n')
   }
-}
 
-/**
- * Extracts text content from an A2A response (Task or Message).
- *
- * For Tasks: extracts text from artifacts first, then falls back to status message.
- * For Messages: extracts text from message parts.
- *
- * @param result - The A2A response
- * @returns Extracted text content
- */
-function extractTextFromA2AResponse(result: Task | A2AMessage): string {
-  if (result.kind !== 'task') {
-    return _textFromParts(result.parts)
+  /**
+   * Checks whether an A2A streaming event represents a complete response.
+   *
+   * @param event - The A2A streaming event
+   * @returns True if the event is a terminal/complete event
+   */
+  private _isCompleteEvent(event: A2AEventData): boolean {
+    if (event.kind === 'message') return true
+    if (event.kind === 'task') return true
+    if (event.kind === 'artifact-update') return event.lastChunk === true
+    if (event.kind === 'status-update') return event.status.state === 'completed'
+    return false
   }
 
-  // Try artifacts first, fall back to status message
-  const parts = result.artifacts?.flatMap((a) => a.parts) ?? []
-  return _textFromParts(parts) || _textFromParts(result.status?.message?.parts ?? [])
-}
+  /**
+   * Builds an AgentResult from the final A2A streaming event.
+   *
+   * @param event - The final A2A event, or undefined if no events were received
+   * @returns The constructed AgentResult
+   */
+  private _buildResult(event: A2AEventData | undefined): AgentResult {
+    const text = event ? this._extractTextFromEvent(event) : ''
+    const lastMessage = new Message({
+      role: 'assistant',
+      content: [new TextBlock(text)],
+    })
+    return new AgentResult({ stopReason: 'endTurn', lastMessage })
+  }
 
-/**
- * Joins text from A2A parts, filtering out non-text parts.
- *
- * @param parts - Array of A2A parts
- * @returns Joined text content
- */
-function _textFromParts(parts: Part[]): string {
-  return parts
-    .filter((p): p is Part & { kind: 'text'; text: string } => p.kind === 'text')
-    .map((p) => p.text)
-    .join('\n')
+  /**
+   * Extracts text content from an A2A streaming event.
+   *
+   * @param event - The A2A streaming event
+   * @returns Extracted text content
+   */
+  private _extractTextFromEvent(event: A2AEventData): string {
+    if (event.kind === 'message') {
+      return this._textFromParts(event.parts)
+    }
+    if (event.kind === 'task') {
+      const parts = event.artifacts?.flatMap((a) => a.parts) ?? []
+      return this._textFromParts(parts) || this._textFromParts(event.status?.message?.parts ?? [])
+    }
+    if (event.kind === 'artifact-update') {
+      return this._textFromParts(event.artifact.parts)
+    }
+    if (event.kind === 'status-update' && event.status.message) {
+      return this._textFromParts(event.status.message.parts)
+    }
+    return ''
+  }
+
+  /**
+   * Joins text from A2A parts, filtering out non-text parts.
+   *
+   * @param parts - Array of A2A parts
+   * @returns Joined text content
+   */
+  private _textFromParts(parts: Part[]): string {
+    return parts
+      .filter((p): p is Part & { kind: 'text'; text: string } => p.kind === 'text')
+      .map((p) => p.text)
+      .join('\n')
+  }
 }

@@ -1,19 +1,29 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { A2AAgent } from '../a2a-agent.js'
-import type { AgentCard, Task, Message as A2AMessage } from '@a2a-js/sdk'
+import { A2AStreamUpdateEvent } from '../events.js'
+import type {
+  AgentCard,
+  Task,
+  Message as A2AMessage,
+  TaskArtifactUpdateEvent,
+  TaskStatusUpdateEvent,
+} from '@a2a-js/sdk'
 import { TextBlock, Message } from '../../types/messages.js'
 import type { InvokeArgs } from '../../agent/agent.js'
 import { AgentResultEvent } from '../../hooks/events.js'
 
 // Mock the A2A SDK client
-const mockSendMessage = vi.fn()
+const mockSendMessageStream = vi.fn()
 const mockGetAgentCard = vi.fn()
 
 vi.mock('@a2a-js/sdk/client', () => ({
   ClientFactory: class MockClientFactory {
-    async createFromUrl(): Promise<{ sendMessage: typeof mockSendMessage; getAgentCard: typeof mockGetAgentCard }> {
+    async createFromUrl(): Promise<{
+      sendMessageStream: typeof mockSendMessageStream
+      getAgentCard: typeof mockGetAgentCard
+    }> {
       return {
-        sendMessage: mockSendMessage,
+        sendMessageStream: mockSendMessageStream,
         getAgentCard: mockGetAgentCard,
       }
     }
@@ -32,31 +42,51 @@ const mockAgentCard: AgentCard = {
   capabilities: {},
 }
 
-const mockTaskResponse: Task = {
-  kind: 'task',
-  id: 'task-1',
-  contextId: 'ctx-1',
-  status: { state: 'completed' },
-  artifacts: [
-    {
-      artifactId: 'art-1',
-      parts: [{ kind: 'text', text: 'Agent response' }],
-    },
-  ],
+function createMockTaskResponse(): Task {
+  return {
+    kind: 'task',
+    id: 'task-1',
+    contextId: 'ctx-1',
+    status: { state: 'completed' },
+    artifacts: [
+      {
+        artifactId: 'art-1',
+        parts: [{ kind: 'text', text: 'Agent response' }],
+      },
+    ],
+  }
+}
+
+async function* mockStream(...events: unknown[]): AsyncGenerator<unknown, void, undefined> {
+  for (const event of events) {
+    yield event
+  }
+}
+
+async function collectStream(
+  gen: AsyncGenerator<unknown, unknown, undefined>
+): Promise<{ events: unknown[]; result: unknown }> {
+  const events: unknown[] = []
+  let next = await gen.next()
+  while (!next.done) {
+    events.push(next.value)
+    next = await gen.next()
+  }
+  return { events, result: next.value }
 }
 
 describe('A2AAgent', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockGetAgentCard.mockResolvedValue(mockAgentCard)
-    mockSendMessage.mockResolvedValue(mockTaskResponse)
+    mockSendMessageStream.mockReturnValue(mockStream(createMockTaskResponse()))
   })
 
   describe('invoke', () => {
     it('returns AgentResult with response text', async () => {
-      const client = new A2AAgent({ url: 'http://localhost:9000' })
+      const agent = new A2AAgent({ url: 'http://localhost:9000' })
 
-      const result = await client.invoke('Hello')
+      const result = await agent.invoke('Hello')
 
       expect(result.stopReason).toBe('endTurn')
       expect(result.lastMessage.role).toBe('assistant')
@@ -95,11 +125,11 @@ describe('A2AAgent', () => {
       },
       { desc: 'empty array', args: [] as TextBlock[], expectedText: '' },
     ])('sends correct parts for $desc input', async ({ args, expectedText }) => {
-      const client = new A2AAgent({ url: 'http://localhost:9000' })
+      const agent = new A2AAgent({ url: 'http://localhost:9000' })
 
-      await client.invoke(args as InvokeArgs)
+      await agent.invoke(args as InvokeArgs)
 
-      expect(mockSendMessage).toHaveBeenCalledWith(
+      expect(mockSendMessageStream).toHaveBeenCalledWith(
         expect.objectContaining({
           message: expect.objectContaining({
             parts: [{ kind: 'text', text: expectedText }],
@@ -109,29 +139,130 @@ describe('A2AAgent', () => {
     })
 
     it('auto-connects on first invoke', async () => {
-      const client = new A2AAgent({ url: 'http://localhost:9000' })
-      await client.invoke('Hello')
+      const agent = new A2AAgent({ url: 'http://localhost:9000' })
+      await agent.invoke('Hello')
       expect(mockGetAgentCard).toHaveBeenCalledOnce()
     })
   })
 
   describe('stream', () => {
-    it('yields AgentResultEvent and returns AgentResult', async () => {
-      const client = new A2AAgent({ url: 'http://localhost:9000' })
-      const generator = client.stream('Hello')
+    it('yields A2AStreamUpdateEvent for each A2A event and AgentResultEvent at the end', async () => {
+      const task = createMockTaskResponse()
+      mockSendMessageStream.mockReturnValue(mockStream(task))
 
-      const events: unknown[] = []
-      let next = await generator.next()
-      while (!next.done) {
-        events.push(next.value)
-        next = await generator.next()
+      const agent = new A2AAgent({ url: 'http://localhost:9000' })
+      const { events, result } = await collectStream(agent.stream('Hello'))
+
+      expect(events).toHaveLength(2)
+      expect(events[0]).toBeInstanceOf(A2AStreamUpdateEvent)
+      expect((events[0] as A2AStreamUpdateEvent).event).toStrictEqual(task)
+      expect(events[1]).toBeInstanceOf(AgentResultEvent)
+      expect((result as { stopReason: string }).stopReason).toBe('endTurn')
+    })
+
+    it('yields multiple A2AStreamUpdateEvents for streamed artifact chunks', async () => {
+      const artifactUpdate1: TaskArtifactUpdateEvent = {
+        kind: 'artifact-update',
+        taskId: 'task-1',
+        contextId: 'ctx-1',
+        artifact: { artifactId: 'art-1', parts: [{ kind: 'text', text: 'Hello ' }] },
+        append: false,
+      }
+      const artifactUpdate2: TaskArtifactUpdateEvent = {
+        kind: 'artifact-update',
+        taskId: 'task-1',
+        contextId: 'ctx-1',
+        artifact: { artifactId: 'art-1', parts: [{ kind: 'text', text: 'World' }] },
+        append: true,
+        lastChunk: true,
+      }
+      const statusUpdate: TaskStatusUpdateEvent = {
+        kind: 'status-update',
+        taskId: 'task-1',
+        contextId: 'ctx-1',
+        status: {
+          state: 'completed',
+          message: {
+            kind: 'message',
+            messageId: 'msg-1',
+            role: 'agent',
+            parts: [{ kind: 'text', text: 'Final answer' }],
+          },
+        },
+        final: true,
       }
 
-      expect(events).toHaveLength(1)
+      mockSendMessageStream.mockReturnValue(mockStream(artifactUpdate1, artifactUpdate2, statusUpdate))
+      const agent = new A2AAgent({ url: 'http://localhost:9000' })
+      const { events } = await collectStream(agent.stream('Hello'))
+
+      // 3 A2AStreamUpdateEvents + 1 AgentResultEvent
+      expect(events).toHaveLength(4)
+      expect(events[0]).toBeInstanceOf(A2AStreamUpdateEvent)
+      expect(events[1]).toBeInstanceOf(A2AStreamUpdateEvent)
+      expect(events[2]).toBeInstanceOf(A2AStreamUpdateEvent)
+      expect(events[3]).toBeInstanceOf(AgentResultEvent)
+
+      // Final result built from last complete event (status-update with completed state)
+      const resultEvent = events[3] as AgentResultEvent
+      expect((resultEvent.result.lastMessage.content[0] as TextBlock).text).toBe('Final answer')
+    })
+
+    it('yields A2AStreamUpdateEvent for Message response', async () => {
+      const message: A2AMessage = {
+        kind: 'message',
+        messageId: 'msg-1',
+        role: 'agent',
+        parts: [{ kind: 'text', text: 'Direct response' }],
+      }
+      mockSendMessageStream.mockReturnValue(mockStream(message))
+
+      const agent = new A2AAgent({ url: 'http://localhost:9000' })
+      const { events } = await collectStream(agent.stream('Hello'))
+
+      expect(events).toHaveLength(2)
+      expect(events[0]).toBeInstanceOf(A2AStreamUpdateEvent)
+      expect((events[0] as A2AStreamUpdateEvent).event.kind).toBe('message')
+
+      const resultEvent = events[1] as AgentResultEvent
+      expect((resultEvent.result.lastMessage.content[0] as TextBlock).text).toBe('Direct response')
+    })
+
+    it('builds result from status-update with completed state', async () => {
+      const statusUpdate: TaskStatusUpdateEvent = {
+        kind: 'status-update',
+        taskId: 'task-1',
+        contextId: 'ctx-1',
+        status: {
+          state: 'completed',
+          message: {
+            kind: 'message',
+            messageId: 'msg-1',
+            role: 'agent',
+            parts: [{ kind: 'text', text: 'Status text' }],
+          },
+        },
+        final: true,
+      }
+      mockSendMessageStream.mockReturnValue(mockStream(statusUpdate))
+
+      const agent = new A2AAgent({ url: 'http://localhost:9000' })
+      const { events } = await collectStream(agent.stream('Hello'))
+
+      const resultEvent = events[1] as AgentResultEvent
+      expect((resultEvent.result.lastMessage.content[0] as TextBlock).text).toBe('Status text')
+    })
+
+    it('returns empty text when no events are received', async () => {
+      mockSendMessageStream.mockReturnValue(mockStream())
+
+      const agent = new A2AAgent({ url: 'http://localhost:9000' })
+      const { events, result } = await collectStream(agent.stream('Hello'))
+
+      expect(events).toHaveLength(1) // only AgentResultEvent
       expect(events[0]).toBeInstanceOf(AgentResultEvent)
-      expect((events[0] as AgentResultEvent).result.stopReason).toBe('endTurn')
-      expect(next.value.stopReason).toBe('endTurn')
-      expect(next.value.lastMessage.content[0]).toBeInstanceOf(TextBlock)
+      expect((result as { lastMessage: Message }).lastMessage.content[0]).toBeInstanceOf(TextBlock)
+      expect(((result as { lastMessage: Message }).lastMessage.content[0] as TextBlock).text).toBe('')
     })
   })
 
@@ -148,19 +279,6 @@ describe('A2AAgent', () => {
       expect(agent.name).toBe('Remote Agent')
       expect(agent.description).toBe('A remote agent for testing')
     })
-
-    it('prefers config overrides over agent card values', async () => {
-      const agent = new A2AAgent({ url: 'http://localhost:9000', name: 'Custom', description: 'Override' })
-      await agent.invoke('Hello')
-      expect(agent.name).toBe('Custom')
-      expect(agent.description).toBe('Override')
-    })
-
-    it('returns config values even before first invocation', () => {
-      const agent = new A2AAgent({ url: 'http://localhost:9000', name: 'Custom', description: 'Override' })
-      expect(agent.name).toBe('Custom')
-      expect(agent.description).toBe('Override')
-    })
   })
 
   describe('response extraction', () => {
@@ -171,12 +289,14 @@ describe('A2AAgent', () => {
     })
 
     it('extracts text from Message response', async () => {
-      mockSendMessage.mockResolvedValue({
-        kind: 'message',
-        messageId: 'msg-1',
-        role: 'agent',
-        parts: [{ kind: 'text', text: 'Direct response' }],
-      })
+      mockSendMessageStream.mockReturnValue(
+        mockStream({
+          kind: 'message',
+          messageId: 'msg-1',
+          role: 'agent',
+          parts: [{ kind: 'text', text: 'Direct response' }],
+        })
+      )
       const agent = new A2AAgent({ url: 'http://localhost:9000' })
       const result = await agent.invoke('Hello')
       expect((result.lastMessage.content[0] as TextBlock).text).toBe('Direct response')
@@ -191,85 +311,95 @@ describe('response text extraction via invoke', () => {
   })
 
   it('joins multiple text parts from Task artifacts', async () => {
-    mockSendMessage.mockResolvedValue({
-      kind: 'task',
-      id: 'task-1',
-      contextId: 'ctx-1',
-      status: { state: 'completed' },
-      artifacts: [
-        {
-          artifactId: 'art-1',
-          parts: [
-            { kind: 'text', text: 'Part 1' },
-            { kind: 'text', text: 'Part 2' },
-          ],
-        },
-      ],
-    } as Task)
+    mockSendMessageStream.mockReturnValue(
+      mockStream({
+        kind: 'task',
+        id: 'task-1',
+        contextId: 'ctx-1',
+        status: { state: 'completed' },
+        artifacts: [
+          {
+            artifactId: 'art-1',
+            parts: [
+              { kind: 'text', text: 'Part 1' },
+              { kind: 'text', text: 'Part 2' },
+            ],
+          },
+        ],
+      } as Task)
+    )
     const agent = new A2AAgent({ url: 'http://localhost:9000' })
     const result = await agent.invoke('Hello')
     expect((result.lastMessage.content[0] as TextBlock).text).toBe('Part 1\nPart 2')
   })
 
   it('joins text from multiple Task artifacts', async () => {
-    mockSendMessage.mockResolvedValue({
-      kind: 'task',
-      id: 'task-1',
-      contextId: 'ctx-1',
-      status: { state: 'completed' },
-      artifacts: [
-        { artifactId: 'art-1', parts: [{ kind: 'text', text: 'First' }] },
-        { artifactId: 'art-2', parts: [{ kind: 'text', text: 'Second' }] },
-      ],
-    } as Task)
+    mockSendMessageStream.mockReturnValue(
+      mockStream({
+        kind: 'task',
+        id: 'task-1',
+        contextId: 'ctx-1',
+        status: { state: 'completed' },
+        artifacts: [
+          { artifactId: 'art-1', parts: [{ kind: 'text', text: 'First' }] },
+          { artifactId: 'art-2', parts: [{ kind: 'text', text: 'Second' }] },
+        ],
+      } as Task)
+    )
     const agent = new A2AAgent({ url: 'http://localhost:9000' })
     const result = await agent.invoke('Hello')
     expect((result.lastMessage.content[0] as TextBlock).text).toBe('First\nSecond')
   })
 
   it('falls back to Task status message when no artifacts', async () => {
-    mockSendMessage.mockResolvedValue({
-      kind: 'task',
-      id: 'task-1',
-      contextId: 'ctx-1',
-      status: {
-        state: 'completed',
-        message: {
-          kind: 'message',
-          messageId: 'msg-1',
-          role: 'agent',
-          parts: [{ kind: 'text', text: 'Status text' }],
+    mockSendMessageStream.mockReturnValue(
+      mockStream({
+        kind: 'task',
+        id: 'task-1',
+        contextId: 'ctx-1',
+        status: {
+          state: 'completed',
+          message: {
+            kind: 'message',
+            messageId: 'msg-1',
+            role: 'agent',
+            parts: [{ kind: 'text', text: 'Status text' }],
+          },
         },
-      },
-    } as Task)
+      } as Task)
+    )
     const agent = new A2AAgent({ url: 'http://localhost:9000' })
     const result = await agent.invoke('Hello')
     expect((result.lastMessage.content[0] as TextBlock).text).toBe('Status text')
   })
 
   it('returns empty text for Task with no text content', async () => {
-    mockSendMessage.mockResolvedValue({
-      kind: 'task',
-      id: 'task-1',
-      contextId: 'ctx-1',
-      status: { state: 'completed' },
-    } as Task)
+    mockSendMessageStream.mockReturnValue(
+      mockStream({
+        kind: 'task',
+        id: 'task-1',
+        contextId: 'ctx-1',
+        status: { state: 'completed' },
+      } as Task)
+    )
     const agent = new A2AAgent({ url: 'http://localhost:9000' })
     const result = await agent.invoke('Hello')
     expect((result.lastMessage.content[0] as TextBlock).text).toBe('')
   })
 
   it('extracts text from Message parts, ignoring non-text parts', async () => {
-    mockSendMessage.mockResolvedValue({
-      kind: 'message',
-      messageId: 'msg-1',
-      role: 'agent',
-      parts: [
-        { kind: 'text', text: 'Hello' },
-        { kind: 'file', file: { uri: 'file://test.txt' } },
-        { kind: 'text', text: 'World' },
-      ],
-    } as A2AMessage)
+    mockSendMessageStream.mockReturnValue(
+      mockStream({
+        kind: 'message',
+        messageId: 'msg-1',
+        role: 'agent',
+        parts: [
+          { kind: 'text', text: 'Hello' },
+          { kind: 'file', file: { uri: 'file://test.txt' } },
+          { kind: 'text', text: 'World' },
+        ],
+      } as A2AMessage)
+    )
     const agent = new A2AAgent({ url: 'http://localhost:9000' })
     const result = await agent.invoke('Hello')
     expect((result.lastMessage.content[0] as TextBlock).text).toBe('Hello\nWorld')
