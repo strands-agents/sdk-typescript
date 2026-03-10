@@ -61,20 +61,6 @@ export class A2AAgent implements AgentBase {
   }
 
   /**
-   * Returns the agent name from the remote agent card.
-   */
-  get name(): string | undefined {
-    return this._agentCard?.name
-  }
-
-  /**
-   * Returns the agent description from the remote agent card.
-   */
-  get description(): string | undefined {
-    return this._agentCard?.description
-  }
-
-  /**
    * Invokes the remote agent and returns the final result.
    *
    * Built on top of `stream()` — consumes the full event stream and returns the final result.

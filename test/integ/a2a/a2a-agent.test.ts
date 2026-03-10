@@ -97,23 +97,4 @@ describe.skipIf(bedrock.skip)('A2AAgent integration', () => {
     expect(result.lastMessage.role).toBe('assistant')
     expect((result.lastMessage.content[0] as TextBlock).text.toLowerCase()).toContain('pong')
   })
-
-  it('populates name and description from agent card after invocation', async () => {
-    const agent = new Agent({
-      model: bedrock.createModel({ maxTokens: 128 }),
-      printer: false,
-      systemPrompt: 'Say hi.',
-    })
-
-    const { url } = await startServer(agent)
-    const remoteAgent = new A2AAgent({ url })
-
-    expect(remoteAgent.name).toBeUndefined()
-    expect(remoteAgent.description).toBeUndefined()
-
-    await remoteAgent.invoke('hello')
-
-    expect(remoteAgent.name).toBe('Test Agent')
-    expect(remoteAgent.description).toBe('Agent for A2A integration tests')
-  })
 })

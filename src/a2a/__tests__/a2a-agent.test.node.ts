@@ -266,21 +266,6 @@ describe('A2AAgent', () => {
     })
   })
 
-  describe('name and description', () => {
-    it('returns undefined before first invocation', () => {
-      const agent = new A2AAgent({ url: 'http://localhost:9000' })
-      expect(agent.name).toBeUndefined()
-      expect(agent.description).toBeUndefined()
-    })
-
-    it('populates from agent card after first invocation', async () => {
-      const agent = new A2AAgent({ url: 'http://localhost:9000' })
-      await agent.invoke('Hello')
-      expect(agent.name).toBe('Remote Agent')
-      expect(agent.description).toBe('A remote agent for testing')
-    })
-  })
-
   describe('response extraction', () => {
     it('extracts text from Task response', async () => {
       const agent = new A2AAgent({ url: 'http://localhost:9000' })
