@@ -308,13 +308,20 @@ export class Graph implements MultiAgentBase {
     }
 
     const visited = new Set<string>()
+    const adjacency = new Map<string, string[]>()
+    for (const edge of this.edges) {
+      const targets = adjacency.get(edge.source.id) ?? []
+      targets.push(edge.target.id)
+      adjacency.set(edge.source.id, targets)
+    }
+
     const queue = this._sources.map((n) => n.id)
     while (queue.length > 0) {
       const id = queue.shift()!
       if (visited.has(id)) continue
       visited.add(id)
-      for (const edge of this.edges.filter((e) => e.source.id === id)) {
-        queue.push(edge.target.id)
+      for (const target of adjacency.get(id) ?? []) {
+        queue.push(target)
       }
     }
 
