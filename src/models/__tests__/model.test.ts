@@ -645,8 +645,8 @@ describe('Model', () => {
             usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
           }
           yield {
-            type: 'modelRedactEvent',
-            inputRedaction: { message: '[User input redacted.]' },
+            type: 'modelRedactionEvent',
+            inputRedaction: { replaceContent: '[User input redacted.]' },
           }
         })
 
@@ -676,8 +676,8 @@ describe('Model', () => {
             usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
           }
           yield {
-            type: 'modelRedactEvent',
-            outputRedaction: { message: '[Assistant output redacted.]' },
+            type: 'modelRedactionEvent',
+            outputRedaction: { replaceContent: '[Assistant output redacted.]' },
           }
         })
 
@@ -708,12 +708,12 @@ describe('Model', () => {
             usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
           }
           yield {
-            type: 'modelRedactEvent',
-            inputRedaction: { message: '[User input redacted.]' },
+            type: 'modelRedactionEvent',
+            inputRedaction: { replaceContent: '[User input redacted.]' },
           }
           yield {
-            type: 'modelRedactEvent',
-            outputRedaction: { message: '[Assistant output redacted.]' },
+            type: 'modelRedactionEvent',
+            outputRedaction: { replaceContent: '[Assistant output redacted.]' },
           }
         })
 

@@ -99,10 +99,10 @@ const DEFAULT_REDACT_INPUT_MESSAGE = '[User input redacted.]'
 const DEFAULT_REDACT_OUTPUT_MESSAGE = '[Assistant output redacted.]'
 
 /**
- * Redaction configuration for guardrails.
+ * Redaction configuration for Bedrock guardrails.
  * Controls whether and how blocked content is replaced.
  */
-export interface GuardrailRedactionConfig {
+export interface BedrockGuardrailRedactionConfig {
   /** Redact input when blocked. @defaultValue true */
   input?: boolean
 
@@ -124,7 +124,7 @@ export interface GuardrailRedactionConfig {
  *
  * @see https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails.html
  */
-export interface GuardrailConfig {
+export interface BedrockGuardrailConfig {
   /** Guardrail identifier */
   guardrailIdentifier: string
 
@@ -138,7 +138,7 @@ export interface GuardrailConfig {
   streamProcessingMode?: 'sync' | 'async'
 
   /** Redaction behavior when content is blocked */
-  redaction?: GuardrailRedactionConfig
+  redaction?: BedrockGuardrailRedactionConfig
 }
 
 /**
@@ -245,7 +245,7 @@ export interface BedrockModelConfig extends BaseModelConfig {
    * Guardrail configuration for content filtering and safety controls.
    * @see https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails.html
    */
-  guardrailConfig?: GuardrailConfig
+  guardrailConfig?: BedrockGuardrailConfig
 }
 
 /**
@@ -438,10 +438,12 @@ export class BedrockModel extends Model<BedrockModelConfig> {
         const response = await this._client.send(command)
         // Stream the response
         if (response.stream) {
+          let lastStopReason: string | undefined
           for await (const chunk of response.stream) {
             // Map Bedrock events to SDK events
-            const events = this._mapStreamedBedrockEventToSDKEvent(chunk)
-            for (const event of events) {
+            const result = this._mapStreamedBedrockEventToSDKEvent(chunk, lastStopReason)
+            lastStopReason = result.stopReason
+            for (const event of result.events) {
               yield event
             }
           }
@@ -941,11 +943,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
       metadataEvent.trace = event.trace
 
       // Check for blocked guardrails and emit redaction events
-      if (
-        this._config.guardrailConfig &&
-        event.trace.guardrail &&
-        this._findDetectedAndBlockedPolicy(event.trace.guardrail)
-      ) {
+      if (this._config.guardrailConfig && event.trace.guardrail && stopReasonRaw === 'guardrail_intervened') {
         for (const redactionEvent of this._generateRedactionEvents(event.trace.guardrail)) {
           events.push(redactionEvent)
         }
@@ -961,10 +959,15 @@ export class BedrockModel extends Model<BedrockModelConfig> {
    * Maps a Bedrock event to SDK streaming events.
    *
    * @param chunk - Bedrock event chunk
-   * @returns Array of SDK streaming events
+   * @param lastStopReason - Stop reason from previous messageStop event
+   * @returns Object containing events array and optional stopReason
    */
-  private _mapStreamedBedrockEventToSDKEvent(chunk: ConverseStreamOutput): ModelStreamEvent[] {
+  private _mapStreamedBedrockEventToSDKEvent(
+    chunk: ConverseStreamOutput,
+    lastStopReason?: string
+  ): { events: ModelStreamEvent[]; stopReason?: string } {
     const events: ModelStreamEvent[] = []
+    let stopReason = lastStopReason
 
     // Extract the event type key
     const eventType = ensureDefined(Object.keys(chunk)[0], 'eventType') as keyof ConverseStreamOutput
@@ -1064,6 +1067,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
         const data = eventData as BedrockMessageStopEvent
 
         const stopReasonRaw = ensureDefined(data.stopReason, 'messageStop.stopReason') as string
+        stopReason = stopReasonRaw
         const event: ModelStreamEvent = {
           type: 'modelMessageStopEvent',
           stopReason: this._transformStopReason(stopReasonRaw, data),
@@ -1113,11 +1117,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
           event.trace = data.trace
 
           // Check for blocked guardrails in trace and emit redaction events
-          if (
-            this._config.guardrailConfig &&
-            data.trace.guardrail &&
-            this._findDetectedAndBlockedPolicy(data.trace.guardrail)
-          ) {
+          if (this._config.guardrailConfig && data.trace.guardrail && lastStopReason === 'guardrail_intervened') {
             for (const redactionEvent of this._generateRedactionEvents(data.trace.guardrail)) {
               events.push(redactionEvent)
             }
@@ -1144,7 +1144,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
         break
     }
 
-    return events
+    return stopReason !== undefined ? { events, stopReason } : { events }
   }
 
   /**
@@ -1290,62 +1290,6 @@ export class BedrockModel extends Model<BedrockModelConfig> {
   }
 
   /**
-   * Checks if guardrail trace contains any blocked policies.
-   *
-   * @param guardrailData - Guardrail trace assessment data
-   * @returns True if any policy action is BLOCKED
-   */
-  private _findDetectedAndBlockedPolicy(guardrailData: GuardrailTraceAssessment): boolean {
-    // Check input assessment
-    if (guardrailData.inputAssessment) {
-      for (const assessment of Object.values(guardrailData.inputAssessment)) {
-        if (this._hasBlockedAction(assessment)) {
-          return true
-        }
-      }
-    }
-
-    // Check output assessments
-    if (guardrailData.outputAssessments) {
-      for (const assessments of Object.values(guardrailData.outputAssessments)) {
-        // Handle both single assessment and array of assessments
-        const assessmentArray = Array.isArray(assessments) ? assessments : [assessments]
-        if (assessmentArray.some((assessment) => this._hasBlockedAction(assessment))) {
-          return true
-        }
-      }
-    }
-
-    return false
-  }
-
-  /**
-   * Recursively checks if an object contains action: 'BLOCKED'.
-   *
-   * @param obj - Object to search for blocked action
-   * @returns True if any nested property has action: 'BLOCKED'
-   */
-  private _hasBlockedAction(obj: unknown): boolean {
-    if (obj === null || typeof obj !== 'object') {
-      return false
-    }
-
-    if (Array.isArray(obj)) {
-      return obj.some((item) => this._hasBlockedAction(item))
-    }
-
-    const record = obj as Record<string, unknown>
-
-    // Check if this object has action: 'BLOCKED'
-    if (record.action === 'BLOCKED') {
-      return true
-    }
-
-    // Recursively check all nested values
-    return Object.values(record).some((value) => this._hasBlockedAction(value))
-  }
-
-  /**
    * Generate redaction events based on guardrail configuration.
    *
    * @param guardrailData - The guardrail trace assessment data
@@ -1359,9 +1303,9 @@ export class BedrockModel extends Model<BedrockModelConfig> {
     if (redaction?.input !== false) {
       logger.debug('redacting input due to guardrail')
       events.push({
-        type: 'modelRedactEvent',
+        type: 'modelRedactionEvent',
         inputRedaction: {
-          message: redaction?.inputMessage ?? DEFAULT_REDACT_INPUT_MESSAGE,
+          replaceContent: redaction?.inputMessage ?? DEFAULT_REDACT_INPUT_MESSAGE,
         },
       })
     }
@@ -1370,9 +1314,9 @@ export class BedrockModel extends Model<BedrockModelConfig> {
     if (redaction?.output) {
       logger.debug('redacting output due to guardrail')
       const outputRedactionEvent: ModelStreamEvent = {
-        type: 'modelRedactEvent',
+        type: 'modelRedactionEvent',
         outputRedaction: {
-          message: redaction?.outputMessage ?? DEFAULT_REDACT_OUTPUT_MESSAGE,
+          replaceContent: redaction?.outputMessage ?? DEFAULT_REDACT_OUTPUT_MESSAGE,
         },
       }
 

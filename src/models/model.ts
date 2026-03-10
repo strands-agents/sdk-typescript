@@ -18,7 +18,7 @@ import {
   ModelMessageStartEvent,
   ModelMessageStopEvent,
   ModelMetadataEvent,
-  ModelRedactEvent,
+  ModelRedactionEvent,
   type ModelStreamEvent,
 } from './streaming.js'
 import { MaxTokensError, ModelError, normalizeError } from '../errors.js'
@@ -189,8 +189,8 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
         return new ModelMessageStopEvent(event_data)
       case 'modelMetadataEvent':
         return new ModelMetadataEvent(event_data)
-      case 'modelRedactEvent':
-        return new ModelRedactEvent(event_data)
+      case 'modelRedactionEvent':
+        return new ModelRedactionEvent(event_data)
       default:
         throw new Error(`Unsupported event type: ${event_data}`)
     }
@@ -346,18 +346,18 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
             metadata = event
             break
 
-          case 'modelRedactEvent':
+          case 'modelRedactionEvent':
             // Handle content redaction from guardrails
             if (event.inputRedaction) {
               // Store redaction message for agent to handle input message redaction
-              redactionMessage = event.inputRedaction.message
+              redactionMessage = event.inputRedaction.replaceContent
             }
             if (event.outputRedaction) {
               // Update output message directly with redacted content
               // Redaction event comes after modelMessageStopEvent, so we overwrite stoppedMessage
               stoppedMessage = new Message({
                 role: 'assistant',
-                content: [new TextBlock(event.outputRedaction.message)],
+                content: [new TextBlock(event.outputRedaction.replaceContent)],
               })
             }
             break

@@ -23,7 +23,7 @@ export type ModelStreamEvent =
   | ModelContentBlockStopEventData
   | ModelMessageStopEventData
   | ModelMetadataEventData
-  | ModelRedactEventData
+  | ModelRedactionEventData
 
 /** Set of all ModelStreamEvent type discriminators. */
 const modelStreamEventTypes: ReadonlySet<string> = new Set<ModelStreamEvent['type']>([
@@ -33,7 +33,7 @@ const modelStreamEventTypes: ReadonlySet<string> = new Set<ModelStreamEvent['typ
   'modelContentBlockStopEvent',
   'modelMessageStopEvent',
   'modelMetadataEvent',
-  'modelRedactEvent',
+  'modelRedactionEvent',
 ])
 
 /**
@@ -295,9 +295,9 @@ export class ModelMetadataEvent implements ModelMetadataEventData {
  */
 export interface RedactInputContent {
   /**
-   * The message to replace the redacted input with.
+   * The content to replace the redacted input with.
    */
-  message: string
+  replaceContent: string
 }
 
 /**
@@ -312,20 +312,20 @@ export interface RedactOutputContent {
   redactedContent?: string
 
   /**
-   * The message to replace the redacted output with.
+   * The content to replace the redacted output with.
    */
-  message: string
+  replaceContent: string
 }
 
 /**
  * Data for a redact event.
  * Emitted when guardrails block content and redaction is enabled.
  */
-export interface ModelRedactEventData {
+export interface ModelRedactionEventData {
   /**
    * Discriminator for redact events.
    */
-  type: 'modelRedactEvent'
+  type: 'modelRedactionEvent'
 
   /**
    * Input redaction information (when input is blocked).
@@ -341,11 +341,11 @@ export interface ModelRedactEventData {
 /**
  * Event emitted when guardrails block content and trigger redaction.
  */
-export class ModelRedactEvent implements ModelRedactEventData {
+export class ModelRedactionEvent implements ModelRedactionEventData {
   /**
    * Discriminator for redact events.
    */
-  readonly type = 'modelRedactEvent' as const
+  readonly type = 'modelRedactionEvent' as const
 
   /**
    * Input redaction information (when input is blocked).
@@ -357,7 +357,7 @@ export class ModelRedactEvent implements ModelRedactEventData {
    */
   readonly outputRedaction?: RedactOutputContent
 
-  constructor(data: ModelRedactEventData) {
+  constructor(data: ModelRedactionEventData) {
     if (data.inputRedaction !== undefined) {
       this.inputRedaction = data.inputRedaction
     }

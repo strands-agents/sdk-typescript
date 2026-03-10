@@ -151,8 +151,8 @@ export type {
   ModelMetadataEvent,
   RedactInputContent,
   RedactOutputContent,
-  ModelRedactEventData,
-  ModelRedactEvent,
+  ModelRedactionEventData,
+  ModelRedactionEvent,
   ModelStreamEvent,
 } from './models/streaming.js'
 export { isModelStreamEvent } from './models/streaming.js'
@@ -167,8 +167,8 @@ export { BedrockModel as BedrockModel } from './models/bedrock.js'
 export type {
   BedrockModelConfig,
   BedrockModelOptions,
-  GuardrailConfig,
-  GuardrailRedactionConfig,
+  BedrockGuardrailConfig,
+  BedrockGuardrailRedactionConfig,
 } from './models/bedrock.js'
 
 // Agent streaming event types

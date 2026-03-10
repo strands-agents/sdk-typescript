@@ -8,7 +8,7 @@ import {
   FunctionTool,
   CachePointBlock,
 } from '@strands-agents/sdk'
-import type { SystemContentBlock, ModelRedactEvent } from '@strands-agents/sdk'
+import type { SystemContentBlock, ModelRedactionEvent } from '@strands-agents/sdk'
 
 import { collectIterator } from '$/sdk/__fixtures__/model-test-helpers.js'
 import { bedrock } from '../__fixtures__/model-providers.js'
@@ -506,13 +506,13 @@ describe.skipIf(bedrock.skip)('BedrockModel Integration Tests', () => {
           events.push(event)
         }
 
-        // Find the ModelRedactEvent with outputRedaction
-        const redactEvent = events.find((e) => e.type === 'modelRedactEvent' && e.outputRedaction) as
-          | ModelRedactEvent
+        // Find the ModelRedactionEvent with outputRedaction
+        const redactEvent = events.find((e) => e.type === 'modelRedactionEvent' && e.outputRedaction) as
+          | ModelRedactionEvent
           | undefined
 
         expect(redactEvent).toBeDefined()
-        expect(redactEvent?.outputRedaction?.message).toBe(REDACT_MESSAGE)
+        expect(redactEvent?.outputRedaction?.replaceContent).toBe(REDACT_MESSAGE)
 
         // In sync mode with full trace, we should get the original content
         // The exact content may vary, but if blocked, redactedContent should be present
