@@ -139,6 +139,20 @@ export interface BedrockGuardrailConfig {
 
   /** Redaction behavior when content is blocked */
   redaction?: BedrockGuardrailRedactionConfig
+
+  /**
+   * Only evaluate the latest user message with guardrails.
+   * When true, wraps the latest user message's text/image content in guardContent blocks.
+   * This can improve performance and reduce costs in multi-turn conversations.
+   *
+   * @remarks
+   * The implementation finds the last user message containing text or image content
+   * (not just the last message), ensuring correct behavior during tool execution cycles
+   * where toolResult messages may follow the user's actual input.
+   *
+   * @defaultValue false
+   */
+  guardLatestUserMessage?: boolean
 }
 
 /**
@@ -580,9 +594,45 @@ export class BedrockModel extends Model<BedrockModelConfig> {
    * @returns Bedrock-formatted messages
    */
   private _formatMessages(messages: Message[]): BedrockMessage[] {
-    return messages.reduce<BedrockMessage[]>((acc, message) => {
+    // Pre-compute the index of the last user message containing text/image content
+    // This ensures guardContent wrapping is maintained across tool execution cycles
+    const lastUserTextIdx = this._config.guardrailConfig?.guardLatestUserMessage
+      ? this._findLastUserTextMessageIndex(messages)
+      : undefined
+
+    return messages.reduce<BedrockMessage[]>((acc, message, idx) => {
       const content = message.content
-        .map((block) => this._formatContentBlock(block))
+        .map((block) => {
+          let formattedBlock = this._formatContentBlock(block)
+
+          // Wrap in guardContent if this is the last user text/image message and guardLatestUserMessage is enabled
+          if (idx === lastUserTextIdx && formattedBlock !== undefined) {
+            if ('text' in formattedBlock) {
+              formattedBlock = {
+                guardContent: {
+                  text: {
+                    text: formattedBlock.text as string,
+                    qualifiers: [],
+                  },
+                },
+              }
+            } else if ('image' in formattedBlock) {
+              // Extract image data and create guardContent with proper typing
+              const imageBlock = formattedBlock.image
+              formattedBlock = {
+                guardContent: {
+                  image: {
+                    format: imageBlock.format as 'png' | 'jpeg',
+                    source: imageBlock.source as { bytes: Uint8Array },
+                  },
+                },
+              }
+            }
+            // Other content types (toolUse, toolResult, etc.) pass through unchanged
+          }
+
+          return formattedBlock
+        })
         .filter((block) => block !== undefined)
 
       if (content.length > 0) {
@@ -591,6 +641,30 @@ export class BedrockModel extends Model<BedrockModelConfig> {
 
       return acc
     }, [])
+  }
+
+  /**
+   * Find the index of the last user message containing text or image content.
+   *
+   * This is used for guardLatestUserMessage guardrail evaluation to ensure that guardContent
+   * wrapping targets the correct message even when toolResult messages (role='user') follow
+   * the actual user text/image input during tool execution cycles.
+   *
+   * @param messages - Array of messages to search
+   * @returns Index of the last user message with text/image content, or undefined if not found
+   */
+  private _findLastUserTextMessageIndex(messages: Message[]): number | undefined {
+    for (let idx = messages.length - 1; idx >= 0; idx--) {
+      const msg = messages[idx]
+      if (msg === undefined) continue
+      if (
+        msg.role === 'user' &&
+        msg.content.some((block) => block.type === 'textBlock' || block.type === 'imageBlock')
+      ) {
+        return idx
+      }
+    }
+    return undefined
   }
 
   /**

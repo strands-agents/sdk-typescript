@@ -7,6 +7,7 @@ import { Message, ReasoningBlock, ToolUseBlock, ToolResultBlock, JsonBlock } fro
 import type { SystemContentBlock } from '../../types/messages.js'
 import { TextBlock, GuardContentBlock, CachePointBlock } from '../../types/messages.js'
 import { CitationsBlock } from '../../types/citations.js'
+import { ImageBlock } from '../../types/media.js'
 import type { StreamOptions } from '../model.js'
 import { collectIterator } from '../../__fixtures__/model-test-helpers.js'
 
@@ -2453,6 +2454,502 @@ describe('BedrockModel', () => {
           type: 'modelRedactionEvent',
           inputRedaction: { replaceContent: '[User input redacted.]' },
         })
+      })
+    })
+
+    describe('guardLatestUserMessage', () => {
+      const mockConverseStreamCommand = vi.mocked(ConverseStreamCommand)
+
+      beforeEach(() => {
+        vi.clearAllMocks()
+      })
+
+      it('accepts guardLatestUserMessage in guardrailConfig', () => {
+        const provider = new BedrockModel({
+          guardrailConfig: {
+            guardrailIdentifier: 'my-guardrail-id',
+            guardrailVersion: '1',
+            guardLatestUserMessage: true,
+          },
+        })
+        expect(provider.getConfig().guardrailConfig).toStrictEqual({
+          guardrailIdentifier: 'my-guardrail-id',
+          guardrailVersion: '1',
+          guardLatestUserMessage: true,
+        })
+      })
+
+      it('wraps latest user message text content in guardContent when enabled', async () => {
+        const provider = new BedrockModel({
+          guardrailConfig: {
+            guardrailIdentifier: 'my-guardrail-id',
+            guardrailVersion: '1',
+            guardLatestUserMessage: true,
+          },
+        })
+        const messages = [new Message({ role: 'user', content: [new TextBlock('Hello world')] })]
+
+        collectIterator(provider.stream(messages))
+
+        expect(mockConverseStreamCommand).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            messages: [
+              {
+                role: 'user',
+                content: [
+                  {
+                    guardContent: {
+                      text: {
+                        text: 'Hello world',
+                        qualifiers: [],
+                      },
+                    },
+                  },
+                ],
+              },
+            ],
+          })
+        )
+      })
+
+      it('wraps latest user message image content in guardContent when enabled', async () => {
+        const imageBytes = new Uint8Array([1, 2, 3, 4])
+        const provider = new BedrockModel({
+          guardrailConfig: {
+            guardrailIdentifier: 'my-guardrail-id',
+            guardrailVersion: '1',
+            guardLatestUserMessage: true,
+          },
+        })
+        const messages = [
+          new Message({
+            role: 'user',
+            content: [
+              new ImageBlock({
+                format: 'jpeg',
+                source: { bytes: imageBytes },
+              }),
+            ],
+          }),
+        ]
+
+        collectIterator(provider.stream(messages))
+
+        expect(mockConverseStreamCommand).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            messages: [
+              {
+                role: 'user',
+                content: [
+                  {
+                    guardContent: {
+                      image: {
+                        format: 'jpeg',
+                        source: { bytes: imageBytes },
+                      },
+                    },
+                  },
+                ],
+              },
+            ],
+          })
+        )
+      })
+
+      it('does not wrap toolResult messages even though role is user', async () => {
+        const provider = new BedrockModel({
+          guardrailConfig: {
+            guardrailIdentifier: 'my-guardrail-id',
+            guardrailVersion: '1',
+            guardLatestUserMessage: true,
+          },
+        })
+        const messages = [
+          new Message({ role: 'user', content: [new TextBlock('What is 2+2?')] }),
+          new Message({
+            role: 'assistant',
+            content: [
+              new ToolUseBlock({
+                name: 'calculator',
+                toolUseId: 'tool-123',
+                input: { expression: '2+2' },
+              }),
+            ],
+          }),
+          new Message({
+            role: 'user',
+            content: [
+              new ToolResultBlock({
+                toolUseId: 'tool-123',
+                status: 'success',
+                content: [new TextBlock('4')],
+              }),
+            ],
+          }),
+        ]
+
+        collectIterator(provider.stream(messages))
+
+        // The latest message is a toolResult, but guardContent should wrap the FIRST user message
+        // which contains text, not the toolResult
+        expect(mockConverseStreamCommand).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            messages: [
+              {
+                role: 'user',
+                content: [
+                  {
+                    guardContent: {
+                      text: {
+                        text: 'What is 2+2?',
+                        qualifiers: [],
+                      },
+                    },
+                  },
+                ],
+              },
+              {
+                role: 'assistant',
+                content: [
+                  {
+                    toolUse: {
+                      name: 'calculator',
+                      toolUseId: 'tool-123',
+                      input: { expression: '2+2' },
+                    },
+                  },
+                ],
+              },
+              {
+                role: 'user',
+                content: [
+                  {
+                    toolResult: expect.objectContaining({
+                      toolUseId: 'tool-123',
+                    }),
+                  },
+                ],
+              },
+            ],
+          })
+        )
+      })
+
+      it('does not wrap messages when guardLatestUserMessage is false', async () => {
+        const provider = new BedrockModel({
+          guardrailConfig: {
+            guardrailIdentifier: 'my-guardrail-id',
+            guardrailVersion: '1',
+            guardLatestUserMessage: false,
+          },
+        })
+        const messages = [new Message({ role: 'user', content: [new TextBlock('Hello world')] })]
+
+        collectIterator(provider.stream(messages))
+
+        expect(mockConverseStreamCommand).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            messages: [
+              {
+                role: 'user',
+                content: [{ text: 'Hello world' }],
+              },
+            ],
+          })
+        )
+      })
+
+      it('does not wrap messages when guardLatestUserMessage is undefined', async () => {
+        const provider = new BedrockModel({
+          guardrailConfig: {
+            guardrailIdentifier: 'my-guardrail-id',
+            guardrailVersion: '1',
+          },
+        })
+        const messages = [new Message({ role: 'user', content: [new TextBlock('Hello world')] })]
+
+        collectIterator(provider.stream(messages))
+
+        expect(mockConverseStreamCommand).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            messages: [
+              {
+                role: 'user',
+                content: [{ text: 'Hello world' }],
+              },
+            ],
+          })
+        )
+      })
+
+      it('does not wrap assistant messages', async () => {
+        const provider = new BedrockModel({
+          guardrailConfig: {
+            guardrailIdentifier: 'my-guardrail-id',
+            guardrailVersion: '1',
+            guardLatestUserMessage: true,
+          },
+        })
+        const messages = [
+          new Message({ role: 'user', content: [new TextBlock('Hello')] }),
+          new Message({ role: 'assistant', content: [new TextBlock('Hi there!')] }),
+        ]
+
+        collectIterator(provider.stream(messages))
+
+        expect(mockConverseStreamCommand).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            messages: [
+              {
+                role: 'user',
+                content: [
+                  {
+                    guardContent: {
+                      text: {
+                        text: 'Hello',
+                        qualifiers: [],
+                      },
+                    },
+                  },
+                ],
+              },
+              {
+                role: 'assistant',
+                content: [{ text: 'Hi there!' }],
+              },
+            ],
+          })
+        )
+      })
+
+      it('wraps only the last user text/image message in multi-turn conversation', async () => {
+        const provider = new BedrockModel({
+          guardrailConfig: {
+            guardrailIdentifier: 'my-guardrail-id',
+            guardrailVersion: '1',
+            guardLatestUserMessage: true,
+          },
+        })
+        const messages = [
+          new Message({ role: 'user', content: [new TextBlock('First message')] }),
+          new Message({ role: 'assistant', content: [new TextBlock('First response')] }),
+          new Message({ role: 'user', content: [new TextBlock('Second message')] }),
+        ]
+
+        collectIterator(provider.stream(messages))
+
+        expect(mockConverseStreamCommand).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            messages: [
+              {
+                role: 'user',
+                content: [{ text: 'First message' }],
+              },
+              {
+                role: 'assistant',
+                content: [{ text: 'First response' }],
+              },
+              {
+                role: 'user',
+                content: [
+                  {
+                    guardContent: {
+                      text: {
+                        text: 'Second message',
+                        qualifiers: [],
+                      },
+                    },
+                  },
+                ],
+              },
+            ],
+          })
+        )
+      })
+
+      it('handles no user messages with text/image content gracefully', async () => {
+        const provider = new BedrockModel({
+          guardrailConfig: {
+            guardrailIdentifier: 'my-guardrail-id',
+            guardrailVersion: '1',
+            guardLatestUserMessage: true,
+          },
+        })
+        // Only assistant message, no user text/image content
+        const messages = [new Message({ role: 'assistant', content: [new TextBlock('Hello!')] })]
+
+        collectIterator(provider.stream(messages))
+
+        // Should not throw and should not wrap anything
+        expect(mockConverseStreamCommand).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            messages: [
+              {
+                role: 'assistant',
+                content: [{ text: 'Hello!' }],
+              },
+            ],
+          })
+        )
+      })
+
+      it('preserves explicit GuardContentBlock in messages without double-wrapping', async () => {
+        const provider = new BedrockModel({
+          guardrailConfig: {
+            guardrailIdentifier: 'my-guardrail-id',
+            guardrailVersion: '1',
+            guardLatestUserMessage: true,
+          },
+        })
+        const messages = [
+          new Message({
+            role: 'user',
+            content: [
+              new GuardContentBlock({
+                text: {
+                  qualifiers: ['grounding_source'],
+                  text: 'Already guarded content',
+                },
+              }),
+            ],
+          }),
+        ]
+
+        collectIterator(provider.stream(messages))
+
+        // Explicit GuardContentBlock should be preserved as-is (no text/image content to wrap)
+        expect(mockConverseStreamCommand).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            messages: [
+              {
+                role: 'user',
+                content: [
+                  {
+                    guardContent: {
+                      text: {
+                        text: 'Already guarded content',
+                        qualifiers: ['grounding_source'],
+                      },
+                    },
+                  },
+                ],
+              },
+            ],
+          })
+        )
+      })
+
+      it('wraps all text and image blocks in the latest user message', async () => {
+        const imageBytes = new Uint8Array([5, 6, 7, 8])
+        const provider = new BedrockModel({
+          guardrailConfig: {
+            guardrailIdentifier: 'my-guardrail-id',
+            guardrailVersion: '1',
+            guardLatestUserMessage: true,
+          },
+        })
+        const messages = [
+          new Message({
+            role: 'user',
+            content: [
+              new TextBlock('Check this text'),
+              new ImageBlock({
+                format: 'png',
+                source: { bytes: imageBytes },
+              }),
+              new TextBlock('And this text too'),
+            ],
+          }),
+        ]
+
+        collectIterator(provider.stream(messages))
+
+        expect(mockConverseStreamCommand).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            messages: [
+              {
+                role: 'user',
+                content: [
+                  {
+                    guardContent: {
+                      text: {
+                        text: 'Check this text',
+                        qualifiers: [],
+                      },
+                    },
+                  },
+                  {
+                    guardContent: {
+                      image: {
+                        format: 'png',
+                        source: { bytes: imageBytes },
+                      },
+                    },
+                  },
+                  {
+                    guardContent: {
+                      text: {
+                        text: 'And this text too',
+                        qualifiers: [],
+                      },
+                    },
+                  },
+                ],
+              },
+            ],
+          })
+        )
+      })
+
+      it('does not wrap reasoning or cachePoint blocks', async () => {
+        const provider = new BedrockModel({
+          guardrailConfig: {
+            guardrailIdentifier: 'my-guardrail-id',
+            guardrailVersion: '1',
+            guardLatestUserMessage: true,
+          },
+        })
+        const messages = [
+          new Message({
+            role: 'user',
+            content: [
+              new TextBlock('User message'),
+              new ReasoningBlock({ text: 'thinking...', signature: 'sig' }),
+              new CachePointBlock({ cacheType: 'default' }),
+            ],
+          }),
+        ]
+
+        collectIterator(provider.stream(messages))
+
+        expect(mockConverseStreamCommand).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            messages: [
+              {
+                role: 'user',
+                content: [
+                  {
+                    guardContent: {
+                      text: {
+                        text: 'User message',
+                        qualifiers: [],
+                      },
+                    },
+                  },
+                  {
+                    reasoningContent: {
+                      reasoningText: {
+                        text: 'thinking...',
+                        signature: 'sig',
+                      },
+                    },
+                  },
+                  { cachePoint: { type: 'default' } },
+                ],
+              },
+            ],
+          })
+        )
       })
     })
   })
