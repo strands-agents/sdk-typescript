@@ -258,7 +258,7 @@ export class Tracer {
   private _loopSpan: Span | undefined
 
   /** In-memory execution trace state, collected independently of OTEL. */
-  private readonly _localtrace: LocalTraceState = { traces: [] }
+  private readonly _localTrace: LocalTraceState = { traces: [] }
 
   /**
    * Initialize the tracer with OpenTelemetry configuration.
@@ -284,7 +284,7 @@ export class Tracer {
    * All local execution traces collected by this tracer.
    */
   get localTraces(): LocalTrace[] {
-    return this._localtrace.traces
+    return this._localTrace.traces
   }
 
   /**
@@ -326,10 +326,10 @@ export class Tracer {
       this._agentSpan = span
 
       // Reset local trace state for this invocation
-      this._localtrace.traces = []
-      this._localtrace.currentCycle = undefined
-      this._localtrace.currentModel = undefined
-      this._localtrace.currentTool = undefined
+      this._localTrace.traces = []
+      this._localTrace.currentCycle = undefined
+      this._localTrace.currentModel = undefined
+      this._localTrace.currentTool = undefined
 
       return span
     } catch (error) {
@@ -350,9 +350,9 @@ export class Tracer {
     this._loopSpan = undefined
 
     // Clear local trace state
-    this._localtrace.currentCycle = undefined
-    this._localtrace.currentModel = undefined
-    this._localtrace.currentTool = undefined
+    this._localTrace.currentCycle = undefined
+    this._localTrace.currentModel = undefined
+    this._localTrace.currentTool = undefined
 
     if (!span) return
 
@@ -380,9 +380,9 @@ export class Tracer {
 
     // Create local model trace as child of current cycle
     const modelTrace = new LocalTrace('stream_messages', {
-      ...(this._localtrace.currentCycle && { parent: this._localtrace.currentCycle }),
+      ...(this._localTrace.currentCycle && { parent: this._localTrace.currentCycle }),
     })
-    this._localtrace.currentModel = modelTrace
+    this._localTrace.currentModel = modelTrace
 
     try {
       const attributes = this._getCommonAttributes('chat')
@@ -411,12 +411,12 @@ export class Tracer {
    */
   endModelInvokeSpan(span: Span | null, options: EndModelSpanOptions = {}): void {
     // End local model trace and attach output message
-    if (this._localtrace.currentModel) {
+    if (this._localTrace.currentModel) {
       if (options.output) {
-        this._localtrace.currentModel.message = options.output
+        this._localTrace.currentModel.message = options.output
       }
-      this._localtrace.currentModel.end()
-      this._localtrace.currentModel = undefined
+      this._localTrace.currentModel.end()
+      this._localTrace.currentModel = undefined
     }
 
     if (!span) return
@@ -449,11 +449,11 @@ export class Tracer {
 
     // Create local tool trace as child of current cycle
     const toolTrace = new LocalTrace(`Tool: ${tool.name}`, {
-      ...(this._localtrace.currentCycle && { parent: this._localtrace.currentCycle }),
+      ...(this._localTrace.currentCycle && { parent: this._localTrace.currentCycle }),
     })
     toolTrace.metadata.toolUseId = tool.toolUseId
     toolTrace.metadata.toolName = tool.name
-    this._localtrace.currentTool = toolTrace
+    this._localTrace.currentTool = toolTrace
 
     try {
       const attributes = this._getCommonAttributes('execute_tool')
@@ -502,9 +502,9 @@ export class Tracer {
    */
   endToolCallSpan(span: Span | null, options: EndToolCallSpanOptions = {}): void {
     // End local tool trace
-    if (this._localtrace.currentTool) {
-      this._localtrace.currentTool.end()
-      this._localtrace.currentTool = undefined
+    if (this._localTrace.currentTool) {
+      this._localTrace.currentTool.end()
+      this._localTrace.currentTool = undefined
     }
 
     if (!span) return
@@ -567,10 +567,10 @@ export class Tracer {
     const { cycleId, messages } = options
 
     // Create local cycle trace
-    const cycleNumber = this._localtrace.traces.length + 1
+    const cycleNumber = this._localTrace.traces.length + 1
     const cycleTrace = new LocalTrace(`Cycle ${cycleNumber}`, { rawName: cycleId })
-    this._localtrace.traces.push(cycleTrace)
-    this._localtrace.currentCycle = cycleTrace
+    this._localTrace.traces.push(cycleTrace)
+    this._localTrace.currentCycle = cycleTrace
 
     try {
       const attributes: Record<string, AttributeValue> = { 'agent_loop.cycle_id': cycleId }
@@ -596,9 +596,9 @@ export class Tracer {
    */
   endAgentLoopSpan(span: Span | null, options: EndAgentLoopSpanOptions = {}): void {
     // End local cycle trace
-    if (this._localtrace.currentCycle) {
-      this._localtrace.currentCycle.end()
-      this._localtrace.currentCycle = undefined
+    if (this._localTrace.currentCycle) {
+      this._localTrace.currentCycle.end()
+      this._localTrace.currentCycle = undefined
     }
 
     if (!span) return

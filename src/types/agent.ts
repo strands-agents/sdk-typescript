@@ -67,12 +67,12 @@ export class AgentResult {
   constructor(data: {
     stopReason: StopReason
     lastMessage: Message
-    traces?: LocalTrace[]
+    traces: LocalTrace[]
     structuredOutput?: z.output<z.ZodType>
   }) {
     this.stopReason = data.stopReason
     this.lastMessage = data.lastMessage
-    this.traces = data.traces ?? []
+    this.traces = data.traces
     if (data.structuredOutput !== undefined) {
       this.structuredOutput = data.structuredOutput
     }

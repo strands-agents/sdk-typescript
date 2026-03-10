@@ -15,6 +15,7 @@ describe('AgentResult', () => {
         const result = new AgentResult({
           stopReason: 'endTurn',
           lastMessage: message,
+          traces: [],
         })
 
         expect(result.toString()).toBe('')
@@ -31,6 +32,7 @@ describe('AgentResult', () => {
         const result = new AgentResult({
           stopReason: 'endTurn',
           lastMessage: message,
+          traces: [],
         })
 
         expect(result.toString()).toBe('Hello, world!')
@@ -47,6 +49,7 @@ describe('AgentResult', () => {
         const result = new AgentResult({
           stopReason: 'endTurn',
           lastMessage: message,
+          traces: [],
         })
 
         expect(result.toString()).toBe('First line\nSecond line\nThird line')
@@ -63,6 +66,7 @@ describe('AgentResult', () => {
         const result = new AgentResult({
           stopReason: 'endTurn',
           lastMessage: message,
+          traces: [],
         })
 
         expect(result.toString()).toBe('💭 Reasoning:\n   Let me think about this...')
@@ -79,6 +83,7 @@ describe('AgentResult', () => {
         const result = new AgentResult({
           stopReason: 'endTurn',
           lastMessage: message,
+          traces: [],
         })
 
         expect(result.toString()).toBe('')
@@ -99,6 +104,7 @@ describe('AgentResult', () => {
         const result = new AgentResult({
           stopReason: 'endTurn',
           lastMessage: message,
+          traces: [],
         })
 
         expect(result.toString()).toBe(
@@ -125,6 +131,7 @@ describe('AgentResult', () => {
         const result = new AgentResult({
           stopReason: 'toolUse',
           lastMessage: message,
+          traces: [],
         })
 
         expect(result.toString()).toBe('')
@@ -147,6 +154,7 @@ describe('AgentResult', () => {
         const result = new AgentResult({
           stopReason: 'toolUse',
           lastMessage: message,
+          traces: [],
         })
 
         expect(result.toString()).toBe('Before tool\n💭 Reasoning:\n   Thinking...\nAfter tool')
@@ -163,6 +171,7 @@ describe('AgentResult', () => {
         const result = new AgentResult({
           stopReason: 'endTurn',
           lastMessage: message,
+          traces: [],
         })
 
         expect(String(result)).toBe('Hello')
@@ -177,6 +186,7 @@ describe('AgentResult', () => {
         const result = new AgentResult({
           stopReason: 'endTurn',
           lastMessage: message,
+          traces: [],
         })
 
         expect(`Response: ${result}`).toBe('Response: World')

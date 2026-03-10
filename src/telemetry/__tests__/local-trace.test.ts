@@ -131,4 +131,51 @@ describe('LocalTrace', () => {
       expect(trace.message.content).toStrictEqual([new TextBlock('hello')])
     })
   })
+
+  describe('toJSON', () => {
+    it('returns complete data for a default trace', () => {
+      const trace = new LocalTrace('Cycle 1', { startTime: 1000 })
+
+      const json = trace.toJSON()
+
+      expect(json).toStrictEqual({
+        id: trace.id,
+        name: 'Cycle 1',
+        rawName: null,
+        parentId: null,
+        startTime: 1000,
+        endTime: null,
+        duration: 0,
+        children: [],
+        metadata: {},
+        message: null,
+      })
+    })
+
+    it('serializes a hierarchy with children', () => {
+      const root = new LocalTrace('Cycle 1', { startTime: 1000, rawName: 'cycle-1' })
+      const child = new LocalTrace('stream_messages', { parent: root, startTime: 1001 })
+      child.end(1100)
+      root.end(1200)
+
+      const json = root.toJSON()
+
+      expect(json.name).toBe('Cycle 1')
+      expect(json.rawName).toBe('cycle-1')
+      expect(json.duration).toBe(200)
+      expect(json.children).toHaveLength(1)
+      expect(json.children[0]).toStrictEqual({
+        id: child.id,
+        name: 'stream_messages',
+        rawName: null,
+        parentId: root.id,
+        startTime: 1001,
+        endTime: 1100,
+        duration: 99,
+        children: [],
+        metadata: {},
+        message: null,
+      })
+    })
+  })
 })

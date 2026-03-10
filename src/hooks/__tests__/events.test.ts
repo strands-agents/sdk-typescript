@@ -467,6 +467,7 @@ describe('AgentResultEvent', () => {
     const result = new AgentResult({
       stopReason: 'endTurn',
       lastMessage: new Message({ role: 'assistant', content: [new TextBlock('Done')] }),
+      traces: [],
     })
     const event = new AgentResultEvent({ agent, result })
 
