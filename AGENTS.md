@@ -49,6 +49,14 @@ sdk-typescript/
 │   │   ├── types.ts              # Hook-related type definitions
 │   │   └── index.ts              # Public exports for hooks
 │   │
+│   ├── plugins/                  # Plugin system for agent extensibility
+│   │   ├── __tests__/            # Unit tests for plugins
+│   │   │   ├── plugin.test.ts    # Tests for Plugin abstract class
+│   │   │   └── registry.test.ts  # Tests for PluginRegistry
+│   │   ├── plugin.ts             # Plugin abstract base class
+│   │   ├── registry.ts           # PluginRegistry implementation
+│   │   └── index.ts              # Public exports for plugins
+│   │
 │   ├── models/                   # Model provider implementations
 │   │   ├── __tests__/            # Unit tests for model providers
 │   │   │   └── bedrock.test.ts   # Tests for Bedrock model provider
@@ -142,6 +150,7 @@ sdk-typescript/
 - **`src/agent/`**: Agent loop coordination, streaming event types, output printing, and conversation management
 - **`src/agent/conversation-manager/`**: Conversation history management strategies
 - **`src/hooks/`**: Hooks system for event-driven extensibility
+- **`src/plugins/`**: Plugin system for extending agent functionality
 - **`src/models/`**: Model provider implementations (Bedrock, OpenAI, future providers)
 - **`src/structured-output/`**: Structured output with Zod schema validation and automatic retry logic
 - **`src/tools/`**: Tool definitions and types for agent tool use

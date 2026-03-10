@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { fileEditor } from '../file-editor.js'
 import type { ToolContext } from '../../../index.js'
 import { AppState } from '../../../app-state.js'
+import { createMockAgent } from '../../../__fixtures__/agent-helpers.js'
 import { promises as fs } from 'fs'
 import * as path from 'path'
 import { tmpdir } from 'os'
@@ -12,16 +13,16 @@ describe('fileEditor tool', () => {
 
   // Helper to create fresh state and context for each test
   const createFreshContext = (): { state: AppState; context: ToolContext } => {
-    const appState = new AppState({})
+    const agent = createMockAgent()
     const toolContext: ToolContext = {
       toolUse: {
         name: 'fileEditor',
         toolUseId: 'test-id',
         input: {},
       },
-      agent: { state: appState, messages: [] },
+      agent,
     }
-    return { state: appState, context: toolContext }
+    return { state: agent.state, context: toolContext }
   }
 
   // Helper to create a test file

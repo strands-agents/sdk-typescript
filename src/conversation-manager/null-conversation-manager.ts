@@ -6,21 +6,18 @@
  * management is handled externally.
  */
 
-import type { HookProvider } from '../hooks/types.js'
-import type { HookRegistry } from '../hooks/registry.js'
+import { Plugin } from '../plugins/plugin.js'
 
 /**
  * A no-op conversation manager that does not modify the conversation history.
- * Implements HookProvider but registers zero hooks.
  */
-export class NullConversationManager implements HookProvider {
+export class NullConversationManager extends Plugin {
   /**
-   * Registers callbacks with the hook registry.
-   * This implementation registers no hooks, providing a complete no-op behavior.
-   *
-   * @param _registry - The hook registry to register callbacks with (unused)
+   * Unique identifier for this plugin.
    */
-  public registerCallbacks(_registry: HookRegistry): void {
-    // No-op - register zero hooks
+  get name(): string {
+    return 'strands:null-conversation-manager'
   }
+
+  // Uses default initAgent which registers no hooks
 }

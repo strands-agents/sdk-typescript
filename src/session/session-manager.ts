@@ -1,7 +1,7 @@
 import type { SnapshotStorage, SnapshotLocation } from './storage.js'
 import type { SnapshotTriggerCallback } from './types.js'
-import type { HookProvider } from '../hooks/index.js'
-import type { HookRegistry } from '../hooks/registry.js'
+import { Plugin } from '../plugins/plugin.js'
+import type { AgentData } from '../types/agent.js'
 import { AfterInvocationEvent, InitializedEvent, MessageAddedEvent } from '../hooks/events.js'
 import { v7 as uuidV7 } from 'uuid'
 import type { Agent } from '../agent/agent.js'
@@ -53,30 +53,38 @@ export interface SessionManagerConfig {
  * const agent = new Agent({ sessionManager: session })
  * ```
  */
-export class SessionManager implements HookProvider {
+export class SessionManager extends Plugin {
   private readonly _sessionId: string
   private readonly _storage: { snapshot: SnapshotStorage }
   private readonly _saveLatestOn: SaveLatestStrategy
   private readonly _snapshotTrigger?: SnapshotTriggerCallback | undefined
 
+  /**
+   * Unique identifier for this plugin.
+   */
+  get name(): string {
+    return 'strands:session-manager'
+  }
+
   constructor(config: SessionManagerConfig) {
+    super()
     this._sessionId = config.sessionId ?? 'default-session'
     this._storage = { snapshot: config.storage.snapshot }
     this._saveLatestOn = config.saveLatestOn ?? 'invocation'
     this._snapshotTrigger = config.snapshotTrigger
   }
 
-  /** Registers lifecycle hook callbacks on the provided registry. */
-  registerCallbacks(registry: HookRegistry): void {
-    registry.addCallback(InitializedEvent, async (event) => {
+  /** Initializes the plugin by registering lifecycle hook callbacks. */
+  public override initAgent(agent: AgentData): void {
+    agent.addHook(InitializedEvent, async (event) => {
       await this._onAgentInitialized(event)
     })
     if (this._saveLatestOn === 'message') {
-      registry.addCallback(MessageAddedEvent, async (event) => {
+      agent.addHook(MessageAddedEvent, async (event) => {
         await this._onMessageAdded(event)
       })
     }
-    registry.addCallback(AfterInvocationEvent, async (event) => {
+    agent.addHook(AfterInvocationEvent, async (event) => {
       await this._onAfterAgentInvocation(event)
     })
   }
@@ -121,7 +129,7 @@ export class SessionManager implements HookProvider {
       await this.saveSnapshot({ target: agent, isLatest: true })
     }
 
-    if (this._snapshotTrigger?.({ agentData: { state: agent.state, messages: agent.messages } })) {
+    if (this._snapshotTrigger?.({ agentData: agent })) {
       await this._saveImmutableAndLatest(agent)
     }
   }

@@ -22,6 +22,7 @@ const mockOrchestrator: MultiAgentBase = {
   async *stream() {
     return new MultiAgentResult({ results: [], duration: 0 })
   },
+  addHook: () => () => {},
 }
 
 describe('MultiAgentInitializedEvent', () => {

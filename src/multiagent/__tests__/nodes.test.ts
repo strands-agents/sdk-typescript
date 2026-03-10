@@ -180,6 +180,7 @@ describe('MultiAgentNode', () => {
           duration: 0,
         })
       },
+      addHook: () => () => {},
     }
   }
 

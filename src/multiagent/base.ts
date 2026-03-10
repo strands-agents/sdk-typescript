@@ -1,4 +1,6 @@
 import type { InvokeArgs } from '../agent/agent.js'
+import type { HookableEvent } from '../hooks/events.js'
+import type { HookCallback, HookableEventConstructor, HookCleanup } from '../hooks/types.js'
 import type { MultiAgentStreamEvent } from './events.js'
 import type { MultiAgentResult } from './state.js'
 
@@ -24,4 +26,13 @@ export interface MultiAgentBase {
    * @returns Async generator yielding events and returning the final result
    */
   stream(input: InvokeArgs): AsyncGenerator<MultiAgentStreamEvent, MultiAgentResult, undefined>
+
+  /**
+   * Register a hook callback for a specific orchestrator event type.
+   *
+   * @param eventType - The event class constructor to register the callback for
+   * @param callback - The callback function to invoke when the event occurs
+   * @returns Cleanup function that removes the callback when invoked
+   */
+  addHook<T extends HookableEvent>(eventType: HookableEventConstructor<T>, callback: HookCallback<T>): HookCleanup
 }
