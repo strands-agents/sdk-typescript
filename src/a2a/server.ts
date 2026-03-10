@@ -157,6 +157,11 @@ export class A2AServer {
 
     return new Promise<void>((resolve, reject) => {
       const server = app.listen(this._port, this._host, () => {
+        const addr = server.address()
+        if (addr && typeof addr === 'object') {
+          this._port = addr.port
+          this._agentCard.url = `http://${this._host}:${this._port}`
+        }
         logger.info(`a2a server listening on http://${this._host}:${this._port}`)
         resolve()
       })
