@@ -322,4 +322,70 @@ describe('Swarm', () => {
       )
     })
   })
+
+  describe('addHook', () => {
+    it('allows adding callback hooks after swarm creation', async () => {
+      const callbackInvocations: BeforeNodeCallEvent[] = []
+      const swarm = new Swarm({
+        nodes: [createFinalAgent('a', 'reply')],
+        start: 'a',
+      })
+
+      swarm.addHook((event: BeforeNodeCallEvent) => {
+        callbackInvocations.push(event)
+      }, BeforeNodeCallEvent)
+
+      await swarm.invoke('hello')
+
+      expect(callbackInvocations).toHaveLength(1)
+      expect(callbackInvocations[0]).toEqual(
+        expect.objectContaining({
+          type: 'beforeNodeCallEvent',
+          nodeId: 'a',
+        })
+      )
+    })
+
+    it('returns cleanup function that removes the callback', async () => {
+      let callCount = 0
+      const swarm = new Swarm({
+        nodes: [createFinalAgent('a', 'reply')],
+        start: 'a',
+      })
+
+      const cleanup = swarm.addHook(() => {
+        callCount++
+      }, BeforeNodeCallEvent)
+
+      await swarm.invoke('first')
+      expect(callCount).toBe(1)
+
+      cleanup()
+
+      await swarm.invoke('second')
+      expect(callCount).toBe(1) // Still 1, callback was removed
+    })
+
+    it('allows registering callbacks for MultiAgentInitializedEvent', async () => {
+      const callbackInvocations: MultiAgentInitializedEvent[] = []
+      const swarm = new Swarm({
+        nodes: [createFinalAgent('a', 'reply')],
+        start: 'a',
+      })
+
+      swarm.addHook((event: MultiAgentInitializedEvent) => {
+        callbackInvocations.push(event)
+      }, MultiAgentInitializedEvent)
+
+      await swarm.invoke('hello')
+
+      expect(callbackInvocations).toHaveLength(1)
+      expect(callbackInvocations[0]).toEqual(
+        expect.objectContaining({
+          type: 'multiAgentInitializedEvent',
+          orchestrator: swarm,
+        })
+      )
+    })
+  })
 })
