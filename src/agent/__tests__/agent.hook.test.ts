@@ -101,7 +101,7 @@ describe('Agent Hooks Integration', () => {
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
       const agent = new Agent({ model })
 
-      agent.hooks.addHook(lifecycleProvider)
+      agent.addHook(lifecycleProvider)
 
       await agent.invoke('Hi')
 
@@ -242,9 +242,9 @@ describe('Agent Hooks Integration', () => {
 
       const streamUpdateEvents: ModelStreamUpdateEvent[] = []
       const agent = new Agent({ model })
-      agent.hooks.addCallback(ModelStreamUpdateEvent, (event: ModelStreamUpdateEvent) => {
+      agent.addHook((event: ModelStreamUpdateEvent) => {
         streamUpdateEvents.push(event)
-      })
+      }, ModelStreamUpdateEvent)
 
       // Collect all stream events
       const allStreamEvents = []
@@ -306,12 +306,12 @@ describe('Agent Hooks Integration', () => {
         .addTurn({ type: 'textBlock', text: 'Success after retry' })
 
       const agent = new Agent({ model })
-      agent.hooks.addCallback(AfterModelCallEvent, (event: AfterModelCallEvent) => {
+      agent.addHook((event: AfterModelCallEvent) => {
         callCount++
         if (callCount === 1 && event.error) {
           event.retry = true
         }
-      })
+      }, AfterModelCallEvent)
 
       const result = await agent.invoke('Test')
 
@@ -333,12 +333,12 @@ describe('Agent Hooks Integration', () => {
         .addTurn({ type: 'textBlock', text: 'Second response after retry' })
 
       const agent = new Agent({ model })
-      agent.hooks.addCallback(AfterModelCallEvent, (event: AfterModelCallEvent) => {
+      agent.addHook((event: AfterModelCallEvent) => {
         callCount++
         if (callCount === 1 && !event.error) {
           event.retry = true
         }
-      })
+      }, AfterModelCallEvent)
 
       const result = await agent.invoke('Test')
 
@@ -364,12 +364,12 @@ describe('Agent Hooks Integration', () => {
         .addTurn({ type: 'textBlock', text: 'Done' })
 
       const agent = new Agent({ model, tools: [tool] })
-      agent.hooks.addCallback(AfterToolCallEvent, (event: AfterToolCallEvent) => {
+      agent.addHook((event: AfterToolCallEvent) => {
         hookCallCount++
         if (hookCallCount === 1 && event.error) {
           event.retry = true
         }
-      })
+      }, AfterToolCallEvent)
 
       const result = await agent.invoke('Test')
 
@@ -414,15 +414,15 @@ describe('Agent Hooks Integration', () => {
         .addTurn({ type: 'textBlock', text: 'Done' })
 
       const agent = new Agent({ model, tools: [tool] })
-      agent.hooks.addCallback(BeforeToolCallEvent, () => {
+      agent.addHook(() => {
         beforeCount++
-      })
-      agent.hooks.addCallback(AfterToolCallEvent, (event: AfterToolCallEvent) => {
+      }, BeforeToolCallEvent)
+      agent.addHook((event: AfterToolCallEvent) => {
         afterCount++
         if (afterCount === 1) {
           event.retry = true
         }
-      })
+      }, AfterToolCallEvent)
 
       await agent.invoke('Test')
 
@@ -448,12 +448,12 @@ describe('Agent Hooks Integration', () => {
         .addTurn({ type: 'textBlock', text: 'Done' })
 
       const agent = new Agent({ model, tools: [tool] })
-      agent.hooks.addCallback(AfterToolCallEvent, (event: AfterToolCallEvent) => {
+      agent.addHook((event: AfterToolCallEvent) => {
         hookCallCount++
         if (hookCallCount === 1) {
           event.retry = true
         }
-      })
+      }, AfterToolCallEvent)
 
       const result = await agent.invoke('Test')
 

@@ -26,7 +26,7 @@ import { ToolRegistry } from '../registry/tool-registry.js'
 import { AppState } from '../app-state.js'
 import type { AgentData } from '../types/agent.js'
 import { AgentPrinter, getDefaultAppender, type Printer } from './printer.js'
-import type { HookProvider } from '../hooks/types.js'
+import type { HookProvider, HookCallback, HookableEventConstructor, HookCleanup } from '../hooks/types.js'
 import { SlidingWindowConversationManager } from '../conversation-manager/sliding-window-conversation-manager.js'
 import { HookRegistryImplementation } from '../hooks/registry.js'
 import {
@@ -195,7 +195,7 @@ export class Agent implements AgentData {
    * Hook registry for managing event callbacks.
    * Hooks enable observing and extending agent behavior.
    */
-  public readonly hooks: HookRegistryImplementation
+  private readonly _hooks: HookRegistryImplementation
 
   /**
    * The model provider used by the agent for inference.
@@ -247,9 +247,9 @@ export class Agent implements AgentData {
     if (config?.description !== undefined) this.description = config.description
 
     // Initialize hooks and register conversation manager hooks
-    this.hooks = new HookRegistryImplementation()
-    this.hooks.addHook(this.conversationManager)
-    this.hooks.addAllHooks(config?.hooks ?? [])
+    this._hooks = new HookRegistryImplementation()
+    this._hooks.addHook(this.conversationManager)
+    this._hooks.addAllHooks(config?.hooks ?? [])
 
     if (typeof config?.model === 'string') {
       this.model = new BedrockModel({ modelId: config.model })
@@ -278,7 +278,7 @@ export class Agent implements AgentData {
     this._tracer = new Tracer(config?.traceAttributes)
 
     if (config?.sessionManager) {
-      this.hooks.addHook(config.sessionManager)
+      this._hooks.addHook(config.sessionManager)
     }
 
     this._initialized = false
@@ -296,7 +296,7 @@ export class Agent implements AgentData {
       })
     )
 
-    await this.hooks.invokeCallbacks(new InitializedEvent({ agent: this }))
+    await this._hooks.invokeCallbacks(new InitializedEvent({ agent: this }))
 
     this._initialized = true
   }
@@ -332,6 +332,49 @@ export class Agent implements AgentData {
    */
   get toolRegistry(): ToolRegistry {
     return this._toolRegistry
+  }
+
+  /**
+   * Register a hook provider with the agent.
+   *
+   * @param provider - The hook provider to register
+   */
+  public addHook(provider: HookProvider): void
+
+  /**
+   * Register a callback function for a specific event type.
+   *
+   * @param callback - The callback function to invoke when events of this type occur
+   * @param eventType - The class type of events this callback should handle
+   * @returns Cleanup function that removes the callback when invoked
+   *
+   * @example
+   * ```typescript
+   * // With explicit event type
+   * agent.addHook((event: BeforeModelCallEvent) => {
+   *   console.log('Calling model...')
+   * }, BeforeModelCallEvent)
+   * ```
+   */
+  public addHook<TEvent extends HookableEvent>(
+    callback: HookCallback<TEvent>,
+    eventType: HookableEventConstructor<TEvent>
+  ): HookCleanup
+
+  /**
+   * Register a hook provider or callback function.
+   *
+   * @param providerOrCallback - Either a HookProvider or a callback function
+   * @param eventType - The event type (required when first argument is a callback)
+   */
+  public addHook<TEvent extends HookableEvent>(
+    providerOrCallback: HookProvider | HookCallback<TEvent>,
+    eventType?: HookableEventConstructor<TEvent>
+  ): void | HookCleanup {
+    if (eventType !== undefined) {
+      return this._hooks.addCallback(eventType, providerOrCallback as HookCallback<TEvent>)
+    }
+    this._hooks.addHook(providerOrCallback as HookProvider)
   }
 
   /**
@@ -409,7 +452,7 @@ export class Agent implements AgentData {
       // Invoke hook callbacks for hookable events (all current events are hookable;
       // the guard exists for future StreamEvent subclasses that may not be)
       if (event instanceof HookableEvent) {
-        await this.hooks.invokeCallbacks(event)
+        await this._hooks.invokeCallbacks(event)
       }
 
       this._printer?.processEvent(event)
@@ -419,7 +462,7 @@ export class Agent implements AgentData {
 
     // Yield final result as last event
     const agentResultEvent = new AgentResultEvent({ agent: this, result: result.value })
-    await this.hooks.invokeCallbacks(agentResultEvent)
+    await this._hooks.invokeCallbacks(agentResultEvent)
     this._printer?.processEvent(agentResultEvent)
     yield agentResultEvent
 

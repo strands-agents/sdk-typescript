@@ -4,7 +4,7 @@ import type { InvokeArgs } from '../agent/agent.js'
 import { z } from 'zod'
 import { HookableEvent } from '../hooks/events.js'
 import { HookRegistryImplementation } from '../hooks/registry.js'
-import type { HookProvider } from '../hooks/types.js'
+import type { HookProvider, HookCallback, HookableEventConstructor, HookCleanup } from '../hooks/types.js'
 import type { ContentBlock } from '../types/messages.js'
 import { TextBlock } from '../types/messages.js'
 import type { AgentNodeOptions } from './nodes.js'
@@ -97,7 +97,7 @@ export interface SwarmOptions extends SwarmConfig {
 export class Swarm implements MultiAgentBase {
   readonly id: string
   readonly config: Required<SwarmConfig>
-  readonly hooks: HookRegistryImplementation
+  private readonly _hooks: HookRegistryImplementation
   private readonly _nodes: Map<string, AgentNode>
   private readonly _start: AgentNode
   private readonly _handoffSchema: z.ZodType<HandoffResult>
@@ -119,9 +119,52 @@ export class Swarm implements MultiAgentBase {
 
     this._handoffSchema = this._buildHandoffSchema()
 
-    this.hooks = new HookRegistryImplementation()
-    this.hooks.addAllHooks(hooks ?? [])
+    this._hooks = new HookRegistryImplementation()
+    this._hooks.addAllHooks(hooks ?? [])
     this._initialized = false
+  }
+
+  /**
+   * Register a hook provider with the swarm.
+   *
+   * @param provider - The hook provider to register
+   */
+  public addHook(provider: HookProvider): void
+
+  /**
+   * Register a callback function for a specific event type.
+   *
+   * @param callback - The callback function to invoke when events of this type occur
+   * @param eventType - The class type of events this callback should handle
+   * @returns Cleanup function that removes the callback when invoked
+   *
+   * @example
+   * ```typescript
+   * // With explicit event type
+   * swarm.addHook((event: BeforeNodeCallEvent) => {
+   *   console.log('Calling node...')
+   * }, BeforeNodeCallEvent)
+   * ```
+   */
+  public addHook<TEvent extends HookableEvent>(
+    callback: HookCallback<TEvent>,
+    eventType: HookableEventConstructor<TEvent>
+  ): HookCleanup
+
+  /**
+   * Register a hook provider or callback function.
+   *
+   * @param providerOrCallback - Either a HookProvider or a callback function
+   * @param eventType - The event type (required when first argument is a callback)
+   */
+  public addHook<TEvent extends HookableEvent>(
+    providerOrCallback: HookProvider | HookCallback<TEvent>,
+    eventType?: HookableEventConstructor<TEvent>
+  ): void | HookCleanup {
+    if (eventType !== undefined) {
+      return this._hooks.addCallback(eventType, providerOrCallback as HookCallback<TEvent>)
+    }
+    this._hooks.addHook(providerOrCallback as HookProvider)
   }
 
   /**
@@ -130,7 +173,7 @@ export class Swarm implements MultiAgentBase {
    */
   async initialize(): Promise<void> {
     if (this._initialized) return
-    await this.hooks.invokeCallbacks(new MultiAgentInitializedEvent({ orchestrator: this }))
+    await this._hooks.invokeCallbacks(new MultiAgentInitializedEvent({ orchestrator: this }))
     this._initialized = true
   }
 
@@ -163,7 +206,7 @@ export class Swarm implements MultiAgentBase {
     let next = await gen.next()
     while (!next.done) {
       if (next.value instanceof HookableEvent) {
-        await this.hooks.invokeCallbacks(next.value)
+        await this._hooks.invokeCallbacks(next.value)
       }
       yield next.value
       next = await gen.next()
