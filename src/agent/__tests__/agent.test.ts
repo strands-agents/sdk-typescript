@@ -1089,6 +1089,107 @@ describe('Agent', () => {
   })
 })
 
+describe('Agent._redactLastMessage', () => {
+  const redactMessage = '[REDACTED]'
+
+  it('redacts last user message with only text blocks', () => {
+    const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Response' })
+    const agent = new Agent({ model })
+
+    // Add a user message
+    agent['messages'].push(
+      new Message({
+        role: 'user',
+        content: [new TextBlock('sensitive content')],
+      })
+    )
+
+    agent['_redactLastMessage'](redactMessage)
+
+    const lastMessage = agent['messages'][agent['messages'].length - 1]!
+    expect(lastMessage.role).toBe('user')
+    expect(lastMessage.content).toHaveLength(1)
+    expect(lastMessage.content[0]!.type).toBe('textBlock')
+    expect((lastMessage.content[0] as TextBlock).text).toBe(redactMessage)
+  })
+
+  it('preserves tool result blocks with redacted content', () => {
+    const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Response' })
+    const agent = new Agent({ model })
+
+    // Add a user message with tool result and text blocks
+    agent['messages'].push(
+      new Message({
+        role: 'user',
+        content: [
+          new TextBlock('some text'),
+          new ToolResultBlock({
+            toolUseId: 'tool-1',
+            status: 'success',
+            content: [new TextBlock('tool result content')],
+          }),
+          new TextBlock('more text'),
+          new ToolResultBlock({
+            toolUseId: 'tool-2',
+            status: 'error',
+            content: [new TextBlock('error content')],
+          }),
+        ],
+      })
+    )
+
+    agent['_redactLastMessage'](redactMessage)
+
+    const lastMessage = agent['messages'][agent['messages'].length - 1]!
+    expect(lastMessage.role).toBe('user')
+    expect(lastMessage.content).toHaveLength(2)
+
+    // Only tool result blocks should remain
+    expect(lastMessage.content[0]!.type).toBe('toolResultBlock')
+    expect(lastMessage.content[1]!.type).toBe('toolResultBlock')
+
+    // Tool result blocks should have redacted content but preserve structure
+    const toolResult1 = lastMessage.content[0] as ToolResultBlock
+    expect(toolResult1.toolUseId).toBe('tool-1')
+    expect(toolResult1.status).toBe('success')
+    expect(toolResult1.content).toHaveLength(1)
+    expect((toolResult1.content[0] as TextBlock).text).toBe(redactMessage)
+
+    const toolResult2 = lastMessage.content[1] as ToolResultBlock
+    expect(toolResult2.toolUseId).toBe('tool-2')
+    expect(toolResult2.status).toBe('error')
+    expect(toolResult2.content).toHaveLength(1)
+    expect((toolResult2.content[0] as TextBlock).text).toBe(redactMessage)
+  })
+
+  it('does not redact when last message is not from user', () => {
+    const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Response' })
+    const agent = new Agent({ model })
+
+    // Add an assistant message
+    const assistantMessage = new Message({
+      role: 'assistant',
+      content: [new TextBlock('assistant response')],
+    })
+    agent['messages'].push(assistantMessage)
+
+    const originalContent = assistantMessage.content
+    agent['_redactLastMessage'](redactMessage)
+
+    const lastMessage = agent['messages'][agent['messages'].length - 1]!
+    expect(lastMessage.role).toBe('assistant')
+    expect(lastMessage.content).toBe(originalContent)
+  })
+
+  it('handles empty messages array gracefully', () => {
+    const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Response' })
+    const agent = new Agent({ model })
+
+    expect(() => agent['_redactLastMessage'](redactMessage)).not.toThrow()
+    expect(agent['messages']).toHaveLength(0)
+  })
+})
+
 describe('Agent._createEmptyUsage', () => {
   const createEmptyUsage = Agent['_createEmptyUsage']
 
