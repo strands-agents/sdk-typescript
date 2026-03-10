@@ -4,7 +4,6 @@ import type { AgentResult, AgentStreamEvent } from '../types/agent.js'
 /**
  * Interface defining the minimal contract for all agent types.
  *
- * Mirrors the Python SDK's `AgentBase` Protocol, adapted to TypeScript patterns.
  * Both `Agent` (full orchestration agent) and `A2AAgent` (remote agent proxy)
  * implement this interface, enabling polymorphic usage across the SDK.
  */

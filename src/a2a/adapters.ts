@@ -1,8 +1,7 @@
 /**
  * Conversion utilities between Strands SDK content blocks and A2A protocol parts.
  *
- * Supports text, images, videos, documents, and structured data, matching
- * the Python SDK's content conversion behavior.
+ * Supports text, images, videos, documents, and structured data.
  */
 
 import type { Part, FileWithBytes, FileWithUri } from '@a2a-js/sdk'
@@ -14,7 +13,7 @@ import { logger } from '../logging/logger.js'
 
 // Reverse lookup: MIME type → canonical format, built from the single source of truth in media.ts.
 // Sorted by format name length so aliases (jpg, mpg) are inserted first and overwritten by
-// canonical forms (jpeg, mpeg), matching the Python SDK's format normalization behavior.
+// canonical forms (jpeg, mpeg).
 const MIME_TO_FORMAT: ReadonlyMap<string, MediaFormats> = new Map(
   Object.entries(MIME_TYPES)
     .sort(([a], [b]) => a.length - b.length)
@@ -25,8 +24,6 @@ const MIME_TO_FORMAT: ReadonlyMap<string, MediaFormats> = new Map(
  * Converts A2A protocol parts to Strands SDK content blocks.
  *
  * Handles text, file (image/video/document), and structured data parts,
- * matching the Python SDK's `_convert_a2a_parts_to_content_blocks` behavior.
- *
  * @param parts - Array of A2A protocol parts
  * @returns Array of Strands content blocks
  */
@@ -35,13 +32,16 @@ export function partsToContentBlocks(parts: Part[]): ContentBlock[] {
 
   for (const part of parts) {
     try {
-      if (part.kind === 'text') {
-        blocks.push(new TextBlock(part.text))
-      } else if (part.kind === 'file') {
-        blocks.push(_convertFilePart(part.file))
-      } else if (part.kind === 'data') {
-        const dataText = JSON.stringify(part.data, null, 2)
-        blocks.push(new TextBlock(`[Structured Data]\n${dataText}`))
+      switch (part.kind) {
+        case 'text':
+          blocks.push(new TextBlock(part.text))
+          break
+        case 'file':
+          blocks.push(_convertFilePart(part.file))
+          break
+        case 'data':
+          blocks.push(new TextBlock(`[Structured Data]\n${JSON.stringify(part.data, null, 2)}`))
+          break
       }
     } catch {
       logger.warn(`part_kind=<${part.kind}> | failed to convert A2A part to content block`)
@@ -65,14 +65,21 @@ export function contentBlocksToParts(blocks: ContentBlock[]): Part[] {
   const parts: Part[] = []
 
   for (const block of blocks) {
-    if (block.type === 'textBlock') {
-      parts.push({ kind: 'text', text: block.text })
-    } else if (block.type === 'imageBlock' || block.type === 'videoBlock') {
-      const filePart = _mediaBlockToFilePart(block)
-      if (filePart) parts.push(filePart)
-    } else if (block.type === 'documentBlock') {
-      const filePart = _documentBlockToFilePart(block)
-      if (filePart) parts.push(filePart)
+    switch (block.type) {
+      case 'textBlock':
+        parts.push({ kind: 'text', text: block.text })
+        break
+      case 'imageBlock':
+      case 'videoBlock': {
+        const filePart = _mediaBlockToFilePart(block)
+        if (filePart) parts.push(filePart)
+        break
+      }
+      case 'documentBlock': {
+        const filePart = _documentBlockToFilePart(block)
+        if (filePart) parts.push(filePart)
+        break
+      }
     }
   }
 
@@ -99,7 +106,7 @@ function _convertFilePart(file: FileWithBytes | FileWithUri): ContentBlock {
       return new VideoBlock({ format: format as VideoFormat, source: { bytes: decoded } })
     }
 
-    // Document or unknown — treat as document (matches Python behavior)
+    // Document or unknown — treat as document
     return new DocumentBlock({
       name: file.name ?? 'document',
       format: format as DocumentFormat,
