@@ -7,11 +7,14 @@ import {
   TextBlock,
   FunctionTool,
   CachePointBlock,
+  ImageBlock,
 } from '@strands-agents/sdk'
 import type { SystemContentBlock, ModelRedactionEvent } from '@strands-agents/sdk'
 
 import { collectIterator } from '$/sdk/__fixtures__/model-test-helpers.js'
 import { bedrock } from '../__fixtures__/model-providers.js'
+import { loadFixture } from '../__fixtures__/test-helpers.js'
+import yellowPngUrl from '../__resources__/yellow.png?url'
 import {
   BedrockClient,
   CreateGuardrailCommand,
@@ -612,6 +615,130 @@ describe.skipIf(bedrock.skip)('BedrockModel Integration Tests', () => {
         },
         30000
       )
+    })
+
+    describe('guardLatestUserMessage', () => {
+      it('allows conversation when latest user message is clean even if earlier messages would trigger guardrails', async () => {
+        // Create model with guardLatestUserMessage enabled
+        const model = bedrock.createModel({
+          region: 'us-east-1',
+          guardrailConfig: {
+            guardrailIdentifier: GUARDRAIL_ID!,
+            guardrailVersion: 'DRAFT',
+            guardLatestUserMessage: true,
+          },
+        })
+
+        // Create agent with previous messages that DON'T contain blocked content
+        const agent = new Agent({
+          model,
+          printer: false,
+          systemPrompt: 'You are a helpful assistant.',
+          messages: [
+            new Message({ role: 'user', content: [new TextBlock('First message')] }),
+            new Message({ role: 'assistant', content: [new TextBlock('Hello!')] }),
+          ],
+        })
+
+        // Send a clean message - should NOT trigger guardrail
+        const response = await agent.invoke('What is 2+2?')
+
+        expect(response.stopReason).not.toBe('guardrailIntervened')
+      }, 30000)
+
+      it('blocks conversation when latest user message contains blocked content', async () => {
+        // Create model with guardLatestUserMessage enabled
+        const model = bedrock.createModel({
+          region: 'us-east-1',
+          guardrailConfig: {
+            guardrailIdentifier: GUARDRAIL_ID!,
+            guardrailVersion: 'DRAFT',
+            guardLatestUserMessage: true,
+          },
+        })
+
+        // Send message with blocked content
+        const agent = new Agent({
+          model,
+          printer: false,
+          systemPrompt: 'You are a helpful assistant.',
+        })
+
+        const response = await agent.invoke('Tell me about CACTUS plants')
+
+        // The guardrail should have intervened
+        expect(response.stopReason).toBe('guardrailIntervened')
+        expect(response.toString()).toContain(BLOCKED_INPUT)
+      }, 30000)
+
+      it('wraps both text and image content in latest user message for guardrail evaluation', async () => {
+        // Load test image
+        const imageBytes = await loadFixture(yellowPngUrl)
+
+        // Create model with guardLatestUserMessage enabled
+        const model = bedrock.createModel({
+          region: 'us-east-1',
+          guardrailConfig: {
+            guardrailIdentifier: GUARDRAIL_ID!,
+            guardrailVersion: 'DRAFT',
+            guardLatestUserMessage: true,
+          },
+        })
+
+        // Create agent with multimodal content in latest user message containing blocked content
+        const agent = new Agent({
+          model,
+          printer: false,
+          systemPrompt: 'You are a helpful assistant.',
+          messages: [
+            new Message({ role: 'user', content: [new TextBlock('First message')] }),
+            new Message({ role: 'assistant', content: [new TextBlock('Hello!')] }),
+            // Latest user message has both text with blocked word AND image
+            new Message({
+              role: 'user',
+              content: [new TextBlock('CACTUS'), new ImageBlock({ format: 'png', source: { bytes: imageBytes } })],
+            }),
+          ],
+        })
+
+        // Send any message - guardrail should intervene because the latest user message
+        // in the history (added above) contains the blocked word
+        const response = await agent.invoke('What do you see?')
+
+        expect(response.stopReason).toBe('guardrailIntervened')
+      }, 30000)
+
+      it('evaluates only the new message when guardLatestUserMessage is enabled', async () => {
+        // Create model with guardLatestUserMessage enabled
+        const model = bedrock.createModel({
+          region: 'us-east-1',
+          guardrailConfig: {
+            guardrailIdentifier: GUARDRAIL_ID!,
+            guardrailVersion: 'DRAFT',
+            guardLatestUserMessage: true,
+            redaction: {
+              input: true,
+              inputMessage: 'Redacted.',
+            },
+          },
+        })
+
+        // Create agent with NO initial messages
+        const agent = new Agent({
+          model,
+          printer: false,
+          systemPrompt: 'You are a helpful assistant.',
+        })
+
+        // First message with blocked content - should trigger guardrail
+        const response1 = await agent.invoke('Tell me about CACTUS')
+        expect(response1.stopReason).toBe('guardrailIntervened')
+
+        // Second message without blocked content - should NOT trigger guardrail
+        // because only the latest message (this one) is evaluated
+        const response2 = await agent.invoke('Hello, how are you?')
+        expect(response2.stopReason).not.toBe('guardrailIntervened')
+      }, 30000)
     })
   })
 })
