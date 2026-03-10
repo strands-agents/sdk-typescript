@@ -96,6 +96,8 @@ export class FileStorage implements SnapshotStorage {
     limit?: number
     startAfter?: string
   }): Promise<string[]> {
+    if (params.limit !== undefined && params.limit <= 0) return []
+    if (params.startAfter) validateUuidV7(params.startAfter)
     const dirPath = await this._getPath(params.location, IMMUTABLE_HISTORY)
     try {
       const { promises: fs } = await import('fs')
@@ -105,7 +107,6 @@ export class FileStorage implements SnapshotStorage {
         .filter((id): id is string => id !== undefined)
         .sort()
       if (params.startAfter) {
-        validateUuidV7(params.startAfter)
         ids = ids.filter((id) => id > params.startAfter!)
       }
       if (params.limit !== undefined) {

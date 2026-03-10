@@ -61,9 +61,18 @@ export interface SnapshotStorage {
   loadSnapshot(params: { location: SnapshotLocation; snapshotId?: string }): Promise<Snapshot | null>
 
   /**
-   * Lists all available snapshot IDs for a session scope, sorted chronologically.
-   * Snapshot IDs are UUID v7, so lexicographic sort is chronological order.
-   * `location` identifies the scope. `limit` caps results. `startAfter` is a UUID v7 cursor for pagination.
+   * Lists all available immutable snapshot IDs for a session scope, sorted chronologically.
+   * Snapshot IDs are UUID v7 strings vended by the SDK — callers should treat them as opaque
+   * handles and never construct them manually.
+   *
+   * Typical pagination pattern:
+   * ```typescript
+   * const page1 = await storage.listSnapshotIds({ location })
+   * const page2 = await storage.listSnapshotIds({ location, startAfter: page1.at(-1) })
+   * ```
+   *
+   * `limit` caps the number of returned IDs. `startAfter` is an exclusive cursor (the last ID
+   * from the previous page); it must be a UUID v7 obtained from a prior `listSnapshotIds` call.
    */
   listSnapshotIds(params: { location: SnapshotLocation; limit?: number; startAfter?: string }): Promise<string[]>
 
