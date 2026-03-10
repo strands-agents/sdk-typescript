@@ -670,8 +670,13 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
             )
           }
 
-          // Validate content is not empty
-          if (!textContent || textContent.trim().length === 0) {
+          // Inject placeholder text when tool result contains only images
+          const effectiveTextContent =
+            textContent.trim().length === 0 && imageParts.length > 0
+              ? 'Tool successfully returned an image. The image is being provided in the following user message.'
+              : textContent
+
+          if (!effectiveTextContent || effectiveTextContent.trim().length === 0) {
             throw new Error(
               `Tool result for toolUseId "${toolResult.toolUseId}" has empty content. ` +
                 'OpenAI requires tool messages to have non-empty content.'
@@ -679,7 +684,7 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
           }
 
           // Prepend error indicator if status is error
-          const finalContent = toolResult.status === 'error' ? `[ERROR] ${textContent}` : textContent
+          const finalContent = toolResult.status === 'error' ? `[ERROR] ${effectiveTextContent}` : effectiveTextContent
 
           // Add text-only tool message
           openAIMessages.push({

@@ -273,7 +273,12 @@ export class ToolUseBlock implements ToolUseBlockData, JSONSerializable<{ toolUs
  *
  * This is a discriminated union where the object key determines the content format.
  */
-export type ToolResultContentData = TextBlockData | JsonBlockData | ImageBlockData | VideoBlockData | DocumentBlockData
+export type ToolResultContentData =
+  | TextBlockData
+  | JsonBlockData
+  | { image: ImageBlockData }
+  | { video: VideoBlockData }
+  | { document: DocumentBlockData }
 
 export type ToolResultContent = TextBlock | JsonBlock | ImageBlock | VideoBlock | DocumentBlock
 
@@ -307,7 +312,7 @@ export interface ToolResultBlockData {
 /**
  * Tool result content block.
  */
-export class ToolResultBlock implements ToolResultBlockData, JSONSerializable<{ toolResult: ToolResultBlockData }> {
+export class ToolResultBlock implements JSONSerializable<{ toolResult: ToolResultBlockData }> {
   /**
    * Discriminator for tool result content.
    */
@@ -366,27 +371,29 @@ export class ToolResultBlock implements ToolResultBlockData, JSONSerializable<{ 
    * @returns ToolResultBlock instance
    */
   static fromJSON(data: { toolResult: ToolResultBlockData }): ToolResultBlock {
-    const content = data.toolResult.content.map((contentItem) => {
-      if ('text' in contentItem) {
-        return new TextBlock(contentItem.text)
-      } else if ('json' in contentItem) {
-        return new JsonBlock(contentItem)
-      } else if ('image' in contentItem) {
-        return ImageBlock.fromJSON(contentItem as { image: ImageBlockData })
-      } else if ('document' in contentItem) {
-        return DocumentBlock.fromJSON(contentItem as { document: DocumentBlockData })
-      } else if ('video' in contentItem) {
-        return VideoBlock.fromJSON(contentItem as { video: VideoBlockData })
-      } else {
-        throw new Error('Unknown ToolResultContentData type')
-      }
-    })
+    const content = data.toolResult.content.map(toolResultContentFromData)
     return new ToolResultBlock({
       toolUseId: data.toolResult.toolUseId,
       status: data.toolResult.status,
       content,
     })
   }
+}
+
+/**
+ * Converts a single ToolResultContentData to a ToolResultContent class instance.
+ *
+ * @param data - The tool result content data to convert
+ * @returns A ToolResultContent instance of the appropriate type
+ * @throws Error if the content data type is unknown
+ */
+export function toolResultContentFromData(data: ToolResultContentData): ToolResultContent {
+  if ('text' in data) return new TextBlock(data.text)
+  if ('json' in data) return new JsonBlock(data)
+  if ('image' in data) return ImageBlock.fromJSON(data as { image: ImageBlockData })
+  if ('video' in data) return VideoBlock.fromJSON(data as { video: VideoBlockData })
+  if ('document' in data) return DocumentBlock.fromJSON(data as { document: DocumentBlockData })
+  throw new Error('Unknown ToolResultContentData type')
 }
 
 /**
@@ -856,19 +863,7 @@ export function contentBlockFromData(data: ContentBlockData): ContentBlock {
   } else if ('toolUse' in data) {
     return new ToolUseBlock(data.toolUse)
   } else if ('toolResult' in data) {
-    return new ToolResultBlock({
-      toolUseId: data.toolResult.toolUseId,
-      status: data.toolResult.status,
-      content: data.toolResult.content.map((contentItem) => {
-        if ('text' in contentItem) {
-          return new TextBlock(contentItem.text)
-        } else if ('json' in contentItem) {
-          return new JsonBlock(contentItem)
-        } else {
-          throw new Error('Unknown ToolResultContentData type')
-        }
-      }),
-    })
+    return ToolResultBlock.fromJSON(data)
   } else if ('reasoning' in data) {
     return ReasoningBlock.fromJSON(data)
   } else if ('cachePoint' in data) {

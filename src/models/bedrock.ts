@@ -594,8 +594,6 @@ export class BedrockModel extends Model<BedrockModelConfig> {
                   ...(content.context && { context: content.context }),
                 },
               }
-            default:
-              return { text: '' }
           }
         })
 

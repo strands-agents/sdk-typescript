@@ -64,6 +64,7 @@ export {
   Message,
   JsonBlock,
   contentBlockFromData,
+  toolResultContentFromData,
 } from './types/messages.js'
 
 // Media classes

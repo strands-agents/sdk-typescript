@@ -413,6 +413,10 @@ export class AnthropicModel extends Model<AnthropicModelConfig> {
           input: block.input as Record<string, unknown>,
         }
 
+      case 'videoBlock':
+        logger.warn('block_type=<videoBlock> | video blocks not supported by anthropic, skipping')
+        return undefined
+
       case 'toolResultBlock': {
         const innerContent = block.content
           .map((c) => {

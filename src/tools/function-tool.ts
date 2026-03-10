@@ -4,7 +4,14 @@ import { ToolStreamEvent } from './tool.js'
 import type { ToolSpec } from './types.js'
 import type { JSONSchema, JSONValue } from '../types/json.js'
 import { deepCopy } from '../types/json.js'
-import { JsonBlock, TextBlock, ToolResultBlock, type ToolResultContent } from '../types/messages.js'
+import {
+  JsonBlock,
+  TextBlock,
+  ToolResultBlock,
+  toolResultContentFromData,
+  type ToolResultContent,
+  type ToolResultContentData,
+} from '../types/messages.js'
 import { DocumentBlock, ImageBlock, VideoBlock } from '../types/media.js'
 
 /**
@@ -221,15 +228,6 @@ export class FunctionTool extends Tool {
    */
   private _wrapInToolResult(value: unknown, toolUseId: string): ToolResultBlock {
     try {
-      // Handle content blocks - pass through directly
-      if (this._isToolResultContent(value)) {
-        return new ToolResultBlock({
-          toolUseId,
-          status: 'success',
-          content: [value],
-        })
-      }
-
       // Handle null with special string representation as text content
       if (value === null) {
         return new ToolResultBlock({
@@ -248,6 +246,16 @@ export class FunctionTool extends Tool {
         })
       }
 
+      // Handle content blocks - class instances or plain data objects
+      const contentBlock = this._asToolResultContent(value)
+      if (contentBlock) {
+        return new ToolResultBlock({
+          toolUseId,
+          status: 'success',
+          content: [contentBlock],
+        })
+      }
+
       // Handle primitives (strings, numbers, booleans) as text content
       // Bedrock doesn't accept primitives as JSON content, so we convert all to strings
       if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
@@ -260,13 +268,16 @@ export class FunctionTool extends Tool {
 
       // Handle arrays
       if (Array.isArray(value)) {
-        // Check if array contains only ToolResultContent instances
-        if (value.length > 0 && value.every((item) => this._isToolResultContent(item))) {
-          return new ToolResultBlock({
-            toolUseId,
-            status: 'success',
-            content: value,
-          })
+        // Check if array contains only content blocks (class instances or plain data objects)
+        if (value.length > 0) {
+          const converted = value.map((item) => this._asToolResultContent(item))
+          if (converted.every((item): item is ToolResultContent => item !== undefined)) {
+            return new ToolResultBlock({
+              toolUseId,
+              status: 'success',
+              content: converted,
+            })
+          }
         }
 
         // Otherwise wrap in object { $value: array }
@@ -292,18 +303,31 @@ export class FunctionTool extends Tool {
   }
 
   /**
-   * Type guard to check if a value is a ToolResultContent instance.
+   * Converts a value to a ToolResultContent instance if it matches a known content type.
+   * Accepts both class instances and plain data objects.
    *
-   * @param value - Value to check
-   * @returns True if value is a ToolResultContent instance
+   * @param value - Value to check and convert
+   * @returns ToolResultContent instance, or undefined if not a recognized content type
    */
-  private _isToolResultContent(value: unknown): value is ToolResultContent {
-    return (
+  private _asToolResultContent(value: unknown): ToolResultContent | undefined {
+    if (typeof value !== 'object') return undefined
+
+    // Class instances — pass through
+    if (
       value instanceof TextBlock ||
       value instanceof JsonBlock ||
       value instanceof ImageBlock ||
       value instanceof VideoBlock ||
       value instanceof DocumentBlock
-    )
+    ) {
+      return value
+    }
+
+    // Plain data objects — delegate to shared converter
+    try {
+      return toolResultContentFromData(value as ToolResultContentData)
+    } catch {
+      return undefined
+    }
   }
 }
