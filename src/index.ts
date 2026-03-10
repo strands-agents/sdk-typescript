@@ -219,4 +219,33 @@ export type { Scope, Snapshot } from './agent/snapshot.js'
 export * as telemetry from './telemetry/index.js'
 
 // Multi-agent orchestration
-export { Swarm } from './multiagent/index.js'
+export { Swarm } from './multiagent/swarm.js'
+export type { SwarmConfig, SwarmNodeDefinition, SwarmOptions } from './multiagent/swarm.js'
+export { createHandoffTool } from './multiagent/handoff-tool.js'
+export type { HandoffToolOptions, HandoffRequest } from './multiagent/handoff-tool.js'
+export { Graph, GraphError } from './multiagent/graph.js'
+export type { GraphConfig, GraphOptions } from './multiagent/graph.js'
+export {
+  MultiAgentState,
+  MultiAgentResult,
+  NodeResult,
+  NodeState,
+  Status,
+  Node,
+  AgentNode,
+  Edge,
+  NodeStreamUpdateEvent,
+  NodeResultEvent,
+  NodeCancelEvent,
+  MultiAgentHandoffEvent,
+  MultiAgentResultEvent,
+} from './multiagent/index.js'
+export type {
+  MultiAgentStreamEvent,
+  NodeConfig,
+  AgentNodeOptions,
+  EdgeHandler,
+  EdgeDefinition,
+  NodeDefinition,
+  NodeType,
+} from './multiagent/index.js'
