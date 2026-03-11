@@ -4,6 +4,7 @@ import { BeforeInvocationEvent, type HookableEvent } from '../../hooks/events.js
 import { ToolRegistry } from '../../registry/tool-registry.js'
 import type { HookableEventConstructor, HookCallback, HookCleanup } from '../../hooks/types.js'
 import type { AgentData } from '../../types/agent.js'
+import { createRandomTool } from '../../__fixtures__/tool-helpers.js'
 
 /**
  * Concrete implementation of Plugin for testing purposes.
@@ -129,7 +130,7 @@ describe('Plugin', () => {
     })
 
     it('registers tools via toolRegistry when super.initAgent is called', () => {
-      const mockTool = { name: 'mock-tool' } as unknown as import('../../tools/tool.js').Tool
+      const mockTool = createRandomTool()
       class ToolPlugin extends Plugin {
         get name(): string {
           return 'tool-plugin'
