@@ -216,7 +216,7 @@ export class Agent implements AgentData {
    */
   public readonly description?: string
 
-  private readonly _hooks: HookRegistryImplementation
+  private readonly _hooksRegistry: HookRegistryImplementation
   private readonly _pluginRegistry: PluginRegistry
   private _toolRegistry: ToolRegistry
   private _mcpClients: McpClient[]
@@ -253,7 +253,7 @@ export class Agent implements AgentData {
     this._mcpClients = mcpClients
 
     // Initialize hooks registry
-    this._hooks = new HookRegistryImplementation()
+    this._hooksRegistry = new HookRegistryImplementation()
 
     // Initialize plugin registry with all plugins to be initialized during initialize()
     this._pluginRegistry = new PluginRegistry([
@@ -304,7 +304,7 @@ export class Agent implements AgentData {
    * ```
    */
   addHook<T extends HookableEvent>(eventType: HookableEventConstructor<T>, callback: HookCallback<T>): HookCleanup {
-    return this._hooks.addCallback(eventType, callback)
+    return this._hooksRegistry.addCallback(eventType, callback)
   }
 
   public async initialize(): Promise<void> {
@@ -320,10 +320,9 @@ export class Agent implements AgentData {
       })
     )
 
-    // Initialize plugins via the registry (matches Python SDK pattern)
     await this._pluginRegistry.initialize(this)
 
-    await this._hooks.invokeCallbacks(new InitializedEvent({ agent: this }))
+    await this._hooksRegistry.invokeCallbacks(new InitializedEvent({ agent: this }))
 
     this._initialized = true
   }
@@ -436,7 +435,7 @@ export class Agent implements AgentData {
       // Invoke hook callbacks for hookable events (all current events are hookable;
       // the guard exists for future StreamEvent subclasses that may not be)
       if (event instanceof HookableEvent) {
-        await this._hooks.invokeCallbacks(event)
+        await this._hooksRegistry.invokeCallbacks(event)
       }
 
       this._printer?.processEvent(event)
@@ -446,7 +445,7 @@ export class Agent implements AgentData {
 
     // Yield final result as last event
     const agentResultEvent = new AgentResultEvent({ agent: this, result: result.value })
-    await this._hooks.invokeCallbacks(agentResultEvent)
+    await this._hooksRegistry.invokeCallbacks(agentResultEvent)
     this._printer?.processEvent(agentResultEvent)
     yield agentResultEvent
 

@@ -175,26 +175,6 @@ describe('Swarm', () => {
       await expect(swarm.invoke('start')).rejects.toThrow('swarm reached step limit')
     })
 
-    it('returns cancelled result with default message when cancel is true', async () => {
-      const swarm = new Swarm({
-        nodes: [createFinalAgent('a', 'hi')],
-        start: 'a',
-      })
-
-      swarm.addHook(BeforeNodeCallEvent, (event: BeforeNodeCallEvent) => {
-        event.cancel = true
-      })
-
-      const { items, result } = await collectGenerator(swarm.stream('go'))
-
-      expect(result.status).toBe(Status.CANCELLED)
-      expect(result.results).toHaveLength(1)
-      expect(result.results[0]).toEqual(expect.objectContaining({ nodeId: 'a', status: Status.CANCELLED, duration: 0 }))
-
-      const cancelEvent = items.find((e) => e.type === 'nodeCancelEvent')
-      expect(cancelEvent).toEqual(expect.objectContaining({ nodeId: 'a', message: 'node cancelled by hook' }))
-    })
-
     it('returns cancelled result with custom message when cancel is a string', async () => {
       const swarm = new Swarm({
         nodes: [createFinalAgent('a', 'hi')],

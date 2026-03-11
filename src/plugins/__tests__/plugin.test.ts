@@ -127,5 +127,27 @@ describe('Plugin', () => {
       const plugin = new TestPlugin()
       expect(plugin.getTools()).toEqual([])
     })
+
+    it('registers tools via toolRegistry when super.initAgent is called', () => {
+      const mockTool = { name: 'mock-tool' } as unknown as import('../../tools/tool.js').Tool
+      class ToolPlugin extends Plugin {
+        get name(): string {
+          return 'tool-plugin'
+        }
+        override getTools() {
+          return [mockTool]
+        }
+      }
+
+      const addedTools: unknown[] = []
+      const mockAgent = {
+        addHook: () => () => {},
+        toolRegistry: { add: (tools: unknown[]) => addedTools.push(...tools) },
+      } as unknown as AgentData
+
+      new ToolPlugin().initAgent(mockAgent)
+
+      expect(addedTools).toStrictEqual([mockTool])
+    })
   })
 })
