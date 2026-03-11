@@ -72,6 +72,23 @@ sdk-typescript/
 │   │   ├── tool.ts               # Tool interface
 │   │   └── types.ts              # Tool-related type definitions
 │   │
+│   ├── multiagent/               # Multi-agent orchestration patterns
+│   │   ├── __tests__/            # Unit tests for multi-agent
+│   │   │   ├── graph.test.ts     # Tests for Graph orchestrator
+│   │   │   ├── swarm.test.ts     # Tests for Swarm orchestrator
+│   │   │   ├── nodes.test.ts     # Tests for Node types
+│   │   │   ├── events.test.ts    # Tests for multi-agent events
+│   │   │   └── queue.test.ts     # Tests for execution queue
+│   │   ├── base.ts               # MultiAgentBase interface
+│   │   ├── graph.ts              # Graph orchestrator (DAG execution)
+│   │   ├── swarm.ts              # Swarm orchestrator (handoff-based)
+│   │   ├── nodes.ts              # Node types (AgentNode, MultiAgentNode)
+│   │   ├── state.ts              # MultiAgentState, NodeResult, Status
+│   │   ├── events.ts             # Multi-agent streaming events
+│   │   ├── edge.ts               # Graph edge definitions
+│   │   ├── queue.ts              # Node execution queue
+│   │   └── index.ts              # Public exports
+│   │
 │   ├── types/                    # Core type definitions
 │   │   ├── json.ts               # JSON schema and value types
 │   │   └── messages.ts           # Message and content block types
@@ -97,6 +114,9 @@ sdk-typescript/
 │   └── README.md                 # Vended tools overview
 │
 ├── test/integ/                  # Integration tests (separate from source)
+│   ├── multiagent/               # Multi-agent integration tests
+│   │   ├── graph.test.ts         # Graph orchestrator integration tests
+│   │   └── swarm.test.ts         # Swarm orchestrator integration tests
 │   ├── bedrock.test.ts           # Bedrock integration tests (requires AWS credentials)
 │   ├── hooks.test.ts             # Hooks integration tests
 │   └── registry.test.ts          # ToolRegistry integration tests
@@ -145,6 +165,7 @@ sdk-typescript/
 - **`src/models/`**: Model provider implementations (Bedrock, OpenAI, future providers)
 - **`src/structured-output/`**: Structured output with Zod schema validation and automatic retry logic
 - **`src/tools/`**: Tool definitions and types for agent tool use
+- **`src/multiagent/`**: Multi-agent orchestration patterns (Graph for DAG execution, Swarm for handoff-based routing)
 - **`src/types/`**: Core type definitions used across the SDK
 - **`vended_tools/`**: Optional vended tools (not part of core SDK, independently importable)
 - **`test/integ/`**: Integration tests (tests public API and external integrations)
