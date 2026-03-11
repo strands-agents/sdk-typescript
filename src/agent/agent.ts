@@ -681,13 +681,18 @@ export class Agent implements AgentData {
     })
 
     try {
-      const { message, stopReason, usage } = yield* this._streamFromModel(this.messages, streamOptions)
+      const result = yield* this._streamFromModel(this.messages, streamOptions)
 
       // Accumulate token usage and model latency metrics
-      this._meter.updateCycle(metadata)
+      this._meter.updateCycle(result.metadata)
 
       // End model span with usage
-      this._tracer.endModelInvokeSpan(modelSpan, { output: message, stopReason, ...(usage && { usage }) })
+      const usage = result.metadata?.usage
+      this._tracer.endModelInvokeSpan(modelSpan, {
+        output: result.message,
+        stopReason: result.stopReason,
+        ...(usage && { usage }),
+      })
 
       yield new ModelMessageEvent({ agent: this, message: result.message, stopReason: result.stopReason })
 
@@ -769,10 +774,7 @@ export class Agent implements AgentData {
     }
 
     // result.done is true, result.value contains the return value
-    const { message, stopReason, metadata } = result.value
-    const returnValue: { message: Message; stopReason: StopReason; usage?: Usage } = { message, stopReason }
-    if (metadata?.usage) returnValue.usage = metadata.usage
-    return returnValue
+    return result.value
   }
 
   /**
