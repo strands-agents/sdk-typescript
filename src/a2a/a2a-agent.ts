@@ -17,6 +17,7 @@ import { Message, TextBlock, type ContentBlock, type ContentBlockData, type Mess
 import { AgentResultEvent } from '../hooks/events.js'
 import { A2AStreamUpdateEvent, type A2AEventData } from './events.js'
 import { AppState } from '../app-state.js'
+import { ToolRegistry } from '../registry/tool-registry.js'
 import { logger } from '../logging/logger.js'
 import { logExperimentalWarning } from './logging.js'
 
@@ -130,7 +131,15 @@ export class A2AAgent implements AgentBase {
     const accumulatedText = [...artifactTexts.values()].map((chunks) => chunks.join('')).join('\n')
     const result = this._buildResult(finalEvent, accumulatedText)
 
-    yield new AgentResultEvent({ agent: { state: new AppState(), messages: [result.lastMessage] }, result })
+    yield new AgentResultEvent({
+      agent: {
+        state: new AppState(),
+        messages: [result.lastMessage],
+        toolRegistry: new ToolRegistry(),
+        addHook: (): (() => void) => () => {},
+      },
+      result,
+    })
     return result
   }
 

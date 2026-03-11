@@ -169,6 +169,12 @@ export interface InvokeOptions {
   structuredOutputSchema?: z.ZodSchema
 }
 
+/** Default name assigned to agents when none is provided. */
+const DEFAULT_AGENT_NAME = 'Strands Agent'
+
+/** Default identifier assigned to agents when none is provided. */
+const DEFAULT_AGENT_ID = 'default'
+
 /**
  * Orchestrates the interaction between a model, a set of tools, and MCP clients.
  * The Agent is responsible for managing the lifecycle of tools and clients
