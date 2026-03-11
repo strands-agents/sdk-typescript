@@ -2895,6 +2895,258 @@ describe('BedrockModel', () => {
         )
       })
 
+      it('skips wrapping images with unsupported formats (gif)', async () => {
+        const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+        const imageBytes = new Uint8Array([1, 2, 3, 4])
+        const provider = new BedrockModel({
+          guardrailConfig: {
+            guardrailIdentifier: 'my-guardrail-id',
+            guardrailVersion: '1',
+            guardLatestUserMessage: true,
+          },
+        })
+        const messages = [
+          new Message({
+            role: 'user',
+            content: [
+              new ImageBlock({
+                format: 'gif',
+                source: { bytes: imageBytes },
+              }),
+            ],
+          }),
+        ]
+
+        collectIterator(provider.stream(messages))
+
+        expect(consoleWarnSpy).toHaveBeenCalledWith(
+          "Image format 'gif' not supported by Bedrock guardrails, skipping guardContent wrap"
+        )
+        expect(mockConverseStreamCommand).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            messages: [
+              {
+                role: 'user',
+                content: [
+                  {
+                    image: {
+                      format: 'gif',
+                      source: { bytes: imageBytes },
+                    },
+                  },
+                ],
+              },
+            ],
+          })
+        )
+        consoleWarnSpy.mockRestore()
+      })
+
+      it('skips wrapping images with unsupported formats (webp)', async () => {
+        const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+        const imageBytes = new Uint8Array([1, 2, 3, 4])
+        const provider = new BedrockModel({
+          guardrailConfig: {
+            guardrailIdentifier: 'my-guardrail-id',
+            guardrailVersion: '1',
+            guardLatestUserMessage: true,
+          },
+        })
+        const messages = [
+          new Message({
+            role: 'user',
+            content: [
+              new ImageBlock({
+                format: 'webp',
+                source: { bytes: imageBytes },
+              }),
+            ],
+          }),
+        ]
+
+        collectIterator(provider.stream(messages))
+
+        expect(consoleWarnSpy).toHaveBeenCalledWith(
+          "Image format 'webp' not supported by Bedrock guardrails, skipping guardContent wrap"
+        )
+        expect(mockConverseStreamCommand).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            messages: [
+              {
+                role: 'user',
+                content: [
+                  {
+                    image: {
+                      format: 'webp',
+                      source: { bytes: imageBytes },
+                    },
+                  },
+                ],
+              },
+            ],
+          })
+        )
+        consoleWarnSpy.mockRestore()
+      })
+
+      it('skips wrapping images with S3 source', async () => {
+        const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+        const provider = new BedrockModel({
+          guardrailConfig: {
+            guardrailIdentifier: 'my-guardrail-id',
+            guardrailVersion: '1',
+            guardLatestUserMessage: true,
+          },
+        })
+        const messages = [
+          new Message({
+            role: 'user',
+            content: [
+              new ImageBlock({
+                format: 'png',
+                source: {
+                  s3Location: {
+                    uri: 's3://bucket/image.png',
+                  },
+                },
+              }),
+            ],
+          }),
+        ]
+
+        collectIterator(provider.stream(messages))
+
+        expect(consoleWarnSpy).toHaveBeenCalledWith(
+          'Image source must be bytes for Bedrock guardrails, skipping guardContent wrap'
+        )
+        expect(mockConverseStreamCommand).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            messages: [
+              {
+                role: 'user',
+                content: [
+                  {
+                    image: {
+                      format: 'png',
+                      source: {
+                        s3Location: {
+                          uri: 's3://bucket/image.png',
+                        },
+                      },
+                    },
+                  },
+                ],
+              },
+            ],
+          })
+        )
+        consoleWarnSpy.mockRestore()
+      })
+
+      it('skips wrapping images with URL source', async () => {
+        const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+        const provider = new BedrockModel({
+          guardrailConfig: {
+            guardrailIdentifier: 'my-guardrail-id',
+            guardrailVersion: '1',
+            guardLatestUserMessage: true,
+          },
+        })
+        const messages = [
+          new Message({
+            role: 'user',
+            content: [
+              new ImageBlock({
+                format: 'jpeg',
+                source: { url: 'https://example.com/image.jpg' },
+              }),
+            ],
+          }),
+        ]
+
+        collectIterator(provider.stream(messages))
+
+        // URL sources return undefined in _formatMediaSource, resulting in source: undefined
+        expect(consoleWarnSpy).toHaveBeenCalledWith(
+          'Ignoring imageSourceUrl content block as its not supported by bedrock'
+        )
+        // The image block still appears but with undefined source (Bedrock will reject this)
+        expect(mockConverseStreamCommand).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            messages: [
+              {
+                role: 'user',
+                content: [
+                  {
+                    image: {
+                      format: 'jpeg',
+                      source: undefined,
+                    },
+                  },
+                ],
+              },
+            ],
+          })
+        )
+        consoleWarnSpy.mockRestore()
+      })
+
+      it('wraps supported image formats (png and jpeg) with bytes source', async () => {
+        const imageBytes = new Uint8Array([1, 2, 3, 4])
+        const provider = new BedrockModel({
+          guardrailConfig: {
+            guardrailIdentifier: 'my-guardrail-id',
+            guardrailVersion: '1',
+            guardLatestUserMessage: true,
+          },
+        })
+        const messages = [
+          new Message({
+            role: 'user',
+            content: [
+              new ImageBlock({
+                format: 'png',
+                source: { bytes: imageBytes },
+              }),
+              new ImageBlock({
+                format: 'jpeg',
+                source: { bytes: imageBytes },
+              }),
+            ],
+          }),
+        ]
+
+        collectIterator(provider.stream(messages))
+
+        expect(mockConverseStreamCommand).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            messages: [
+              {
+                role: 'user',
+                content: [
+                  {
+                    guardContent: {
+                      image: {
+                        format: 'png',
+                        source: { bytes: imageBytes },
+                      },
+                    },
+                  },
+                  {
+                    guardContent: {
+                      image: {
+                        format: 'jpeg',
+                        source: { bytes: imageBytes },
+                      },
+                    },
+                  },
+                ],
+              },
+            ],
+          })
+        )
+      })
+
       it('does not wrap reasoning or cachePoint blocks', async () => {
         const provider = new BedrockModel({
           guardrailConfig: {

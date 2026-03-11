@@ -603,7 +603,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
     return messages.reduce<BedrockMessage[]>((acc, message, idx) => {
       const shouldApplyGuardBlocks = idx === lastUserTextIdx
       const content = message.content
-        .map((block) => {
+        .map((block: ContentBlock) => {
           const formattedBlock = this._formatContentBlock(block)
           return shouldApplyGuardBlocks ? this._applyGuardBlocks(formattedBlock) : formattedBlock
         })
@@ -643,12 +643,30 @@ export class BedrockModel extends Model<BedrockModelConfig> {
     }
 
     if ('image' in formattedBlock) {
-      // Extract image data and create guardContent with proper typing
+      // Extract image data and validate for guardContent compatibility
       const imageBlock = formattedBlock.image
+      if (!imageBlock?.format || !imageBlock?.source) {
+        return formattedBlock
+      }
+
+      const format = imageBlock.format
+
+      // Bedrock guardrails only support png/jpeg formats
+      if (format !== 'png' && format !== 'jpeg') {
+        console.warn(`Image format '${format}' not supported by Bedrock guardrails, skipping guardContent wrap`)
+        return formattedBlock
+      }
+
+      // Bedrock guardrails only support bytes source (not S3 or URL)
+      if (!('bytes' in imageBlock.source)) {
+        console.warn('Image source must be bytes for Bedrock guardrails, skipping guardContent wrap')
+        return formattedBlock
+      }
+
       return {
         guardContent: {
           image: {
-            format: imageBlock.format as 'png' | 'jpeg',
+            format: format as 'png' | 'jpeg',
             source: imageBlock.source as { bytes: Uint8Array },
           },
         },
