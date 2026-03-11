@@ -2501,7 +2501,6 @@ describe('BedrockModel', () => {
                     guardContent: {
                       text: {
                         text: 'Hello world',
-                        qualifiers: [],
                       },
                     },
                   },
@@ -2602,7 +2601,6 @@ describe('BedrockModel', () => {
                     guardContent: {
                       text: {
                         text: 'What is 2+2?',
-                        qualifiers: [],
                       },
                     },
                   },
@@ -2707,7 +2705,6 @@ describe('BedrockModel', () => {
                     guardContent: {
                       text: {
                         text: 'Hello',
-                        qualifiers: [],
                       },
                     },
                   },
@@ -2756,7 +2753,6 @@ describe('BedrockModel', () => {
                     guardContent: {
                       text: {
                         text: 'Second message',
-                        qualifiers: [],
                       },
                     },
                   },
@@ -2874,7 +2870,6 @@ describe('BedrockModel', () => {
                     guardContent: {
                       text: {
                         text: 'Check this text',
-                        qualifiers: [],
                       },
                     },
                   },
@@ -2890,7 +2885,6 @@ describe('BedrockModel', () => {
                     guardContent: {
                       text: {
                         text: 'And this text too',
-                        qualifiers: [],
                       },
                     },
                   },
@@ -2932,7 +2926,6 @@ describe('BedrockModel', () => {
                     guardContent: {
                       text: {
                         text: 'User message',
-                        qualifiers: [],
                       },
                     },
                   },

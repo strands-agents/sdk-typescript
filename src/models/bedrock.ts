@@ -636,8 +636,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
       return {
         guardContent: {
           text: {
-            text: formattedBlock.text as string,
-            qualifiers: [],
+            text: formattedBlock.text,
           },
         },
       }

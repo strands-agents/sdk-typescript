@@ -642,7 +642,7 @@ describe.skipIf(bedrock.skip)('BedrockModel Integration Tests', () => {
             new Message({
               role: 'user',
               content: [
-                new TextBlock('Tell me about CACTUS'),
+                new TextBlock('Dont Say CACTUS'),
                 new ImageBlock({ format: 'png', source: { bytes: imageBytes } }),
               ],
             }),
@@ -651,7 +651,7 @@ describe.skipIf(bedrock.skip)('BedrockModel Integration Tests', () => {
         })
 
         // Send a clean message - should NOT trigger guardrail because only the latest message is evaluated
-        const response = await agent.invoke('What is 2+2?')
+        const response = await agent.invoke('Hello!')
 
         expect(response.stopReason).not.toBe('guardrailIntervened')
       }, 30000)
