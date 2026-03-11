@@ -601,37 +601,11 @@ export class BedrockModel extends Model<BedrockModelConfig> {
       : undefined
 
     return messages.reduce<BedrockMessage[]>((acc, message, idx) => {
+      const shouldApplyGuardBlocks = idx === lastUserTextIdx
       const content = message.content
         .map((block) => {
-          let formattedBlock = this._formatContentBlock(block)
-
-          // Wrap in guardContent if this is the last user text/image message and guardLatestUserMessage is enabled
-          if (idx === lastUserTextIdx && formattedBlock !== undefined) {
-            if ('text' in formattedBlock) {
-              formattedBlock = {
-                guardContent: {
-                  text: {
-                    text: formattedBlock.text as string,
-                    qualifiers: [],
-                  },
-                },
-              }
-            } else if ('image' in formattedBlock) {
-              // Extract image data and create guardContent with proper typing
-              const imageBlock = formattedBlock.image
-              formattedBlock = {
-                guardContent: {
-                  image: {
-                    format: imageBlock.format as 'png' | 'jpeg',
-                    source: imageBlock.source as { bytes: Uint8Array },
-                  },
-                },
-              }
-            }
-            // Other content types (toolUse, toolResult, etc.) pass through unchanged
-          }
-
-          return formattedBlock
+          const formattedBlock = this._formatContentBlock(block)
+          return shouldApplyGuardBlocks ? this._applyGuardBlocks(formattedBlock) : formattedBlock
         })
         .filter((block) => block !== undefined)
 
@@ -641,6 +615,49 @@ export class BedrockModel extends Model<BedrockModelConfig> {
 
       return acc
     }, [])
+  }
+
+  /**
+   * Wraps a formatted content block in guardContent for guardrail evaluation.
+   *
+   * When guardLatestUserMessage is enabled, this method wraps text and image blocks
+   * in guardContent blocks to signal to Bedrock's guardrails to evaluate only that content.
+   * Other content types (toolUse, toolResult, etc.) pass through unchanged.
+   *
+   * @param formattedBlock - The formatted content block to potentially wrap
+   * @returns The block wrapped in guardContent if applicable, or the original block
+   */
+  private _applyGuardBlocks(formattedBlock: BedrockContentBlock | undefined): BedrockContentBlock | undefined {
+    if (formattedBlock === undefined) {
+      return undefined
+    }
+
+    if ('text' in formattedBlock) {
+      return {
+        guardContent: {
+          text: {
+            text: formattedBlock.text as string,
+            qualifiers: [],
+          },
+        },
+      }
+    }
+
+    if ('image' in formattedBlock) {
+      // Extract image data and create guardContent with proper typing
+      const imageBlock = formattedBlock.image
+      return {
+        guardContent: {
+          image: {
+            format: imageBlock.format as 'png' | 'jpeg',
+            source: imageBlock.source as { bytes: Uint8Array },
+          },
+        },
+      }
+    }
+
+    // Other content types (toolUse, toolResult, etc.) pass through unchanged
+    return formattedBlock
   }
 
   /**
