@@ -2,8 +2,6 @@ import { describe, expect, it, vi } from 'vitest'
 import { Agent } from '../../agent/agent.js'
 import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
 import { collectGenerator } from '../../__fixtures__/model-test-helpers.js'
-import { MultiAgentPlugin } from '../plugin.js'
-import type { MultiAgentBase } from '../base.js'
 import { BeforeNodeCallEvent, MultiAgentInitializedEvent } from '../events.js'
 import type { JSONValue } from '../../types/json.js'
 import { TextBlock } from '../../types/messages.js'
@@ -178,19 +176,13 @@ describe('Swarm', () => {
     })
 
     it('returns cancelled result with default message when cancel is true', async () => {
-      const provider = new (class extends MultiAgentPlugin {
-        readonly name = 'test-cancel-true'
-        initMultiAgent(orchestrator: MultiAgentBase): void {
-          orchestrator.addHook(BeforeNodeCallEvent, (event: BeforeNodeCallEvent) => {
-            event.cancel = true
-          })
-        }
-      })()
-
       const swarm = new Swarm({
         nodes: [createFinalAgent('a', 'hi')],
         start: 'a',
-        plugins: [provider],
+      })
+
+      swarm.addHook(BeforeNodeCallEvent, (event: BeforeNodeCallEvent) => {
+        event.cancel = true
       })
 
       const { items, result } = await collectGenerator(swarm.stream('go'))
@@ -204,19 +196,13 @@ describe('Swarm', () => {
     })
 
     it('returns cancelled result with custom message when cancel is a string', async () => {
-      const provider = new (class extends MultiAgentPlugin {
-        readonly name = 'test-cancel-string'
-        initMultiAgent(orchestrator: MultiAgentBase): void {
-          orchestrator.addHook(BeforeNodeCallEvent, (event: BeforeNodeCallEvent) => {
-            event.cancel = 'agent not ready'
-          })
-        }
-      })()
-
       const swarm = new Swarm({
         nodes: [createFinalAgent('a', 'hi')],
         start: 'a',
-        plugins: [provider],
+      })
+
+      swarm.addHook(BeforeNodeCallEvent, (event: BeforeNodeCallEvent) => {
+        event.cancel = 'agent not ready'
       })
 
       const { items, result } = await collectGenerator(swarm.stream('go'))
@@ -245,19 +231,14 @@ describe('Swarm', () => {
 
     it('calls initialize only once across invocations', async () => {
       let callCount = 0
-      const provider = new (class extends MultiAgentPlugin {
-        readonly name = 'test-init-count'
-        initMultiAgent(orchestrator: MultiAgentBase): void {
-          orchestrator.addHook(MultiAgentInitializedEvent, () => {
-            callCount++
-          })
-        }
-      })()
 
       const swarm = new Swarm({
         nodes: [createFinalAgent('a', 'hi')],
         start: 'a',
-        plugins: [provider],
+      })
+
+      swarm.addHook(MultiAgentInitializedEvent, () => {
+        callCount++
       })
 
       await swarm.invoke('first')
@@ -327,19 +308,13 @@ describe('Swarm', () => {
     })
 
     it('returns cancelled result with default message when cancel is true', async () => {
-      const provider = new (class extends MultiAgentPlugin {
-        readonly name = 'stream-cancel-true'
-        initMultiAgent(orchestrator: MultiAgentBase): void {
-          orchestrator.addHook(BeforeNodeCallEvent, (event: BeforeNodeCallEvent) => {
-            event.cancel = true
-          })
-        }
-      })()
-
       const swarm = new Swarm({
         nodes: [createFinalAgent('a', 'hi')],
         start: 'a',
-        plugins: [provider],
+      })
+
+      swarm.addHook(BeforeNodeCallEvent, (event: BeforeNodeCallEvent) => {
+        event.cancel = true
       })
 
       const { items, result } = await collectGenerator(swarm.stream('go'))
@@ -353,19 +328,13 @@ describe('Swarm', () => {
     })
 
     it('returns cancelled result with custom message when cancel is a string', async () => {
-      const provider = new (class extends MultiAgentPlugin {
-        readonly name = 'stream-cancel-string'
-        initMultiAgent(orchestrator: MultiAgentBase): void {
-          orchestrator.addHook(BeforeNodeCallEvent, (event: BeforeNodeCallEvent) => {
-            event.cancel = 'agent not ready'
-          })
-        }
-      })()
-
       const swarm = new Swarm({
         nodes: [createFinalAgent('a', 'hi')],
         start: 'a',
-        plugins: [provider],
+      })
+
+      swarm.addHook(BeforeNodeCallEvent, (event: BeforeNodeCallEvent) => {
+        event.cancel = 'agent not ready'
       })
 
       const { items, result } = await collectGenerator(swarm.stream('go'))

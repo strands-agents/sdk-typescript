@@ -3,8 +3,6 @@ import { Agent } from '../../agent/agent.js'
 import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
 import { collectGenerator } from '../../__fixtures__/model-test-helpers.js'
 import { AfterNodeCallEvent, BeforeNodeCallEvent, MultiAgentInitializedEvent } from '../events.js'
-import { MultiAgentPlugin } from '../plugin.js'
-import type { MultiAgentBase } from '../base.js'
 import { TextBlock } from '../../types/messages.js'
 import { Status } from '../state.js'
 import { AgentNode, MultiAgentNode } from '../nodes.js'
@@ -369,19 +367,13 @@ describe('Graph', () => {
     it('calls initialize only once across invocations', async () => {
       let callCount = 0
 
-      const provider = new (class extends MultiAgentPlugin {
-        readonly name = 'test-init-count'
-        initMultiAgent(orchestrator: MultiAgentBase): void {
-          orchestrator.addHook(MultiAgentInitializedEvent, () => {
-            callCount++
-          })
-        }
-      })()
-
       const graph = new Graph({
         nodes: [makeAgent('a')],
         edges: [],
-        plugins: [provider],
+      })
+
+      graph.addHook(MultiAgentInitializedEvent, () => {
+        callCount++
       })
 
       await graph.invoke('first')
@@ -394,19 +386,6 @@ describe('Graph', () => {
       let concurrent = 0
       let maxConcurrent = 0
 
-      const provider = new (class extends MultiAgentPlugin {
-        readonly name = 'test-concurrency'
-        initMultiAgent(orchestrator: MultiAgentBase): void {
-          orchestrator.addHook(BeforeNodeCallEvent, () => {
-            concurrent++
-            maxConcurrent = Math.max(maxConcurrent, concurrent)
-          })
-          orchestrator.addHook(AfterNodeCallEvent, () => {
-            concurrent--
-          })
-        }
-      })()
-
       const graph = new Graph({
         nodes: [makeAgent('a'), makeAgent('b'), makeAgent('c')],
         edges: [
@@ -414,7 +393,14 @@ describe('Graph', () => {
           ['a', 'c'],
         ],
         maxConcurrency: 1,
-        plugins: [provider],
+      })
+
+      graph.addHook(BeforeNodeCallEvent, () => {
+        concurrent++
+        maxConcurrent = Math.max(maxConcurrent, concurrent)
+      })
+      graph.addHook(AfterNodeCallEvent, () => {
+        concurrent--
       })
 
       const result = await graph.invoke('go')
@@ -528,19 +514,13 @@ describe('Graph', () => {
     })
 
     it('returns cancelled result when cancel is true', async () => {
-      const provider = new (class extends MultiAgentPlugin {
-        readonly name = 'test-cancel-true'
-        initMultiAgent(orchestrator: MultiAgentBase): void {
-          orchestrator.addHook(BeforeNodeCallEvent, (event: BeforeNodeCallEvent) => {
-            event.cancel = true
-          })
-        }
-      })()
-
       const graph = new Graph({
         nodes: [makeAgent('a')],
         edges: [],
-        plugins: [provider],
+      })
+
+      graph.addHook(BeforeNodeCallEvent, (event: BeforeNodeCallEvent) => {
+        event.cancel = true
       })
 
       const { items, result } = await collectGenerator(graph.stream('go'))
@@ -554,19 +534,13 @@ describe('Graph', () => {
     })
 
     it('returns cancelled result with custom message when cancel is a string', async () => {
-      const provider = new (class extends MultiAgentPlugin {
-        readonly name = 'test-cancel-string'
-        initMultiAgent(orchestrator: MultiAgentBase): void {
-          orchestrator.addHook(BeforeNodeCallEvent, (event: BeforeNodeCallEvent) => {
-            event.cancel = 'node not ready'
-          })
-        }
-      })()
-
       const graph = new Graph({
         nodes: [makeAgent('a')],
         edges: [],
-        plugins: [provider],
+      })
+
+      graph.addHook(BeforeNodeCallEvent, (event: BeforeNodeCallEvent) => {
+        event.cancel = 'node not ready'
       })
 
       const { items, result } = await collectGenerator(graph.stream('go'))
