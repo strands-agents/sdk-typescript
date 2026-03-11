@@ -19,7 +19,7 @@ import { logger } from '../logging/logger.js'
  * Converts A2A message parts to Strands content blocks, streams the agent
  * execution, and publishes text deltas as artifact updates through the A2A
  * event bus. Text chunks are appended to a single artifact as they arrive,
- * matching the Python SDK's A2A-compliant streaming behavior.
+ * implementing A2A-compliant streaming behavior.
  *
  * @example
  * ```typescript

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { A2AServer, type A2AServerConfig } from '../server.js'
+import { A2AServer, A2AExpressServer, type A2AExpressServerConfig } from '../server.js'
 import { Agent } from '../../agent/agent.js'
 import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
 
@@ -37,7 +37,7 @@ vi.mock('@a2a-js/sdk/server/express', () => ({
   UserBuilder: { noAuthentication: vi.fn() },
 }))
 
-function createTestConfig(overrides?: Partial<A2AServerConfig>): A2AServerConfig {
+function createTestConfig(overrides?: Partial<A2AExpressServerConfig>): A2AExpressServerConfig {
   const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
   return {
     agent: new Agent({ model, printer: false }),
@@ -48,8 +48,35 @@ function createTestConfig(overrides?: Partial<A2AServerConfig>): A2AServerConfig
 
 describe('A2AServer', () => {
   describe('constructor', () => {
+    it('builds agent card with provided values', () => {
+      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
+      const server = new A2AServer({
+        agent: new Agent({ model, printer: false }),
+        name: 'Base Agent',
+        description: 'A base agent',
+        httpUrl: 'http://example.com',
+        version: '2.0.0',
+      })
+
+      expect(server.agentCard).toStrictEqual({
+        name: 'Base Agent',
+        description: 'A base agent',
+        version: '2.0.0',
+        protocolVersion: '0.2.0',
+        url: 'http://example.com',
+        defaultInputModes: ['text/plain'],
+        defaultOutputModes: ['text/plain'],
+        skills: [],
+        capabilities: { streaming: true },
+      })
+    })
+  })
+})
+
+describe('A2AExpressServer', () => {
+  describe('constructor', () => {
     it('builds agent card with default values', () => {
-      const server = new A2AServer(createTestConfig())
+      const server = new A2AExpressServer(createTestConfig())
 
       expect(server.agentCard).toStrictEqual({
         name: 'Test Agent',
@@ -65,7 +92,7 @@ describe('A2AServer', () => {
     })
 
     it('uses custom config values', () => {
-      const server = new A2AServer(
+      const server = new A2AExpressServer(
         createTestConfig({
           description: 'A helpful agent',
           host: '0.0.0.0',
@@ -89,21 +116,26 @@ describe('A2AServer', () => {
     })
 
     it('uses httpUrl override when provided', () => {
-      const server = new A2AServer(createTestConfig({ httpUrl: 'https://my-agent.example.com' }))
+      const server = new A2AExpressServer(createTestConfig({ httpUrl: 'https://my-agent.example.com' }))
 
       expect(server.agentCard.url).toBe('https://my-agent.example.com')
     })
 
     it('accepts custom taskStore', () => {
       const taskStore = { save: vi.fn(), load: vi.fn() }
-      const server = new A2AServer(createTestConfig({ taskStore }))
+      const server = new A2AExpressServer(createTestConfig({ taskStore }))
       expect(server.agentCard).toBeDefined()
+    })
+
+    it('is an instance of A2AServer', () => {
+      const server = new A2AExpressServer(createTestConfig())
+      expect(server).toBeInstanceOf(A2AServer)
     })
   })
 
   describe('createMiddleware', () => {
     it('returns an express router with SDK middleware', async () => {
-      const server = new A2AServer(createTestConfig())
+      const server = new A2AExpressServer(createTestConfig())
       const router = server.createMiddleware()
 
       expect(router).toBeDefined()

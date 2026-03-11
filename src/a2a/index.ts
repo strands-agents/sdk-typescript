@@ -9,7 +9,7 @@
  * may require breaking changes in this module.
  */
 
-export { A2AServer, type A2AServerConfig } from './server.js'
+export { A2AServer, A2AExpressServer, type A2AServerConfig, type A2AExpressServerConfig } from './server.js'
 export { A2AAgent, type A2AAgentConfig } from './a2a-agent.js'
 export { A2AStreamUpdateEvent, type A2AEventData } from './events.js'
 export { A2AExecutor } from './executor.js'
