@@ -5,6 +5,7 @@ import type { ToolSpec } from './types.js'
 import type { JSONSchema, JSONValue } from '../types/json.js'
 import { deepCopy } from '../types/json.js'
 import { JsonBlock, TextBlock, ToolResultBlock } from '../types/messages.js'
+import { ImageBlock } from '../types/media.js'
 
 /**
  * Callback function for FunctionTool implementations.
@@ -245,6 +246,16 @@ export class FunctionTool extends Tool implements InvokableTool<unknown, JSONVal
    */
   private _wrapInToolResult(value: unknown, toolUseId: string): ToolResultBlock {
     try {
+      // If the callback already returned a ToolResultBlock, use it directly (re-stamp the toolUseId)
+      if (value instanceof ToolResultBlock) {
+        return new ToolResultBlock({
+          toolUseId,
+          status: value.status,
+          content: value.content,
+          ...(value.error !== undefined && { error: value.error }),
+        })
+      }
+
       // Handle null with special string representation as text content
       if (value === null) {
         return new ToolResultBlock({
@@ -260,6 +271,15 @@ export class FunctionTool extends Tool implements InvokableTool<unknown, JSONVal
           toolUseId,
           status: 'success',
           content: [new TextBlock('<undefined>')],
+        })
+      }
+
+      // Handle ImageBlock directly — return it as image content in the tool result
+      if (value instanceof ImageBlock) {
+        return new ToolResultBlock({
+          toolUseId,
+          status: 'success',
+          content: [value],
         })
       }
 

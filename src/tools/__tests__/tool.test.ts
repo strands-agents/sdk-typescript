@@ -442,6 +442,45 @@ describe('FunctionTool', () => {
       })
     })
 
+    describe('with ImageBlock return', () => {
+      it('wraps ImageBlock in ToolResult with image content', async () => {
+        const { ImageBlock } = await import('../../types/media.js')
+        const tool = new FunctionTool({
+          name: 'imageTool',
+          description: 'Returns an image',
+          inputSchema: { type: 'object' },
+          callback: () => new ImageBlock({ format: 'png', source: { bytes: new Uint8Array([1, 2, 3]) } }) as unknown as JSONValue,
+        })
+
+        const toolUse = { name: 'imageTool', toolUseId: 'test-image-1', input: {} }
+        const context = createMockContext(toolUse)
+        const { result } = await collectGenerator(tool.stream(context))
+
+        expect(result.status).toBe('success')
+        expect(result.content).toHaveLength(1)
+        expect(result.content[0]!.type).toBe('imageBlock')
+      })
+
+      it('wraps ToolResultBlock return directly', async () => {
+        const { ToolResultBlock: TRB, TextBlock: TB } = await import('../../types/messages.js')
+        const tool = new FunctionTool({
+          name: 'prebuiltTool',
+          description: 'Returns a pre-built ToolResultBlock',
+          inputSchema: { type: 'object' },
+          callback: () => new TRB({ toolUseId: 'ignored', status: 'success', content: [new TB('pre-built')] }) as unknown as JSONValue,
+        })
+
+        const toolUse = { name: 'prebuiltTool', toolUseId: 'test-prebuilt-1', input: {} }
+        const context = createMockContext(toolUse)
+        const { result } = await collectGenerator(tool.stream(context))
+
+        expect(result.status).toBe('success')
+        expect(result.toolUseId).toBe('test-prebuilt-1')
+        expect(result.content).toHaveLength(1)
+        expect(result.content[0]!.type).toBe('textBlock')
+      })
+    })
+
     describe('with promise callback', () => {
       it('wraps resolved value in ToolResult', async () => {
         const tool = new FunctionTool({

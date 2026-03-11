@@ -7,6 +7,7 @@ import { Message, ReasoningBlock, ToolUseBlock, ToolResultBlock, JsonBlock } fro
 import type { SystemContentBlock } from '../../types/messages.js'
 import { TextBlock, GuardContentBlock, CachePointBlock } from '../../types/messages.js'
 import { CitationsBlock } from '../../types/citations.js'
+import { ImageBlock } from '../../types/media.js'
 import type { StreamOptions } from '../model.js'
 import { collectIterator } from '../../__fixtures__/model-test-helpers.js'
 
@@ -451,6 +452,51 @@ describe('BedrockModel', () => {
                   ],
                   status: 'success',
                   toolUseId: 'tool-123',
+                },
+              },
+            ],
+            role: 'user',
+          },
+        ],
+        modelId: expect.any(String),
+      })
+    })
+
+    it('formats tool result messages with image content', async () => {
+      const provider = new BedrockModel()
+      const imageBytes = new Uint8Array([1, 2, 3])
+      const messages = [
+        new Message({
+          role: 'user',
+          content: [
+            new ToolResultBlock({
+              toolUseId: 'tool-img-1',
+              status: 'success',
+              content: [new TextBlock('Here is the screenshot'), new ImageBlock({ format: 'png', source: { bytes: imageBytes } })],
+            }),
+          ],
+        }),
+      ]
+
+      collectIterator(provider.stream(messages))
+
+      expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
+        messages: [
+          {
+            content: [
+              {
+                toolResult: {
+                  content: [
+                    { text: 'Here is the screenshot' },
+                    {
+                      image: {
+                        format: 'png',
+                        source: { bytes: imageBytes },
+                      },
+                    },
+                  ],
+                  status: 'success',
+                  toolUseId: 'tool-img-1',
                 },
               },
             ],
