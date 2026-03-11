@@ -62,7 +62,7 @@ export class AgentResult {
    * Aggregated metrics for the agent's loop execution.
    * Tracks cycle counts, token usage, tool execution stats, and model latency.
    */
-  readonly metrics: AgentMetrics
+  readonly metrics?: AgentMetrics
 
   constructor(data: {
     stopReason: StopReason
@@ -72,7 +72,9 @@ export class AgentResult {
   }) {
     this.stopReason = data.stopReason
     this.lastMessage = data.lastMessage
-    this.metrics = data.metrics ?? new AgentMetrics()
+    if (data.metrics !== undefined) {
+      this.metrics = data.metrics
+    }
     if (data.structuredOutput !== undefined) {
       this.structuredOutput = data.structuredOutput
     }
