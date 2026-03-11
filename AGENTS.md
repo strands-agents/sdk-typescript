@@ -123,7 +123,10 @@ sdk-typescript/
 │
 ├── examples/                     # Example applications
 │   ├── first-agent/              # Basic agent usage example
-│   └── mcp/                      # MCP integration examples
+│   ├── graph/                    # Graph multi-agent orchestration example
+│   ├── mcp/                      # MCP integration examples
+│   ├── swarm/                    # Swarm multi-agent orchestration example
+│   └── telemetry/                # OpenTelemetry integration example
 │
 ├── .github/                      # GitHub Actions workflows
 │   ├── workflows/                # CI/CD workflows
