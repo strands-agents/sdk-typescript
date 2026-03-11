@@ -1,4 +1,5 @@
 import type { SnapshotStorage, SnapshotLocation } from './storage.js'
+import { validateIdentifier } from './validation.js'
 import type { SnapshotTriggerCallback } from './types.js'
 import { Plugin } from '../plugins/plugin.js'
 import type { AgentData } from '../types/agent.js'
@@ -68,7 +69,7 @@ export class SessionManager extends Plugin {
 
   constructor(config: SessionManagerConfig) {
     super()
-    this._sessionId = config.sessionId ?? 'default-session'
+    this._sessionId = validateIdentifier(config.sessionId ?? 'default-session')
     this._storage = { snapshot: config.storage.snapshot }
     this._saveLatestOn = config.saveLatestOn ?? 'invocation'
     this._snapshotTrigger = config.snapshotTrigger
@@ -107,6 +108,11 @@ export class SessionManager extends Plugin {
       isLatest: params.isLatest,
       snapshot,
     })
+  }
+
+  /** Deletes all snapshots and manifests for this session from storage. */
+  async deleteSession(): Promise<void> {
+    await this._storage.snapshot.deleteSession({ sessionId: this._sessionId })
   }
 
   /** Loads a snapshot from storage and restores it into the target agent. Returns false if no snapshot exists. */

@@ -1,15 +1,21 @@
-import { S3Client, PutObjectCommand, GetObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3'
-import type { ListObjectsV2CommandOutput } from '@aws-sdk/client-s3/dist-types/commands/ListObjectsV2Command.js'
+import {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+  ListObjectsV2Command,
+  DeleteObjectsCommand,
+} from '@aws-sdk/client-s3'
 import type { SnapshotStorage, SnapshotLocation } from './storage.js'
 import type { Snapshot, SnapshotManifest } from './types.js'
 import { SessionError } from '../errors.js'
-import { validateIdentifier } from './validation.js'
+import { validateIdentifier, validateUuidV7 } from './validation.js'
 
 const MANIFEST = 'manifest.json'
 const SNAPSHOT_LATEST = 'snapshot_latest.json'
 const IMMUTABLE_HISTORY = 'immutable_history/'
 const SCHEMA_VERSION = '1.0'
 const SNAPSHOT_REGEX = /snapshot_([\w-]+)\.json$/
+const S3_PAGE_SIZE = 1000
 
 /**
  * Configuration options for S3Storage
@@ -26,7 +32,16 @@ export type S3StorageConfig = {
 }
 
 /**
- * S3-based implementation of SnapshotStorage for persisting session snapshots
+ * S3-based implementation of SnapshotStorage.
+ * Persists session snapshots as JSON objects in an S3 bucket.
+ *
+ * Object key layout:
+ * ```
+ * [<prefix>/]<sessionId>/scopes/<scope>/<scopeId>/snapshots/
+ *   snapshot_latest.json
+ *   immutable_history/
+ *     snapshot_<uuid7>.json
+ * ```
  */
 export class S3Storage implements SnapshotStorage {
   /** S3 client instance */
@@ -50,7 +65,8 @@ export class S3Storage implements SnapshotStorage {
   }
 
   /**
-   * Generates S3 key path for session scope snapshots
+   * Resolves the full S3 object key for a given scope location and path.
+   * Validates sessionId and scopeId before constructing the key.
    */
   private _getKey(location: SnapshotLocation, path: string): string {
     validateIdentifier(location.sessionId)
@@ -60,7 +76,19 @@ export class S3Storage implements SnapshotStorage {
   }
 
   /**
-   * Saves snapshot to S3, optionally marking as latest
+   * Resolves the S3 key prefix for an entire session (`[<prefix>/]<sessionId>/`).
+   * Used by deleteSession to list and remove all objects under the session.
+   */
+  private _getSessionPrefix(sessionId: string): string {
+    validateIdentifier(sessionId)
+    const base = this._prefix ? `${this._prefix}/` : ''
+    return `${base}${sessionId}/`
+  }
+
+  /**
+   * Persists a snapshot to S3.
+   * If `isLatest` is true, writes to `snapshot_latest.json` (overwriting any previous).
+   * Otherwise, writes to `immutable_history/snapshot_<snapshotId>.json`.
    */
   async saveSnapshot(params: {
     location: SnapshotLocation
@@ -76,7 +104,9 @@ export class S3Storage implements SnapshotStorage {
   }
 
   /**
-   * Loads snapshot by ID or latest if undefined
+   * Loads a snapshot from S3.
+   * If `snapshotId` is omitted, loads `snapshot_latest.json`.
+   * Returns null if the object does not exist.
    */
   async loadSnapshot(params: { location: SnapshotLocation; snapshotId?: string }): Promise<Snapshot | null> {
     const key =
@@ -87,39 +117,88 @@ export class S3Storage implements SnapshotStorage {
   }
 
   /**
-   * Lists all snapshot IDs for a session scope.
-   *
-   * TODO: Add pagination support for long-running agents with many snapshots.
-   * Future signature could be:
-   * ```typescript
-   * listSnapshots(params: {
-   *   sessionId: string
-   *   scope: Scope
-   *   limit?: number        // Max results to return (e.g., 100)
-   *   startAfter?: string   // Snapshot ID to start after (for cursor-based pagination)
-   * }): Promise<{ snapshotIds: string[]; nextToken?: string }>
-   * ```
+   * Lists immutable snapshot IDs for a scope, sorted chronologically.
+   * Since IDs are UUID v7, lexicographic sort equals chronological order.
+   * Pushes `startAfter` and `limit` down to S3 via `StartAfter` and `MaxKeys`
+   * to avoid fetching unnecessary objects.
+   * Returns an empty array if no snapshots exist yet.
    */
-  async listSnapshotIds(params: { location: SnapshotLocation }): Promise<string[]> {
+  async listSnapshotIds(params: {
+    location: SnapshotLocation
+    limit?: number
+    startAfter?: string
+  }): Promise<string[]> {
+    if (params.limit !== undefined && params.limit <= 0) return []
+    if (params.startAfter) validateUuidV7(params.startAfter)
+
     const prefix = this._getKey(params.location, IMMUTABLE_HISTORY)
+    // S3 StartAfter is a full object key; construct it from the UUID cursor.
+    // Exclusive: objects after this key are returned, matching our pagination contract.
+    const startAfterKey = params.startAfter
+      ? this._getHistorySnapshotKey(params.location, params.startAfter)
+      : undefined
     try {
-      const response: ListObjectsV2CommandOutput = await this._s3.send(
-        new ListObjectsV2Command({ Bucket: this._bucket, Prefix: prefix })
-      )
-      return (response.Contents ?? [])
-        .map((obj) => obj.Key?.match(SNAPSHOT_REGEX)?.[1])
-        .filter((id): id is string => id !== undefined)
-        .sort()
+      const ids: string[] = []
+      let continuationToken: string | undefined
+      do {
+        const response = await this._s3.send(
+          new ListObjectsV2Command({
+            Bucket: this._bucket,
+            Prefix: prefix,
+            StartAfter: continuationToken ? undefined : startAfterKey,
+            MaxKeys: params.limit !== undefined ? Math.min(S3_PAGE_SIZE, params.limit - ids.length) : S3_PAGE_SIZE,
+            ContinuationToken: continuationToken,
+          })
+        )
+        const page = (response.Contents ?? [])
+          .map((obj) => obj.Key?.match(SNAPSHOT_REGEX)?.[1])
+          .filter((id): id is string => id !== undefined)
+        ids.push(...page)
+        if (response.IsTruncated) {
+          if (!response.NextContinuationToken) {
+            throw new SessionError('S3 returned truncated response without continuation token')
+          }
+          continuationToken = response.NextContinuationToken
+        } else {
+          continuationToken = undefined
+        }
+      } while (continuationToken && (params.limit === undefined || ids.length < params.limit))
+      return params.limit !== undefined ? ids.slice(0, params.limit) : ids
     } catch (error: unknown) {
-      if (this._isNotFoundError(error)) {
-        return []
-      }
+      if (error instanceof SessionError) throw error
+      if (this._isNotFoundError(error)) return []
       throw new SessionError(`Failed to list snapshots for session ${params.location.sessionId}`, { cause: error })
     }
   }
 
   /**
-   * Loads manifest or returns default if not found
+   * Deletes all S3 objects belonging to a session by listing and batch-deleting
+   * everything under `[<prefix>/]<sessionId>/`.
+   * Handles buckets with more than 1000 objects via continuation token pagination.
+   * No-ops if the session has no objects.
+   */
+  async deleteSession(params: { sessionId: string }): Promise<void> {
+    const prefix = this._getSessionPrefix(params.sessionId)
+    try {
+      let continuationToken: string | undefined
+      do {
+        const response = await this._s3.send(
+          new ListObjectsV2Command({ Bucket: this._bucket, Prefix: prefix, ContinuationToken: continuationToken })
+        )
+        const keys = (response.Contents ?? []).map((obj) => ({ Key: obj.Key! }))
+        if (keys.length > 0) {
+          await this._s3.send(new DeleteObjectsCommand({ Bucket: this._bucket, Delete: { Objects: keys } }))
+        }
+        continuationToken = response.IsTruncated ? response.NextContinuationToken : undefined
+      } while (continuationToken)
+    } catch (error: unknown) {
+      throw new SessionError(`Failed to delete session ${params.sessionId}`, { cause: error })
+    }
+  }
+
+  /**
+   * Loads the snapshot manifest for a scope from S3.
+   * Returns a default manifest with the current timestamp if none exists yet.
    */
   async loadManifest(params: { location: SnapshotLocation }): Promise<SnapshotManifest> {
     const key = this._getKey(params.location, MANIFEST)
@@ -134,7 +213,7 @@ export class S3Storage implements SnapshotStorage {
   }
 
   /**
-   * Saves manifest to S3
+   * Persists the snapshot manifest for a scope to S3.
    */
   async saveManifest(params: { location: SnapshotLocation; manifest: SnapshotManifest }): Promise<void> {
     const key = this._getKey(params.location, MANIFEST)
@@ -142,7 +221,7 @@ export class S3Storage implements SnapshotStorage {
   }
 
   /**
-   * Writes JSON data to S3
+   * Serializes data as JSON and writes it to S3 with `application/json` content type.
    */
   private async _writeJSON(key: string, data: unknown): Promise<void> {
     try {
@@ -160,20 +239,8 @@ export class S3Storage implements SnapshotStorage {
   }
 
   /**
-   * Checks if error is a missing S3 object/bucket error
-   */
-  private _isNotFoundError(error: unknown): error is { name: string } {
-    return (
-      error !== null &&
-      typeof error === 'object' &&
-      'name' in error &&
-      typeof (error as { name: unknown }).name === 'string' &&
-      ((error as { name: string }).name === 'NoSuchKey' || (error as { name: string }).name === 'NoSuchBucket')
-    )
-  }
-
-  /**
-   * Reads and parses JSON from S3
+   * Reads and parses a JSON object from S3. Returns null if the object does not exist.
+   * Throws SessionError on parse failure or unexpected S3 errors.
    */
   private async _readJSON<T>(key: string): Promise<T | null> {
     try {
@@ -192,10 +259,23 @@ export class S3Storage implements SnapshotStorage {
     }
   }
 
+  /** Returns true if the error represents a missing S3 object (`NoSuchKey`) or bucket (`NoSuchBucket`). */
+  private _isNotFoundError(error: unknown): error is { name: string } {
+    return (
+      error !== null &&
+      typeof error === 'object' &&
+      'name' in error &&
+      typeof (error as { name: unknown }).name === 'string' &&
+      ((error as { name: string }).name === 'NoSuchKey' || (error as { name: string }).name === 'NoSuchBucket')
+    )
+  }
+
+  /** Returns the S3 key for `snapshot_latest.json` within the given scope. */
   private _getLatestSnapshotKey(location: SnapshotLocation): string {
     return this._getKey(location, SNAPSHOT_LATEST)
   }
 
+  /** Returns the S3 key for an immutable snapshot in `immutable_history/`. Validates the snapshotId before constructing the key. */
   private _getHistorySnapshotKey(location: SnapshotLocation, snapshotId: string): string {
     validateIdentifier(snapshotId)
     return this._getKey(location, `${IMMUTABLE_HISTORY}snapshot_${snapshotId}.json`)
