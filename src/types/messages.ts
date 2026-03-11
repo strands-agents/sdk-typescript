@@ -277,9 +277,9 @@ export class ToolUseBlock implements ToolUseBlockData, JSONSerializable<{ toolUs
  *
  * This is a discriminated union where the object key determines the content format.
  */
-export type ToolResultContentData = TextBlockData | JsonBlockData
+export type ToolResultContentData = TextBlockData | JsonBlockData | { image: MaybeSerializedInput<ImageBlockData> }
 
-export type ToolResultContent = TextBlock | JsonBlock
+export type ToolResultContent = TextBlock | JsonBlock | ImageBlock
 
 /**
  * Data for a tool result block.
@@ -311,7 +311,7 @@ export interface ToolResultBlockData {
 /**
  * Tool result content block.
  */
-export class ToolResultBlock implements ToolResultBlockData, JSONSerializable<{ toolResult: ToolResultBlockData }> {
+export class ToolResultBlock implements JSONSerializable<{ toolResult: ToolResultBlockData }> {
   /**
    * Discriminator for tool result content.
    */
@@ -375,6 +375,8 @@ export class ToolResultBlock implements ToolResultBlockData, JSONSerializable<{ 
         return new TextBlock(contentItem.text)
       } else if ('json' in contentItem) {
         return new JsonBlock(contentItem)
+      } else if ('image' in contentItem) {
+        return ImageBlock.fromJSON(contentItem)
       } else {
         throw new Error('Unknown ToolResultContentData type')
       }
@@ -862,6 +864,8 @@ export function contentBlockFromData(data: ContentBlockData): ContentBlock {
           return new TextBlock(contentItem.text)
         } else if ('json' in contentItem) {
           return new JsonBlock(contentItem)
+        } else if ('image' in contentItem) {
+          return ImageBlock.fromJSON(contentItem)
         } else {
           throw new Error('Unknown ToolResultContentData type')
         }

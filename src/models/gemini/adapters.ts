@@ -272,6 +272,11 @@ function formatToolResultBlock(block: ToolResultBlock, toolUseIdToName: Map<stri
           return { text: c.text }
         case 'jsonBlock':
           return { json: c.json }
+        case 'imageBlock':
+          if (c.source.type === 'imageSourceBytes') {
+            return { inlineData: { data: encodeBase64(c.source.bytes), mimeType: `image/${c.format}` } }
+          }
+          return { text: `[image: ${c.format}]` }
       }
     }),
   }

@@ -647,6 +647,13 @@ export class BedrockModel extends Model<BedrockModelConfig> {
               return { text: content.text }
             case 'jsonBlock':
               return { json: content.json }
+            case 'imageBlock':
+              return {
+                image: {
+                  format: content.format as ImageFormat,
+                  source: this._formatMediaSource(content.source),
+                },
+              }
           }
         })
 

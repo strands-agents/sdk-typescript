@@ -418,10 +418,8 @@ export class AnthropicModel extends Model<AnthropicModelConfig> {
           .map((c) => {
             if (c.type === 'textBlock') return { type: 'text' as const, text: c.text }
             if (c.type === 'jsonBlock') return { type: 'text' as const, text: JSON.stringify(c.json) }
-
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            if ((c as any).type === 'imageBlock') {
-              const img = this._formatContentBlock(c as unknown as ContentBlock)
+            if (c.type === 'imageBlock') {
+              const img = this._formatContentBlock(c)
               if (img && img.type === 'image') return img
             }
             return undefined

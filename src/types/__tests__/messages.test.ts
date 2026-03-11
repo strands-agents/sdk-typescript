@@ -72,6 +72,53 @@ describe('ToolResultBlock', () => {
       content: [new TextBlock('result')],
     })
   })
+
+  test('creates tool result block with image content', () => {
+    const imageBlock = new ImageBlock({ format: 'png', source: { bytes: new Uint8Array([1, 2, 3]) } })
+    const block = new ToolResultBlock({
+      toolUseId: '456',
+      status: 'success',
+      content: [imageBlock],
+    })
+
+    expect(block.type).toBe('toolResultBlock')
+    expect(block.toolUseId).toBe('456')
+    expect(block.content).toHaveLength(1)
+    expect(block.content[0]).toBeInstanceOf(ImageBlock)
+    expect((block.content[0] as ImageBlock).format).toBe('png')
+  })
+
+  test('creates tool result block with mixed text and image content', () => {
+    const textBlock = new TextBlock('Here is the image:')
+    const imageBlock = new ImageBlock({ format: 'jpeg', source: { bytes: new Uint8Array([4, 5, 6]) } })
+    const block = new ToolResultBlock({
+      toolUseId: '789',
+      status: 'success',
+      content: [textBlock, imageBlock],
+    })
+
+    expect(block.content).toHaveLength(2)
+    expect(block.content[0]).toBeInstanceOf(TextBlock)
+    expect(block.content[1]).toBeInstanceOf(ImageBlock)
+  })
+
+  test('round-trips tool result block with image content through JSON', () => {
+    const imageBlock = new ImageBlock({ format: 'png', source: { bytes: new Uint8Array([1, 2, 3]) } })
+    const block = new ToolResultBlock({
+      toolUseId: '123',
+      status: 'success',
+      content: [new TextBlock('caption'), imageBlock],
+    })
+
+    const json = block.toJSON()
+    const restored = ToolResultBlock.fromJSON(json)
+
+    expect(restored.toolUseId).toBe('123')
+    expect(restored.content).toHaveLength(2)
+    expect(restored.content[0]).toBeInstanceOf(TextBlock)
+    expect(restored.content[1]).toBeInstanceOf(ImageBlock)
+    expect((restored.content[1] as ImageBlock).format).toBe('png')
+  })
 })
 
 describe('ReasoningBlock', () => {
@@ -176,6 +223,28 @@ describe('Message.fromMessageData', () => {
     const toolResultBlock = message.content[0] as ToolResultBlock
     expect(toolResultBlock.content).toHaveLength(1)
     expect(toolResultBlock.content[0]).toBeInstanceOf(JsonBlock)
+  })
+
+  it('converts tool result block data to ToolResultBlock with image content', () => {
+    const messageData: MessageData = {
+      role: 'user',
+      content: [
+        {
+          toolResult: {
+            toolUseId: 'tool-123',
+            status: 'success',
+            content: [{ image: { format: 'png', source: { bytes: new Uint8Array([1, 2, 3]) } } }],
+          },
+        },
+      ],
+    }
+    const message = Message.fromMessageData(messageData)
+    expect(message.content).toHaveLength(1)
+    expect(message.content[0]).toBeInstanceOf(ToolResultBlock)
+    const toolResultBlock = message.content[0] as ToolResultBlock
+    expect(toolResultBlock.content).toHaveLength(1)
+    expect(toolResultBlock.content[0]).toBeInstanceOf(ImageBlock)
+    expect((toolResultBlock.content[0] as ImageBlock).format).toBe('png')
   })
 
   it('converts reasoning block data to ReasoningBlock', () => {
@@ -547,6 +616,7 @@ describe('toJSON/fromJSON round-trips', () => {
     ['ToolUseBlock with reasoningSignature',   () => new ToolUseBlock({ name: 'test-tool', toolUseId: '123', input: { param: 'value' }, reasoningSignature: 'sig123' })],
     ['ToolResultBlock with text content',      () => new ToolResultBlock({ toolUseId: '123', status: 'success', content: [new TextBlock('Result text')] })],
     ['ToolResultBlock with json content',      () => new ToolResultBlock({ toolUseId: '456', status: 'success', content: [new JsonBlock({ json: { result: 'data' } })] })],
+    ['ToolResultBlock with image content',     () => new ToolResultBlock({ toolUseId: '101', status: 'success', content: [new ImageBlock({ format: 'png', source: { bytes: new Uint8Array([1, 2, 3]) } })] })],
     ['ToolResultBlock with error status',      () => new ToolResultBlock({ toolUseId: '789', status: 'error', content: [new TextBlock('Error message')] })],
     ['ReasoningBlock with text only',          () => new ReasoningBlock({ text: 'Thinking...' })],
     ['ReasoningBlock with signature',          () => new ReasoningBlock({ text: 'Thinking...', signature: 'sig123' })],
