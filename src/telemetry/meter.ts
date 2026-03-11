@@ -130,10 +130,10 @@ interface ToolUsageOptions {
  * @example
  * ```typescript
  * const result = await agent.invoke('Hello')
- * console.log(result.metrics.cycleCount)
- * console.log(result.metrics.totalDuration)
- * console.log(result.metrics.accumulatedData)
- * console.log(result.metrics.toolMetrics)
+ * console.log(result.metrics?.cycleCount)
+ * console.log(result.metrics?.totalDuration)
+ * console.log(result.metrics?.accumulatedData)
+ * console.log(result.metrics?.toolMetrics)
  * console.log(JSON.stringify(result.metrics))
  * ```
  */

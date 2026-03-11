@@ -20,6 +20,7 @@ All test fixtures are located in `src/__fixtures__/`. Use these helpers to reduc
 | `createMockContext()`  | `tool-helpers.ts`       | Create mock `ToolContext` for testing tool implementations directly                  | [Tool Fixtures](#tool-fixtures-tool-helpersts)                              |
 | `createMockAgent()`    | `agent-helpers.ts`      | Create minimal mock Agent with messages and state                                    | [Agent Fixtures](#agent-fixtures-agent-helpersts)                           |
 | `isNode` / `isBrowser` | `environment.ts`        | Environment detection for conditional test execution                                 | [Environment Fixtures](#environment-fixtures-environmentts)                 |
+| `expectLoopMetrics()`  | `metrics-helpers.ts`    | Assert on `AgentMetrics` with expected cycle count, tool names, and optional token usage | [Metrics Fixtures](#metrics-fixtures-metrics-helpersts)                     |
 
 ## Test Organization
 
@@ -323,6 +324,19 @@ const provider = new MockMessageModel()
 // ✅ OPTIONAL - Explicit stopReason when needed
 const provider = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Partial response' }, 'maxTokens')
 
+// ✅ OPTIONAL - Token usage metadata (emits modelMetadataEvent after message stop)
+const provider = new MockMessageModel()
+  .addTurn({ type: 'toolUseBlock', name: 'calc', toolUseId: 'id-1', input: {} }, undefined, {
+    inputTokens: 100,
+    outputTokens: 50,
+    totalTokens: 150,
+  })
+  .addTurn({ type: 'textBlock', text: 'Done' }, undefined, {
+    inputTokens: 200,
+    outputTokens: 30,
+    totalTokens: 230,
+  })
+
 // ✅ OPTIONAL - Error handling
 const provider = new MockMessageModel()
   .addTurn({ type: 'textBlock', text: 'Success' })
@@ -466,6 +480,45 @@ describe.skipIf(!isNode)('Node.js specific features', () => {
     expect(process.env.NODE_ENV).toBeDefined()
   })
 })
+```
+
+### Metrics Fixtures (`metrics-helpers.ts`)
+
+- **`expectLoopMetrics({ cycleCount, toolNames?, usage? })`** - Creates an asymmetric matcher that validates `AgentMetrics` structure and values. When `usage` is provided, asserts exact token counts. When omitted, falls back to shape-level assertions with `expect.any(Number)`.
+
+```typescript
+import { expectLoopMetrics } from '../__fixtures__/metrics-helpers'
+
+// Shape-level assertion (no concrete token counts)
+expect(result).toEqual(
+  new AgentResult({
+    stopReason: 'endTurn',
+    lastMessage: expect.objectContaining({ role: 'assistant' }),
+    metrics: expectLoopMetrics({ cycleCount: 1 }),
+  })
+)
+
+// With tool names
+expect(result).toEqual(
+  new AgentResult({
+    stopReason: 'endTurn',
+    lastMessage: expect.objectContaining({ role: 'assistant' }),
+    metrics: expectLoopMetrics({ cycleCount: 2, toolNames: ['calc'] }),
+  })
+)
+
+// With concrete token usage (pair with MockMessageModel usage param)
+expect(result).toEqual(
+  new AgentResult({
+    stopReason: 'endTurn',
+    lastMessage: expect.objectContaining({ role: 'assistant' }),
+    metrics: expectLoopMetrics({
+      cycleCount: 2,
+      toolNames: ['calc'],
+      usage: { inputTokens: 300, outputTokens: 80, totalTokens: 380 },
+    }),
+  })
+)
 ```
 
 ## Multi-Environment Testing

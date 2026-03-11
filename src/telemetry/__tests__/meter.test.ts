@@ -22,11 +22,15 @@ describe('Meter', () => {
 
     it('returns zeroed snapshot for fresh instance', () => {
       const snapshot = meter.metrics
-      expect(snapshot.cycleCount).toBe(0)
-      expect(snapshot.toolMetrics).toStrictEqual({})
-      expect(snapshot.agentInvocations).toStrictEqual([])
-      expect(snapshot.accumulatedUsage).toStrictEqual({ inputTokens: 0, outputTokens: 0, totalTokens: 0 })
-      expect(snapshot.accumulatedMetrics).toStrictEqual({ latencyMs: 0 })
+      expect(snapshot).toStrictEqual(
+        new AgentMetrics({
+          cycleCount: 0,
+          toolMetrics: {},
+          agentInvocations: [],
+          accumulatedUsage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+          accumulatedMetrics: { latencyMs: 0 },
+        })
+      )
     })
 
     it('returns complete snapshot after a realistic agent execution', () => {
@@ -436,6 +440,35 @@ describe('AgentMetrics', () => {
           search: { callCount: 2, successCount: 1, errorCount: 1, totalTime: 2.0 },
         },
       })
+    })
+  })
+
+  describe('toJSON roundtrip', () => {
+    it('reconstructs equivalent AgentMetrics from serialized data', () => {
+      const original = new AgentMetrics({
+        cycleCount: 3,
+        accumulatedUsage: { inputTokens: 50, outputTokens: 25, totalTokens: 75 },
+        accumulatedMetrics: { latencyMs: 500 },
+        agentInvocations: [
+          {
+            usage: { inputTokens: 50, outputTokens: 25, totalTokens: 75 },
+            cycles: [
+              { cycleId: 'cycle-1', duration: 1000, usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } },
+              { cycleId: 'cycle-2', duration: 2000, usage: { inputTokens: 20, outputTokens: 10, totalTokens: 30 } },
+              { cycleId: 'cycle-3', duration: 3000, usage: { inputTokens: 20, outputTokens: 10, totalTokens: 30 } },
+            ],
+          },
+        ],
+        toolMetrics: {
+          search: { callCount: 2, successCount: 2, errorCount: 0, totalTime: 1.5 },
+          calc: { callCount: 1, successCount: 0, errorCount: 1, totalTime: 0.3 },
+        },
+      })
+
+      const json = JSON.stringify(original)
+      const restored = new AgentMetrics(JSON.parse(json))
+
+      expect(restored.toJSON()).toStrictEqual(original.toJSON())
     })
   })
 

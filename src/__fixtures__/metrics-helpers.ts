@@ -3,6 +3,7 @@
  */
 
 import { expect } from 'vitest'
+import type { Usage } from '../models/streaming.js'
 import { AgentMetrics } from '../telemetry/meter.js'
 
 /**
@@ -18,6 +19,12 @@ export interface LoopMetricsMatcher {
    * Expected tool names that were invoked.
    */
   toolNames?: string[]
+
+  /**
+   * Expected accumulated token usage. When provided, asserts exact values.
+   * When omitted, asserts the shape with expect.any(Number).
+   */
+  usage?: Usage
 }
 
 /**
@@ -27,7 +34,7 @@ export interface LoopMetricsMatcher {
  * @returns An asymmetric matcher suitable for use in expect().toEqual()
  */
 export function expectLoopMetrics(options: LoopMetricsMatcher): AgentMetrics {
-  const { cycleCount, toolNames = [] } = options
+  const { cycleCount, toolNames = [], usage } = options
 
   const expectedToolMetrics: Record<string, unknown> = {}
   for (const name of toolNames) {
@@ -39,14 +46,18 @@ export function expectLoopMetrics(options: LoopMetricsMatcher): AgentMetrics {
     }
   }
 
-  return expect.objectContaining({
-    cycleCount,
-    toolMetrics: toolNames.length > 0 ? expect.objectContaining(expectedToolMetrics) : {},
-    accumulatedUsage: expect.objectContaining({
+  const expectedUsage =
+    usage ??
+    expect.objectContaining({
       inputTokens: expect.any(Number),
       outputTokens: expect.any(Number),
       totalTokens: expect.any(Number),
-    }),
+    })
+
+  return expect.objectContaining({
+    cycleCount,
+    toolMetrics: toolNames.length > 0 ? expect.objectContaining(expectedToolMetrics) : {},
+    accumulatedUsage: expectedUsage,
     accumulatedMetrics: { latencyMs: expect.any(Number) },
   }) as AgentMetrics
 }

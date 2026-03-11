@@ -226,8 +226,16 @@ describe('Agent', () => {
     describe('with tool use', () => {
       it('executes tools and returns final result', async () => {
         const model = new MockMessageModel()
-          .addTurn({ type: 'toolUseBlock', name: 'calc', toolUseId: 'tool-1', input: { a: 1, b: 2 } })
-          .addTurn({ type: 'textBlock', text: 'The answer is 3' })
+          .addTurn({ type: 'toolUseBlock', name: 'calc', toolUseId: 'tool-1', input: { a: 1, b: 2 } }, undefined, {
+            inputTokens: 100,
+            outputTokens: 50,
+            totalTokens: 150,
+          })
+          .addTurn({ type: 'textBlock', text: 'The answer is 3' }, undefined, {
+            inputTokens: 200,
+            outputTokens: 30,
+            totalTokens: 230,
+          })
 
         const tool = createMockTool(
           'calc',
@@ -253,7 +261,11 @@ describe('Agent', () => {
                 expect.objectContaining({ type: 'textBlock', text: 'The answer is 3' }),
               ]),
             }),
-            metrics: expectLoopMetrics({ cycleCount: 2, toolNames: ['calc'] }),
+            metrics: expectLoopMetrics({
+              cycleCount: 2,
+              toolNames: ['calc'],
+              usage: { inputTokens: 300, outputTokens: 80, totalTokens: 380 },
+            }),
           })
         )
       })
@@ -265,6 +277,99 @@ describe('Agent', () => {
         const agent = new Agent({ model })
 
         await expect(agent.invoke('Test')).rejects.toThrow(MaxTokensError)
+      })
+    })
+
+    describe('metrics on errors', () => {
+      it('tracks cycle count when maxTokens error occurs', async () => {
+        const model = new MockMessageModel()
+          .addTurn({ type: 'toolUseBlock', name: 'testTool', toolUseId: 'tool-1', input: {} }, undefined, {
+            inputTokens: 100,
+            outputTokens: 50,
+            totalTokens: 150,
+          })
+          .addTurn({ type: 'textBlock', text: 'Partial' }, 'maxTokens', {
+            inputTokens: 80,
+            outputTokens: 20,
+            totalTokens: 100,
+          })
+
+        const tool = createMockTool(
+          'testTool',
+          () =>
+            new ToolResultBlock({
+              toolUseId: 'tool-1',
+              status: 'success' as const,
+              content: [new TextBlock('Done')],
+            })
+        )
+
+        const agent = new Agent({ model, tools: [tool] })
+
+        const meter = (agent as any)._meter
+        await expect(agent.invoke('Test')).rejects.toThrow(MaxTokensError)
+
+        expect(meter.metrics.cycleCount).toBe(2)
+        // Only the first turn's usage is accumulated; the second turn throws
+        // MaxTokensError inside streamAggregated before metadata reaches updateCycle
+        expect(meter.metrics.accumulatedUsage).toStrictEqual({
+          inputTokens: 100,
+          outputTokens: 50,
+          totalTokens: 150,
+        })
+        expect(meter.metrics.accumulatedMetrics).toStrictEqual({
+          latencyMs: expect.any(Number),
+        })
+        expect(meter.metrics.toolMetrics).toStrictEqual({
+          testTool: {
+            callCount: 1,
+            successCount: 1,
+            errorCount: 0,
+            totalTime: expect.any(Number),
+          },
+        })
+      })
+
+      it('tracks metrics when a hook throws an error', async () => {
+        const model = new MockMessageModel()
+          .addTurn({ type: 'toolUseBlock', name: 'testTool', toolUseId: 'tool-1', input: {} }, undefined, {
+            inputTokens: 60,
+            outputTokens: 25,
+            totalTokens: 85,
+          })
+          .addTurn({ type: 'textBlock', text: 'Done' })
+
+        const tool = createMockTool(
+          'testTool',
+          () =>
+            new ToolResultBlock({
+              toolUseId: 'tool-1',
+              status: 'success' as const,
+              content: [new TextBlock('Result')],
+            })
+        )
+
+        const agent = new Agent({ model, tools: [tool] })
+
+        agent.hooks.addCallback(BeforeToolsEvent, () => {
+          throw new Error('Hook failure')
+        })
+
+        const meter = (agent as any)._meter
+        await expect(agent.invoke('Test')).rejects.toThrow('Hook failure')
+
+        // The hook throws after the model returns but before tools execute,
+        // so the first cycle's model usage is recorded but no tool metrics exist
+        expect(meter.metrics.cycleCount).toBe(1)
+        expect(meter.metrics.accumulatedUsage).toStrictEqual({
+          inputTokens: 60,
+          outputTokens: 25,
+          totalTokens: 85,
+        })
+        expect(meter.metrics.accumulatedMetrics).toStrictEqual({
+          latencyMs: expect.any(Number),
+        })
+        expect(meter.metrics.toolMetrics).toStrictEqual({})
       })
     })
   })
