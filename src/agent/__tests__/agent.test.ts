@@ -160,7 +160,10 @@ describe('Agent', () => {
 
     describe('error handling', () => {
       it('throws MaxTokensError when model hits token limit', async () => {
-        const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Partial...' }, 'maxTokens')
+        const model = new MockMessageModel().addTurn(
+          { type: 'textBlock', text: 'Partial...' },
+          { stopReason: 'maxTokens' }
+        )
         const agent = new Agent({ model })
 
         await expect(async () => {
@@ -226,16 +229,18 @@ describe('Agent', () => {
     describe('with tool use', () => {
       it('executes tools and returns final result', async () => {
         const model = new MockMessageModel()
-          .addTurn({ type: 'toolUseBlock', name: 'calc', toolUseId: 'tool-1', input: { a: 1, b: 2 } }, undefined, {
-            inputTokens: 100,
-            outputTokens: 50,
-            totalTokens: 150,
-          })
-          .addTurn({ type: 'textBlock', text: 'The answer is 3' }, undefined, {
-            inputTokens: 200,
-            outputTokens: 30,
-            totalTokens: 230,
-          })
+          .addTurn(
+            { type: 'toolUseBlock', name: 'calc', toolUseId: 'tool-1', input: { a: 1, b: 2 } },
+            {
+              usage: { inputTokens: 100, outputTokens: 50, totalTokens: 150 },
+            }
+          )
+          .addTurn(
+            { type: 'textBlock', text: 'The answer is 3' },
+            {
+              usage: { inputTokens: 200, outputTokens: 30, totalTokens: 230 },
+            }
+          )
 
         const tool = createMockTool(
           'calc',
@@ -273,7 +278,10 @@ describe('Agent', () => {
 
     describe('error handling', () => {
       it('propagates maxTokens error', async () => {
-        const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Partial' }, 'maxTokens')
+        const model = new MockMessageModel().addTurn(
+          { type: 'textBlock', text: 'Partial' },
+          { stopReason: 'maxTokens' }
+        )
         const agent = new Agent({ model })
 
         await expect(agent.invoke('Test')).rejects.toThrow(MaxTokensError)
@@ -283,16 +291,19 @@ describe('Agent', () => {
     describe('metrics on errors', () => {
       it('tracks cycle count when maxTokens error occurs', async () => {
         const model = new MockMessageModel()
-          .addTurn({ type: 'toolUseBlock', name: 'testTool', toolUseId: 'tool-1', input: {} }, undefined, {
-            inputTokens: 100,
-            outputTokens: 50,
-            totalTokens: 150,
-          })
-          .addTurn({ type: 'textBlock', text: 'Partial' }, 'maxTokens', {
-            inputTokens: 80,
-            outputTokens: 20,
-            totalTokens: 100,
-          })
+          .addTurn(
+            { type: 'toolUseBlock', name: 'testTool', toolUseId: 'tool-1', input: {} },
+            {
+              usage: { inputTokens: 100, outputTokens: 50, totalTokens: 150 },
+            }
+          )
+          .addTurn(
+            { type: 'textBlock', text: 'Partial' },
+            {
+              stopReason: 'maxTokens',
+              usage: { inputTokens: 80, outputTokens: 20, totalTokens: 100 },
+            }
+          )
 
         const tool = createMockTool(
           'testTool',
@@ -332,11 +343,12 @@ describe('Agent', () => {
 
       it('tracks metrics when a hook throws an error', async () => {
         const model = new MockMessageModel()
-          .addTurn({ type: 'toolUseBlock', name: 'testTool', toolUseId: 'tool-1', input: {} }, undefined, {
-            inputTokens: 60,
-            outputTokens: 25,
-            totalTokens: 85,
-          })
+          .addTurn(
+            { type: 'toolUseBlock', name: 'testTool', toolUseId: 'tool-1', input: {} },
+            {
+              usage: { inputTokens: 60, outputTokens: 25, totalTokens: 85 },
+            }
+          )
           .addTurn({ type: 'textBlock', text: 'Done' })
 
         const tool = createMockTool(
@@ -524,7 +536,7 @@ describe('Agent', () => {
     it('releases lock after errors and abandoned streams', async () => {
       // Test error case
       const model = new MockMessageModel()
-        .addTurn({ type: 'textBlock', text: 'Partial' }, 'maxTokens')
+        .addTurn({ type: 'textBlock', text: 'Partial' }, { stopReason: 'maxTokens' })
         .addTurn({ type: 'textBlock', text: 'Success' })
       const agent = new Agent({ model })
 
@@ -1058,7 +1070,10 @@ describe('Agent', () => {
     it('throws MaxTokensError when maxTokens reached before structured output', async () => {
       const schema = z.object({ value: z.number() })
 
-      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Partial...' }, 'maxTokens')
+      const model = new MockMessageModel().addTurn(
+        { type: 'textBlock', text: 'Partial...' },
+        { stopReason: 'maxTokens' }
+      )
 
       const agent = new Agent({ model, structuredOutputSchema: schema })
 
@@ -1118,7 +1133,10 @@ describe('Agent', () => {
     it('cleans up structured output tool even when error occurs', async () => {
       const schema = z.object({ value: z.number() })
 
-      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Partial...' }, 'maxTokens')
+      const model = new MockMessageModel().addTurn(
+        { type: 'textBlock', text: 'Partial...' },
+        { stopReason: 'maxTokens' }
+      )
 
       const agent = new Agent({ model, structuredOutputSchema: schema })
 

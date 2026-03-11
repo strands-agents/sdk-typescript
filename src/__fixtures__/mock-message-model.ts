@@ -56,8 +56,7 @@ export class MockMessageModel extends Model<BaseModelConfig> {
    * Returns this for method chaining.
    *
    * @param turn - ContentBlock, ContentBlock[], or Error to add
-   * @param stopReason - Explicit stop reason (auto-derived from content when omitted)
-   * @param usage - Token usage to emit as a modelMetadataEvent
+   * @param options - Optional stop reason and token usage
    * @returns This provider for chaining
    *
    * @example
@@ -65,13 +64,13 @@ export class MockMessageModel extends Model<BaseModelConfig> {
    * provider
    *   .addTurn({ type: 'textBlock', text: 'Hello' })  // Single block
    *   .addTurn([{ type: 'toolUseBlock', ... }])  // Array of blocks
-   *   .addTurn({ type: 'textBlock', text: 'Done' }, 'maxTokens')  // Explicit stopReason
-   *   .addTurn({ type: 'textBlock', text: 'Hi' }, undefined, { inputTokens: 10, outputTokens: 5, totalTokens: 15 })
+   *   .addTurn({ type: 'textBlock', text: 'Done' }, { stopReason: 'maxTokens' })  // Explicit stopReason
+   *   .addTurn({ type: 'textBlock', text: 'Hi' }, { usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } })
    *   .addTurn(new Error('Failed'))  // Error turn
    * ```
    */
-  addTurn(turn: ContentBlockInput, stopReason?: StopReason, usage?: Usage): this {
-    this._turns.push(this._createTurn(turn, stopReason, usage))
+  addTurn(turn: ContentBlockInput, options?: { stopReason?: StopReason; usage?: Usage }): this {
+    this._turns.push(this._createTurn(turn, options?.stopReason, options?.usage))
     return this
   }
 

@@ -322,19 +322,15 @@ const provider = new MockMessageModel()
   .addTurn({ type: 'textBlock', text: 'The answer is 42' }) // Auto-derives 'endTurn'
 
 // ✅ OPTIONAL - Explicit stopReason when needed
-const provider = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Partial response' }, 'maxTokens')
+const provider = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Partial response' }, { stopReason: 'maxTokens' })
 
 // ✅ OPTIONAL - Token usage metadata (emits modelMetadataEvent after message stop)
 const provider = new MockMessageModel()
-  .addTurn({ type: 'toolUseBlock', name: 'calc', toolUseId: 'id-1', input: {} }, undefined, {
-    inputTokens: 100,
-    outputTokens: 50,
-    totalTokens: 150,
+  .addTurn({ type: 'toolUseBlock', name: 'calc', toolUseId: 'id-1', input: {} }, {
+    usage: { inputTokens: 100, outputTokens: 50, totalTokens: 150 },
   })
-  .addTurn({ type: 'textBlock', text: 'Done' }, undefined, {
-    inputTokens: 200,
-    outputTokens: 30,
-    totalTokens: 230,
+  .addTurn({ type: 'textBlock', text: 'Done' }, {
+    usage: { inputTokens: 200, outputTokens: 30, totalTokens: 230 },
   })
 
 // ✅ OPTIONAL - Error handling
