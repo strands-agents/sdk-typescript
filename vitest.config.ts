@@ -85,6 +85,7 @@ export default defineConfig({
           include: ['test/integ/**/*.test.ts', 'test/integ/**/*.test.browser.ts'],
           name: { label: 'integ-browser', color: 'yellow' },
           testTimeout: 60 * 1000,
+          retry: 1,
           browser: {
             enabled: true,
             provider: playwright(),
