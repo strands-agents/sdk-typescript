@@ -217,10 +217,6 @@ export class Graph implements MultiAgentBase {
           }
         }
       }
-    } catch (error) {
-      queue.dispose()
-      await Promise.allSettled(streams.values())
-      throw error
     } finally {
       queue.dispose()
       await Promise.allSettled(streams.values())
