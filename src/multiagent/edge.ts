@@ -23,10 +23,18 @@ export class Edge {
 }
 
 /**
- * An edge definition accepted by orchestration constructors.
+ * Options for creating an edge with an optional condition handler.
  */
-export interface EdgeDefinition {
+export interface EdgeOptions {
   source: string
   target: string
   handler?: EdgeHandler
 }
+
+/**
+ * An edge definition accepted by orchestration constructors.
+ *
+ * Pass a `[source, target]` tuple for the simple case, or {@link EdgeOptions}
+ * when per-edge configuration is needed.
+ */
+export type EdgeDefinition = [source: string, target: string] | EdgeOptions

@@ -21,6 +21,7 @@ import type {
 import type { HookCallback, HookableEventConstructor, HookCleanup } from '../hooks/types.js'
 import type { ToolRegistry } from '../registry/tool-registry.js'
 import type { z } from 'zod'
+import { AgentMetrics } from '../telemetry/meter.js'
 
 /**
  * Interface for objects that provide agent state.
@@ -74,9 +75,23 @@ export class AgentResult {
    */
   readonly structuredOutput?: z.output<z.ZodType>
 
-  constructor(data: { stopReason: StopReason; lastMessage: Message; structuredOutput?: z.output<z.ZodType> }) {
+  /**
+   * Aggregated metrics for the agent's loop execution.
+   * Tracks cycle counts, token usage, tool execution stats, and model latency.
+   */
+  readonly metrics?: AgentMetrics
+
+  constructor(data: {
+    stopReason: StopReason
+    lastMessage: Message
+    metrics?: AgentMetrics
+    structuredOutput?: z.output<z.ZodType>
+  }) {
     this.stopReason = data.stopReason
     this.lastMessage = data.lastMessage
+    if (data.metrics !== undefined) {
+      this.metrics = data.metrics
+    }
     if (data.structuredOutput !== undefined) {
       this.structuredOutput = data.structuredOutput
     }

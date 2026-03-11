@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { AgentResult } from '../agent.js'
+import { AgentMetrics } from '../../telemetry/meter.js'
 import { Message } from '../messages.js'
 import { TextBlock, ReasoningBlock, ToolUseBlock, ToolResultBlock, CachePointBlock } from '../messages.js'
 
@@ -15,6 +16,7 @@ describe('AgentResult', () => {
         const result = new AgentResult({
           stopReason: 'endTurn',
           lastMessage: message,
+          metrics: new AgentMetrics(),
         })
 
         expect(result.toString()).toBe('')
@@ -31,6 +33,7 @@ describe('AgentResult', () => {
         const result = new AgentResult({
           stopReason: 'endTurn',
           lastMessage: message,
+          metrics: new AgentMetrics(),
         })
 
         expect(result.toString()).toBe('Hello, world!')
@@ -47,6 +50,7 @@ describe('AgentResult', () => {
         const result = new AgentResult({
           stopReason: 'endTurn',
           lastMessage: message,
+          metrics: new AgentMetrics(),
         })
 
         expect(result.toString()).toBe('First line\nSecond line\nThird line')
@@ -63,6 +67,7 @@ describe('AgentResult', () => {
         const result = new AgentResult({
           stopReason: 'endTurn',
           lastMessage: message,
+          metrics: new AgentMetrics(),
         })
 
         expect(result.toString()).toBe('💭 Reasoning:\n   Let me think about this...')
@@ -79,6 +84,7 @@ describe('AgentResult', () => {
         const result = new AgentResult({
           stopReason: 'endTurn',
           lastMessage: message,
+          metrics: new AgentMetrics(),
         })
 
         expect(result.toString()).toBe('')
@@ -99,6 +105,7 @@ describe('AgentResult', () => {
         const result = new AgentResult({
           stopReason: 'endTurn',
           lastMessage: message,
+          metrics: new AgentMetrics(),
         })
 
         expect(result.toString()).toBe(
@@ -125,6 +132,7 @@ describe('AgentResult', () => {
         const result = new AgentResult({
           stopReason: 'toolUse',
           lastMessage: message,
+          metrics: new AgentMetrics(),
         })
 
         expect(result.toString()).toBe('')
@@ -147,6 +155,7 @@ describe('AgentResult', () => {
         const result = new AgentResult({
           stopReason: 'toolUse',
           lastMessage: message,
+          metrics: new AgentMetrics(),
         })
 
         expect(result.toString()).toBe('Before tool\n💭 Reasoning:\n   Thinking...\nAfter tool')
@@ -163,6 +172,7 @@ describe('AgentResult', () => {
         const result = new AgentResult({
           stopReason: 'endTurn',
           lastMessage: message,
+          metrics: new AgentMetrics(),
         })
 
         expect(String(result)).toBe('Hello')
@@ -177,6 +187,7 @@ describe('AgentResult', () => {
         const result = new AgentResult({
           stopReason: 'endTurn',
           lastMessage: message,
+          metrics: new AgentMetrics(),
         })
 
         expect(`Response: ${result}`).toBe('Response: World')

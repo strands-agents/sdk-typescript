@@ -32,6 +32,7 @@ export class Queue {
   private readonly _entries: QueueEntry[] = []
   /** Resolve function for the pending wait() promise, if any. */
   private _notify?: (() => void) | undefined
+  private _disposed = false
 
   /**
    * Push data to the queue, waking any waiting consumer.
@@ -51,6 +52,8 @@ export class Queue {
    * @returns Promise that resolves when the consumer calls {@link QueueEntry.ack}
    */
   send(data: QueueData): Promise<void> {
+    if (this._disposed) return Promise.resolve()
+
     return new Promise((resolve) => {
       this._entries.push({ data, ack: resolve })
       this._notify?.()
@@ -73,6 +76,17 @@ export class Queue {
    */
   shift(): QueueEntry | undefined {
     return this._entries.shift()
+  }
+
+  /**
+   * Dispose the queue by resolving all pending acks and draining entries.
+   * Future {@link send} calls resolve immediately.
+   */
+  dispose(): void {
+    this._disposed = true
+    while (this._entries.length > 0) {
+      this._entries.shift()!.ack()
+    }
   }
 
   /**

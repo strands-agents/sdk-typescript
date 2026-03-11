@@ -8,6 +8,7 @@ import { BeforeNodeCallEvent, MultiAgentInitializedEvent } from '../events.js'
 import type { JSONValue } from '../../types/json.js'
 import { TextBlock } from '../../types/messages.js'
 import { Status } from '../state.js'
+import { AgentNode } from '../nodes.js'
 import { Swarm } from '../swarm.js'
 
 /**
@@ -61,7 +62,7 @@ describe('Swarm', () => {
         nodes: [{ agent: createFinalAgent('a', 'hi') }],
         start: 'a',
       })
-      expect(swarm.id).toBe('swarm')
+      expect(swarm.nodes.get('a')).toBeInstanceOf(AgentNode)
     })
 
     it('throws when start references unknown agent', () => {
@@ -323,6 +324,56 @@ describe('Swarm', () => {
           targets: ['b'],
         })
       )
+    })
+
+    it('returns cancelled result with default message when cancel is true', async () => {
+      const provider = new (class extends MultiAgentPlugin {
+        readonly name = 'stream-cancel-true'
+        initMultiAgent(orchestrator: MultiAgentBase): void {
+          orchestrator.addHook(BeforeNodeCallEvent, (event: BeforeNodeCallEvent) => {
+            event.cancel = true
+          })
+        }
+      })()
+
+      const swarm = new Swarm({
+        nodes: [createFinalAgent('a', 'hi')],
+        start: 'a',
+        plugins: [provider],
+      })
+
+      const { items, result } = await collectGenerator(swarm.stream('go'))
+
+      expect(result.status).toBe(Status.CANCELLED)
+      expect(result.results).toHaveLength(1)
+      expect(result.results[0]).toEqual(expect.objectContaining({ nodeId: 'a', status: Status.CANCELLED, duration: 0 }))
+
+      const cancelEvent = items.find((e) => e.type === 'nodeCancelEvent')
+      expect(cancelEvent).toEqual(expect.objectContaining({ nodeId: 'a', message: 'node cancelled by hook' }))
+    })
+
+    it('returns cancelled result with custom message when cancel is a string', async () => {
+      const provider = new (class extends MultiAgentPlugin {
+        readonly name = 'stream-cancel-string'
+        initMultiAgent(orchestrator: MultiAgentBase): void {
+          orchestrator.addHook(BeforeNodeCallEvent, (event: BeforeNodeCallEvent) => {
+            event.cancel = 'agent not ready'
+          })
+        }
+      })()
+
+      const swarm = new Swarm({
+        nodes: [createFinalAgent('a', 'hi')],
+        start: 'a',
+        plugins: [provider],
+      })
+
+      const { items, result } = await collectGenerator(swarm.stream('go'))
+
+      expect(result.status).toBe(Status.CANCELLED)
+
+      const cancelEvent = items.find((e) => e.type === 'nodeCancelEvent')
+      expect(cancelEvent).toEqual(expect.objectContaining({ nodeId: 'a', message: 'agent not ready' }))
     })
   })
 })
