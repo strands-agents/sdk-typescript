@@ -31,10 +31,8 @@ When proposing solutions or reviewing code, we reference these principles to gui
    ```bash
    git clone https://github.com/strands-agents/sdk-typescript.git
    cd sdk-typescript
-   npm ci
+   npm install
    ```
-
-   > **Note**: Use `npm ci` for installing dependencies. Use `npm install` only when intentionally adding or updating dependencies. See [Dependency Guidelines](docs/DEPENDENCIES.md) for details.
 
 2. Install Playwright browsers for browser testing:
 
