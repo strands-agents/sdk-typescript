@@ -27,7 +27,7 @@ export interface CacheConfig {
   /**
    * Caching strategy to use.
    * - "auto": Automatically inject cache points at optimal positions based on model ID detection
-   *   (after last assistant message)
+   *   (after last user message)
    * - "anthropic": Force enable Anthropic-style caching (useful for application inference profiles)
    */
   strategy: 'auto' | 'anthropic'

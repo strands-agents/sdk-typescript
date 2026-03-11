@@ -1327,6 +1327,33 @@ describe('BedrockModel', () => {
       warnSpy.mockRestore()
     })
 
+    it('skips cache point injection for Nova models with automatic caching', async () => {
+      const warnSpy = vi.spyOn(console, 'warn')
+      const provider = new BedrockModel({
+        modelId: 'amazon.nova-pro-v1:0',
+        cacheConfig: { strategy: 'auto' },
+      })
+      const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
+
+      collectIterator(provider.stream(messages))
+
+      // Verify no warning was logged (Nova handles caching automatically)
+      expect(warnSpy).not.toHaveBeenCalled()
+
+      // Verify no cache points were added
+      expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
+        modelId: 'amazon.nova-pro-v1:0',
+        messages: [
+          {
+            role: 'user',
+            content: [{ text: 'Hello' }],
+          },
+        ],
+      })
+
+      warnSpy.mockRestore()
+    })
+
     it('enables caching with anthropic strategy for application inference profiles', async () => {
       const provider = new BedrockModel({
         modelId: 'arn:aws:bedrock:us-east-1:123456789012:application-inference-profile/abc123',

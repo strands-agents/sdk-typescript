@@ -153,7 +153,7 @@ export interface BedrockModelConfig extends BaseModelConfig {
 
   /**
    * Configuration for prompt caching.
-   * When strategy is 'auto', cache points are automatically placed after the last assistant message.
+   * When strategy is 'auto', cache points are automatically placed after the last user message.
    *
    * @see https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-caching.html
    */
