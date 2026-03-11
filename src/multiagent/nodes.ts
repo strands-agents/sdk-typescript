@@ -5,6 +5,7 @@ import { NodeStreamUpdateEvent, NodeResultEvent } from './events.js'
 import { NodeResult, Status } from './state.js'
 import type { MultiAgentState, NodeResultUpdate } from './state.js'
 import type { MultiAgentBase } from './base.js'
+import { logger } from '../logging/logger.js'
 
 /**
  * Known node type identifiers with extensibility for custom nodes.
@@ -77,6 +78,7 @@ export abstract class Node {
         duration: Date.now() - nodeState.startTime,
         error: error instanceof Error ? error : new Error(String(error)),
       })
+      logger.warn(`node_id=<${this.id}>, error=<${result.error?.message}> | node execution failed`)
     } finally {
       nodeState.status = result!.status
       nodeState.results.push(result!)
