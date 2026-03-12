@@ -10,5 +10,5 @@ const DEFAULT_SERVICE_NAME = 'strands-agents'
  * @returns The service name from OTEL_SERVICE_NAME or the default 'strands-agents'
  */
 export function getServiceName(): string {
-  return globalThis?.process?.env?.OTEL_SERVICE_NAME || DEFAULT_SERVICE_NAME
+  return globalThis.process?.env?.OTEL_SERVICE_NAME || DEFAULT_SERVICE_NAME
 }

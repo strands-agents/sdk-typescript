@@ -5,17 +5,11 @@
 
 import type { Attributes } from '@opentelemetry/api'
 
-/**
- * Recorded data point from a counter or histogram call.
- */
 export interface MockDataPoint {
   value: number
   attributes: Attributes | undefined
 }
 
-/**
- * A mock counter that records all add() calls.
- */
 export class MockCounter {
   readonly dataPoints: MockDataPoint[] = []
 
@@ -23,17 +17,11 @@ export class MockCounter {
     this.dataPoints.push({ value, attributes })
   }
 
-  /**
-   * Sum of all recorded values.
-   */
   get sum(): number {
     return this.dataPoints.reduce((acc, dp) => acc + dp.value, 0)
   }
 }
 
-/**
- * A mock histogram that records all record() calls.
- */
 export class MockHistogram {
   readonly dataPoints: MockDataPoint[] = []
 
@@ -41,9 +29,6 @@ export class MockHistogram {
     this.dataPoints.push({ value, attributes })
   }
 
-  /**
-   * Sum of all recorded values.
-   */
   get sum(): number {
     return this.dataPoints.reduce((acc, dp) => acc + dp.value, 0)
   }
@@ -69,16 +54,10 @@ export class MockMeter {
     return histogram
   }
 
-  /**
-   * Get a counter by metric name.
-   */
   getCounter(name: string): MockCounter | undefined {
     return this._counters.get(name)
   }
 
-  /**
-   * Get a histogram by metric name.
-   */
   getHistogram(name: string): MockHistogram | undefined {
     return this._histograms.get(name)
   }

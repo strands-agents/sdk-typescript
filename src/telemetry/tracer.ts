@@ -623,7 +623,7 @@ export class Tracer {
    * Parse the OTEL_SEMCONV_STABILITY_OPT_IN environment variable.
    */
   private static _parseSemconvOptIn(): Set<string> {
-    const optInEnv = globalThis?.process?.env?.OTEL_SEMCONV_STABILITY_OPT_IN ?? ''
+    const optInEnv = globalThis.process?.env?.OTEL_SEMCONV_STABILITY_OPT_IN ?? ''
     return new Set(
       optInEnv
         .split(',')

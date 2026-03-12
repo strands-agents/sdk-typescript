@@ -147,12 +147,13 @@ export function setupTracer(config: TracerConfig = {}): BasicTracerProvider {
 
   _provider = config.provider ?? new DefaultTracerProvider({ resource: getOtelResource() })
 
+  // Exporters are additive — if a custom provider already has processors, these append to them.
   if (config.exporters?.otlp) addOtlpTraceExporter(_provider)
   if (config.exporters?.console) addConsoleTraceExporter(_provider)
 
   _provider.register()
 
-  if (typeof globalThis?.process?.once === 'function') {
+  if (typeof globalThis.process?.once === 'function') {
     globalThis.process.once('beforeExit', () => {
       if (_provider) {
         _provider.forceFlush().catch((err: unknown) => {
@@ -214,12 +215,13 @@ export function setupMeter(config: MeterConfig = {}): MeterProvider {
 
   _meterProvider = config.provider ?? new MeterProvider({ resource: getOtelResource() })
 
+  // Exporters are additive — if a custom provider already has readers, these append to them.
   if (config.exporters?.otlp) addOtlpMetricReader(_meterProvider)
   if (config.exporters?.console) addConsoleMetricReader(_meterProvider)
 
   otelMetrics.setGlobalMeterProvider(_meterProvider)
 
-  if (typeof globalThis?.process?.once === 'function') {
+  if (typeof globalThis.process?.once === 'function') {
     globalThis.process.once('beforeExit', () => {
       if (_meterProvider) {
         _meterProvider.forceFlush().catch((err: unknown) => {
@@ -266,8 +268,8 @@ function addConsoleMetricReader(provider: MeterProvider): void {
 
 function getOtelResource(): Resource {
   const serviceName = getServiceName()
-  const serviceNamespace = globalThis?.process?.env?.OTEL_SERVICE_NAMESPACE || DEFAULT_SERVICE_NAMESPACE
-  const deploymentEnvironment = globalThis?.process?.env?.OTEL_DEPLOYMENT_ENVIRONMENT || DEFAULT_DEPLOYMENT_ENVIRONMENT
+  const serviceNamespace = globalThis.process?.env?.OTEL_SERVICE_NAMESPACE || DEFAULT_SERVICE_NAMESPACE
+  const deploymentEnvironment = globalThis.process?.env?.OTEL_DEPLOYMENT_ENVIRONMENT || DEFAULT_DEPLOYMENT_ENVIRONMENT
 
   const defaultResource = new Resource({
     'service.name': serviceName,

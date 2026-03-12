@@ -145,7 +145,8 @@ describe('Meter', () => {
 
   describe('startCycle', () => {
     it('returns cycle id and start time', () => {
-      vi.spyOn(Date, 'now').mockReturnValue(100_000)
+      vi.useFakeTimers()
+      vi.setSystemTime(100_000)
 
       const result = meter.startCycle()
 
@@ -154,7 +155,7 @@ describe('Meter', () => {
         startTime: 100_000,
       })
       expect(meter.metrics.cycleCount).toBe(1)
-      vi.restoreAllMocks()
+      vi.useRealTimers()
     })
 
     it('adds cycle entry to the latest invocation', () => {
@@ -176,34 +177,37 @@ describe('Meter', () => {
 
   describe('endCycle', () => {
     it('records duration on the latest cycle', () => {
-      vi.spyOn(Date, 'now').mockReturnValue(200_000)
+      vi.useFakeTimers()
+      vi.setSystemTime(200_000)
 
       meter.startNewInvocation()
       meter.startCycle()
       meter.endCycle(100_000)
 
       expect(meter.metrics.latestAgentInvocation!.cycles[0]!.duration).toBe(100_000)
-      vi.restoreAllMocks()
+      vi.useRealTimers()
     })
 
     it('does not fail when no invocation exists', () => {
-      vi.spyOn(Date, 'now').mockReturnValue(200_000)
+      vi.useFakeTimers()
+      vi.setSystemTime(200_000)
 
       meter.startCycle()
 
       expect(() => meter.endCycle(100_000)).not.toThrow()
       expect(meter.metrics.agentInvocations).toStrictEqual([])
-      vi.restoreAllMocks()
+      vi.useRealTimers()
     })
 
     it('does not fail when invocation has no cycles', () => {
-      vi.spyOn(Date, 'now').mockReturnValue(200_000)
+      vi.useFakeTimers()
+      vi.setSystemTime(200_000)
 
       meter.startNewInvocation()
 
       expect(() => meter.endCycle(100_000)).not.toThrow()
       expect(meter.metrics.latestAgentInvocation!.cycles).toStrictEqual([])
-      vi.restoreAllMocks()
+      vi.useRealTimers()
     })
   })
 
@@ -437,13 +441,14 @@ describe('Meter', () => {
     })
 
     it('emits cycle duration histogram on endCycle', () => {
-      vi.spyOn(Date, 'now').mockReturnValue(5000)
+      vi.useFakeTimers()
+      vi.setSystemTime(5000)
       const m = new Meter()
 
       m.endCycle(3000)
 
       expect(mockMeter.getHistogram('gen_ai.agent.cycle.duration')?.sum).toBe(2000)
-      vi.restoreAllMocks()
+      vi.useRealTimers()
     })
 
     it('emits tool call counter and duration on successful endToolCall', () => {

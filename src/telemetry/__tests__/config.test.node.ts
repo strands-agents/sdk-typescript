@@ -19,6 +19,8 @@ vi.mock('@opentelemetry/sdk-trace-base', async (importOriginal) => {
 describe('setupTracer (node-specific)', () => {
   const originalEnv = { ...process.env }
 
+  // resetModules clears the module cache so each test gets a fresh singleton.
+  // Tests use dynamic await import() to re-import after the reset.
   beforeEach(() => {
     vi.resetModules()
     vi.clearAllMocks()
@@ -158,14 +160,21 @@ describe('setupMeter (node-specific)', () => {
   describe('resource attributes from environment', () => {
     it('should use OTEL_SERVICE_NAME when set', async () => {
       process.env.OTEL_SERVICE_NAME = 'my-meter-service'
+      const { InMemoryMetricExporter, PeriodicExportingMetricReader, AggregationTemporality } =
+        await import('@opentelemetry/sdk-metrics')
       const telemetry = await import('../index.js')
 
+      const exporter = new InMemoryMetricExporter(AggregationTemporality.CUMULATIVE)
       const provider = telemetry.setupMeter()
+      provider.addMetricReader(new PeriodicExportingMetricReader({ exporter, exportIntervalMillis: 100 }))
 
-      const resource = (provider as unknown as { _sharedState: { resource: { attributes: Record<string, unknown> } } })
-        ._sharedState?.resource
-      expect(resource).toBeDefined()
-      expect(resource!.attributes['service.name']).toBe('my-meter-service')
+      provider.getMeter('test').createCounter('probe').add(1)
+      await provider.forceFlush()
+
+      const resource = exporter.getMetrics().at(-1)?.resource
+      expect(resource?.attributes['service.name']).toBe('my-meter-service')
+
+      await provider.shutdown()
     })
   })
 
