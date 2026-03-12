@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { A2AServer, A2AExpressServer, type A2AExpressServerConfig } from '../server.js'
+import { A2AExpressServer, type A2AExpressServerConfig } from '../express-server.js'
+import { A2AServer } from '../server.js'
 import { Agent } from '../../agent/agent.js'
 import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
 
@@ -45,33 +46,6 @@ function createTestConfig(overrides?: Partial<A2AExpressServerConfig>): A2AExpre
     ...overrides,
   }
 }
-
-describe('A2AServer', () => {
-  describe('constructor', () => {
-    it('builds agent card with provided values', () => {
-      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
-      const server = new A2AServer({
-        agent: new Agent({ model, printer: false }),
-        name: 'Base Agent',
-        description: 'A base agent',
-        httpUrl: 'http://example.com',
-        version: '2.0.0',
-      })
-
-      expect(server.agentCard).toStrictEqual({
-        name: 'Base Agent',
-        description: 'A base agent',
-        version: '2.0.0',
-        protocolVersion: '0.2.0',
-        url: 'http://example.com',
-        defaultInputModes: ['text/plain'],
-        defaultOutputModes: ['text/plain'],
-        skills: [],
-        capabilities: { streaming: true },
-      })
-    })
-  })
-})
 
 describe('A2AExpressServer', () => {
   describe('constructor', () => {
