@@ -136,7 +136,7 @@
   "homepage": "https://github.com/strands-agents/sdk-typescript#readme",
   "dependencies": {
     "@aws-sdk/client-bedrock-runtime": "^3.943.0",
-    "uuid": "^10.0.0"
+    "uuid": "^13.0.0"
   },
   "peerDependencies": {
     "@a2a-js/sdk": "^0.3.10",
