@@ -69,13 +69,6 @@ const MODELS_INCLUDE_STATUS = ['anthropic.claude']
 const MODELS_SUPPORTING_ANTHROPIC_CACHING = ['anthropic', 'claude']
 
 /**
- * Models that handle prompt caching automatically without explicit cache points.
- * These models cache prompts on the server side and do not need SDK-injected cache points.
- * @see https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-caching.html
- */
-const MODELS_WITH_AUTOMATIC_CACHING = ['nova']
-
-/**
  * Error messages that indicate context window overflow.
  * Used to detect when input exceeds the model's context window.
  */
@@ -153,7 +146,7 @@ export interface BedrockModelConfig extends BaseModelConfig {
 
   /**
    * Configuration for prompt caching.
-   * When strategy is 'auto', cache points are automatically placed after the last user message.
+   * When enabled, cache points are automatically placed after tools and the last user message.
    *
    * @see https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-caching.html
    */
@@ -342,13 +335,9 @@ export class BedrockModel extends Model<BedrockModelConfig> {
     if (strategy === 'auto') {
       const detectedStrategy = this._getCacheStrategy()
       if (!detectedStrategy) {
-        if (MODELS_WITH_AUTOMATIC_CACHING.some((pattern) => this._config.modelId?.includes(pattern))) {
-          logger.info(`model_id=<${this._config.modelId}> | this model handles caching automatically`)
-        } else {
-          logger.warn(
-            `model_id=<${this._config.modelId}> | cache_config is enabled but this model does not support automatic caching`
-          )
-        }
+        logger.warn(
+          `model_id=<${this._config.modelId}> | cache_config is enabled but this model does not support automatic caching`
+        )
         return false
       }
       strategy = detectedStrategy
@@ -492,6 +481,10 @@ export class BedrockModel extends Model<BedrockModelConfig> {
             },
           }) as Tool
       )
+
+      if (this._shouldEnableCaching()) {
+        tools.push({ cachePoint: { type: 'default' } })
+      }
 
       const toolConfig: ToolConfiguration = {
         tools: tools,

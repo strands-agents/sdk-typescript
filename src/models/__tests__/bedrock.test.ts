@@ -360,6 +360,7 @@ describe('BedrockModel', () => {
                 inputSchema: { json: { type: 'object', properties: { expression: { type: 'string' } } } },
               },
             },
+            { cachePoint: { type: 'default' } },
           ],
         },
         inferenceConfig: {
@@ -1203,7 +1204,7 @@ describe('BedrockModel', () => {
       warnSpy.mockRestore()
     })
 
-    it('does not add cache point after tools when cacheConfig enabled', async () => {
+    it('adds cache point after tools when cacheConfig enabled', async () => {
       const provider = new BedrockModel({ cacheConfig: { strategy: 'auto' } })
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
       const options: StreamOptions = {
@@ -1235,12 +1236,13 @@ describe('BedrockModel', () => {
                 inputSchema: { json: { type: 'object' } },
               },
             },
+            { cachePoint: { type: 'default' } },
           ],
         },
       })
     })
 
-    it('adds cache points only to messages when cacheConfig enabled', async () => {
+    it('adds cache points to tools and messages when cacheConfig enabled', async () => {
       const provider = new BedrockModel({ cacheConfig: { strategy: 'auto' } })
       const messages = [
         new Message({ role: 'user', content: [new TextBlock('Hello')] }),
@@ -1269,12 +1271,11 @@ describe('BedrockModel', () => {
             inputSchema: { json: { type: 'object' } },
           },
         },
+        { cachePoint: { type: 'default' } },
       ])
-      // Cache point should be on the last user message (index 0), not the assistant message
       const userMsg = call?.messages?.[0]
       const lastBlock = userMsg?.content?.[userMsg.content.length - 1]
       expect(lastBlock).toStrictEqual({ cachePoint: { type: 'default' } })
-      // Assistant message should not have a cache point
       const assistantMsg = call?.messages?.[1]
       const assistantLastBlock = assistantMsg?.content?.[assistantMsg.content.length - 1]
       expect(assistantLastBlock).not.toStrictEqual({ cachePoint: { type: 'default' } })
@@ -1322,33 +1323,6 @@ describe('BedrockModel', () => {
           },
         ],
         system: [{ text: 'You are a helpful assistant' }],
-      })
-
-      warnSpy.mockRestore()
-    })
-
-    it('skips cache point injection for Nova models with automatic caching', async () => {
-      const warnSpy = vi.spyOn(console, 'warn')
-      const provider = new BedrockModel({
-        modelId: 'amazon.nova-pro-v1:0',
-        cacheConfig: { strategy: 'auto' },
-      })
-      const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
-
-      collectIterator(provider.stream(messages))
-
-      // Verify no warning was logged (Nova handles caching automatically)
-      expect(warnSpy).not.toHaveBeenCalled()
-
-      // Verify no cache points were added
-      expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
-        modelId: 'amazon.nova-pro-v1:0',
-        messages: [
-          {
-            role: 'user',
-            content: [{ text: 'Hello' }],
-          },
-        ],
       })
 
       warnSpy.mockRestore()
