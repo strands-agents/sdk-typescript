@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { Plugin } from '../plugin.js'
+import type { Plugin } from '../plugin.js'
 import { BeforeInvocationEvent, type HookableEvent } from '../../hooks/events.js'
 import { ToolRegistry } from '../../registry/tool-registry.js'
 import type { HookableEventConstructor, HookCallback, HookCleanup } from '../../hooks/types.js'
@@ -9,14 +9,14 @@ import { createRandomTool } from '../../__fixtures__/tool-helpers.js'
 /**
  * Concrete implementation of Plugin for testing purposes.
  */
-class TestPlugin extends Plugin {
+class TestPlugin implements Plugin {
   callbacks: Array<{ eventType: unknown; callback: unknown }> = []
 
   get name(): string {
     return 'test-plugin'
   }
 
-  override initAgent(agent: AgentData): void {
+  initAgent(agent: AgentData): void {
     agent.addHook(BeforeInvocationEvent, () => {
       // No-op for testing
     })
@@ -26,11 +26,10 @@ class TestPlugin extends Plugin {
 /**
  * Plugin with custom name for testing.
  */
-class CustomNamePlugin extends Plugin {
+class CustomNamePlugin implements Plugin {
   private readonly _name: string
 
   constructor(name: string) {
-    super()
     this._name = name
   }
 
@@ -38,20 +37,20 @@ class CustomNamePlugin extends Plugin {
     return this._name
   }
 
-  // Uses default empty initAgent
+  initAgent(_agent: AgentData): void {}
 }
 
 /**
  * Plugin with initAgent implementation for testing.
  */
-class InitializablePlugin extends Plugin {
+class InitializablePlugin implements Plugin {
   public initialized = false
 
   get name(): string {
     return 'initializable-plugin'
   }
 
-  override initAgent(_agent: AgentData): void {
+  initAgent(_agent: AgentData): void {
     this.initialized = true
   }
 }
@@ -96,19 +95,19 @@ describe('Plugin', () => {
       expect(callbacks[0]?.eventType).toBe(BeforeInvocationEvent)
     })
 
-    it('has a default empty implementation', () => {
-      const plugin = new CustomNamePlugin('test')
+    it('has a no-op default when not overridden', () => {
+      const plugin: Plugin = new CustomNamePlugin('test')
       const mockAgent = {
         addHook: () => () => {},
         toolRegistry: new ToolRegistry(),
       } as unknown as AgentData
 
-      // Should not throw
+      // Should not throw and return undefined
       const result = plugin.initAgent(mockAgent)
       expect(result).toBeUndefined()
     })
 
-    it('can be overridden for custom initialization', () => {
+    it('can be implemented for custom initialization', () => {
       const plugin = new InitializablePlugin()
       const mockAgent = {
         addHook: () => () => {},
@@ -124,31 +123,24 @@ describe('Plugin', () => {
   })
 
   describe('getTools', () => {
-    it('returns empty array by default', () => {
-      const plugin = new TestPlugin()
-      expect(plugin.getTools()).toEqual([])
+    it('is optional — plugins without getTools are valid', () => {
+      const plugin: Plugin = new TestPlugin()
+      expect(plugin.getTools).toBeUndefined()
     })
 
-    it('registers tools via toolRegistry when super.initAgent is called', () => {
+    it('can be implemented to provide tools', () => {
       const mockTool = createRandomTool()
-      class ToolPlugin extends Plugin {
+      class ToolPlugin implements Plugin {
         get name(): string {
           return 'tool-plugin'
         }
-        override getTools() {
+        initAgent(_agent: AgentData): void {}
+        getTools() {
           return [mockTool]
         }
       }
 
-      const addedTools: unknown[] = []
-      const mockAgent = {
-        addHook: () => () => {},
-        toolRegistry: { add: (tools: unknown[]) => addedTools.push(...tools) },
-      } as unknown as AgentData
-
-      new ToolPlugin().initAgent(mockAgent)
-
-      expect(addedTools).toStrictEqual([mockTool])
+      expect(new ToolPlugin().getTools()).toStrictEqual([mockTool])
     })
   })
 })

@@ -1,7 +1,7 @@
 import type { SnapshotStorage, SnapshotLocation } from './storage.js'
 import { validateIdentifier } from './validation.js'
 import type { SnapshotTriggerCallback } from './types.js'
-import { Plugin } from '../plugins/plugin.js'
+import type { Plugin } from '../plugins/plugin.js'
 import type { AgentData } from '../types/agent.js'
 import { AfterInvocationEvent, AfterModelCallEvent, InitializedEvent, MessageAddedEvent } from '../hooks/events.js'
 import { v7 as uuidV7 } from 'uuid'
@@ -54,7 +54,7 @@ export interface SessionManagerConfig {
  * const agent = new Agent({ sessionManager: session })
  * ```
  */
-export class SessionManager extends Plugin {
+export class SessionManager implements Plugin {
   private readonly _sessionId: string
   private readonly _storage: { snapshot: SnapshotStorage }
   private readonly _saveLatestOn: SaveLatestStrategy
@@ -68,7 +68,6 @@ export class SessionManager extends Plugin {
   }
 
   constructor(config: SessionManagerConfig) {
-    super()
     this._sessionId = validateIdentifier(config.sessionId ?? 'default-session')
     this._storage = { snapshot: config.storage.snapshot }
     this._saveLatestOn = config.saveLatestOn ?? 'invocation'
@@ -76,7 +75,7 @@ export class SessionManager extends Plugin {
   }
 
   /** Initializes the plugin by registering lifecycle hook callbacks. */
-  public override initAgent(agent: AgentData): void {
+  public initAgent(agent: AgentData): void {
     agent.addHook(InitializedEvent, async (event) => {
       await this._onAgentInitialized(event)
     })

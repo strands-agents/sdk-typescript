@@ -7,7 +7,7 @@
 
 import { ContextWindowOverflowError } from '../errors.js'
 import { Message, TextBlock, ToolResultBlock } from '../types/messages.js'
-import { Plugin } from '../plugins/plugin.js'
+import type { Plugin } from '../plugins/plugin.js'
 import type { AgentData } from '../types/agent.js'
 import { AfterInvocationEvent, AfterModelCallEvent } from '../hooks/events.js'
 
@@ -40,7 +40,7 @@ export type SlidingWindowConversationManagerConfig = {
  * - AfterInvocationEvent: Applies sliding window management after each invocation
  * - AfterModelCallEvent: Reduces context on overflow errors and requests retry
  */
-export class SlidingWindowConversationManager extends Plugin {
+export class SlidingWindowConversationManager implements Plugin {
   private readonly _windowSize: number
   private readonly _shouldTruncateResults: boolean
 
@@ -57,7 +57,6 @@ export class SlidingWindowConversationManager extends Plugin {
    * @param config - Configuration options for the sliding window manager.
    */
   constructor(config?: SlidingWindowConversationManagerConfig) {
-    super()
     this._windowSize = config?.windowSize ?? 40
     this._shouldTruncateResults = config?.shouldTruncateResults ?? true
   }
@@ -71,7 +70,7 @@ export class SlidingWindowConversationManager extends Plugin {
    *
    * @param agent - The agent to register hooks with
    */
-  public override initAgent(agent: AgentData): void {
+  public initAgent(agent: AgentData): void {
     // Apply sliding window management after each invocation
     agent.addHook(AfterInvocationEvent, (event) => {
       this.applyManagement(event.agent.messages)

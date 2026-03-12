@@ -199,7 +199,7 @@ export {
 export type { HookCallback, HookableEventConstructor, ModelStopResponse, Redaction } from './hooks/index.js'
 
 // Plugin system
-export { Plugin } from './plugins/index.js'
+export type { Plugin } from './plugins/index.js'
 
 // Conversation Manager
 export { NullConversationManager } from './conversation-manager/null-conversation-manager.js'

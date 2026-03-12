@@ -6,12 +6,13 @@
  * management is handled externally.
  */
 
-import { Plugin } from '../plugins/plugin.js'
+import type { Plugin } from '../plugins/plugin.js'
+import type { AgentData } from '../types/agent.js'
 
 /**
  * A no-op conversation manager that does not modify the conversation history.
  */
-export class NullConversationManager extends Plugin {
+export class NullConversationManager implements Plugin {
   /**
    * Unique identifier for this plugin.
    */
@@ -19,5 +20,6 @@ export class NullConversationManager extends Plugin {
     return 'strands:null-conversation-manager'
   }
 
-  // Uses default initAgent which registers no hooks
+  // No-op — does not register any hooks
+  initAgent(_agent: AgentData): void {}
 }

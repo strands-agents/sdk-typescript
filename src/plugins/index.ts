@@ -27,4 +27,4 @@
  * ```
  */
 
-export { Plugin } from './plugin.js'
+export type { Plugin } from './plugin.js'

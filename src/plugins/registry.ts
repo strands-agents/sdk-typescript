@@ -9,7 +9,7 @@ import type { AgentData } from '../types/agent.js'
  * Registry for managing plugins attached to an agent.
  *
  * Holds pending plugins and initializes them on first use.
- * Handles duplicate detection and calls each plugin's initAgent method.
+ * Handles duplicate detection, tool registration, and calls each plugin's initAgent method.
  */
 export class PluginRegistry {
   private readonly _plugins: Map<string, Plugin>
@@ -38,6 +38,12 @@ export class PluginRegistry {
       throw new Error(`plugin_name=<${plugin.name}> | plugin already registered`)
     }
     this._plugins.set(plugin.name, plugin)
+
+    const tools = plugin.getTools?.() ?? []
+    if (tools.length > 0) {
+      agent.toolRegistry.add(tools)
+    }
+
     await plugin.initAgent(agent)
   }
 }
