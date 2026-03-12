@@ -7,7 +7,7 @@
 
 import { Model } from '../models/model.js'
 import type { Message, StopReason } from '../types/messages.js'
-import type { ModelStreamEvent } from '../models/streaming.js'
+import type { ModelStreamEvent, Usage } from '../models/streaming.js'
 import type { BaseModelConfig, StreamOptions } from '../models/model.js'
 import type { PlainContentBlock } from './slim-types.js'
 
@@ -20,7 +20,9 @@ type ContentBlockInput = PlainContentBlock | PlainContentBlock[] | Error
  * Represents a single turn in the test sequence.
  * Can be either content blocks with stopReason, or an Error to throw.
  */
-type Turn = { type: 'content'; content: PlainContentBlock[]; stopReason: StopReason } | { type: 'error'; error: Error }
+type Turn =
+  | { type: 'content'; content: PlainContentBlock[]; stopReason: StopReason; usage?: Usage }
+  | { type: 'error'; error: Error }
 
 /**
  * Test model provider that operates at the content block level.
@@ -54,7 +56,7 @@ export class MockMessageModel extends Model<BaseModelConfig> {
    * Returns this for method chaining.
    *
    * @param turn - ContentBlock, ContentBlock[], or Error to add
-   * @param stopReason - Optional explicit stopReason (overrides auto-derivation)
+   * @param options - Optional stop reason and token usage
    * @returns This provider for chaining
    *
    * @example
@@ -62,12 +64,13 @@ export class MockMessageModel extends Model<BaseModelConfig> {
    * provider
    *   .addTurn({ type: 'textBlock', text: 'Hello' })  // Single block
    *   .addTurn([{ type: 'toolUseBlock', ... }])  // Array of blocks
-   *   .addTurn({ type: 'textBlock', text: 'Done' }, 'maxTokens')  // Explicit stopReason
+   *   .addTurn({ type: 'textBlock', text: 'Done' }, { stopReason: 'maxTokens' })  // Explicit stopReason
+   *   .addTurn({ type: 'textBlock', text: 'Hi' }, { usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } })
    *   .addTurn(new Error('Failed'))  // Error turn
    * ```
    */
-  addTurn(turn: ContentBlockInput, stopReason?: StopReason): this {
-    this._turns.push(this._createTurn(turn, stopReason))
+  addTurn(turn: ContentBlockInput, options?: { stopReason?: StopReason; usage?: Usage }): this {
+    this._turns.push(this._createTurn(turn, options?.stopReason, options?.usage))
     return this
   }
 
@@ -125,7 +128,7 @@ export class MockMessageModel extends Model<BaseModelConfig> {
     }
 
     // Generate events for content turn
-    yield* this._generateEventsForContent(turn.content, turn.stopReason)
+    yield* this._generateEventsForContent(turn.content, turn.stopReason, turn.usage)
   }
 
   /**
@@ -134,7 +137,8 @@ export class MockMessageModel extends Model<BaseModelConfig> {
    */
   private async *_generateEventsForContent(
     content: PlainContentBlock[],
-    stopReason: StopReason
+    stopReason: StopReason,
+    usage?: Usage
   ): AsyncGenerator<ModelStreamEvent> {
     // Yield message start event (always assistant role)
     yield { type: 'modelMessageStartEvent', role: 'assistant' }
@@ -147,12 +151,17 @@ export class MockMessageModel extends Model<BaseModelConfig> {
 
     // Yield message stop event
     yield { type: 'modelMessageStopEvent', stopReason }
+
+    // Yield metadata event with token usage when provided
+    if (usage) {
+      yield { type: 'modelMetadataEvent', usage }
+    }
   }
 
   /**
    * Creates a Turn object from ContentBlock(s) or Error.
    */
-  private _createTurn(turn: ContentBlockInput, explicitStopReason?: StopReason): Turn {
+  private _createTurn(turn: ContentBlockInput, explicitStopReason?: StopReason, usage?: Usage): Turn {
     if (turn instanceof Error) {
       return { type: 'error', error: turn }
     }
@@ -164,6 +173,7 @@ export class MockMessageModel extends Model<BaseModelConfig> {
       type: 'content',
       content,
       stopReason: explicitStopReason ?? this._deriveStopReason(content),
+      ...(usage !== undefined && { usage }),
     }
   }
 
@@ -261,6 +271,19 @@ export class MockMessageModel extends Model<BaseModelConfig> {
       case 'guardContentBlock':
         // GuardContentBlock is handled by guardrails and doesn't generate model events
         // This is typically used in system prompts or message content for guardrail evaluation
+        break
+
+      case 'citationsBlock':
+        yield { type: 'modelContentBlockStartEvent' }
+        yield {
+          type: 'modelContentBlockDeltaEvent',
+          delta: {
+            type: 'citationsDelta',
+            citations: block.citations,
+            content: block.content,
+          },
+        }
+        yield { type: 'modelContentBlockStopEvent' }
         break
 
       case 'imageBlock':

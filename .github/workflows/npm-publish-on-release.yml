@@ -44,6 +44,7 @@ jobs:
       with:
         node-version: '20'
         registry-url: 'https://registry.npmjs.org'
+        package-manager-cache: false
 
     - name: Update npm to latest
       run: npm install -g npm@latest
@@ -70,10 +71,10 @@ jobs:
         npm version ${{ steps.version.outputs.version }} --no-git-tag-version
 
     - name: Install dependencies and build
-      run: npm ci
+      run: npm install
 
     - name: Store the distribution packages
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         name: npm-package-distributions
         path: .

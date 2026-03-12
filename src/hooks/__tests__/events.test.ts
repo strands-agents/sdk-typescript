@@ -19,6 +19,7 @@ import {
 } from '../events.js'
 import { Agent } from '../../agent/agent.js'
 import { AgentResult } from '../../types/agent.js'
+import { AgentMetrics } from '../../telemetry/meter.js'
 import { Message, TextBlock, ToolResultBlock, ToolUseBlock } from '../../types/messages.js'
 import { FunctionTool } from '../../tools/function-tool.js'
 import { ToolStreamEvent } from '../../tools/tool.js'
@@ -467,6 +468,7 @@ describe('AgentResultEvent', () => {
     const result = new AgentResult({
       stopReason: 'endTurn',
       lastMessage: new Message({ role: 'assistant', content: [new TextBlock('Done')] }),
+      metrics: new AgentMetrics(),
     })
     const event = new AgentResultEvent({ agent, result })
 

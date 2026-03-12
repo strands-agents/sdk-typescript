@@ -8,8 +8,8 @@
  *   All current events extend {@link HookableEvent}, making them subscribable via hook callbacks.
  *   See {@link StreamEvent} and `events.ts` for the full taxonomy.
  *
- * - **Hook infrastructure** (`HookProvider`, `HookCallback`, `HookRegistry`, `HookCleanup`) —
- *   the subscription mechanism that lets providers register callbacks for {@link HookableEvent} types.
+ * - **Hook infrastructure** (`HookCallback`, `HookRegistry`, `HookCleanup`) —
+ *   the subscription mechanism that lets callers register callbacks for {@link HookableEvent} types.
  *   Named `Hook*` because they describe the hooking/subscription pattern, not the events themselves.
  */
 
@@ -36,10 +36,10 @@ export {
 } from './events.js'
 
 // Event types
-export type { ModelStopData as ModelStopResponse } from './events.js'
+export type { ModelStopData as ModelStopResponse, Redaction } from './events.js'
 
 // Registry
 export { HookRegistryImplementation as HookRegistry } from './registry.js'
 
 // Types
-export type { HookCallback, HookProvider, HookableEventConstructor, HookCleanup } from './types.js'
+export type { HookCallback, HookableEventConstructor, HookCleanup } from './types.js'

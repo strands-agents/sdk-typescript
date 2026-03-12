@@ -30,10 +30,10 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: ${{ matrix.node-version }}
-          cache: 'npm'
+          package-manager-cache: false
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install
 
       - name: Install Playwright browsers
         run: npm run test:browser:install
@@ -43,7 +43,7 @@ jobs:
 
       - name: Upload test artifacts
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: test-artifacts-${{ matrix.node-version }}-${{ matrix.os }}
           path: ./test/.artifacts/

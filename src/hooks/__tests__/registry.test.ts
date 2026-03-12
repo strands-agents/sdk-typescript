@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { HookRegistryImplementation } from '../registry.js'
 import { AfterInvocationEvent, BeforeInvocationEvent } from '../events.js'
-import type { HookProvider } from '../types.js'
 import { Agent } from '../../agent/agent.js'
 
 describe('HookRegistryImplementation', () => {
@@ -51,47 +50,6 @@ describe('HookRegistryImplementation', () => {
       await registry.invokeCallbacks(new AfterInvocationEvent({ agent: mockAgent }))
 
       expect(afterCallback).toHaveBeenCalledOnce()
-    })
-  })
-
-  describe('addHook', () => {
-    it('registers all callbacks from provider', async () => {
-      const beforeCallback = vi.fn()
-      const afterCallback = vi.fn()
-
-      const provider: HookProvider = {
-        registerCallbacks: (reg) => {
-          reg.addCallback(BeforeInvocationEvent, beforeCallback)
-          reg.addCallback(AfterInvocationEvent, afterCallback)
-        },
-      }
-
-      registry.addHook(provider)
-
-      await registry.invokeCallbacks(new BeforeInvocationEvent({ agent: mockAgent }))
-      expect(beforeCallback).toHaveBeenCalledOnce()
-
-      await registry.invokeCallbacks(new AfterInvocationEvent({ agent: mockAgent }))
-      expect(afterCallback).toHaveBeenCalledOnce()
-    })
-
-    it('clears current provider even if registerCallbacks throws', () => {
-      const provider: HookProvider = {
-        registerCallbacks: () => {
-          throw new Error('Provider failed')
-        },
-      }
-
-      expect(() => registry.addHook(provider)).toThrow('Provider failed')
-
-      // Verify _currentProvider is cleared by registering another provider successfully
-      const workingProvider: HookProvider = {
-        registerCallbacks: (reg) => {
-          reg.addCallback(BeforeInvocationEvent, vi.fn())
-        },
-      }
-
-      expect(() => registry.addHook(workingProvider)).not.toThrow()
     })
   })
 
@@ -236,177 +194,30 @@ describe('HookRegistryImplementation', () => {
       expect(callback2).toHaveBeenCalledOnce()
     })
 
-    it('cleanup function works with callbacks registered via provider', async () => {
+    it('allows callback to be re-registered after cleanup', async () => {
       const callback = vi.fn()
 
-      const provider: HookProvider = {
-        registerCallbacks: (reg) => {
-          reg.addCallback(BeforeInvocationEvent, callback)
-        },
-      }
-
-      registry.addHook(provider)
-      registry.removeHook(provider)
-
-      await registry.invokeCallbacks(new BeforeInvocationEvent({ agent: mockAgent }))
-
-      expect(callback).not.toHaveBeenCalled()
-    })
-  })
-
-  describe('removeHook', () => {
-    it('removes all callbacks registered by provider', async () => {
-      const beforeCallback = vi.fn()
-      const afterCallback = vi.fn()
-
-      const provider: HookProvider = {
-        registerCallbacks: (reg) => {
-          reg.addCallback(BeforeInvocationEvent, beforeCallback)
-          reg.addCallback(AfterInvocationEvent, afterCallback)
-        },
-      }
-
-      registry.addHook(provider)
-      registry.removeHook(provider)
-
-      await registry.invokeCallbacks(new BeforeInvocationEvent({ agent: mockAgent }))
-      await registry.invokeCallbacks(new AfterInvocationEvent({ agent: mockAgent }))
-
-      expect(beforeCallback).not.toHaveBeenCalled()
-      expect(afterCallback).not.toHaveBeenCalled()
-    })
-
-    it('removes all instances when provider registered multiple times', async () => {
-      const callback = vi.fn()
-
-      const provider: HookProvider = {
-        registerCallbacks: (reg) => {
-          reg.addCallback(BeforeInvocationEvent, callback)
-        },
-      }
-
-      registry.addHook(provider)
-      registry.addHook(provider)
-      registry.removeHook(provider)
-
-      await registry.invokeCallbacks(new BeforeInvocationEvent({ agent: mockAgent }))
-
-      expect(callback).not.toHaveBeenCalled()
-    })
-
-    it('is no-op when called with non-existent provider', async () => {
-      const callback = vi.fn()
-
-      const provider1: HookProvider = {
-        registerCallbacks: (reg) => {
-          reg.addCallback(BeforeInvocationEvent, callback)
-        },
-      }
-
-      const provider2: HookProvider = {
-        registerCallbacks: () => {},
-      }
-
-      registry.addHook(provider1)
-      registry.removeHook(provider2)
-
-      await registry.invokeCallbacks(new BeforeInvocationEvent({ agent: mockAgent }))
-
-      expect(callback).toHaveBeenCalledOnce()
-    })
-
-    it('does not affect callbacks from other providers', async () => {
-      const callback1 = vi.fn()
-      const callback2 = vi.fn()
-
-      const provider1: HookProvider = {
-        registerCallbacks: (reg) => {
-          reg.addCallback(BeforeInvocationEvent, callback1)
-        },
-      }
-
-      const provider2: HookProvider = {
-        registerCallbacks: (reg) => {
-          reg.addCallback(BeforeInvocationEvent, callback2)
-        },
-      }
-
-      registry.addHook(provider1)
-      registry.addHook(provider2)
-      registry.removeHook(provider1)
-
-      await registry.invokeCallbacks(new BeforeInvocationEvent({ agent: mockAgent }))
-
-      expect(callback1).not.toHaveBeenCalled()
-      expect(callback2).toHaveBeenCalledOnce()
-    })
-
-    it('does not affect callbacks registered without provider', async () => {
-      const directCallback = vi.fn()
-      const providerCallback = vi.fn()
-
-      const provider: HookProvider = {
-        registerCallbacks: (reg) => {
-          reg.addCallback(BeforeInvocationEvent, providerCallback)
-        },
-      }
-
-      registry.addCallback(BeforeInvocationEvent, directCallback)
-      registry.addHook(provider)
-      registry.removeHook(provider)
-
-      await registry.invokeCallbacks(new BeforeInvocationEvent({ agent: mockAgent }))
-
-      expect(directCallback).toHaveBeenCalledOnce()
-      expect(providerCallback).not.toHaveBeenCalled()
-    })
-
-    it('allows provider to be added and removed multiple times', async () => {
-      const callback = vi.fn()
-
-      const provider: HookProvider = {
-        registerCallbacks: (reg) => {
-          reg.addCallback(BeforeInvocationEvent, callback)
-        },
-      }
-
-      registry.addHook(provider)
-      await registry.invokeCallbacks(new BeforeInvocationEvent({ agent: mockAgent }))
-      expect(callback).toHaveBeenCalledTimes(1)
-
-      registry.removeHook(provider)
-      await registry.invokeCallbacks(new BeforeInvocationEvent({ agent: mockAgent }))
-      expect(callback).toHaveBeenCalledTimes(1)
-
-      registry.addHook(provider)
-      await registry.invokeCallbacks(new BeforeInvocationEvent({ agent: mockAgent }))
-      expect(callback).toHaveBeenCalledTimes(2)
-    })
-  })
-
-  describe('cleanup function and removeHook work independently', () => {
-    it('cleanup function works after removeHook called', async () => {
-      const callback1 = vi.fn()
-      const callback2 = vi.fn()
-
-      const provider: HookProvider = {
-        registerCallbacks: (reg) => {
-          reg.addCallback(BeforeInvocationEvent, callback1)
-          reg.addCallback(BeforeInvocationEvent, callback2)
-        },
-      }
-
-      registry.addHook(provider)
-      registry.removeHook(provider)
-
-      const cleanup = registry.addCallback(BeforeInvocationEvent, callback1)
-      registry.addCallback(BeforeInvocationEvent, callback2)
+      const cleanup = registry.addCallback(BeforeInvocationEvent, callback)
       cleanup()
 
+      registry.addCallback(BeforeInvocationEvent, callback)
       await registry.invokeCallbacks(new BeforeInvocationEvent({ agent: mockAgent }))
 
-      expect(callback1).not.toHaveBeenCalled()
-      expect(callback2).toHaveBeenCalledOnce()
+      expect(callback).toHaveBeenCalledTimes(1)
+    })
+
+    it('cleanup from one registration does not affect independent registration of same function', async () => {
+      const callback1 = vi.fn()
+      const callback2 = vi.fn()
+
+      registry.addCallback(BeforeInvocationEvent, callback1)
+      const cleanup2 = registry.addCallback(BeforeInvocationEvent, callback2)
+      cleanup2()
+
+      await registry.invokeCallbacks(new BeforeInvocationEvent({ agent: mockAgent }))
+
+      expect(callback1).toHaveBeenCalledOnce()
+      expect(callback2).not.toHaveBeenCalled()
     })
   })
 })

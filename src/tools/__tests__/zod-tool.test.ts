@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { tool } from '../zod-tool.js'
+import { tool } from '../tool-factory.js'
 import { Tool } from '../tool.js'
 import { createMockContext } from '../../__fixtures__/tool-helpers.js'
 import { collectGenerator } from '../../__fixtures__/model-test-helpers.js'
@@ -96,7 +96,7 @@ describe('tool', () => {
         })
 
         const result = await myTool.invoke({ count: 3 })
-        expect(result).toBe(3)
+        expect(result).toBe(0)
       })
     })
 
@@ -533,8 +533,7 @@ describe('tool', () => {
         })
 
         const result = await myTool.invoke({})
-        // invoke() returns the last yielded value, not the return value
-        expect(result).toBe('Processing...')
+        expect(result).toBe('Complete!')
       })
     })
 

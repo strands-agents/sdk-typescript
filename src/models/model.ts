@@ -8,6 +8,8 @@ import {
   TextBlock,
   ToolUseBlock,
 } from '../types/messages.js'
+import { CitationsBlock } from '../types/citations.js'
+import type { Citation, CitationGeneratedContent } from '../types/citations.js'
 import type { ToolChoice, ToolSpec } from '../tools/types.js'
 import {
   ModelContentBlockDeltaEvent,
@@ -16,9 +18,30 @@ import {
   ModelMessageStartEvent,
   ModelMessageStopEvent,
   ModelMetadataEvent,
+  ModelRedactionEvent,
   type ModelStreamEvent,
 } from './streaming.js'
 import { MaxTokensError, ModelError, normalizeError } from '../errors.js'
+import type { Redaction } from '../hooks/events.js'
+
+class CitationAccumulator {
+  citations: Citation[] = []
+  content: CitationGeneratedContent[] = []
+
+  push(citations: Citation[], content: CitationGeneratedContent[]): void {
+    this.citations.push(...citations)
+    this.content.push(...content)
+  }
+
+  hasData(): boolean {
+    return this.citations.length > 0
+  }
+
+  reset(): void {
+    this.citations = []
+    this.content = []
+  }
+}
 
 /**
  * Configuration for prompt caching.
@@ -109,6 +132,12 @@ export interface StreamAggregatedResult {
    * Optional metadata about the model invocation, including usage statistics and metrics.
    */
   metadata?: ModelMetadataEvent
+
+  /**
+   * Optional redaction information when guardrails blocked input.
+   * Output redaction is handled by updating the message directly.
+   */
+  redaction?: Redaction
 }
 
 /**
@@ -135,6 +164,13 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
    * @returns The current configuration object
    */
   abstract getConfig(): T
+
+  /**
+   * The model ID from the current configuration, if configured.
+   */
+  get modelId(): string | undefined {
+    return this.getConfig().modelId
+  }
 
   /**
    * Streams a conversation with the model.
@@ -166,6 +202,8 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
         return new ModelMessageStopEvent(event_data)
       case 'modelMetadataEvent':
         return new ModelMetadataEvent(event_data)
+      case 'modelRedactionEvent':
+        return new ModelRedactionEvent(event_data)
       default:
         throw new Error(`Unsupported event type: ${event_data}`)
     }
@@ -216,10 +254,12 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
         signature?: string
         redactedContent?: Uint8Array
       } = {}
+      const accumulatedCitations = new CitationAccumulator()
       let errorToThrow: Error | undefined = undefined
       let stoppedMessage: Message | null = null
       let finalStopReason: StopReason | null = null
       let metadata: ModelMetadataEvent | undefined = undefined
+      let redactionMessage: string | undefined = undefined
 
       for await (const event_data of this.stream(messages, options)) {
         const event = this._convert_to_class_event(event_data)
@@ -241,9 +281,10 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
             accumulatedToolInput = ''
             accumulatedText = ''
             accumulatedReasoning = {}
+            accumulatedCitations.reset()
             break
 
-          case 'modelContentBlockDeltaEvent':
+          case 'modelContentBlockDeltaEvent': {
             switch (event.delta.type) {
               case 'textDelta':
                 accumulatedText += event.delta.text
@@ -256,8 +297,12 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
                 if (event.delta.signature) accumulatedReasoning.signature = event.delta.signature
                 if (event.delta.redactedContent) accumulatedReasoning.redactedContent = event.delta.redactedContent
                 break
+              case 'citationsDelta':
+                accumulatedCitations.push(event.delta.citations, event.delta.content)
+                break
             }
             break
+          }
 
           case 'modelContentBlockStopEvent': {
             // Finalize and emit complete ContentBlock
@@ -278,6 +323,12 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
                   ...accumulatedReasoning,
                 })
                 accumulatedReasoning = {} // Reset after creating reasoning block
+              } else if (accumulatedCitations.hasData()) {
+                block = new CitationsBlock({
+                  citations: accumulatedCitations.citations,
+                  content: accumulatedCitations.content,
+                })
+                accumulatedCitations.reset()
               } else {
                 block = new TextBlock(accumulatedText)
               }
@@ -306,6 +357,22 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
           case 'modelMetadataEvent':
             // Store metadata, keeping the last one if multiple events occur
             metadata = event
+            break
+
+          case 'modelRedactionEvent':
+            // Handle content redaction from guardrails
+            if (event.inputRedaction) {
+              // Store redaction message for agent to handle input message redaction
+              redactionMessage = event.inputRedaction.replaceContent
+            }
+            if (event.outputRedaction) {
+              // Update output message directly with redacted content
+              // Redaction event comes after modelMessageStopEvent, so we overwrite stoppedMessage
+              stoppedMessage = new Message({
+                role: 'assistant',
+                content: [new TextBlock(event.outputRedaction.replaceContent)],
+              })
+            }
             break
 
           default:
@@ -341,6 +408,9 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
       }
       if (metadata !== undefined) {
         result.metadata = metadata
+      }
+      if (redactionMessage !== undefined) {
+        result.redaction = { userMessage: redactionMessage }
       }
       return result
     } catch (error) {

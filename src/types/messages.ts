@@ -2,11 +2,13 @@ import type { JSONValue, Serialized, MaybeSerializedInput, JSONSerializable } fr
 import { omitUndefined } from './json.js'
 import type { ImageBlockData, VideoBlockData, DocumentBlockData } from './media.js'
 import { ImageBlock, VideoBlock, DocumentBlock, encodeBase64, decodeBase64 } from './media.js'
+import type { CitationsBlockData } from './citations.js'
+import { CitationsBlock } from './citations.js'
 
 /**
  * Message types and content blocks for conversational AI interactions.
  *
- * This module follows a pattern where <name>Data interfaces define the structure
+ * This module follows a pattern where "Data" interfaces define the structure
  * for objects, while corresponding classes extend those interfaces with additional
  * functionality and type discrimination.
  */
@@ -115,6 +117,7 @@ export type ContentBlockData =
   | { image: ImageBlockData }
   | { video: VideoBlockData }
   | { document: DocumentBlockData }
+  | { citations: CitationsBlockData }
 
 export type ContentBlock =
   | TextBlock
@@ -126,6 +129,7 @@ export type ContentBlock =
   | ImageBlock
   | VideoBlock
   | DocumentBlock
+  | CitationsBlock
 
 /**
  * Data for a text block.
@@ -298,7 +302,7 @@ export interface ToolResultBlockData {
 
   /**
    * The original error object when status is 'error'.
-   * Available for inspection by hooks, error handlers, and event loop.
+   * Available for inspection by hooks, error handlers, and agent loop.
    * Tools must wrap non-Error thrown values into Error objects.
    */
   error?: Error
@@ -330,7 +334,7 @@ export class ToolResultBlock implements ToolResultBlockData, JSONSerializable<{ 
 
   /**
    * The original error object when status is 'error'.
-   * Available for inspection by hooks, error handlers, and event loop.
+   * Available for inspection by hooks, error handlers, and agent loop.
    * Tools must wrap non-Error thrown values into Error objects.
    */
   readonly error?: Error
@@ -626,7 +630,7 @@ export type SystemPrompt = string | SystemContentBlock[]
  * Data representation of a system prompt.
  * Can be a simple string or an array of system content block data for advanced caching.
  *
- * This is the data interface counterpart to SystemPrompt, following the <name>Data pattern.
+ * This is the data interface counterpart to SystemPrompt, following the "Data" pattern.
  */
 export type SystemPromptData = string | SystemContentBlockData[]
 
@@ -875,6 +879,8 @@ export function contentBlockFromData(data: ContentBlockData): ContentBlock {
     return VideoBlock.fromJSON(data)
   } else if ('document' in data) {
     return DocumentBlock.fromJSON(data)
+  } else if ('citations' in data) {
+    return CitationsBlock.fromJSON(data)
   } else {
     throw new Error('Unknown ContentBlockData type')
   }

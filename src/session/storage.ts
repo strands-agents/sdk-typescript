@@ -39,10 +39,9 @@ export type SessionStorage = {
  *     agent/<scope_id>/
  *       snapshots/
  *         snapshot_latest.json
- *         manifest.json
  *         immutable_history/
- *           snapshot_00001.json
- *           snapshot_00002.json
+ *           snapshot_<uuid>.json
+ *           snapshot_<uuid>.json
  * ```
  */
 export interface SnapshotStorage {
@@ -62,19 +61,25 @@ export interface SnapshotStorage {
   loadSnapshot(params: { location: SnapshotLocation; snapshotId?: string }): Promise<Snapshot | null>
 
   /**
-   * Lists all available snapshot IDs for a session scope.
+   * Lists all available immutable snapshot IDs for a session scope, sorted chronologically.
+   * Snapshot IDs are UUID v7 strings vended by the SDK — callers should treat them as opaque
+   * handles and never construct them manually.
    *
-   * TODO: Add pagination support for long-running agents with many snapshots.
-   * Future signature could be:
+   * Typical pagination pattern:
    * ```typescript
-   * listSnapshots(params: {
-   *   location: SnapshotLocation
-   *   limit?: number        // Max results to return (e.g., 100)
-   *   startAfter?: string   // Snapshot ID to start after (for cursor-based pagination)
-   * }): Promise<{ snapshotIds: string[]; nextToken?: string }>
+   * const page1 = await storage.listSnapshotIds({ location })
+   * const page2 = await storage.listSnapshotIds({ location, startAfter: page1.at(-1) })
    * ```
+   *
+   * `limit` caps the number of returned IDs. `startAfter` is an exclusive cursor (the last ID
+   * from the previous page); it must be a UUID v7 obtained from a prior `listSnapshotIds` call.
    */
-  listSnapshotIds(params: { location: SnapshotLocation }): Promise<string[]>
+  listSnapshotIds(params: { location: SnapshotLocation; limit?: number; startAfter?: string }): Promise<string[]>
+
+  /**
+   * Deletes all snapshots and directories belonging to the session ID.
+   */
+  deleteSession(params: { sessionId: string }): Promise<void>
 
   /**
    * Loads the snapshot manifest.

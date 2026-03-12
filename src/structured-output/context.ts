@@ -127,7 +127,7 @@ export class StructuredOutputContext implements IStructuredOutputContext {
    */
   cleanup(registry: ToolRegistry): void {
     if (this._tool) {
-      registry.removeByName(this._tool.name)
+      registry.remove(this._tool.name)
       this._tool = undefined
     }
   }

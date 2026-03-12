@@ -16,7 +16,7 @@ describe('NullStructuredOutputContext', () => {
 
     context.registerTool(registry)
 
-    expect(registry.values()).toEqual([])
+    expect(registry.list()).toEqual([])
   })
 
   it('storeResult does nothing', () => {
@@ -69,7 +69,7 @@ describe('StructuredOutputContext', () => {
 
       context.registerTool(registry)
 
-      const tools = registry.values()
+      const tools = registry.list()
       expect(tools.length).toBe(1)
       expect(tools[0]).toBeInstanceOf(StructuredOutputTool)
       expect(tools[0]?.name).toBe('strands_structured_output')
@@ -81,7 +81,7 @@ describe('StructuredOutputContext', () => {
       const registry = new ToolRegistry()
 
       context.registerTool(registry)
-      expect(registry.values().length).toBe(1)
+      expect(registry.list().length).toBe(1)
 
       expect(() => context.registerTool(registry)).toThrow('already registered')
     })
@@ -174,10 +174,10 @@ describe('StructuredOutputContext', () => {
       const registry = new ToolRegistry()
 
       context.registerTool(registry)
-      expect(registry.values().length).toBe(1)
+      expect(registry.list().length).toBe(1)
 
       context.cleanup(registry)
-      expect(registry.values().length).toBe(0)
+      expect(registry.list().length).toBe(0)
     })
 
     it('can be called multiple times safely', () => {
@@ -187,10 +187,10 @@ describe('StructuredOutputContext', () => {
 
       context.registerTool(registry)
       context.cleanup(registry)
-      expect(registry.values().length).toBe(0)
+      expect(registry.list().length).toBe(0)
 
       context.cleanup(registry)
-      expect(registry.values().length).toBe(0)
+      expect(registry.list().length).toBe(0)
     })
 
     it('does nothing if tool not registered', () => {
@@ -199,7 +199,7 @@ describe('StructuredOutputContext', () => {
       const registry = new ToolRegistry()
 
       context.cleanup(registry)
-      expect(registry.values().length).toBe(0)
+      expect(registry.list().length).toBe(0)
     })
 
     it('supports register-cleanup-register cycle', () => {
@@ -208,13 +208,13 @@ describe('StructuredOutputContext', () => {
       const registry = new ToolRegistry()
 
       context.registerTool(registry)
-      expect(registry.values().length).toBe(1)
+      expect(registry.list().length).toBe(1)
 
       context.cleanup(registry)
-      expect(registry.values().length).toBe(0)
+      expect(registry.list().length).toBe(0)
 
       context.registerTool(registry)
-      expect(registry.values().length).toBe(1)
+      expect(registry.list().length).toBe(1)
     })
   })
 
@@ -226,7 +226,7 @@ describe('StructuredOutputContext', () => {
 
       // Register
       context.registerTool(registry)
-      expect(registry.values().length).toBe(1)
+      expect(registry.list().length).toBe(1)
 
       // Use
       context.storeResult('tool-1', { name: 'John' })
@@ -235,7 +235,7 @@ describe('StructuredOutputContext', () => {
 
       // Cleanup
       context.cleanup(registry)
-      expect(registry.values().length).toBe(0)
+      expect(registry.list().length).toBe(0)
     })
   })
 })

@@ -1,5 +1,4 @@
-/* eslint-env node */
-import { tool } from '../../tools/zod-tool.js'
+import { tool } from '../../tools/tool-factory.js'
 import { z } from 'zod'
 import { spawn, type ChildProcess } from 'child_process'
 import { Buffer } from 'buffer'

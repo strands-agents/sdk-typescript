@@ -35,11 +35,16 @@ import {
   DocumentFormat,
   ImageFormat,
   type BedrockRuntimeClientResolvedConfig,
+  type CitationLocation as BedrockCitationLocation,
+  type Citation as BedrockCitation,
+  type CitationsContentBlock as BedrockCitationsContentBlock,
+  type GuardrailTraceAssessment,
 } from '@aws-sdk/client-bedrock-runtime'
 import { type BaseModelConfig, type CacheConfig, Model, type StreamOptions } from '../models/model.js'
 import type { ContentBlock, Message, StopReason, ToolUseBlock } from '../types/messages.js'
 import type { ImageSource, VideoSource, DocumentSource } from '../types/media.js'
-import type { ModelStreamEvent, ReasoningContentDelta, Usage } from '../models/streaming.js'
+import type { CitationsDelta, ModelStreamEvent, ReasoningContentDelta, Usage } from '../models/streaming.js'
+import type { Citation, CitationLocation, CitationsBlockData } from '../types/citations.js'
 import type { JSONValue } from '../types/json.js'
 import { ContextWindowOverflowError, ModelThrottledError, normalizeError } from '../errors.js'
 import { ensureDefined } from '../types/validation.js'
@@ -89,6 +94,73 @@ const STOP_REASON_MAP = {
   content_filtered: 'contentFiltered',
   guardrail_intervened: 'guardrailIntervened',
 } as const
+
+/**
+ * Default message for redacted input.
+ */
+const DEFAULT_REDACT_INPUT_MESSAGE = '[User input redacted.]'
+
+/**
+ * Default message for redacted output.
+ */
+const DEFAULT_REDACT_OUTPUT_MESSAGE = '[Assistant output redacted.]'
+
+/**
+ * Redaction configuration for Bedrock guardrails.
+ * Controls whether and how blocked content is replaced.
+ */
+export interface BedrockGuardrailRedactionConfig {
+  /** Redact input when blocked. @defaultValue true */
+  input?: boolean
+
+  /** Replacement message for redacted input. @defaultValue '[User input redacted.]' */
+  inputMessage?: string
+
+  /** Redact output when blocked. @defaultValue false */
+  output?: boolean
+
+  /** Replacement message for redacted output. @defaultValue '[Assistant output redacted.]' */
+  outputMessage?: string
+}
+
+/**
+ * Configuration for Bedrock guardrails.
+ *
+ * For production use with sensitive content, consider `SessionManager` with `saveLatestOn: 'message'`
+ * to persist redactions immediately.
+ *
+ * @see https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails.html
+ */
+export interface BedrockGuardrailConfig {
+  /** Guardrail identifier */
+  guardrailIdentifier: string
+
+  /** Guardrail version (e.g., "1", "DRAFT") */
+  guardrailVersion: string
+
+  /** Trace mode for evaluation. @defaultValue 'enabled' */
+  trace?: 'enabled' | 'disabled' | 'enabled_full'
+
+  /** Stream processing mode */
+  streamProcessingMode?: 'sync' | 'async'
+
+  /** Redaction behavior when content is blocked */
+  redaction?: BedrockGuardrailRedactionConfig
+
+  /**
+   * Only evaluate the latest user message with guardrails.
+   * When true, wraps the latest user message's text/image content in guardContent blocks.
+   * This can improve performance and reduce costs in multi-turn conversations.
+   *
+   * @remarks
+   * The implementation finds the last user message containing text or image content
+   * (not just the last message), ensuring correct behavior during tool execution cycles
+   * where toolResult messages may follow the user's actual input.
+   *
+   * @defaultValue false
+   */
+  guardLatestUserMessage?: boolean
+}
 
 /**
  * Converts a snake_case string to camelCase.
@@ -185,6 +257,12 @@ export interface BedrockModelConfig extends BaseModelConfig {
    * - `'auto'`: Automatically determine based on model ID (default)
    */
   includeToolResultStatus?: 'auto' | boolean
+
+  /**
+   * Guardrail configuration for content filtering and safety controls.
+   * @see https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails.html
+   */
+  guardrailConfig?: BedrockGuardrailConfig
 }
 
 /**
@@ -419,10 +497,12 @@ export class BedrockModel extends Model<BedrockModelConfig> {
         const response = await this._client.send(command)
         // Stream the response
         if (response.stream) {
+          let lastStopReason: string | undefined
           for await (const chunk of response.stream) {
             // Map Bedrock events to SDK events
-            const events = this._mapStreamedBedrockEventToSDKEvent(chunk)
-            for (const event of events) {
+            const result = this._mapStreamedBedrockEventToSDKEvent(chunk, lastStopReason)
+            lastStopReason = result.stopReason
+            for (const event of result.events) {
               yield event
             }
           }
@@ -523,6 +603,18 @@ export class BedrockModel extends Model<BedrockModelConfig> {
       Object.assign(request, this._config.additionalArgs)
     }
 
+    // Add guardrail configuration
+    if (this._config.guardrailConfig) {
+      request.guardrailConfig = {
+        guardrailIdentifier: this._config.guardrailConfig.guardrailIdentifier,
+        guardrailVersion: this._config.guardrailConfig.guardrailVersion,
+        trace: this._config.guardrailConfig.trace ?? 'enabled',
+        ...(this._config.guardrailConfig.streamProcessingMode && {
+          streamProcessingMode: this._config.guardrailConfig.streamProcessingMode,
+        }),
+      }
+    }
+
     return request
   }
 
@@ -534,8 +626,19 @@ export class BedrockModel extends Model<BedrockModelConfig> {
    */
   private _formatMessages(messages: Message[]): BedrockMessage[] {
     const formattedMessages = messages.reduce<BedrockMessage[]>((acc, message) => {
+    // Pre-compute the index of the last user message containing text/image content
+    // This ensures guardContent wrapping is maintained across tool execution cycles
+    const lastUserTextIdx = this._config.guardrailConfig?.guardLatestUserMessage
+      ? this._findLastUserTextMessageIndex(messages)
+      : undefined
+
+    return messages.reduce<BedrockMessage[]>((acc, message, idx) => {
+      const shouldApplyGuardBlocks = idx === lastUserTextIdx
       const content = message.content
-        .map((block) => this._formatContentBlock(block))
+        .map((block: ContentBlock) => {
+          const formattedBlock = this._formatContentBlock(block)
+          return shouldApplyGuardBlocks ? this._applyGuardBlocks(formattedBlock) : formattedBlock
+        })
         .filter((block) => block !== undefined)
 
       if (content.length > 0) {
@@ -596,6 +699,90 @@ export class BedrockModel extends Model<BedrockModelConfig> {
         logger.debug(`msg_idx=<${lastUserIdx}> | added cache point to last user message`)
       }
     }
+  }
+
+  /**
+   * Wraps a formatted content block in guardContent for guardrail evaluation.
+   *
+   * When guardLatestUserMessage is enabled, this method wraps text and image blocks
+   * in guardContent blocks to signal to Bedrock's guardrails to evaluate only that content.
+   * Other content types (toolUse, toolResult, etc.) pass through unchanged.
+   *
+   * @param formattedBlock - The formatted content block to potentially wrap
+   * @returns The block wrapped in guardContent if applicable, or the original block
+   */
+  private _applyGuardBlocks(formattedBlock: BedrockContentBlock | undefined): BedrockContentBlock | undefined {
+    if (formattedBlock === undefined) {
+      return undefined
+    }
+
+    if ('text' in formattedBlock) {
+      return {
+        guardContent: {
+          text: {
+            text: formattedBlock.text,
+          },
+        },
+      }
+    }
+
+    if ('image' in formattedBlock) {
+      // Extract image data and validate for guardContent compatibility
+      const imageBlock = formattedBlock.image
+      if (!imageBlock?.format || !imageBlock?.source) {
+        return formattedBlock
+      }
+
+      const format = imageBlock.format
+
+      // Bedrock guardrails only support png/jpeg formats
+      if (format !== 'png' && format !== 'jpeg') {
+        console.warn(`Image format '${format}' not supported by Bedrock guardrails, skipping guardContent wrap`)
+        return formattedBlock
+      }
+
+      // Bedrock guardrails only support bytes source (not S3 or URL)
+      if (!('bytes' in imageBlock.source)) {
+        console.warn('Image source must be bytes for Bedrock guardrails, skipping guardContent wrap')
+        return formattedBlock
+      }
+
+      return {
+        guardContent: {
+          image: {
+            format: format as 'png' | 'jpeg',
+            source: imageBlock.source as { bytes: Uint8Array },
+          },
+        },
+      }
+    }
+
+    // Other content types (toolUse, toolResult, etc.) pass through unchanged
+    return formattedBlock
+  }
+
+  /**
+   * Find the index of the last user message containing text or image content.
+   *
+   * This is used for guardLatestUserMessage guardrail evaluation to ensure that guardContent
+   * wrapping targets the correct message even when toolResult messages (role='user') follow
+   * the actual user text/image input during tool execution cycles.
+   *
+   * @param messages - Array of messages to search
+   * @returns Index of the last user message with text/image content, or undefined if not found
+   */
+  private _findLastUserTextMessageIndex(messages: Message[]): number | undefined {
+    for (let idx = messages.length - 1; idx >= 0; idx--) {
+      const msg = messages[idx]
+      if (msg === undefined) continue
+      if (
+        msg.role === 'user' &&
+        msg.content.some((block) => block.type === 'textBlock' || block.type === 'imageBlock')
+      ) {
+        return idx
+      }
+    }
+    return undefined
   }
 
   /**
@@ -712,6 +899,14 @@ export class BedrockModel extends Model<BedrockModelConfig> {
             source: this._formatDocumentSource(block.source),
             ...(block.citations && { citations: block.citations }),
             ...(block.context && { context: block.context }),
+          },
+        }
+
+      case 'citationsBlock':
+        return {
+          citationsContent: {
+            citations: block.citations.map((c) => this._mapCitationToBedrock(c)),
+            content: block.content,
           },
         }
 
@@ -885,6 +1080,19 @@ export class BedrockModel extends Model<BedrockModelConfig> {
 
         events.push({ type: 'modelContentBlockStopEvent' })
       },
+      citationsContent: (block: BedrockCitationsContentBlock): void => {
+        if (!block) return
+        events.push({ type: 'modelContentBlockStartEvent' })
+
+        const mapped = this._mapBedrockCitationsData(block)
+        const delta: CitationsDelta = {
+          type: 'citationsDelta',
+          citations: mapped.citations,
+          content: mapped.content,
+        }
+        events.push({ type: 'modelContentBlockDeltaEvent', delta })
+        events.push({ type: 'modelContentBlockStopEvent' })
+      },
     }
 
     const content = ensureDefined(message.content, 'message.content')
@@ -922,6 +1130,18 @@ export class BedrockModel extends Model<BedrockModelConfig> {
       }
     }
 
+    // Handle trace and guardrail check for non-streaming responses
+    if (event.trace) {
+      metadataEvent.trace = event.trace
+
+      // Check for blocked guardrails and emit redaction events
+      if (this._config.guardrailConfig && event.trace.guardrail && stopReasonRaw === 'guardrail_intervened') {
+        for (const redactionEvent of this._generateRedactionEvents(event.trace.guardrail)) {
+          events.push(redactionEvent)
+        }
+      }
+    }
+
     events.push(metadataEvent)
 
     return events
@@ -931,10 +1151,15 @@ export class BedrockModel extends Model<BedrockModelConfig> {
    * Maps a Bedrock event to SDK streaming events.
    *
    * @param chunk - Bedrock event chunk
-   * @returns Array of SDK streaming events
+   * @param lastStopReason - Stop reason from previous messageStop event
+   * @returns Object containing events array and optional stopReason
    */
-  private _mapStreamedBedrockEventToSDKEvent(chunk: ConverseStreamOutput): ModelStreamEvent[] {
+  private _mapStreamedBedrockEventToSDKEvent(
+    chunk: ConverseStreamOutput,
+    lastStopReason?: string
+  ): { events: ModelStreamEvent[]; stopReason?: string } {
     const events: ModelStreamEvent[] = []
+    let stopReason = lastStopReason
 
     // Extract the event type key
     const eventType = ensureDefined(Object.keys(chunk)[0], 'eventType') as keyof ConverseStreamOutput
@@ -998,6 +1223,16 @@ export class BedrockModel extends Model<BedrockModelConfig> {
               events.push({ type: 'modelContentBlockDeltaEvent', delta: reasoningDelta })
             }
           },
+          citationsContent: (block: BedrockCitationsContentBlock): void => {
+            if (!block) return
+            const mapped = this._mapBedrockCitationsData(block)
+            const delta: CitationsDelta = {
+              type: 'citationsDelta',
+              citations: mapped.citations,
+              content: mapped.content,
+            }
+            events.push({ type: 'modelContentBlockDeltaEvent', delta })
+          },
         }
 
         for (const key in delta) {
@@ -1024,6 +1259,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
         const data = eventData as BedrockMessageStopEvent
 
         const stopReasonRaw = ensureDefined(data.stopReason, 'messageStop.stopReason') as string
+        stopReason = stopReasonRaw
         const event: ModelStreamEvent = {
           type: 'modelMessageStopEvent',
           stopReason: this._transformStopReason(stopReasonRaw, data),
@@ -1071,6 +1307,13 @@ export class BedrockModel extends Model<BedrockModelConfig> {
 
         if (data.trace) {
           event.trace = data.trace
+
+          // Check for blocked guardrails in trace and emit redaction events
+          if (this._config.guardrailConfig && data.trace.guardrail && lastStopReason === 'guardrail_intervened') {
+            for (const redactionEvent of this._generateRedactionEvents(data.trace.guardrail)) {
+              events.push(redactionEvent)
+            }
+          }
         }
 
         events.push(event)
@@ -1093,7 +1336,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
         break
     }
 
-    return events
+    return stopReason !== undefined ? { events, stopReason } : { events }
   }
 
   /**
@@ -1131,6 +1374,153 @@ export class BedrockModel extends Model<BedrockModelConfig> {
     }
 
     return mappedStopReason
+  }
+
+  /**
+   * Maps a Bedrock object-key citation location to the SDK's type-field format.
+   *
+   * Bedrock uses object-key discrimination (`{ documentChar: { ... } }`) while the SDK uses
+   * type-field discrimination (`{ type: 'documentChar', ... }`). Also normalizes Bedrock's
+   * `searchResultLocation` key to the shorter `searchResult`.
+   *
+   * @param bedrockLocation - Bedrock citation location with object-key discrimination
+   * @returns SDK CitationLocation with type field discrimination
+   */
+  private _mapBedrockCitationLocation(bedrockLocation: BedrockCitationLocation): CitationLocation | undefined {
+    if (bedrockLocation.documentChar) {
+      const loc = bedrockLocation.documentChar
+      return { type: 'documentChar', documentIndex: loc.documentIndex!, start: loc.start!, end: loc.end! }
+    }
+    if (bedrockLocation.documentPage) {
+      const loc = bedrockLocation.documentPage
+      return { type: 'documentPage', documentIndex: loc.documentIndex!, start: loc.start!, end: loc.end! }
+    }
+    if (bedrockLocation.documentChunk) {
+      const loc = bedrockLocation.documentChunk
+      return { type: 'documentChunk', documentIndex: loc.documentIndex!, start: loc.start!, end: loc.end! }
+    }
+    if (bedrockLocation.searchResultLocation) {
+      const loc = bedrockLocation.searchResultLocation
+      return { type: 'searchResult', searchResultIndex: loc.searchResultIndex!, start: loc.start!, end: loc.end! }
+    }
+    if (bedrockLocation.web) {
+      const loc = bedrockLocation.web
+      return { type: 'web', url: loc.url!, ...(loc.domain && { domain: loc.domain }) }
+    }
+    logger.warn(`citation_location=<${JSON.stringify(bedrockLocation)}> | unknown citation location type`)
+    return undefined
+  }
+
+  /**
+   * Maps a Bedrock CitationsContentBlock to SDK CitationsBlockData.
+   *
+   * @param bedrockData - Bedrock CitationsContentBlock
+   * @returns SDK CitationsBlockData with type-field CitationLocations
+   */
+  private _mapBedrockCitationsData(bedrockData: BedrockCitationsContentBlock): CitationsBlockData {
+    return {
+      citations: (bedrockData.citations ?? [])
+        .map((citation) => {
+          const location = citation.location ? this._mapBedrockCitationLocation(citation.location) : undefined
+          if (!location) return undefined
+          return {
+            source: citation.source ?? '',
+            title: citation.title ?? '',
+            sourceContent: (citation.sourceContent ?? []).map((sc) => ({ text: sc.text! })),
+            location,
+          }
+        })
+        .filter((c) => c !== undefined),
+      content: (bedrockData.content ?? []).map((gc) => ({ text: gc.text! })),
+    }
+  }
+
+  /**
+   * Maps an SDK Citation to Bedrock's Citation format.
+   *
+   * @param citation - SDK Citation with type-field location
+   * @returns Bedrock Citation with object-key location
+   */
+  private _mapCitationToBedrock(citation: Citation): BedrockCitation {
+    return {
+      location: this._mapCitationLocationToBedrock(citation.location),
+      sourceContent: citation.sourceContent.map((sc) => ({ text: sc.text })),
+      source: citation.source,
+      title: citation.title,
+    }
+  }
+
+  /**
+   * Maps an SDK CitationLocation to Bedrock's object-key format.
+   *
+   * @param location - SDK CitationLocation with type field
+   * @returns Bedrock CitationLocation with object-key discrimination
+   */
+  private _mapCitationLocationToBedrock(location: CitationLocation): BedrockCitationLocation {
+    switch (location.type) {
+      case 'documentChar': {
+        const { type: _, ...fields } = location
+        return { documentChar: fields }
+      }
+      case 'documentPage': {
+        const { type: _, ...fields } = location
+        return { documentPage: fields }
+      }
+      case 'documentChunk': {
+        const { type: _, ...fields } = location
+        return { documentChunk: fields }
+      }
+      case 'searchResult': {
+        const { type: _, ...fields } = location
+        return { searchResultLocation: fields }
+      }
+      case 'web':
+        return { web: { url: location.url, ...(location.domain && { domain: location.domain }) } }
+      default:
+        return location as unknown as BedrockCitationLocation
+    }
+  }
+
+  /**
+   * Generate redaction events based on guardrail configuration.
+   *
+   * @param guardrailData - The guardrail trace assessment data
+   * @returns Array of redaction events to emit
+   */
+  private _generateRedactionEvents(guardrailData: GuardrailTraceAssessment): ModelStreamEvent[] {
+    const events: ModelStreamEvent[] = []
+    const redaction = this._config.guardrailConfig?.redaction
+
+    // Default: redact input is true unless explicitly set to false
+    if (redaction?.input !== false) {
+      logger.debug('redacting input due to guardrail')
+      events.push({
+        type: 'modelRedactionEvent',
+        inputRedaction: {
+          replaceContent: redaction?.inputMessage ?? DEFAULT_REDACT_INPUT_MESSAGE,
+        },
+      })
+    }
+
+    // Only redact output if explicitly enabled
+    if (redaction?.output) {
+      logger.debug('redacting output due to guardrail')
+      const outputRedactionEvent: ModelStreamEvent = {
+        type: 'modelRedactionEvent',
+        outputRedaction: {
+          replaceContent: redaction?.outputMessage ?? DEFAULT_REDACT_OUTPUT_MESSAGE,
+        },
+      }
+
+      // Include the original model output if available
+      if (guardrailData.modelOutput && guardrailData.modelOutput.length > 0) {
+        outputRedactionEvent.outputRedaction!.redactedContent = guardrailData.modelOutput.join('')
+      }
+
+      events.push(outputRedactionEvent)
+    }
+
+    return events
   }
 }
 

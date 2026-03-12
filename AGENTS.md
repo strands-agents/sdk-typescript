@@ -19,16 +19,15 @@ sdk-typescript/
 ├── src/                          # Source code (all production code)
 │   ├── __tests__/                # Unit tests for root-level source files
 │   │   ├── errors.test.ts        # Tests for error classes
-│   │   └── index.test.ts         # Tests for main entry point
+│   │   ├── index.test.ts         # Tests for main entry point
+│   │   └── app-state.test.ts     # Tests for app state
 │   │
 │   ├── agent/                    # Agent loop and streaming
 │   │   ├── __tests__/            # Unit tests for agent loop
 │   │   │   ├── agent.test.ts     # Tests for agent implementation
-│   │   │   ├── state.test.ts     # Tests for agent state
 │   │   │   └── printer.test.ts   # Tests for printer
 │   │   ├── agent.ts              # Core agent implementation
 │   │   ├── printer.ts            # Agent output printing
-│   │   ├── state.ts              # Agent state implementation
 │   │   └── streaming.ts          # Agent streaming event types
 │   │
 │   ├── conversation-manager/ # Conversation management implementations
@@ -49,6 +48,14 @@ sdk-typescript/
 │   │   ├── registry.ts           # HookRegistry implementation
 │   │   ├── types.ts              # Hook-related type definitions
 │   │   └── index.ts              # Public exports for hooks
+│   │
+│   ├── plugins/                  # Plugin system for agent extensibility
+│   │   ├── __tests__/            # Unit tests for plugins
+│   │   │   ├── plugin.test.ts    # Tests for Plugin abstract class
+│   │   │   └── registry.test.ts  # Tests for PluginRegistry
+│   │   ├── plugin.ts             # Plugin abstract base class
+│   │   ├── registry.ts           # PluginRegistry implementation
+│   │   └── index.ts              # Public exports for plugins
 │   │
 │   ├── models/                   # Model provider implementations
 │   │   ├── __tests__/            # Unit tests for model providers
@@ -73,6 +80,23 @@ sdk-typescript/
 │   │   ├── tool.ts               # Tool interface
 │   │   └── types.ts              # Tool-related type definitions
 │   │
+│   ├── multiagent/               # Multi-agent orchestration patterns
+│   │   ├── __tests__/            # Unit tests for multi-agent
+│   │   │   ├── graph.test.ts     # Tests for Graph orchestrator
+│   │   │   ├── swarm.test.ts     # Tests for Swarm orchestrator
+│   │   │   ├── nodes.test.ts     # Tests for Node types
+│   │   │   ├── events.test.ts    # Tests for multi-agent events
+│   │   │   └── queue.test.ts     # Tests for execution queue
+│   │   ├── base.ts               # MultiAgentBase interface
+│   │   ├── graph.ts              # Graph orchestrator (DAG execution)
+│   │   ├── swarm.ts              # Swarm orchestrator (handoff-based)
+│   │   ├── nodes.ts              # Node types (AgentNode, MultiAgentNode)
+│   │   ├── state.ts              # MultiAgentState, NodeResult, Status
+│   │   ├── events.ts             # Multi-agent streaming events
+│   │   ├── edge.ts               # Graph edge definitions
+│   │   ├── queue.ts              # Node execution queue
+│   │   └── index.ts              # Public exports
+│   │
 │   ├── types/                    # Core type definitions
 │   │   ├── json.ts               # JSON schema and value types
 │   │   └── messages.ts           # Message and content block types
@@ -84,6 +108,7 @@ sdk-typescript/
 │   │
 │   ├── mcp.ts                    # MCP client implementation
 │   ├── errors.ts                 # Custom error classes
+│   ├── app-state.ts              # App state implementation
 │   └── index.ts                  # Main SDK entry point (single export point)
 │
 ├── vended_tools/                  # Optional vended tools (not part of core SDK)
@@ -97,13 +122,19 @@ sdk-typescript/
 │   └── README.md                 # Vended tools overview
 │
 ├── test/integ/                  # Integration tests (separate from source)
+│   ├── multiagent/               # Multi-agent integration tests
+│   │   ├── graph.test.ts         # Graph orchestrator integration tests
+│   │   └── swarm.test.ts         # Swarm orchestrator integration tests
 │   ├── bedrock.test.ts           # Bedrock integration tests (requires AWS credentials)
 │   ├── hooks.test.ts             # Hooks integration tests
 │   └── registry.test.ts          # ToolRegistry integration tests
 │
 ├── examples/                     # Example applications
 │   ├── first-agent/              # Basic agent usage example
-│   └── mcp/                      # MCP integration examples
+│   ├── graph/                    # Graph multi-agent orchestration example
+│   ├── mcp/                      # MCP integration examples
+│   ├── swarm/                    # Swarm multi-agent orchestration example
+│   └── telemetry/                # OpenTelemetry integration example
 │
 ├── .github/                      # GitHub Actions workflows
 │   ├── workflows/                # CI/CD workflows
@@ -142,9 +173,11 @@ sdk-typescript/
 - **`src/agent/`**: Agent loop coordination, streaming event types, output printing, and conversation management
 - **`src/agent/conversation-manager/`**: Conversation history management strategies
 - **`src/hooks/`**: Hooks system for event-driven extensibility
+- **`src/plugins/`**: Plugin system for extending agent functionality
 - **`src/models/`**: Model provider implementations (Bedrock, OpenAI, future providers)
 - **`src/structured-output/`**: Structured output with Zod schema validation and automatic retry logic
 - **`src/tools/`**: Tool definitions and types for agent tool use
+- **`src/multiagent/`**: Multi-agent orchestration patterns (Graph for DAG execution, Swarm for handoff-based routing)
 - **`src/types/`**: Core type definitions used across the SDK
 - **`vended_tools/`**: Optional vended tools (not part of core SDK, independently importable)
 - **`test/integ/`**: Integration tests (tests public API and external integrations)
@@ -241,20 +274,20 @@ logger.warn(`field=<${value}> | statement one | statement two`)
 **Examples**:
 
 ```typescript
-// ✅ Good: Context fields with message
+// Good: Context fields with message
 logger.warn(`stop_reason=<${stopReason}>, fallback=<${fallback}> | unknown stop reason, converting to camelCase`)
 logger.warn(`event_type=<${eventType}> | unsupported bedrock event type`)
 
-// ✅ Good: Simple message without context fields
+// Good: Simple message without context fields
 logger.warn('cache points are not supported in openai system prompts, ignoring cache points')
 
-// ✅ Good: Multiple statements separated by pipes
+// Good: Multiple statements separated by pipes
 logger.warn(`request_id=<${id}> | processing request | starting validation`)
 
-// ❌ Bad: Not using angle brackets for values
+// Bad: Not using angle brackets for values
 logger.warn(`stop_reason=${stopReason} | unknown stop reason`)
 
-// ❌ Bad: Using punctuation
+// Bad: Using punctuation
 logger.warn(`event_type=<${eventType}> | Unsupported event type.`)
 ```
 
@@ -289,7 +322,7 @@ src/
 
 **Example**:
 ```typescript
-// ✅ Good: Main function first, helpers follow
+// Good: Main function first, helpers follow
 export async function* mainFunction() {
   const result = await helperFunction1()
   return helperFunction2(result)
@@ -303,7 +336,7 @@ function helperFunction2(input: string) {
   // Implementation
 }
 
-// ❌ Bad: Helpers before main function
+// Bad: Helpers before main function
 async function helperFunction1() {
   // Implementation
 }
@@ -325,10 +358,10 @@ test/integ/
 **Optional chaining for null safety**: Prefer optional chaining over verbose `typeof` checks when accessing potentially undefined properties:
 
 ```typescript
-// ✅ Good: Optional chaining
+// Good: Optional chaining
 return globalThis?.process?.env?.API_KEY
 
-// ❌ Bad: Verbose typeof checks
+// Bad: Verbose typeof checks
 if (typeof process !== 'undefined' && typeof process.env !== 'undefined') {
   return process.env.API_KEY
 }
@@ -369,7 +402,7 @@ export function getData(): any {
 **Private fields**: Use underscore prefix for private class fields to improve readability and distinguish them from public members.
 
 ```typescript
-// ✅ Good: Private fields with underscore prefix
+// Good: Private fields with underscore prefix
 export class Example {
   private readonly _config: Config
   private _state: State
@@ -384,7 +417,7 @@ export class Example {
   }
 }
 
-// ❌ Bad: No underscore for private fields
+// Bad: No underscore for private fields
 export class Example {
   private readonly config: Config  // Missing underscore
 
@@ -497,7 +530,7 @@ import type { Options, Config } from '../types'
 **When defining interfaces or types, organize them so the top-level interface comes first, followed by its dependencies, and then all nested dependencies.**
 
 ```typescript
-// ✅ Correct - Top-level first, then dependencies
+// Correct - Top-level first, then dependencies
 export interface Message {
   role: Role
   content: ContentBlock[]
@@ -537,7 +570,7 @@ export class ToolResultBlock {
   }
 }
 
-// ❌ Wrong - Dependencies before top-level
+// Wrong - Dependencies before top-level
 export type Role = 'user' | 'assistant'
 
 export interface TextBlockData {
@@ -557,7 +590,7 @@ export interface Message {  // Top-level should come first
 **When creating discriminated unions with a `type` field, the type value MUST match the interface name with the first letter lowercase.**
 
 ```typescript
-// ✅ Correct - type matches class name (first letter lowercase)
+// Correct - type matches class name (first letter lowercase)
 export class TextBlock {
   readonly type = 'textBlock' as const  // Matches 'TextBlock' class name
   readonly text: string
@@ -572,7 +605,7 @@ export class CachePointBlock {
 
 export type ContentBlock = TextBlock | ToolUseBlock | CachePointBlock
 
-// ❌ Wrong - type doesn't match class name
+// Wrong - type doesn't match class name
 export class CachePointBlock {
   readonly type = 'cachePoint' as const  // Should be 'cachePointBlock'
   readonly cacheType: 'default'
@@ -580,6 +613,47 @@ export class CachePointBlock {
 ```
 
 **Rationale**: This consistent naming makes discriminated unions predictable and improves code readability. Developers can easily understand the relationship between the type value and the class.
+
+### API Union Types (Bedrock Pattern)
+
+When the upstream API (e.g., Bedrock) defines a type as a **UNION** ("only one member can be specified"), model it as a TypeScript `type` union with each variant's field **required** — not an `interface` with optional fields. This allows non-breaking expansion when new variants are added.
+
+The Bedrock API marks all fields in union types as "Not Required" as a mechanism for future extensibility. In TypeScript, encode the mutual exclusivity using `|` with each variant having its field required. The "not required" from the API docs means "this field won't be present if a different variant is active."
+
+```typescript
+// Correct: type union — each variant has its field required
+// Adding a new variant later (e.g., | { image: ImageData }) is non-breaking
+export type CitationSourceContent = { text: string }
+
+// Correct: multi-variant union with object-key discrimination
+export type DocumentSourceData =
+  | { bytes: Uint8Array }
+  | { text: string }
+  | { content: DocumentContentBlockData[] }
+  | { s3Location: S3LocationData }
+
+// Correct: multi-variant union for citation locations
+export type CitationLocation =
+  | { documentChar: DocumentCharLocation }
+  | { documentPage: DocumentPageLocation }
+  | { web: WebLocation }
+
+// Wrong: interface with optional fields — cannot expand without breaking
+export interface CitationSourceContent {
+  text?: string
+}
+
+// Wrong: interface with required field — changing to union later is breaking
+export interface CitationSourceContent {
+  text: string
+}
+```
+
+**Key points**:
+- Use `type` alias (not `interface`) so it can be expanded to a union later
+- Each variant's field is **required** within that variant
+- Use object-key discrimination (`'text' in source`) to narrow variants at runtime
+- See `DocumentSourceData` in `src/types/media.ts` and `CitationLocation` in `src/types/citations.ts` for reference implementations
 
 ### Error Handling
 
@@ -614,13 +688,13 @@ export class ValidationError extends Error {
 When asserting on objects, prefer `toStrictEqual` for full object comparison rather than checking individual fields:
 
 ```typescript
-// ✅ Good: Full object assertion with toStrictEqual
+// Good: Full object assertion with toStrictEqual
 expect(provider.getConfig()).toStrictEqual({
   modelId: 'gemini-2.5-flash',
   params: { temperature: 0.5 },
 })
 
-// ❌ Bad: Checking individual fields
+// Bad: Checking individual fields
 expect(provider.getConfig().modelId).toBe('gemini-2.5-flash')
 expect(provider.getConfig().params.temperature).toBe(0.5)
 ```
@@ -639,7 +713,7 @@ When adding or modifying dependencies, you **MUST** follow the guidelines in [do
 
 ## Things to Do
 
-✅ **Do**:
+**Do**:
 - Use relative imports for internal modules
 - Co-locate unit tests with source under `__tests__` directories
 - Follow nested describe pattern for test organization
@@ -652,7 +726,7 @@ When adding or modifying dependencies, you **MUST** follow the guidelines in [do
 
 ## Things NOT to Do
 
-❌ **Don't**:
+**Don't**:
 - Use `any` type (enforced by ESLint)
 - Put unit tests in separate `tests/` directory (use `src/**/__tests__/**`)
 - Skip documentation for exported functions

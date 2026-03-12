@@ -1,4 +1,4 @@
-import type { AgentState } from '../agent/state.js'
+import type { AppState } from '../app-state.js'
 import type { Message, StopReason } from './messages.js'
 import type {
   BeforeInvocationEvent,
@@ -16,8 +16,12 @@ import type {
   ToolResultEvent,
   ToolStreamUpdateEvent,
   AgentResultEvent,
+  HookableEvent,
 } from '../hooks/events.js'
+import type { HookCallback, HookableEventConstructor, HookCleanup } from '../hooks/types.js'
+import type { ToolRegistry } from '../registry/tool-registry.js'
 import type { z } from 'zod'
+import { AgentMetrics } from '../telemetry/meter.js'
 
 /**
  * Interface for objects that provide agent state.
@@ -25,14 +29,28 @@ import type { z } from 'zod'
  */
 export interface AgentData {
   /**
-   * Agent state storage accessible to tools and application logic.
+   * App state storage accessible to tools and application logic.
    */
-  state: AgentState
+  state: AppState
 
   /**
    * The conversation history of messages between user and assistant.
    */
   messages: Message[]
+
+  /**
+   * The tool registry for registering tools with the agent.
+   */
+  readonly toolRegistry: ToolRegistry
+
+  /**
+   * Register a hook callback for a specific event type.
+   *
+   * @param eventType - The event class constructor to register the callback for
+   * @param callback - The callback function to invoke when the event occurs
+   * @returns Cleanup function that removes the callback when invoked
+   */
+  addHook<T extends HookableEvent>(eventType: HookableEventConstructor<T>, callback: HookCallback<T>): HookCleanup
 }
 
 /**
@@ -57,9 +75,23 @@ export class AgentResult {
    */
   readonly structuredOutput?: z.output<z.ZodType>
 
-  constructor(data: { stopReason: StopReason; lastMessage: Message; structuredOutput?: z.output<z.ZodType> }) {
+  /**
+   * Aggregated metrics for the agent's loop execution.
+   * Tracks cycle counts, token usage, tool execution stats, and model latency.
+   */
+  readonly metrics?: AgentMetrics
+
+  constructor(data: {
+    stopReason: StopReason
+    lastMessage: Message
+    metrics?: AgentMetrics
+    structuredOutput?: z.output<z.ZodType>
+  }) {
     this.stopReason = data.stopReason
     this.lastMessage = data.lastMessage
+    if (data.metrics !== undefined) {
+      this.metrics = data.metrics
+    }
     if (data.structuredOutput !== undefined) {
       this.structuredOutput = data.structuredOutput
     }

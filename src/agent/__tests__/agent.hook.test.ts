@@ -10,37 +10,38 @@ import {
   MessageAddedEvent,
   ModelStreamUpdateEvent,
   InitializedEvent,
+  HookableEvent,
 } from '../../hooks/index.js'
 import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
-import { MockHookProvider } from '../../__fixtures__/mock-hook-provider.js'
+import { MockPlugin } from '../../__fixtures__/mock-plugin.js'
 import { collectIterator } from '../../__fixtures__/model-test-helpers.js'
 import { createMockTool } from '../../__fixtures__/tool-helpers.js'
 import { Message, TextBlock, ToolResultBlock } from '../../types/messages.js'
 
 describe('Agent Hooks Integration', () => {
-  let mockProvider: MockHookProvider
+  let mockPlugin: MockPlugin
 
   beforeEach(() => {
-    mockProvider = new MockHookProvider()
+    mockPlugin = new MockPlugin()
   })
 
   describe('invocation lifecycle', () => {
     it('fires hooks during invoke', async () => {
-      const lifecycleProvider = new MockHookProvider()
+      const lifecyclePlugin = new MockPlugin()
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
-      const agent = new Agent({ model, hooks: [lifecycleProvider] })
+      const agent = new Agent({ model, plugins: [lifecyclePlugin] })
 
       await agent.invoke('Hi')
 
-      expect(lifecycleProvider.invocations).toHaveLength(7)
+      expect(lifecyclePlugin.invocations).toHaveLength(7)
 
-      expect(lifecycleProvider.invocations[0]).toEqual(new InitializedEvent({ agent }))
-      expect(lifecycleProvider.invocations[1]).toEqual(new BeforeInvocationEvent({ agent }))
-      expect(lifecycleProvider.invocations[2]).toEqual(
+      expect(lifecyclePlugin.invocations[0]).toEqual(new InitializedEvent({ agent }))
+      expect(lifecyclePlugin.invocations[1]).toEqual(new BeforeInvocationEvent({ agent }))
+      expect(lifecyclePlugin.invocations[2]).toEqual(
         new MessageAddedEvent({ agent, message: new Message({ role: 'user', content: [new TextBlock('Hi')] }) })
       )
-      expect(lifecycleProvider.invocations[3]).toEqual(new BeforeModelCallEvent({ agent }))
-      expect(lifecycleProvider.invocations[4]).toEqual(
+      expect(lifecyclePlugin.invocations[3]).toEqual(new BeforeModelCallEvent({ agent }))
+      expect(lifecyclePlugin.invocations[4]).toEqual(
         new AfterModelCallEvent({
           agent,
           stopData: {
@@ -49,34 +50,34 @@ describe('Agent Hooks Integration', () => {
           },
         })
       )
-      expect(lifecycleProvider.invocations[5]).toEqual(
+      expect(lifecyclePlugin.invocations[5]).toEqual(
         new MessageAddedEvent({
           agent,
           message: new Message({ role: 'assistant', content: [new TextBlock('Hello')] }),
         })
       )
-      expect(lifecycleProvider.invocations[6]).toEqual(new AfterInvocationEvent({ agent }))
+      expect(lifecyclePlugin.invocations[6]).toEqual(new AfterInvocationEvent({ agent }))
     })
 
     it('fires hooks during stream', async () => {
-      const lifecycleProvider = new MockHookProvider()
+      const lifecyclePlugin = new MockPlugin()
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
-      const agent = new Agent({ model, hooks: [lifecycleProvider] })
+      const agent = new Agent({ model, plugins: [lifecyclePlugin] })
 
       await collectIterator(agent.stream('Hi'))
 
-      expect(lifecycleProvider.invocations).toHaveLength(7)
+      expect(lifecyclePlugin.invocations).toHaveLength(7)
 
-      expect(lifecycleProvider.invocations[0]).toEqual(new InitializedEvent({ agent }))
-      expect(lifecycleProvider.invocations[1]).toEqual(new BeforeInvocationEvent({ agent }))
-      expect(lifecycleProvider.invocations[2]).toEqual(
+      expect(lifecyclePlugin.invocations[0]).toEqual(new InitializedEvent({ agent }))
+      expect(lifecyclePlugin.invocations[1]).toEqual(new BeforeInvocationEvent({ agent }))
+      expect(lifecyclePlugin.invocations[2]).toEqual(
         new MessageAddedEvent({
           agent,
           message: new Message({ role: 'user', content: [new TextBlock('Hi')] }),
         })
       )
-      expect(lifecycleProvider.invocations[3]).toEqual(new BeforeModelCallEvent({ agent }))
-      expect(lifecycleProvider.invocations[4]).toEqual(
+      expect(lifecyclePlugin.invocations[3]).toEqual(new BeforeModelCallEvent({ agent }))
+      expect(lifecyclePlugin.invocations[4]).toEqual(
         new AfterModelCallEvent({
           agent,
           stopData: {
@@ -85,54 +86,59 @@ describe('Agent Hooks Integration', () => {
           },
         })
       )
-      expect(lifecycleProvider.invocations[5]).toEqual(
+      expect(lifecyclePlugin.invocations[5]).toEqual(
         new MessageAddedEvent({
           agent,
           message: new Message({ role: 'assistant', content: [new TextBlock('Hello')] }),
         })
       )
-      expect(lifecycleProvider.invocations[6]).toEqual(new AfterInvocationEvent({ agent }))
+      expect(lifecyclePlugin.invocations[6]).toEqual(new AfterInvocationEvent({ agent }))
     })
   })
 
   describe('runtime hook registration', () => {
-    it('allows adding hooks after agent creation', async () => {
-      const lifecycleProvider = new MockHookProvider()
+    it('allows adding hooks after agent creation via addHook', async () => {
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
       const agent = new Agent({ model })
 
-      agent.hooks.addHook(lifecycleProvider)
+      // Track events via individual hook registrations
+      const invocations: HookableEvent[] = []
+      agent.addHook(BeforeInvocationEvent, (e) => {
+        invocations.push(e)
+      })
+      agent.addHook(AfterInvocationEvent, (e) => {
+        invocations.push(e)
+      })
 
       await agent.invoke('Hi')
 
-      // Should have all lifecycle events
-      expect(lifecycleProvider.invocations).toHaveLength(7)
-      expect(lifecycleProvider.invocations[1]).toEqual(new BeforeInvocationEvent({ agent }))
-      expect(lifecycleProvider.invocations[6]).toEqual(new AfterInvocationEvent({ agent }))
+      expect(invocations).toHaveLength(2)
+      expect(invocations[0]).toEqual(new BeforeInvocationEvent({ agent }))
+      expect(invocations[1]).toEqual(new AfterInvocationEvent({ agent }))
     })
   })
 
   describe('multi-turn conversations', () => {
     it('fires hooks for each invoke call', async () => {
-      const lifecycleProvider = new MockHookProvider()
+      const lifecyclePlugin = new MockPlugin()
       const model = new MockMessageModel()
         .addTurn({ type: 'textBlock', text: 'First response' })
         .addTurn({ type: 'textBlock', text: 'Second response' })
 
-      const agent = new Agent({ model, hooks: [lifecycleProvider] })
+      const agent = new Agent({ model, plugins: [lifecyclePlugin] })
 
       await agent.invoke('First message')
 
       // First turn: InitializedEvent + BeforeInvocation, MessageAdded, BeforeModelCall, AfterModelCall, MessageAdded, AfterInvocation
-      expect(lifecycleProvider.invocations).toHaveLength(7)
+      expect(lifecyclePlugin.invocations).toHaveLength(7)
 
       await agent.invoke('Second message')
 
       // Should have 13 events total (7 for first turn + 6 for second turn, no InitializedEvent on second)
-      expect(lifecycleProvider.invocations).toHaveLength(13)
+      expect(lifecyclePlugin.invocations).toHaveLength(13)
 
       // Filter for just Invocation events to verify they fire for each turn
-      const invocationEvents = lifecycleProvider.invocations.filter(
+      const invocationEvents = lifecyclePlugin.invocations.filter(
         (e) => e instanceof BeforeInvocationEvent || e instanceof AfterInvocationEvent
       )
       expect(invocationEvents).toHaveLength(4) // 2 for each turn
@@ -152,15 +158,15 @@ describe('Agent Hooks Integration', () => {
       const agent = new Agent({
         model,
         tools: [tool],
-        hooks: [mockProvider],
+        plugins: [mockPlugin],
       })
 
       await agent.invoke('Test with tool')
 
       // Find key events
-      const beforeToolCallEvents = mockProvider.invocations.filter((e) => e instanceof BeforeToolCallEvent)
-      const afterToolCallEvents = mockProvider.invocations.filter((e) => e instanceof AfterToolCallEvent)
-      const messageAddedEvents = mockProvider.invocations.filter((e) => e instanceof MessageAddedEvent)
+      const beforeToolCallEvents = mockPlugin.invocations.filter((e) => e instanceof BeforeToolCallEvent)
+      const afterToolCallEvents = mockPlugin.invocations.filter((e) => e instanceof AfterToolCallEvent)
+      const messageAddedEvents = mockPlugin.invocations.filter((e) => e instanceof MessageAddedEvent)
 
       // Verify tool hooks fired
       expect(beforeToolCallEvents.length).toBe(1)
@@ -207,7 +213,7 @@ describe('Agent Hooks Integration', () => {
       const agent = new Agent({
         model,
         tools: [tool],
-        hooks: [mockProvider],
+        plugins: [mockPlugin],
       })
 
       // Agent should complete successfully (tool errors are handled gracefully)
@@ -215,7 +221,7 @@ describe('Agent Hooks Integration', () => {
       expect(result.stopReason).toBe('endTurn')
 
       // Find AfterToolCallEvent
-      const afterToolCallEvents = mockProvider.invocations.filter((e) => e instanceof AfterToolCallEvent)
+      const afterToolCallEvents = mockPlugin.invocations.filter((e) => e instanceof AfterToolCallEvent)
       expect(afterToolCallEvents.length).toBe(1)
 
       const afterToolCall = afterToolCallEvents[0] as AfterToolCallEvent
@@ -242,7 +248,7 @@ describe('Agent Hooks Integration', () => {
 
       const streamUpdateEvents: ModelStreamUpdateEvent[] = []
       const agent = new Agent({ model })
-      agent.hooks.addCallback(ModelStreamUpdateEvent, (event: ModelStreamUpdateEvent) => {
+      agent.addHook(ModelStreamUpdateEvent, (event: ModelStreamUpdateEvent) => {
         streamUpdateEvents.push(event)
       })
 
@@ -273,12 +279,12 @@ describe('Agent Hooks Integration', () => {
       const agent = new Agent({
         model,
         messages: [initialMessage],
-        hooks: [mockProvider],
+        plugins: [mockPlugin],
       })
 
       await agent.invoke('New message')
 
-      const messageAddedEvents = mockProvider.invocations.filter((e) => e instanceof MessageAddedEvent)
+      const messageAddedEvents = mockPlugin.invocations.filter((e) => e instanceof MessageAddedEvent)
 
       // Should have 2 MessageAdded event
       expect(messageAddedEvents).toHaveLength(2)
@@ -306,7 +312,7 @@ describe('Agent Hooks Integration', () => {
         .addTurn({ type: 'textBlock', text: 'Success after retry' })
 
       const agent = new Agent({ model })
-      agent.hooks.addCallback(AfterModelCallEvent, (event: AfterModelCallEvent) => {
+      agent.addHook(AfterModelCallEvent, (event: AfterModelCallEvent) => {
         callCount++
         if (callCount === 1 && event.error) {
           event.retry = true
@@ -333,7 +339,7 @@ describe('Agent Hooks Integration', () => {
         .addTurn({ type: 'textBlock', text: 'Second response after retry' })
 
       const agent = new Agent({ model })
-      agent.hooks.addCallback(AfterModelCallEvent, (event: AfterModelCallEvent) => {
+      agent.addHook(AfterModelCallEvent, (event: AfterModelCallEvent) => {
         callCount++
         if (callCount === 1 && !event.error) {
           event.retry = true
@@ -364,7 +370,7 @@ describe('Agent Hooks Integration', () => {
         .addTurn({ type: 'textBlock', text: 'Done' })
 
       const agent = new Agent({ model, tools: [tool] })
-      agent.hooks.addCallback(AfterToolCallEvent, (event: AfterToolCallEvent) => {
+      agent.addHook(AfterToolCallEvent, (event: AfterToolCallEvent) => {
         hookCallCount++
         if (hookCallCount === 1 && event.error) {
           event.retry = true
@@ -414,10 +420,10 @@ describe('Agent Hooks Integration', () => {
         .addTurn({ type: 'textBlock', text: 'Done' })
 
       const agent = new Agent({ model, tools: [tool] })
-      agent.hooks.addCallback(BeforeToolCallEvent, () => {
+      agent.addHook(BeforeToolCallEvent, () => {
         beforeCount++
       })
-      agent.hooks.addCallback(AfterToolCallEvent, (event: AfterToolCallEvent) => {
+      agent.addHook(AfterToolCallEvent, (event: AfterToolCallEvent) => {
         afterCount++
         if (afterCount === 1) {
           event.retry = true
@@ -448,7 +454,7 @@ describe('Agent Hooks Integration', () => {
         .addTurn({ type: 'textBlock', text: 'Done' })
 
       const agent = new Agent({ model, tools: [tool] })
-      agent.hooks.addCallback(AfterToolCallEvent, (event: AfterToolCallEvent) => {
+      agent.addHook(AfterToolCallEvent, (event: AfterToolCallEvent) => {
         hookCallCount++
         if (hookCallCount === 1) {
           event.retry = true
