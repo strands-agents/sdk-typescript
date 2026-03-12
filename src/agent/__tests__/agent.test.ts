@@ -363,7 +363,7 @@ describe('Agent', () => {
 
         const agent = new Agent({ model, tools: [tool] })
 
-        agent.hooks.addCallback(BeforeToolsEvent, () => {
+        agent.addHook(BeforeToolsEvent, () => {
           throw new Error('Hook failure')
         })
 
