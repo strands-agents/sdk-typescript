@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { metrics as otelMetrics } from '@opentelemetry/api'
-import type { Meter as OtelMeter } from '@opentelemetry/api'
+import { metrics as otelMetrics, type Meter as OtelMeter } from '@opentelemetry/api'
 import { Meter, AgentMetrics } from '../meter.js'
+import { MockMeter } from '../../__fixtures__/mock-meter.js'
 import type { ToolUse } from '../../tools/types.js'
 
 describe('Meter', () => {
@@ -413,68 +413,11 @@ describe('Meter', () => {
   })
 
   describe('OTEL instrument emission', () => {
-    // Per-instrument mocks for precise assertion
-    let mockCycleCounter: { add: ReturnType<typeof vi.fn> }
-    let mockInvocationCounter: { add: ReturnType<typeof vi.fn> }
-    let mockToolCallCounter: { add: ReturnType<typeof vi.fn> }
-    let mockToolErrorCounter: { add: ReturnType<typeof vi.fn> }
-    let mockInputTokens: { add: ReturnType<typeof vi.fn> }
-    let mockOutputTokens: { add: ReturnType<typeof vi.fn> }
-    let mockCycleDuration: { record: ReturnType<typeof vi.fn> }
-    let mockToolDuration: { record: ReturnType<typeof vi.fn> }
-    let mockModelLatency: { record: ReturnType<typeof vi.fn> }
-    let mockMeter: OtelMeter
+    let mockMeter: MockMeter
 
     beforeEach(() => {
-      mockCycleCounter = { add: vi.fn() }
-      mockInvocationCounter = { add: vi.fn() }
-      mockToolCallCounter = { add: vi.fn() }
-      mockToolErrorCounter = { add: vi.fn() }
-      mockInputTokens = { add: vi.fn() }
-      mockOutputTokens = { add: vi.fn() }
-      mockCycleDuration = { record: vi.fn() }
-      mockToolDuration = { record: vi.fn() }
-      mockModelLatency = { record: vi.fn() }
-
-      const counterMap: Record<string, { add: ReturnType<typeof vi.fn> }> = {
-        'gen_ai.agent.cycle.count': mockCycleCounter,
-        'gen_ai.agent.invocation.count': mockInvocationCounter,
-        'gen_ai.agent.tool.call.count': mockToolCallCounter,
-        'gen_ai.agent.tool.error.count': mockToolErrorCounter,
-        'gen_ai.agent.tokens.input': mockInputTokens,
-        'gen_ai.agent.tokens.output': mockOutputTokens,
-      }
-      const histogramMap: Record<string, { record: ReturnType<typeof vi.fn> }> = {
-        'gen_ai.agent.cycle.duration': mockCycleDuration,
-        'gen_ai.agent.tool.duration': mockToolDuration,
-        'gen_ai.agent.model.latency': mockModelLatency,
-      }
-
-      mockMeter = {
-        createCounter: vi.fn().mockImplementation((name: string) => counterMap[name] ?? { add: vi.fn() }),
-        createHistogram: vi.fn().mockImplementation((name: string) => histogramMap[name] ?? { record: vi.fn() }),
-        createUpDownCounter: vi.fn(),
-        createObservableCounter: vi.fn(),
-        createObservableGauge: vi.fn(),
-        createObservableUpDownCounter: vi.fn(),
-        createGauge: vi.fn(),
-      } as unknown as OtelMeter
-      vi.spyOn(otelMetrics, 'getMeter').mockReturnValue(mockMeter)
-    })
-
-    it('creates all expected OTEL instruments on construction', () => {
-      const m = new Meter()
-
-      expect(mockMeter.createCounter).toHaveBeenCalledWith('gen_ai.agent.cycle.count', expect.any(Object))
-      expect(mockMeter.createCounter).toHaveBeenCalledWith('gen_ai.agent.invocation.count', expect.any(Object))
-      expect(mockMeter.createCounter).toHaveBeenCalledWith('gen_ai.agent.tool.call.count', expect.any(Object))
-      expect(mockMeter.createCounter).toHaveBeenCalledWith('gen_ai.agent.tool.error.count', expect.any(Object))
-      expect(mockMeter.createCounter).toHaveBeenCalledWith('gen_ai.agent.tokens.input', expect.any(Object))
-      expect(mockMeter.createCounter).toHaveBeenCalledWith('gen_ai.agent.tokens.output', expect.any(Object))
-      expect(mockMeter.createHistogram).toHaveBeenCalledWith('gen_ai.agent.cycle.duration', expect.any(Object))
-      expect(mockMeter.createHistogram).toHaveBeenCalledWith('gen_ai.agent.tool.duration', expect.any(Object))
-      expect(mockMeter.createHistogram).toHaveBeenCalledWith('gen_ai.agent.model.latency', expect.any(Object))
-      expect(m).toBeDefined()
+      mockMeter = new MockMeter()
+      vi.spyOn(otelMetrics, 'getMeter').mockReturnValue(mockMeter as unknown as OtelMeter)
     })
 
     it('emits invocation counter on startNewInvocation', () => {
@@ -482,8 +425,7 @@ describe('Meter', () => {
 
       m.startNewInvocation()
 
-      expect(mockInvocationCounter.add).toHaveBeenCalledTimes(1)
-      expect(mockInvocationCounter.add).toHaveBeenCalledWith(1)
+      expect(mockMeter.getCounter('gen_ai.agent.invocation.count')?.sum).toBe(1)
     })
 
     it('emits cycle counter on startCycle', () => {
@@ -491,8 +433,7 @@ describe('Meter', () => {
 
       m.startCycle()
 
-      expect(mockCycleCounter.add).toHaveBeenCalledTimes(1)
-      expect(mockCycleCounter.add).toHaveBeenCalledWith(1)
+      expect(mockMeter.getCounter('gen_ai.agent.cycle.count')?.sum).toBe(1)
     })
 
     it('emits cycle duration histogram on endCycle', () => {
@@ -501,8 +442,7 @@ describe('Meter', () => {
 
       m.endCycle(3000)
 
-      expect(mockCycleDuration.record).toHaveBeenCalledTimes(1)
-      expect(mockCycleDuration.record).toHaveBeenCalledWith(2000)
+      expect(mockMeter.getHistogram('gen_ai.agent.cycle.duration')?.sum).toBe(2000)
       vi.restoreAllMocks()
     })
 
@@ -511,11 +451,13 @@ describe('Meter', () => {
 
       m.endToolCall({ tool: makeTool('search', 'id-1'), duration: 150, success: true })
 
-      expect(mockToolCallCounter.add).toHaveBeenCalledTimes(1)
-      expect(mockToolCallCounter.add).toHaveBeenCalledWith(1, { 'gen_ai.tool.name': 'search' })
-      expect(mockToolDuration.record).toHaveBeenCalledTimes(1)
-      expect(mockToolDuration.record).toHaveBeenCalledWith(150, { 'gen_ai.tool.name': 'search' })
-      expect(mockToolErrorCounter.add).not.toHaveBeenCalled()
+      expect(mockMeter.getCounter('gen_ai.agent.tool.call.count')?.dataPoints).toStrictEqual([
+        { value: 1, attributes: { 'gen_ai.tool.name': 'search' } },
+      ])
+      expect(mockMeter.getHistogram('gen_ai.agent.tool.duration')?.dataPoints).toStrictEqual([
+        { value: 150, attributes: { 'gen_ai.tool.name': 'search' } },
+      ])
+      expect(mockMeter.getCounter('gen_ai.agent.tool.error.count')?.dataPoints).toStrictEqual([])
     })
 
     it('emits tool call counter, error counter, and duration on failed endToolCall', () => {
@@ -523,12 +465,15 @@ describe('Meter', () => {
 
       m.endToolCall({ tool: makeTool('search', 'id-1'), duration: 50, success: false })
 
-      expect(mockToolCallCounter.add).toHaveBeenCalledTimes(1)
-      expect(mockToolCallCounter.add).toHaveBeenCalledWith(1, { 'gen_ai.tool.name': 'search' })
-      expect(mockToolErrorCounter.add).toHaveBeenCalledTimes(1)
-      expect(mockToolErrorCounter.add).toHaveBeenCalledWith(1, { 'gen_ai.tool.name': 'search' })
-      expect(mockToolDuration.record).toHaveBeenCalledTimes(1)
-      expect(mockToolDuration.record).toHaveBeenCalledWith(50, { 'gen_ai.tool.name': 'search' })
+      expect(mockMeter.getCounter('gen_ai.agent.tool.call.count')?.dataPoints).toStrictEqual([
+        { value: 1, attributes: { 'gen_ai.tool.name': 'search' } },
+      ])
+      expect(mockMeter.getCounter('gen_ai.agent.tool.error.count')?.dataPoints).toStrictEqual([
+        { value: 1, attributes: { 'gen_ai.tool.name': 'search' } },
+      ])
+      expect(mockMeter.getHistogram('gen_ai.agent.tool.duration')?.dataPoints).toStrictEqual([
+        { value: 50, attributes: { 'gen_ai.tool.name': 'search' } },
+      ])
     })
 
     it('emits input token counter, output token counter, and model latency on updateCycle', () => {
@@ -540,12 +485,9 @@ describe('Meter', () => {
         metrics: { latencyMs: 200 },
       })
 
-      expect(mockInputTokens.add).toHaveBeenCalledTimes(1)
-      expect(mockInputTokens.add).toHaveBeenCalledWith(100)
-      expect(mockOutputTokens.add).toHaveBeenCalledTimes(1)
-      expect(mockOutputTokens.add).toHaveBeenCalledWith(50)
-      expect(mockModelLatency.record).toHaveBeenCalledTimes(1)
-      expect(mockModelLatency.record).toHaveBeenCalledWith(200)
+      expect(mockMeter.getCounter('gen_ai.agent.tokens.input')?.sum).toBe(100)
+      expect(mockMeter.getCounter('gen_ai.agent.tokens.output')?.sum).toBe(50)
+      expect(mockMeter.getHistogram('gen_ai.agent.model.latency')?.sum).toBe(200)
     })
 
     it('does not emit token counters or latency when updateCycle has no usage or metrics', () => {
@@ -553,9 +495,9 @@ describe('Meter', () => {
 
       m.updateCycle({ type: 'modelMetadataEvent' })
 
-      expect(mockInputTokens.add).not.toHaveBeenCalled()
-      expect(mockOutputTokens.add).not.toHaveBeenCalled()
-      expect(mockModelLatency.record).not.toHaveBeenCalled()
+      expect(mockMeter.getCounter('gen_ai.agent.tokens.input')?.dataPoints).toStrictEqual([])
+      expect(mockMeter.getCounter('gen_ai.agent.tokens.output')?.dataPoints).toStrictEqual([])
+      expect(mockMeter.getHistogram('gen_ai.agent.model.latency')?.dataPoints).toStrictEqual([])
     })
 
     it('does not emit any OTEL instruments when updateCycle is called with undefined', () => {
@@ -563,9 +505,9 @@ describe('Meter', () => {
 
       m.updateCycle(undefined)
 
-      expect(mockInputTokens.add).not.toHaveBeenCalled()
-      expect(mockOutputTokens.add).not.toHaveBeenCalled()
-      expect(mockModelLatency.record).not.toHaveBeenCalled()
+      expect(mockMeter.getCounter('gen_ai.agent.tokens.input')?.dataPoints).toStrictEqual([])
+      expect(mockMeter.getCounter('gen_ai.agent.tokens.output')?.dataPoints).toStrictEqual([])
+      expect(mockMeter.getHistogram('gen_ai.agent.model.latency')?.dataPoints).toStrictEqual([])
     })
   })
 })

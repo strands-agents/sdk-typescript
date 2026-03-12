@@ -20,6 +20,9 @@ All test fixtures are located in `src/__fixtures__/`. Use these helpers to reduc
 | `createMockContext()`  | `tool-helpers.ts`       | Create mock `ToolContext` for testing tool implementations directly                  | [Tool Fixtures](#tool-fixtures-tool-helpersts)                              |
 | `createMockAgent()`    | `agent-helpers.ts`      | Create minimal mock Agent with messages and state                                    | [Agent Fixtures](#agent-fixtures-agent-helpersts)                           |
 | `isNode` / `isBrowser` | `environment.ts`        | Environment detection for conditional test execution                                 | [Environment Fixtures](#environment-fixtures-environmentts)                 |
+| `MockSpan`             | `mock-span.ts`          | Mock OTEL Span that records all setAttribute/addEvent/end calls for assertion            | [Telemetry Fixtures](#telemetry-fixtures-mock-spants-mock-meterts)          |
+| `eventAttr()`          | `mock-span.ts`          | Extract a string attribute from a mock span event                                        | [Telemetry Fixtures](#telemetry-fixtures-mock-spants-mock-meterts)          |
+| `MockMeter`            | `mock-meter.ts`         | Mock OTEL Meter that records all counter/histogram instrument calls for assertion        | [Telemetry Fixtures](#telemetry-fixtures-mock-spants-mock-meterts)          |
 | `expectLoopMetrics()`  | `metrics-helpers.ts`    | Assert on `AgentMetrics` with expected cycle count, tool names, and optional token usage | [Metrics Fixtures](#metrics-fixtures-metrics-helpersts)                     |
 | `findMetricValue()`    | `metrics-helpers.ts`    | Find the latest data point value for a named OTEL metric from ResourceMetrics            | [Metrics Fixtures](#metrics-fixtures-metrics-helpersts)                     |
 
@@ -477,6 +480,50 @@ describe.skipIf(!isNode)('Node.js specific features', () => {
     expect(process.env.NODE_ENV).toBeDefined()
   })
 })
+```
+
+### Telemetry Fixtures (`mock-span.ts`, `mock-meter.ts`)
+
+- **`MockSpan`** - Implements the OTEL `Span` interface and records all calls (`setAttribute`, `addEvent`, `setStatus`, `end`, `recordException`) for assertion. Use with `vi.mock('@opentelemetry/api')` to intercept tracer span creation.
+  - Access `mockSpan.calls.setAttribute` etc. to verify recorded calls.
+  - Use `mockSpan.getAttributeValue(key)` to look up a specific attribute.
+  - Use `mockSpan.getEvents(name)` to filter events by name.
+- **`eventAttr(event, key)`** - Extracts a string attribute from a mock span event's attributes map.
+- **`MockMeter`** - Implements the OTEL `Meter` interface and records all instrument data points. Use with `vi.spyOn(otelMetrics, 'getMeter').mockReturnValue(mockMeter)` to intercept meter creation.
+  - Use `mockMeter.getCounter(name)` to retrieve a counter by metric name.
+  - Use `mockMeter.getHistogram(name)` to retrieve a histogram by metric name.
+  - Counters and histograms expose `.dataPoints` (array of `{ value, attributes }`) and `.sum` (total of all values).
+
+```typescript
+import { MockSpan, eventAttr } from '../__fixtures__/mock-span'
+
+// Mock the OTEL API and inject MockSpan
+const mockSpan = new MockSpan()
+const mockStartSpan = vi.fn().mockReturnValue(mockSpan)
+vi.mocked(trace.getTracer).mockReturnValue({ startSpan: mockStartSpan, startActiveSpan: vi.fn() })
+
+// Assert on span attributes and events
+expect(mockSpan.getAttributeValue('gen_ai.agent.name')).toBe('test-agent')
+expect(mockSpan.getEvents('gen_ai.user.message')).toHaveLength(1)
+expect(eventAttr(mockSpan.getEvents('gen_ai.choice')[0]!, 'finish_reason')).toBe('end_turn')
+```
+
+```typescript
+import { MockMeter } from '../__fixtures__/mock-meter'
+
+// Mock the OTEL API and inject MockMeter
+const mockMeter = new MockMeter()
+vi.spyOn(otelMetrics, 'getMeter').mockReturnValue(mockMeter)
+
+const m = new Meter()
+m.startNewInvocation()
+
+// Assert on collected metric values
+expect(mockMeter.getCounter('gen_ai.agent.invocation.count')?.sum).toBe(1)
+expect(mockMeter.getHistogram('gen_ai.agent.cycle.duration')?.sum).toBe(2000)
+expect(mockMeter.getCounter('gen_ai.agent.tool.call.count')?.dataPoints).toStrictEqual([
+  { value: 1, attributes: { 'gen_ai.tool.name': 'search' } },
+])
 ```
 
 ### Metrics Fixtures (`metrics-helpers.ts`)

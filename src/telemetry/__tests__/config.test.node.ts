@@ -1,6 +1,20 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node'
+import { ConsoleSpanExporter } from '@opentelemetry/sdk-trace-base'
+import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http'
 import { findMetricValue } from '../../__fixtures__/metrics-helpers.js'
+
+vi.mock('@opentelemetry/exporter-trace-otlp-http', () => ({
+  OTLPTraceExporter: vi.fn(),
+}))
+
+vi.mock('@opentelemetry/sdk-trace-base', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@opentelemetry/sdk-trace-base')>()
+  return {
+    ...actual,
+    ConsoleSpanExporter: vi.fn(),
+  }
+})
 
 describe('setupTracer (node-specific)', () => {
   const originalEnv = { ...process.env }
@@ -36,42 +50,45 @@ describe('setupTracer (node-specific)', () => {
   describe('exporter configuration', () => {
     it('should add OTLP exporter when exporters.otlp is true', async () => {
       const telemetry = await import('../index.js')
-      const provider = telemetry.setupTracer({ exporters: { otlp: true } })
 
-      const processors = (provider as unknown as { _registeredSpanProcessors: unknown[] })._registeredSpanProcessors
-      expect(processors.length).toBeGreaterThanOrEqual(1)
+      telemetry.setupTracer({ exporters: { otlp: true } })
+
+      expect(OTLPTraceExporter).toHaveBeenCalled()
     })
 
     it('should add console exporter when exporters.console is true', async () => {
       const telemetry = await import('../index.js')
-      const provider = telemetry.setupTracer({ exporters: { console: true } })
 
-      const processors = (provider as unknown as { _registeredSpanProcessors: unknown[] })._registeredSpanProcessors
-      expect(processors.length).toBeGreaterThanOrEqual(1)
+      telemetry.setupTracer({ exporters: { console: true } })
+
+      expect(ConsoleSpanExporter).toHaveBeenCalled()
     })
 
     it('should add both exporters when both are true', async () => {
       const telemetry = await import('../index.js')
-      const provider = telemetry.setupTracer({ exporters: { otlp: true, console: true } })
 
-      const processors = (provider as unknown as { _registeredSpanProcessors: unknown[] })._registeredSpanProcessors
-      expect(processors.length).toBeGreaterThanOrEqual(2)
+      telemetry.setupTracer({ exporters: { otlp: true, console: true } })
+
+      expect(OTLPTraceExporter).toHaveBeenCalled()
+      expect(ConsoleSpanExporter).toHaveBeenCalled()
     })
 
     it('should add no exporters when both are false', async () => {
       const telemetry = await import('../index.js')
-      const provider = telemetry.setupTracer({ exporters: { otlp: false, console: false } })
 
-      const processors = (provider as unknown as { _registeredSpanProcessors: unknown[] })._registeredSpanProcessors
-      expect(processors.length).toBe(0)
+      telemetry.setupTracer({ exporters: { otlp: false, console: false } })
+
+      expect(OTLPTraceExporter).not.toHaveBeenCalled()
+      expect(ConsoleSpanExporter).not.toHaveBeenCalled()
     })
 
     it('should add no exporters when exporters config is empty', async () => {
       const telemetry = await import('../index.js')
-      const provider = telemetry.setupTracer({})
 
-      const processors = (provider as unknown as { _registeredSpanProcessors: unknown[] })._registeredSpanProcessors
-      expect(processors.length).toBe(0)
+      telemetry.setupTracer({})
+
+      expect(OTLPTraceExporter).not.toHaveBeenCalled()
+      expect(ConsoleSpanExporter).not.toHaveBeenCalled()
     })
   })
 
@@ -138,26 +155,8 @@ describe('setupMeter (node-specific)', () => {
     process.env = { ...originalEnv }
   })
 
-  describe('exporter configuration', () => {
-    it('should configure OTLP metric exporter when exporters.otlp is true', async () => {
-      const telemetry = await import('../index.js')
-      const provider = telemetry.setupMeter({ exporters: { otlp: true } })
-
-      expect(provider).toBeDefined()
-      expect(typeof provider.forceFlush).toBe('function')
-    })
-
-    it('should configure console metric exporter when exporters.console is true', async () => {
-      const telemetry = await import('../index.js')
-      const provider = telemetry.setupMeter({ exporters: { console: true } })
-
-      expect(provider).toBeDefined()
-      expect(typeof provider.forceFlush).toBe('function')
-    })
-  })
-
   describe('resource attributes from environment', () => {
-    it('uses OTEL_SERVICE_NAME when set', async () => {
+    it('should use OTEL_SERVICE_NAME when set', async () => {
       process.env.OTEL_SERVICE_NAME = 'my-meter-service'
       const telemetry = await import('../index.js')
 

@@ -933,12 +933,12 @@ describe.sequential('Metrics Integration', () => {
     expect(cycleCount).toBeGreaterThanOrEqual(2)
   })
 
-  it('getMeter returns a functional meter', () => {
+  it('getMeter returns a meter that records real metrics', async () => {
     const meter = telemetry.getMeter()
-
-    expect(meter).toBeDefined()
-
     const counter = meter.createCounter('test.custom.counter')
-    expect(() => counter.add(1)).not.toThrow()
+    counter.add(7)
+
+    const metrics = await collectMetrics()
+    expect(findMetricValue(metrics, 'test.custom.counter')).toBe(7)
   })
 })
