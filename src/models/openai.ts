@@ -13,7 +13,8 @@ import { Model } from '../models/model.js'
 import type { BaseModelConfig, StreamOptions } from '../models/model.js'
 import type { Message, StopReason } from '../types/messages.js'
 import type { ImageBlock, DocumentBlock } from '../types/media.js'
-import { encodeBase64, getMimeType } from '../types/media.js'
+import { encodeBase64 } from '../types/media.js'
+import { toMimeType } from '../mime.js'
 import type { ModelStreamEvent } from '../models/streaming.js'
 import { ContextWindowOverflowError, ModelThrottledError } from '../errors.js'
 import type { ChatCompletionContentPartText } from 'openai/resources/index.mjs'
@@ -597,7 +598,7 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
                   }
                   case 'imageSourceBytes': {
                     const base64 = encodeBase64(imageBlock.source.bytes)
-                    const mimeType = getMimeType(imageBlock.format) || `image/${imageBlock.format}`
+                    const mimeType = toMimeType(imageBlock.format) || `image/${imageBlock.format}`
 
                     contentParts.push({
                       type: 'image_url',
@@ -620,7 +621,7 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
                 const docBlock = block as DocumentBlock
                 switch (docBlock.source.type) {
                   case 'documentSourceBytes': {
-                    const mimeType = getMimeType(docBlock.format) || `application/${docBlock.format}`
+                    const mimeType = toMimeType(docBlock.format) || `application/${docBlock.format}`
                     const base64 = encodeBase64(docBlock.source.bytes)
 
                     const file: OpenAI.Chat.Completions.ChatCompletionContentPart.File = {
