@@ -16,11 +16,12 @@ vi.mock('@opentelemetry/sdk-trace-base', async (importOriginal) => {
   }
 })
 
+// resetModules clears the module cache so each test gets a fresh singleton.
+// Tests use dynamic await import() to re-import after the reset.
+
 describe('setupTracer (node-specific)', () => {
   const originalEnv = { ...process.env }
 
-  // resetModules clears the module cache so each test gets a fresh singleton.
-  // Tests use dynamic await import() to re-import after the reset.
   beforeEach(() => {
     vi.resetModules()
     vi.clearAllMocks()

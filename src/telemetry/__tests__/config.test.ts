@@ -1,5 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 
+// resetModules clears the module cache so each test gets a fresh singleton.
+// Tests use dynamic await import() to re-import after the reset.
+
 describe('setupTracer', () => {
   beforeEach(() => {
     vi.resetModules()
