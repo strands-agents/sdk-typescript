@@ -625,14 +625,13 @@ export class BedrockModel extends Model<BedrockModelConfig> {
    * @returns Bedrock-formatted messages
    */
   private _formatMessages(messages: Message[]): BedrockMessage[] {
-    const formattedMessages = messages.reduce<BedrockMessage[]>((acc, message) => {
     // Pre-compute the index of the last user message containing text/image content
     // This ensures guardContent wrapping is maintained across tool execution cycles
     const lastUserTextIdx = this._config.guardrailConfig?.guardLatestUserMessage
       ? this._findLastUserTextMessageIndex(messages)
       : undefined
 
-    return messages.reduce<BedrockMessage[]>((acc, message, idx) => {
+    const formattedMessages = messages.reduce<BedrockMessage[]>((acc, message, idx) => {
       const shouldApplyGuardBlocks = idx === lastUserTextIdx
       const content = message.content
         .map((block: ContentBlock) => {
