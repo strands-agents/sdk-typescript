@@ -63,6 +63,14 @@ describe('Swarm', () => {
       expect(swarm.nodes.get('a')).toBeInstanceOf(AgentNode)
     })
 
+    it('defaults start to the first node when not specified', () => {
+      const swarm = new Swarm({
+        nodes: [createFinalAgent('first', 'hi'), createFinalAgent('second', 'bye')],
+      })
+
+      expect(swarm.start.id).toBe('first')
+    })
+
     it('throws when start references unknown agent', () => {
       expect(
         () =>
@@ -71,6 +79,10 @@ describe('Swarm', () => {
             start: 'missing',
           })
       ).toThrow('start=<missing> | start references unknown agent')
+    })
+
+    it('throws when nodes list is empty', () => {
+      expect(() => new Swarm({ nodes: [] })).toThrow('nodes list is empty')
     })
 
     it('throws on duplicate agent ids', () => {

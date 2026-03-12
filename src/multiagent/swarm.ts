@@ -62,8 +62,8 @@ export interface SwarmOptions extends SwarmConfig {
   id?: string
   /** Swarm agents. Pass agents directly or use {@link AgentNodeOptions} for per-node config. */
   nodes: SwarmNodeDefinition[]
-  /** Agent id that receives the initial input. */
-  start: string
+  /** Agent id that receives the initial input. Defaults to the first agent in `nodes`. */
+  start?: string
   /** Plugins for event-driven extensibility. */
   plugins?: MultiAgentPlugin[]
 }
@@ -102,7 +102,7 @@ export class Swarm implements MultiAgentBase {
   readonly config: Required<SwarmConfig>
   private readonly _pluginRegistry: MultiAgentPluginRegistry
   private readonly _hookRegistry: HookRegistryImplementation
-  private readonly _start: AgentNode
+  readonly start: AgentNode
   private readonly _handoffSchema: z.ZodType<HandoffResult>
   private _initialized: boolean
 
@@ -117,7 +117,7 @@ export class Swarm implements MultiAgentBase {
     this._validateConfig()
 
     this.nodes = this._resolveNodes(nodes)
-    this._start = this._resolveStart(start)
+    this.start = this._resolveStart(start)
 
     this._handoffSchema = this._buildHandoffSchema()
 
@@ -193,7 +193,7 @@ export class Swarm implements MultiAgentBase {
 
     yield new BeforeMultiAgentInvocationEvent({ orchestrator: this, state })
 
-    let node = this._start
+    let node = this.start
     let handoff: HandoffResult | undefined
 
     try {
@@ -282,6 +282,10 @@ export class Swarm implements MultiAgentBase {
   }
 
   private _resolveNodes(definitions: SwarmNodeDefinition[]): Map<string, AgentNode> {
+    if (definitions.length === 0) {
+      throw new Error('nodes list is empty')
+    }
+
     const nodes = new Map<string, AgentNode>()
     for (const definition of definitions) {
       const node = definition instanceof Agent ? new AgentNode({ agent: definition }) : new AgentNode(definition)
@@ -293,7 +297,11 @@ export class Swarm implements MultiAgentBase {
     return nodes
   }
 
-  private _resolveStart(start: string): AgentNode {
+  private _resolveStart(start: string | undefined): AgentNode {
+    if (start === undefined) {
+      return this.nodes.values().next().value!
+    }
+
     const node = this.nodes.get(start)
     if (!node) {
       throw new Error(`start=<${start}> | start references unknown agent`)
