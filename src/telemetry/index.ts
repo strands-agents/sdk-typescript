@@ -2,8 +2,9 @@
  * OpenTelemetry telemetry support for Strands Agents SDK.
  *
  * This module provides `setupTracer()` to configure a NodeTracerProvider
- * with OTLP or console exporters. The Agent class handles tracing internally
- * once telemetry is configured.
+ * with OTLP or console exporters, and `setupMeter()` to configure a
+ * MeterProvider for OTEL metrics export. The Agent class handles tracing
+ * and metrics internally once telemetry is configured.
  *
  * @example Basic setup with OTLP exporter
  * ```typescript
@@ -11,8 +12,9 @@
  *
  * // Configure telemetry with OTLP exporter
  * telemetry.setupTracer({ exporters: { otlp: true } })
+ * telemetry.setupMeter({ exporters: { otlp: true } })
  *
- * // Agent automatically traces invocations
+ * // Agent automatically traces invocations and emits metrics
  * const agent = new Agent()
  * ```
  *
@@ -30,5 +32,5 @@
  * ```
  */
 
-export { setupTracer, getTracer } from './config.js'
-export type { TracerConfig } from './config.js'
+export { setupTracer, getTracer, setupMeter, getMeter } from './config.js'
+export type { TracerConfig, MeterConfig } from './config.js'

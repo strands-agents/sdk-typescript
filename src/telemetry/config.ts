@@ -1,15 +1,21 @@
 /**
  * OpenTelemetry configuration and setup utilities for Strands agents.
  *
+ * Provides {@link setupTracer} for distributed tracing and {@link setupMeter}
+ * for OTEL metrics export. Both use the global OTel API so any provider
+ * registered here (or by the user) is automatically picked up by the Agent.
+ *
+ * This module is only loaded when the user explicitly imports and calls
+ * {@link setupTracer} or {@link setupMeter}. The core agent loop
+ * (tracer.ts, meter.ts) does not depend on this module.
+ *
  * Uses NodeTracerProvider when available for async context propagation
  * across MCP server boundaries. Falls back to BasicTracerProvider in
  * environments without async_hooks support.
- *
- * @see https://github.com/strands-agents/sdk-typescript/issues/447
  */
 
-import { trace } from '@opentelemetry/api'
-import type { Tracer as OtelTracer } from '@opentelemetry/api'
+import { metrics as otelMetrics, trace } from '@opentelemetry/api'
+import type { Meter as OtelMeter, Tracer as OtelTracer } from '@opentelemetry/api'
 import { Resource, envDetectorSync } from '@opentelemetry/resources'
 import {
   BasicTracerProvider,
@@ -17,8 +23,11 @@ import {
   SimpleSpanProcessor,
   BatchSpanProcessor,
 } from '@opentelemetry/sdk-trace-base'
+import { MeterProvider, PeriodicExportingMetricReader, ConsoleMetricExporter } from '@opentelemetry/sdk-metrics'
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http'
+import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-http'
 import { logger } from '../logging/index.js'
+import { getServiceName } from './utils.js'
 
 let DefaultTracerProvider: typeof BasicTracerProvider = BasicTracerProvider
 if (typeof globalThis.process?.getBuiltinModule === 'function') {
@@ -33,18 +42,8 @@ if (typeof globalThis.process?.getBuiltinModule === 'function') {
   }
 }
 
-const DEFAULT_SERVICE_NAME = 'strands-agents'
 const DEFAULT_SERVICE_NAMESPACE = 'strands'
 const DEFAULT_DEPLOYMENT_ENVIRONMENT = 'development'
-
-/**
- * Get the service name, respecting the OTEL_SERVICE_NAME environment variable.
- *
- * @returns The service name from OTEL_SERVICE_NAME or the default 'strands-agents'
- */
-export function getServiceName(): string {
-  return globalThis?.process?.env?.OTEL_SERVICE_NAME || DEFAULT_SERVICE_NAME
-}
 
 /**
  * Get an OpenTelemetry Tracer instance.
@@ -73,6 +72,30 @@ export function getServiceName(): string {
  */
 export function getTracer(): OtelTracer {
   return trace.getTracer(getServiceName())
+}
+
+/**
+ * Get an OpenTelemetry Meter instance.
+ *
+ * Wraps the OTel metrics API to provide a consistent meter scoped to the
+ * configured service name. Returns a no-op meter until a MeterProvider is
+ * registered (either via {@link setupMeter} or by the user directly).
+ *
+ * @returns An OTel Meter instance from the global meter provider
+ *
+ * @example
+ * ```typescript
+ * import { telemetry } from '@strands-agents/sdk'
+ *
+ * telemetry.setupMeter({ exporters: { otlp: true } })
+ *
+ * const meter = telemetry.getMeter()
+ * const counter = meter.createCounter('my.custom.counter')
+ * counter.add(1)
+ * ```
+ */
+export function getMeter(): OtelMeter {
+  return otelMetrics.getMeter(getServiceName())
 }
 
 /**
@@ -124,8 +147,8 @@ export function setupTracer(config: TracerConfig = {}): BasicTracerProvider {
 
   _provider = config.provider ?? new DefaultTracerProvider({ resource: getOtelResource() })
 
-  if (config.exporters?.otlp) addOtlpExporter(_provider)
-  if (config.exporters?.console) addConsoleExporter(_provider)
+  if (config.exporters?.otlp) addOtlpTraceExporter(_provider)
+  if (config.exporters?.console) addConsoleTraceExporter(_provider)
 
   _provider.register()
 
@@ -142,19 +165,102 @@ export function setupTracer(config: TracerConfig = {}): BasicTracerProvider {
   return _provider
 }
 
-function addOtlpExporter(provider: BasicTracerProvider): void {
-  try {
-    provider.addSpanProcessor(new BatchSpanProcessor(new OTLPTraceExporter()))
-  } catch (error) {
-    logger.warn(`error=<${error}> | failed to configure otlp exporter`)
+/**
+ * Configuration options for setting up the OTEL meter provider.
+ */
+export interface MeterConfig {
+  /**
+   * Custom MeterProvider instance. When provided, it is registered as the
+   * global meter provider and the SDK will not create one internally.
+   */
+  provider?: MeterProvider
+
+  /**
+   * Exporter configuration.
+   */
+  exporters?: {
+    /**
+     * Enable OTLP exporter. Uses OTEL_EXPORTER_OTLP_ENDPOINT and
+     * OTEL_EXPORTER_OTLP_HEADERS env vars automatically.
+     */
+    otlp?: boolean
+    /**
+     * Enable console exporter for debugging.
+     */
+    console?: boolean
   }
 }
 
-function addConsoleExporter(provider: BasicTracerProvider): void {
+let _meterProvider: MeterProvider | null = null
+
+/**
+ * Set up the OTEL meter provider with the given configuration.
+ *
+ * @param config - Meter configuration options
+ * @returns The configured meter provider
+ *
+ * @example
+ * ```typescript
+ * import { telemetry } from '\@strands-agents/sdk'
+ *
+ * telemetry.setupMeter({ exporters: { otlp: true } })
+ * ```
+ */
+export function setupMeter(config: MeterConfig = {}): MeterProvider {
+  if (_meterProvider) {
+    logger.warn('meter provider already initialized, returning existing provider')
+    return _meterProvider
+  }
+
+  _meterProvider = config.provider ?? new MeterProvider({ resource: getOtelResource() })
+
+  if (config.exporters?.otlp) addOtlpMetricReader(_meterProvider)
+  if (config.exporters?.console) addConsoleMetricReader(_meterProvider)
+
+  otelMetrics.setGlobalMeterProvider(_meterProvider)
+
+  if (typeof globalThis?.process?.once === 'function') {
+    globalThis.process.once('beforeExit', () => {
+      if (_meterProvider) {
+        _meterProvider.forceFlush().catch((err: unknown) => {
+          logger.warn(`error=<${err}> | failed to flush meter provider on exit`)
+        })
+      }
+    })
+  }
+
+  return _meterProvider
+}
+
+function addOtlpTraceExporter(provider: BasicTracerProvider): void {
+  try {
+    provider.addSpanProcessor(new BatchSpanProcessor(new OTLPTraceExporter()))
+  } catch (error) {
+    logger.warn(`error=<${error}> | failed to configure otlp trace exporter`)
+  }
+}
+
+function addConsoleTraceExporter(provider: BasicTracerProvider): void {
   try {
     provider.addSpanProcessor(new SimpleSpanProcessor(new ConsoleSpanExporter()))
   } catch (error) {
-    logger.warn(`error=<${error}> | failed to configure console exporter`)
+    logger.warn(`error=<${error}> | failed to configure console trace exporter`)
+  }
+}
+
+function addOtlpMetricReader(provider: MeterProvider): void {
+  try {
+    provider.addMetricReader(new PeriodicExportingMetricReader({ exporter: new OTLPMetricExporter() }))
+  } catch (error) {
+    logger.warn(`error=<${error}> | failed to configure otlp metric exporter`)
+  }
+}
+
+function addConsoleMetricReader(provider: MeterProvider): void {
+  try {
+    provider.addMetricReader(new PeriodicExportingMetricReader({ exporter: new ConsoleMetricExporter() }))
+  } catch (error) {
+    logger.warn(`error=<${error}> | failed to configure console metric exporter`)
   }
 }
 

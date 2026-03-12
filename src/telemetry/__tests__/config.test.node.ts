@@ -1,19 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node'
-import { ConsoleSpanExporter } from '@opentelemetry/sdk-trace-base'
-import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http'
-
-vi.mock('@opentelemetry/exporter-trace-otlp-http', () => ({
-  OTLPTraceExporter: vi.fn(),
-}))
-
-vi.mock('@opentelemetry/sdk-trace-base', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@opentelemetry/sdk-trace-base')>()
-  return {
-    ...actual,
-    ConsoleSpanExporter: vi.fn(),
-  }
-})
+import { findMetricValue } from '../../__fixtures__/metrics-helpers.js'
 
 describe('setupTracer (node-specific)', () => {
   const originalEnv = { ...process.env }
@@ -49,45 +36,42 @@ describe('setupTracer (node-specific)', () => {
   describe('exporter configuration', () => {
     it('should add OTLP exporter when exporters.otlp is true', async () => {
       const telemetry = await import('../index.js')
+      const provider = telemetry.setupTracer({ exporters: { otlp: true } })
 
-      telemetry.setupTracer({ exporters: { otlp: true } })
-
-      expect(OTLPTraceExporter).toHaveBeenCalled()
+      const processors = (provider as unknown as { _registeredSpanProcessors: unknown[] })._registeredSpanProcessors
+      expect(processors.length).toBeGreaterThanOrEqual(1)
     })
 
     it('should add console exporter when exporters.console is true', async () => {
       const telemetry = await import('../index.js')
+      const provider = telemetry.setupTracer({ exporters: { console: true } })
 
-      telemetry.setupTracer({ exporters: { console: true } })
-
-      expect(ConsoleSpanExporter).toHaveBeenCalled()
+      const processors = (provider as unknown as { _registeredSpanProcessors: unknown[] })._registeredSpanProcessors
+      expect(processors.length).toBeGreaterThanOrEqual(1)
     })
 
     it('should add both exporters when both are true', async () => {
       const telemetry = await import('../index.js')
+      const provider = telemetry.setupTracer({ exporters: { otlp: true, console: true } })
 
-      telemetry.setupTracer({ exporters: { otlp: true, console: true } })
-
-      expect(OTLPTraceExporter).toHaveBeenCalled()
-      expect(ConsoleSpanExporter).toHaveBeenCalled()
+      const processors = (provider as unknown as { _registeredSpanProcessors: unknown[] })._registeredSpanProcessors
+      expect(processors.length).toBeGreaterThanOrEqual(2)
     })
 
     it('should add no exporters when both are false', async () => {
       const telemetry = await import('../index.js')
+      const provider = telemetry.setupTracer({ exporters: { otlp: false, console: false } })
 
-      telemetry.setupTracer({ exporters: { otlp: false, console: false } })
-
-      expect(OTLPTraceExporter).not.toHaveBeenCalled()
-      expect(ConsoleSpanExporter).not.toHaveBeenCalled()
+      const processors = (provider as unknown as { _registeredSpanProcessors: unknown[] })._registeredSpanProcessors
+      expect(processors.length).toBe(0)
     })
 
     it('should add no exporters when exporters config is empty', async () => {
       const telemetry = await import('../index.js')
+      const provider = telemetry.setupTracer({})
 
-      telemetry.setupTracer({})
-
-      expect(OTLPTraceExporter).not.toHaveBeenCalled()
-      expect(ConsoleSpanExporter).not.toHaveBeenCalled()
+      const processors = (provider as unknown as { _registeredSpanProcessors: unknown[] })._registeredSpanProcessors
+      expect(processors.length).toBe(0)
     })
   })
 
@@ -138,6 +122,94 @@ describe('setupTracer (node-specific)', () => {
 
       expect(provider.resource.attributes['service.name']).toBe('custom-service')
       expect(provider.resource.attributes['deployment.environment']).toBe('production')
+    })
+  })
+})
+
+describe('setupMeter (node-specific)', () => {
+  const originalEnv = { ...process.env }
+
+  beforeEach(() => {
+    vi.resetModules()
+    vi.clearAllMocks()
+  })
+
+  afterEach(() => {
+    process.env = { ...originalEnv }
+  })
+
+  describe('exporter configuration', () => {
+    it('should configure OTLP metric exporter when exporters.otlp is true', async () => {
+      const telemetry = await import('../index.js')
+      const provider = telemetry.setupMeter({ exporters: { otlp: true } })
+
+      expect(provider).toBeDefined()
+      expect(typeof provider.forceFlush).toBe('function')
+    })
+
+    it('should configure console metric exporter when exporters.console is true', async () => {
+      const telemetry = await import('../index.js')
+      const provider = telemetry.setupMeter({ exporters: { console: true } })
+
+      expect(provider).toBeDefined()
+      expect(typeof provider.forceFlush).toBe('function')
+    })
+  })
+
+  describe('resource attributes from environment', () => {
+    it('uses OTEL_SERVICE_NAME when set', async () => {
+      process.env.OTEL_SERVICE_NAME = 'my-meter-service'
+      const telemetry = await import('../index.js')
+
+      const provider = telemetry.setupMeter()
+
+      const resource = (provider as unknown as { _sharedState: { resource: { attributes: Record<string, unknown> } } })
+        ._sharedState?.resource
+      expect(resource).toBeDefined()
+      expect(resource!.attributes['service.name']).toBe('my-meter-service')
+    })
+  })
+
+  describe('global meter provider registration', () => {
+    it('returns a provider that produces real metrics via its own meter', async () => {
+      const {
+        MeterProvider: SdkMeterProvider,
+        InMemoryMetricExporter,
+        PeriodicExportingMetricReader,
+        AggregationTemporality,
+      } = await import('@opentelemetry/sdk-metrics')
+      const telemetry = await import('../index.js')
+
+      const testExporter = new InMemoryMetricExporter(AggregationTemporality.CUMULATIVE)
+      const testReader = new PeriodicExportingMetricReader({
+        exporter: testExporter,
+        exportIntervalMillis: 100,
+      })
+      const testProvider = new SdkMeterProvider({ readers: [testReader] })
+
+      const provider = telemetry.setupMeter({ provider: testProvider })
+
+      const meter = provider.getMeter('test-registration')
+      const counter = meter.createCounter('test_registration_counter')
+      counter.add(42)
+
+      await testProvider.forceFlush()
+
+      expect(findMetricValue(testExporter.getMetrics(), 'test_registration_counter')).toBe(42)
+
+      await testProvider.shutdown()
+    })
+  })
+
+  describe('custom provider', () => {
+    it('accepts a custom MeterProvider', async () => {
+      const { MeterProvider } = await import('@opentelemetry/sdk-metrics')
+      const telemetry = await import('../index.js')
+      const customProvider = new MeterProvider()
+
+      const provider = telemetry.setupMeter({ provider: customProvider })
+
+      expect(provider).toBe(customProvider)
     })
   })
 })

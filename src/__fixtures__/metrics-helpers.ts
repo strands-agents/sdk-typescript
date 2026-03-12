@@ -61,3 +61,30 @@ export function expectLoopMetrics(options: LoopMetricsMatcher): AgentMetrics {
     accumulatedMetrics: { latencyMs: expect.any(Number) },
   }) as AgentMetrics
 }
+
+/**
+ * Finds the latest data point value for a named metric from OTEL ResourceMetrics.
+ *
+ * Flattens the ResourceMetrics → ScopeMetrics → MetricData hierarchy and
+ * returns the value of the last data point for the matching metric name.
+ * For counters this is a number; for histograms it is an object with
+ * sum, count, min, max, etc.
+ *
+ * @param resourceMetrics - Array of ResourceMetrics from an InMemoryMetricExporter
+ * @param metricName - The metric descriptor name to search for
+ * @returns The value of the last data point, or undefined if not found
+ */
+export function findMetricValue(
+  resourceMetrics: {
+    scopeMetrics: { metrics: { descriptor: { name: string }; dataPoints: { value: unknown }[] }[] }[]
+  }[],
+  metricName: string
+): unknown {
+  const dp = resourceMetrics
+    .flatMap((rm) => rm.scopeMetrics)
+    .flatMap((sm) => sm.metrics)
+    .filter((m) => m.descriptor.name === metricName)
+    .flatMap((m) => m.dataPoints)
+    .at(-1)
+  return dp?.value
+}

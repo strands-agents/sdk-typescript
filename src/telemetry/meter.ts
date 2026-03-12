@@ -4,11 +4,18 @@
  * The {@link Meter} accumulates local metrics during agent invocation and
  * provides them as a read-only {@link AgentMetrics} snapshot via the
  * {@link Meter.metrics} getter for inclusion in {@link AgentResult}.
+ *
+ * When an OTEL MeterProvider is registered (via {@link setupMeter} or
+ * directly), the Meter also emits counters and histograms through the
+ * global OTEL metrics API, enabling export to OTLP backends.
  */
 
+import type { Counter, Histogram, Meter as OtelMeter } from '@opentelemetry/api'
+import { metrics as otelMetrics } from '@opentelemetry/api'
 import type { Usage, Metrics, ModelMetadataEventData } from '../models/streaming.js'
 import type { ToolUse } from '../tools/types.js'
 import type { JSONSerializable } from '../types/json.js'
+import { getServiceName } from './utils.js'
 
 /**
  * Per-tool execution metrics.
@@ -239,6 +246,9 @@ export class AgentMetrics implements JSONSerializable<AgentMetricsData> {
  * Use the {@link metrics} getter to obtain a read-only {@link AgentMetrics}
  * snapshot for inclusion in {@link AgentResult}.
  *
+ * When an OTEL MeterProvider is registered, the same data is also emitted
+ * as OTEL counters and histograms via the global metrics API. If no
+ * provider is registered the OTEL meter is a no-op and adds no overhead.
  */
 export class Meter {
   /**
@@ -266,6 +276,53 @@ export class Meter {
    */
   private readonly _toolMetrics: Record<string, ToolMetricsData> = {}
 
+  // OTEL instruments (no-op when no MeterProvider is registered)
+  private readonly _otelMeter: OtelMeter
+  private readonly _otelCycleCounter: Counter
+  private readonly _otelInvocationCounter: Counter
+  private readonly _otelCycleDuration: Histogram
+  private readonly _otelToolCallCounter: Counter
+  private readonly _otelToolErrorCounter: Counter
+  private readonly _otelToolDuration: Histogram
+  private readonly _otelInputTokens: Counter
+  private readonly _otelOutputTokens: Counter
+  private readonly _otelModelLatency: Histogram
+
+  constructor() {
+    this._otelMeter = otelMetrics.getMeter(getServiceName())
+
+    this._otelCycleCounter = this._otelMeter.createCounter('gen_ai.agent.cycle.count', {
+      description: 'Number of agent loop cycles executed',
+    })
+    this._otelInvocationCounter = this._otelMeter.createCounter('gen_ai.agent.invocation.count', {
+      description: 'Number of agent invocations',
+    })
+    this._otelCycleDuration = this._otelMeter.createHistogram('gen_ai.agent.cycle.duration', {
+      description: 'Duration of agent loop cycles in milliseconds',
+      unit: 'ms',
+    })
+    this._otelToolCallCounter = this._otelMeter.createCounter('gen_ai.agent.tool.call.count', {
+      description: 'Number of tool calls',
+    })
+    this._otelToolErrorCounter = this._otelMeter.createCounter('gen_ai.agent.tool.error.count', {
+      description: 'Number of failed tool calls',
+    })
+    this._otelToolDuration = this._otelMeter.createHistogram('gen_ai.agent.tool.duration', {
+      description: 'Duration of tool calls in milliseconds',
+      unit: 'ms',
+    })
+    this._otelInputTokens = this._otelMeter.createCounter('gen_ai.agent.tokens.input', {
+      description: 'Input tokens consumed',
+    })
+    this._otelOutputTokens = this._otelMeter.createCounter('gen_ai.agent.tokens.output', {
+      description: 'Output tokens consumed',
+    })
+    this._otelModelLatency = this._otelMeter.createHistogram('gen_ai.agent.model.latency', {
+      description: 'Model invocation latency in milliseconds',
+      unit: 'ms',
+    })
+  }
+
   /**
    * Begin tracking a new agent invocation.
    * Creates a new InvocationMetricsData entry for per-invocation metrics.
@@ -275,6 +332,7 @@ export class Meter {
       cycles: [],
       usage: Meter._createEmptyUsage(),
     })
+    this._otelInvocationCounter.add(1)
   }
 
   /**
@@ -284,6 +342,7 @@ export class Meter {
    */
   startCycle(): { cycleId: string; startTime: number } {
     this._cycleCount++
+    this._otelCycleCounter.add(1)
 
     const cycleId = `cycle-${this._cycleCount}`
     const startTime = Date.now()
@@ -306,11 +365,14 @@ export class Meter {
    * @param startTime - The timestamp when the cycle started (milliseconds since epoch)
    */
   endCycle(startTime: number): void {
+    const duration = Date.now() - startTime
+    this._otelCycleDuration.record(duration)
+
     const latestInvocation = this._latestAgentInvocation
     if (latestInvocation) {
       const cycles = latestInvocation.cycles
       if (cycles.length > 0) {
-        cycles[cycles.length - 1]!.duration = Date.now() - startTime
+        cycles[cycles.length - 1]!.duration = duration
       }
     }
   }
@@ -332,10 +394,15 @@ export class Meter {
     toolEntry.callCount++
     toolEntry.totalTime += duration
 
+    const attrs = { 'gen_ai.tool.name': toolName }
+    this._otelToolCallCounter.add(1, attrs)
+    this._otelToolDuration.record(duration, attrs)
+
     if (success) {
       toolEntry.successCount++
     } else {
       toolEntry.errorCount++
+      this._otelToolErrorCounter.add(1, attrs)
     }
   }
 
@@ -385,6 +452,7 @@ export class Meter {
     }
     if (metadata.metrics) {
       this._accumulatedMetrics.latencyMs += metadata.metrics.latencyMs
+      this._otelModelLatency.record(metadata.metrics.latencyMs)
     }
   }
 
@@ -395,6 +463,9 @@ export class Meter {
    */
   private _updateUsage(usage: Usage): void {
     Meter._accumulateUsage(this._accumulatedUsage, usage)
+
+    this._otelInputTokens.add(usage.inputTokens)
+    this._otelOutputTokens.add(usage.outputTokens)
 
     const latestInvocation = this._latestAgentInvocation
     if (latestInvocation) {

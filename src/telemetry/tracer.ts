@@ -43,7 +43,7 @@ import type {
 } from './types.js'
 import type { ContentBlock, Message } from '../types/messages.js'
 import { jsonReplacer } from './json.js'
-import { getServiceName, getTracer } from './config.js'
+import { getServiceName } from './utils.js'
 
 /**
  * Tracer manages OpenTelemetry spans for agent operations.
@@ -118,7 +118,7 @@ export class Tracer {
     this._includeToolDefinitions = optInValues.has('gen_ai_tool_definitions')
 
     // Get tracer from global API to ensure ground truth
-    this._tracer = getTracer()
+    this._tracer = trace.getTracer(getServiceName())
   }
 
   /**

@@ -21,6 +21,7 @@ All test fixtures are located in `src/__fixtures__/`. Use these helpers to reduc
 | `createMockAgent()`    | `agent-helpers.ts`      | Create minimal mock Agent with messages and state                                    | [Agent Fixtures](#agent-fixtures-agent-helpersts)                           |
 | `isNode` / `isBrowser` | `environment.ts`        | Environment detection for conditional test execution                                 | [Environment Fixtures](#environment-fixtures-environmentts)                 |
 | `expectLoopMetrics()`  | `metrics-helpers.ts`    | Assert on `AgentMetrics` with expected cycle count, tool names, and optional token usage | [Metrics Fixtures](#metrics-fixtures-metrics-helpersts)                     |
+| `findMetricValue()`    | `metrics-helpers.ts`    | Find the latest data point value for a named OTEL metric from ResourceMetrics            | [Metrics Fixtures](#metrics-fixtures-metrics-helpersts)                     |
 
 ## Test Organization
 
@@ -481,6 +482,7 @@ describe.skipIf(!isNode)('Node.js specific features', () => {
 ### Metrics Fixtures (`metrics-helpers.ts`)
 
 - **`expectLoopMetrics({ cycleCount, toolNames?, usage? })`** - Creates an asymmetric matcher that validates `AgentMetrics` structure and values. When `usage` is provided, asserts exact token counts. When omitted, falls back to shape-level assertions with `expect.any(Number)`.
+- **`findMetricValue(resourceMetrics, metricName)`** - Flattens the OTEL ResourceMetrics → ScopeMetrics → MetricData hierarchy and returns the value of the last data point for the matching metric name. Returns `undefined` if not found.
 
 ```typescript
 import { expectLoopMetrics } from '../__fixtures__/metrics-helpers'
@@ -515,6 +517,18 @@ expect(result).toEqual(
     }),
   })
 )
+```
+
+```typescript
+import { findMetricValue } from '../__fixtures__/metrics-helpers'
+
+// Find a counter value from OTEL InMemoryMetricExporter output
+const cycleCount = findMetricValue(metricExporter.getMetrics(), 'gen_ai.agent.cycle.count')
+expect(cycleCount).toBeGreaterThanOrEqual(1)
+
+// Check a histogram was emitted
+const duration = findMetricValue(metrics, 'gen_ai.agent.cycle.duration')
+expect(duration).toBeDefined()
 ```
 
 ## Multi-Environment Testing
