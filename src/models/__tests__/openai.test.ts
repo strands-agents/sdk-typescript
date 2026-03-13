@@ -6,6 +6,7 @@ import { ContextWindowOverflowError, ModelThrottledError } from '../../errors.js
 import { collectIterator } from '../../__fixtures__/model-test-helpers.js'
 import { Message, TextBlock, ToolUseBlock, ToolResultBlock, GuardContentBlock } from '../../types/messages.js'
 import type { SystemContentBlock } from '../../types/messages.js'
+import { ImageBlock, DocumentBlock, VideoBlock } from '../../types/media.js'
 
 /**
  * Helper to create a mock OpenAI client with streaming support
@@ -47,6 +48,23 @@ describe('OpenAIModel', () => {
       vi.unstubAllEnvs()
     }
   })
+
+  // Shared helper to create a mock OpenAI client that captures the request
+  const createMockClientWithCapture = (captureContainer: { request: any }): any => {
+    return {
+      chat: {
+        completions: {
+          create: vi.fn(async (request: any) => {
+            captureContainer.request = request
+            return (async function* () {
+              yield { choices: [{ delta: { role: 'assistant' }, index: 0 }] }
+              yield { choices: [{ finish_reason: 'stop', delta: {}, index: 0 }] }
+            })()
+          }),
+        },
+      },
+    } as any
+  }
 
   describe('constructor', () => {
     it('creates an instance with required modelId', () => {
@@ -947,23 +965,6 @@ describe('OpenAIModel', () => {
   })
 
   describe('systemPrompt handling', () => {
-    // Create mock client factory that captures request in provided container
-    const createMockClientWithCapture = (captureContainer: { request: any }): any => {
-      return {
-        chat: {
-          completions: {
-            create: vi.fn(async (request: any) => {
-              captureContainer.request = request
-              return (async function* () {
-                yield { choices: [{ delta: { role: 'assistant' }, index: 0 }] }
-                yield { choices: [{ finish_reason: 'stop', delta: {}, index: 0 }] }
-              })()
-            }),
-          },
-        },
-      } as any
-    }
-
     it('formats array system prompt with text blocks only', async () => {
       const captured: { request: any } = { request: null }
       const mockClient = createMockClientWithCapture(captured)
@@ -1164,23 +1165,6 @@ describe('OpenAIModel', () => {
   })
 
   describe('guard content in messages', () => {
-    // Create mock client factory that captures request in provided container
-    const createMockClientWithCapture = (captureContainer: { request: any }): any => {
-      return {
-        chat: {
-          completions: {
-            create: vi.fn(async (request: any) => {
-              captureContainer.request = request
-              return (async function* () {
-                yield { choices: [{ delta: { role: 'assistant' }, index: 0 }] }
-                yield { choices: [{ finish_reason: 'stop', delta: {}, index: 0 }] }
-              })()
-            }),
-          },
-        },
-      } as any
-    }
-
     it('warns and filters guard content from user messages', async () => {
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
       const captured: { request: any } = { request: null }
@@ -1291,6 +1275,195 @@ describe('OpenAIModel', () => {
       expect(captured.request).toBeDefined()
       expect(captured.request!.messages).toEqual([])
 
+      warnSpy.mockRestore()
+    })
+  })
+
+  describe('media blocks', () => {
+    it('formats image block in user message as image_url with base64', async () => {
+      const captured: { request: any } = { request: null }
+      const mockClient = createMockClientWithCapture(captured)
+      const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
+      const imageBytes = new Uint8Array([72, 101, 108, 108, 111])
+      const messages = [
+        new Message({
+          role: 'user',
+          content: [
+            new TextBlock('What is in this image?'),
+            new ImageBlock({ format: 'png', source: { bytes: imageBytes } }),
+          ],
+        }),
+      ]
+
+      await collectIterator(provider.stream(messages))
+
+      const userMsg = captured.request.messages[0]
+      expect(userMsg.role).toBe('user')
+      expect(userMsg.content).toHaveLength(2)
+      expect(userMsg.content[0]).toEqual({ type: 'text', text: 'What is in this image?' })
+      expect(userMsg.content[1]).toEqual({
+        type: 'image_url',
+        image_url: { url: 'data:image/png;base64,SGVsbG8=' },
+      })
+    })
+
+    it('formats image block in user message with URL source', async () => {
+      const captured: { request: any } = { request: null }
+      const mockClient = createMockClientWithCapture(captured)
+      const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
+      const messages = [
+        new Message({
+          role: 'user',
+          content: [new ImageBlock({ format: 'jpeg', source: { url: 'https://example.com/img.jpg' } })],
+        }),
+      ]
+
+      await collectIterator(provider.stream(messages))
+
+      const userMsg = captured.request.messages[0]
+      expect(userMsg.content[0]).toEqual({
+        type: 'image_url',
+        image_url: { url: 'https://example.com/img.jpg' },
+      })
+    })
+
+    it('formats document block with bytes source as file in user message', async () => {
+      const captured: { request: any } = { request: null }
+      const mockClient = createMockClientWithCapture(captured)
+      const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
+      const docBytes = new Uint8Array([1, 2, 3])
+      const messages = [
+        new Message({
+          role: 'user',
+          content: [new DocumentBlock({ name: 'report.pdf', format: 'pdf', source: { bytes: docBytes } })],
+        }),
+      ]
+
+      await collectIterator(provider.stream(messages))
+
+      const userMsg = captured.request.messages[0]
+      expect(userMsg.content[0]).toEqual({
+        type: 'file',
+        file: { file_data: 'data:application/pdf;base64,AQID', filename: 'report.pdf' },
+      })
+    })
+
+    it('splits image from tool result into separate user message', async () => {
+      const captured: { request: any } = { request: null }
+      const mockClient = createMockClientWithCapture(captured)
+      const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
+      const imageBytes = new Uint8Array([72, 101, 108, 108, 111])
+      const messages = [
+        new Message({
+          role: 'user',
+          content: [
+            new ToolResultBlock({
+              toolUseId: 'tool-1',
+              status: 'success',
+              content: [
+                new TextBlock('Screenshot captured'),
+                new ImageBlock({ format: 'png', source: { bytes: imageBytes } }),
+              ],
+            }),
+          ],
+        }),
+      ]
+
+      await collectIterator(provider.stream(messages))
+
+      // Tool message with text only
+      const toolMsg = captured.request.messages[0]
+      expect(toolMsg.role).toBe('tool')
+      expect(toolMsg.tool_call_id).toBe('tool-1')
+      expect(toolMsg.content).toBe('Screenshot captured')
+
+      // Separate user message with image
+      const userMsg = captured.request.messages[1]
+      expect(userMsg.role).toBe('user')
+      expect(userMsg.content[0]).toEqual({
+        type: 'image_url',
+        image_url: { url: 'data:image/png;base64,SGVsbG8=' },
+      })
+    })
+
+    it('injects placeholder text when tool result contains only images', async () => {
+      const captured: { request: any } = { request: null }
+      const mockClient = createMockClientWithCapture(captured)
+      const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
+      const messages = [
+        new Message({
+          role: 'user',
+          content: [
+            new ToolResultBlock({
+              toolUseId: 'tool-1',
+              status: 'success',
+              content: [new ImageBlock({ format: 'png', source: { bytes: new Uint8Array([1]) } })],
+            }),
+          ],
+        }),
+      ]
+
+      await collectIterator(provider.stream(messages))
+
+      const toolMsg = captured.request.messages[0]
+      expect(toolMsg.content).toContain('Tool successfully returned an image')
+    })
+
+    it('skips document block in tool result with warning', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const captured: { request: any } = { request: null }
+      const mockClient = createMockClientWithCapture(captured)
+      const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
+      const messages = [
+        new Message({
+          role: 'user',
+          content: [
+            new ToolResultBlock({
+              toolUseId: 'tool-1',
+              status: 'success',
+              content: [
+                new TextBlock('result'),
+                new DocumentBlock({ name: 'doc.pdf', format: 'pdf', source: { bytes: new Uint8Array([1]) } }),
+              ],
+            }),
+          ],
+        }),
+      ]
+
+      await collectIterator(provider.stream(messages))
+
+      const toolMsg = captured.request.messages[0]
+      expect(toolMsg.content).toBe('result')
+      expect(warnSpy).toHaveBeenCalled()
+      warnSpy.mockRestore()
+    })
+
+    it('skips video block in tool result with warning', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const captured: { request: any } = { request: null }
+      const mockClient = createMockClientWithCapture(captured)
+      const provider = new OpenAIModel({ modelId: 'gpt-4o', client: mockClient })
+      const messages = [
+        new Message({
+          role: 'user',
+          content: [
+            new ToolResultBlock({
+              toolUseId: 'tool-1',
+              status: 'success',
+              content: [
+                new TextBlock('result'),
+                new VideoBlock({ format: 'mp4', source: { bytes: new Uint8Array([1]) } }),
+              ],
+            }),
+          ],
+        }),
+      ]
+
+      await collectIterator(provider.stream(messages))
+
+      const toolMsg = captured.request.messages[0]
+      expect(toolMsg.content).toBe('result')
+      expect(warnSpy).toHaveBeenCalled()
       warnSpy.mockRestore()
     })
   })
