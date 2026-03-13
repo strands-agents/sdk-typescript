@@ -249,13 +249,13 @@ const model = new BedrockModel({ maxTokens: 1024 })
 
 const researcher = new Agent({
   model,
-  agentId: 'researcher',
+  id: 'researcher',
   systemPrompt: 'Research the topic and provide key facts.',
 })
 
 const writer = new Agent({
   model,
-  agentId: 'writer',
+  id: 'writer',
   systemPrompt: 'Rewrite the research into a polished paragraph.',
 })
 
@@ -276,14 +276,14 @@ const model = new BedrockModel({ maxTokens: 1024 })
 
 const researcher = new Agent({
   model,
-  agentId: 'researcher',
+  id: 'researcher',
   description: 'Researches a topic and gathers key facts.',
   systemPrompt: 'Research the answer, then hand off to the writer.',
 })
 
 const writer = new Agent({
   model,
-  agentId: 'writer',
+  id: 'writer',
   description: 'Writes a polished final answer.',
   systemPrompt: 'Write the final answer. Do not hand off.',
 })
