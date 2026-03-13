@@ -45,7 +45,7 @@ function makeS3Manager(sessionId: string, bucket: string, credentials: any): Ses
 
 async function getPersistedMessageCount(manager: SessionManager): Promise<number> {
   const snap = await (manager as any)._storage.snapshot.loadSnapshot({
-    location: (manager as any)._location({ agentId: 'default' }),
+    location: (manager as any)._location({ id: 'default' }),
   })
   return (snap?.data?.messages as unknown[])?.length ?? 0
 }

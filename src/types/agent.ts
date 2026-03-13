@@ -1,5 +1,5 @@
 import type { AppState } from '../app-state.js'
-import type { Message, StopReason } from './messages.js'
+import type { Message, StopReason, SystemPrompt } from './messages.js'
 import type {
   BeforeInvocationEvent,
   AfterInvocationEvent,
@@ -38,6 +38,11 @@ export interface AgentData {
    * The conversation history of messages between user and assistant.
    */
   messages: Message[]
+
+  /**
+   * The system prompt that guides agent behavior.
+   */
+  systemPrompt?: SystemPrompt
 
   /**
    * The tool registry for registering tools with the agent.

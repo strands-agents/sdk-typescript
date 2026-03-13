@@ -3,7 +3,6 @@ import { A2AExecutor } from '../executor.js'
 import type { AgentExecutionEvent, ExecutionEventBus, RequestContext } from '@a2a-js/sdk/server'
 import type { TaskArtifactUpdateEvent, TaskStatusUpdateEvent } from '@a2a-js/sdk'
 import { Agent } from '../../agent/agent.js'
-import type { AgentBase } from '../../agent/agent-base.js'
 import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
 import { createMockAgent } from '../../__fixtures__/agent-helpers.js'
 import { TextBlock } from '../../types/messages.js'
@@ -156,28 +155,27 @@ describe('A2AExecutor', () => {
 
     it('publishes image content blocks as separate file artifacts', async () => {
       const imageBytes = new Uint8Array([137, 80, 78, 71])
-      const mockAgent: AgentBase = {
-        invoke: vi.fn(),
-        async *stream() {
-          const agent = createMockAgent()
-          // Text delta
-          yield new ModelStreamUpdateEvent({
-            agent,
-            event: { type: 'modelContentBlockDeltaEvent', delta: { type: 'textDelta', text: 'Here is the image:' } },
-          })
-          // Image content block
-          yield new ContentBlockEvent({
-            agent,
-            contentBlock: new ImageBlock({ format: 'png', source: { bytes: imageBytes } }),
-          })
-          return new AgentResult({
-            stopReason: 'endTurn',
-            lastMessage: new Message({ role: 'assistant', content: [new TextBlock('Here is the image:')] }),
-          })
-        },
-      }
+      const baseAgent = createMockAgent()
+      baseAgent.invoke = vi.fn() as typeof baseAgent.invoke
+      baseAgent.stream = async function* () {
+        const agent = createMockAgent()
+        // Text delta
+        yield new ModelStreamUpdateEvent({
+          agent,
+          event: { type: 'modelContentBlockDeltaEvent', delta: { type: 'textDelta', text: 'Here is the image:' } },
+        })
+        // Image content block
+        yield new ContentBlockEvent({
+          agent,
+          contentBlock: new ImageBlock({ format: 'png', source: { bytes: imageBytes } }),
+        })
+        return new AgentResult({
+          stopReason: 'endTurn',
+          lastMessage: new Message({ role: 'assistant', content: [new TextBlock('Here is the image:')] }),
+        })
+      } as typeof baseAgent.stream
 
-      const executor = new A2AExecutor(mockAgent)
+      const executor = new A2AExecutor(baseAgent)
       const eventBus = createMockEventBus()
 
       await executor.execute(createRequestContext('Generate an image'), eventBus)

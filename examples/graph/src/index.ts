@@ -7,14 +7,14 @@ async function main() {
   const researcher = new Agent({
     model,
     printer: false,
-    agentId: 'researcher',
+    id: 'researcher',
     systemPrompt: 'Research the topic and provide key facts in 2-3 sentences.',
   })
 
   const writer = new Agent({
     model,
     printer: false,
-    agentId: 'writer',
+    id: 'writer',
     systemPrompt: 'Rewrite the research into a polished, concise paragraph.',
   })
 
@@ -34,21 +34,21 @@ async function main() {
   const router = new Agent({
     model,
     printer: false,
-    agentId: 'router',
+    id: 'router',
     systemPrompt: 'Repeat the user input exactly.',
   })
 
   const capitals = new Agent({
     model,
     printer: false,
-    agentId: 'capitals',
+    id: 'capitals',
     systemPrompt: 'Answer with only the capital of France.',
   })
 
   const oceans = new Agent({
     model,
     printer: false,
-    agentId: 'oceans',
+    id: 'oceans',
     systemPrompt: 'Answer with only the largest ocean.',
   })
 

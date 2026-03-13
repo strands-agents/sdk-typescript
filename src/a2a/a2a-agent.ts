@@ -13,8 +13,17 @@ import { ClientFactory } from '@a2a-js/sdk/client'
 import type { AgentBase } from '../agent/agent-base.js'
 import type { InvokeArgs, InvokeOptions } from '../agent/agent.js'
 import { AgentResult, type AgentStreamEvent } from '../types/agent.js'
-import { Message, TextBlock, type ContentBlock, type ContentBlockData, type MessageData } from '../types/messages.js'
+import {
+  Message,
+  TextBlock,
+  type ContentBlock,
+  type ContentBlockData,
+  type MessageData,
+  type SystemPrompt,
+} from '../types/messages.js'
+import type { HookableEvent } from '../hooks/events.js'
 import { AgentResultEvent } from '../hooks/events.js'
+import type { HookCallback, HookableEventConstructor, HookCleanup } from '../hooks/types.js'
 import { A2AStreamUpdateEvent, type A2AEventData } from './events.js'
 import { AppState } from '../app-state.js'
 import { ToolRegistry } from '../registry/tool-registry.js'
@@ -29,6 +38,10 @@ export interface A2AAgentConfig {
   url: string
   /** Path to the agent card endpoint (default: '/.well-known/agent-card.json') */
   agentCardPath?: string
+  /** Unique identifier for this agent. Defaults to the URL. */
+  id?: string
+  /** Optional description of what this agent does. */
+  description?: string
 }
 
 /**
@@ -48,6 +61,13 @@ export interface A2AAgentConfig {
  * ```
  */
 export class A2AAgent implements AgentBase {
+  readonly type = 'agent' as const
+  readonly id: string
+  readonly description?: string
+  readonly messages: Message[] = []
+  readonly state = new AppState()
+  readonly toolRegistry = new ToolRegistry()
+  systemPrompt?: SystemPrompt
   private _config: A2AAgentConfig
   private _client: A2AClientSdk | undefined
   private _agentCard: AgentCard | undefined
@@ -59,6 +79,19 @@ export class A2AAgent implements AgentBase {
    */
   constructor(config: A2AAgentConfig) {
     this._config = config
+    this.id = config.id ?? config.url
+    if (config.description !== undefined) this.description = config.description
+  }
+  /**
+   * No-op. A2AAgent does not emit hookable events yet.
+   *
+   * @param _eventType - The event class constructor (unused)
+   * @param _callback - The callback function (unused)
+   * @returns No-op cleanup function
+   */
+  addHook<T extends HookableEvent>(_eventType: HookableEventConstructor<T>, _callback: HookCallback<T>): HookCleanup {
+    logger.warn('a2a agent does not emit hookable events yet')
+    return () => {}
   }
 
   /**
@@ -132,12 +165,7 @@ export class A2AAgent implements AgentBase {
     const result = this._buildResult(finalEvent, accumulatedText)
 
     yield new AgentResultEvent({
-      agent: {
-        state: new AppState(),
-        messages: [result.lastMessage],
-        toolRegistry: new ToolRegistry(),
-        addHook: (): (() => void) => () => {},
-      },
+      agent: this,
       result,
     })
     return result

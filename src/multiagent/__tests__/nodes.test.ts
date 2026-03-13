@@ -90,7 +90,7 @@ describe('AgentNode', () => {
 
   beforeEach(() => {
     const model = new MockMessageModel().addTurn(new TextBlock('reply'))
-    agent = new Agent({ model, printer: false, state: { key1: 'value1' }, agentId: 'agent-1' })
+    agent = new Agent({ model, printer: false, state: { key1: 'value1' }, id: 'agent-1' })
     node = new AgentNode({ agent })
     state = new MultiAgentState({ nodeIds: ['agent-1'] })
   })
@@ -143,7 +143,7 @@ describe('AgentNode', () => {
         })
         .addTurn({ type: 'textBlock', text: 'Done' })
 
-      agent = new Agent({ model, printer: false, agentId: 'schema-agent' })
+      agent = new Agent({ model, printer: false, id: 'schema-agent' })
       node = new AgentNode({ agent })
       state = new MultiAgentState({ nodeIds: ['schema-agent'], structuredOutputSchema: schema })
 
@@ -168,6 +168,7 @@ describe('MultiAgentNode', () => {
    */
   function mockOrchestrator(id: string, events: MultiAgentStreamEvent[]): MultiAgentBase {
     return {
+      type: 'multiAgent',
       id,
       invoke: async () => new MultiAgentResult({ results: [], duration: 0 }),
       async *stream() {

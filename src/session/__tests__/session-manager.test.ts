@@ -13,9 +13,9 @@ import { Message, TextBlock } from '../../types/messages.js'
 import { createMockAgent as createMockAgentWithHooks, invokeTrackedHook } from '../../__fixtures__/agent-helpers.js'
 
 // Test fixtures
-function createMockAgent(agentId = 'default'): Agent {
+function createMockAgent(id = 'default'): Agent {
   const agent = {
-    agentId,
+    id,
     messages: [],
     state: {
       _m: new Map(),

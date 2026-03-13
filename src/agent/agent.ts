@@ -23,7 +23,6 @@ import type { BaseModelConfig, StreamAggregatedResult, StreamOptions } from '../
 import { isModelStreamEvent } from '../models/streaming.js'
 import { ToolRegistry } from '../registry/tool-registry.js'
 import { AppState } from '../app-state.js'
-import type { AgentData } from '../types/agent.js'
 import type { AgentBase } from './agent-base.js'
 import { AgentPrinter, getDefaultAppender, type Printer } from './printer.js'
 import type { Plugin } from '../plugins/plugin.js'
@@ -146,7 +145,7 @@ export type AgentConfig = {
   /**
    * Optional unique identifier for the agent. Defaults to "default".
    */
-  agentId?: string
+  id?: string
 }
 
 /**
@@ -173,14 +172,15 @@ export interface InvokeOptions {
 const DEFAULT_AGENT_NAME = 'Strands Agent'
 
 /** Default identifier assigned to agents when none is provided. */
-const DEFAULT_AGENT_ID = 'default'
+const DEFAULT_AGENT_ID = 'agent'
 
 /**
  * Orchestrates the interaction between a model, a set of tools, and MCP clients.
  * The Agent is responsible for managing the lifecycle of tools and clients
  * and invoking the core decision-making loop.
  */
-export class Agent implements AgentData, AgentBase {
+export class Agent implements AgentBase {
+  readonly type = 'agent' as const
   /**
    * The conversation history of messages between user and assistant.
    */
@@ -210,7 +210,7 @@ export class Agent implements AgentData, AgentBase {
   /**
    * The unique identifier of the agent instance.
    */
-  public readonly agentId: string
+  public readonly id: string
 
   /**
    * Optional description of what the agent does.
@@ -240,7 +240,7 @@ export class Agent implements AgentData, AgentBase {
     this.state = new AppState(config?.state)
     this._conversationManager = config?.conversationManager ?? new SlidingWindowConversationManager({ windowSize: 40 })
     this.name = config?.name ?? DEFAULT_AGENT_NAME
-    this.agentId = config?.agentId ?? DEFAULT_AGENT_ID
+    this.id = config?.id ?? DEFAULT_AGENT_ID
     if (config?.description !== undefined) this.description = config.description
 
     if (typeof config?.model === 'string') {
@@ -485,7 +485,7 @@ export class Agent implements AgentData, AgentBase {
     const agentSpanOptions: Parameters<Tracer['startAgentSpan']>[0] = {
       messages: inputMessages,
       agentName: this.name,
-      agentId: this.agentId,
+      agentId: this.id,
       tools: this.tools,
     }
     if (agentModelId) agentSpanOptions.modelId = agentModelId
