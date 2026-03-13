@@ -9,52 +9,8 @@ import type { Serialized, MaybeSerializedInput, JSONSerializable } from './json.
 import { omitUndefined } from './json.js'
 import { TextBlock, type TextBlockData } from './messages.js'
 
-export type MediaFormats = DocumentFormat | ImageFormat | VideoFormat
-
-/**
- * MIME type mappings for supported media formats.
- * Browser-compatible (no external dependencies).
- */
-const MIME_TYPES: Record<MediaFormats, string> = {
-  // Images
-  png: 'image/png',
-  jpg: 'image/jpeg',
-  jpeg: 'image/jpeg',
-  gif: 'image/gif',
-  webp: 'image/webp',
-  // Videos
-  mkv: 'video/x-matroska',
-  mov: 'video/quicktime',
-  mp4: 'video/mp4',
-  webm: 'video/webm',
-  flv: 'video/x-flv',
-  mpeg: 'video/mpeg',
-  mpg: 'video/mpeg',
-  wmv: 'video/x-ms-wmv',
-  '3gp': 'video/3gpp',
-  // Documents
-  pdf: 'application/pdf',
-  csv: 'text/csv',
-  doc: 'application/msword',
-  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  xls: 'application/vnd.ms-excel',
-  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  html: 'text/html',
-  txt: 'text/plain',
-  md: 'text/markdown',
-  json: 'application/json',
-  xml: 'application/xml',
-}
-
-/**
- * Get the MIME type for a media format.
- *
- * @param format - File format/extension
- * @returns MIME type string or undefined if not a known format
- */
-export function getMimeType(format: string): string | undefined {
-  return MIME_TYPES[format.toLowerCase() as MediaFormats]
-}
+export type { ImageFormat, VideoFormat, DocumentFormat, MediaFormat } from '../mime.js'
+import type { ImageFormat, VideoFormat, DocumentFormat } from '../mime.js'
 
 /**
  * Cross-platform base64 encoding function that works in both browser and Node.js environments.
@@ -161,11 +117,6 @@ export class S3Location implements S3LocationData, JSONSerializable<S3LocationDa
     return new S3Location(data)
   }
 }
-
-/**
- * Image format type.
- */
-export type ImageFormat = 'png' | 'jpg' | 'jpeg' | 'gif' | 'webp'
 
 /**
  * Source for an image (Data version).
@@ -293,11 +244,6 @@ export class ImageBlock implements ImageBlockData, JSONSerializable<{ image: Ser
 }
 
 /**
- * Video format type.
- */
-export type VideoFormat = 'mkv' | 'mov' | 'mp4' | 'webm' | 'flv' | 'mpeg' | 'mpg' | 'wmv' | '3gp'
-
-/**
  * Source for a video (Data version).
  */
 export type VideoSourceData = { bytes: Uint8Array } | { s3Location: S3LocationData } // Bedrock: up to 1GB
@@ -403,11 +349,6 @@ export class VideoBlock implements VideoBlockData, JSONSerializable<{ video: Ser
     })
   }
 }
-
-/**
- * Document format type.
- */
-export type DocumentFormat = 'pdf' | 'csv' | 'doc' | 'docx' | 'xls' | 'xlsx' | 'html' | 'txt' | 'md' | 'json' | 'xml'
 
 /**
  * Content blocks that can be nested inside a document.

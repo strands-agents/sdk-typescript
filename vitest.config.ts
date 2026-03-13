@@ -29,7 +29,6 @@ export default defineConfig({
             'src/vended-tools/**/__tests__/**/*.test.ts',
             'src/vended-tools/**/__tests__/**/*.test.node.ts',
           ],
-          includeSource: ['src/**/*.{js,ts}'],
           name: { label: 'unit-node', color: 'green' },
           typecheck: {
             enabled: true,
@@ -86,6 +85,7 @@ export default defineConfig({
           include: ['test/integ/**/*.test.ts', 'test/integ/**/*.test.browser.ts'],
           name: { label: 'integ-browser', color: 'yellow' },
           testTimeout: 60 * 1000,
+          retry: 1,
           browser: {
             enabled: true,
             provider: playwright(),
@@ -122,8 +122,5 @@ export default defineConfig({
       },
     },
     environment: 'node',
-  },
-  define: {
-    'import.meta.vitest': 'undefined',
   },
 })

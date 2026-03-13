@@ -17,7 +17,7 @@ type ZodInferred<TInput> = TInput extends z.ZodType ? z.infer<TInput> : never
  * @typeParam TInput - Zod schema type for input validation
  * @typeParam TReturn - Return type of the callback function
  */
-export interface ToolConfig<TInput extends z.ZodType | undefined, TReturn extends JSONValue = JSONValue> {
+export interface ZodToolConfig<TInput extends z.ZodType | undefined, TReturn extends JSONValue = JSONValue> {
   /** The name of the tool */
   name: string
 
@@ -44,10 +44,10 @@ export interface ToolConfig<TInput extends z.ZodType | undefined, TReturn extend
 }
 
 /**
- * Internal implementation of a Zod-based tool.
+ * Zod-based tool implementation.
  * Extends Tool abstract class and implements InvokableTool interface.
  */
-class ZodTool<TInput extends z.ZodType | undefined, TReturn extends JSONValue = JSONValue>
+export class ZodTool<TInput extends z.ZodType | undefined, TReturn extends JSONValue = JSONValue>
   extends Tool
   implements InvokableTool<ZodInferred<TInput>, TReturn>
 {
@@ -70,7 +70,7 @@ class ZodTool<TInput extends z.ZodType | undefined, TReturn extends JSONValue = 
     context?: ToolContext
   ) => AsyncGenerator<unknown, TReturn, never> | Promise<TReturn> | TReturn
 
-  constructor(config: ToolConfig<TInput, TReturn>) {
+  constructor(config: ZodToolConfig<TInput, TReturn>) {
     super()
     const { name, description = '', inputSchema, callback } = config
 
@@ -164,72 +164,15 @@ class ZodTool<TInput extends z.ZodType | undefined, TReturn extends JSONValue = 
 
     // Handle different return types
     if (result && typeof result === 'object' && Symbol.asyncIterator in result) {
-      // AsyncGenerator - consume all yielded values and return the last one
-      let lastValue: TReturn | undefined = undefined
-      for await (const value of result as AsyncGenerator<unknown, TReturn, undefined>) {
-        lastValue = value as TReturn
+      const generator = result as AsyncGenerator<unknown, TReturn, undefined>
+      let iterResult = await generator.next()
+      while (!iterResult.done) {
+        iterResult = await generator.next()
       }
-      return lastValue as TReturn
+      return iterResult.value
     } else {
       // Regular value or Promise - return directly
       return await result
     }
   }
-}
-
-/**
- * Creates an InvokableTool from a Zod schema and callback function.
- *
- * The tool() function validates input against the schema and generates JSON schema
- * for model providers using Zod v4's built-in z.toJSONSchema() method.
- *
- * @example
- * ```typescript
- * import { tool } from '@strands-agents/sdk'
- * import { z } from 'zod'
- *
- * // Tool with input parameters
- * const calculator = tool({
- *   name: 'calculator',
- *   description: 'Performs basic arithmetic',
- *   inputSchema: z.object({
- *     operation: z.enum(['add', 'subtract', 'multiply', 'divide']),
- *     a: z.number(),
- *     b: z.number()
- *   }),
- *   callback: (input) => {
- *     switch (input.operation) {
- *       case 'add': return input.a + input.b
- *       case 'subtract': return input.a - input.b
- *       case 'multiply': return input.a * input.b
- *       case 'divide': return input.a / input.b
- *     }
- *   }
- * })
- *
- * // Tool without input (omit inputSchema)
- * const getStatus = tool({
- *   name: 'getStatus',
- *   description: 'Gets system status',
- *   callback: () => ({ status: 'operational', uptime: 99.9 })
- * })
- *
- * // Direct invocation
- * const result = await calculator.invoke({ operation: 'add', a: 5, b: 3 })
- *
- * // Agent usage
- * for await (const event of calculator.stream(context)) {
- *   console.log(event)
- * }
- * ```
- *
- * @typeParam TInput - Zod schema type for input validation
- * @typeParam TReturn - Return type of the callback function
- * @param config - Tool configuration
- * @returns An InvokableTool that implements the Tool interface with invoke() method
- */
-export function tool<TInput extends z.ZodType | undefined, TReturn extends JSONValue = JSONValue>(
-  config: ToolConfig<TInput, TReturn>
-): InvokableTool<ZodInferred<TInput>, TReturn> {
-  return new ZodTool(config)
 }

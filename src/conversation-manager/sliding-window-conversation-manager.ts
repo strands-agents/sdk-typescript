@@ -7,8 +7,8 @@
 
 import { ContextWindowOverflowError } from '../errors.js'
 import { Message, TextBlock, ToolResultBlock } from '../types/messages.js'
-import type { HookProvider } from '../hooks/types.js'
-import type { HookRegistry } from '../hooks/registry.js'
+import type { Plugin } from '../plugins/plugin.js'
+import type { AgentData } from '../types/agent.js'
 import { AfterInvocationEvent, AfterModelCallEvent } from '../hooks/events.js'
 
 /**
@@ -36,13 +36,20 @@ export type SlidingWindowConversationManagerConfig = {
  * the window size, it will either truncate large tool results or remove the oldest
  * messages while ensuring tool use/result pairs remain valid.
  *
- * As a HookProvider, it registers callbacks for:
+ * As a Plugin, it registers callbacks for:
  * - AfterInvocationEvent: Applies sliding window management after each invocation
  * - AfterModelCallEvent: Reduces context on overflow errors and requests retry
  */
-export class SlidingWindowConversationManager implements HookProvider {
+export class SlidingWindowConversationManager implements Plugin {
   private readonly _windowSize: number
   private readonly _shouldTruncateResults: boolean
+
+  /**
+   * Unique identifier for this plugin.
+   */
+  get name(): string {
+    return 'strands:sliding-window-conversation-manager'
+  }
 
   /**
    * Initialize the sliding window conversation manager.
@@ -55,22 +62,22 @@ export class SlidingWindowConversationManager implements HookProvider {
   }
 
   /**
-   * Registers callbacks with the hook registry.
+   * Initialize the plugin by registering hooks with the agent.
    *
    * Registers:
    * - AfterInvocationEvent callback to apply sliding window management
    * - AfterModelCallEvent callback to handle context overflow and request retry
    *
-   * @param registry - The hook registry to register callbacks with
+   * @param agent - The agent to register hooks with
    */
-  public registerCallbacks(registry: HookRegistry): void {
+  public initAgent(agent: AgentData): void {
     // Apply sliding window management after each invocation
-    registry.addCallback(AfterInvocationEvent, (event) => {
+    agent.addHook(AfterInvocationEvent, (event) => {
       this.applyManagement(event.agent.messages)
     })
 
     // Handle context overflow errors
-    registry.addCallback(AfterModelCallEvent, (event) => {
+    agent.addHook(AfterModelCallEvent, (event) => {
       if (event.error instanceof ContextWindowOverflowError) {
         this.reduceContext(event.agent.messages, event.error)
         event.retry = true
@@ -81,7 +88,7 @@ export class SlidingWindowConversationManager implements HookProvider {
   /**
    * Apply the sliding window to the messages array to maintain a manageable history size.
    *
-   * This method is called after every event loop cycle to apply a sliding window if the message
+   * This method is called after every agent loop cycle to apply a sliding window if the message
    * count exceeds the window size. If the number of messages is within the window size, no action
    * is taken.
    *

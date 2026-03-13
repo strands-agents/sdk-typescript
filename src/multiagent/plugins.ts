@@ -1,0 +1,90 @@
+/**
+ * Plugin interface and registry for extending multi-agent orchestrator functionality.
+ *
+ * This module defines the MultiAgentPlugin abstract class and MultiAgentPluginRegistry,
+ * which provide a composable way to add behavior to multi-agent orchestrators (e.g. Swarm, Graph)
+ * through hook registration and custom initialization.
+ */
+
+import type { MultiAgentBase } from './base.js'
+
+/**
+ * Abstract base class for plugins that extend multi-agent orchestrator functionality.
+ *
+ * MultiAgentPlugins provide a composable way to add behavior to orchestrators
+ * by registering hook callbacks in their `initMultiAgent` method.
+ *
+ * @example
+ * ```typescript
+ * class LoggingPlugin extends MultiAgentPlugin {
+ *   get name(): string {
+ *     return 'logging-plugin'
+ *   }
+ *
+ *   override initMultiAgent(orchestrator: MultiAgentBase): void {
+ *     orchestrator.addHook(BeforeNodeCallEvent, (event) => {
+ *       console.log(`Node ${event.nodeId} starting`)
+ *     })
+ *   }
+ * }
+ *
+ * const swarm = new Swarm({
+ *   nodes: [agentA, agentB],
+ *   start: 'agentA',
+ *   plugins: [new LoggingPlugin()],
+ * })
+ * ```
+ */
+export abstract class MultiAgentPlugin {
+  /**
+   * A stable string identifier for the plugin.
+   * Used for logging, duplicate detection, and plugin management.
+   */
+  abstract readonly name: string
+
+  /**
+   * Initialize the plugin with the orchestrator instance.
+   *
+   * Override this method to register hooks and perform custom initialization.
+   *
+   * @param orchestrator - The orchestrator this plugin is being attached to
+   */
+  abstract initMultiAgent(orchestrator: MultiAgentBase): void | Promise<void>
+}
+
+/**
+ * Registry for managing plugins attached to a multi-agent orchestrator.
+ *
+ * Holds pending plugins and initializes them on first use.
+ * Handles duplicate detection and calls each plugin's initMultiAgent method.
+ */
+export class MultiAgentPluginRegistry {
+  private readonly _plugins: Map<string, MultiAgentPlugin>
+  private readonly _pending: MultiAgentPlugin[]
+
+  constructor(plugins: MultiAgentPlugin[] = []) {
+    this._plugins = new Map()
+    this._pending = [...plugins]
+  }
+
+  /**
+   * Initialize all pending plugins with the orchestrator.
+   * Safe to call multiple times — only runs once.
+   *
+   * @param orchestrator - The orchestrator instance to initialize plugins with
+   */
+  async initialize(orchestrator: MultiAgentBase): Promise<void> {
+    while (this._pending.length > 0) {
+      const plugin = this._pending.shift()!
+      await this._addAndInit(plugin, orchestrator)
+    }
+  }
+
+  private async _addAndInit(plugin: MultiAgentPlugin, orchestrator: MultiAgentBase): Promise<void> {
+    if (this._plugins.has(plugin.name)) {
+      throw new Error(`plugin_name=<${plugin.name}> | plugin already registered`)
+    }
+    this._plugins.set(plugin.name, plugin)
+    await plugin.initMultiAgent(orchestrator)
+  }
+}

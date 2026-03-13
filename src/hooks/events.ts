@@ -227,6 +227,17 @@ export class BeforeModelCallEvent extends HookableEvent {
 }
 
 /**
+ * Redaction information when guardrails block content.
+ */
+export interface Redaction {
+  /**
+   * The text to replace the user message with.
+   * When present, indicates the last user message should be redacted with this text.
+   */
+  userMessage: string
+}
+
+/**
  * Response from a model invocation containing the message and stop reason.
  */
 export interface ModelStopData {
@@ -238,6 +249,12 @@ export interface ModelStopData {
    * The reason the model stopped generating.
    */
   readonly stopReason: StopReason
+  /**
+   * Optional redaction info when guardrails blocked input.
+   * When present, indicates the last user message was redacted.
+   * The redacted message is available in `agent.messages` (last message).
+   */
+  readonly redaction?: Redaction
 }
 
 /**

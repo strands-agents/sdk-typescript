@@ -48,7 +48,7 @@ describe('FileStorage', () => {
           SCOPE_ID,
           'snapshots',
           'immutable_history',
-          'snapshot_00001.json'
+          'snapshot_1.json'
         )
         const content = await fs.readFile(historyPath, 'utf8')
         expect(JSON.parse(content)).toEqual(snapshot)
@@ -186,32 +186,31 @@ describe('FileStorage', () => {
     })
   })
 
-  describe('listSnapshots', () => {
+  describe('listSnapshotIds', () => {
     describe('FileSnapshotStorage_When_listSnapshots_Then_ReturnsOrderedIds', () => {
       it('returns sorted snapshot IDs', async () => {
         const location: SnapshotLocation = { sessionId: 'test-session', scope: createTestScope(), scopeId: SCOPE_ID }
         const snapshots = createTestSnapshots(3)
+        const ids = [
+          '019c9bf1-14e5-7eef-96fb-cc07ae54210f',
+          '019c9bf1-1d34-7eef-96fb-d1be20fd7bbd',
+          '019c9bf1-24bb-7eef-96fb-ddcc943cd859',
+        ]
 
-        await storage.saveSnapshot({ location, snapshotId: '3', isLatest: false, snapshot: snapshots[2]! })
-        await storage.saveSnapshot({ location, snapshotId: '1', isLatest: false, snapshot: snapshots[0]! })
-        await storage.saveSnapshot({ location, snapshotId: '2', isLatest: false, snapshot: snapshots[1]! })
+        await storage.saveSnapshot({ location, snapshotId: ids[2]!, isLatest: false, snapshot: snapshots[2]! })
+        await storage.saveSnapshot({ location, snapshotId: ids[0]!, isLatest: false, snapshot: snapshots[0]! })
+        await storage.saveSnapshot({ location, snapshotId: ids[1]!, isLatest: false, snapshot: snapshots[1]! })
 
         const result = await storage.listSnapshotIds({ location })
 
-        expect(result).toEqual(['00001', '00002', '00003'])
-      })
-
-      it('returns empty array when no snapshots exist', async () => {
-        const result = await storage.listSnapshotIds({
-          location: { sessionId: 'empty-session', scope: 'agent', scopeId: SCOPE_ID },
-        })
-        expect(result).toEqual([])
+        expect(result).toEqual(ids)
       })
 
       it('ignores non-snapshot files', async () => {
         const location: SnapshotLocation = { sessionId: 'test-session', scope: createTestScope(), scopeId: SCOPE_ID }
         const snapshot = createTestSnapshot()
-        await storage.saveSnapshot({ location, snapshotId: '1', isLatest: false, snapshot })
+        const id = '019c9bf1-14e5-7eef-96fb-cc07ae54210f'
+        await storage.saveSnapshot({ location, snapshotId: id, isLatest: false, snapshot })
 
         const historyDir = join(
           testDir,
@@ -225,7 +224,58 @@ describe('FileStorage', () => {
         await fs.writeFile(join(historyDir, 'other-file.txt'), 'not a snapshot', 'utf8')
 
         const result = await storage.listSnapshotIds({ location })
-        expect(result).toEqual(['00001'])
+        expect(result).toEqual([id])
+      })
+
+      it('filters by startAfter for pagination', async () => {
+        const location: SnapshotLocation = { sessionId: 'test-session', scope: createTestScope(), scopeId: SCOPE_ID }
+        const snapshots = createTestSnapshots(3)
+        const ids = [
+          '019c9bf1-14e5-7eef-96fb-cc07ae54210f',
+          '019c9bf1-1d34-7eef-96fb-d1be20fd7bbd',
+          '019c9bf1-24bb-7eef-96fb-ddcc943cd859',
+        ]
+        for (let i = 0; i < ids.length; i++) {
+          await storage.saveSnapshot({ location, snapshotId: ids[i]!, isLatest: false, snapshot: snapshots[i]! })
+        }
+
+        const result = await storage.listSnapshotIds({ location, startAfter: ids[0]! })
+
+        expect(result).toEqual([ids[1], ids[2]])
+      })
+
+      it('limits results when limit is provided', async () => {
+        const location: SnapshotLocation = { sessionId: 'test-session', scope: createTestScope(), scopeId: SCOPE_ID }
+        const snapshots = createTestSnapshots(3)
+        const ids = [
+          '019c9bf1-14e5-7eef-96fb-cc07ae54210f',
+          '019c9bf1-1d34-7eef-96fb-d1be20fd7bbd',
+          '019c9bf1-24bb-7eef-96fb-ddcc943cd859',
+        ]
+        for (let i = 0; i < ids.length; i++) {
+          await storage.saveSnapshot({ location, snapshotId: ids[i]!, isLatest: false, snapshot: snapshots[i]! })
+        }
+
+        const result = await storage.listSnapshotIds({ location, limit: 2 })
+
+        expect(result).toEqual([ids[0], ids[1]])
+      })
+
+      it('combines startAfter and limit', async () => {
+        const location: SnapshotLocation = { sessionId: 'test-session', scope: createTestScope(), scopeId: SCOPE_ID }
+        const snapshots = createTestSnapshots(3)
+        const ids = [
+          '019c9bf1-14e5-7eef-96fb-cc07ae54210f',
+          '019c9bf1-1d34-7eef-96fb-d1be20fd7bbd',
+          '019c9bf1-24bb-7eef-96fb-ddcc943cd859',
+        ]
+        for (let i = 0; i < ids.length; i++) {
+          await storage.saveSnapshot({ location, snapshotId: ids[i]!, isLatest: false, snapshot: snapshots[i]! })
+        }
+
+        const result = await storage.listSnapshotIds({ location, startAfter: ids[0]!, limit: 1 })
+
+        expect(result).toEqual([ids[1]])
       })
     })
 
@@ -244,6 +294,30 @@ describe('FileStorage', () => {
         await expect(
           storage.listSnapshotIds({ location: { sessionId: 'test-session', scope: 'agent', scopeId: SCOPE_ID } })
         ).rejects.toThrow(SessionError)
+      })
+    })
+  })
+
+  describe('deleteSession', () => {
+    describe('FileSnapshotStorage_When_DeleteSession_Then_RemovesDirectory', () => {
+      it('removes the entire session directory', async () => {
+        const location: SnapshotLocation = { sessionId: 'test-session', scope: createTestScope(), scopeId: SCOPE_ID }
+        await storage.saveSnapshot({ location, snapshotId: '1', isLatest: true, snapshot: createTestSnapshot() })
+
+        await storage.deleteSession({ sessionId: 'test-session' })
+
+        await expect(fs.stat(join(testDir, 'test-session'))).rejects.toMatchObject({ code: 'ENOENT' })
+      })
+
+      it('no-ops when session directory does not exist', async () => {
+        await expect(storage.deleteSession({ sessionId: 'nonexistent-session' })).resolves.toBeUndefined()
+      })
+    })
+
+    describe('FileSnapshotStorage_When_DeleteSessionFails_Then_ThrowsSessionError', () => {
+      it('throws SessionError when rm fails', async () => {
+        vi.spyOn(fs, 'rm').mockRejectedValueOnce(new Error('Permission denied'))
+        await expect(storage.deleteSession({ sessionId: 'test-session' })).rejects.toThrow(SessionError)
       })
     })
   })
@@ -303,7 +377,6 @@ describe('FileStorage', () => {
         })
         expect(result).toEqual({
           schemaVersion: '1.0',
-          nextSnapshotId: '1',
           updatedAt: expect.any(String),
         })
       })

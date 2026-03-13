@@ -25,6 +25,7 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: 22
+          package-manager-cache: false
 
       - name: Install dependencies
         run: npm install
@@ -37,3 +38,6 @@ jobs:
 
       - name: Run type checking
         run: npm run type-check
+
+      - name: Verify browser bundle
+        run: npm run check:browser-bundle

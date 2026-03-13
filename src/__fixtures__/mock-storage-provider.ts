@@ -19,7 +19,6 @@ export function createTestSnapshot(overrides: Partial<Snapshot> = {}): Snapshot 
 export function createTestManifest(overrides: Partial<SnapshotManifest> = {}): SnapshotManifest {
   return {
     schemaVersion: '1.0',
-    nextSnapshotId: '2',
     updatedAt: '2024-01-01T00:00:00.000Z',
     ...overrides,
   }
@@ -72,19 +71,41 @@ export class MockSnapshotStorage implements SnapshotStorage {
     return this.snapshots.get(this.getKey(params.location, params.snapshotId)) ?? null
   }
 
-  async listSnapshotIds(params: { location: SnapshotLocation }): Promise<string[]> {
+  async listSnapshotIds(params: {
+    location: SnapshotLocation
+    limit?: number
+    startAfter?: string
+  }): Promise<string[]> {
     if (this.shouldThrowErrors) throw new Error('Mock list error')
 
     const prefix = `${params.location.sessionId}::${params.location.scope}::${params.location.scopeId}::`
-    const ids: string[] = []
+    let ids: string[] = []
 
-    for (const [key, _snapshot] of this.snapshots) {
+    for (const [key] of this.snapshots) {
       if (key.startsWith(prefix) && !key.endsWith('::latest')) {
         ids.push(key.slice(prefix.length))
       }
     }
 
-    return ids.sort()
+    ids = ids.sort()
+    if (params.startAfter) {
+      ids = ids.filter((id) => id > params.startAfter!)
+    }
+    if (params.limit !== undefined) {
+      ids = ids.slice(0, params.limit)
+    }
+    return ids
+  }
+
+  async deleteSession(params: { sessionId: string }): Promise<void> {
+    if (this.shouldThrowErrors) throw new Error('Mock delete error')
+
+    for (const key of this.snapshots.keys()) {
+      if (key.startsWith(`${params.sessionId}::`)) this.snapshots.delete(key)
+    }
+    for (const key of this.manifests.keys()) {
+      if (key.startsWith(`${params.sessionId}::`)) this.manifests.delete(key)
+    }
   }
 
   async loadManifest(params: { location: SnapshotLocation }): Promise<SnapshotManifest> {
@@ -98,8 +119,7 @@ export class MockSnapshotStorage implements SnapshotStorage {
     const key = this.getManifestKey(params.location)
     return (
       this.manifests.get(key) ?? {
-        schemaVersion: '1',
-        nextSnapshotId: '1',
+        schemaVersion: '1.0',
         updatedAt: new Date().toISOString(),
       }
     )

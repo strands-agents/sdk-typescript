@@ -22,6 +22,7 @@ export interface ProviderFeatures {
   images: boolean
   documents: boolean
   video: boolean
+  citations: boolean
 }
 
 export const bedrock = {
@@ -34,6 +35,7 @@ export const bedrock = {
     images: true,
     documents: true,
     video: true,
+    citations: true,
   } satisfies ProviderFeatures,
   models: {
     default: {},
@@ -68,6 +70,7 @@ export const openai = {
     images: true,
     documents: true,
     video: false,
+    citations: false,
   } satisfies ProviderFeatures,
   models: {
     default: {},
@@ -100,6 +103,7 @@ export const anthropic = {
     images: true,
     documents: true,
     video: false,
+    citations: false,
   } satisfies ProviderFeatures,
   models: {
     default: {},
@@ -139,6 +143,7 @@ export const gemini = {
     images: true,
     documents: true,
     video: true,
+    citations: false,
   } satisfies ProviderFeatures,
   models: {
     default: {},

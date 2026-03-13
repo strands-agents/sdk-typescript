@@ -2,12 +2,35 @@
  * Multi-agent orchestration module.
  */
 
-export { MultiAgentState, Status, NodeResult } from './state.js'
-export type { NodeResultUpdate } from './state.js'
+export { MultiAgentState, NodeState, Status, NodeResult, MultiAgentResult } from './state.js'
+export type { NodeResultUpdate, ResultStatus } from './state.js'
 
-export { Node, AgentNode } from './nodes.js'
-export type { NodeConfig } from './nodes.js'
+export { Node, AgentNode, MultiAgentNode } from './nodes.js'
+export type { NodeConfig, AgentNodeOptions, MultiAgentNodeOptions, NodeDefinition, NodeType } from './nodes.js'
 
-export { NodeStreamUpdateEvent } from './events.js'
+export type { MultiAgentBase } from './base.js'
+
+export {
+  MultiAgentInitializedEvent,
+  BeforeMultiAgentInvocationEvent,
+  AfterMultiAgentInvocationEvent,
+  BeforeNodeCallEvent,
+  AfterNodeCallEvent,
+  NodeStreamUpdateEvent,
+  NodeResultEvent,
+  NodeCancelEvent,
+  MultiAgentHandoffEvent,
+  MultiAgentResultEvent,
+} from './events.js'
 export type { MultiAgentStreamEvent } from './events.js'
-export type { NodeType } from './types.js'
+
+export { Edge } from './edge.js'
+export type { EdgeHandler, EdgeDefinition } from './edge.js'
+
+export { Graph } from './graph.js'
+export type { GraphConfig, GraphOptions } from './graph.js'
+
+export { Swarm } from './swarm.js'
+export type { SwarmConfig, SwarmNodeDefinition, SwarmOptions } from './swarm.js'
+
+export type { MultiAgentPlugin } from './plugins.js'

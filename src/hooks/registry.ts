@@ -1,12 +1,11 @@
 import type { HookableEvent } from './events.js'
-import type { HookCallback, HookProvider, HookableEventConstructor, HookCleanup } from './types.js'
+import type { HookCallback, HookableEventConstructor, HookCleanup } from './types.js'
 
 /**
- * Represents a callback entry with its source provider.
+ * Represents a registered callback entry.
  */
 type CallbackEntry = {
   callback: HookCallback<HookableEvent>
-  source: HookProvider | undefined
 }
 
 /**
@@ -22,20 +21,6 @@ export interface HookRegistry {
    * @returns Cleanup function that removes the callback when invoked
    */
   addCallback<T extends HookableEvent>(eventType: HookableEventConstructor<T>, callback: HookCallback<T>): HookCleanup
-
-  /**
-   * Register all callbacks from a hook provider.
-   *
-   * @param provider - The hook provider to register
-   */
-  addHook(provider: HookProvider): void
-
-  /**
-   * Remove all callbacks registered by a hook provider.
-   *
-   * @param provider - The hook provider to remove
-   */
-  removeHook(provider: HookProvider): void
 }
 
 /**
@@ -44,11 +29,9 @@ export interface HookRegistry {
  */
 export class HookRegistryImplementation implements HookRegistry {
   private readonly _callbacks: Map<HookableEventConstructor, CallbackEntry[]>
-  private _currentProvider: HookProvider | undefined
 
   constructor() {
     this._callbacks = new Map()
-    this._currentProvider = undefined
   }
 
   /**
@@ -59,7 +42,7 @@ export class HookRegistryImplementation implements HookRegistry {
    * @returns Cleanup function that removes the callback when invoked
    */
   addCallback<T extends HookableEvent>(eventType: HookableEventConstructor<T>, callback: HookCallback<T>): HookCleanup {
-    const entry: CallbackEntry = { callback: callback as HookCallback<HookableEvent>, source: this._currentProvider }
+    const entry: CallbackEntry = { callback: callback as HookCallback<HookableEvent> }
     const callbacks = this._callbacks.get(eventType) ?? []
     callbacks.push(entry)
     this._callbacks.set(eventType, callbacks)
@@ -70,52 +53,6 @@ export class HookRegistryImplementation implements HookRegistry {
       const index = callbacks.indexOf(entry)
       if (index !== -1) {
         callbacks.splice(index, 1)
-      }
-    }
-  }
-
-  /**
-   * Register all callbacks from a hook provider.
-   *
-   * @param provider - The hook provider to register
-   */
-  addHook(provider: HookProvider): void {
-    // We want to be able to remove all hooks from a given provider so that things implemented via hooks (like
-    // conversation-managers or printers) can be changed dynamically on the agent. To allow removing hooks, we
-    // need to track where a given callback came from - we could force callers to pass in the source when calling
-    // addCallback but that's a poor dev-x, so we do it ourselves here.
-
-    this._currentProvider = provider
-    try {
-      provider.registerCallbacks(this)
-    } finally {
-      this._currentProvider = undefined
-    }
-  }
-
-  /**
-   * Register all callbacks from multiple hook providers.
-   *
-   * @param providers - Array of hook providers to register
-   */
-  addAllHooks(providers: HookProvider[]): void {
-    for (const provider of providers) {
-      this.addHook(provider)
-    }
-  }
-
-  /**
-   * Remove all callbacks registered by a hook provider.
-   *
-   * @param provider - The hook provider to remove
-   */
-  removeHook(provider: HookProvider): void {
-    for (const [eventType, callbacks] of this._callbacks.entries()) {
-      const filtered = callbacks.filter((entry) => entry.source !== provider)
-      if (filtered.length === 0) {
-        this._callbacks.delete(eventType)
-      } else if (filtered.length !== callbacks.length) {
-        this._callbacks.set(eventType, filtered)
       }
     }
   }

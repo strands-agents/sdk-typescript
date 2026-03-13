@@ -21,7 +21,8 @@ import type {
 } from '../../types/messages.js'
 import type { ModelStreamEvent } from '../streaming.js'
 import type { GeminiStreamState } from './types.js'
-import { encodeBase64, getMimeType, type ImageBlock, type DocumentBlock, type VideoBlock } from '../../types/media.js'
+import { encodeBase64, type ImageBlock, type DocumentBlock, type VideoBlock } from '../../types/media.js'
+import { toMimeType } from '../../mime.js'
 import { logger } from '../../logging/logger.js'
 
 /**
@@ -132,7 +133,7 @@ function formatContentBlock(block: ContentBlock, toolUseIdToName: Map<string, st
  * @internal
  */
 function formatImageBlock(block: ImageBlock): Part[] {
-  const mimeType = getMimeType(block.format) ?? `image/${block.format}`
+  const mimeType = toMimeType(block.format) ?? `image/${block.format}`
 
   switch (block.source.type) {
     case 'imageSourceBytes':
@@ -185,7 +186,7 @@ function formatReasoningBlock(block: ReasoningBlock): Part[] {
  * @internal
  */
 function formatDocumentBlock(block: DocumentBlock): Part[] {
-  const mimeType = getMimeType(block.format) ?? `application/${block.format}`
+  const mimeType = toMimeType(block.format) ?? `application/${block.format}`
 
   switch (block.source.type) {
     case 'documentSourceBytes':
@@ -216,7 +217,7 @@ function formatDocumentBlock(block: DocumentBlock): Part[] {
  * @internal
  */
 function formatVideoBlock(block: VideoBlock): Part[] {
-  const mimeType = getMimeType(block.format) ?? `video/${block.format}`
+  const mimeType = toMimeType(block.format) ?? `video/${block.format}`
 
   switch (block.source.type) {
     case 'videoSourceBytes':

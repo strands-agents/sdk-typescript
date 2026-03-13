@@ -47,6 +47,7 @@ Strands Agents is a simple yet powerful SDK that takes a model-driven approach t
 - **⚡ Streaming Support**: Real-time response streaming for better user experience
 - **🎣 Extensible Hooks**: Lifecycle hooks for monitoring and customizing agent behavior
 - **💬 Conversation Management**: Flexible strategies for managing conversation history and context windows
+- **🤝 Multi-Agent Orchestration**: Graph and Swarm patterns for coordinating multiple agents
 
 ---
 
@@ -234,6 +235,69 @@ await agent.invoke("Use a random tool from the MCP server.");
 
 await documentationTools.disconnect();
 ```
+
+### Multi-Agent Orchestration
+
+Coordinate multiple agents using built-in orchestration patterns.
+
+**Graph** — You define a deterministic execution plan. Agents run as nodes in a directed graph, with edges controlling execution order. Parallel execution is supported, and downstream nodes run once all dependencies complete.
+
+```typescript
+import { Agent, BedrockModel, Graph } from '@strands-agents/sdk'
+
+const model = new BedrockModel({ maxTokens: 1024 })
+
+const researcher = new Agent({
+  model,
+  agentId: 'researcher',
+  systemPrompt: 'Research the topic and provide key facts.',
+})
+
+const writer = new Agent({
+  model,
+  agentId: 'writer',
+  systemPrompt: 'Rewrite the research into a polished paragraph.',
+})
+
+const graph = new Graph({
+  nodes: [researcher, writer],
+  edges: [['researcher', 'writer']],
+})
+
+const result = await graph.invoke('What is the largest ocean?')
+```
+
+**Swarm** — The agents decide the routing. Each agent chooses whether to hand off to another agent or produce a final response, making the execution path dynamic and model-driven.
+
+```typescript
+import { Agent, BedrockModel, Swarm } from '@strands-agents/sdk'
+
+const model = new BedrockModel({ maxTokens: 1024 })
+
+const researcher = new Agent({
+  model,
+  agentId: 'researcher',
+  description: 'Researches a topic and gathers key facts.',
+  systemPrompt: 'Research the answer, then hand off to the writer.',
+})
+
+const writer = new Agent({
+  model,
+  agentId: 'writer',
+  description: 'Writes a polished final answer.',
+  systemPrompt: 'Write the final answer. Do not hand off.',
+})
+
+const swarm = new Swarm({
+  nodes: [researcher, writer],
+  start: 'researcher',
+  maxSteps: 4,
+})
+
+const result = await swarm.invoke('What is the largest ocean?')
+```
+
+Both patterns support streaming via `.stream()` for real-time access to handoff and node execution events. See the [examples](./examples/) directory for complete working samples.
 
 ---
 

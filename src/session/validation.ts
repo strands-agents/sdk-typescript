@@ -13,3 +13,16 @@ export function validateIdentifier(id: string): string {
   }
   return id
 }
+
+/**
+ * Validates that a string is a UUID v7.
+ *
+ * @param id - The string to validate
+ * @throws Error if the string is not a valid UUID v7
+ */
+export function validateUuidV7(id: string): void {
+  const uuidV7Pattern = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+  if (!uuidV7Pattern.test(id)) {
+    throw new Error(`'${id}' is not a valid UUID v7 snapshot ID`)
+  }
+}
