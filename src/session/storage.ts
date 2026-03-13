@@ -8,7 +8,7 @@ export type SnapshotLocation = {
   sessionId: string
   /** Scope of the snapshot (agent or multi-agent) */
   scope: Scope
-  /** Scope-specific identifier (agentId or multiAgentId) */
+  /** Scope-specific identifier (agent id or multi-agent id) */
   scopeId: string
 }
 

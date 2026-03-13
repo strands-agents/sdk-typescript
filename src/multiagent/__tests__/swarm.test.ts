@@ -14,9 +14,9 @@ import { Swarm } from '../swarm.js'
  * The model returns a toolUseBlock with the handoff payload, then a text block to finish.
  */
 function createHandoffAgent(
-  agentId: string,
+  id: string,
   handoff: { agentId?: string; message: string; context?: Record<string, unknown> },
-  description: string = `Agent ${agentId}`
+  description: string = `Agent ${id}`
 ): Agent {
   const model = new MockMessageModel()
     .addTurn({
@@ -26,14 +26,14 @@ function createHandoffAgent(
       input: handoff as JSONValue,
     })
     .addTurn(new TextBlock('Done'))
-  return new Agent({ model, printer: false, agentId, description })
+  return new Agent({ model, printer: false, id, description })
 }
 
 /**
  * Creates a simple agent that produces a final response (no handoff).
  */
-function createFinalAgent(agentId: string, message: string, description: string = `Agent ${agentId}`): Agent {
-  return createHandoffAgent(agentId, { message }, description)
+function createFinalAgent(id: string, message: string, description: string = `Agent ${id}`): Agent {
+  return createHandoffAgent(id, { message }, description)
 }
 
 describe('Swarm', () => {
@@ -57,7 +57,7 @@ describe('Swarm', () => {
 
     it('accepts AgentNodeOptions with per-node config', () => {
       const swarm = new Swarm({
-        nodes: [{ agent: createFinalAgent('a', 'hi') }],
+        nodes: [{ type: 'agentOptions', agent: createFinalAgent('a', 'hi') }],
         start: 'a',
       })
       expect(swarm.nodes.get('a')).toBeInstanceOf(AgentNode)
@@ -207,10 +207,10 @@ describe('Swarm', () => {
 
     it('returns failed result when agent throws', async () => {
       const model = new MockMessageModel().addTurn(new Error('agent exploded'))
-      const agent = new Agent({ model, printer: false, agentId: 'a', description: 'Agent a' })
+      const agent = new Agent({ model, printer: false, id: 'a', description: 'Agent a' })
 
       const swarm = new Swarm({
-        nodes: [{ agent }],
+        nodes: [{ type: 'agentOptions', agent }],
         start: 'a',
       })
 

@@ -1,4 +1,3 @@
-import { Agent } from '../agent/agent.js'
 import type { InvokeArgs } from '../agent/agent.js'
 import type { ContentBlock } from '../types/messages.js'
 import { TextBlock } from '../types/messages.js'
@@ -87,6 +86,7 @@ export interface GraphOptions extends GraphConfig {
  * ```
  */
 export class Graph implements MultiAgentBase {
+  readonly type = 'multiAgent' as const
   readonly id: string
   readonly nodes: ReadonlyMap<string, Node>
   readonly edges: readonly Edge[]
@@ -358,25 +358,23 @@ export class Graph implements MultiAgentBase {
 
       if (definition instanceof Node) {
         node = definition
-      } else if ('type' in definition) {
+      } else {
         switch (definition.type) {
-          case 'agent': {
-            const { type: _, ...options } = definition
-            node = new AgentNode(options)
+          case 'agent':
+            node = new AgentNode({ agent: definition })
             break
-          }
-          case 'multiAgent': {
-            const { type: _, ...options } = definition
-            node = new MultiAgentNode(options)
+          case 'multiAgent':
+            node = new MultiAgentNode({ orchestrator: definition })
             break
-          }
+          case 'agentOptions':
+            node = new AgentNode(definition)
+            break
+          case 'multiAgentOptions':
+            node = new MultiAgentNode(definition)
+            break
           default:
             throw new Error('unknown node definition type')
         }
-      } else if (definition instanceof Agent) {
-        node = new AgentNode({ agent: definition })
-      } else {
-        node = new MultiAgentNode({ orchestrator: definition })
       }
 
       if (nodes.has(node.id)) {

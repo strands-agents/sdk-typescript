@@ -16,6 +16,7 @@ import type { MultiAgentBase } from '../base.js'
 import type { AgentStreamEvent } from '../../types/agent.js'
 
 const mockOrchestrator: MultiAgentBase = {
+  type: 'multiAgent',
   id: 'test-orchestrator',
   invoke: async () => new MultiAgentResult({ results: [], duration: 0 }),
   // eslint-disable-next-line require-yield

@@ -10,7 +10,7 @@ import { Graph } from '../graph.js'
 
 function makeAgent(id: string, text = 'reply'): Agent {
   const model = new MockMessageModel().addTurn(new TextBlock(text))
-  return new Agent({ model, printer: false, agentId: id })
+  return new Agent({ model, printer: false, id })
 }
 
 describe('Graph', () => {
@@ -34,7 +34,7 @@ describe('Graph', () => {
 
     it('accepts agent node options', () => {
       const graph = new Graph({
-        nodes: [{ type: 'agent', agent: makeAgent('a') }],
+        nodes: [{ type: 'agentOptions', agent: makeAgent('a') }],
         edges: [],
       })
       expect(graph.nodes.get('a')).toBeInstanceOf(AgentNode)
@@ -48,7 +48,7 @@ describe('Graph', () => {
       })
 
       const graph = new Graph({
-        nodes: [{ type: 'multiAgent', orchestrator: inner }],
+        nodes: [{ type: 'multiAgentOptions', orchestrator: inner }],
         edges: [],
       })
       expect(graph.nodes.get('inner')).toBeInstanceOf(MultiAgentNode)
@@ -317,7 +317,7 @@ describe('Graph', () => {
 
     it('returns failed result when agent throws', async () => {
       const model = new MockMessageModel().addTurn(new Error('agent exploded'))
-      const agent = new Agent({ model, printer: false, agentId: 'a' })
+      const agent = new Agent({ model, printer: false, id: 'a' })
 
       const graph = new Graph({
         nodes: [agent, makeAgent('b', 'b-reply')],

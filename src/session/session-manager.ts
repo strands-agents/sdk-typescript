@@ -95,7 +95,7 @@ export class SessionManager implements Plugin {
   }
 
   private _location(agent: Agent): SnapshotLocation {
-    return { sessionId: this._sessionId, scope: 'agent', scopeId: agent.agentId }
+    return { sessionId: this._sessionId, scope: 'agent', scopeId: agent.id }
   }
 
   async saveSnapshot(params: { target: Agent; isLatest: boolean }): Promise<void> {

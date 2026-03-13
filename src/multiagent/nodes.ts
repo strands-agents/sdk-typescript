@@ -1,4 +1,5 @@
-import type { Agent, InvokeArgs, InvokeOptions } from '../agent/agent.js'
+import type { AgentBase } from '../agent/agent-base.js'
+import type { InvokeArgs, InvokeOptions } from '../agent/agent.js'
 import { takeSnapshot, loadSnapshot } from '../agent/snapshot.js'
 import type { MultiAgentStreamEvent } from './events.js'
 import { NodeStreamUpdateEvent, NodeResultEvent } from './events.js'
@@ -106,23 +107,23 @@ export abstract class Node {
  */
 export interface AgentNodeOptions {
   /** The agent to wrap as a node. */
-  agent: Agent
+  agent: AgentBase
 }
 
 /**
- * Node that wraps an Agent instance for multi-agent orchestration.
+ * Node that wraps an AgentBase instance for multi-agent orchestration.
  *
- * Each execution is isolated — the wrapped agent's internal state
- * is unchanged after the node completes.
+ * Each execution is isolated — the agent's internal state is snapshot/restored
+ * so it remains unchanged after the node completes.
  */
 export class AgentNode extends Node {
   readonly type = 'agentNode' as const
-  private readonly _agent: Agent
+  private readonly _agent: AgentBase
 
   constructor(options: AgentNodeOptions) {
     const { agent, ...config } = options
 
-    super(agent.agentId, {
+    super(agent.id, {
       ...config,
       ...(agent.description !== undefined && { description: agent.description }),
     })
@@ -130,7 +131,7 @@ export class AgentNode extends Node {
     this._agent = agent
   }
 
-  get agent(): Agent {
+  get agent(): AgentBase {
     return this._agent
   }
 
@@ -229,13 +230,13 @@ export class MultiAgentNode extends Node {
 /**
  * A node definition accepted by orchestration constructors.
  *
- * Pass an {@link Agent} or {@link MultiAgentBase} directly for the simple case,
+ * Pass an {@link AgentBase} or {@link MultiAgentBase} directly for the simple case,
  * use typed options objects for per-node configuration, or provide pre-built
  * {@link Node} instances for full control.
  */
 export type NodeDefinition =
-  | Agent
+  | AgentBase
   | MultiAgentBase
   | Node
-  | (AgentNodeOptions & { type: 'agent' })
-  | (MultiAgentNodeOptions & { type: 'multiAgent' })
+  | (AgentNodeOptions & { type: 'agentOptions' })
+  | (MultiAgentNodeOptions & { type: 'multiAgentOptions' })
