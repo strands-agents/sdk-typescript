@@ -105,21 +105,15 @@ describe.skipIf(bedrock.skip)('BedrockModel Integration Tests', () => {
           },
         ]
 
+        const messages = [new Message({ role: 'user', content: [new TextBlock(largeContext)] })]
+
         // First request - writes to cache
-        const events1 = await collectIterator(
-          provider.stream([new Message({ role: 'user', content: [new TextBlock(largeContext + ' Say hello')] })], {
-            toolSpecs,
-          })
-        )
+        const events1 = await collectIterator(provider.stream(messages, { toolSpecs }))
         const metadata1 = events1.find((e) => e.type === 'modelMetadataEvent')
         expect(metadata1?.usage?.cacheWriteInputTokens).toBeGreaterThan(0)
 
-        // Second request - should read from cache
-        const events2 = await collectIterator(
-          provider.stream([new Message({ role: 'user', content: [new TextBlock(largeContext + ' Say goodbye')] })], {
-            toolSpecs,
-          })
-        )
+        // Second request - identical content, should read from cache
+        const events2 = await collectIterator(provider.stream(messages, { toolSpecs }))
         const metadata2 = events2.find((e) => e.type === 'modelMetadataEvent')
         expect(metadata2?.usage?.cacheReadInputTokens).toBeGreaterThan(0)
       })
@@ -130,17 +124,15 @@ describe.skipIf(bedrock.skip)('BedrockModel Integration Tests', () => {
           const provider = bedrock.createModel({ maxTokens: 100, cacheConfig: { strategy: 'anthropic' } })
           const largeContext = `Context information: ${'hello '.repeat(2000)} [test-${Date.now()}-${Math.random()}]`
 
+          const messages = [new Message({ role: 'user', content: [new TextBlock(largeContext)] })]
+
           // First request - writes to cache
-          const events1 = await collectIterator(
-            provider.stream([new Message({ role: 'user', content: [new TextBlock(largeContext + ' Say hello')] })])
-          )
+          const events1 = await collectIterator(provider.stream(messages))
           const metadata1 = events1.find((e) => e.type === 'modelMetadataEvent')
           expect(metadata1?.usage?.cacheWriteInputTokens).toBeGreaterThan(0)
 
-          // Second request - should read from cache
-          const events2 = await collectIterator(
-            provider.stream([new Message({ role: 'user', content: [new TextBlock(largeContext + ' Say goodbye')] })])
-          )
+          // Second request - identical content, should read from cache
+          const events2 = await collectIterator(provider.stream(messages))
           const metadata2 = events2.find((e) => e.type === 'modelMetadataEvent')
           expect(metadata2?.usage?.cacheReadInputTokens).toBeGreaterThan(0)
         }
