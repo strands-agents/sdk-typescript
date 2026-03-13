@@ -413,22 +413,23 @@ export class AnthropicModel extends Model<AnthropicModelConfig> {
           input: block.input as Record<string, unknown>,
         }
 
+      case 'videoBlock':
+        logger.warn('block_type=<videoBlock> | video blocks not supported by anthropic, skipping')
+        return undefined
+
       case 'toolResultBlock': {
         const innerContent = block.content
           .map((c) => {
             if (c.type === 'textBlock') return { type: 'text' as const, text: c.text }
             if (c.type === 'jsonBlock') return { type: 'text' as const, text: JSON.stringify(c.json) }
 
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            if ((c as any).type === 'imageBlock') {
-              const img = this._formatContentBlock(c as unknown as ContentBlock)
-              if (img && img.type === 'image') return img
-            }
-            return undefined
+            // Recursively format any other content block (image, document, video, etc.)
+            const formatted = this._formatContentBlock(c as unknown as ContentBlock)
+            return formatted
           })
           .filter((c): c is NonNullable<typeof c> => !!c)
 
-        let contentVal: string | Array<Anthropic.TextBlockParam | Anthropic.ImageBlockParam>
+        let contentVal: string | Anthropic.ContentBlockParam[]
 
         const firstItem = innerContent[0]
         if (innerContent.length === 1 && firstItem && firstItem.type === 'text') {

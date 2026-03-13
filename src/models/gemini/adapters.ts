@@ -263,18 +263,67 @@ function formatToolUseBlock(block: ToolUseBlock): Part[] {
  * @internal
  */
 function formatToolResultBlock(block: ToolResultBlock, toolUseIdToName: Map<string, string>): Part[] {
+  const parts: Part[] = []
+  const output: Array<{ text?: string; json?: unknown }> = []
+
+  for (const c of block.content) {
+    switch (c.type) {
+      case 'textBlock':
+        output.push({ text: c.text })
+        break
+      case 'jsonBlock':
+        output.push({ json: c.json })
+        break
+      case 'imageBlock': {
+        const mimeType = toMimeType(c.format) ?? `image/${c.format}`
+        if (c.source.type === 'imageSourceBytes') {
+          parts.push({
+            inlineData: {
+              data: encodeBase64(c.source.bytes),
+              mimeType,
+              displayName: `image.${c.format}`,
+            },
+          })
+        } else {
+          logger.warn('source_type=<%s> | only bytes sources supported in gemini tool results', c.source.type)
+        }
+        break
+      }
+      case 'documentBlock': {
+        const mimeType = toMimeType(c.format) ?? `application/${c.format}`
+        if (c.source.type === 'documentSourceBytes') {
+          parts.push({
+            inlineData: {
+              data: encodeBase64(c.source.bytes),
+              mimeType,
+              displayName: c.name,
+            },
+          })
+        } else if (c.source.type === 'documentSourceText') {
+          parts.push({
+            inlineData: {
+              data: encodeBase64(new TextEncoder().encode(c.source.text)),
+              mimeType,
+              displayName: c.name,
+            },
+          })
+        } else {
+          logger.warn('source_type=<%s> | only bytes/text sources supported in gemini tool results', c.source.type)
+        }
+        break
+      }
+      case 'videoBlock':
+        logger.warn('block_type=<videoBlock> | videos not supported in gemini tool results, skipping')
+        break
+    }
+  }
+
   const functionResponse = new FunctionResponse()
   functionResponse.id = block.toolUseId
   functionResponse.name = toolUseIdToName.get(block.toolUseId) ?? block.toolUseId
-  functionResponse.response = {
-    output: block.content.map((c) => {
-      switch (c.type) {
-        case 'textBlock':
-          return { text: c.text }
-        case 'jsonBlock':
-          return { json: c.json }
-      }
-    }),
+  functionResponse.response = { output }
+  if (parts.length > 0) {
+    functionResponse.parts = parts
   }
 
   return [{ functionResponse }]

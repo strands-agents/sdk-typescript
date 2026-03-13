@@ -804,6 +804,120 @@ describe('GeminiModel', () => {
       const fr = (resultPart as { functionResponse: { name: string } }).functionResponse
       expect(fr.name).toBe('unknown-id')
     })
+
+    it('formats image block in tool result as inlineData', () => {
+      const imageBytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47])
+      const toolUseBlock = new ToolUseBlock({ toolUseId: 'test-id', name: 'screenshot', input: {} })
+      const toolResultBlock = new ToolResultBlock({
+        toolUseId: 'test-id',
+        status: 'success',
+        content: [new ImageBlock({ format: 'png', source: { bytes: imageBytes } })],
+      })
+      const messages = [
+        new Message({ role: 'assistant', content: [toolUseBlock] }),
+        new Message({ role: 'user', content: [toolResultBlock] }),
+      ]
+
+      const contents = formatMessages(messages)
+
+      const resultPart = contents[1]!.parts![0]! as { functionResponse: { response: unknown; parts?: unknown[] } }
+      // Image goes to separate parts, not into response.output
+      expect(resultPart.functionResponse.response).toEqual({ output: [] })
+      expect(resultPart.functionResponse.parts).toEqual([
+        { inlineData: { data: 'iVBORw==', mimeType: 'image/png', displayName: 'image.png' } },
+      ])
+    })
+
+    it('formats document block with bytes source in tool result as inlineData', () => {
+      const docBytes = new Uint8Array([0x25, 0x50, 0x44, 0x46])
+      const toolUseBlock = new ToolUseBlock({ toolUseId: 'test-id', name: 'read_doc', input: {} })
+      const toolResultBlock = new ToolResultBlock({
+        toolUseId: 'test-id',
+        status: 'success',
+        content: [new DocumentBlock({ name: 'report.pdf', format: 'pdf', source: { bytes: docBytes } })],
+      })
+      const messages = [
+        new Message({ role: 'assistant', content: [toolUseBlock] }),
+        new Message({ role: 'user', content: [toolResultBlock] }),
+      ]
+
+      const contents = formatMessages(messages)
+
+      const resultPart = contents[1]!.parts![0]! as { functionResponse: { response: unknown; parts?: unknown[] } }
+      expect(resultPart.functionResponse.response).toEqual({ output: [] })
+      expect(resultPart.functionResponse.parts).toEqual([
+        { inlineData: { data: 'JVBERg==', mimeType: 'application/pdf', displayName: 'report.pdf' } },
+      ])
+    })
+
+    it('formats document block with text source in tool result as inlineData', () => {
+      const toolUseBlock = new ToolUseBlock({ toolUseId: 'test-id', name: 'read_doc', input: {} })
+      const toolResultBlock = new ToolResultBlock({
+        toolUseId: 'test-id',
+        status: 'success',
+        content: [new DocumentBlock({ name: 'notes.txt', format: 'txt', source: { text: 'Hello' } })],
+      })
+      const messages = [
+        new Message({ role: 'assistant', content: [toolUseBlock] }),
+        new Message({ role: 'user', content: [toolResultBlock] }),
+      ]
+
+      const contents = formatMessages(messages)
+
+      const resultPart = contents[1]!.parts![0]! as { functionResponse: { response: unknown; parts?: unknown[] } }
+      expect(resultPart.functionResponse.response).toEqual({ output: [] })
+      expect(resultPart.functionResponse.parts).toEqual([
+        { inlineData: { data: 'SGVsbG8=', mimeType: 'text/plain', displayName: 'notes.txt' } },
+      ])
+    })
+
+    it('skips video block in tool result with warning', () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const toolUseBlock = new ToolUseBlock({ toolUseId: 'test-id', name: 'capture', input: {} })
+      const toolResultBlock = new ToolResultBlock({
+        toolUseId: 'test-id',
+        status: 'success',
+        content: [new TextBlock('captured'), new VideoBlock({ format: 'mp4', source: { bytes: new Uint8Array([1]) } })],
+      })
+      const messages = [
+        new Message({ role: 'assistant', content: [toolUseBlock] }),
+        new Message({ role: 'user', content: [toolResultBlock] }),
+      ]
+
+      const contents = formatMessages(messages)
+
+      const resultPart = contents[1]!.parts![0]! as { functionResponse: { response: unknown; parts?: unknown[] } }
+      expect(resultPart.functionResponse.response).toEqual({ output: [{ text: 'captured' }] })
+      // No parts for video - it's skipped
+      expect(resultPart.functionResponse.parts).toBeUndefined()
+      expect(warnSpy).toHaveBeenCalled()
+      warnSpy.mockRestore()
+    })
+
+    it('formats mixed text and image content in tool result', () => {
+      const imageBytes = new Uint8Array([1, 2])
+      const toolUseBlock = new ToolUseBlock({ toolUseId: 'test-id', name: 'analyze', input: {} })
+      const toolResultBlock = new ToolResultBlock({
+        toolUseId: 'test-id',
+        status: 'success',
+        content: [
+          new TextBlock('Analysis complete'),
+          new ImageBlock({ format: 'jpeg', source: { bytes: imageBytes } }),
+        ],
+      })
+      const messages = [
+        new Message({ role: 'assistant', content: [toolUseBlock] }),
+        new Message({ role: 'user', content: [toolResultBlock] }),
+      ]
+
+      const contents = formatMessages(messages)
+
+      const resultPart = contents[1]!.parts![0]! as { functionResponse: { response: unknown; parts?: unknown[] } }
+      expect(resultPart.functionResponse.response).toEqual({ output: [{ text: 'Analysis complete' }] })
+      expect(resultPart.functionResponse.parts).toEqual([
+        { inlineData: { data: 'AQI=', mimeType: 'image/jpeg', displayName: 'image.jpeg' } },
+      ])
+    })
   })
 
   describe('tool use streaming', () => {

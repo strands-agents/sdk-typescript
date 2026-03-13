@@ -11,7 +11,7 @@ import OpenAI, { type ClientOptions } from 'openai'
 import type { ApiKeySetter } from 'openai/client'
 import { Model } from '../models/model.js'
 import type { BaseModelConfig, StreamOptions } from '../models/model.js'
-import type { Message, StopReason } from '../types/messages.js'
+import type { Message, StopReason, ToolResultBlock } from '../types/messages.js'
 import type { ImageBlock, DocumentBlock } from '../types/media.js'
 import { encodeBase64 } from '../types/media.js'
 import { toMimeType } from '../mime.js'
@@ -585,35 +585,9 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
                 break
               }
               case 'imageBlock': {
-                const imageBlock = block as ImageBlock
-                switch (imageBlock.source.type) {
-                  case 'imageSourceUrl': {
-                    contentParts.push({
-                      type: 'image_url',
-                      image_url: {
-                        url: imageBlock.source.url,
-                      },
-                    })
-                    break
-                  }
-                  case 'imageSourceBytes': {
-                    const base64 = encodeBase64(imageBlock.source.bytes)
-                    const mimeType = toMimeType(imageBlock.format) || `image/${imageBlock.format}`
-
-                    contentParts.push({
-                      type: 'image_url',
-                      image_url: {
-                        url: `data:${mimeType};base64,${base64}`,
-                      },
-                    })
-                    break
-                  }
-                  default: {
-                    console.warn(
-                      `OpenAI ChatCompletions API does not support image block type: ${imageBlock.source.type}.`
-                    )
-                    break
-                  }
+                const formatted = this._formatImageBlock(block as ImageBlock)
+                if (formatted) {
+                  contentParts.push(formatted)
                 }
                 break
               }
@@ -682,50 +656,56 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
           }
         }
 
-        // Add each tool result as separate tool message
-        // OpenAI only supports text content in tool result messages, not JSON
+        // Process tool results - split media into separate user messages
+        // OpenAI API restricts media to user role messages only
+        const userMessagesWithMedia: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = []
+
         for (const toolResult of toolResults) {
-          if (toolResult.type === 'toolResultBlock') {
-            // Format tool result content - convert all to text string
-            // Note: OpenAI tool messages only accept string content (not structured JSON)
-            const contentText = toolResult.content
-              .map((c) => {
-                if (c.type === 'textBlock') {
-                  return c.text
-                } else if (c.type === 'jsonBlock') {
-                  try {
-                    return JSON.stringify(c.json)
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  } catch (error: any) {
-                    const dataPreview =
-                      typeof c.json === 'object' && c.json !== null
-                        ? `object with keys: ${Object.keys(c.json).slice(0, 5).join(', ')}`
-                        : typeof c.json
-                    return `[JSON Serialization Error: ${error.message}. Data type: ${dataPreview}]`
-                  }
-                }
-                return ''
-              })
-              .join('')
+          // Split tool result into text and image content
+          const [textContent, imageParts] = this._splitToolResultMedia(toolResult)
 
-            // Validate content is not empty
-            if (!contentText || contentText.trim().length === 0) {
-              throw new Error(
-                `Tool result for toolUseId "${toolResult.toolUseId}" has empty content. ` +
-                  'OpenAI requires tool messages to have non-empty content.'
-              )
-            }
+          // Log warning if images are present
+          if (imageParts.length > 0) {
+            logger.warn(
+              `tool_call_id=<${toolResult.toolUseId}> | moving images from tool result to separate user message for openai compatibility`
+            )
+          }
 
-            // Prepend error indicator if status is error
-            const finalContent = toolResult.status === 'error' ? `[ERROR] ${contentText}` : contentText
+          // Inject placeholder text when tool result contains only images
+          const effectiveTextContent =
+            textContent.trim().length === 0 && imageParts.length > 0
+              ? 'Tool successfully returned an image. The image is being provided in the following user message.'
+              : textContent
 
-            openAIMessages.push({
-              role: 'tool',
-              tool_call_id: toolResult.toolUseId,
-              content: finalContent,
+          if (!effectiveTextContent || effectiveTextContent.trim().length === 0) {
+            throw new Error(
+              `Tool result for toolUseId "${toolResult.toolUseId}" has empty content. ` +
+                'OpenAI requires tool messages to have non-empty content.'
+            )
+          }
+
+          // Prepend error indicator if status is error
+          const finalContent = toolResult.status === 'error' ? `[ERROR] ${effectiveTextContent}` : effectiveTextContent
+
+          // Add text-only tool message
+          openAIMessages.push({
+            role: 'tool',
+            tool_call_id: toolResult.toolUseId,
+            content: finalContent,
+          })
+
+          // Queue images for separate user message
+          if (imageParts.length > 0) {
+            userMessagesWithMedia.push({
+              role: 'user',
+              content: imageParts,
             })
           }
         }
+
+        // Add all user messages with images after tool messages
+        // This maintains proper message ordering for OpenAI API
+        openAIMessages.push(...userMessagesWithMedia)
       } else {
         // Handle assistant messages
         const toolUseCalls: OpenAI.Chat.Completions.ChatCompletionMessageToolCall[] = []
@@ -792,6 +772,78 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
     }
 
     return openAIMessages
+  }
+
+  /**
+   * Formats an image block to OpenAI image_url format.
+   *
+   * @param imageBlock - Image block to format
+   * @returns OpenAI image_url content part, or undefined if unsupported
+   */
+  private _formatImageBlock(
+    imageBlock: ImageBlock
+  ): OpenAI.Chat.Completions.ChatCompletionContentPartImage | undefined {
+    if (imageBlock.source.type === 'imageSourceBytes') {
+      const base64 = encodeBase64(imageBlock.source.bytes)
+      const mimeType = toMimeType(imageBlock.format) || `image/${imageBlock.format}`
+      return {
+        type: 'image_url',
+        image_url: {
+          url: `data:${mimeType};base64,${base64}`,
+        },
+      }
+    } else if (imageBlock.source.type === 'imageSourceUrl') {
+      return {
+        type: 'image_url',
+        image_url: {
+          url: imageBlock.source.url,
+        },
+      }
+    }
+    return undefined
+  }
+
+  /**
+   * Splits tool result content into text and image parts.
+   * OpenAI API restricts images to user role messages only.
+   *
+   * @param toolResult - Tool result block to split
+   * @returns Tuple of [text content, image parts for user message]
+   */
+  private _splitToolResultMedia(
+    toolResult: ToolResultBlock
+  ): [string, OpenAI.Chat.Completions.ChatCompletionContentPart[]] {
+    const textParts: string[] = []
+    const imageParts: OpenAI.Chat.Completions.ChatCompletionContentPart[] = []
+
+    for (const c of toolResult.content) {
+      if (c.type === 'textBlock') {
+        textParts.push(c.text)
+      } else if (c.type === 'jsonBlock') {
+        try {
+          textParts.push(JSON.stringify(c.json))
+        } catch (error: unknown) {
+          if (error instanceof Error) {
+            const dataPreview =
+              typeof c.json === 'object' && c.json !== null
+                ? `object with keys: ${Object.keys(c.json).slice(0, 5).join(', ')}`
+                : typeof c.json
+            textParts.push(`[JSON Serialization Error: ${error.message}. Data type: ${dataPreview}]`)
+          }
+        }
+      } else if (c.type === 'imageBlock') {
+        const formatted = this._formatImageBlock(c as ImageBlock)
+        if (formatted) {
+          imageParts.push(formatted)
+        }
+      } else if (c.type === 'documentBlock') {
+        logger.warn('block_type=<documentBlock> | documents not supported in openai tool results, skipping')
+      } else if (c.type === 'videoBlock') {
+        logger.warn('block_type=<videoBlock> | videos not supported in openai tool results, skipping')
+      }
+    }
+
+    return [textParts.join(''), imageParts]
   }
 
   /**

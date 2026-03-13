@@ -34,6 +34,7 @@ import {
   type SystemContentBlock,
   DocumentFormat,
   ImageFormat,
+  VideoFormat,
   type BedrockRuntimeClientResolvedConfig,
   type CitationLocation as BedrockCitationLocation,
   type Citation as BedrockCitation,
@@ -837,6 +838,30 @@ export class BedrockModel extends Model<BedrockModelConfig> {
               return { text: content.text }
             case 'jsonBlock':
               return { json: content.json }
+            case 'imageBlock':
+              return {
+                image: {
+                  format: content.format as ImageFormat,
+                  source: this._formatMediaSource(content.source),
+                },
+              }
+            case 'videoBlock':
+              return {
+                video: {
+                  format: content.format === '3gp' ? 'three_gp' : (content.format as VideoFormat),
+                  source: this._formatMediaSource(content.source),
+                },
+              }
+            case 'documentBlock':
+              return {
+                document: {
+                  name: content.name,
+                  format: content.format as DocumentFormat,
+                  source: this._formatDocumentSource(content.source),
+                  ...(content.citations && { citations: content.citations }),
+                  ...(content.context && { context: content.context }),
+                },
+              }
           }
         })
 
