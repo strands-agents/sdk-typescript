@@ -52,7 +52,16 @@ describe('Node', () => {
         return { content }
       })
 
-      const { result } = await collectGenerator(node.stream([], state))
+      const { items, result } = await collectGenerator(node.stream([], state))
+
+      const resultEvent = items.find((e) => e.type === 'nodeResultEvent')
+      expect(resultEvent).toEqual({
+        type: 'nodeResultEvent',
+        nodeId: 'test-node',
+        nodeType: 'node',
+        state,
+        result,
+      })
 
       expect(result).toEqual({
         type: 'nodeResult',
@@ -69,7 +78,16 @@ describe('Node', () => {
         throw new Error('boom')
       })
 
-      const { result } = await collectGenerator(node.stream([], state))
+      const { items, result } = await collectGenerator(node.stream([], state))
+
+      const resultEvent = items.find((e) => e.type === 'nodeResultEvent')
+      expect(resultEvent).toEqual({
+        type: 'nodeResultEvent',
+        nodeId: 'fail-node',
+        nodeType: 'node',
+        state,
+        result,
+      })
 
       expect(result).toEqual({
         type: 'nodeResult',
@@ -201,10 +219,11 @@ describe('MultiAgentNode', () => {
 
   describe('handle', () => {
     it('passes through inner NodeStreamUpdateEvents', async () => {
-      const innerUpdate = new MultiAgentHandoffEvent({ source: 'x', targets: ['y'] })
+      const innerUpdate = new MultiAgentHandoffEvent({ source: 'x', targets: ['y'], state })
       const innerEvent = new NodeStreamUpdateEvent({
         nodeId: 'deep-node',
         nodeType: 'agentNode',
+        state,
         event: innerUpdate,
       })
       const orchestrator = mockOrchestrator('inner', [innerEvent])
@@ -218,7 +237,7 @@ describe('MultiAgentNode', () => {
     })
 
     it('wraps non-NodeStreamUpdateEvents with this node identity', async () => {
-      const handoff = new MultiAgentHandoffEvent({ source: 'a', targets: ['b'] })
+      const handoff = new MultiAgentHandoffEvent({ source: 'a', targets: ['b'], state })
       const orchestrator = mockOrchestrator('inner', [handoff])
       node = new MultiAgentNode({ orchestrator })
 

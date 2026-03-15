@@ -84,7 +84,7 @@ export abstract class Node {
       nodeState.results.push(result!)
     }
 
-    yield new NodeResultEvent({ nodeId: this.id, nodeType: this.type, result })
+    yield new NodeResultEvent({ nodeId: this.id, nodeType: this.type, state, result })
     return result
   }
 
@@ -155,7 +155,7 @@ export class AgentNode extends Node {
       const gen = this._agent.stream(args, options)
       let next = await gen.next()
       while (!next.done) {
-        yield new NodeStreamUpdateEvent({ nodeId: this.id, nodeType: this.type, event: next.value })
+        yield new NodeStreamUpdateEvent({ nodeId: this.id, nodeType: this.type, state, event: next.value })
         next = await gen.next()
       }
 
@@ -209,7 +209,7 @@ export class MultiAgentNode extends Node {
    */
   async *handle(
     args: InvokeArgs,
-    _state: MultiAgentState
+    state: MultiAgentState
   ): AsyncGenerator<MultiAgentStreamEvent, NodeResultUpdate, undefined> {
     const gen = this._orchestrator.stream(args)
     let next = await gen.next()
@@ -218,7 +218,7 @@ export class MultiAgentNode extends Node {
       if (event.type === 'nodeStreamUpdateEvent') {
         yield event
       } else {
-        yield new NodeStreamUpdateEvent({ nodeId: this.id, nodeType: this.type, event })
+        yield new NodeStreamUpdateEvent({ nodeId: this.id, nodeType: this.type, state, event })
       }
       next = await gen.next()
     }

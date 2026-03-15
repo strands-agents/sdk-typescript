@@ -4,7 +4,7 @@ import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
 import { collectGenerator } from '../../__fixtures__/model-test-helpers.js'
 import { AfterNodeCallEvent, BeforeNodeCallEvent, MultiAgentInitializedEvent } from '../events.js'
 import { TextBlock } from '../../types/messages.js'
-import { Status } from '../state.js'
+import { Status, MultiAgentState } from '../state.js'
 import { AgentNode, MultiAgentNode } from '../nodes.js'
 import { Graph } from '../graph.js'
 
@@ -509,6 +509,7 @@ describe('Graph', () => {
           type: 'multiAgentHandoffEvent',
           source: 'a',
           targets: ['b'],
+          state: expect.any(MultiAgentState),
         })
       )
     })
@@ -530,7 +531,9 @@ describe('Graph', () => {
       expect(result.results[0]).toEqual(expect.objectContaining({ nodeId: 'a', status: Status.CANCELLED, duration: 0 }))
 
       const cancelEvent = items.find((e) => e.type === 'nodeCancelEvent')
-      expect(cancelEvent).toEqual(expect.objectContaining({ nodeId: 'a', message: 'node cancelled by hook' }))
+      expect(cancelEvent).toEqual(
+        expect.objectContaining({ nodeId: 'a', state: expect.any(MultiAgentState), message: 'node cancelled by hook' })
+      )
     })
 
     it('returns cancelled result with custom message when cancel is a string', async () => {
@@ -548,7 +551,9 @@ describe('Graph', () => {
       expect(result.status).toBe(Status.CANCELLED)
 
       const cancelEvent = items.find((e) => e.type === 'nodeCancelEvent')
-      expect(cancelEvent).toEqual(expect.objectContaining({ nodeId: 'a', message: 'node not ready' }))
+      expect(cancelEvent).toEqual(
+        expect.objectContaining({ nodeId: 'a', state: expect.any(MultiAgentState), message: 'node not ready' })
+      )
     })
 
     it('cleans up running nodes when consumer breaks mid-stream', async () => {

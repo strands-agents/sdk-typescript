@@ -227,6 +227,7 @@ export class Graph implements MultiAgentBase {
             yield new MultiAgentHandoffEvent({
               source: node.id,
               targets: ready.map((n) => n.id),
+              state,
             })
             targets.push(...ready)
           }
@@ -265,7 +266,7 @@ export class Graph implements MultiAgentBase {
       await queue.send({
         type: 'event',
         node,
-        event: new NodeCancelEvent({ nodeId: node.id, message }),
+        event: new NodeCancelEvent({ nodeId: node.id, state, message }),
       })
       await queue.send({
         type: 'event',

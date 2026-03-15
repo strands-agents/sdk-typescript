@@ -5,7 +5,7 @@ import { collectGenerator } from '../../__fixtures__/model-test-helpers.js'
 import { BeforeNodeCallEvent, MultiAgentInitializedEvent } from '../events.js'
 import type { JSONValue } from '../../types/json.js'
 import { TextBlock } from '../../types/messages.js'
-import { Status } from '../state.js'
+import { Status, MultiAgentState } from '../state.js'
 import { AgentNode } from '../nodes.js'
 import { Swarm } from '../swarm.js'
 
@@ -202,7 +202,9 @@ describe('Swarm', () => {
       expect(result.status).toBe(Status.CANCELLED)
 
       const cancelEvent = items.find((e) => e.type === 'nodeCancelEvent')
-      expect(cancelEvent).toEqual(expect.objectContaining({ nodeId: 'a', message: 'agent not ready' }))
+      expect(cancelEvent).toEqual(
+        expect.objectContaining({ nodeId: 'a', state: expect.any(MultiAgentState), message: 'agent not ready' })
+      )
     })
 
     it('returns failed result when agent throws', async () => {
@@ -295,6 +297,7 @@ describe('Swarm', () => {
           type: 'multiAgentHandoffEvent',
           source: 'a',
           targets: ['b'],
+          state: expect.any(MultiAgentState),
         })
       )
     })
@@ -316,7 +319,9 @@ describe('Swarm', () => {
       expect(result.results[0]).toEqual(expect.objectContaining({ nodeId: 'a', status: Status.CANCELLED, duration: 0 }))
 
       const cancelEvent = items.find((e) => e.type === 'nodeCancelEvent')
-      expect(cancelEvent).toEqual(expect.objectContaining({ nodeId: 'a', message: 'node cancelled by hook' }))
+      expect(cancelEvent).toEqual(
+        expect.objectContaining({ nodeId: 'a', state: expect.any(MultiAgentState), message: 'node cancelled by hook' })
+      )
     })
 
     it('returns cancelled result with custom message when cancel is a string', async () => {
@@ -334,7 +339,9 @@ describe('Swarm', () => {
       expect(result.status).toBe(Status.CANCELLED)
 
       const cancelEvent = items.find((e) => e.type === 'nodeCancelEvent')
-      expect(cancelEvent).toEqual(expect.objectContaining({ nodeId: 'a', message: 'agent not ready' }))
+      expect(cancelEvent).toEqual(
+        expect.objectContaining({ nodeId: 'a', state: expect.any(MultiAgentState), message: 'agent not ready' })
+      )
     })
   })
 })
