@@ -163,13 +163,15 @@ describe('AfterNodeCallEvent', () => {
 
 describe('NodeStreamUpdateEvent', () => {
   it('creates instance with correct properties', () => {
+    const state = new MultiAgentState()
     const innerEvent = { type: 'beforeInvocationEvent' } as AgentStreamEvent
-    const event = new NodeStreamUpdateEvent({ nodeId: 'node-1', nodeType: 'agentNode', event: innerEvent })
+    const event = new NodeStreamUpdateEvent({ nodeId: 'node-1', nodeType: 'agentNode', state, event: innerEvent })
 
     expect(event).toEqual({
       type: 'nodeStreamUpdateEvent',
       nodeId: 'node-1',
       nodeType: 'agentNode',
+      state,
       event: innerEvent,
     })
     // @ts-expect-error verifying that property is readonly
@@ -177,19 +179,23 @@ describe('NodeStreamUpdateEvent', () => {
     // @ts-expect-error verifying that property is readonly
     event.nodeType = 'agentNode'
     // @ts-expect-error verifying that property is readonly
+    event.state = state
+    // @ts-expect-error verifying that property is readonly
     event.event = innerEvent
   })
 })
 
 describe('NodeResultEvent', () => {
   it('creates instance with correct properties', () => {
+    const state = new MultiAgentState()
     const result = new NodeResult({ nodeId: 'node-1', status: Status.COMPLETED, duration: 100 })
-    const event = new NodeResultEvent({ nodeId: 'node-1', nodeType: 'agentNode', result })
+    const event = new NodeResultEvent({ nodeId: 'node-1', nodeType: 'agentNode', state, result })
 
     expect(event).toEqual({
       type: 'nodeResultEvent',
       nodeId: 'node-1',
       nodeType: 'agentNode',
+      state,
       result,
     })
     // @ts-expect-error verifying that property is readonly
@@ -197,21 +203,27 @@ describe('NodeResultEvent', () => {
     // @ts-expect-error verifying that property is readonly
     event.nodeType = 'agentNode'
     // @ts-expect-error verifying that property is readonly
+    event.state = state
+    // @ts-expect-error verifying that property is readonly
     event.result = result
   })
 })
 
 describe('NodeCancelEvent', () => {
   it('creates instance with correct properties', () => {
-    const event = new NodeCancelEvent({ nodeId: 'node-1', message: 'cancelled by hook' })
+    const state = new MultiAgentState()
+    const event = new NodeCancelEvent({ nodeId: 'node-1', state, message: 'cancelled by hook' })
 
     expect(event).toEqual({
       type: 'nodeCancelEvent',
       nodeId: 'node-1',
+      state,
       message: 'cancelled by hook',
     })
     // @ts-expect-error verifying that property is readonly
     event.nodeId = 'node-1'
+    // @ts-expect-error verifying that property is readonly
+    event.state = state
     // @ts-expect-error verifying that property is readonly
     event.message = 'cancelled by hook'
   })
@@ -219,17 +231,21 @@ describe('NodeCancelEvent', () => {
 
 describe('MultiAgentHandoffEvent', () => {
   it('creates instance with correct properties', () => {
-    const event = new MultiAgentHandoffEvent({ source: 'node-a', targets: ['node-b', 'node-c'] })
+    const state = new MultiAgentState()
+    const event = new MultiAgentHandoffEvent({ source: 'node-a', targets: ['node-b', 'node-c'], state })
 
     expect(event).toEqual({
       type: 'multiAgentHandoffEvent',
       source: 'node-a',
       targets: ['node-b', 'node-c'],
+      state,
     })
     // @ts-expect-error verifying that property is readonly
     event.source = 'node-a'
     // @ts-expect-error verifying that property is readonly
     event.targets = []
+    // @ts-expect-error verifying that property is readonly
+    event.state = state
   })
 })
 

@@ -110,16 +110,19 @@ export class NodeStreamUpdateEvent extends HookableEvent {
   readonly type = 'nodeStreamUpdateEvent' as const
   readonly nodeId: string
   readonly nodeType: NodeType
+  readonly state: MultiAgentState
   readonly event: AgentStreamEvent | Exclude<MultiAgentStreamEvent, NodeStreamUpdateEvent>
 
   constructor(data: {
     nodeId: string
     nodeType: NodeType
+    state: MultiAgentState
     event: AgentStreamEvent | Exclude<MultiAgentStreamEvent, NodeStreamUpdateEvent>
   }) {
     super()
     this.nodeId = data.nodeId
     this.nodeType = data.nodeType
+    this.state = data.state
     this.event = data.event
   }
 }
@@ -132,12 +135,14 @@ export class NodeResultEvent extends HookableEvent {
   readonly type = 'nodeResultEvent' as const
   readonly nodeId: string
   readonly nodeType: NodeType
+  readonly state: MultiAgentState
   readonly result: NodeResult
 
-  constructor(data: { nodeId: string; nodeType: NodeType; result: NodeResult }) {
+  constructor(data: { nodeId: string; nodeType: NodeType; state: MultiAgentState; result: NodeResult }) {
     super()
     this.nodeId = data.nodeId
     this.nodeType = data.nodeType
+    this.state = data.state
     this.result = data.result
   }
 }
@@ -149,11 +154,13 @@ export class MultiAgentHandoffEvent extends HookableEvent {
   readonly type = 'multiAgentHandoffEvent' as const
   readonly source: string
   readonly targets: string[]
+  readonly state: MultiAgentState
 
-  constructor(data: { source: string; targets: string[] }) {
+  constructor(data: { source: string; targets: string[]; state: MultiAgentState }) {
     super()
     this.source = data.source
     this.targets = data.targets
+    this.state = data.state
   }
 }
 
@@ -163,11 +170,13 @@ export class MultiAgentHandoffEvent extends HookableEvent {
 export class NodeCancelEvent extends HookableEvent {
   readonly type = 'nodeCancelEvent' as const
   readonly nodeId: string
+  readonly state: MultiAgentState
   readonly message: string
 
-  constructor(data: { nodeId: string; message: string }) {
+  constructor(data: { nodeId: string; state: MultiAgentState; message: string }) {
     super()
     this.nodeId = data.nodeId
+    this.state = data.state
     this.message = data.message
   }
 }

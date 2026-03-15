@@ -212,7 +212,7 @@ export class Swarm implements MultiAgentBase {
 
         // Hand off to next agent
         const target = this.nodes.get(handoff.agentId)!
-        yield new MultiAgentHandoffEvent({ source: node.id, targets: [target.id] })
+        yield new MultiAgentHandoffEvent({ source: node.id, targets: [target.id], state })
         logger.debug(`source=<${node.id}>, target=<${target.id}> | swarm handoff`)
         node = target
       }
@@ -247,7 +247,7 @@ export class Swarm implements MultiAgentBase {
       const result = new NodeResult({ nodeId: node.id, status: Status.CANCELLED, duration: 0 })
       nodeState.status = Status.CANCELLED
       nodeState.results.push(result)
-      yield new NodeCancelEvent({ nodeId: node.id, message })
+      yield new NodeCancelEvent({ nodeId: node.id, state, message })
       yield new AfterNodeCallEvent({ orchestrator: this, state, nodeId: node.id })
       return result
     }
