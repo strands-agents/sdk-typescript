@@ -4,7 +4,15 @@ import { ToolStreamEvent } from './tool.js'
 import type { ToolSpec } from './types.js'
 import type { JSONSchema, JSONValue } from '../types/json.js'
 import { deepCopy } from '../types/json.js'
-import { JsonBlock, TextBlock, ToolResultBlock } from '../types/messages.js'
+import {
+  JsonBlock,
+  TextBlock,
+  ToolResultBlock,
+  toolResultContentFromData,
+  type ToolResultContent,
+  type ToolResultContentData,
+} from '../types/messages.js'
+import { DocumentBlock, ImageBlock, VideoBlock } from '../types/media.js'
 
 /**
  * Callback function for FunctionTool implementations.
@@ -233,11 +241,13 @@ export class FunctionTool extends Tool implements InvokableTool<unknown, JSONVal
    *
    * Due to AWS Bedrock limitations (only accepts objects as JSON content), the following
    * rules are applied:
+   * - Content blocks (TextBlock, JsonBlock, ImageBlock, VideoBlock, DocumentBlock) → passed through directly
+   * - Arrays of content blocks → used directly as content array
    * - Strings → TextBlock
    * - Numbers, Booleans → TextBlock (converted to string)
    * - null, undefined → TextBlock (special string representation)
    * - Objects → JsonBlock (with deep copy)
-   * - Arrays → JsonBlock wrapped in \{ $value: array \} (with deep copy)
+   * - Arrays (non-content blocks) → JsonBlock wrapped in \{ $value: array \} (with deep copy)
    *
    * @param value - The value to wrap (can be any type)
    * @param toolUseId - The tool use ID for the ToolResultBlock
@@ -245,6 +255,15 @@ export class FunctionTool extends Tool implements InvokableTool<unknown, JSONVal
    */
   private _wrapInToolResult(value: unknown, toolUseId: string): ToolResultBlock {
     try {
+      // Handle media blocks - pass through directly
+      if (value instanceof DocumentBlock || value instanceof ImageBlock || value instanceof VideoBlock) {
+        return new ToolResultBlock({
+          toolUseId,
+          status: 'success',
+          content: [value],
+        })
+      }
+
       // Handle null with special string representation as text content
       if (value === null) {
         return new ToolResultBlock({
@@ -263,6 +282,16 @@ export class FunctionTool extends Tool implements InvokableTool<unknown, JSONVal
         })
       }
 
+      // Handle content blocks - class instances or plain data objects
+      const contentBlock = this._asToolResultContent(value)
+      if (contentBlock) {
+        return new ToolResultBlock({
+          toolUseId,
+          status: 'success',
+          content: [contentBlock],
+        })
+      }
+
       // Handle primitives (strings, numbers, booleans) as text content
       // Bedrock doesn't accept primitives as JSON content, so we convert all to strings
       if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
@@ -273,8 +302,21 @@ export class FunctionTool extends Tool implements InvokableTool<unknown, JSONVal
         })
       }
 
-      // Handle arrays by wrapping in object { $value: array }
+      // Handle arrays
       if (Array.isArray(value)) {
+        // Check if array contains only content blocks (class instances or plain data objects)
+        if (value.length > 0) {
+          const converted = value.map((item) => this._asToolResultContent(item))
+          if (converted.every((item): item is ToolResultContent => item !== undefined)) {
+            return new ToolResultBlock({
+              toolUseId,
+              status: 'success',
+              content: converted,
+            })
+          }
+        }
+
+        // Otherwise wrap in object { $value: array }
         const copiedValue = deepCopy(value)
         return new ToolResultBlock({
           toolUseId,
@@ -293,6 +335,37 @@ export class FunctionTool extends Tool implements InvokableTool<unknown, JSONVal
     } catch (error) {
       // If deep copy fails (circular references, non-serializable values), return error result
       return createErrorResult(error, toolUseId)
+    }
+  }
+
+  /**
+   * Converts a value to a ToolResultContent instance if it matches a known content type.
+   * Accepts both class instances and plain data objects.
+   *
+   * @param value - Value to check and convert
+   * @returns ToolResultContent instance, or undefined if not a recognized content type
+   */
+  private _asToolResultContent(value: unknown): ToolResultContent | undefined {
+    if (typeof value !== 'object') return undefined
+
+    // Class instances — pass through
+    if (
+      value instanceof TextBlock ||
+      value instanceof JsonBlock ||
+      value instanceof ImageBlock ||
+      value instanceof VideoBlock ||
+      value instanceof DocumentBlock
+    ) {
+      return value
+    }
+
+    // Plain data objects — require exactly one key to match the discriminated
+    // union shape; multi-key objects fall through to JsonBlock instead.
+    try {
+      if (Object.keys(value as object).length !== 1) return undefined
+      return toolResultContentFromData(value as ToolResultContentData)
+    } catch {
+      return undefined
     }
   }
 }
