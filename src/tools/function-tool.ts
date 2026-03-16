@@ -359,8 +359,10 @@ export class FunctionTool extends Tool implements InvokableTool<unknown, JSONVal
       return value
     }
 
-    // Plain data objects — delegate to shared converter
+    // Plain data objects — require exactly one key to match the discriminated
+    // union shape; multi-key objects fall through to JsonBlock instead.
     try {
+      if (Object.keys(value as object).length !== 1) return undefined
       return toolResultContentFromData(value as ToolResultContentData)
     } catch {
       return undefined

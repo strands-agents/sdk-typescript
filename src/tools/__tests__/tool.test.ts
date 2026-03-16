@@ -183,6 +183,30 @@ describe('FunctionTool', () => {
         })
       })
 
+      it('treats objects with extra keys beyond a content block key as JSON', async () => {
+        const tool = new FunctionTool({
+          name: 'extraKeyTool',
+          description: 'Returns object with text key plus extra keys',
+          inputSchema: { type: 'object' },
+          callback: (): { text: string; extra: string } => ({ text: 'abc', extra: '123' }),
+        })
+
+        const toolUse = { name: 'extraKeyTool', toolUseId: 'test-extra', input: {} }
+        const { result } = await collectGenerator(tool.stream(createMockContext(toolUse)))
+
+        expect(result).toEqual({
+          type: 'toolResultBlock',
+          toolUseId: 'test-extra',
+          status: 'success',
+          content: [
+            expect.objectContaining({
+              type: 'jsonBlock',
+              json: { text: 'abc', extra: '123' },
+            }),
+          ],
+        })
+      })
+
       it('passes input to callback exactly as provided to stream', async () => {
         const inputData = { name: 'test', value: 42, nested: { key: 'value' } }
         let receivedInput: unknown
