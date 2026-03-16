@@ -13,7 +13,7 @@ import { ContextWindowOverflowError } from '../errors.js'
 /**
  * Options passed to {@link ConversationManager.reduce}.
  */
-export type ReduceOptions = {
+export type ConversationManagerReduceOptions = {
   /**
    * The agent instance. Mutate `agent.messages` in place to reduce history.
    */
@@ -75,7 +75,7 @@ export abstract class ConversationManager implements Plugin {
    * @param options - The reduction options
    * @returns `true` if the history was reduced, `false` otherwise
    */
-  abstract reduce(options: ReduceOptions): boolean
+  abstract reduce(options: ConversationManagerReduceOptions): boolean
 
   /**
    * Initialize the conversation manager with the agent instance.

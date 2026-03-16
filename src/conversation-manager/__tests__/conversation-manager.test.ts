@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { ConversationManager, type ReduceOptions } from '../conversation-manager.js'
+import { ConversationManager, type ConversationManagerReduceOptions } from '../conversation-manager.js'
 import { NullConversationManager } from '../null-conversation-manager.js'
 import { Agent } from '../../agent/agent.js'
 import { Message, TextBlock } from '../../index.js'
@@ -13,7 +13,7 @@ class TestConversationManager extends ConversationManager {
   reduceCallCount = 0
   shouldReduce = true
 
-  reduce({ agent }: ReduceOptions): boolean {
+  reduce({ agent }: ConversationManagerReduceOptions): boolean {
     this.reduceCallCount++
     if (!this.shouldReduce) return false
     agent.messages.splice(0, 1)
@@ -78,10 +78,10 @@ describe('ConversationManager', () => {
     })
 
     it('passes error to reduce when called due to overflow', async () => {
-      const receivedArgs: ReduceOptions[] = []
+      const receivedArgs: ConversationManagerReduceOptions[] = []
       class CapturingManager extends ConversationManager {
         readonly name = 'test:capturing'
-        reduce(args: ReduceOptions): boolean {
+        reduce(args: ConversationManagerReduceOptions): boolean {
           receivedArgs.push(args)
           return false
         }

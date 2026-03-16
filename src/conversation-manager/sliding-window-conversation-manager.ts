@@ -5,11 +5,11 @@
  * that preserves tool usage pairs and avoids invalid window states.
  */
 
-import { ContextWindowOverflowError } from '../errors.js'
 import { Message, TextBlock, ToolResultBlock } from '../types/messages.js'
 import type { AgentData } from '../types/agent.js'
 import { AfterInvocationEvent } from '../hooks/events.js'
-import { ConversationManager, type ReduceOptions } from './conversation-manager.js'
+import { ConversationManager, type ConversationManagerReduceOptions } from './conversation-manager.js'
+import { logger } from '../logging/logger.js'
 
 /**
  * Configuration for the sliding window conversation manager.
@@ -85,7 +85,7 @@ export class SlidingWindowConversationManager extends ConversationManager {
    * @param options - The reduction options
    * @returns `true` if the history was reduced, `false` otherwise
    */
-  reduce({ agent, error }: ReduceOptions): boolean {
+  reduce({ agent, error }: ConversationManagerReduceOptions): boolean {
     return this._reduceContext(agent.messages, error)
   }
 
@@ -119,9 +119,6 @@ export class SlidingWindowConversationManager extends ConversationManager {
    * @param messages - The message array to reduce. Modified in-place.
    * @param _error - The error that triggered the context reduction, if any.
    * @returns `true` if any reduction occurred, `false` otherwise.
-   *
-   * @throws ContextWindowOverflowError If the context cannot be reduced further,
-   *         such as when the conversation is already minimal or when no valid trim point exists.
    */
   private _reduceContext(messages: Message[], _error?: Error): boolean {
     // Only truncate tool results when handling a context overflow error, not for window size enforcement
@@ -169,12 +166,15 @@ export class SlidingWindowConversationManager extends ConversationManager {
       break
     }
 
-    // If we didn't find a valid trim_index, then we throw
+    // If no valid trim point was found, return false and let the caller handle it
     if (trimIndex >= messages.length) {
-      throw new ContextWindowOverflowError('Unable to trim conversation context!')
+      logger.warn(
+        `window_size=<${this._windowSize}>, messages=<${messages.length}> | unable to trim conversation context, no valid trim point found`
+      )
+      return false
     }
 
-    // Overwrite message history
+    // trimIndex is guaranteed to be < messages.length here, so splice always removes at least one message
     messages.splice(0, trimIndex)
     return true
   }

@@ -543,7 +543,30 @@ describe('SlidingWindowConversationManager', () => {
       expect(mockAgent.messages[0]!.content[0]).toEqual({ type: 'textBlock', text: 'Response 1' })
     })
 
-    it('throws ContextWindowOverflowError when no valid trim point exists', async () => {
+    it('returns false when no valid trim point exists', async () => {
+      const manager = new SlidingWindowConversationManager({ windowSize: 0, shouldTruncateResults: false })
+      const messages = [
+        new Message({
+          role: 'user',
+          content: [
+            new ToolResultBlock({
+              toolUseId: 'id-1',
+              status: 'success',
+              content: [new TextBlock('Result')],
+            }),
+          ],
+        }),
+      ]
+
+      const result = manager.reduce({
+        agent: createMockAgent({ messages }),
+        error: new ContextWindowOverflowError('Context overflow'),
+      })
+
+      expect(result).toBe(false)
+    })
+
+    it('propagates the original ContextWindowOverflowError when reduce cannot reduce further', async () => {
       const manager = new SlidingWindowConversationManager({ windowSize: 0, shouldTruncateResults: false })
       const messages = [
         new Message({
@@ -558,10 +581,16 @@ describe('SlidingWindowConversationManager', () => {
         }),
       ]
       const mockAgent = createMockAgent({ messages })
+      const originalError = new ContextWindowOverflowError('Context overflow')
 
-      await expect(
-        triggerContextOverflow(manager, mockAgent, new ContextWindowOverflowError('Context overflow'))
-      ).rejects.toThrow(ContextWindowOverflowError)
+      // The base class hook does not set event.retry when reduce returns false,
+      // so the original error propagates out of the hook chain
+      const event = new AfterModelCallEvent({ agent: mockAgent, error: originalError })
+      const pluginAgent = createMockAgent()
+      manager.initAgent(pluginAgent)
+      await invokeTrackedHook(pluginAgent, event)
+
+      expect(event.retry).toBeUndefined()
     })
   })
 

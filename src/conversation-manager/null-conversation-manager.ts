@@ -6,7 +6,7 @@
  * management is handled externally.
  */
 
-import { ConversationManager, type ReduceOptions } from './conversation-manager.js'
+import { ConversationManager, type ConversationManagerReduceOptions } from './conversation-manager.js'
 
 /**
  * A no-op conversation manager that does not modify the conversation history.
@@ -25,7 +25,7 @@ export class NullConversationManager extends ConversationManager {
    *
    * @returns `false` always
    */
-  reduce(_args: ReduceOptions): boolean {
+  reduce(_args: ConversationManagerReduceOptions): boolean {
     return false
   }
 }
