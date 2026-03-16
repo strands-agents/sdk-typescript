@@ -85,10 +85,8 @@ export class SlidingWindowConversationManager extends ConversationManager {
    * @param options - The reduction options
    * @returns `true` if the history was reduced, `false` otherwise
    */
-  reduce({ messages, error }: ReduceOptions): boolean {
-    const before = messages.length
-    this._reduceContext(messages, error)
-    return messages.length < before
+  reduce({ agent, error }: ReduceOptions): boolean {
+    return this._reduceContext(agent.messages, error)
   }
 
   /**
@@ -103,7 +101,7 @@ export class SlidingWindowConversationManager extends ConversationManager {
       return
     }
 
-    this._reduceContext(messages)
+    this._reduceContext(messages, undefined)
   }
 
   /**
@@ -120,17 +118,18 @@ export class SlidingWindowConversationManager extends ConversationManager {
    *
    * @param messages - The message array to reduce. Modified in-place.
    * @param _error - The error that triggered the context reduction, if any.
+   * @returns `true` if any reduction occurred, `false` otherwise.
    *
    * @throws ContextWindowOverflowError If the context cannot be reduced further,
    *         such as when the conversation is already minimal or when no valid trim point exists.
    */
-  private _reduceContext(messages: Message[], _error?: Error): void {
+  private _reduceContext(messages: Message[], _error?: Error): boolean {
     // Only truncate tool results when handling a context overflow error, not for window size enforcement
     const lastMessageIdxWithToolResults = this._findLastMessageWithToolResults(messages)
     if (_error && lastMessageIdxWithToolResults !== undefined && this._shouldTruncateResults) {
       const resultsTruncated = this._truncateToolResults(messages, lastMessageIdxWithToolResults)
       if (resultsTruncated) {
-        return
+        return true
       }
     }
 
@@ -177,6 +176,7 @@ export class SlidingWindowConversationManager extends ConversationManager {
 
     // Overwrite message history
     messages.splice(0, trimIndex)
+    return true
   }
 
   /**

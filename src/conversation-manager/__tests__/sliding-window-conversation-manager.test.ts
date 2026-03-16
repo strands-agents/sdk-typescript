@@ -48,6 +48,48 @@ describe('SlidingWindowConversationManager', () => {
     })
   })
 
+  describe('reduce', () => {
+    it('returns true when tool results are truncated even though message count is unchanged', () => {
+      const manager = new SlidingWindowConversationManager({ shouldTruncateResults: true })
+      const messages = [
+        new Message({
+          role: 'user',
+          content: [
+            new ToolResultBlock({
+              toolUseId: 'tool-1',
+              status: 'success',
+              content: [new TextBlock('Large tool result content')],
+            }),
+          ],
+        }),
+      ]
+
+      const result = manager.reduce({
+        agent: createMockAgent({ messages }),
+        error: new ContextWindowOverflowError('overflow'),
+      })
+
+      expect(result).toBe(true)
+      expect(messages).toHaveLength(1) // length unchanged, but truncation occurred
+    })
+
+    it('returns true when messages are trimmed', () => {
+      const manager = new SlidingWindowConversationManager({ windowSize: 1, shouldTruncateResults: false })
+      const messages = [
+        new Message({ role: 'user', content: [new TextBlock('Message 1')] }),
+        new Message({ role: 'assistant', content: [new TextBlock('Response 1')] }),
+      ]
+
+      const result = manager.reduce({
+        agent: createMockAgent({ messages }),
+        error: new ContextWindowOverflowError('overflow'),
+      })
+
+      expect(result).toBe(true)
+      expect(messages).toHaveLength(1)
+    })
+  })
+
   describe('applyManagement', () => {
     it('skips reduction when message count is less than window size', async () => {
       const manager = new SlidingWindowConversationManager({ windowSize: 10 })

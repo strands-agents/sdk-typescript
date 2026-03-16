@@ -15,12 +15,7 @@ import { ContextWindowOverflowError } from '../errors.js'
  */
 export type ReduceOptions = {
   /**
-   * The conversation message history to reduce. Mutate in place.
-   */
-  messages: AgentData['messages']
-
-  /**
-   * The agent instance, available for stateful managers that need to store metadata.
+   * The agent instance. Mutate `agent.messages` in place to reduce history.
    */
   agent: AgentData
 
@@ -51,9 +46,9 @@ export type ReduceOptions = {
  * class Last10MessagesManager extends ConversationManager {
  *   readonly name = 'my:last-10-messages'
  *
- *   reduce({ messages }: ReduceOptions): boolean {
- *     if (messages.length <= 10) return false
- *     messages.splice(0, messages.length - 10)
+ *   reduce({ agent }: ReduceOptions): boolean {
+ *     if (agent.messages.length <= 10) return false
+ *     agent.messages.splice(0, agent.messages.length - 10)
  *     return true
  *   }
  * }
@@ -74,7 +69,7 @@ export abstract class ConversationManager implements Plugin {
    * Returning `false` means no reduction was possible, and the {@link ContextWindowOverflowError} will
    * propagate out of the agent loop.
    *
-   * Implementations should mutate `messages` in place and return `true` if any reduction
+   * Implementations should mutate `agent.messages` in place and return `true` if any reduction
    * was performed, `false` otherwise.
    *
    * @param options - The reduction options
@@ -97,7 +92,7 @@ export abstract class ConversationManager implements Plugin {
   initAgent(agent: AgentData): void {
     agent.addHook(AfterModelCallEvent, (event) => {
       if (event.error instanceof ContextWindowOverflowError) {
-        if (this.reduce({ messages: event.agent.messages, agent: event.agent, error: event.error })) {
+        if (this.reduce({ agent: event.agent, error: event.error })) {
           event.retry = true
         }
       }

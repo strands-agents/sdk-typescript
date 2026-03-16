@@ -13,10 +13,10 @@ class TestConversationManager extends ConversationManager {
   reduceCallCount = 0
   shouldReduce = true
 
-  reduce({ messages }: ReduceOptions): boolean {
+  reduce({ agent }: ReduceOptions): boolean {
     this.reduceCallCount++
     if (!this.shouldReduce) return false
-    messages.splice(0, 1)
+    agent.messages.splice(0, 1)
     return true
   }
 }
