@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest'
 import { AppState } from '../app-state.js'
 import {
   isStateSerializable,
-  loadStateFromJSON,
+  loadStateFromJSONSymbol,
   loadStateSerializable,
   serializeStateSerializable,
-  stateToJSON,
+  stateToJSONSymbol,
 } from '../types/serializable.js'
 
 describe('AppState', () => {
@@ -330,10 +330,10 @@ describe('AppState', () => {
     })
   })
 
-  describe('stateToJSON (via symbol)', () => {
+  describe('stateToJSONSymbol (via symbol)', () => {
     it('returns deep copy of state', () => {
       const state = new AppState({ key1: 'value1', nested: { deep: true } })
-      const json = state[stateToJSON]()
+      const json = state[stateToJSONSymbol]()
       expect(json).toEqual({ key1: 'value1', nested: { deep: true } })
     })
 
@@ -344,16 +344,16 @@ describe('AppState', () => {
     })
   })
 
-  describe('loadStateFromJSON (via symbol)', () => {
+  describe('loadStateFromJSONSymbol (via symbol)', () => {
     it('replaces state with json data', () => {
       const state = new AppState({ old: 'data' })
-      state[loadStateFromJSON]({ new: 'data', count: 42 })
+      state[loadStateFromJSONSymbol]({ new: 'data', count: 42 })
       expect(state.getAll()).toEqual({ new: 'data', count: 42 })
     })
 
     it('clears state when given non-object', () => {
       const state = new AppState({ key: 'value' })
-      state[loadStateFromJSON](null)
+      state[loadStateFromJSONSymbol](null)
       expect(state.getAll()).toEqual({})
     })
 
@@ -380,14 +380,14 @@ describe('AppState', () => {
     })
 
     it('returns false for objects with only one symbol method', () => {
-      const partial = { [stateToJSON]: () => ({}) }
+      const partial = { [stateToJSONSymbol]: () => ({}) }
       expect(isStateSerializable(partial)).toBe(false)
     })
 
     it('returns true for objects implementing both symbol methods', () => {
       const custom = {
-        [stateToJSON]: () => ({ custom: true }),
-        [loadStateFromJSON]: () => {},
+        [stateToJSONSymbol]: () => ({ custom: true }),
+        [loadStateFromJSONSymbol]: () => {},
       }
       expect(isStateSerializable(custom)).toBe(true)
     })

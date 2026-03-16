@@ -11,7 +11,7 @@ import {
 import { Agent } from '../../agent/agent.js'
 import { Message, TextBlock } from '../../types/messages.js'
 import { createMockAgent as createMockAgentWithHooks, invokeTrackedHook } from '../../__fixtures__/agent-helpers.js'
-import { loadStateFromJSON, stateToJSON } from '../../types/serializable.js'
+import { loadStateFromJSONSymbol, stateToJSONSymbol } from '../../types/serializable.js'
 
 // Test fixtures
 function createMockAgent(id = 'agent'): Agent {
@@ -26,10 +26,10 @@ function createMockAgent(id = 'agent'): Agent {
       set(k: string, v: unknown) {
         this._m.set(k, v)
       },
-      [stateToJSON]() {
+      [stateToJSONSymbol]() {
         return Object.fromEntries(this._m)
       },
-      [loadStateFromJSON](json: Record<string, unknown>) {
+      [loadStateFromJSONSymbol](json: Record<string, unknown>) {
         Object.entries(json).forEach(([k, v]) => this._m.set(k, v))
       },
     } as any,

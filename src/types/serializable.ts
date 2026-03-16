@@ -13,12 +13,12 @@ import type { JSONValue } from './json.js'
 /**
  * Symbol for the serialization method on StateSerializable objects.
  */
-export const stateToJSON = Symbol('StateSerializable.toJSON')
+export const stateToJSONSymbol = Symbol('StateSerializable.toJSON')
 
 /**
  * Symbol for the deserialization method on StateSerializable objects.
  */
-export const loadStateFromJSON = Symbol('StateSerializable.loadStateFromJSON')
+export const loadStateFromJSONSymbol = Symbol('StateSerializable.loadStateFromJSON')
 
 /**
  * Interface for mutable state containers that can serialize and restore their state.
@@ -33,14 +33,14 @@ export interface StateSerializable {
    *
    * @returns The serialized state
    */
-  [stateToJSON](): JSONValue
+  [stateToJSONSymbol](): JSONValue
 
   /**
    * Loads state from a previously serialized JSON value.
    *
    * @param json - The serialized state to load
    */
-  [loadStateFromJSON](json: JSONValue): void
+  [loadStateFromJSONSymbol](json: JSONValue): void
 }
 
 /**
@@ -53,8 +53,8 @@ export function isStateSerializable(obj: unknown): obj is StateSerializable {
   return (
     obj !== null &&
     typeof obj === 'object' &&
-    typeof (obj as StateSerializable)[stateToJSON] === 'function' &&
-    typeof (obj as StateSerializable)[loadStateFromJSON] === 'function'
+    typeof (obj as StateSerializable)[stateToJSONSymbol] === 'function' &&
+    typeof (obj as StateSerializable)[loadStateFromJSONSymbol] === 'function'
   )
 }
 
@@ -65,7 +65,7 @@ export function isStateSerializable(obj: unknown): obj is StateSerializable {
  * @returns The serialized JSON value
  */
 export function serializeStateSerializable(obj: StateSerializable): JSONValue {
-  return obj[stateToJSON]()
+  return obj[stateToJSONSymbol]()
 }
 
 /**
@@ -75,5 +75,5 @@ export function serializeStateSerializable(obj: StateSerializable): JSONValue {
  * @param json - The JSON value to load
  */
 export function loadStateSerializable(obj: StateSerializable, json: JSONValue): void {
-  obj[loadStateFromJSON](json)
+  obj[loadStateFromJSONSymbol](json)
 }
