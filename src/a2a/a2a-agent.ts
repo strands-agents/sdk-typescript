@@ -54,6 +54,8 @@ export interface A2AAgentConfig {
  * ```
  */
 export class A2AAgent implements AgentBase {
+  readonly type = 'agent' as const
+
   private _config: A2AAgentConfig
   private _client: A2AClientSdk | undefined
   private _agentCard: AgentCard | undefined

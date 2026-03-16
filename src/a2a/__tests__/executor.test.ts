@@ -157,6 +157,7 @@ describe('A2AExecutor', () => {
     it('publishes image content blocks as separate file artifacts', async () => {
       const imageBytes = new Uint8Array([137, 80, 78, 71])
       const mockAgent: AgentBase = {
+        type: 'agent',
         id: 'test-agent',
         name: 'Test Agent',
         invoke: vi.fn(),

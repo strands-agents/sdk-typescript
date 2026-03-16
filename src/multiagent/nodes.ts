@@ -1,4 +1,6 @@
-import type { Agent, InvokeArgs, InvokeOptions } from '../agent/agent.js'
+import { Agent } from '../agent/agent.js'
+import type { InvokeArgs, InvokeOptions } from '../agent/agent.js'
+import type { AgentBase } from '../agent/agent-base.js'
 import { takeSnapshot, loadSnapshot } from '../agent/snapshot.js'
 import type { MultiAgentStreamEvent } from './events.js'
 import { NodeStreamUpdateEvent, NodeResultEvent } from './events.js'
@@ -106,18 +108,18 @@ export abstract class Node {
  */
 export interface AgentNodeOptions {
   /** The agent to wrap as a node. */
-  agent: Agent
+  agent: AgentBase
 }
 
 /**
- * Node that wraps an Agent instance for multi-agent orchestration.
+ * Node that wraps an {@link AgentBase} instance for multi-agent orchestration.
  *
- * Each execution is isolated — the wrapped agent's internal state
- * is unchanged after the node completes.
+ * Each execution is isolated. When the wrapped agent is an {@link Agent} instance,
+ * its internal state is snapshot/restored so it remains unchanged after the node completes.
  */
 export class AgentNode extends Node {
   readonly type = 'agentNode' as const
-  private readonly _agent: Agent
+  private readonly _agent: AgentBase
 
   constructor(options: AgentNodeOptions) {
     const { agent, ...config } = options
@@ -130,7 +132,7 @@ export class AgentNode extends Node {
     this._agent = agent
   }
 
-  get agent(): Agent {
+  get agent(): AgentBase {
     return this._agent
   }
 
@@ -146,7 +148,8 @@ export class AgentNode extends Node {
     args: InvokeArgs,
     state: MultiAgentState
   ): AsyncGenerator<MultiAgentStreamEvent, NodeResultUpdate, undefined> {
-    const snapshot = takeSnapshot(this._agent, { include: ['messages', 'state'] })
+    const snapshot =
+      this._agent instanceof Agent ? takeSnapshot(this._agent, { include: ['messages', 'state'] }) : undefined
     try {
       const options: InvokeOptions = {
         ...(state.structuredOutputSchema && { structuredOutputSchema: state.structuredOutputSchema }),
@@ -164,7 +167,9 @@ export class AgentNode extends Node {
         ...('structuredOutput' in next.value && { structuredOutput: next.value.structuredOutput }),
       }
     } finally {
-      loadSnapshot(this._agent, snapshot)
+      if (snapshot) {
+        loadSnapshot(this._agent as Agent, snapshot)
+      }
     }
   }
 }
@@ -229,13 +234,8 @@ export class MultiAgentNode extends Node {
 /**
  * A node definition accepted by orchestration constructors.
  *
- * Pass an {@link Agent} or {@link MultiAgentBase} directly for the simple case,
+ * Pass an {@link AgentBase} or {@link MultiAgentBase} directly for the simple case,
  * use typed options objects for per-node configuration, or provide pre-built
  * {@link Node} instances for full control.
  */
-export type NodeDefinition =
-  | Agent
-  | MultiAgentBase
-  | Node
-  | (AgentNodeOptions & { type: 'agent' })
-  | (MultiAgentNodeOptions & { type: 'multiAgent' })
+export type NodeDefinition = AgentBase | MultiAgentBase | Node | AgentNodeOptions | MultiAgentNodeOptions

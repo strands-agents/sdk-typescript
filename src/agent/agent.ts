@@ -181,6 +181,8 @@ const DEFAULT_AGENT_ID = 'agent'
  * and invoking the core decision-making loop.
  */
 export class Agent implements AgentData, AgentBase {
+  readonly type = 'agent' as const
+
   /**
    * The conversation history of messages between user and assistant.
    */

@@ -10,6 +10,11 @@ import type { MultiAgentResult } from './state.js'
  * composed as nodes within other orchestrators via {@link MultiAgentNode}.
  */
 export interface MultiAgentBase {
+  /**
+   * Type discriminator for identifying multi-agent orchestrator instances in union types.
+   */
+  readonly type: 'multiAgent'
+
   /** Unique identifier for this orchestrator. */
   readonly id: string
 

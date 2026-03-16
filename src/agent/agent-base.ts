@@ -9,6 +9,11 @@ import type { AgentResult, AgentStreamEvent } from '../types/agent.js'
  */
 export interface AgentBase {
   /**
+   * Type discriminator for identifying agent instances in union types.
+   */
+  readonly type: 'agent'
+
+  /**
    * The unique identifier of the agent instance.
    */
   readonly id: string

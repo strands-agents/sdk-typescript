@@ -1,6 +1,6 @@
 import { logger } from '../logging/logger.js'
-import { Agent } from '../agent/agent.js'
 import type { InvokeArgs } from '../agent/agent.js'
+import type { AgentBase } from '../agent/agent-base.js'
 import { z } from 'zod'
 import { HookableEvent } from '../hooks/events.js'
 import { HookRegistryImplementation } from '../hooks/registry.js'
@@ -52,10 +52,10 @@ interface HandoffResult {
  * Options for creating a Swarm instance.
  */
 /**
- * Input type for swarm nodes. Pass an {@link Agent} directly for the simple case,
+ * Input type for swarm nodes. Pass an {@link AgentBase} directly for the simple case,
  * or {@link AgentNodeOptions} for per-node config.
  */
-export type SwarmNodeDefinition = Agent | AgentNodeOptions
+export type SwarmNodeDefinition = AgentBase | AgentNodeOptions
 
 export interface SwarmOptions extends SwarmConfig {
   /** Unique identifier. Defaults to `'swarm'`. */
@@ -97,6 +97,8 @@ export interface SwarmOptions extends SwarmConfig {
  * ```
  */
 export class Swarm implements MultiAgentBase {
+  readonly type = 'multiAgent' as const
+
   readonly id: string
   readonly nodes: ReadonlyMap<string, AgentNode>
   readonly config: Required<SwarmConfig>
@@ -288,7 +290,7 @@ export class Swarm implements MultiAgentBase {
 
     const nodes = new Map<string, AgentNode>()
     for (const definition of definitions) {
-      const node = definition instanceof Agent ? new AgentNode({ agent: definition }) : new AgentNode(definition)
+      const node = 'agent' in definition ? new AgentNode(definition) : new AgentNode({ agent: definition })
       if (nodes.has(node.id)) {
         throw new Error(`agent_id=<${node.id}> | duplicate agent id`)
       }
