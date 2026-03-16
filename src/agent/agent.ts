@@ -29,6 +29,7 @@ import { AgentPrinter, getDefaultAppender, type Printer } from './printer.js'
 import type { Plugin } from '../plugins/plugin.js'
 import { PluginRegistry } from '../plugins/registry.js'
 import { SlidingWindowConversationManager } from '../conversation-manager/sliding-window-conversation-manager.js'
+import { ConversationManager } from '../conversation-manager/conversation-manager.js'
 import { HookRegistryImplementation } from '../hooks/registry.js'
 import type { HookableEventConstructor, HookCallback, HookCleanup } from '../hooks/types.js'
 import {
@@ -116,7 +117,7 @@ export type AgentConfig = {
    * Conversation manager for handling message history and context overflow.
    * Defaults to SlidingWindowConversationManager with windowSize of 40.
    */
-  conversationManager?: Plugin
+  conversationManager?: ConversationManager
   /**
    * Plugins to register with the agent.
    */
@@ -190,7 +191,7 @@ export class Agent implements AgentData, AgentBase {
    * State is not passed to the model during inference.
    */
   public readonly state: AppState
-  private readonly _conversationManager: Plugin
+  private readonly _conversationManager: ConversationManager
 
   /**
    * The model provider used by the agent for inference.

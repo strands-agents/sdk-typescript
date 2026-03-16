@@ -6,20 +6,26 @@
  * management is handled externally.
  */
 
-import type { Plugin } from '../plugins/plugin.js'
-import type { AgentData } from '../types/agent.js'
+import { ConversationManager, type ReduceOptions } from './conversation-manager.js'
 
 /**
  * A no-op conversation manager that does not modify the conversation history.
+ *
+ * Does not register any proactive hooks. Overflow errors will not be retried
+ * since `reduce` always returns `false`.
  */
-export class NullConversationManager implements Plugin {
+export class NullConversationManager extends ConversationManager {
   /**
-   * Unique identifier for this plugin.
+   * Unique identifier for this conversation manager.
    */
-  get name(): string {
-    return 'strands:null-conversation-manager'
-  }
+  readonly name = 'strands:null-conversation-manager'
 
-  // No-op — does not register any hooks
-  initAgent(_agent: AgentData): void {}
+  /**
+   * No-op reduction — never modifies the conversation history.
+   *
+   * @returns `false` always
+   */
+  reduce(_args: ReduceOptions): boolean {
+    return false
+  }
 }

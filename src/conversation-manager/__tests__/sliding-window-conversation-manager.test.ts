@@ -224,7 +224,7 @@ describe('SlidingWindowConversationManager', () => {
       ]
 
       // First call should return false (already truncated)
-      const result = (manager as any).truncateToolResults(messages, 0)
+      const result = (manager as any)._truncateToolResults(messages, 0)
       expect(result).toBe(false)
 
       // reduceContext should fall through to message trimming
@@ -272,13 +272,13 @@ describe('SlidingWindowConversationManager', () => {
       ]
       const mockAgent = createMockAgent({ messages })
 
-      // Spy on truncateToolResults to verify it's NOT called
-      const truncateSpy = vi.spyOn(manager as any, 'truncateToolResults')
+      // Spy on _truncateToolResults to verify it's NOT called
+      const truncateSpy = vi.spyOn(manager as any, '_truncateToolResults')
 
       // Trigger window size enforcement (no error parameter)
       await triggerSlidingWindow(manager, mockAgent)
 
-      // Verify truncateToolResults was NOT called during window enforcement
+      // Verify _truncateToolResults was NOT called during window enforcement
       expect(truncateSpy).not.toHaveBeenCalled()
 
       // Should have trimmed to window size (1 message) through message trimming instead
@@ -542,7 +542,7 @@ describe('SlidingWindowConversationManager', () => {
           new Message({ role: 'assistant', content: [new TextBlock('Response')] }),
         ]
 
-        const index = (manager as any).findLastMessageWithToolResults(messages)
+        const index = (manager as any)._findLastMessageWithToolResults(messages)
         expect(index).toBe(1)
       })
 
@@ -553,7 +553,7 @@ describe('SlidingWindowConversationManager', () => {
           new Message({ role: 'assistant', content: [new TextBlock('Response 1')] }),
         ]
 
-        const index = (manager as any).findLastMessageWithToolResults(messages)
+        const index = (manager as any)._findLastMessageWithToolResults(messages)
         expect(index).toBeUndefined()
       })
 
@@ -583,7 +583,7 @@ describe('SlidingWindowConversationManager', () => {
           }),
         ]
 
-        const index = (manager as any).findLastMessageWithToolResults(messages)
+        const index = (manager as any)._findLastMessageWithToolResults(messages)
         // Should find the last one (index 2), not the first one (index 0)
         expect(index).toBe(2)
       })
@@ -605,7 +605,7 @@ describe('SlidingWindowConversationManager', () => {
           }),
         ]
 
-        const result = (manager as any).truncateToolResults(messages, 0)
+        const result = (manager as any)._truncateToolResults(messages, 0)
         expect(result).toBe(true)
       })
 
@@ -624,7 +624,7 @@ describe('SlidingWindowConversationManager', () => {
           }),
         ]
 
-        const result = (manager as any).truncateToolResults(messages, 0)
+        const result = (manager as any)._truncateToolResults(messages, 0)
         expect(result).toBe(false)
       })
 
@@ -632,7 +632,7 @@ describe('SlidingWindowConversationManager', () => {
         const manager = new SlidingWindowConversationManager()
         const messages = [new Message({ role: 'user', content: [new TextBlock('Message')] })]
 
-        const result = (manager as any).truncateToolResults(messages, 0)
+        const result = (manager as any)._truncateToolResults(messages, 0)
         expect(result).toBe(false)
       })
     })
