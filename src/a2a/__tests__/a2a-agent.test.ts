@@ -82,6 +82,54 @@ describe('A2AAgent', () => {
     mockSendMessageStream.mockReturnValue(mockStream(createMockTaskResponse()))
   })
 
+  describe('identity properties', () => {
+    it('defaults id to the URL when not provided', () => {
+      const agent = new A2AAgent({ url: 'http://localhost:9000' })
+      expect(agent.id).toBe('http://localhost:9000')
+    })
+
+    it('uses provided id from config', () => {
+      const agent = new A2AAgent({ url: 'http://localhost:9000', id: 'custom-id' })
+      expect(agent.id).toBe('custom-id')
+    })
+
+    it('uses provided name and description from config', () => {
+      const agent = new A2AAgent({ url: 'http://localhost:9000', name: 'My Agent', description: 'Does things' })
+      expect(agent.name).toBe('My Agent')
+      expect(agent.description).toBe('Does things')
+    })
+
+    it('has undefined name and description when not provided in config', () => {
+      const agent = new A2AAgent({ url: 'http://localhost:9000' })
+      expect(agent.name).toBeUndefined()
+      expect(agent.description).toBeUndefined()
+    })
+
+    it('populates name and description from agent card on first connection', async () => {
+      const agent = new A2AAgent({ url: 'http://localhost:9000' })
+      expect(agent.name).toBeUndefined()
+      expect(agent.description).toBeUndefined()
+
+      await agent.invoke('Hello')
+
+      expect(agent.name).toBe('Remote Agent')
+      expect(agent.description).toBe('A remote agent for testing')
+    })
+
+    it('does not overwrite config-provided name and description with agent card values', async () => {
+      const agent = new A2AAgent({
+        url: 'http://localhost:9000',
+        name: 'Custom Name',
+        description: 'Custom description',
+      })
+
+      await agent.invoke('Hello')
+
+      expect(agent.name).toBe('Custom Name')
+      expect(agent.description).toBe('Custom description')
+    })
+  })
+
   describe('invoke', () => {
     it('returns AgentResult with response text', async () => {
       const agent = new A2AAgent({ url: 'http://localhost:9000' })

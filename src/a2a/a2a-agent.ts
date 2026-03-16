@@ -67,13 +67,13 @@ export class A2AAgent implements AgentBase {
    * The name of the agent.
    * If not provided in config, populated from the agent card after connection.
    */
-  name?: string
+  readonly name?: string
 
   /**
    * Optional description of what the agent does.
    * If not provided in config, populated from the agent card after connection.
    */
-  description?: string
+  readonly description?: string
 
   /**
    * Creates a new A2AAgent.
@@ -186,10 +186,10 @@ export class A2AAgent implements AgentBase {
     const client = await factory.createFromUrl(this._config.url, this._config.agentCardPath)
     this._agentCard = await client.getAgentCard()
     if (this.name === undefined && this._agentCard?.name) {
-      this.name = this._agentCard.name
+      ;(this as { name?: string }).name = this._agentCard.name
     }
     if (this.description === undefined && this._agentCard?.description) {
-      this.description = this._agentCard.description
+      ;(this as { description?: string }).description = this._agentCard.description
     }
     this._client = client
     return client
