@@ -141,7 +141,6 @@ export class AppState implements StateSerializable {
 
   /**
    * Returns the serialized state as JSON value.
-   * This is an internal method accessed via symbol.
    *
    * @returns Deep copy of all state
    */
@@ -151,7 +150,6 @@ export class AppState implements StateSerializable {
 
   /**
    * Loads state from a previously serialized JSON value.
-   * This is an internal method accessed via symbol.
    *
    * @param json - The serialized state to load
    */
