@@ -122,7 +122,7 @@ export class AgentNode extends Node {
   constructor(options: AgentNodeOptions) {
     const { agent, ...config } = options
 
-    super(agent.agentId, {
+    super(agent.id, {
       ...config,
       ...(agent.description !== undefined && { description: agent.description }),
     })

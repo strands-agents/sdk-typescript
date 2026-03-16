@@ -11,7 +11,7 @@ describe.skipIf(bedrock.skip)('Graph', () => {
     const agent = new Agent({
       model: createModel(),
       printer: false,
-      agentId: 'assistant',
+      id: 'assistant',
       systemPrompt: 'Answer in one word only.',
     })
 
@@ -48,14 +48,14 @@ describe.skipIf(bedrock.skip)('Graph', () => {
     const researcher = new Agent({
       model: createModel(),
       printer: false,
-      agentId: 'researcher',
+      id: 'researcher',
       systemPrompt: 'Research the topic and provide key facts in 1-2 sentences.',
     })
 
     const writer = new Agent({
       model: createModel(),
       printer: false,
-      agentId: 'writer',
+      id: 'writer',
       systemPrompt: 'Rewrite the input as a single polished sentence.',
     })
 
@@ -90,21 +90,21 @@ describe.skipIf(bedrock.skip)('Graph', () => {
     const router = new Agent({
       model: createModel(),
       printer: false,
-      agentId: 'router',
+      id: 'router',
       systemPrompt: 'Repeat the user input exactly.',
     })
 
     const capitals = new Agent({
       model: createModel(),
       printer: false,
-      agentId: 'capitals',
+      id: 'capitals',
       systemPrompt: 'Answer with only the capital of France in one word.',
     })
 
     const oceans = new Agent({
       model: createModel(),
       printer: false,
-      agentId: 'oceans',
+      id: 'oceans',
       systemPrompt: 'Answer with only the largest ocean in one word.',
     })
 
@@ -139,7 +139,7 @@ describe.skipIf(bedrock.skip)('Graph', () => {
         new Agent({
           model: createModel(),
           printer: false,
-          agentId: 'answerer',
+          id: 'answerer',
           description: 'Answers questions in one word.',
           systemPrompt: 'Answer in one word only.',
         }),
@@ -150,7 +150,7 @@ describe.skipIf(bedrock.skip)('Graph', () => {
     const summarizer = new Agent({
       model: createModel(),
       printer: false,
-      agentId: 'summarizer',
+      id: 'summarizer',
       systemPrompt: 'Repeat the input exactly as given.',
     })
 
@@ -179,7 +179,7 @@ describe.skipIf(bedrock.skip)('Graph', () => {
     const agent = new Agent({
       model: createModel(),
       printer: false,
-      agentId: 'counter',
+      id: 'counter',
       systemPrompt: 'Reply with the single word "counted".',
     })
 

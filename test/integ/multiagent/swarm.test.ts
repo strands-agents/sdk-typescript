@@ -11,7 +11,7 @@ describe.skipIf(bedrock.skip)('Swarm', () => {
     const agent = new Agent({
       model: createModel(),
       printer: false,
-      agentId: 'assistant',
+      id: 'assistant',
       description: 'Answers questions briefly.',
       systemPrompt: 'Answer in one word only.',
     })
@@ -46,7 +46,7 @@ describe.skipIf(bedrock.skip)('Swarm', () => {
     const researcher = new Agent({
       model: createModel(),
       printer: false,
-      agentId: 'researcher',
+      id: 'researcher',
       description: 'Researches a topic then hands off to the writer.',
       systemPrompt:
         'You are a researcher. Look up the answer, then always hand off to the writer agent. Never produce a final response yourself.',
@@ -55,7 +55,7 @@ describe.skipIf(bedrock.skip)('Swarm', () => {
     const writer = new Agent({
       model: createModel(),
       printer: false,
-      agentId: 'writer',
+      id: 'writer',
       description: 'Writes a final one-sentence answer.',
       systemPrompt: 'Write the final answer in one sentence. Do not hand off to another agent.',
     })

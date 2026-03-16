@@ -9,6 +9,21 @@ import type { AgentResult, AgentStreamEvent } from '../types/agent.js'
  */
 export interface AgentBase {
   /**
+   * The unique identifier of the agent instance.
+   */
+  readonly id: string
+
+  /**
+   * The name of the agent.
+   */
+  readonly name?: string
+
+  /**
+   * Optional description of what the agent does.
+   */
+  readonly description?: string
+
+  /**
    * Invokes the agent and returns the final result.
    *
    * @param args - Arguments for invoking the agent

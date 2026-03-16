@@ -13,9 +13,9 @@ import { Message, TextBlock } from '../../types/messages.js'
 import { createMockAgent as createMockAgentWithHooks, invokeTrackedHook } from '../../__fixtures__/agent-helpers.js'
 
 // Test fixtures
-function createMockAgent(agentId = 'default'): Agent {
+function createMockAgent(id = 'agent'): Agent {
   const agent = {
-    agentId,
+    id,
     messages: [],
     state: {
       _m: new Map(),
@@ -73,7 +73,7 @@ describe('SessionManager', () => {
       await initPluginAndInvokeHook(sessionManager, new AfterInvocationEvent(createMockEvent(mockAgent)))
 
       const snapshot = await storage.loadSnapshot({
-        location: { sessionId: 'test-default', scope: 'agent', scopeId: 'default' },
+        location: { sessionId: 'test-default', scope: 'agent', scopeId: 'agent' },
       })
       expect(snapshot).not.toBeNull()
     })
@@ -427,10 +427,10 @@ describe('SessionManager', () => {
       await invokeTrackedHook(pluginAgent, new AfterInvocationEvent(createMockEvent(mockAgent)))
 
       const latest = await storage.loadSnapshot({
-        location: { sessionId: 'lifecycle-test', scope: 'agent', scopeId: 'default' },
+        location: { sessionId: 'lifecycle-test', scope: 'agent', scopeId: 'agent' },
       })
       const immutableIds = await storage.listSnapshotIds({
-        location: { sessionId: 'lifecycle-test', scope: 'agent', scopeId: 'default' },
+        location: { sessionId: 'lifecycle-test', scope: 'agent', scopeId: 'agent' },
       })
 
       expect(latest).not.toBeNull()
@@ -454,7 +454,7 @@ describe('SessionManager', () => {
       await invokeTrackedHook(pluginAgent, new AfterInvocationEvent(createMockEvent(mockAgent)))
 
       const ids = await storage.listSnapshotIds({
-        location: { sessionId: 'resume-test', scope: 'agent', scopeId: 'default' },
+        location: { sessionId: 'resume-test', scope: 'agent', scopeId: 'agent' },
       })
       expect(ids.length).toBe(1)
 

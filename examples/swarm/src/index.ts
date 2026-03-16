@@ -7,7 +7,7 @@ async function main() {
   const researcher = new Agent({
     model,
     printer: false,
-    agentId: 'researcher',
+    id: 'researcher',
     description: 'Researches a topic and gathers key facts.',
     systemPrompt:
       'You are a researcher. Look up the answer, then hand off to the writer agent. Never produce a final response yourself.',
@@ -16,7 +16,7 @@ async function main() {
   const writer = new Agent({
     model,
     printer: false,
-    agentId: 'writer',
+    id: 'writer',
     description: 'Writes a polished final answer.',
     systemPrompt: 'Write the final answer in one clear paragraph. Do not hand off to another agent.',
   })

@@ -29,6 +29,12 @@ export interface A2AAgentConfig {
   url: string
   /** Path to the agent card endpoint (default: '/.well-known/agent-card.json') */
   agentCardPath?: string
+  /** Optional unique identifier. Defaults to the URL. */
+  id?: string
+  /** Optional name. If not provided, populated from the agent card after connection. */
+  name?: string
+  /** Optional description. If not provided, populated from the agent card after connection. */
+  description?: string
 }
 
 /**
@@ -53,12 +59,32 @@ export class A2AAgent implements AgentBase {
   private _agentCard: AgentCard | undefined
 
   /**
+   * The unique identifier of the agent instance.
+   */
+  readonly id: string
+
+  /**
+   * The name of the agent.
+   * If not provided in config, populated from the agent card after connection.
+   */
+  name?: string
+
+  /**
+   * Optional description of what the agent does.
+   * If not provided in config, populated from the agent card after connection.
+   */
+  description?: string
+
+  /**
    * Creates a new A2AAgent.
    *
    * @param config - Configuration for connecting to the remote agent
    */
   constructor(config: A2AAgentConfig) {
     this._config = config
+    this.id = config.id ?? config.url
+    if (config.name !== undefined) this.name = config.name
+    if (config.description !== undefined) this.description = config.description
   }
 
   /**
@@ -159,6 +185,12 @@ export class A2AAgent implements AgentBase {
     const factory = new ClientFactory()
     const client = await factory.createFromUrl(this._config.url, this._config.agentCardPath)
     this._agentCard = await client.getAgentCard()
+    if (this.name === undefined && this._agentCard?.name) {
+      this.name = this._agentCard.name
+    }
+    if (this.description === undefined && this._agentCard?.description) {
+      this.description = this._agentCard.description
+    }
     this._client = client
     return client
   }

@@ -45,7 +45,7 @@ function makeS3Manager(sessionId: string, bucket: string, credentials: any): Ses
 
 async function getPersistedMessageCount(manager: SessionManager): Promise<number> {
   const snap = await (manager as any)._storage.snapshot.loadSnapshot({
-    location: (manager as any)._location({ agentId: 'default' }),
+    location: (manager as any)._location({ id: 'agent' }),
   })
   return (snap?.data?.messages as unknown[])?.length ?? 0
 }
@@ -130,14 +130,14 @@ describe.skipIf(bedrock.skip)('Session Management - FileStorage', () => {
     expect(agent1.messages).toHaveLength(4)
 
     // Verify storage layout
-    const base = join(tempDir, sessionId, 'scopes', 'agent', 'default', 'snapshots')
+    const base = join(tempDir, sessionId, 'scopes', 'agent', 'agent', 'snapshots')
     await expect(fs.access(join(base, 'snapshot_latest.json'))).resolves.toBeUndefined()
     const files = await fs.readdir(join(base, 'immutable_history'))
     expect(files).toHaveLength(2)
     expect(files.every((f) => /^snapshot_[\w-]+\.json$/.test(f))).toBe(true)
 
     // Restore from snapshot 1 — should only have 2 messages
-    const snapshotIds = await storage.listSnapshotIds({ location: { sessionId, scope: 'agent', scopeId: 'default' } })
+    const snapshotIds = await storage.listSnapshotIds({ location: { sessionId, scope: 'agent', scopeId: 'agent' } })
     expect(snapshotIds[0]).toBeDefined()
     const sessionManager2 = new SessionManager({
       sessionId,
@@ -262,7 +262,7 @@ describe.skipIf(bedrock.skip)('Session Management - S3Storage', () => {
 
     // Verify UUID-based S3 key naming and restore from snapshot 1 (after turn 2)
     const s3Storage = new S3Storage({ bucket, s3Client: new S3Client({ region: AWS_REGION, credentials }) })
-    const snapshotIds = await s3Storage.listSnapshotIds({ location: { sessionId, scope: 'agent', scopeId: 'default' } })
+    const snapshotIds = await s3Storage.listSnapshotIds({ location: { sessionId, scope: 'agent', scopeId: 'agent' } })
     expect(snapshotIds).toHaveLength(1)
     expect(snapshotIds.every((id) => /^[\w-]{36}$/.test(id))).toBe(true)
     expect(snapshotIds[0]).toBeDefined()

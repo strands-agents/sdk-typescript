@@ -26,7 +26,7 @@ function createHandoffAgent(
       input: handoff as JSONValue,
     })
     .addTurn(new TextBlock('Done'))
-  return new Agent({ model, printer: false, agentId, description })
+  return new Agent({ model, printer: false, id: agentId, description })
 }
 
 /**
@@ -207,7 +207,7 @@ describe('Swarm', () => {
 
     it('returns failed result when agent throws', async () => {
       const model = new MockMessageModel().addTurn(new Error('agent exploded'))
-      const agent = new Agent({ model, printer: false, agentId: 'a', description: 'Agent a' })
+      const agent = new Agent({ model, printer: false, id: 'a', description: 'Agent a' })
 
       const swarm = new Swarm({
         nodes: [{ agent }],

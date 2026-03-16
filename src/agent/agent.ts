@@ -144,9 +144,9 @@ export type AgentConfig = {
    */
   description?: string
   /**
-   * Optional unique identifier for the agent. Defaults to "default".
+   * Optional unique identifier for the agent. Defaults to "agent".
    */
-  agentId?: string
+  id?: string
 }
 
 /**
@@ -173,7 +173,7 @@ export interface InvokeOptions {
 const DEFAULT_AGENT_NAME = 'Strands Agent'
 
 /** Default identifier assigned to agents when none is provided. */
-const DEFAULT_AGENT_ID = 'default'
+const DEFAULT_AGENT_ID = 'agent'
 
 /**
  * Orchestrates the interaction between a model, a set of tools, and MCP clients.
@@ -210,7 +210,7 @@ export class Agent implements AgentData, AgentBase {
   /**
    * The unique identifier of the agent instance.
    */
-  public readonly agentId: string
+  public readonly id: string
 
   /**
    * Optional description of what the agent does.
@@ -240,7 +240,7 @@ export class Agent implements AgentData, AgentBase {
     this.state = new AppState(config?.state)
     this._conversationManager = config?.conversationManager ?? new SlidingWindowConversationManager({ windowSize: 40 })
     this.name = config?.name ?? DEFAULT_AGENT_NAME
-    this.agentId = config?.agentId ?? DEFAULT_AGENT_ID
+    this.id = config?.id ?? DEFAULT_AGENT_ID
     if (config?.description !== undefined) this.description = config.description
 
     if (typeof config?.model === 'string') {
@@ -485,7 +485,7 @@ export class Agent implements AgentData, AgentBase {
     const agentSpanOptions: Parameters<Tracer['startAgentSpan']>[0] = {
       messages: inputMessages,
       agentName: this.name,
-      agentId: this.agentId,
+      agentId: this.id,
       tools: this.tools,
     }
     if (agentModelId) agentSpanOptions.modelId = agentModelId
