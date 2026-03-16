@@ -148,6 +148,7 @@ export class AgentNode extends Node {
     args: InvokeArgs,
     state: MultiAgentState
   ): AsyncGenerator<MultiAgentStreamEvent, NodeResultUpdate, undefined> {
+    // Only Agent instances support snapshot/restore for state isolation
     const snapshot =
       this._agent instanceof Agent ? takeSnapshot(this._agent, { include: ['messages', 'state'] }) : undefined
     try {
