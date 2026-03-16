@@ -1,4 +1,4 @@
-import { Agent, BedrockModel, tool } from '@strands-agents/sdk'
+import { Agent, AgentResult, BedrockModel, tool } from '@strands-agents/sdk'
 import { z } from 'zod'
 
 /**
@@ -8,6 +8,10 @@ import { z } from 'zod'
  * each focused on a single subject area. This mirrors the Python
  * "Teacher's Assistant" example using the agents-as-tools pattern.
  */
+
+function extractText(result: AgentResult): string {
+  return result.lastMessage.content.map((b) => ('text' in b ? b.text : '')).join('')
+}
 
 const model = new BedrockModel({ maxTokens: 1024 })
 
@@ -26,7 +30,7 @@ const mathAssistant = tool({
       systemPrompt: `You are a math tutor. Solve problems step-by-step and explain your reasoning clearly.`,
     })
     const result = await agent.invoke(input.query)
-    return result.lastMessage.content.map((b) => ('text' in b ? b.text : '')).join('')
+    return extractText(result)
   },
 })
 
@@ -43,7 +47,7 @@ const englishAssistant = tool({
       systemPrompt: `You are an English tutor. Help with grammar, writing, literature analysis, and composition.`,
     })
     const result = await agent.invoke(input.query)
-    return result.lastMessage.content.map((b) => ('text' in b ? b.text : '')).join('')
+    return extractText(result)
   },
 })
 
@@ -60,7 +64,7 @@ const computerScienceAssistant = tool({
       systemPrompt: `You are a computer science tutor. Explain programming concepts, algorithms, and data structures clearly with examples.`,
     })
     const result = await agent.invoke(input.query)
-    return result.lastMessage.content.map((b) => ('text' in b ? b.text : '')).join('')
+    return extractText(result)
   },
 })
 
@@ -77,7 +81,7 @@ const generalAssistant = tool({
       systemPrompt: `You are a helpful general assistant. Answer questions clearly and concisely.`,
     })
     const result = await agent.invoke(input.query)
-    return result.lastMessage.content.map((b) => ('text' in b ? b.text : '')).join('')
+    return extractText(result)
   },
 })
 
@@ -100,7 +104,7 @@ async function main(): Promise<void> {
 
   const response = await teacher.invoke('What is the time complexity of merge sort and why?')
   console.log('\n=== Final Response ===')
-  console.log(response.lastMessage.content.map((b) => ('text' in b ? b.text : '')).join(''))
+  console.log(extractText(response))
 }
 
 await main().catch(console.error)
