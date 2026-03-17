@@ -4,7 +4,7 @@
 
 import type { Message, Task, TaskStatusUpdateEvent, TaskArtifactUpdateEvent } from '@a2a-js/sdk'
 import { StreamEvent } from '../hooks/events.js'
-import type { AgentResult } from '../types/agent.js'
+import type { AgentResultEvent } from '../hooks/events.js'
 
 /**
  * Union of raw A2A protocol event types received during streaming.
@@ -37,9 +37,9 @@ export class A2AStreamUpdateEvent extends StreamEvent {
  */
 export class A2AResultEvent extends StreamEvent {
   readonly type = 'a2aResultEvent' as const
-  readonly result: AgentResult
+  readonly result: AgentResultEvent['result']
 
-  constructor(data: { result: AgentResult }) {
+  constructor(data: Pick<AgentResultEvent, 'result'>) {
     super()
     this.result = data.result
   }
