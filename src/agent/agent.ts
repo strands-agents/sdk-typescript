@@ -704,6 +704,7 @@ export class Agent implements AgentData, AgentBase {
     const modelSpan = this._tracer.startModelInvokeSpan({
       messages: this.messages,
       ...(modelId && { modelId }),
+      ...(this.systemPrompt !== undefined && { systemPrompt: this.systemPrompt }),
     })
 
     try {
@@ -714,10 +715,12 @@ export class Agent implements AgentData, AgentBase {
 
       // End model span with usage
       const usage = result.metadata?.usage
+      const metrics = result.metadata?.metrics
       this._tracer.endModelInvokeSpan(modelSpan, {
         output: result.message,
         stopReason: result.stopReason,
         ...(usage && { usage }),
+        ...(metrics && { metrics }),
       })
 
       yield new ModelMessageEvent({ agent: this, message: result.message, stopReason: result.stopReason })

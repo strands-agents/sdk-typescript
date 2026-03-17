@@ -527,4 +527,10 @@ export interface Metrics {
    * Latency in milliseconds.
    */
   latencyMs: number
+
+  /**
+   * Time to first byte in milliseconds.
+   * Latency from sending the model request to receiving the first content chunk.
+   */
+  timeToFirstByteMs?: number
 }

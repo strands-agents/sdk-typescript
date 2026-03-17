@@ -287,6 +287,7 @@ export class Meter {
   private readonly _otelInputTokens: Counter
   private readonly _otelOutputTokens: Counter
   private readonly _otelModelLatency: Histogram
+  private readonly _otelTimeToFirstByte: Histogram
 
   constructor() {
     this._otelMeter = otelMetrics.getMeter(getServiceName())
@@ -319,6 +320,10 @@ export class Meter {
     })
     this._otelModelLatency = this._otelMeter.createHistogram('gen_ai.agent.model.latency', {
       description: 'Model invocation latency in milliseconds',
+      unit: 'ms',
+    })
+    this._otelTimeToFirstByte = this._otelMeter.createHistogram('gen_ai.agent.model.time_to_first_token', {
+      description: 'Time to first token from model in milliseconds',
       unit: 'ms',
     })
   }
@@ -453,6 +458,10 @@ export class Meter {
     if (metadata.metrics) {
       this._accumulatedMetrics.latencyMs += metadata.metrics.latencyMs
       this._otelModelLatency.record(metadata.metrics.latencyMs)
+
+      if (metadata.metrics.timeToFirstByteMs !== undefined && metadata.metrics.timeToFirstByteMs > 0) {
+        this._otelTimeToFirstByte.record(metadata.metrics.timeToFirstByteMs)
+      }
     }
   }
 

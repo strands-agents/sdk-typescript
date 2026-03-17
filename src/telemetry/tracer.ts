@@ -41,7 +41,7 @@ import type {
   Usage,
   Metrics,
 } from './types.js'
-import type { ContentBlock, Message } from '../types/messages.js'
+import type { ContentBlock, Message, SystemPrompt } from '../types/messages.js'
 import { jsonReplacer } from './json.js'
 import { getServiceName } from './utils.js'
 
@@ -102,6 +102,13 @@ export class Tracer {
   private _loopSpan: Span | undefined
 
   /**
+   * Whether Langfuse is configured as the OTLP endpoint.
+   * Detected from OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_EXPORTER_OTLP_TRACES_ENDPOINT,
+   * or LANGFUSE_BASE_URL environment variables.
+   */
+  private readonly _isLangfuse: boolean
+
+  /**
    * Initialize the tracer with OpenTelemetry configuration.
    * Reads OTEL_SEMCONV_STABILITY_OPT_IN to determine convention version.
    * Gets tracer from the global API to ensure ground truth - works correctly
@@ -117,8 +124,13 @@ export class Tracer {
     this._useLatestConventions = optInValues.has('gen_ai_latest_experimental')
     this._includeToolDefinitions = optInValues.has('gen_ai_tool_definitions')
 
+    this._isLangfuse = Tracer._detectLangfuse()
+
     // Get tracer from global API to ensure ground truth
     this._tracer = trace.getTracer(getServiceName())
+
+    // Warn if no tracer provider is configured
+    Tracer._warnIfNoopTracer(this._tracer)
   }
 
   /**
@@ -183,6 +195,7 @@ export class Tracer {
     try {
       const attributes: Record<string, AttributeValue> = {}
       if (accumulatedUsage) this._setUsageAttributes(attributes, accumulatedUsage)
+      if (this._isLangfuse) attributes['langfuse.observation.type'] = 'span'
       if (response !== undefined) this._addResponseEvent(span, response, stopReason)
 
       this._endSpan(span, attributes, error)
@@ -198,7 +211,7 @@ export class Tracer {
    * @param options - Options for starting the model invocation span
    */
   startModelInvokeSpan(options: StartModelInvokeSpanOptions): Span | null {
-    const { messages, modelId } = options
+    const { messages, modelId, systemPrompt } = options
 
     try {
       const attributes = this._getCommonAttributes('chat')
@@ -210,6 +223,7 @@ export class Tracer {
         spanKind: SpanKind.INTERNAL,
         ...(this._loopSpan && { parentSpan: this._loopSpan }),
       })
+      this._addSystemPromptEvent(span, systemPrompt)
       this._addEventMessages(span, messages)
 
       return span
@@ -560,6 +574,9 @@ export class Tracer {
     if (metrics.latencyMs !== undefined && metrics.latencyMs > 0) {
       attributes['gen_ai.server.request.duration'] = metrics.latencyMs
     }
+    if (metrics.timeToFirstByteMs !== undefined && metrics.timeToFirstByteMs > 0) {
+      attributes['gen_ai.server.time_to_first_token'] = metrics.timeToFirstByteMs
+    }
   }
 
   /**
@@ -630,6 +647,89 @@ export class Tracer {
         .map((value) => value.trim())
         .filter((value) => value.length > 0)
     )
+  }
+
+  /**
+   * Detect whether Langfuse is configured as the OTLP endpoint.
+   * Checks OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_EXPORTER_OTLP_TRACES_ENDPOINT,
+   * and LANGFUSE_BASE_URL environment variables.
+   */
+  private static _detectLangfuse(): boolean {
+    const envVars = ['OTEL_EXPORTER_OTLP_ENDPOINT', 'OTEL_EXPORTER_OTLP_TRACES_ENDPOINT', 'LANGFUSE_BASE_URL']
+    return envVars.some((v) => (globalThis.process?.env?.[v] ?? '').includes('langfuse'))
+  }
+
+  /**
+   * Warn once if the global tracer provider is a noop.
+   * Creates a test span to check if it records; if not, the provider is a noop
+   * and traces will be silently discarded.
+   */
+  private static _noopWarningEmitted = false
+  private static _warnIfNoopTracer(tracer: OtelTracer): void {
+    if (Tracer._noopWarningEmitted) return
+    Tracer._noopWarningEmitted = true
+
+    try {
+      const testSpan = tracer.startSpan('_strands_noop_check')
+      const isNoop = !testSpan.isRecording()
+      testSpan.end()
+
+      if (isNoop) {
+        logger.warn(
+          'no TracerProvider configured | traces will be discarded | call telemetry.setupTracer() or register your own provider'
+        )
+      }
+    } catch {
+      // Swallow errors from noop detection
+    }
+  }
+
+  /**
+   * Emit system prompt as a span event per OTel GenAI semantic conventions.
+   * In stable mode, emits a `gen_ai.system.message` event.
+   * In latest experimental mode, emits `gen_ai.system_instructions` on the
+   * `gen_ai.client.inference.operation.details` event.
+   *
+   * @param span - The span to add the event to
+   * @param systemPrompt - The system prompt provided to the model
+   */
+  private _addSystemPromptEvent(span: Span, systemPrompt?: SystemPrompt): void {
+    if (systemPrompt === undefined) return
+
+    if (this._useLatestConventions) {
+      const parts = Tracer._mapSystemPromptToOtelParts(systemPrompt)
+      this._addEvent(span, 'gen_ai.client.inference.operation.details', {
+        'gen_ai.system_instructions': JSON.stringify(parts, jsonReplacer),
+      })
+    } else {
+      // Normalize string prompts to an array of text blocks for consistent format
+      const blocks = typeof systemPrompt === 'string' ? [{ text: systemPrompt }] : systemPrompt
+      this._addEvent(span, 'gen_ai.system.message', {
+        content: JSON.stringify(blocks, jsonReplacer),
+      })
+    }
+  }
+
+  /**
+   * Map a system prompt to OTEL parts format (latest conventions).
+   * Handles both string prompts and SystemContentBlock arrays.
+   */
+  private static _mapSystemPromptToOtelParts(systemPrompt: SystemPrompt): Record<string, unknown>[] {
+    if (typeof systemPrompt === 'string') {
+      return [{ type: 'text', content: systemPrompt }]
+    }
+    return systemPrompt.map((block) => {
+      switch (block.type) {
+        case 'textBlock':
+          return { type: 'text', content: block.text }
+        case 'cachePointBlock':
+          return { type: 'cache_point', cacheType: block.cacheType }
+        case 'guardContentBlock':
+          return { type: 'guard_content', text: block.text, image: block.image }
+        default:
+          return { type: 'unknown' }
+      }
+    })
   }
 
   /**

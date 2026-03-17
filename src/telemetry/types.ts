@@ -54,6 +54,8 @@ export interface StartModelInvokeSpanOptions {
   messages: Message[]
   /** Model identifier being invoked. */
   modelId?: string
+  /** System prompt provided to the model for this invocation. */
+  systemPrompt?: SystemPrompt
 }
 
 /**
