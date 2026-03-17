@@ -14,6 +14,7 @@ export { AppState } from './app-state.js'
 // Agent types
 export { AgentResult } from './types/agent.js'
 export type { AgentConfig, ToolList } from './agent/agent.js'
+export type { LocalAgent } from './types/agent.js'
 
 // Error types
 export {
