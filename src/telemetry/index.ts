@@ -8,11 +8,12 @@
  *
  * @example Basic setup with OTLP exporter
  * ```typescript
- * import { telemetry, Agent } from '@strands-agents/sdk'
+ * import { Agent } from '@strands-agents/sdk'
+ * import { setupTracer, setupMeter } from '@strands-agents/sdk/telemetry'
  *
  * // Configure telemetry with OTLP exporter
- * telemetry.setupTracer({ exporters: { otlp: true } })
- * telemetry.setupMeter({ exporters: { otlp: true } })
+ * setupTracer({ exporters: { otlp: true } })
+ * setupMeter({ exporters: { otlp: true } })
  *
  * // Agent automatically traces invocations and emits metrics
  * const agent = new Agent()

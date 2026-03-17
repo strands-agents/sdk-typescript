@@ -18,13 +18,13 @@
  */
 
 import { Agent, tool } from '@strands-agents/sdk'
-import * as telemetry from '@strands-agents/sdk/telemetry'
+import { setupTracer } from '@strands-agents/sdk/telemetry'
 import { z } from 'zod'
 
 // 1. Set up telemetry ONCE at application start.
 //    setupTracer() creates a NodeTracerProvider with sensible defaults and
 //    registers it globally. All agents will automatically pick it up.
-const provider = telemetry.setupTracer({
+const provider = setupTracer({
   exporters: {
     // Send spans to an OTLP-compatible backend (Jaeger, Grafana, etc.)
     // Uses OTEL_EXPORTER_OTLP_ENDPOINT env var for the endpoint.

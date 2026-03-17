@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest'
 import { Agent, tool } from '@strands-agents/sdk'
-import * as telemetry from '@strands-agents/sdk/telemetry'
+import { getTracer, getMeter } from '@strands-agents/sdk/telemetry'
 import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node'
 import { InMemorySpanExporter, SimpleSpanProcessor } from '@opentelemetry/sdk-trace-base'
 import type { ReadableSpan } from '@opentelemetry/sdk-trace-base'
@@ -710,7 +710,7 @@ describe.sequential('Telemetry Integration', () => {
 
   describe('getTracer', () => {
     it('returns a tracer that produces spans captured by the registered provider', async () => {
-      const tracer = telemetry.getTracer()
+      const tracer = getTracer()
       const span = tracer.startSpan('custom-operation')
       span.setAttribute('custom.key', 'custom-value')
       span.end()
@@ -732,7 +732,7 @@ describe.sequential('Telemetry Integration', () => {
       userProvider.addSpanProcessor(new SimpleSpanProcessor(userExporter))
       userProvider.register() // no-op: global provider already set in beforeAll
 
-      const tracer = telemetry.getTracer()
+      const tracer = getTracer()
       const span = tracer.startSpan('user-provider-span')
       span.setAttribute('source', 'custom-provider')
       span.end()
@@ -760,7 +760,7 @@ describe.sequential('Telemetry Integration', () => {
       providerB.addSpanProcessor(new SimpleSpanProcessor(exporterB))
       providerB.register() // no-op
 
-      const tracer = telemetry.getTracer()
+      const tracer = getTracer()
       const span = tracer.startSpan('multi-register-span')
       span.end()
 
@@ -788,7 +788,7 @@ describe.sequential('Telemetry Integration', () => {
       const agentSpanRef = trace.wrapSpanContext(agentReadableSpan.spanContext())
 
       // Create a custom span parented to the agent span via context
-      const tracer = telemetry.getTracer()
+      const tracer = getTracer()
       context.with(trace.setSpan(context.active(), agentSpanRef), () => {
         const childSpan = tracer.startSpan('custom-child')
         childSpan.end()
@@ -935,7 +935,7 @@ describe.sequential('Metrics Integration', () => {
   })
 
   it('getMeter returns a meter that records real metrics', async () => {
-    const meter = telemetry.getMeter()
+    const meter = getMeter()
     const counter = meter.createCounter('test.custom.counter')
     counter.add(7)
 

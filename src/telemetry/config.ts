@@ -55,13 +55,13 @@ const DEFAULT_DEPLOYMENT_ENVIRONMENT = 'development'
  *
  * @example
  * ```typescript
- * import { telemetry } from '@strands-agents/sdk'
+ * import { setupTracer, getTracer } from '@strands-agents/sdk/telemetry'
  *
  * // Set up telemetry first (or register your own NodeTracerProvider)
- * telemetry.setupTracer({ exporters: { otlp: true } })
+ * setupTracer({ exporters: { otlp: true } })
  *
  * // Get a tracer and create custom spans
- * const tracer = telemetry.getTracer()
+ * const tracer = getTracer()
  * const span = tracer.startSpan('my-custom-operation')
  * span.setAttribute('custom.key', 'value')
  *
@@ -85,11 +85,11 @@ export function getTracer(): OtelTracer {
  *
  * @example
  * ```typescript
- * import { telemetry } from '@strands-agents/sdk'
+ * import { setupMeter, getMeter } from '@strands-agents/sdk/telemetry'
  *
- * telemetry.setupMeter({ exporters: { otlp: true } })
+ * setupMeter({ exporters: { otlp: true } })
  *
- * const meter = telemetry.getMeter()
+ * const meter = getMeter()
  * const counter = meter.createCounter('my.custom.counter')
  * counter.add(1)
  * ```
