@@ -31,18 +31,11 @@ describe('Tracer', () => {
 
     // Default to stable conventions; tests needing latest override this
     vi.stubEnv('OTEL_SEMCONV_STABILITY_OPT_IN', '')
-
-    // Suppress noop check so the test span created by _warnIfNoopTracer
-    // does not pollute mockSpan.calls.end counts
-    // @ts-expect-error - accessing private static for test reset
-    Tracer._noopWarningEmitted = true
   })
 
-  /** Get the [spanName, options] from the first non-noop-check startSpan call. */
+  /** Get the [spanName, options] from the startSpan call for the span under test. */
   function getStartSpanCall(): [string, { attributes: Record<string, SpanAttributeValue | undefined> }] {
-    const calls = mockStartSpan.mock.calls
-    const idx = calls.findIndex((c: unknown[]) => c[0] !== '_strands_noop_check')
-    return calls[idx] as [string, { attributes: Record<string, SpanAttributeValue | undefined> }]
+    return mockStartSpan.mock.calls[0] as [string, { attributes: Record<string, SpanAttributeValue | undefined> }]
   }
 
   describe('constructor', () => {
@@ -758,7 +751,7 @@ describe('Tracer', () => {
   })
 
   describe('timeToFirstByteMs', () => {
-    it('sets gen_ai.server.time_to_first_token attribute when TTFB is provided', () => {
+    it('does not set TTFB as span attribute (TTFB is a histogram metric, not a span attribute)', () => {
       const tracer = new Tracer()
       const span = tracer.startModelInvokeSpan({ messages: [textMessage('user', 'Hi')] })
 
@@ -767,32 +760,8 @@ describe('Tracer', () => {
         metrics: { latencyMs: 500, timeToFirstByteMs: 150 },
       })
 
-      expect(mockSpan.getAttributeValue('gen_ai.server.time_to_first_token')).toBe(150)
+      expect(mockSpan.getAttributeValue('gen_ai.server.time_to_first_token')).toBeUndefined()
       expect(mockSpan.getAttributeValue('gen_ai.server.request.duration')).toBe(500)
-    })
-
-    it('skips TTFB attribute when zero', () => {
-      const tracer = new Tracer()
-      const span = tracer.startModelInvokeSpan({ messages: [textMessage('user', 'Hi')] })
-
-      tracer.endModelInvokeSpan(span, {
-        usage: { inputTokens: 10, outputTokens: 20, totalTokens: 30 },
-        metrics: { latencyMs: 500, timeToFirstByteMs: 0 },
-      })
-
-      expect(mockSpan.getAttributeValue('gen_ai.server.time_to_first_token')).toBeUndefined()
-    })
-
-    it('skips TTFB attribute when undefined', () => {
-      const tracer = new Tracer()
-      const span = tracer.startModelInvokeSpan({ messages: [textMessage('user', 'Hi')] })
-
-      tracer.endModelInvokeSpan(span, {
-        usage: { inputTokens: 10, outputTokens: 20, totalTokens: 30 },
-        metrics: { latencyMs: 500 },
-      })
-
-      expect(mockSpan.getAttributeValue('gen_ai.server.time_to_first_token')).toBeUndefined()
     })
   })
 
@@ -821,8 +790,8 @@ describe('Tracer', () => {
       expect(mockSpan.getAttributeValue('langfuse.observation.type')).toBe('span')
     })
 
-    it('sets langfuse.observation.type when LANGFUSE_BASE_URL contains langfuse', () => {
-      vi.stubEnv('LANGFUSE_BASE_URL', 'https://us.cloud.langfuse.com')
+    it('sets langfuse.observation.type when LANGFUSE_BASE_URL is set', () => {
+      vi.stubEnv('LANGFUSE_BASE_URL', 'https://self-hosted.example.com')
       const tracer = new Tracer()
       const span = tracer.startAgentSpan({ messages: [textMessage('user', 'Hi')], agentName: 'agent' })
 

@@ -128,9 +128,6 @@ export class Tracer {
 
     // Get tracer from global API to ensure ground truth
     this._tracer = trace.getTracer(getServiceName())
-
-    // Warn if no tracer provider is configured
-    Tracer._warnIfNoopTracer(this._tracer)
   }
 
   /**
@@ -574,9 +571,6 @@ export class Tracer {
     if (metrics.latencyMs !== undefined && metrics.latencyMs > 0) {
       attributes['gen_ai.server.request.duration'] = metrics.latencyMs
     }
-    if (metrics.timeToFirstByteMs !== undefined && metrics.timeToFirstByteMs > 0) {
-      attributes['gen_ai.server.time_to_first_token'] = metrics.timeToFirstByteMs
-    }
   }
 
   /**
@@ -655,33 +649,11 @@ export class Tracer {
    * and LANGFUSE_BASE_URL environment variables.
    */
   private static _detectLangfuse(): boolean {
-    const envVars = ['OTEL_EXPORTER_OTLP_ENDPOINT', 'OTEL_EXPORTER_OTLP_TRACES_ENDPOINT', 'LANGFUSE_BASE_URL']
-    return envVars.some((v) => (globalThis.process?.env?.[v] ?? '').includes('langfuse'))
-  }
-
-  /**
-   * Warn once if the global tracer provider is a noop.
-   * Creates a test span to check if it records; if not, the provider is a noop
-   * and traces will be silently discarded.
-   */
-  private static _noopWarningEmitted = false
-  private static _warnIfNoopTracer(tracer: OtelTracer): void {
-    if (Tracer._noopWarningEmitted) return
-    Tracer._noopWarningEmitted = true
-
-    try {
-      const testSpan = tracer.startSpan('_strands_noop_check')
-      const isNoop = !testSpan.isRecording()
-      testSpan.end()
-
-      if (isNoop) {
-        logger.warn(
-          'no TracerProvider configured | traces will be discarded | call telemetry.setupTracer() or register your own provider'
-        )
-      }
-    } catch {
-      // Swallow errors from noop detection
-    }
+    const env = globalThis.process?.env
+    if (env?.LANGFUSE_BASE_URL) return true
+    return ['OTEL_EXPORTER_OTLP_ENDPOINT', 'OTEL_EXPORTER_OTLP_TRACES_ENDPOINT'].some((v) =>
+      (env?.[v] ?? '').includes('langfuse')
+    )
   }
 
   /**

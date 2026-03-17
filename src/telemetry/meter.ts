@@ -322,9 +322,9 @@ export class Meter {
       description: 'Model invocation latency in milliseconds',
       unit: 'ms',
     })
-    this._otelTimeToFirstByte = this._otelMeter.createHistogram('gen_ai.agent.model.time_to_first_token', {
-      description: 'Time to first token from model in milliseconds',
-      unit: 'ms',
+    this._otelTimeToFirstByte = this._otelMeter.createHistogram('gen_ai.server.time_to_first_token', {
+      description: 'Time to generate first token for successful responses',
+      unit: 's',
     })
   }
 
@@ -460,7 +460,7 @@ export class Meter {
       this._otelModelLatency.record(metadata.metrics.latencyMs)
 
       if (metadata.metrics.timeToFirstByteMs !== undefined && metadata.metrics.timeToFirstByteMs > 0) {
-        this._otelTimeToFirstByte.record(metadata.metrics.timeToFirstByteMs)
+        this._otelTimeToFirstByte.record(metadata.metrics.timeToFirstByteMs / 1000)
       }
     }
   }
