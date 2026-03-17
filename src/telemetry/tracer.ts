@@ -650,10 +650,13 @@ export class Tracer {
    */
   private static _detectLangfuse(): boolean {
     const env = globalThis.process?.env
-    if (env?.LANGFUSE_BASE_URL) return true
-    return ['OTEL_EXPORTER_OTLP_ENDPOINT', 'OTEL_EXPORTER_OTLP_TRACES_ENDPOINT'].some((v) =>
-      (env?.[v] ?? '').includes('langfuse')
-    )
+    if (!env) return false
+
+    if (env.LANGFUSE_BASE_URL) return true
+
+    const otlpEndpoint = env.OTEL_EXPORTER_OTLP_ENDPOINT ?? ''
+    const tracesEndpoint = env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT ?? ''
+    return otlpEndpoint.includes('langfuse') || tracesEndpoint.includes('langfuse')
   }
 
   /**
