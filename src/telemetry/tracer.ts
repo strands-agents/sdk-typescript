@@ -192,6 +192,11 @@ export class Tracer {
     try {
       const attributes: Record<string, AttributeValue> = {}
       if (accumulatedUsage) this._setUsageAttributes(attributes, accumulatedUsage)
+      // Langfuse auto-generates "generation" observations for spans with token usage,
+      // which duplicates the token counts already reported on this agent span.
+      // Setting observation.type to "span" prevents Langfuse from creating that
+      // extra generation, avoiding double-counted tokens in dashboards.
+      // See https://github.com/langfuse/langfuse/issues/7549
       if (this._isLangfuse) attributes['langfuse.observation.type'] = 'span'
       if (response !== undefined) this._addResponseEvent(span, response, stopReason)
 
