@@ -31,5 +31,29 @@ describe('index', () => {
       }
       expect(_typeCheck).toBeDefined()
     })
+
+    it('exports streaming event classes as values, not just types', () => {
+      // Regression: these must be value exports (not `export type`) so they
+      // survive TypeScript type-erasure and can be used with `instanceof` /
+      // `new` at runtime.
+      expect(SDK.ToolStreamEvent).toBeDefined()
+      expect(SDK.ModelMessageStartEvent).toBeDefined()
+      expect(SDK.ModelContentBlockStartEvent).toBeDefined()
+      expect(SDK.ModelContentBlockDeltaEvent).toBeDefined()
+      expect(SDK.ModelContentBlockStopEvent).toBeDefined()
+      expect(SDK.ModelMessageStopEvent).toBeDefined()
+      expect(SDK.ModelMetadataEvent).toBeDefined()
+      expect(SDK.ModelRedactionEvent).toBeDefined()
+    })
+
+    it('can instantiate exported streaming event classes', () => {
+      const toolEvent = new SDK.ToolStreamEvent({ data: 'test' })
+      expect(toolEvent).toBeInstanceOf(SDK.ToolStreamEvent)
+      expect(toolEvent.type).toBe('toolStreamEvent')
+
+      const msgStart = new SDK.ModelMessageStartEvent({ type: 'modelMessageStartEvent', role: 'assistant' })
+      expect(msgStart).toBeInstanceOf(SDK.ModelMessageStartEvent)
+      expect(msgStart.type).toBe('modelMessageStartEvent')
+    })
   })
 })
