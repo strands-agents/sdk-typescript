@@ -106,6 +106,16 @@ export class AfterNodeCallEvent extends HookableEvent {
  *
  * Use `inner.source` to determine the event origin, then `inner.event`
  * to access the underlying event and switch on its `type`.
+ *
+ * Sources:
+ * - `'agent'` — the node wraps an {@link Agent} instance. The event is an
+ *   {@link AgentStreamEvent} and can be narrowed via `event.type`.
+ * - `'multiAgent'` — the node wraps a nested orchestrator (e.g. {@link Graph}
+ *   or {@link Swarm}). The event is a {@link MultiAgentStreamEvent} (excluding
+ *   {@link NodeStreamUpdateEvent}, which passes through directly).
+ * - `'custom'` — the node wraps an {@link InvokableAgent} that is not an
+ *   {@link Agent} instance (e.g. {@link A2AAgent} or a third-party implementation).
+ *   The event is a {@link StreamEvent} with no further type narrowing available.
  */
 export type NodeStreamUpdateInnerEvent =
   | { readonly source: 'agent'; readonly event: AgentStreamEvent }
