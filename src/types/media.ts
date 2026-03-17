@@ -141,7 +141,7 @@ export class S3Location implements S3LocationData, JSONSerializable<S3LocationDa
  */
 export type ImageSourceData =
   | { bytes: Uint8Array } // raw binary data
-  | { location: S3LocationData } // Bedrock: S3 reference
+  | { location: S3LocationData } // S3 location reference
   | { url: string } // https://
 
 /**
@@ -263,7 +263,7 @@ export class ImageBlock implements ImageBlockData, JSONSerializable<{ image: Ser
 /**
  * Source for a video (Data version).
  */
-export type VideoSourceData = { bytes: Uint8Array } | { location: S3LocationData } // Bedrock: up to 1GB
+export type VideoSourceData = { bytes: Uint8Array } | { location: S3LocationData } // S3 location reference
 
 /**
  * Source for a video (Class version).
@@ -382,7 +382,7 @@ export type DocumentSourceData =
   | { bytes: Uint8Array } // raw binary data
   | { text: string } // plain text
   | { content: DocumentContentBlockData[] } // structured content
-  | { location: S3LocationData } // S3 reference
+  | { location: S3LocationData } // S3 location reference
 
 /**
  * Source for a document (Class version).
