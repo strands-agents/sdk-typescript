@@ -287,7 +287,7 @@ export class Meter {
   private readonly _otelInputTokens: Counter
   private readonly _otelOutputTokens: Counter
   private readonly _otelModelLatency: Histogram
-  private readonly _otelTimeToFirstByte: Histogram
+  private readonly _otelTimeToFirstToken: Histogram
 
   constructor() {
     this._otelMeter = otelMetrics.getMeter(getServiceName())
@@ -322,7 +322,8 @@ export class Meter {
       description: 'Model invocation latency in milliseconds',
       unit: 'ms',
     })
-    this._otelTimeToFirstByte = this._otelMeter.createHistogram('gen_ai.server.time_to_first_token', {
+    // OTel GenAI semconv requires seconds for this metric, unlike the SDK-internal histograms which use ms
+    this._otelTimeToFirstToken = this._otelMeter.createHistogram('gen_ai.server.time_to_first_token', {
       description: 'Time to generate first token for successful responses',
       unit: 's',
     })
@@ -460,7 +461,7 @@ export class Meter {
       this._otelModelLatency.record(metadata.metrics.latencyMs)
 
       if (metadata.metrics.timeToFirstByteMs !== undefined && metadata.metrics.timeToFirstByteMs > 0) {
-        this._otelTimeToFirstByte.record(metadata.metrics.timeToFirstByteMs / 1000)
+        this._otelTimeToFirstToken.record(metadata.metrics.timeToFirstByteMs / 1000)
       }
     }
   }

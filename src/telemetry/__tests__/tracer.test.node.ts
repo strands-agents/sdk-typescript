@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import type { Span, SpanAttributeValue } from '@opentelemetry/api'
 import { SpanStatusCode, trace, context } from '@opentelemetry/api'
 import { Tracer } from '../tracer.js'
-import { Message, TextBlock, ToolResultBlock, ToolUseBlock } from '../../types/messages.js'
+import { Message, TextBlock, ToolResultBlock, ToolUseBlock, CachePointBlock } from '../../types/messages.js'
 import { MockSpan, eventAttr } from '../../__fixtures__/mock-span.js'
 import { textMessage } from '../../__fixtures__/agent-helpers.js'
 
@@ -747,6 +747,42 @@ describe('Tracer', () => {
 
       const systemEvents = mockSpan.getEvents('gen_ai.system.message')
       expect(systemEvents).toHaveLength(0)
+    })
+
+    it('handles SystemContentBlock array with cache points in latest conventions', () => {
+      vi.stubEnv('OTEL_SEMCONV_STABILITY_OPT_IN', 'gen_ai_latest_experimental')
+      const tracer = new Tracer()
+
+      tracer.startModelInvokeSpan({
+        messages: [textMessage('user', 'Hello')],
+        modelId: 'test-model',
+        systemPrompt: [new TextBlock('You are helpful'), new CachePointBlock({ cacheType: 'default' })],
+      })
+
+      const detailEvents = mockSpan.getEvents('gen_ai.client.inference.operation.details')
+      const systemEvent = detailEvents.find((e) => eventAttr(e, 'gen_ai.system_instructions'))
+      expect(systemEvent).toBeDefined()
+      expect(JSON.parse(eventAttr(systemEvent!, 'gen_ai.system_instructions'))).toStrictEqual([
+        { type: 'text', content: 'You are helpful' },
+        { type: 'cache_point', cacheType: 'default' },
+      ])
+    })
+
+    it('serializes SystemContentBlock array in stable conventions', () => {
+      const tracer = new Tracer()
+
+      tracer.startModelInvokeSpan({
+        messages: [textMessage('user', 'Hello')],
+        modelId: 'test-model',
+        systemPrompt: [new TextBlock('You are helpful'), new CachePointBlock({ cacheType: 'default' })],
+      })
+
+      const systemEvents = mockSpan.getEvents('gen_ai.system.message')
+      expect(systemEvents).toHaveLength(1)
+      const parsed = JSON.parse(eventAttr(systemEvents[0]!, 'content'))
+      expect(parsed).toHaveLength(2)
+      expect(parsed[0]).toStrictEqual({ text: 'You are helpful' })
+      expect(parsed[1]).toStrictEqual({ cachePoint: { cacheType: 'default' } })
     })
   })
 

@@ -701,8 +701,6 @@ export class Tracer {
           return { type: 'cache_point', cacheType: block.cacheType }
         case 'guardContentBlock':
           return { type: 'guard_content', text: block.text, image: block.image }
-        default:
-          return { type: 'unknown' }
       }
     })
   }
@@ -723,7 +721,7 @@ export class Tracer {
         case 'toolResultBlock':
           return { type: 'tool_call_response', id: block.toolUseId, response: block.content }
         default:
-          return block as unknown as Record<string, unknown>
+          return { type: block.type }
       }
     })
   }
