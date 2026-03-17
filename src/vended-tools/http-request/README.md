@@ -22,7 +22,7 @@ npm install @strands-agents/sdk
 
 ```typescript
 import { Agent } from '@strands-agents/sdk'
-import { httpRequest } from '@strands-agents/sdk/vended_tools/http_request'
+import { httpRequest } from '@strands-agents/sdk/vended-tools/http-request'
 
 const agent = new Agent({
   tools: [httpRequest],
@@ -35,7 +35,7 @@ await agent.invoke('Get data from https://api.example.com/data')
 ### Direct Invocation
 
 ```typescript
-import { httpRequest } from '@strands-agents/sdk/vended_tools/http_request'
+import { httpRequest } from '@strands-agents/sdk/vended-tools/http-request'
 
 // Simple GET request
 const response = await httpRequest.invoke({

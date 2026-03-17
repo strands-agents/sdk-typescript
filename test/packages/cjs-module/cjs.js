@@ -5,10 +5,10 @@
 
 const { Agent, BedrockModel, tool, Tool } = require('@strands-agents/sdk')
 
-const { notebook } = require('@strands-agents/sdk/vended_tools/notebook')
-const { fileEditor } = require('@strands-agents/sdk/vended_tools/file_editor')
-const { httpRequest } = require('@strands-agents/sdk/vended_tools/http_request')
-const { bash } = require('@strands-agents/sdk/vended_tools/bash')
+const { notebook } = require('@strands-agents/sdk/vended-tools/notebook')
+const { fileEditor } = require('@strands-agents/sdk/vended-tools/file-editor')
+const { httpRequest } = require('@strands-agents/sdk/vended-tools/http-request')
+const { bash } = require('@strands-agents/sdk/vended-tools/bash')
 
 const { z } = require('zod')
 

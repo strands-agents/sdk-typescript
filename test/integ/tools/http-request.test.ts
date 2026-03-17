@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { httpRequest } from '@strands-agents/sdk/vended_tools/http_request'
+import { httpRequest } from '@strands-agents/sdk/vended-tools/http-request'
 import { Agent } from '@strands-agents/sdk'
 import { bedrock } from '../__fixtures__/model-providers.js'
 

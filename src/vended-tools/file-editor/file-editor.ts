@@ -47,7 +47,7 @@ class TextFileReader implements IFileReader {
  *
  * @example
  * ```typescript
- * import { fileEditor } from '@strands-agents/sdk/vended_tools/file_editor'
+ * import { fileEditor } from '@strands-agents/sdk/vended-tools/file-editor'
  * import { Agent } from '@strands-agents/sdk'
  *
  * const agent = new Agent({

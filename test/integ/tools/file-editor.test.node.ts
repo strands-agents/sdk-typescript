@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { Agent } from '$/sdk/index.js'
-import { fileEditor } from '$/sdk/vended-tools/file_editor/index.js'
+import { fileEditor } from '$/sdk/vended-tools/file-editor/index.js'
 import { collectGenerator } from '$/sdk/__fixtures__/model-test-helpers.js'
 import { promises as fs } from 'fs'
 import * as path from 'path'
