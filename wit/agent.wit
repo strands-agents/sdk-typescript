@@ -122,6 +122,27 @@ interface types {
     top-p: option<f64>,
   }
 
+  record file-storage-config {
+    base-dir: string,
+  }
+
+  record s3-storage-config {
+    bucket: string,
+    region: option<string>,
+    prefix: option<string>,
+  }
+
+  variant storage-config {
+    file(file-storage-config),
+    s3(s3-storage-config),
+  }
+
+  record session-config {
+    session-id: string,
+    storage: storage-config,
+    save-latest-on: option<string>,
+  }
+
   record agent-config {
     model: option<model-config>,
     model-params: option<model-params>,
@@ -129,6 +150,7 @@ interface types {
     system-prompt-blocks: option<string>,
     tools: option<list<tool-spec>>,
     trace-context: option<string>,
+    session: option<session-config>,
   }
 
   record call-tool-args {
@@ -198,6 +220,9 @@ interface api {
     generate: func(args: stream-args) -> response-stream;
     get-messages: func() -> string;
     set-messages: func(args: set-messages-args);
+    save-session: func() -> result<_, string>;
+    list-snapshots: func() -> result<list<string>, string>;
+    delete-session: func() -> result<_, string>;
   }
 
   resource response-stream {

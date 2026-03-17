@@ -53,7 +53,7 @@ await build({
   platform: 'browser',
   target: 'es2022',
   define: { 'import.meta.vitest': 'undefined' },
-  external: ['strands:*'],
+  external: ['strands:*', 'fs', 'path'],
   outfile: 'dist/bundle.js',
   logLevel: 'info',
   plugins: [patchWasiBufferReuse],

@@ -26,7 +26,7 @@ import type {
 
 import { callTool } from 'strands:agent/tool-provider';
 import { log as hostLog } from 'strands:agent/host-log';
-import { Agent, FunctionTool } from '@strands-agents/sdk';
+import { Agent, FunctionTool, SessionManager, FileStorage, S3Storage } from '@strands-agents/sdk';
 import { AnthropicModel } from '@strands-agents/sdk/anthropic';
 import { BedrockModel } from '@strands-agents/sdk/bedrock';
 import { OpenAIModel } from '@strands-agents/sdk/openai';
@@ -349,27 +349,62 @@ function parseInput(input: string): any {
   return input;
 }
 
+function createSessionManager(config: AgentConfig): SessionManager | undefined {
+  if (!config.session) return undefined;
+
+  const sc = config.session;
+  let storage;
+  switch (sc.storage.tag) {
+    case 'file':
+      storage = new FileStorage(sc.storage.val.baseDir);
+      break;
+    case 's3': {
+      const s3 = sc.storage.val;
+      storage = new S3Storage({
+        bucket: s3.bucket,
+        ...(s3.region ? { region: s3.region } : {}),
+        ...(s3.prefix ? { prefix: s3.prefix } : {}),
+      });
+      break;
+    }
+    default:
+      throw new Error(`Unknown storage type: ${(sc.storage as any).tag}`);
+  }
+
+  return new SessionManager({
+    sessionId: sc.sessionId,
+    storage: { snapshot: storage },
+    ...(sc.saveLatestOn ? { saveLatestOn: sc.saveLatestOn as any } : {}),
+  });
+}
+
 class AgentImpl {
   private agent: Agent;
   private defaultTools: FunctionTool[] | undefined;
   private lifecycleBridge: LifecycleBridge;
+  private sessionManager: SessionManager | undefined;
 
   constructor(config: AgentConfig) {
     glog('info', 'AgentImpl: constructing', {
       hasModel: !!config.model,
       hasTools: !!(config.tools?.length),
       toolCount: config.tools?.length ?? 0,
+      hasSession: !!config.session,
     });
 
     const model = createModel(config.model, config.modelParams);
     this.defaultTools = createTools(config.tools);
     this.lifecycleBridge = new LifecycleBridge();
+    this.sessionManager = createSessionManager(config);
+
+    const hooks: any[] = [this.lifecycleBridge];
+    if (this.sessionManager) hooks.push(this.sessionManager);
 
     this.agent = new Agent({
       model,
       systemPrompt: buildSystemPrompt(config),
       tools: this.defaultTools,
-      hooks: [this.lifecycleBridge],
+      hooks,
       printer: false,
     });
   }
@@ -406,6 +441,27 @@ class AgentImpl {
   setMessages(args: SetMessagesArgs): void {
     const newMessages = JSON.parse(args.json);
     this.agent.messages.splice(0, this.agent.messages.length, ...newMessages);
+  }
+
+  async saveSession(): Promise<void> {
+    if (!this.sessionManager) throw new Error('No session manager configured');
+    await this.sessionManager.saveSnapshot({ target: this.agent, isLatest: true });
+  }
+
+  async listSnapshots(): Promise<string[]> {
+    if (!this.sessionManager) throw new Error('No session manager configured');
+    const storage = (this.sessionManager as any)._storage.snapshot;
+    const location = (this.sessionManager as any)._location?.(this.agent)
+      ?? { sessionId: (this.sessionManager as any)._sessionId, scope: 'agent', scopeId: this.agent.agentId };
+    return storage.listSnapshotIds({ location });
+  }
+
+  async deleteSession(): Promise<void> {
+    if (!this.sessionManager) throw new Error('No session manager configured');
+    // Delete by removing all snapshots - FileStorage/S3Storage don't have a bulk delete,
+    // so we'd need to implement this per-storage. For now, list and delete individually.
+    // TODO: Add deleteSession to SnapshotStorage interface upstream.
+    throw new Error('deleteSession not yet implemented');
   }
 }
 
