@@ -66,10 +66,25 @@ export function decodeBase64(input: string): Uint8Array {
 }
 
 /**
+ * Base interface for a document/media source location.
+ */
+export interface LocationData {
+  /**
+   * Location type discriminator.
+   */
+  type: string
+}
+
+/**
  * Data for an S3 location.
  * Used by Bedrock for referencing media and documents stored in S3.
  */
-export interface S3LocationData {
+export interface S3LocationData extends LocationData {
+  /**
+   * Location type — always "s3".
+   */
+  type: 's3'
+
   /**
    * S3 URI in format: s3://bucket-name/key-name
    */
@@ -86,10 +101,11 @@ export interface S3LocationData {
  * S3 location for Bedrock media and document sources.
  */
 export class S3Location implements S3LocationData, JSONSerializable<S3LocationData> {
+  readonly type = 's3' as const
   readonly uri: string
   readonly bucketOwner?: string
 
-  constructor(data: S3LocationData) {
+  constructor(data: Omit<S3LocationData, 'type'> & { type?: 's3' }) {
     this.uri = data.uri
     if (data.bucketOwner !== undefined) {
       this.bucketOwner = data.bucketOwner
@@ -102,9 +118,10 @@ export class S3Location implements S3LocationData, JSONSerializable<S3LocationDa
    */
   toJSON(): S3LocationData {
     return omitUndefined({
+      type: this.type,
       uri: this.uri,
       bucketOwner: this.bucketOwner,
-    })
+    }) as S3LocationData
   }
 
   /**
@@ -124,7 +141,7 @@ export class S3Location implements S3LocationData, JSONSerializable<S3LocationDa
  */
 export type ImageSourceData =
   | { bytes: Uint8Array } // raw binary data
-  | { s3Location: S3LocationData } // Bedrock: S3 reference
+  | { location: S3LocationData } // Bedrock: S3 reference
   | { url: string } // https://
 
 /**
@@ -132,7 +149,7 @@ export type ImageSourceData =
  */
 export type ImageSource =
   | { type: 'imageSourceBytes'; bytes: Uint8Array }
-  | { type: 'imageSourceS3Location'; s3Location: S3Location }
+  | { type: 'imageSourceS3Location'; location: S3Location }
   | { type: 'imageSourceUrl'; url: string }
 
 /**
@@ -187,10 +204,10 @@ export class ImageBlock implements ImageBlockData, JSONSerializable<{ image: Ser
         url: source.url,
       }
     }
-    if ('s3Location' in source) {
+    if ('location' in source) {
       return {
         type: 'imageSourceS3Location',
-        s3Location: new S3Location(source.s3Location),
+        location: new S3Location(source.location),
       }
     }
     throw new Error('Invalid image source')
@@ -208,7 +225,7 @@ export class ImageBlock implements ImageBlockData, JSONSerializable<{ image: Ser
     } else if (this.source.type === 'imageSourceUrl') {
       source = { url: this.source.url }
     } else {
-      source = { s3Location: this.source.s3Location.toJSON() }
+      source = { location: this.source.location.toJSON() }
     }
     return {
       image: {
@@ -234,7 +251,7 @@ export class ImageBlock implements ImageBlockData, JSONSerializable<{ image: Ser
     } else if ('url' in image.source) {
       source = { url: image.source.url }
     } else {
-      source = { s3Location: image.source.s3Location }
+      source = { location: image.source.location }
     }
     return new ImageBlock({
       format: image.format,
@@ -246,14 +263,14 @@ export class ImageBlock implements ImageBlockData, JSONSerializable<{ image: Ser
 /**
  * Source for a video (Data version).
  */
-export type VideoSourceData = { bytes: Uint8Array } | { s3Location: S3LocationData } // Bedrock: up to 1GB
+export type VideoSourceData = { bytes: Uint8Array } | { location: S3LocationData } // Bedrock: up to 1GB
 
 /**
  * Source for a video (Class version).
  */
 export type VideoSource =
   | { type: 'videoSourceBytes'; bytes: Uint8Array }
-  | { type: 'videoSourceS3Location'; s3Location: S3Location }
+  | { type: 'videoSourceS3Location'; location: S3Location }
 
 /**
  * Data for a video block.
@@ -301,8 +318,8 @@ export class VideoBlock implements VideoBlockData, JSONSerializable<{ video: Ser
         bytes: source.bytes,
       }
     }
-    if ('s3Location' in source) {
-      return { type: 'videoSourceS3Location', s3Location: new S3Location(source.s3Location) }
+    if ('location' in source) {
+      return { type: 'videoSourceS3Location', location: new S3Location(source.location) }
     }
     throw new Error('Invalid video source')
   }
@@ -317,7 +334,7 @@ export class VideoBlock implements VideoBlockData, JSONSerializable<{ video: Ser
     if (this.source.type === 'videoSourceBytes') {
       source = { bytes: encodeBase64(this.source.bytes) }
     } else {
-      source = { s3Location: this.source.s3Location.toJSON() }
+      source = { location: this.source.location.toJSON() }
     }
     return {
       video: {
@@ -341,7 +358,7 @@ export class VideoBlock implements VideoBlockData, JSONSerializable<{ video: Ser
       const bytes = video.source.bytes
       source = { bytes: typeof bytes === 'string' ? decodeBase64(bytes) : bytes }
     } else {
-      source = { s3Location: video.source.s3Location }
+      source = { location: video.source.location }
     }
     return new VideoBlock({
       format: video.format,
@@ -365,7 +382,7 @@ export type DocumentSourceData =
   | { bytes: Uint8Array } // raw binary data
   | { text: string } // plain text
   | { content: DocumentContentBlockData[] } // structured content
-  | { s3Location: S3LocationData } // S3 reference
+  | { location: S3LocationData } // S3 reference
 
 /**
  * Source for a document (Class version).
@@ -374,7 +391,7 @@ export type DocumentSource =
   | { type: 'documentSourceBytes'; bytes: Uint8Array }
   | { type: 'documentSourceText'; text: string }
   | { type: 'documentSourceContentBlock'; content: DocumentContentBlock[] }
-  | { type: 'documentSourceS3Location'; s3Location: S3Location }
+  | { type: 'documentSourceS3Location'; location: S3Location }
 
 /**
  * Data for a document block.
@@ -471,10 +488,10 @@ export class DocumentBlock implements DocumentBlockData, JSONSerializable<{ docu
         content: source.content.map((block) => new TextBlock(block.text)),
       }
     }
-    if ('s3Location' in source) {
+    if ('location' in source) {
       return {
         type: 'documentSourceS3Location',
-        s3Location: new S3Location(source.s3Location),
+        location: new S3Location(source.location),
       }
     }
     throw new Error('Invalid document source')
@@ -494,7 +511,7 @@ export class DocumentBlock implements DocumentBlockData, JSONSerializable<{ docu
     } else if (this.source.type === 'documentSourceContentBlock') {
       source = { content: this.source.content.map((block) => block.toJSON()) }
     } else {
-      source = { s3Location: this.source.s3Location.toJSON() }
+      source = { location: this.source.location.toJSON() }
     }
     return {
       document: omitUndefined({
@@ -525,7 +542,7 @@ export class DocumentBlock implements DocumentBlockData, JSONSerializable<{ docu
     } else if ('content' in doc.source) {
       source = { content: doc.source.content }
     } else {
-      source = { s3Location: doc.source.s3Location }
+      source = { location: doc.source.location }
     }
     const result: DocumentBlockData = {
       name: doc.name,

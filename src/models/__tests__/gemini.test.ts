@@ -368,7 +368,7 @@ describe('GeminiModel', () => {
 
         const imageBlock = new ImageBlock({
           format: 'png',
-          source: { s3Location: { uri: 's3://test/image.png' } },
+          source: { location: { type: 's3', uri: 's3://test/image.png' } },
         })
 
         const contents = formatBlock(imageBlock)

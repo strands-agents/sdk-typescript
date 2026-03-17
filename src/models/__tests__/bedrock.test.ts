@@ -1885,7 +1885,9 @@ describe('BedrockModel', () => {
       const messages = [
         new Message({
           role: 'user',
-          content: [new ImageBlock({ format: 'png', source: { s3Location: { uri: 's3://bucket/image.png' } } })],
+          content: [
+            new ImageBlock({ format: 'png', source: { location: { type: 's3', uri: 's3://bucket/image.png' } } }),
+          ],
         }),
       ]
 
@@ -2267,7 +2269,9 @@ describe('BedrockModel', () => {
       const messages = [
         new Message({
           role: 'user',
-          content: [new ImageBlock({ format: 'png', source: { s3Location: { uri: 's3://bucket/image.png' } } })],
+          content: [
+            new ImageBlock({ format: 'png', source: { location: { type: 's3', uri: 's3://bucket/image.png' } } }),
+          ],
         }),
       ]
 
@@ -3680,7 +3684,8 @@ describe('BedrockModel', () => {
               new ImageBlock({
                 format: 'png',
                 source: {
-                  s3Location: {
+                  location: {
+                    type: 's3',
                     uri: 's3://bucket/image.png',
                   },
                 },

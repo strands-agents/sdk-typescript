@@ -995,8 +995,8 @@ export class BedrockModel extends Model<BedrockModelConfig> {
       case 'videoSourceS3Location':
         return {
           s3Location: {
-            uri: source.s3Location.uri,
-            ...(source.s3Location.bucketOwner && { bucketOwner: source.s3Location.bucketOwner }),
+            uri: source.location.uri,
+            ...(source.location.bucketOwner && { bucketOwner: source.location.bucketOwner }),
           },
         }
 
@@ -1038,8 +1038,8 @@ export class BedrockModel extends Model<BedrockModelConfig> {
       case 'documentSourceS3Location':
         return {
           s3Location: {
-            uri: source.s3Location.uri,
-            ...(source.s3Location.bucketOwner && { bucketOwner: source.s3Location.bucketOwner }),
+            uri: source.location.uri,
+            ...(source.location.bucketOwner && { bucketOwner: source.location.bucketOwner }),
           },
         }
 

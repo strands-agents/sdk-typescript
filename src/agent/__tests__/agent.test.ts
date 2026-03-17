@@ -796,7 +796,7 @@ describe('Agent', () => {
           }),
           new VideoBlock({
             format: 'mp4',
-            source: { s3Location: { uri: 's3://bucket/video.mp4' } },
+            source: { location: { type: 's3', uri: 's3://bucket/video.mp4' } },
           }),
           new DocumentBlock({
             format: 'pdf',
@@ -857,7 +857,7 @@ describe('Agent', () => {
           {
             video: {
               format: 'mp4' as const,
-              source: { s3Location: { uri: 's3://bucket/video.mp4' } },
+              source: { location: { type: 's3' as const, uri: 's3://bucket/video.mp4' } },
             },
           },
           {

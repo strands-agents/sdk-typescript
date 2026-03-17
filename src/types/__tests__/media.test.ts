@@ -18,6 +18,7 @@ describe('S3Location', () => {
       uri: 's3://my-bucket/image.jpg',
     })
     expect(location).toEqual({
+      type: 's3',
       uri: 's3://my-bucket/image.jpg',
     })
   })
@@ -28,6 +29,7 @@ describe('S3Location', () => {
       bucketOwner: '123456789012',
     })
     expect(location).toEqual({
+      type: 's3',
       uri: 's3://my-bucket/image.jpg',
       bucketOwner: '123456789012',
     })
@@ -52,7 +54,8 @@ describe('ImageBlock', () => {
     const block = new ImageBlock({
       format: 'png',
       source: {
-        s3Location: {
+        location: {
+          type: 's3',
           uri: 's3://my-bucket/image.png',
           bucketOwner: '123456789012',
         },
@@ -63,14 +66,14 @@ describe('ImageBlock', () => {
       format: 'png',
       source: {
         type: 'imageSourceS3Location',
-        s3Location: expect.any(S3Location),
+        location: expect.any(S3Location),
       },
     })
     // Assert S3Location was converted to class
-    const s3Source = block.source as { type: 'imageSourceS3Location'; s3Location: S3Location }
-    expect(s3Source.s3Location).toBeInstanceOf(S3Location)
-    expect(s3Source.s3Location.uri).toBe('s3://my-bucket/image.png')
-    expect(s3Source.s3Location.bucketOwner).toBe('123456789012')
+    const s3Source = block.source as { type: 'imageSourceS3Location'; location: S3Location }
+    expect(s3Source.location).toBeInstanceOf(S3Location)
+    expect(s3Source.location.uri).toBe('s3://my-bucket/image.png')
+    expect(s3Source.location.bucketOwner).toBe('123456789012')
   })
 
   it('creates instance with URL source', () => {
@@ -112,7 +115,8 @@ describe('VideoBlock', () => {
     const block = new VideoBlock({
       format: 'webm',
       source: {
-        s3Location: {
+        location: {
+          type: 's3',
           uri: 's3://my-bucket/video.webm',
         },
       },
@@ -122,13 +126,13 @@ describe('VideoBlock', () => {
       format: 'webm',
       source: {
         type: 'videoSourceS3Location',
-        s3Location: expect.any(S3Location),
+        location: expect.any(S3Location),
       },
     })
     // Assert S3Location was converted to class
-    const s3Source = block.source as { type: 'videoSourceS3Location'; s3Location: S3Location }
-    expect(s3Source.s3Location).toBeInstanceOf(S3Location)
-    expect(s3Source.s3Location.uri).toBe('s3://my-bucket/video.webm')
+    const s3Source = block.source as { type: 'videoSourceS3Location'; location: S3Location }
+    expect(s3Source.location).toBeInstanceOf(S3Location)
+    expect(s3Source.location.uri).toBe('s3://my-bucket/video.webm')
   })
 
   it('throws error for invalid source', () => {
@@ -201,7 +205,8 @@ describe('DocumentBlock', () => {
       name: 'report.pdf',
       format: 'pdf',
       source: {
-        s3Location: {
+        location: {
+          type: 's3',
           uri: 's3://my-bucket/report.pdf',
           bucketOwner: '123456789012',
         },
@@ -213,7 +218,8 @@ describe('DocumentBlock', () => {
       format: 'pdf',
       source: {
         type: 'documentSourceS3Location',
-        s3Location: {
+        location: {
+          type: 's3',
           uri: 's3://my-bucket/report.pdf',
           bucketOwner: '123456789012',
         },
@@ -383,10 +389,10 @@ describe('S3Location toJSON/fromJSON', () => {
     expect(restored).toEqual(original)
   })
 
-  it('omits undefined bucketOwner from JSON', () => {
+  it('includes type in JSON output', () => {
     const location = new S3Location({ uri: 's3://bucket/key.jpg' })
     const json = location.toJSON()
-    expect(json).toStrictEqual({ uri: 's3://bucket/key.jpg' })
+    expect(json).toStrictEqual({ type: 's3', uri: 's3://bucket/key.jpg' })
     expect('bucketOwner' in json).toBe(false)
   })
 })
@@ -413,7 +419,7 @@ describe('ImageBlock toJSON/fromJSON', () => {
   it('round-trips with s3Location source', () => {
     const original = new ImageBlock({
       format: 'webp',
-      source: { s3Location: { uri: 's3://bucket/image.webp', bucketOwner: '123456789012' } },
+      source: { location: { type: 's3', uri: 's3://bucket/image.webp', bucketOwner: '123456789012' } },
     })
     const restored = ImageBlock.fromJSON(original.toJSON())
     expect(restored).toEqual(original)
@@ -442,7 +448,7 @@ describe('VideoBlock toJSON/fromJSON', () => {
   it('round-trips with s3Location source', () => {
     const original = new VideoBlock({
       format: 'webm',
-      source: { s3Location: { uri: 's3://bucket/video.webm' } },
+      source: { location: { type: 's3', uri: 's3://bucket/video.webm' } },
     })
     const restored = VideoBlock.fromJSON(original.toJSON())
     expect(restored).toEqual(original)
@@ -493,7 +499,7 @@ describe('DocumentBlock toJSON/fromJSON', () => {
     const original = new DocumentBlock({
       name: 'report.pdf',
       format: 'pdf',
-      source: { s3Location: { uri: 's3://bucket/report.pdf', bucketOwner: '123456789012' } },
+      source: { location: { type: 's3', uri: 's3://bucket/report.pdf', bucketOwner: '123456789012' } },
     })
     const restored = DocumentBlock.fromJSON(original.toJSON())
     expect(restored).toEqual(original)
