@@ -1,6 +1,7 @@
-import type { InvokableAgent, InvokeArgs } from '../types/agent.js'
+import type { InvokableAgent } from '../types/agent.js'
+import type { MultiAgentInput } from './multiagent.js'
 import type { ContentBlock } from '../types/messages.js'
-import { TextBlock } from '../types/messages.js'
+import { TextBlock, contentBlockFromData } from '../types/messages.js'
 import { HookableEvent } from '../hooks/events.js'
 import { HookRegistryImplementation } from '../hooks/registry.js'
 import type { HookCallback, HookableEventConstructor, HookCleanup } from '../hooks/types.js'
@@ -134,7 +135,7 @@ export class Graph implements MultiAgent {
    * @param input - The input to pass to entry point nodes
    * @returns Promise resolving to the final MultiAgentResult
    */
-  async invoke(input: InvokeArgs): Promise<MultiAgentResult> {
+  async invoke(input: MultiAgentInput): Promise<MultiAgentResult> {
     const gen = this.stream(input)
     let next = await gen.next()
     while (!next.done) {
@@ -161,7 +162,7 @@ export class Graph implements MultiAgent {
    * @param input - The input to pass to entry nodes
    * @returns Async generator yielding streaming events and returning a MultiAgentResult
    */
-  async *stream(input: InvokeArgs): AsyncGenerator<MultiAgentStreamEvent, MultiAgentResult, undefined> {
+  async *stream(input: MultiAgentInput): AsyncGenerator<MultiAgentStreamEvent, MultiAgentResult, undefined> {
     await this.initialize()
 
     const gen = this._stream(input)
@@ -180,7 +181,7 @@ export class Graph implements MultiAgent {
     }
   }
 
-  private async *_stream(input: InvokeArgs): AsyncGenerator<MultiAgentStreamEvent, MultiAgentResult, undefined> {
+  private async *_stream(input: MultiAgentInput): AsyncGenerator<MultiAgentStreamEvent, MultiAgentResult, undefined> {
     const state = new MultiAgentState({ nodeIds: [...this.nodes.keys()] })
 
     const queue = new Queue()
@@ -251,7 +252,7 @@ export class Graph implements MultiAgent {
   /**
    * Executes a single node, pushing streaming events to the shared queue in real-time.
    */
-  private async _streamNode(node: Node, input: InvokeArgs, state: MultiAgentState, queue: Queue): Promise<void> {
+  private async _streamNode(node: Node, input: MultiAgentInput, state: MultiAgentState, queue: Queue): Promise<void> {
     const nodeState = state.node(node.id)!
 
     const beforeEvent = new BeforeNodeCallEvent({ orchestrator: this, state, nodeId: node.id })
@@ -436,7 +437,7 @@ export class Graph implements MultiAgent {
   /**
    * Builds the input for a node by combining the original task with dependency outputs.
    */
-  private _resolveNodeInput(node: Node, input: InvokeArgs, state: MultiAgentState): InvokeArgs {
+  private _resolveNodeInput(node: Node, input: MultiAgentInput, state: MultiAgentState): MultiAgentInput {
     const deps: ContentBlock[] = []
     for (const edge of this.edges.filter((e) => e.target.id === node.id)) {
       const ns = state.node(edge.source.id)!
@@ -447,7 +448,10 @@ export class Graph implements MultiAgent {
 
     if (deps.length === 0) return input
 
-    const blocks: ContentBlock[] = typeof input === 'string' ? [new TextBlock(input)] : (input as ContentBlock[])
+    const blocks =
+      typeof input === 'string'
+        ? [new TextBlock(input)]
+        : input.map((b) => ('type' in b ? (b as ContentBlock) : contentBlockFromData(b)))
     return [...blocks, ...deps]
   }
 

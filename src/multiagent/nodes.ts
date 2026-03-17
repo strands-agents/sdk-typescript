@@ -1,5 +1,6 @@
 import { Agent } from '../agent/agent.js'
-import type { InvokeArgs, InvokeOptions, InvokableAgent, AgentStreamEvent } from '../types/agent.js'
+import type { InvokeOptions, InvokableAgent, AgentStreamEvent } from '../types/agent.js'
+import type { MultiAgentInput } from './multiagent.js'
 import { takeSnapshot, loadSnapshot } from '../agent/snapshot.js'
 import type { MultiAgentStreamEvent } from './events.js'
 import { NodeStreamUpdateEvent, NodeResultEvent } from './events.js'
@@ -50,12 +51,12 @@ export abstract class Node {
    * Execute the node. Handles duration measurement, error capture,
    * and delegates to handle() for node-specific logic.
    *
-   * @param args - Input to pass to the node (string, content blocks, or messages)
+   * @param args - Input to pass to the node (string or content blocks)
    * @param state - The current multi-agent state
    * @returns Async generator yielding streaming events and returning a NodeResult
    */
   async *stream(
-    args: InvokeArgs,
+    args: MultiAgentInput,
     state: MultiAgentState
   ): AsyncGenerator<MultiAgentStreamEvent, NodeResult, undefined> {
     const nodeState = state.node(this.id)!
@@ -92,12 +93,12 @@ export abstract class Node {
   /**
    * Node-specific execution logic implemented by subclasses.
    *
-   * @param args - Input to process (string, content blocks, or messages)
+   * @param args - Input to process (string or content blocks)
    * @param state - The current multi-agent state
    * @returns Async generator yielding streaming events and returning a partial result
    */
   abstract handle(
-    args: InvokeArgs,
+    args: MultiAgentInput,
     state: MultiAgentState
   ): AsyncGenerator<MultiAgentStreamEvent, NodeResultUpdate, undefined>
 }
@@ -144,7 +145,7 @@ export class AgentNode extends Node {
    * @returns Async generator yielding streaming events and returning the agent's content blocks
    */
   async *handle(
-    args: InvokeArgs,
+    args: MultiAgentInput,
     state: MultiAgentState
   ): AsyncGenerator<MultiAgentStreamEvent, NodeResultUpdate, undefined> {
     // Only Agent instances support snapshot/restore for state isolation
@@ -221,7 +222,7 @@ export class MultiAgentNode extends Node {
    * @returns Async generator yielding streaming events and returning the orchestrator's content
    */
   async *handle(
-    args: InvokeArgs,
+    args: MultiAgentInput,
     state: MultiAgentState
   ): AsyncGenerator<MultiAgentStreamEvent, NodeResultUpdate, undefined> {
     const gen = this._orchestrator.stream(args)

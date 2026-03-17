@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { Agent } from '../../agent/agent.js'
-import type { InvokeArgs } from '../../types/agent.js'
+import type { MultiAgentInput } from '../multiagent.js'
 import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
 import { collectGenerator } from '../../__fixtures__/model-test-helpers.js'
 import { TextBlock } from '../../types/messages.js'
@@ -17,20 +17,23 @@ import type { NodeResultUpdate } from '../state.js'
  */
 class TestNode extends Node {
   private readonly _fn: (
-    args: InvokeArgs,
+    args: MultiAgentInput,
     state: MultiAgentState
   ) => AsyncGenerator<MultiAgentStreamEvent, NodeResultUpdate, undefined>
 
   constructor(
     id: string,
-    fn: (args: InvokeArgs, state: MultiAgentState) => AsyncGenerator<MultiAgentStreamEvent, NodeResultUpdate, undefined>
+    fn: (
+      args: MultiAgentInput,
+      state: MultiAgentState
+    ) => AsyncGenerator<MultiAgentStreamEvent, NodeResultUpdate, undefined>
   ) {
     super(id, {})
     this._fn = fn
   }
 
   async *handle(
-    args: InvokeArgs,
+    args: MultiAgentInput,
     state: MultiAgentState
   ): AsyncGenerator<MultiAgentStreamEvent, NodeResultUpdate, undefined> {
     return yield* this._fn(args, state)

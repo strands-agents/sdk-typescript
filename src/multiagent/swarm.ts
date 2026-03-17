@@ -1,5 +1,6 @@
 import { logger } from '../logging/logger.js'
-import type { InvokeArgs, InvokableAgent } from '../types/agent.js'
+import type { InvokableAgent } from '../types/agent.js'
+import type { MultiAgentInput } from './multiagent.js'
 import { z } from 'zod'
 import { HookableEvent } from '../hooks/events.js'
 import { HookRegistryImplementation } from '../hooks/registry.js'
@@ -153,7 +154,7 @@ export class Swarm implements MultiAgent {
    * @param input - The input to pass to the start agent
    * @returns Promise resolving to the final MultiAgentResult
    */
-  async invoke(input: InvokeArgs): Promise<MultiAgentResult> {
+  async invoke(input: MultiAgentInput): Promise<MultiAgentResult> {
     const gen = this.stream(input)
     let next = await gen.next()
     while (!next.done) {
@@ -169,7 +170,7 @@ export class Swarm implements MultiAgent {
    * @param input - The input to pass to the start agent
    * @returns Async generator yielding streaming events and returning a MultiAgentResult
    */
-  async *stream(input: InvokeArgs): AsyncGenerator<MultiAgentStreamEvent, MultiAgentResult, undefined> {
+  async *stream(input: MultiAgentInput): AsyncGenerator<MultiAgentStreamEvent, MultiAgentResult, undefined> {
     await this.initialize()
 
     const gen = this._stream(input)
@@ -184,7 +185,7 @@ export class Swarm implements MultiAgent {
     return next.value
   }
 
-  private async *_stream(input: InvokeArgs): AsyncGenerator<MultiAgentStreamEvent, MultiAgentResult, undefined> {
+  private async *_stream(input: MultiAgentInput): AsyncGenerator<MultiAgentStreamEvent, MultiAgentResult, undefined> {
     const state = new MultiAgentState({
       nodeIds: [...this.nodes.keys()],
       structuredOutputSchema: this._handoffSchema,
@@ -232,7 +233,7 @@ export class Swarm implements MultiAgent {
 
   private async *_streamNode(
     node: AgentNode,
-    input: InvokeArgs,
+    input: MultiAgentInput,
     state: MultiAgentState,
     handoff?: HandoffResult
   ): AsyncGenerator<MultiAgentStreamEvent, NodeResult, undefined> {
@@ -314,7 +315,7 @@ export class Swarm implements MultiAgent {
     return [...last.content]
   }
 
-  private _resolveNodeInput(input: InvokeArgs, handoff?: HandoffResult): InvokeArgs {
+  private _resolveNodeInput(input: MultiAgentInput, handoff?: HandoffResult): MultiAgentInput {
     if (!handoff) return input
 
     const blocks: ContentBlock[] = [new TextBlock(handoff.message)]
