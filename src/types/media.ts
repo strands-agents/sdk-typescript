@@ -77,7 +77,6 @@ export interface LocationData {
 
 /**
  * Data for an S3 location.
- * Used by Bedrock for referencing media and documents stored in S3.
  */
 export interface S3LocationData extends LocationData {
   /**
@@ -98,7 +97,7 @@ export interface S3LocationData extends LocationData {
 }
 
 /**
- * S3 location for Bedrock media and document sources.
+ * S3 location for media and document sources.
  */
 export class S3Location implements S3LocationData, JSONSerializable<S3LocationData> {
   readonly type = 's3' as const
@@ -141,7 +140,7 @@ export class S3Location implements S3LocationData, JSONSerializable<S3LocationDa
  */
 export type ImageSourceData =
   | { bytes: Uint8Array } // raw binary data
-  | { location: S3LocationData } // S3 location reference
+  | { location: S3LocationData } // remote location reference
   | { url: string } // https://
 
 /**
@@ -263,7 +262,7 @@ export class ImageBlock implements ImageBlockData, JSONSerializable<{ image: Ser
 /**
  * Source for a video (Data version).
  */
-export type VideoSourceData = { bytes: Uint8Array } | { location: S3LocationData } // S3 location reference
+export type VideoSourceData = { bytes: Uint8Array } | { location: S3LocationData } // remote location reference
 
 /**
  * Source for a video (Class version).
@@ -382,7 +381,7 @@ export type DocumentSourceData =
   | { bytes: Uint8Array } // raw binary data
   | { text: string } // plain text
   | { content: DocumentContentBlockData[] } // structured content
-  | { location: S3LocationData } // S3 location reference
+  | { location: S3LocationData } // remote location reference
 
 /**
  * Source for a document (Class version).
