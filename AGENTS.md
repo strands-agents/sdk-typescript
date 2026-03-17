@@ -630,7 +630,7 @@ export type DocumentSourceData =
   | { bytes: Uint8Array }
   | { text: string }
   | { content: DocumentContentBlockData[] }
-  | { s3Location: S3LocationData }
+  | { location: S3LocationData }
 
 // Correct: multi-variant union for citation locations
 export type CitationLocation =
