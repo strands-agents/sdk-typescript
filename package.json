@@ -166,6 +166,9 @@
     "zod": "^4.1.12"
   },
   "peerDependenciesMeta": {
+    "@a2a-js/sdk": {
+      "optional": true
+    },
     "@anthropic-ai/sdk": {
       "optional": true
     },
