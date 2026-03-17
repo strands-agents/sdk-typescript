@@ -53,6 +53,14 @@
     "./a2a": {
       "types": "./dist/src/a2a/index.d.ts",
       "default": "./dist/src/a2a/index.js"
+    },
+    "./session/s3-storage": {
+      "types": "./dist/src/session/s3-storage.d.ts",
+      "default": "./dist/src/session/s3-storage.js"
+    },
+    "./telemetry": {
+      "types": "./dist/src/telemetry/index.d.ts",
+      "default": "./dist/src/telemetry/index.js"
     }
   },
   "scripts": {
@@ -105,7 +113,6 @@
     "@opentelemetry/sdk-trace-base": "^1.30.1",
     "@opentelemetry/sdk-trace-node": "^1.30.1",
     "@google/genai": "^1.40.0",
-    "@types/json-schema": "^7.0.15",
     "@types/express": "^5.0.6",
     "@types/node": "^24.6.0",
     "@types/uuid": "^10.0.0",
@@ -138,6 +145,7 @@
   "homepage": "https://github.com/strands-agents/sdk-typescript#readme",
   "dependencies": {
     "@aws-sdk/client-bedrock-runtime": "^3.943.0",
+    "@types/json-schema": "^7.0.15",
     "uuid": "^10.0.0"
   },
   "peerDependencies": {
@@ -158,9 +166,6 @@
     "zod": "^4.1.12"
   },
   "peerDependenciesMeta": {
-    "@a2a-js/sdk": {
-      "optional": true
-    },
     "@anthropic-ai/sdk": {
       "optional": true
     },

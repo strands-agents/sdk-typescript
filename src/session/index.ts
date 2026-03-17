@@ -13,6 +13,5 @@ export type { SessionStorage, SnapshotStorage, SnapshotLocation } from './storag
 
 // Storage implementations
 export { FileStorage } from './file-storage.js'
-export { S3Storage, type S3StorageConfig } from './s3-storage.js'
 
 export type { Scope, Snapshot } from '../agent/snapshot.js'

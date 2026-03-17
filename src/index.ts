@@ -232,13 +232,9 @@ export type { SessionManagerConfig, SaveLatestStrategy } from './session/session
 export type { SnapshotManifest, SnapshotTriggerCallback, SnapshotTriggerParams } from './session/types.js'
 export type { SessionStorage, SnapshotStorage, SnapshotLocation } from './session/storage.js'
 export { FileStorage } from './session/file-storage.js'
-export { S3Storage, type S3StorageConfig } from './session/s3-storage.js'
 export type { Scope, Snapshot } from './agent/snapshot.js'
 
 // Telemetry
-export * as telemetry from './telemetry/index.js'
-
-// Local Metrics
 export { AgentMetrics } from './telemetry/meter.js'
 
 // Multi-agent orchestration

@@ -17,7 +17,8 @@
  *   npm start
  */
 
-import { Agent, telemetry, tool } from '@strands-agents/sdk'
+import { Agent, tool } from '@strands-agents/sdk'
+import * as telemetry from '@strands-agents/sdk/telemetry'
 import { z } from 'zod'
 
 // 1. Set up telemetry ONCE at application start.

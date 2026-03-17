@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest'
-import { Agent, telemetry, tool } from '@strands-agents/sdk'
+import { Agent, tool } from '@strands-agents/sdk'
+import * as telemetry from '@strands-agents/sdk/telemetry'
 import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node'
 import { InMemorySpanExporter, SimpleSpanProcessor } from '@opentelemetry/sdk-trace-base'
 import type { ReadableSpan } from '@opentelemetry/sdk-trace-base'
