@@ -17,8 +17,8 @@ import type {
   ToolStreamUpdateEvent,
   AgentResultEvent,
   HookableEvent,
+  StreamEvent,
 } from '../hooks/events.js'
-import type { A2AStreamEvent } from '../a2a/events.js'
 import type { HookCallback, HookableEventConstructor, HookCleanup } from '../hooks/types.js'
 import type { ToolRegistry } from '../registry/tool-registry.js'
 import type { z } from 'zod'
@@ -82,10 +82,7 @@ export interface InvokableAgent {
    * @param options - Optional invocation options (e.g. structured output schema)
    * @returns Async generator that yields stream events and returns AgentResult
    */
-  stream(
-    args: InvokeArgs,
-    options?: InvokeOptions
-  ): AsyncGenerator<AgentStreamEvent | A2AStreamEvent, AgentResult, undefined>
+  stream(args: InvokeArgs, options?: InvokeOptions): AsyncGenerator<StreamEvent, AgentResult, undefined>
 }
 
 /**

@@ -224,7 +224,7 @@ describe('MultiAgentNode', () => {
         nodeId: 'deep-node',
         nodeType: 'agentNode',
         state,
-        event: innerUpdate,
+        inner: { source: 'multiAgent', event: innerUpdate },
       })
       const orchestrator = mockOrchestrator('inner', [innerEvent])
       node = new MultiAgentNode({ orchestrator })
@@ -244,7 +244,7 @@ describe('MultiAgentNode', () => {
       const { items } = await collectGenerator(node.stream([], state))
 
       const streamEvents = items.filter((e) => e.type === 'nodeStreamUpdateEvent') as NodeStreamUpdateEvent[]
-      const wrapped = streamEvents.find((e) => e.nodeId === 'inner' && e.event === handoff)
+      const wrapped = streamEvents.find((e) => e.nodeId === 'inner' && e.inner.event === handoff)
       expect(wrapped).toBeDefined()
       expect(wrapped!.nodeType).toBe('multiAgentNode')
     })

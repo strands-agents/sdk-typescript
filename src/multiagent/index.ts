@@ -20,7 +20,7 @@ export {
   MultiAgentHandoffEvent,
   MultiAgentResultEvent,
 } from './events.js'
-export type { MultiAgentStreamEvent } from './events.js'
+export type { MultiAgentStreamEvent, NodeStreamUpdateInnerEvent } from './events.js'
 
 export { Edge } from './edge.js'
 export type { EdgeHandler, EdgeDefinition } from './edge.js'

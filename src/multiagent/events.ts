@@ -1,6 +1,5 @@
-import { HookableEvent } from '../hooks/events.js'
+import { HookableEvent, StreamEvent } from '../hooks/events.js'
 import type { AgentStreamEvent } from '../types/agent.js'
-import type { A2AStreamEvent } from '../a2a/events.js'
 import type { MultiAgentResult, MultiAgentState, NodeResult } from './state.js'
 import type { MultiAgent } from './multiagent.js'
 import type { NodeType } from './nodes.js'
@@ -103,6 +102,17 @@ export class AfterNodeCallEvent extends HookableEvent {
 }
 
 /**
+ * Tagged inner event from a node, discriminated by {@link source}.
+ *
+ * Use `inner.source` to determine the event origin, then `inner.event`
+ * to access the underlying event and switch on its `type`.
+ */
+export type NodeStreamUpdateInnerEvent =
+  | { readonly source: 'agent'; readonly event: AgentStreamEvent }
+  | { readonly source: 'multiAgent'; readonly event: Exclude<MultiAgentStreamEvent, NodeStreamUpdateEvent> }
+  | { readonly source: 'custom'; readonly event: StreamEvent }
+
+/**
  * Wraps an inner streaming event from a node with the node's identity.
  * Emitted during node execution to propagate agent-level or nested
  * multi-agent events up to the orchestration layer.
@@ -112,19 +122,14 @@ export class NodeStreamUpdateEvent extends HookableEvent {
   readonly nodeId: string
   readonly nodeType: NodeType
   readonly state: MultiAgentState
-  readonly event: AgentStreamEvent | A2AStreamEvent | Exclude<MultiAgentStreamEvent, NodeStreamUpdateEvent>
+  readonly inner: NodeStreamUpdateInnerEvent
 
-  constructor(data: {
-    nodeId: string
-    nodeType: NodeType
-    state: MultiAgentState
-    event: AgentStreamEvent | A2AStreamEvent | Exclude<MultiAgentStreamEvent, NodeStreamUpdateEvent>
-  }) {
+  constructor(data: { nodeId: string; nodeType: NodeType; state: MultiAgentState; inner: NodeStreamUpdateInnerEvent }) {
     super()
     this.nodeId = data.nodeId
     this.nodeType = data.nodeType
     this.state = data.state
-    this.event = data.event
+    this.inner = data.inner
   }
 }
 
