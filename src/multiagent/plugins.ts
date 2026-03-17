@@ -6,7 +6,7 @@
  * through hook registration and custom initialization.
  */
 
-import type { MultiAgentBase } from './base.js'
+import type { MultiAgent } from './multiagent.js'
 
 /**
  * Abstract base class for plugins that extend multi-agent orchestrator functionality.
@@ -49,7 +49,7 @@ export abstract class MultiAgentPlugin {
    *
    * @param orchestrator - The orchestrator this plugin is being attached to
    */
-  abstract initMultiAgent(orchestrator: MultiAgentBase): void | Promise<void>
+  abstract initMultiAgent(orchestrator: MultiAgent): void | Promise<void>
 }
 
 /**
@@ -73,14 +73,14 @@ export class MultiAgentPluginRegistry {
    *
    * @param orchestrator - The orchestrator instance to initialize plugins with
    */
-  async initialize(orchestrator: MultiAgentBase): Promise<void> {
+  async initialize(orchestrator: MultiAgent): Promise<void> {
     while (this._pending.length > 0) {
       const plugin = this._pending.shift()!
       await this._addAndInit(plugin, orchestrator)
     }
   }
 
-  private async _addAndInit(plugin: MultiAgentPlugin, orchestrator: MultiAgentBase): Promise<void> {
+  private async _addAndInit(plugin: MultiAgentPlugin, orchestrator: MultiAgent): Promise<void> {
     if (this._plugins.has(plugin.name)) {
       throw new Error(`plugin_name=<${plugin.name}> | plugin already registered`)
     }

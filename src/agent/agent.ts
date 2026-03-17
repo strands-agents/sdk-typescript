@@ -1,4 +1,11 @@
-import { AgentResult, type AgentStreamEvent } from '../types/agent.js'
+import {
+  AgentResult,
+  type AgentStreamEvent,
+  type InvokableAgent,
+  type InvokeArgs,
+  type InvokeOptions,
+  type LocalAgent,
+} from '../types/agent.js'
 import { BedrockModel } from '../models/bedrock.js'
 import {
   contentBlockFromData,
@@ -23,8 +30,6 @@ import type { BaseModelConfig, StreamAggregatedResult, StreamOptions } from '../
 import { isModelStreamEvent } from '../models/streaming.js'
 import { ToolRegistry } from '../registry/tool-registry.js'
 import { AppState } from '../app-state.js'
-import type { AgentData } from '../types/agent.js'
-import type { AgentBase } from './agent-base.js'
 import { AgentPrinter, getDefaultAppender, type Printer } from './printer.js'
 import type { Plugin } from '../plugins/plugin.js'
 import { PluginRegistry } from '../plugins/registry.js'
@@ -150,26 +155,6 @@ export type AgentConfig = {
   id?: string
 }
 
-/**
- * Arguments for invoking an agent.
- *
- * Supports multiple input formats:
- * - `string` - User text input (wrapped in TextBlock, creates user Message)
- * - `ContentBlock[]` | `ContentBlockData[]` - Array of content blocks (creates single user Message)
- * - `Message[]` | `MessageData[]` - Array of messages (appends all to conversation)
- */
-export type InvokeArgs = string | ContentBlock[] | ContentBlockData[] | Message[] | MessageData[]
-
-/**
- * Options for a single agent invocation.
- */
-export interface InvokeOptions {
-  /**
-   * Zod schema for structured output validation, overriding the constructor-provided schema for this invocation only.
-   */
-  structuredOutputSchema?: z.ZodSchema
-}
-
 /** Default name assigned to agents when none is provided. */
 const DEFAULT_AGENT_NAME = 'Strands Agent'
 
@@ -181,9 +166,7 @@ const DEFAULT_AGENT_ID = 'agent'
  * The Agent is responsible for managing the lifecycle of tools and clients
  * and invoking the core decision-making loop.
  */
-export class Agent implements AgentData, AgentBase {
-  readonly type = 'agent' as const
-
+export class Agent implements LocalAgent, InvokableAgent {
   /**
    * The conversation history of messages between user and assistant.
    */

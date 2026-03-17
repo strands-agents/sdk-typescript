@@ -7,8 +7,7 @@ import type { Task } from '@a2a-js/sdk'
 import express from 'express'
 import { ClientFactory } from '@a2a-js/sdk/client'
 import { Agent } from '@strands-agents/sdk'
-import { A2AExpressServer, A2AAgent, A2AStreamUpdateEvent } from '$/sdk/a2a/index.js'
-import { AgentResultEvent } from '$/sdk/hooks/events.js'
+import { A2AExpressServer, A2AAgent, A2AStreamUpdateEvent, A2AResultEvent } from '$/sdk/a2a/index.js'
 import { TextBlock } from '$/sdk/types/messages.js'
 import { encodeBase64 } from '$/sdk/types/media.js'
 import { collectGenerator } from '$/sdk/__fixtures__/model-test-helpers.js'
@@ -152,7 +151,7 @@ describe.skipIf(bedrock.skip)('A2AAgent integration', () => {
       expect((result.lastMessage.content[0] as TextBlock).text.toLowerCase()).toContain('pong')
     })
 
-    it('stream yields A2AStreamUpdateEvents and AgentResultEvent', async () => {
+    it('stream yields A2AStreamUpdateEvents and A2AResultEvent', async () => {
       const agent = new Agent({
         model: bedrock.createModel({ maxTokens: 256 }),
         printer: false,
@@ -165,7 +164,7 @@ describe.skipIf(bedrock.skip)('A2AAgent integration', () => {
       const { items, result } = await collectGenerator(remoteAgent.stream('ping'))
 
       const streamUpdates = items.filter((e) => e instanceof A2AStreamUpdateEvent)
-      const resultEvents = items.filter((e) => e instanceof AgentResultEvent)
+      const resultEvents = items.filter((e) => e instanceof A2AResultEvent)
 
       expect(streamUpdates.length).toBeGreaterThan(0)
       expect(resultEvents).toHaveLength(1)

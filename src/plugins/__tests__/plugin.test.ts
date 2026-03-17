@@ -3,7 +3,7 @@ import type { Plugin } from '../plugin.js'
 import { BeforeInvocationEvent, type HookableEvent } from '../../hooks/events.js'
 import { ToolRegistry } from '../../registry/tool-registry.js'
 import type { HookableEventConstructor, HookCallback, HookCleanup } from '../../hooks/types.js'
-import type { AgentData } from '../../types/agent.js'
+import type { LocalAgent } from '../../types/agent.js'
 import { createRandomTool } from '../../__fixtures__/tool-helpers.js'
 
 /**
@@ -16,7 +16,7 @@ class TestPlugin implements Plugin {
     return 'test-plugin'
   }
 
-  initAgent(agent: AgentData): void {
+  initAgent(agent: LocalAgent): void {
     agent.addHook(BeforeInvocationEvent, () => {
       // No-op for testing
     })
@@ -37,7 +37,7 @@ class CustomNamePlugin implements Plugin {
     return this._name
   }
 
-  initAgent(_agent: AgentData): void {}
+  initAgent(_agent: LocalAgent): void {}
 }
 
 /**
@@ -50,7 +50,7 @@ class InitializablePlugin implements Plugin {
     return 'initializable-plugin'
   }
 
-  initAgent(_agent: AgentData): void {
+  initAgent(_agent: LocalAgent): void {
     this.initialized = true
   }
 }
@@ -87,7 +87,7 @@ describe('Plugin', () => {
           return () => {}
         },
         toolRegistry: new ToolRegistry(),
-      } as unknown as AgentData
+      } as unknown as LocalAgent
 
       plugin.initAgent(mockAgent)
 
@@ -100,7 +100,7 @@ describe('Plugin', () => {
       const mockAgent = {
         addHook: () => () => {},
         toolRegistry: new ToolRegistry(),
-      } as unknown as AgentData
+      } as unknown as LocalAgent
 
       // Should not throw and return undefined
       const result = plugin.initAgent(mockAgent)
@@ -112,7 +112,7 @@ describe('Plugin', () => {
       const mockAgent = {
         addHook: () => () => {},
         toolRegistry: new ToolRegistry(),
-      } as unknown as AgentData
+      } as unknown as LocalAgent
 
       expect(plugin.initialized).toBe(false)
 
@@ -134,7 +134,7 @@ describe('Plugin', () => {
         get name(): string {
           return 'tool-plugin'
         }
-        initAgent(_agent: AgentData): void {}
+        initAgent(_agent: LocalAgent): void {}
         getTools() {
           return [mockTool]
         }

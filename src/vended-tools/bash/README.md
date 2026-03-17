@@ -31,7 +31,7 @@ A robust tool for executing bash shell commands in Node.js environments with per
 ## Installation
 
 ```typescript
-import { bash } from '@strands-agents/sdk/vended_tools/bash'
+import { bash } from '@strands-agents/sdk/vended-tools/bash'
 ```
 
 ## Usage
@@ -41,7 +41,7 @@ import { bash } from '@strands-agents/sdk/vended_tools/bash'
 ```typescript
 import { Agent } from '@strands-agents/sdk'
 import { BedrockModel } from '@strands-agents/sdk'
-import { bash } from '@strands-agents/sdk/vended_tools/bash'
+import { bash } from '@strands-agents/sdk/vended-tools/bash'
 
 const agent = new Agent({
   model: new BedrockModel({
@@ -62,7 +62,7 @@ Variables, functions, and working directory persist across commands in the same 
 ```typescript
 import { Agent } from '@strands-agents/sdk'
 import { BedrockModel } from '@strands-agents/sdk'
-import { bash } from '@strands-agents/sdk/vended_tools/bash'
+import { bash } from '@strands-agents/sdk/vended-tools/bash'
 
 const model = new BedrockModel({
   region: 'us-east-1',
@@ -88,7 +88,7 @@ Clear all session state and start fresh:
 ```typescript
 import { Agent } from '@strands-agents/sdk'
 import { BedrockModel } from '@strands-agents/sdk'
-import { bash } from '@strands-agents/sdk/vended_tools/bash'
+import { bash } from '@strands-agents/sdk/vended-tools/bash'
 
 const model = new BedrockModel({
   region: 'us-east-1',
@@ -153,7 +153,7 @@ The tool throws custom errors for specific failure scenarios:
 - **`BashSessionError`**: Thrown when the bash process encounters an error
 
 ```typescript
-import { BashTimeoutError, BashSessionError } from '@strands-agents/sdk/vended_tools/bash'
+import { BashTimeoutError, BashSessionError } from '@strands-agents/sdk/vended-tools/bash'
 
 try {
   await bash.invoke({ mode: 'execute', command: 'sleep 1000', timeout: 1 }, context)

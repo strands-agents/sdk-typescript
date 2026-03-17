@@ -12,11 +12,10 @@ import {
   MultiAgentResultEvent,
 } from '../events.js'
 import { MultiAgentResult, MultiAgentState, NodeResult, Status } from '../state.js'
-import type { MultiAgentBase } from '../base.js'
+import type { MultiAgent } from '../multiagent.js'
 import type { AgentStreamEvent } from '../../types/agent.js'
 
-const mockOrchestrator: MultiAgentBase = {
-  type: 'multiAgent',
+const mockOrchestrator: MultiAgent = {
   id: 'test-orchestrator',
   invoke: async () => new MultiAgentResult({ results: [], duration: 0 }),
   // eslint-disable-next-line require-yield
@@ -165,15 +164,15 @@ describe('AfterNodeCallEvent', () => {
 describe('NodeStreamUpdateEvent', () => {
   it('creates instance with correct properties', () => {
     const state = new MultiAgentState()
-    const innerEvent = { type: 'beforeInvocationEvent' } as AgentStreamEvent
-    const event = new NodeStreamUpdateEvent({ nodeId: 'node-1', nodeType: 'agentNode', state, event: innerEvent })
+    const innerEvent = { source: 'agent', event: { type: 'beforeInvocationEvent' } as AgentStreamEvent } as const
+    const event = new NodeStreamUpdateEvent({ nodeId: 'node-1', nodeType: 'agentNode', state, inner: innerEvent })
 
     expect(event).toEqual({
       type: 'nodeStreamUpdateEvent',
       nodeId: 'node-1',
       nodeType: 'agentNode',
       state,
-      event: innerEvent,
+      inner: innerEvent,
     })
     // @ts-expect-error verifying that property is readonly
     event.nodeId = 'node-1'
@@ -182,7 +181,7 @@ describe('NodeStreamUpdateEvent', () => {
     // @ts-expect-error verifying that property is readonly
     event.state = state
     // @ts-expect-error verifying that property is readonly
-    event.event = innerEvent
+    event.inner = innerEvent
   })
 })
 

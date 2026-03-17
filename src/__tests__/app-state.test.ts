@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { AppState } from '../app-state.js'
+import {
+  isStateSerializable,
+  loadStateFromJSONSymbol,
+  loadStateSerializable,
+  serializeStateSerializable,
+  stateToJSONSymbol,
+} from '../types/serializable.js'
 
 describe('AppState', () => {
   describe('constructor', () => {
@@ -323,25 +330,66 @@ describe('AppState', () => {
     })
   })
 
-  describe('toJSON', () => {
+  describe('stateToJSONSymbol (via symbol)', () => {
     it('returns deep copy of state', () => {
       const state = new AppState({ key1: 'value1', nested: { deep: true } })
-      const json = state.toJSON()
+      const json = state[stateToJSONSymbol]()
       expect(json).toEqual({ key1: 'value1', nested: { deep: true } })
+    })
+
+    it('can be accessed via serializeStateSerializable helper', () => {
+      const state = new AppState({ key1: 'value1' })
+      const json = serializeStateSerializable(state)
+      expect(json).toEqual({ key1: 'value1' })
     })
   })
 
-  describe('loadStateFromJson', () => {
+  describe('loadStateFromJSONSymbol (via symbol)', () => {
     it('replaces state with json data', () => {
       const state = new AppState({ old: 'data' })
-      state.loadStateFromJson({ new: 'data', count: 42 })
+      state[loadStateFromJSONSymbol]({ new: 'data', count: 42 })
       expect(state.getAll()).toEqual({ new: 'data', count: 42 })
     })
 
     it('clears state when given non-object', () => {
       const state = new AppState({ key: 'value' })
-      state.loadStateFromJson(null)
+      state[loadStateFromJSONSymbol](null)
       expect(state.getAll()).toEqual({})
+    })
+
+    it('can be accessed via loadStateSerializable helper', () => {
+      const state = new AppState({ old: 'data' })
+      loadStateSerializable(state, { new: 'data' })
+      expect(state.getAll()).toEqual({ new: 'data' })
+    })
+  })
+
+  describe('isStateSerializable', () => {
+    it('returns true for AppState instances', () => {
+      const state = new AppState()
+      expect(isStateSerializable(state)).toBe(true)
+    })
+
+    it('returns false for plain objects', () => {
+      const obj = { toJSON: () => ({}), loadStateFromJson: () => {} }
+      expect(isStateSerializable(obj)).toBe(false)
+    })
+
+    it('returns false for null', () => {
+      expect(isStateSerializable(null)).toBe(false)
+    })
+
+    it('returns false for objects with only one symbol method', () => {
+      const partial = { [stateToJSONSymbol]: () => ({}) }
+      expect(isStateSerializable(partial)).toBe(false)
+    })
+
+    it('returns true for objects implementing both symbol methods', () => {
+      const custom = {
+        [stateToJSONSymbol]: () => ({ custom: true }),
+        [loadStateFromJSONSymbol]: () => {},
+      }
+      expect(isStateSerializable(custom)).toBe(true)
     })
   })
 })

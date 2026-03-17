@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { Agent } from '../../agent/agent.js'
-import type { InvokeArgs } from '../../agent/agent.js'
+import type { InvokeArgs } from '../../types/agent.js'
 import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
 import { collectGenerator } from '../../__fixtures__/model-test-helpers.js'
 import { TextBlock } from '../../types/messages.js'
@@ -9,7 +9,7 @@ import { MultiAgentResult, MultiAgentState, NodeResult, Status } from '../state.
 import type { MultiAgentStreamEvent } from '../events.js'
 import { MultiAgentHandoffEvent, NodeStreamUpdateEvent } from '../events.js'
 import { AgentNode, MultiAgentNode, Node } from '../nodes.js'
-import type { MultiAgentBase } from '../base.js'
+import type { MultiAgent } from '../multiagent.js'
 import type { NodeResultUpdate } from '../state.js'
 
 /**
@@ -184,9 +184,8 @@ describe('MultiAgentNode', () => {
   /**
    * Creates a mock orchestrator that yields the given events and returns a result with the given content.
    */
-  function mockOrchestrator(id: string, events: MultiAgentStreamEvent[]): MultiAgentBase {
+  function mockOrchestrator(id: string, events: MultiAgentStreamEvent[]): MultiAgent {
     return {
-      type: 'multiAgent',
       id,
       invoke: async () => new MultiAgentResult({ results: [], duration: 0 }),
       async *stream() {
@@ -225,7 +224,7 @@ describe('MultiAgentNode', () => {
         nodeId: 'deep-node',
         nodeType: 'agentNode',
         state,
-        event: innerUpdate,
+        inner: { source: 'multiAgent', event: innerUpdate },
       })
       const orchestrator = mockOrchestrator('inner', [innerEvent])
       node = new MultiAgentNode({ orchestrator })
@@ -245,7 +244,7 @@ describe('MultiAgentNode', () => {
       const { items } = await collectGenerator(node.stream([], state))
 
       const streamEvents = items.filter((e) => e.type === 'nodeStreamUpdateEvent') as NodeStreamUpdateEvent[]
-      const wrapped = streamEvents.find((e) => e.nodeId === 'inner' && e.event === handoff)
+      const wrapped = streamEvents.find((e) => e.nodeId === 'inner' && e.inner.event === handoff)
       expect(wrapped).toBeDefined()
       expect(wrapped!.nodeType).toBe('multiAgentNode')
     })

@@ -4,7 +4,7 @@ import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
 import { McpClient } from '../mcp.js'
 import { McpTool } from '../tools/mcp-tool.js'
 import { JsonBlock, type TextBlock, type ToolResultBlock } from '../types/messages.js'
-import type { AgentData } from '../types/agent.js'
+import type { LocalAgent } from '../types/agent.js'
 import type { ToolContext } from '../tools/tool.js'
 import { context, propagation, trace, TraceFlags } from '@opentelemetry/api'
 import type { SpanContext } from '@opentelemetry/api'
@@ -305,7 +305,7 @@ describe('MCP Integration', () => {
 
     const toolContext: ToolContext = {
       toolUse: { toolUseId: 'id-123', name: 'weather', input: { city: 'NYC' } },
-      agent: {} as AgentData,
+      agent: {} as LocalAgent,
     }
 
     it('returns text results on success', async () => {

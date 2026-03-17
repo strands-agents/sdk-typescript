@@ -1,12 +1,11 @@
 import { Agent } from '../agent/agent.js'
-import type { InvokeArgs, InvokeOptions } from '../agent/agent.js'
-import type { AgentBase } from '../agent/agent-base.js'
+import type { InvokeArgs, InvokeOptions, InvokableAgent, AgentStreamEvent } from '../types/agent.js'
 import { takeSnapshot, loadSnapshot } from '../agent/snapshot.js'
 import type { MultiAgentStreamEvent } from './events.js'
 import { NodeStreamUpdateEvent, NodeResultEvent } from './events.js'
 import { NodeResult, Status } from './state.js'
 import type { MultiAgentState, NodeResultUpdate } from './state.js'
-import type { MultiAgentBase } from './base.js'
+import type { MultiAgent } from './multiagent.js'
 import { logger } from '../logging/logger.js'
 
 /**
@@ -108,18 +107,18 @@ export abstract class Node {
  */
 export interface AgentNodeOptions {
   /** The agent to wrap as a node. */
-  agent: AgentBase
+  agent: InvokableAgent
 }
 
 /**
- * Node that wraps an {@link AgentBase} instance for multi-agent orchestration.
+ * Node that wraps an {@link InvokableAgent} instance for multi-agent orchestration.
  *
  * Each execution is isolated. When the wrapped agent is an {@link Agent} instance,
  * its internal state is snapshot/restored so it remains unchanged after the node completes.
  */
 export class AgentNode extends Node {
   readonly type = 'agentNode' as const
-  private readonly _agent: AgentBase
+  private readonly _agent: InvokableAgent
 
   constructor(options: AgentNodeOptions) {
     const { agent, ...config } = options
@@ -132,7 +131,7 @@ export class AgentNode extends Node {
     this._agent = agent
   }
 
-  get agent(): AgentBase {
+  get agent(): InvokableAgent {
     return this._agent
   }
 
@@ -159,7 +158,15 @@ export class AgentNode extends Node {
       const gen = this._agent.stream(args, options)
       let next = await gen.next()
       while (!next.done) {
-        yield new NodeStreamUpdateEvent({ nodeId: this.id, nodeType: this.type, state, event: next.value })
+        yield new NodeStreamUpdateEvent({
+          nodeId: this.id,
+          nodeType: this.type,
+          state,
+          inner:
+            this._agent instanceof Agent
+              ? { source: 'agent', event: next.value as AgentStreamEvent }
+              : { source: 'custom', event: next.value },
+        })
         next = await gen.next()
       }
 
@@ -180,7 +187,7 @@ export class AgentNode extends Node {
  */
 export interface MultiAgentNodeOptions extends NodeConfig {
   /** The orchestrator to wrap as a node. */
-  orchestrator: MultiAgentBase
+  orchestrator: MultiAgent
 }
 
 /**
@@ -192,7 +199,7 @@ export interface MultiAgentNodeOptions extends NodeConfig {
  */
 export class MultiAgentNode extends Node {
   readonly type = 'multiAgentNode' as const
-  private readonly _orchestrator: MultiAgentBase
+  private readonly _orchestrator: MultiAgent
 
   constructor(options: MultiAgentNodeOptions) {
     const { orchestrator, ...config } = options
@@ -200,7 +207,7 @@ export class MultiAgentNode extends Node {
     this._orchestrator = orchestrator
   }
 
-  get orchestrator(): MultiAgentBase {
+  get orchestrator(): MultiAgent {
     return this._orchestrator
   }
 
@@ -224,7 +231,12 @@ export class MultiAgentNode extends Node {
       if (event.type === 'nodeStreamUpdateEvent') {
         yield event
       } else {
-        yield new NodeStreamUpdateEvent({ nodeId: this.id, nodeType: this.type, state, event })
+        yield new NodeStreamUpdateEvent({
+          nodeId: this.id,
+          nodeType: this.type,
+          state,
+          inner: { source: 'multiAgent', event },
+        })
       }
       next = await gen.next()
     }
@@ -235,8 +247,8 @@ export class MultiAgentNode extends Node {
 /**
  * A node definition accepted by orchestration constructors.
  *
- * Pass an {@link AgentBase} or {@link MultiAgentBase} directly for the simple case,
+ * Pass an {@link InvokableAgent} or {@link MultiAgent} directly for the simple case,
  * use typed options objects for per-node configuration, or provide pre-built
  * {@link Node} instances for full control.
  */
-export type NodeDefinition = AgentBase | MultiAgentBase | Node | AgentNodeOptions | MultiAgentNodeOptions
+export type NodeDefinition = InvokableAgent | MultiAgent | Node | AgentNodeOptions | MultiAgentNodeOptions

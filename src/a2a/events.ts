@@ -4,6 +4,7 @@
 
 import type { Message, Task, TaskStatusUpdateEvent, TaskArtifactUpdateEvent } from '@a2a-js/sdk'
 import { StreamEvent } from '../hooks/events.js'
+import type { AgentResultEvent } from '../hooks/events.js'
 
 /**
  * Union of raw A2A protocol event types received during streaming.
@@ -29,3 +30,25 @@ export class A2AStreamUpdateEvent extends StreamEvent {
     this.event = event
   }
 }
+
+/**
+ * Event triggered as the final event in the A2A agent stream.
+ * Wraps the agent result containing the stop reason and last message.
+ */
+export class A2AResultEvent extends StreamEvent {
+  readonly type = 'a2aResultEvent' as const
+  readonly result: AgentResultEvent['result']
+
+  constructor(data: Pick<AgentResultEvent, 'result'>) {
+    super()
+    this.result = data.result
+  }
+}
+
+/**
+ * Union of all events yielded by `A2AAgent.stream()`.
+ *
+ * Includes raw A2A protocol events ({@link A2AStreamUpdateEvent}) and the final
+ * result event ({@link A2AResultEvent}).
+ */
+export type A2AStreamEvent = A2AStreamUpdateEvent | A2AResultEvent

@@ -111,7 +111,7 @@ sdk-typescript/
 │   ├── app-state.ts              # App state implementation
 │   └── index.ts                  # Main SDK entry point (single export point)
 │
-├── vended_tools/                  # Optional vended tools (not part of core SDK)
+├── vended-tools/                 # Optional vended tools (not part of core SDK)
 │   ├── notebook/                 # Notebook tool for managing text notebooks
 │   │   ├── __tests__/            # Unit tests for notebook tool
 │   │   │   └── notebook.test.ts
@@ -179,7 +179,7 @@ sdk-typescript/
 - **`src/tools/`**: Tool definitions and types for agent tool use
 - **`src/multiagent/`**: Multi-agent orchestration patterns (Graph for DAG execution, Swarm for handoff-based routing)
 - **`src/types/`**: Core type definitions used across the SDK
-- **`vended_tools/`**: Optional vended tools (not part of core SDK, independently importable)
+- **`src/vended-tools/`**: Optional vended tools (not part of core SDK, independently importable)
 - **`test/integ/`**: Integration tests (tests public API and external integrations)
 - **`.github/workflows/`**: CI/CD automation and quality gates
 - **`.project/`**: Task management and project tracking

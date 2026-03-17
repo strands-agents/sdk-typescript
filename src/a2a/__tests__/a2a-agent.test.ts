@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { A2AAgent } from '../a2a-agent.js'
-import { A2AStreamUpdateEvent } from '../events.js'
+import { A2AStreamUpdateEvent, A2AResultEvent } from '../events.js'
 import type {
   AgentCard,
   Task,
@@ -9,8 +9,7 @@ import type {
   TaskStatusUpdateEvent,
 } from '@a2a-js/sdk'
 import { TextBlock, Message } from '../../types/messages.js'
-import type { InvokeArgs } from '../../agent/agent.js'
-import { AgentResultEvent } from '../../hooks/events.js'
+import type { InvokeArgs } from '../../types/agent.js'
 
 // Mock the A2A SDK client
 const mockSendMessageStream = vi.fn()
@@ -194,7 +193,7 @@ describe('A2AAgent', () => {
   })
 
   describe('stream', () => {
-    it('yields A2AStreamUpdateEvent for each A2A event and AgentResultEvent at the end', async () => {
+    it('yields A2AStreamUpdateEvent for each A2A event and A2AResultEvent at the end', async () => {
       const task = createMockTaskResponse()
       mockSendMessageStream.mockReturnValue(mockStream(task))
 
@@ -204,7 +203,7 @@ describe('A2AAgent', () => {
       expect(events).toHaveLength(2)
       expect(events[0]).toBeInstanceOf(A2AStreamUpdateEvent)
       expect((events[0] as A2AStreamUpdateEvent).event).toStrictEqual(task)
-      expect(events[1]).toBeInstanceOf(AgentResultEvent)
+      expect(events[1]).toBeInstanceOf(A2AResultEvent)
       expect((result as { stopReason: string }).stopReason).toBe('endTurn')
     })
 
@@ -244,15 +243,15 @@ describe('A2AAgent', () => {
       const agent = new A2AAgent({ url: 'http://localhost:9000' })
       const { events } = await collectStream(agent.stream('Hello'))
 
-      // 3 A2AStreamUpdateEvents + 1 AgentResultEvent
+      // 3 A2AStreamUpdateEvents + 1 A2AResultEvent
       expect(events).toHaveLength(4)
       expect(events[0]).toBeInstanceOf(A2AStreamUpdateEvent)
       expect(events[1]).toBeInstanceOf(A2AStreamUpdateEvent)
       expect(events[2]).toBeInstanceOf(A2AStreamUpdateEvent)
-      expect(events[3]).toBeInstanceOf(AgentResultEvent)
+      expect(events[3]).toBeInstanceOf(A2AResultEvent)
 
       // Final result built from last complete event (status-update with completed state)
-      const resultEvent = events[3] as AgentResultEvent
+      const resultEvent = events[3] as A2AResultEvent
       expect((resultEvent.result.lastMessage.content[0] as TextBlock).text).toBe('Final answer')
     })
 
@@ -272,7 +271,7 @@ describe('A2AAgent', () => {
       expect(events[0]).toBeInstanceOf(A2AStreamUpdateEvent)
       expect((events[0] as A2AStreamUpdateEvent).event.kind).toBe('message')
 
-      const resultEvent = events[1] as AgentResultEvent
+      const resultEvent = events[1] as A2AResultEvent
       expect((resultEvent.result.lastMessage.content[0] as TextBlock).text).toBe('Direct response')
     })
 
@@ -297,7 +296,7 @@ describe('A2AAgent', () => {
       const agent = new A2AAgent({ url: 'http://localhost:9000' })
       const { events } = await collectStream(agent.stream('Hello'))
 
-      const resultEvent = events[1] as AgentResultEvent
+      const resultEvent = events[1] as A2AResultEvent
       expect((resultEvent.result.lastMessage.content[0] as TextBlock).text).toBe('Status text')
     })
 
@@ -307,8 +306,8 @@ describe('A2AAgent', () => {
       const agent = new A2AAgent({ url: 'http://localhost:9000' })
       const { events, result } = await collectStream(agent.stream('Hello'))
 
-      expect(events).toHaveLength(1) // only AgentResultEvent
-      expect(events[0]).toBeInstanceOf(AgentResultEvent)
+      expect(events).toHaveLength(1) // only A2AResultEvent
+      expect(events[0]).toBeInstanceOf(A2AResultEvent)
       expect((result as { lastMessage: Message }).lastMessage.content[0]).toBeInstanceOf(TextBlock)
       expect(((result as { lastMessage: Message }).lastMessage.content[0] as TextBlock).text).toBe('')
     })

@@ -14,7 +14,7 @@ A filesystem editor tool for viewing, creating, and editing files programmatical
 ## Installation
 
 ```typescript
-import { fileEditor } from '@strands-agents/sdk/vended_tools/file_editor'
+import { fileEditor } from '@strands-agents/sdk/vended-tools/file-editor'
 import { Agent, BedrockModel } from '@strands-agents/sdk'
 
 const agent = new Agent({
@@ -68,7 +68,7 @@ Insert text at a specific line number (0-indexed).
 ## Example Usage
 
 ```typescript
-import { fileEditor } from '@strands-agents/sdk/vended_tools/file_editor'
+import { fileEditor } from '@strands-agents/sdk/vended-tools/file-editor'
 import { Agent, BedrockModel } from '@strands-agents/sdk'
 
 const agent = new Agent({

@@ -14,6 +14,7 @@
 import type { JSONValue } from '../types/json.js'
 import type { MessageData, SystemPromptData } from '../types/messages.js'
 import { Message, systemPromptFromData, systemPromptToData } from '../types/messages.js'
+import { loadStateSerializable, serializeStateSerializable } from '../types/serializable.js'
 import type { Agent } from './agent.js'
 
 /**
@@ -134,7 +135,7 @@ export function takeSnapshot(agent: Agent, options: TakeSnapshotOptions): Snapsh
   }
 
   if (fields.has('state')) {
-    data.state = agent.state.toJSON()
+    data.state = serializeStateSerializable(agent.state)
   }
 
   if (fields.has('systemPrompt')) {
@@ -176,7 +177,7 @@ export function loadSnapshot(agent: Agent, snapshot: Snapshot): void {
   }
 
   if (state !== undefined) {
-    agent.state.loadStateFromJson(state)
+    loadStateSerializable(agent.state, state)
   }
 
   // Only restore systemPrompt if explicitly present and non-null in the snapshot

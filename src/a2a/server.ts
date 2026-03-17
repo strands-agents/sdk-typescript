@@ -11,7 +11,7 @@
 import type { AgentCard, AgentSkill } from '@a2a-js/sdk'
 import type { TaskStore, A2ARequestHandler } from '@a2a-js/sdk/server'
 import { DefaultRequestHandler, InMemoryTaskStore } from '@a2a-js/sdk/server'
-import type { AgentBase } from '../agent/agent-base.js'
+import type { InvokableAgent } from '../types/agent.js'
 import { A2AExecutor } from './executor.js'
 
 /**
@@ -19,7 +19,7 @@ import { A2AExecutor } from './executor.js'
  */
 export interface A2AServerConfig {
   /** The Strands Agent to serve via A2A protocol */
-  agent: AgentBase
+  agent: InvokableAgent
   /** Human-readable name for the agent */
   name: string
   /** Optional description of the agent's purpose */

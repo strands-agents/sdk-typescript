@@ -6,7 +6,7 @@ A tool for managing persistent text notebooks within agent sessions. The noteboo
 
 ```typescript
 import { Agent, BedrockModel } from '@strands-agents/sdk'
-import { notebook } from '@strands-agents/sdk/vended_tools/notebook'
+import { notebook } from '@strands-agents/sdk/vended-tools/notebook'
 ```
 
 ## Quick Start
@@ -15,7 +15,7 @@ import { notebook } from '@strands-agents/sdk/vended_tools/notebook'
 
 ```typescript
 import { Agent, BedrockModel } from '@strands-agents/sdk'
-import { notebook } from '@strands-agents/sdk/vended_tools/notebook'
+import { notebook } from '@strands-agents/sdk/vended-tools/notebook'
 
 // Create an agent with the notebook tool
 const agent = new Agent({
@@ -115,7 +115,7 @@ const taskState = agent.state.getAll()
 You can also use the notebook tool directly without an agent:
 
 ```typescript
-import { notebook } from '@strands-agents/sdk/vended_tools/notebook'
+import { notebook } from '@strands-agents/sdk/vended-tools/notebook'
 import { AppState } from '@strands-agents/sdk'
 
 const state = new AppState({ notebooks: {} })

@@ -1,6 +1,5 @@
 import { logger } from '../logging/logger.js'
-import type { InvokeArgs } from '../agent/agent.js'
-import type { AgentBase } from '../agent/agent-base.js'
+import type { InvokeArgs, InvokableAgent } from '../types/agent.js'
 import { z } from 'zod'
 import { HookableEvent } from '../hooks/events.js'
 import { HookRegistryImplementation } from '../hooks/registry.js'
@@ -12,7 +11,7 @@ import { TextBlock } from '../types/messages.js'
 import type { AgentNodeOptions } from './nodes.js'
 import { AgentNode } from './nodes.js'
 import { MultiAgentState, MultiAgentResult, NodeResult, Status } from './state.js'
-import type { MultiAgentBase } from './base.js'
+import type { MultiAgent } from './multiagent.js'
 import type { MultiAgentStreamEvent } from './events.js'
 import {
   AfterMultiAgentInvocationEvent,
@@ -52,10 +51,10 @@ interface HandoffResult {
  * Options for creating a Swarm instance.
  */
 /**
- * Input type for swarm nodes. Pass an {@link AgentBase} directly for the simple case,
+ * Input type for swarm nodes. Pass an {@link InvokableAgent} directly for the simple case,
  * or {@link AgentNodeOptions} for per-node config.
  */
-export type SwarmNodeDefinition = AgentBase | AgentNodeOptions
+export type SwarmNodeDefinition = InvokableAgent | AgentNodeOptions
 
 export interface SwarmOptions extends SwarmConfig {
   /** Unique identifier. Defaults to `'swarm'`. */
@@ -96,9 +95,7 @@ export interface SwarmOptions extends SwarmConfig {
  * const result = await swarm.invoke('Explain quantum computing')
  * ```
  */
-export class Swarm implements MultiAgentBase {
-  readonly type = 'multiAgent' as const
-
+export class Swarm implements MultiAgent {
   readonly id: string
   readonly nodes: ReadonlyMap<string, AgentNode>
   readonly config: Required<SwarmConfig>

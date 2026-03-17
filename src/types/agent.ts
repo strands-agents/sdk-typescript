@@ -1,5 +1,5 @@
 import type { AppState } from '../app-state.js'
-import type { Message, StopReason } from './messages.js'
+import type { ContentBlock, ContentBlockData, Message, MessageData, StopReason } from './messages.js'
 import type {
   BeforeInvocationEvent,
   AfterInvocationEvent,
@@ -17,18 +17,79 @@ import type {
   ToolStreamUpdateEvent,
   AgentResultEvent,
   HookableEvent,
+  StreamEvent,
 } from '../hooks/events.js'
 import type { HookCallback, HookableEventConstructor, HookCleanup } from '../hooks/types.js'
 import type { ToolRegistry } from '../registry/tool-registry.js'
-import type { A2AStreamUpdateEvent } from '../a2a/events.js'
 import type { z } from 'zod'
 import { AgentMetrics } from '../telemetry/meter.js'
 
 /**
- * Interface for objects that provide agent state.
- * Allows ToolContext to work with different agent types.
+ * Arguments for invoking an agent.
+ *
+ * Supports multiple input formats:
+ * - `string` - User text input (wrapped in TextBlock, creates user Message)
+ * - `ContentBlock[]` | `ContentBlockData[]` - Array of content blocks (creates single user Message)
+ * - `Message[]` | `MessageData[]` - Array of messages (appends all to conversation)
  */
-export interface AgentData {
+export type InvokeArgs = string | ContentBlock[] | ContentBlockData[] | Message[] | MessageData[]
+
+/**
+ * Options for a single agent invocation.
+ */
+export interface InvokeOptions {
+  /**
+   * Zod schema for structured output validation, overriding the constructor-provided schema for this invocation only.
+   */
+  structuredOutputSchema?: z.ZodSchema
+}
+
+/**
+ * Interface for agents that support request-response invocation.
+ *
+ * Both `Agent` (full orchestration agent) and `A2AAgent` (remote agent proxy)
+ * implement this interface, enabling polymorphic usage across the SDK.
+ */
+export interface InvokableAgent {
+  /**
+   * The unique identifier of the agent instance.
+   */
+  readonly id: string
+
+  /**
+   * The name of the agent.
+   */
+  readonly name?: string
+
+  /**
+   * Optional description of what the agent does.
+   */
+  readonly description?: string
+
+  /**
+   * Invokes the agent and returns the final result.
+   *
+   * @param args - Arguments for invoking the agent
+   * @param options - Optional invocation options (e.g. structured output schema)
+   * @returns Promise that resolves to the final AgentResult
+   */
+  invoke(args: InvokeArgs, options?: InvokeOptions): Promise<AgentResult>
+
+  /**
+   * Streams the agent execution, yielding events and returning the final result.
+   *
+   * @param args - Arguments for invoking the agent
+   * @param options - Optional invocation options (e.g. structured output schema)
+   * @returns Async generator that yields stream events and returns AgentResult
+   */
+  stream(args: InvokeArgs, options?: InvokeOptions): AsyncGenerator<StreamEvent, AgentResult, undefined>
+}
+
+/**
+ * Interface for agents with locally accessible state, messages, tools, and hooks.
+ * Used by ToolContext and hook events that need access to agent internals.
+ */
+export interface LocalAgent {
   /**
    * App state storage accessible to tools and application logic.
    */
@@ -157,4 +218,3 @@ export type AgentStreamEvent =
   | AfterToolCallEvent
   | MessageAddedEvent
   | AgentResultEvent
-  | A2AStreamUpdateEvent

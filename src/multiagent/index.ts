@@ -8,8 +8,6 @@ export type { NodeResultUpdate, ResultStatus } from './state.js'
 export { Node, AgentNode, MultiAgentNode } from './nodes.js'
 export type { NodeConfig, AgentNodeOptions, MultiAgentNodeOptions, NodeDefinition, NodeType } from './nodes.js'
 
-export type { MultiAgentBase } from './base.js'
-
 export {
   MultiAgentInitializedEvent,
   BeforeMultiAgentInvocationEvent,
@@ -22,7 +20,7 @@ export {
   MultiAgentHandoffEvent,
   MultiAgentResultEvent,
 } from './events.js'
-export type { MultiAgentStreamEvent } from './events.js'
+export type { MultiAgentStreamEvent, NodeStreamUpdateInnerEvent } from './events.js'
 
 export { Edge } from './edge.js'
 export type { EdgeHandler, EdgeDefinition } from './edge.js'

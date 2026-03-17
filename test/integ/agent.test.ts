@@ -10,8 +10,8 @@ import {
   VideoBlock,
   tool,
 } from '@strands-agents/sdk'
-import { notebook } from '@strands-agents/sdk/vended_tools/notebook'
-import { httpRequest } from '@strands-agents/sdk/vended_tools/http_request'
+import { notebook } from '@strands-agents/sdk/vended-tools/notebook'
+import { httpRequest } from '@strands-agents/sdk/vended-tools/http-request'
 import { z } from 'zod'
 
 import { collectGenerator } from '$/sdk/__fixtures__/model-test-helpers.js'

@@ -5,10 +5,10 @@
 
 import { Agent, BedrockModel, tool, Tool } from '@strands-agents/sdk'
 
-import { notebook } from '@strands-agents/sdk/vended_tools/notebook'
-import { fileEditor } from '@strands-agents/sdk/vended_tools/file_editor'
-import { httpRequest } from '@strands-agents/sdk/vended_tools/http_request'
-import { bash } from '@strands-agents/sdk/vended_tools/bash'
+import { notebook } from '@strands-agents/sdk/vended-tools/notebook'
+import { fileEditor } from '@strands-agents/sdk/vended-tools/file-editor'
+import { httpRequest } from '@strands-agents/sdk/vended-tools/http-request'
+import { bash } from '@strands-agents/sdk/vended-tools/bash'
 
 import { z } from 'zod'
 
