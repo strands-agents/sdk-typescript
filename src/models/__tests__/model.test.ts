@@ -302,6 +302,33 @@ describe('Model', () => {
           MaxTokensError
         )
       })
+
+      it('preserves SyntaxError instead of overwriting with MaxTokensError when tool input JSON is malformed', async () => {
+        const provider = new TestModelProvider(async function* () {
+          yield { type: 'modelMessageStartEvent', role: 'assistant' }
+          yield {
+            type: 'modelContentBlockStartEvent',
+            start: { type: 'toolUseStart', toolUseId: 'tool1', name: 'get_weather' },
+          }
+          yield {
+            type: 'modelContentBlockDeltaEvent',
+            delta: { type: 'toolUseInputDelta', input: '{invalid json' },
+          }
+          yield { type: 'modelContentBlockStopEvent' }
+          yield { type: 'modelMessageStopEvent', stopReason: 'maxTokens' }
+        })
+
+        const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
+
+        try {
+          await collectGenerator(provider.streamAggregated(messages))
+          expect.fail('Expected error to be thrown')
+        } catch (error) {
+          expect(error).toBeInstanceOf(ModelError)
+          expect(error).not.toBeInstanceOf(MaxTokensError)
+          expect((error as ModelError).cause).toBeInstanceOf(SyntaxError)
+        }
+      })
     })
 
     describe('when streaming reasoning content', () => {

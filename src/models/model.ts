@@ -23,6 +23,7 @@ import {
 } from './streaming.js'
 import { MaxTokensError, ModelError, normalizeError } from '../errors.js'
 import type { Redaction } from '../hooks/events.js'
+import { logger } from '../logging/logger.js'
 
 class CitationAccumulator {
   citations: Citation[] = []
@@ -336,7 +337,7 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
               yield block
             } catch (e: unknown) {
               if (e instanceof SyntaxError) {
-                console.error('Unable to parse JSON string.')
+                logger.error('Unable to parse JSON string.', e)
                 errorToThrow = e
               }
             }
@@ -389,12 +390,11 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
       }
 
       // Handle stop reason
-      if (finalStopReason === 'maxTokens') {
-        const maxTokensError = new MaxTokensError(
+      if (finalStopReason === 'maxTokens' && !errorToThrow) {
+        errorToThrow = new MaxTokensError(
           'Model reached maximum token limit. This is an unrecoverable state that requires intervention.',
           stoppedMessage
         )
-        errorToThrow = maxTokensError
       }
 
       if (errorToThrow !== undefined) {
