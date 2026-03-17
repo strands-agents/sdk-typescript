@@ -1,7 +1,7 @@
 /**
- * A2A agent that wraps a remote A2A agent as an AgentBase.
+ * A2A agent that wraps a remote A2A agent as an InvokableAgent.
  *
- * Implements the AgentBase interface so it can be used anywhere a local Agent
+ * Implements the InvokableAgent interface so it can be used anywhere a local Agent
  * can be used. The remote agent is invoked via the A2A protocol.
  * The A2A protocol is experimental, so breaking changes in the underlying SDK
  * may require breaking changes in this module.
@@ -10,14 +10,10 @@
 import type { AgentCard, Part } from '@a2a-js/sdk'
 import type { Client as A2AClientSdk } from '@a2a-js/sdk/client'
 import { ClientFactory } from '@a2a-js/sdk/client'
-import type { AgentBase } from '../agent/agent-base.js'
-import type { InvokeArgs, InvokeOptions } from '../agent/agent.js'
-import { AgentResult, type AgentStreamEvent } from '../types/agent.js'
+import type { InvokableAgent, InvokeArgs, InvokeOptions } from '../types/agent.js'
+import { AgentResult } from '../types/agent.js'
 import { Message, TextBlock, type ContentBlock, type ContentBlockData, type MessageData } from '../types/messages.js'
-import { AgentResultEvent } from '../hooks/events.js'
-import { A2AStreamUpdateEvent, type A2AEventData } from './events.js'
-import { AppState } from '../app-state.js'
-import { ToolRegistry } from '../registry/tool-registry.js'
+import { A2AStreamUpdateEvent, A2AResultEvent, type A2AEventData, type A2AStreamEvent } from './events.js'
 import { logger } from '../logging/logger.js'
 import { logExperimentalWarning } from './logging.js'
 
@@ -38,9 +34,9 @@ export interface A2AAgentConfig {
 }
 
 /**
- * Wraps a remote A2A agent as an AgentBase.
+ * Wraps a remote A2A agent as an InvokableAgent.
  *
- * Implements `AgentBase` so it can be used polymorphically with local `Agent` instances.
+ * Implements `InvokableAgent` so it can be used polymorphically with local `Agent` instances.
  * On invocation, the agent lazily connects to the remote endpoint via the A2A protocol
  * and returns the response as an `AgentResult`.
  *
@@ -53,9 +49,7 @@ export interface A2AAgentConfig {
  * console.log(result.toString())
  * ```
  */
-export class A2AAgent implements AgentBase {
-  readonly type = 'agent' as const
-
+export class A2AAgent implements InvokableAgent {
   private _config: A2AAgentConfig
   private _client: A2AClientSdk | undefined
   private _agentCard: AgentCard | undefined
@@ -111,14 +105,14 @@ export class A2AAgent implements AgentBase {
    * Streams the remote agent execution, yielding A2A events as they arrive.
    *
    * Yields `A2AStreamUpdateEvent` for each raw A2A protocol event (Message, Task,
-   * TaskStatusUpdateEvent, TaskArtifactUpdateEvent), followed by an `AgentResultEvent`
+   * TaskStatusUpdateEvent, TaskArtifactUpdateEvent), followed by an `A2AResultEvent`
    * containing the final result built from the last complete event.
    *
    * @param args - Arguments for invoking the agent
    * @param _options - Optional invocation options (unused for remote agents)
    * @returns Async generator that yields AgentStreamEvent objects and returns AgentResult
    */
-  async *stream(args: InvokeArgs, _options?: InvokeOptions): AsyncGenerator<AgentStreamEvent, AgentResult, undefined> {
+  async *stream(args: InvokeArgs, _options?: InvokeOptions): AsyncGenerator<A2AStreamEvent, AgentResult, undefined> {
     const client = await this._getClient()
     const text = this._extractTextFromArgs(args)
 
@@ -159,15 +153,7 @@ export class A2AAgent implements AgentBase {
     const accumulatedText = [...artifactTexts.values()].map((chunks) => chunks.join('')).join('\n')
     const result = this._buildResult(finalEvent, accumulatedText)
 
-    yield new AgentResultEvent({
-      agent: {
-        state: new AppState(),
-        messages: [result.lastMessage],
-        toolRegistry: new ToolRegistry(),
-        addHook: (): (() => void) => () => {},
-      },
-      result,
-    })
+    yield new A2AResultEvent({ result })
     return result
   }
 

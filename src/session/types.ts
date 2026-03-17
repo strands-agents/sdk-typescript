@@ -1,4 +1,4 @@
-import type { AgentData } from '../types/agent.js'
+import type { LocalAgent } from '../types/agent.js'
 
 // Re-export Snapshot and Scope from the canonical location
 export type { Snapshot, Scope } from '../agent/snapshot.js'
@@ -19,7 +19,7 @@ export interface SnapshotManifest {
  */
 export interface SnapshotTriggerParams {
   /** Current agent data including messages and state */
-  agentData: AgentData
+  agentData: LocalAgent
 }
 
 /**

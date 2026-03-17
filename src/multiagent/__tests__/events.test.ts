@@ -12,11 +12,10 @@ import {
   MultiAgentResultEvent,
 } from '../events.js'
 import { MultiAgentResult, MultiAgentState, NodeResult, Status } from '../state.js'
-import type { MultiAgentBase } from '../base.js'
+import type { MultiAgent } from '../multiagent.js'
 import type { AgentStreamEvent } from '../../types/agent.js'
 
-const mockOrchestrator: MultiAgentBase = {
-  type: 'multiAgent',
+const mockOrchestrator: MultiAgent = {
   id: 'test-orchestrator',
   invoke: async () => new MultiAgentResult({ results: [], duration: 0 }),
   // eslint-disable-next-line require-yield

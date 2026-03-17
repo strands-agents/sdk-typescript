@@ -1,7 +1,8 @@
 import { HookableEvent } from '../hooks/events.js'
 import type { AgentStreamEvent } from '../types/agent.js'
+import type { A2AStreamEvent } from '../a2a/events.js'
 import type { MultiAgentResult, MultiAgentState, NodeResult } from './state.js'
-import type { MultiAgentBase } from './base.js'
+import type { MultiAgent } from './multiagent.js'
 import type { NodeType } from './nodes.js'
 
 /**
@@ -9,9 +10,9 @@ import type { NodeType } from './nodes.js'
  */
 export class MultiAgentInitializedEvent extends HookableEvent {
   readonly type = 'multiAgentInitializedEvent' as const
-  readonly orchestrator: MultiAgentBase
+  readonly orchestrator: MultiAgent
 
-  constructor(data: { orchestrator: MultiAgentBase }) {
+  constructor(data: { orchestrator: MultiAgent }) {
     super()
     this.orchestrator = data.orchestrator
   }
@@ -22,10 +23,10 @@ export class MultiAgentInitializedEvent extends HookableEvent {
  */
 export class BeforeMultiAgentInvocationEvent extends HookableEvent {
   readonly type = 'beforeMultiAgentInvocationEvent' as const
-  readonly orchestrator: MultiAgentBase
+  readonly orchestrator: MultiAgent
   readonly state: MultiAgentState
 
-  constructor(data: { orchestrator: MultiAgentBase; state: MultiAgentState }) {
+  constructor(data: { orchestrator: MultiAgent; state: MultiAgentState }) {
     super()
     this.orchestrator = data.orchestrator
     this.state = data.state
@@ -37,10 +38,10 @@ export class BeforeMultiAgentInvocationEvent extends HookableEvent {
  */
 export class AfterMultiAgentInvocationEvent extends HookableEvent {
   readonly type = 'afterMultiAgentInvocationEvent' as const
-  readonly orchestrator: MultiAgentBase
+  readonly orchestrator: MultiAgent
   readonly state: MultiAgentState
 
-  constructor(data: { orchestrator: MultiAgentBase; state: MultiAgentState }) {
+  constructor(data: { orchestrator: MultiAgent; state: MultiAgentState }) {
     super()
     this.orchestrator = data.orchestrator
     this.state = data.state
@@ -57,7 +58,7 @@ export class AfterMultiAgentInvocationEvent extends HookableEvent {
  */
 export class BeforeNodeCallEvent extends HookableEvent {
   readonly type = 'beforeNodeCallEvent' as const
-  readonly orchestrator: MultiAgentBase
+  readonly orchestrator: MultiAgent
   readonly state: MultiAgentState
   readonly nodeId: string
 
@@ -68,7 +69,7 @@ export class BeforeNodeCallEvent extends HookableEvent {
    */
   cancel: boolean | string = false
 
-  constructor(data: { orchestrator: MultiAgentBase; state: MultiAgentState; nodeId: string }) {
+  constructor(data: { orchestrator: MultiAgent; state: MultiAgentState; nodeId: string }) {
     super()
     this.orchestrator = data.orchestrator
     this.state = data.state
@@ -81,12 +82,12 @@ export class BeforeNodeCallEvent extends HookableEvent {
  */
 export class AfterNodeCallEvent extends HookableEvent {
   readonly type = 'afterNodeCallEvent' as const
-  readonly orchestrator: MultiAgentBase
+  readonly orchestrator: MultiAgent
   readonly state: MultiAgentState
   readonly nodeId: string
   readonly error?: Error
 
-  constructor(data: { orchestrator: MultiAgentBase; state: MultiAgentState; nodeId: string; error?: Error }) {
+  constructor(data: { orchestrator: MultiAgent; state: MultiAgentState; nodeId: string; error?: Error }) {
     super()
     this.orchestrator = data.orchestrator
     this.state = data.state
@@ -111,13 +112,13 @@ export class NodeStreamUpdateEvent extends HookableEvent {
   readonly nodeId: string
   readonly nodeType: NodeType
   readonly state: MultiAgentState
-  readonly event: AgentStreamEvent | Exclude<MultiAgentStreamEvent, NodeStreamUpdateEvent>
+  readonly event: AgentStreamEvent | A2AStreamEvent | Exclude<MultiAgentStreamEvent, NodeStreamUpdateEvent>
 
   constructor(data: {
     nodeId: string
     nodeType: NodeType
     state: MultiAgentState
-    event: AgentStreamEvent | Exclude<MultiAgentStreamEvent, NodeStreamUpdateEvent>
+    event: AgentStreamEvent | A2AStreamEvent | Exclude<MultiAgentStreamEvent, NodeStreamUpdateEvent>
   }) {
     super()
     this.nodeId = data.nodeId

@@ -3,7 +3,7 @@
  */
 
 import type { Plugin } from './plugin.js'
-import type { AgentData } from '../types/agent.js'
+import type { LocalAgent } from '../types/agent.js'
 
 /**
  * Registry for managing plugins attached to an agent.
@@ -26,14 +26,14 @@ export class PluginRegistry {
    *
    * @param agent - The agent instance to initialize plugins with
    */
-  async initialize(agent: AgentData): Promise<void> {
+  async initialize(agent: LocalAgent): Promise<void> {
     while (this._pending.length > 0) {
       const plugin = this._pending.shift()!
       await this._addAndInit(plugin, agent)
     }
   }
 
-  private async _addAndInit(plugin: Plugin, agent: AgentData): Promise<void> {
+  private async _addAndInit(plugin: Plugin, agent: LocalAgent): Promise<void> {
     if (this._plugins.has(plugin.name)) {
       throw new Error(`plugin_name=<${plugin.name}> | plugin already registered`)
     }

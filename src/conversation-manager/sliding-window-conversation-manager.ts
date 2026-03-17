@@ -6,7 +6,7 @@
  */
 
 import { Message, TextBlock, ToolResultBlock } from '../types/messages.js'
-import type { AgentData } from '../types/agent.js'
+import type { LocalAgent } from '../types/agent.js'
 import { AfterInvocationEvent } from '../hooks/events.js'
 import { ConversationManager, type ConversationManagerReduceOptions } from './conversation-manager.js'
 import { logger } from '../logging/logger.js'
@@ -69,7 +69,7 @@ export class SlidingWindowConversationManager extends ConversationManager {
    *
    * @param agent - The agent to register hooks with
    */
-  public override initAgent(agent: AgentData): void {
+  public override initAgent(agent: LocalAgent): void {
     super.initAgent(agent)
 
     agent.addHook(AfterInvocationEvent, (event) => {

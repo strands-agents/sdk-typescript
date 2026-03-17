@@ -1,6 +1,6 @@
 import type { ToolSpec, ToolUse } from './types.js'
 import { TextBlock, ToolResultBlock } from '../types/messages.js'
-import type { AgentData } from '../types/agent.js'
+import type { LocalAgent } from '../types/agent.js'
 import { normalizeError } from '../errors.js'
 
 export type { ToolSpec } from './types.js'
@@ -20,7 +20,7 @@ export interface ToolContext {
    * The agent instance that is executing this tool.
    * Provides access to agent state and other agent-level information.
    */
-  agent: AgentData
+  agent: LocalAgent
 }
 
 /**

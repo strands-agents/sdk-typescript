@@ -6,7 +6,7 @@
  */
 
 import type { Plugin } from '../plugins/plugin.js'
-import type { AgentData } from '../types/agent.js'
+import type { LocalAgent } from '../types/agent.js'
 import { AfterModelCallEvent } from '../hooks/events.js'
 import { ContextWindowOverflowError } from '../errors.js'
 
@@ -17,7 +17,7 @@ export type ConversationManagerReduceOptions = {
   /**
    * The agent instance. Mutate `agent.messages` in place to reduce history.
    */
-  agent: AgentData
+  agent: LocalAgent
 
   /**
    * The {@link ContextWindowOverflowError} that triggered this call.
@@ -89,7 +89,7 @@ export abstract class ConversationManager implements Plugin {
    *
    * @param agent - The agent to register hooks with
    */
-  initAgent(agent: AgentData): void {
+  initAgent(agent: LocalAgent): void {
     agent.addHook(AfterModelCallEvent, (event) => {
       if (event.error instanceof ContextWindowOverflowError) {
         if (this.reduce({ agent: event.agent, error: event.error })) {

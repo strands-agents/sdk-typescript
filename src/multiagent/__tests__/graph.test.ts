@@ -34,7 +34,7 @@ describe('Graph', () => {
 
     it('accepts agent node options', () => {
       const graph = new Graph({
-        nodes: [{ type: 'agent', agent: makeAgent('a') }],
+        nodes: [{ agent: makeAgent('a') }],
         edges: [],
       })
       expect(graph.nodes.get('a')).toBeInstanceOf(AgentNode)

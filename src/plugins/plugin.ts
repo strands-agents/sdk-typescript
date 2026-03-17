@@ -6,7 +6,7 @@
  */
 
 import type { Tool } from '../tools/tool.js'
-import type { AgentData } from '../types/agent.js'
+import type { LocalAgent } from '../types/agent.js'
 
 /**
  * Interface for objects that extend agent functionality.
@@ -65,7 +65,7 @@ export interface Plugin {
    *
    * @param agent - The agent instance this plugin is being attached to
    */
-  initAgent(agent: AgentData): void | Promise<void>
+  initAgent(agent: LocalAgent): void | Promise<void>
 
   /**
    * Returns tools provided by this plugin for auto-registration.

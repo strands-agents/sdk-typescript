@@ -8,7 +8,7 @@
 import type { ExecutionEventBus, RequestContext } from '@a2a-js/sdk/server'
 import type { AgentExecutor } from '@a2a-js/sdk/server'
 import { A2AError } from '@a2a-js/sdk/server'
-import type { AgentBase } from '../agent/agent-base.js'
+import type { InvokableAgent } from '../types/agent.js'
 import { contentBlocksToParts, partsToContentBlocks } from './adapters.js'
 import { normalizeError } from '../errors.js'
 import { logger } from '../logging/logger.js'
@@ -31,14 +31,14 @@ import { logger } from '../logging/logger.js'
  * ```
  */
 export class A2AExecutor implements AgentExecutor {
-  private _agent: AgentBase
+  private _agent: InvokableAgent
 
   /**
    * Creates a new A2AExecutor.
    *
    * @param agent - The agent to execute for incoming A2A requests
    */
-  constructor(agent: AgentBase) {
+  constructor(agent: InvokableAgent) {
     this._agent = agent
   }
 

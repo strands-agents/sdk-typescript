@@ -1,4 +1,4 @@
-import type { InvokeArgs } from '../agent/agent.js'
+import type { InvokeArgs } from '../types/agent.js'
 import type { HookableEvent } from '../hooks/events.js'
 import type { HookCallback, HookableEventConstructor, HookCleanup } from '../hooks/types.js'
 import type { MultiAgentStreamEvent } from './events.js'
@@ -9,12 +9,7 @@ import type { MultiAgentResult } from './state.js'
  * Implement this interface to create custom orchestration patterns that can be
  * composed as nodes within other orchestrators via {@link MultiAgentNode}.
  */
-export interface MultiAgentBase {
-  /**
-   * Type discriminator for identifying multi-agent orchestrator instances in union types.
-   */
-  readonly type: 'multiAgent'
-
+export interface MultiAgent {
   /** Unique identifier for this orchestrator. */
   readonly id: string
 

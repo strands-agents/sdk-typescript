@@ -8,8 +8,6 @@ export type { NodeResultUpdate, ResultStatus } from './state.js'
 export { Node, AgentNode, MultiAgentNode } from './nodes.js'
 export type { NodeConfig, AgentNodeOptions, MultiAgentNodeOptions, NodeDefinition, NodeType } from './nodes.js'
 
-export type { MultiAgentBase } from './base.js'
-
 export {
   MultiAgentInitializedEvent,
   BeforeMultiAgentInvocationEvent,

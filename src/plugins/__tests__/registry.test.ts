@@ -4,7 +4,7 @@ import type { Plugin } from '../plugin.js'
 import { BeforeInvocationEvent, type HookableEvent } from '../../hooks/events.js'
 import type { Tool } from '../../tools/tool.js'
 import type { HookableEventConstructor, HookCallback } from '../../hooks/types.js'
-import type { AgentData } from '../../types/agent.js'
+import type { LocalAgent } from '../../types/agent.js'
 import { createMockAgent } from '../../__fixtures__/agent-helpers.js'
 import { createRandomTool } from '../../__fixtures__/tool-helpers.js'
 
@@ -23,7 +23,7 @@ class TestPlugin implements Plugin {
     return this._name
   }
 
-  initAgent(agent: AgentData): void {
+  initAgent(agent: LocalAgent): void {
     agent.addHook(BeforeInvocationEvent, () => {
       this.hookRegistered = true
     })
@@ -42,7 +42,7 @@ class InitializableTestPlugin implements Plugin {
     return this._name
   }
 
-  initAgent(_agent: AgentData): void {
+  initAgent(_agent: LocalAgent): void {
     this.initialized = true
   }
 }
@@ -60,7 +60,7 @@ class ToolProviderPlugin implements Plugin {
     return this._name
   }
 
-  initAgent(_agent: AgentData): void {}
+  initAgent(_agent: LocalAgent): void {}
 
   getTools(): Tool[] {
     return this._tools
@@ -69,7 +69,7 @@ class ToolProviderPlugin implements Plugin {
 
 describe('PluginRegistry', () => {
   let registry: PluginRegistry
-  let mockAgent: AgentData
+  let mockAgent: LocalAgent
   let registeredHooks: Array<{
     eventType: HookableEventConstructor<HookableEvent>
     callback: HookCallback<HookableEvent>
@@ -87,7 +87,7 @@ describe('PluginRegistry', () => {
           return () => {}
         },
       },
-    }) as unknown as AgentData
+    }) as unknown as LocalAgent
   })
 
   describe('initialize', () => {
@@ -148,7 +148,7 @@ describe('PluginRegistry', () => {
           return 'async-plugin'
         }
 
-        async initAgent(_agent: AgentData): Promise<void> {
+        async initAgent(_agent: LocalAgent): Promise<void> {
           await vi.waitFor(() => Promise.resolve())
           this.initialized = true
         }
@@ -181,7 +181,7 @@ describe('PluginRegistry', () => {
       await registry.initialize(mockAgent)
 
       const callback = registeredHooks[0]?.callback
-      const mockAgentData = {} as AgentData
+      const mockAgentData = {} as LocalAgent
       callback?.(new BeforeInvocationEvent({ agent: mockAgentData }))
 
       expect(plugin.hookRegistered).toBe(true)

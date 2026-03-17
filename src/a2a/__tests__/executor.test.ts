@@ -3,7 +3,7 @@ import { A2AExecutor } from '../executor.js'
 import type { AgentExecutionEvent, ExecutionEventBus, RequestContext } from '@a2a-js/sdk/server'
 import type { TaskArtifactUpdateEvent, TaskStatusUpdateEvent } from '@a2a-js/sdk'
 import { Agent } from '../../agent/agent.js'
-import type { AgentBase } from '../../agent/agent-base.js'
+import type { InvokableAgent } from '../../types/agent.js'
 import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
 import { createMockAgent } from '../../__fixtures__/agent-helpers.js'
 import { TextBlock } from '../../types/messages.js'
@@ -156,8 +156,7 @@ describe('A2AExecutor', () => {
 
     it('publishes image content blocks as separate file artifacts', async () => {
       const imageBytes = new Uint8Array([137, 80, 78, 71])
-      const mockAgent: AgentBase = {
-        type: 'agent',
+      const mockAgent: InvokableAgent = {
         id: 'test-agent',
         name: 'Test Agent',
         invoke: vi.fn(),

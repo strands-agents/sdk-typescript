@@ -1,4 +1,4 @@
-import type { InvokeArgs } from '../agent/agent.js'
+import type { InvokableAgent, InvokeArgs } from '../types/agent.js'
 import type { ContentBlock } from '../types/messages.js'
 import { TextBlock } from '../types/messages.js'
 import { HookableEvent } from '../hooks/events.js'
@@ -9,7 +9,8 @@ import { MultiAgentPluginRegistry } from './plugins.js'
 import type { NodeDefinition } from './nodes.js'
 import { AgentNode, MultiAgentNode, Node } from './nodes.js'
 import { MultiAgentState, MultiAgentResult, NodeResult, Status } from './state.js'
-import type { MultiAgentBase } from './base.js'
+import type { MultiAgent } from './multiagent.js'
+import { Swarm } from './swarm.js'
 import type { MultiAgentStreamEvent } from './events.js'
 import {
   AfterMultiAgentInvocationEvent,
@@ -71,7 +72,7 @@ export interface GraphOptions extends GraphConfig {
  * - Agent nodes are stateless by default (snapshot/restore on each execution). Python
  *   accumulates agent state across executions unless `reset_on_revisit` is enabled.
  * - Node failures produce a FAILED result, allowing parallel paths to continue.
- *   Orchestrator-level limits (maxSteps) throw exceptions. Python does the inverse:
+ *   MultiAgent-level limits (maxSteps) throw exceptions. Python does the inverse:
  *   node failures throw exceptions (fail-fast), while limit violations return a
  *   FAILED result.
  *
@@ -85,9 +86,7 @@ export interface GraphOptions extends GraphConfig {
  * const result = await graph.invoke('Explain quantum computing')
  * ```
  */
-export class Graph implements MultiAgentBase {
-  readonly type = 'multiAgent' as const
-
+export class Graph implements MultiAgent {
   readonly id: string
   readonly nodes: ReadonlyMap<string, Node>
   readonly edges: readonly Edge[]
@@ -360,14 +359,14 @@ export class Graph implements MultiAgentBase {
 
       if (definition instanceof Node) {
         node = definition
-      } else if ('agent' in definition) {
-        node = new AgentNode(definition)
       } else if ('orchestrator' in definition) {
         node = new MultiAgentNode(definition)
-      } else if (definition.type === 'agent') {
-        node = new AgentNode({ agent: definition })
-      } else {
+      } else if ('agent' in definition) {
+        node = new AgentNode(definition)
+      } else if (definition instanceof Graph || definition instanceof Swarm) {
         node = new MultiAgentNode({ orchestrator: definition })
+      } else {
+        node = new AgentNode({ agent: definition as InvokableAgent })
       }
 
       if (nodes.has(node.id)) {

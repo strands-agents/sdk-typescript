@@ -8,14 +8,10 @@
 // Agent class
 export { Agent } from './agent/agent.js'
 
-// Agent base interface
-export type { AgentBase } from './agent/agent-base.js'
-
 // App state
 export { AppState } from './app-state.js'
 
 // Agent types
-export type { AgentData } from './types/agent.js'
 export { AgentResult } from './types/agent.js'
 export type { AgentConfig, ToolList } from './agent/agent.js'
 
