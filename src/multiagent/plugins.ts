@@ -21,7 +21,7 @@ import type { MultiAgent } from './multiagent.js'
  *     return 'logging-plugin'
  *   }
  *
- *   override initMultiAgent(orchestrator: MultiAgentBase): void {
+ *   override initMultiAgent(orchestrator: MultiAgent): void {
  *     orchestrator.addHook(BeforeNodeCallEvent, (event) => {
  *       console.log(`Node ${event.nodeId} starting`)
  *     })

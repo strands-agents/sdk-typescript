@@ -22,7 +22,7 @@ import type { LocalAgent } from '../types/agent.js'
  *     return 'logging-plugin'
  *   }
  *
- *   initAgent(agent: AgentData): void {
+ *   initAgent(agent: LocalAgent): void {
  *     agent.addHook(BeforeInvocationEvent, (event) => {
  *       console.log('Agent invocation started')
  *     })
