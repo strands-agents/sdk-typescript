@@ -256,7 +256,6 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
         redactedContent?: Uint8Array
       } = {}
       const accumulatedCitations = new CitationAccumulator()
-      let errorToThrow: Error | undefined = undefined
       let stoppedMessage: Message | null = null
       let finalStopReason: StopReason | null = null
       let metadata: ModelMetadataEvent | undefined = undefined
@@ -338,7 +337,7 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
             } catch (e: unknown) {
               if (e instanceof SyntaxError) {
                 logger.error('Unable to parse JSON string.', e)
-                errorToThrow = e
+                throw e
               }
             }
             break
@@ -383,22 +382,15 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
 
       if (!stoppedMessage || !finalStopReason) {
         // If we exit the loop without completing a message or stop reason, throw an error
-        throw new ModelError(
-          'Stream ended without completing a message',
-          errorToThrow ? { cause: errorToThrow } : undefined
-        )
+        throw new ModelError('Stream ended without completing a message')
       }
 
       // Handle stop reason
-      if (finalStopReason === 'maxTokens' && !errorToThrow) {
-        errorToThrow = new MaxTokensError(
+      if (finalStopReason === 'maxTokens') {
+        throw new MaxTokensError(
           'Model reached maximum token limit. This is an unrecoverable state that requires intervention.',
           stoppedMessage
         )
-      }
-
-      if (errorToThrow !== undefined) {
-        throw errorToThrow
       }
 
       // Return the final message with stop reason and optional metadata
