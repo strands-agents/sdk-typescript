@@ -219,11 +219,16 @@ describe('Graph tracer integration', () => {
 
       await graph.invoke('Hello')
 
-      // node.stream() init + gen.next() per iteration (at least 2: first result + done)
+      // First call: multiAgentSpan to create nodeSpan, then nodeSpan for node.stream() + gen.next() calls
       expect(tracer.withSpanContext.mock.calls.length).toBeGreaterThanOrEqual(3)
-      for (const call of tracer.withSpanContext.mock.calls) {
-        expect(call[0]).toStrictEqual({ mock: 'nodeSpan' })
-        expect(typeof call[1]).toBe('function')
+
+      // First call uses multiAgentSpan to create the nodeSpan
+      expect(tracer.withSpanContext.mock.calls[0]![0]).toStrictEqual({ mock: 'multiAgentSpan' })
+
+      // Subsequent calls use nodeSpan for node execution
+      for (let i = 1; i < tracer.withSpanContext.mock.calls.length; i++) {
+        expect(tracer.withSpanContext.mock.calls[i]![0]).toStrictEqual({ mock: 'nodeSpan' })
+        expect(typeof tracer.withSpanContext.mock.calls[i]![1]).toBe('function')
       }
     })
   })

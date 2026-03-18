@@ -279,7 +279,9 @@ export class Swarm implements MultiAgent {
     const nodeInput = this._resolveNodeInput(input, handoff)
 
     try {
-      const gen = this._tracer.withSpanContext(nodeSpan, () => node.stream(nodeInput, state, { structuredOutputSchema: handoffSchema }))
+      const gen = this._tracer.withSpanContext(nodeSpan, () =>
+        node.stream(nodeInput, state, { structuredOutputSchema: handoffSchema })
+      )
       let next = await this._tracer.withSpanContext(nodeSpan, () => gen.next())
       while (!next.done) {
         yield next.value
