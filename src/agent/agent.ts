@@ -547,6 +547,7 @@ export class Agent implements LocalAgent, InvokableAgent {
             result = new AgentResult({
               stopReason: modelResult.stopReason,
               lastMessage: modelResult.message,
+              traces: this._tracer.localTraces,
               structuredOutput,
               metrics: this._meter.metrics,
             })

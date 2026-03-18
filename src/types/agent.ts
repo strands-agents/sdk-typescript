@@ -1,5 +1,6 @@
 import type { StateStore } from '../state-store.js'
 import type { ContentBlock, ContentBlockData, Message, MessageData, StopReason } from './messages.js'
+import type { AgentTrace } from '../telemetry/tracer.js'
 import type {
   BeforeInvocationEvent,
   AfterInvocationEvent,
@@ -132,6 +133,12 @@ export class AgentResult {
   readonly lastMessage: Message
 
   /**
+   * Local execution traces collected during the agent invocation.
+   * Contains timing and hierarchy of operations within the agent loop.
+   */
+  readonly traces?: AgentTrace[]
+
+  /**
    * The validated structured output from the LLM, if a schema was provided.
    * Type represents any validated Zod schema output.
    */
@@ -146,16 +153,39 @@ export class AgentResult {
   constructor(data: {
     stopReason: StopReason
     lastMessage: Message
+    traces?: AgentTrace[]
     metrics?: AgentMetrics
     structuredOutput?: z.output<z.ZodType>
   }) {
     this.stopReason = data.stopReason
     this.lastMessage = data.lastMessage
+    if (data.traces !== undefined) {
+      this.traces = data.traces
+    }
     if (data.metrics !== undefined) {
       this.metrics = data.metrics
     }
     if (data.structuredOutput !== undefined) {
       this.structuredOutput = data.structuredOutput
+    }
+  }
+
+  /**
+   * Custom JSON serialization that excludes traces and metrics by default.
+   * This prevents accidentally sending large trace/metric data over the wire
+   * when serializing AgentResult for API responses.
+   *
+   * Traces and metrics remain accessible via their properties for debugging,
+   * but won't be included in JSON.stringify() output.
+   *
+   * @returns Object representation without traces/metrics for safe serialization
+   */
+  public toJSON(): object {
+    return {
+      type: this.type,
+      stopReason: this.stopReason,
+      lastMessage: this.lastMessage,
+      ...(this.structuredOutput !== undefined && { structuredOutput: this.structuredOutput }),
     }
   }
 

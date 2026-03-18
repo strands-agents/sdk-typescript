@@ -1,5 +1,5 @@
 /**
- * OpenTelemetry integration.
+ * OpenTelemetry tracing and local execution trace management.
  *
  * This module provides tracing capabilities using OpenTelemetry,
  * enabling trace data to be sent to OTLP endpoints.
@@ -9,17 +9,17 @@
  * context.active(). Use context.with() to set a span as active before
  * creating child spans.
  *
+ * Lightweight in-memory LocalTrace trees are always collected regardless
+ * of OTel configuration and surfaced via AgentResult.traces.
+ *
  * @example
  * ```typescript
  * const tracer = new Tracer()
  * const parentSpan = tracer.startAgentSpan({ ... })
  *
- * // Run code with parentSpan as active context
- * await context.with(trace.setSpan(context.active(), parentSpan), async () => {
- *   // Child spans automatically parent to parentSpan
- *   const childSpan = tracer.startModelInvokeSpan({ messages })
- *   // ...
- *   tracer.endModelInvokeSpan(childSpan)
+ * context.with(trace.setSpan(context.active(), parentSpan), async () => {
+ *   const modelSpan = tracer.startModelInvokeSpan({ messages })
+ *   tracer.endModelInvokeSpan(modelSpan)
  * })
  *
  * tracer.endAgentSpan(parentSpan)
@@ -42,22 +42,111 @@ import type {
   Metrics,
 } from './types.js'
 import type { ContentBlock, Message, SystemPrompt } from '../types/messages.js'
+import type { JSONSerializable } from '../types/json.js'
 import { jsonReplacer } from './json.js'
 import { getServiceName } from './utils.js'
 
 /**
- * Tracer manages OpenTelemetry spans for agent operations.
+ * JSON-serializable representation of LocalTrace.
+ */
+interface AgentTraceData {
+  id: string
+  name: string
+  parentId: string | null
+  startTime: number
+  endTime: number | null
+  duration: number
+  children: AgentTraceData[]
+  metadata: Record<string, string>
+  message: Message | null
+}
+
+/**
+ * Execution trace for performance analysis.
+ * Tracks timing and hierarchy of operations within the agent loop.
+ * Fields default to null for JSON serialization compatibility.
+ */
+export class AgentTrace implements JSONSerializable<AgentTraceData> {
+  /** Unique identifier (UUID) for this trace. */
+  readonly id: string
+  /** Human-readable display name (e.g., "Cycle 1", "Tool: calc", "stream_messages"). */
+  readonly name: string
+  /** ID of the parent trace, if this trace is nested. Null for root traces. */
+  readonly parentId: string | null
+  /** Start time in milliseconds since epoch. */
+  readonly startTime: number
+  /** End time in milliseconds since epoch. Null until trace is ended. */
+  endTime: number | null = null
+  /** Duration in milliseconds (endTime - startTime). */
+  duration: number = 0
+  /** Child traces nested under this trace. */
+  readonly children: AgentTrace[] = []
+  /** Additional metadata for this trace (e.g., cycleId, toolUseId, toolName). */
+  readonly metadata: Record<string, string> = {}
+  /** Message associated with this trace (e.g., model output). Null if not applicable. */
+  message: Message | null = null
+
+  /**
+   * @param name - Display name for this trace
+   * @param options - Optional configuration for parent and startTime
+   */
+  constructor(name: string, options?: { parent?: AgentTrace; startTime?: number }) {
+    this.id = globalThis.crypto.randomUUID()
+    this.name = name
+    this.parentId = options?.parent?.id ?? null
+    this.startTime = options?.startTime ?? Date.now()
+
+    if (options?.parent) {
+      options.parent.children.push(this)
+    }
+  }
+
+  /**
+   * @param endTime - Optional end time in milliseconds since epoch
+   */
+  end(endTime?: number): void {
+    this.endTime = endTime ?? Date.now()
+    this.duration = this.endTime - this.startTime
+  }
+
+  toJSON(): AgentTraceData {
+    return {
+      id: this.id,
+      name: this.name,
+      parentId: this.parentId,
+      startTime: this.startTime,
+      endTime: this.endTime,
+      duration: this.duration,
+      children: this.children.map((child) => child.toJSON()),
+      metadata: this.metadata,
+      message: this.message,
+    }
+  }
+}
+
+/**
+ * In-memory execution trace state, collected independently of OTel.
+ * Always active regardless of whether setupTracer() has been called.
+ */
+interface AgentTraceState {
+  /** Completed and in-progress cycle traces. */
+  traces: AgentTrace[]
+  /** Current cycle trace, parents model and tool traces. */
+  currentCycle?: AgentTrace | undefined
+  /** Current model invocation trace. */
+  currentModel?: AgentTrace | undefined
+  /** Current tool call trace. */
+  currentTool?: AgentTrace | undefined
+}
+
+/**
+ * Manages both OpenTelemetry spans and local execution traces for agent operations.
  *
- * Uses a fully stateful approach via OpenTelemetry's context propagation.
- * Parent-child relationships are established automatically through context.active().
+ * OTel spans are exported to external observability backends (Jaeger, X-Ray, etc.)
+ * when configured via setupTracer(). Local traces are lightweight, in-memory timing
+ * trees that are always collected regardless of OTel configuration and returned
+ * in AgentResult.traces for programmatic access.
  *
- * To create nested spans, use context.with() to set the parent span as active:
- * ```typescript
- * const parent = tracer.startAgentSpan({ ... })
- * context.with(trace.setSpan(context.active(), parent), () => {
- *   const child = tracer.startModelInvokeSpan({ messages }) // auto-parents to parent
- * })
- * ```
  */
 export class Tracer {
   /**
@@ -108,6 +197,9 @@ export class Tracer {
    */
   private readonly _isLangfuse: boolean
 
+  /** In-memory execution trace state, collected independently of OTEL. */
+  private readonly _traceState: AgentTraceState = { traces: [] }
+
   /**
    * Initialize the tracer with OpenTelemetry configuration.
    * Reads OTEL_SEMCONV_STABILITY_OPT_IN to determine convention version.
@@ -131,6 +223,13 @@ export class Tracer {
   }
 
   /**
+   * All local execution traces collected by this tracer.
+   */
+  get localTraces(): AgentTrace[] {
+    return this._traceState.traces
+  }
+
+  /**
    * Start an agent invocation span.
    * Returns the span which should be ended with endAgentSpan.
    * Parents to the current active span from context.active().
@@ -139,6 +238,12 @@ export class Tracer {
    */
   startAgentSpan(options: StartAgentSpanOptions): Span | null {
     const { messages, agentName, agentId, modelId, tools, traceAttributes, toolsConfig, systemPrompt } = options
+
+    // Reset local trace state for this invocation
+    this._traceState.traces = []
+    this._traceState.currentCycle = undefined
+    this._traceState.currentModel = undefined
+    this._traceState.currentTool = undefined
 
     try {
       const spanName = `invoke_agent ${agentName}`
@@ -167,6 +272,7 @@ export class Tracer {
       this._addEventMessages(span, messages)
 
       this._agentSpan = span
+
       return span
     } catch (error) {
       logger.warn(`error=<${error}> | failed to start agent span`)
@@ -184,6 +290,11 @@ export class Tracer {
     // Clear stale state from any previous invocation
     this._agentSpan = undefined
     this._loopSpan = undefined
+
+    // Clear local trace state
+    this._traceState.currentCycle = undefined
+    this._traceState.currentModel = undefined
+    this._traceState.currentTool = undefined
 
     if (!span) return
 
@@ -215,6 +326,12 @@ export class Tracer {
   startModelInvokeSpan(options: StartModelInvokeSpanOptions): Span | null {
     const { messages, modelId, systemPrompt } = options
 
+    // Create local model trace as child of current cycle
+    this._traceState.currentModel = new AgentTrace(
+      'stream_messages',
+      this._traceState.currentCycle ? { parent: this._traceState.currentCycle } : undefined
+    )
+
     try {
       const attributes = this._getCommonAttributes('chat')
       if (modelId) attributes['gen_ai.request.model'] = modelId
@@ -242,6 +359,15 @@ export class Tracer {
    * @param options - Options for ending the span including usage, metrics, error, and output
    */
   endModelInvokeSpan(span: Span | null, options: EndModelSpanOptions = {}): void {
+    // End local model trace and attach output message
+    if (this._traceState.currentModel) {
+      if (options.output) {
+        this._traceState.currentModel.message = options.output
+      }
+      this._traceState.currentModel.end()
+      this._traceState.currentModel = undefined
+    }
+
     if (!span) return
 
     const { usage, metrics, error, output, stopReason } = options
@@ -269,6 +395,15 @@ export class Tracer {
    */
   startToolCallSpan(options: StartToolCallSpanOptions): Span | null {
     const { tool } = options
+
+    // Create local tool trace as child of current cycle
+    const toolTrace = new AgentTrace(
+      `Tool: ${tool.name}`,
+      this._traceState.currentCycle ? { parent: this._traceState.currentCycle } : undefined
+    )
+    toolTrace.metadata.toolUseId = tool.toolUseId
+    toolTrace.metadata.toolName = tool.name
+    this._traceState.currentTool = toolTrace
 
     try {
       const attributes = this._getCommonAttributes('execute_tool')
@@ -316,6 +451,12 @@ export class Tracer {
    * @param options - Options for ending the tool call span
    */
   endToolCallSpan(span: Span | null, options: EndToolCallSpanOptions = {}): void {
+    // End local tool trace
+    if (this._traceState.currentTool) {
+      this._traceState.currentTool.end()
+      this._traceState.currentTool = undefined
+    }
+
     if (!span) return
 
     const { toolResult, error } = options
@@ -375,6 +516,12 @@ export class Tracer {
   startAgentLoopSpan(options: StartAgentLoopSpanOptions): Span | null {
     const { cycleId, messages } = options
 
+    // Create local cycle trace
+    const cycleNumber = this._traceState.traces.length + 1
+    this._traceState.currentCycle = new AgentTrace(`Cycle ${cycleNumber}`)
+    this._traceState.currentCycle.metadata.cycleId = cycleId
+    this._traceState.traces.push(this._traceState.currentCycle)
+
     try {
       const attributes: Record<string, AttributeValue> = { 'agent_loop.cycle_id': cycleId }
       const span = this._startSpan({
@@ -398,6 +545,12 @@ export class Tracer {
    * @param options - Options for ending the agent loop span
    */
   endAgentLoopSpan(span: Span | null, options: EndAgentLoopSpanOptions = {}): void {
+    // End local cycle trace
+    if (this._traceState.currentCycle) {
+      this._traceState.currentCycle.end()
+      this._traceState.currentCycle = undefined
+    }
+
     if (!span) return
     try {
       this._endSpan(span, {}, options.error)

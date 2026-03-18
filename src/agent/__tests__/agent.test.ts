@@ -9,7 +9,6 @@ import {
   MaxTokensError,
   TextBlock,
   CachePointBlock,
-  AgentResult,
   Message,
   ToolUseBlock,
   ToolResultBlock,
@@ -66,7 +65,7 @@ describe('Agent', () => {
         const { result } = await collectGenerator(agent.stream('Test prompt'))
 
         expect(result).toEqual(
-          new AgentResult({
+          expect.objectContaining({
             stopReason: 'endTurn',
             lastMessage: expect.objectContaining({
               role: 'assistant',
@@ -75,6 +74,7 @@ describe('Agent', () => {
             metrics: expectLoopMetrics({ cycleCount: 1 }),
           })
         )
+        expect(result.traces?.[0]?.children[0]?.name).toBe('stream_messages')
       })
     })
 
@@ -194,7 +194,7 @@ describe('Agent', () => {
         const result = await agent.invoke('Test prompt')
 
         expect(result).toEqual(
-          new AgentResult({
+          expect.objectContaining({
             stopReason: 'endTurn',
             lastMessage: expect.objectContaining({
               type: 'message',
@@ -204,6 +204,7 @@ describe('Agent', () => {
             metrics: expectLoopMetrics({ cycleCount: 1 }),
           })
         )
+        expect(result.traces?.[0]?.name).toBe('Cycle 1')
       })
 
       it('consumes stream events internally', async () => {
@@ -213,7 +214,7 @@ describe('Agent', () => {
         const result = await agent.invoke('Test')
 
         expect(result).toEqual(
-          new AgentResult({
+          expect.objectContaining({
             stopReason: 'endTurn',
             lastMessage: expect.objectContaining({
               type: 'message',
@@ -223,6 +224,7 @@ describe('Agent', () => {
             metrics: expectLoopMetrics({ cycleCount: 1 }),
           })
         )
+        expect(result.traces).toBeDefined()
       })
     })
 
@@ -257,7 +259,7 @@ describe('Agent', () => {
         const result = await agent.invoke('What is 1 + 2?')
 
         expect(result).toEqual(
-          new AgentResult({
+          expect.objectContaining({
             stopReason: 'endTurn',
             lastMessage: expect.objectContaining({
               type: 'message',
@@ -273,6 +275,57 @@ describe('Agent', () => {
             }),
           })
         )
+        expect(result.traces?.[0]?.children[1]?.name).toBe('Tool: calc')
+        expect(result.traces?.[1]?.children[0]?.name).toBe('stream_messages')
+      })
+
+      it('stores cycleId in trace metadata', async () => {
+        const model = new MockMessageModel()
+          .addTurn({ type: 'toolUseBlock', name: 'calc', toolUseId: 'tool-1', input: {} })
+          .addTurn({ type: 'textBlock', text: 'Done' })
+
+        const tool = createMockTool(
+          'calc',
+          () =>
+            new ToolResultBlock({
+              toolUseId: 'tool-1',
+              status: 'success' as const,
+              content: [new TextBlock('result')],
+            })
+        )
+
+        const agent = new Agent({ model, tools: [tool] })
+
+        const result = await agent.invoke('Test')
+
+        expect(result.traces).toHaveLength(2)
+        expect(result.traces![0]!.metadata.cycleId).toBe('cycle-1')
+        expect(result.traces![1]!.metadata.cycleId).toBe('cycle-2')
+      })
+
+      it('stores tool metadata in trace children', async () => {
+        const model = new MockMessageModel()
+          .addTurn({ type: 'toolUseBlock', name: 'testTool', toolUseId: 'tool-abc123', input: {} })
+          .addTurn({ type: 'textBlock', text: 'Done' })
+
+        const tool = createMockTool(
+          'testTool',
+          () =>
+            new ToolResultBlock({
+              toolUseId: 'tool-abc123',
+              status: 'success' as const,
+              content: [new TextBlock('result')],
+            })
+        )
+
+        const agent = new Agent({ model, tools: [tool] })
+
+        const result = await agent.invoke('Test')
+
+        const toolTrace = result.traces![0]!.children.find((child) => child.name.startsWith('Tool:'))
+        expect(toolTrace).toBeDefined()
+        expect(toolTrace!.metadata.toolUseId).toBe('tool-abc123')
+        expect(toolTrace!.metadata.toolName).toBe('testTool')
       })
     })
 
@@ -339,6 +392,48 @@ describe('Agent', () => {
             totalTime: expect.any(Number),
           },
         })
+      })
+
+      it('collects local traces for completed cycles when error occurs mid-run', async () => {
+        const model = new MockMessageModel()
+          .addTurn(
+            { type: 'toolUseBlock', name: 'testTool', toolUseId: 'tool-1', input: {} },
+            {
+              usage: { inputTokens: 100, outputTokens: 50, totalTokens: 150 },
+            }
+          )
+          .addTurn(
+            { type: 'textBlock', text: 'Partial' },
+            {
+              stopReason: 'maxTokens',
+              usage: { inputTokens: 80, outputTokens: 20, totalTokens: 100 },
+            }
+          )
+
+        const tool = createMockTool(
+          'testTool',
+          () =>
+            new ToolResultBlock({
+              toolUseId: 'tool-1',
+              status: 'success' as const,
+              content: [new TextBlock('Done')],
+            })
+        )
+
+        const agent = new Agent({ model, tools: [tool] })
+
+        const tracer = (agent as any)._tracer
+        await expect(agent.invoke('Test')).rejects.toThrow(MaxTokensError)
+
+        // Cycle 1 completed (tool use), cycle 2 errored (maxTokens)
+        expect(tracer.localTraces).toHaveLength(2)
+        expect(tracer.localTraces[0]!.name).toBe('Cycle 1')
+        expect(tracer.localTraces[0]!.children).toHaveLength(2)
+        expect(tracer.localTraces[0]!.children[0]!.name).toBe('stream_messages')
+        expect(tracer.localTraces[0]!.children[1]!.name).toBe('Tool: testTool')
+        expect(tracer.localTraces[1]!.name).toBe('Cycle 2')
+        expect(tracer.localTraces[1]!.children).toHaveLength(1)
+        expect(tracer.localTraces[1]!.children[0]!.name).toBe('stream_messages')
       })
 
       it('tracks metrics when a hook throws an error', async () => {
@@ -431,6 +526,11 @@ describe('Agent', () => {
 
       expect(invokeResult.stopReason).toBe(streamResult.stopReason)
       expect(invokeResult.lastMessage).toEqual(streamResult.lastMessage)
+      expect(invokeResult.traces).toHaveLength(streamResult.traces!.length)
+      expect(invokeResult.traces!.map((t) => t.name)).toEqual(streamResult.traces!.map((t) => t.name))
+      expect(invokeResult.traces!.map((t) => t.children.length)).toEqual(
+        streamResult.traces!.map((t) => t.children.length)
+      )
     })
   })
 

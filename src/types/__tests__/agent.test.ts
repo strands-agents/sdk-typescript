@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { AgentResult } from '../agent.js'
 import { AgentMetrics } from '../../telemetry/meter.js'
+import { AgentTrace } from '../../telemetry/tracer.js'
 import { Message } from '../messages.js'
 import { TextBlock, ReasoningBlock, ToolUseBlock, ToolResultBlock, CachePointBlock } from '../messages.js'
 
@@ -192,6 +193,152 @@ describe('AgentResult', () => {
 
         expect(`Response: ${result}`).toBe('Response: World')
       })
+    })
+  })
+
+  describe('toJSON', () => {
+    it('excludes traces and metrics from serialization', () => {
+      const message = new Message({
+        role: 'assistant',
+        content: [new TextBlock('Hello')],
+      })
+
+      const traces = [new AgentTrace('Cycle 1')]
+      const metrics = new AgentMetrics()
+
+      const result = new AgentResult({
+        stopReason: 'endTurn',
+        lastMessage: message,
+        traces,
+        metrics,
+      })
+
+      const json = result.toJSON()
+
+      expect(json).toHaveProperty('type', 'agentResult')
+      expect(json).toHaveProperty('stopReason', 'endTurn')
+      expect(json).toHaveProperty('lastMessage')
+      expect(json).not.toHaveProperty('traces')
+      expect(json).not.toHaveProperty('metrics')
+    })
+
+    it('includes structuredOutput when present', () => {
+      const message = new Message({
+        role: 'assistant',
+        content: [new TextBlock('Response')],
+      })
+
+      const structuredOutput = { field: 'value' }
+
+      const result = new AgentResult({
+        stopReason: 'endTurn',
+        lastMessage: message,
+        structuredOutput,
+      })
+
+      const json = result.toJSON()
+
+      expect(json).toHaveProperty('structuredOutput', structuredOutput)
+    })
+
+    it('excludes structuredOutput when not present', () => {
+      const message = new Message({
+        role: 'assistant',
+        content: [new TextBlock('Response')],
+      })
+
+      const result = new AgentResult({
+        stopReason: 'endTurn',
+        lastMessage: message,
+      })
+
+      const json = result.toJSON()
+
+      expect(json).not.toHaveProperty('structuredOutput')
+    })
+
+    it('is automatically used by JSON.stringify()', () => {
+      const message = new Message({
+        role: 'assistant',
+        content: [new TextBlock('Hello')],
+      })
+
+      const traces = [new AgentTrace('Cycle 1')]
+      const metrics = new AgentMetrics()
+
+      const result = new AgentResult({
+        stopReason: 'endTurn',
+        lastMessage: message,
+        traces,
+        metrics,
+      })
+
+      const jsonString = JSON.stringify(result)
+      const parsed = JSON.parse(jsonString)
+
+      expect(parsed).toHaveProperty('type', 'agentResult')
+      expect(parsed).toHaveProperty('stopReason', 'endTurn')
+      expect(parsed).not.toHaveProperty('traces')
+      expect(parsed).not.toHaveProperty('metrics')
+    })
+
+    it('preserves traces and metrics as accessible properties', () => {
+      const message = new Message({
+        role: 'assistant',
+        content: [new TextBlock('Hello')],
+      })
+
+      const traces = [new AgentTrace('Cycle 1')]
+      const metrics = new AgentMetrics()
+
+      const result = new AgentResult({
+        stopReason: 'endTurn',
+        lastMessage: message,
+        traces,
+        metrics,
+      })
+
+      // Properties are still accessible
+      expect(result.traces).toBe(traces)
+      expect(result.metrics).toBe(metrics)
+
+      // But not in JSON
+      const json = result.toJSON()
+      expect(json).not.toHaveProperty('traces')
+      expect(json).not.toHaveProperty('metrics')
+    })
+
+    it('prevents bloated API responses when forwarding result directly', () => {
+      const message = new Message({
+        role: 'assistant',
+        content: [new TextBlock('Response text')],
+      })
+
+      // Simulate large traces and metrics from real agent execution
+      const traces = [new AgentTrace('Cycle 1'), new AgentTrace('Cycle 2'), new AgentTrace('Cycle 3')]
+      const metrics = new AgentMetrics()
+
+      const result = new AgentResult({
+        stopReason: 'endTurn',
+        lastMessage: message,
+        traces,
+        metrics,
+      })
+
+      // Simulate what happens in Express/Next.js: res.json(result)
+      const apiResponse = JSON.parse(JSON.stringify(result))
+
+      // Verify API response is lean - no traces/metrics bloat
+      expect(apiResponse).toEqual({
+        type: 'agentResult',
+        stopReason: 'endTurn',
+        lastMessage: expect.objectContaining({
+          role: 'assistant',
+          content: expect.any(Array),
+        }),
+      })
+      expect(apiResponse).not.toHaveProperty('traces')
+      expect(apiResponse).not.toHaveProperty('metrics')
     })
   })
 })

@@ -231,6 +231,12 @@ export { FileStorage } from './session/file-storage.js'
 export type { Scope, Snapshot } from './agent/snapshot.js'
 
 // Telemetry
+export * as telemetry from './telemetry/index.js'
+
+// Local Traces
+export { AgentTrace } from './telemetry/tracer.js'
+
+// Local Metrics
 export { AgentMetrics } from './telemetry/meter.js'
 
 // Multi-agent orchestration
