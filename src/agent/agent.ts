@@ -723,7 +723,7 @@ export class Agent implements LocalAgent, InvokableAgent {
       yield afterModelCallEvent
 
       if (afterModelCallEvent.retry) {
-        return yield* this.invokeModel(args)
+        return yield* this.invokeModel(undefined, forcedToolChoice)
       }
 
       return result
@@ -741,7 +741,7 @@ export class Agent implements LocalAgent, InvokableAgent {
 
       // After yielding, hooks have been invoked and may have set retry
       if (errorEvent.retry) {
-        return yield* this.invokeModel(args)
+        return yield* this.invokeModel(undefined, forcedToolChoice)
       }
 
       // Re-throw error
