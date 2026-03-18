@@ -514,6 +514,39 @@ describe('Meter', () => {
       expect(mockMeter.getCounter('gen_ai.agent.tokens.output')?.dataPoints).toStrictEqual([])
       expect(mockMeter.getHistogram('gen_ai.agent.model.latency')?.dataPoints).toStrictEqual([])
     })
+
+    it('emits time-to-first-token histogram in seconds when timeToFirstByteMs is provided', () => {
+      const m = new Meter()
+
+      m.updateCycle({
+        type: 'modelMetadataEvent',
+        metrics: { latencyMs: 500, timeToFirstByteMs: 150 },
+      })
+
+      expect(mockMeter.getHistogram('gen_ai.server.time_to_first_token')?.sum).toBeCloseTo(0.15)
+    })
+
+    it('does not emit time-to-first-token histogram when timeToFirstByteMs is undefined', () => {
+      const m = new Meter()
+
+      m.updateCycle({
+        type: 'modelMetadataEvent',
+        metrics: { latencyMs: 500 },
+      })
+
+      expect(mockMeter.getHistogram('gen_ai.server.time_to_first_token')?.dataPoints).toStrictEqual([])
+    })
+
+    it('does not emit time-to-first-token histogram when timeToFirstByteMs is zero', () => {
+      const m = new Meter()
+
+      m.updateCycle({
+        type: 'modelMetadataEvent',
+        metrics: { latencyMs: 500, timeToFirstByteMs: 0 },
+      })
+
+      expect(mockMeter.getHistogram('gen_ai.server.time_to_first_token')?.dataPoints).toStrictEqual([])
+    })
   })
 })
 
