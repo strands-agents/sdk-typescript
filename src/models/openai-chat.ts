@@ -80,7 +80,7 @@ type OpenAIChatChoice = {
  * }
  * ```
  */
-export interface OpenAIModelConfig extends BaseModelConfig {
+export interface OpenAIChatModelConfig extends BaseModelConfig {
   /**
    * OpenAI model identifier (e.g., gpt-4o, gpt-3.5-turbo).
    */
@@ -138,7 +138,7 @@ export interface OpenAIModelConfig extends BaseModelConfig {
 /**
  * Options interface for creating an OpenAIModel instance.
  */
-export interface OpenAIModelOptions extends OpenAIModelConfig {
+export interface OpenAIChatModelOptions extends OpenAIChatModelConfig {
   /**
    * OpenAI API key (falls back to OPENAI_API_KEY environment variable).
    *
@@ -187,8 +187,8 @@ export interface OpenAIModelOptions extends OpenAIModelConfig {
  * }
  * ```
  */
-export class OpenAIModel extends Model<OpenAIModelConfig> {
-  private _config: OpenAIModelConfig
+export class OpenAIChatModel extends Model<OpenAIChatModelConfig> {
+  private _config: OpenAIChatModelConfig
   private _client: OpenAI
 
   /**
@@ -231,7 +231,7 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
    * })
    * ```
    */
-  constructor(options?: OpenAIModelOptions) {
+  constructor(options?: OpenAIChatModelOptions) {
     super()
     const { apiKey, client, clientConfig, ...modelConfig } = options || {}
 
@@ -277,7 +277,7 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
    * })
    * ```
    */
-  updateConfig(modelConfig: OpenAIModelConfig): void {
+  updateConfig(modelConfig: OpenAIChatModelConfig): void {
     this._config = { ...this._config, ...modelConfig }
   }
 
@@ -292,7 +292,7 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
    * console.log(config.modelId)
    * ```
    */
-  getConfig(): OpenAIModelConfig {
+  getConfig(): OpenAIChatModelConfig {
     return this._config
   }
 

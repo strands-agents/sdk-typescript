@@ -4,7 +4,7 @@
 
 import { inject } from 'vitest'
 import { BedrockModel, type BedrockModelOptions } from '$/sdk/models/bedrock.js'
-import { OpenAIModel, type OpenAIModelOptions } from '$/sdk/models/openai.js'
+import { OpenAIChatModel, type OpenAIChatModelOptions } from '$/sdk/models/openai-chat.js'
 import { AnthropicModel, type AnthropicModelOptions } from '$/sdk/models/anthropic.js'
 import { GeminiModel, type GeminiModelOptions } from '$/sdk/models/gemini/model.js'
 
@@ -61,7 +61,7 @@ export const bedrock = {
 }
 
 export const openai = {
-  name: 'OpenAIModel',
+  name: 'OpenAIChatModel',
   supports: {
     reasoning: false,
     tools: true,
@@ -80,12 +80,12 @@ export const openai = {
   get skip() {
     return inject('provider-openai').shouldSkip
   },
-  createModel: (config: OpenAIModelOptions = {}): OpenAIModel => {
+  createModel: (config: OpenAIChatModelOptions = {}): OpenAIChatModel => {
     const apiKey = inject('provider-openai')?.apiKey
     if (!apiKey) {
       throw new Error('No OpenAI apiKey provided')
     }
-    return new OpenAIModel({
+    return new OpenAIChatModel({
       ...config,
       apiKey,
       clientConfig: { ...(config.clientConfig ?? {}), dangerouslyAllowBrowser: true },

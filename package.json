@@ -18,9 +18,9 @@
       "types": "./dist/src/models/anthropic.d.ts",
       "default": "./dist/src/models/anthropic.js"
     },
-    "./openai": {
-      "types": "./dist/src/models/openai.d.ts",
-      "default": "./dist/src/models/openai.js"
+    "./openai-chat": {
+      "types": "./dist/src/models/openai-chat.d.ts",
+      "default": "./dist/src/models/openai-chat.js"
     },
     "./bedrock": {
       "types": "./dist/src/models/bedrock.d.ts",
