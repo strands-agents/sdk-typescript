@@ -12,7 +12,7 @@ import { logger } from '../../logging/logger.js'
  * This union type will expand as more error types are supported
  * (e.g., 'throttling', 'invalidRequest').
  */
-export type GeminiErrorType = 'contextOverflow'
+export type GeminiErrorType = 'contextOverflow' | 'throttling'
 
 /**
  * Configuration for handling a specific error status.
@@ -32,6 +32,12 @@ export const ERROR_STATUS_MAP: Record<string, ErrorStatusConfig> = {
   INVALID_ARGUMENT: {
     type: 'contextOverflow',
     messagePatterns: new Set(['exceeds the maximum number of tokens']),
+  },
+  RESOURCE_EXHAUSTED: {
+    type: 'throttling',
+  },
+  UNAVAILABLE: {
+    type: 'throttling',
   },
 }
 

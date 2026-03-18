@@ -17,7 +17,7 @@ import { Model } from '../model.js'
 import type { StreamOptions } from '../model.js'
 import type { Message } from '../../types/messages.js'
 import type { ModelStreamEvent } from '../streaming.js'
-import { ContextWindowOverflowError } from '../../errors.js'
+import { ContextWindowOverflowError, ModelThrottledError } from '../../errors.js'
 import type { GeminiModelConfig, GeminiModelOptions, GeminiStreamState } from './types.js'
 export type { GeminiModelConfig, GeminiModelOptions }
 import { classifyGeminiError } from './errors.js'
@@ -209,6 +209,10 @@ export class GeminiModel extends Model<GeminiModelConfig> {
 
       if (errorType === 'contextOverflow') {
         throw new ContextWindowOverflowError(error.message)
+      }
+
+      if (errorType === 'throttling') {
+        throw new ModelThrottledError(error.message, { cause: error })
       }
 
       throw error
