@@ -74,7 +74,7 @@ const result = await agent.invoke('What is the square root of 1764?')
 console.log(result)
 ```
 
-> **Note**: For the default Amazon Bedrock model provider, you'll need AWS credentials configured and model access enabled for Claude 4.5 Sonnet in your region.
+> **Note**: For the default Amazon Bedrock model provider, you'll need AWS credentials configured and model access enabled for Claude Sonnet 4 in your region.
 
 ---
 

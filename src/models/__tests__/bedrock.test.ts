@@ -255,7 +255,7 @@ describe('BedrockModel', () => {
       const provider = new BedrockModel({ region: 'us-east-1', apiKey: 'br-test-key', temperature: 0.5 })
       const config = provider.getConfig()
       expect(config).toStrictEqual({
-        modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
+        modelId: 'global.anthropic.claude-sonnet-4-6',
         temperature: 0.5,
       })
     })
@@ -266,7 +266,7 @@ describe('BedrockModel', () => {
       const provider = new BedrockModel({ region: 'us-west-2', temperature: 0.5 })
       provider.updateConfig({ temperature: 0.8, maxTokens: 2048 })
       expect(provider.getConfig()).toStrictEqual({
-        modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
+        modelId: 'global.anthropic.claude-sonnet-4-6',
         temperature: 0.8,
         maxTokens: 2048,
       })
@@ -1185,7 +1185,7 @@ describe('BedrockModel', () => {
       collectIterator(provider.stream(messages, options))
 
       expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
-        modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
+        modelId: 'global.anthropic.claude-sonnet-4-6',
         messages: [
           {
             role: 'user',
@@ -1209,7 +1209,7 @@ describe('BedrockModel', () => {
       collectIterator(provider.stream(messages, options))
 
       expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
-        modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
+        modelId: 'global.anthropic.claude-sonnet-4-6',
         messages: [
           {
             role: 'user',
@@ -1234,7 +1234,7 @@ describe('BedrockModel', () => {
       collectIterator(provider.stream(messages, options))
 
       expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
-        modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
+        modelId: 'global.anthropic.claude-sonnet-4-6',
         messages: [
           {
             role: 'user',
@@ -1267,7 +1267,7 @@ describe('BedrockModel', () => {
 
       // Verify array is used as-is
       expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
-        modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
+        modelId: 'global.anthropic.claude-sonnet-4-6',
         messages: [
           {
             role: 'user',
@@ -1296,7 +1296,7 @@ describe('BedrockModel', () => {
       collectIterator(provider.stream(messages, options))
 
       expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
-        modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
+        modelId: 'global.anthropic.claude-sonnet-4-6',
         messages: [
           {
             role: 'user',
@@ -1434,7 +1434,7 @@ describe('BedrockModel', () => {
 
       // Empty array should not set system field
       expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
-        modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
+        modelId: 'global.anthropic.claude-sonnet-4-6',
         messages: [
           {
             role: 'user',
@@ -1462,7 +1462,7 @@ describe('BedrockModel', () => {
       collectIterator(provider.stream(messages, options))
 
       expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
-        modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
+        modelId: 'global.anthropic.claude-sonnet-4-6',
         messages: [
           {
             role: 'user',
@@ -1503,7 +1503,7 @@ describe('BedrockModel', () => {
       collectIterator(provider.stream(messages, options))
 
       expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
-        modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
+        modelId: 'global.anthropic.claude-sonnet-4-6',
         messages: [
           {
             role: 'user',
@@ -1543,7 +1543,7 @@ describe('BedrockModel', () => {
       collectIterator(provider.stream(messages, options))
 
       expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
-        modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
+        modelId: 'global.anthropic.claude-sonnet-4-6',
         messages: [
           {
             role: 'user',
@@ -1581,7 +1581,7 @@ describe('BedrockModel', () => {
       collectIterator(provider.stream(messages, options))
 
       expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
-        modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
+        modelId: 'global.anthropic.claude-sonnet-4-6',
         messages: [
           {
             role: 'user',
@@ -1629,7 +1629,7 @@ describe('BedrockModel', () => {
       collectIterator(provider.stream(messages))
 
       expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
-        modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
+        modelId: 'global.anthropic.claude-sonnet-4-6',
         messages: [
           {
             role: 'user',
@@ -1670,7 +1670,7 @@ describe('BedrockModel', () => {
       collectIterator(provider.stream(messages))
 
       expect(mockConverseStreamCommand).toHaveBeenLastCalledWith({
-        modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
+        modelId: 'global.anthropic.claude-sonnet-4-6',
         messages: [
           {
             role: 'user',

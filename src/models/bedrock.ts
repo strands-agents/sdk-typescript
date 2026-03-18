@@ -53,9 +53,9 @@ import { logger } from '../logging/logger.js'
 
 /**
  * Default Bedrock model ID.
- * Uses Claude Sonnet 4.5 with global inference profile for cross-region availability.
+ * Uses Claude Sonnet 4 with global inference profile for cross-region availability.
  */
-const DEFAULT_BEDROCK_MODEL_ID = 'global.anthropic.claude-sonnet-4-5-20250929-v1:0'
+const DEFAULT_BEDROCK_MODEL_ID = 'global.anthropic.claude-sonnet-4-6'
 
 const DEFAULT_BEDROCK_REGION = 'us-west-2'
 const DEFAULT_BEDROCK_REGION_SUPPORTS_FIP = false
@@ -183,7 +183,7 @@ function snakeToCamel(str: string): string {
  * @example
  * ```typescript
  * const config: BedrockModelConfig = {
- *   modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
+ *   modelId: 'global.anthropic.claude-sonnet-4-6',
  *   maxTokens: 1024,
  *   temperature: 0.7,
  *   cacheConfig: { strategy: 'auto' }
@@ -297,7 +297,7 @@ export interface BedrockModelOptions extends BedrockModelConfig {
  * ```typescript
  * const provider = new BedrockModel({
  *   modelConfig: {
- *     modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
+ *     modelId: 'global.anthropic.claude-sonnet-4-6',
  *     maxTokens: 1024,
  *     temperature: 0.7
  *   },
@@ -336,7 +336,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
    * // With model configuration
    * const provider = new BedrockModel({
    *   region: 'us-west-2',
-   *   modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
+   *   modelId: 'global.anthropic.claude-sonnet-4-6',
    *   maxTokens: 2048,
    *   temperature: 0.8,
    *   cacheConfig: { strategy: 'auto' }

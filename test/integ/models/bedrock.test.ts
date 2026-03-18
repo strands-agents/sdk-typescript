@@ -253,7 +253,7 @@ describe.skipIf(bedrock.skip)('BedrockModel Integration Tests', () => {
   describe('Thinking Mode with Tools', () => {
     it('handles thinking mode with tool use', async () => {
       const bedrockModel = bedrock.createModel({
-        modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
+        modelId: 'global.anthropic.claude-sonnet-4-6',
         additionalRequestFields: {
           thinking: {
             type: 'enabled',

@@ -7,7 +7,7 @@ describe.skipIf(bedrock.skip)('BedrockModel Integration Tests', () => {
     it.concurrent('accepts string model ID and creates functional Agent', async () => {
       // Create agent with string model ID
       const agent = new Agent({
-        model: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
+        model: 'global.anthropic.claude-sonnet-4-6',
         printer: false,
       })
 

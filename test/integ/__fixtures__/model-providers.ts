@@ -108,7 +108,7 @@ export const anthropic = {
   models: {
     default: {},
     reasoning: {
-      modelId: 'claude-sonnet-4-5-20250929',
+      modelId: 'claude-sonnet-4-6',
       params: { thinking: { type: 'enabled', budget_tokens: 1024 } },
     },
     video: {},

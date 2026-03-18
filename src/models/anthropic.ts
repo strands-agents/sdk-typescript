@@ -7,7 +7,7 @@ import type { ImageBlock, DocumentBlock } from '../types/media.js'
 import { encodeBase64 } from '../types/media.js'
 import { logger } from '../logging/logger.js'
 
-const DEFAULT_ANTHROPIC_MODEL_ID = 'claude-sonnet-4-5-20250929'
+const DEFAULT_ANTHROPIC_MODEL_ID = 'claude-sonnet-4-6'
 const CONTEXT_WINDOW_OVERFLOW_ERRORS = ['prompt is too long', 'max_tokens exceeded', 'input too long']
 const TEXT_FILE_FORMATS = ['txt', 'md', 'markdown', 'csv', 'json', 'xml', 'html', 'yml', 'yaml', 'js', 'ts', 'py']
 
