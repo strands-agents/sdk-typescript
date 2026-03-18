@@ -135,7 +135,7 @@ export function takeSnapshot(agent: Agent, options: TakeSnapshotOptions): Snapsh
   }
 
   if (fields.has('state')) {
-    data.state = serializeStateSerializable(agent.state)
+    data.state = serializeStateSerializable(agent.appState)
   }
 
   if (fields.has('systemPrompt')) {
@@ -177,7 +177,7 @@ export function loadSnapshot(agent: Agent, snapshot: Snapshot): void {
   }
 
   if (state !== undefined) {
-    loadStateSerializable(agent.state, state)
+    loadStateSerializable(agent.appState, state)
   }
 
   // Only restore systemPrompt if explicitly present and non-null in the snapshot

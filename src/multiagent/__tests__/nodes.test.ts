@@ -111,7 +111,7 @@ describe('AgentNode', () => {
 
   beforeEach(() => {
     const model = new MockMessageModel().addTurn(new TextBlock('reply'))
-    agent = new Agent({ model, printer: false, state: { key1: 'value1' }, id: 'agent-1' })
+    agent = new Agent({ model, printer: false, appState: { key1: 'value1' }, id: 'agent-1' })
     node = new AgentNode({ agent })
     state = new MultiAgentState({ nodeIds: ['agent-1'] })
   })
@@ -144,12 +144,12 @@ describe('AgentNode', () => {
 
     it('restores agent messages and state after execution', async () => {
       const messagesBefore = [...agent.messages]
-      const stateBefore = agent.state.getAll()
+      const stateBefore = agent.appState.getAll()
 
       await collectGenerator(node.stream([new TextBlock('prompt')], state))
 
       expect(agent.messages).toStrictEqual(messagesBefore)
-      expect(agent.state.getAll()).toStrictEqual(stateBefore)
+      expect(agent.appState.getAll()).toStrictEqual(stateBefore)
     })
 
     it('passes structuredOutputSchema from state to the agent', async () => {

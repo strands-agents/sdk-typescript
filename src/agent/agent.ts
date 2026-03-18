@@ -29,7 +29,7 @@ import { Model } from '../models/model.js'
 import type { BaseModelConfig, StreamAggregatedResult, StreamOptions } from '../models/model.js'
 import { isModelStreamEvent } from '../models/streaming.js'
 import { ToolRegistry } from '../registry/tool-registry.js'
-import { AppState } from '../app-state.js'
+import { StateStore } from '../state-store.js'
 import { AgentPrinter, getDefaultAppender, type Printer } from './printer.js'
 import type { Plugin } from '../plugins/plugin.js'
 import { PluginRegistry } from '../plugins/registry.js'
@@ -111,7 +111,7 @@ export type AgentConfig = {
    */
   systemPrompt?: SystemPrompt | SystemPromptData
   /** Optional initial state values for the agent. */
-  state?: Record<string, JSONValue>
+  appState?: Record<string, JSONValue>
   /**
    * Enable automatic printing of agent output to console.
    * When true, prints text generation, reasoning, and tool usage as they occur.
@@ -175,7 +175,7 @@ export class Agent implements LocalAgent, InvokableAgent {
    * App state storage accessible to tools and application logic.
    * State is not passed to the model during inference.
    */
-  public readonly state: AppState
+  public readonly appState: StateStore
   private readonly _conversationManager: ConversationManager
 
   /**
@@ -223,7 +223,7 @@ export class Agent implements LocalAgent, InvokableAgent {
   constructor(config?: AgentConfig) {
     // Initialize public fields
     this.messages = (config?.messages ?? []).map((msg) => (msg instanceof Message ? msg : Message.fromMessageData(msg)))
-    this.state = new AppState(config?.state)
+    this.appState = new StateStore(config?.appState)
     this._conversationManager = config?.conversationManager ?? new SlidingWindowConversationManager({ windowSize: 40 })
     this.name = config?.name ?? DEFAULT_AGENT_NAME
     this.id = config?.id ?? DEFAULT_AGENT_ID

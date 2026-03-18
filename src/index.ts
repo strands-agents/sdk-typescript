@@ -9,7 +9,7 @@
 export { Agent } from './agent/agent.js'
 
 // App state
-export { AppState } from './app-state.js'
+export { StateStore } from './state-store.js'
 
 // Agent types
 export { AgentResult } from './types/agent.js'

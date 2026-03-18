@@ -499,7 +499,7 @@ describe('FunctionTool', () => {
           description: 'Uses context',
           inputSchema: { type: 'object' },
           callback: async (_input: unknown, context: ToolContext): Promise<JSONValue> => {
-            return context.agent.state.getAll()
+            return context.agent.appState.getAll()
           },
         })
 

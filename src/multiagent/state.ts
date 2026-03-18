@@ -1,4 +1,4 @@
-import { AppState } from '../app-state.js'
+import { StateStore } from '../state-store.js'
 import type { ContentBlock } from '../types/messages.js'
 import type { z } from 'zod'
 
@@ -139,7 +139,7 @@ export class MultiAgentState {
   /** All node results in completion order. */
   readonly results: NodeResult[]
   /** App-level key-value state accessible from hooks, edge handlers, and custom nodes. */
-  readonly app: AppState
+  readonly app: StateStore
   /** Structured output schema to apply to node invocations. */
   readonly structuredOutputSchema?: z.ZodSchema
   private readonly _nodes: Map<string, NodeState>
@@ -148,7 +148,7 @@ export class MultiAgentState {
     this.startTime = Date.now()
     this.steps = 0
     this.results = []
-    this.app = new AppState()
+    this.app = new StateStore()
     if (data?.structuredOutputSchema) this.structuredOutputSchema = data.structuredOutputSchema
     this._nodes = new Map()
     for (const id of data?.nodeIds ?? []) {

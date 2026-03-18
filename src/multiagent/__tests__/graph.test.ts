@@ -430,7 +430,7 @@ describe('Graph', () => {
     it('preserves agent messages and state after execution', async () => {
       const agent = makeAgent('a', 'reply')
       const messagesBefore = [...agent.messages]
-      const stateBefore = agent.state.getAll()
+      const stateBefore = agent.appState.getAll()
 
       const graph = new Graph({
         nodes: [agent],
@@ -440,7 +440,7 @@ describe('Graph', () => {
       await graph.invoke('hello')
 
       expect(agent.messages).toStrictEqual(messagesBefore)
-      expect(agent.state.getAll()).toStrictEqual(stateBefore)
+      expect(agent.appState.getAll()).toStrictEqual(stateBefore)
     })
 
     it('executes join node exactly once when all parents complete concurrently', async () => {

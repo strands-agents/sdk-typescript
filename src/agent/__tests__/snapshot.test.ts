@@ -92,7 +92,7 @@ describe('Snapshot API', () => {
 
     it('creates snapshot with session preset', () => {
       agent.messages.push(new Message({ role: 'user', content: [new TextBlock('Hello')] }))
-      agent.state.set('key', 'value')
+      agent.appState.set('key', 'value')
       agent.systemPrompt = 'Test prompt'
 
       const snapshot = takeSnapshot(agent, { preset: 'session' })
@@ -120,7 +120,7 @@ describe('Snapshot API', () => {
 
     it('excludes specified fields', () => {
       agent.messages.push(new Message({ role: 'user', content: [new TextBlock('Hello')] }))
-      agent.state.set('key', 'value')
+      agent.appState.set('key', 'value')
 
       const snapshot = takeSnapshot(agent, { preset: 'session', exclude: ['messages'] })
 
@@ -180,7 +180,7 @@ describe('Snapshot API', () => {
 
       loadSnapshot(agent, snapshot)
 
-      expect(agent.state.get('restoredKey')).toBe('restoredValue')
+      expect(agent.appState.get('restoredKey')).toBe('restoredValue')
     })
 
     it('restores systemPrompt from snapshot', () => {
@@ -244,19 +244,19 @@ describe('Snapshot API', () => {
     })
 
     it('preserves state through save/load cycle', () => {
-      agent.state.set('userId', 'user-123')
-      agent.state.set('counter', 42)
+      agent.appState.set('userId', 'user-123')
+      agent.appState.set('counter', 42)
 
       const snapshot = takeSnapshot(agent, { preset: 'session' })
 
       // Modify state
-      agent.state.clear()
-      agent.state.set('different', 'value')
+      agent.appState.clear()
+      agent.appState.set('different', 'value')
 
       // Restore
       loadSnapshot(agent, snapshot)
 
-      expect(agent.state.getAll()).toEqual({ userId: 'user-123', counter: 42 })
+      expect(agent.appState.getAll()).toEqual({ userId: 'user-123', counter: 42 })
     })
 
     it('handles complex message content', () => {
@@ -288,7 +288,7 @@ describe('Snapshot API', () => {
     it('snapshot survives JSON.stringify/JSON.parse round-trip', () => {
       const agent = createTestAgent()
       agent.messages.push(new Message({ role: 'user', content: [new TextBlock('Hello')] }))
-      agent.state.set('userId', 'user-123')
+      agent.appState.set('userId', 'user-123')
       agent.systemPrompt = 'You are a helpful assistant'
 
       const snapshot = takeSnapshot(agent, { preset: 'session' })
@@ -304,7 +304,7 @@ describe('Snapshot API', () => {
     it('snapshot can be stored and retrieved as JSON string', () => {
       const agent = createTestAgent()
       agent.messages.push(new Message({ role: 'user', content: [new TextBlock('Test message')] }))
-      agent.state.set('key', 'value')
+      agent.appState.set('key', 'value')
 
       const snapshot = takeSnapshot(agent, { preset: 'session' })
 
@@ -317,7 +317,7 @@ describe('Snapshot API', () => {
       loadSnapshot(newAgent, retrieved)
 
       expect(newAgent.messages).toHaveLength(1)
-      expect(newAgent.state.getAll()).toEqual({ key: 'value' })
+      expect(newAgent.appState.getAll()).toEqual({ key: 'value' })
     })
   })
 })

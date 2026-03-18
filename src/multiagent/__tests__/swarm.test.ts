@@ -244,7 +244,7 @@ describe('Swarm', () => {
     it('preserves agent messages and state after execution', async () => {
       const agent = createFinalAgent('a', 'reply')
       const messagesBefore = [...agent.messages]
-      const stateBefore = agent.state.getAll()
+      const stateBefore = agent.appState.getAll()
 
       const swarm = new Swarm({
         nodes: [agent],
@@ -254,7 +254,7 @@ describe('Swarm', () => {
       await swarm.invoke('hello')
 
       expect(agent.messages).toStrictEqual(messagesBefore)
-      expect(agent.state.getAll()).toStrictEqual(stateBefore)
+      expect(agent.appState.getAll()).toStrictEqual(stateBefore)
     })
   })
 

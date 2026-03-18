@@ -24,7 +24,7 @@ describe.skipIf(bedrock.skip)('Notebook Tool Integration', () => {
     )
 
     // Verify notebook was created
-    const notebooks1 = agent.state.get('notebooks') as any
+    const notebooks1 = agent.appState.get('notebooks') as any
     expect(notebooks1).toBeTruthy()
     expect(notebooks1).toHaveProperty('test')
     expect(notebooks1.test).toContain('# Test Notebook')
@@ -33,7 +33,7 @@ describe.skipIf(bedrock.skip)('Notebook Tool Integration', () => {
     const { items: _events2 } = await collectGenerator(agent.stream('Add "- First item" to the test notebook'))
 
     // Verify content was added
-    const notebooks2 = agent.state.get('notebooks') as any
+    const notebooks2 = agent.appState.get('notebooks') as any
     expect(notebooks2.test).toContain('- First item')
 
     // Step 3: Read the notebook
@@ -46,7 +46,7 @@ describe.skipIf(bedrock.skip)('Notebook Tool Integration', () => {
     expect(textBlocks.length).toBeGreaterThan(0)
 
     // The notebook should still contain both pieces of content
-    const notebooks3 = agent.state.get('notebooks') as any
+    const notebooks3 = agent.appState.get('notebooks') as any
     expect(notebooks3.test).toContain('# Test Notebook')
     expect(notebooks3.test).toContain('- First item')
   }, 30000) // 30 second timeout for network calls
@@ -59,21 +59,21 @@ describe.skipIf(bedrock.skip)('Notebook Tool Integration', () => {
     await collectGenerator(agent1.stream('Create a notebook called "persist" with "Persistent content"'))
 
     // Verify notebook was created
-    const notebooks1 = agent1.state.get('notebooks') as any
+    const notebooks1 = agent1.appState.get('notebooks') as any
     expect(notebooks1).toBeTruthy()
     expect(notebooks1.persist).toContain('Persistent content')
 
     // Save state
-    const savedState = agent1.state.getAll()
+    const savedState = agent1.appState.getAll()
 
     // Create second agent with restored state
     const agent2 = new Agent({
       ...agentParams,
-      state: savedState, // Pass state in constructor
+      appState: savedState, // Pass state in constructor
     })
 
     // Verify notebooks were restored
-    const notebooks2 = agent2.state.get('notebooks') as any
+    const notebooks2 = agent2.appState.get('notebooks') as any
     expect(notebooks2).toBeTruthy()
     expect(notebooks2.persist).toContain('Persistent content')
 
@@ -81,7 +81,7 @@ describe.skipIf(bedrock.skip)('Notebook Tool Integration', () => {
     await collectGenerator(agent2.stream('Read the persist notebook'))
 
     // Verify content still exists
-    const notebooks3 = agent2.state.get('notebooks') as any
+    const notebooks3 = agent2.appState.get('notebooks') as any
     expect(notebooks3.persist).toContain('Persistent content')
   }, 30000)
 

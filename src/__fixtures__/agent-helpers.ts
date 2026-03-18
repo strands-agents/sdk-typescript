@@ -6,7 +6,7 @@
 import type { Agent } from '../agent/agent.js'
 import { Message, TextBlock } from '../types/messages.js'
 import type { Role } from '../types/messages.js'
-import { AppState } from '../app-state.js'
+import { StateStore } from '../state-store.js'
 import type { JSONValue } from '../types/json.js'
 import { ToolRegistry } from '../registry/tool-registry.js'
 import type { HookableEvent } from '../hooks/events.js'
@@ -31,7 +31,7 @@ export interface MockAgentData {
   /**
    * Initial state for the agent.
    */
-  state?: Record<string, JSONValue>
+  appState?: Record<string, JSONValue>
   /**
    * Optional tool registry for the agent.
    */
@@ -49,7 +49,7 @@ export type MockAgent = Agent & { trackedHooks: TrackedHook[] }
 
 /**
  * Helper to create a mock Agent for testing.
- * Provides minimal Agent interface with messages, state, and tool registry.
+ * Provides minimal Agent interface with messages, appState, and tool registry.
  * `addHook` captures registrations into `trackedHooks` for test inspection.
  *
  * @param data - Optional mock agent data
@@ -59,7 +59,7 @@ export function createMockAgent(data?: MockAgentData): MockAgent {
   const trackedHooks: TrackedHook[] = []
   return {
     messages: data?.messages ?? [],
-    state: new AppState(data?.state ?? {}),
+    appState: new StateStore(data?.appState ?? {}),
     toolRegistry: data?.toolRegistry ?? new ToolRegistry(),
     addHook: <T extends HookableEvent>(eventType: HookableEventConstructor<T>, callback: HookCallback<T>) => {
       trackedHooks.push({

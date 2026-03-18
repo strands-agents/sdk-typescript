@@ -2,14 +2,14 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 import { bash } from '../index.js'
 import { BashTimeoutError, BashSessionError, type BashOutput } from '../index.js'
 import type { ToolContext } from '../../../index.js'
-import { AppState } from '../../../app-state.js'
+import { StateStore } from '../../../state-store.js'
 import { createMockAgent } from '../../../__fixtures__/agent-helpers.js'
 import { realpathSync } from 'fs'
 
 // Skip tests on Windows (bash not available)
 describe.skipIf(process.platform === 'win32')('bash tool', () => {
   // Helper to create fresh context
-  const createFreshContext = (): { state: AppState; context: ToolContext } => {
+  const createFreshContext = (): { state: StateStore; context: ToolContext } => {
     const agent = createMockAgent()
     const context: ToolContext = {
       toolUse: {
@@ -19,7 +19,7 @@ describe.skipIf(process.platform === 'win32')('bash tool', () => {
       },
       agent,
     }
-    return { state: agent.state, context }
+    return { state: agent.appState, context }
   }
 
   afterEach(() => {

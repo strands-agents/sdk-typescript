@@ -2,7 +2,7 @@ import { deepCopy, deepCopyWithValidation, type JSONValue } from './types/json.j
 import { loadStateFromJSONSymbol, stateToJSONSymbol, type StateSerializable } from './types/serializable.js'
 
 /**
- * App state provides key-value storage outside conversation context.
+ * Key-value storage for application state outside conversation context.
  * State is not passed to the model during inference but is accessible
  * by tools (via ToolContext) and application logic.
  *
@@ -11,16 +11,16 @@ import { loadStateFromJSONSymbol, stateToJSONSymbol, type StateSerializable } fr
  *
  * @example
  * ```typescript
- * const state = new AppState({ userId: 'user-123' })
+ * const state = new StateStore({ userId: 'user-123' })
  * state.set('sessionId', 'session-456')
  * const userId = state.get('userId') // 'user-123'
  * ```
  */
-export class AppState implements StateSerializable {
+export class StateStore implements StateSerializable {
   private _state: Record<string, JSONValue>
 
   /**
-   * Creates a new AppState instance.
+   * Creates a new StateStore instance.
    *
    * @param initialState - Optional initial state values
    * @throws Error if initialState is not JSON serializable
@@ -45,7 +45,7 @@ export class AppState implements StateSerializable {
    * @example
    * ```typescript
    * // Typed usage
-   * const user = state.get<AppState>('user')      // { name: string; age: number } | undefined
+   * const user = state.get<MyState>('user')      // { name: string; age: number } | undefined
    *
    * // Untyped usage
    * const value = state.get('someKey')            // JSONValue | undefined
@@ -80,7 +80,7 @@ export class AppState implements StateSerializable {
    * @example
    * ```typescript
    * // Typed usage
-   * state.set<AppState>('user', { name: 'Alice', age: 25 })
+   * state.set<MyState>('user', { name: 'Alice', age: 25 })
    *
    * // Untyped usage
    * state.set('someKey', { any: 'value' })
@@ -102,7 +102,7 @@ export class AppState implements StateSerializable {
    * @example
    * ```typescript
    * // Typed usage
-   * state.delete<AppState>('user')
+   * state.delete<MyState>('user')
    *
    * // Untyped usage
    * state.delete('someKey')

@@ -1,4 +1,4 @@
-import type { AppState } from '../app-state.js'
+import type { StateStore } from '../state-store.js'
 import type { ContentBlock, ContentBlockData, Message, MessageData, StopReason } from './messages.js'
 import type {
   BeforeInvocationEvent,
@@ -93,7 +93,7 @@ export interface LocalAgent {
   /**
    * App state storage accessible to tools and application logic.
    */
-  state: AppState
+  appState: StateStore
 
   /**
    * The conversation history of messages between user and assistant.

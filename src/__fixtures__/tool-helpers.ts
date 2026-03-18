@@ -6,7 +6,7 @@
 import type { Tool, ToolContext } from '../tools/tool.js'
 import { ToolResultBlock } from '../types/messages.js'
 import type { JSONValue } from '../types/json.js'
-import { AppState } from '../app-state.js'
+import { StateStore } from '../state-store.js'
 import { ToolRegistry } from '../registry/tool-registry.js'
 import type { PlainToolResultBlock } from './slim-types.js'
 
@@ -24,7 +24,7 @@ export function createMockContext(
   return {
     toolUse,
     agent: {
-      state: new AppState(appState),
+      appState: new StateStore(appState),
       messages: [],
       toolRegistry: new ToolRegistry(),
       addHook: () => () => {},

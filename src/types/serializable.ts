@@ -5,7 +5,7 @@
  * their state, enabling persistence and restoration of runtime state.
  *
  * StateSerializable uses symbol-keyed methods to keep the serialization API internal,
- * preventing accidental usage by customers (e.g., accessing agent.state.toJSON() directly).
+ * preventing accidental usage by customers (e.g., accessing agent.appState.toJSON() directly).
  */
 
 import type { JSONValue } from './json.js'

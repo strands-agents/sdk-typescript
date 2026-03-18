@@ -71,7 +71,7 @@ export const notebook = tool({
     }
 
     // Get notebooks from state, or initialize if not present
-    let notebooks = context.agent.state.get<NotebookState>('notebooks')
+    let notebooks = context.agent.appState.get<NotebookState>('notebooks')
 
     if (!notebooks) {
       notebooks = {}
@@ -110,7 +110,7 @@ export const notebook = tool({
     }
 
     // Persist notebooks back to state
-    context.agent.state.set('notebooks', notebooks)
+    context.agent.appState.set('notebooks', notebooks)
 
     return result
   },
