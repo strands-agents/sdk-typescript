@@ -1,5 +1,4 @@
 import { Agent, McpClient } from '@strands-agents/sdk'
-import { OpenAIModel } from '../../../dist/src/models/openai.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 

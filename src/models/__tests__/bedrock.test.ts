@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { BedrockRuntimeClient, ConverseStreamCommand, ValidationException } from '@aws-sdk/client-bedrock-runtime'
 import { isNode } from '../../__fixtures__/environment.js'
-import { BedrockModel } from '../bedrock.js'
+import { BedrockConverseModel } from '../bedrock.js'
 import { ContextWindowOverflowError, ModelThrottledError } from '../../errors.js'
 import { Message, ReasoningBlock, ToolUseBlock, ToolResultBlock, JsonBlock } from '../../types/messages.js'
 import type { SystemContentBlock } from '../../types/messages.js'
@@ -139,7 +139,7 @@ vi.mock('@aws-sdk/client-bedrock-runtime', async (importOriginal) => {
   }
 })
 
-describe('BedrockModel', () => {
+describe('BedrockConverseModel', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     // Reset mock to a working implementation to ensure test isolation
@@ -163,14 +163,14 @@ describe('BedrockModel', () => {
 
   describe('constructor', () => {
     it('creates an instance with default configuration', () => {
-      const provider = new BedrockModel()
+      const provider = new BedrockConverseModel()
       const config = provider.getConfig()
       expect(config.modelId).toBeDefined()
     })
 
     it('uses provided model ID ', () => {
       const customModelId = 'us.anthropic.claude-3-5-sonnet-20241022-v2:0'
-      const provider = new BedrockModel({ modelId: customModelId })
+      const provider = new BedrockConverseModel({ modelId: customModelId })
       expect(provider.getConfig()).toStrictEqual({
         modelId: customModelId,
       })
@@ -178,7 +178,7 @@ describe('BedrockModel', () => {
 
     it('uses provided region', () => {
       const customRegion = 'eu-west-1'
-      new BedrockModel({ region: customRegion })
+      new BedrockConverseModel({ region: customRegion })
       expect(BedrockRuntimeClient).toHaveBeenCalledWith({
         region: customRegion,
         customUserAgent: 'strands-agents-ts-sdk',
@@ -187,7 +187,7 @@ describe('BedrockModel', () => {
 
     it('extends custom user agent if provided', () => {
       const customAgent = 'my-app/1.0'
-      new BedrockModel({ region: 'us-west-2', clientConfig: { customUserAgent: customAgent } })
+      new BedrockConverseModel({ region: 'us-west-2', clientConfig: { customUserAgent: customAgent } })
       expect(BedrockRuntimeClient).toHaveBeenCalledWith({
         region: 'us-west-2',
         customUserAgent: 'my-app/1.0 strands-agents-ts-sdk',
@@ -197,7 +197,7 @@ describe('BedrockModel', () => {
     it('passes custom endpoint to client', () => {
       const endpoint = 'https://vpce-abc.bedrock-runtime.us-west-2.vpce.amazonaws.com'
       const region = 'us-west-2'
-      new BedrockModel({ region, clientConfig: { endpoint } })
+      new BedrockConverseModel({ region, clientConfig: { endpoint } })
       expect(BedrockRuntimeClient).toHaveBeenCalledWith({
         region,
         endpoint,
@@ -211,7 +211,7 @@ describe('BedrockModel', () => {
         secretAccessKey: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
       }
       const region = 'us-west-2'
-      new BedrockModel({ region, clientConfig: { credentials } })
+      new BedrockConverseModel({ region, clientConfig: { credentials } })
       expect(BedrockRuntimeClient).toHaveBeenCalledWith({
         region,
         credentials,
@@ -220,7 +220,7 @@ describe('BedrockModel', () => {
     })
 
     it('adds api key middleware when apiKey is provided', () => {
-      const provider = new BedrockModel({ region: 'us-east-1', apiKey: 'br-test-key' })
+      const provider = new BedrockConverseModel({ region: 'us-east-1', apiKey: 'br-test-key' })
       const mockAdd = provider['_client'].middlewareStack.add as ReturnType<typeof vi.fn>
       expect(mockAdd).toHaveBeenCalledWith(expect.any(Function), {
         step: 'finalizeRequest',
@@ -230,13 +230,13 @@ describe('BedrockModel', () => {
     })
 
     it('does not add api key middleware when apiKey is not provided', () => {
-      const provider = new BedrockModel({ region: 'us-east-1' })
+      const provider = new BedrockConverseModel({ region: 'us-east-1' })
       const mockAdd = provider['_client'].middlewareStack.add as ReturnType<typeof vi.fn>
       expect(mockAdd).not.toHaveBeenCalled()
     })
 
     it('api key middleware sets authorization header', async () => {
-      const provider = new BedrockModel({ region: 'us-east-1', apiKey: 'br-test-key' })
+      const provider = new BedrockConverseModel({ region: 'us-east-1', apiKey: 'br-test-key' })
       const mockAdd = provider['_client'].middlewareStack.add as ReturnType<typeof vi.fn>
       const middlewareFn = mockAdd.mock.calls[0]![0] as (
         next: (args: unknown) => Promise<unknown>
@@ -252,7 +252,7 @@ describe('BedrockModel', () => {
     })
 
     it('does not include apiKey in model config', () => {
-      const provider = new BedrockModel({ region: 'us-east-1', apiKey: 'br-test-key', temperature: 0.5 })
+      const provider = new BedrockConverseModel({ region: 'us-east-1', apiKey: 'br-test-key', temperature: 0.5 })
       const config = provider.getConfig()
       expect(config).toStrictEqual({
         modelId: 'global.anthropic.claude-sonnet-4-6',
@@ -263,7 +263,7 @@ describe('BedrockModel', () => {
 
   describe('updateConfig', () => {
     it('merges new config with existing config', () => {
-      const provider = new BedrockModel({ region: 'us-west-2', temperature: 0.5 })
+      const provider = new BedrockConverseModel({ region: 'us-west-2', temperature: 0.5 })
       provider.updateConfig({ temperature: 0.8, maxTokens: 2048 })
       expect(provider.getConfig()).toStrictEqual({
         modelId: 'global.anthropic.claude-sonnet-4-6',
@@ -273,7 +273,7 @@ describe('BedrockModel', () => {
     })
 
     it('preserves fields not included in the update', () => {
-      const provider = new BedrockModel({
+      const provider = new BedrockConverseModel({
         region: 'us-west-2',
         modelId: 'custom-model',
         temperature: 0.5,
@@ -290,7 +290,7 @@ describe('BedrockModel', () => {
 
   describe('getConfig', () => {
     it('returns the current configuration', () => {
-      const provider = new BedrockModel({
+      const provider = new BedrockConverseModel({
         region: 'us-west-2',
         modelId: 'test-model',
         maxTokens: 1024,
@@ -307,7 +307,7 @@ describe('BedrockModel', () => {
   describe('format_message', async () => {
     const mockConverseStreamCommand = vi.mocked(ConverseStreamCommand)
     it('formats the request to bedrock properly', async () => {
-      const provider = new BedrockModel({
+      const provider = new BedrockConverseModel({
         region: 'us-west-2',
         modelId: 'anthropic.claude-test-model',
         maxTokens: 1024,
@@ -376,7 +376,7 @@ describe('BedrockModel', () => {
 
     it('formats tool use messages', async () => {
       const mockConverseStreamCommand = vi.mocked(ConverseStreamCommand)
-      const provider = new BedrockModel()
+      const provider = new BedrockConverseModel()
       const messages = [
         new Message({
           role: 'assistant',
@@ -415,7 +415,7 @@ describe('BedrockModel', () => {
     })
 
     it('formats tool result messages', async () => {
-      const provider = new BedrockModel()
+      const provider = new BedrockConverseModel()
       const messages = [
         new Message({
           role: 'user',
@@ -462,7 +462,7 @@ describe('BedrockModel', () => {
     })
 
     it('formats reasoning messages properly', async () => {
-      const provider = new BedrockModel()
+      const provider = new BedrockConverseModel()
       const messages = [
         new Message({
           role: 'user',
@@ -508,7 +508,7 @@ describe('BedrockModel', () => {
     })
 
     it('formats cache point blocks in messages', async () => {
-      const provider = new BedrockModel()
+      const provider = new BedrockConverseModel()
       const messages = [
         new Message({
           role: 'user',
@@ -534,7 +534,7 @@ describe('BedrockModel', () => {
   describe.each([
     { mode: 'streaming', stream: true },
     { mode: 'non-streaming', stream: false },
-  ])('BedrockModel in $mode mode', ({ stream }) => {
+  ])('BedrockConverseModel in $mode mode', ({ stream }) => {
     it('yields and validates text events correctly', async () => {
       const mockSend = vi.fn(async () => {
         if (stream) {
@@ -562,7 +562,7 @@ describe('BedrockModel', () => {
 
       mockBedrockClientImplementation({ send: mockSend })
 
-      const provider = new BedrockModel({ stream })
+      const provider = new BedrockConverseModel({ stream })
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
       const events = await collectIterator(provider.stream(messages))
 
@@ -625,7 +625,7 @@ describe('BedrockModel', () => {
       })
       mockBedrockClientImplementation({ send: mockSend })
 
-      const provider = new BedrockModel({ stream })
+      const provider = new BedrockConverseModel({ stream })
       const messages = [new Message({ role: 'user', content: [new TextBlock('Weather?')] })]
       const events = await collectIterator(provider.stream(messages))
       const startEvent = events.find((e) => e.type === 'modelContentBlockStartEvent')
@@ -687,7 +687,7 @@ describe('BedrockModel', () => {
       })
       mockBedrockClientImplementation({ send: mockSend })
 
-      const provider = new BedrockModel({ stream })
+      const provider = new BedrockConverseModel({ stream })
       const messages = [new Message({ role: 'user', content: [new TextBlock('A question.')] })]
       const events = await collectIterator(provider.stream(messages))
 
@@ -743,7 +743,7 @@ describe('BedrockModel', () => {
       })
       mockBedrockClientImplementation({ send: mockSend })
 
-      const provider = new BedrockModel({ stream })
+      const provider = new BedrockConverseModel({ stream })
       const messages = [new Message({ role: 'user', content: [new TextBlock('A sensitive question.')] })]
       const events = await collectIterator(provider.stream(messages))
 
@@ -810,7 +810,7 @@ describe('BedrockModel', () => {
       })
       mockBedrockClientImplementation({ send: mockSend })
 
-      const provider = new BedrockModel({ stream })
+      const provider = new BedrockConverseModel({ stream })
       const messages = [new Message({ role: 'user', content: [new TextBlock('Cite this.')] })]
       const events = await collectIterator(provider.stream(messages))
 
@@ -853,7 +853,7 @@ describe('BedrockModel', () => {
         const mockSendError = vi.fn().mockRejectedValue(error)
         mockBedrockClientImplementation({ send: mockSendError })
 
-        const provider = new BedrockModel()
+        const provider = new BedrockConverseModel()
         const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
 
         await expect(collectIterator(provider.stream(messages))).rejects.toThrow(expected)
@@ -874,7 +874,7 @@ describe('BedrockModel', () => {
         yield { metadata: { usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } } }
       })
 
-      const provider = new BedrockModel()
+      const provider = new BedrockConverseModel()
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
 
       const events = await collectIterator(provider.stream(messages))
@@ -907,7 +907,7 @@ describe('BedrockModel', () => {
         yield { metadata: { usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } } }
       })
 
-      const provider = new BedrockModel()
+      const provider = new BedrockConverseModel()
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
 
       const events = await collectIterator(provider.stream(messages))
@@ -949,7 +949,7 @@ describe('BedrockModel', () => {
         yield { unknown: 'type' }
       })
 
-      const provider = new BedrockModel()
+      const provider = new BedrockConverseModel()
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
 
       const events = await collectIterator(provider.stream(messages))
@@ -981,7 +981,7 @@ describe('BedrockModel', () => {
         yield { metadata: { usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } } }
       })
 
-      const provider = new BedrockModel()
+      const provider = new BedrockConverseModel()
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
 
       const events = await collectIterator(provider.stream(messages))
@@ -1019,7 +1019,7 @@ describe('BedrockModel', () => {
         }
       })
 
-      const provider = new BedrockModel()
+      const provider = new BedrockConverseModel()
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
 
       const events = await collectIterator(provider.stream(messages))
@@ -1047,7 +1047,7 @@ describe('BedrockModel', () => {
         }
       })
 
-      const provider = new BedrockModel()
+      const provider = new BedrockConverseModel()
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
 
       const events = await collectIterator(provider.stream(messages))
@@ -1069,7 +1069,7 @@ describe('BedrockModel', () => {
         yield { metadata: { usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } } }
       })
 
-      const provider = new BedrockModel()
+      const provider = new BedrockConverseModel()
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
 
       const events = await collectIterator(provider.stream(messages))
@@ -1100,7 +1100,7 @@ describe('BedrockModel', () => {
             yield { metadata: { usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } } }
           })
 
-          const provider = new BedrockModel()
+          const provider = new BedrockConverseModel()
           const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
 
           const events = []
@@ -1124,7 +1124,7 @@ describe('BedrockModel', () => {
           yield { throttlingException: { message: 'Rate exceeded' } }
         })
 
-        const provider = new BedrockModel()
+        const provider = new BedrockConverseModel()
         const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
 
         await expect(async () => {
@@ -1140,7 +1140,7 @@ describe('BedrockModel', () => {
           yield { throttlingException: { message: 'Too many requests' } }
         })
 
-        const provider = new BedrockModel()
+        const provider = new BedrockConverseModel()
         const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
 
         await expect(async () => {
@@ -1156,7 +1156,7 @@ describe('BedrockModel', () => {
           yield { throttlingException: {} }
         })
 
-        const provider = new BedrockModel()
+        const provider = new BedrockConverseModel()
         const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
 
         await expect(async () => {
@@ -1176,7 +1176,7 @@ describe('BedrockModel', () => {
     })
 
     it('does not add cache points to string system prompt with cacheConfig', async () => {
-      const provider = new BedrockModel({ cacheConfig: { strategy: 'auto' } })
+      const provider = new BedrockConverseModel({ cacheConfig: { strategy: 'auto' } })
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
       const options: StreamOptions = {
         systemPrompt: 'You are a helpful assistant',
@@ -1197,7 +1197,7 @@ describe('BedrockModel', () => {
     })
 
     it('formats array system prompt with text blocks only', async () => {
-      const provider = new BedrockModel()
+      const provider = new BedrockConverseModel()
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
       const options: StreamOptions = {
         systemPrompt: [
@@ -1221,7 +1221,7 @@ describe('BedrockModel', () => {
     })
 
     it('formats array system prompt with cache points', async () => {
-      const provider = new BedrockModel()
+      const provider = new BedrockConverseModel()
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
       const options: StreamOptions = {
         systemPrompt: [
@@ -1251,7 +1251,7 @@ describe('BedrockModel', () => {
 
     it('does not warn when array system prompt is provided without cacheConfig', async () => {
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-      const provider = new BedrockModel()
+      const provider = new BedrockConverseModel()
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
       const options: StreamOptions = {
         systemPrompt: [
@@ -1281,7 +1281,7 @@ describe('BedrockModel', () => {
     })
 
     it('adds cache point after tools when cacheConfig enabled', async () => {
-      const provider = new BedrockModel({ cacheConfig: { strategy: 'auto' } })
+      const provider = new BedrockConverseModel({ cacheConfig: { strategy: 'auto' } })
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
       const options: StreamOptions = {
         toolSpecs: [
@@ -1319,7 +1319,7 @@ describe('BedrockModel', () => {
     })
 
     it('adds cache points to tools and messages when cacheConfig enabled', async () => {
-      const provider = new BedrockModel({ cacheConfig: { strategy: 'auto' } })
+      const provider = new BedrockConverseModel({ cacheConfig: { strategy: 'auto' } })
       const messages = [
         new Message({ role: 'user', content: [new TextBlock('Hello')] }),
         new Message({ role: 'assistant', content: [new TextBlock('Hi')] }),
@@ -1358,7 +1358,7 @@ describe('BedrockModel', () => {
     })
 
     it('does not mutate the original messages array', async () => {
-      const provider = new BedrockModel({ cacheConfig: { strategy: 'auto' } })
+      const provider = new BedrockConverseModel({ cacheConfig: { strategy: 'auto' } })
       const originalMessages = [
         new Message({ role: 'user', content: [new TextBlock('Hello')] }),
         new Message({ role: 'assistant', content: [new TextBlock('Hi')] }),
@@ -1375,7 +1375,7 @@ describe('BedrockModel', () => {
 
     it('logs warning and disables caching for non-caching models', async () => {
       const warnSpy = vi.spyOn(console, 'warn')
-      const provider = new BedrockModel({
+      const provider = new BedrockConverseModel({
         modelId: 'amazon.titan-text-express-v1',
         cacheConfig: { strategy: 'auto' },
       })
@@ -1405,7 +1405,7 @@ describe('BedrockModel', () => {
     })
 
     it('enables caching with anthropic strategy for application inference profiles', async () => {
-      const provider = new BedrockModel({
+      const provider = new BedrockConverseModel({
         modelId: 'arn:aws:bedrock:us-east-1:123456789012:application-inference-profile/abc123',
         cacheConfig: { strategy: 'anthropic' },
       })
@@ -1424,7 +1424,7 @@ describe('BedrockModel', () => {
     })
 
     it('handles empty array system prompt', async () => {
-      const provider = new BedrockModel()
+      const provider = new BedrockConverseModel()
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
       const options: StreamOptions = {
         systemPrompt: [],
@@ -1445,7 +1445,7 @@ describe('BedrockModel', () => {
     })
 
     it('formats array system prompt with guard content', async () => {
-      const provider = new BedrockModel()
+      const provider = new BedrockConverseModel()
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
       const options: StreamOptions = {
         systemPrompt: [
@@ -1484,7 +1484,7 @@ describe('BedrockModel', () => {
     })
 
     it('formats mixed system prompt with text, guard content, and cache points', async () => {
-      const provider = new BedrockModel()
+      const provider = new BedrockConverseModel()
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
       const options: StreamOptions = {
         systemPrompt: [
@@ -1527,7 +1527,7 @@ describe('BedrockModel', () => {
     })
 
     it('formats guard content with all qualifier types', async () => {
-      const provider = new BedrockModel()
+      const provider = new BedrockConverseModel()
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
       const options: StreamOptions = {
         systemPrompt: [
@@ -1564,7 +1564,7 @@ describe('BedrockModel', () => {
     })
 
     it('formats guard content with image in system prompt', async () => {
-      const provider = new BedrockModel()
+      const provider = new BedrockConverseModel()
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
       const imageBytes = new Uint8Array([1, 2, 3, 4])
       const options: StreamOptions = {
@@ -1610,7 +1610,7 @@ describe('BedrockModel', () => {
     })
 
     it('formats guard content with text in message', async () => {
-      const provider = new BedrockModel()
+      const provider = new BedrockConverseModel()
       const messages = [
         new Message({
           role: 'user',
@@ -1650,7 +1650,7 @@ describe('BedrockModel', () => {
     })
 
     it('formats guard content with image in message', async () => {
-      const provider = new BedrockModel()
+      const provider = new BedrockConverseModel()
       const imageBytes = new Uint8Array([1, 2, 3, 4])
       const messages = [
         new Message({
@@ -1695,7 +1695,7 @@ describe('BedrockModel', () => {
     const mockConverseStreamCommand = vi.mocked(ConverseStreamCommand)
 
     it('formats image block in tool result', async () => {
-      const provider = new BedrockModel()
+      const provider = new BedrockConverseModel()
       const imageBytes = new Uint8Array([1, 2, 3])
       const messages = [
         new Message({
@@ -1733,7 +1733,7 @@ describe('BedrockModel', () => {
     })
 
     it('formats video block in tool result with 3gp format mapping', async () => {
-      const provider = new BedrockModel()
+      const provider = new BedrockConverseModel()
       const videoBytes = new Uint8Array([4, 5, 6])
       const messages = [
         new Message({
@@ -1771,7 +1771,7 @@ describe('BedrockModel', () => {
     })
 
     it('formats document block in tool result', async () => {
-      const provider = new BedrockModel()
+      const provider = new BedrockConverseModel()
       const docBytes = new Uint8Array([7, 8, 9])
       const messages = [
         new Message({
@@ -1809,7 +1809,7 @@ describe('BedrockModel', () => {
     })
 
     it('formats mixed text and media content in tool result', async () => {
-      const provider = new BedrockModel()
+      const provider = new BedrockConverseModel()
       const imageBytes = new Uint8Array([1, 2])
       const messages = [
         new Message({
@@ -1857,7 +1857,7 @@ describe('BedrockModel', () => {
     const mockConverseStreamCommand = vi.mocked(ConverseStreamCommand)
 
     it('formats top-level image block', async () => {
-      const provider = new BedrockModel()
+      const provider = new BedrockConverseModel()
       const imageBytes = new Uint8Array([1, 2, 3])
       const messages = [
         new Message({
@@ -1881,7 +1881,7 @@ describe('BedrockModel', () => {
     })
 
     it('formats top-level image block with S3 source', async () => {
-      const provider = new BedrockModel()
+      const provider = new BedrockConverseModel()
       const messages = [
         new Message({
           role: 'user',
@@ -1906,7 +1906,7 @@ describe('BedrockModel', () => {
     })
 
     it('formats top-level video block with 3gp format mapping', async () => {
-      const provider = new BedrockModel()
+      const provider = new BedrockConverseModel()
       const videoBytes = new Uint8Array([4, 5, 6])
       const messages = [
         new Message({
@@ -1930,7 +1930,7 @@ describe('BedrockModel', () => {
     })
 
     it('formats top-level document block with text source converted to bytes', async () => {
-      const provider = new BedrockModel()
+      const provider = new BedrockConverseModel()
       const messages = [
         new Message({
           role: 'user',
@@ -1965,7 +1965,7 @@ describe('BedrockModel', () => {
     const mockConverseStreamCommand = vi.mocked(ConverseStreamCommand)
 
     it('maps SDK CitationLocation types to Bedrock object-key format through formatting pipeline', async () => {
-      const provider = new BedrockModel()
+      const provider = new BedrockConverseModel()
       const sdkCitations = [
         {
           location: { type: 'documentChar' as const, documentIndex: 0, start: 150, end: 300 },
@@ -2079,7 +2079,7 @@ describe('BedrockModel', () => {
     const mockConverseStreamCommand = vi.mocked(ConverseStreamCommand)
 
     it('formats image block in tool result', async () => {
-      const provider = new BedrockModel()
+      const provider = new BedrockConverseModel()
       const imageBytes = new Uint8Array([1, 2, 3])
       const messages = [
         new Message({
@@ -2117,7 +2117,7 @@ describe('BedrockModel', () => {
     })
 
     it('formats video block in tool result with 3gp format mapping', async () => {
-      const provider = new BedrockModel()
+      const provider = new BedrockConverseModel()
       const videoBytes = new Uint8Array([4, 5, 6])
       const messages = [
         new Message({
@@ -2155,7 +2155,7 @@ describe('BedrockModel', () => {
     })
 
     it('formats document block in tool result', async () => {
-      const provider = new BedrockModel()
+      const provider = new BedrockConverseModel()
       const docBytes = new Uint8Array([7, 8, 9])
       const messages = [
         new Message({
@@ -2193,7 +2193,7 @@ describe('BedrockModel', () => {
     })
 
     it('formats mixed text and media content in tool result', async () => {
-      const provider = new BedrockModel()
+      const provider = new BedrockConverseModel()
       const imageBytes = new Uint8Array([1, 2])
       const messages = [
         new Message({
@@ -2241,7 +2241,7 @@ describe('BedrockModel', () => {
     const mockConverseStreamCommand = vi.mocked(ConverseStreamCommand)
 
     it('formats top-level image block', async () => {
-      const provider = new BedrockModel()
+      const provider = new BedrockConverseModel()
       const imageBytes = new Uint8Array([1, 2, 3])
       const messages = [
         new Message({
@@ -2265,7 +2265,7 @@ describe('BedrockModel', () => {
     })
 
     it('formats top-level image block with S3 source', async () => {
-      const provider = new BedrockModel()
+      const provider = new BedrockConverseModel()
       const messages = [
         new Message({
           role: 'user',
@@ -2290,7 +2290,7 @@ describe('BedrockModel', () => {
     })
 
     it('formats top-level video block with 3gp format mapping', async () => {
-      const provider = new BedrockModel()
+      const provider = new BedrockConverseModel()
       const videoBytes = new Uint8Array([4, 5, 6])
       const messages = [
         new Message({
@@ -2314,7 +2314,7 @@ describe('BedrockModel', () => {
     })
 
     it('formats top-level document block with text source converted to bytes', async () => {
-      const provider = new BedrockModel()
+      const provider = new BedrockConverseModel()
       const messages = [
         new Message({
           role: 'user',
@@ -2350,7 +2350,7 @@ describe('BedrockModel', () => {
 
     describe('when includeToolResultStatus is true', () => {
       it('always includes status field in tool results', async () => {
-        const provider = new BedrockModel({ includeToolResultStatus: true })
+        const provider = new BedrockConverseModel({ includeToolResultStatus: true })
         const messages = [
           new Message({
             role: 'user',
@@ -2388,7 +2388,7 @@ describe('BedrockModel', () => {
 
     describe('when includeToolResultStatus is false', () => {
       it('never includes status field in tool results', async () => {
-        const provider = new BedrockModel({ includeToolResultStatus: false })
+        const provider = new BedrockConverseModel({ includeToolResultStatus: false })
         const messages = [
           new Message({
             role: 'user',
@@ -2425,7 +2425,7 @@ describe('BedrockModel', () => {
 
     describe('when includeToolResultStatus is auto', () => {
       it('includes status field for Claude models', async () => {
-        const provider = new BedrockModel({
+        const provider = new BedrockConverseModel({
           modelId: 'anthropic.claude-3-5-sonnet-20241022-v2:0',
           includeToolResultStatus: 'auto',
         })
@@ -2466,7 +2466,7 @@ describe('BedrockModel', () => {
 
     describe('when includeToolResultStatus is undefined (default)', () => {
       it('follows auto logic for non-Claude models', async () => {
-        const provider = new BedrockModel({
+        const provider = new BedrockConverseModel({
           modelId: 'amazon.nova-lite-v1:0',
         })
         const messages = [
@@ -2512,7 +2512,7 @@ describe('BedrockModel', () => {
     it('uses explicit region when provided', async () => {
       mockBedrockClientImplementation()
 
-      const provider = new BedrockModel({ region: 'eu-west-1' })
+      const provider = new BedrockConverseModel({ region: 'eu-west-1' })
 
       // After applyDefaultRegion wraps the config functions, verify they still return the correct value
       const regionResult = await provider['_client'].config.region()
@@ -2529,7 +2529,7 @@ describe('BedrockModel', () => {
         },
       })
 
-      const provider = new BedrockModel()
+      const provider = new BedrockConverseModel()
 
       // After applyDefaultRegion wraps the config functions
       const regionResult = await provider['_client'].config.region()
@@ -2546,7 +2546,7 @@ describe('BedrockModel', () => {
         },
       })
 
-      const provider = new BedrockModel()
+      const provider = new BedrockConverseModel()
 
       // Should rethrow the error
       await expect(provider['_client'].config.region()).rejects.toThrow('Network error')
@@ -2562,7 +2562,7 @@ describe('BedrockModel', () => {
 
     describe('constructor', () => {
       it('accepts guardrailConfig in options', () => {
-        const provider = new BedrockModel({
+        const provider = new BedrockConverseModel({
           guardrailConfig: {
             guardrailIdentifier: 'my-guardrail-id',
             guardrailVersion: '1',
@@ -2575,7 +2575,7 @@ describe('BedrockModel', () => {
       })
 
       it('accepts guardrailConfig with all options', () => {
-        const provider = new BedrockModel({
+        const provider = new BedrockConverseModel({
           guardrailConfig: {
             guardrailIdentifier: 'my-guardrail-id',
             guardrailVersion: '1',
@@ -2606,7 +2606,7 @@ describe('BedrockModel', () => {
 
     describe('request formatting', () => {
       it('includes guardrailConfig in request with default trace', async () => {
-        const provider = new BedrockModel({
+        const provider = new BedrockConverseModel({
           guardrailConfig: {
             guardrailIdentifier: 'my-guardrail-id',
             guardrailVersion: '1',
@@ -2628,7 +2628,7 @@ describe('BedrockModel', () => {
       })
 
       it('includes guardrailConfig in request with custom trace', async () => {
-        const provider = new BedrockModel({
+        const provider = new BedrockConverseModel({
           guardrailConfig: {
             guardrailIdentifier: 'my-guardrail-id',
             guardrailVersion: '1',
@@ -2651,7 +2651,7 @@ describe('BedrockModel', () => {
       })
 
       it('includes streamProcessingMode when specified', async () => {
-        const provider = new BedrockModel({
+        const provider = new BedrockConverseModel({
           guardrailConfig: {
             guardrailIdentifier: 'my-guardrail-id',
             guardrailVersion: '1',
@@ -2675,7 +2675,7 @@ describe('BedrockModel', () => {
       })
 
       it('does not include guardrailConfig when not configured', async () => {
-        const provider = new BedrockModel()
+        const provider = new BedrockConverseModel()
         const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
 
         collectIterator(provider.stream(messages))
@@ -2714,7 +2714,7 @@ describe('BedrockModel', () => {
           }
         })
 
-        const provider = new BedrockModel({
+        const provider = new BedrockConverseModel({
           guardrailConfig: {
             guardrailIdentifier: 'my-guardrail-id',
             guardrailVersion: '1',
@@ -2756,7 +2756,7 @@ describe('BedrockModel', () => {
           }
         })
 
-        const provider = new BedrockModel({
+        const provider = new BedrockConverseModel({
           guardrailConfig: {
             guardrailIdentifier: 'my-guardrail-id',
             guardrailVersion: '1',
@@ -2794,7 +2794,7 @@ describe('BedrockModel', () => {
           }
         })
 
-        const provider = new BedrockModel({
+        const provider = new BedrockConverseModel({
           guardrailConfig: {
             guardrailIdentifier: 'my-guardrail-id',
             guardrailVersion: '1',
@@ -2832,7 +2832,7 @@ describe('BedrockModel', () => {
           }
         })
 
-        const provider = new BedrockModel()
+        const provider = new BedrockConverseModel()
         const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
         const events = await collectIterator(provider.stream(messages))
 
@@ -2858,7 +2858,7 @@ describe('BedrockModel', () => {
           }
         })
 
-        const provider = new BedrockModel({
+        const provider = new BedrockConverseModel({
           guardrailConfig: {
             guardrailIdentifier: 'id',
             guardrailVersion: '1',
@@ -2890,7 +2890,7 @@ describe('BedrockModel', () => {
           }
         })
 
-        const provider = new BedrockModel({
+        const provider = new BedrockConverseModel({
           guardrailConfig: {
             guardrailIdentifier: 'id',
             guardrailVersion: '1',
@@ -2925,7 +2925,7 @@ describe('BedrockModel', () => {
           }
         })
 
-        const provider = new BedrockModel({
+        const provider = new BedrockConverseModel({
           guardrailConfig: {
             guardrailIdentifier: 'id',
             guardrailVersion: '1',
@@ -2958,7 +2958,7 @@ describe('BedrockModel', () => {
           }
         })
 
-        const provider = new BedrockModel({
+        const provider = new BedrockConverseModel({
           guardrailConfig: {
             guardrailIdentifier: 'id',
             guardrailVersion: '1',
@@ -2993,7 +2993,7 @@ describe('BedrockModel', () => {
           }
         })
 
-        const provider = new BedrockModel({
+        const provider = new BedrockConverseModel({
           guardrailConfig: {
             guardrailIdentifier: 'id',
             guardrailVersion: '1',
@@ -3029,7 +3029,7 @@ describe('BedrockModel', () => {
           }
         })
 
-        const provider = new BedrockModel({
+        const provider = new BedrockConverseModel({
           guardrailConfig: {
             guardrailIdentifier: 'id',
             guardrailVersion: '1',
@@ -3075,7 +3075,7 @@ describe('BedrockModel', () => {
           }
         })
 
-        const provider = new BedrockModel({
+        const provider = new BedrockConverseModel({
           guardrailConfig: {
             guardrailIdentifier: 'id',
             guardrailVersion: '1',
@@ -3118,7 +3118,7 @@ describe('BedrockModel', () => {
         }))
         mockBedrockClientImplementation({ send: mockSend })
 
-        const provider = new BedrockModel({
+        const provider = new BedrockConverseModel({
           stream: false,
           guardrailConfig: {
             guardrailIdentifier: 'id',
@@ -3144,7 +3144,7 @@ describe('BedrockModel', () => {
       })
 
       it('accepts guardLatestUserMessage in guardrailConfig', () => {
-        const provider = new BedrockModel({
+        const provider = new BedrockConverseModel({
           guardrailConfig: {
             guardrailIdentifier: 'my-guardrail-id',
             guardrailVersion: '1',
@@ -3159,7 +3159,7 @@ describe('BedrockModel', () => {
       })
 
       it('wraps latest user message text content in guardContent when enabled', async () => {
-        const provider = new BedrockModel({
+        const provider = new BedrockConverseModel({
           guardrailConfig: {
             guardrailIdentifier: 'my-guardrail-id',
             guardrailVersion: '1',
@@ -3192,7 +3192,7 @@ describe('BedrockModel', () => {
 
       it('wraps latest user message image content in guardContent when enabled', async () => {
         const imageBytes = new Uint8Array([1, 2, 3, 4])
-        const provider = new BedrockModel({
+        const provider = new BedrockConverseModel({
           guardrailConfig: {
             guardrailIdentifier: 'my-guardrail-id',
             guardrailVersion: '1',
@@ -3235,7 +3235,7 @@ describe('BedrockModel', () => {
       })
 
       it('does not wrap toolResult messages even though role is user', async () => {
-        const provider = new BedrockModel({
+        const provider = new BedrockConverseModel({
           guardrailConfig: {
             guardrailIdentifier: 'my-guardrail-id',
             guardrailVersion: '1',
@@ -3313,7 +3313,7 @@ describe('BedrockModel', () => {
       })
 
       it('does not wrap messages when guardLatestUserMessage is false', async () => {
-        const provider = new BedrockModel({
+        const provider = new BedrockConverseModel({
           guardrailConfig: {
             guardrailIdentifier: 'my-guardrail-id',
             guardrailVersion: '1',
@@ -3337,7 +3337,7 @@ describe('BedrockModel', () => {
       })
 
       it('does not wrap messages when guardLatestUserMessage is undefined', async () => {
-        const provider = new BedrockModel({
+        const provider = new BedrockConverseModel({
           guardrailConfig: {
             guardrailIdentifier: 'my-guardrail-id',
             guardrailVersion: '1',
@@ -3360,7 +3360,7 @@ describe('BedrockModel', () => {
       })
 
       it('does not wrap assistant messages', async () => {
-        const provider = new BedrockModel({
+        const provider = new BedrockConverseModel({
           guardrailConfig: {
             guardrailIdentifier: 'my-guardrail-id',
             guardrailVersion: '1',
@@ -3399,7 +3399,7 @@ describe('BedrockModel', () => {
       })
 
       it('wraps only the last user text/image message in multi-turn conversation', async () => {
-        const provider = new BedrockModel({
+        const provider = new BedrockConverseModel({
           guardrailConfig: {
             guardrailIdentifier: 'my-guardrail-id',
             guardrailVersion: '1',
@@ -3443,7 +3443,7 @@ describe('BedrockModel', () => {
       })
 
       it('handles no user messages with text/image content gracefully', async () => {
-        const provider = new BedrockModel({
+        const provider = new BedrockConverseModel({
           guardrailConfig: {
             guardrailIdentifier: 'my-guardrail-id',
             guardrailVersion: '1',
@@ -3469,7 +3469,7 @@ describe('BedrockModel', () => {
       })
 
       it('preserves explicit GuardContentBlock in messages without double-wrapping', async () => {
-        const provider = new BedrockModel({
+        const provider = new BedrockConverseModel({
           guardrailConfig: {
             guardrailIdentifier: 'my-guardrail-id',
             guardrailVersion: '1',
@@ -3516,7 +3516,7 @@ describe('BedrockModel', () => {
 
       it('wraps all text and image blocks in the latest user message', async () => {
         const imageBytes = new Uint8Array([5, 6, 7, 8])
-        const provider = new BedrockModel({
+        const provider = new BedrockConverseModel({
           guardrailConfig: {
             guardrailIdentifier: 'my-guardrail-id',
             guardrailVersion: '1',
@@ -3577,7 +3577,7 @@ describe('BedrockModel', () => {
       it('skips wrapping images with unsupported formats (gif)', async () => {
         const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
         const imageBytes = new Uint8Array([1, 2, 3, 4])
-        const provider = new BedrockModel({
+        const provider = new BedrockConverseModel({
           guardrailConfig: {
             guardrailIdentifier: 'my-guardrail-id',
             guardrailVersion: '1',
@@ -3624,7 +3624,7 @@ describe('BedrockModel', () => {
       it('skips wrapping images with unsupported formats (webp)', async () => {
         const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
         const imageBytes = new Uint8Array([1, 2, 3, 4])
-        const provider = new BedrockModel({
+        const provider = new BedrockConverseModel({
           guardrailConfig: {
             guardrailIdentifier: 'my-guardrail-id',
             guardrailVersion: '1',
@@ -3670,7 +3670,7 @@ describe('BedrockModel', () => {
 
       it('skips wrapping images with S3 source', async () => {
         const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-        const provider = new BedrockModel({
+        const provider = new BedrockConverseModel({
           guardrailConfig: {
             guardrailIdentifier: 'my-guardrail-id',
             guardrailVersion: '1',
@@ -3725,7 +3725,7 @@ describe('BedrockModel', () => {
 
       it('skips wrapping images with URL source', async () => {
         const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-        const provider = new BedrockModel({
+        const provider = new BedrockConverseModel({
           guardrailConfig: {
             guardrailIdentifier: 'my-guardrail-id',
             guardrailVersion: '1',
@@ -3773,7 +3773,7 @@ describe('BedrockModel', () => {
 
       it('wraps supported image formats (png and jpeg) with bytes source', async () => {
         const imageBytes = new Uint8Array([1, 2, 3, 4])
-        const provider = new BedrockModel({
+        const provider = new BedrockConverseModel({
           guardrailConfig: {
             guardrailIdentifier: 'my-guardrail-id',
             guardrailVersion: '1',
@@ -3828,7 +3828,7 @@ describe('BedrockModel', () => {
       })
 
       it('does not wrap reasoning or cachePoint blocks', async () => {
-        const provider = new BedrockModel({
+        const provider = new BedrockConverseModel({
           guardrailConfig: {
             guardrailIdentifier: 'my-guardrail-id',
             guardrailVersion: '1',

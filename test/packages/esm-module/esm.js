@@ -3,27 +3,33 @@
  * This script runs in a pure Node.js ES module environment.
  */
 
-import { Agent, BedrockModel, tool, Tool } from '@strands-agents/sdk'
+import { Agent, BedrockConverseModel, tool, Tool } from '@strands-agents/sdk'
 
 import { notebook } from '@strands-agents/sdk/vended-tools/notebook'
 import { fileEditor } from '@strands-agents/sdk/vended-tools/file-editor'
 import { httpRequest } from '@strands-agents/sdk/vended-tools/http-request'
 import { bash } from '@strands-agents/sdk/vended-tools/bash'
 
+// Verify model subpath exports
+import { BedrockConverseModel as BedrockFromSubpath } from '@strands-agents/sdk/models/bedrock'
+import { OpenAIChatModel } from '@strands-agents/sdk/models/openai'
+import { AnthropicMessagesModel } from '@strands-agents/sdk/models/anthropic'
+import { GoogleGenAIModel } from '@strands-agents/sdk/models/google'
+
 import { z } from 'zod'
 
 console.log('✓ Import from main entry point successful')
 
-// Verify BedrockModel can be instantiated
-const model = new BedrockModel({ region: 'us-west-2' })
-console.log('✓ BedrockModel instantiation successful')
+// Verify BedrockConverseModel can be instantiated
+const model = new BedrockConverseModel({ region: 'us-west-2' })
+console.log('✓ BedrockConverseModel instantiation successful')
 
 // Verify basic functionality
 const config = model.getConfig()
 if (!config) {
-  throw new Error('BedrockModel config is invalid')
+  throw new Error('BedrockConverseModel config is invalid')
 }
-console.log('✓ BedrockModel configuration retrieval successful')
+console.log('✓ BedrockConverseModel configuration retrieval successful')
 
 // Define a tool
 const example_tool = tool({
@@ -98,3 +104,9 @@ for (const tool of Object.values(tools)) {
     throw new Error(`Tool ${tool.name} isn't an instance of a tool`)
   }
 }
+
+// Verify model subpath exports resolve correctly
+if (BedrockFromSubpath !== BedrockConverseModel) {
+  throw new Error('BedrockConverseModel from subpath should match main export')
+}
+console.log('✓ Model subpath exports verified')

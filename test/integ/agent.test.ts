@@ -147,7 +147,7 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel, mode
         expect(metadataEvent.usage?.outputTokens).toBeGreaterThan(0)
 
         // Bedrock includes latencyMs in metrics, OpenAI does not
-        if (name === 'BedrockModel') {
+        if (name === 'BedrockConverseModel') {
           expect(metadataEvent.metrics?.latencyMs).toBeGreaterThan(0)
         }
 

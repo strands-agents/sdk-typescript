@@ -110,7 +110,7 @@ const DEFAULT_REDACT_OUTPUT_MESSAGE = '[Assistant output redacted.]'
  * Redaction configuration for Bedrock guardrails.
  * Controls whether and how blocked content is replaced.
  */
-export interface BedrockGuardrailRedactionConfig {
+export interface BedrockConverseGuardrailRedactionConfig {
   /** Redact input when blocked. @defaultValue true */
   input?: boolean
 
@@ -132,7 +132,7 @@ export interface BedrockGuardrailRedactionConfig {
  *
  * @see https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails.html
  */
-export interface BedrockGuardrailConfig {
+export interface BedrockConverseGuardrailConfig {
   /** Guardrail identifier */
   guardrailIdentifier: string
 
@@ -146,7 +146,7 @@ export interface BedrockGuardrailConfig {
   streamProcessingMode?: 'sync' | 'async'
 
   /** Redaction behavior when content is blocked */
-  redaction?: BedrockGuardrailRedactionConfig
+  redaction?: BedrockConverseGuardrailRedactionConfig
 
   /**
    * Only evaluate the latest user message with guardrails.
@@ -182,7 +182,7 @@ function snakeToCamel(str: string): string {
  *
  * @example
  * ```typescript
- * const config: BedrockModelConfig = {
+ * const config: BedrockConverseModelConfig = {
  *   modelId: 'global.anthropic.claude-sonnet-4-6',
  *   maxTokens: 1024,
  *   temperature: 0.7,
@@ -190,7 +190,7 @@ function snakeToCamel(str: string): string {
  * }
  * ```
  */
-export interface BedrockModelConfig extends BaseModelConfig {
+export interface BedrockConverseModelConfig extends BaseModelConfig {
   /**
    * Maximum number of tokens to generate in the response.
    *
@@ -262,13 +262,13 @@ export interface BedrockModelConfig extends BaseModelConfig {
    * Guardrail configuration for content filtering and safety controls.
    * @see https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails.html
    */
-  guardrailConfig?: BedrockGuardrailConfig
+  guardrailConfig?: BedrockConverseGuardrailConfig
 }
 
 /**
- * Options for creating a BedrockModel instance.
+ * Options for creating a BedrockConverseModel instance.
  */
-export interface BedrockModelOptions extends BedrockModelConfig {
+export interface BedrockConverseModelOptions extends BedrockConverseModelConfig {
   /**
    * AWS region to use for the Bedrock service.
    */
@@ -295,7 +295,7 @@ export interface BedrockModelOptions extends BedrockModelConfig {
  *
  * @example
  * ```typescript
- * const provider = new BedrockModel({
+ * const provider = new BedrockConverseModel({
  *   modelConfig: {
  *     modelId: 'global.anthropic.claude-sonnet-4-6',
  *     maxTokens: 1024,
@@ -317,24 +317,24 @@ export interface BedrockModelOptions extends BedrockModelConfig {
  * }
  * ```
  */
-export class BedrockModel extends Model<BedrockModelConfig> {
-  private _config: BedrockModelConfig
+export class BedrockConverseModel extends Model<BedrockConverseModelConfig> {
+  private _config: BedrockConverseModelConfig
   private _client: BedrockRuntimeClient
 
   /**
-   * Creates a new BedrockModel instance.
+   * Creates a new BedrockConverseModel instance.
    *
    * @param options - Optional configuration for model and client
    *
    * @example
    * ```typescript
    * // Minimal configuration with defaults
-   * const provider = new BedrockModel({
+   * const provider = new BedrockConverseModel({
    *   region: 'us-west-2'
    * })
    *
    * // With model configuration
-   * const provider = new BedrockModel({
+   * const provider = new BedrockConverseModel({
    *   region: 'us-west-2',
    *   modelId: 'global.anthropic.claude-sonnet-4-6',
    *   maxTokens: 2048,
@@ -343,7 +343,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
    * })
    *
    * // With client configuration
-   * const provider = new BedrockModel({
+   * const provider = new BedrockConverseModel({
    *   region: 'us-east-1',
    *   clientConfig: {
    *     credentials: myCredentials
@@ -351,7 +351,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
    * })
    * ```
    */
-  constructor(options?: BedrockModelOptions) {
+  constructor(options?: BedrockConverseModelOptions) {
     super()
 
     const { region, clientConfig, apiKey, ...modelConfig } = options ?? {}
@@ -439,7 +439,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
    * })
    * ```
    */
-  updateConfig(modelConfig: BedrockModelConfig): void {
+  updateConfig(modelConfig: BedrockConverseModelConfig): void {
     this._config = { ...this._config, ...modelConfig }
   }
 
@@ -454,7 +454,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
    * console.log(config.modelId)
    * ```
    */
-  getConfig(): BedrockModelConfig {
+  getConfig(): BedrockConverseModelConfig {
     return this._config
   }
 

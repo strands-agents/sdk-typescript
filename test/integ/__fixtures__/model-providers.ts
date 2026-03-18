@@ -3,10 +3,10 @@
  */
 
 import { inject } from 'vitest'
-import { BedrockModel, type BedrockModelOptions } from '$/sdk/models/bedrock.js'
-import { OpenAIModel, type OpenAIModelOptions } from '$/sdk/models/openai.js'
-import { AnthropicModel, type AnthropicModelOptions } from '$/sdk/models/anthropic.js'
-import { GeminiModel, type GeminiModelOptions } from '$/sdk/models/gemini/model.js'
+import { ConverseModel, type ConverseModelOptions } from '$/sdk/models/bedrock.js'
+import { ChatModel, type ChatModelOptions } from '$/sdk/models/openai.js'
+import { MessagesModel, type MessagesModelOptions } from '$/sdk/models/anthropic.js'
+import { GenAIModel, type GenAIModelOptions } from '$/sdk/models/google/model.js'
 
 /**
  * Feature support flags for model providers.
@@ -26,7 +26,7 @@ export interface ProviderFeatures {
 }
 
 export const bedrock = {
-  name: 'BedrockModel',
+  name: 'ConverseModel',
   supports: {
     reasoning: true,
     tools: true,
@@ -48,12 +48,12 @@ export const bedrock = {
   get skip() {
     return inject('provider-bedrock').shouldSkip
   },
-  createModel: (options: BedrockModelOptions = {}): BedrockModel => {
+  createModel: (options: ConverseModelOptions = {}): ConverseModel => {
     const credentials = inject('provider-bedrock')?.credentials
     if (!credentials) {
       throw new Error('No Bedrock credentials provided')
     }
-    return new BedrockModel({
+    return new ConverseModel({
       ...options,
       clientConfig: { ...(options.clientConfig ?? {}), credentials },
     })
@@ -61,7 +61,7 @@ export const bedrock = {
 }
 
 export const openai = {
-  name: 'OpenAIModel',
+  name: 'ChatModel',
   supports: {
     reasoning: false,
     tools: true,
@@ -80,12 +80,12 @@ export const openai = {
   get skip() {
     return inject('provider-openai').shouldSkip
   },
-  createModel: (config: OpenAIModelOptions = {}): OpenAIModel => {
+  createModel: (config: ChatModelOptions = {}): ChatModel => {
     const apiKey = inject('provider-openai')?.apiKey
     if (!apiKey) {
       throw new Error('No OpenAI apiKey provided')
     }
-    return new OpenAIModel({
+    return new ChatModel({
       ...config,
       apiKey,
       clientConfig: { ...(config.clientConfig ?? {}), dangerouslyAllowBrowser: true },
@@ -94,7 +94,7 @@ export const openai = {
 }
 
 export const anthropic = {
-  name: 'AnthropicModel',
+  name: 'MessagesModel',
   supports: {
     reasoning: true,
     tools: true,
@@ -116,13 +116,13 @@ export const anthropic = {
   get skip() {
     return inject('provider-anthropic').shouldSkip
   },
-  createModel: (config: AnthropicModelOptions = {}): AnthropicModel => {
+  createModel: (config: MessagesModelOptions = {}): MessagesModel => {
     const apiKey = inject('provider-anthropic')?.apiKey
     if (!apiKey) {
       throw new Error('No Anthropic apiKey provided')
     }
 
-    return new AnthropicModel({
+    return new MessagesModel({
       ...config,
       apiKey: apiKey,
       clientConfig: {
@@ -134,7 +134,7 @@ export const anthropic = {
 }
 
 export const gemini = {
-  name: 'GeminiModel',
+  name: 'GenAIModel',
   supports: {
     reasoning: true,
     tools: true,
@@ -152,19 +152,19 @@ export const gemini = {
       params: { thinkingConfig: { thinkingBudget: 1024, includeThoughts: true } },
     },
     builtInTools: {
-      geminiTools: [{ codeExecution: {} }],
+      builtInTools: [{ codeExecution: {} }],
     },
     video: {},
   },
   get skip() {
     return inject('provider-gemini').shouldSkip
   },
-  createModel: (config: GeminiModelOptions = {}): GeminiModel => {
+  createModel: (config: GenAIModelOptions = {}): GenAIModel => {
     const apiKey = inject('provider-gemini').apiKey
     if (!apiKey) {
       throw new Error('No Gemini apiKey provided')
     }
-    return new GeminiModel({ ...config, apiKey })
+    return new GenAIModel({ ...config, apiKey })
   },
 }
 

@@ -1,5 +1,5 @@
 /**
- * Google Gemini model provider implementation.
+ * Google GenAI model provider implementation.
  *
  * This module provides integration with Google's Gemini API,
  * supporting streaming responses and configurable model parameters.
@@ -18,25 +18,25 @@ import type { StreamOptions } from '../model.js'
 import type { Message } from '../../types/messages.js'
 import type { ModelStreamEvent } from '../streaming.js'
 import { ContextWindowOverflowError, ModelThrottledError } from '../../errors.js'
-import type { GeminiModelConfig, GeminiModelOptions, GeminiStreamState } from './types.js'
-export type { GeminiModelConfig, GeminiModelOptions }
-import { classifyGeminiError } from './errors.js'
+import type { GoogleGenAIModelConfig, GoogleGenAIModelOptions, GoogleGenAIStreamState } from './types.js'
+export type { GoogleGenAIModelConfig, GoogleGenAIModelOptions }
+import { classifyGoogleGenAIError } from './errors.js'
 import { formatMessages, mapChunkToEvents } from './adapters.js'
 
 /**
- * Default Gemini model ID.
+ * Default Google GenAI model ID.
  */
-const DEFAULT_GEMINI_MODEL_ID = 'gemini-2.5-flash'
+const DEFAULT_GOOGLE_GENAI_MODEL_ID = 'gemini-2.5-flash'
 
 /**
- * Google Gemini model provider implementation.
+ * Google GenAI model provider implementation.
  *
  * Implements the Model interface for Google Gemini using the Generative AI API.
  * Supports streaming responses and comprehensive configuration.
  *
  * @example
  * ```typescript
- * const provider = new GeminiModel({
+ * const provider = new GoogleGenAIModel({
  *   apiKey: 'your-api-key',
  *   modelId: 'gemini-2.5-flash',
  *   params: { temperature: 0.7, maxOutputTokens: 1024 }
@@ -53,42 +53,42 @@ const DEFAULT_GEMINI_MODEL_ID = 'gemini-2.5-flash'
  * }
  * ```
  */
-export class GeminiModel extends Model<GeminiModelConfig> {
-  private _config: GeminiModelConfig
+export class GoogleGenAIModel extends Model<GoogleGenAIModelConfig> {
+  private _config: GoogleGenAIModelConfig
   private _client: GoogleGenAI
 
   /**
-   * Creates a new GeminiModel instance.
+   * Creates a new GoogleGenAIModel instance.
    *
    * @param options - Configuration for model and client
    *
    * @example
    * ```typescript
    * // Minimal configuration with API key
-   * const provider = new GeminiModel({
+   * const provider = new GoogleGenAIModel({
    *   apiKey: 'your-api-key'
    * })
    *
    * // With model configuration
-   * const provider = new GeminiModel({
+   * const provider = new GoogleGenAIModel({
    *   apiKey: 'your-api-key',
    *   modelId: 'gemini-2.5-flash',
    *   params: { temperature: 0.8, maxOutputTokens: 2048 }
    * })
    *
    * // Using environment variable for API key
-   * const provider = new GeminiModel({
+   * const provider = new GoogleGenAIModel({
    *   modelId: 'gemini-2.5-flash'
    * })
    *
    * // Using a pre-configured client instance
    * const client = new GoogleGenAI({ apiKey: 'your-api-key' })
-   * const provider = new GeminiModel({
+   * const provider = new GoogleGenAIModel({
    *   client
    * })
    * ```
    */
-  constructor(options?: GeminiModelOptions) {
+  constructor(options?: GoogleGenAIModelOptions) {
     super()
     const { apiKey, client, clientConfig, ...modelConfig } = options || {}
 
@@ -97,7 +97,7 @@ export class GeminiModel extends Model<GeminiModelConfig> {
     if (client) {
       this._client = client
     } else {
-      const resolvedApiKey = apiKey || GeminiModel._getEnvApiKey()
+      const resolvedApiKey = apiKey || GoogleGenAIModel._getEnvApiKey()
 
       if (!resolvedApiKey) {
         throw new Error(
@@ -126,7 +126,7 @@ export class GeminiModel extends Model<GeminiModelConfig> {
    * })
    * ```
    */
-  updateConfig(modelConfig: GeminiModelConfig): void {
+  updateConfig(modelConfig: GoogleGenAIModelConfig): void {
     this._config = { ...this._config, ...modelConfig }
   }
 
@@ -141,7 +141,7 @@ export class GeminiModel extends Model<GeminiModelConfig> {
    * console.log(config.modelId)
    * ```
    */
-  getConfig(): GeminiModelConfig {
+  getConfig(): GoogleGenAIModelConfig {
     return this._config
   }
 
@@ -157,7 +157,7 @@ export class GeminiModel extends Model<GeminiModelConfig> {
    *
    * @example
    * ```typescript
-   * const provider = new GeminiModel({ apiKey: 'your-api-key' })
+   * const provider = new GoogleGenAIModel({ apiKey: 'your-api-key' })
    * const messages: Message[] = [
    *   { role: 'user', content: [{ type: 'textBlock', text: 'What is 2+2?' }] }
    * ]
@@ -178,7 +178,7 @@ export class GeminiModel extends Model<GeminiModelConfig> {
       const params = this._formatRequest(messages, options)
       const stream = await this._client.models.generateContentStream(params)
 
-      const streamState: GeminiStreamState = {
+      const streamState: GoogleGenAIStreamState = {
         messageStarted: false,
         textContentBlockStarted: false,
         reasoningContentBlockStarted: false,
@@ -205,7 +205,7 @@ export class GeminiModel extends Model<GeminiModelConfig> {
       if (!(error instanceof Error)) {
         throw error
       }
-      const errorType = classifyGeminiError(error)
+      const errorType = classifyGoogleGenAIError(error)
 
       if (errorType === 'contextOverflow') {
         throw new ContextWindowOverflowError(error.message)
@@ -283,11 +283,11 @@ export class GeminiModel extends Model<GeminiModelConfig> {
     }
 
     // Append built-in tools (e.g., GoogleSearch, CodeExecution)
-    if (this._config.geminiTools && this._config.geminiTools.length > 0) {
+    if (this._config.builtInTools && this._config.builtInTools.length > 0) {
       if (!config.tools) {
         config.tools = []
       }
-      config.tools.push(...this._config.geminiTools)
+      config.tools.push(...this._config.builtInTools)
     }
 
     // Spread params object for forward compatibility
@@ -296,7 +296,7 @@ export class GeminiModel extends Model<GeminiModelConfig> {
     }
 
     return {
-      model: this._config.modelId ?? DEFAULT_GEMINI_MODEL_ID,
+      model: this._config.modelId ?? DEFAULT_GOOGLE_GENAI_MODEL_ID,
       contents,
       config,
     }

@@ -23,7 +23,7 @@ import {
 } from '@aws-sdk/client-bedrock'
 import { inject } from 'vitest'
 
-describe.skipIf(bedrock.skip)('BedrockModel Integration Tests', () => {
+describe.skipIf(bedrock.skip)('BedrockConverseModel Integration Tests', () => {
   describe('Streaming', () => {
     describe('Configuration', () => {
       it.concurrent('respects maxTokens configuration', async () => {

@@ -7,13 +7,13 @@ describe('index', () => {
       expect(SDK.ContextWindowOverflowError).toBeDefined()
     })
 
-    it('exports BedrockModel', () => {
-      expect(SDK.BedrockModel).toBeDefined()
+    it('exports BedrockConverseModel', () => {
+      expect(SDK.BedrockConverseModel).toBeDefined()
     })
 
-    it('can instantiate BedrockModel', () => {
-      const provider = new SDK.BedrockModel({ region: 'us-west-2' })
-      expect(provider).toBeInstanceOf(SDK.BedrockModel)
+    it('can instantiate BedrockConverseModel', () => {
+      const provider = new SDK.BedrockConverseModel({ region: 'us-west-2' })
+      expect(provider).toBeInstanceOf(SDK.BedrockConverseModel)
       expect(provider.getConfig()).toBeDefined()
     })
 
@@ -24,10 +24,10 @@ describe('index', () => {
         // Error types
         contextError: typeof SDK.ContextWindowOverflowError
         // Model provider
-        provider: typeof SDK.BedrockModel
+        provider: typeof SDK.BedrockConverseModel
       } = {
         contextError: SDK.ContextWindowOverflowError,
-        provider: SDK.BedrockModel,
+        provider: SDK.BedrockConverseModel,
       }
       expect(_typeCheck).toBeDefined()
     })

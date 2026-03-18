@@ -1,16 +1,16 @@
 /**
- * Type definitions for the Gemini model provider.
+ * Type definitions for the Google GenAI model provider.
  */
 
 import type { GoogleGenAI, GoogleGenAIOptions, Tool } from '@google/genai'
 import type { BaseModelConfig } from '../model.js'
 
 /**
- * Configuration interface for Gemini model provider.
+ * Configuration interface for Google GenAI model provider.
  *
  * @example
  * ```typescript
- * const config: GeminiModelConfig = {
+ * const config: GoogleGenAIModelConfig = {
  *   modelId: 'gemini-2.5-flash',
  *   params: { temperature: 0.7, maxOutputTokens: 1024 }
  * }
@@ -18,7 +18,7 @@ import type { BaseModelConfig } from '../model.js'
  *
  * @see https://ai.google.dev/api/generate-content#generationconfig
  */
-export interface GeminiModelConfig extends BaseModelConfig {
+export interface GoogleGenAIModelConfig extends BaseModelConfig {
   /**
    * Gemini model identifier (e.g., gemini-2.5-flash, gemini-2.5-pro).
    *
@@ -40,13 +40,13 @@ export interface GeminiModelConfig extends BaseModelConfig {
    *
    * @see https://ai.google.dev/gemini-api/docs/function-calling
    */
-  geminiTools?: Tool[]
+  builtInTools?: Tool[]
 }
 
 /**
- * Options interface for creating a GeminiModel instance.
+ * Options interface for creating a GoogleGenAIModel instance.
  */
-export interface GeminiModelOptions extends GeminiModelConfig {
+export interface GoogleGenAIModelOptions extends GoogleGenAIModelConfig {
   /**
    * Gemini API key (falls back to GEMINI_API_KEY environment variable).
    */
@@ -68,7 +68,7 @@ export interface GeminiModelOptions extends GeminiModelConfig {
 /**
  * Internal state for tracking streaming progress.
  */
-export interface GeminiStreamState {
+export interface GoogleGenAIStreamState {
   messageStarted: boolean
   textContentBlockStarted: boolean
   reasoningContentBlockStarted: boolean

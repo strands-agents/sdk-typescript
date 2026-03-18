@@ -1,7 +1,7 @@
-import { Agent, BedrockModel, Swarm } from '@strands-agents/sdk'
+import { Agent, BedrockConverseModel, Swarm } from '@strands-agents/sdk'
 
 async function main() {
-  const model = new BedrockModel({ maxTokens: 1024 })
+  const model = new BedrockConverseModel({ maxTokens: 1024 })
 
   // Define swarm agents with descriptions (used for routing decisions)
   const researcher = new Agent({

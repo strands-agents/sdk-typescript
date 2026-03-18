@@ -62,7 +62,7 @@ Leave these out of your PR description:
 ### Type Definition Updates
 
 - Added ApiKeySetter type import from 'openai/client'
-- Updated OpenAIModelOptions interface apiKey type
+- Updated OpenAIChatModelOptions interface apiKey type
 ```
 
 ❌ **Implementation notes reviewers don't need:**
@@ -101,18 +101,18 @@ preventing users from leveraging these capabilities.
 ````markdown
 ## Public API Changes
 
-The `OpenAIModelOptions.apiKey` parameter now accepts either a string or an
+The `OpenAIChatModelOptions.apiKey` parameter now accepts either a string or an
 async function:
 
 ```typescript
 // Before: only string supported
-const model = new OpenAIModel({
+const model = new OpenAIChatModel({
   modelId: 'gpt-4o',
   apiKey: 'sk-...',
 })
 
 // After: function also supported
-const model = new OpenAIModel({
+const model = new OpenAIChatModel({
   modelId: 'gpt-4o',
   apiKey: async () => await secretManager.getApiKey(),
 })

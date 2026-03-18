@@ -3,27 +3,33 @@
  * This script runs in a pure Node.js ES module environment.
  */
 
-const { Agent, BedrockModel, tool, Tool } = require('@strands-agents/sdk')
+const { Agent, BedrockConverseModel, tool, Tool } = require('@strands-agents/sdk')
 
 const { notebook } = require('@strands-agents/sdk/vended-tools/notebook')
 const { fileEditor } = require('@strands-agents/sdk/vended-tools/file-editor')
 const { httpRequest } = require('@strands-agents/sdk/vended-tools/http-request')
 const { bash } = require('@strands-agents/sdk/vended-tools/bash')
 
+// Verify model subpath exports
+const { BedrockConverseModel: BedrockFromSubpath } = require('@strands-agents/sdk/models/bedrock')
+const { OpenAIChatModel } = require('@strands-agents/sdk/models/openai')
+const { AnthropicMessagesModel } = require('@strands-agents/sdk/models/anthropic')
+const { GoogleGenAIModel } = require('@strands-agents/sdk/models/google')
+
 const { z } = require('zod')
 
 console.log('✓ Import from main entry point successful')
 
-// Verify BedrockModel can be instantiated
-const model = new BedrockModel({ region: 'us-west-2' })
-console.log('✓ BedrockModel instantiation successful')
+// Verify BedrockConverseModel can be instantiated
+const model = new BedrockConverseModel({ region: 'us-west-2' })
+console.log('✓ BedrockConverseModel instantiation successful')
 
 // Verify basic functionality
 const config = model.getConfig()
 if (!config) {
-  throw new Error('BedrockModel config is invalid')
+  throw new Error('BedrockConverseModel config is invalid')
 }
-console.log('✓ BedrockModel configuration retrieval successful')
+console.log('✓ BedrockConverseModel configuration retrieval successful')
 
 // Define a tool
 const example_tool = tool({
@@ -73,6 +79,12 @@ async function main() {
       throw new Error(`Tool ${tool.name} isn't an instance of a tool`)
     }
   }
+
+  // Verify model subpath exports resolve correctly
+  if (BedrockFromSubpath !== BedrockConverseModel) {
+    throw new Error('BedrockConverseModel from subpath should match main export')
+  }
+  console.log('✓ Model subpath exports verified')
 }
 
 main().catch((error) => {

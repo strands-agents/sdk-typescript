@@ -7,7 +7,7 @@ import { anthropic } from '../__fixtures__/model-providers.js'
 
 import yellowPngUrl from '../__resources__/yellow.png?url'
 
-describe.skipIf(anthropic.skip)('AnthropicModel Integration Tests', () => {
+describe.skipIf(anthropic.skip)('AnthropicMessagesModel Integration Tests', () => {
   describe('Configuration', () => {
     it.concurrent('respects maxTokens configuration', async () => {
       const provider = anthropic.createModel({ maxTokens: 20 })

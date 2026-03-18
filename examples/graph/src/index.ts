@@ -1,7 +1,7 @@
-import { Agent, BedrockModel, Graph } from '@strands-agents/sdk'
+import { Agent, BedrockConverseModel, Graph } from '@strands-agents/sdk'
 
 async function main() {
-  const model = new BedrockModel({ maxTokens: 1024 })
+  const model = new BedrockConverseModel({ maxTokens: 1024 })
 
   // Define agents as graph nodes
   const researcher = new Agent({

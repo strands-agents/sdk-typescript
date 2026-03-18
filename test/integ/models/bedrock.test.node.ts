@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { bedrock } from '../__fixtures__/model-providers.js'
 import { Agent } from '$/sdk/agent/agent.js'
 
-describe.skipIf(bedrock.skip)('BedrockModel Integration Tests', () => {
+describe.skipIf(bedrock.skip)('BedrockConverseModel Integration Tests', () => {
   describe('Agent with String Model ID', () => {
     it.concurrent('accepts string model ID and creates functional Agent', async () => {
       // Create agent with string model ID

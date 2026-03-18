@@ -278,9 +278,9 @@ it('yields expected stream events', async () => {
 **Example Implementation Test:**
 
 ```typescript
-describe('BedrockModel', () => {
+describe('BedrockConverseModel', () => {
   it('streams messages correctly', async () => {
-    const provider = new BedrockModel(config)
+    const provider = new BedrockConverseModel(config)
     const stream = provider.stream(messages)
 
     for await (const event of stream) {

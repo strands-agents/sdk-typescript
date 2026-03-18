@@ -12,23 +12,23 @@ const DEFAULT_ANTHROPIC_MODEL_ID = 'claude-sonnet-4-6'
 const CONTEXT_WINDOW_OVERFLOW_ERRORS = ['prompt is too long', 'max_tokens exceeded', 'input too long']
 const TEXT_FILE_FORMATS = ['txt', 'md', 'markdown', 'csv', 'json', 'xml', 'html', 'yml', 'yaml', 'js', 'ts', 'py']
 
-export interface AnthropicModelConfig extends BaseModelConfig {
+export interface AnthropicMessagesModelConfig extends BaseModelConfig {
   maxTokens?: number
   stopSequences?: string[]
   params?: Record<string, unknown>
 }
 
-export interface AnthropicModelOptions extends AnthropicModelConfig {
+export interface AnthropicMessagesModelOptions extends AnthropicMessagesModelConfig {
   apiKey?: string
   client?: Anthropic
   clientConfig?: ClientOptions
 }
 
-export class AnthropicModel extends Model<AnthropicModelConfig> {
-  private _config: AnthropicModelConfig
+export class AnthropicMessagesModel extends Model<AnthropicMessagesModelConfig> {
+  private _config: AnthropicMessagesModelConfig
   private _client: Anthropic
 
-  constructor(options?: AnthropicModelOptions) {
+  constructor(options?: AnthropicMessagesModelOptions) {
     super()
     const { apiKey, client, clientConfig, ...modelConfig } = options || {}
 
@@ -61,11 +61,11 @@ export class AnthropicModel extends Model<AnthropicModelConfig> {
     }
   }
 
-  updateConfig(modelConfig: AnthropicModelConfig): void {
+  updateConfig(modelConfig: AnthropicMessagesModelConfig): void {
     this._config = { ...this._config, ...modelConfig }
   }
 
-  getConfig(): AnthropicModelConfig {
+  getConfig(): AnthropicMessagesModelConfig {
     return this._config
   }
 

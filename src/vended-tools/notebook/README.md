@@ -5,7 +5,7 @@ A tool for managing persistent text notebooks within agent sessions. The noteboo
 ## Installation
 
 ```typescript
-import { Agent, BedrockModel } from '@strands-agents/sdk'
+import { Agent, BedrockConverseModel } from '@strands-agents/sdk'
 import { notebook } from '@strands-agents/sdk/vended-tools/notebook'
 ```
 
@@ -14,12 +14,12 @@ import { notebook } from '@strands-agents/sdk/vended-tools/notebook'
 ### Creating an Agent with the Notebook Tool
 
 ```typescript
-import { Agent, BedrockModel } from '@strands-agents/sdk'
+import { Agent, BedrockConverseModel } from '@strands-agents/sdk'
 import { notebook } from '@strands-agents/sdk/vended-tools/notebook'
 
 // Create an agent with the notebook tool
 const agent = new Agent({
-  model: new BedrockModel({
+  model: new BedrockConverseModel({
     region: 'us-east-1',
   }),
   tools: [notebook],
@@ -57,7 +57,7 @@ const savedState = agent.appState.getAll()
 
 // Later, create a new agent with the saved state
 const restoredAgent = new Agent({
-  model: new BedrockModel({
+  model: new BedrockConverseModel({
     region: 'us-east-1',
   }),
   tools: [notebook],
@@ -85,7 +85,7 @@ The agent can perform these operations through natural language:
 
 ```typescript
 const agent = new Agent({
-  model: new BedrockModel({
+  model: new BedrockConverseModel({
     region: 'us-east-1',
   }),
   tools: [notebook],

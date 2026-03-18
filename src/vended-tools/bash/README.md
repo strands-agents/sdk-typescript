@@ -40,11 +40,11 @@ import { bash } from '@strands-agents/sdk/vended-tools/bash'
 
 ```typescript
 import { Agent } from '@strands-agents/sdk'
-import { BedrockModel } from '@strands-agents/sdk'
+import { BedrockConverseModel } from '@strands-agents/sdk'
 import { bash } from '@strands-agents/sdk/vended-tools/bash'
 
 const agent = new Agent({
-  model: new BedrockModel({
+  model: new BedrockConverseModel({
     region: 'us-east-1',
   }),
   tools: [bash],
@@ -61,10 +61,10 @@ Variables, functions, and working directory persist across commands in the same 
 
 ```typescript
 import { Agent } from '@strands-agents/sdk'
-import { BedrockModel } from '@strands-agents/sdk'
+import { BedrockConverseModel } from '@strands-agents/sdk'
 import { bash } from '@strands-agents/sdk/vended-tools/bash'
 
-const model = new BedrockModel({
+const model = new BedrockConverseModel({
   region: 'us-east-1',
 })
 
@@ -87,10 +87,10 @@ Clear all session state and start fresh:
 
 ```typescript
 import { Agent } from '@strands-agents/sdk'
-import { BedrockModel } from '@strands-agents/sdk'
+import { BedrockConverseModel } from '@strands-agents/sdk'
 import { bash } from '@strands-agents/sdk/vended-tools/bash'
 
-const model = new BedrockModel({
+const model = new BedrockConverseModel({
   region: 'us-east-1',
 })
 

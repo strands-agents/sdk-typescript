@@ -98,9 +98,9 @@ Switch between model providers easily:
 **Amazon Bedrock (Default)**
 
 ```typescript
-import { Agent, BedrockModel } from '@strands-agents/sdk'
+import { Agent, BedrockConverseModel } from '@strands-agents/sdk'
 
-const model = new BedrockModel({
+const model = new BedrockConverseModel({
   region: 'us-east-1',
   modelId: 'anthropic.claude-3-5-sonnet-20240620-v1:0',
   maxTokens: 4096,
@@ -114,10 +114,10 @@ const agent = new Agent({ model })
 
 ```typescript
 import { Agent } from '@strands-agents/sdk'
-import { OpenAIModel } from '@strands-agents/sdk/openai'
+import { OpenAIChatModel } from '@strands-agents/sdk/models/openai'
 
 // Automatically uses process.env.OPENAI_API_KEY and defaults to gpt-4o
-const model = new OpenAIModel()
+const model = new OpenAIChatModel()
 
 const agent = new Agent({ model })
 ```
@@ -243,9 +243,9 @@ Coordinate multiple agents using built-in orchestration patterns.
 **Graph** — You define a deterministic execution plan. Agents run as nodes in a directed graph, with edges controlling execution order. Parallel execution is supported, and downstream nodes run once all dependencies complete.
 
 ```typescript
-import { Agent, BedrockModel, Graph } from '@strands-agents/sdk'
+import { Agent, BedrockConverseModel, Graph } from '@strands-agents/sdk'
 
-const model = new BedrockModel({ maxTokens: 1024 })
+const model = new BedrockConverseModel({ maxTokens: 1024 })
 
 const researcher = new Agent({
   model,
@@ -270,9 +270,9 @@ const result = await graph.invoke('What is the largest ocean?')
 **Swarm** — The agents decide the routing. Each agent chooses whether to hand off to another agent or produce a final response, making the execution path dynamic and model-driven.
 
 ```typescript
-import { Agent, BedrockModel, Swarm } from '@strands-agents/sdk'
+import { Agent, BedrockConverseModel, Swarm } from '@strands-agents/sdk'
 
-const model = new BedrockModel({ maxTokens: 1024 })
+const model = new BedrockConverseModel({ maxTokens: 1024 })
 
 const researcher = new Agent({
   model,
