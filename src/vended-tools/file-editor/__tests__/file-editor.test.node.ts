@@ -308,6 +308,17 @@ describe('fileEditor tool', () => {
       expect(fileContent).toBe('Line 1\nNEW LINE\nLine 4')
     })
 
+    it('preserves dollar sign patterns in new_str literally', async () => {
+      const filePath = await createTestFile('test.txt', 'const value = getPrice()')
+      await fileEditor.invoke(
+        { command: 'str_replace', path: filePath, old_str: 'getPrice()', new_str: '$& is not $1 or $$' },
+        context
+      )
+
+      const fileContent = await fs.readFile(filePath, 'utf-8')
+      expect(fileContent).toBe('const value = $& is not $1 or $$')
+    })
+
     describe('error cases', () => {
       it('throws when old_str not found', async () => {
         const filePath = await createTestFile('test.txt', 'Line 1\nLine 2\nLine 3')

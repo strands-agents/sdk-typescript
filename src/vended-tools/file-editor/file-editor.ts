@@ -351,7 +351,7 @@ async function handleStrReplace(
   }
 
   // Perform replacement
-  const newFileContent = fileContent.replace(expandedOldStr, expandedNewStr)
+  const newFileContent = fileContent.replace(expandedOldStr, () => expandedNewStr)
 
   // Write back to file
   await fs.writeFile(filePath, newFileContent, 'utf-8')
