@@ -139,6 +139,7 @@ describe('AgentNode', () => {
         status: Status.COMPLETED,
         content: expect.arrayContaining([expect.objectContaining({ type: 'textBlock', text: 'reply' })]),
         duration: expect.any(Number),
+        usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
       })
     })
 

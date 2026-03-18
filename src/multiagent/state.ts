@@ -1,5 +1,7 @@
 import { StateStore } from '../state-store.js'
 import type { ContentBlock } from '../types/messages.js'
+import type { Usage } from '../models/streaming.js'
+import { accumulateUsage, createEmptyUsage } from '../models/streaming.js'
 import type { z } from 'zod'
 
 /**
@@ -41,6 +43,8 @@ export class NodeResult {
   readonly error?: Error
   /** Validated structured output, if a schema was provided. */
   readonly structuredOutput?: z.output<z.ZodType>
+  /** Token usage from the node execution. */
+  readonly usage?: Usage
 
   constructor(data: {
     nodeId: string
@@ -49,6 +53,7 @@ export class NodeResult {
     content?: ContentBlock[]
     error?: Error
     structuredOutput?: z.output<z.ZodType>
+    usage?: Usage
   }) {
     this.nodeId = data.nodeId
     this.status = data.status
@@ -56,6 +61,7 @@ export class NodeResult {
     this.content = data.content ?? []
     if ('error' in data) this.error = data.error
     if ('structuredOutput' in data) this.structuredOutput = data.structuredOutput
+    if ('usage' in data) this.usage = data.usage
   }
 }
 
@@ -105,6 +111,8 @@ export class MultiAgentResult {
   readonly content: ContentBlock[]
   readonly duration: number
   readonly error?: Error
+  /** Aggregated token usage across all node results. */
+  readonly usage: Usage
 
   constructor(data: {
     status?: ResultStatus
@@ -118,6 +126,7 @@ export class MultiAgentResult {
     this.content = data.content ?? []
     this.duration = data.duration
     if ('error' in data) this.error = data.error
+    this.usage = this._aggregateNodeUsage(data.results)
   }
 
   /** Derives the aggregate status from individual node results. */
@@ -125,6 +134,16 @@ export class MultiAgentResult {
     if (results.some((r) => r.status === Status.FAILED)) return Status.FAILED
     if (results.some((r) => r.status === Status.CANCELLED)) return Status.CANCELLED
     return Status.COMPLETED
+  }
+
+  /** Sums token usage across all node results. */
+  private _aggregateNodeUsage(results: NodeResult[]): Usage {
+    const usage = createEmptyUsage()
+    for (const result of results) {
+      if (!result.usage) continue
+      accumulateUsage(usage, result.usage)
+    }
+    return usage
   }
 }
 

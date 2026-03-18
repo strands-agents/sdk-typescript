@@ -9,6 +9,7 @@ import type { MultiAgentState, NodeResultUpdate } from './state.js'
 import type { MultiAgent } from './multiagent.js'
 import { logger } from '../logging/logger.js'
 import type { z } from 'zod'
+import { normalizeError } from '../errors.js'
 
 /**
  * Known node type identifiers with extensibility for custom nodes.
@@ -91,7 +92,7 @@ export abstract class Node {
         nodeId: this.id,
         status: Status.FAILED,
         duration: Date.now() - nodeState.startTime,
-        error: error instanceof Error ? error : new Error(String(error)),
+        error: normalizeError(error),
       })
       logger.warn(`node_id=<${this.id}>, error=<${result.error?.message}> | node execution failed`)
     } finally {
@@ -191,6 +192,7 @@ export class AgentNode extends Node {
       return {
         content: next.value.lastMessage.content,
         ...('structuredOutput' in next.value && { structuredOutput: next.value.structuredOutput }),
+        ...(next.value.metrics?.accumulatedUsage && { usage: next.value.metrics.accumulatedUsage }),
       }
     } finally {
       if (snapshot) {
@@ -260,7 +262,7 @@ export class MultiAgentNode extends Node {
       }
       next = await gen.next()
     }
-    return { content: next.value.content }
+    return { content: next.value.content, usage: next.value.usage }
   }
 }
 

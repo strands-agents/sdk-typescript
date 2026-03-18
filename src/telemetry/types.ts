@@ -4,6 +4,7 @@
 
 import type { AttributeValue } from '@opentelemetry/api'
 import type { Message, SystemPrompt, ToolResultBlock } from '../types/messages.js'
+import type { InvokeArgs } from '../types/agent.js'
 import type { ToolSpec, ToolUse } from '../tools/types.js'
 import type { Usage, Metrics } from '../models/streaming.js'
 
@@ -108,4 +109,56 @@ export interface StartAgentLoopSpanOptions {
 export interface EndAgentLoopSpanOptions {
   /** Error that caused the loop cycle to fail. */
   error?: Error
+}
+
+/**
+ * Options for starting a multi-agent orchestration span.
+ */
+export interface StartMultiAgentSpanOptions {
+  /** Unique identifier for the orchestrator instance. */
+  orchestratorId: string
+  /** Orchestration pattern type. */
+  orchestratorType: 'graph' | 'swarm'
+  /** Input task or prompt passed to the orchestrator. */
+  input?: InvokeArgs | undefined
+  /** Custom attributes to merge onto the span. */
+  traceAttributes?: Record<string, AttributeValue> | undefined
+}
+
+/**
+ * Options for ending a multi-agent orchestration span.
+ */
+export interface EndMultiAgentSpanOptions {
+  /** Error that caused the orchestration to fail. */
+  error?: Error | undefined
+  /** Total duration of the orchestration in milliseconds. */
+  duration?: number | undefined
+  /** Aggregated token usage across all node executions. */
+  usage?: Usage | undefined
+}
+
+/**
+ * Options for starting a node execution span.
+ */
+export interface StartNodeSpanOptions {
+  /** Unique identifier for the node. */
+  nodeId: string
+  /** Node type identifier (e.g., 'agentNode', 'multiAgentNode'). */
+  nodeType: string
+  /** Custom attributes to merge onto the span. */
+  traceAttributes?: Record<string, AttributeValue> | undefined
+}
+
+/**
+ * Options for ending a node execution span.
+ */
+export interface EndNodeSpanOptions {
+  /** Final status of the node execution. */
+  status?: string | undefined
+  /** Duration of the node execution in milliseconds. */
+  duration?: number | undefined
+  /** Token usage from the node execution. */
+  usage?: Usage | undefined
+  /** Error that caused the node execution to fail. */
+  error?: Error | undefined
 }

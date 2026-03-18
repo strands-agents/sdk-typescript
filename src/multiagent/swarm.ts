@@ -1,4 +1,5 @@
 import { logger } from '../logging/logger.js'
+import type { AttributeValue } from '@opentelemetry/api'
 import type { InvokableAgent } from '../types/agent.js'
 import type { MultiAgentInput } from './multiagent.js'
 import { z } from 'zod'
@@ -24,6 +25,8 @@ import {
   MultiAgentResultEvent,
   NodeCancelEvent,
 } from './events.js'
+import { Tracer } from '../telemetry/tracer.js'
+import { normalizeError } from '../errors.js'
 
 /**
  * Runtime configuration for swarm execution.
@@ -66,6 +69,8 @@ export interface SwarmOptions extends SwarmConfig {
   start?: string
   /** Plugins for event-driven extensibility. */
   plugins?: MultiAgentPlugin[]
+  /** Custom trace attributes to include on all spans. */
+  traceAttributes?: Record<string, AttributeValue>
 }
 
 /**
@@ -102,11 +107,12 @@ export class Swarm implements MultiAgent {
   readonly config: Required<SwarmConfig>
   private readonly _pluginRegistry: MultiAgentPluginRegistry
   private readonly _hookRegistry: HookRegistryImplementation
+  private readonly _tracer: Tracer
   readonly start: AgentNode
   private _initialized: boolean
 
   constructor(options: SwarmOptions) {
-    const { id, nodes, start, plugins, ...config } = options
+    const { id, nodes, start, plugins, traceAttributes, ...config } = options
 
     this.id = id ?? 'swarm'
 
@@ -120,6 +126,7 @@ export class Swarm implements MultiAgent {
 
     this._hookRegistry = new HookRegistryImplementation()
     this._pluginRegistry = new MultiAgentPluginRegistry(plugins)
+    this._tracer = new Tracer(traceAttributes)
     this._initialized = false
   }
 
@@ -187,22 +194,30 @@ export class Swarm implements MultiAgent {
       nodeIds: [...this.nodes.keys()],
     })
 
+    const multiAgentSpan = this._tracer.startMultiAgentSpan({
+      orchestratorId: this.id,
+      orchestratorType: 'swarm',
+      input,
+    })
+
     yield new BeforeMultiAgentInvocationEvent({ orchestrator: this, state })
 
     let node = this.start
     let handoff: HandoffResult | undefined
+    let caughtError: Error | undefined
+    let result: MultiAgentResult | undefined
 
     try {
       while (state.steps < this.config.maxSteps) {
         state.steps++
 
         // Execute current node
-        const result = yield* this._streamNode(node, input, state, handoff)
-        handoff = result.structuredOutput as HandoffResult | undefined
-        state.results.push(result)
+        const nodeResult = yield* this._streamNode(node, input, state, handoff)
+        handoff = nodeResult.structuredOutput as HandoffResult | undefined
+        state.results.push(nodeResult)
 
         // Check for terminal conditions
-        if (result.status === Status.FAILED || !handoff?.agentId) {
+        if (nodeResult.status === Status.FAILED || !handoff?.agentId) {
           break
         }
 
@@ -214,15 +229,25 @@ export class Swarm implements MultiAgent {
       }
 
       this._checkSteps(state, handoff)
+
+      result = new MultiAgentResult({
+        results: state.results,
+        content: this._resolveContent(state),
+        duration: Date.now() - state.startTime,
+      })
+    } catch (error) {
+      caughtError = normalizeError(error)
+      throw caughtError
     } finally {
+      this._tracer.endMultiAgentSpan(multiAgentSpan, {
+        duration: Date.now() - state.startTime,
+        ...(result && { usage: result.usage }),
+        ...(caughtError && { error: caughtError }),
+      })
+
       yield new AfterMultiAgentInvocationEvent({ orchestrator: this, state })
     }
 
-    const result = new MultiAgentResult({
-      results: state.results,
-      content: this._resolveContent(state),
-      duration: Date.now() - state.startTime,
-    })
     yield new MultiAgentResultEvent({ result })
     return result
   }
@@ -235,6 +260,7 @@ export class Swarm implements MultiAgent {
   ): AsyncGenerator<MultiAgentStreamEvent, NodeResult, undefined> {
     const nodeState = state.node(node.id)!
     const handoffSchema = this._buildHandoffSchema(node.id)
+    const nodeSpan = this._tracer.startNodeSpan({ nodeId: node.id, nodeType: node.type })
 
     const beforeEvent = new BeforeNodeCallEvent({ orchestrator: this, state, nodeId: node.id })
     yield beforeEvent
@@ -246,29 +272,36 @@ export class Swarm implements MultiAgent {
       nodeState.results.push(result)
       yield new NodeCancelEvent({ nodeId: node.id, state, message })
       yield new AfterNodeCallEvent({ orchestrator: this, state, nodeId: node.id })
+      this._tracer.endNodeSpan(nodeSpan, { status: Status.CANCELLED, duration: 0 })
       return result
     }
 
     const nodeInput = this._resolveNodeInput(input, handoff)
 
     try {
-      const gen = node.stream(nodeInput, state, { structuredOutputSchema: handoffSchema })
-      let next = await gen.next()
+      const gen = this._tracer.withSpanContext(nodeSpan, () => node.stream(nodeInput, state, { structuredOutputSchema: handoffSchema }))
+      let next = await this._tracer.withSpanContext(nodeSpan, () => gen.next())
       while (!next.done) {
         yield next.value
-        next = await gen.next()
+        next = await this._tracer.withSpanContext(nodeSpan, () => gen.next())
       }
 
+      const result = next.value
+      this._tracer.endNodeSpan(nodeSpan, { status: result.status, duration: result.duration, usage: result.usage })
+
       yield new AfterNodeCallEvent({ orchestrator: this, state, nodeId: node.id })
-      return next.value
+      return result
     } catch (error) {
+      const nodeError = normalizeError(error)
+      this._tracer.endNodeSpan(nodeSpan, { error: nodeError })
+
       yield new AfterNodeCallEvent({
         orchestrator: this,
         state,
         nodeId: node.id,
-        error: error instanceof Error ? error : new Error(String(error)),
+        error: nodeError,
       })
-      throw error
+      throw nodeError
     }
   }
 

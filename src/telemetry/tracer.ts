@@ -38,6 +38,10 @@ import type {
   StartModelInvokeSpanOptions,
   StartToolCallSpanOptions,
   StartAgentLoopSpanOptions,
+  StartMultiAgentSpanOptions,
+  EndMultiAgentSpanOptions,
+  StartNodeSpanOptions,
+  EndNodeSpanOptions,
   Usage,
   Metrics,
 } from './types.js'
@@ -146,6 +150,7 @@ interface AgentTraceState {
  * when configured via setupTracer(). Local traces are lightweight, in-memory timing
  * trees that are always collected regardless of OTel configuration and returned
  * in AgentResult.traces for programmatic access.
+ * 
  *
  */
 export class Tracer {
@@ -189,6 +194,9 @@ export class Tracer {
 
   /** Span for the current agent loop cycle, used to parent model and tool spans. */
   private _loopSpan: Span | undefined
+
+  /** Root span for the current multi-agent orchestration, used to parent node spans. */
+  private _multiAgentSpan: Span | undefined
 
   /**
    * Whether Langfuse is configured as the OTLP endpoint.
@@ -494,6 +502,111 @@ export class Tracer {
     }
   }
   /**
+   * Start a multi-agent orchestration span.
+   * Parents to the current active span from context.active().
+   *
+   * @param options - Options for starting the multi-agent span
+   * @returns The span, or null if span creation failed
+   */
+  startMultiAgentSpan(options: StartMultiAgentSpanOptions): Span | null {
+    const { orchestratorId, orchestratorType, input, traceAttributes } = options
+
+    try {
+      const spanName = `invoke_${orchestratorType} ${orchestratorId}`
+      const attributes: Record<string, AttributeValue> = {
+        ...this._getCommonAttributes(`invoke_${orchestratorType}`),
+        'gen_ai.agent.name': orchestratorType,
+        'gen_ai.agent.id': orchestratorId,
+        name: spanName,
+      }
+      if (input) attributes['gen_ai.agent.input'] = JSON.stringify(input, jsonReplacer)
+
+      const mergedAttributes = { ...attributes, ...this._traceAttributes, ...traceAttributes }
+      const span = this._startSpan({ name: spanName, attributes: mergedAttributes, spanKind: SpanKind.INTERNAL })
+      this._multiAgentSpan = span
+      return span
+    } catch (error) {
+      logger.warn(`error=<${error}> | failed to start multi-agent span`)
+      return null
+    }
+  }
+
+  /**
+   * End a multi-agent orchestration span.
+   *
+   * @param span - The span to end, or null if span creation failed
+   * @param options - Options for ending the span including duration and error
+   */
+  endMultiAgentSpan(span: Span | null, options: EndMultiAgentSpanOptions = {}): void {
+    this._multiAgentSpan = undefined
+
+    if (!span) return
+
+    try {
+      const attributes: Record<string, AttributeValue> = {}
+      if (options.duration !== undefined) attributes['gen_ai.agent.execution_time'] = options.duration
+      if (options.usage) this._setUsageAttributes(attributes, options.usage)
+
+      this._endSpan(span, attributes, options.error)
+    } catch (err) {
+      logger.warn(`error=<${err}> | failed to end multi-agent span`)
+    }
+  }
+
+  /**
+   * Start a node execution span.
+   * Parents to the current active span from context.active().
+   *
+   * @param options - Options for starting the node span
+   * @returns The span, or null if span creation failed
+   */
+  startNodeSpan(options: StartNodeSpanOptions): Span | null {
+    const { nodeId, nodeType, traceAttributes } = options
+
+    try {
+      const spanName = `node ${nodeId}`
+      const attributes: Record<string, AttributeValue> = {
+        ...this._getCommonAttributes('execute_node'),
+        'gen_ai.agent.id': nodeId,
+        'gen_ai.agent.node_type': nodeType,
+        name: spanName,
+      }
+
+      const mergedAttributes = { ...attributes, ...this._traceAttributes, ...traceAttributes }
+      return this._startSpan({
+        name: spanName,
+        attributes: mergedAttributes,
+        spanKind: SpanKind.INTERNAL,
+        ...(this._multiAgentSpan && { parentSpan: this._multiAgentSpan }),
+      })
+    } catch (error) {
+      logger.warn(`error=<${error}> | failed to start node span`)
+      return null
+    }
+  }
+
+  /**
+   * End a node execution span.
+   *
+   * @param span - The span to end, or null if span creation failed
+   * @param options - Options for ending the span including status, duration, and error
+   */
+  endNodeSpan(span: Span | null, options: EndNodeSpanOptions = {}): void {
+    if (!span) return
+
+    try {
+      const attributes: Record<string, AttributeValue> = {}
+      if (options.status) attributes['gen_ai.agent.status'] = options.status
+      if (options.duration !== undefined) attributes['gen_ai.agent.execution_time'] = options.duration
+      if (options.usage) this._setUsageAttributes(attributes, options.usage)
+
+      this._endSpan(span, attributes, options.error)
+    } catch (err) {
+      logger.warn(`error=<${err}> | failed to end node span`)
+    }
+  }
+
+  /**
    * Runs a callback with the given span set as the active OpenTelemetry context.
    * Downstream code (e.g., MCP clients) can read the span from context.active()
    * for distributed trace propagation. No-ops if span is null.
@@ -765,26 +878,30 @@ export class Tracer {
    * Add output event to a span for model invocation.
    */
   private _addOutputEvent(span: Span, message: Message, stopReason?: string): void {
-    const finishReason = stopReason || 'unknown'
+    try {
+      const finishReason = stopReason || 'unknown'
 
-    if (this._useLatestConventions) {
-      this._addEvent(span, 'gen_ai.client.inference.operation.details', {
-        'gen_ai.output.messages': JSON.stringify(
-          [
-            {
-              role: message.role,
-              parts: Tracer._mapContentBlocksToOtelParts(message.content),
-              finish_reason: finishReason,
-            },
-          ],
-          jsonReplacer
-        ),
-      })
-    } else {
-      this._addEvent(span, 'gen_ai.choice', {
-        finish_reason: finishReason,
-        message: JSON.stringify(Tracer._mapContentBlocksToStableFormat(message.content), jsonReplacer),
-      })
+      if (this._useLatestConventions) {
+        this._addEvent(span, 'gen_ai.client.inference.operation.details', {
+          'gen_ai.output.messages': JSON.stringify(
+            [
+              {
+                role: message.role,
+                parts: Tracer._mapContentBlocksToOtelParts(message.content),
+                finish_reason: finishReason,
+              },
+            ],
+            jsonReplacer
+          ),
+        })
+      } else {
+        this._addEvent(span, 'gen_ai.choice', {
+          finish_reason: finishReason,
+          message: JSON.stringify(Tracer._mapContentBlocksToStableFormat(message.content), jsonReplacer),
+        })
+      }
+    } catch (err) {
+      logger.warn(`error=<${err}> | failed to add output event`)
     }
   }
 

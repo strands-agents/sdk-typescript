@@ -534,3 +534,34 @@ export interface Metrics {
    */
   timeToFirstByteMs?: number
 }
+
+/**
+ * Accumulates token usage from a source into a target, mutating the target in place.
+ *
+ * @param target - Usage object to accumulate into
+ * @param source - Usage object to add from
+ */
+export function accumulateUsage(target: Usage, source: Usage): void {
+  target.inputTokens += source.inputTokens
+  target.outputTokens += source.outputTokens
+  target.totalTokens += source.totalTokens
+  if (source.cacheReadInputTokens !== undefined) {
+    target.cacheReadInputTokens = (target.cacheReadInputTokens ?? 0) + source.cacheReadInputTokens
+  }
+  if (source.cacheWriteInputTokens !== undefined) {
+    target.cacheWriteInputTokens = (target.cacheWriteInputTokens ?? 0) + source.cacheWriteInputTokens
+  }
+}
+
+/**
+ * Creates a Usage object with all counters zeroed.
+ *
+ * @returns A Usage object with zeroed counters
+ */
+export function createEmptyUsage(): Usage {
+  return {
+    inputTokens: 0,
+    outputTokens: 0,
+    totalTokens: 0,
+  }
+}

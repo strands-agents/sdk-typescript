@@ -2,6 +2,7 @@ import Anthropic, { type ClientOptions } from '@anthropic-ai/sdk'
 import { Model, type BaseModelConfig, type StreamOptions } from '../models/model.js'
 import type { Message, ContentBlock } from '../types/messages.js'
 import type { ModelStreamEvent } from '../models/streaming.js'
+import { createEmptyUsage } from '../models/streaming.js'
 import { ContextWindowOverflowError, ModelThrottledError, normalizeError } from '../errors.js'
 import type { ImageBlock, DocumentBlock } from '../types/media.js'
 import { encodeBase64 } from '../types/media.js'
@@ -73,13 +74,7 @@ export class AnthropicModel extends Model<AnthropicModelConfig> {
       const request = this._formatRequest(messages, options)
       const stream = this._client.messages.stream(request)
 
-      const usage: {
-        inputTokens: number
-        outputTokens: number
-        totalTokens: number
-        cacheWriteInputTokens?: number
-        cacheReadInputTokens?: number
-      } = { inputTokens: 0, outputTokens: 0, totalTokens: 0 }
+      const usage = createEmptyUsage()
 
       let stopReason = 'endTurn'
 

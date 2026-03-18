@@ -1,3 +1,4 @@
+import type { AttributeValue } from '@opentelemetry/api'
 import type { InvokableAgent } from '../types/agent.js'
 import type { MultiAgentInput } from './multiagent.js'
 import type { ContentBlock } from '../types/messages.js'
@@ -26,6 +27,8 @@ import {
 import type { EdgeDefinition } from './edge.js'
 import { Edge } from './edge.js'
 import { Queue } from './queue.js'
+import { Tracer } from '../telemetry/tracer.js'
+import { normalizeError } from '../errors.js'
 
 /**
  * Runtime configuration for graph execution.
@@ -51,6 +54,8 @@ export interface GraphOptions extends GraphConfig {
   sources?: string[]
   /** Plugins for event-driven extensibility. */
   plugins?: MultiAgentPlugin[]
+  /** Custom trace attributes to include on all spans. */
+  traceAttributes?: Record<string, AttributeValue>
 }
 
 /**
@@ -95,10 +100,11 @@ export class Graph implements MultiAgent {
   private readonly _pluginRegistry: MultiAgentPluginRegistry
   private readonly _hookRegistry: HookRegistryImplementation
   private readonly _sources: Node[]
+  private readonly _tracer: Tracer
   private _initialized: boolean
 
   constructor(options: GraphOptions) {
-    const { id, nodes, edges, sources, plugins, ...config } = options
+    const { id, nodes, edges, sources, plugins, traceAttributes, ...config } = options
 
     this.id = id ?? 'graph'
 
@@ -115,6 +121,7 @@ export class Graph implements MultiAgent {
 
     this._hookRegistry = new HookRegistryImplementation()
     this._pluginRegistry = new MultiAgentPluginRegistry(plugins)
+    this._tracer = new Tracer(traceAttributes)
     this._initialized = false
   }
 
@@ -188,8 +195,16 @@ export class Graph implements MultiAgent {
     const targets = [...this._sources]
     const streams = new Map<string, Promise<void>>()
 
+    const multiAgentSpan = this._tracer.startMultiAgentSpan({
+      orchestratorId: this.id,
+      orchestratorType: 'graph',
+      input,
+    })
+
     yield new BeforeMultiAgentInvocationEvent({ orchestrator: this, state })
 
+    let caughtError: Error | undefined
+    let result: MultiAgentResult | undefined
     try {
       while (targets.length > 0 || streams.size > 0) {
         while (targets.length > 0 && streams.size < this.config.maxConcurrency) {
@@ -217,11 +232,11 @@ export class Graph implements MultiAgent {
             throw data.error
           }
 
-          const { node, result } = data
+          const { node, result: nodeResult } = data
           streams.delete(node.id)
           ack()
 
-          state.results.push(result)
+          state.results.push(nodeResult)
 
           const ready = await this._findReady(node, state, streams, targets)
           if (ready.length > 0) {
@@ -234,17 +249,28 @@ export class Graph implements MultiAgent {
           }
         }
       }
+
+      result = new MultiAgentResult({
+        results: state.results,
+        content: this._resolveContent(state),
+        duration: Date.now() - state.startTime,
+      })
+    } catch (error) {
+      caughtError = normalizeError(error)
+      throw caughtError
     } finally {
       queue.dispose()
       await Promise.allSettled(streams.values())
+
+      this._tracer.endMultiAgentSpan(multiAgentSpan, {
+        duration: Date.now() - state.startTime,
+        ...(result && { usage: result.usage }),
+        ...(caughtError && { error: caughtError }),
+      })
+
       yield new AfterMultiAgentInvocationEvent({ orchestrator: this, state })
     }
 
-    const result = new MultiAgentResult({
-      results: state.results,
-      content: this._resolveContent(state),
-      duration: Date.now() - state.startTime,
-    })
     yield new MultiAgentResultEvent({ result })
     return result
   }
@@ -254,6 +280,8 @@ export class Graph implements MultiAgent {
    */
   private async _streamNode(node: Node, input: MultiAgentInput, state: MultiAgentState, queue: Queue): Promise<void> {
     const nodeState = state.node(node.id)!
+
+    const nodeSpan = this._tracer.startNodeSpan({ nodeId: node.id, nodeType: node.type })
 
     const beforeEvent = new BeforeNodeCallEvent({ orchestrator: this, state, nodeId: node.id })
     await queue.send({ type: 'event', node, event: beforeEvent })
@@ -274,6 +302,7 @@ export class Graph implements MultiAgent {
         node,
         event: new AfterNodeCallEvent({ orchestrator: this, state, nodeId: node.id }),
       })
+      this._tracer.endNodeSpan(nodeSpan, { status: Status.CANCELLED, duration: 0 })
       queue.push({ type: 'result', node, result })
       return
     }
@@ -281,13 +310,15 @@ export class Graph implements MultiAgent {
     try {
       const nodeInput = this._resolveNodeInput(node, input, state)
 
-      const gen = node.stream(nodeInput, state)
-      let next = await gen.next()
+      const gen = this._tracer.withSpanContext(nodeSpan, () => node.stream(nodeInput, state))
+      let next = await this._tracer.withSpanContext(nodeSpan, () => gen.next())
       while (!next.done) {
         await queue.send({ type: 'event', node, event: next.value })
-        next = await gen.next()
+        next = await this._tracer.withSpanContext(nodeSpan, () => gen.next())
       }
-      queue.push({ type: 'result', node, result: next.value })
+      const result = next.value
+      this._tracer.endNodeSpan(nodeSpan, { status: result.status, duration: result.duration, usage: result.usage })
+      queue.push({ type: 'result', node, result })
 
       await queue.send({
         type: 'event',
@@ -295,6 +326,9 @@ export class Graph implements MultiAgent {
         event: new AfterNodeCallEvent({ orchestrator: this, state, nodeId: node.id }),
       })
     } catch (error) {
+      const nodeError = normalizeError(error)
+      this._tracer.endNodeSpan(nodeSpan, { error: nodeError })
+
       await queue.send({
         type: 'event',
         node,
@@ -302,13 +336,13 @@ export class Graph implements MultiAgent {
           orchestrator: this,
           state,
           nodeId: node.id,
-          error: error instanceof Error ? error : new Error(String(error)),
+          error: nodeError,
         }),
       })
       queue.push({
         type: 'error',
         node,
-        error: error instanceof Error ? error : new Error(String(error)),
+        error: nodeError,
       })
     }
   }

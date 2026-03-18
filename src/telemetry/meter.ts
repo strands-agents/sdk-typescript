@@ -13,6 +13,7 @@
 import type { Counter, Histogram, Meter as OtelMeter } from '@opentelemetry/api'
 import { metrics as otelMetrics } from '@opentelemetry/api'
 import type { Usage, Metrics, ModelMetadataEventData } from '../models/streaming.js'
+import { accumulateUsage, createEmptyUsage } from '../models/streaming.js'
 import type { ToolUse } from '../tools/types.js'
 import type { JSONSerializable } from '../types/json.js'
 import { getServiceName } from './utils.js'
@@ -172,7 +173,7 @@ export class AgentMetrics implements JSONSerializable<AgentMetricsData> {
 
   constructor(data?: Partial<AgentMetricsData>) {
     this.cycleCount = data?.cycleCount ?? 0
-    this.accumulatedUsage = data?.accumulatedUsage ?? { inputTokens: 0, outputTokens: 0, totalTokens: 0 }
+    this.accumulatedUsage = data?.accumulatedUsage ?? createEmptyUsage()
     this.accumulatedMetrics = data?.accumulatedMetrics ?? { latencyMs: 0 }
     this.agentInvocations = data?.agentInvocations ?? []
     this.toolMetrics = data?.toolMetrics ?? {}
@@ -259,7 +260,7 @@ export class Meter {
   /**
    * Accumulated token usage across all model invocations.
    */
-  private readonly _accumulatedUsage: Usage = Meter._createEmptyUsage()
+  private readonly _accumulatedUsage: Usage = createEmptyUsage()
 
   /**
    * Accumulated performance metrics across all model invocations.
@@ -336,7 +337,7 @@ export class Meter {
   startNewInvocation(): void {
     this._agentInvocations.push({
       cycles: [],
-      usage: Meter._createEmptyUsage(),
+      usage: createEmptyUsage(),
     })
     this._otelInvocationCounter.add(1)
   }
@@ -358,7 +359,7 @@ export class Meter {
       latestInvocation.cycles.push({
         cycleId: cycleId,
         duration: 0,
-        usage: Meter._createEmptyUsage(),
+        usage: createEmptyUsage(),
       })
     }
 
@@ -472,50 +473,19 @@ export class Meter {
    * @param usage - The usage data to accumulate
    */
   private _updateUsage(usage: Usage): void {
-    Meter._accumulateUsage(this._accumulatedUsage, usage)
+    accumulateUsage(this._accumulatedUsage, usage)
 
     this._otelInputTokens.add(usage.inputTokens)
     this._otelOutputTokens.add(usage.outputTokens)
 
     const latestInvocation = this._latestAgentInvocation
     if (latestInvocation) {
-      Meter._accumulateUsage(latestInvocation.usage, usage)
+      accumulateUsage(latestInvocation.usage, usage)
 
       const cycles = latestInvocation.cycles
       if (cycles.length > 0) {
-        Meter._accumulateUsage(cycles[cycles.length - 1]!.usage, usage)
+        accumulateUsage(cycles[cycles.length - 1]!.usage, usage)
       }
-    }
-  }
-
-  /**
-   * Creates an empty Usage object with all counters set to zero.
-   *
-   * @returns A Usage object with zeroed counters
-   */
-  private static _createEmptyUsage(): Usage {
-    return {
-      inputTokens: 0,
-      outputTokens: 0,
-      totalTokens: 0,
-    }
-  }
-
-  /**
-   * Accumulates token usage from a source into a target Usage object.
-   *
-   * @param target - The Usage object to accumulate into (mutated in place)
-   * @param source - The Usage object to accumulate from
-   */
-  private static _accumulateUsage(target: Usage, source: Usage): void {
-    target.inputTokens += source.inputTokens
-    target.outputTokens += source.outputTokens
-    target.totalTokens += source.totalTokens
-    if (source.cacheReadInputTokens !== undefined) {
-      target.cacheReadInputTokens = (target.cacheReadInputTokens ?? 0) + source.cacheReadInputTokens
-    }
-    if (source.cacheWriteInputTokens !== undefined) {
-      target.cacheWriteInputTokens = (target.cacheWriteInputTokens ?? 0) + source.cacheWriteInputTokens
     }
   }
 }
