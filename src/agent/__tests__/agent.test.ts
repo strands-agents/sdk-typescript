@@ -482,11 +482,18 @@ describe('Agent', () => {
     it('does not create printer when printer is false', async () => {
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
 
-      // Capture any output that would happen if printer was active
+      // Capture any output that would happen if printer was active.
+      // Mock both process.stdout (Node) and console.log (browser) since the printer uses whichever is available.
       const outputs: string[] = []
-      const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation((text) => {
+      // @ts-expect-error -- process is typed as always-defined in Node types, but this check is needed for browser compatibility
+      const stdoutSpy = globalThis.process?.stdout?.write
+        ? vi.spyOn(process.stdout, 'write').mockImplementation((text) => {
+            outputs.push(String(text))
+            return true
+          })
+        : null
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation((text) => {
         outputs.push(String(text))
-        return true
       })
 
       try {
@@ -496,18 +503,26 @@ describe('Agent', () => {
         // With printer disabled, no text should be output to stdout
         expect(outputs.filter((o) => o.includes('Hello'))).toEqual([])
       } finally {
-        writeSpy.mockRestore()
+        stdoutSpy?.mockRestore()
+        consoleSpy.mockRestore()
       }
     })
 
     it('defaults to printer=true when not specified', async () => {
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
 
-      // Capture stdout to verify printer is active by default
+      // Capture output to verify printer is active by default.
+      // Mock both process.stdout (Node) and console.log (browser) since the printer uses whichever is available.
       const outputs: string[] = []
-      const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation((text) => {
+      // @ts-expect-error -- process is typed as always-defined in Node types, but this check is needed for browser compatibility
+      const stdoutSpy = globalThis.process?.stdout?.write
+        ? vi.spyOn(process.stdout, 'write').mockImplementation((text) => {
+            outputs.push(String(text))
+            return true
+          })
+        : null
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation((text) => {
         outputs.push(String(text))
-        return true
       })
 
       try {
@@ -518,7 +533,8 @@ describe('Agent', () => {
         const allOutput = outputs.join('')
         expect(allOutput).toContain('Hello')
       } finally {
-        writeSpy.mockRestore()
+        stdoutSpy?.mockRestore()
+        consoleSpy.mockRestore()
       }
     })
 
