@@ -45,7 +45,10 @@ describe.skipIf(bedrock.skip)('BedrockModel Integration Tests', () => {
       })
 
       it.concurrent('uses system prompt cache on subsequent requests', async () => {
-        const provider = bedrock.createModel({ maxTokens: 100 })
+        const provider = bedrock.createModel({
+          modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
+          maxTokens: 100,
+        })
         const largeContext = `Context information: ${'hello '.repeat(2000)} [test-${Date.now()}-${Math.random()}]`
         const cachedSystemPrompt: SystemContentBlock[] = [
           new TextBlock('You are a helpful assistant.'),
@@ -73,7 +76,10 @@ describe.skipIf(bedrock.skip)('BedrockModel Integration Tests', () => {
       })
 
       it.concurrent('uses message cache points on subsequent requests', async () => {
-        const provider = bedrock.createModel({ maxTokens: 100 })
+        const provider = bedrock.createModel({
+          modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
+          maxTokens: 100,
+        })
         const largeContext = `Context information: ${'hello '.repeat(2000)} [test-${Date.now()}-${Math.random()}]`
         const messagesWithCachePoint = (text: string): Message[] => [
           new Message({
@@ -94,7 +100,11 @@ describe.skipIf(bedrock.skip)('BedrockModel Integration Tests', () => {
       })
 
       it.concurrent('uses cacheConfig to automatically inject cache points in tools and messages', async () => {
-        const provider = bedrock.createModel({ maxTokens: 100, cacheConfig: { strategy: 'auto' } })
+        const provider = bedrock.createModel({
+          modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
+          maxTokens: 100,
+          cacheConfig: { strategy: 'auto' },
+        })
         const largeContext = `Context information: ${'hello '.repeat(2000)} [test-${Date.now()}-${Math.random()}]`
 
         const toolSpecs = [
@@ -121,7 +131,11 @@ describe.skipIf(bedrock.skip)('BedrockModel Integration Tests', () => {
       it.concurrent(
         'uses cacheConfig with explicit anthropic strategy for application inference profiles',
         async () => {
-          const provider = bedrock.createModel({ maxTokens: 100, cacheConfig: { strategy: 'anthropic' } })
+          const provider = bedrock.createModel({
+            modelId: 'us.anthropic.claude-sonnet-4-5-20250929-v1:0',
+            maxTokens: 100,
+            cacheConfig: { strategy: 'anthropic' },
+          })
           const largeContext = `Context information: ${'hello '.repeat(2000)} [test-${Date.now()}-${Math.random()}]`
 
           const messages = [new Message({ role: 'user', content: [new TextBlock(largeContext)] })]
