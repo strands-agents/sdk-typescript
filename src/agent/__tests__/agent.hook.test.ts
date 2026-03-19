@@ -305,6 +305,49 @@ describe('Agent Hooks Integration', () => {
   })
 
   describe('AfterModelCallEvent retry', () => {
+    it('does not duplicate user messages on error retry', async () => {
+      const model = new MockMessageModel()
+        .addTurn(new Error('context overflow'))
+        .addTurn({ type: 'textBlock', text: 'Success' })
+
+      const agent = new Agent({ model, printer: false })
+      agent.addHook(AfterModelCallEvent, (event: AfterModelCallEvent) => {
+        if (event.error) {
+          event.retry = true
+        }
+      })
+
+      await agent.invoke('Hello')
+
+      // Count user messages with "Hello" — should be exactly 1
+      const userMessages = agent.messages.filter(
+        (m) => m.role === 'user' && m.content.some((b) => b.type === 'textBlock' && b.text === 'Hello')
+      )
+      expect(userMessages).toHaveLength(1)
+    })
+
+    it('does not duplicate user messages on success retry', async () => {
+      let callCount = 0
+      const model = new MockMessageModel()
+        .addTurn({ type: 'textBlock', text: 'First' })
+        .addTurn({ type: 'textBlock', text: 'Second' })
+
+      const agent = new Agent({ model, printer: false })
+      agent.addHook(AfterModelCallEvent, (event: AfterModelCallEvent) => {
+        callCount++
+        if (callCount === 1 && !event.error) {
+          event.retry = true
+        }
+      })
+
+      await agent.invoke('Hello')
+
+      const userMessages = agent.messages.filter(
+        (m) => m.role === 'user' && m.content.some((b) => b.type === 'textBlock' && b.text === 'Hello')
+      )
+      expect(userMessages).toHaveLength(1)
+    })
+
     it('retries model call when hook sets retry', async () => {
       let callCount = 0
       const model = new MockMessageModel()

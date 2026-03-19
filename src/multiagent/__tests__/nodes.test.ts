@@ -152,7 +152,7 @@ describe('AgentNode', () => {
       expect(agent.appState.getAll()).toStrictEqual(stateBefore)
     })
 
-    it('passes structuredOutputSchema from state to the agent', async () => {
+    it('passes structuredOutputSchema from options to the agent', async () => {
       const schema = z.object({ agentName: z.string().optional(), message: z.string() })
 
       const model = new MockMessageModel()
@@ -166,9 +166,9 @@ describe('AgentNode', () => {
 
       agent = new Agent({ model, printer: false, id: 'schema-agent' })
       node = new AgentNode({ agent })
-      state = new MultiAgentState({ nodeIds: ['schema-agent'], structuredOutputSchema: schema })
+      state = new MultiAgentState({ nodeIds: ['schema-agent'] })
 
-      const { result } = await collectGenerator(node.stream('test', state))
+      const { result } = await collectGenerator(node.stream('test', state, { structuredOutputSchema: schema }))
 
       expect(result.structuredOutput).toStrictEqual({ message: 'hello' })
     })

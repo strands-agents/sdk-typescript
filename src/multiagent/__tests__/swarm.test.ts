@@ -177,6 +177,30 @@ describe('Swarm', () => {
       expect(texts).toContainEqual(expect.stringContaining(JSON.stringify(contextData, null, 2)))
     })
 
+    it('excludes current agent from handoff schema', async () => {
+      const agentA = createHandoffAgent('a', { agentId: 'b', message: 'go to b' })
+      const agentB = createFinalAgent('b', 'done')
+      const streamSpyA = vi.spyOn(agentA, 'stream')
+      const streamSpyB = vi.spyOn(agentB, 'stream')
+
+      const swarm = new Swarm({
+        nodes: [agentA, agentB],
+        start: 'a',
+      })
+
+      await swarm.invoke('start')
+
+      // Agent A's handoff schema allows B but rejects A
+      const schemaA = streamSpyA.mock.calls[0]![1]!.structuredOutputSchema!
+      expect(schemaA.parse({ agentId: 'b', message: 'ok' })).toStrictEqual({ agentId: 'b', message: 'ok' })
+      expect(() => schemaA.parse({ agentId: 'a', message: 'ok' })).toThrow()
+
+      // Agent B's handoff schema allows A but rejects B
+      const schemaB = streamSpyB.mock.calls[0]![1]!.structuredOutputSchema!
+      expect(schemaB.parse({ agentId: 'a', message: 'ok' })).toStrictEqual({ agentId: 'a', message: 'ok' })
+      expect(() => schemaB.parse({ agentId: 'b', message: 'ok' })).toThrow()
+    })
+
     it('throws when maxSteps is exceeded', async () => {
       const swarm = new Swarm({
         nodes: [createHandoffAgent('a', { agentId: 'b', message: 'to b' }), createFinalAgent('b', 'done')],

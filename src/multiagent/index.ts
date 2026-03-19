@@ -6,7 +6,14 @@ export { MultiAgentState, NodeState, Status, NodeResult, MultiAgentResult } from
 export type { NodeResultUpdate, ResultStatus } from './state.js'
 
 export { Node, AgentNode, MultiAgentNode } from './nodes.js'
-export type { NodeConfig, AgentNodeOptions, MultiAgentNodeOptions, NodeDefinition, NodeType } from './nodes.js'
+export type {
+  NodeConfig,
+  NodeInputOptions,
+  AgentNodeOptions,
+  MultiAgentNodeOptions,
+  NodeDefinition,
+  NodeType,
+} from './nodes.js'
 
 export {
   MultiAgentInitializedEvent,

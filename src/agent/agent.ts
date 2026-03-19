@@ -495,8 +495,16 @@ export class Agent implements LocalAgent, InvokableAgent {
         })
 
         try {
-          const modelResult = yield* this.invokeModel(currentArgs, forcedToolChoice)
-          currentArgs = undefined // Only pass args on first invocation
+          // Normalize input and append user messages on first invocation only
+          if (currentArgs !== undefined) {
+            const messagesToAppend = this._normalizeInput(currentArgs)
+            for (const message of messagesToAppend) {
+              yield this._appendMessage(message)
+            }
+            currentArgs = undefined
+          }
+
+          const modelResult = yield* this.invokeModel(forcedToolChoice)
           const wasForced = forcedToolChoice !== undefined
           forcedToolChoice = undefined // Clear after use
 
@@ -660,15 +668,8 @@ export class Agent implements LocalAgent, InvokableAgent {
    * @returns Object containing the assistant message, stop reason, and optional redaction message
    */
   private async *invokeModel(
-    args?: InvokeArgs,
     forcedToolChoice?: ToolChoice
   ): AsyncGenerator<AgentStreamEvent, StreamAggregatedResult, undefined> {
-    // Normalize input and append messages to conversation
-    const messagesToAppend = this._normalizeInput(args)
-    for (const message of messagesToAppend) {
-      yield this._appendMessage(message)
-    }
-
     const toolSpecs = this._toolRegistry.list().map((tool) => tool.toolSpec)
     const streamOptions: StreamOptions = { toolSpecs }
     if (this.systemPrompt !== undefined) {
@@ -723,7 +724,7 @@ export class Agent implements LocalAgent, InvokableAgent {
       yield afterModelCallEvent
 
       if (afterModelCallEvent.retry) {
-        return yield* this.invokeModel(args)
+        return yield* this.invokeModel(forcedToolChoice)
       }
 
       return result
@@ -741,7 +742,7 @@ export class Agent implements LocalAgent, InvokableAgent {
 
       // After yielding, hooks have been invoked and may have set retry
       if (errorEvent.retry) {
-        return yield* this.invokeModel(args)
+        return yield* this.invokeModel(forcedToolChoice)
       }
 
       // Re-throw error
