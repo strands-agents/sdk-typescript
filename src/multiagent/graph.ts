@@ -11,7 +11,7 @@ import { MultiAgentPluginRegistry } from './plugins.js'
 import type { NodeDefinition } from './nodes.js'
 import { AgentNode, MultiAgentNode, Node } from './nodes.js'
 import { MultiAgentState, MultiAgentResult, NodeResult, Status } from './state.js'
-import type { MultiAgent } from './multiagent.js'
+import type { MultiAgent, MultiAgentOptions } from './multiagent.js'
 import { Swarm } from './swarm.js'
 import type { MultiAgentStreamEvent } from './events.js'
 import {
@@ -143,8 +143,8 @@ export class Graph implements MultiAgent {
    * @param input - The input to pass to entry point nodes
    * @returns Promise resolving to the final MultiAgentResult
    */
-  async invoke(input: MultiAgentInput): Promise<MultiAgentResult> {
-    const gen = this.stream(input)
+  async invoke(input: MultiAgentInput, options?: MultiAgentOptions): Promise<MultiAgentResult> {
+    const gen = this.stream(input, options)
     let next = await gen.next()
     while (!next.done) {
       next = await gen.next()
@@ -170,10 +170,13 @@ export class Graph implements MultiAgent {
    * @param input - The input to pass to entry nodes
    * @returns Async generator yielding streaming events and returning a MultiAgentResult
    */
-  async *stream(input: MultiAgentInput): AsyncGenerator<MultiAgentStreamEvent, MultiAgentResult, undefined> {
+  async *stream(
+    input: MultiAgentInput,
+    options?: MultiAgentOptions
+  ): AsyncGenerator<MultiAgentStreamEvent, MultiAgentResult, undefined> {
     await this.initialize()
 
-    const gen = this._stream(input)
+    const gen = this._stream(input, options?.signal)
     try {
       let next = await gen.next()
       while (!next.done) {
@@ -189,7 +192,10 @@ export class Graph implements MultiAgent {
     }
   }
 
-  private async *_stream(input: MultiAgentInput): AsyncGenerator<MultiAgentStreamEvent, MultiAgentResult, undefined> {
+  private async *_stream(
+    input: MultiAgentInput,
+    signal?: AbortSignal
+  ): AsyncGenerator<MultiAgentStreamEvent, MultiAgentResult, undefined> {
     const state = new MultiAgentState({ nodeIds: [...this.nodes.keys()] })
 
     const queue = new Queue()
@@ -208,13 +214,14 @@ export class Graph implements MultiAgent {
     let result: MultiAgentResult | undefined
     try {
       while (targets.length > 0 || streams.size > 0) {
+        if (signal?.aborted) break
         while (targets.length > 0 && streams.size < this.config.maxConcurrency) {
           const node = targets.shift()!
 
           this._checkSteps(state)
           state.steps++
 
-          streams.set(node.id, this._streamNode(node, input, state, queue, multiAgentSpan))
+          streams.set(node.id, this._streamNode(node, input, state, queue, multiAgentSpan, signal))
         }
 
         await queue.wait()
@@ -252,6 +259,7 @@ export class Graph implements MultiAgent {
       }
 
       result = new MultiAgentResult({
+        ...(signal?.aborted && { status: Status.CANCELLED }),
         results: state.results,
         content: this._resolveContent(state),
         duration: Date.now() - state.startTime,
@@ -284,7 +292,8 @@ export class Graph implements MultiAgent {
     input: MultiAgentInput,
     state: MultiAgentState,
     queue: Queue,
-    multiAgentSpan: Span | null
+    multiAgentSpan: Span | null,
+    signal?: AbortSignal
   ): Promise<void> {
     const nodeState = state.node(node.id)!
 
@@ -319,7 +328,9 @@ export class Graph implements MultiAgent {
     try {
       const nodeInput = this._resolveNodeInput(node, input, state)
 
-      const gen = this._tracer.withSpanContext(nodeSpan, () => node.stream(nodeInput, state))
+      const gen = this._tracer.withSpanContext(nodeSpan, () =>
+        node.stream(nodeInput, state, signal ? { signal } : undefined)
+      )
       let next = await this._tracer.withSpanContext(nodeSpan, () => gen.next())
       while (!next.done) {
         await queue.send({ type: 'event', node, event: next.value })

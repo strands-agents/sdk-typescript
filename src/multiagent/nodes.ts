@@ -34,6 +34,10 @@ export interface NodeInputOptions {
    * Structured output schema for this node invocation.
    */
   structuredOutputSchema?: z.ZodSchema
+  /**
+   * Optional abort signal to cancel node execution.
+   */
+  signal?: AbortSignal
 }
 
 /**
@@ -172,6 +176,7 @@ export class AgentNode extends Node {
     try {
       const invokeOptions: InvokeOptions = {
         ...(options?.structuredOutputSchema && { structuredOutputSchema: options.structuredOutputSchema }),
+        ...(options?.signal && { signal: options.signal }),
       }
 
       const gen = this._agent.stream(input, invokeOptions)
@@ -238,15 +243,15 @@ export class MultiAgentNode extends Node {
    *
    * @param input - Input to pass to the orchestrator
    * @param state - The current multi-agent state
-   * @param _options - Per-invocation options (unused by orchestrator nodes)
+   * @param options - Per-invocation options from the orchestrator
    * @returns Async generator yielding streaming events and returning the orchestrator's content
    */
   async *handle(
     input: MultiAgentInput,
     state: MultiAgentState,
-    _options?: NodeInputOptions
+    options?: NodeInputOptions
   ): AsyncGenerator<MultiAgentStreamEvent, NodeResultUpdate, undefined> {
-    const gen = this._orchestrator.stream(input)
+    const gen = this._orchestrator.stream(input, options?.signal ? { signal: options.signal } : undefined)
     let next = await gen.next()
     while (!next.done) {
       const event = next.value

@@ -40,4 +40,4 @@ export type { SwarmConfig, SwarmNodeDefinition, SwarmOptions } from './swarm.js'
 
 export type { MultiAgentPlugin } from './plugins.js'
 
-export type { MultiAgent, MultiAgentInput } from './multiagent.js'
+export type { MultiAgent, MultiAgentInput, MultiAgentOptions } from './multiagent.js'

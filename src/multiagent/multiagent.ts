@@ -12,6 +12,18 @@ import type { MultiAgentResult } from './state.js'
 export type MultiAgentInput = Exclude<InvokeArgs, Message[] | MessageData[]>
 
 /**
+ * Options for multi-agent orchestrator invocations.
+ */
+export interface MultiAgentOptions {
+  /**
+   * AbortSignal to cancel the orchestration.
+   * When aborted, the orchestrator stops launching new nodes and returns
+   * a result with status CANCELLED containing any partial results.
+   */
+  signal?: AbortSignal
+}
+
+/**
  * Interface for any multi-agent orchestrator that can stream execution.
  * Implement this interface to create custom orchestration patterns that can be
  * composed as nodes within other orchestrators via {@link MultiAgentNode}.
@@ -23,16 +35,18 @@ export interface MultiAgent {
   /**
    * Execute the orchestrator and return the final result.
    * @param input - Input to pass to the orchestrator
+   * @param options - Optional invocation options (e.g. abort signal)
    * @returns The aggregate result from all executed nodes
    */
-  invoke(input: MultiAgentInput): Promise<MultiAgentResult>
+  invoke(input: MultiAgentInput, options?: MultiAgentOptions): Promise<MultiAgentResult>
 
   /**
    * Execute the orchestrator and stream events as they occur.
    * @param input - Input to pass to the orchestrator
+   * @param options - Optional invocation options (e.g. abort signal)
    * @returns Async generator yielding events and returning the final result
    */
-  stream(input: MultiAgentInput): AsyncGenerator<MultiAgentStreamEvent, MultiAgentResult, undefined>
+  stream(input: MultiAgentInput, options?: MultiAgentOptions): AsyncGenerator<MultiAgentStreamEvent, MultiAgentResult, undefined>
 
   /**
    * Register a hook callback for a specific orchestrator event type.

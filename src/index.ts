@@ -240,3 +240,4 @@ export { AgentMetrics } from './telemetry/meter.js'
 // Multi-agent orchestration
 export { Graph } from './multiagent/index.js'
 export { Swarm } from './multiagent/index.js'
+export type { MultiAgentOptions } from './multiagent/index.js'

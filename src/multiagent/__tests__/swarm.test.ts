@@ -294,6 +294,23 @@ describe('Swarm', () => {
     })
   })
 
+  describe('abort signal', () => {
+    it('stops execution when signal is already aborted', async () => {
+      const swarm = new Swarm({
+        nodes: [createHandoffAgent('a', { agentId: 'b', message: 'go' }), createFinalAgent('b', 'done')],
+        start: 'a',
+      })
+
+      const controller = new AbortController()
+      controller.abort()
+
+      const result = await swarm.invoke('start', { signal: controller.signal })
+
+      expect(result.status).toBe(Status.CANCELLED)
+      expect(result.results).toHaveLength(0)
+    })
+  })
+
   describe('stream', () => {
     it('yields lifecycle events in correct order for single agent', async () => {
       const swarm = new Swarm({

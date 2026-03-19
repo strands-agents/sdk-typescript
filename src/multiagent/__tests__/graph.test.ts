@@ -488,6 +488,23 @@ describe('Graph', () => {
     })
   })
 
+  describe('abort signal', () => {
+    it('stops execution when signal is already aborted', async () => {
+      const graph = new Graph({
+        nodes: [makeAgent('a'), makeAgent('b')],
+        edges: [['a', 'b']],
+      })
+
+      const controller = new AbortController()
+      controller.abort()
+
+      const result = await graph.invoke('start', { signal: controller.signal })
+
+      expect(result.status).toBe(Status.CANCELLED)
+      expect(result.results).toHaveLength(0)
+    })
+  })
+
   describe('stream', () => {
     it('yields lifecycle events in correct order for single node', async () => {
       const graph = new Graph({

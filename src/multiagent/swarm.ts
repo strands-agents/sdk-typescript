@@ -13,7 +13,7 @@ import { TextBlock } from '../types/messages.js'
 import type { AgentNodeOptions } from './nodes.js'
 import { AgentNode } from './nodes.js'
 import { MultiAgentState, MultiAgentResult, NodeResult, Status } from './state.js'
-import type { MultiAgent } from './multiagent.js'
+import type { MultiAgent, MultiAgentOptions } from './multiagent.js'
 import type { MultiAgentStreamEvent } from './events.js'
 import {
   AfterMultiAgentInvocationEvent,
@@ -158,8 +158,8 @@ export class Swarm implements MultiAgent {
    * @param input - The input to pass to the start agent
    * @returns Promise resolving to the final MultiAgentResult
    */
-  async invoke(input: MultiAgentInput): Promise<MultiAgentResult> {
-    const gen = this.stream(input)
+  async invoke(input: MultiAgentInput, options?: MultiAgentOptions): Promise<MultiAgentResult> {
+    const gen = this.stream(input, options)
     let next = await gen.next()
     while (!next.done) {
       next = await gen.next()
@@ -174,10 +174,13 @@ export class Swarm implements MultiAgent {
    * @param input - The input to pass to the start agent
    * @returns Async generator yielding streaming events and returning a MultiAgentResult
    */
-  async *stream(input: MultiAgentInput): AsyncGenerator<MultiAgentStreamEvent, MultiAgentResult, undefined> {
+  async *stream(
+    input: MultiAgentInput,
+    options?: MultiAgentOptions
+  ): AsyncGenerator<MultiAgentStreamEvent, MultiAgentResult, undefined> {
     await this.initialize()
 
-    const gen = this._stream(input)
+    const gen = this._stream(input, options?.signal)
     let next = await gen.next()
     while (!next.done) {
       if (next.value instanceof HookableEvent) {
@@ -189,7 +192,10 @@ export class Swarm implements MultiAgent {
     return next.value
   }
 
-  private async *_stream(input: MultiAgentInput): AsyncGenerator<MultiAgentStreamEvent, MultiAgentResult, undefined> {
+  private async *_stream(
+    input: MultiAgentInput,
+    signal?: AbortSignal
+  ): AsyncGenerator<MultiAgentStreamEvent, MultiAgentResult, undefined> {
     const state = new MultiAgentState({
       nodeIds: [...this.nodes.keys()],
     })
@@ -209,10 +215,11 @@ export class Swarm implements MultiAgent {
 
     try {
       while (state.steps < this.config.maxSteps) {
+        if (signal?.aborted) break
         state.steps++
 
         // Execute current node
-        const nodeResult = yield* this._streamNode(node, input, state, handoff, multiAgentSpan)
+        const nodeResult = yield* this._streamNode(node, input, state, handoff, multiAgentSpan, signal)
         handoff = nodeResult.structuredOutput as HandoffResult | undefined
         state.results.push(nodeResult)
 
@@ -231,6 +238,7 @@ export class Swarm implements MultiAgent {
       this._checkSteps(state, handoff)
 
       result = new MultiAgentResult({
+        ...(signal?.aborted && { status: Status.CANCELLED }),
         results: state.results,
         content: this._resolveContent(state),
         duration: Date.now() - state.startTime,
@@ -257,7 +265,8 @@ export class Swarm implements MultiAgent {
     input: MultiAgentInput,
     state: MultiAgentState,
     handoff: HandoffResult | undefined,
-    multiAgentSpan: Span | null
+    multiAgentSpan: Span | null,
+    signal?: AbortSignal
   ): AsyncGenerator<MultiAgentStreamEvent, NodeResult, undefined> {
     const nodeState = state.node(node.id)!
     const handoffSchema = this._buildHandoffSchema(node.id)
@@ -283,7 +292,7 @@ export class Swarm implements MultiAgent {
 
     try {
       const gen = this._tracer.withSpanContext(nodeSpan, () =>
-        node.stream(nodeInput, state, { structuredOutputSchema: handoffSchema })
+        node.stream(nodeInput, state, { structuredOutputSchema: handoffSchema, ...(signal && { signal }) })
       )
       let next = await this._tracer.withSpanContext(nodeSpan, () => gen.next())
       while (!next.done) {
@@ -345,7 +354,8 @@ export class Swarm implements MultiAgent {
   }
 
   private _resolveContent(state: MultiAgentState): ContentBlock[] {
-    const last = state.results[state.results.length - 1]!
+    const last = state.results[state.results.length - 1]
+    if (!last) return []
     state.node(last.nodeId)!.terminus = true
 
     const handoff = last.structuredOutput as HandoffResult | undefined
