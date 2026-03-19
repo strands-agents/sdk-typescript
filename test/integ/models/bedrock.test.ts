@@ -450,6 +450,7 @@ describe.skipIf(bedrock.skip)('BedrockModel Integration Tests', () => {
         'blocks output without redaction in %s mode',
         async (processingMode) => {
           const model = bedrock.createModel({
+            modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
             region: 'us-east-1',
             guardrailConfig: {
               guardrailIdentifier: GUARDRAIL_ID!,
