@@ -172,3 +172,17 @@ export class ToolValidationError extends Error {
     this.name = 'ToolValidationError'
   }
 }
+
+/**
+ * Error thrown when the model retry limit is exceeded.
+ *
+ * This error indicates that hooks requested more retries than the configured
+ * maximum via `AfterModelCallEvent.retry`. This prevents infinite recursion
+ * from buggy retry hooks.
+ */
+export class ModelRetryLimitError extends ModelError {
+  constructor(maxRetries: number) {
+    super(`Model retry limit (${maxRetries}) exceeded. Configure maxModelRetries in AgentConfig to adjust.`)
+    this.name = 'ModelRetryLimitError'
+  }
+}

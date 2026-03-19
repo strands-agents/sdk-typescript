@@ -17,6 +17,7 @@ import { MockPlugin } from '../../__fixtures__/mock-plugin.js'
 import { collectIterator } from '../../__fixtures__/model-test-helpers.js'
 import { createMockTool } from '../../__fixtures__/tool-helpers.js'
 import { Message, TextBlock, ToolResultBlock } from '../../types/messages.js'
+import { ModelRetryLimitError } from '../../errors.js'
 
 describe('Agent Hooks Integration', () => {
   let mockPlugin: MockPlugin
@@ -393,6 +394,73 @@ describe('Agent Hooks Integration', () => {
 
       expect(result.lastMessage.content[0]).toEqual({ type: 'textBlock', text: 'Second response after retry' })
       expect(callCount).toBe(2)
+    })
+
+    it('throws ModelRetryLimitError when error retry hook always retries', async () => {
+      // Model that always fails
+      const turns = Array.from({ length: 10 }, () => new Error('always fails'))
+      const model = new MockMessageModel()
+      for (const t of turns) model.addTurn(t)
+
+      const agent = new Agent({ model, maxModelRetries: 3 })
+      agent.addHook(AfterModelCallEvent, (event: AfterModelCallEvent) => {
+        if (event.error) {
+          event.retry = true
+        }
+      })
+
+      await expect(agent.invoke('Test')).rejects.toThrow(ModelRetryLimitError)
+    })
+
+    it('throws ModelRetryLimitError when success retry hook always retries', async () => {
+      const turns = Array.from({ length: 10 }, () => ({ type: 'textBlock' as const, text: 'response' }))
+      const model = new MockMessageModel()
+      for (const t of turns) model.addTurn(t)
+
+      const agent = new Agent({ model, maxModelRetries: 2 })
+      agent.addHook(AfterModelCallEvent, (event: AfterModelCallEvent) => {
+        event.retry = true
+      })
+
+      await expect(agent.invoke('Test')).rejects.toThrow(ModelRetryLimitError)
+    })
+
+    it('respects custom maxModelRetries value', async () => {
+      let callCount = 0
+      const turns = Array.from({ length: 10 }, () => new Error('fail'))
+      const model = new MockMessageModel()
+      for (const t of turns) model.addTurn(t)
+
+      const agent = new Agent({ model, maxModelRetries: 4 })
+      agent.addHook(AfterModelCallEvent, (event: AfterModelCallEvent) => {
+        callCount++
+        if (event.error) {
+          event.retry = true
+        }
+      })
+
+      await expect(agent.invoke('Test')).rejects.toThrow(ModelRetryLimitError)
+      // 1 initial + 4 retries = 5 calls
+      expect(callCount).toBe(5)
+    })
+
+    it('uses default maxModelRetries of 5', async () => {
+      let callCount = 0
+      const turns = Array.from({ length: 10 }, () => new Error('fail'))
+      const model = new MockMessageModel()
+      for (const t of turns) model.addTurn(t)
+
+      const agent = new Agent({ model })
+      agent.addHook(AfterModelCallEvent, (event: AfterModelCallEvent) => {
+        callCount++
+        if (event.error) {
+          event.retry = true
+        }
+      })
+
+      await expect(agent.invoke('Test')).rejects.toThrow(ModelRetryLimitError)
+      // 1 initial + 5 retries = 6 calls
+      expect(callCount).toBe(6)
     })
   })
 

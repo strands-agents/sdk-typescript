@@ -24,7 +24,7 @@ import { McpClient } from '../mcp.js'
 import { type Tool, type ToolContext } from '../tools/tool.js'
 import type { ToolChoice } from '../tools/types.js'
 import { systemPromptFromData } from '../types/messages.js'
-import { normalizeError, ConcurrentInvocationError, MaxTokensError } from '../errors.js'
+import { normalizeError, ConcurrentInvocationError, MaxTokensError, ModelRetryLimitError } from '../errors.js'
 import { Model } from '../models/model.js'
 import type { BaseModelConfig, StreamAggregatedResult, StreamOptions } from '../models/model.js'
 import { isModelStreamEvent } from '../models/streaming.js'
@@ -153,6 +153,11 @@ export type AgentConfig = {
    * Optional unique identifier for the agent. Defaults to "agent".
    */
   id?: string
+  /**
+   * Maximum number of times hooks can retry a model call via AfterModelCallEvent.retry.
+   * Prevents infinite recursion from buggy retry hooks. Defaults to 5.
+   */
+  maxModelRetries?: number
 }
 
 /** Default name assigned to agents when none is provided. */
@@ -211,6 +216,8 @@ export class Agent implements LocalAgent, InvokableAgent {
   private _isInvoking: boolean = false
   private _printer?: Printer
   private _structuredOutputSchema?: z.ZodSchema | undefined
+  /** Maximum number of hook-driven model retries before throwing. */
+  private readonly _maxModelRetries: number
   /** Tracer instance for creating and managing OpenTelemetry spans. */
   private _tracer: Tracer
   /** Meter instance for accumulating loop metrics during invocation. */
@@ -261,6 +268,9 @@ export class Agent implements LocalAgent, InvokableAgent {
 
     // Store structured output schema
     this._structuredOutputSchema = config?.structuredOutputSchema
+
+    // Store max model retries (default 5)
+    this._maxModelRetries = config?.maxModelRetries ?? 5
 
     // Initialize tracer - OTEL returns no-op tracer if not configured
     this._tracer = new Tracer(config?.traceAttributes)
@@ -670,83 +680,89 @@ export class Agent implements LocalAgent, InvokableAgent {
   private async *invokeModel(
     forcedToolChoice?: ToolChoice
   ): AsyncGenerator<AgentStreamEvent, StreamAggregatedResult, undefined> {
-    const toolSpecs = this._toolRegistry.list().map((tool) => tool.toolSpec)
-    const streamOptions: StreamOptions = { toolSpecs }
-    if (this.systemPrompt !== undefined) {
-      streamOptions.systemPrompt = this.systemPrompt
-    }
+    for (let attempt = 0; ; attempt++) {
+      if (attempt > this._maxModelRetries) {
+        throw new ModelRetryLimitError(this._maxModelRetries)
+      }
 
-    // Add tool choice if provided (for structured output forcing)
-    if (forcedToolChoice) {
-      streamOptions.toolChoice = forcedToolChoice
-    }
+      const toolSpecs = this._toolRegistry.list().map((tool) => tool.toolSpec)
+      const streamOptions: StreamOptions = { toolSpecs }
+      if (this.systemPrompt !== undefined) {
+        streamOptions.systemPrompt = this.systemPrompt
+      }
 
-    yield new BeforeModelCallEvent({ agent: this })
+      // Add tool choice if provided (for structured output forcing)
+      if (forcedToolChoice) {
+        streamOptions.toolChoice = forcedToolChoice
+      }
 
-    // Start model span within loop span context
-    const modelId = this.model.modelId
-    const modelSpan = this._tracer.startModelInvokeSpan({
-      messages: this.messages,
-      ...(modelId && { modelId }),
-      ...(this.systemPrompt !== undefined && { systemPrompt: this.systemPrompt }),
-    })
+      yield new BeforeModelCallEvent({ agent: this })
 
-    try {
-      const result = yield* this._streamFromModel(this.messages, streamOptions)
-
-      // Accumulate token usage and model latency metrics
-      this._meter.updateCycle(result.metadata)
-
-      // End model span with usage
-      const usage = result.metadata?.usage
-      const metrics = result.metadata?.metrics
-      this._tracer.endModelInvokeSpan(modelSpan, {
-        output: result.message,
-        stopReason: result.stopReason,
-        ...(usage && { usage }),
-        ...(metrics && { metrics }),
+      // Start model span within loop span context
+      const modelId = this.model.modelId
+      const modelSpan = this._tracer.startModelInvokeSpan({
+        messages: this.messages,
+        ...(modelId && { modelId }),
+        ...(this.systemPrompt !== undefined && { systemPrompt: this.systemPrompt }),
       })
 
-      yield new ModelMessageEvent({ agent: this, message: result.message, stopReason: result.stopReason })
+      try {
+        const result = yield* this._streamFromModel(this.messages, streamOptions)
 
-      // Handle user content redaction if guardrails blocked input
-      if (result.redaction?.userMessage) {
-        this._redactLastMessage(result.redaction.userMessage)
+        // Accumulate token usage and model latency metrics
+        this._meter.updateCycle(result.metadata)
+
+        // End model span with usage
+        const usage = result.metadata?.usage
+        const metrics = result.metadata?.metrics
+        this._tracer.endModelInvokeSpan(modelSpan, {
+          output: result.message,
+          stopReason: result.stopReason,
+          ...(usage && { usage }),
+          ...(metrics && { metrics }),
+        })
+
+        yield new ModelMessageEvent({ agent: this, message: result.message, stopReason: result.stopReason })
+
+        // Handle user content redaction if guardrails blocked input
+        if (result.redaction?.userMessage) {
+          this._redactLastMessage(result.redaction.userMessage)
+        }
+
+        const stopData: ModelStopData = {
+          message: result.message,
+          stopReason: result.stopReason,
+          ...(result.redaction && { redaction: result.redaction }),
+        }
+
+        const afterModelCallEvent = new AfterModelCallEvent({ agent: this, stopData })
+        yield afterModelCallEvent
+
+        if (afterModelCallEvent.retry) {
+          continue
+        }
+
+        return result
+      } catch (error) {
+        const modelError = normalizeError(error)
+
+        // End model span with error
+        this._tracer.endModelInvokeSpan(modelSpan, { error: modelError })
+
+        // Create error event
+        const errorEvent = new AfterModelCallEvent({ agent: this, error: modelError })
+
+        // Yield error event - stream will invoke hooks
+        yield errorEvent
+
+        // After yielding, hooks have been invoked and may have set retry
+        if (errorEvent.retry) {
+          continue
+        }
+
+        // Re-throw error
+        throw error
       }
-
-      const stopData: ModelStopData = {
-        message: result.message,
-        stopReason: result.stopReason,
-        ...(result.redaction && { redaction: result.redaction }),
-      }
-
-      const afterModelCallEvent = new AfterModelCallEvent({ agent: this, stopData })
-      yield afterModelCallEvent
-
-      if (afterModelCallEvent.retry) {
-        return yield* this.invokeModel(forcedToolChoice)
-      }
-
-      return result
-    } catch (error) {
-      const modelError = normalizeError(error)
-
-      // End model span with error
-      this._tracer.endModelInvokeSpan(modelSpan, { error: modelError })
-
-      // Create error event
-      const errorEvent = new AfterModelCallEvent({ agent: this, error: modelError })
-
-      // Yield error event - stream will invoke hooks
-      yield errorEvent
-
-      // After yielding, hooks have been invoked and may have set retry
-      if (errorEvent.retry) {
-        return yield* this.invokeModel(forcedToolChoice)
-      }
-
-      // Re-throw error
-      throw error
     }
   }
 
