@@ -8,9 +8,9 @@
 
 import type { Agent } from '../agent/agent.js'
 import { ContextWindowOverflowError } from '../errors.js'
-import type { HookProvider } from '../hooks/types.js'
-import type { HookRegistry } from '../hooks/registry.js'
+import { ConversationManager, type ConversationManagerReduceOptions } from './conversation-manager.js'
 import { AfterModelCallEvent } from '../hooks/events.js'
+import type { LocalAgent } from '../types/agent.js'
 import { Message, TextBlock } from '../types/messages.js'
 import type { StreamOptions } from '../models/model.js'
 import { findValidSplitPoint } from './utils.js'
@@ -82,7 +82,8 @@ export type SummarizingConversationManagerConfig = {
  * As a HookProvider, it registers callbacks for:
  * - AfterModelCallEvent: Reduces context on overflow errors and requests retry
  */
-export class SummarizingConversationManager implements HookProvider {
+export class SummarizingConversationManager extends ConversationManager {
+  readonly name = 'strands:summarizing-conversation-manager'
   private readonly _summaryRatio: number
   private readonly _preserveRecentMessages: number
   private readonly _summarizationAgent?: Agent
@@ -94,6 +95,7 @@ export class SummarizingConversationManager implements HookProvider {
    * @param config - Configuration options for the summarizing manager.
    */
   constructor(config?: SummarizingConversationManagerConfig) {
+    super()
     if (config?.summarizationAgent && config?.summarizationSystemPrompt) {
       throw new Error(
         'Cannot provide both summarizationAgent and summarizationSystemPrompt. Agents come with their own system prompt.'
@@ -113,15 +115,20 @@ export class SummarizingConversationManager implements HookProvider {
   }
 
   /**
-   * Registers callbacks with the hook registry.
-   *
-   * Registers:
-   * - AfterModelCallEvent callback to handle context overflow and request retry
-   *
-   * @param registry - The hook registry to register callbacks with
+   * Reduce context by summarizing older messages (sync check only).
+   * The actual async summarization is handled by initAgent's hook.
    */
-  public registerCallbacks(registry: HookRegistry): void {
-    registry.addCallback(AfterModelCallEvent, async (event) => {
+  reduce(_options: ConversationManagerReduceOptions): boolean {
+    // Summarization is async — handled by our custom initAgent hook
+    return false
+  }
+
+  /**
+   * Initialize with the agent, registering an async overflow handler.
+   * Overrides the base class sync reduce with async summarization.
+   */
+  initAgent(agent: LocalAgent): void {
+    agent.addHook(AfterModelCallEvent, async (event) => {
       if (event.error instanceof ContextWindowOverflowError) {
         await this.reduceContext(event.agent as Agent)
         event.retry = true

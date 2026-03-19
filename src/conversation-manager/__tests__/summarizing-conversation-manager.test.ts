@@ -1,20 +1,20 @@
 import { describe, it, expect } from 'vitest'
 import { SummarizingConversationManager } from '../summarizing-conversation-manager.js'
 import { ContextWindowOverflowError, Message, TextBlock } from '../../index.js'
-import { HookRegistryImplementation } from '../../hooks/registry.js'
 import { AfterModelCallEvent } from '../../hooks/events.js'
-import { createMockAgent } from '../../__fixtures__/agent-helpers.js'
+import { createMockAgent, invokeTrackedHook, type MockAgent } from '../../__fixtures__/agent-helpers.js'
 import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
 import type { Agent } from '../../agent/agent.js'
 
 async function triggerContextOverflow(
   manager: SummarizingConversationManager,
-  agent: Agent,
+  agent: MockAgent,
   error: Error
-): Promise<{ retry?: boolean }> {
-  const registry = new HookRegistryImplementation()
-  registry.addHook(manager)
-  return await registry.invokeCallbacks(new AfterModelCallEvent({ agent, error }))
+): Promise<AfterModelCallEvent> {
+  manager.initAgent(agent as any)
+  const event = new AfterModelCallEvent({ agent: agent as any, error })
+  await invokeTrackedHook(agent, event)
+  return event
 }
 
 describe('SummarizingConversationManager', () => {
@@ -210,13 +210,13 @@ describe('SummarizingConversationManager', () => {
   })
 
   describe('hook integration', () => {
-    it('registers AfterModelCallEvent callback', () => {
+    it('registers AfterModelCallEvent callback via initAgent', () => {
       const manager = new SummarizingConversationManager()
-      const registry = new HookRegistryImplementation()
+      const agent = createMockAgent()
 
-      manager.registerCallbacks(registry)
+      manager.initAgent(agent as any)
 
-      expect((registry as any)._callbacks.has(AfterModelCallEvent)).toBe(true)
+      expect(agent.trackedHooks.some((h) => h.eventType === AfterModelCallEvent)).toBe(true)
     })
 
     it('sets retry flag on context overflow', async () => {
