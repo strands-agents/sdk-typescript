@@ -816,7 +816,7 @@ export class Agent implements LocalAgent, InvokableAgent {
 
     // Cancel all tools if hook requested it
     if (beforeToolsEvent.cancelTool) {
-      const cancelMessage = cancelToolMessage(beforeToolsEvent.cancelTool, 'tool cancelled by hook')
+      const cancelMessage = cancelToolMessage(beforeToolsEvent.cancelTool)
       const toolResultBlocks = toolUseBlocks.map(
         (block) =>
           new ToolResultBlock({
@@ -884,7 +884,7 @@ export class Agent implements LocalAgent, InvokableAgent {
 
       // Cancel individual tool if hook requested it
       if (beforeToolCallEvent.cancelTool) {
-        const cancelMessage = cancelToolMessage(beforeToolCallEvent.cancelTool, 'tool cancelled by hook')
+        const cancelMessage = cancelToolMessage(beforeToolCallEvent.cancelTool)
         const toolResult = new ToolResultBlock({
           toolUseId: toolUseBlock.toolUseId,
           status: 'error',
@@ -1061,14 +1061,19 @@ export class Agent implements LocalAgent, InvokableAgent {
 }
 
 /**
+ * Returns the cancel message for a cancelled tool.
+ * @param cancelTool - The cancel value (true or custom message)
+ * @returns The cancel message string
+ */
+function cancelToolMessage(cancelTool: true | string): string {
+  return typeof cancelTool === 'string' ? cancelTool : 'tool cancelled by hook'
+}
+
+/**
  * Recursively flattens nested arrays of tools into a single flat array.
  * @param tools - Tools or nested arrays of tools
  * @returns Flat array of tools and MCP clients
  */
-function cancelToolMessage(cancelTool: true | string, defaultMessage: string): string {
-  return typeof cancelTool === 'string' ? cancelTool : defaultMessage
-}
-
 function flattenTools(toolList: ToolList): { tools: Tool[]; mcpClients: McpClient[] } {
   const tools: Tool[] = []
   const mcpClients: McpClient[] = []
