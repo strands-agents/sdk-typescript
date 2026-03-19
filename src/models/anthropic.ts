@@ -49,9 +49,12 @@ export class AnthropicModel extends Model<AnthropicModelConfig> {
         )
       }
 
+      const isBrowser = typeof window !== 'undefined' && typeof process === 'undefined'
+
       this._client = new Anthropic({
         ...(apiKey ? { apiKey } : {}),
         ...clientConfig,
+        ...(isBrowser ? { dangerouslyAllowBrowser: true } : {}),
         defaultHeaders: {
           ...clientConfig?.defaultHeaders,
           'anthropic-beta': 'pdfs-2024-09-25,prompt-caching-2024-07-31',
