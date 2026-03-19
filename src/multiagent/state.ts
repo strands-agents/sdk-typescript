@@ -140,16 +140,13 @@ export class MultiAgentState {
   readonly results: NodeResult[]
   /** App-level key-value state accessible from hooks, edge handlers, and custom nodes. */
   readonly app: StateStore
-  /** Structured output schema to apply to node invocations. */
-  readonly structuredOutputSchema?: z.ZodSchema
   private readonly _nodes: Map<string, NodeState>
 
-  constructor(data?: { nodeIds?: string[]; structuredOutputSchema?: z.ZodSchema }) {
+  constructor(data?: { nodeIds?: string[] }) {
     this.startTime = Date.now()
     this.steps = 0
     this.results = []
     this.app = new StateStore()
-    if (data?.structuredOutputSchema) this.structuredOutputSchema = data.structuredOutputSchema
     this._nodes = new Map()
     for (const id of data?.nodeIds ?? []) {
       this._nodes.set(id, new NodeState())

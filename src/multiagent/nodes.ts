@@ -8,6 +8,7 @@ import { NodeResult, Status } from './state.js'
 import type { MultiAgentState, NodeResultUpdate } from './state.js'
 import type { MultiAgent } from './multiagent.js'
 import { logger } from '../logging/logger.js'
+import type { z } from 'zod'
 
 /**
  * Known node type identifiers with extensibility for custom nodes.
@@ -22,6 +23,16 @@ export interface NodeConfig {
    * Optional description of what this node does.
    */
   description?: string
+}
+
+/**
+ * Per-invocation options passed from the orchestrator to a node.
+ */
+export interface NodeInputOptions {
+  /**
+   * Structured output schema for this node invocation.
+   */
+  structuredOutputSchema?: z.ZodSchema
 }
 
 /**
@@ -51,13 +62,15 @@ export abstract class Node {
    * Execute the node. Handles duration measurement, error capture,
    * and delegates to handle() for node-specific logic.
    *
-   * @param args - Input to pass to the node (string or content blocks)
+   * @param input - Input to pass to the node (string or content blocks)
    * @param state - The current multi-agent state
+   * @param options - Per-invocation options from the orchestrator
    * @returns Async generator yielding streaming events and returning a NodeResult
    */
   async *stream(
-    args: MultiAgentInput,
-    state: MultiAgentState
+    input: MultiAgentInput,
+    state: MultiAgentState,
+    options?: NodeInputOptions
   ): AsyncGenerator<MultiAgentStreamEvent, NodeResult, undefined> {
     const nodeState = state.node(this.id)!
     nodeState.status = Status.EXECUTING
@@ -65,7 +78,7 @@ export abstract class Node {
 
     let result: NodeResult
     try {
-      const update = yield* this.handle(args, state)
+      const update = yield* this.handle(input, state, options)
       result = new NodeResult({
         nodeId: this.id,
         status: Status.COMPLETED,
@@ -93,13 +106,15 @@ export abstract class Node {
   /**
    * Node-specific execution logic implemented by subclasses.
    *
-   * @param args - Input to process (string or content blocks)
+   * @param input - Input to process (string or content blocks)
    * @param state - The current multi-agent state
+   * @param options - Per-invocation options from the orchestrator
    * @returns Async generator yielding streaming events and returning a partial result
    */
   abstract handle(
-    args: MultiAgentInput,
-    state: MultiAgentState
+    input: MultiAgentInput,
+    state: MultiAgentState,
+    options?: NodeInputOptions
   ): AsyncGenerator<MultiAgentStreamEvent, NodeResultUpdate, undefined>
 }
 
@@ -140,23 +155,25 @@ export class AgentNode extends Node {
    * Executes the wrapped agent, yielding each agent streaming event
    * wrapped in a {@link NodeStreamUpdateEvent}.
    *
-   * @param args - Input to pass to the agent
+   * @param input - Input to pass to the agent
    * @param state - The current multi-agent state
+   * @param options - Per-invocation options from the orchestrator
    * @returns Async generator yielding streaming events and returning the agent's content blocks
    */
   async *handle(
-    args: MultiAgentInput,
-    state: MultiAgentState
+    input: MultiAgentInput,
+    state: MultiAgentState,
+    options?: NodeInputOptions
   ): AsyncGenerator<MultiAgentStreamEvent, NodeResultUpdate, undefined> {
     // Only Agent instances support snapshot/restore for state isolation
     const snapshot =
       this._agent instanceof Agent ? takeSnapshot(this._agent, { include: ['messages', 'state'] }) : undefined
     try {
-      const options: InvokeOptions = {
-        ...(state.structuredOutputSchema && { structuredOutputSchema: state.structuredOutputSchema }),
+      const invokeOptions: InvokeOptions = {
+        ...(options?.structuredOutputSchema && { structuredOutputSchema: options.structuredOutputSchema }),
       }
 
-      const gen = this._agent.stream(args, options)
+      const gen = this._agent.stream(input, invokeOptions)
       let next = await gen.next()
       while (!next.done) {
         yield new NodeStreamUpdateEvent({
@@ -217,15 +234,17 @@ export class MultiAgentNode extends Node {
    * pass through as-is; all other events are wrapped in a new
    * {@link NodeStreamUpdateEvent} tagged with this node's identity.
    *
-   * @param args - Input to pass to the orchestrator
-   * @param _state - The current multi-agent state (unused)
+   * @param input - Input to pass to the orchestrator
+   * @param state - The current multi-agent state
+   * @param _options - Per-invocation options (unused by orchestrator nodes)
    * @returns Async generator yielding streaming events and returning the orchestrator's content
    */
   async *handle(
-    args: MultiAgentInput,
-    state: MultiAgentState
+    input: MultiAgentInput,
+    state: MultiAgentState,
+    _options?: NodeInputOptions
   ): AsyncGenerator<MultiAgentStreamEvent, NodeResultUpdate, undefined> {
-    const gen = this._orchestrator.stream(args)
+    const gen = this._orchestrator.stream(input)
     let next = await gen.next()
     while (!next.done) {
       const event = next.value
