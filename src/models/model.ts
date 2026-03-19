@@ -206,7 +206,7 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
       case 'modelRedactionEvent':
         return new ModelRedactionEvent(event_data)
       default:
-        throw new Error(`Unsupported event type: ${event_data}`)
+        throw new Error(`Unsupported event type: ${(event_data as { type: string }).type}`)
     }
   }
 

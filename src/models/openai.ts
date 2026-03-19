@@ -610,7 +610,7 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
                   }
                   case 'documentSourceText': {
                     // Text documents can be added directly
-                    console.warn(
+                    logger.warn(
                       'OpenAI does not support text document sources directly. Converting this text document to string content.'
                     )
                     contentParts.push({
@@ -632,7 +632,7 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
                     break
                   }
                   default: {
-                    console.warn(
+                    logger.warn(
                       `OpenAI ChatCompletions API only supports text content in user messages. Skipping document block type: ${docBlock.source.type}.`
                     )
                     break
@@ -641,7 +641,7 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
                 break
               }
               default: {
-                console.warn(`OpenAI ChatCompletions API does not support content type: ${block.type}.`)
+                logger.warn(`OpenAI ChatCompletions API does not support content type: ${block.type}.`)
                 break
               }
             }
@@ -739,13 +739,13 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
             }
             case 'reasoningBlock': {
               if (block.text) {
-                console.warn('Reasoning blocks are not supported by OpenAI Chat Completions API. Converting to text.')
+                logger.warn('Reasoning blocks are not supported by OpenAI Chat Completions API. Converting to text.')
                 textParts.push(block.text)
               }
               break
             }
             default: {
-              console.warn(
+              logger.warn(
                 `OpenAI ChatCompletions API does not support ${block.type} content in assistant messages. Skipping this block.`
               )
             }
