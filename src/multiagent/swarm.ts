@@ -213,7 +213,7 @@ export class Swarm implements MultiAgent {
         node = target
       }
 
-      this._checkSteps(state)
+      this._checkSteps(state, handoff)
     } finally {
       yield new AfterMultiAgentInvocationEvent({ orchestrator: this, state })
     }
@@ -322,8 +322,19 @@ export class Swarm implements MultiAgent {
     return blocks
   }
 
-  private _checkSteps(state: MultiAgentState): void {
-    if (state.steps >= this.config.maxSteps) {
+  /**
+   * Checks whether the swarm has exceeded its step limit with work still pending.
+   *
+   * This is only an error when the loop exhausted its step budget while the last agent
+   * still requested a handoff (i.e. there was more work to do). If the swarm completed
+   * normally on its final allowed step (no pending handoff), no error is thrown.
+   *
+   * @param state - Current swarm execution state
+   * @param handoff - The last handoff result from the most recent agent execution
+   * @throws Error when step limit is reached with a pending handoff
+   */
+  private _checkSteps(state: MultiAgentState, handoff?: HandoffResult): void {
+    if (handoff?.agentId && state.steps >= this.config.maxSteps) {
       throw new Error(`max_steps=<${this.config.maxSteps}> | swarm reached step limit`)
     }
   }
