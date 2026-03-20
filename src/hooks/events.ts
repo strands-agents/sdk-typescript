@@ -144,7 +144,7 @@ export class MessageAddedEvent extends HookableEvent {
 /**
  * Event triggered just before a tool is executed.
  * Fired after tool lookup but before execution begins.
- * Hook callbacks can set {@link cancelTool} to prevent the tool from executing.
+ * Hook callbacks can set {@link cancel} to prevent the tool from executing.
  */
 export class BeforeToolCallEvent extends HookableEvent {
   readonly type = 'beforeToolCallEvent' as const
@@ -161,7 +161,7 @@ export class BeforeToolCallEvent extends HookableEvent {
    * When set to `true`, a default cancel message is used.
    * When set to a string, that string is used as the tool result error message.
    */
-  cancelTool: boolean | string = false
+  cancel: boolean | string = false
 
   constructor(data: {
     agent: LocalAgent
@@ -414,7 +414,7 @@ export class AgentResultEvent extends HookableEvent {
 /**
  * Event triggered before executing tools.
  * Fired when the model returns tool use blocks that need to be executed.
- * Hook callbacks can set {@link cancelTool} to prevent all tools from executing.
+ * Hook callbacks can set {@link cancel} to prevent all tools from executing.
  */
 export class BeforeToolsEvent extends HookableEvent {
   readonly type = 'beforeToolsEvent' as const
@@ -426,7 +426,7 @@ export class BeforeToolsEvent extends HookableEvent {
    * When set to `true`, a default cancel message is used.
    * When set to a string, that string is used as the tool result error message.
    */
-  cancelTool: boolean | string = false
+  cancel: boolean | string = false
 
   constructor(data: { agent: LocalAgent; message: Message }) {
     super()

@@ -815,8 +815,8 @@ export class Agent implements LocalAgent, InvokableAgent {
     }
 
     // Cancel all tools if hook requested it
-    if (beforeToolsEvent.cancelTool) {
-      const cancelMessage = cancelToolMessage(beforeToolsEvent.cancelTool)
+    if (beforeToolsEvent.cancel) {
+      const cancelMessage = cancelToolMessage(beforeToolsEvent.cancel)
       const toolResultBlocks = toolUseBlocks.map(
         (block) =>
           new ToolResultBlock({
@@ -883,8 +883,8 @@ export class Agent implements LocalAgent, InvokableAgent {
       yield beforeToolCallEvent
 
       // Cancel individual tool if hook requested it
-      if (beforeToolCallEvent.cancelTool) {
-        const cancelMessage = cancelToolMessage(beforeToolCallEvent.cancelTool)
+      if (beforeToolCallEvent.cancel) {
+        const cancelMessage = cancelToolMessage(beforeToolCallEvent.cancel)
         const toolResult = new ToolResultBlock({
           toolUseId: toolUseBlock.toolUseId,
           status: 'error',

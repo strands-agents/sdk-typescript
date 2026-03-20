@@ -130,7 +130,7 @@ describe('BeforeToolCallEvent', () => {
       agent: agent,
       toolUse: toolUse,
       tool: tool,
-      cancelTool: false,
+      cancel: false,
     })
     // @ts-expect-error verifying that property is readonly
     event.agent = new Agent()
@@ -154,7 +154,7 @@ describe('BeforeToolCallEvent', () => {
       agent: agent,
       toolUse: toolUse,
       tool: undefined,
-      cancelTool: false,
+      cancel: false,
     })
   })
 
@@ -165,23 +165,23 @@ describe('BeforeToolCallEvent', () => {
     expect(event._shouldReverseCallbacks()).toBe(false)
   })
 
-  it('allows cancelTool to be set to true', () => {
+  it('allows cancel to be set to true', () => {
     const agent = new Agent()
     const toolUse = { name: 'test', toolUseId: 'id', input: {} }
     const event = new BeforeToolCallEvent({ agent, toolUse, tool: undefined })
 
-    expect(event.cancelTool).toBe(false)
-    event.cancelTool = true
-    expect(event.cancelTool).toBe(true)
+    expect(event.cancel).toBe(false)
+    event.cancel = true
+    expect(event.cancel).toBe(true)
   })
 
-  it('allows cancelTool to be set to a string message', () => {
+  it('allows cancel to be set to a string message', () => {
     const agent = new Agent()
     const toolUse = { name: 'test', toolUseId: 'id', input: {} }
     const event = new BeforeToolCallEvent({ agent, toolUse, tool: undefined })
 
-    event.cancelTool = 'tool not allowed'
-    expect(event.cancelTool).toBe('tool not allowed')
+    event.cancel = 'tool not allowed'
+    expect(event.cancel).toBe('tool not allowed')
   })
 })
 
@@ -524,7 +524,7 @@ describe('BeforeToolsEvent', () => {
       type: 'beforeToolsEvent',
       agent: agent,
       message: message,
-      cancelTool: false,
+      cancel: false,
     })
     // @ts-expect-error verifying that property is readonly
     event.agent = new Agent()
@@ -539,23 +539,23 @@ describe('BeforeToolsEvent', () => {
     expect(event._shouldReverseCallbacks()).toBe(false)
   })
 
-  it('allows cancelTool to be set to true', () => {
+  it('allows cancel to be set to true', () => {
     const agent = new Agent()
     const message = new Message({ role: 'assistant', content: [] })
     const event = new BeforeToolsEvent({ agent, message })
 
-    expect(event.cancelTool).toBe(false)
-    event.cancelTool = true
-    expect(event.cancelTool).toBe(true)
+    expect(event.cancel).toBe(false)
+    event.cancel = true
+    expect(event.cancel).toBe(true)
   })
 
-  it('allows cancelTool to be set to a string message', () => {
+  it('allows cancel to be set to a string message', () => {
     const agent = new Agent()
     const message = new Message({ role: 'assistant', content: [] })
     const event = new BeforeToolsEvent({ agent, message })
 
-    event.cancelTool = 'tools not allowed'
-    expect(event.cancelTool).toBe('tools not allowed')
+    event.cancel = 'tools not allowed'
+    expect(event.cancel).toBe('tools not allowed')
   })
 })
 

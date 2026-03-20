@@ -515,7 +515,7 @@ describe('Agent Hooks Integration', () => {
   })
 
   describe('cancel tool via hooks', () => {
-    it('cancels individual tool call with default message when cancelTool is true', async () => {
+    it('cancels individual tool call with default message when cancel is true', async () => {
       let toolExecuted = false
       const tool = createMockTool('blockedTool', () => {
         toolExecuted = true
@@ -528,7 +528,7 @@ describe('Agent Hooks Integration', () => {
 
       const agent = new Agent({ model, tools: [tool], plugins: [mockPlugin] })
       agent.addHook(BeforeToolCallEvent, (event: BeforeToolCallEvent) => {
-        event.cancelTool = true
+        event.cancel = true
       })
 
       const result = await agent.invoke('Test')
@@ -539,11 +539,16 @@ describe('Agent Hooks Integration', () => {
       const afterToolCallEvents = mockPlugin.invocations.filter((e) => e instanceof AfterToolCallEvent)
       expect(afterToolCallEvents).toHaveLength(1)
       const afterEvent = afterToolCallEvents[0] as AfterToolCallEvent
-      expect(afterEvent.result.status).toBe('error')
-      expect(afterEvent.result.content[0]).toEqual(new TextBlock('tool cancelled by hook'))
+      expect(afterEvent.result).toEqual(
+        new ToolResultBlock({
+          toolUseId: 'tool-1',
+          status: 'error',
+          content: [new TextBlock('tool cancelled by hook')],
+        })
+      )
     })
 
-    it('cancels individual tool call with custom message when cancelTool is a string', async () => {
+    it('cancels individual tool call with custom message when cancel is a string', async () => {
       let toolExecuted = false
       const tool = createMockTool('blockedTool', () => {
         toolExecuted = true
@@ -556,7 +561,7 @@ describe('Agent Hooks Integration', () => {
 
       const agent = new Agent({ model, tools: [tool], plugins: [mockPlugin] })
       agent.addHook(BeforeToolCallEvent, (event: BeforeToolCallEvent) => {
-        event.cancelTool = 'Tool call limit exceeded'
+        event.cancel = 'Tool call limit exceeded'
       })
 
       const result = await agent.invoke('Test')
@@ -567,8 +572,13 @@ describe('Agent Hooks Integration', () => {
       const afterToolCallEvents = mockPlugin.invocations.filter((e) => e instanceof AfterToolCallEvent)
       expect(afterToolCallEvents).toHaveLength(1)
       const afterEvent = afterToolCallEvents[0] as AfterToolCallEvent
-      expect(afterEvent.result.status).toBe('error')
-      expect(afterEvent.result.content[0]).toEqual(new TextBlock('Tool call limit exceeded'))
+      expect(afterEvent.result).toEqual(
+        new ToolResultBlock({
+          toolUseId: 'tool-1',
+          status: 'error',
+          content: [new TextBlock('Tool call limit exceeded')],
+        })
+      )
     })
 
     it('cancels only specific tools when BeforeToolCallEvent selectively cancels', async () => {
@@ -592,7 +602,7 @@ describe('Agent Hooks Integration', () => {
       const agent = new Agent({ model, tools: [tool1, tool2], plugins: [mockPlugin] })
       agent.addHook(BeforeToolCallEvent, (event: BeforeToolCallEvent) => {
         if (event.toolUse.name === 'blockedTool') {
-          event.cancelTool = 'This tool is blocked'
+          event.cancel = 'This tool is blocked'
         }
       })
 
@@ -603,14 +613,19 @@ describe('Agent Hooks Integration', () => {
 
       const afterToolCallEvents = mockPlugin.invocations.filter((e) => e instanceof AfterToolCallEvent)
       expect(afterToolCallEvents).toHaveLength(2)
-      expect((afterToolCallEvents[0] as AfterToolCallEvent).result.status).toBe('success')
-      expect((afterToolCallEvents[1] as AfterToolCallEvent).result.status).toBe('error')
-      expect((afterToolCallEvents[1] as AfterToolCallEvent).result.content[0]).toEqual(
-        new TextBlock('This tool is blocked')
+      expect((afterToolCallEvents[0] as AfterToolCallEvent).result).toEqual(
+        new ToolResultBlock({ toolUseId: 'tool-1', status: 'success', content: [new TextBlock('Allowed')] })
+      )
+      expect((afterToolCallEvents[1] as AfterToolCallEvent).result).toEqual(
+        new ToolResultBlock({
+          toolUseId: 'tool-2',
+          status: 'error',
+          content: [new TextBlock('This tool is blocked')],
+        })
       )
     })
 
-    it('cancels all tools with default message when BeforeToolsEvent.cancelTool is true', async () => {
+    it('cancels all tools with default message when BeforeToolsEvent.cancel is true', async () => {
       let toolExecuted = false
       const tool = createMockTool('blockedTool', () => {
         toolExecuted = true
@@ -623,7 +638,7 @@ describe('Agent Hooks Integration', () => {
 
       const agent = new Agent({ model, tools: [tool], plugins: [mockPlugin] })
       agent.addHook(BeforeToolsEvent, (event: BeforeToolsEvent) => {
-        event.cancelTool = true
+        event.cancel = true
       })
 
       const result = await agent.invoke('Test')
@@ -634,12 +649,16 @@ describe('Agent Hooks Integration', () => {
       const afterToolsEvents = mockPlugin.invocations.filter((e) => e instanceof AfterToolsEvent)
       expect(afterToolsEvents).toHaveLength(1)
       const afterEvent = afterToolsEvents[0] as AfterToolsEvent
-      const toolResult = afterEvent.message.content[0] as ToolResultBlock
-      expect(toolResult.status).toBe('error')
-      expect(toolResult.content[0]).toEqual(new TextBlock('tool cancelled by hook'))
+      expect(afterEvent.message.content[0]).toEqual(
+        new ToolResultBlock({
+          toolUseId: 'tool-1',
+          status: 'error',
+          content: [new TextBlock('tool cancelled by hook')],
+        })
+      )
     })
 
-    it('cancels all tools with custom message when BeforeToolsEvent.cancelTool is a string', async () => {
+    it('cancels all tools with custom message when BeforeToolsEvent.cancel is a string', async () => {
       let toolExecuted = false
       const tool = createMockTool('blockedTool', () => {
         toolExecuted = true
@@ -652,7 +671,7 @@ describe('Agent Hooks Integration', () => {
 
       const agent = new Agent({ model, tools: [tool], plugins: [mockPlugin] })
       agent.addHook(BeforeToolsEvent, (event: BeforeToolsEvent) => {
-        event.cancelTool = 'All tools blocked'
+        event.cancel = 'All tools blocked'
       })
 
       const result = await agent.invoke('Test')
@@ -663,9 +682,13 @@ describe('Agent Hooks Integration', () => {
       const afterToolsEvents = mockPlugin.invocations.filter((e) => e instanceof AfterToolsEvent)
       expect(afterToolsEvents).toHaveLength(1)
       const afterEvent = afterToolsEvents[0] as AfterToolsEvent
-      const toolResult = afterEvent.message.content[0] as ToolResultBlock
-      expect(toolResult.status).toBe('error')
-      expect(toolResult.content[0]).toEqual(new TextBlock('All tools blocked'))
+      expect(afterEvent.message.content[0]).toEqual(
+        new ToolResultBlock({
+          toolUseId: 'tool-1',
+          status: 'error',
+          content: [new TextBlock('All tools blocked')],
+        })
+      )
     })
 
     it('cancels all tools in a batch via BeforeToolsEvent with correct toolUseIds', async () => {
@@ -688,7 +711,7 @@ describe('Agent Hooks Integration', () => {
 
       const agent = new Agent({ model, tools: [tool1, tool2], plugins: [mockPlugin] })
       agent.addHook(BeforeToolsEvent, (event: BeforeToolsEvent) => {
-        event.cancelTool = 'Batch cancelled'
+        event.cancel = 'Batch cancelled'
       })
 
       const result = await agent.invoke('Test')
@@ -698,12 +721,19 @@ describe('Agent Hooks Integration', () => {
 
       const afterToolsEvents = mockPlugin.invocations.filter((e) => e instanceof AfterToolsEvent)
       expect(afterToolsEvents).toHaveLength(1)
-      const resultBlocks = (afterToolsEvents[0] as AfterToolsEvent).message.content as ToolResultBlock[]
-      expect(resultBlocks).toHaveLength(2)
-      expect(resultBlocks[0]!.toolUseId).toBe('tool-1')
-      expect(resultBlocks[0]!.status).toBe('error')
-      expect(resultBlocks[1]!.toolUseId).toBe('tool-2')
-      expect(resultBlocks[1]!.status).toBe('error')
+      const afterEvent = afterToolsEvents[0] as AfterToolsEvent
+      expect(afterEvent.message.content).toEqual([
+        new ToolResultBlock({
+          toolUseId: 'tool-1',
+          status: 'error',
+          content: [new TextBlock('Batch cancelled')],
+        }),
+        new ToolResultBlock({
+          toolUseId: 'tool-2',
+          status: 'error',
+          content: [new TextBlock('Batch cancelled')],
+        }),
+      ])
     })
 
     it('emits cancel events correctly via stream()', async () => {
@@ -719,7 +749,7 @@ describe('Agent Hooks Integration', () => {
 
       const agent = new Agent({ model, tools: [tool] })
       agent.addHook(BeforeToolCallEvent, (event: BeforeToolCallEvent) => {
-        event.cancelTool = 'Cancelled via stream'
+        event.cancel = 'Cancelled via stream'
       })
 
       const items = await collectIterator(agent.stream('Test'))
@@ -732,8 +762,13 @@ describe('Agent Hooks Integration', () => {
       expect(afterToolCallEvents).toHaveLength(1)
 
       const afterEvent = afterToolCallEvents[0] as AfterToolCallEvent
-      expect(afterEvent.result.status).toBe('error')
-      expect(afterEvent.result.content[0]).toEqual(new TextBlock('Cancelled via stream'))
+      expect(afterEvent.result).toEqual(
+        new ToolResultBlock({
+          toolUseId: 'tool-1',
+          status: 'error',
+          content: [new TextBlock('Cancelled via stream')],
+        })
+      )
     })
 
     it('allows retry after cancel on BeforeToolCallEvent', async () => {
@@ -752,7 +787,7 @@ describe('Agent Hooks Integration', () => {
       agent.addHook(BeforeToolCallEvent, (event: BeforeToolCallEvent) => {
         beforeCount++
         if (beforeCount === 1) {
-          event.cancelTool = 'Not yet'
+          event.cancel = 'Not yet'
         }
       })
       agent.addHook(AfterToolCallEvent, (event: AfterToolCallEvent) => {
