@@ -806,7 +806,7 @@ describe('toJSON serialization', () => {
         type: 'afterToolCallEvent',
         toolUse: { name: 'calc', toolUseId: 'id-1', input: {} },
         result: { toolResult: { toolUseId: 'id-1', status: 'error', content: [{ text: 'Error' }] } },
-        error: 'Tool crashed',
+        error: { message: 'Tool crashed' },
       })
     })
   })
@@ -837,7 +837,7 @@ describe('toJSON serialization', () => {
 
       expect(json).toStrictEqual({
         type: 'afterModelCallEvent',
-        error: 'Model failed',
+        error: { message: 'Model failed' },
       })
     })
   })
@@ -904,5 +904,89 @@ describe('toJSON serialization', () => {
       expect(json).not.toContain('appState')
       expect(json).not.toContain('toolRegistry')
     })
+  })
+})
+
+// ===================== Serialization completeness tests =====================
+// Ensures that if a new field is added to an event class, it must either be
+// included in toJSON() or explicitly added to the exclusion set.
+
+describe('toJSON serialization completeness', () => {
+  /**
+   * Fields that should NEVER appear in toJSON() output.
+   * If you add a new field to an event and it should be excluded from wire serialization,
+   * add it here. Otherwise, add it to toJSON() so it gets serialized.
+   */
+  const EXCLUDED_FIELDS = new Set(['agent', 'tool', 'cancel', 'retry'])
+
+  /**
+   * Fields where toJSON() transforms the value (e.g., Error to message object).
+   * These appear in both instance and JSON but with different shapes.
+   */
+  const TRANSFORMED_FIELDS = new Set(['error'])
+
+  // Helper: create a fully-populated instance of each event class
+  function createEventInstances(): Array<{ name: string; event: { toJSON(): Record<string, unknown> } }> {
+    const agent = new Agent()
+    const message = new Message({ role: 'assistant', content: [new TextBlock('test')] })
+    const toolUse = { name: 'test', toolUseId: 'id-1', input: {} }
+    const result = new ToolResultBlock({ toolUseId: 'id-1', status: 'success', content: [new TextBlock('ok')] })
+    const tool = new FunctionTool({ name: 'test', description: 'Test', inputSchema: {}, callback: () => 'ok' })
+    const error = new Error('test error')
+    const stopData = { message, stopReason: 'endTurn' as const }
+    const streamEvent = {
+      type: 'modelContentBlockDeltaEvent' as const,
+      delta: { type: 'textDelta' as const, text: 'Hi' },
+    }
+    const contentBlock = new TextBlock('test')
+    const toolStreamEvent = new ToolStreamEvent({ data: { progress: 50 } })
+    const agentResult = new AgentResult({
+      stopReason: 'endTurn',
+      lastMessage: message,
+      metrics: new AgentMetrics(),
+    })
+
+    return [
+      { name: 'InitializedEvent', event: new InitializedEvent({ agent }) },
+      { name: 'BeforeInvocationEvent', event: new BeforeInvocationEvent({ agent }) },
+      { name: 'AfterInvocationEvent', event: new AfterInvocationEvent({ agent }) },
+      { name: 'BeforeModelCallEvent', event: new BeforeModelCallEvent({ agent }) },
+      { name: 'AfterModelCallEvent', event: new AfterModelCallEvent({ agent, stopData, error }) },
+      { name: 'MessageAddedEvent', event: new MessageAddedEvent({ agent, message }) },
+      { name: 'ModelStreamUpdateEvent', event: new ModelStreamUpdateEvent({ agent, event: streamEvent }) },
+      { name: 'ContentBlockEvent', event: new ContentBlockEvent({ agent, contentBlock }) },
+      { name: 'ModelMessageEvent', event: new ModelMessageEvent({ agent, message, stopReason: 'endTurn' }) },
+      { name: 'ToolResultEvent', event: new ToolResultEvent({ agent, result }) },
+      { name: 'ToolStreamUpdateEvent', event: new ToolStreamUpdateEvent({ agent, event: toolStreamEvent }) },
+      { name: 'AgentResultEvent', event: new AgentResultEvent({ agent, result: agentResult }) },
+      { name: 'BeforeToolCallEvent', event: new BeforeToolCallEvent({ agent, toolUse, tool }) },
+      { name: 'AfterToolCallEvent', event: new AfterToolCallEvent({ agent, toolUse, tool, result, error }) },
+      { name: 'BeforeToolsEvent', event: new BeforeToolsEvent({ agent, message }) },
+      { name: 'AfterToolsEvent', event: new AfterToolsEvent({ agent, message }) },
+    ]
+  }
+
+  const eventInstances = createEventInstances()
+
+  it.each(eventInstances)('$name: toJSON() includes all fields except known exclusions', ({ event }) => {
+    const instanceKeys = new Set(Object.keys(event))
+    const jsonKeys = new Set(Object.keys(event.toJSON()))
+
+    // Every instance key should either be in JSON output, in the exclusion set, or transformed
+    for (const key of instanceKeys) {
+      if (!jsonKeys.has(key) && !TRANSFORMED_FIELDS.has(key)) {
+        expect(EXCLUDED_FIELDS).toContain(key)
+      }
+    }
+
+    // Every JSON key should come from the instance or be a known transformation
+    for (const key of jsonKeys) {
+      expect(instanceKeys.has(key) || TRANSFORMED_FIELDS.has(key)).toBe(true)
+    }
+  })
+
+  it.each(eventInstances)('$name: toJSON() never includes agent', ({ event }) => {
+    const json = event.toJSON()
+    expect(json).not.toHaveProperty('agent')
   })
 })

@@ -261,15 +261,15 @@ export class AfterToolCallEvent extends HookableEvent {
 
   /**
    * Serializes for wire transport, excluding the agent reference, tool instance, and mutable retry flag.
-   * Converts Error to its message string for safe serialization.
+   * Converts Error to an extensible object for safe wire serialization.
    * Called automatically by JSON.stringify().
    */
-  toJSON(): Pick<AfterToolCallEvent, 'type' | 'toolUse' | 'result'> & { error?: string } {
+  toJSON(): Pick<AfterToolCallEvent, 'type' | 'toolUse' | 'result'> & { error?: { message?: string } } {
     return {
       type: this.type,
       toolUse: this.toolUse,
       result: this.result,
-      ...(this.error !== undefined && { error: this.error.message }),
+      ...(this.error !== undefined && { error: { message: this.error.message } }),
     }
   }
 }
@@ -363,14 +363,14 @@ export class AfterModelCallEvent extends HookableEvent {
 
   /**
    * Serializes for wire transport, excluding the agent reference and mutable retry flag.
-   * Converts Error to its message string for safe serialization.
+   * Converts Error to an extensible object for safe wire serialization.
    * Called automatically by JSON.stringify().
    */
-  toJSON(): Pick<AfterModelCallEvent, 'type' | 'stopData'> & { error?: string } {
+  toJSON(): Pick<AfterModelCallEvent, 'type' | 'stopData'> & { error?: { message?: string } } {
     return {
       type: this.type,
       ...(this.stopData !== undefined && { stopData: this.stopData }),
-      ...(this.error !== undefined && { error: this.error.message }),
+      ...(this.error !== undefined && { error: { message: this.error.message } }),
     }
   }
 }
