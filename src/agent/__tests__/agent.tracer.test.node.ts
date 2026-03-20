@@ -141,6 +141,34 @@ describe('Agent tracer integration', () => {
       )
     })
 
+    it('includes empty string systemPrompt in agent span', async () => {
+      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
+      const agent = new Agent({ model, systemPrompt: '' })
+      const tracer = getLatestTracer()
+
+      await agent.invoke('Hi')
+
+      expect(tracer.startAgentSpan).toHaveBeenCalledWith(
+        expect.objectContaining({
+          systemPrompt: '',
+        })
+      )
+    })
+
+    it('omits systemPrompt from agent span when not configured', async () => {
+      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
+      const agent = new Agent({ model })
+      const tracer = getLatestTracer()
+
+      await agent.invoke('Hi')
+
+      expect(tracer.startAgentSpan).toHaveBeenCalledWith(
+        expect.not.objectContaining({
+          systemPrompt: expect.anything(),
+        })
+      )
+    })
+
     it('includes tools in agent span', async () => {
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
       const tool = createMockTool(
