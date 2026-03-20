@@ -592,3 +592,317 @@ describe('AfterToolsEvent', () => {
     expect(event._shouldReverseCallbacks()).toBe(true)
   })
 })
+
+// ===================== toJSON serialization tests =====================
+
+describe('toJSON serialization', () => {
+  describe('InitializedEvent', () => {
+    it('excludes agent and returns only type', () => {
+      const agent = new Agent()
+      const event = new InitializedEvent({ agent })
+      const json = JSON.parse(JSON.stringify(event))
+
+      expect(json).toStrictEqual({ type: 'initializedEvent' })
+    })
+  })
+
+  describe('BeforeInvocationEvent', () => {
+    it('excludes agent and returns only type', () => {
+      const agent = new Agent()
+      const event = new BeforeInvocationEvent({ agent })
+      const json = JSON.parse(JSON.stringify(event))
+
+      expect(json).toStrictEqual({ type: 'beforeInvocationEvent' })
+    })
+  })
+
+  describe('AfterInvocationEvent', () => {
+    it('excludes agent and returns only type', () => {
+      const agent = new Agent()
+      const event = new AfterInvocationEvent({ agent })
+      const json = JSON.parse(JSON.stringify(event))
+
+      expect(json).toStrictEqual({ type: 'afterInvocationEvent' })
+    })
+  })
+
+  describe('BeforeModelCallEvent', () => {
+    it('excludes agent and returns only type', () => {
+      const agent = new Agent()
+      const event = new BeforeModelCallEvent({ agent })
+      const json = JSON.parse(JSON.stringify(event))
+
+      expect(json).toStrictEqual({ type: 'beforeModelCallEvent' })
+    })
+  })
+
+  describe('MessageAddedEvent', () => {
+    it('includes message and excludes agent', () => {
+      const agent = new Agent()
+      const message = new Message({ role: 'assistant', content: [new TextBlock('Hello')] })
+      const event = new MessageAddedEvent({ agent, message })
+      const json = JSON.parse(JSON.stringify(event))
+
+      expect(json).toStrictEqual({
+        type: 'messageAddedEvent',
+        message: { role: 'assistant', content: [{ text: 'Hello' }] },
+      })
+    })
+  })
+
+  describe('ModelStreamUpdateEvent', () => {
+    it('includes stream event and excludes agent', () => {
+      const agent = new Agent()
+      const streamEvent = {
+        type: 'modelContentBlockDeltaEvent' as const,
+        delta: { type: 'textDelta' as const, text: 'Hi' },
+      }
+      const event = new ModelStreamUpdateEvent({ agent, event: streamEvent })
+      const json = JSON.parse(JSON.stringify(event))
+
+      expect(json).toStrictEqual({
+        type: 'modelStreamUpdateEvent',
+        event: { type: 'modelContentBlockDeltaEvent', delta: { type: 'textDelta', text: 'Hi' } },
+      })
+    })
+  })
+
+  describe('ContentBlockEvent', () => {
+    it('includes content block and excludes agent', () => {
+      const agent = new Agent()
+      const contentBlock = new TextBlock('Hello world')
+      const event = new ContentBlockEvent({ agent, contentBlock })
+      const json = JSON.parse(JSON.stringify(event))
+
+      expect(json).toStrictEqual({
+        type: 'contentBlockEvent',
+        contentBlock: { text: 'Hello world' },
+      })
+    })
+  })
+
+  describe('ModelMessageEvent', () => {
+    it('includes message and stopReason, excludes agent', () => {
+      const agent = new Agent()
+      const message = new Message({ role: 'assistant', content: [new TextBlock('Done')] })
+      const event = new ModelMessageEvent({ agent, message, stopReason: 'endTurn' })
+      const json = JSON.parse(JSON.stringify(event))
+
+      expect(json).toStrictEqual({
+        type: 'modelMessageEvent',
+        message: { role: 'assistant', content: [{ text: 'Done' }] },
+        stopReason: 'endTurn',
+      })
+    })
+  })
+
+  describe('ToolResultEvent', () => {
+    it('includes result and excludes agent', () => {
+      const agent = new Agent()
+      const result = new ToolResultBlock({
+        toolUseId: 'tool-1',
+        status: 'success',
+        content: [new TextBlock('42')],
+      })
+      const event = new ToolResultEvent({ agent, result })
+      const json = JSON.parse(JSON.stringify(event))
+
+      expect(json).toStrictEqual({
+        type: 'toolResultEvent',
+        result: { toolResult: { toolUseId: 'tool-1', status: 'success', content: [{ text: '42' }] } },
+      })
+    })
+  })
+
+  describe('ToolStreamUpdateEvent', () => {
+    it('includes tool stream event and excludes agent', () => {
+      const agent = new Agent()
+      const toolStreamEvent = new ToolStreamEvent({ data: { progress: 50 } })
+      const event = new ToolStreamUpdateEvent({ agent, event: toolStreamEvent })
+      const json = JSON.parse(JSON.stringify(event))
+
+      expect(json).toStrictEqual({
+        type: 'toolStreamUpdateEvent',
+        event: { type: 'toolStreamEvent', data: { progress: 50 } },
+      })
+    })
+  })
+
+  describe('AgentResultEvent', () => {
+    it('includes result and excludes agent', () => {
+      const agent = new Agent()
+      const result = new AgentResult({
+        stopReason: 'endTurn',
+        lastMessage: new Message({ role: 'assistant', content: [new TextBlock('Done')] }),
+        metrics: new AgentMetrics(),
+      })
+      const event = new AgentResultEvent({ agent, result })
+      const json = JSON.parse(JSON.stringify(event))
+
+      expect(json).toStrictEqual({
+        type: 'agentResultEvent',
+        result: {
+          type: 'agentResult',
+          stopReason: 'endTurn',
+          lastMessage: { role: 'assistant', content: [{ text: 'Done' }] },
+        },
+      })
+    })
+  })
+
+  describe('BeforeToolCallEvent', () => {
+    it('includes toolUse and excludes agent, tool, and cancel', () => {
+      const agent = new Agent()
+      const tool = new FunctionTool({
+        name: 'testTool',
+        description: 'Test',
+        inputSchema: {},
+        callback: () => 'result',
+      })
+      const toolUse = { name: 'testTool', toolUseId: 'id-1', input: { query: 'hello' } }
+      const event = new BeforeToolCallEvent({ agent, toolUse, tool })
+      const json = JSON.parse(JSON.stringify(event))
+
+      expect(json).toStrictEqual({
+        type: 'beforeToolCallEvent',
+        toolUse: { name: 'testTool', toolUseId: 'id-1', input: { query: 'hello' } },
+      })
+    })
+  })
+
+  describe('AfterToolCallEvent', () => {
+    it('includes toolUse and result, excludes agent and tool on success', () => {
+      const agent = new Agent()
+      const toolUse = { name: 'calc', toolUseId: 'id-1', input: {} }
+      const result = new ToolResultBlock({
+        toolUseId: 'id-1',
+        status: 'success',
+        content: [new TextBlock('42')],
+      })
+      const event = new AfterToolCallEvent({ agent, toolUse, tool: undefined, result })
+      const json = JSON.parse(JSON.stringify(event))
+
+      expect(json).toStrictEqual({
+        type: 'afterToolCallEvent',
+        toolUse: { name: 'calc', toolUseId: 'id-1', input: {} },
+        result: { toolResult: { toolUseId: 'id-1', status: 'success', content: [{ text: '42' }] } },
+      })
+    })
+
+    it('converts error to message string and excludes retry', () => {
+      const agent = new Agent()
+      const toolUse = { name: 'calc', toolUseId: 'id-1', input: {} }
+      const result = new ToolResultBlock({
+        toolUseId: 'id-1',
+        status: 'error',
+        content: [new TextBlock('Error')],
+      })
+      const error = new Error('Tool crashed')
+      const event = new AfterToolCallEvent({ agent, toolUse, tool: undefined, result, error })
+      event.retry = true
+      const json = JSON.parse(JSON.stringify(event))
+
+      expect(json).toStrictEqual({
+        type: 'afterToolCallEvent',
+        toolUse: { name: 'calc', toolUseId: 'id-1', input: {} },
+        result: { toolResult: { toolUseId: 'id-1', status: 'error', content: [{ text: 'Error' }] } },
+        error: 'Tool crashed',
+      })
+    })
+  })
+
+  describe('AfterModelCallEvent', () => {
+    it('includes stopData and excludes agent on success', () => {
+      const agent = new Agent()
+      const message = new Message({ role: 'assistant', content: [new TextBlock('Hi')] })
+      const stopData = { message, stopReason: 'endTurn' as const }
+      const event = new AfterModelCallEvent({ agent, stopData })
+      const json = JSON.parse(JSON.stringify(event))
+
+      expect(json).toStrictEqual({
+        type: 'afterModelCallEvent',
+        stopData: {
+          message: { role: 'assistant', content: [{ text: 'Hi' }] },
+          stopReason: 'endTurn',
+        },
+      })
+    })
+
+    it('converts error to message string and excludes retry', () => {
+      const agent = new Agent()
+      const error = new Error('Model failed')
+      const event = new AfterModelCallEvent({ agent, error })
+      event.retry = true
+      const json = JSON.parse(JSON.stringify(event))
+
+      expect(json).toStrictEqual({
+        type: 'afterModelCallEvent',
+        error: 'Model failed',
+      })
+    })
+  })
+
+  describe('BeforeToolsEvent', () => {
+    it('includes message and excludes agent and cancel', () => {
+      const agent = new Agent()
+      const message = new Message({
+        role: 'assistant',
+        content: [new ToolUseBlock({ name: 'calc', toolUseId: 'id-1', input: {} })],
+      })
+      const event = new BeforeToolsEvent({ agent, message })
+      event.cancel = 'not allowed'
+      const json = JSON.parse(JSON.stringify(event))
+
+      expect(json).toStrictEqual({
+        type: 'beforeToolsEvent',
+        message: { role: 'assistant', content: [{ toolUse: { name: 'calc', toolUseId: 'id-1', input: {} } }] },
+      })
+    })
+  })
+
+  describe('AfterToolsEvent', () => {
+    it('includes message and excludes agent', () => {
+      const agent = new Agent()
+      const message = new Message({
+        role: 'user',
+        content: [
+          new ToolResultBlock({
+            toolUseId: 'id-1',
+            status: 'success',
+            content: [new TextBlock('Done')],
+          }),
+        ],
+      })
+      const event = new AfterToolsEvent({ agent, message })
+      const json = JSON.parse(JSON.stringify(event))
+
+      expect(json).toStrictEqual({
+        type: 'afterToolsEvent',
+        message: {
+          role: 'user',
+          content: [{ toolResult: { toolUseId: 'id-1', status: 'success', content: [{ text: 'Done' }] } }],
+        },
+      })
+    })
+  })
+
+  describe('agent reference is never serialized', () => {
+    it('JSON.stringify output never contains agent properties', () => {
+      const agent = new Agent()
+      // Add messages to make agent heavy
+      agent.messages.push(new Message({ role: 'user', content: [new TextBlock('Hello '.repeat(100))] }))
+
+      const event = new ModelStreamUpdateEvent({
+        agent,
+        event: { type: 'modelContentBlockDeltaEvent', delta: { type: 'textDelta', text: 'Hi' } },
+      })
+      const json = JSON.stringify(event)
+
+      // Should be small (no agent serialized)
+      expect(json.length).toBeLessThan(200)
+      expect(json).not.toContain('Hello Hello')
+      expect(json).not.toContain('appState')
+      expect(json).not.toContain('toolRegistry')
+    })
+  })
+})
