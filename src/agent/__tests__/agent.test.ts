@@ -211,9 +211,9 @@ describe('Agent', () => {
               content: expect.arrayContaining([expect.objectContaining({ type: 'textBlock', text: 'Response text' })]),
             }),
             metrics: expectLoopMetrics({ cycleCount: 1 }),
+            traces: expect.arrayContaining([expect.objectContaining({ name: 'Cycle 1' })]),
           })
         )
-        expect(result.traces?.[0]?.name).toBe('Cycle 1')
       })
 
       it('consumes stream events internally', async () => {
@@ -568,12 +568,19 @@ describe('Agent', () => {
       const invokeResult = await agent1.invoke('Use tool')
       const { result: streamResult } = await collectGenerator(agent2.stream('Use tool'))
 
-      expect(invokeResult.stopReason).toBe(streamResult.stopReason)
-      expect(invokeResult.lastMessage).toEqual(streamResult.lastMessage)
-      expect(invokeResult.traces).toHaveLength(streamResult.traces!.length)
-      expect(invokeResult.traces!.map((t) => t.name)).toEqual(streamResult.traces!.map((t) => t.name))
-      expect(invokeResult.traces!.map((t) => t.children.length)).toEqual(
-        streamResult.traces!.map((t) => t.children.length)
+      expect(invokeResult).toEqual(
+        expect.objectContaining({
+          stopReason: streamResult.stopReason,
+          lastMessage: streamResult.lastMessage,
+          traces: streamResult.traces?.map((t) =>
+            expect.objectContaining({
+              name: t.name,
+              children: expect.arrayContaining(
+                Array(t.children.length).fill(expect.objectContaining({ name: expect.any(String) }))
+              ),
+            })
+          ),
+        })
       )
     })
   })

@@ -215,11 +215,11 @@ describe('AgentResult', () => {
 
       const json = result.toJSON()
 
-      expect(json).toHaveProperty('type', 'agentResult')
-      expect(json).toHaveProperty('stopReason', 'endTurn')
-      expect(json).toHaveProperty('lastMessage')
-      expect(json).not.toHaveProperty('traces')
-      expect(json).not.toHaveProperty('metrics')
+      expect(json).toEqual({
+        type: 'agentResult',
+        stopReason: 'endTurn',
+        lastMessage: message,
+      })
     })
 
     it('includes structuredOutput when present', () => {
@@ -276,10 +276,14 @@ describe('AgentResult', () => {
       const jsonString = JSON.stringify(result)
       const parsed = JSON.parse(jsonString)
 
-      expect(parsed).toHaveProperty('type', 'agentResult')
-      expect(parsed).toHaveProperty('stopReason', 'endTurn')
-      expect(parsed).not.toHaveProperty('traces')
-      expect(parsed).not.toHaveProperty('metrics')
+      expect(parsed).toEqual({
+        type: 'agentResult',
+        stopReason: 'endTurn',
+        lastMessage: expect.objectContaining({
+          role: 'assistant',
+          content: expect.any(Array),
+        }),
+      })
     })
 
     it('preserves traces and metrics as accessible properties', () => {
@@ -299,13 +303,18 @@ describe('AgentResult', () => {
       })
 
       // Properties are still accessible
-      expect(result.traces).toBe(traces)
-      expect(result.metrics).toBe(metrics)
+      expect({ traces: result.traces, metrics: result.metrics }).toEqual({
+        traces,
+        metrics,
+      })
 
       // But not in JSON
       const json = result.toJSON()
-      expect(json).not.toHaveProperty('traces')
-      expect(json).not.toHaveProperty('metrics')
+      expect(json).toEqual({
+        type: 'agentResult',
+        stopReason: 'endTurn',
+        lastMessage: message,
+      })
     })
 
     it('prevents bloated API responses when forwarding result directly', () => {
