@@ -475,7 +475,7 @@ export class Agent implements LocalAgent, InvokableAgent {
       tools: this.tools,
     }
     if (agentModelId) agentSpanOptions.modelId = agentModelId
-    if (this.systemPrompt) agentSpanOptions.systemPrompt = this.systemPrompt
+    if (this.systemPrompt !== undefined) agentSpanOptions.systemPrompt = this.systemPrompt
     const agentSpan = this._tracer.startAgentSpan(agentSpanOptions)
 
     let caughtError: Error | undefined
