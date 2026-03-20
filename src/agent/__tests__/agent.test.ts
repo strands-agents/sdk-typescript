@@ -469,9 +469,8 @@ describe('Agent', () => {
       const outputs: string[] = []
       const mockAppender = (text: string) => outputs.push(text)
 
-      // Create agent with custom printer for testing
-      const agent = new Agent({ model, printer: false })
-      ;(agent as any)._printer = new AgentPrinter(mockAppender)
+      // Create agent with custom printer plugin for testing
+      const agent = new Agent({ model, printer: false, plugins: [new AgentPrinter(mockAppender)] })
 
       await collectGenerator(agent.stream('Test'))
 
@@ -480,20 +479,63 @@ describe('Agent', () => {
       expect(allOutput).toContain('Hello world')
     })
 
-    it('does not create printer when printer is false', () => {
+    it('does not create printer when printer is false', async () => {
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
-      const agent = new Agent({ model, printer: false })
 
-      expect(agent).toBeDefined()
-      expect((agent as any)._printer).toBeUndefined()
+      // Capture any output that would happen if printer was active.
+      // Mock both process.stdout (Node) and console.log (browser) since the printer uses whichever is available.
+      const outputs: string[] = []
+      // @ts-expect-error -- process is typed as always-defined in Node types, but this check is needed for browser compatibility
+      const stdoutSpy = globalThis.process?.stdout?.write
+        ? vi.spyOn(process.stdout, 'write').mockImplementation((text) => {
+            outputs.push(String(text))
+            return true
+          })
+        : null
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation((text) => {
+        outputs.push(String(text))
+      })
+
+      try {
+        const agent = new Agent({ model, printer: false })
+        await collectGenerator(agent.stream('Test'))
+
+        // With printer disabled, no text should be output to stdout
+        expect(outputs.filter((o) => o.includes('Hello'))).toEqual([])
+      } finally {
+        stdoutSpy?.mockRestore()
+        consoleSpy.mockRestore()
+      }
     })
 
-    it('defaults to printer=true when not specified', () => {
+    it('defaults to printer=true when not specified', async () => {
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
-      const agent = new Agent({ model })
 
-      expect(agent).toBeDefined()
-      expect((agent as any)._printer).toBeDefined()
+      // Capture output to verify printer is active by default.
+      // Mock both process.stdout (Node) and console.log (browser) since the printer uses whichever is available.
+      const outputs: string[] = []
+      // @ts-expect-error -- process is typed as always-defined in Node types, but this check is needed for browser compatibility
+      const stdoutSpy = globalThis.process?.stdout?.write
+        ? vi.spyOn(process.stdout, 'write').mockImplementation((text) => {
+            outputs.push(String(text))
+            return true
+          })
+        : null
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation((text) => {
+        outputs.push(String(text))
+      })
+
+      try {
+        const agent = new Agent({ model })
+        await collectGenerator(agent.stream('Test'))
+
+        // With default printer enabled, text should be output
+        const allOutput = outputs.join('')
+        expect(allOutput).toContain('Hello')
+      } finally {
+        stdoutSpy?.mockRestore()
+        consoleSpy.mockRestore()
+      }
     })
 
     it('agent works correctly with printer disabled', async () => {
