@@ -222,7 +222,6 @@ describe('Agent', () => {
             metrics: expectLoopMetrics({ cycleCount: 1 }),
           })
         )
-        expect(result.traces).toBeDefined()
       })
     })
 
@@ -266,20 +265,16 @@ describe('Agent', () => {
             usage: { inputTokens: 300, outputTokens: 80, totalTokens: 380 },
           })
         )
-        // Verify trace structure details
-        expect(result.traces).toEqual([
-          expect.objectContaining({
-            name: 'Cycle 1',
-            children: expect.arrayContaining([
-              expect.objectContaining({ name: 'stream_messages' }),
-              expect.objectContaining({ name: 'Tool: calc' }),
-            ]),
-          }),
-          expect.objectContaining({
-            name: 'Cycle 2',
-            children: expect.arrayContaining([expect.objectContaining({ name: 'stream_messages' })]),
-          }),
-        ])
+        // Verify detailed trace children structure
+        expect(result.traces?.[0]?.children).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ name: 'stream_messages' }),
+            expect.objectContaining({ name: 'Tool: calc' }),
+          ])
+        )
+        expect(result.traces?.[1]?.children).toEqual(
+          expect.arrayContaining([expect.objectContaining({ name: 'stream_messages' })])
+        )
       })
 
       it('stores cycleId in trace metadata', async () => {
@@ -573,10 +568,7 @@ describe('Agent', () => {
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
       const agent = new Agent({ model })
 
-      const messages = agent.messages
-
-      expect(messages).toBeDefined()
-      expect(Array.isArray(messages)).toBe(true)
+      expect(agent.messages).toEqual([])
     })
 
     it('reflects conversation history after invoke', async () => {
@@ -585,13 +577,16 @@ describe('Agent', () => {
 
       await agent.invoke('Hello')
 
-      const messages = agent.messages
-      expect(messages.length).toBeGreaterThan(0)
-      expect(messages.length).toBe(2)
-      expect(messages[0]?.role).toBe('user')
-      expect(messages[0]?.content).toEqual([{ type: 'textBlock', text: 'Hello' }])
-      expect(messages[1]?.role).toBe('assistant')
-      expect(messages[1]?.content).toEqual([{ type: 'textBlock', text: 'Response' }])
+      expect(agent.messages).toEqual([
+        expect.objectContaining({
+          role: 'user',
+          content: [{ type: 'textBlock', text: 'Hello' }],
+        }),
+        expect.objectContaining({
+          role: 'assistant',
+          content: [{ type: 'textBlock', text: 'Response' }],
+        }),
+      ])
     })
   })
 

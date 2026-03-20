@@ -533,9 +533,9 @@ expect(result).toEqual(
 **Options:**
 
 - `stopReason` (required) - Expected stop reason ('endTurn', 'toolUse', 'maxTokens')
-- `messageText` (optional) - Expected text content in last message. When omitted, only validates message exists
+- `messageText` (optional) - Expected text content in last assistant message's TextBlock. When omitted, only validates message exists with role 'assistant'
 - `cycleCount` (required) - Expected number of agent loop cycles
-- `traceCount` (optional) - Expected number of traces. When omitted, only validates traces array exists
+- `traceCount` (optional) - Expected exact number of traces. When omitted, validates at least one trace exists
 - `toolNames` (optional) - Expected tool names that were invoked
 - `usage` (optional) - Expected token usage. When omitted, validates shape with `expect.any(Number)`
 

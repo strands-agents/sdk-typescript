@@ -113,8 +113,9 @@ export interface AgentResultMatcher extends Omit<LoopMetricsMatcher, 'cycleCount
   stopReason: StopReason
 
   /**
-   * Expected text content in the last message. When provided, asserts exact text.
-   * When omitted, asserts lastMessage exists with any content.
+   * Expected text content in the last assistant message's TextBlock.
+   * When provided, asserts exact text match in a TextBlock with role 'assistant'.
+   * When omitted, only validates lastMessage exists with role 'assistant'.
    */
   messageText?: string
 
@@ -124,8 +125,8 @@ export interface AgentResultMatcher extends Omit<LoopMetricsMatcher, 'cycleCount
   cycleCount: number
 
   /**
-   * Expected number of traces. When provided, asserts exact length.
-   * When omitted, asserts traces array exists with any length.
+   * Expected number of traces. When provided, asserts exact array length.
+   * When omitted, asserts traces array exists with at least one element.
    */
   traceCount?: number
 }
@@ -158,10 +159,8 @@ export function expectAgentResult(options: AgentResultMatcher): AgentResult {
 
   const expectedTraces =
     traceCount !== undefined
-      ? expect.arrayContaining(
-          Array.from({ length: traceCount }, (_, i) => expect.objectContaining({ name: `Cycle ${i + 1}` }))
-        )
-      : expect.any(Array)
+      ? expect.objectContaining({ length: traceCount })
+      : expect.arrayContaining([expect.objectContaining({ name: expect.any(String) })])
 
   // Build metrics matcher options, only including defined properties
   const metricsOptions: LoopMetricsMatcher = { cycleCount }
