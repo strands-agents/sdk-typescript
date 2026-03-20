@@ -28,6 +28,7 @@ import type { EdgeDefinition } from './edge.js'
 import { Edge } from './edge.js'
 import { Queue } from './queue.js'
 import { Tracer } from '../telemetry/tracer.js'
+import type { Span } from '@opentelemetry/api'
 import { normalizeError } from '../errors.js'
 
 /**
@@ -213,7 +214,7 @@ export class Graph implements MultiAgent {
           this._checkSteps(state)
           state.steps++
 
-          streams.set(node.id, this._streamNode(node, input, state, queue))
+          streams.set(node.id, this._streamNode(node, input, state, queue, multiAgentSpan))
         }
 
         await queue.wait()
@@ -278,10 +279,18 @@ export class Graph implements MultiAgent {
   /**
    * Executes a single node, pushing streaming events to the shared queue in real-time.
    */
-  private async _streamNode(node: Node, input: MultiAgentInput, state: MultiAgentState, queue: Queue): Promise<void> {
+  private async _streamNode(
+    node: Node,
+    input: MultiAgentInput,
+    state: MultiAgentState,
+    queue: Queue,
+    multiAgentSpan: Span | null
+  ): Promise<void> {
     const nodeState = state.node(node.id)!
 
-    const nodeSpan = this._tracer.startNodeSpan({ nodeId: node.id, nodeType: node.type })
+    const nodeSpan = this._tracer.withSpanContext(multiAgentSpan, () =>
+      this._tracer.startNodeSpan({ nodeId: node.id, nodeType: node.type })
+    )
 
     const beforeEvent = new BeforeNodeCallEvent({ orchestrator: this, state, nodeId: node.id })
     await queue.send({ type: 'event', node, event: beforeEvent })

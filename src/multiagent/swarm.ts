@@ -1,5 +1,5 @@
 import { logger } from '../logging/logger.js'
-import type { AttributeValue } from '@opentelemetry/api'
+import type { AttributeValue, Span } from '@opentelemetry/api'
 import type { InvokableAgent } from '../types/agent.js'
 import type { MultiAgentInput } from './multiagent.js'
 import { z } from 'zod'
@@ -212,7 +212,7 @@ export class Swarm implements MultiAgent {
         state.steps++
 
         // Execute current node
-        const nodeResult = yield* this._streamNode(node, input, state, handoff)
+        const nodeResult = yield* this._streamNode(node, input, state, handoff, multiAgentSpan)
         handoff = nodeResult.structuredOutput as HandoffResult | undefined
         state.results.push(nodeResult)
 
@@ -256,11 +256,14 @@ export class Swarm implements MultiAgent {
     node: AgentNode,
     input: MultiAgentInput,
     state: MultiAgentState,
-    handoff?: HandoffResult
+    handoff: HandoffResult | undefined,
+    multiAgentSpan: Span | null
   ): AsyncGenerator<MultiAgentStreamEvent, NodeResult, undefined> {
     const nodeState = state.node(node.id)!
     const handoffSchema = this._buildHandoffSchema(node.id)
-    const nodeSpan = this._tracer.startNodeSpan({ nodeId: node.id, nodeType: node.type })
+    const nodeSpan = this._tracer.withSpanContext(multiAgentSpan, () =>
+      this._tracer.startNodeSpan({ nodeId: node.id, nodeType: node.type })
+    )
 
     const beforeEvent = new BeforeNodeCallEvent({ orchestrator: this, state, nodeId: node.id })
     yield beforeEvent

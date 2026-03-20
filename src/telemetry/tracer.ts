@@ -150,7 +150,7 @@ interface AgentTraceState {
  * when configured via setupTracer(). Local traces are lightweight, in-memory timing
  * trees that are always collected regardless of OTel configuration and returned
  * in AgentResult.traces for programmatic access.
- * 
+ *
  *
  */
 export class Tracer {
