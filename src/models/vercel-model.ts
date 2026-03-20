@@ -26,7 +26,7 @@ import { APICallError } from '@ai-sdk/provider'
 import type { SystemPrompt, StopReason } from '../types/messages.js'
 import type { ToolChoice, ToolSpec } from '../tools/types.js'
 import type { ModelStreamEvent, Usage } from './streaming.js'
-import { Message } from '../types/messages.js'
+import { Message, TextBlock } from '../types/messages.js'
 import { Model, type BaseModelConfig, type StreamOptions } from './model.js'
 import {
   ModelContentBlockDeltaEvent,
@@ -335,8 +335,8 @@ function formatMessages(messages: Message[], systemPrompt?: SystemPrompt): Langu
       typeof systemPrompt === 'string'
         ? systemPrompt
         : systemPrompt
-            .filter((block) => 'text' in block && typeof block.text === 'string')
-            .map((block) => (block as unknown as { text: string }).text)
+            .filter(isTextBlock)
+            .map((block) => block.text)
             .join('\n')
     if (text) {
       prompt.push({ role: 'system', content: text })
@@ -558,4 +558,11 @@ function formatToolChoice(toolChoice: ToolChoice): LanguageModelV3ToolChoice {
   if ('any' in toolChoice) return { type: 'required' }
   if ('tool' in toolChoice) return { type: 'tool', toolName: toolChoice.tool.name }
   return { type: 'auto' }
+}
+
+/**
+ * Type guard for TextBlock instances in system prompt content.
+ */
+function isTextBlock(block: unknown): block is TextBlock {
+  return typeof block === 'object' && block !== null && 'text' in block && typeof (block as TextBlock).text === 'string'
 }
