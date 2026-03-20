@@ -211,6 +211,19 @@ describe('Swarm', () => {
       await expect(swarm.invoke('start')).rejects.toThrow('swarm reached step limit')
     })
 
+    it('does not throw when swarm completes normally using exactly maxSteps', async () => {
+      const swarm = new Swarm({
+        nodes: [createHandoffAgent('a', { agentId: 'b', message: 'to b' }), createFinalAgent('b', 'done by b')],
+        start: 'a',
+        maxSteps: 2,
+      })
+
+      const result = await swarm.invoke('start')
+
+      expect(result.status).toBe(Status.COMPLETED)
+      expect(result.results.map((r) => r.nodeId)).toStrictEqual(['a', 'b'])
+    })
+
     it('returns cancelled result with custom message when cancel is a string', async () => {
       const swarm = new Swarm({
         nodes: [createFinalAgent('a', 'hi')],
