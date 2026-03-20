@@ -79,6 +79,10 @@ export class AgentPrinter implements Printer {
         this.handleToolResult(event)
         break
 
+      case 'agentResultEvent':
+        this.write('\n')
+        break
+
       // Ignore other event types
       default:
         break

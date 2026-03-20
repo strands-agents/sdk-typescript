@@ -20,7 +20,7 @@ describe('AgentPrinter', () => {
       await collectGenerator(agent.stream('Test'))
 
       const allOutput = outputs.join('')
-      expect(allOutput).toBe('Hello world')
+      expect(allOutput).toBe('Hello world\n')
     })
 
     it('prints reasoning content wrapped in tags', async () => {
@@ -35,7 +35,7 @@ describe('AgentPrinter', () => {
       await collectGenerator(agent.stream('Test'))
 
       const allOutput = outputs.join('')
-      expect(allOutput).toBe('\n💭 Reasoning:\n   Let me think\n')
+      expect(allOutput).toBe('\n💭 Reasoning:\n   Let me think\n\n')
     })
 
     it('prints text and reasoning together', async () => {
@@ -53,7 +53,7 @@ describe('AgentPrinter', () => {
       await collectGenerator(agent.stream('Test'))
 
       const allOutput = outputs.join('')
-      expect(allOutput).toBe('Answer: \n💭 Reasoning:\n   thinking\n')
+      expect(allOutput).toBe('Answer: \n💭 Reasoning:\n   thinking\n\n')
     })
 
     it('handles newlines in reasoning content', async () => {
@@ -76,7 +76,7 @@ describe('AgentPrinter', () => {
    First line
    Second line
    Third line
-`
+\n`
       expect(allOutput).toBe(expected)
     })
 
@@ -104,7 +104,7 @@ describe('AgentPrinter', () => {
       await collectGenerator(agent.stream('Test'))
 
       const allOutput = outputs.join('')
-      expect(allOutput).toBe('\n🔧 Tool #1: calc\n✓ Tool completed\nResult: 4')
+      expect(allOutput).toBe('\n🔧 Tool #1: calc\n✓ Tool completed\nResult: 4\n')
     })
 
     it('prints tool error', async () => {
@@ -131,7 +131,7 @@ describe('AgentPrinter', () => {
       await collectGenerator(agent.stream('Test'))
 
       const allOutput = outputs.join('')
-      expect(allOutput).toBe('\n🔧 Tool #1: bad_tool\n✗ Tool failed\nError handled')
+      expect(allOutput).toBe('\n🔧 Tool #1: bad_tool\n✗ Tool failed\nError handled\n')
     })
 
     it('prints comprehensive scenario with all output types', async () => {
@@ -195,7 +195,7 @@ The calculation succeeded.
 All done. 
 💭 Reasoning:
    Task completed successfully
-`
+\n`
 
       expect(allOutput).toBe(expected)
     })
