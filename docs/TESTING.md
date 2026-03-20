@@ -19,6 +19,7 @@ All test fixtures are located in `src/__fixtures__/`. Use these helpers to reduc
 | `createRandomTool()`   | `tool-helpers.ts`       | Create minimal mock tools when execution doesn't matter                              | [Tool Fixtures](#tool-fixtures-tool-helpersts)                              |
 | `createMockContext()`  | `tool-helpers.ts`       | Create mock `ToolContext` for testing tool implementations directly                  | [Tool Fixtures](#tool-fixtures-tool-helpersts)                              |
 | `createMockAgent()`    | `agent-helpers.ts`      | Create minimal mock Agent with messages and state                                    | [Agent Fixtures](#agent-fixtures-agent-helpersts)                           |
+| `expectAgentResult()`  | `agent-helpers.ts`      | Assert on `AgentResult` with expected stop reason, message text, cycle count, and traces | [Agent Fixtures](#agent-fixtures-agent-helpersts)                           |
 | `isNode` / `isBrowser` | `environment.ts`        | Environment detection for conditional test execution                                 | [Environment Fixtures](#environment-fixtures-environmentts)                 |
 | `MockSpan`             | `mock-span.ts`          | Mock OTEL Span that records all setAttribute/addEvent/end calls for assertion            | [Telemetry Fixtures](#telemetry-fixtures-mock-spants-mock-meterts)          |
 | `eventAttr()`          | `mock-span.ts`          | Extract a string attribute from a mock span event                                        | [Telemetry Fixtures](#telemetry-fixtures-mock-spants-mock-meterts)          |
@@ -463,6 +464,80 @@ const agent = createMockAgent({
   state: { key: 'value' },
 })
 ```
+
+- **`expectAgentResult(options)`** - Creates an asymmetric matcher that validates `AgentResult` structure and values. Reduces deeply nested assertions by providing a clean, readable matcher that combines stop reason, message text, metrics, and traces validation.
+
+```typescript
+import { expectAgentResult } from '../__fixtures__/agent-helpers'
+
+// ✅ RECOMMENDED - Clean, readable assertion
+expect(result).toEqual(
+  expectAgentResult({
+    stopReason: 'endTurn',
+    messageText: 'Hello, world!',
+    cycleCount: 1,
+    traceCount: 1,
+  })
+)
+
+// ✅ With tools and detailed metrics
+expect(result).toEqual(
+  expectAgentResult({
+    stopReason: 'endTurn',
+    messageText: 'The answer is 42',
+    cycleCount: 2,
+    toolNames: ['calculator'],
+    traceCount: 2,
+    usage: { inputTokens: 300, outputTokens: 80, totalTokens: 380 },
+  })
+)
+
+// ✅ For detailed trace structure validation, follow up with specific assertions
+expect(result).toEqual(
+  expectAgentResult({
+    stopReason: 'endTurn',
+    messageText: 'Done',
+    cycleCount: 2,
+    toolNames: ['calc'],
+  })
+)
+// Verify detailed trace structure
+expect(result.traces).toEqual([
+  expect.objectContaining({
+    name: 'Cycle 1',
+    children: expect.arrayContaining([
+      expect.objectContaining({ name: 'stream_messages' }),
+      expect.objectContaining({ name: 'Tool: calc' }),
+    ]),
+  }),
+  expect.objectContaining({
+    name: 'Cycle 2',
+    children: expect.arrayContaining([expect.objectContaining({ name: 'stream_messages' })]),
+  }),
+])
+
+// ❌ AVOID - Deeply nested, hard to read
+expect(result).toEqual(
+  expect.objectContaining({
+    stopReason: 'endTurn',
+    lastMessage: expect.objectContaining({
+      role: 'assistant',
+      content: expect.arrayContaining([expect.objectContaining({ type: 'textBlock', text: 'Hello' })]),
+    }),
+    metrics: expectLoopMetrics({ cycleCount: 1 }),
+    traces: expect.arrayContaining([expect.objectContaining({ name: 'Cycle 1' })]),
+  })
+)
+```
+
+**Options:**
+
+- `stopReason` (required) - Expected stop reason ('endTurn', 'toolUse', 'maxTokens')
+- `messageText` (optional) - Expected text content in last message. When omitted, only validates message exists
+- `cycleCount` (required) - Expected number of agent loop cycles
+- `traceCount` (optional) - Expected number of traces. When omitted, only validates traces array exists
+- `toolNames` (optional) - Expected tool names that were invoked
+- `usage` (optional) - Expected token usage. When omitted, validates shape with `expect.any(Number)`
 
 ### Environment Fixtures (`environment.ts`)
 

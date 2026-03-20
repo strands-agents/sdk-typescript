@@ -3,7 +3,10 @@
  * This module provides utilities for testing Agent-related implementations.
  */
 
+import { expect } from 'vitest'
 import type { Agent } from '../agent/agent.js'
+import type { AgentResult } from '../types/agent.js'
+import type { StopReason } from '../types/messages.js'
 import { Message, TextBlock } from '../types/messages.js'
 import type { Role } from '../types/messages.js'
 import { StateStore } from '../state-store.js'
@@ -11,6 +14,7 @@ import type { JSONValue } from '../types/json.js'
 import { ToolRegistry } from '../registry/tool-registry.js'
 import type { HookableEvent } from '../hooks/events.js'
 import type { HookableEventConstructor, HookCallback } from '../hooks/types.js'
+import { expectLoopMetrics, type LoopMetricsMatcher } from './metrics-helpers.js'
 
 /**
  * A hook registration captured by the mock agent's addHook.
@@ -97,4 +101,82 @@ export async function invokeTrackedHook<T extends HookableEvent>(agent: MockAgen
     throw new Error(`No hook registered for event type: ${event.constructor.name}`)
   }
   await hook.callback(event)
+}
+
+/**
+ * Options for building an AgentResult matcher.
+ */
+export interface AgentResultMatcher extends Omit<LoopMetricsMatcher, 'cycleCount'> {
+  /**
+   * Expected stop reason from the final model response.
+   */
+  stopReason: StopReason
+
+  /**
+   * Expected text content in the last message. When provided, asserts exact text.
+   * When omitted, asserts lastMessage exists with any content.
+   */
+  messageText?: string
+
+  /**
+   * Expected number of agent loop cycles.
+   */
+  cycleCount: number
+
+  /**
+   * Expected number of traces. When provided, asserts exact length.
+   * When omitted, asserts traces array exists with any length.
+   */
+  traceCount?: number
+}
+
+/**
+ * Creates an asymmetric matcher that validates AgentResult structure and values.
+ * Reduces nesting in test assertions by providing a clean, readable matcher.
+ *
+ * @param options - Expected result values
+ * @returns An asymmetric matcher suitable for use in expect().toEqual()
+ *
+ * @example
+ * ```typescript
+ * expect(result).toEqual(expectAgentResult({
+ *   stopReason: 'endTurn',
+ *   messageText: 'Hello',
+ *   cycleCount: 1,
+ * }))
+ * ```
+ */
+export function expectAgentResult(options: AgentResultMatcher): AgentResult {
+  const { stopReason, messageText, cycleCount, traceCount, toolNames, usage } = options
+
+  const expectedLastMessage = messageText
+    ? expect.objectContaining({
+        role: 'assistant',
+        content: expect.arrayContaining([expect.objectContaining({ type: 'textBlock', text: messageText })]),
+      })
+    : expect.objectContaining({ role: 'assistant' })
+
+  const expectedTraces =
+    traceCount !== undefined
+      ? expect.arrayContaining(
+          Array.from({ length: traceCount }, (_, i) => expect.objectContaining({ name: `Cycle ${i + 1}` }))
+        )
+      : expect.any(Array)
+
+  // Build metrics matcher options, only including defined properties
+  const metricsOptions: LoopMetricsMatcher = { cycleCount }
+  if (toolNames !== undefined) {
+    metricsOptions.toolNames = toolNames
+  }
+  if (usage !== undefined) {
+    metricsOptions.usage = usage
+  }
+
+  return expect.objectContaining({
+    type: 'agentResult',
+    stopReason,
+    lastMessage: expectedLastMessage,
+    metrics: expectLoopMetrics(metricsOptions),
+    traces: expectedTraces,
+  }) as AgentResult
 }

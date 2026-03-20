@@ -23,6 +23,7 @@ import { BeforeInvocationEvent, BeforeToolsEvent } from '../../hooks/events.js'
 import { BedrockModel } from '../../models/bedrock.js'
 import { StructuredOutputException } from '../../structured-output/exceptions.js'
 import { expectLoopMetrics } from '../../__fixtures__/metrics-helpers.js'
+import { expectAgentResult } from '../../__fixtures__/agent-helpers.js'
 
 describe('Agent', () => {
   describe('stream', () => {
@@ -65,24 +66,16 @@ describe('Agent', () => {
         const { result } = await collectGenerator(agent.stream('Test prompt'))
 
         expect(result).toEqual(
-          expect.objectContaining({
+          expectAgentResult({
             stopReason: 'endTurn',
-            lastMessage: expect.objectContaining({
-              role: 'assistant',
-              content: expect.arrayContaining([expect.objectContaining({ type: 'textBlock', text: 'Hello' })]),
-            }),
-            metrics: expectLoopMetrics({ cycleCount: 1 }),
-            traces: expect.arrayContaining([
-              expect.objectContaining({
-                name: 'Cycle 1',
-                children: expect.arrayContaining([
-                  expect.objectContaining({
-                    name: 'stream_messages',
-                  }),
-                ]),
-              }),
-            ]),
+            messageText: 'Hello',
+            cycleCount: 1,
+            traceCount: 1,
           })
+        )
+        // Verify trace structure
+        expect(result.traces?.[0]?.children).toEqual(
+          expect.arrayContaining([expect.objectContaining({ name: 'stream_messages' })])
         )
       })
     })
@@ -203,15 +196,11 @@ describe('Agent', () => {
         const result = await agent.invoke('Test prompt')
 
         expect(result).toEqual(
-          expect.objectContaining({
+          expectAgentResult({
             stopReason: 'endTurn',
-            lastMessage: expect.objectContaining({
-              type: 'message',
-              role: 'assistant',
-              content: expect.arrayContaining([expect.objectContaining({ type: 'textBlock', text: 'Response text' })]),
-            }),
-            metrics: expectLoopMetrics({ cycleCount: 1 }),
-            traces: expect.arrayContaining([expect.objectContaining({ name: 'Cycle 1' })]),
+            messageText: 'Response text',
+            cycleCount: 1,
+            traceCount: 1,
           })
         )
       })
@@ -268,35 +257,29 @@ describe('Agent', () => {
         const result = await agent.invoke('What is 1 + 2?')
 
         expect(result).toEqual(
-          expect.objectContaining({
+          expectAgentResult({
             stopReason: 'endTurn',
-            lastMessage: expect.objectContaining({
-              type: 'message',
-              role: 'assistant',
-              content: expect.arrayContaining([
-                expect.objectContaining({ type: 'textBlock', text: 'The answer is 3' }),
-              ]),
-            }),
-            metrics: expectLoopMetrics({
-              cycleCount: 2,
-              toolNames: ['calc'],
-              usage: { inputTokens: 300, outputTokens: 80, totalTokens: 380 },
-            }),
-            traces: expect.arrayContaining([
-              expect.objectContaining({
-                name: 'Cycle 1',
-                children: expect.arrayContaining([
-                  expect.objectContaining({ name: 'stream_messages' }),
-                  expect.objectContaining({ name: 'Tool: calc' }),
-                ]),
-              }),
-              expect.objectContaining({
-                name: 'Cycle 2',
-                children: expect.arrayContaining([expect.objectContaining({ name: 'stream_messages' })]),
-              }),
-            ]),
+            messageText: 'The answer is 3',
+            cycleCount: 2,
+            toolNames: ['calc'],
+            traceCount: 2,
+            usage: { inputTokens: 300, outputTokens: 80, totalTokens: 380 },
           })
         )
+        // Verify trace structure details
+        expect(result.traces).toEqual([
+          expect.objectContaining({
+            name: 'Cycle 1',
+            children: expect.arrayContaining([
+              expect.objectContaining({ name: 'stream_messages' }),
+              expect.objectContaining({ name: 'Tool: calc' }),
+            ]),
+          }),
+          expect.objectContaining({
+            name: 'Cycle 2',
+            children: expect.arrayContaining([expect.objectContaining({ name: 'stream_messages' })]),
+          }),
+        ])
       })
 
       it('stores cycleId in trace metadata', async () => {
