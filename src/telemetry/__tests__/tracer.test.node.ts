@@ -588,9 +588,12 @@ describe('Tracer', () => {
       tracer.startAgentLoopSpan({ cycleId: 'cycle-123', messages: [] })
 
       const traces = tracer.localTraces
-      expect(traces).toHaveLength(1)
-      expect(traces[0]!.name).toBe('Cycle 1')
-      expect(traces[0]!.metadata.cycleId).toBe('cycle-123')
+      expect(traces).toEqual([
+        expect.objectContaining({
+          name: 'Cycle 1',
+          metadata: expect.objectContaining({ cycleId: 'cycle-123' }),
+        }),
+      ])
     })
 
     it('stores unique cycleIds for multiple cycles', () => {
@@ -601,9 +604,16 @@ describe('Tracer', () => {
       tracer.startAgentLoopSpan({ cycleId: 'cycle-xyz', messages: [] })
 
       const traces = tracer.localTraces
-      expect(traces).toHaveLength(2)
-      expect(traces[0]!.metadata.cycleId).toBe('cycle-abc')
-      expect(traces[1]!.metadata.cycleId).toBe('cycle-xyz')
+      expect(traces).toEqual([
+        expect.objectContaining({
+          name: 'Cycle 1',
+          metadata: expect.objectContaining({ cycleId: 'cycle-abc' }),
+        }),
+        expect.objectContaining({
+          name: 'Cycle 2',
+          metadata: expect.objectContaining({ cycleId: 'cycle-xyz' }),
+        }),
+      ])
     })
   })
 

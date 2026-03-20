@@ -72,9 +72,18 @@ describe('Agent', () => {
               content: expect.arrayContaining([expect.objectContaining({ type: 'textBlock', text: 'Hello' })]),
             }),
             metrics: expectLoopMetrics({ cycleCount: 1 }),
+            traces: expect.arrayContaining([
+              expect.objectContaining({
+                name: 'Cycle 1',
+                children: expect.arrayContaining([
+                  expect.objectContaining({
+                    name: 'stream_messages',
+                  }),
+                ]),
+              }),
+            ]),
           })
         )
-        expect(result.traces?.[0]?.children[0]?.name).toBe('stream_messages')
       })
     })
 
@@ -273,10 +282,21 @@ describe('Agent', () => {
               toolNames: ['calc'],
               usage: { inputTokens: 300, outputTokens: 80, totalTokens: 380 },
             }),
+            traces: expect.arrayContaining([
+              expect.objectContaining({
+                name: 'Cycle 1',
+                children: expect.arrayContaining([
+                  expect.objectContaining({ name: 'stream_messages' }),
+                  expect.objectContaining({ name: 'Tool: calc' }),
+                ]),
+              }),
+              expect.objectContaining({
+                name: 'Cycle 2',
+                children: expect.arrayContaining([expect.objectContaining({ name: 'stream_messages' })]),
+              }),
+            ]),
           })
         )
-        expect(result.traces?.[0]?.children[1]?.name).toBe('Tool: calc')
-        expect(result.traces?.[1]?.children[0]?.name).toBe('stream_messages')
       })
 
       it('stores cycleId in trace metadata', async () => {
@@ -298,9 +318,16 @@ describe('Agent', () => {
 
         const result = await agent.invoke('Test')
 
-        expect(result.traces).toHaveLength(2)
-        expect(result.traces![0]!.metadata.cycleId).toBe('cycle-1')
-        expect(result.traces![1]!.metadata.cycleId).toBe('cycle-2')
+        expect(result.traces).toEqual([
+          expect.objectContaining({
+            name: 'Cycle 1',
+            metadata: expect.objectContaining({ cycleId: 'cycle-1' }),
+          }),
+          expect.objectContaining({
+            name: 'Cycle 2',
+            metadata: expect.objectContaining({ cycleId: 'cycle-2' }),
+          }),
+        ])
       })
 
       it('stores tool metadata in trace children', async () => {
@@ -322,10 +349,22 @@ describe('Agent', () => {
 
         const result = await agent.invoke('Test')
 
-        const toolTrace = result.traces![0]!.children.find((child) => child.name.startsWith('Tool:'))
-        expect(toolTrace).toBeDefined()
-        expect(toolTrace!.metadata.toolUseId).toBe('tool-abc123')
-        expect(toolTrace!.metadata.toolName).toBe('testTool')
+        expect(result.traces).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              name: 'Cycle 1',
+              children: expect.arrayContaining([
+                expect.objectContaining({
+                  name: 'Tool: testTool',
+                  metadata: expect.objectContaining({
+                    toolUseId: 'tool-abc123',
+                    toolName: 'testTool',
+                  }),
+                }),
+              ]),
+            }),
+          ])
+        )
       })
     })
 
@@ -426,14 +465,19 @@ describe('Agent', () => {
         await expect(agent.invoke('Test')).rejects.toThrow(MaxTokensError)
 
         // Cycle 1 completed (tool use), cycle 2 errored (maxTokens)
-        expect(tracer.localTraces).toHaveLength(2)
-        expect(tracer.localTraces[0]!.name).toBe('Cycle 1')
-        expect(tracer.localTraces[0]!.children).toHaveLength(2)
-        expect(tracer.localTraces[0]!.children[0]!.name).toBe('stream_messages')
-        expect(tracer.localTraces[0]!.children[1]!.name).toBe('Tool: testTool')
-        expect(tracer.localTraces[1]!.name).toBe('Cycle 2')
-        expect(tracer.localTraces[1]!.children).toHaveLength(1)
-        expect(tracer.localTraces[1]!.children[0]!.name).toBe('stream_messages')
+        expect(tracer.localTraces).toEqual([
+          expect.objectContaining({
+            name: 'Cycle 1',
+            children: [
+              expect.objectContaining({ name: 'stream_messages' }),
+              expect.objectContaining({ name: 'Tool: testTool' }),
+            ],
+          }),
+          expect.objectContaining({
+            name: 'Cycle 2',
+            children: [expect.objectContaining({ name: 'stream_messages' })],
+          }),
+        ])
       })
 
       it('tracks metrics when a hook throws an error', async () => {
