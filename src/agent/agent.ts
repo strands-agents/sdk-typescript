@@ -170,7 +170,7 @@ export class Agent implements LocalAgent, InvokableAgent {
   /**
    * The conversation history of messages between user and assistant.
    */
-  public readonly messages: Message[]
+  public messages: Message[]
   /**
    * App state storage accessible to tools and application logic.
    * State is not passed to the model during inference.
