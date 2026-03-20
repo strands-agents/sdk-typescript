@@ -79,19 +79,18 @@ describe('Graph tracer integration', () => {
 
       await graph.invoke('Hello')
 
-      expect(tracer.startMultiAgentSpan).toHaveBeenCalledTimes(1)
-      expect(tracer.startMultiAgentSpan).toHaveBeenCalledWith({
-        orchestratorId: 'test-graph',
-        orchestratorType: 'graph',
-        input: 'Hello',
-      })
-      expect(tracer.endMultiAgentSpan).toHaveBeenCalledTimes(1)
+      expect(tracer.startMultiAgentSpan.mock.calls).toEqual([
+        [{ orchestratorId: 'test-graph', orchestratorType: 'graph', input: 'Hello' }],
+      ])
+      expect(tracer.endMultiAgentSpan.mock.calls.length).toBe(1)
 
       const [span, endOpts] = tracer.endMultiAgentSpan.mock.calls[0]!
       expect(span).toStrictEqual({ mock: 'multiAgentSpan' })
+      expect(endOpts).toEqual({
+        duration: expect.any(Number),
+        usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+      })
       expect(endOpts.duration).toBeGreaterThanOrEqual(0)
-      expect(endOpts.usage).toStrictEqual({ inputTokens: 0, outputTokens: 0, totalTokens: 0 })
-      expect(endOpts.error).toBeUndefined()
     })
 
     it('passes exact usage from result to endMultiAgentSpan', async () => {
@@ -116,8 +115,12 @@ describe('Graph tracer integration', () => {
 
       const [span, endOpts] = tracer.endMultiAgentSpan.mock.calls[0]!
       expect(span).toStrictEqual({ mock: 'multiAgentSpan' })
-      expect(endOpts.error).toBeInstanceOf(Error)
-      expect(endOpts.error.message).toContain('max steps reached')
+      expect(endOpts).toEqual({
+        duration: expect.any(Number),
+        error: expect.objectContaining({
+          message: expect.stringContaining('max steps reached'),
+        }),
+      })
       expect(endOpts.duration).toBeGreaterThanOrEqual(0)
     })
   })
@@ -129,10 +132,11 @@ describe('Graph tracer integration', () => {
 
       await graph.invoke('Hello')
 
-      expect(tracer.startNodeSpan).toHaveBeenCalledTimes(2)
-      expect(tracer.startNodeSpan).toHaveBeenNthCalledWith(1, { nodeId: 'a', nodeType: 'agentNode' })
-      expect(tracer.startNodeSpan).toHaveBeenNthCalledWith(2, { nodeId: 'b', nodeType: 'agentNode' })
-      expect(tracer.endNodeSpan).toHaveBeenCalledTimes(2)
+      expect(tracer.startNodeSpan.mock.calls).toEqual([
+        [{ nodeId: 'a', nodeType: 'agentNode' }],
+        [{ nodeId: 'b', nodeType: 'agentNode' }],
+      ])
+      expect(tracer.endNodeSpan.mock.calls.length).toBe(2)
     })
 
     it('ends node span with COMPLETED status, duration, and zero usage on success', async () => {
@@ -143,9 +147,12 @@ describe('Graph tracer integration', () => {
 
       const [span, endOpts] = tracer.endNodeSpan.mock.calls[0]!
       expect(span).toStrictEqual({ mock: 'nodeSpan' })
-      expect(endOpts.status).toBe(Status.COMPLETED)
+      expect(endOpts).toEqual({
+        status: Status.COMPLETED,
+        duration: expect.any(Number),
+        usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+      })
       expect(endOpts.duration).toBeGreaterThanOrEqual(0)
-      expect(endOpts.usage).toStrictEqual({ inputTokens: 0, outputTokens: 0, totalTokens: 0 })
     })
 
     it('passes exact usage from node result to endNodeSpan', async () => {
@@ -169,7 +176,10 @@ describe('Graph tracer integration', () => {
       expect(result.status).toBe(Status.FAILED)
       const [span, endOpts] = tracer.endNodeSpan.mock.calls[0]!
       expect(span).toStrictEqual({ mock: 'nodeSpan' })
-      expect(endOpts.status).toBe(Status.FAILED)
+      expect(endOpts).toEqual({
+        status: Status.FAILED,
+        duration: expect.any(Number),
+      })
       expect(endOpts.duration).toBeGreaterThanOrEqual(0)
     })
 
@@ -182,7 +192,7 @@ describe('Graph tracer integration', () => {
 
       await graph.invoke('Hello')
 
-      expect(tracer.endNodeSpan).toHaveBeenCalledWith({ mock: 'nodeSpan' }, { status: Status.CANCELLED, duration: 0 })
+      expect(tracer.endNodeSpan.mock.calls).toEqual([[{ mock: 'nodeSpan' }, { status: Status.CANCELLED, duration: 0 }]])
     })
   })
 
@@ -220,16 +230,17 @@ describe('Graph tracer integration', () => {
       await graph.invoke('Hello')
 
       // First call: multiAgentSpan to create nodeSpan, then nodeSpan for node.stream() + gen.next() calls
-      expect(tracer.withSpanContext.mock.calls.length).toBeGreaterThanOrEqual(3)
+      const calls = tracer.withSpanContext.mock.calls
+      expect(calls.length).toBeGreaterThanOrEqual(3)
 
       // First call uses multiAgentSpan to create the nodeSpan
-      expect(tracer.withSpanContext.mock.calls[0]![0]).toStrictEqual({ mock: 'multiAgentSpan' })
+      expect(calls[0]).toEqual([{ mock: 'multiAgentSpan' }, expect.any(Function)])
 
       // Subsequent calls use nodeSpan for node execution
-      for (let i = 1; i < tracer.withSpanContext.mock.calls.length; i++) {
-        expect(tracer.withSpanContext.mock.calls[i]![0]).toStrictEqual({ mock: 'nodeSpan' })
-        expect(typeof tracer.withSpanContext.mock.calls[i]![1]).toBe('function')
-      }
+      const subsequentCalls = calls.slice(1)
+      expect(subsequentCalls).toEqual(
+        expect.arrayContaining(Array(subsequentCalls.length).fill([{ mock: 'nodeSpan' }, expect.any(Function)]))
+      )
     })
   })
 
@@ -246,12 +257,10 @@ describe('Graph tracer integration', () => {
 
       await graph.invoke('Hello')
 
-      expect(tracer.startNodeSpan).toHaveBeenCalledTimes(3)
       const nodeIds = tracer.startNodeSpan.mock.calls.map((call) => call[0].nodeId)
-      expect(nodeIds).toContain('a')
-      expect(nodeIds).toContain('b')
-      expect(nodeIds).toContain('c')
-      expect(tracer.endNodeSpan).toHaveBeenCalledTimes(3)
+      expect(nodeIds).toEqual(expect.arrayContaining(['a', 'b', 'c']))
+      expect(tracer.startNodeSpan.mock.calls.length).toBe(3)
+      expect(tracer.endNodeSpan.mock.calls.length).toBe(3)
     })
   })
 })

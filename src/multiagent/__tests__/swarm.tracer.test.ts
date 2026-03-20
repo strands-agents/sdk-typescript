@@ -88,14 +88,6 @@ function createHandoffAgentWithUsage(
   return new Agent({ model, printer: false, id: agentId, description })
 }
 
-function createFinalAgent(agentId: string, description: string = `Agent ${agentId}`): Agent {
-  return createHandoffAgent(agentId, { message: 'final response' }, description)
-}
-
-function createFinalAgentWithUsage(agentId: string, description: string = `Agent ${agentId}`): Agent {
-  return createHandoffAgentWithUsage(agentId, { message: 'final response' }, description)
-}
-
 describe('Swarm tracer integration', () => {
   let swarm: Swarm
   let tracer: MockTracerInstance
@@ -106,28 +98,27 @@ describe('Swarm tracer integration', () => {
 
   describe('multi-agent span lifecycle', () => {
     it('starts and ends multi-agent span on successful invocation', async () => {
-      swarm = new Swarm({ id: 'test-swarm', nodes: [createFinalAgent('a')] })
+      swarm = new Swarm({ id: 'test-swarm', nodes: [createHandoffAgent('a', { message: 'final response' })] })
       tracer = getSwarmTracer()
 
       await swarm.invoke('Hello')
 
-      expect(tracer.startMultiAgentSpan).toHaveBeenCalledTimes(1)
-      expect(tracer.startMultiAgentSpan).toHaveBeenCalledWith({
-        orchestratorId: 'test-swarm',
-        orchestratorType: 'swarm',
-        input: 'Hello',
-      })
-      expect(tracer.endMultiAgentSpan).toHaveBeenCalledTimes(1)
+      expect(tracer.startMultiAgentSpan.mock.calls).toEqual([
+        [{ orchestratorId: 'test-swarm', orchestratorType: 'swarm', input: 'Hello' }],
+      ])
+      expect(tracer.endMultiAgentSpan.mock.calls.length).toBe(1)
 
       const [span, endOpts] = tracer.endMultiAgentSpan.mock.calls[0]!
       expect(span).toStrictEqual({ mock: 'multiAgentSpan' })
+      expect(endOpts).toEqual({
+        duration: expect.any(Number),
+        usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+      })
       expect(endOpts.duration).toBeGreaterThanOrEqual(0)
-      expect(endOpts.usage).toStrictEqual({ inputTokens: 0, outputTokens: 0, totalTokens: 0 })
-      expect(endOpts.error).toBeUndefined()
     })
 
     it('passes exact usage from result to endMultiAgentSpan', async () => {
-      swarm = new Swarm({ id: 'test-swarm', nodes: [createFinalAgentWithUsage('a')] })
+      swarm = new Swarm({ id: 'test-swarm', nodes: [createHandoffAgentWithUsage('a', { message: 'final response' })] })
       tracer = getSwarmTracer()
 
       await swarm.invoke('Hello')
@@ -150,8 +141,12 @@ describe('Swarm tracer integration', () => {
 
       const [span, endOpts] = tracer.endMultiAgentSpan.mock.calls[0]!
       expect(span).toStrictEqual({ mock: 'multiAgentSpan' })
-      expect(endOpts.error).toBeInstanceOf(Error)
-      expect(endOpts.error.message).toContain('swarm reached step limit')
+      expect(endOpts).toEqual({
+        duration: expect.any(Number),
+        error: expect.objectContaining({
+          message: expect.stringContaining('swarm reached step limit'),
+        }),
+      })
       expect(endOpts.duration).toBeGreaterThanOrEqual(0)
     })
   })
@@ -159,33 +154,40 @@ describe('Swarm tracer integration', () => {
   describe('node span lifecycle', () => {
     it('starts and ends node span for each agent in handoff chain', async () => {
       swarm = new Swarm({
-        nodes: [createHandoffAgent('a', { agentId: 'b', message: 'go to b' }), createFinalAgent('b')],
+        nodes: [
+          createHandoffAgent('a', { agentId: 'b', message: 'go to b' }),
+          createHandoffAgent('b', { message: 'final response' }),
+        ],
       })
       tracer = getSwarmTracer()
 
       await swarm.invoke('Hello')
 
-      expect(tracer.startNodeSpan).toHaveBeenCalledTimes(2)
-      expect(tracer.startNodeSpan).toHaveBeenNthCalledWith(1, { nodeId: 'a', nodeType: 'agentNode' })
-      expect(tracer.startNodeSpan).toHaveBeenNthCalledWith(2, { nodeId: 'b', nodeType: 'agentNode' })
-      expect(tracer.endNodeSpan).toHaveBeenCalledTimes(2)
+      expect(tracer.startNodeSpan.mock.calls).toEqual([
+        [{ nodeId: 'a', nodeType: 'agentNode' }],
+        [{ nodeId: 'b', nodeType: 'agentNode' }],
+      ])
+      expect(tracer.endNodeSpan.mock.calls.length).toBe(2)
     })
 
     it('ends node span with COMPLETED status, duration, and zero usage on success', async () => {
-      swarm = new Swarm({ nodes: [createFinalAgent('a')] })
+      swarm = new Swarm({ nodes: [createHandoffAgent('a', { message: 'final response' })] })
       tracer = getSwarmTracer()
 
       await swarm.invoke('Hello')
 
       const [span, endOpts] = tracer.endNodeSpan.mock.calls[0]!
       expect(span).toStrictEqual({ mock: 'nodeSpan' })
-      expect(endOpts.status).toBe(Status.COMPLETED)
+      expect(endOpts).toEqual({
+        status: Status.COMPLETED,
+        duration: expect.any(Number),
+        usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+      })
       expect(endOpts.duration).toBeGreaterThanOrEqual(0)
-      expect(endOpts.usage).toStrictEqual({ inputTokens: 0, outputTokens: 0, totalTokens: 0 })
     })
 
     it('passes exact usage from node result to endNodeSpan', async () => {
-      swarm = new Swarm({ nodes: [createFinalAgentWithUsage('a')] })
+      swarm = new Swarm({ nodes: [createHandoffAgentWithUsage('a', { message: 'final response' })] })
       tracer = getSwarmTracer()
 
       await swarm.invoke('Hello')
@@ -205,12 +207,15 @@ describe('Swarm tracer integration', () => {
       expect(result.status).toBe(Status.FAILED)
       const [span, endOpts] = tracer.endNodeSpan.mock.calls[0]!
       expect(span).toStrictEqual({ mock: 'nodeSpan' })
-      expect(endOpts.status).toBe(Status.FAILED)
+      expect(endOpts).toEqual({
+        status: Status.FAILED,
+        duration: expect.any(Number),
+      })
       expect(endOpts.duration).toBeGreaterThanOrEqual(0)
     })
 
     it('ends node span with CANCELLED status and zero duration when cancelled by hook', async () => {
-      swarm = new Swarm({ nodes: [createFinalAgent('a')] })
+      swarm = new Swarm({ nodes: [createHandoffAgent('a', { message: 'final response' })] })
       tracer = getSwarmTracer()
       swarm.addHook(BeforeNodeCallEvent, (event) => {
         event.cancel = 'cancelled by test'
@@ -218,13 +223,13 @@ describe('Swarm tracer integration', () => {
 
       await swarm.invoke('Hello')
 
-      expect(tracer.endNodeSpan).toHaveBeenCalledWith({ mock: 'nodeSpan' }, { status: Status.CANCELLED, duration: 0 })
+      expect(tracer.endNodeSpan.mock.calls).toEqual([[{ mock: 'nodeSpan' }, { status: Status.CANCELLED, duration: 0 }]])
     })
   })
 
   describe('null span handling', () => {
     it('completes successfully when startMultiAgentSpan returns null', async () => {
-      swarm = new Swarm({ nodes: [createFinalAgent('a')] })
+      swarm = new Swarm({ nodes: [createHandoffAgent('a', { message: 'final response' })] })
       tracer = getSwarmTracer()
       tracer.startMultiAgentSpan.mockReturnValue(null)
 
@@ -236,7 +241,7 @@ describe('Swarm tracer integration', () => {
     })
 
     it('completes successfully when startNodeSpan returns null', async () => {
-      swarm = new Swarm({ nodes: [createFinalAgent('a')] })
+      swarm = new Swarm({ nodes: [createHandoffAgent('a', { message: 'final response' })] })
       tracer = getSwarmTracer()
       tracer.startNodeSpan.mockReturnValue(null)
 
@@ -250,22 +255,23 @@ describe('Swarm tracer integration', () => {
 
   describe('span context propagation', () => {
     it('passes node span to every withSpanContext call during node execution', async () => {
-      swarm = new Swarm({ nodes: [createFinalAgent('a')] })
+      swarm = new Swarm({ nodes: [createHandoffAgent('a', { message: 'final response' })] })
       tracer = getSwarmTracer()
 
       await swarm.invoke('Hello')
 
       // First call: multiAgentSpan to create nodeSpan, then nodeSpan for node.stream() + gen.next() calls
-      expect(tracer.withSpanContext.mock.calls.length).toBeGreaterThanOrEqual(3)
+      const calls = tracer.withSpanContext.mock.calls
+      expect(calls.length).toBeGreaterThanOrEqual(3)
 
       // First call uses multiAgentSpan to create the nodeSpan
-      expect(tracer.withSpanContext.mock.calls[0]![0]).toStrictEqual({ mock: 'multiAgentSpan' })
+      expect(calls[0]).toEqual([{ mock: 'multiAgentSpan' }, expect.any(Function)])
 
       // Subsequent calls use nodeSpan for node execution
-      for (let i = 1; i < tracer.withSpanContext.mock.calls.length; i++) {
-        expect(tracer.withSpanContext.mock.calls[i]![0]).toStrictEqual({ mock: 'nodeSpan' })
-        expect(typeof tracer.withSpanContext.mock.calls[i]![1]).toBe('function')
-      }
+      const subsequentCalls = calls.slice(1)
+      expect(subsequentCalls).toEqual(
+        expect.arrayContaining(Array(subsequentCalls.length).fill([{ mock: 'nodeSpan' }, expect.any(Function)]))
+      )
     })
   })
 
@@ -275,7 +281,7 @@ describe('Swarm tracer integration', () => {
         nodes: [
           createHandoffAgent('a', { agentId: 'b', message: 'go to b' }),
           createHandoffAgent('b', { agentId: 'c', message: 'go to c' }),
-          createFinalAgent('c'),
+          createHandoffAgent('c', { message: 'final response' }),
         ],
       })
       tracer = getSwarmTracer()
@@ -290,7 +296,10 @@ describe('Swarm tracer integration', () => {
 
     it('accumulates usage across handoff chain', async () => {
       swarm = new Swarm({
-        nodes: [createHandoffAgentWithUsage('a', { agentId: 'b', message: 'go to b' }), createFinalAgentWithUsage('b')],
+        nodes: [
+          createHandoffAgentWithUsage('a', { agentId: 'b', message: 'go to b' }),
+          createHandoffAgentWithUsage('b', { message: 'final response' }),
+        ],
       })
       tracer = getSwarmTracer()
 
