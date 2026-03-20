@@ -172,3 +172,14 @@ export class ToolValidationError extends Error {
     this.name = 'ToolValidationError'
   }
 }
+/**
+ * Thrown when the model fails to produce structured output.
+ * This occurs when the LLM refuses to use the structured output tool
+ * even after being forced via toolChoice.
+ */
+export class StructuredOutputError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'StructuredOutputError'
+  }
+}

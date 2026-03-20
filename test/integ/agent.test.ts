@@ -505,6 +505,22 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel, mode
       await collectGenerator(agent.stream('What was the result?'))
     })
 
+    describe.skipIf(!supports.tools)('Structured Output', () => {
+      it('returns validated structured output', async () => {
+        const schema = z.object({ answer: z.number() })
+
+        const agent = new Agent({
+          model: createModel(),
+          printer: false,
+          structuredOutputSchema: schema,
+        })
+
+        const result = await agent.invoke('What is 2 + 2?')
+
+        expect(result.structuredOutput).toStrictEqual({ answer: 4 })
+      })
+    })
+
     it.skipIf(!supports.reasoning)('emits reasoning content with thinking model', async () => {
       const agent = new Agent({
         model: createModel(models.reasoning),

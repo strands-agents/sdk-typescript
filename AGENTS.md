@@ -64,20 +64,17 @@ sdk-typescript/
 │   │   ├── model.ts              # Base model provider interface
 │   │   └── streaming.ts          # Streaming event types
 │   │
-│   ├── structured-output/        # Structured output with Zod schemas
-│   │   ├── exceptions.ts         # StructuredOutputException
-│   │   ├── utils.ts              # Zod to JSON Schema conversion
-│   │   ├── tool.ts               # Tool implementation for validation
-│   │   └── context.ts            # Per-invocation context management
-│   │
 │   ├── tools/                    # Tool definitions and types
 │   │   ├── __tests__/            # Unit tests for tools
 │   │   │   ├── registry.test.ts  # Tests for ToolRegistry
-│   │   │   └── tool.test.ts      # Tests for FunctionTool
+│   │   │   ├── tool.test.ts      # Tests for FunctionTool
+│   │   │   └── structured-output-tool.test.ts  # Tests for StructuredOutputTool
 │   │   ├── function-tool.ts      # FunctionTool implementation
 │   │   ├── mcp-tool.ts           # MCP tool wrapper
+│   │   ├── structured-output-tool.ts  # Structured output validation tool
 │   │   ├── registry.ts           # ToolRegistry implementation
 │   │   ├── tool.ts               # Tool interface
+│   │   ├── zod-utils.ts          # Zod to JSON Schema conversion
 │   │   └── types.ts              # Tool-related type definitions
 │   │
 │   ├── multiagent/               # Multi-agent orchestration patterns
@@ -175,7 +172,7 @@ sdk-typescript/
 - **`src/hooks/`**: Hooks system for event-driven extensibility
 - **`src/plugins/`**: Plugin system for extending agent functionality
 - **`src/models/`**: Model provider implementations (Bedrock, OpenAI, future providers)
-- **`src/structured-output/`**: Structured output with Zod schema validation and automatic retry logic
+- **`src/tools/`**: Tool definitions, types, and structured output validation with Zod schemas
 - **`src/tools/`**: Tool definitions and types for agent tool use
 - **`src/multiagent/`**: Multi-agent orchestration patterns (Graph for DAG execution, Swarm for handoff-based routing)
 - **`src/types/`**: Core type definitions used across the SDK

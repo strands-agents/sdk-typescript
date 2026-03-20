@@ -25,6 +25,7 @@ export {
   ConcurrentInvocationError,
   ModelThrottledError,
   ToolValidationError,
+  StructuredOutputError,
 } from './errors.js'
 
 // JSON types
@@ -218,9 +219,6 @@ export type { Logger } from './logging/types.js'
 
 // MCP Client types and implementations
 export { type McpClientConfig, type TasksConfig, McpClient } from './mcp.js'
-
-// Structured output
-export { StructuredOutputException } from './structured-output/exceptions.js'
 
 // Session management
 export { SessionManager } from './session/session-manager.js'

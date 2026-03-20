@@ -24,7 +24,7 @@ import { McpClient } from '../mcp.js'
 import { type Tool, type ToolContext } from '../tools/tool.js'
 import type { ToolChoice } from '../tools/types.js'
 import { systemPromptFromData } from '../types/messages.js'
-import { normalizeError, ConcurrentInvocationError, MaxTokensError } from '../errors.js'
+import { normalizeError, ConcurrentInvocationError, StructuredOutputError } from '../errors.js'
 import { Model } from '../models/model.js'
 import type { BaseModelConfig, StreamAggregatedResult, StreamOptions } from '../models/model.js'
 import { isModelStreamEvent } from '../models/streaming.js'
@@ -57,8 +57,8 @@ import {
   ToolStreamUpdateEvent,
   type ModelStopData,
 } from '../hooks/events.js'
-import { createStructuredOutputContext } from '../structured-output/context.js'
-import { StructuredOutputException } from '../structured-output/exceptions.js'
+import { StructuredOutputTool, STRUCTURED_OUTPUT_TOOL_NAME } from '../tools/structured-output-tool.js'
+
 import type { z } from 'zod'
 import type { SessionManager } from '../session/session-manager.js'
 import { Tracer } from '../telemetry/tracer.js'
@@ -452,12 +452,12 @@ export class Agent implements LocalAgent, InvokableAgent {
     options?: InvokeOptions
   ): AsyncGenerator<AgentStreamEvent, AgentResult, undefined> {
     let currentArgs: InvokeArgs | undefined = args
-    let forcedToolChoice: ToolChoice | undefined = undefined
     let result: AgentResult | undefined
 
-    // Create structured output context (uses null object pattern when no schema)
-    const schema = options?.structuredOutputSchema ?? this._structuredOutputSchema
-    const context = createStructuredOutputContext(schema)
+    // Resolve structured output schema from per-invocation options or constructor config
+    const structuredOutputSchema = options?.structuredOutputSchema ?? this._structuredOutputSchema
+    const structuredOutputTool = structuredOutputSchema ? new StructuredOutputTool(structuredOutputSchema) : undefined
+    let structuredOutputChoice: ToolChoice | undefined
 
     // Emit event before the try block
     yield new BeforeInvocationEvent({ agent: this })
@@ -480,8 +480,10 @@ export class Agent implements LocalAgent, InvokableAgent {
 
     let caughtError: Error | undefined
     try {
-      // Register structured output tool
-      context.registerTool(this._toolRegistry)
+      // Register structured output tool if schema provided
+      if (structuredOutputTool) {
+        this._toolRegistry.add(structuredOutputTool)
+      }
 
       // Main agent loop - continues until model stops without requesting tools
       while (true) {
@@ -504,46 +506,58 @@ export class Agent implements LocalAgent, InvokableAgent {
             currentArgs = undefined
           }
 
-          const modelResult = yield* this.invokeModel(forcedToolChoice)
-          const wasForced = forcedToolChoice !== undefined
-          forcedToolChoice = undefined // Clear after use
+          const modelResult = yield* this._invokeModel(structuredOutputChoice)
 
           if (modelResult.stopReason !== 'toolUse') {
-            // Special handling for maxTokens - always fail regardless of whether we have structured output
-            if (modelResult.stopReason === 'maxTokens') {
-              throw new MaxTokensError(
-                'The model reached maxTokens before producing structured output. Consider increasing maxTokens in your model configuration.',
-                modelResult.message
-              )
-            }
-
-            // Check if we need to force structured output tool
-            if (!context.hasResult()) {
-              if (wasForced) {
-                // Already tried forcing - LLM refused to use the tool
-                throw new StructuredOutputException(
+            // If structured output is required, force it
+            if (structuredOutputTool) {
+              if (structuredOutputChoice) {
+                throw new StructuredOutputError(
                   'The model failed to invoke the structured output tool even after it was forced.'
                 )
               }
 
-              // Force the model to use the structured output tool
-              const toolName = context.getToolName()
-              forcedToolChoice = { tool: { name: toolName } }
-              this._meter.endCycle(cycleStartTime)
-              this._tracer.endAgentLoopSpan(cycleSpan)
+              structuredOutputChoice = { tool: { name: STRUCTURED_OUTPUT_TOOL_NAME } }
+            }
+
+            this._meter.endCycle(cycleStartTime)
+            this._tracer.endAgentLoopSpan(cycleSpan)
+
+            yield this._appendMessage(modelResult.message)
+
+            if (structuredOutputChoice) {
               continue
             }
 
-            // Loop terminates - no tool use requested (and structured output satisfied if needed)
-            yield this._appendMessage(modelResult.message)
+            result = new AgentResult({
+              stopReason: modelResult.stopReason,
+              lastMessage: modelResult.message,
+              traces: this._tracer.localTraces,
+              metrics: this._meter.metrics,
+            })
+            return result
+          }
 
-            // End cycle tracking
-            this._meter.endCycle(cycleStartTime)
+          // Execute tools
+          const toolResultMessage = yield* this.executeTools(modelResult.message, this._toolRegistry)
 
-            // End cycle span
-            this._tracer.endAgentLoopSpan(cycleSpan)
+          /**
+           * Deferred append: both messages are added AFTER tool execution completes.
+           * This keeps agent.messages in a valid, reinvokable state at all times.
+           * If interrupted during tool execution, messages has no dangling toolUse
+           * without a matching toolResult, so the agent can be reinvoked cleanly.
+           */
+          yield this._appendMessage(modelResult.message)
+          yield this._appendMessage(toolResultMessage)
 
-            const structuredOutput = context.getResult()
+          this._meter.endCycle(cycleStartTime)
+          this._tracer.endAgentLoopSpan(cycleSpan)
+
+          // Structured output captured: exit
+          const structuredOutput = structuredOutputTool
+            ? this._extractStructuredOutput(modelResult.message, toolResultMessage)
+            : undefined
+          if (structuredOutput !== undefined) {
             result = new AgentResult({
               stopReason: modelResult.stopReason,
               lastMessage: modelResult.message,
@@ -553,36 +567,7 @@ export class Agent implements LocalAgent, InvokableAgent {
             })
             return result
           }
-
-          // Execute tools sequentially
-          const toolResultMessage = yield* this.executeTools(modelResult.message, this._toolRegistry)
-
-          /**
-           * Deferred append: both messages are added AFTER tool execution completes.
-           * This keeps agent.messages in a valid, reinvokable state at all times:
-           *
-           * - If interrupted during tool execution, messages has no dangling toolUse
-           *   without a matching toolResult, so the agent can be reinvoked cleanly.
-           * - The Python SDK appends the assistant message BEFORE tool execution,
-           *   requiring recovery logic (generate_missing_tool_result_content) on
-           *   interrupts. We avoid that by deferring.
-           * - Trade-off: MessageAddedEvent for the assistant message fires after tools
-           *   complete (not before as in Python), and agent.messages is incomplete
-           *   during tool execution. Events like BeforeToolsEvent.message and
-           *   BeforeToolCallEvent.toolUse provide the data directly.
-           */
-          yield this._appendMessage(modelResult.message)
-          yield this._appendMessage(toolResultMessage)
-
-          // End cycle tracking
-          this._meter.endCycle(cycleStartTime)
-
-          // End cycle span
-          this._tracer.endAgentLoopSpan(cycleSpan)
-
-          // Continue loop
         } catch (error) {
-          // End cycle tracking and span with error
           this._meter.endCycle(cycleStartTime)
           this._tracer.endAgentLoopSpan(cycleSpan, { error: error as Error })
           throw error
@@ -599,12 +584,37 @@ export class Agent implements LocalAgent, InvokableAgent {
         ...(result?.stopReason && { stopReason: result.stopReason }),
       })
 
-      // Cleanup structured output context
-      context.cleanup(this._toolRegistry)
+      // Cleanup structured output tool
+      if (structuredOutputTool) {
+        this._toolRegistry.remove(STRUCTURED_OUTPUT_TOOL_NAME)
+      }
 
       // Always emit final event
       yield new AfterInvocationEvent({ agent: this })
     }
+  }
+
+  /**
+   * Extracts the validated structured output result from tool execution.
+   *
+   * @param toolUseMessage - The assistant message containing tool use blocks
+   * @param toolResultMessage - The message containing tool results
+   * @returns The parsed structured output, or undefined if not found
+   */
+  private _extractStructuredOutput(toolUseMessage: Message, toolResultMessage: Message): unknown | undefined {
+    const toolUse = toolUseMessage.content.find(
+      (block): block is ToolUseBlock => block.type === 'toolUseBlock' && block.name === STRUCTURED_OUTPUT_TOOL_NAME
+    )
+    if (!toolUse) return undefined
+
+    const toolResult = toolResultMessage.content.find(
+      (block): block is ToolResultBlock =>
+        block.type === 'toolResultBlock' && block.toolUseId === toolUse.toolUseId && block.status === 'success'
+    )
+    if (!toolResult) return undefined
+
+    const firstContent = toolResult.content[0]
+    return firstContent?.type === 'jsonBlock' ? firstContent.json : undefined
   }
 
   /**
@@ -668,8 +678,8 @@ export class Agent implements LocalAgent, InvokableAgent {
    * @param toolChoice - Optional tool choice to force specific tool usage
    * @returns Object containing the assistant message, stop reason, and optional redaction message
    */
-  private async *invokeModel(
-    forcedToolChoice?: ToolChoice
+  private async *_invokeModel(
+    toolChoice?: ToolChoice
   ): AsyncGenerator<AgentStreamEvent, StreamAggregatedResult, undefined> {
     const toolSpecs = this._toolRegistry.list().map((tool) => tool.toolSpec)
     const streamOptions: StreamOptions = { toolSpecs }
@@ -677,9 +687,9 @@ export class Agent implements LocalAgent, InvokableAgent {
       streamOptions.systemPrompt = this.systemPrompt
     }
 
-    // Add tool choice if provided (for structured output forcing)
-    if (forcedToolChoice) {
-      streamOptions.toolChoice = forcedToolChoice
+    // Add tool choice if provided
+    if (toolChoice) {
+      streamOptions.toolChoice = toolChoice
     }
 
     yield new BeforeModelCallEvent({ agent: this })
@@ -725,7 +735,7 @@ export class Agent implements LocalAgent, InvokableAgent {
       yield afterModelCallEvent
 
       if (afterModelCallEvent.retry) {
-        return yield* this.invokeModel(forcedToolChoice)
+        return yield* this._invokeModel(toolChoice)
       }
 
       return result
@@ -743,7 +753,7 @@ export class Agent implements LocalAgent, InvokableAgent {
 
       // After yielding, hooks have been invoked and may have set retry
       if (errorEvent.retry) {
-        return yield* this.invokeModel(forcedToolChoice)
+        return yield* this._invokeModel(toolChoice)
       }
 
       // Re-throw error

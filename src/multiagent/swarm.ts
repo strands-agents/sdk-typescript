@@ -347,6 +347,12 @@ export class Swarm implements MultiAgent {
   private _resolveContent(state: MultiAgentState): ContentBlock[] {
     const last = state.results[state.results.length - 1]!
     state.node(last.nodeId)!.terminus = true
+
+    const handoff = last.structuredOutput as HandoffResult | undefined
+    if (handoff?.message) {
+      return [new TextBlock(handoff.message)]
+    }
+
     return [...last.content]
   }
 

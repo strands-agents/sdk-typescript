@@ -21,7 +21,7 @@ import {
 import { AgentPrinter } from '../printer.js'
 import { BeforeInvocationEvent, BeforeToolsEvent } from '../../hooks/events.js'
 import { BedrockModel } from '../../models/bedrock.js'
-import { StructuredOutputException } from '../../structured-output/exceptions.js'
+import { StructuredOutputError } from '../../errors.js'
 import { expectLoopMetrics } from '../../__fixtures__/metrics-helpers.js'
 import { expectAgentResult } from '../../__fixtures__/agent-helpers.js'
 
@@ -1168,6 +1168,7 @@ describe('Agent', () => {
       const result = await agent.invoke('Test')
 
       expect(result.structuredOutput).toEqual({ name: 'John', age: 30 })
+      expect(model.callCount).toBe(1)
     })
 
     it('forces structured output tool when model does not use it', async () => {
@@ -1185,7 +1186,7 @@ describe('Agent', () => {
       expect(result.structuredOutput).toEqual({ value: 42 })
     })
 
-    it('throws StructuredOutputException when model refuses to use tool after forcing', async () => {
+    it('throws StructuredOutputError when model refuses to use tool after forcing', async () => {
       const schema = z.object({ value: z.number() })
 
       // Model returns text twice - once normally, once when forced
@@ -1193,7 +1194,7 @@ describe('Agent', () => {
 
       const agent = new Agent({ model, structuredOutputSchema: schema })
 
-      await expect(agent.invoke('Test')).rejects.toThrow(StructuredOutputException)
+      await expect(agent.invoke('Test')).rejects.toThrow(StructuredOutputError)
     })
 
     it('throws MaxTokensError when maxTokens reached before structured output', async () => {

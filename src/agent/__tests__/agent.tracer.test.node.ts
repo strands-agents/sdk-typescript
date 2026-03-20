@@ -2,7 +2,7 @@ import { describe, expect, it, vi, beforeEach, type MockInstance } from 'vitest'
 import { Agent } from '../agent.js'
 import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
 import { createMockTool } from '../../__fixtures__/tool-helpers.js'
-import { TextBlock, ToolUseBlock, ToolResultBlock, MaxTokensError, StructuredOutputException } from '../../index.js'
+import { TextBlock, ToolUseBlock, ToolResultBlock, MaxTokensError, StructuredOutputError } from '../../index.js'
 import { Tracer } from '../../telemetry/tracer.js'
 import { z } from 'zod'
 
@@ -246,32 +246,25 @@ describe('Agent tracer integration', () => {
       )
     })
 
-    it('ends loop span for cycles where structured output forces tool choice via continue', async () => {
+    it('ends loop span for cycle where structured output forces tool choice', async () => {
       const schema = z.object({ value: z.number() })
 
-      // Turn 1: model returns text (no tool use) → triggers forced tool choice continue
-      // Turn 2: model uses the structured output tool → tool execution cycle
-      // Turn 3: model returns text (endTurn) → final cycle with result
+      // Turn 1: model returns text (no tool use) → triggers forced tool choice on next cycle
+      // Turn 2: model uses the structured output tool → tool succeeds, early exit
       const model = new MockMessageModel()
         .addTurn({ type: 'textBlock', text: 'First response' })
         .addTurn({ type: 'toolUseBlock', name: 'strands_structured_output', toolUseId: 'tool-1', input: { value: 42 } })
-        .addTurn({ type: 'textBlock', text: 'Done' })
 
       const agent = new Agent({ model, structuredOutputSchema: schema })
       const tracer = getLatestTracer()
 
       await agent.invoke('Test')
 
-      // Every started loop span must be ended — including the cycle that hit continue
-      expect(tracer.startAgentLoopSpan).toHaveBeenCalledTimes(3)
+      // Forced call gets its own cycle for accurate metrics and tracing
+      expect(tracer.startAgentLoopSpan).toHaveBeenCalledTimes(2)
       expect(tracer.startAgentLoopSpan).toHaveBeenNthCalledWith(1, expect.objectContaining({ cycleId: 'cycle-1' }))
       expect(tracer.startAgentLoopSpan).toHaveBeenNthCalledWith(2, expect.objectContaining({ cycleId: 'cycle-2' }))
-      expect(tracer.startAgentLoopSpan).toHaveBeenNthCalledWith(3, expect.objectContaining({ cycleId: 'cycle-3' }))
-      expect(tracer.endAgentLoopSpan).toHaveBeenCalledTimes(3)
-      // All three cycles end without error (continue cycle, tool use cycle, final cycle)
-      expect(tracer.endAgentLoopSpan).toHaveBeenNthCalledWith(1, { mock: 'loopSpan' })
-      expect(tracer.endAgentLoopSpan).toHaveBeenNthCalledWith(2, { mock: 'loopSpan' })
-      expect(tracer.endAgentLoopSpan).toHaveBeenNthCalledWith(3, { mock: 'loopSpan' })
+      expect(tracer.endAgentLoopSpan).toHaveBeenCalledTimes(2)
     })
   })
 
@@ -581,15 +574,15 @@ describe('Agent tracer integration', () => {
       const agent = new Agent({ model, structuredOutputSchema: schema })
       const tracer = getLatestTracer()
 
-      await expect(agent.invoke('Test')).rejects.toThrow(StructuredOutputException)
+      await expect(agent.invoke('Test')).rejects.toThrow(StructuredOutputError)
 
       expect(tracer.endAgentSpan).toHaveBeenCalledWith(
         { mock: 'agentSpan' },
-        expect.objectContaining({ error: expect.any(StructuredOutputException) })
+        expect.objectContaining({ error: expect.any(StructuredOutputError) })
       )
     })
 
-    it('ends cycle span with error on StructuredOutputException', async () => {
+    it('ends cycle span with error on StructuredOutputError', async () => {
       const schema = z.object({ value: z.number() })
 
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'I refuse' })
@@ -597,26 +590,30 @@ describe('Agent tracer integration', () => {
       const agent = new Agent({ model, structuredOutputSchema: schema })
       const tracer = getLatestTracer()
 
-      await expect(agent.invoke('Test')).rejects.toThrow(StructuredOutputException)
+      await expect(agent.invoke('Test')).rejects.toThrow(StructuredOutputError)
 
-      // Cycle 1: text response → continue (span ended normally)
-      // Cycle 2: text response again with forced tool → StructuredOutputException (span ended with error)
+      // Cycle 1: model returns text, triggers forced tool choice on next cycle
+      // Cycle 2: model still returns text, throws StructuredOutputError
       expect(tracer.startAgentLoopSpan).toHaveBeenCalledTimes(2)
       expect(tracer.endAgentLoopSpan).toHaveBeenCalledTimes(2)
       expect(tracer.endAgentLoopSpan).toHaveBeenNthCalledWith(1, { mock: 'loopSpan' })
       expect(tracer.endAgentLoopSpan).toHaveBeenNthCalledWith(
         2,
         { mock: 'loopSpan' },
-        expect.objectContaining({ error: expect.any(StructuredOutputException) })
+        expect.objectContaining({ error: expect.any(StructuredOutputError) })
       )
     })
 
     it('ends agent span with result on successful structured output', async () => {
       const schema = z.object({ value: z.number() })
 
-      const model = new MockMessageModel()
-        .addTurn({ type: 'toolUseBlock', name: 'strands_structured_output', toolUseId: 'tool-1', input: { value: 42 } })
-        .addTurn({ type: 'textBlock', text: 'Done' })
+      // Model calls structured output tool → early exit after successful validation
+      const model = new MockMessageModel().addTurn({
+        type: 'toolUseBlock',
+        name: 'strands_structured_output',
+        toolUseId: 'tool-1',
+        input: { value: 42 },
+      })
 
       const agent = new Agent({ model, structuredOutputSchema: schema })
       const tracer = getLatestTracer()
@@ -627,7 +624,7 @@ describe('Agent tracer integration', () => {
         { mock: 'agentSpan' },
         expect.objectContaining({
           response: expect.objectContaining({ role: 'assistant' }),
-          stopReason: 'endTurn',
+          stopReason: 'toolUse',
         })
       )
     })
@@ -635,9 +632,8 @@ describe('Agent tracer integration', () => {
     it('creates correct spans for validation retry cycle', async () => {
       const schema = z.object({ name: z.string(), age: z.number() })
 
-      // Turn 1: invalid input → tool returns error
-      // Turn 2: valid input → tool succeeds
-      // Turn 3: model finishes
+      // Turn 1: invalid input → tool returns error, loop continues
+      // Turn 2: valid input → tool succeeds, early exit
       const model = new MockMessageModel()
         .addTurn({
           type: 'toolUseBlock',
@@ -651,26 +647,24 @@ describe('Agent tracer integration', () => {
           toolUseId: 'tool-2',
           input: { name: 'John', age: 30 },
         })
-        .addTurn({ type: 'textBlock', text: 'Done' })
 
       const agent = new Agent({ model, structuredOutputSchema: schema })
       const tracer = getLatestTracer()
 
       await agent.invoke('Test')
 
-      // 3 cycles: invalid tool use, valid tool use, final text — all end without error
+      // 2 cycles: invalid tool use, valid tool use with early exit
+      expect(tracer.startAgentLoopSpan).toHaveBeenCalledTimes(2)
       expect(tracer.startAgentLoopSpan).toHaveBeenNthCalledWith(1, expect.objectContaining({ cycleId: 'cycle-1' }))
       expect(tracer.startAgentLoopSpan).toHaveBeenNthCalledWith(2, expect.objectContaining({ cycleId: 'cycle-2' }))
-      expect(tracer.startAgentLoopSpan).toHaveBeenNthCalledWith(3, expect.objectContaining({ cycleId: 'cycle-3' }))
-      expect(tracer.endAgentLoopSpan).toHaveBeenCalledTimes(3)
+      expect(tracer.endAgentLoopSpan).toHaveBeenCalledTimes(2)
       expect(tracer.endAgentLoopSpan).toHaveBeenNthCalledWith(1, { mock: 'loopSpan' })
       expect(tracer.endAgentLoopSpan).toHaveBeenNthCalledWith(2, { mock: 'loopSpan' })
-      expect(tracer.endAgentLoopSpan).toHaveBeenNthCalledWith(3, { mock: 'loopSpan' })
 
-      // 3 model calls, one per cycle — all end without error
-      expect(tracer.startModelInvokeSpan).toHaveBeenCalledTimes(3)
-      expect(tracer.endModelInvokeSpan).toHaveBeenCalledTimes(3)
-      for (let i = 1; i <= 3; i++) {
+      // 2 model calls, one per cycle
+      expect(tracer.startModelInvokeSpan).toHaveBeenCalledTimes(2)
+      expect(tracer.endModelInvokeSpan).toHaveBeenCalledTimes(2)
+      for (let i = 1; i <= 2; i++) {
         expect(tracer.endModelInvokeSpan).toHaveBeenNthCalledWith(
           i,
           { mock: 'modelSpan' },

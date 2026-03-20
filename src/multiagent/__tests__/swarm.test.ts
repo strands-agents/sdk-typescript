@@ -11,21 +11,19 @@ import { Swarm } from '../swarm.js'
 
 /**
  * Creates an agent that produces a structured output handoff via the strands_structured_output tool.
- * The model returns a toolUseBlock with the handoff payload, then a text block to finish.
+ * The agent exits after the structured output tool succeeds (early-exit behavior).
  */
 function createHandoffAgent(
   agentId: string,
   handoff: { agentId?: string; message: string; context?: Record<string, unknown> },
   description: string = `Agent ${agentId}`
 ): Agent {
-  const model = new MockMessageModel()
-    .addTurn({
-      type: 'toolUseBlock',
-      name: 'strands_structured_output',
-      toolUseId: 'tool-1',
-      input: handoff as JSONValue,
-    })
-    .addTurn(new TextBlock('Done'))
+  const model = new MockMessageModel().addTurn({
+    type: 'toolUseBlock',
+    name: 'strands_structured_output',
+    toolUseId: 'tool-1',
+    input: handoff as JSONValue,
+  })
   return new Agent({ model, printer: false, id: agentId, description })
 }
 
@@ -121,10 +119,11 @@ describe('Swarm', () => {
         expect.objectContaining({
           status: Status.COMPLETED,
           duration: expect.any(Number),
-          content: expect.arrayContaining([expect.objectContaining({ type: 'textBlock', text: 'Done' })]),
+          content: [expect.objectContaining({ type: 'textBlock', text: 'final answer' })],
         })
       )
       expect(result.results.map((r) => r.nodeId)).toStrictEqual(['a'])
+      expect(result.results[0]?.structuredOutput).toEqual({ message: 'final answer' })
     })
 
     it('hands off from A to B and returns final output', async () => {

@@ -194,16 +194,16 @@ console.log(result.structuredOutput.name) // "John Smith"
 console.log(result.structuredOutput.age)  // 30
 ```
 
-**Error handling**: The agent automatically retries with validation feedback when the LLM provides invalid output. If validation ultimately fails, a `StructuredOutputException` is thrown:
+**Error handling**: The agent automatically retries with validation feedback when the LLM provides invalid output. If validation ultimately fails, a `StructuredOutputError` is thrown:
 
 ```typescript
-import { StructuredOutputException } from '@strands-agents/sdk'
+import { StructuredOutputError } from '@strands-agents/sdk'
 
 try {
   const result = await agent.invoke('Extract person info...')
   console.log(result.structuredOutput)
 } catch (error) {
-  if (error instanceof StructuredOutputException) {
+  if (error instanceof StructuredOutputError) {
     console.error('Validation failed:', error.message)
   }
 }
