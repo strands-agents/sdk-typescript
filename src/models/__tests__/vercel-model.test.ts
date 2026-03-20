@@ -6,7 +6,7 @@ import type {
   LanguageModelV3StreamResult,
 } from '@ai-sdk/provider'
 import { APICallError } from '@ai-sdk/provider'
-import { VercelModel } from '../vercel-model.js'
+import { VercelModel } from '../vercel.js'
 import { ContextWindowOverflowError, ModelError, ModelThrottledError } from '../../errors.js'
 import { collectIterator } from '../../__fixtures__/model-test-helpers.js'
 import { Message, TextBlock, ToolUseBlock, ToolResultBlock, ReasoningBlock, JsonBlock } from '../../types/messages.js'

@@ -83,7 +83,7 @@ export interface VercelModelConfig extends BaseModelConfig, LanguageModelCallSet
  * @example
  * ```typescript
  * import { Agent } from '@strands-agents/sdk'
- * import { VercelModel } from '@strands-agents/sdk/vercel-model'
+ * import { VercelModel } from '@strands-agents/sdk/vercel'
  * import { bedrock } from '@ai-sdk/amazon-bedrock'
  *
  * const agent = new Agent({
