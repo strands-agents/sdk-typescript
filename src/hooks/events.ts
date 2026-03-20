@@ -94,7 +94,7 @@ export class InitializedEvent extends HookableEvent {
    * Serializes for wire transport, excluding the agent reference.
    * Called automatically by JSON.stringify().
    */
-  toJSON(): { type: 'initializedEvent' } {
+  toJSON(): Pick<InitializedEvent, 'type'> {
     return { type: this.type }
   }
 }
@@ -116,7 +116,7 @@ export class BeforeInvocationEvent extends HookableEvent {
    * Serializes for wire transport, excluding the agent reference.
    * Called automatically by JSON.stringify().
    */
-  toJSON(): { type: 'beforeInvocationEvent' } {
+  toJSON(): Pick<BeforeInvocationEvent, 'type'> {
     return { type: this.type }
   }
 }
@@ -143,7 +143,7 @@ export class AfterInvocationEvent extends HookableEvent {
    * Serializes for wire transport, excluding the agent reference.
    * Called automatically by JSON.stringify().
    */
-  toJSON(): { type: 'afterInvocationEvent' } {
+  toJSON(): Pick<AfterInvocationEvent, 'type'> {
     return { type: this.type }
   }
 }
@@ -168,7 +168,7 @@ export class MessageAddedEvent extends HookableEvent {
    * Serializes for wire transport, excluding the agent reference.
    * Called automatically by JSON.stringify().
    */
-  toJSON(): { type: 'messageAddedEvent'; message: Message } {
+  toJSON(): Pick<MessageAddedEvent, 'type' | 'message'> {
     return { type: this.type, message: this.message }
   }
 }
@@ -210,7 +210,7 @@ export class BeforeToolCallEvent extends HookableEvent {
    * Serializes for wire transport, excluding the agent reference, tool instance, and mutable cancel flag.
    * Called automatically by JSON.stringify().
    */
-  toJSON(): { type: 'beforeToolCallEvent'; toolUse: { name: string; toolUseId: string; input: JSONValue } } {
+  toJSON(): Pick<BeforeToolCallEvent, 'type' | 'toolUse'> {
     return { type: this.type, toolUse: this.toolUse }
   }
 }
@@ -264,12 +264,7 @@ export class AfterToolCallEvent extends HookableEvent {
    * Converts Error to its message string for safe serialization.
    * Called automatically by JSON.stringify().
    */
-  toJSON(): {
-    type: 'afterToolCallEvent'
-    toolUse: { name: string; toolUseId: string; input: JSONValue }
-    result: ToolResultBlock
-    error?: string
-  } {
+  toJSON(): Pick<AfterToolCallEvent, 'type' | 'toolUse' | 'result'> & { error?: string } {
     return {
       type: this.type,
       toolUse: this.toolUse,
@@ -296,7 +291,7 @@ export class BeforeModelCallEvent extends HookableEvent {
    * Serializes for wire transport, excluding the agent reference.
    * Called automatically by JSON.stringify().
    */
-  toJSON(): { type: 'beforeModelCallEvent' } {
+  toJSON(): Pick<BeforeModelCallEvent, 'type'> {
     return { type: this.type }
   }
 }
@@ -371,7 +366,7 @@ export class AfterModelCallEvent extends HookableEvent {
    * Converts Error to its message string for safe serialization.
    * Called automatically by JSON.stringify().
    */
-  toJSON(): { type: 'afterModelCallEvent'; stopData?: ModelStopData; error?: string } {
+  toJSON(): Pick<AfterModelCallEvent, 'type' | 'stopData'> & { error?: string } {
     return {
       type: this.type,
       ...(this.stopData !== undefined && { stopData: this.stopData }),
@@ -401,7 +396,7 @@ export class ModelStreamUpdateEvent extends HookableEvent {
    * Serializes for wire transport, excluding the agent reference.
    * Called automatically by JSON.stringify().
    */
-  toJSON(): { type: 'modelStreamUpdateEvent'; event: ModelStreamEvent } {
+  toJSON(): Pick<ModelStreamUpdateEvent, 'type' | 'event'> {
     return { type: this.type, event: this.event }
   }
 }
@@ -431,7 +426,7 @@ export class ContentBlockEvent extends HookableEvent {
    * Serializes for wire transport, excluding the agent reference.
    * Called automatically by JSON.stringify().
    */
-  toJSON(): { type: 'contentBlockEvent'; contentBlock: ContentBlock } {
+  toJSON(): Pick<ContentBlockEvent, 'type' | 'contentBlock'> {
     return { type: this.type, contentBlock: this.contentBlock }
   }
 }
@@ -457,7 +452,7 @@ export class ModelMessageEvent extends HookableEvent {
    * Serializes for wire transport, excluding the agent reference.
    * Called automatically by JSON.stringify().
    */
-  toJSON(): { type: 'modelMessageEvent'; message: Message; stopReason: StopReason } {
+  toJSON(): Pick<ModelMessageEvent, 'type' | 'message' | 'stopReason'> {
     return { type: this.type, message: this.message, stopReason: this.stopReason }
   }
 }
@@ -481,7 +476,7 @@ export class ToolResultEvent extends HookableEvent {
    * Serializes for wire transport, excluding the agent reference.
    * Called automatically by JSON.stringify().
    */
-  toJSON(): { type: 'toolResultEvent'; result: ToolResultBlock } {
+  toJSON(): Pick<ToolResultEvent, 'type' | 'result'> {
     return { type: this.type, result: this.result }
   }
 }
@@ -510,7 +505,7 @@ export class ToolStreamUpdateEvent extends HookableEvent {
    * Serializes for wire transport, excluding the agent reference.
    * Called automatically by JSON.stringify().
    */
-  toJSON(): { type: 'toolStreamUpdateEvent'; event: ToolStreamEvent } {
+  toJSON(): Pick<ToolStreamUpdateEvent, 'type' | 'event'> {
     return { type: this.type, event: this.event }
   }
 }
@@ -534,7 +529,7 @@ export class AgentResultEvent extends HookableEvent {
    * Serializes for wire transport, excluding the agent reference.
    * Called automatically by JSON.stringify().
    */
-  toJSON(): { type: 'agentResultEvent'; result: AgentResult } {
+  toJSON(): Pick<AgentResultEvent, 'type' | 'result'> {
     return { type: this.type, result: this.result }
   }
 }
@@ -566,7 +561,7 @@ export class BeforeToolsEvent extends HookableEvent {
    * Serializes for wire transport, excluding the agent reference and mutable cancel flag.
    * Called automatically by JSON.stringify().
    */
-  toJSON(): { type: 'beforeToolsEvent'; message: Message } {
+  toJSON(): Pick<BeforeToolsEvent, 'type' | 'message'> {
     return { type: this.type, message: this.message }
   }
 }
@@ -595,7 +590,7 @@ export class AfterToolsEvent extends HookableEvent {
    * Serializes for wire transport, excluding the agent reference.
    * Called automatically by JSON.stringify().
    */
-  toJSON(): { type: 'afterToolsEvent'; message: Message } {
+  toJSON(): Pick<AfterToolsEvent, 'type' | 'message'> {
     return { type: this.type, message: this.message }
   }
 }
