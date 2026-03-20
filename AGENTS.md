@@ -173,7 +173,6 @@ sdk-typescript/
 - **`src/plugins/`**: Plugin system for extending agent functionality
 - **`src/models/`**: Model provider implementations (Bedrock, OpenAI, future providers)
 - **`src/tools/`**: Tool definitions, types, and structured output validation with Zod schemas
-- **`src/tools/`**: Tool definitions and types for agent tool use
 - **`src/multiagent/`**: Multi-agent orchestration patterns (Graph for DAG execution, Swarm for handoff-based routing)
 - **`src/types/`**: Core type definitions used across the SDK
 - **`src/vended-tools/`**: Optional vended tools (not part of core SDK, independently importable)
