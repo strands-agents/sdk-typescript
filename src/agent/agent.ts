@@ -6,7 +6,7 @@ import {
   type InvokeOptions,
   type LocalAgent,
 } from '../types/agent.js'
-import { BedrockConverseModel } from '../models/bedrock.js'
+import { ConverseModel } from '../models/bedrock.js'
 import {
   contentBlockFromData,
   type ContentBlock,
@@ -79,18 +79,18 @@ export type AgentConfig = {
   /**
    * The model instance that the agent will use to make decisions.
    * Accepts either a Model instance or a string representing a Bedrock model ID.
-   * When a string is provided, it will be used to create a BedrockConverseModel instance.
+   * When a string is provided, it will be used to create a ConverseModel instance.
    *
    * @example
    * ```typescript
-   * // Using a string model ID (creates BedrockConverseModel)
+   * // Using a string model ID (creates ConverseModel)
    * const agent = new Agent({
    *   model: 'anthropic.claude-3-5-sonnet-20240620-v1:0'
    * })
    *
-   * // Using an explicit BedrockConverseModel instance with configuration
+   * // Using an explicit ConverseModel instance with configuration
    * const agent = new Agent({
-   *   model: new BedrockConverseModel({
+   *   model: new ConverseModel({
    *     modelId: 'anthropic.claude-3-5-sonnet-20240620-v1:0',
    *     temperature: 0.7,
    *     maxTokens: 2048
@@ -230,9 +230,9 @@ export class Agent implements LocalAgent, InvokableAgent {
     if (config?.description !== undefined) this.description = config.description
 
     if (typeof config?.model === 'string') {
-      this.model = new BedrockConverseModel({ modelId: config.model })
+      this.model = new ConverseModel({ modelId: config.model })
     } else {
-      this.model = config?.model ?? new BedrockConverseModel()
+      this.model = config?.model ?? new ConverseModel()
     }
 
     const { tools, mcpClients } = flattenTools(config?.tools ?? [])

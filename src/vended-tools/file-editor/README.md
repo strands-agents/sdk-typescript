@@ -15,10 +15,10 @@ A filesystem editor tool for viewing, creating, and editing files programmatical
 
 ```typescript
 import { fileEditor } from '@strands-agents/sdk/vended-tools/file-editor'
-import { Agent, BedrockConverseModel } from '@strands-agents/sdk'
+import { Agent, ConverseModel } from '@strands-agents/sdk'
 
 const agent = new Agent({
-  model: new BedrockConverseModel({ region: 'us-east-1' }),
+  model: new ConverseModel({ region: 'us-east-1' }),
   tools: [fileEditor],
 })
 
@@ -69,10 +69,10 @@ Insert text at a specific line number (0-indexed).
 
 ```typescript
 import { fileEditor } from '@strands-agents/sdk/vended-tools/file-editor'
-import { Agent, BedrockConverseModel } from '@strands-agents/sdk'
+import { Agent, ConverseModel } from '@strands-agents/sdk'
 
 const agent = new Agent({
-  model: new BedrockConverseModel({ region: 'us-east-1' }),
+  model: new ConverseModel({ region: 'us-east-1' }),
   tools: [fileEditor],
 })
 

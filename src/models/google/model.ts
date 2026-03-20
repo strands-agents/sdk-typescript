@@ -18,9 +18,9 @@ import type { StreamOptions } from '../model.js'
 import type { Message } from '../../types/messages.js'
 import type { ModelStreamEvent } from '../streaming.js'
 import { ContextWindowOverflowError, ModelThrottledError } from '../../errors.js'
-import type { GoogleGenAIModelConfig, GoogleGenAIModelOptions, GoogleGenAIStreamState } from './types.js'
-export type { GoogleGenAIModelConfig, GoogleGenAIModelOptions }
-import { classifyGoogleGenAIError } from './errors.js'
+import type { GenAIModelConfig, GenAIModelOptions, GenAIStreamState } from './types.js'
+export type { GenAIModelConfig, GenAIModelOptions }
+import { classifyGenAIError } from './errors.js'
 import { formatMessages, mapChunkToEvents } from './adapters.js'
 
 /**
@@ -36,7 +36,7 @@ const DEFAULT_GOOGLE_GENAI_MODEL_ID = 'gemini-2.5-flash'
  *
  * @example
  * ```typescript
- * const provider = new GoogleGenAIModel({
+ * const provider = new GenAIModel({
  *   apiKey: 'your-api-key',
  *   modelId: 'gemini-2.5-flash',
  *   params: { temperature: 0.7, maxOutputTokens: 1024 }
@@ -53,42 +53,42 @@ const DEFAULT_GOOGLE_GENAI_MODEL_ID = 'gemini-2.5-flash'
  * }
  * ```
  */
-export class GoogleGenAIModel extends Model<GoogleGenAIModelConfig> {
-  private _config: GoogleGenAIModelConfig
+export class GenAIModel extends Model<GenAIModelConfig> {
+  private _config: GenAIModelConfig
   private _client: GoogleGenAI
 
   /**
-   * Creates a new GoogleGenAIModel instance.
+   * Creates a new GenAIModel instance.
    *
    * @param options - Configuration for model and client
    *
    * @example
    * ```typescript
    * // Minimal configuration with API key
-   * const provider = new GoogleGenAIModel({
+   * const provider = new GenAIModel({
    *   apiKey: 'your-api-key'
    * })
    *
    * // With model configuration
-   * const provider = new GoogleGenAIModel({
+   * const provider = new GenAIModel({
    *   apiKey: 'your-api-key',
    *   modelId: 'gemini-2.5-flash',
    *   params: { temperature: 0.8, maxOutputTokens: 2048 }
    * })
    *
    * // Using environment variable for API key
-   * const provider = new GoogleGenAIModel({
+   * const provider = new GenAIModel({
    *   modelId: 'gemini-2.5-flash'
    * })
    *
    * // Using a pre-configured client instance
    * const client = new GoogleGenAI({ apiKey: 'your-api-key' })
-   * const provider = new GoogleGenAIModel({
+   * const provider = new GenAIModel({
    *   client
    * })
    * ```
    */
-  constructor(options?: GoogleGenAIModelOptions) {
+  constructor(options?: GenAIModelOptions) {
     super()
     const { apiKey, client, clientConfig, ...modelConfig } = options || {}
 
@@ -97,7 +97,7 @@ export class GoogleGenAIModel extends Model<GoogleGenAIModelConfig> {
     if (client) {
       this._client = client
     } else {
-      const resolvedApiKey = apiKey || GoogleGenAIModel._getEnvApiKey()
+      const resolvedApiKey = apiKey || GenAIModel._getEnvApiKey()
 
       if (!resolvedApiKey) {
         throw new Error(
@@ -126,7 +126,7 @@ export class GoogleGenAIModel extends Model<GoogleGenAIModelConfig> {
    * })
    * ```
    */
-  updateConfig(modelConfig: GoogleGenAIModelConfig): void {
+  updateConfig(modelConfig: GenAIModelConfig): void {
     this._config = { ...this._config, ...modelConfig }
   }
 
@@ -141,7 +141,7 @@ export class GoogleGenAIModel extends Model<GoogleGenAIModelConfig> {
    * console.log(config.modelId)
    * ```
    */
-  getConfig(): GoogleGenAIModelConfig {
+  getConfig(): GenAIModelConfig {
     return this._config
   }
 
@@ -157,7 +157,7 @@ export class GoogleGenAIModel extends Model<GoogleGenAIModelConfig> {
    *
    * @example
    * ```typescript
-   * const provider = new GoogleGenAIModel({ apiKey: 'your-api-key' })
+   * const provider = new GenAIModel({ apiKey: 'your-api-key' })
    * const messages: Message[] = [
    *   { role: 'user', content: [{ type: 'textBlock', text: 'What is 2+2?' }] }
    * ]
@@ -178,7 +178,7 @@ export class GoogleGenAIModel extends Model<GoogleGenAIModelConfig> {
       const params = this._formatRequest(messages, options)
       const stream = await this._client.models.generateContentStream(params)
 
-      const streamState: GoogleGenAIStreamState = {
+      const streamState: GenAIStreamState = {
         messageStarted: false,
         textContentBlockStarted: false,
         reasoningContentBlockStarted: false,
@@ -205,7 +205,7 @@ export class GoogleGenAIModel extends Model<GoogleGenAIModelConfig> {
       if (!(error instanceof Error)) {
         throw error
       }
-      const errorType = classifyGoogleGenAIError(error)
+      const errorType = classifyGenAIError(error)
 
       if (errorType === 'contextOverflow') {
         throw new ContextWindowOverflowError(error.message)

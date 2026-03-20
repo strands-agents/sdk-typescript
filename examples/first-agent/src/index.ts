@@ -1,4 +1,4 @@
-import { Agent, BedrockConverseModel, tool } from '@strands-agents/sdk'
+import { Agent, ConverseModel, tool } from '@strands-agents/sdk'
 import { z } from 'zod'
 
 const weatherTool = tool({
@@ -54,7 +54,7 @@ async function runStreaming(title: string, agent: Agent, prompt: string) {
 
 async function main() {
   // 1. Initialize the components
-  const model = new BedrockConverseModel()
+  const model = new ConverseModel()
 
   // 2. Create agents
   const defaultAgent = new Agent()

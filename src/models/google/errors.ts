@@ -12,7 +12,7 @@ import { logger } from '../../logging/logger.js'
  * This union type will expand as more error types are supported
  * (e.g., 'throttling', 'invalidRequest').
  */
-export type GoogleGenAIErrorType = 'contextOverflow' | 'throttling'
+export type GenAIErrorType = 'contextOverflow' | 'throttling'
 
 /**
  * Configuration for handling a specific error status.
@@ -20,7 +20,7 @@ export type GoogleGenAIErrorType = 'contextOverflow' | 'throttling'
  * If messagePatterns is not provided, the status alone triggers the error type.
  */
 export interface ErrorStatusConfig {
-  type: GoogleGenAIErrorType
+  type: GenAIErrorType
   messagePatterns?: Set<string>
 }
 
@@ -50,7 +50,7 @@ export const ERROR_STATUS_MAP: Record<string, ErrorStatusConfig> = {
  *
  * @internal
  */
-export function classifyGoogleGenAIError(error: Error): GoogleGenAIErrorType | undefined {
+export function classifyGenAIError(error: Error): GenAIErrorType | undefined {
   if (!error.message) {
     return undefined
   }

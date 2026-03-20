@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { GoogleGenAI, FunctionCallingConfigMode, type GenerateContentResponse } from '@google/genai'
 import { collectIterator } from '../../__fixtures__/model-test-helpers.js'
-import { GoogleGenAIModel } from '../google/model.js'
+import { GenAIModel } from '../google/model.js'
 import { ContextWindowOverflowError, ModelThrottledError } from '../../errors.js'
 import {
   Message,
@@ -14,7 +14,7 @@ import {
 } from '../../types/messages.js'
 import type { ContentBlock } from '../../types/messages.js'
 import { formatMessages, mapChunkToEvents } from '../google/adapters.js'
-import type { GoogleGenAIStreamState } from '../google/types.js'
+import type { GenAIStreamState } from '../google/types.js'
 import { ImageBlock, DocumentBlock, VideoBlock } from '../../types/media.js'
 
 /**
@@ -52,12 +52,12 @@ function createMockClientWithCapture(): { client: GoogleGenAI; captured: Record<
  * Helper to set up a capture-based test with provider, captured params, and a default user message.
  */
 function setupCaptureTest(): {
-  provider: GoogleGenAIModel
+  provider: GenAIModel
   captured: Record<string, unknown>
   messages: Message[]
 } {
   const { client, captured } = createMockClientWithCapture()
-  const provider = new GoogleGenAIModel({ client })
+  const provider = new GenAIModel({ client })
   const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
   return { provider, captured, messages }
 }
@@ -66,11 +66,11 @@ function setupCaptureTest(): {
  * Helper to set up a stream-based test with a mock client, provider, and default user message.
  */
 function setupStreamTest(streamGenerator: () => AsyncGenerator<Record<string, unknown>>): {
-  provider: GoogleGenAIModel
+  provider: GenAIModel
   messages: Message[]
 } {
   const client = createMockClient(streamGenerator)
-  const provider = new GoogleGenAIModel({ client })
+  const provider = new GenAIModel({ client })
   const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
   return { provider, messages }
 }
@@ -82,21 +82,21 @@ function formatBlock(block: ContentBlock, role: 'user' | 'assistant' = 'user'): 
   return formatMessages([new Message({ role, content: [block] })])
 }
 
-describe('GoogleGenAIModel', () => {
+describe('GenAIModel', () => {
   beforeEach(() => {
     vi.stubEnv('GEMINI_API_KEY', 'test-api-key')
   })
 
   describe('constructor', () => {
     it('creates instance with API key', () => {
-      const provider = new GoogleGenAIModel({ apiKey: 'test-key', modelId: 'gemini-2.0-flash' })
+      const provider = new GenAIModel({ apiKey: 'test-key', modelId: 'gemini-2.0-flash' })
       expect(provider.getConfig().modelId).toBe('gemini-2.0-flash')
     })
 
     it('throws error when no API key provided and no env variable', () => {
       vi.stubEnv('GEMINI_API_KEY', '')
 
-      expect(() => new GoogleGenAIModel()).toThrow('Gemini API key is required')
+      expect(() => new GenAIModel()).toThrow('Gemini API key is required')
     })
 
     it('does not require API key when client is provided', () => {
@@ -106,13 +106,13 @@ describe('GoogleGenAIModel', () => {
         yield { candidates: [{ finishReason: 'STOP' }] }
       })
 
-      expect(() => new GoogleGenAIModel({ client: mockClient })).not.toThrow()
+      expect(() => new GenAIModel({ client: mockClient })).not.toThrow()
     })
   })
 
   describe('updateConfig', () => {
     it('merges new config with existing config', () => {
-      const provider = new GoogleGenAIModel({ apiKey: 'test-key', modelId: 'gemini-2.5-flash' })
+      const provider = new GenAIModel({ apiKey: 'test-key', modelId: 'gemini-2.5-flash' })
       provider.updateConfig({ params: { temperature: 0.5 } })
       expect(provider.getConfig()).toStrictEqual({
         modelId: 'gemini-2.5-flash',
@@ -123,7 +123,7 @@ describe('GoogleGenAIModel', () => {
 
   describe('getConfig', () => {
     it('returns the current configuration', () => {
-      const provider = new GoogleGenAIModel({
+      const provider = new GenAIModel({
         apiKey: 'test-key',
         modelId: 'gemini-2.5-flash',
         params: { maxOutputTokens: 1024, temperature: 0.7 },
@@ -137,7 +137,7 @@ describe('GoogleGenAIModel', () => {
 
   describe('stream', () => {
     it('throws error when messages array is empty', async () => {
-      const provider = new GoogleGenAIModel({ apiKey: 'test-key' })
+      const provider = new GenAIModel({ apiKey: 'test-key' })
 
       await expect(collectIterator(provider.stream([]))).rejects.toThrow('At least one message is required')
     })
@@ -262,7 +262,7 @@ describe('GoogleGenAIModel', () => {
         },
       } as unknown as GoogleGenAI
 
-      const provider = new GoogleGenAIModel({ client: mockClient })
+      const provider = new GenAIModel({ client: mockClient })
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
 
       await expect(collectIterator(provider.stream(messages))).rejects.toThrow(ContextWindowOverflowError)
@@ -284,7 +284,7 @@ describe('GoogleGenAIModel', () => {
         },
       } as unknown as GoogleGenAI
 
-      const provider = new GoogleGenAIModel({ client: mockClient })
+      const provider = new GenAIModel({ client: mockClient })
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
 
       await expect(collectIterator(provider.stream(messages))).rejects.toThrow(ModelThrottledError)
@@ -306,7 +306,7 @@ describe('GoogleGenAIModel', () => {
         },
       } as unknown as GoogleGenAI
 
-      const provider = new GoogleGenAIModel({ client: mockClient })
+      const provider = new GenAIModel({ client: mockClient })
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
 
       await expect(collectIterator(provider.stream(messages))).rejects.toThrow(ModelThrottledError)
@@ -321,7 +321,7 @@ describe('GoogleGenAIModel', () => {
         },
       } as unknown as GoogleGenAI
 
-      const provider = new GoogleGenAIModel({ client: mockClient })
+      const provider = new GenAIModel({ client: mockClient })
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
 
       await expect(collectIterator(provider.stream(messages))).rejects.toThrow('Network error')
@@ -718,7 +718,7 @@ describe('GoogleGenAIModel', () => {
   describe('built-in tools', () => {
     it('appends builtInTools to config.tools alongside functionDeclarations', async () => {
       const { client, captured } = createMockClientWithCapture()
-      const provider = new GoogleGenAIModel({ client, builtInTools: [{ googleSearch: {} }] })
+      const provider = new GenAIModel({ client, builtInTools: [{ googleSearch: {} }] })
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
 
       await collectIterator(
@@ -749,7 +749,7 @@ describe('GoogleGenAIModel', () => {
 
     it('passes builtInTools when no toolSpecs provided', async () => {
       const { client, captured } = createMockClientWithCapture()
-      const provider = new GoogleGenAIModel({ client, builtInTools: [{ codeExecution: {} }] })
+      const provider = new GenAIModel({ client, builtInTools: [{ codeExecution: {} }] })
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
 
       await collectIterator(provider.stream(messages))
@@ -761,7 +761,7 @@ describe('GoogleGenAIModel', () => {
 
     it('does not add tools when neither builtInTools nor toolSpecs provided', async () => {
       const { client, captured } = createMockClientWithCapture()
-      const provider = new GoogleGenAIModel({ client })
+      const provider = new GenAIModel({ client })
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
 
       await collectIterator(provider.stream(messages))
@@ -965,7 +965,7 @@ describe('GoogleGenAIModel', () => {
   })
 
   describe('tool use streaming', () => {
-    function createStreamState(): GoogleGenAIStreamState {
+    function createStreamState(): GenAIStreamState {
       return {
         messageStarted: true,
         textContentBlockStarted: false,

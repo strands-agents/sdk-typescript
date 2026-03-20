@@ -51,7 +51,7 @@ class TextFileReader implements IFileReader {
  * import { Agent } from '@strands-agents/sdk'
  *
  * const agent = new Agent({
- *   model: new BedrockConverseModel({ region: 'us-east-1' }),
+ *   model: new ConverseModel({ region: 'us-east-1' }),
  *   tools: [fileEditor],
  * })
  *

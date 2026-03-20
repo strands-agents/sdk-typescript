@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import Anthropic from '@anthropic-ai/sdk'
 import { isNode } from '../../__fixtures__/environment.js'
-import { AnthropicMessagesModel } from '../anthropic.js'
+import { MessagesModel } from '../anthropic.js'
 import { ContextWindowOverflowError, ModelThrottledError } from '../../errors.js'
 import { collectIterator } from '../../__fixtures__/model-test-helpers.js'
 import {
@@ -39,7 +39,7 @@ vi.mock('@anthropic-ai/sdk', () => {
   }
 })
 
-describe('AnthropicMessagesModel', () => {
+describe('MessagesModel', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     if (isNode) {
@@ -56,7 +56,7 @@ describe('AnthropicMessagesModel', () => {
 
   describe('constructor', () => {
     it('creates an instance with default configuration', () => {
-      const provider = new AnthropicMessagesModel({ apiKey: 'sk-ant-test' })
+      const provider = new MessagesModel({ apiKey: 'sk-ant-test' })
       const config = provider.getConfig()
       expect(config.modelId).toBe('claude-sonnet-4-6')
       expect(config.maxTokens).toBe(4096)
@@ -64,13 +64,13 @@ describe('AnthropicMessagesModel', () => {
 
     it('uses provided model ID', () => {
       const customModelId = 'claude-3-opus-20240229'
-      const provider = new AnthropicMessagesModel({ modelId: customModelId, apiKey: 'sk-ant-test' })
+      const provider = new MessagesModel({ modelId: customModelId, apiKey: 'sk-ant-test' })
       expect(provider.getConfig().modelId).toBe(customModelId)
     })
 
     it('uses API key from constructor parameter', () => {
       const apiKey = 'sk-explicit'
-      new AnthropicMessagesModel({ apiKey })
+      new MessagesModel({ apiKey })
       expect(Anthropic).toHaveBeenCalledWith(
         expect.objectContaining({
           apiKey,
@@ -81,19 +81,19 @@ describe('AnthropicMessagesModel', () => {
     if (isNode) {
       it('uses API key from environment variable', () => {
         vi.stubEnv('ANTHROPIC_API_KEY', 'sk-from-env')
-        new AnthropicMessagesModel()
+        new MessagesModel()
         expect(Anthropic).toHaveBeenCalled()
       })
 
       it('throws error when no API key is available', () => {
         vi.stubEnv('ANTHROPIC_API_KEY', '')
-        expect(() => new AnthropicMessagesModel()).toThrow('Anthropic API key is required')
+        expect(() => new MessagesModel()).toThrow('Anthropic API key is required')
       })
     }
 
     it('uses provided client instance', () => {
       const mockClient = {} as Anthropic
-      const provider = new AnthropicMessagesModel({ client: mockClient })
+      const provider = new MessagesModel({ client: mockClient })
       expect(Anthropic).not.toHaveBeenCalled()
       expect(provider).toBeDefined()
     })
@@ -101,7 +101,7 @@ describe('AnthropicMessagesModel', () => {
 
   describe('updateConfig', () => {
     it('merges new config with existing config', () => {
-      const provider = new AnthropicMessagesModel({ apiKey: 'sk-test', temperature: 0.5 })
+      const provider = new MessagesModel({ apiKey: 'sk-test', temperature: 0.5 })
       provider.updateConfig({ temperature: 0.8, maxTokens: 8192 })
       expect(provider.getConfig()).toMatchObject({
         temperature: 0.8,
@@ -121,7 +121,7 @@ describe('AnthropicMessagesModel', () => {
         yield { type: 'message_stop' }
       })
 
-      const provider = new AnthropicMessagesModel({ client: mockClient })
+      const provider = new MessagesModel({ client: mockClient })
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
 
       const events = await collectIterator(provider.stream(messages))
@@ -156,7 +156,7 @@ describe('AnthropicMessagesModel', () => {
         yield { type: 'message_stop' }
       })
 
-      const provider = new AnthropicMessagesModel({ client: mockClient })
+      const provider = new MessagesModel({ client: mockClient })
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
 
       const events = await collectIterator(provider.stream(messages))
@@ -193,7 +193,7 @@ describe('AnthropicMessagesModel', () => {
         yield { type: 'message_stop' }
       })
 
-      const provider = new AnthropicMessagesModel({ client: mockClient })
+      const provider = new MessagesModel({ client: mockClient })
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
 
       const events = await collectIterator(provider.stream(messages))
@@ -222,7 +222,7 @@ describe('AnthropicMessagesModel', () => {
         yield { type: 'message_stop' }
       })
 
-      const provider = new AnthropicMessagesModel({ client: mockClient })
+      const provider = new MessagesModel({ client: mockClient })
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
 
       const events = await collectIterator(provider.stream(messages))
@@ -242,7 +242,7 @@ describe('AnthropicMessagesModel', () => {
         yield { type: 'message_stop' }
       })
 
-      const provider = new AnthropicMessagesModel({ client: mockClient })
+      const provider = new MessagesModel({ client: mockClient })
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
 
       const events = await collectIterator(provider.stream(messages))
@@ -258,7 +258,7 @@ describe('AnthropicMessagesModel', () => {
         yield { type: 'ping' } // Satisfy linter require-yield
         throw new Error('API Error')
       })
-      const provider = new AnthropicMessagesModel({ client: mockClient })
+      const provider = new MessagesModel({ client: mockClient })
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
 
       await expect(collectIterator(provider.stream(messages))).rejects.toThrow('API Error')
@@ -269,7 +269,7 @@ describe('AnthropicMessagesModel', () => {
         yield { type: 'ping' } // Satisfy linter require-yield
         throw new Error('prompt is too long')
       })
-      const provider = new AnthropicMessagesModel({ client: mockClient })
+      const provider = new MessagesModel({ client: mockClient })
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
 
       await expect(collectIterator(provider.stream(messages))).rejects.toThrow(ContextWindowOverflowError)
@@ -281,7 +281,7 @@ describe('AnthropicMessagesModel', () => {
       const mockClient = createMockClient(async function* () {
         throw rateLimitError
       })
-      const provider = new AnthropicMessagesModel({ client: mockClient })
+      const provider = new MessagesModel({ client: mockClient })
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
 
       await expect(collectIterator(provider.stream(messages))).rejects.toThrow(ModelThrottledError)
@@ -306,7 +306,7 @@ describe('AnthropicMessagesModel', () => {
 
     it('formats basic request correctly', async () => {
       const { captured, mockClient } = setupCapture()
-      const provider = new AnthropicMessagesModel({
+      const provider = new MessagesModel({
         modelId: 'claude-3-opus',
         maxTokens: 1000,
         temperature: 0.7,
@@ -327,7 +327,7 @@ describe('AnthropicMessagesModel', () => {
 
     it('formats tools correctly', async () => {
       const { captured, mockClient } = setupCapture()
-      const provider = new AnthropicMessagesModel({ client: mockClient })
+      const provider = new MessagesModel({ client: mockClient })
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
       const toolSpecs = [
         {
@@ -351,7 +351,7 @@ describe('AnthropicMessagesModel', () => {
     describe('Prompt Caching (Lookahead logic)', () => {
       it('attaches cache control to message content block followed by cache point', async () => {
         const { captured, mockClient } = setupCapture()
-        const provider = new AnthropicMessagesModel({ client: mockClient })
+        const provider = new MessagesModel({ client: mockClient })
         const messages = [
           new Message({
             role: 'user',
@@ -381,7 +381,7 @@ describe('AnthropicMessagesModel', () => {
 
       it('formats system prompt string without cache', async () => {
         const { captured, mockClient } = setupCapture()
-        const provider = new AnthropicMessagesModel({ client: mockClient })
+        const provider = new MessagesModel({ client: mockClient })
         const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
 
         await collectIterator(provider.stream(messages, { systemPrompt: 'System instruction' }))
@@ -391,7 +391,7 @@ describe('AnthropicMessagesModel', () => {
 
       it('formats system prompt array with cache points', async () => {
         const { captured, mockClient } = setupCapture()
-        const provider = new AnthropicMessagesModel({ client: mockClient })
+        const provider = new MessagesModel({ client: mockClient })
         const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
         const systemPrompt = [
           new TextBlock('Heavy context'),
@@ -419,7 +419,7 @@ describe('AnthropicMessagesModel', () => {
     describe('Media blocks', () => {
       it('formats images correctly', async () => {
         const { captured, mockClient } = setupCapture()
-        const provider = new AnthropicMessagesModel({ client: mockClient })
+        const provider = new MessagesModel({ client: mockClient })
         const imageBytes = new Uint8Array([72, 101, 108, 108, 111]) // "Hello"
         const messages = [
           new Message({
@@ -444,7 +444,7 @@ describe('AnthropicMessagesModel', () => {
 
       it('formats PDFs correctly', async () => {
         const { captured, mockClient } = setupCapture()
-        const provider = new AnthropicMessagesModel({ client: mockClient })
+        const provider = new MessagesModel({ client: mockClient })
         const pdfBytes = new Uint8Array([1, 2, 3])
         const messages = [
           new Message({
@@ -469,7 +469,7 @@ describe('AnthropicMessagesModel', () => {
       it('logs warning for unsupported GuardContentBlock in user message', async () => {
         const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {}) // Spy on console.warn (via logger)
         const { captured, mockClient } = setupCapture()
-        const provider = new AnthropicMessagesModel({ client: mockClient })
+        const provider = new MessagesModel({ client: mockClient })
         const messages = [
           new Message({
             role: 'user',
@@ -492,7 +492,7 @@ describe('AnthropicMessagesModel', () => {
     describe('Tool Results', () => {
       it('formats simple text tool result', async () => {
         const { captured, mockClient } = setupCapture()
-        const provider = new AnthropicMessagesModel({ client: mockClient })
+        const provider = new MessagesModel({ client: mockClient })
         const messages = [
           new Message({
             role: 'user',
@@ -517,7 +517,7 @@ describe('AnthropicMessagesModel', () => {
 
       it('formats mixed tool result (json/image)', async () => {
         const { captured, mockClient } = setupCapture()
-        const provider = new AnthropicMessagesModel({ client: mockClient })
+        const provider = new MessagesModel({ client: mockClient })
         const messages = [
           new Message({
             role: 'user',
@@ -544,7 +544,7 @@ describe('AnthropicMessagesModel', () => {
 
       it('formats image block inside tool result via recursive formatting', async () => {
         const { captured, mockClient } = setupCapture()
-        const provider = new AnthropicMessagesModel({ client: mockClient })
+        const provider = new MessagesModel({ client: mockClient })
         const imageBytes = new Uint8Array([72, 101, 108, 108, 111])
         const messages = [
           new Message({
@@ -576,7 +576,7 @@ describe('AnthropicMessagesModel', () => {
 
       it('formats document block inside tool result as text for text formats', async () => {
         const { captured, mockClient } = setupCapture()
-        const provider = new AnthropicMessagesModel({ client: mockClient })
+        const provider = new MessagesModel({ client: mockClient })
         const messages = [
           new Message({
             role: 'user',
@@ -601,7 +601,7 @@ describe('AnthropicMessagesModel', () => {
       it('skips video block inside tool result with warning', async () => {
         const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
         const { captured, mockClient } = setupCapture()
-        const provider = new AnthropicMessagesModel({ client: mockClient })
+        const provider = new MessagesModel({ client: mockClient })
         const messages = [
           new Message({
             role: 'user',

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import OpenAI from 'openai'
 import { isNode } from '../../__fixtures__/environment.js'
-import { OpenAIChatModel } from '../openai.js'
+import { ChatModel } from '../openai.js'
 import { ContextWindowOverflowError, ModelThrottledError } from '../../errors.js'
 import { collectIterator } from '../../__fixtures__/model-test-helpers.js'
 import { Message, TextBlock, ToolUseBlock, ToolResultBlock, GuardContentBlock } from '../../types/messages.js'
@@ -31,7 +31,7 @@ vi.mock('openai', () => {
   }
 })
 
-describe('OpenAIChatModel', () => {
+describe('ChatModel', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.restoreAllMocks()
@@ -68,14 +68,14 @@ describe('OpenAIChatModel', () => {
 
   describe('constructor', () => {
     it('creates an instance with required modelId', () => {
-      const provider = new OpenAIChatModel({ modelId: 'gpt-4o', apiKey: 'sk-test' })
+      const provider = new ChatModel({ modelId: 'gpt-4o', apiKey: 'sk-test' })
       const config = provider.getConfig()
       expect(config.modelId).toBe('gpt-4o')
     })
 
     it('uses custom model ID', () => {
       const customModelId = 'gpt-3.5-turbo'
-      const provider = new OpenAIChatModel({ modelId: customModelId, apiKey: 'sk-test' })
+      const provider = new ChatModel({ modelId: customModelId, apiKey: 'sk-test' })
       expect(provider.getConfig()).toStrictEqual({
         modelId: customModelId,
       })
@@ -83,7 +83,7 @@ describe('OpenAIChatModel', () => {
 
     it('uses API key from constructor parameter', () => {
       const apiKey = 'sk-explicit'
-      new OpenAIChatModel({ modelId: 'gpt-4o', apiKey })
+      new ChatModel({ modelId: 'gpt-4o', apiKey })
       expect(OpenAI).toHaveBeenCalledWith(
         expect.objectContaining({
           apiKey: apiKey,
@@ -95,7 +95,7 @@ describe('OpenAIChatModel', () => {
     if (isNode) {
       it('uses API key from environment variable', () => {
         vi.stubEnv('OPENAI_API_KEY', 'sk-from-env')
-        new OpenAIChatModel({ modelId: 'gpt-4o' })
+        new ChatModel({ modelId: 'gpt-4o' })
         // OpenAI client should be called without explicit apiKey (uses env var internally)
         expect(OpenAI).toHaveBeenCalled()
       })
@@ -106,7 +106,7 @@ describe('OpenAIChatModel', () => {
         vi.stubEnv('OPENAI_API_KEY', 'sk-from-env')
       }
       const explicitKey = 'sk-explicit'
-      new OpenAIChatModel({ modelId: 'gpt-4o', apiKey: explicitKey })
+      new ChatModel({ modelId: 'gpt-4o', apiKey: explicitKey })
       expect(OpenAI).toHaveBeenCalledWith(
         expect.objectContaining({
           apiKey: explicitKey,
@@ -118,14 +118,14 @@ describe('OpenAIChatModel', () => {
       if (isNode) {
         vi.stubEnv('OPENAI_API_KEY', '')
       }
-      expect(() => new OpenAIChatModel({ modelId: 'gpt-4o' })).toThrow(
+      expect(() => new ChatModel({ modelId: 'gpt-4o' })).toThrow(
         "OpenAI API key is required. Provide it via the 'apiKey' option (string or function) or set the OPENAI_API_KEY environment variable."
       )
     })
 
     it('uses custom client configuration', () => {
       const timeout = 30000
-      new OpenAIChatModel({ modelId: 'gpt-4o', apiKey: 'sk-test', clientConfig: { timeout } })
+      new ChatModel({ modelId: 'gpt-4o', apiKey: 'sk-test', clientConfig: { timeout } })
       expect(OpenAI).toHaveBeenCalledWith(
         expect.objectContaining({
           timeout: timeout,
@@ -136,7 +136,7 @@ describe('OpenAIChatModel', () => {
     it('uses provided client instance', () => {
       vi.clearAllMocks()
       const mockClient = {} as OpenAI
-      const provider = new OpenAIChatModel({ modelId: 'gpt-4o', client: mockClient })
+      const provider = new ChatModel({ modelId: 'gpt-4o', client: mockClient })
       // Should not create a new OpenAI client
       expect(OpenAI).not.toHaveBeenCalled()
       expect(provider).toBeDefined()
@@ -145,7 +145,7 @@ describe('OpenAIChatModel', () => {
     it('provided client takes precedence over apiKey and clientConfig', () => {
       vi.clearAllMocks()
       const mockClient = {} as OpenAI
-      new OpenAIChatModel({
+      new ChatModel({
         modelId: 'gpt-4o',
         apiKey: 'sk-test',
         client: mockClient,
@@ -161,12 +161,12 @@ describe('OpenAIChatModel', () => {
         vi.stubEnv('OPENAI_API_KEY', '')
       }
       const mockClient = {} as OpenAI
-      expect(() => new OpenAIChatModel({ modelId: 'gpt-4o', client: mockClient })).not.toThrow()
+      expect(() => new ChatModel({ modelId: 'gpt-4o', client: mockClient })).not.toThrow()
     })
 
     it('accepts function-based API key', () => {
       const apiKeyFn = vi.fn(async () => 'sk-dynamic')
-      new OpenAIChatModel({
+      new ChatModel({
         modelId: 'gpt-4o',
         apiKey: apiKeyFn,
       })
@@ -183,7 +183,7 @@ describe('OpenAIChatModel', () => {
         return 'sk-async-key'
       }
 
-      new OpenAIChatModel({
+      new ChatModel({
         modelId: 'gpt-4o',
         apiKey: apiKeyFn,
       })
@@ -198,7 +198,7 @@ describe('OpenAIChatModel', () => {
 
   describe('updateConfig', () => {
     it('merges new config with existing config', () => {
-      const provider = new OpenAIChatModel({ modelId: 'gpt-4o', apiKey: 'sk-test', temperature: 0.5 })
+      const provider = new ChatModel({ modelId: 'gpt-4o', apiKey: 'sk-test', temperature: 0.5 })
       provider.updateConfig({ modelId: 'gpt-4o', temperature: 0.8, maxTokens: 2048 })
       expect(provider.getConfig()).toStrictEqual({
         modelId: 'gpt-4o',
@@ -208,7 +208,7 @@ describe('OpenAIChatModel', () => {
     })
 
     it('preserves fields not included in the update', () => {
-      const provider = new OpenAIChatModel({
+      const provider = new ChatModel({
         apiKey: 'sk-test',
         modelId: 'gpt-3.5-turbo',
         temperature: 0.5,
@@ -225,7 +225,7 @@ describe('OpenAIChatModel', () => {
 
   describe('getConfig', () => {
     it('returns the current configuration', () => {
-      const provider = new OpenAIChatModel({
+      const provider = new ChatModel({
         modelId: 'gpt-4o',
         apiKey: 'sk-test',
         maxTokens: 1024,
@@ -243,7 +243,7 @@ describe('OpenAIChatModel', () => {
     describe('validation', () => {
       it('throws error when messages array is empty', async () => {
         const mockClient = createMockClient(async function* () {})
-        const provider = new OpenAIChatModel({ modelId: 'gpt-4o', client: mockClient })
+        const provider = new ChatModel({ modelId: 'gpt-4o', client: mockClient })
 
         await expect(async () => {
           await collectIterator(provider.stream([]))
@@ -259,7 +259,7 @@ describe('OpenAIChatModel', () => {
             choices: [{ finish_reason: 'stop', delta: {}, index: 0 }],
           }
         })
-        const provider = new OpenAIChatModel({ modelId: 'gpt-4o', client: mockClient })
+        const provider = new ChatModel({ modelId: 'gpt-4o', client: mockClient })
         const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
 
         // System prompt that's only whitespace should not be sent
@@ -272,7 +272,7 @@ describe('OpenAIChatModel', () => {
 
       it('throws error for streaming with n > 1', async () => {
         const mockClient = createMockClient(async function* () {})
-        const provider = new OpenAIChatModel({
+        const provider = new ChatModel({
           modelId: 'gpt-4o',
           client: mockClient,
           params: { n: 2 },
@@ -288,7 +288,7 @@ describe('OpenAIChatModel', () => {
 
       it('throws error for tool spec without name or description', async () => {
         const mockClient = createMockClient(async function* () {})
-        const provider = new OpenAIChatModel({ modelId: 'gpt-4o', client: mockClient })
+        const provider = new ChatModel({ modelId: 'gpt-4o', client: mockClient })
         const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
 
         await expect(async () => {
@@ -302,7 +302,7 @@ describe('OpenAIChatModel', () => {
 
       it('throws error for empty tool result content', async () => {
         const mockClient = createMockClient(async function* () {})
-        const provider = new OpenAIChatModel({ modelId: 'gpt-4o', client: mockClient })
+        const provider = new ChatModel({ modelId: 'gpt-4o', client: mockClient })
         const messages = [
           new Message({
             role: 'user',
@@ -332,7 +332,7 @@ describe('OpenAIChatModel', () => {
             choices: [{ finish_reason: 'stop', delta: {}, index: 0 }],
           }
         })
-        const provider = new OpenAIChatModel({ modelId: 'gpt-4o', client: mockClient })
+        const provider = new ChatModel({ modelId: 'gpt-4o', client: mockClient })
         const messages = [
           new Message({ role: 'user', content: [new TextBlock('Run tool')] }),
           new Message({
@@ -367,7 +367,7 @@ describe('OpenAIChatModel', () => {
 
       it('throws error for circular reference in tool input', async () => {
         const mockClient = createMockClient(async function* () {})
-        const provider = new OpenAIChatModel({ modelId: 'gpt-4o', client: mockClient })
+        const provider = new ChatModel({ modelId: 'gpt-4o', client: mockClient })
 
         const circular: any = { a: 1 }
         circular.self = circular
@@ -411,7 +411,7 @@ describe('OpenAIChatModel', () => {
           }
         })
 
-        const provider = new OpenAIChatModel({ modelId: 'gpt-4o', client: mockClient })
+        const provider = new ChatModel({ modelId: 'gpt-4o', client: mockClient })
         const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
 
         const events = await collectIterator(provider.stream(messages))
@@ -451,7 +451,7 @@ describe('OpenAIChatModel', () => {
         }
       })
 
-      const provider = new OpenAIChatModel({ modelId: 'gpt-4o', client: mockClient })
+      const provider = new ChatModel({ modelId: 'gpt-4o', client: mockClient })
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
 
       const events = await collectIterator(provider.stream(messages))
@@ -482,7 +482,7 @@ describe('OpenAIChatModel', () => {
         }
       })
 
-      const provider = new OpenAIChatModel({ modelId: 'gpt-4o', client: mockClient })
+      const provider = new ChatModel({ modelId: 'gpt-4o', client: mockClient })
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
 
       const events = await collectIterator(provider.stream(messages))
@@ -515,7 +515,7 @@ describe('OpenAIChatModel', () => {
         }
       })
 
-      const provider = new OpenAIChatModel({ modelId: 'gpt-4o', client: mockClient })
+      const provider = new ChatModel({ modelId: 'gpt-4o', client: mockClient })
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
 
       const events = await collectIterator(provider.stream(messages))
@@ -539,7 +539,7 @@ describe('OpenAIChatModel', () => {
         }
       })
 
-      const provider = new OpenAIChatModel({ modelId: 'gpt-4o', client: mockClient })
+      const provider = new ChatModel({ modelId: 'gpt-4o', client: mockClient })
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
 
       // Suppress console.warn for this test
@@ -601,7 +601,7 @@ describe('OpenAIChatModel', () => {
         }
       })
 
-      const provider = new OpenAIChatModel({ modelId: 'gpt-4o', client: mockClient })
+      const provider = new ChatModel({ modelId: 'gpt-4o', client: mockClient })
       const messages = [new Message({ role: 'user', content: [new TextBlock('Calculate 2+2')] })]
 
       const events = await collectIterator(provider.stream(messages))
@@ -680,7 +680,7 @@ describe('OpenAIChatModel', () => {
         }
       })
 
-      const provider = new OpenAIChatModel({ modelId: 'gpt-4o', client: mockClient })
+      const provider = new ChatModel({ modelId: 'gpt-4o', client: mockClient })
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
 
       const events = await collectIterator(provider.stream(messages))
@@ -719,7 +719,7 @@ describe('OpenAIChatModel', () => {
         }
       })
 
-      const provider = new OpenAIChatModel({ modelId: 'gpt-4o', client: mockClient })
+      const provider = new ChatModel({ modelId: 'gpt-4o', client: mockClient })
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
 
       // Suppress console.warn for this test
@@ -767,7 +767,7 @@ describe('OpenAIChatModel', () => {
         yield { choices: [{ finish_reason: 'tool_calls', delta: {}, index: 0 }] }
       })
 
-      const provider = new OpenAIChatModel({ modelId: 'gpt-4o', client: mockClient })
+      const provider = new ChatModel({ modelId: 'gpt-4o', client: mockClient })
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
 
       const events = await collectIterator(provider.stream(messages))
@@ -811,7 +811,7 @@ describe('OpenAIChatModel', () => {
         yield { choices: [{ finish_reason: 'tool_calls', delta: {}, index: 0 }] }
       })
 
-      const provider = new OpenAIChatModel({ modelId: 'gpt-4o', client: mockClient })
+      const provider = new ChatModel({ modelId: 'gpt-4o', client: mockClient })
       const messages = [new Message({ role: 'user', content: [new TextBlock('Calculate 2+2')] })]
 
       const events = await collectIterator(provider.stream(messages))
@@ -854,7 +854,7 @@ describe('OpenAIChatModel', () => {
           }
         })
 
-        const provider = new OpenAIChatModel({ modelId: 'gpt-4o', client: mockClient })
+        const provider = new ChatModel({ modelId: 'gpt-4o', client: mockClient })
         const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
 
         const events = await collectIterator(provider.stream(messages))
@@ -875,7 +875,7 @@ describe('OpenAIChatModel', () => {
         }
       })
 
-      const provider = new OpenAIChatModel({ modelId: 'gpt-4o', client: mockClient })
+      const provider = new ChatModel({ modelId: 'gpt-4o', client: mockClient })
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
 
       const events = await collectIterator(provider.stream(messages))
@@ -911,7 +911,7 @@ describe('OpenAIChatModel', () => {
         },
       } as any
 
-      const provider = new OpenAIChatModel({
+      const provider = new ChatModel({
         modelId: 'gpt-4o',
         client: mockClient,
         temperature: 0.7,
@@ -968,7 +968,7 @@ describe('OpenAIChatModel', () => {
     it('formats array system prompt with text blocks only', async () => {
       const captured: { request: any } = { request: null }
       const mockClient = createMockClientWithCapture(captured)
-      const provider = new OpenAIChatModel({ modelId: 'gpt-4o', client: mockClient })
+      const provider = new ChatModel({ modelId: 'gpt-4o', client: mockClient })
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
 
       await collectIterator(
@@ -991,7 +991,7 @@ describe('OpenAIChatModel', () => {
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
       const captured: { request: any } = { request: null }
       const mockClient = createMockClientWithCapture(captured)
-      const provider = new OpenAIChatModel({ modelId: 'gpt-4o', client: mockClient })
+      const provider = new ChatModel({ modelId: 'gpt-4o', client: mockClient })
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
 
       collectIterator(
@@ -1022,7 +1022,7 @@ describe('OpenAIChatModel', () => {
     it('handles empty array system prompt', async () => {
       const captured: { request: any } = { request: null }
       const mockClient = createMockClientWithCapture(captured)
-      const provider = new OpenAIChatModel({ modelId: 'gpt-4o', client: mockClient })
+      const provider = new ChatModel({ modelId: 'gpt-4o', client: mockClient })
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
 
       await collectIterator(
@@ -1039,7 +1039,7 @@ describe('OpenAIChatModel', () => {
     it('formats array system prompt with single text block', async () => {
       const captured: { request: any } = { request: null }
       const mockClient = createMockClientWithCapture(captured)
-      const provider = new OpenAIChatModel({ modelId: 'gpt-4o', client: mockClient })
+      const provider = new ChatModel({ modelId: 'gpt-4o', client: mockClient })
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
 
       await collectIterator(
@@ -1059,7 +1059,7 @@ describe('OpenAIChatModel', () => {
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
       const captured: { request: any } = { request: null }
       const mockClient = createMockClientWithCapture(captured)
-      const provider = new OpenAIChatModel({ modelId: 'gpt-4o', client: mockClient })
+      const provider = new ChatModel({ modelId: 'gpt-4o', client: mockClient })
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
 
       await collectIterator(
@@ -1096,7 +1096,7 @@ describe('OpenAIChatModel', () => {
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
       const captured: { request: any } = { request: null }
       const mockClient = createMockClientWithCapture(captured)
-      const provider = new OpenAIChatModel({ modelId: 'gpt-4o', client: mockClient })
+      const provider = new ChatModel({ modelId: 'gpt-4o', client: mockClient })
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
 
       await collectIterator(
@@ -1134,7 +1134,7 @@ describe('OpenAIChatModel', () => {
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
       const captured: { request: any } = { request: null }
       const mockClient = createMockClientWithCapture(captured)
-      const provider = new OpenAIChatModel({ modelId: 'gpt-4o', client: mockClient })
+      const provider = new ChatModel({ modelId: 'gpt-4o', client: mockClient })
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
 
       await collectIterator(
@@ -1169,7 +1169,7 @@ describe('OpenAIChatModel', () => {
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
       const captured: { request: any } = { request: null }
       const mockClient = createMockClientWithCapture(captured)
-      const provider = new OpenAIChatModel({ modelId: 'gpt-4o', client: mockClient })
+      const provider = new ChatModel({ modelId: 'gpt-4o', client: mockClient })
       const messages = [
         new Message({
           role: 'user',
@@ -1212,7 +1212,7 @@ describe('OpenAIChatModel', () => {
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
       const captured: { request: any } = { request: null }
       const mockClient = createMockClientWithCapture(captured)
-      const provider = new OpenAIChatModel({ modelId: 'gpt-4o', client: mockClient })
+      const provider = new ChatModel({ modelId: 'gpt-4o', client: mockClient })
       const imageBytes = new Uint8Array([1, 2, 3, 4])
       const messages = [
         new Message({
@@ -1249,7 +1249,7 @@ describe('OpenAIChatModel', () => {
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
       const captured: { request: any } = { request: null }
       const mockClient = createMockClientWithCapture(captured)
-      const provider = new OpenAIChatModel({ modelId: 'gpt-4o', client: mockClient })
+      const provider = new ChatModel({ modelId: 'gpt-4o', client: mockClient })
       const messages = [
         new Message({
           role: 'user',
@@ -1283,7 +1283,7 @@ describe('OpenAIChatModel', () => {
     it('formats image block in user message as image_url with base64', async () => {
       const captured: { request: any } = { request: null }
       const mockClient = createMockClientWithCapture(captured)
-      const provider = new OpenAIChatModel({ modelId: 'gpt-4o', client: mockClient })
+      const provider = new ChatModel({ modelId: 'gpt-4o', client: mockClient })
       const imageBytes = new Uint8Array([72, 101, 108, 108, 111])
       const messages = [
         new Message({
@@ -1310,7 +1310,7 @@ describe('OpenAIChatModel', () => {
     it('formats image block in user message with URL source', async () => {
       const captured: { request: any } = { request: null }
       const mockClient = createMockClientWithCapture(captured)
-      const provider = new OpenAIChatModel({ modelId: 'gpt-4o', client: mockClient })
+      const provider = new ChatModel({ modelId: 'gpt-4o', client: mockClient })
       const messages = [
         new Message({
           role: 'user',
@@ -1330,7 +1330,7 @@ describe('OpenAIChatModel', () => {
     it('formats document block with bytes source as file in user message', async () => {
       const captured: { request: any } = { request: null }
       const mockClient = createMockClientWithCapture(captured)
-      const provider = new OpenAIChatModel({ modelId: 'gpt-4o', client: mockClient })
+      const provider = new ChatModel({ modelId: 'gpt-4o', client: mockClient })
       const docBytes = new Uint8Array([1, 2, 3])
       const messages = [
         new Message({
@@ -1351,7 +1351,7 @@ describe('OpenAIChatModel', () => {
     it('splits image from tool result into separate user message', async () => {
       const captured: { request: any } = { request: null }
       const mockClient = createMockClientWithCapture(captured)
-      const provider = new OpenAIChatModel({ modelId: 'gpt-4o', client: mockClient })
+      const provider = new ChatModel({ modelId: 'gpt-4o', client: mockClient })
       const imageBytes = new Uint8Array([72, 101, 108, 108, 111])
       const messages = [
         new Message({
@@ -1389,7 +1389,7 @@ describe('OpenAIChatModel', () => {
     it('injects placeholder text when tool result contains only images', async () => {
       const captured: { request: any } = { request: null }
       const mockClient = createMockClientWithCapture(captured)
-      const provider = new OpenAIChatModel({ modelId: 'gpt-4o', client: mockClient })
+      const provider = new ChatModel({ modelId: 'gpt-4o', client: mockClient })
       const messages = [
         new Message({
           role: 'user',
@@ -1413,7 +1413,7 @@ describe('OpenAIChatModel', () => {
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
       const captured: { request: any } = { request: null }
       const mockClient = createMockClientWithCapture(captured)
-      const provider = new OpenAIChatModel({ modelId: 'gpt-4o', client: mockClient })
+      const provider = new ChatModel({ modelId: 'gpt-4o', client: mockClient })
       const messages = [
         new Message({
           role: 'user',
@@ -1442,7 +1442,7 @@ describe('OpenAIChatModel', () => {
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
       const captured: { request: any } = { request: null }
       const mockClient = createMockClientWithCapture(captured)
-      const provider = new OpenAIChatModel({ modelId: 'gpt-4o', client: mockClient })
+      const provider = new ChatModel({ modelId: 'gpt-4o', client: mockClient })
       const messages = [
         new Message({
           role: 'user',
@@ -1482,7 +1482,7 @@ describe('OpenAIChatModel', () => {
         },
       } as any
 
-      const provider = new OpenAIChatModel({ modelId: 'gpt-4o', client: mockClient })
+      const provider = new ChatModel({ modelId: 'gpt-4o', client: mockClient })
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
 
       await expect(async () => {
@@ -1503,7 +1503,7 @@ describe('OpenAIChatModel', () => {
         },
       } as any
 
-      const provider = new OpenAIChatModel({ modelId: 'gpt-4o', client: mockClient })
+      const provider = new ChatModel({ modelId: 'gpt-4o', client: mockClient })
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
 
       await expect(async () => {
@@ -1531,7 +1531,7 @@ describe('OpenAIChatModel', () => {
         },
       } as any
 
-      const provider = new OpenAIChatModel({ modelId: 'gpt-4o', client: mockClient })
+      const provider = new ChatModel({ modelId: 'gpt-4o', client: mockClient })
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
 
       await expect(async () => {
@@ -1552,7 +1552,7 @@ describe('OpenAIChatModel', () => {
         },
       } as any
 
-      const provider = new OpenAIChatModel({ modelId: 'gpt-4o', client: mockClient })
+      const provider = new ChatModel({ modelId: 'gpt-4o', client: mockClient })
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
 
       await expect(async () => {
@@ -1570,7 +1570,7 @@ describe('OpenAIChatModel', () => {
         throw new Error('Network connection lost')
       })
 
-      const provider = new OpenAIChatModel({ modelId: 'gpt-4o', client: mockClient })
+      const provider = new ChatModel({ modelId: 'gpt-4o', client: mockClient })
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
 
       await expect(async () => {
@@ -1594,7 +1594,7 @@ describe('OpenAIChatModel', () => {
         },
       } as unknown as OpenAI
 
-      const provider = new OpenAIChatModel({ modelId: 'gpt-4o', client: mockClient })
+      const provider = new ChatModel({ modelId: 'gpt-4o', client: mockClient })
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
 
       await expect(async () => {
@@ -1618,7 +1618,7 @@ describe('OpenAIChatModel', () => {
         },
       } as unknown as OpenAI
 
-      const provider = new OpenAIChatModel({ modelId: 'gpt-4o', client: mockClient })
+      const provider = new ChatModel({ modelId: 'gpt-4o', client: mockClient })
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
 
       await expect(async () => {
@@ -1639,7 +1639,7 @@ describe('OpenAIChatModel', () => {
         },
       } as unknown as OpenAI
 
-      const provider = new OpenAIChatModel({ modelId: 'gpt-4o', client: mockClient })
+      const provider = new ChatModel({ modelId: 'gpt-4o', client: mockClient })
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
 
       await expect(async () => {
@@ -1660,7 +1660,7 @@ describe('OpenAIChatModel', () => {
         },
       } as unknown as OpenAI
 
-      const provider = new OpenAIChatModel({ modelId: 'gpt-4o', client: mockClient })
+      const provider = new ChatModel({ modelId: 'gpt-4o', client: mockClient })
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
 
       await expect(async () => {
@@ -1684,7 +1684,7 @@ describe('OpenAIChatModel', () => {
         },
       } as unknown as OpenAI
 
-      const provider = new OpenAIChatModel({ modelId: 'gpt-4o', client: mockClient })
+      const provider = new ChatModel({ modelId: 'gpt-4o', client: mockClient })
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
 
       try {

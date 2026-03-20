@@ -10,7 +10,7 @@ import type { BaseModelConfig } from '../model.js'
  *
  * @example
  * ```typescript
- * const config: GoogleGenAIModelConfig = {
+ * const config: GenAIModelConfig = {
  *   modelId: 'gemini-2.5-flash',
  *   params: { temperature: 0.7, maxOutputTokens: 1024 }
  * }
@@ -18,7 +18,7 @@ import type { BaseModelConfig } from '../model.js'
  *
  * @see https://ai.google.dev/api/generate-content#generationconfig
  */
-export interface GoogleGenAIModelConfig extends BaseModelConfig {
+export interface GenAIModelConfig extends BaseModelConfig {
   /**
    * Gemini model identifier (e.g., gemini-2.5-flash, gemini-2.5-pro).
    *
@@ -44,9 +44,9 @@ export interface GoogleGenAIModelConfig extends BaseModelConfig {
 }
 
 /**
- * Options interface for creating a GoogleGenAIModel instance.
+ * Options interface for creating a GenAIModel instance.
  */
-export interface GoogleGenAIModelOptions extends GoogleGenAIModelConfig {
+export interface GenAIModelOptions extends GenAIModelConfig {
   /**
    * Gemini API key (falls back to GEMINI_API_KEY environment variable).
    */
@@ -68,7 +68,7 @@ export interface GoogleGenAIModelOptions extends GoogleGenAIModelConfig {
 /**
  * Internal state for tracking streaming progress.
  */
-export interface GoogleGenAIStreamState {
+export interface GenAIStreamState {
   messageStarted: boolean
   textContentBlockStarted: boolean
   reasoningContentBlockStarted: boolean

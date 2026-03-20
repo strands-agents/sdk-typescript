@@ -164,12 +164,12 @@ export type { BaseModelConfig, StreamOptions, CacheConfig } from './models/model
 export { Model } from './models/model.js'
 
 // Bedrock model provider
-export { BedrockConverseModel } from './models/bedrock.js'
+export { ConverseModel } from './models/bedrock.js'
 export type {
-  BedrockConverseModelConfig,
-  BedrockConverseModelOptions,
-  BedrockConverseGuardrailConfig,
-  BedrockConverseGuardrailRedactionConfig,
+  ConverseModelConfig,
+  ConverseModelOptions,
+  ConverseGuardrailConfig,
+  ConverseGuardrailRedactionConfig,
 } from './models/bedrock.js'
 
 // Agent streaming event types

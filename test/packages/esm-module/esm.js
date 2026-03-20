@@ -3,7 +3,7 @@
  * This script runs in a pure Node.js ES module environment.
  */
 
-import { Agent, BedrockConverseModel, tool, Tool } from '@strands-agents/sdk'
+import { Agent, ConverseModel, tool, Tool } from '@strands-agents/sdk'
 
 import { notebook } from '@strands-agents/sdk/vended-tools/notebook'
 import { fileEditor } from '@strands-agents/sdk/vended-tools/file-editor'
@@ -11,25 +11,25 @@ import { httpRequest } from '@strands-agents/sdk/vended-tools/http-request'
 import { bash } from '@strands-agents/sdk/vended-tools/bash'
 
 // Verify model subpath exports
-import { BedrockConverseModel as BedrockFromSubpath } from '@strands-agents/sdk/models/bedrock'
-import { OpenAIChatModel } from '@strands-agents/sdk/models/openai'
-import { AnthropicMessagesModel } from '@strands-agents/sdk/models/anthropic'
-import { GoogleGenAIModel } from '@strands-agents/sdk/models/google'
+import { ConverseModel as BedrockFromSubpath } from '@strands-agents/sdk/models/bedrock'
+import { ChatModel } from '@strands-agents/sdk/models/openai'
+import { MessagesModel } from '@strands-agents/sdk/models/anthropic'
+import { GenAIModel } from '@strands-agents/sdk/models/google'
 
 import { z } from 'zod'
 
 console.log('✓ Import from main entry point successful')
 
-// Verify BedrockConverseModel can be instantiated
-const model = new BedrockConverseModel({ region: 'us-west-2' })
-console.log('✓ BedrockConverseModel instantiation successful')
+// Verify ConverseModel can be instantiated
+const model = new ConverseModel({ region: 'us-west-2' })
+console.log('✓ ConverseModel instantiation successful')
 
 // Verify basic functionality
 const config = model.getConfig()
 if (!config) {
-  throw new Error('BedrockConverseModel config is invalid')
+  throw new Error('ConverseModel config is invalid')
 }
-console.log('✓ BedrockConverseModel configuration retrieval successful')
+console.log('✓ ConverseModel configuration retrieval successful')
 
 // Define a tool
 const example_tool = tool({
@@ -106,7 +106,7 @@ for (const tool of Object.values(tools)) {
 }
 
 // Verify model subpath exports resolve correctly
-if (BedrockFromSubpath !== BedrockConverseModel) {
-  throw new Error('BedrockConverseModel from subpath should match main export')
+if (BedrockFromSubpath !== ConverseModel) {
+  throw new Error('ConverseModel from subpath should match main export')
 }
 console.log('✓ Model subpath exports verified')

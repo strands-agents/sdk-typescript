@@ -3,13 +3,13 @@
  *
  * @example
  * ```typescript
- * import { GoogleGenAIModel } from '@strands-agents/sdk/models/google'
+ * import { GenAIModel } from '@strands-agents/sdk/models/google'
  *
- * const model = new GoogleGenAIModel({
+ * const model = new GenAIModel({
  *   apiKey: 'your-api-key',
  *   modelId: 'gemini-2.5-flash',
  * })
  * ```
  */
 
-export { GoogleGenAIModel, type GoogleGenAIModelConfig, type GoogleGenAIModelOptions } from './model.js'
+export { GenAIModel, type GenAIModelConfig, type GenAIModelOptions } from './model.js'

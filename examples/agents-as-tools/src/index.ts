@@ -1,4 +1,4 @@
-import { Agent, AgentResult, BedrockConverseModel, tool } from '@strands-agents/sdk'
+import { Agent, AgentResult, ConverseModel, tool } from '@strands-agents/sdk'
 import { z } from 'zod'
 
 /**
@@ -13,7 +13,7 @@ function extractText(result: AgentResult): string {
   return result.lastMessage.content.map((b) => ('text' in b ? b.text : '')).join('')
 }
 
-const model = new BedrockConverseModel({ maxTokens: 1024 })
+const model = new ConverseModel({ maxTokens: 1024 })
 
 // Specialized tool agents
 

@@ -47,7 +47,7 @@ const OPENAI_RATE_LIMIT_PATTERNS = ['rate_limit_exceeded', 'rate limit', 'too ma
  * Type representing an OpenAI streaming chat choice.
  * Used for type-safe handling of streaming responses.
  */
-type OpenAIChatChoice = {
+type ChatChoice = {
   delta?: {
     role?: string
     content?: string
@@ -73,14 +73,14 @@ type OpenAIChatChoice = {
  *
  * @example
  * ```typescript
- * const config: OpenAIChatModelConfig = {
+ * const config: ChatModelConfig = {
  *   modelId: 'gpt-4o',
  *   temperature: 0.7,
  *   maxTokens: 1024
  * }
  * ```
  */
-export interface OpenAIChatModelConfig extends BaseModelConfig {
+export interface ChatModelConfig extends BaseModelConfig {
   /**
    * OpenAI model identifier (e.g., gpt-4o, gpt-3.5-turbo).
    */
@@ -136,9 +136,9 @@ export interface OpenAIChatModelConfig extends BaseModelConfig {
 }
 
 /**
- * Options interface for creating an OpenAIChatModel instance.
+ * Options interface for creating an ChatModel instance.
  */
-export interface OpenAIChatModelOptions extends OpenAIChatModelConfig {
+export interface ChatModelOptions extends ChatModelConfig {
   /**
    * OpenAI API key (falls back to OPENAI_API_KEY environment variable).
    *
@@ -169,7 +169,7 @@ export interface OpenAIChatModelOptions extends OpenAIChatModelConfig {
  *
  * @example
  * ```typescript
- * const provider = new OpenAIChatModel({
+ * const provider = new ChatModel({
  *   apiKey: 'sk-...',
  *   modelId: 'gpt-4o',
  *   temperature: 0.7,
@@ -187,25 +187,25 @@ export interface OpenAIChatModelOptions extends OpenAIChatModelConfig {
  * }
  * ```
  */
-export class OpenAIChatModel extends Model<OpenAIChatModelConfig> {
-  private _config: OpenAIChatModelConfig
+export class ChatModel extends Model<ChatModelConfig> {
+  private _config: ChatModelConfig
   private _client: OpenAI
 
   /**
-   * Creates a new OpenAIChatModel instance.
+   * Creates a new ChatModel instance.
    *
    * @param options - Configuration for model and client (modelId is required)
    *
    * @example
    * ```typescript
    * // Minimal configuration with API key and model ID
-   * const provider = new OpenAIChatModel({
+   * const provider = new ChatModel({
    *   modelId: 'gpt-4o',
    *   apiKey: 'sk-...'
    * })
    *
    * // With additional model configuration
-   * const provider = new OpenAIChatModel({
+   * const provider = new ChatModel({
    *   modelId: 'gpt-4o',
    *   apiKey: 'sk-...',
    *   temperature: 0.8,
@@ -213,25 +213,25 @@ export class OpenAIChatModel extends Model<OpenAIChatModelConfig> {
    * })
    *
    * // Using environment variable for API key
-   * const provider = new OpenAIChatModel({
+   * const provider = new ChatModel({
    *   modelId: 'gpt-3.5-turbo'
    * })
    *
    * // Using function-based API key for dynamic key retrieval
-   * const provider = new OpenAIChatModel({
+   * const provider = new ChatModel({
    *   modelId: 'gpt-4o',
    *   apiKey: async () => await getRotatingApiKey()
    * })
    *
    * // Using a pre-configured client instance
    * const client = new OpenAI({ apiKey: 'sk-...', timeout: 60000 })
-   * const provider = new OpenAIChatModel({
+   * const provider = new ChatModel({
    *   modelId: 'gpt-4o',
    *   client
    * })
    * ```
    */
-  constructor(options?: OpenAIChatModelOptions) {
+  constructor(options?: ChatModelOptions) {
     super()
     const { apiKey, client, clientConfig, ...modelConfig } = options || {}
 
@@ -277,7 +277,7 @@ export class OpenAIChatModel extends Model<OpenAIChatModelConfig> {
    * })
    * ```
    */
-  updateConfig(modelConfig: OpenAIChatModelConfig): void {
+  updateConfig(modelConfig: ChatModelConfig): void {
     this._config = { ...this._config, ...modelConfig }
   }
 
@@ -292,7 +292,7 @@ export class OpenAIChatModel extends Model<OpenAIChatModelConfig> {
    * console.log(config.modelId)
    * ```
    */
-  getConfig(): OpenAIChatModelConfig {
+  getConfig(): ChatModelConfig {
     return this._config
   }
 
@@ -308,7 +308,7 @@ export class OpenAIChatModel extends Model<OpenAIChatModelConfig> {
    *
    * @example
    * ```typescript
-   * const provider = new OpenAIChatModel({ modelId: 'gpt-4o', apiKey: 'sk-...' })
+   * const provider = new ChatModel({ modelId: 'gpt-4o', apiKey: 'sk-...' })
    * const messages: Message[] = [
    *   { role: 'user', content: [{ type: 'textBlock', text: 'What is 2+2?' }] }
    * ]
@@ -892,7 +892,7 @@ export class OpenAIChatModel extends Model<OpenAIChatModelConfig> {
     }
 
     // Process first choice (OpenAI typically returns one choice in streaming)
-    const typedChoice = choice as OpenAIChatChoice
+    const typedChoice = choice as ChatChoice
 
     if (!typedChoice.delta && !typedChoice.finish_reason) {
       return events

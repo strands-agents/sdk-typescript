@@ -20,7 +20,7 @@ import {
 } from '../../index.js'
 import { AgentPrinter } from '../printer.js'
 import { BeforeInvocationEvent, BeforeToolsEvent } from '../../hooks/events.js'
-import { BedrockConverseModel } from '../../models/bedrock.js'
+import { ConverseModel } from '../../models/bedrock.js'
 import { StructuredOutputError } from '../../errors.js'
 import { expectLoopMetrics } from '../../__fixtures__/metrics-helpers.js'
 import { expectAgentResult } from '../../__fixtures__/agent-helpers.js'
@@ -797,11 +797,11 @@ describe('Agent', () => {
         expect(agent.model).toBe(model)
       })
 
-      it('returns default BedrockConverseModel when no model provided', () => {
+      it('returns default ConverseModel when no model provided', () => {
         const agent = new Agent()
 
         expect(agent.model).toBeDefined()
-        expect(agent.model.constructor.name).toBe('BedrockConverseModel')
+        expect(agent.model.constructor.name).toBe('ConverseModel')
       })
     })
 
@@ -1097,15 +1097,15 @@ describe('Agent', () => {
 
   describe('model initialization', () => {
     describe('when model is a string', () => {
-      it('creates BedrockConverseModel with specified modelId', () => {
+      it('creates ConverseModel with specified modelId', () => {
         const agent = new Agent({ model: 'anthropic.claude-3-5-sonnet-20240620-v1:0' })
 
         expect(agent.model).toBeDefined()
-        expect(agent.model.constructor.name).toBe('BedrockConverseModel')
+        expect(agent.model.constructor.name).toBe('ConverseModel')
         expect(agent.model.getConfig().modelId).toBe('anthropic.claude-3-5-sonnet-20240620-v1:0')
       })
 
-      it('creates BedrockConverseModel with custom model ID', () => {
+      it('creates ConverseModel with custom model ID', () => {
         const customModelId = 'custom.model.id'
         const agent = new Agent({ model: customModelId })
 
@@ -1113,9 +1113,9 @@ describe('Agent', () => {
       })
     })
 
-    describe('when model is explicit BedrockConverseModel', () => {
-      it('uses provided BedrockConverseModel instance', () => {
-        const explicitModel = new BedrockConverseModel({ modelId: 'explicit-model-id' })
+    describe('when model is explicit ConverseModel', () => {
+      it('uses provided ConverseModel instance', () => {
+        const explicitModel = new ConverseModel({ modelId: 'explicit-model-id' })
         const agent = new Agent({ model: explicitModel })
 
         expect(agent.model).toBe(explicitModel)
@@ -1124,23 +1124,23 @@ describe('Agent', () => {
     })
 
     describe('when no model is provided', () => {
-      it('creates default BedrockConverseModel', () => {
+      it('creates default ConverseModel', () => {
         const agent = new Agent()
 
         expect(agent.model).toBeDefined()
-        expect(agent.model.constructor.name).toBe('BedrockConverseModel')
+        expect(agent.model.constructor.name).toBe('ConverseModel')
       })
     })
 
     describe('behavior parity', () => {
-      it('string model behaves identically to explicit BedrockConverseModel with same modelId', () => {
+      it('string model behaves identically to explicit ConverseModel with same modelId', () => {
         const modelId = 'anthropic.claude-3-5-sonnet-20240620-v1:0'
 
         // Create agent with string model ID
         const agentWithString = new Agent({ model: modelId })
 
-        // Create agent with explicit BedrockConverseModel
-        const explicitModel = new BedrockConverseModel({ modelId })
+        // Create agent with explicit ConverseModel
+        const explicitModel = new ConverseModel({ modelId })
         const agentWithExplicit = new Agent({ model: explicitModel })
 
         // Both should have same modelId
