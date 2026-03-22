@@ -116,6 +116,20 @@ describe('AgentNode', () => {
     state = new MultiAgentState({ nodeIds: ['agent-1'] })
   })
 
+  describe('constructor', () => {
+    it('throws when agent does not implement stream()', () => {
+      const notAnAgent = { id: 'bad' } as any
+      expect(() => new AgentNode({ agent: notAnAgent })).toThrow('agent must implement InvokableAgent')
+    })
+
+    it('throws with fallback id when agent has neither stream nor id', () => {
+      const notAnAgent = {} as any
+      expect(() => new AgentNode({ agent: notAnAgent })).toThrow(
+        'node_id=<unknown> | agent must implement InvokableAgent'
+      )
+    })
+  })
+
   describe('handle', () => {
     it('wraps agent events and returns content', async () => {
       const { items, result } = await collectGenerator(node.stream([new TextBlock('prompt')], state))
