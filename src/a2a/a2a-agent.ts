@@ -173,10 +173,10 @@ export class A2AAgent implements InvokableAgent {
     const factory = new ClientFactory()
     const client = await factory.createFromUrl(this._config.url, this._config.agentCardPath)
     this._agentCard = await client.getAgentCard()
-    if (this.name === undefined && this._agentCard?.name) {
+    if (this.name === undefined && this._agentCard?.name !== undefined) {
       ;(this as { name?: string }).name = this._agentCard.name
     }
-    if (this.description === undefined && this._agentCard?.description) {
+    if (this.description === undefined && this._agentCard?.description !== undefined) {
       ;(this as { description?: string }).description = this._agentCard.description
     }
     this._client = client

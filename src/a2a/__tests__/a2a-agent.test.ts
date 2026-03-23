@@ -127,6 +127,15 @@ describe('A2AAgent', () => {
       expect(agent.name).toBe('Custom Name')
       expect(agent.description).toBe('Custom description')
     })
+
+    it('populates empty string description from agent card', async () => {
+      mockGetAgentCard.mockResolvedValue({ ...mockAgentCard, description: '' })
+      const agent = new A2AAgent({ url: 'http://localhost:9000' })
+
+      await agent.invoke('Hello')
+
+      expect(agent.description).toBe('')
+    })
   })
 
   describe('invoke', () => {
