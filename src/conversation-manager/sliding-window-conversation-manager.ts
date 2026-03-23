@@ -166,7 +166,8 @@ export class SlidingWindowConversationManager extends ConversationManager {
       break
     }
 
-    // If no valid trim point was found, return false and let the caller handle it
+    // If no valid trim point was found, return false and let the caller handle it.
+    // When windowSize is 0, trimIndex === messages.length is expected (remove all), so allow it through.
     if (trimIndex > messages.length || (trimIndex === messages.length && this._windowSize > 0)) {
       logger.warn(
         `window_size=<${this._windowSize}>, messages=<${messages.length}> | unable to trim conversation context, no valid trim point found`
