@@ -7,15 +7,15 @@ import type { Task } from '@a2a-js/sdk'
 import express from 'express'
 import { ClientFactory } from '@a2a-js/sdk/client'
 import { Agent } from '@strands-agents/sdk'
-import { A2AExpressServer, A2AAgent, A2AStreamUpdateEvent, A2AResultEvent } from '$/sdk/a2a/index.js'
+import { A2AAgent, A2AStreamUpdateEvent, A2AResultEvent } from '$/sdk/a2a/index.js'
+import { A2AExpressServer } from '$/sdk/a2a/express-server.js'
 import { TextBlock } from '$/sdk/types/messages.js'
 import { encodeBase64 } from '$/sdk/types/media.js'
 import { collectGenerator } from '$/sdk/__fixtures__/model-test-helpers.js'
 import { bedrock } from '../__fixtures__/model-providers.js'
 
-describe.skipIf(bedrock.skip)('A2AAgent integration', () => {
-  describe('with standalone server (A2AExpressServer.serve)', () => {
-    let a2aAgent: A2AAgent
+describe.skipIf(bedrock.skip)('A2AExpressServer', () => {
+  describe('serve', () => {
     let a2aServer: A2AExpressServer
     let abortController: AbortController
 
@@ -35,24 +35,23 @@ describe.skipIf(bedrock.skip)('A2AAgent integration', () => {
 
       abortController = new AbortController()
       await a2aServer.serve({ signal: abortController.signal })
-
-      a2aAgent = new A2AAgent({ url: `http://127.0.0.1:${a2aServer.port}` })
     })
 
-    afterAll(async () => {
+    afterAll(() => {
       abortController?.abort()
     })
 
-    it('invoke receives a text response', async () => {
-      const result = await a2aAgent.invoke('What is 2+2? Reply with just the number.')
+    it('serves agent card at well-known endpoint', async () => {
+      const factory = new ClientFactory()
+      const client = await factory.createFromUrl(`http://127.0.0.1:${a2aServer.port}`)
+      const card = await client.getAgentCard()
 
-      expect(result.stopReason).toBe('endTurn')
-      expect(result.lastMessage.role).toBe('assistant')
-      expect(result.lastMessage.content.length).toBeGreaterThan(0)
-      expect(result.toString()).toMatch(/4/)
+      expect(card.name).toBe('Test A2A Agent')
+      expect(card.description).toBe('Integration test agent')
+      expect(card.capabilities?.streaming).toBe(true)
     })
 
-    it('invoke processes an image sent as a file part', async () => {
+    it('processes an image sent as a file part', async () => {
       const imagePath = join(process.cwd(), 'test/integ/__resources__/yellow.png')
       const imageBytes = new Uint8Array(await readFile(imagePath))
 
@@ -85,17 +84,9 @@ describe.skipIf(bedrock.skip)('A2AAgent integration', () => {
 
       expect(texts.toLowerCase()).toContain('yellow')
     })
-
-    it('stream yields events and returns final result', async () => {
-      const { items, result } = await collectGenerator(a2aAgent.stream('Say the word test'))
-
-      expect(items.length).toBeGreaterThan(0)
-      expect(result.stopReason).toBe('endTurn')
-      expect(result.lastMessage.content[0]!.type).toBe('textBlock')
-    })
   })
 
-  describe('with express middleware (A2AExpressServer.createMiddleware)', () => {
+  describe('createMiddleware', () => {
     const servers: Server[] = []
 
     afterEach(() => {
@@ -107,8 +98,6 @@ describe.skipIf(bedrock.skip)('A2AAgent integration', () => {
 
     /**
      * Starts an A2A server on an OS-assigned port and returns the URL.
-     * We bind express first to discover the port, then create the A2AExpressServer
-     * with the correct httpUrl so the agent card advertises the right address.
      */
     async function startServer(agent: Agent): Promise<{ url: string }> {
       return new Promise((resolve, reject) => {

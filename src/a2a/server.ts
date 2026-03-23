@@ -43,7 +43,7 @@ export interface A2AServerConfig {
  * @example
  * ```typescript
  * import { Agent } from '@strands-agents/sdk'
- * import { A2AExpressServer } from '@strands-agents/sdk/a2a'
+ * import { A2AExpressServer } from '@strands-agents/sdk/a2a/express'
  *
  * const agent = new Agent({ model: 'my-model' })
  * const server = new A2AExpressServer({

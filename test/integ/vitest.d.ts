@@ -21,5 +21,9 @@ declare module 'vitest' {
       shouldSkip: boolean
       apiKey: string | undefined
     }
+    ['a2a-server']: {
+      shouldSkip: boolean
+      url: string | undefined
+    }
   }
 }

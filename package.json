@@ -54,6 +54,10 @@
       "types": "./dist/src/a2a/index.d.ts",
       "default": "./dist/src/a2a/index.js"
     },
+    "./a2a/express": {
+      "types": "./dist/src/a2a/express-server.d.ts",
+      "default": "./dist/src/a2a/express-server.js"
+    },
     "./session/s3-storage": {
       "types": "./dist/src/session/s3-storage.d.ts",
       "default": "./dist/src/session/s3-storage.js"

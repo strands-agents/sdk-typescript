@@ -5,9 +5,14 @@
  */
 
 import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager'
+import { fromNodeProviderChain } from '@aws-sdk/credential-providers'
+import express from 'express'
 import type { TestProject } from 'vitest/node'
 import type { ProvidedContext } from 'vitest'
-import { fromNodeProviderChain } from '@aws-sdk/credential-providers'
+
+import { Agent } from '../../../src/agent/agent.js'
+import { A2AExpressServer } from '../../../src/a2a/express-server.js'
+import { BedrockModel } from '../../../src/models/bedrock.js'
 
 /**
  * Load API keys as environment variables from AWS Secrets Manager
@@ -59,7 +64,7 @@ async function loadApiKeysFromSecretsManager(): Promise<void> {
 /**
  * Perform shared setup for the integration tests.
  */
-export async function setup(project: TestProject): Promise<void> {
+export async function setup(project: TestProject): Promise<() => void> {
   console.log('Global setup: Loading API keys from Secrets Manager...')
   await loadApiKeysFromSecretsManager()
   console.log('Global setup: API keys loaded into environment')
@@ -72,6 +77,13 @@ export async function setup(project: TestProject): Promise<void> {
   project.provide('provider-bedrock', await getBedrockTestContext(isCI))
   project.provide('provider-anthropic', await getAnthropicTestContext(isCI))
   project.provide('provider-gemini', await getGeminiTestContext(isCI))
+
+  const a2aContext = await getA2AServerContext()
+  project.provide('a2a-server', { shouldSkip: a2aContext.shouldSkip, url: a2aContext.url })
+
+  return () => {
+    a2aContext.abort?.()
+  }
 }
 
 async function getOpenAITestContext(isCI: boolean): Promise<ProvidedContext['provider-openai']> {
@@ -147,5 +159,56 @@ async function getGeminiTestContext(_isCI: boolean): Promise<ProvidedContext['pr
   return {
     apiKey: apiKey,
     shouldSkip: shouldSkip,
+  }
+}
+
+async function getA2AServerContext(): Promise<ProvidedContext['a2a-server'] & { abort?: () => void }> {
+  try {
+    const credentialProvider = fromNodeProviderChain()
+    const credentials = await credentialProvider()
+
+    const model = new BedrockModel({ clientConfig: { credentials } })
+    const agent = new Agent({
+      model,
+      printer: false,
+      systemPrompt: 'You are a helpful assistant. Always respond in a single short sentence.',
+    })
+
+    const a2aServer = new A2AExpressServer({
+      agent,
+      name: 'Test A2A Agent',
+      description: 'Integration test agent',
+    })
+
+    // Use createMiddleware() with CORS headers so browser integ tests can reach the server.
+    // Browser tests run on a different port (Vitest dev server), making this a cross-origin request.
+    const app = express()
+    app.use((_req, res, next) => {
+      res.setHeader('Access-Control-Allow-Origin', '*')
+      res.setHeader('Access-Control-Allow-Methods', '*')
+      res.setHeader('Access-Control-Allow-Headers', '*')
+      next()
+    })
+    app.use(a2aServer.createMiddleware())
+
+    return new Promise((resolve, reject) => {
+      const server = app.listen(0, '127.0.0.1', () => {
+        const addr = server.address() as { port: number }
+        const url = `http://127.0.0.1:${addr.port}`
+        // Update the agent card URL to reflect the actual bound port.
+        // createMiddleware() doesn't do this automatically (unlike serve()).
+        a2aServer.agentCard.url = url
+        console.log(`⏭️  A2A server started on ${url}`)
+        resolve({
+          shouldSkip: false,
+          url,
+          abort: () => server.close(),
+        })
+      })
+      server.on('error', reject)
+    })
+  } catch {
+    console.log('⏭️  A2A server not available - A2A integration tests will be skipped')
+    return { shouldSkip: true, url: undefined }
   }
 }
