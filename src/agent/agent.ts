@@ -224,7 +224,6 @@ export class Agent implements LocalAgent, InvokableAgent {
     // Initialize public fields
     this.messages = (config?.messages ?? []).map((msg) => (msg instanceof Message ? msg : Message.fromMessageData(msg)))
     this.appState = new StateStore(config?.appState)
-    this._conversationManager = config?.conversationManager ?? new SlidingWindowConversationManager({ windowSize: 40 })
     this.name = config?.name ?? DEFAULT_AGENT_NAME
     this.id = config?.id ?? DEFAULT_AGENT_ID
     if (config?.description !== undefined) this.description = config.description
@@ -234,6 +233,13 @@ export class Agent implements LocalAgent, InvokableAgent {
     } else {
       this.model = config?.model ?? new BedrockModel()
     }
+
+    this._conversationManager =
+      config?.conversationManager ??
+      new SlidingWindowConversationManager({
+        windowSize: 40,
+        requireUserMessageStart: this.model instanceof BedrockModel,
+      })
 
     const { tools, mcpClients } = flattenTools(config?.tools ?? [])
     this._toolRegistry = new ToolRegistry(tools)

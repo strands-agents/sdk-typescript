@@ -46,6 +46,16 @@ describe('SlidingWindowConversationManager', () => {
       const manager = new SlidingWindowConversationManager({ shouldTruncateResults: false })
       expect((manager as any)._shouldTruncateResults).toBe(false)
     })
+
+    it('sets default requireUserMessageStart to false', () => {
+      const manager = new SlidingWindowConversationManager()
+      expect((manager as any)._requireUserMessageStart).toBe(false)
+    })
+
+    it('accepts custom requireUserMessageStart', () => {
+      const manager = new SlidingWindowConversationManager({ requireUserMessageStart: true })
+      expect((manager as any)._requireUserMessageStart).toBe(true)
+    })
   })
 
   describe('reduce', () => {
@@ -426,6 +436,21 @@ describe('SlidingWindowConversationManager', () => {
   })
 
   describe('reduceContext - tool pair validation', () => {
+    it('skips assistant trim points when requireUserMessageStart is true', async () => {
+      const manager = new SlidingWindowConversationManager({ windowSize: 2, requireUserMessageStart: true })
+      const messages = [
+        new Message({ role: 'user', content: [new TextBlock('Message 1')] }),
+        new Message({ role: 'assistant', content: [new TextBlock('Response 1')] }),
+        new Message({ role: 'user', content: [new TextBlock('Message 2')] }),
+      ]
+      const mockAgent = createMockAgent({ messages })
+
+      await triggerContextOverflow(manager, mockAgent, new ContextWindowOverflowError('Context overflow'))
+
+      expect(mockAgent.messages).toHaveLength(1)
+      expect(mockAgent.messages[0]).toStrictEqual(new Message({ role: 'user', content: [new TextBlock('Message 2')] }))
+    })
+
     it('does not trim at index where oldest message is toolResult', async () => {
       const manager = new SlidingWindowConversationManager({ windowSize: 2, shouldTruncateResults: false })
       const messages = [

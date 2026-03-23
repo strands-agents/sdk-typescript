@@ -21,6 +21,7 @@ import {
 import { AgentPrinter } from '../printer.js'
 import { BeforeInvocationEvent, BeforeToolsEvent } from '../../hooks/events.js'
 import { BedrockModel } from '../../models/bedrock.js'
+import { SlidingWindowConversationManager } from '../../conversation-manager/sliding-window-conversation-manager.js'
 import { StructuredOutputError } from '../../errors.js'
 import { expectLoopMetrics } from '../../__fixtures__/metrics-helpers.js'
 import { expectAgentResult } from '../../__fixtures__/agent-helpers.js'
@@ -1120,6 +1121,22 @@ describe('Agent', () => {
 
         expect(agent.model).toBe(explicitModel)
         expect(agent.model.getConfig().modelId).toBe('explicit-model-id')
+      })
+    })
+
+    describe('default conversation manager', () => {
+      it('enables requireUserMessageStart for Bedrock models', () => {
+        const agent = new Agent()
+
+        expect((agent as any)._conversationManager).toBeInstanceOf(SlidingWindowConversationManager)
+        expect((agent as any)._conversationManager._requireUserMessageStart).toBe(true)
+      })
+
+      it('does not enable requireUserMessageStart for non-Bedrock models', () => {
+        const agent = new Agent({ model: new MockMessageModel() })
+
+        expect((agent as any)._conversationManager).toBeInstanceOf(SlidingWindowConversationManager)
+        expect((agent as any)._conversationManager._requireUserMessageStart).toBe(false)
       })
     })
 

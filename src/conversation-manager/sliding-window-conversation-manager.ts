@@ -26,6 +26,12 @@ export type SlidingWindowConversationManagerConfig = {
    * Defaults to true.
    */
   shouldTruncateResults?: boolean
+
+  /**
+   * Whether reduced histories must begin with a user message.
+   * Defaults to false.
+   */
+  requireUserMessageStart?: boolean
 }
 
 /**
@@ -43,6 +49,7 @@ export type SlidingWindowConversationManagerConfig = {
 export class SlidingWindowConversationManager extends ConversationManager {
   private readonly _windowSize: number
   private readonly _shouldTruncateResults: boolean
+  private readonly _requireUserMessageStart: boolean
 
   /**
    * Unique identifier for this conversation manager.
@@ -58,6 +65,7 @@ export class SlidingWindowConversationManager extends ConversationManager {
     super()
     this._windowSize = config?.windowSize ?? 40
     this._shouldTruncateResults = config?.shouldTruncateResults ?? true
+    this._requireUserMessageStart = config?.requireUserMessageStart ?? false
   }
 
   /**
@@ -139,6 +147,11 @@ export class SlidingWindowConversationManager extends ConversationManager {
       const oldestMessage = messages[trimIndex]
       if (!oldestMessage) {
         break
+      }
+
+      if (this._requireUserMessageStart && oldestMessage.role !== 'user') {
+        trimIndex++
+        continue
       }
 
       // Check if oldest message would be a toolResult (invalid - needs preceding toolUse)
