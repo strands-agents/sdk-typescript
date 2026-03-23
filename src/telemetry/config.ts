@@ -38,7 +38,7 @@ if (typeof globalThis.process?.getBuiltinModule === 'function') {
       DefaultTracerProvider = req('@opentelemetry/sdk-trace-node').NodeTracerProvider
     }
   } catch {
-    logger.info('sdk-trace-node not available; using BasicTracerProvider without async context propagation')
+    logger.info('sdk-trace-node not available | using BasicTracerProvider without async context propagation')
   }
 }
 

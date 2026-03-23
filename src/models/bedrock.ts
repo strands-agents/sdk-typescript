@@ -736,13 +736,17 @@ export class BedrockModel extends Model<BedrockModelConfig> {
 
       // Bedrock guardrails only support png/jpeg formats
       if (format !== 'png' && format !== 'jpeg') {
-        logger.warn(`Image format '${format}' not supported by Bedrock guardrails, skipping guardContent wrap`)
+        logger.warn(
+          `image_format=<${format}> | format not supported by bedrock guardrails | skipping guardContent wrap`
+        )
         return formattedBlock
       }
 
       // Bedrock guardrails only support bytes source (not S3 or URL)
       if (!('bytes' in imageBlock.source)) {
-        logger.warn('Image source must be bytes for Bedrock guardrails, skipping guardContent wrap')
+        logger.warn(
+          'source_type=<non-bytes> | image source must be bytes for bedrock guardrails | skipping guardContent wrap'
+        )
         return formattedBlock
       }
 
@@ -988,7 +992,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
             },
           }
         }
-        logger.warn('Ignoring imageSourceUrl content block as its not supported by bedrock')
+        logger.warn('source_type=<imageSourceUrl> | not supported by bedrock | skipping')
         return
 
       case 'imageSourceS3Location':

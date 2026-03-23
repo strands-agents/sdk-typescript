@@ -1197,7 +1197,7 @@ describe('OpenAIModel', () => {
 
       // Verify warning was logged
       expect(warnSpy).toHaveBeenCalledWith(
-        'OpenAI ChatCompletions API does not support content type: guardContentBlock.'
+        'block_type=<guardContentBlock> | unsupported content type in openai user message | skipping'
       )
 
       // Verify guard content filtered out
@@ -1240,7 +1240,7 @@ describe('OpenAIModel', () => {
 
       // Verify warning was logged
       expect(warnSpy).toHaveBeenCalledWith(
-        'OpenAI ChatCompletions API does not support content type: guardContentBlock.'
+        'block_type=<guardContentBlock> | unsupported content type in openai user message | skipping'
       )
 
       // Verify guard content filtered out
@@ -1275,7 +1275,7 @@ describe('OpenAIModel', () => {
 
       // Verify warning was logged
       expect(warnSpy).toHaveBeenCalledWith(
-        'OpenAI ChatCompletions API does not support content type: guardContentBlock.'
+        'block_type=<guardContentBlock> | unsupported content type in openai user message | skipping'
       )
 
       // Verify no user message added (only guard content)

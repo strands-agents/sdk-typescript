@@ -1053,7 +1053,7 @@ export class Agent implements LocalAgent, InvokableAgent {
       } else if (lastMessage) {
         // Unexpected state: redaction requested but last message is not from user
         logger.warn(
-          `role=<${lastMessage.role}> | received input redaction but last message is not from user | redaction skipped.`
+          `role=<${lastMessage.role}> | received input redaction but last message is not from user | redaction skipped`
         )
       }
     }

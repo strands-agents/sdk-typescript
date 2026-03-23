@@ -242,7 +242,9 @@ export class AnthropicModel extends Model<AnthropicModelConfig> {
 
             if (cacheControl) i++
           } else if (block.type === 'guardContentBlock') {
-            logger.warn('guardContentBlock is not supported in Anthropic system prompt')
+            logger.warn(
+              'block_type=<guardContentBlock> | guard content not supported in anthropic system prompt | skipping'
+            )
           }
         }
         if (systemBlocks.length > 0) request.system = systemBlocks
@@ -357,7 +359,7 @@ export class AnthropicModel extends Model<AnthropicModelConfig> {
             },
           }
         }
-        logger.warn('Anthropic provider requires image bytes. URLs not fully supported.')
+        logger.warn('source_type=<imageSourceUrl> | anthropic requires image bytes | url sources not fully supported')
         return undefined
       }
 
@@ -384,7 +386,7 @@ export class AnthropicModel extends Model<AnthropicModelConfig> {
             if (typeof TextDecoder !== 'undefined') {
               textContent = new TextDecoder().decode(docBlock.source.bytes)
             } else {
-              logger.warn(`Cannot decode bytes for ${docBlock.format} document: TextDecoder missing.`)
+              logger.warn(`format=<${docBlock.format}> | cannot decode document bytes | TextDecoder not available`)
             }
           }
 
@@ -475,7 +477,7 @@ export class AnthropicModel extends Model<AnthropicModelConfig> {
       case 'tool_use':
         return 'toolUse'
       default:
-        logger.warn(`Unknown stop reason: ${anthropicReason}`)
+        logger.warn(`stop_reason=<${anthropicReason}> | unknown anthropic stop reason`)
         return anthropicReason
     }
   }

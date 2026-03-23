@@ -636,7 +636,7 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
                   case 'documentSourceText': {
                     // Text documents can be added directly
                     logger.warn(
-                      'OpenAI does not support text document sources directly. Converting this text document to string content.'
+                      'source_type=<documentSourceText> | openai does not support text document sources directly | converting to string content'
                     )
                     contentParts.push({
                       type: 'text',
@@ -658,7 +658,7 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
                   }
                   default: {
                     logger.warn(
-                      `OpenAI ChatCompletions API only supports text content in user messages. Skipping document block type: ${docBlock.source.type}.`
+                      `source_type=<${docBlock.source.type}> | openai only supports text content in user messages | skipping document block`
                     )
                     break
                   }
@@ -666,7 +666,7 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
                 break
               }
               default: {
-                logger.warn(`OpenAI ChatCompletions API does not support content type: ${block.type}.`)
+                logger.warn(`block_type=<${block.type}> | unsupported content type in openai user message | skipping`)
                 break
               }
             }
@@ -764,14 +764,16 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
             }
             case 'reasoningBlock': {
               if (block.text) {
-                logger.warn('Reasoning blocks are not supported by OpenAI Chat Completions API. Converting to text.')
+                logger.warn(
+                  'block_type=<reasoningBlock> | reasoning blocks not supported by openai | converting to text'
+                )
                 textParts.push(block.text)
               }
               break
             }
             default: {
               logger.warn(
-                `OpenAI ChatCompletions API does not support ${block.type} content in assistant messages. Skipping this block.`
+                `block_type=<${block.type}> | unsupported content type in openai assistant message | skipping`
               )
             }
           }
