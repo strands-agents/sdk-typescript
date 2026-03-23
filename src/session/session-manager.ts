@@ -5,8 +5,8 @@ import type { Plugin } from '../plugins/plugin.js'
 import type { LocalAgent } from '../types/agent.js'
 import { AfterInvocationEvent, AfterModelCallEvent, InitializedEvent, MessageAddedEvent } from '../hooks/events.js'
 import { v7 as uuidV7 } from 'uuid'
-import type { Agent } from '../agent/agent.js'
 import { takeSnapshot, loadSnapshot } from '../agent/snapshot.js'
+import { logger } from '../logging/logger.js'
 
 /**
  * Controls when `snapshot_latest` is saved automatically.
@@ -72,6 +72,10 @@ export class SessionManager implements Plugin {
     this._storage = { snapshot: config.storage.snapshot }
     this._saveLatestOn = config.saveLatestOn ?? 'invocation'
     this._snapshotTrigger = config.snapshotTrigger
+
+    if (this._saveLatestOn === 'trigger' && !this._snapshotTrigger) {
+      throw new Error('snapshotTrigger is required when saveLatestOn is "trigger"')
+    }
   }
 
   /** Initializes the plugin by registering lifecycle hook callbacks. */
@@ -94,11 +98,11 @@ export class SessionManager implements Plugin {
     })
   }
 
-  private _location(agent: Agent): SnapshotLocation {
+  private _location(agent: LocalAgent): SnapshotLocation {
     return { sessionId: this._sessionId, scope: 'agent', scopeId: agent.id }
   }
 
-  async saveSnapshot(params: { target: Agent; isLatest: boolean }): Promise<void> {
+  async saveSnapshot(params: { target: LocalAgent; isLatest: boolean }): Promise<void> {
     const snapshot = takeSnapshot(params.target, { preset: 'session' })
     const snapshotId = params.isLatest ? 'latest' : uuidV7()
     await this._storage.snapshot.saveSnapshot({
@@ -115,7 +119,7 @@ export class SessionManager implements Plugin {
   }
 
   /** Loads a snapshot from storage and restores it into the target agent. Returns false if no snapshot exists. */
-  async restoreSnapshot(params: { target: Agent; snapshotId?: string }): Promise<boolean> {
+  async restoreSnapshot(params: { target: LocalAgent; snapshotId?: string }): Promise<boolean> {
     const snapshot = await this._storage.snapshot.loadSnapshot({
       location: this._location(params.target),
       ...(params.snapshotId !== undefined && { snapshotId: params.snapshotId }),
@@ -128,25 +132,29 @@ export class SessionManager implements Plugin {
 
   /** Restores session state on agent initialization. */
   private async _onAgentInitialized(event: InitializedEvent): Promise<void> {
-    await this.restoreSnapshot({ target: event.agent as Agent })
+    const hadMessages = event.agent.messages.length > 0
+    const restored = await this.restoreSnapshot({ target: event.agent })
+
+    if (restored && hadMessages) {
+      logger.warn(
+        `agent_id=<${event.agent.id}>, session_id=<${this._sessionId}> | agent had existing messages that were overwritten by session restore`
+      )
+    }
   }
 
   /** Saves latest on invocation and fires the snapshot trigger if configured. */
   private async _onAfterAgentInvocation(event: AfterInvocationEvent): Promise<void> {
-    const agent = event.agent as Agent
-
     if (this._saveLatestOn === 'invocation') {
-      await this.saveSnapshot({ target: agent, isLatest: true })
+      await this.saveSnapshot({ target: event.agent, isLatest: true })
     }
 
-    if (this._snapshotTrigger?.({ agentData: agent })) {
-      await this._saveImmutableAndLatest(agent)
+    if (this._snapshotTrigger?.({ agentData: event.agent })) {
+      await this._saveImmutableAndLatest(event.agent)
     }
   }
 
   private async _onMessageAdded(event: MessageAddedEvent): Promise<void> {
-    const agent = event.agent as Agent
-    await this.saveSnapshot({ target: agent, isLatest: true })
+    await this.saveSnapshot({ target: event.agent, isLatest: true })
   }
 
   /**
@@ -156,13 +164,12 @@ export class SessionManager implements Plugin {
   private async _onAfterModelCall(event: AfterModelCallEvent): Promise<void> {
     // Only save if there was a redaction
     if (event.stopData?.redaction) {
-      const agent = event.agent as Agent
-      await this.saveSnapshot({ target: agent, isLatest: true })
+      await this.saveSnapshot({ target: event.agent, isLatest: true })
     }
   }
 
   /** Captures one snapshot and writes it to both immutable history and snapshot_latest. */
-  private async _saveImmutableAndLatest(agent: Agent): Promise<void> {
+  private async _saveImmutableAndLatest(agent: LocalAgent): Promise<void> {
     const snapshot = takeSnapshot(agent, { preset: 'session' })
     const snapshotId = uuidV7()
     await Promise.all([

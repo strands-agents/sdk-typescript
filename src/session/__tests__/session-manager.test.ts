@@ -12,6 +12,7 @@ import { Agent } from '../../agent/agent.js'
 import { Message, TextBlock } from '../../types/messages.js'
 import { createMockAgent as createMockAgentWithHooks, invokeTrackedHook } from '../../__fixtures__/agent-helpers.js'
 import { loadStateFromJSONSymbol, stateToJSONSymbol } from '../../types/serializable.js'
+import { logger } from '../../logging/logger.js'
 
 // Test fixtures
 function createMockAgent(id = 'agent'): Agent {
@@ -77,6 +78,17 @@ describe('SessionManager', () => {
         location: { sessionId: 'test-default', scope: 'agent', scopeId: 'agent' },
       })
       expect(snapshot).not.toBeNull()
+    })
+
+    it('throws when saveLatestOn is trigger without snapshotTrigger', () => {
+      expect(
+        () =>
+          new SessionManager({
+            sessionId: 'test-session',
+            storage: { snapshot: storage },
+            saveLatestOn: 'trigger',
+          })
+      ).toThrow('snapshotTrigger is required when saveLatestOn is "trigger"')
     })
   })
 
@@ -198,6 +210,52 @@ describe('SessionManager', () => {
         initPluginAndInvokeHook(sessionManager, new InitializedEvent(createMockEvent(mockAgent)))
       ).resolves.not.toThrow()
     })
+
+    it('warns when snapshot restore overwrites existing messages', async () => {
+      const warnSpy = vi.spyOn(logger, 'warn')
+
+      const snapshot = createTestSnapshot()
+      await storage.saveSnapshot({
+        location: { sessionId: 'test-session', scope: 'agent', scopeId: 'test-agent' },
+        snapshotId: 'latest',
+        isLatest: true,
+        snapshot,
+      })
+
+      mockAgent.messages.push(MOCK_MESSAGE)
+
+      sessionManager = new SessionManager({
+        sessionId: 'test-session',
+        storage: { snapshot: storage },
+      })
+
+      await initPluginAndInvokeHook(sessionManager, new InitializedEvent(createMockEvent(mockAgent)))
+
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('overwritten by session restore'))
+      warnSpy.mockRestore()
+    })
+
+    it('does not warn when restoring into agent with no messages', async () => {
+      const warnSpy = vi.spyOn(logger, 'warn')
+
+      const snapshot = createTestSnapshot()
+      await storage.saveSnapshot({
+        location: { sessionId: 'test-session', scope: 'agent', scopeId: 'test-agent' },
+        snapshotId: 'latest',
+        isLatest: true,
+        snapshot,
+      })
+
+      sessionManager = new SessionManager({
+        sessionId: 'test-session',
+        storage: { snapshot: storage },
+      })
+
+      await initPluginAndInvokeHook(sessionManager, new InitializedEvent(createMockEvent(mockAgent)))
+
+      expect(warnSpy).not.toHaveBeenCalled()
+      warnSpy.mockRestore()
+    })
   })
 
   describe('MessageAddedEvent handling', () => {
@@ -262,21 +320,6 @@ describe('SessionManager', () => {
         location: { sessionId: 'test-session', scope: 'agent', scopeId: 'test-agent' },
       })
       expect(snapshot).not.toBeNull()
-    })
-
-    it('does not save snapshot_latest when saveLatestOn is trigger', async () => {
-      sessionManager = new SessionManager({
-        sessionId: 'test-session',
-        storage: { snapshot: storage },
-        saveLatestOn: 'trigger',
-      })
-
-      await initPluginAndInvokeHook(sessionManager, new AfterInvocationEvent(createMockEvent(mockAgent)))
-
-      const snapshot = await storage.loadSnapshot({
-        location: { sessionId: 'test-session', scope: 'agent', scopeId: 'test-agent' },
-      })
-      expect(snapshot).toBeNull()
     })
   })
 

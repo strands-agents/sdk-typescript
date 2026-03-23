@@ -15,7 +15,7 @@ import type { JSONValue } from '../types/json.js'
 import type { MessageData, SystemPromptData } from '../types/messages.js'
 import { Message, systemPromptFromData, systemPromptToData } from '../types/messages.js'
 import { loadStateSerializable, serializeStateSerializable } from '../types/serializable.js'
-import type { Agent } from './agent.js'
+import type { LocalAgent } from '../types/agent.js'
 
 /**
  * Current schema version of the snapshot format.
@@ -125,7 +125,7 @@ export type TakeSnapshotOptions = {
  * @param options - Snapshot options
  * @returns A snapshot of the agent's state
  */
-export function takeSnapshot(agent: Agent, options: TakeSnapshotOptions): Snapshot {
+export function takeSnapshot(agent: LocalAgent, options: TakeSnapshotOptions): Snapshot {
   const fields = resolveSnapshotFields(options)
 
   const data: Record<string, JSONValue> = {}
@@ -160,7 +160,7 @@ export function takeSnapshot(agent: Agent, options: TakeSnapshotOptions): Snapsh
  * @param agent - The agent to restore state into
  * @param snapshot - The snapshot to load
  */
-export function loadSnapshot(agent: Agent, snapshot: Snapshot): void {
+export function loadSnapshot(agent: LocalAgent, snapshot: Snapshot): void {
   if (snapshot.schemaVersion !== SNAPSHOT_SCHEMA_VERSION) {
     throw new Error(
       `Unsupported snapshot schema version: ${snapshot.schemaVersion}. Current version: ${SNAPSHOT_SCHEMA_VERSION}`
