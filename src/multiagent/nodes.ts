@@ -262,7 +262,13 @@ export class MultiAgentNode extends Node {
       }
       next = await gen.next()
     }
-    return { content: next.value.content, usage: next.value.usage }
+    const innerResult = next.value
+    return {
+      content: innerResult.content,
+      usage: innerResult.usage,
+      ...(innerResult.status !== Status.COMPLETED && { status: innerResult.status }),
+      ...(innerResult.error && { error: innerResult.error }),
+    }
   }
 }
 
