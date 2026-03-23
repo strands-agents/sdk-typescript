@@ -135,6 +135,15 @@ describe('Graph', () => {
       ).toThrow('node_id=<island1> | unreachable from any source node')
     })
 
+    it('auto-detects source when only edge is a self-loop', () => {
+      const graph = new Graph({
+        nodes: [makeAgent('refiner', 'refiner-reply'), makeAgent('formatter', 'formatter-reply')],
+        edges: [{ source: 'refiner', target: 'refiner', handler: () => false }, ['refiner', 'formatter']],
+      })
+
+      expect(graph.nodes.size).toBe(2)
+    })
+
     it('throws when explicit source references unknown node', () => {
       expect(
         () =>
@@ -484,6 +493,18 @@ describe('Graph', () => {
       expect(result.results).toHaveLength(2)
       expect(result.results.map((r) => r.nodeId)).toStrictEqual(['a', 'a'])
       expect(visits).toBe(2)
+    })
+
+    it('auto-detects self-loop node as source and executes full graph', async () => {
+      const graph = new Graph({
+        nodes: [makeAgent('refiner', 'refined'), makeAgent('formatter', 'formatted')],
+        edges: [{ source: 'refiner', target: 'refiner', handler: () => false }, ['refiner', 'formatter']],
+      })
+
+      const result = await graph.invoke('go')
+
+      expect(result.status).toBe(Status.COMPLETED)
+      expect(result.results.map((r) => r.nodeId)).toStrictEqual(['refiner', 'formatter'])
     })
   })
 
