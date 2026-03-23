@@ -35,10 +35,10 @@ impl JvmCallbackRelay {
             .send(Box::new(move || {
                 let _ = result_tx.send(f());
             }))
-            .map_err(|_| "callback relay thread gone".to_string())?;
+            .map_err(|_send_err| "callback relay thread gone".to_string())?;
         result_rx
             .recv()
-            .map_err(|_| "callback relay response lost".to_string())
+            .map_err(|_recv_err| "callback relay response lost".to_string())
     }
 }
 
@@ -66,8 +66,7 @@ impl From<anyhow::Error> for AgentError {
         let reason = e
             .chain()
             .last()
-            .map(|c| c.to_string())
-            .unwrap_or_else(|| full.clone());
+            .map_or_else(|| full.clone(), |c| c.to_string());
         let detail = if reason != full { Some(full) } else { None };
         Self::Runtime { reason, detail }
     }

@@ -1,8 +1,8 @@
-"""Conversions between PyO3 types and Python SDK formats.
+"""Conversions between UniFFI types and upstream Python SDK formats.
 
-PyO3 stream events are flat structs with a .kind discriminator and optional typed
+Stream events are flat structs with a .kind discriminator and optional typed
 fields (.text_delta, .stop, .tool_use, .tool_result, .metadata, .error, .interrupt).
-Functions here convert these to the dict format the Python SDK expects.
+Functions here convert these to the dict format the upstream Python SDK expects.
 """
 
 from __future__ import annotations
@@ -58,7 +58,7 @@ def lifecycle_event_from_wit(lifecycle: Any) -> object | None:
     if event_type is None:
         return None
 
-    # The WIT enum comes through PyO3 as an object with a .value string attribute.
+    # The WIT enum comes through UniFFI as an object with a .value string attribute.
     type_str = event_type.value if hasattr(event_type, "value") else str(event_type)
     cls = _LIFECYCLE_EVENT_MAP.get(type_str)
     if cls is None:
@@ -80,38 +80,12 @@ def lifecycle_event_from_wit(lifecycle: Any) -> object | None:
     return event
 
 
-def lifecycle_event_from_json(payload: str) -> object | None:
-    """Legacy: parse a lifecycle JSON payload. Kept for backward compatibility."""
-    data = _safe_json_loads(payload)
-    if not isinstance(data, dict):
-        return None
-    d = cast(dict[str, Any], data)
-    event_type = d.get("type", "")
-    cls = _LIFECYCLE_EVENT_MAP.get(event_type)
-    if cls is None:
-        return None
-    event = cls()
-
-    if event_type == "before-tool-call":
-        tool_use = d.get("toolUse")
-        if tool_use and hasattr(event, "tool_use"):
-            event.tool_use = tool_use
-    elif event_type == "after-tool-call":
-        tool_use = d.get("toolUse")
-        result = d.get("result")
-        if tool_use and hasattr(event, "tool_use"):
-            event.tool_use = tool_use
-        if result and hasattr(event, "result"):
-            event.result = result
-
-    return event
-
 
 def stop_reason_to_snake(stop: Any) -> str:
-    """Convert a PyO3 stop payload to the snake_case string the Python SDK uses.
+    """Convert a WIT stop reason to the snake_case string the upstream Python SDK uses.
 
-    The WIT stop reason arrives as a PyO3 enum with a .value string like "end-turn".
-    The Python SDK uses "end_turn".
+    The WIT stop reason arrives as a UniFFI record with a .value string like "end-turn".
+    The upstream Python SDK uses "end_turn".
     """
     reason = stop.reason if stop else None
     if reason and hasattr(reason, "value"):

@@ -1,4 +1,4 @@
-// @generated from wit/agent.wit — do not edit
+// @generated from wit/agent.wit -- do not edit
 
 /// <reference path="./interfaces/strands-agent-api.d.ts" />
 /// <reference path="./interfaces/strands-agent-host-log.d.ts" />

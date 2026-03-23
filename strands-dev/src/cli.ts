@@ -6,7 +6,7 @@ import { join, resolve } from "node:path";
 import { program } from "commander";
 import { parse as parseTOML } from "smol-toml";
 
-const ROOT = resolve(import.meta.dirname, "..");
+const ROOT = resolve(import.meta.dirname, "../..");
 const PY = `${ROOT}/strands-py`;
 
 process.env.PYTHONPYCACHEPREFIX ??= ".pycache";
@@ -26,7 +26,7 @@ program
   .description("Install toolchains and dependencies")
   .option("--rust", "Rust stable, wasm32-wasip2, cargo tools")
   .option("--node", "npm install")
-  .option("--python", "Create venv, install maturin, ruff, componentize-py")
+  .option("--python", "Create venv, install maturin and ruff")
   .action((opts) => setup(opts));
 
 program
@@ -35,7 +35,7 @@ program
   .option("--ts", "TypeScript SDK")
   .option("--wasm", "WASM component (rebuilds TS first)")
   .option("--rs", "Rust host")
-  .option("--py", "Python extension and type stubs")
+  .option("--py", "Python package (maturin + UniFFI)")
   .option("--kt", "Kotlin/Java SDK (UniFFI bindings + Gradle)")
   .option("--release", "Release build")
   .action((opts) => build(opts));
@@ -53,7 +53,7 @@ program
 program
   .command("check")
   .description("Lint and type-check without building")
-  .option("--rs", "Rust clippy (workspace and pyo3)")
+  .option("--rs", "Rust clippy")
   .option("--ts", "TypeScript type-check")
   .option("--py", "Python ruff")
   .option("--kt", "Kotlin/Java compile check")
@@ -197,11 +197,17 @@ program
 program.parse();
 
 function run(cmd: string, opts?: { cwd?: string; env?: Record<string, string> }): void {
-  execSync(cmd, {
-    stdio: "inherit",
-    cwd: opts?.cwd ?? ROOT,
-    env: opts?.env ? { ...process.env, ...opts.env } : undefined,
-  });
+  try {
+    execSync(cmd, {
+      stdio: "inherit",
+      cwd: opts?.cwd ?? ROOT,
+      env: opts?.env ? { ...process.env, ...opts.env } : undefined,
+    });
+  } catch (e: unknown) {
+    const status = (e as { status?: number }).status ?? 1;
+    console.error(`\nfailed: ${cmd} (exit ${status})`);
+    process.exit(status);
+  }
 }
 
 function py(cmd: string): void {
@@ -229,7 +235,7 @@ function setup(opts?: {
   if (all || opts?.node) run("npm install");
   if (all || opts?.python) {
     py("python3 -m venv .venv");
-    py(".venv/bin/pip install maturin ruff componentize-py");
+    py(".venv/bin/pip install maturin ruff");
   }
 }
 
@@ -253,18 +259,10 @@ function build(opts?: {
   if (all || opts?.rs) run(`cargo build -p strands${rel}`);
   if (all || opts?.kt) {
     const profile = opts?.release ? "release" : "debug";
-    const ext =
-      process.platform === "win32"
-        ? "dll"
-        : process.platform === "darwin"
-          ? "dylib"
-          : "so";
-    const libName =
-      process.platform === "win32" ? `strands.${ext}` : `libstrands.${ext}`;
     run(`cargo rustc -p strands --crate-type cdylib${rel}`);
     run("rm -f strands-kt/lib/src/main/kotlin/uniffi/strands/strands.kt");
     run(
-      `cargo run -p uniffi-bindgen -- generate --library target/${profile}/${libName} --language kotlin --out-dir strands-kt/lib/src/main/kotlin/ --no-format`,
+      `cargo run -p uniffi-bindgen -- generate --library target/${profile}/${cdylibName()} --language kotlin --out-dir strands-kt/lib/src/main/kotlin/ --no-format`,
     );
     gradle(
       ":lib:compileKotlin :examples-kt:compileKotlin :examples-java:compileJava",
@@ -306,7 +304,6 @@ function check(opts?: {
   const all = !opts?.rs && !opts?.ts && !opts?.py && !opts?.kt;
   if (all || opts?.rs) {
     run("cargo clippy --workspace -- -D warnings");
-    run("cargo clippy -p strands --features pyo3 -- -D warnings");
   }
   if (all || opts?.py) py(".venv/bin/ruff check strands/ tests_integ/");
   if (all || opts?.ts) run("npm run type-check --workspaces --if-present");
@@ -325,10 +322,22 @@ function fmt(opts?: { check?: boolean }): void {
   py(`.venv/bin/ruff format${flag} strands/ tests_integ/`);
 }
 
-function generate(opts?: { check?: boolean }): void {
-  run("npm run generate -w strands-ts");
-  run("npm run generate -w strands-wasm");
+function cdylibName(): string {
+  const ext =
+    process.platform === "win32"
+      ? "dll"
+      : process.platform === "darwin"
+        ? "dylib"
+        : "so";
+  return process.platform === "win32" ? `strands.${ext}` : `libstrands.${ext}`;
+}
 
+function generate(opts?: { check?: boolean }): void {
+  run("npm install");
+  run("npx jco guest-types wit --name strands:agent --world-name agent --out-dir strands-ts/generated", { cwd: ROOT });
+  run("npx jco guest-types wit --name strands:agent --world-name agent --out-dir strands-wasm/generated", { cwd: ROOT });
+
+  // Tag generated TS/WASM type declarations.
   for (const dir of ["strands-wasm/generated", "strands-ts/generated"]) {
     for (const file of globSync("**/*.d.ts", { cwd: join(ROOT, dir) })) {
       const path = join(ROOT, dir, file);
@@ -342,10 +351,17 @@ function generate(opts?: { check?: boolean }): void {
     }
   }
 
+  // Generate Python UniFFI bindings from the compiled cdylib.
+  const lib = `target/debug/${cdylibName()}`;
+  run(`cargo rustc -p strands --crate-type cdylib`);
+  run(
+    `cargo run -p uniffi-bindgen -- generate --library ${lib} --language python --out-dir strands-py/strands/_generated/ --no-format`,
+  );
+
   if (opts?.check) {
     try {
       execSync(
-        "git diff --quiet -- strands-wasm/generated/ strands-ts/generated/",
+        "git diff --quiet -- strands-wasm/generated/ strands-ts/generated/ strands-py/strands/_generated/",
         { cwd: ROOT },
       );
     } catch {
@@ -353,7 +369,7 @@ function generate(opts?: { check?: boolean }): void {
         "error: generated files are out of date -- run 'strands-dev generate' and commit",
       );
       run(
-        "git diff --stat -- strands-wasm/generated/ strands-ts/generated/",
+        "git diff --stat -- strands-wasm/generated/ strands-ts/generated/ strands-py/strands/_generated/",
       );
       process.exit(1);
     }
@@ -392,8 +408,7 @@ function report(opts?: { full?: boolean }): void {
     xs: 1, s: 2, m: 3, l: 4, xl: 5,
   };
 
-  const repoRoot = resolve(ROOT, "..");
-  const raw = readFileSync(join(repoRoot, "tasks.toml"), "utf-8");
+  const raw = readFileSync(join(ROOT, "tasks.toml"), "utf-8");
   const doc = parseTOML(raw) as Record<string, unknown>;
   const meta = doc.meta as Record<string, unknown>;
   const groupDefs = doc.groups as Record<string, Group>;

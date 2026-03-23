@@ -84,3 +84,113 @@ This definiton of a monorepo is one where all of our SDK's exist in the same rep
 ### Recommendation
 
 I recommend publishing Strands WASM as written. This greatly simplifies the contribution model of the SDK's, and the development of the development CLI. Rather than making many small PR's across many repositories, all with 2 approver requirements, a feature owner can push a single PR, and get batch approval for every SDK.
+
+## TypeScript SDK ownership
+
+The TS SDK currently lives in `strands-agents/sdk-typescript`. This repo consumes it as a git subtree. The question is whether TS development should move into this repo permanently.
+
+### Separate repositories
+
+The TS SDK stays in its own repo. This repo imports it as a dependency or subtree.
+
+**Pros**
+
+- TS team keeps their existing workflow and CI.
+- TS repo has its own stars, issues, and contributor community.
+
+**Cons**
+
+- The TS SDK cannot use WIT-generated type declarations. Types that cross the WASM boundary must be defined independently in both the WIT contract and the TS SDK, with no compile-time check that they agree.
+- The TS SDK cannot be tested against the WASM component. A TS change that breaks the bridge is not discovered until someone manually integrates it.
+- Cross-cutting changes (new stream event types, new lifecycle hooks, new model config fields) require coordinated releases across repos. The TS release must ship before the monorepo can consume it.
+- Lockstep versioning requires releasing the TS SDK and the monorepo in sync, which means coordinating two CI pipelines, two changelogs, and two approval chains for every release.
+
+### Move TS into this repo
+
+The TS SDK becomes a directory in the monorepo. `strands-agents/sdk-typescript` becomes a mirror or archive.
+
+**Pros**
+
+- WIT-generated type declarations can be shared. The TS SDK imports from `strands-ts/generated/` which is produced from `wit/agent.wit`. If the contract changes and the TS types don't match, the build fails.
+- A TS change and its WASM bridge update land in one PR. CI validates the full pipeline (TS → WASM → Rust → Python) on every change.
+- One release process. Lockstep versioning is enforced by the build, not by cross-repo coordination.
+- The dev CLI already orchestrates TS builds, tests, and linting. No tooling changes needed.
+
+**Cons**
+
+- The upstream `sdk-typescript` repo loses its independent community presence. Stars, issues, and PR history would need to migrate or be archived.
+- TS contributors see Rust, Python, and Kotlin code in the same repo.
+- PR reviews for bridge-touching changes require cross-language awareness.
+
+### Recommendation
+
+Move TS development into this repo. The inability to share WIT-generated types and the inability to test TS changes against the WASM pipeline are the deciding factors. Separate repos means separate releases, manual integration, and type drift with no compile-time safety net. The community cost of archiving `sdk-typescript` is real but manageable. The repo redirects to the monorepo and existing contributors follow.
+
+## Potential breaking changes
+
+Changes we could make that would simplify the codebase but break upstream Python SDK compatibility. Each needs a decision before the 2.0 release.
+
+### Drop Bedrock dict format from stream_async
+
+`event_to_dict` in `_conversions.py` fabricates Bedrock raw API dicts (`{"event": {"contentBlockDelta": {"delta": {"text": "..."}}}}`) from WIT stream events. This exists because the upstream Python SDK's streaming API yields Bedrock's raw converse-stream format directly, and we need to match that for compatibility.
+
+Neither the TS SDK nor the WIT contract produce this format. It's manufactured in the Python wrapper purely to match upstream expectations.
+
+If we yield WIT stream events directly from `stream_async()` (objects with `.kind`, `.text_delta`, `.tool_use`, etc.), we delete `event_to_dict` and its 80 lines of dict construction.
+
+**Merits:** eliminates a fabrication layer, stream events are typed objects instead of untyped dicts, consistent with what every other language wrapper sees, eliminates a Bedrock-specific format from a model-agnostic streaming API.
+
+**Cost:** any user code that iterates `stream_async()` and reads `chunk["event"]["contentBlockDelta"]` breaks.
+
+### Drop message format conversion
+
+`convert_message` in `_conversions.py` translates messages from TS SDK format (`{"type": "textBlock", "text": "..."}`) to upstream Python SDK format (`{"text": "..."}`). The TS SDK uses typed blocks with a `type` discriminator. The upstream Python SDK uses untyped dicts without a `type` field, using the presence of keys (`text`, `toolUse`, `toolResult`) as implicit discriminators.
+
+This runs on every `agent.messages` access.
+
+If we adopt the TS block format, we delete `convert_message` and `_convert_block`. Users who access `agent.messages` and expect upstream Python SDK keys would need to update.
+
+**Merits:** eliminates a per-message translation layer, message format matches what the TS runtime produces, typed blocks are less ambiguous than key-presence discrimination.
+
+**Cost:** any user code that reads `msg["content"][i]["toolUse"]` instead of checking `msg["content"][i]["type"] == "toolUseBlock"` breaks.
+
+### Adopt WIT stop reason format
+
+`stop_reason_to_snake` converts WIT stop reasons from kebab-case (`end-turn`) to snake_case (`end_turn`). The upstream Python SDK uses snake_case. The TS SDK and WIT use kebab-case.
+
+If we adopt kebab-case, we delete the conversion and `stop_reason` values match what the WIT contract and TS SDK produce.
+
+**Merits:** one fewer conversion, consistent with WIT and TS SDK.
+
+**Cost:** any user code that checks `result.stop_reason == "end_turn"` breaks. Would need `result.stop_reason == "end-turn"`.
+
+### Flatten the Python package
+
+The upstream Python SDK has 31 `.py` files across 8 nested directories. The polyglot wrapper mirrors this structure for import compatibility, but the files are much smaller. Most are under 100 lines, many `__init__.py` files exist only to make directories importable.
+
+The upstream import surface is deep:
+
+```python
+from strands.models.bedrock import BedrockModel
+from strands.session.file_session_manager import FileSessionManager
+from strands.tools.mcp.mcp_client import MCPClient
+from strands.types.content import Messages, ContentBlock, Message
+from strands.types.exceptions import MaxTokensReachedException
+from strands.agent.conversation_manager.sliding_window_conversation_manager import SlidingWindowConversationManager
+from strands.multiagent.graph import GraphBuilder
+from strands.experimental.bidi.agent.agent import BidiAgent
+```
+
+These paths encode internal package structure into the public API. Users must know that `FileSessionManager` lives in `strands.session.file_session_manager`, not `strands.session` or `strands`.
+
+Two changes, independent of each other:
+
+**1. Flatten the file tree.** Collapse the 8 nested directories into flat modules. `models/` (5 files, 4 under 70 lines each) becomes `models.py`. `types/` (3 small dataclass files) becomes `types.py`. `session/` (2 stub managers) becomes `session.py`. `tools/mcp/` (2 files) becomes `mcp.py`. `_conversions.py` folds into `agent.py` since nothing else imports it. Result: ~11 files instead of 31, no nested directories except `_generated/`.
+
+**2. Flatten imports.** Re-export everything from `strands/__init__.py` so users can write `from strands import Agent, BedrockModel, MCPClient`. The internal file layout becomes an implementation detail that can change without breaking user code.
+
+These can be done together or separately. Flattening the file tree without flattening imports preserves the existing import paths (via re-exports from the old module locations). Flattening imports without flattening files is just adding re-exports to `__init__.py`.
+
+**Merits:** fewer files to navigate, no `__init__.py` boilerplate, `from strands import X` works for everything, internal refactors don't break user code, new contributors see the whole wrapper without exploring subdirectories.
+
+**Cost:** existing deep import paths break. Migration is mechanical (find-and-replace).

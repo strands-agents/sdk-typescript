@@ -1,3 +1,5 @@
+// @generated from wit/agent.wit -- do not edit
+
 declare module 'strands:agent/types' {
   /**
    * # Variants
@@ -55,7 +57,32 @@ declare module 'strands:agent/types' {
     usage?: Usage,
     metrics?: Metrics,
   }
-  export type StreamEvent = StreamEventTextDelta | StreamEventToolUse | StreamEventToolResult | StreamEventMetadata | StreamEventStop | StreamEventError | StreamEventInterrupt;
+  /**
+   * # Variants
+   * 
+   * ## `"initialized"`
+   * 
+   * ## `"before-invocation"`
+   * 
+   * ## `"after-invocation"`
+   * 
+   * ## `"before-model-call"`
+   * 
+   * ## `"after-model-call"`
+   * 
+   * ## `"before-tool-call"`
+   * 
+   * ## `"after-tool-call"`
+   * 
+   * ## `"message-added"`
+   */
+  export type LifecycleEventType = 'initialized' | 'before-invocation' | 'after-invocation' | 'before-model-call' | 'after-model-call' | 'before-tool-call' | 'after-tool-call' | 'message-added';
+  export interface LifecycleEvent {
+    eventType: LifecycleEventType,
+    toolUse?: string,
+    toolResult?: string,
+  }
+  export type StreamEvent = StreamEventTextDelta | StreamEventToolUse | StreamEventToolResult | StreamEventMetadata | StreamEventStop | StreamEventError | StreamEventInterrupt | StreamEventLifecycle;
   export interface StreamEventTextDelta {
     tag: 'text-delta',
     val: string,
@@ -84,9 +111,14 @@ declare module 'strands:agent/types' {
     tag: 'interrupt',
     val: string,
   }
+  export interface StreamEventLifecycle {
+    tag: 'lifecycle',
+    val: LifecycleEvent,
+  }
   export interface AnthropicConfig {
     modelId?: string,
     apiKey?: string,
+    additionalConfig?: string,
   }
   export interface BedrockConfig {
     modelId: string,
@@ -94,8 +126,19 @@ declare module 'strands:agent/types' {
     accessKeyId?: string,
     secretAccessKey?: string,
     sessionToken?: string,
+    additionalConfig?: string,
   }
-  export type ModelConfig = ModelConfigAnthropic | ModelConfigBedrock;
+  export interface OpenaiConfig {
+    modelId?: string,
+    apiKey?: string,
+    additionalConfig?: string,
+  }
+  export interface GeminiConfig {
+    modelId?: string,
+    apiKey?: string,
+    additionalConfig?: string,
+  }
+  export type ModelConfig = ModelConfigAnthropic | ModelConfigBedrock | ModelConfigOpenai | ModelConfigGemini;
   export interface ModelConfigAnthropic {
     tag: 'anthropic',
     val: AnthropicConfig,
@@ -104,10 +147,40 @@ declare module 'strands:agent/types' {
     tag: 'bedrock',
     val: BedrockConfig,
   }
+  export interface ModelConfigOpenai {
+    tag: 'openai',
+    val: OpenaiConfig,
+  }
+  export interface ModelConfigGemini {
+    tag: 'gemini',
+    val: GeminiConfig,
+  }
   export interface ModelParams {
     maxTokens?: number,
     temperature?: number,
     topP?: number,
+  }
+  export interface FileStorageConfig {
+    baseDir: string,
+  }
+  export interface S3StorageConfig {
+    bucket: string,
+    region?: string,
+    prefix?: string,
+  }
+  export type StorageConfig = StorageConfigFile | StorageConfigS3;
+  export interface StorageConfigFile {
+    tag: 'file',
+    val: FileStorageConfig,
+  }
+  export interface StorageConfigS3 {
+    tag: 's3',
+    val: S3StorageConfig,
+  }
+  export interface SessionConfig {
+    sessionId: string,
+    storage: StorageConfig,
+    saveLatestOn?: string,
   }
   export interface AgentConfig {
     model?: ModelConfig,
@@ -116,6 +189,7 @@ declare module 'strands:agent/types' {
     systemPromptBlocks?: string,
     tools?: Array<ToolSpec>,
     traceContext?: string,
+    session?: SessionConfig,
   }
   export interface CallToolArgs {
     name: string,
