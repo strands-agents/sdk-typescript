@@ -117,6 +117,19 @@ describe('SlidingWindowConversationManager', () => {
       expect(mockAgent.messages).toHaveLength(2)
     })
 
+    it('removes all messages when windowSize is 0', async () => {
+      const manager = new SlidingWindowConversationManager({ windowSize: 0 })
+      const messages = [
+        new Message({ role: 'user', content: [new TextBlock('Message 1')] }),
+        new Message({ role: 'assistant', content: [new TextBlock('Response 1')] }),
+      ]
+      const mockAgent = createMockAgent({ messages })
+
+      await triggerSlidingWindow(manager, mockAgent)
+
+      expect(mockAgent.messages).toHaveLength(0)
+    })
+
     it('calls reduceContext when message count exceeds window size', async () => {
       const manager = new SlidingWindowConversationManager({ windowSize: 2 })
       const messages = [
@@ -365,6 +378,19 @@ describe('SlidingWindowConversationManager', () => {
       expect(mockAgent.messages).toHaveLength(2)
     })
 
+    it('removes all messages when windowSize is 0 on context overflow', async () => {
+      const manager = new SlidingWindowConversationManager({ windowSize: 0, shouldTruncateResults: false })
+      const messages = [
+        new Message({ role: 'user', content: [new TextBlock('Message 1')] }),
+        new Message({ role: 'assistant', content: [new TextBlock('Response 1')] }),
+      ]
+      const mockAgent = createMockAgent({ messages })
+
+      await triggerContextOverflow(manager, mockAgent, new ContextWindowOverflowError('Context overflow'))
+
+      expect(mockAgent.messages).toHaveLength(0)
+    })
+
     it('uses default trim index of 2 when messages <= windowSize', async () => {
       const manager = new SlidingWindowConversationManager({ windowSize: 5 })
       const messages = [
@@ -544,7 +570,7 @@ describe('SlidingWindowConversationManager', () => {
     })
 
     it('returns false when no valid trim point exists', async () => {
-      const manager = new SlidingWindowConversationManager({ windowSize: 0, shouldTruncateResults: false })
+      const manager = new SlidingWindowConversationManager({ windowSize: 1, shouldTruncateResults: false })
       const messages = [
         new Message({
           role: 'user',
@@ -567,7 +593,7 @@ describe('SlidingWindowConversationManager', () => {
     })
 
     it('propagates the original ContextWindowOverflowError when reduce cannot reduce further', async () => {
-      const manager = new SlidingWindowConversationManager({ windowSize: 0, shouldTruncateResults: false })
+      const manager = new SlidingWindowConversationManager({ windowSize: 1, shouldTruncateResults: false })
       const messages = [
         new Message({
           role: 'user',
