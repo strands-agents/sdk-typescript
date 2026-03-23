@@ -26,7 +26,7 @@ import { logger } from '../logging/logger.js'
  */
 export type OpenAIApi = 'chat'
 
-const DEFAULT_OPENAI_MODEL_ID = 'gpt-4o'
+const DEFAULT_OPENAI_MODEL_ID = 'gpt-4.1'
 
 /**
  * Error message patterns that indicate context window overflow.
@@ -80,7 +80,7 @@ type OpenAIChatChoice = {
  * @example
  * ```typescript
  * const config: OpenAIModelConfig = {
- *   modelId: 'gpt-4o',
+ *   modelId: 'gpt-4.1',
  *   temperature: 0.7,
  *   maxTokens: 1024
  * }
@@ -88,7 +88,7 @@ type OpenAIChatChoice = {
  */
 export interface OpenAIModelConfig extends BaseModelConfig {
   /**
-   * OpenAI model identifier (e.g., gpt-4o, gpt-3.5-turbo).
+   * OpenAI model identifier (e.g., gpt-4.1, gpt-4.1-mini).
    */
   modelId?: string
 
@@ -186,7 +186,7 @@ export interface OpenAIModelOptions extends OpenAIModelConfig {
  * const provider = new OpenAIModel({
  *   api: 'chat',
  *   apiKey: 'sk-...',
- *   modelId: 'gpt-4o',
+ *   modelId: 'gpt-4.1',
  *   temperature: 0.7,
  *   maxTokens: 1024
  * })
@@ -216,14 +216,14 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
    * // Minimal configuration with API key and model ID
    * const provider = new OpenAIModel({
    *   api: 'chat',
-   *   modelId: 'gpt-4o',
+   *   modelId: 'gpt-4.1',
    *   apiKey: 'sk-...'
    * })
    *
    * // With additional model configuration
    * const provider = new OpenAIModel({
    *   api: 'chat',
-   *   modelId: 'gpt-4o',
+   *   modelId: 'gpt-4.1',
    *   apiKey: 'sk-...',
    *   temperature: 0.8,
    *   maxTokens: 2048
@@ -232,13 +232,13 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
    * // Using environment variable for API key
    * const provider = new OpenAIModel({
    *   api: 'chat',
-   *   modelId: 'gpt-3.5-turbo'
+   *   modelId: 'gpt-4.1-mini'
    * })
    *
    * // Using function-based API key for dynamic key retrieval
    * const provider = new OpenAIModel({
    *   api: 'chat',
-   *   modelId: 'gpt-4o',
+   *   modelId: 'gpt-4.1',
    *   apiKey: async () => await getRotatingApiKey()
    * })
    *
@@ -246,7 +246,7 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
    * const client = new OpenAI({ apiKey: 'sk-...', timeout: 60000 })
    * const provider = new OpenAIModel({
    *   api: 'chat',
-   *   modelId: 'gpt-4o',
+   *   modelId: 'gpt-4.1',
    *   client
    * })
    * ```
@@ -333,7 +333,7 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
    *
    * @example
    * ```typescript
-   * const provider = new OpenAIModel({ api: 'chat', modelId: 'gpt-4o', apiKey: 'sk-...' })
+   * const provider = new OpenAIModel({ api: 'chat', modelId: 'gpt-4.1', apiKey: 'sk-...' })
    * const messages: Message[] = [
    *   { role: 'user', content: [{ type: 'textBlock', text: 'What is 2+2?' }] }
    * ]
