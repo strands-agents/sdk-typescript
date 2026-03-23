@@ -476,7 +476,6 @@ describe('Graph', () => {
             },
           },
         ],
-        sources: ['a'],
       })
 
       const result = await graph.invoke('go')

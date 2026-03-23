@@ -51,7 +51,27 @@ export interface GraphOptions extends GraphConfig {
   nodes: NodeDefinition[]
   /** Edge definitions describing connections between nodes. */
   edges: EdgeDefinition[]
-  /** Explicit source node IDs. If omitted, auto-detected from nodes with no incoming edges. */
+  /**
+   * Explicit source (entry point) node IDs.
+   *
+   * If omitted, sources are auto-detected as nodes with no incoming edges from
+   * other nodes (self-loop edges are ignored during detection). For graphs with
+   * cycles or complex topologies, prefer setting this explicitly to make entry
+   * points clear and avoid relying on heuristic detection.
+   *
+   * @example
+   * ```typescript
+   * // Recommended for cyclic graphs
+   * const graph = new Graph({
+   *   nodes: [refiner, formatter],
+   *   edges: [
+   *     { source: 'refiner', target: 'refiner', handler: shouldLoop },
+   *     ['refiner', 'formatter'],
+   *   ],
+   *   sources: ['refiner'],
+   * })
+   * ```
+   */
   sources?: string[]
   /** Plugins for event-driven extensibility. */
   plugins?: MultiAgentPlugin[]
@@ -63,9 +83,12 @@ export interface GraphOptions extends GraphConfig {
  * Directed graph orchestration pattern.
  *
  * Agents execute as nodes in a dependency graph, with edges defining execution order
- * and optional conditions controlling routing. Source nodes (those with no incoming edges)
- * run first, and downstream nodes execute once all their dependencies complete. Parallel
- * execution is supported up to a configurable concurrency limit.
+ * and optional conditions controlling routing. Source nodes (entry points) run first,
+ * and downstream nodes execute once all their dependencies complete. Parallel execution
+ * is supported up to a configurable concurrency limit.
+ *
+ * Source nodes are auto-detected as nodes with no incoming edges from other nodes
+ * (self-loops are ignored). For graphs with cycles, prefer setting `sources` explicitly.
  *
  * Key design choices vs the Python SDK:
  * - Construction uses a declarative options object rather than a mutable GraphBuilder.
@@ -442,6 +465,18 @@ export class Graph implements MultiAgent {
     return edges
   }
 
+  /**
+   * Resolves source (entry point) nodes for the graph.
+   *
+   * When explicit source IDs are provided, validates and returns those nodes.
+   * Otherwise, auto-detects sources as nodes with no incoming edges from other
+   * nodes. Self-loop edges (where source === target) are excluded from this
+   * detection so that a node with only a self-loop is still recognized as a
+   * source.
+   *
+   * For graphs with cycles, prefer passing explicit source IDs to avoid
+   * relying on heuristic detection.
+   */
   private _resolveSources(sourceIds?: string[]): Node[] {
     if (sourceIds) {
       const sources: Node[] = []
@@ -455,14 +490,16 @@ export class Graph implements MultiAgent {
       return sources
     }
 
-    const targetIds = new Set(this.edges.map((e) => e.target.id))
+    // Self-loop edges are excluded: a node whose only incoming edge is from
+    // itself has no external dependencies and should be treated as a source.
+    const targetIds = new Set(this.edges.filter((e) => e.source.id !== e.target.id).map((e) => e.target.id))
     return [...this.nodes.values()].filter((node) => !targetIds.has(node.id))
   }
 
   /**
    * Identifies terminus nodes and returns their combined content.
    * A terminus node is where an execution path ended: completed with no
-   * downstream progress, or failed/cancelled.
+   * downstream progress, or failed/canceled.
    */
   private _resolveContent(state: MultiAgentState): ContentBlock[] {
     for (const [id, ns] of state.nodes.entries()) {
