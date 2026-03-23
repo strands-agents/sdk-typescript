@@ -290,6 +290,28 @@ describe('MultiAgentNode', () => {
       expect(result.status).toBe(Status.FAILED)
       expect(result.error?.message).toBe('inner boom')
     })
+
+    it('propagates CANCELLED status from inner orchestrator', async () => {
+      const cancelledOrchestrator: MultiAgent = {
+        id: 'inner',
+        invoke: async () => new MultiAgentResult({ results: [], duration: 0 }),
+        async *stream() {
+          yield* []
+          return new MultiAgentResult({
+            status: Status.CANCELLED,
+            results: [],
+            content: [],
+            duration: 0,
+          })
+        },
+        addHook: () => () => {},
+      }
+      node = new MultiAgentNode({ orchestrator: cancelledOrchestrator })
+
+      const { result } = await collectGenerator(node.stream([], state))
+
+      expect(result.status).toBe(Status.CANCELLED)
+    })
   })
 
   describe('orchestrator', () => {
