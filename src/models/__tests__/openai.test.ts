@@ -68,9 +68,9 @@ describe('OpenAIModel', () => {
 
   describe('constructor', () => {
     it('creates an instance with required modelId', () => {
-      const provider = new OpenAIModel({ api: 'chat', modelId: 'gpt-4.1', apiKey: 'sk-test' })
+      const provider = new OpenAIModel({ api: 'chat', modelId: 'gpt-5.4', apiKey: 'sk-test' })
       const config = provider.getConfig()
-      expect(config.modelId).toBe('gpt-4.1')
+      expect(config.modelId).toBe('gpt-5.4')
     })
 
     it('uses custom model ID', () => {
@@ -83,7 +83,7 @@ describe('OpenAIModel', () => {
 
     it('uses API key from constructor parameter', () => {
       const apiKey = 'sk-explicit'
-      new OpenAIModel({ api: 'chat', modelId: 'gpt-4.1', apiKey })
+      new OpenAIModel({ api: 'chat', modelId: 'gpt-5.4', apiKey })
       expect(OpenAI).toHaveBeenCalledWith(
         expect.objectContaining({
           apiKey: apiKey,
@@ -95,7 +95,7 @@ describe('OpenAIModel', () => {
     if (isNode) {
       it('uses API key from environment variable', () => {
         vi.stubEnv('OPENAI_API_KEY', 'sk-from-env')
-        new OpenAIModel({ api: 'chat', modelId: 'gpt-4.1' })
+        new OpenAIModel({ api: 'chat', modelId: 'gpt-5.4' })
         // OpenAI client should be called without explicit apiKey (uses env var internally)
         expect(OpenAI).toHaveBeenCalled()
       })
@@ -106,7 +106,7 @@ describe('OpenAIModel', () => {
         vi.stubEnv('OPENAI_API_KEY', 'sk-from-env')
       }
       const explicitKey = 'sk-explicit'
-      new OpenAIModel({ api: 'chat', modelId: 'gpt-4.1', apiKey: explicitKey })
+      new OpenAIModel({ api: 'chat', modelId: 'gpt-5.4', apiKey: explicitKey })
       expect(OpenAI).toHaveBeenCalledWith(
         expect.objectContaining({
           apiKey: explicitKey,
@@ -118,14 +118,14 @@ describe('OpenAIModel', () => {
       if (isNode) {
         vi.stubEnv('OPENAI_API_KEY', '')
       }
-      expect(() => new OpenAIModel({ api: 'chat', modelId: 'gpt-4.1' })).toThrow(
+      expect(() => new OpenAIModel({ api: 'chat', modelId: 'gpt-5.4' })).toThrow(
         "OpenAI API key is required. Provide it via the 'apiKey' option (string or function) or set the OPENAI_API_KEY environment variable."
       )
     })
 
     it('uses custom client configuration', () => {
       const timeout = 30000
-      new OpenAIModel({ api: 'chat', modelId: 'gpt-4.1', apiKey: 'sk-test', clientConfig: { timeout } })
+      new OpenAIModel({ api: 'chat', modelId: 'gpt-5.4', apiKey: 'sk-test', clientConfig: { timeout } })
       expect(OpenAI).toHaveBeenCalledWith(
         expect.objectContaining({
           timeout: timeout,
@@ -147,7 +147,7 @@ describe('OpenAIModel', () => {
       const mockClient = {} as OpenAI
       new OpenAIModel({
         api: 'chat',
-        modelId: 'gpt-4.1',
+        modelId: 'gpt-5.4',
         apiKey: 'sk-test',
         client: mockClient,
         clientConfig: { timeout: 30000 },
@@ -169,7 +169,7 @@ describe('OpenAIModel', () => {
       const apiKeyFn = vi.fn(async () => 'sk-dynamic')
       new OpenAIModel({
         api: 'chat',
-        modelId: 'gpt-4.1',
+        modelId: 'gpt-5.4',
         apiKey: apiKeyFn,
       })
       expect(OpenAI).toHaveBeenCalledWith(
@@ -187,7 +187,7 @@ describe('OpenAIModel', () => {
 
       new OpenAIModel({
         api: 'chat',
-        modelId: 'gpt-4.1',
+        modelId: 'gpt-5.4',
         apiKey: apiKeyFn,
       })
 
@@ -201,10 +201,10 @@ describe('OpenAIModel', () => {
 
   describe('updateConfig', () => {
     it('merges new config with existing config', () => {
-      const provider = new OpenAIModel({ api: 'chat', modelId: 'gpt-4.1', apiKey: 'sk-test', temperature: 0.5 })
-      provider.updateConfig({ modelId: 'gpt-4.1', temperature: 0.8, maxTokens: 2048 })
+      const provider = new OpenAIModel({ api: 'chat', modelId: 'gpt-5.4', apiKey: 'sk-test', temperature: 0.5 })
+      provider.updateConfig({ modelId: 'gpt-5.4', temperature: 0.8, maxTokens: 2048 })
       expect(provider.getConfig()).toStrictEqual({
-        modelId: 'gpt-4.1',
+        modelId: 'gpt-5.4',
         temperature: 0.8,
         maxTokens: 2048,
       })
@@ -231,13 +231,13 @@ describe('OpenAIModel', () => {
     it('returns the current configuration', () => {
       const provider = new OpenAIModel({
         api: 'chat',
-        modelId: 'gpt-4.1',
+        modelId: 'gpt-5.4',
         apiKey: 'sk-test',
         maxTokens: 1024,
         temperature: 0.7,
       })
       expect(provider.getConfig()).toStrictEqual({
-        modelId: 'gpt-4.1',
+        modelId: 'gpt-5.4',
         maxTokens: 1024,
         temperature: 0.7,
       })
@@ -279,7 +279,7 @@ describe('OpenAIModel', () => {
         const mockClient = createMockClient(async function* () {})
         const provider = new OpenAIModel({
           api: 'chat',
-          modelId: 'gpt-4.1',
+          modelId: 'gpt-5.4',
           client: mockClient,
           params: { n: 2 },
         })
@@ -919,7 +919,7 @@ describe('OpenAIModel', () => {
 
       const provider = new OpenAIModel({
         api: 'chat',
-        modelId: 'gpt-4.1',
+        modelId: 'gpt-5.4',
         client: mockClient,
         temperature: 0.7,
         maxTokens: 1000,
@@ -947,7 +947,7 @@ describe('OpenAIModel', () => {
       expect(callCount).toBe(1)
       expect(capturedRequest).toBeDefined()
       expect(capturedRequest).toEqual({
-        model: 'gpt-4.1',
+        model: 'gpt-5.4',
         stream: true,
         stream_options: { include_usage: true },
         temperature: 0.7,
@@ -1678,7 +1678,7 @@ describe('OpenAIModel', () => {
     })
 
     it('preserves original error as cause in ModelThrottledError', async () => {
-      const originalError: Error & { status?: number } = new Error('Request too large for gpt-4.1 on tokens per min')
+      const originalError: Error & { status?: number } = new Error('Request too large for gpt-5.4 on tokens per min')
       originalError.status = 429
 
       const mockClient = {
@@ -1703,7 +1703,7 @@ describe('OpenAIModel', () => {
         expect(error).toBeInstanceOf(ModelThrottledError)
         const throttleError = error as ModelThrottledError
         expect(throttleError.cause).toBe(originalError)
-        expect(throttleError.message).toBe('Request too large for gpt-4.1 on tokens per min')
+        expect(throttleError.message).toBe('Request too large for gpt-5.4 on tokens per min')
       }
     })
   })
