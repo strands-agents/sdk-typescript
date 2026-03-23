@@ -1,5 +1,5 @@
 /**
- * Error handling utilities for the Gemini model provider.
+ * Error handling utilities for the Google model provider.
  *
  * @internal This module is not part of the public API.
  */
@@ -7,12 +7,12 @@
 import { logger } from '../../logging/logger.js'
 
 /**
- * Recognized error types from Gemini API responses.
+ * Recognized error types from Google GenAI API responses.
  *
  * This union type will expand as more error types are supported
  * (e.g., 'throttling', 'invalidRequest').
  */
-export type GeminiErrorType = 'contextOverflow' | 'throttling'
+export type GoogleErrorType = 'contextOverflow' | 'throttling'
 
 /**
  * Configuration for handling a specific error status.
@@ -20,12 +20,12 @@ export type GeminiErrorType = 'contextOverflow' | 'throttling'
  * If messagePatterns is not provided, the status alone triggers the error type.
  */
 export interface ErrorStatusConfig {
-  type: GeminiErrorType
+  type: GoogleErrorType
   messagePatterns?: Set<string>
 }
 
 /**
- * Mapping of Gemini API error statuses to error handling configuration.
+ * Mapping of Google GenAI API error statuses to error handling configuration.
  * Maps status codes to either direct error types or message-pattern-based detection.
  */
 export const ERROR_STATUS_MAP: Record<string, ErrorStatusConfig> = {
@@ -42,7 +42,7 @@ export const ERROR_STATUS_MAP: Record<string, ErrorStatusConfig> = {
 }
 
 /**
- * Classifies a Gemini API error based on status and message patterns.
+ * Classifies a Google GenAI API error based on status and message patterns.
  * Returns the error type if recognized, undefined otherwise.
  *
  * @param error - The error to classify
@@ -50,7 +50,7 @@ export const ERROR_STATUS_MAP: Record<string, ErrorStatusConfig> = {
  *
  * @internal
  */
-export function classifyGeminiError(error: Error): GeminiErrorType | undefined {
+export function classifyGoogleError(error: Error): GoogleErrorType | undefined {
   if (!error.message) {
     return undefined
   }
@@ -63,7 +63,7 @@ export function classifyGeminiError(error: Error): GeminiErrorType | undefined {
     status = parsed?.error?.status || ''
     message = parsed?.error?.message || ''
   } catch {
-    logger.debug(`error_message=<${error.message}> | gemini api returned non-json error`)
+    logger.debug(`error_message=<${error.message}> | google genai api returned non-json error`)
     return undefined
   }
 

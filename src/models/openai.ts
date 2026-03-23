@@ -20,6 +20,12 @@ import { ContextWindowOverflowError, ModelThrottledError } from '../errors.js'
 import type { ChatCompletionContentPartText } from 'openai/resources/index.mjs'
 import { logger } from '../logging/logger.js'
 
+/**
+ * Supported OpenAI API types.
+ * - 'chat': OpenAI Chat Completions API
+ */
+export type OpenAIApi = 'chat'
+
 const DEFAULT_OPENAI_MODEL_ID = 'gpt-4o'
 
 /**
@@ -140,6 +146,14 @@ export interface OpenAIModelConfig extends BaseModelConfig {
  */
 export interface OpenAIModelOptions extends OpenAIModelConfig {
   /**
+   * Which OpenAI API to use for inference.
+   * Currently only 'chat' (Chat Completions API) is supported.
+   *
+   * @see https://platform.openai.com/docs/api-reference/chat
+   */
+  api: OpenAIApi
+
+  /**
    * OpenAI API key (falls back to OPENAI_API_KEY environment variable).
    *
    * Accepts either a static string or an async function that resolves to a string.
@@ -170,6 +184,7 @@ export interface OpenAIModelOptions extends OpenAIModelConfig {
  * @example
  * ```typescript
  * const provider = new OpenAIModel({
+ *   api: 'chat',
  *   apiKey: 'sk-...',
  *   modelId: 'gpt-4o',
  *   temperature: 0.7,
@@ -194,18 +209,20 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
   /**
    * Creates a new OpenAIModel instance.
    *
-   * @param options - Configuration for model and client (modelId is required)
+   * @param options - Configuration for model and client
    *
    * @example
    * ```typescript
    * // Minimal configuration with API key and model ID
    * const provider = new OpenAIModel({
+   *   api: 'chat',
    *   modelId: 'gpt-4o',
    *   apiKey: 'sk-...'
    * })
    *
    * // With additional model configuration
    * const provider = new OpenAIModel({
+   *   api: 'chat',
    *   modelId: 'gpt-4o',
    *   apiKey: 'sk-...',
    *   temperature: 0.8,
@@ -214,11 +231,13 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
    *
    * // Using environment variable for API key
    * const provider = new OpenAIModel({
+   *   api: 'chat',
    *   modelId: 'gpt-3.5-turbo'
    * })
    *
    * // Using function-based API key for dynamic key retrieval
    * const provider = new OpenAIModel({
+   *   api: 'chat',
    *   modelId: 'gpt-4o',
    *   apiKey: async () => await getRotatingApiKey()
    * })
@@ -226,14 +245,20 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
    * // Using a pre-configured client instance
    * const client = new OpenAI({ apiKey: 'sk-...', timeout: 60000 })
    * const provider = new OpenAIModel({
+   *   api: 'chat',
    *   modelId: 'gpt-4o',
    *   client
    * })
    * ```
    */
-  constructor(options?: OpenAIModelOptions) {
+  constructor(options: OpenAIModelOptions) {
     super()
-    const { apiKey, client, clientConfig, ...modelConfig } = options || {}
+    const { api, apiKey, client, clientConfig, ...modelConfig } = options
+
+    // Validate api field
+    if (api !== 'chat') {
+      throw new Error(`Unsupported OpenAI API: '${api}'. Supported values: 'chat'`)
+    }
 
     // Initialize model config
     this._config = modelConfig
@@ -308,7 +333,7 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
    *
    * @example
    * ```typescript
-   * const provider = new OpenAIModel({ modelId: 'gpt-4o', apiKey: 'sk-...' })
+   * const provider = new OpenAIModel({ api: 'chat', modelId: 'gpt-4o', apiKey: 'sk-...' })
    * const messages: Message[] = [
    *   { role: 'user', content: [{ type: 'textBlock', text: 'What is 2+2?' }] }
    * ]

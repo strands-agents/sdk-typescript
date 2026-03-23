@@ -14,21 +14,21 @@
       "types": "./dist/src/index.d.ts",
       "default": "./dist/src/index.js"
     },
-    "./anthropic": {
+    "./models/anthropic": {
       "types": "./dist/src/models/anthropic.d.ts",
       "default": "./dist/src/models/anthropic.js"
     },
-    "./openai": {
+    "./models/openai": {
       "types": "./dist/src/models/openai.d.ts",
       "default": "./dist/src/models/openai.js"
     },
-    "./bedrock": {
+    "./models/bedrock": {
       "types": "./dist/src/models/bedrock.d.ts",
       "default": "./dist/src/models/bedrock.js"
     },
-    "./gemini": {
-      "types": "./dist/src/models/gemini/model.d.ts",
-      "default": "./dist/src/models/gemini/model.js"
+    "./models/google": {
+      "types": "./dist/src/models/google/index.d.ts",
+      "default": "./dist/src/models/google/index.js"
     },
     "./multiagent": {
       "types": "./dist/src/multiagent/index.d.ts",

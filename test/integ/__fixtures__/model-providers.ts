@@ -6,7 +6,7 @@ import { inject } from 'vitest'
 import { BedrockModel, type BedrockModelOptions } from '$/sdk/models/bedrock.js'
 import { OpenAIModel, type OpenAIModelOptions } from '$/sdk/models/openai.js'
 import { AnthropicModel, type AnthropicModelOptions } from '$/sdk/models/anthropic.js'
-import { GeminiModel, type GeminiModelOptions } from '$/sdk/models/gemini/model.js'
+import { GoogleModel, type GoogleModelOptions } from '$/sdk/models/google/model.js'
 
 /**
  * Feature support flags for model providers.
@@ -80,13 +80,14 @@ export const openai = {
   get skip() {
     return inject('provider-openai').shouldSkip
   },
-  createModel: (config: OpenAIModelOptions = {}): OpenAIModel => {
+  createModel: (config: Omit<OpenAIModelOptions, 'api'> = {}): OpenAIModel => {
     const apiKey = inject('provider-openai')?.apiKey
     if (!apiKey) {
       throw new Error('No OpenAI apiKey provided')
     }
     return new OpenAIModel({
       ...config,
+      api: 'chat',
       apiKey,
       clientConfig: { ...(config.clientConfig ?? {}), dangerouslyAllowBrowser: true },
     })
@@ -134,7 +135,7 @@ export const anthropic = {
 }
 
 export const gemini = {
-  name: 'GeminiModel',
+  name: 'GoogleModel',
   supports: {
     reasoning: true,
     tools: true,
@@ -152,19 +153,19 @@ export const gemini = {
       params: { thinkingConfig: { thinkingBudget: 1024, includeThoughts: true } },
     },
     builtInTools: {
-      geminiTools: [{ codeExecution: {} }],
+      builtInTools: [{ codeExecution: {} }],
     },
     video: {},
   },
   get skip() {
     return inject('provider-gemini').shouldSkip
   },
-  createModel: (config: GeminiModelOptions = {}): GeminiModel => {
+  createModel: (config: GoogleModelOptions = {}): GoogleModel => {
     const apiKey = inject('provider-gemini').apiKey
     if (!apiKey) {
       throw new Error('No Gemini apiKey provided')
     }
-    return new GeminiModel({ ...config, apiKey })
+    return new GoogleModel({ ...config, apiKey })
   },
 }
 

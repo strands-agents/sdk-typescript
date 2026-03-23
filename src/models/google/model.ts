@@ -1,5 +1,5 @@
 /**
- * Google Gemini model provider implementation.
+ * Google model provider implementation.
  *
  * This module provides integration with Google's Gemini API,
  * supporting streaming responses and configurable model parameters.
@@ -18,9 +18,9 @@ import type { StreamOptions } from '../model.js'
 import type { Message } from '../../types/messages.js'
 import type { ModelStreamEvent } from '../streaming.js'
 import { ContextWindowOverflowError, ModelThrottledError } from '../../errors.js'
-import type { GeminiModelConfig, GeminiModelOptions, GeminiStreamState } from './types.js'
-export type { GeminiModelConfig, GeminiModelOptions }
-import { classifyGeminiError } from './errors.js'
+import type { GoogleModelConfig, GoogleModelOptions, GoogleStreamState } from './types.js'
+export type { GoogleModelConfig, GoogleModelOptions }
+import { classifyGoogleError } from './errors.js'
 import { formatMessages, mapChunkToEvents } from './adapters.js'
 
 /**
@@ -29,14 +29,14 @@ import { formatMessages, mapChunkToEvents } from './adapters.js'
 const DEFAULT_GEMINI_MODEL_ID = 'gemini-2.5-flash'
 
 /**
- * Google Gemini model provider implementation.
+ * Google model provider implementation.
  *
- * Implements the Model interface for Google Gemini using the Generative AI API.
+ * Implements the Model interface for Google GenAI using the Generative AI API.
  * Supports streaming responses and comprehensive configuration.
  *
  * @example
  * ```typescript
- * const provider = new GeminiModel({
+ * const provider = new GoogleModel({
  *   apiKey: 'your-api-key',
  *   modelId: 'gemini-2.5-flash',
  *   params: { temperature: 0.7, maxOutputTokens: 1024 }
@@ -53,42 +53,42 @@ const DEFAULT_GEMINI_MODEL_ID = 'gemini-2.5-flash'
  * }
  * ```
  */
-export class GeminiModel extends Model<GeminiModelConfig> {
-  private _config: GeminiModelConfig
+export class GoogleModel extends Model<GoogleModelConfig> {
+  private _config: GoogleModelConfig
   private _client: GoogleGenAI
 
   /**
-   * Creates a new GeminiModel instance.
+   * Creates a new GoogleModel instance.
    *
    * @param options - Configuration for model and client
    *
    * @example
    * ```typescript
    * // Minimal configuration with API key
-   * const provider = new GeminiModel({
+   * const provider = new GoogleModel({
    *   apiKey: 'your-api-key'
    * })
    *
    * // With model configuration
-   * const provider = new GeminiModel({
+   * const provider = new GoogleModel({
    *   apiKey: 'your-api-key',
    *   modelId: 'gemini-2.5-flash',
    *   params: { temperature: 0.8, maxOutputTokens: 2048 }
    * })
    *
    * // Using environment variable for API key
-   * const provider = new GeminiModel({
+   * const provider = new GoogleModel({
    *   modelId: 'gemini-2.5-flash'
    * })
    *
    * // Using a pre-configured client instance
    * const client = new GoogleGenAI({ apiKey: 'your-api-key' })
-   * const provider = new GeminiModel({
+   * const provider = new GoogleModel({
    *   client
    * })
    * ```
    */
-  constructor(options?: GeminiModelOptions) {
+  constructor(options?: GoogleModelOptions) {
     super()
     const { apiKey, client, clientConfig, ...modelConfig } = options || {}
 
@@ -97,7 +97,7 @@ export class GeminiModel extends Model<GeminiModelConfig> {
     if (client) {
       this._client = client
     } else {
-      const resolvedApiKey = apiKey || GeminiModel._getEnvApiKey()
+      const resolvedApiKey = apiKey || GoogleModel._getEnvApiKey()
 
       if (!resolvedApiKey) {
         throw new Error(
@@ -126,7 +126,7 @@ export class GeminiModel extends Model<GeminiModelConfig> {
    * })
    * ```
    */
-  updateConfig(modelConfig: GeminiModelConfig): void {
+  updateConfig(modelConfig: GoogleModelConfig): void {
     this._config = { ...this._config, ...modelConfig }
   }
 
@@ -141,12 +141,12 @@ export class GeminiModel extends Model<GeminiModelConfig> {
    * console.log(config.modelId)
    * ```
    */
-  getConfig(): GeminiModelConfig {
+  getConfig(): GoogleModelConfig {
     return this._config
   }
 
   /**
-   * Streams a conversation with the Gemini model.
+   * Streams a conversation with the Google model.
    * Returns an async iterable that yields streaming events as they occur.
    *
    * @param messages - Array of conversation messages
@@ -157,7 +157,7 @@ export class GeminiModel extends Model<GeminiModelConfig> {
    *
    * @example
    * ```typescript
-   * const provider = new GeminiModel({ apiKey: 'your-api-key' })
+   * const provider = new GoogleModel({ apiKey: 'your-api-key' })
    * const messages: Message[] = [
    *   { role: 'user', content: [{ type: 'textBlock', text: 'What is 2+2?' }] }
    * ]
@@ -178,7 +178,7 @@ export class GeminiModel extends Model<GeminiModelConfig> {
       const params = this._formatRequest(messages, options)
       const stream = await this._client.models.generateContentStream(params)
 
-      const streamState: GeminiStreamState = {
+      const streamState: GoogleStreamState = {
         messageStarted: false,
         textContentBlockStarted: false,
         reasoningContentBlockStarted: false,
@@ -205,7 +205,7 @@ export class GeminiModel extends Model<GeminiModelConfig> {
       if (!(error instanceof Error)) {
         throw error
       }
-      const errorType = classifyGeminiError(error)
+      const errorType = classifyGoogleError(error)
 
       if (errorType === 'contextOverflow') {
         throw new ContextWindowOverflowError(error.message)
@@ -227,7 +227,7 @@ export class GeminiModel extends Model<GeminiModelConfig> {
   }
 
   /**
-   * Formats a request for the Gemini API.
+   * Formats a request for the Google GenAI API.
    */
   private _formatRequest(messages: Message[], options?: StreamOptions): GenerateContentParameters {
     const contents = formatMessages(messages)
@@ -283,11 +283,11 @@ export class GeminiModel extends Model<GeminiModelConfig> {
     }
 
     // Append built-in tools (e.g., GoogleSearch, CodeExecution)
-    if (this._config.geminiTools && this._config.geminiTools.length > 0) {
+    if (this._config.builtInTools && this._config.builtInTools.length > 0) {
       if (!config.tools) {
         config.tools = []
       }
-      config.tools.push(...this._config.geminiTools)
+      config.tools.push(...this._config.builtInTools)
     }
 
     // Spread params object for forward compatibility

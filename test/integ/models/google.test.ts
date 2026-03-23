@@ -13,7 +13,7 @@ import { gemini } from '../__fixtures__/model-providers.js'
  * media content, reasoning, basic agent usage) are intentionally omitted here to avoid duplication.
  * This file focuses on low-level model provider behavior specific to Gemini.
  */
-describe.skipIf(gemini.skip)('GeminiModel Integration Tests', () => {
+describe.skipIf(gemini.skip)('GoogleModel Integration Tests', () => {
   describe('Streaming', () => {
     describe('Configuration', () => {
       it.concurrent('respects temperature configuration', async () => {

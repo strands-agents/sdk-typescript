@@ -114,10 +114,10 @@ const agent = new Agent({ model })
 
 ```typescript
 import { Agent } from '@strands-agents/sdk'
-import { OpenAIModel } from '@strands-agents/sdk/openai'
+import { OpenAIModel } from '@strands-agents/sdk/models/openai'
 
 // Automatically uses process.env.OPENAI_API_KEY and defaults to gpt-4o
-const model = new OpenAIModel()
+const model = new OpenAIModel({ api: 'chat' })
 
 const agent = new Agent({ model })
 ```

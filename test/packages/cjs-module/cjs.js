@@ -10,6 +10,12 @@ const { fileEditor } = require('@strands-agents/sdk/vended-tools/file-editor')
 const { httpRequest } = require('@strands-agents/sdk/vended-tools/http-request')
 const { bash } = require('@strands-agents/sdk/vended-tools/bash')
 
+// Verify model subpath exports
+const { BedrockModel: BedrockFromSubpath } = require('@strands-agents/sdk/models/bedrock')
+const { OpenAIModel } = require('@strands-agents/sdk/models/openai')
+const { AnthropicModel } = require('@strands-agents/sdk/models/anthropic')
+const { GoogleModel } = require('@strands-agents/sdk/models/google')
+
 const { z } = require('zod')
 
 console.log('✓ Import from main entry point successful')
@@ -73,6 +79,12 @@ async function main() {
       throw new Error(`Tool ${tool.name} isn't an instance of a tool`)
     }
   }
+
+  // Verify model subpath exports resolve correctly
+  if (BedrockFromSubpath !== BedrockModel) {
+    throw new Error('BedrockModel from subpath should match main export')
+  }
+  console.log('✓ Model subpath exports verified')
 }
 
 main().catch((error) => {

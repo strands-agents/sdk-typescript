@@ -20,7 +20,7 @@ import type {
   ToolResultBlock,
 } from '../../types/messages.js'
 import type { ModelStreamEvent } from '../streaming.js'
-import type { GeminiStreamState } from './types.js'
+import type { GoogleStreamState } from './types.js'
 import { encodeBase64, type ImageBlock, type DocumentBlock, type VideoBlock } from '../../types/media.js'
 import { toMimeType } from '../../mime.js'
 import { logger } from '../../logging/logger.js'
@@ -28,7 +28,7 @@ import { logger } from '../../logging/logger.js'
 /**
  * Mapping of Gemini finish reasons to SDK stop reasons.
  * Only MAX_TOKENS needs explicit mapping; everything else defaults to endTurn.
- * Tool use stop reason is determined by the hasToolCalls flag in GeminiStreamState,
+ * Tool use stop reason is determined by the hasToolCalls flag in GoogleStreamState,
  * since Gemini does not have a tool use finish reason.
  *
  * @internal
@@ -342,7 +342,7 @@ function formatToolResultBlock(block: ToolResultBlock, toolUseIdToName: Map<stri
  *
  * @internal
  */
-export function mapChunkToEvents(chunk: GenerateContentResponse, streamState: GeminiStreamState): ModelStreamEvent[] {
+export function mapChunkToEvents(chunk: GenerateContentResponse, streamState: GoogleStreamState): ModelStreamEvent[] {
   const events: ModelStreamEvent[] = []
 
   // Extract usage metadata if available
