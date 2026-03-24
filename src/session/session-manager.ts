@@ -72,10 +72,6 @@ export class SessionManager implements Plugin {
     this._storage = { snapshot: config.storage.snapshot }
     this._saveLatestOn = config.saveLatestOn ?? 'invocation'
     this._snapshotTrigger = config.snapshotTrigger
-
-    if (this._saveLatestOn === 'trigger' && !this._snapshotTrigger) {
-      throw new Error('snapshotTrigger is required when saveLatestOn is "trigger"')
-    }
   }
 
   /** Initializes the plugin by registering lifecycle hook callbacks. */

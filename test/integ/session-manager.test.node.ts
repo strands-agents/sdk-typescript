@@ -270,7 +270,6 @@ describe.skipIf(bedrock.skip)('Session Management - S3Storage', () => {
       sessionId,
       storage: { snapshot: s3Storage },
       saveLatestOn: 'trigger',
-      snapshotTrigger: () => false,
     })
     const agent2 = new Agent({ model, sessionManager: s3Manager2, printer: false })
     await agent2.initialize()
