@@ -369,3 +369,31 @@ export class FunctionTool extends Tool implements InvokableTool<unknown, JSONVal
     }
   }
 }
+
+/**
+ * Same shape as {@link FunctionToolConfig} but uses `schema` instead of `inputSchema`
+ * for call sites that already model tools as JSON Schema objects.
+ */
+export interface FromJsonSchemaConfig {
+  /** The unique name of the tool */
+  name: string
+  /** Human-readable description of the tool's purpose */
+  description: string
+  /** JSON Schema defining the expected input structure */
+  schema: JSONSchema
+  /** Function that implements the tool logic */
+  callback: FunctionToolCallback
+}
+
+/**
+ * Builds a {@link FunctionTool} from a JSON Schema definition (no Zod).
+ * Prefer this when tool definitions already use a `schema` field.
+ */
+export function fromJsonSchema(config: FromJsonSchemaConfig): FunctionTool {
+  return new FunctionTool({
+    name: config.name,
+    description: config.description,
+    inputSchema: config.schema,
+    callback: config.callback,
+  })
+}
