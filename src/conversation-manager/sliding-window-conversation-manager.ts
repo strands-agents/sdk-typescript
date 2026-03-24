@@ -137,7 +137,7 @@ export class SlidingWindowConversationManager extends ConversationManager {
     // Find the next valid trim point that:
     // 1. Starts with a user message (required by some models)
     // 2. Does not start with an orphaned toolResult
-    // 3. Does not start with a toolUse unless it's toolResult immediately follows
+    // 3. Does not start with a toolUse unless its toolResult immediately follows
     while (trimIndex < messages.length) {
       const oldestMessage = messages[trimIndex]
       if (!oldestMessage) {

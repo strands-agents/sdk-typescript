@@ -67,6 +67,7 @@ export class NodeResult {
     if ('usage' in data) this.usage = data.usage
   }
 
+  /** Serializes this result to a JSON-compatible value. */
   toJSON(): JSONValue {
     return {
       nodeId: this.nodeId,
@@ -79,6 +80,7 @@ export class NodeResult {
     } as JSONValue
   }
 
+  /** Creates a NodeResult from a previously serialized JSON value. */
   static fromJSON(data: JSONValue): NodeResult {
     const json = data as Record<string, JSONValue>
     return new NodeResult({
@@ -179,6 +181,7 @@ export class MultiAgentResult {
     this.usage = this._aggregateNodeUsage(data.results)
   }
 
+  /** Serializes this result to a JSON-compatible value. */
   toJSON(): JSONValue {
     return {
       status: this.status,
@@ -189,6 +192,7 @@ export class MultiAgentResult {
     } as JSONValue
   }
 
+  /** Creates a MultiAgentResult from a previously serialized JSON value. */
   static fromJSON(data: JSONValue): MultiAgentResult {
     const json = data as Record<string, JSONValue>
     return new MultiAgentResult({
