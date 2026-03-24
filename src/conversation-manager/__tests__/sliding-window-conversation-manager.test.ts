@@ -74,10 +74,12 @@ describe('SlidingWindowConversationManager', () => {
     })
 
     it('returns true when messages are trimmed', () => {
-      const manager = new SlidingWindowConversationManager({ windowSize: 1, shouldTruncateResults: false })
+      const manager = new SlidingWindowConversationManager({ windowSize: 2, shouldTruncateResults: false })
       const messages = [
         new Message({ role: 'user', content: [new TextBlock('Message 1')] }),
         new Message({ role: 'assistant', content: [new TextBlock('Response 1')] }),
+        new Message({ role: 'user', content: [new TextBlock('Message 2')] }),
+        new Message({ role: 'assistant', content: [new TextBlock('Response 2')] }),
       ]
 
       const result = manager.reduce({
@@ -86,7 +88,7 @@ describe('SlidingWindowConversationManager', () => {
       })
 
       expect(result).toBe(true)
-      expect(messages).toHaveLength(1)
+      expect(messages).toHaveLength(2)
     })
   })
 
@@ -136,13 +138,15 @@ describe('SlidingWindowConversationManager', () => {
         new Message({ role: 'user', content: [new TextBlock('Message 1')] }),
         new Message({ role: 'assistant', content: [new TextBlock('Response 1')] }),
         new Message({ role: 'user', content: [new TextBlock('Message 2')] }),
+        new Message({ role: 'assistant', content: [new TextBlock('Response 2')] }),
       ]
       const mockAgent = createMockAgent({ messages })
 
       await triggerSlidingWindow(manager, mockAgent)
 
-      // Should have trimmed to window size
+      // Should have trimmed; first message must be user
       expect(mockAgent.messages).toHaveLength(2)
+      expect(mockAgent.messages[0]!.role).toBe('user')
     })
   })
 
@@ -236,10 +240,15 @@ describe('SlidingWindowConversationManager', () => {
     })
 
     it('skips truncation when shouldTruncateResults is false', async () => {
-      const manager = new SlidingWindowConversationManager({ windowSize: 2, shouldTruncateResults: false })
+      const manager = new SlidingWindowConversationManager({ windowSize: 3, shouldTruncateResults: false })
       const messages = [
         new Message({ role: 'user', content: [new TextBlock('Message 1')] }),
         new Message({ role: 'assistant', content: [new TextBlock('Response 1')] }),
+        new Message({ role: 'user', content: [new TextBlock('Message 2')] }),
+        new Message({
+          role: 'assistant',
+          content: [new ToolUseBlock({ name: 'tool1', toolUseId: 'tool-1', input: {} })],
+        }),
         new Message({
           role: 'user',
           content: [
@@ -256,10 +265,11 @@ describe('SlidingWindowConversationManager', () => {
       await triggerContextOverflow(manager, mockAgent, new ContextWindowOverflowError('Context overflow'))
 
       // Should have trimmed messages instead of truncating tool result
-      expect(mockAgent.messages).toHaveLength(2)
+      expect(mockAgent.messages).toHaveLength(3)
+      expect(mockAgent.messages[0]!.role).toBe('user')
 
-      // Tool result should not be truncated - it's now at index 1 after trimming
-      const toolResult = mockAgent.messages[1]!.content[0]! as ToolResultBlock
+      // Tool result should not be truncated
+      const toolResult = mockAgent.messages[2]!.content[0]! as ToolResultBlock
       expect(toolResult.status).toBe('success')
     })
 
@@ -306,7 +316,7 @@ describe('SlidingWindowConversationManager', () => {
     })
 
     it('does not call truncateToolResults unless an error is passed in', async () => {
-      const manager = new SlidingWindowConversationManager({ windowSize: 1, shouldTruncateResults: true })
+      const manager = new SlidingWindowConversationManager({ windowSize: 2, shouldTruncateResults: true })
       const messages = [
         new Message({ role: 'user', content: [new TextBlock('Message 1')] }),
         new Message({
@@ -324,6 +334,7 @@ describe('SlidingWindowConversationManager', () => {
           ],
         }),
         new Message({ role: 'assistant', content: [new TextBlock('Response 1')] }),
+        new Message({ role: 'user', content: [new TextBlock('Message 2')] }),
       ]
       const mockAgent = createMockAgent({ messages })
 
@@ -336,9 +347,9 @@ describe('SlidingWindowConversationManager', () => {
       // Verify _truncateToolResults was NOT called during window enforcement
       expect(truncateSpy).not.toHaveBeenCalled()
 
-      // Should have trimmed to window size (1 message) through message trimming instead
-      expect(mockAgent.messages).toHaveLength(1)
-      expect(mockAgent.messages[0]!.content[0]!).toEqual({ type: 'textBlock', text: 'Response 1' })
+      // Should have trimmed; first message must be user
+      expect(mockAgent.messages.length).toBeLessThanOrEqual(2)
+      expect(mockAgent.messages[0]!.role).toBe('user')
 
       truncateSpy.mockRestore()
     })
@@ -450,10 +461,9 @@ describe('SlidingWindowConversationManager', () => {
 
       await triggerContextOverflow(manager, mockAgent, new ContextWindowOverflowError('Context overflow'))
 
-      // Should not trim at index 1 (toolResult), should trim at index 2 instead
-      // This means keeping last 2 messages
-      expect(mockAgent.messages).toHaveLength(2)
-      expect(mockAgent.messages[0]!.content[0]!).toEqual({ type: 'textBlock', text: 'Response' })
+      // Skips index 1 (toolResult) and index 2 (assistant), trims at index 3 (user)
+      expect(mockAgent.messages).toHaveLength(1)
+      expect(mockAgent.messages[0]!.content[0]!).toEqual({ type: 'textBlock', text: 'Message' })
     })
 
     it('does not trim at index where oldest message is toolUse without following toolResult', async () => {
@@ -471,9 +481,9 @@ describe('SlidingWindowConversationManager', () => {
 
       await triggerContextOverflow(manager, mockAgent, new ContextWindowOverflowError('Context overflow'))
 
-      // Should skip index 1 (toolUse without following toolResult), trim at index 2
-      expect(mockAgent.messages).toHaveLength(2)
-      expect(mockAgent.messages[0]!.content[0]!).toEqual({ type: 'textBlock', text: 'Response' })
+      // Skips index 1 (toolUse without following toolResult), skips index 2 (assistant), trims at index 3 (user)
+      expect(mockAgent.messages).toHaveLength(1)
+      expect(mockAgent.messages[0]!.content[0]!).toEqual({ type: 'textBlock', text: 'Message 2' })
     })
 
     it('allows trim when oldest message is toolUse with following toolResult', async () => {
@@ -501,21 +511,18 @@ describe('SlidingWindowConversationManager', () => {
 
       await triggerContextOverflow(manager, mockAgent, new ContextWindowOverflowError('Context overflow'))
 
-      // Should trim at index 3 (5 - 2 = 3)
-      // Index 1 would be toolUse (valid start since toolResult follows)
-      // Index 2 would be toolResult (invalid - no preceding toolUse)
-      // Index 3 would be Response (valid - text block)
-      // So we trim at index 3, keeping last 2 messages
-      expect(mockAgent.messages).toHaveLength(2)
-      expect(mockAgent.messages[0]!.content[0]!).toEqual({ type: 'textBlock', text: 'Response' })
-      expect(mockAgent.messages[1]!.content[0]!).toEqual({ type: 'textBlock', text: 'Message 2' })
+      // trimIndex starts at 3 (5 - 2 = 3), which is assistant 'Response' — skipped (not user).
+      // trimIndex 4 is user 'Message 2' — valid.
+      expect(mockAgent.messages).toHaveLength(1)
+      expect(mockAgent.messages[0]!.content[0]!).toEqual({ type: 'textBlock', text: 'Message 2' })
     })
 
     it('allows trim at toolUse when toolResult immediately follows', async () => {
-      const manager = new SlidingWindowConversationManager({ windowSize: 3, shouldTruncateResults: false })
+      const manager = new SlidingWindowConversationManager({ windowSize: 4, shouldTruncateResults: false })
       const messages = [
         new Message({ role: 'user', content: [new TextBlock('Message 1')] }),
         new Message({ role: 'assistant', content: [new TextBlock('Response 1')] }),
+        new Message({ role: 'user', content: [new TextBlock('Message 2')] }),
         new Message({
           role: 'assistant',
           content: [new ToolUseBlock({ name: 'tool1', toolUseId: 'id-1', input: {} })],
@@ -536,21 +543,9 @@ describe('SlidingWindowConversationManager', () => {
 
       await triggerContextOverflow(manager, mockAgent, new ContextWindowOverflowError('Context overflow'))
 
-      // Should trim at index 2 (5 - 3 = 2)
-      // Index 2 is toolUse with toolResult at index 3 - this is valid
-      expect(mockAgent.messages).toHaveLength(3)
-      expect(mockAgent.messages[0]!.content[0]!).toEqual({
-        type: 'toolUseBlock',
-        name: 'tool1',
-        toolUseId: 'id-1',
-        input: {},
-      })
-      expect(mockAgent.messages[1]!.content[0]!).toEqual({
-        type: 'toolResultBlock',
-        toolUseId: 'id-1',
-        status: 'success',
-        content: [{ type: 'textBlock', text: 'Result' }],
-      })
+      // trimIndex starts at 2 (6 - 4 = 2), which is user 'Message 2' — valid trim point
+      expect(mockAgent.messages).toHaveLength(4)
+      expect(mockAgent.messages[0]!.content[0]!).toEqual({ type: 'textBlock', text: 'Message 2' })
     })
 
     it('allows trim when oldest message is text or other non-tool content', async () => {
@@ -559,14 +554,31 @@ describe('SlidingWindowConversationManager', () => {
         new Message({ role: 'user', content: [new TextBlock('Message 1')] }),
         new Message({ role: 'assistant', content: [new TextBlock('Response 1')] }),
         new Message({ role: 'user', content: [new TextBlock('Message 2')] }),
+        new Message({ role: 'assistant', content: [new TextBlock('Response 2')] }),
       ]
       const mockAgent = createMockAgent({ messages })
 
       await triggerContextOverflow(manager, mockAgent, new ContextWindowOverflowError('Context overflow'))
 
-      // Should trim at index 1 (3 - 2 = 1)
+      // trimIndex starts at 2 (4 - 2 = 2), which is user 'Message 2' — valid
       expect(mockAgent.messages).toHaveLength(2)
-      expect(mockAgent.messages[0]!.content[0]).toEqual({ type: 'textBlock', text: 'Response 1' })
+      expect(mockAgent.messages[0]!.content[0]).toEqual({ type: 'textBlock', text: 'Message 2' })
+    })
+
+    it('skips assistant message to ensure trimmed conversation starts with user', async () => {
+      const manager = new SlidingWindowConversationManager({ windowSize: 8 })
+      const messages = Array.from(
+        { length: 9 },
+        (_, i) => new Message({ role: i % 2 === 0 ? 'user' : 'assistant', content: [new TextBlock(`message ${i}`)] })
+      )
+      const mockAgent = createMockAgent({ messages })
+
+      await triggerSlidingWindow(manager, mockAgent)
+
+      // Naive trim would leave assistant at index 1 as first message.
+      // Fix skips it so conversation starts with user at index 2.
+      expect(mockAgent.messages[0]!.role).toBe('user')
+      expect(mockAgent.messages[0]!.content[0]!).toEqual({ type: 'textBlock', text: 'message 2' })
     })
 
     it('returns false when no valid trim point exists', async () => {

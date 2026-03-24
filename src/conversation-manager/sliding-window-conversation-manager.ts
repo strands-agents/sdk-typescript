@@ -134,29 +134,35 @@ export class SlidingWindowConversationManager extends ConversationManager {
     // If the number of messages is less than the window_size, then we default to 2, otherwise, trim to window size
     let trimIndex = messages.length <= this._windowSize ? 2 : messages.length - this._windowSize
 
-    // Find the next valid trim_index
+    // Find the next valid trim point that:
+    // 1. Starts with a user message (required by most model providers)
+    // 2. Does not start with an orphaned toolResult
+    // 3. Does not start with a toolUse unless its toolResult immediately follows
     while (trimIndex < messages.length) {
       const oldestMessage = messages[trimIndex]
       if (!oldestMessage) {
         break
       }
 
-      // Check if oldest message would be a toolResult (invalid - needs preceding toolUse)
+      // Must start with a user message
+      if (oldestMessage.role !== 'user') {
+        trimIndex++
+        continue
+      }
+
+      // Cannot start with an orphaned toolResult
       const hasToolResult = oldestMessage.content.some((block) => block.type === 'toolResultBlock')
       if (hasToolResult) {
         trimIndex++
         continue
       }
 
-      // Check if oldest message would be a toolUse without immediately following toolResult
+      // toolUse is only valid if the next message is its toolResult
       const hasToolUse = oldestMessage.content.some((block) => block.type === 'toolUseBlock')
       if (hasToolUse) {
-        // Check if next message has toolResult
         const nextMessage = messages[trimIndex + 1]
         const nextHasToolResult = nextMessage && nextMessage.content.some((block) => block.type === 'toolResultBlock')
-
         if (!nextHasToolResult) {
-          // toolUse without following toolResult - invalid trim point
           trimIndex++
           continue
         }
