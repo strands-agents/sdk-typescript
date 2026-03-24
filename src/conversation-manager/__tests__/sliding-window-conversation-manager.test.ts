@@ -348,7 +348,7 @@ describe('SlidingWindowConversationManager', () => {
       expect(truncateSpy).not.toHaveBeenCalled()
 
       // Should have trimmed; first message must be user
-      expect(mockAgent.messages.length).toBeLessThanOrEqual(2)
+      expect(mockAgent.messages.length).toBe(1)
       expect(mockAgent.messages[0]!.role).toBe('user')
 
       truncateSpy.mockRestore()
