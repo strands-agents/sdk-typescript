@@ -951,7 +951,10 @@ describe('toJSON serialization completeness', () => {
       { name: 'BeforeInvocationEvent', event: new BeforeInvocationEvent({ agent }) },
       { name: 'AfterInvocationEvent', event: new AfterInvocationEvent({ agent }) },
       { name: 'BeforeModelCallEvent', event: new BeforeModelCallEvent({ agent }) },
-      { name: 'AfterModelCallEvent', event: Object.assign(new AfterModelCallEvent({ agent, stopData, error }), { retry: true }) },
+      {
+        name: 'AfterModelCallEvent',
+        event: Object.assign(new AfterModelCallEvent({ agent, stopData, error }), { retry: true }),
+      },
       { name: 'MessageAddedEvent', event: new MessageAddedEvent({ agent, message }) },
       { name: 'ModelStreamUpdateEvent', event: new ModelStreamUpdateEvent({ agent, event: streamEvent }) },
       { name: 'ContentBlockEvent', event: new ContentBlockEvent({ agent, contentBlock }) },
@@ -960,7 +963,10 @@ describe('toJSON serialization completeness', () => {
       { name: 'ToolStreamUpdateEvent', event: new ToolStreamUpdateEvent({ agent, event: toolStreamEvent }) },
       { name: 'AgentResultEvent', event: new AgentResultEvent({ agent, result: agentResult }) },
       { name: 'BeforeToolCallEvent', event: new BeforeToolCallEvent({ agent, toolUse, tool }) },
-      { name: 'AfterToolCallEvent', event: Object.assign(new AfterToolCallEvent({ agent, toolUse, tool, result, error }), { retry: true }) },
+      {
+        name: 'AfterToolCallEvent',
+        event: Object.assign(new AfterToolCallEvent({ agent, toolUse, tool, result, error }), { retry: true }),
+      },
       { name: 'BeforeToolsEvent', event: new BeforeToolsEvent({ agent, message }) },
       { name: 'AfterToolsEvent', event: new AfterToolsEvent({ agent, message }) },
     ]
