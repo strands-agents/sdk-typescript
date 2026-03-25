@@ -27,7 +27,7 @@ import type { SystemPrompt, StopReason } from '../types/messages.js'
 import type { ToolChoice, ToolSpec } from '../tools/types.js'
 import type { ModelStreamEvent, Usage } from './streaming.js'
 import { Message, TextBlock, type ToolResultContent } from '../types/messages.js'
-import { encodeBase64 } from '../types/media.js'
+import { encodeBase64, ImageBlock, DocumentBlock, VideoBlock } from '../types/media.js'
 import { Model, type BaseModelConfig, type StreamOptions } from './model.js'
 import {
   ModelContentBlockDeltaEvent,
@@ -406,7 +406,7 @@ function formatMessages(messages: Message[], systemPrompt?: SystemPrompt): Langu
     if (message.role === 'user') {
       formatUserMessage(message, prompt, toolNameMap)
     } else if (message.role === 'assistant') {
-      formatAssistantMessage(message, prompt, toolNameMap)
+      formatAssistantMessage(message, prompt)
     }
   }
 
@@ -430,47 +430,11 @@ function formatUserMessage(message: Message, prompt: LanguageModelV3Prompt, tool
       case 'textBlock':
         content.push({ type: 'text', text: block.text })
         break
-      case 'imageBlock': {
-        const source = block.source
-        const mediaType = toMimeType(block.format) ?? `image/${block.format}`
-        if (source.type === 'imageSourceBytes') {
-          content.push({ type: 'file', data: source.bytes, mediaType })
-        } else if (source.type === 'imageSourceUrl') {
-          content.push({ type: 'file', data: new URL(source.url), mediaType })
-        } else {
-          logger.warn(`source_type=<${source.type}> | unsupported image source type, skipping`)
-        }
+      case 'imageBlock':
+      case 'documentBlock':
+      case 'videoBlock':
+        content.push(...formatMediaBlock(block))
         break
-      }
-      case 'documentBlock': {
-        const source = block.source
-        const mediaType = toMimeType(block.format) ?? `application/${block.format}`
-        if (source.type === 'documentSourceBytes') {
-          content.push({ type: 'file', data: source.bytes, mediaType })
-        } else if (source.type === 'documentSourceText') {
-          content.push({ type: 'text', text: source.text })
-        } else if (source.type === 'documentSourceContentBlock') {
-          for (const contentBlock of source.content) {
-            content.push({ type: 'text', text: contentBlock.text })
-          }
-        } else {
-          logger.warn(`source_type=<${source.type}> | unsupported document source type, skipping`)
-        }
-        break
-      }
-      case 'videoBlock': {
-        const source = block.source
-        if (source.type === 'videoSourceBytes') {
-          content.push({
-            type: 'file',
-            data: source.bytes,
-            mediaType: toMimeType(block.format) ?? `video/${block.format}`,
-          })
-        } else {
-          logger.warn(`source_type=<${source.type}> | unsupported video source type, skipping`)
-        }
-        break
-      }
       case 'toolResultBlock':
         toolResults.push({
           type: 'tool-result',
@@ -496,34 +460,27 @@ function formatUserMessage(message: Message, prompt: LanguageModelV3Prompt, tool
 
 /**
  * Formats a Strands assistant message to LanguageModelV3 format.
- * Tool results are extracted into separate tool messages (one per result).
  *
  * @param message - The assistant message to format
  * @param prompt - The prompt array to push formatted messages into
- * @param toolNameMap - Map of toolCallId to toolName for resolving tool result names
  */
-function formatAssistantMessage(
-  message: Message,
-  prompt: LanguageModelV3Prompt,
-  toolNameMap: Map<string, string>
-): void {
-  const assistantContent: Array<LanguageModelV3TextPart | LanguageModelV3ReasoningPart | LanguageModelV3ToolCallPart> =
-    []
-
-  const toolResults: LanguageModelV3ToolResultPart[] = []
+function formatAssistantMessage(message: Message, prompt: LanguageModelV3Prompt): void {
+  const content: Array<
+    LanguageModelV3TextPart | LanguageModelV3FilePart | LanguageModelV3ReasoningPart | LanguageModelV3ToolCallPart
+  > = []
 
   for (const block of message.content) {
     switch (block.type) {
       case 'textBlock':
-        assistantContent.push({ type: 'text', text: block.text })
+        content.push({ type: 'text', text: block.text })
         break
       case 'reasoningBlock':
         if (block.text) {
-          assistantContent.push({ type: 'reasoning', text: block.text })
+          content.push({ type: 'reasoning', text: block.text })
         }
         break
       case 'toolUseBlock':
-        assistantContent.push({
+        content.push({
           type: 'tool-call',
           toolCallId: block.toolUseId,
           toolName: block.name,
@@ -531,12 +488,12 @@ function formatAssistantMessage(
         })
         break
       case 'toolResultBlock':
-        toolResults.push({
-          type: 'tool-result',
-          toolCallId: block.toolUseId,
-          toolName: toolNameMap.get(block.toolUseId) ?? '',
-          output: formatToolResultOutput(block.status, block.content),
-        })
+        logger.warn('tool result in assistant message is not supported, skipping')
+        break
+      case 'imageBlock':
+      case 'documentBlock':
+      case 'videoBlock':
+        content.push(...formatMediaBlock(block))
         break
       default:
         logger.warn(`block_type=<${block.type}> | unsupported content type in vercel assistant message, skipping`)
@@ -544,14 +501,61 @@ function formatAssistantMessage(
     }
   }
 
-  if (assistantContent.length > 0) {
-    prompt.push({ role: 'assistant', content: assistantContent })
+  if (content.length > 0) {
+    prompt.push({ role: 'assistant', content })
+  }
+}
+
+/**
+ * Converts an image, document, or video block to LanguageModelV3 file/text parts.
+ */
+function formatMediaBlock(
+  block: ImageBlock | DocumentBlock | VideoBlock
+): Array<LanguageModelV3TextPart | LanguageModelV3FilePart> {
+  const parts: Array<LanguageModelV3TextPart | LanguageModelV3FilePart> = []
+
+  switch (block.type) {
+    case 'imageBlock': {
+      const mediaType = toMimeType(block.format) ?? `image/${block.format}`
+      if (block.source.type === 'imageSourceBytes') {
+        parts.push({ type: 'file', data: block.source.bytes, mediaType })
+      } else if (block.source.type === 'imageSourceUrl') {
+        parts.push({ type: 'file', data: new URL(block.source.url), mediaType })
+      } else {
+        logger.warn(`source_type=<${block.source.type}> | unsupported image source type, skipping`)
+      }
+      break
+    }
+    case 'documentBlock': {
+      const mediaType = toMimeType(block.format) ?? `application/${block.format}`
+      if (block.source.type === 'documentSourceBytes') {
+        parts.push({ type: 'file', data: block.source.bytes, mediaType })
+      } else if (block.source.type === 'documentSourceText') {
+        parts.push({ type: 'text', text: block.source.text })
+      } else if (block.source.type === 'documentSourceContentBlock') {
+        for (const contentBlock of block.source.content) {
+          parts.push({ type: 'text', text: contentBlock.text })
+        }
+      } else {
+        logger.warn(`source_type=<${block.source.type}> | unsupported document source type, skipping`)
+      }
+      break
+    }
+    case 'videoBlock': {
+      if (block.source.type === 'videoSourceBytes') {
+        parts.push({
+          type: 'file',
+          data: block.source.bytes,
+          mediaType: toMimeType(block.format) ?? `video/${block.format}`,
+        })
+      } else {
+        logger.warn(`source_type=<${block.source.type}> | unsupported video source type, skipping`)
+      }
+      break
+    }
   }
 
-  // Each tool result gets its own tool message to preserve ordering
-  for (const result of toolResults) {
-    prompt.push({ role: 'tool', content: [result] })
-  }
+  return parts
 }
 
 /**

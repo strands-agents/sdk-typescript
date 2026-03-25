@@ -9,7 +9,7 @@ import { APICallError } from '@ai-sdk/provider'
 import { VercelModel } from '../vercel.js'
 import { ContextWindowOverflowError, ModelError, ModelThrottledError } from '../../errors.js'
 import { collectIterator } from '../../__fixtures__/model-test-helpers.js'
-import { Message, TextBlock, ToolUseBlock, ToolResultBlock, ReasoningBlock, JsonBlock } from '../../types/messages.js'
+import { Message, TextBlock, ToolUseBlock, ToolResultBlock, ReasoningBlock } from '../../types/messages.js'
 import { DocumentBlock, ImageBlock, VideoBlock } from '../../types/media.js'
 import type { ToolSpec } from '../../tools/types.js'
 
@@ -630,7 +630,7 @@ describe('VercelModel', () => {
     })
 
     describe('assistant messages', () => {
-      it('formats text and tool use with tool results extracted to separate messages', async () => {
+      it('formats text and tool use blocks', async () => {
         const { collect, callArgs } = setupCaptureTest()
         await collect([
           new Message({
@@ -638,21 +638,18 @@ describe('VercelModel', () => {
             content: [
               new TextBlock('Let me calculate'),
               new ToolUseBlock({ name: 'calc', toolUseId: 'tu1', input: { x: 1 } }),
-              new ToolResultBlock({ toolUseId: 'tu1', status: 'success', content: [new TextBlock('42')] }),
             ],
           }),
         ])
 
         const prompt = callArgs().prompt
+        expect(prompt).toHaveLength(1)
         const assistantMsg = prompt[0] as any
         expect(assistantMsg.role).toBe('assistant')
-        expect(assistantMsg.content).toHaveLength(2) // text + tool-call (tool result extracted)
-
-        const toolMsg = prompt[1] as any
-        expect(toolMsg.role).toBe('tool')
-        expect(toolMsg.content[0].type).toBe('tool-result')
-        expect(toolMsg.content[0].toolCallId).toBe('tu1')
-        expect(toolMsg.content[0].toolName).toBe('calc')
+        expect(assistantMsg.content).toHaveLength(2)
+        expect(assistantMsg.content[0]).toEqual({ type: 'text', text: 'Let me calculate' })
+        expect(assistantMsg.content[1].type).toBe('tool-call')
+        expect(assistantMsg.content[1].toolCallId).toBe('tu1')
       })
 
       it('formats reasoning blocks', async () => {
@@ -668,107 +665,26 @@ describe('VercelModel', () => {
         expect(assistantMsg.content[0]).toEqual({ type: 'reasoning', text: 'thinking...' })
       })
 
-      it('formats error tool results', async () => {
+      it('warns and skips tool results in assistant messages', async () => {
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
         const { collect, callArgs } = setupCaptureTest()
         await collect([
           new Message({
             role: 'assistant',
             content: [
               new ToolUseBlock({ name: 'calc', toolUseId: 'tu1', input: {} }),
-              new ToolResultBlock({ toolUseId: 'tu1', status: 'error', content: [new TextBlock('failed')] }),
-            ],
-          }),
-        ])
-
-        const toolMsg = callArgs().prompt[1] as any
-        expect(toolMsg.role).toBe('tool')
-        expect(toolMsg.content[0].output).toEqual({ type: 'error-text', value: 'failed' })
-        expect(toolMsg.content[0].toolName).toBe('calc')
-      })
-
-      it('formats JSON tool results', async () => {
-        const { collect, callArgs } = setupCaptureTest()
-        await collect([
-          new Message({
-            role: 'assistant',
-            content: [
-              new ToolUseBlock({ name: 'calc', toolUseId: 'tu1', input: {} }),
-              new ToolResultBlock({
-                toolUseId: 'tu1',
-                status: 'success',
-                content: [new JsonBlock({ json: { result: 42 } })],
-              }),
-            ],
-          }),
-        ])
-
-        const toolMsg = callArgs().prompt[1] as any
-        expect(toolMsg.content[0].output).toEqual({ type: 'json', value: { result: 42 } })
-      })
-
-      it.each([
-        {
-          name: 'image bytes',
-          block: new ImageBlock({ format: 'png', source: { bytes: new Uint8Array([1]) } }),
-          expected: { type: 'file-data', mediaType: 'image/png' },
-        },
-        {
-          name: 'image URL',
-          block: new ImageBlock({ format: 'png', source: { url: 'https://example.com/img.png' } }),
-          expected: { type: 'text', text: 'https://example.com/img.png' },
-        },
-        {
-          name: 'document bytes',
-          block: new DocumentBlock({ format: 'pdf', name: 'doc', source: { bytes: new Uint8Array([1]) } }),
-          expected: { type: 'file-data', mediaType: 'application/pdf' },
-        },
-        {
-          name: 'document text',
-          block: new DocumentBlock({ format: 'txt', name: 'doc', source: { text: 'hello' } }),
-          expected: { type: 'text', text: 'hello' },
-        },
-        {
-          name: 'video bytes',
-          block: new VideoBlock({ format: 'mp4', source: { bytes: new Uint8Array([1]) } }),
-          expected: { type: 'file-data', mediaType: 'video/mp4' },
-        },
-      ])('formats $name in tool results using content variant', async ({ block, expected }) => {
-        const { collect, callArgs } = setupCaptureTest()
-        await collect([
-          new Message({
-            role: 'assistant',
-            content: [
-              new ToolUseBlock({ name: 'tool', toolUseId: 'tu1', input: {} }),
-              new ToolResultBlock({ toolUseId: 'tu1', status: 'success', content: [block] }),
-            ],
-          }),
-        ])
-
-        const output = (callArgs().prompt[1] as any).content[0].output
-        expect(output.type).toBe('content')
-        expect(output.value[0]).toMatchObject(expected)
-      })
-
-      it('creates separate tool messages for multiple tool results', async () => {
-        const { collect, callArgs } = setupCaptureTest()
-        await collect([
-          new Message({
-            role: 'assistant',
-            content: [
-              new ToolUseBlock({ name: 'search', toolUseId: 'tu1', input: { q: 'a' } }),
-              new ToolUseBlock({ name: 'calc', toolUseId: 'tu2', input: { x: 1 } }),
-              new ToolResultBlock({ toolUseId: 'tu1', status: 'success', content: [new TextBlock('result1')] }),
-              new ToolResultBlock({ toolUseId: 'tu2', status: 'success', content: [new TextBlock('result2')] }),
+              new ToolResultBlock({ toolUseId: 'tu1', status: 'success', content: [new TextBlock('42')] }),
             ],
           }),
         ])
 
         const prompt = callArgs().prompt
-        expect(prompt).toHaveLength(3) // assistant + 2 tool messages
-        expect((prompt[1] as any).content[0].toolCallId).toBe('tu1')
-        expect((prompt[1] as any).content[0].toolName).toBe('search')
-        expect((prompt[2] as any).content[0].toolCallId).toBe('tu2')
-        expect((prompt[2] as any).content[0].toolName).toBe('calc')
+        expect(prompt).toHaveLength(1)
+        const assistantMsg = prompt[0] as any
+        expect(assistantMsg.content).toHaveLength(1)
+        expect(assistantMsg.content[0].type).toBe('tool-call')
+        expect(warnSpy).toHaveBeenCalled()
+        warnSpy.mockRestore()
       })
 
       it('handles assistant message with no tool results', async () => {
