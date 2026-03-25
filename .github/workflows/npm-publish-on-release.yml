@@ -58,7 +58,7 @@ jobs:
 
     - name: Validate version
       run: |
-        if [[ ${{ steps.version.outputs.version }} =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        if [[ ${{ steps.version.outputs.version }} =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
             echo "Valid version format"
             exit 0
         else
