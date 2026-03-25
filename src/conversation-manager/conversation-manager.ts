@@ -73,9 +73,10 @@ export abstract class ConversationManager implements Plugin {
    * was performed, `false` otherwise.
    *
    * @param options - The reduction options
-   * @returns `true` if the history was reduced, `false` otherwise
+   * @returns `true` if the history was reduced, `false` otherwise.
+   *   May return a `Promise` for implementations that need async I/O (e.g. model calls).
    */
-  abstract reduce(options: ConversationManagerReduceOptions): boolean
+  abstract reduce(options: ConversationManagerReduceOptions): boolean | Promise<boolean>
 
   /**
    * Initialize the conversation manager with the agent instance.
@@ -90,9 +91,9 @@ export abstract class ConversationManager implements Plugin {
    * @param agent - The agent to register hooks with
    */
   initAgent(agent: LocalAgent): void {
-    agent.addHook(AfterModelCallEvent, (event) => {
+    agent.addHook(AfterModelCallEvent, async (event) => {
       if (event.error instanceof ContextWindowOverflowError) {
-        if (this.reduce({ agent: event.agent, error: event.error })) {
+        if (await this.reduce({ agent: event.agent, error: event.error })) {
           event.retry = true
         }
       }
