@@ -29,6 +29,10 @@ export class A2AStreamUpdateEvent extends StreamEvent {
     super()
     this.event = event
   }
+
+  toJSON(): Pick<A2AStreamUpdateEvent, 'type' | 'event'> {
+    return { type: this.type, event: this.event }
+  }
 }
 
 /**
@@ -42,6 +46,10 @@ export class A2AResultEvent extends StreamEvent {
   constructor(data: Pick<AgentResultEvent, 'result'>) {
     super()
     this.result = data.result
+  }
+
+  toJSON(): Pick<A2AResultEvent, 'type' | 'result'> {
+    return { type: this.type, result: this.result }
   }
 }
 

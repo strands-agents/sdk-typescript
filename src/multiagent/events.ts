@@ -15,6 +15,10 @@ export class MultiAgentInitializedEvent extends HookableEvent {
     super()
     this.orchestrator = data.orchestrator
   }
+
+  toJSON(): Pick<MultiAgentInitializedEvent, 'type'> {
+    return { type: this.type }
+  }
 }
 
 /**
@@ -29,6 +33,10 @@ export class BeforeMultiAgentInvocationEvent extends HookableEvent {
     super()
     this.orchestrator = data.orchestrator
     this.state = data.state
+  }
+
+  toJSON(): Pick<BeforeMultiAgentInvocationEvent, 'type'> {
+    return { type: this.type }
   }
 }
 
@@ -48,6 +56,10 @@ export class AfterMultiAgentInvocationEvent extends HookableEvent {
 
   override _shouldReverseCallbacks(): boolean {
     return true
+  }
+
+  toJSON(): Pick<AfterMultiAgentInvocationEvent, 'type'> {
+    return { type: this.type }
   }
 }
 
@@ -74,6 +86,10 @@ export class BeforeNodeCallEvent extends HookableEvent {
     this.state = data.state
     this.nodeId = data.nodeId
   }
+
+  toJSON(): Pick<BeforeNodeCallEvent, 'type' | 'nodeId'> {
+    return { type: this.type, nodeId: this.nodeId }
+  }
 }
 
 /**
@@ -98,6 +114,14 @@ export class AfterNodeCallEvent extends HookableEvent {
 
   override _shouldReverseCallbacks(): boolean {
     return true
+  }
+
+  toJSON(): Pick<AfterNodeCallEvent, 'type' | 'nodeId'> & { error?: { message?: string } } {
+    return {
+      type: this.type,
+      nodeId: this.nodeId,
+      ...(this.error !== undefined && { error: { message: this.error.message } }),
+    }
   }
 }
 
@@ -141,6 +165,10 @@ export class NodeStreamUpdateEvent extends HookableEvent {
     this.state = data.state
     this.inner = data.inner
   }
+
+  toJSON(): Pick<NodeStreamUpdateEvent, 'type' | 'nodeId' | 'nodeType' | 'inner'> {
+    return { type: this.type, nodeId: this.nodeId, nodeType: this.nodeType, inner: this.inner }
+  }
 }
 
 /**
@@ -161,6 +189,10 @@ export class NodeResultEvent extends HookableEvent {
     this.state = data.state
     this.result = data.result
   }
+
+  toJSON(): Pick<NodeResultEvent, 'type' | 'nodeId' | 'nodeType' | 'result'> {
+    return { type: this.type, nodeId: this.nodeId, nodeType: this.nodeType, result: this.result }
+  }
 }
 
 /**
@@ -177,6 +209,10 @@ export class MultiAgentHandoffEvent extends HookableEvent {
     this.source = data.source
     this.targets = data.targets
     this.state = data.state
+  }
+
+  toJSON(): Pick<MultiAgentHandoffEvent, 'type' | 'source' | 'targets'> {
+    return { type: this.type, source: this.source, targets: this.targets }
   }
 }
 
@@ -195,6 +231,10 @@ export class NodeCancelEvent extends HookableEvent {
     this.state = data.state
     this.message = data.message
   }
+
+  toJSON(): Pick<NodeCancelEvent, 'type' | 'nodeId' | 'message'> {
+    return { type: this.type, nodeId: this.nodeId, message: this.message }
+  }
 }
 
 /**
@@ -208,6 +248,10 @@ export class MultiAgentResultEvent extends HookableEvent {
   constructor(data: { result: MultiAgentResult }) {
     super()
     this.result = data.result
+  }
+
+  toJSON(): Pick<MultiAgentResultEvent, 'type' | 'result'> {
+    return { type: this.type, result: this.result }
   }
 }
 
