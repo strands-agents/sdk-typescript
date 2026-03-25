@@ -236,6 +236,19 @@ describe('AfterNodeCallEvent', () => {
       })
     })
 
+    it('serializes without error', () => {
+      const event = new AfterNodeCallEvent({
+        orchestrator: mockOrchestrator,
+        state: new MultiAgentState(),
+        nodeId: 'node-1',
+      })
+
+      expect(JSON.parse(JSON.stringify(event))).toStrictEqual({
+        type: 'afterNodeCallEvent',
+        nodeId: 'node-1',
+      })
+    })
+
     it('only excludes expected fields', () => {
       const json = event.toJSON()
       expect(Object.keys(event).filter((k) => !(k in json))).toStrictEqual(['orchestrator', 'state'])
