@@ -26,7 +26,8 @@ import { APICallError } from '@ai-sdk/provider'
 import type { SystemPrompt, StopReason } from '../types/messages.js'
 import type { ToolChoice, ToolSpec } from '../tools/types.js'
 import type { ModelStreamEvent, Usage } from './streaming.js'
-import { Message, TextBlock } from '../types/messages.js'
+import { Message, TextBlock, type ToolResultContent } from '../types/messages.js'
+import { encodeBase64 } from '../types/media.js'
 import { Model, type BaseModelConfig, type StreamOptions } from './model.js'
 import {
   ModelContentBlockDeltaEvent,
@@ -74,6 +75,21 @@ type LanguageModelCallSettings = Omit<LanguageModelV3CallOptions, 'prompt' | 'to
 export interface VercelModelConfig extends BaseModelConfig, LanguageModelCallSettings {}
 
 /**
+ * Options for creating a VercelModel instance.
+ */
+export interface VercelModelOptions {
+  /**
+   * A LanguageModelV3 instance from any Vercel provider.
+   */
+  model: LanguageModelV3
+
+  /**
+   * Optional configuration overrides.
+   */
+  config?: Partial<VercelModelConfig>
+}
+
+/**
  * Adapter that wraps a LanguageModelV3 instance
  * for use as a Strands model provider.
  *
@@ -83,11 +99,11 @@ export interface VercelModelConfig extends BaseModelConfig, LanguageModelCallSet
  * @example
  * ```typescript
  * import { Agent } from '@strands-agents/sdk'
- * import { VercelModel } from '@strands-agents/sdk/vercel'
+ * import { VercelModel } from '@strands-agents/sdk/models/vercel'
  * import { bedrock } from '@ai-sdk/amazon-bedrock'
  *
  * const agent = new Agent({
- *   model: new VercelModel(bedrock('us.anthropic.claude-sonnet-4-20250514-v1:0')),
+ *   model: new VercelModel({ model: bedrock('us.anthropic.claude-sonnet-4-20250514-v1:0') }),
  * })
  *
  * for await (const event of agent.stream('Hello!')) {
@@ -104,15 +120,14 @@ export class VercelModel extends Model<VercelModelConfig> {
   /**
    * Creates a new VercelModel instance.
    *
-   * @param model - A LanguageModelV3 instance from any Vercel provider
-   * @param config - Optional configuration overrides
+   * @param options - The model and optional configuration
    */
-  constructor(model: LanguageModelV3, config?: Partial<VercelModelConfig>) {
+  constructor(options: VercelModelOptions) {
     super()
-    this._model = model
-    const { modelId, maxTokens, ...callSettings } = config ?? {}
+    this._model = options.model
+    const { modelId, maxTokens, ...callSettings } = options.config ?? {}
     this._config = {
-      modelId: modelId ?? model.modelId,
+      modelId: modelId ?? options.model.modelId,
       ...(maxTokens != null && { maxTokens }),
       ...callSettings,
     }
@@ -152,11 +167,18 @@ export class VercelModel extends Model<VercelModelConfig> {
     const incrementalToolCallIds = new Set<string>()
     try {
       while (true) {
-        const { done, value } = await reader.read()
+        let readResult
+        try {
+          readResult = await reader.read()
+        } catch (error) {
+          throw classifyError(error)
+        }
+        const { done, value } = readResult
         if (done) break
         if (value.type === 'tool-input-start') {
           incrementalToolCallIds.add(value.id)
         }
+        // Skip complete tool-call events when we already received incremental tool-input-* events for the same call
         if (value.type === 'tool-call' && incrementalToolCallIds.has(value.toolCallId)) {
           continue
         }
@@ -262,7 +284,10 @@ function* mapStreamPart(part: LanguageModelV3StreamPart): Generator<ModelStreamE
       })
       yield new ModelContentBlockDeltaEvent({
         type: 'modelContentBlockDeltaEvent',
-        delta: { type: 'toolUseInputDelta', input: part.input },
+        delta: {
+          type: 'toolUseInputDelta',
+          input: typeof part.input === 'string' ? part.input : JSON.stringify(part.input),
+        },
       })
       yield new ModelContentBlockStopEvent({ type: 'modelContentBlockStopEvent' })
       break
@@ -284,8 +309,8 @@ function* mapStreamPart(part: LanguageModelV3StreamPart): Generator<ModelStreamE
         { cause: part.error }
       )
 
-    // Ignore: tool-call (complete, we use incremental), response-metadata, raw, source, file, tool-result, tool-approval-request
     default:
+      logger.warn(`event_type=<${part.type}> | unsupported vercel stream event type, skipping`)
       break
   }
 }
@@ -303,8 +328,12 @@ function mapFinishReason(finishReason: LanguageModelV3FinishReason): StopReason 
       return 'contentFiltered'
     case 'tool-calls':
       return 'toolUse'
-    case 'error':
     case 'other':
+      return 'endTurn'
+    case 'error':
+      throw new ModelError(`model finished with error | raw=<${finishReason.raw}>`)
+    default:
+      logger.warn(`finish_reason=<${finishReason.unified}> | unknown vercel finish reason, defaulting to endTurn`)
       return 'endTurn'
   }
 }
@@ -331,15 +360,35 @@ function formatMessages(messages: Message[], systemPrompt?: SystemPrompt): Langu
   const prompt: LanguageModelV3Prompt = []
 
   if (systemPrompt) {
-    const text =
-      typeof systemPrompt === 'string'
-        ? systemPrompt
-        : systemPrompt
-            .filter(isTextBlock)
-            .map((block) => block.text)
-            .join('\n')
-    if (text) {
-      prompt.push({ role: 'system', content: text })
+    if (typeof systemPrompt === 'string') {
+      prompt.push({ role: 'system', content: systemPrompt })
+    } else {
+      const textBlocks: string[] = []
+      let hasCachePoints = false
+      let hasGuardContent = false
+
+      for (const block of systemPrompt) {
+        if (isTextBlock(block)) {
+          textBlocks.push(block.text)
+        } else if (block.type === 'cachePointBlock') {
+          hasCachePoints = true
+        } else if (block.type === 'guardContentBlock') {
+          hasGuardContent = true
+        }
+      }
+
+      if (hasCachePoints) {
+        logger.warn('cache points are not supported in vercel system prompts, ignoring cache points')
+      }
+
+      if (hasGuardContent) {
+        logger.warn('guard content is not supported in vercel system prompts, removing guard content block')
+      }
+
+      const text = textBlocks.join('')
+      if (text) {
+        prompt.push({ role: 'system', content: text })
+      }
     }
   }
 
@@ -431,6 +480,7 @@ function formatUserMessage(message: Message, prompt: LanguageModelV3Prompt, tool
         })
         break
       default:
+        logger.warn(`block_type=<${block.type}> | unsupported content type in vercel user message, skipping`)
         break
     }
   }
@@ -489,6 +539,7 @@ function formatAssistantMessage(
         })
         break
       default:
+        logger.warn(`block_type=<${block.type}> | unsupported content type in vercel assistant message, skipping`)
         break
     }
   }
@@ -508,11 +559,11 @@ function formatAssistantMessage(
  */
 function formatToolResultOutput(
   status: string,
-  content: ReadonlyArray<{ type: string; text?: string; json?: unknown }>
+  content: ReadonlyArray<ToolResultContent>
 ): LanguageModelV3ToolResultOutput {
   if (status === 'error') {
     const errorText = content
-      .filter((c): c is { type: string; text: string } => 'text' in c && typeof c.text === 'string')
+      .filter((c): c is ToolResultContent & { text: string } => 'text' in c && typeof c.text === 'string')
       .map((c) => c.text)
       .join('\n')
     return { type: 'error-text', value: errorText || 'Tool execution failed' }
@@ -520,19 +571,57 @@ function formatToolResultOutput(
 
   if (content.length === 1) {
     const item = content[0]!
-    if ('text' in item && typeof item.text === 'string') {
-      return { type: 'text', value: item.text }
-    }
-    if ('json' in item && item.json != null) {
-      return { type: 'json', value: item.json as Parameters<typeof JSON.stringify>[0] }
-    }
+    if (item.type === 'textBlock') return { type: 'text', value: item.text }
+    if (item.type === 'jsonBlock') return { type: 'json', value: item.json as Parameters<typeof JSON.stringify>[0] }
   }
 
-  const text = content
-    .filter((c): c is { type: string; text: string } => 'text' in c && typeof c.text === 'string')
-    .map((c) => c.text)
-    .join('\n')
-  return { type: 'text', value: text || '' }
+  const value: Array<{ type: 'text'; text: string } | { type: 'file-data'; data: string; mediaType: string }> = []
+  for (const c of content) {
+    switch (c.type) {
+      case 'textBlock':
+        value.push({ type: 'text', text: c.text })
+        break
+      case 'jsonBlock':
+        value.push({ type: 'text', text: JSON.stringify(c.json) })
+        break
+      case 'imageBlock': {
+        const mediaType = toMimeType(c.format) ?? `image/${c.format}`
+        if (c.source.type === 'imageSourceBytes') {
+          value.push({ type: 'file-data', data: encodeBase64(c.source.bytes), mediaType })
+        } else if (c.source.type === 'imageSourceUrl') {
+          value.push({ type: 'text', text: c.source.url })
+        } else {
+          logger.warn(`source_type=<${c.source.type}> | unsupported image source in vercel tool result, skipping`)
+        }
+        break
+      }
+      case 'documentBlock': {
+        const mediaType = toMimeType(c.format) ?? `application/${c.format}`
+        if (c.source.type === 'documentSourceBytes') {
+          value.push({ type: 'file-data', data: encodeBase64(c.source.bytes), mediaType })
+        } else if (c.source.type === 'documentSourceText') {
+          value.push({ type: 'text', text: c.source.text })
+        } else if (c.source.type === 'documentSourceContentBlock') {
+          for (const block of c.source.content) {
+            value.push({ type: 'text', text: block.text })
+          }
+        } else {
+          logger.warn(`source_type=<${c.source.type}> | unsupported document source in vercel tool result, skipping`)
+        }
+        break
+      }
+      case 'videoBlock': {
+        const mediaType = toMimeType(c.format) ?? `video/${c.format}`
+        if (c.source.type === 'videoSourceBytes') {
+          value.push({ type: 'file-data', data: encodeBase64(c.source.bytes), mediaType })
+        } else {
+          logger.warn(`source_type=<${c.source.type}> | unsupported video source in vercel tool result, skipping`)
+        }
+        break
+      }
+    }
+  }
+  return { type: 'content', value }
 }
 
 /**

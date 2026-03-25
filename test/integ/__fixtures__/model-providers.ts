@@ -208,9 +208,12 @@ export const vercelBedrock = {
     const { providerOptions, ...rest } = config as Partial<VercelModelConfig> & {
       providerOptions?: Record<string, unknown>
     }
-    return new VercelModel(provider('us.anthropic.claude-sonnet-4-20250514-v1:0'), {
-      ...rest,
-      ...(providerOptions && { providerOptions }),
+    return new VercelModel({
+      model: provider('us.anthropic.claude-sonnet-4-20250514-v1:0'),
+      config: {
+        ...rest,
+        ...(providerOptions && { providerOptions }),
+      },
     })
   },
 }
@@ -244,9 +247,12 @@ export const vercelOpenAI = {
     const { providerOptions, ...rest } = config as Partial<VercelModelConfig> & {
       providerOptions?: Record<string, unknown>
     }
-    return new VercelModel(provider('gpt-4o'), {
-      ...rest,
-      ...(providerOptions && { providerOptions }),
+    return new VercelModel({
+      model: provider('gpt-4o'),
+      config: {
+        ...rest,
+        ...(providerOptions && { providerOptions }),
+      },
     })
   },
 }

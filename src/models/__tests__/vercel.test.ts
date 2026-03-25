@@ -67,7 +67,7 @@ function setupCaptureTest(
   collect: (messages: Message[], options?: Parameters<VercelModel['stream']>[1]) => ReturnType<typeof collectIterator>
 } {
   const mock = createMockModel(parts)
-  const model = new VercelModel(mock, config)
+  const model = new VercelModel({ model: mock, ...(config && { config }) })
   return {
     model,
     mock,
@@ -84,21 +84,24 @@ describe('VercelModel', () => {
   describe('constructor and config', () => {
     it('uses model.modelId as default and allows override', () => {
       const mock = createMockModel([])
-      expect(new VercelModel(mock).getConfig().modelId).toBe('test-model')
-      expect(new VercelModel(mock, { modelId: 'custom-id' }).getConfig().modelId).toBe('custom-id')
+      expect(new VercelModel({ model: mock }).getConfig().modelId).toBe('test-model')
+      expect(new VercelModel({ model: mock, config: { modelId: 'custom-id' } }).getConfig().modelId).toBe('custom-id')
     })
 
     it('passes through all config fields', () => {
       const mock = createMockModel([])
-      const model = new VercelModel(mock, {
-        maxTokens: 100,
-        temperature: 0.5,
-        topP: 0.9,
-        topK: 40,
-        presencePenalty: 0.5,
-        frequencyPenalty: 0.3,
-        stopSequences: ['END'],
-        seed: 42,
+      const model = new VercelModel({
+        model: mock,
+        config: {
+          maxTokens: 100,
+          temperature: 0.5,
+          topP: 0.9,
+          topK: 40,
+          presencePenalty: 0.5,
+          frequencyPenalty: 0.3,
+          stopSequences: ['END'],
+          seed: 42,
+        },
       })
       expect(model.getConfig()).toStrictEqual({
         modelId: 'test-model',
@@ -115,7 +118,7 @@ describe('VercelModel', () => {
 
     it('updateConfig merges config and getConfig returns a copy', () => {
       const mock = createMockModel([])
-      const model = new VercelModel(mock)
+      const model = new VercelModel({ model: mock })
       model.updateConfig({ modelId: 'updated', maxTokens: 200 })
       const config1 = model.getConfig()
       const config2 = model.getConfig()
@@ -200,6 +203,26 @@ describe('VercelModel', () => {
         expect(events[5]).toMatchObject({ type: 'modelMessageStopEvent', stopReason: 'toolUse' })
       })
 
+      it('normalizes object tool-call input to JSON string', async () => {
+        const { model } = setupCaptureTest([
+          { type: 'stream-start', warnings: [] },
+          {
+            type: 'tool-call',
+            toolCallId: 'call_1',
+            toolName: 'calculator',
+            input: { expr: '2+2' } as unknown as string,
+          },
+          { type: 'finish', usage: testUsage, finishReason: { unified: 'tool-calls', raw: 'tool_calls' } },
+        ])
+
+        const events = await collectIterator(model.stream([]))
+
+        expect(events[2]).toMatchObject({
+          type: 'modelContentBlockDeltaEvent',
+          delta: { type: 'toolUseInputDelta', input: '{"expr":"2+2"}' },
+        })
+      })
+
       it('skips duplicate tool-call when incremental tool-input events were already emitted', async () => {
         const { model } = setupCaptureTest([
           { type: 'stream-start', warnings: [] },
@@ -253,7 +276,6 @@ describe('VercelModel', () => {
         ['length', 'maxTokens'],
         ['content-filter', 'contentFiltered'],
         ['tool-calls', 'toolUse'],
-        ['error', 'endTurn'],
         ['other', 'endTurn'],
       ] as const)('maps Language Model "%s" to Strands "%s"', async (unified, expected) => {
         const { model } = setupCaptureTest([
@@ -264,6 +286,15 @@ describe('VercelModel', () => {
         const events = await collectIterator(model.stream([]))
         const stopEvent = events.find((e) => e.type === 'modelMessageStopEvent')
         expect(stopEvent?.stopReason).toBe(expected)
+      })
+
+      it('throws ModelError for error finish reason', async () => {
+        const { model } = setupCaptureTest([
+          { type: 'stream-start', warnings: [] },
+          { type: 'finish', usage: testUsage, finishReason: { unified: 'error', raw: 'internal_error' } },
+        ])
+
+        await expect(collectIterator(model.stream([]))).rejects.toThrow(ModelError)
       })
     })
 
@@ -373,6 +404,28 @@ describe('VercelModel', () => {
 
         await expect(collectIterator(model.stream([]))).rejects.toThrow(ContextWindowOverflowError)
       })
+
+      it('classifies errors thrown during reader.read()', async () => {
+        const mock = createMockModel([])
+        ;(mock.doStream as ReturnType<typeof vi.fn>).mockResolvedValue({
+          stream: new ReadableStream({
+            start(controller) {
+              controller.enqueue({ type: 'stream-start', warnings: [] })
+              controller.error(
+                new APICallError({
+                  message: 'Too many requests',
+                  url: 'https://api.example.com',
+                  requestBodyValues: {},
+                  statusCode: 429,
+                })
+              )
+            },
+          }),
+        })
+        const model = new VercelModel({ model: mock })
+
+        await expect(collectIterator(model.stream([]))).rejects.toThrow(ModelThrottledError)
+      })
     })
 
     describe('call options forwarding', () => {
@@ -422,6 +475,7 @@ describe('VercelModel', () => {
     })
 
     it('skips unknown stream parts without error', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
       const { model } = setupCaptureTest([
         { type: 'stream-start', warnings: [] },
         { type: 'text-start', id: 't1' },
@@ -433,6 +487,8 @@ describe('VercelModel', () => {
 
       const events = await collectIterator(model.stream([]))
       expect(events.map((e) => e.type)).not.toContain('response-metadata')
+      expect(warnSpy).toHaveBeenCalled()
+      warnSpy.mockRestore()
     })
   })
 
@@ -449,7 +505,37 @@ describe('VercelModel', () => {
         const { collect, callArgs } = setupCaptureTest()
         await collect([], { systemPrompt: [{ text: 'Part 1' }, { text: 'Part 2' }] as any })
 
-        expect(callArgs().prompt[0]).toEqual({ role: 'system', content: 'Part 1\nPart 2' })
+        expect(callArgs().prompt[0]).toEqual({ role: 'system', content: 'Part 1Part 2' })
+      })
+
+      it('ignores cache points in system prompt', async () => {
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+        const { collect, callArgs } = setupCaptureTest()
+        await collect([], {
+          systemPrompt: [
+            { type: 'textBlock', text: 'Hello' },
+            { type: 'cachePointBlock', cacheType: 'default' },
+          ] as any,
+        })
+
+        expect(callArgs().prompt[0]).toEqual({ role: 'system', content: 'Hello' })
+        expect(warnSpy).toHaveBeenCalled()
+        warnSpy.mockRestore()
+      })
+
+      it('ignores guard content in system prompt', async () => {
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+        const { collect, callArgs } = setupCaptureTest()
+        await collect([], {
+          systemPrompt: [
+            { type: 'textBlock', text: 'Hello' },
+            { type: 'guardContentBlock', guardContent: {} },
+          ] as any,
+        })
+
+        expect(callArgs().prompt[0]).toEqual({ role: 'system', content: 'Hello' })
+        expect(warnSpy).toHaveBeenCalled()
+        warnSpy.mockRestore()
       })
     })
 
@@ -524,7 +610,6 @@ describe('VercelModel', () => {
             format: 'png',
             source: { location: { type: 's3', uri: 's3://bucket/key', bucketOwner: '' } },
           }),
-          pattern: 'unsupported image source type',
         },
         {
           name: 'video S3 source',
@@ -532,14 +617,14 @@ describe('VercelModel', () => {
             format: 'mp4',
             source: { location: { type: 's3', uri: 's3://bucket/video', bucketOwner: '' } },
           }),
-          pattern: 'unsupported video source type',
         },
-      ])('logs warning for unsupported $name', async ({ block, pattern }) => {
-        const warnSpy = vi.spyOn(await import('../../logging/logger.js').then((m) => m.logger), 'warn')
-        const { collect } = setupCaptureTest()
+      ])('skips unsupported $name', async ({ block }) => {
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+        const { collect, callArgs } = setupCaptureTest()
         await collect([new Message({ role: 'user', content: [block] })])
 
-        expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining(pattern))
+        expect(callArgs().prompt).toHaveLength(0)
+        expect(warnSpy).toHaveBeenCalled()
         warnSpy.mockRestore()
       })
     })
@@ -619,6 +704,49 @@ describe('VercelModel', () => {
 
         const toolMsg = callArgs().prompt[1] as any
         expect(toolMsg.content[0].output).toEqual({ type: 'json', value: { result: 42 } })
+      })
+
+      it.each([
+        {
+          name: 'image bytes',
+          block: new ImageBlock({ format: 'png', source: { bytes: new Uint8Array([1]) } }),
+          expected: { type: 'file-data', mediaType: 'image/png' },
+        },
+        {
+          name: 'image URL',
+          block: new ImageBlock({ format: 'png', source: { url: 'https://example.com/img.png' } }),
+          expected: { type: 'text', text: 'https://example.com/img.png' },
+        },
+        {
+          name: 'document bytes',
+          block: new DocumentBlock({ format: 'pdf', name: 'doc', source: { bytes: new Uint8Array([1]) } }),
+          expected: { type: 'file-data', mediaType: 'application/pdf' },
+        },
+        {
+          name: 'document text',
+          block: new DocumentBlock({ format: 'txt', name: 'doc', source: { text: 'hello' } }),
+          expected: { type: 'text', text: 'hello' },
+        },
+        {
+          name: 'video bytes',
+          block: new VideoBlock({ format: 'mp4', source: { bytes: new Uint8Array([1]) } }),
+          expected: { type: 'file-data', mediaType: 'video/mp4' },
+        },
+      ])('formats $name in tool results using content variant', async ({ block, expected }) => {
+        const { collect, callArgs } = setupCaptureTest()
+        await collect([
+          new Message({
+            role: 'assistant',
+            content: [
+              new ToolUseBlock({ name: 'tool', toolUseId: 'tu1', input: {} }),
+              new ToolResultBlock({ toolUseId: 'tu1', status: 'success', content: [block] }),
+            ],
+          }),
+        ])
+
+        const output = (callArgs().prompt[1] as any).content[0].output
+        expect(output.type).toBe('content')
+        expect(output.value[0]).toMatchObject(expected)
       })
 
       it('creates separate tool messages for multiple tool results', async () => {
