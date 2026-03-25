@@ -309,6 +309,10 @@ function* mapStreamPart(part: LanguageModelV3StreamPart): Generator<ModelStreamE
         { cause: part.error }
       )
 
+    case 'response-metadata':
+      logger.debug(`event_type=<${part.type}>, id=<${part.id}>, modelId=<${part.modelId}> | response metadata`)
+      break
+
     default:
       logger.warn(`event_type=<${part.type}> | unsupported vercel stream event type, skipping`)
       break

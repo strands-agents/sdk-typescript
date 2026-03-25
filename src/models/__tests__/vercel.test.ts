@@ -8,6 +8,7 @@ import type {
 import { APICallError } from '@ai-sdk/provider'
 import { VercelModel } from '../vercel.js'
 import { ContextWindowOverflowError, ModelError, ModelThrottledError } from '../../errors.js'
+import { logger } from '../../logging/logger.js'
 import { collectIterator } from '../../__fixtures__/model-test-helpers.js'
 import { Message, TextBlock, ToolUseBlock, ToolResultBlock, ReasoningBlock } from '../../types/messages.js'
 import { DocumentBlock, ImageBlock, VideoBlock } from '../../types/media.js'
@@ -474,8 +475,8 @@ describe('VercelModel', () => {
       })
     })
 
-    it('skips unknown stream parts without error', async () => {
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    it('logs response-metadata at debug level', async () => {
+      const debugSpy = vi.spyOn(logger, 'debug').mockImplementation(() => {})
       const { model } = setupCaptureTest([
         { type: 'stream-start', warnings: [] },
         { type: 'text-start', id: 't1' },
@@ -487,8 +488,8 @@ describe('VercelModel', () => {
 
       const events = await collectIterator(model.stream([]))
       expect(events.map((e) => e.type)).not.toContain('response-metadata')
-      expect(warnSpy).toHaveBeenCalled()
-      warnSpy.mockRestore()
+      expect(debugSpy).toHaveBeenCalled()
+      debugSpy.mockRestore()
     })
   })
 
