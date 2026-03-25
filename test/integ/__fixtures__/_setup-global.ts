@@ -78,7 +78,7 @@ export async function setup(project: TestProject): Promise<() => void> {
   project.provide('provider-anthropic', await getAnthropicTestContext(isCI))
   project.provide('provider-gemini', await getGeminiTestContext(isCI))
 
-  const a2aContext = await getA2AServerContext()
+  const a2aContext = await getA2AServerContext(project)
   project.provide('a2a-server', { shouldSkip: a2aContext.shouldSkip, url: a2aContext.url })
 
   return () => {
@@ -162,53 +162,63 @@ async function getGeminiTestContext(_isCI: boolean): Promise<ProvidedContext['pr
   }
 }
 
-async function getA2AServerContext(): Promise<ProvidedContext['a2a-server'] & { abort?: () => void }> {
-  try {
-    const credentialProvider = fromNodeProviderChain()
-    const credentials = await credentialProvider()
+async function getA2AServerContext(
+  project: TestProject
+): Promise<ProvidedContext['a2a-server'] & { abort?: () => void }> {
+  const { testFiles } = await project.globTestFiles()
+  const hasA2ATests = testFiles.some((f) => f.includes('/a2a/'))
 
-    const model = new BedrockModel({ clientConfig: { credentials } })
-    const agent = new Agent({
-      model,
-      printer: false,
-      systemPrompt: 'You are a helpful assistant. Always respond in a single short sentence.',
-    })
-
-    const a2aServer = new A2AExpressServer({
-      agent,
-      name: 'Test A2A Agent',
-      description: 'Integration test agent',
-    })
-
-    // Use createMiddleware() with CORS headers so browser integ tests can reach the server.
-    // Browser tests run on a different port (Vitest dev server), making this a cross-origin request.
-    const app = express()
-    app.use((_req, res, next) => {
-      res.setHeader('Access-Control-Allow-Origin', '*')
-      res.setHeader('Access-Control-Allow-Methods', '*')
-      res.setHeader('Access-Control-Allow-Headers', '*')
-      next()
-    })
-    app.use(a2aServer.createMiddleware())
-
-    return new Promise((resolve, reject) => {
-      const server = app.listen(0, '127.0.0.1', () => {
-        const addr = server.address() as { port: number }
-        const url = `http://127.0.0.1:${addr.port}`
-        // Update the agent card URL to reflect the actual bound port.
-        // createMiddleware() doesn't do this automatically (unlike serve()).
-        a2aServer.agentCard.url = url
-        console.log(`⏭️  A2A server started on ${url}`)
-        resolve({
-          shouldSkip: false,
-          url,
-          abort: () => server.close(),
-        })
-      })
-      server.on('error', reject)
-    })
-  } catch {
-    console.log('⏭️  A2A server not available - A2A integration tests will be skipped')
+  if (!hasA2ATests) {
     return { shouldSkip: true, url: undefined }
   }
+
+  let credentials
+  try {
+    const credentialProvider = fromNodeProviderChain()
+    credentials = await credentialProvider()
+  } catch {
+    console.log('⏭️  A2A server not available (no Bedrock credentials) - A2A integration tests will be skipped')
+    return { shouldSkip: true, url: undefined }
+  }
+
+  const model = new BedrockModel({ clientConfig: { credentials } })
+  const agent = new Agent({
+    model,
+    printer: false,
+    systemPrompt: 'You are a helpful assistant. Always respond in a single short sentence.',
+  })
+
+  const a2aServer = new A2AExpressServer({
+    agent,
+    name: 'Test A2A Agent',
+    description: 'Integration test agent',
+  })
+
+  // Use createMiddleware() with CORS headers so browser integ tests can reach the server.
+  // Browser tests run on a different port (Vitest dev server), making this a cross-origin request.
+  const app = express()
+  app.use((_req, res, next) => {
+    res.setHeader('Access-Control-Allow-Origin', '*')
+    res.setHeader('Access-Control-Allow-Methods', '*')
+    res.setHeader('Access-Control-Allow-Headers', '*')
+    next()
+  })
+  app.use(a2aServer.createMiddleware())
+
+  return new Promise((resolve, reject) => {
+    const server = app.listen(0, '127.0.0.1', () => {
+      const addr = server.address() as { port: number }
+      const url = `http://127.0.0.1:${addr.port}`
+      // Update the agent card URL to reflect the actual bound port.
+      // createMiddleware() doesn't do this automatically (unlike serve()).
+      a2aServer.agentCard.url = url
+      console.log(`⏭️  A2A server started on ${url}`)
+      resolve({
+        shouldSkip: false,
+        url,
+        abort: () => server.close(),
+      })
+    })
+    server.on('error', reject)
+  })
 }
