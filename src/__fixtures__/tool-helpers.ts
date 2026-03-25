@@ -24,6 +24,7 @@ export function createMockContext(
   return {
     toolUse,
     agent: {
+      id: 'mock-agent',
       appState: new StateStore(appState),
       messages: [],
       toolRegistry: new ToolRegistry(),

@@ -89,6 +89,14 @@ export class InitializedEvent extends HookableEvent {
     super()
     this.agent = data.agent
   }
+
+  /**
+   * Serializes for wire transport, excluding the agent reference.
+   * Called automatically by JSON.stringify().
+   */
+  toJSON(): Pick<InitializedEvent, 'type'> {
+    return { type: this.type }
+  }
 }
 
 /**
@@ -102,6 +110,14 @@ export class BeforeInvocationEvent extends HookableEvent {
   constructor(data: { agent: LocalAgent }) {
     super()
     this.agent = data.agent
+  }
+
+  /**
+   * Serializes for wire transport, excluding the agent reference.
+   * Called automatically by JSON.stringify().
+   */
+  toJSON(): Pick<BeforeInvocationEvent, 'type'> {
+    return { type: this.type }
   }
 }
 
@@ -122,6 +138,14 @@ export class AfterInvocationEvent extends HookableEvent {
   override _shouldReverseCallbacks(): boolean {
     return true
   }
+
+  /**
+   * Serializes for wire transport, excluding the agent reference.
+   * Called automatically by JSON.stringify().
+   */
+  toJSON(): Pick<AfterInvocationEvent, 'type'> {
+    return { type: this.type }
+  }
 }
 
 /**
@@ -138,6 +162,14 @@ export class MessageAddedEvent extends HookableEvent {
     super()
     this.agent = data.agent
     this.message = data.message
+  }
+
+  /**
+   * Serializes for wire transport, excluding the agent reference.
+   * Called automatically by JSON.stringify().
+   */
+  toJSON(): Pick<MessageAddedEvent, 'type' | 'message'> {
+    return { type: this.type, message: this.message }
   }
 }
 
@@ -172,6 +204,14 @@ export class BeforeToolCallEvent extends HookableEvent {
     this.agent = data.agent
     this.toolUse = data.toolUse
     this.tool = data.tool
+  }
+
+  /**
+   * Serializes for wire transport, excluding the agent reference, tool instance, and mutable cancel flag.
+   * Called automatically by JSON.stringify().
+   */
+  toJSON(): Pick<BeforeToolCallEvent, 'type' | 'toolUse'> {
+    return { type: this.type, toolUse: this.toolUse }
   }
 }
 
@@ -218,6 +258,20 @@ export class AfterToolCallEvent extends HookableEvent {
   override _shouldReverseCallbacks(): boolean {
     return true
   }
+
+  /**
+   * Serializes for wire transport, excluding the agent reference, tool instance, and mutable retry flag.
+   * Converts Error to an extensible object for safe wire serialization.
+   * Called automatically by JSON.stringify().
+   */
+  toJSON(): Pick<AfterToolCallEvent, 'type' | 'toolUse' | 'result'> & { error?: { message?: string } } {
+    return {
+      type: this.type,
+      toolUse: this.toolUse,
+      result: this.result,
+      ...(this.error !== undefined && { error: { message: this.error.message } }),
+    }
+  }
 }
 
 /**
@@ -231,6 +285,14 @@ export class BeforeModelCallEvent extends HookableEvent {
   constructor(data: { agent: LocalAgent }) {
     super()
     this.agent = data.agent
+  }
+
+  /**
+   * Serializes for wire transport, excluding the agent reference.
+   * Called automatically by JSON.stringify().
+   */
+  toJSON(): Pick<BeforeModelCallEvent, 'type'> {
+    return { type: this.type }
   }
 }
 
@@ -298,6 +360,19 @@ export class AfterModelCallEvent extends HookableEvent {
   override _shouldReverseCallbacks(): boolean {
     return true
   }
+
+  /**
+   * Serializes for wire transport, excluding the agent reference and mutable retry flag.
+   * Converts Error to an extensible object for safe wire serialization.
+   * Called automatically by JSON.stringify().
+   */
+  toJSON(): Pick<AfterModelCallEvent, 'type' | 'stopData'> & { error?: { message?: string } } {
+    return {
+      type: this.type,
+      ...(this.stopData !== undefined && { stopData: this.stopData }),
+      ...(this.error !== undefined && { error: { message: this.error.message } }),
+    }
+  }
 }
 
 /**
@@ -315,6 +390,14 @@ export class ModelStreamUpdateEvent extends HookableEvent {
     super()
     this.agent = data.agent
     this.event = data.event
+  }
+
+  /**
+   * Serializes for wire transport, excluding the agent reference.
+   * Called automatically by JSON.stringify().
+   */
+  toJSON(): Pick<ModelStreamUpdateEvent, 'type' | 'event'> {
+    return { type: this.type, event: this.event }
   }
 }
 
@@ -338,6 +421,14 @@ export class ContentBlockEvent extends HookableEvent {
     this.agent = data.agent
     this.contentBlock = data.contentBlock
   }
+
+  /**
+   * Serializes for wire transport, excluding the agent reference.
+   * Called automatically by JSON.stringify().
+   */
+  toJSON(): Pick<ContentBlockEvent, 'type' | 'contentBlock'> {
+    return { type: this.type, contentBlock: this.contentBlock }
+  }
 }
 
 /**
@@ -356,6 +447,14 @@ export class ModelMessageEvent extends HookableEvent {
     this.message = data.message
     this.stopReason = data.stopReason
   }
+
+  /**
+   * Serializes for wire transport, excluding the agent reference.
+   * Called automatically by JSON.stringify().
+   */
+  toJSON(): Pick<ModelMessageEvent, 'type' | 'message' | 'stopReason'> {
+    return { type: this.type, message: this.message, stopReason: this.stopReason }
+  }
 }
 
 /**
@@ -371,6 +470,14 @@ export class ToolResultEvent extends HookableEvent {
     super()
     this.agent = data.agent
     this.result = data.result
+  }
+
+  /**
+   * Serializes for wire transport, excluding the agent reference.
+   * Called automatically by JSON.stringify().
+   */
+  toJSON(): Pick<ToolResultEvent, 'type' | 'result'> {
+    return { type: this.type, result: this.result }
   }
 }
 
@@ -393,6 +500,14 @@ export class ToolStreamUpdateEvent extends HookableEvent {
     this.agent = data.agent
     this.event = data.event
   }
+
+  /**
+   * Serializes for wire transport, excluding the agent reference.
+   * Called automatically by JSON.stringify().
+   */
+  toJSON(): Pick<ToolStreamUpdateEvent, 'type' | 'event'> {
+    return { type: this.type, event: this.event }
+  }
 }
 
 /**
@@ -408,6 +523,14 @@ export class AgentResultEvent extends HookableEvent {
     super()
     this.agent = data.agent
     this.result = data.result
+  }
+
+  /**
+   * Serializes for wire transport, excluding the agent reference.
+   * Called automatically by JSON.stringify().
+   */
+  toJSON(): Pick<AgentResultEvent, 'type' | 'result'> {
+    return { type: this.type, result: this.result }
   }
 }
 
@@ -433,6 +556,14 @@ export class BeforeToolsEvent extends HookableEvent {
     this.agent = data.agent
     this.message = data.message
   }
+
+  /**
+   * Serializes for wire transport, excluding the agent reference and mutable cancel flag.
+   * Called automatically by JSON.stringify().
+   */
+  toJSON(): Pick<BeforeToolsEvent, 'type' | 'message'> {
+    return { type: this.type, message: this.message }
+  }
 }
 
 /**
@@ -453,5 +584,13 @@ export class AfterToolsEvent extends HookableEvent {
 
   override _shouldReverseCallbacks(): boolean {
     return true
+  }
+
+  /**
+   * Serializes for wire transport, excluding the agent reference.
+   * Called automatically by JSON.stringify().
+   */
+  toJSON(): Pick<AfterToolsEvent, 'type' | 'message'> {
+    return { type: this.type, message: this.message }
   }
 }

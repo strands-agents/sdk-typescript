@@ -208,7 +208,9 @@ export class A2AAgent implements InvokableAgent {
     const blocks = args as (ContentBlock | ContentBlockData)[]
     const nonTextCount = blocks.filter((b) => ('type' in b ? b.type !== 'textBlock' : !('text' in b))).length
     if (nonTextCount > 0) {
-      logger.info(`non_text_blocks=<${nonTextCount}> | stripping non-text content blocks, a2a only supports text`)
+      logger.warn(
+        `non_text_blocks=<${nonTextCount}> | stripping non-text content blocks, A2AAgent does not yet support non-text content`
+      )
     }
 
     return blocks

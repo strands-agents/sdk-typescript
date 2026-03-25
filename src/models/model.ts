@@ -336,7 +336,7 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
               yield block
             } catch (e: unknown) {
               if (e instanceof SyntaxError) {
-                logger.error('Unable to parse JSON string.', e)
+                logger.error('unable to parse JSON string', e)
                 throw e
               }
             }

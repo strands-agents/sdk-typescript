@@ -116,7 +116,7 @@ const agent = new Agent({ model })
 import { Agent } from '@strands-agents/sdk'
 import { OpenAIModel } from '@strands-agents/sdk/models/openai'
 
-// Automatically uses process.env.OPENAI_API_KEY and defaults to gpt-4o
+// Automatically uses process.env.OPENAI_API_KEY and defaults to gpt-5.4
 const model = new OpenAIModel({ api: 'chat' })
 
 const agent = new Agent({ model })

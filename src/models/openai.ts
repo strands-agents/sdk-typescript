@@ -26,7 +26,7 @@ import { logger } from '../logging/logger.js'
  */
 export type OpenAIApi = 'chat'
 
-const DEFAULT_OPENAI_MODEL_ID = 'gpt-4o'
+const DEFAULT_OPENAI_MODEL_ID = 'gpt-5.4'
 
 /**
  * Error message patterns that indicate context window overflow.
@@ -80,7 +80,7 @@ type OpenAIChatChoice = {
  * @example
  * ```typescript
  * const config: OpenAIModelConfig = {
- *   modelId: 'gpt-4o',
+ *   modelId: 'gpt-5.4',
  *   temperature: 0.7,
  *   maxTokens: 1024
  * }
@@ -88,7 +88,7 @@ type OpenAIChatChoice = {
  */
 export interface OpenAIModelConfig extends BaseModelConfig {
   /**
-   * OpenAI model identifier (e.g., gpt-4o, gpt-3.5-turbo).
+   * OpenAI model identifier (e.g., gpt-5.4, gpt-5.4-mini).
    */
   modelId?: string
 
@@ -186,7 +186,7 @@ export interface OpenAIModelOptions extends OpenAIModelConfig {
  * const provider = new OpenAIModel({
  *   api: 'chat',
  *   apiKey: 'sk-...',
- *   modelId: 'gpt-4o',
+ *   modelId: 'gpt-5.4',
  *   temperature: 0.7,
  *   maxTokens: 1024
  * })
@@ -216,14 +216,14 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
    * // Minimal configuration with API key and model ID
    * const provider = new OpenAIModel({
    *   api: 'chat',
-   *   modelId: 'gpt-4o',
+   *   modelId: 'gpt-5.4',
    *   apiKey: 'sk-...'
    * })
    *
    * // With additional model configuration
    * const provider = new OpenAIModel({
    *   api: 'chat',
-   *   modelId: 'gpt-4o',
+   *   modelId: 'gpt-5.4',
    *   apiKey: 'sk-...',
    *   temperature: 0.8,
    *   maxTokens: 2048
@@ -232,13 +232,13 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
    * // Using environment variable for API key
    * const provider = new OpenAIModel({
    *   api: 'chat',
-   *   modelId: 'gpt-3.5-turbo'
+   *   modelId: 'gpt-5.4-mini'
    * })
    *
    * // Using function-based API key for dynamic key retrieval
    * const provider = new OpenAIModel({
    *   api: 'chat',
-   *   modelId: 'gpt-4o',
+   *   modelId: 'gpt-5.4',
    *   apiKey: async () => await getRotatingApiKey()
    * })
    *
@@ -246,7 +246,7 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
    * const client = new OpenAI({ apiKey: 'sk-...', timeout: 60000 })
    * const provider = new OpenAIModel({
    *   api: 'chat',
-   *   modelId: 'gpt-4o',
+   *   modelId: 'gpt-5.4',
    *   client
    * })
    * ```
@@ -333,7 +333,7 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
    *
    * @example
    * ```typescript
-   * const provider = new OpenAIModel({ api: 'chat', modelId: 'gpt-4o', apiKey: 'sk-...' })
+   * const provider = new OpenAIModel({ api: 'chat', modelId: 'gpt-5.4', apiKey: 'sk-...' })
    * const messages: Message[] = [
    *   { role: 'user', content: [{ type: 'textBlock', text: 'What is 2+2?' }] }
    * ]
@@ -636,7 +636,7 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
                   case 'documentSourceText': {
                     // Text documents can be added directly
                     logger.warn(
-                      'OpenAI does not support text document sources directly. Converting this text document to string content.'
+                      'source_type=<documentSourceText> | openai does not support text document sources directly | converting to string content'
                     )
                     contentParts.push({
                       type: 'text',
@@ -658,7 +658,7 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
                   }
                   default: {
                     logger.warn(
-                      `OpenAI ChatCompletions API only supports text content in user messages. Skipping document block type: ${docBlock.source.type}.`
+                      `source_type=<${docBlock.source.type}> | openai only supports text content in user messages | skipping document block`
                     )
                     break
                   }
@@ -666,7 +666,7 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
                 break
               }
               default: {
-                logger.warn(`OpenAI ChatCompletions API does not support content type: ${block.type}.`)
+                logger.warn(`block_type=<${block.type}> | unsupported content type in openai user message | skipping`)
                 break
               }
             }
@@ -764,14 +764,16 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
             }
             case 'reasoningBlock': {
               if (block.text) {
-                logger.warn('Reasoning blocks are not supported by OpenAI Chat Completions API. Converting to text.')
+                logger.warn(
+                  'block_type=<reasoningBlock> | reasoning blocks not supported by openai | converting to text'
+                )
                 textParts.push(block.text)
               }
               break
             }
             default: {
               logger.warn(
-                `OpenAI ChatCompletions API does not support ${block.type} content in assistant messages. Skipping this block.`
+                `block_type=<${block.type}> | unsupported content type in openai assistant message | skipping`
               )
             }
           }

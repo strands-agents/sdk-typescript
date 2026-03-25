@@ -50,8 +50,8 @@ describe('Node', () => {
   describe('stream', () => {
     it('returns COMPLETED NodeResult on successful execution', async () => {
       const content = [new TextBlock('result')]
-      // eslint-disable-next-line require-yield
       const node = new TestNode('test-node', async function* () {
+        yield* []
         return { content }
       })
 
@@ -76,8 +76,8 @@ describe('Node', () => {
     })
 
     it('catches errors and returns FAILED NodeResult', async () => {
-      // eslint-disable-next-line require-yield
       const node = new TestNode('fail-node', async function* () {
+        yield* []
         throw new Error('boom')
       })
 
@@ -263,6 +263,54 @@ describe('MultiAgentNode', () => {
           content,
         })
       )
+    })
+
+    it('propagates FAILED status from inner orchestrator', async () => {
+      const failedOrchestrator: MultiAgent = {
+        id: 'inner',
+        invoke: async () => new MultiAgentResult({ results: [], duration: 0 }),
+        async *stream() {
+          yield* []
+          return new MultiAgentResult({
+            status: Status.FAILED,
+            results: [
+              new NodeResult({ nodeId: 'x', status: Status.FAILED, duration: 0, error: new Error('inner boom') }),
+            ],
+            content: [],
+            duration: 0,
+            error: new Error('inner boom'),
+          })
+        },
+        addHook: () => () => {},
+      }
+      node = new MultiAgentNode({ orchestrator: failedOrchestrator })
+
+      const { result } = await collectGenerator(node.stream([], state))
+
+      expect(result.status).toBe(Status.FAILED)
+      expect(result.error?.message).toBe('inner boom')
+    })
+
+    it('propagates CANCELLED status from inner orchestrator', async () => {
+      const cancelledOrchestrator: MultiAgent = {
+        id: 'inner',
+        invoke: async () => new MultiAgentResult({ results: [], duration: 0 }),
+        async *stream() {
+          yield* []
+          return new MultiAgentResult({
+            status: Status.CANCELLED,
+            results: [],
+            content: [],
+            duration: 0,
+          })
+        },
+        addHook: () => () => {},
+      }
+      node = new MultiAgentNode({ orchestrator: cancelledOrchestrator })
+
+      const { result } = await collectGenerator(node.stream([], state))
+
+      expect(result.status).toBe(Status.CANCELLED)
     })
   })
 

@@ -19,7 +19,13 @@ import {
   DocumentBlock,
 } from '../../index.js'
 import { AgentPrinter } from '../printer.js'
-import { BeforeInvocationEvent, BeforeToolsEvent } from '../../hooks/events.js'
+import {
+  AfterInvocationEvent,
+  AfterToolCallEvent,
+  AfterToolsEvent,
+  BeforeInvocationEvent,
+  BeforeToolsEvent,
+} from '../../hooks/events.js'
 import { BedrockModel } from '../../models/bedrock.js'
 import { StructuredOutputError } from '../../errors.js'
 import { expectLoopMetrics } from '../../__fixtures__/metrics-helpers.js'
@@ -171,6 +177,37 @@ describe('Agent', () => {
         await expect(async () => {
           await collectGenerator(agent.stream('Test'))
         }).rejects.toThrow(MaxTokensError)
+      })
+    })
+
+    describe('hook error cleanup', () => {
+      it('fires AfterInvocationEvent when consumer breaks from stream', async () => {
+        const model = new MockMessageModel()
+          .addTurn({ type: 'toolUseBlock', name: 'testTool', toolUseId: 'tool-1', input: {} })
+          .addTurn({ type: 'textBlock', text: 'Done' })
+
+        const tool = createMockTool(
+          'testTool',
+          () =>
+            new ToolResultBlock({
+              toolUseId: 'tool-1',
+              status: 'success' as const,
+              content: [new TextBlock('ok')],
+            })
+        )
+
+        const agent = new Agent({ model, tools: [tool], printer: false })
+
+        const afterInvocationCallback = vi.fn()
+        agent.addHook(AfterInvocationEvent, afterInvocationCallback)
+
+        for await (const event of agent.stream('Test')) {
+          if (event.type === 'beforeToolsEvent') {
+            break
+          }
+        }
+
+        expect(afterInvocationCallback).toHaveBeenCalledOnce()
       })
     })
   })
@@ -499,6 +536,107 @@ describe('Agent', () => {
           latencyMs: expect.any(Number),
         })
         expect(meter.metrics.toolMetrics).toStrictEqual({})
+      })
+    })
+
+    describe('hook error cleanup', () => {
+      it('fires AfterInvocationEvent when a mid-stream hook throws', async () => {
+        const model = new MockMessageModel()
+          .addTurn({ type: 'toolUseBlock', name: 'testTool', toolUseId: 'tool-1', input: {} })
+          .addTurn({ type: 'textBlock', text: 'Done' })
+
+        const tool = createMockTool(
+          'testTool',
+          () =>
+            new ToolResultBlock({
+              toolUseId: 'tool-1',
+              status: 'success' as const,
+              content: [new TextBlock('ok')],
+            })
+        )
+
+        const agent = new Agent({ model, tools: [tool], printer: false })
+
+        agent.addHook(AfterToolCallEvent, () => {
+          throw new Error('hook error')
+        })
+
+        const afterInvocationCallback = vi.fn()
+        agent.addHook(AfterInvocationEvent, afterInvocationCallback)
+
+        await expect(agent.invoke('Test')).rejects.toThrow('hook error')
+        expect(afterInvocationCallback).toHaveBeenCalledOnce()
+      })
+
+      it('fires AfterToolsEvent when a mid-stream hook throws', async () => {
+        const model = new MockMessageModel()
+          .addTurn({ type: 'toolUseBlock', name: 'testTool', toolUseId: 'tool-1', input: {} })
+          .addTurn({ type: 'textBlock', text: 'Done' })
+
+        const tool = createMockTool(
+          'testTool',
+          () =>
+            new ToolResultBlock({
+              toolUseId: 'tool-1',
+              status: 'success' as const,
+              content: [new TextBlock('ok')],
+            })
+        )
+
+        const agent = new Agent({ model, tools: [tool], printer: false })
+
+        agent.addHook(AfterToolCallEvent, () => {
+          throw new Error('hook error')
+        })
+
+        const afterToolsCallback = vi.fn()
+        agent.addHook(AfterToolsEvent, afterToolsCallback)
+
+        await expect(agent.invoke('Test')).rejects.toThrow('hook error')
+        expect(afterToolsCallback).toHaveBeenCalledOnce()
+      })
+
+      it('does not fire AfterInvocationEvent when BeforeInvocationEvent hook throws', async () => {
+        const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
+        const agent = new Agent({ model, printer: false })
+
+        agent.addHook(BeforeInvocationEvent, () => {
+          throw new Error('before hook error')
+        })
+
+        const afterInvocationCallback = vi.fn()
+        agent.addHook(AfterInvocationEvent, afterInvocationCallback)
+
+        await expect(agent.invoke('Test')).rejects.toThrow('before hook error')
+        expect(afterInvocationCallback).not.toHaveBeenCalled()
+      })
+
+      it('does not fire AfterToolsEvent when BeforeToolsEvent hook throws', async () => {
+        const model = new MockMessageModel()
+          .addTurn({ type: 'toolUseBlock', name: 'testTool', toolUseId: 'tool-1', input: {} })
+          .addTurn({ type: 'textBlock', text: 'Done' })
+
+        const tool = createMockTool(
+          'testTool',
+          () =>
+            new ToolResultBlock({
+              toolUseId: 'tool-1',
+              status: 'success' as const,
+              content: [new TextBlock('ok')],
+            })
+        )
+
+        const agent = new Agent({ model, tools: [tool], printer: false })
+
+        agent.addHook(BeforeToolsEvent, () => {
+          throw new Error('before tools hook error')
+        })
+
+        const afterToolsCallback = vi.fn()
+        agent.addHook(AfterToolsEvent, afterToolsCallback)
+
+        await expect(agent.invoke('Test')).rejects.toThrow('before tools hook error')
+        expect(afterToolsCallback).not.toHaveBeenCalled()
       })
     })
   })

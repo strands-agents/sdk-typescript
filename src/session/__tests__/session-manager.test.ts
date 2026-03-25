@@ -12,6 +12,7 @@ import { Agent } from '../../agent/agent.js'
 import { Message, TextBlock } from '../../types/messages.js'
 import { createMockAgent as createMockAgentWithHooks, invokeTrackedHook } from '../../__fixtures__/agent-helpers.js'
 import { loadStateFromJSONSymbol, stateToJSONSymbol } from '../../types/serializable.js'
+import { logger } from '../../logging/logger.js'
 
 // Test fixtures
 function createMockAgent(id = 'agent'): Agent {
@@ -197,6 +198,52 @@ describe('SessionManager', () => {
       await expect(
         initPluginAndInvokeHook(sessionManager, new InitializedEvent(createMockEvent(mockAgent)))
       ).resolves.not.toThrow()
+    })
+
+    it('warns when snapshot restore overwrites existing messages', async () => {
+      const warnSpy = vi.spyOn(logger, 'warn')
+
+      const snapshot = createTestSnapshot()
+      await storage.saveSnapshot({
+        location: { sessionId: 'test-session', scope: 'agent', scopeId: 'test-agent' },
+        snapshotId: 'latest',
+        isLatest: true,
+        snapshot,
+      })
+
+      mockAgent.messages.push(MOCK_MESSAGE)
+
+      sessionManager = new SessionManager({
+        sessionId: 'test-session',
+        storage: { snapshot: storage },
+      })
+
+      await initPluginAndInvokeHook(sessionManager, new InitializedEvent(createMockEvent(mockAgent)))
+
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('overwritten by session restore'))
+      warnSpy.mockRestore()
+    })
+
+    it('does not warn when restoring into agent with no messages', async () => {
+      const warnSpy = vi.spyOn(logger, 'warn')
+
+      const snapshot = createTestSnapshot()
+      await storage.saveSnapshot({
+        location: { sessionId: 'test-session', scope: 'agent', scopeId: 'test-agent' },
+        snapshotId: 'latest',
+        isLatest: true,
+        snapshot,
+      })
+
+      sessionManager = new SessionManager({
+        sessionId: 'test-session',
+        storage: { snapshot: storage },
+      })
+
+      await initPluginAndInvokeHook(sessionManager, new InitializedEvent(createMockEvent(mockAgent)))
+
+      expect(warnSpy).not.toHaveBeenCalled()
+      warnSpy.mockRestore()
     })
   })
 

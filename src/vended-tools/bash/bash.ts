@@ -51,6 +51,7 @@ class BashSession {
       }
 
       this._started = true
+      activeSessions.add(this)
 
       // Handle unexpected process exits
       this._process.on('close', () => {
@@ -71,6 +72,7 @@ class BashSession {
       this._process = null
       this._started = false
     }
+    activeSessions.delete(this)
   }
 
   /**
@@ -128,10 +130,12 @@ class BashSession {
       // Handler for process errors
       const onError = (err: Error): void => {
         cleanup()
+        this.stop()
         reject(new BashSessionError(`Bash process error: ${err.message}`))
       }
 
-      // Cleanup function
+      // Cleanup function - removes per-command listeners and timeout.
+      // Does NOT stop the process, preserving session state between calls.
       const cleanup = (): void => {
         if (timeoutHandle !== null) {
           // eslint-disable-next-line no-undef
@@ -145,10 +149,6 @@ class BashSession {
           this._process.off('close', onClose)
           this._process.off('error', onError)
         }
-        // Kill the process after command completes to allow clean exit
-        // This is important for one-shot scripts that need to terminate
-        this.stop()
-        activeSessions.delete(this)
       }
 
       // Set up timeout
@@ -156,11 +156,7 @@ class BashSession {
       timeoutHandle = setTimeout(() => {
         isTimedOut = true
         cleanup()
-        // Check if process still exists before killing
-        if (this._process) {
-          this._process.kill()
-        }
-        this._started = false
+        this.stop()
         reject(new BashTimeoutError(`Command timed out after ${effectiveTimeout} seconds`))
       }, effectiveTimeout * 1000)
 
@@ -175,6 +171,7 @@ class BashSession {
         stdin.write(`${command}\necho "${this._sentinel}"\n`)
       } catch (err) {
         cleanup()
+        this.stop()
         reject(new BashSessionError(`Failed to write command: ${(err as Error).message}`))
       }
     })
@@ -191,6 +188,13 @@ const sessions = new WeakMap<any, BashSession>()
  * Track all active sessions for cleanup on process exit.
  */
 const activeSessions = new Set<BashSession>()
+
+/**
+ * Clean up bash sessions when their associated agent is garbage collected.
+ */
+const sessionFinalizer = new FinalizationRegistry<BashSession>((session) => {
+  session.stop()
+})
 
 /**
  * Clean up all active bash sessions.
@@ -270,13 +274,12 @@ export const bash = tool({
       const existingSession = sessions.get(agent)
       if (existingSession) {
         existingSession.stop()
-        activeSessions.delete(existingSession)
         sessions.delete(agent)
       }
-      // Create new session
+      // Create new session (will be added to activeSessions when started)
       const newSession = new BashSession(120)
       sessions.set(agent, newSession)
-      activeSessions.add(newSession)
+      sessionFinalizer.register(agent, newSession)
       return 'Bash session restarted'
     }
 
@@ -286,7 +289,7 @@ export const bash = tool({
     if (!session) {
       session = new BashSession(input.timeout ?? 120)
       sessions.set(agent, session)
-      activeSessions.add(session)
+      sessionFinalizer.register(agent, session)
     }
 
     // Execute command

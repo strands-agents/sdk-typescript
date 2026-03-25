@@ -107,6 +107,24 @@ describe.skipIf(process.platform === 'win32')('bash tool', () => {
       expect((result as BashOutput).output.trim()).toBe('empty')
     })
 
+    it('persists environment variables between calls', async () => {
+      const { context } = createFreshContext()
+
+      await bash.invoke({ mode: 'execute', command: 'MY_VAR="persistent_value"' }, context)
+      const result = await bash.invoke({ mode: 'execute', command: 'echo $MY_VAR' }, context)
+
+      expect((result as BashOutput).output.trim()).toBe('persistent_value')
+    })
+
+    it('persists working directory between calls', async () => {
+      const { context } = createFreshContext()
+
+      await bash.invoke({ mode: 'execute', command: 'cd /tmp' }, context)
+      const result = await bash.invoke({ mode: 'execute', command: 'pwd' }, context)
+
+      expect(realpathSync((result as BashOutput).output.trim())).toBe(realpathSync('/tmp'))
+    })
+
     it('provides isolated sessions for different agents', async () => {
       const { context: context1 } = createFreshContext()
       const { context: context2 } = createFreshContext()

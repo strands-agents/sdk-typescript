@@ -414,29 +414,44 @@ export class Agent implements LocalAgent, InvokableAgent {
 
     // Delegate to _stream and process events through printer and hooks
     const streamGenerator = this._stream(args, options)
-    let result = await streamGenerator.next()
+    try {
+      let result = await streamGenerator.next()
 
-    while (!result.done) {
-      const event = result.value
-
-      // Invoke hook callbacks for hookable events (all current events are hookable;
-      // the guard exists for future StreamEvent subclasses that may not be)
-      if (event instanceof HookableEvent) {
-        await this._hooksRegistry.invokeCallbacks(event)
+      while (!result.done) {
+        yield await this._invokeCallbacks(result.value)
+        result = await streamGenerator.next()
       }
 
-      this._printer?.processEvent(event)
-      yield event
-      result = await streamGenerator.next()
+      yield await this._invokeCallbacks(new AgentResultEvent({ agent: this, result: result.value }))
+
+      return result.value
+    } finally {
+      // Drain remaining events from _stream() so cleanup events (after events
+      // from finally blocks) still get their hooks and printer invoked.
+      let result = await streamGenerator.return(undefined as never)
+      while (!result.done) {
+        try {
+          yield await this._invokeCallbacks(result.value)
+        } catch (error) {
+          logger.warn(`event_type=<${result.value.type}>, error=<${error}> | error invoking callbacks during cleanup`)
+        }
+        result = await streamGenerator.next()
+      }
     }
+  }
 
-    // Yield final result as last event
-    const agentResultEvent = new AgentResultEvent({ agent: this, result: result.value })
-    await this._hooksRegistry.invokeCallbacks(agentResultEvent)
-    this._printer?.processEvent(agentResultEvent)
-    yield agentResultEvent
-
-    return result.value
+  /**
+   * Invokes hook callbacks and printer for a stream event.
+   *
+   * @param event - The event to process
+   * @returns The event after processing
+   */
+  private async _invokeCallbacks(event: AgentStreamEvent): Promise<AgentStreamEvent> {
+    if (event instanceof HookableEvent) {
+      await this._hooksRegistry.invokeCallbacks(event)
+    }
+    this._printer?.processEvent(event)
+    return event
   }
 
   /**
@@ -815,52 +830,52 @@ export class Agent implements LocalAgent, InvokableAgent {
     const beforeToolsEvent = new BeforeToolsEvent({ agent: this, message: assistantMessage })
     yield beforeToolsEvent
 
-    // Extract tool use blocks from assistant message
-    const toolUseBlocks = assistantMessage.content.filter(
-      (block): block is ToolUseBlock => block.type === 'toolUseBlock'
-    )
-
-    if (toolUseBlocks.length === 0) {
-      // No tool use blocks found even though stopReason is toolUse
-      throw new Error('Model indicated toolUse but no tool use blocks found in message')
-    }
-
-    // Cancel all tools if hook requested it
-    if (beforeToolsEvent.cancel) {
-      const cancelMessage = cancelToolMessage(beforeToolsEvent.cancel)
-      const toolResultBlocks = toolUseBlocks.map(
-        (block) =>
-          new ToolResultBlock({
-            toolUseId: block.toolUseId,
-            status: 'error',
-            content: [new TextBlock(cancelMessage)],
-          })
-      )
-      for (const result of toolResultBlocks) {
-        yield new ToolResultEvent({ agent: this, result })
-      }
-      const toolResultMessage = new Message({ role: 'user', content: toolResultBlocks })
-      yield new AfterToolsEvent({ agent: this, message: toolResultMessage })
-      return toolResultMessage
-    }
-
     const toolResultBlocks: ToolResultBlock[] = []
+    let toolResultMessage: Message
 
-    for (const toolUseBlock of toolUseBlocks) {
-      const toolResultBlock = yield* this.executeTool(toolUseBlock, toolRegistry)
-      toolResultBlocks.push(toolResultBlock)
+    try {
+      // Extract tool use blocks from assistant message
+      const toolUseBlocks = assistantMessage.content.filter(
+        (block): block is ToolUseBlock => block.type === 'toolUseBlock'
+      )
 
-      // Yield the tool result event as it's created
-      yield new ToolResultEvent({ agent: this, result: toolResultBlock })
+      if (toolUseBlocks.length === 0) {
+        // No tool use blocks found even though stopReason is toolUse
+        throw new Error('Model indicated toolUse but no tool use blocks found in message')
+      }
+
+      // Cancel all tools if hook requested it
+      if (beforeToolsEvent.cancel) {
+        const cancelMessage = cancelToolMessage(beforeToolsEvent.cancel)
+        const cancelBlocks = toolUseBlocks.map(
+          (block) =>
+            new ToolResultBlock({
+              toolUseId: block.toolUseId,
+              status: 'error',
+              content: [new TextBlock(cancelMessage)],
+            })
+        )
+        for (const result of cancelBlocks) {
+          yield new ToolResultEvent({ agent: this, result })
+        }
+        toolResultBlocks.push(...cancelBlocks)
+      } else {
+        for (const toolUseBlock of toolUseBlocks) {
+          const toolResultBlock = yield* this.executeTool(toolUseBlock, toolRegistry)
+          toolResultBlocks.push(toolResultBlock)
+
+          // Yield the tool result event as it's created
+          yield new ToolResultEvent({ agent: this, result: toolResultBlock })
+        }
+      }
+    } finally {
+      toolResultMessage = new Message({
+        role: 'user',
+        content: toolResultBlocks,
+      })
+
+      yield new AfterToolsEvent({ agent: this, message: toolResultMessage })
     }
-
-    // Create user message with tool results
-    const toolResultMessage: Message = new Message({
-      role: 'user',
-      content: toolResultBlocks,
-    })
-
-    yield new AfterToolsEvent({ agent: this, message: toolResultMessage })
 
     return toolResultMessage
   }
@@ -1053,7 +1068,7 @@ export class Agent implements LocalAgent, InvokableAgent {
       } else if (lastMessage) {
         // Unexpected state: redaction requested but last message is not from user
         logger.warn(
-          `role=<${lastMessage.role}> | received input redaction but last message is not from user | redaction skipped.`
+          `role=<${lastMessage.role}> | received input redaction but last message is not from user | redaction skipped`
         )
       }
     }

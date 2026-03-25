@@ -3599,7 +3599,7 @@ describe('BedrockModel', () => {
         collectIterator(provider.stream(messages))
 
         expect(consoleWarnSpy).toHaveBeenCalledWith(
-          "Image format 'gif' not supported by Bedrock guardrails, skipping guardContent wrap"
+          'image_format=<gif> | format not supported by bedrock guardrails | skipping guardContent wrap'
         )
         expect(mockConverseStreamCommand).toHaveBeenLastCalledWith(
           expect.objectContaining({
@@ -3646,7 +3646,7 @@ describe('BedrockModel', () => {
         collectIterator(provider.stream(messages))
 
         expect(consoleWarnSpy).toHaveBeenCalledWith(
-          "Image format 'webp' not supported by Bedrock guardrails, skipping guardContent wrap"
+          'image_format=<webp> | format not supported by bedrock guardrails | skipping guardContent wrap'
         )
         expect(mockConverseStreamCommand).toHaveBeenLastCalledWith(
           expect.objectContaining({
@@ -3697,7 +3697,7 @@ describe('BedrockModel', () => {
         collectIterator(provider.stream(messages))
 
         expect(consoleWarnSpy).toHaveBeenCalledWith(
-          'Image source must be bytes for Bedrock guardrails, skipping guardContent wrap'
+          'source_type=<non-bytes> | image source must be bytes for bedrock guardrails | skipping guardContent wrap'
         )
         expect(mockConverseStreamCommand).toHaveBeenLastCalledWith(
           expect.objectContaining({
@@ -3748,7 +3748,7 @@ describe('BedrockModel', () => {
 
         // URL sources return undefined in _formatMediaSource, resulting in source: undefined
         expect(consoleWarnSpy).toHaveBeenCalledWith(
-          'Ignoring imageSourceUrl content block as its not supported by bedrock'
+          'source_type=<imageSourceUrl> | not supported by bedrock | skipping'
         )
         // The image block still appears but with undefined source (Bedrock will reject this)
         expect(mockConverseStreamCommand).toHaveBeenLastCalledWith(

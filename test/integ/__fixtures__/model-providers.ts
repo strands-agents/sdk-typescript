@@ -74,7 +74,7 @@ export const openai = {
   } satisfies ProviderFeatures,
   models: {
     default: {},
-    reasoning: { modelId: 'o1-mini' },
+    reasoning: { modelId: 'o4-mini' },
     video: {},
   },
   get skip() {

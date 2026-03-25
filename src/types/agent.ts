@@ -1,5 +1,5 @@
 import type { StateStore } from '../state-store.js'
-import type { ContentBlock, ContentBlockData, Message, MessageData, StopReason } from './messages.js'
+import type { ContentBlock, ContentBlockData, Message, MessageData, StopReason, SystemPrompt } from './messages.js'
 import type { AgentTrace } from '../telemetry/tracer.js'
 import type {
   BeforeInvocationEvent,
@@ -92,6 +92,11 @@ export interface InvokableAgent {
  */
 export interface LocalAgent {
   /**
+   * The unique identifier of the agent instance.
+   */
+  readonly id: string
+
+  /**
    * App state storage accessible to tools and application logic.
    */
   appState: StateStore
@@ -105,6 +110,11 @@ export interface LocalAgent {
    * The tool registry for registering tools with the agent.
    */
   readonly toolRegistry: ToolRegistry
+
+  /**
+   * The system prompt to pass to the model provider.
+   */
+  systemPrompt?: SystemPrompt
 
   /**
    * Register a hook callback for a specific event type.
