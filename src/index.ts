@@ -228,9 +228,6 @@ export type { SessionStorage, SnapshotStorage, SnapshotLocation } from './sessio
 export { FileStorage } from './session/file-storage.js'
 export type { Scope, Snapshot } from './agent/snapshot.js'
 
-// Telemetry
-export * as telemetry from './telemetry/index.js'
-
 // Local Traces
 export { AgentTrace } from './telemetry/tracer.js'
 
