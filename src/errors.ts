@@ -6,6 +6,7 @@
  */
 
 import type { Message } from './types/messages.js'
+import type { JSONValue } from './types/json.js'
 
 /**
  * Base exception class for all model-related errors.
@@ -142,6 +143,14 @@ export class ModelThrottledError extends ModelError {
  */
 export function normalizeError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error))
+}
+
+/**
+ * Serializes an Error to a JSON-compatible value.
+ * Use {@link normalizeError} for the reverse direction.
+ */
+export function serializeError(error: Error): JSONValue {
+  return error.message
 }
 
 /**

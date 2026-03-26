@@ -4,8 +4,14 @@ import type { Usage } from '../models/streaming.js'
 import { accumulateUsage, createEmptyUsage } from '../models/streaming.js'
 import type { z } from 'zod'
 import type { JSONValue } from '../types/json.js'
-import { normalizeError } from '../errors.js'
-import { loadStateFromJSONSymbol, stateToJSONSymbol, type StateSerializable } from '../types/serializable.js'
+import { normalizeError, serializeError } from '../errors.js'
+import {
+  loadStateFromJSONSymbol,
+  stateToJSONSymbol,
+  serializeStateSerializable,
+  loadStateSerializable,
+  type StateSerializable,
+} from '../types/serializable.js'
 
 /**
  * Execution lifecycle status shared across all multi-agent patterns.
@@ -70,11 +76,12 @@ export class NodeResult {
   /** Serializes this result to a JSON-compatible value. */
   toJSON(): JSONValue {
     return {
+      type: this.type,
       nodeId: this.nodeId,
       status: this.status,
       duration: this.duration,
       content: this.content.map((block) => block.toJSON()),
-      ...(this.error && { error: this.error.message }),
+      ...(this.error && { error: serializeError(this.error) }),
       ...(this.structuredOutput !== undefined && { structuredOutput: this.structuredOutput as JSONValue }),
       ...(this.usage && { usage: { ...this.usage } }),
     } as JSONValue
@@ -184,11 +191,13 @@ export class MultiAgentResult {
   /** Serializes this result to a JSON-compatible value. */
   toJSON(): JSONValue {
     return {
+      type: this.type,
       status: this.status,
       results: this.results.map((result) => result.toJSON()),
       content: this.content.map((block) => block.toJSON()),
       duration: this.duration,
-      ...(this.error && { error: this.error.message }),
+      usage: { ...this.usage },
+      ...(this.error && { error: serializeError(this.error) }),
     } as JSONValue
   }
 
@@ -268,13 +277,13 @@ export class MultiAgentState implements StateSerializable {
   [stateToJSONSymbol](): JSONValue {
     const nodes: Record<string, JSONValue> = {}
     for (const [id, nodeState] of this._nodes) {
-      nodes[id] = nodeState[stateToJSONSymbol]()
+      nodes[id] = serializeStateSerializable(nodeState)
     }
     return {
       startTime: this.startTime,
       steps: this.steps,
       results: this.results.map((result) => result.toJSON()),
-      app: this.app[stateToJSONSymbol](),
+      app: serializeStateSerializable(this.app),
       nodes,
     } as JSONValue
   }
@@ -282,21 +291,19 @@ export class MultiAgentState implements StateSerializable {
   /** Loads state from a previously serialized JSON value. */
   [loadStateFromJSONSymbol](json: JSONValue): void {
     const data = json as Record<string, JSONValue>
-    // Bypass readonly for deserialization — startTime is set once at construction
-    // and must be restored to the original value from the snapshot.
     ;(this as { startTime: number }).startTime = data.startTime as number
     this.steps = data.steps as number
     this.results.length = 0
     for (const entry of data.results as JSONValue[]) {
       this.results.push(NodeResult.fromJSON(entry))
     }
-    this.app[loadStateFromJSONSymbol](data.app as JSONValue)
+    loadStateSerializable(this.app, data.app as JSONValue)
     this._nodes.clear()
     const nodes = data.nodes as Record<string, JSONValue> | undefined
     if (nodes) {
       for (const [id, nodeData] of Object.entries(nodes)) {
         const nodeState = new NodeState()
-        nodeState[loadStateFromJSONSymbol](nodeData)
+        loadStateSerializable(nodeState, nodeData)
         this._nodes.set(id, nodeState)
       }
     }

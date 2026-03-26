@@ -16,9 +16,11 @@ describe('NodeResult', () => {
 
       const restored = NodeResult.fromJSON(original.toJSON())
 
-      expect(restored.nodeId).toBe('agent-1')
-      expect(restored.status).toBe(Status.COMPLETED)
-      expect(restored.duration).toBe(150)
+      expect(restored).toMatchObject({
+        nodeId: 'agent-1',
+        status: Status.COMPLETED,
+        duration: 150,
+      })
       expect(restored.content).toHaveLength(1)
       expect(restored.content[0]).toBeInstanceOf(TextBlock)
       expect((restored.content[0] as TextBlock).text).toBe('hello world')
@@ -36,10 +38,12 @@ describe('NodeResult', () => {
 
       const restored = NodeResult.fromJSON(original.toJSON())
 
-      expect(restored.status).toBe(Status.FAILED)
+      expect(restored).toMatchObject({
+        status: Status.FAILED,
+        content: [],
+      })
       expect(restored.error).toBeInstanceOf(Error)
       expect(restored.error!.message).toBe('something broke')
-      expect(restored.content).toEqual([])
     })
 
     it('round-trips structuredOutput with nested objects', () => {
@@ -110,9 +114,11 @@ describe('NodeResult', () => {
 
       const restored = NodeResult.fromJSON(original.toJSON())
 
-      expect(restored.status).toBe(Status.CANCELLED)
-      expect(restored.content).toEqual([])
-      expect(restored.duration).toBe(0)
+      expect(restored).toMatchObject({
+        status: Status.CANCELLED,
+        content: [],
+        duration: 0,
+      })
     })
 
     it('omits error from JSON when not present', () => {
@@ -180,10 +186,12 @@ describe('NodeState', () => {
       const restored = new NodeState()
       restored[loadStateFromJSONSymbol](original[stateToJSONSymbol]())
 
-      expect(restored.status).toBe(Status.PENDING)
-      expect(restored.terminus).toBe(false)
-      expect(restored.startTime).toBe(original.startTime)
-      expect(restored.results).toEqual([])
+      expect(restored).toMatchObject({
+        status: Status.PENDING,
+        terminus: false,
+        startTime: original.startTime,
+        results: [],
+      })
     })
 
     it('round-trips a node state with results', () => {
@@ -200,11 +208,13 @@ describe('NodeState', () => {
       const restored = new NodeState()
       restored[loadStateFromJSONSymbol](original[stateToJSONSymbol]())
 
-      expect(restored.status).toBe(Status.COMPLETED)
-      expect(restored.terminus).toBe(true)
+      expect(restored).toMatchObject({
+        status: Status.COMPLETED,
+        terminus: true,
+      })
       expect(restored.results).toHaveLength(2)
-      expect(restored.results[0]!.status).toBe(Status.COMPLETED)
-      expect(restored.results[1]!.status).toBe(Status.FAILED)
+      expect(restored.results[0]).toMatchObject({ status: Status.COMPLETED })
+      expect(restored.results[1]).toMatchObject({ status: Status.FAILED })
       expect(restored.results[1]!.error!.message).toBe('retry failed')
     })
 
@@ -230,9 +240,11 @@ describe('NodeState', () => {
       const target = new NodeState()
       target[loadStateFromJSONSymbol](original[stateToJSONSymbol]())
 
-      expect(target.status).toBe(Status.COMPLETED)
-      expect(target.terminus).toBe(true)
-      expect(target.startTime).toBe(original.startTime)
+      expect(target).toMatchObject({
+        status: Status.COMPLETED,
+        terminus: true,
+        startTime: original.startTime,
+      })
       expect(target.results).toHaveLength(1)
     })
   })
@@ -255,10 +267,12 @@ describe('MultiAgentResult', () => {
 
       const restored = MultiAgentResult.fromJSON(original.toJSON())
 
-      expect(restored.status).toBe(Status.COMPLETED)
-      expect(restored.duration).toBe(500)
+      expect(restored).toMatchObject({
+        status: Status.COMPLETED,
+        duration: 500,
+      })
       expect(restored.results).toHaveLength(1)
-      expect(restored.results[0]!.nodeId).toBe('writer')
+      expect(restored.results[0]).toMatchObject({ nodeId: 'writer' })
       expect(restored.content).toHaveLength(1)
       expect((restored.content[0] as TextBlock).text).toBe('final answer')
       expect(restored.error).toBeUndefined()
@@ -274,7 +288,7 @@ describe('MultiAgentResult', () => {
 
       const restored = MultiAgentResult.fromJSON(original.toJSON())
 
-      expect(restored.status).toBe(Status.FAILED)
+      expect(restored).toMatchObject({ status: Status.FAILED })
       expect(restored.error).toBeInstanceOf(Error)
       expect(restored.error!.message).toBe('orchestration failed')
     })
@@ -304,9 +318,11 @@ describe('MultiAgentResult', () => {
 
       const restored = MultiAgentResult.fromJSON(original.toJSON())
 
-      expect(restored.results).toEqual([])
-      expect(restored.content).toEqual([])
-      expect(restored.status).toBe(Status.COMPLETED)
+      expect(restored).toMatchObject({
+        status: Status.COMPLETED,
+        results: [],
+        content: [],
+      })
     })
 
     it('preserves aggregated usage after round-trip', () => {
@@ -328,14 +344,11 @@ describe('MultiAgentResult', () => {
         duration: 30,
       })
 
-      expect(original.usage.inputTokens).toBe(8)
-      expect(original.usage.outputTokens).toBe(17)
+      expect(original.usage).toMatchObject({ inputTokens: 8, outputTokens: 17 })
 
       const restored = MultiAgentResult.fromJSON(original.toJSON())
 
-      expect(restored.usage.inputTokens).toBe(8)
-      expect(restored.usage.outputTokens).toBe(17)
-      expect(restored.usage.totalTokens).toBe(25)
+      expect(restored.usage).toMatchObject({ inputTokens: 8, outputTokens: 17, totalTokens: 25 })
     })
   })
 })
@@ -348,9 +361,11 @@ describe('MultiAgentState', () => {
       const restored = new MultiAgentState()
       restored[loadStateFromJSONSymbol](original[stateToJSONSymbol]())
 
-      expect(restored.startTime).toBe(original.startTime)
-      expect(restored.steps).toBe(0)
-      expect(restored.results).toEqual([])
+      expect(restored).toMatchObject({
+        startTime: original.startTime,
+        steps: 0,
+        results: [],
+      })
       expect(restored.nodes.size).toBe(3)
       expect(restored.node('a')).toBeDefined()
       expect(restored.node('b')).toBeDefined()
@@ -382,8 +397,8 @@ describe('MultiAgentState', () => {
 
       expect(restored.steps).toBe(3)
       expect(restored.results).toHaveLength(2)
-      expect(restored.results[0]!.nodeId).toBe('researcher')
-      expect(restored.results[1]!.nodeId).toBe('writer')
+      expect(restored.results[0]).toMatchObject({ nodeId: 'researcher' })
+      expect(restored.results[1]).toMatchObject({ nodeId: 'writer' })
     })
 
     it('round-trips app state', () => {
@@ -409,8 +424,10 @@ describe('MultiAgentState', () => {
       restored[loadStateFromJSONSymbol](original[stateToJSONSymbol]())
 
       const restoredNs = restored.node('agent-1')!
-      expect(restoredNs.status).toBe(Status.COMPLETED)
-      expect(restoredNs.terminus).toBe(true)
+      expect(restoredNs).toMatchObject({
+        status: Status.COMPLETED,
+        terminus: true,
+      })
       expect(restoredNs.results).toHaveLength(1)
     })
 
@@ -420,9 +437,11 @@ describe('MultiAgentState', () => {
       const restored = new MultiAgentState()
       restored[loadStateFromJSONSymbol](original[stateToJSONSymbol]())
 
+      expect(restored).toMatchObject({
+        steps: 0,
+        results: [],
+      })
       expect(restored.nodes.size).toBe(0)
-      expect(restored.steps).toBe(0)
-      expect(restored.results).toEqual([])
     })
 
     it('handles loadStateFromJSONSymbol with missing nodes key gracefully', () => {
@@ -436,8 +455,8 @@ describe('MultiAgentState', () => {
       const restored = new MultiAgentState()
       restored[loadStateFromJSONSymbol](json)
 
+      expect(restored).toMatchObject({ startTime: 1000 })
       expect(restored.nodes.size).toBe(0)
-      expect(restored.startTime).toBe(1000)
     })
 
     it('preserves startTime exactly (no re-initialization)', () => {
@@ -452,8 +471,10 @@ describe('MultiAgentState', () => {
       const restored = new MultiAgentState()
       restored[loadStateFromJSONSymbol](json)
 
-      expect(restored.startTime).toBe(1234567890)
-      expect(restored.steps).toBe(5)
+      expect(restored).toMatchObject({
+        startTime: 1234567890,
+        steps: 5,
+      })
     })
   })
 })
