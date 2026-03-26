@@ -8,7 +8,7 @@
 
 import { Message, TextBlock } from '../types/messages.js'
 import { ConversationManager, type ConversationManagerReduceOptions } from './conversation-manager.js'
-import type { Model } from '../models/model.js'
+import type { Agent } from '../agent/agent.js'
 import { logger } from '../logging/logger.js'
 
 const DEFAULT_SUMMARIZATION_PROMPT = `You are a conversation summarizer. Provide a concise summary of the conversation \
@@ -45,9 +45,9 @@ Example format:
  */
 export type SummarizationConversationManagerConfig = {
   /**
-   * The model to use for generating summaries.
+   * The agent whose model will be used for generating summaries.
    */
-  model: Model
+  agent: Agent
 
   /**
    * Ratio of messages to summarize when context overflow occurs.
@@ -78,14 +78,14 @@ export type SummarizationConversationManagerConfig = {
 export class SummarizationConversationManager extends ConversationManager {
   readonly name = 'strands:summarization-conversation-manager'
 
-  private readonly _model: Model
+  private readonly _agent: Agent
   private readonly _summaryRatio: number
   private readonly _preserveRecentMessages: number
   private readonly _summarizationSystemPrompt: string
 
   constructor(config: SummarizationConversationManagerConfig) {
     super()
-    this._model = config.model
+    this._agent = config.agent
     // clamped [0.1, 0.8]
     this._summaryRatio = Math.max(0.1, Math.min(0.8, config.summaryRatio ?? 0.3))
     this._preserveRecentMessages = config.preserveRecentMessages ?? 10
@@ -128,10 +128,10 @@ export class SummarizationConversationManager extends ConversationManager {
 
       return true
     } catch (summarizationError) {
-      logger.error('summarization failed', summarizationError)
-      throw summarizationError instanceof Error
-        ? summarizationError
-        : new Error(String(summarizationError), { cause: error })
+      logger.error(`error=<${summarizationError}> | summarization failed`)
+      const wrapped = summarizationError instanceof Error ? summarizationError : new Error(String(summarizationError))
+      wrapped.cause = error
+      throw wrapped
     }
   }
 
@@ -150,7 +150,7 @@ export class SummarizationConversationManager extends ConversationManager {
       }),
     ]
 
-    const stream = this._model.streamAggregated(summarizationMessages, {
+    const stream = this._agent.model.streamAggregated(summarizationMessages, {
       systemPrompt: this._summarizationSystemPrompt,
     })
 

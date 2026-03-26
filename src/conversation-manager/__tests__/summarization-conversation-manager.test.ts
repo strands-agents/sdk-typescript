@@ -17,8 +17,9 @@ describe('SummarizationConversationManager', () => {
   describe('constructor', () => {
     it('clamps summaryRatio to [0.1, 0.8]', () => {
       const model = new MockMessageModel()
-      expect((new SummarizationConversationManager({ model, summaryRatio: 0 }) as any)._summaryRatio).toBe(0.1)
-      expect((new SummarizationConversationManager({ model, summaryRatio: 1.0 }) as any)._summaryRatio).toBe(0.8)
+      const agent = createMockAgent({ extra: { model } })
+      expect((new SummarizationConversationManager({ agent, summaryRatio: 0 }) as any)._summaryRatio).toBe(0.1)
+      expect((new SummarizationConversationManager({ agent, summaryRatio: 1.0 }) as any)._summaryRatio).toBe(0.8)
     })
   })
 
@@ -28,7 +29,7 @@ describe('SummarizationConversationManager', () => {
       model.addTurn({ type: 'textBlock', text: 'Summary of conversation' })
 
       const manager = new SummarizationConversationManager({
-        model,
+        agent: createMockAgent({ extra: { model } }),
         summaryRatio: 0.5,
         preserveRecentMessages: 2,
       })
@@ -55,7 +56,10 @@ describe('SummarizationConversationManager', () => {
 
     it('returns false when there are not enough messages to summarize', async () => {
       const model = new MockMessageModel()
-      const manager = new SummarizationConversationManager({ model, preserveRecentMessages: 10 })
+      const manager = new SummarizationConversationManager({
+        agent: createMockAgent({ extra: { model } }),
+        preserveRecentMessages: 10,
+      })
       const messages = makeMessages(8)
       const mockAgent = createMockAgent({ messages })
 
@@ -68,20 +72,22 @@ describe('SummarizationConversationManager', () => {
       expect(mockAgent.messages).toHaveLength(8)
     })
 
-    it('rethrows model errors', async () => {
+    it('rethrows model errors with the overflow error as cause', async () => {
       const model = new MockMessageModel()
       model.addTurn(new Error('model failed'))
 
       const manager = new SummarizationConversationManager({
-        model,
+        agent: createMockAgent({ extra: { model } }),
         summaryRatio: 0.5,
         preserveRecentMessages: 2,
       })
+      const overflowError = new ContextWindowOverflowError('overflow')
       const mockAgent = createMockAgent({ messages: makeMessages(20) })
 
-      await expect(
-        manager.reduce({ agent: mockAgent, error: new ContextWindowOverflowError('overflow') })
-      ).rejects.toThrow('model failed')
+      const thrown = await manager.reduce({ agent: mockAgent, error: overflowError }).catch((e: unknown) => e)
+      expect(thrown).toBeInstanceOf(Error)
+      expect((thrown as Error).message).toBe('model failed')
+      expect((thrown as Error).cause).toBe(overflowError)
     })
 
     it('wraps non-Error throw values with the overflow error as cause', async () => {
@@ -93,7 +99,7 @@ describe('SummarizationConversationManager', () => {
       } as any)
 
       const manager = new SummarizationConversationManager({
-        model,
+        agent: createMockAgent({ extra: { model } }),
         summaryRatio: 0.5,
         preserveRecentMessages: 2,
       })
@@ -113,7 +119,7 @@ describe('SummarizationConversationManager', () => {
 
       const customPrompt = 'Custom summarization prompt'
       const manager = new SummarizationConversationManager({
-        model,
+        agent: createMockAgent({ extra: { model } }),
         summaryRatio: 0.5,
         preserveRecentMessages: 2,
         summarizationSystemPrompt: customPrompt,
@@ -144,7 +150,7 @@ describe('SummarizationConversationManager', () => {
       model.addTurn({ type: 'textBlock', text: 'Summary' })
 
       const manager = new SummarizationConversationManager({
-        model,
+        agent: createMockAgent({ extra: { model } }),
         summaryRatio: 0.8,
         preserveRecentMessages: 18,
       })
@@ -169,7 +175,7 @@ describe('SummarizationConversationManager', () => {
       model.addTurn({ type: 'textBlock', text: 'Summary' })
 
       const manager = new SummarizationConversationManager({
-        model,
+        agent: createMockAgent({ extra: { model } }),
         summaryRatio: 0.3,
         preserveRecentMessages: 2,
       })
@@ -204,7 +210,7 @@ describe('SummarizationConversationManager', () => {
     it('throws when no valid split point exists', async () => {
       const model = new MockMessageModel()
       const manager = new SummarizationConversationManager({
-        model,
+        agent: createMockAgent({ extra: { model } }),
         summaryRatio: 0.5,
         preserveRecentMessages: 0,
       })
@@ -236,7 +242,7 @@ describe('SummarizationConversationManager', () => {
       model.addTurn({ type: 'textBlock', text: 'Summary' })
 
       const manager = new SummarizationConversationManager({
-        model,
+        agent: createMockAgent({ extra: { model } }),
         summaryRatio: 0.5,
         preserveRecentMessages: 2,
       })
