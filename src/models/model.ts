@@ -344,14 +344,15 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
           }
 
           case 'modelMessageStopEvent':
-            // Store message and stop reason
-            if (messageRole) {
-              stoppedMessage = new Message({
-                role: messageRole,
-                content: [...contentBlocks],
-              })
-              finalStopReason = event.stopReason!
-            }
+            // Store message and stop reason.
+            // Bedrock may return messageStop without messageStart when the model
+            // produces an empty response (e.g., after certain tool results).
+            // In that case, default to 'assistant' role with empty content.
+            stoppedMessage = new Message({
+              role: messageRole ?? 'assistant',
+              content: [...contentBlocks],
+            })
+            finalStopReason = event.stopReason!
             break
 
           case 'modelMetadataEvent':
