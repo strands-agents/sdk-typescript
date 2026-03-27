@@ -8,8 +8,8 @@
 
 import { Message, TextBlock } from '../types/messages.js'
 import { ConversationManager, type ConversationManagerReduceOptions } from './conversation-manager.js'
-import type { Agent } from '../agent/agent.js'
 import { logger } from '../logging/logger.js'
+import type { Model } from '../models/model.js'
 
 const DEFAULT_SUMMARIZATION_PROMPT = `You are a conversation summarizer. Provide a concise summary of the conversation \
 history.
@@ -45,11 +45,6 @@ Example format:
  */
 export type SummarizationConversationManagerConfig = {
   /**
-   * The agent whose model will be used for generating summaries.
-   */
-  agent: Agent
-
-  /**
    * Ratio of messages to summarize when context overflow occurs.
    * Value is clamped to [0.1, 0.8]. Defaults to 0.3 (summarize 30% of oldest messages).
    */
@@ -78,18 +73,16 @@ export type SummarizationConversationManagerConfig = {
 export class SummarizationConversationManager extends ConversationManager {
   readonly name = 'strands:summarization-conversation-manager'
 
-  private readonly _agent: Agent
   private readonly _summaryRatio: number
   private readonly _preserveRecentMessages: number
   private readonly _summarizationSystemPrompt: string
 
-  constructor(config: SummarizationConversationManagerConfig) {
+  constructor(config?: SummarizationConversationManagerConfig) {
     super()
-    this._agent = config.agent
     // clamped [0.1, 0.8]
-    this._summaryRatio = Math.max(0.1, Math.min(0.8, config.summaryRatio ?? 0.3))
-    this._preserveRecentMessages = config.preserveRecentMessages ?? 10
-    this._summarizationSystemPrompt = config.summarizationSystemPrompt ?? DEFAULT_SUMMARIZATION_PROMPT
+    this._summaryRatio = Math.max(0.1, Math.min(0.8, config?.summaryRatio ?? 0.3))
+    this._preserveRecentMessages = config?.preserveRecentMessages ?? 10
+    this._summarizationSystemPrompt = config?.summarizationSystemPrompt ?? DEFAULT_SUMMARIZATION_PROMPT
   }
 
   /**
@@ -98,7 +91,7 @@ export class SummarizationConversationManager extends ConversationManager {
    * @param options - The reduction options
    * @returns `true` if the history was reduced, `false` otherwise
    */
-  async reduce({ agent, error }: ConversationManagerReduceOptions): Promise<boolean> {
+  async reduce({ agent, model, error }: ConversationManagerReduceOptions): Promise<boolean> {
     const messages = agent.messages
 
     // Calculate how many messages to summarize
@@ -121,7 +114,7 @@ export class SummarizationConversationManager extends ConversationManager {
       const messagesToSummarize = messages.slice(0, messagesToSummarizeCount)
 
       // Generate summary via model call
-      const summaryMessage = await this._generateSummary(messagesToSummarize)
+      const summaryMessage = await this._generateSummary(messagesToSummarize, model)
 
       // Replace summarized messages with the summary
       messages.splice(0, messagesToSummarizeCount, summaryMessage)
@@ -141,7 +134,7 @@ export class SummarizationConversationManager extends ConversationManager {
    * @param messagesToSummarize - The messages to summarize
    * @returns A user-role message containing the summary
    */
-  private async _generateSummary(messagesToSummarize: Message[]): Promise<Message> {
+  private async _generateSummary(messagesToSummarize: Message[], model: Model): Promise<Message> {
     const summarizationMessages = [
       ...messagesToSummarize,
       new Message({
@@ -150,7 +143,7 @@ export class SummarizationConversationManager extends ConversationManager {
       }),
     ]
 
-    const stream = this._agent.model.streamAggregated(summarizationMessages, {
+    const stream = model.streamAggregated(summarizationMessages, {
       systemPrompt: this._summarizationSystemPrompt,
     })
 

@@ -297,11 +297,12 @@ describe('AfterToolCallEvent', () => {
 describe('BeforeModelCallEvent', () => {
   it('creates instance with correct properties', () => {
     const agent = new Agent()
-    const event = new BeforeModelCallEvent({ agent })
+    const event = new BeforeModelCallEvent({ agent, model: agent.model })
 
     expect(event).toEqual({
       type: 'beforeModelCallEvent',
       agent: agent,
+      model: agent.model,
     })
     // @ts-expect-error verifying that property is readonly
     event.agent = new Agent()
@@ -309,7 +310,7 @@ describe('BeforeModelCallEvent', () => {
 
   it('returns false for _shouldReverseCallbacks', () => {
     const agent = new Agent()
-    const event = new BeforeModelCallEvent({ agent })
+    const event = new BeforeModelCallEvent({ agent, model: agent.model })
     expect(event._shouldReverseCallbacks()).toBe(false)
   })
 })
@@ -320,11 +321,12 @@ describe('AfterModelCallEvent', () => {
     const message = new Message({ role: 'assistant', content: [new TextBlock('Response')] })
     const stopReason = 'endTurn'
     const response = { message, stopReason }
-    const event = new AfterModelCallEvent({ agent, stopData: response })
+    const event = new AfterModelCallEvent({ agent, model: agent.model, stopData: response })
 
     expect(event).toEqual({
       type: 'afterModelCallEvent',
       agent: agent,
+      model: agent.model,
       stopData: response,
       error: undefined,
     })
@@ -339,11 +341,12 @@ describe('AfterModelCallEvent', () => {
     const message = new Message({ role: 'assistant', content: [] })
     const error = new Error('Model failed')
     const response = { message, stopReason: 'error' }
-    const event = new AfterModelCallEvent({ agent, stopData: response, error })
+    const event = new AfterModelCallEvent({ agent, model: agent.model, stopData: response, error })
 
     expect(event).toEqual({
       type: 'afterModelCallEvent',
       agent: agent,
+      model: agent.model,
       stopData: response,
       error: error,
     })
@@ -353,14 +356,14 @@ describe('AfterModelCallEvent', () => {
     const agent = new Agent()
     const message = new Message({ role: 'assistant', content: [] })
     const response = { message, stopReason: 'endTurn' }
-    const event = new AfterModelCallEvent({ agent, stopData: response })
+    const event = new AfterModelCallEvent({ agent, model: agent.model, stopData: response })
     expect(event._shouldReverseCallbacks()).toBe(true)
   })
 
   it('allows retry to be set when error is present', () => {
     const agent = new Agent()
     const error = new Error('Model failed')
-    const event = new AfterModelCallEvent({ agent, error })
+    const event = new AfterModelCallEvent({ agent, model: agent.model, error })
 
     // Initially undefined
     expect(event.retry).toBeUndefined()
@@ -377,7 +380,7 @@ describe('AfterModelCallEvent', () => {
   it('retry is optional and defaults to undefined', () => {
     const agent = new Agent()
     const error = new Error('Model failed')
-    const event = new AfterModelCallEvent({ agent, error })
+    const event = new AfterModelCallEvent({ agent, model: agent.model, error })
 
     expect(event.retry).toBeUndefined()
   })
@@ -627,9 +630,9 @@ describe('toJSON serialization', () => {
   })
 
   describe('BeforeModelCallEvent', () => {
-    it('excludes agent and returns only type', () => {
+    it('excludes agent and model and returns only type', () => {
       const agent = new Agent()
-      const event = new BeforeModelCallEvent({ agent })
+      const event = new BeforeModelCallEvent({ agent, model: agent.model })
       const json = JSON.parse(JSON.stringify(event))
 
       expect(json).toStrictEqual({ type: 'beforeModelCallEvent' })
@@ -812,11 +815,11 @@ describe('toJSON serialization', () => {
   })
 
   describe('AfterModelCallEvent', () => {
-    it('includes stopData and excludes agent on success', () => {
+    it('includes stopData and excludes agent and model on success', () => {
       const agent = new Agent()
       const message = new Message({ role: 'assistant', content: [new TextBlock('Hi')] })
       const stopData = { message, stopReason: 'endTurn' as const }
-      const event = new AfterModelCallEvent({ agent, stopData })
+      const event = new AfterModelCallEvent({ agent, model: agent.model, stopData })
       const json = JSON.parse(JSON.stringify(event))
 
       expect(json).toStrictEqual({
@@ -831,7 +834,7 @@ describe('toJSON serialization', () => {
     it('converts error to message string and excludes retry', () => {
       const agent = new Agent()
       const error = new Error('Model failed')
-      const event = new AfterModelCallEvent({ agent, error })
+      const event = new AfterModelCallEvent({ agent, model: agent.model, error })
       event.retry = true
       const json = JSON.parse(JSON.stringify(event))
 
@@ -917,7 +920,7 @@ describe('toJSON serialization completeness', () => {
    * If you add a new field to an event and it should be excluded from wire serialization,
    * add it here. Otherwise, add it to toJSON() so it gets serialized.
    */
-  const EXCLUDED_FIELDS = new Set(['agent', 'tool', 'cancel', 'retry'])
+  const EXCLUDED_FIELDS = new Set(['agent', 'model', 'tool', 'cancel', 'retry'])
 
   /**
    * Fields where toJSON() transforms the value (e.g., Error to message object).
@@ -950,10 +953,10 @@ describe('toJSON serialization completeness', () => {
       { name: 'InitializedEvent', event: new InitializedEvent({ agent }) },
       { name: 'BeforeInvocationEvent', event: new BeforeInvocationEvent({ agent }) },
       { name: 'AfterInvocationEvent', event: new AfterInvocationEvent({ agent }) },
-      { name: 'BeforeModelCallEvent', event: new BeforeModelCallEvent({ agent }) },
+      { name: 'BeforeModelCallEvent', event: new BeforeModelCallEvent({ agent, model: agent.model }) },
       {
         name: 'AfterModelCallEvent',
-        event: Object.assign(new AfterModelCallEvent({ agent, stopData, error }), { retry: true }),
+        event: Object.assign(new AfterModelCallEvent({ agent, model: agent.model, stopData, error }), { retry: true }),
       },
       { name: 'MessageAddedEvent', event: new MessageAddedEvent({ agent, message }) },
       { name: 'ModelStreamUpdateEvent', event: new ModelStreamUpdateEvent({ agent, event: streamEvent }) },

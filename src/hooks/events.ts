@@ -3,6 +3,7 @@ import type { ContentBlock, Message, StopReason, ToolResultBlock } from '../type
 import { type Tool, ToolStreamEvent } from '../tools/tool.js'
 import type { JSONValue } from '../types/json.js'
 import type { ModelStreamEvent } from '../models/streaming.js'
+import type { Model } from '../models/model.js'
 
 /**
  * Agent hook events.
@@ -281,10 +282,12 @@ export class AfterToolCallEvent extends HookableEvent {
 export class BeforeModelCallEvent extends HookableEvent {
   readonly type = 'beforeModelCallEvent' as const
   readonly agent: LocalAgent
+  readonly model: Model
 
-  constructor(data: { agent: LocalAgent }) {
+  constructor(data: { agent: LocalAgent; model: Model }) {
     super()
     this.agent = data.agent
+    this.model = data.model
   }
 
   /**
@@ -337,6 +340,7 @@ export interface ModelStopData {
 export class AfterModelCallEvent extends HookableEvent {
   readonly type = 'afterModelCallEvent' as const
   readonly agent: LocalAgent
+  readonly model: Model
   readonly stopData?: ModelStopData
   readonly error?: Error
 
@@ -346,9 +350,10 @@ export class AfterModelCallEvent extends HookableEvent {
    */
   retry?: boolean
 
-  constructor(data: { agent: LocalAgent; stopData?: ModelStopData; error?: Error }) {
+  constructor(data: { agent: LocalAgent; model: Model; stopData?: ModelStopData; error?: Error }) {
     super()
     this.agent = data.agent
+    this.model = data.model
     if (data.stopData !== undefined) {
       this.stopData = data.stopData
     }

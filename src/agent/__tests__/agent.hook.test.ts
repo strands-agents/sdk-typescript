@@ -42,10 +42,11 @@ describe('Agent Hooks Integration', () => {
       expect(lifecyclePlugin.invocations[2]).toEqual(
         new MessageAddedEvent({ agent, message: new Message({ role: 'user', content: [new TextBlock('Hi')] }) })
       )
-      expect(lifecyclePlugin.invocations[3]).toEqual(new BeforeModelCallEvent({ agent }))
+      expect(lifecyclePlugin.invocations[3]).toEqual(new BeforeModelCallEvent({ agent, model: agent.model }))
       expect(lifecyclePlugin.invocations[4]).toEqual(
         new AfterModelCallEvent({
           agent,
+          model: agent.model,
           stopData: {
             stopReason: 'endTurn',
             message: new Message({ role: 'assistant', content: [new TextBlock('Hello')] }),
@@ -78,10 +79,11 @@ describe('Agent Hooks Integration', () => {
           message: new Message({ role: 'user', content: [new TextBlock('Hi')] }),
         })
       )
-      expect(lifecyclePlugin.invocations[3]).toEqual(new BeforeModelCallEvent({ agent }))
+      expect(lifecyclePlugin.invocations[3]).toEqual(new BeforeModelCallEvent({ agent, model: agent.model }))
       expect(lifecyclePlugin.invocations[4]).toEqual(
         new AfterModelCallEvent({
           agent,
+          model: agent.model,
           stopData: {
             stopReason: 'endTurn',
             message: new Message({ role: 'assistant', content: [new TextBlock('Hello')] }),

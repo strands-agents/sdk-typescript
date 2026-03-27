@@ -539,6 +539,7 @@ describe('SessionManager', () => {
       const assistantMessage = new Message({ role: 'assistant', content: [new TextBlock('Response')] })
       const event = new AfterModelCallEvent({
         agent: mockAgent,
+        model: {} as any,
         stopData: {
           message: assistantMessage,
           stopReason: 'endTurn' as const,
@@ -564,6 +565,7 @@ describe('SessionManager', () => {
       const assistantMessage = new Message({ role: 'assistant', content: [new TextBlock('Response')] })
       const event = new AfterModelCallEvent({
         agent: mockAgent,
+        model: {} as any,
         stopData: { message: assistantMessage, stopReason: 'endTurn' as const },
       } as any)
 
