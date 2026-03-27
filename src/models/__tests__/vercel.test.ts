@@ -68,7 +68,7 @@ function setupCaptureTest(
   collect: (messages: Message[], options?: Parameters<VercelModel['stream']>[1]) => ReturnType<typeof collectIterator>
 } {
   const mock = createMockModel(parts)
-  const model = new VercelModel({ model: mock, ...config })
+  const model = new VercelModel({ provider: mock, ...config })
   return {
     model,
     mock,
@@ -85,14 +85,14 @@ describe('VercelModel', () => {
   describe('constructor and config', () => {
     it('uses model.modelId as default and allows override', () => {
       const mock = createMockModel([])
-      expect(new VercelModel({ model: mock }).getConfig().modelId).toBe('test-model')
-      expect(new VercelModel({ model: mock, modelId: 'custom-id' }).getConfig().modelId).toBe('custom-id')
+      expect(new VercelModel({ provider: mock }).getConfig().modelId).toBe('test-model')
+      expect(new VercelModel({ provider: mock, modelId: 'custom-id' }).getConfig().modelId).toBe('custom-id')
     })
 
     it('passes through all config fields', () => {
       const mock = createMockModel([])
       const model = new VercelModel({
-        model: mock,
+        provider: mock,
         maxTokens: 100,
         temperature: 0.5,
         topP: 0.9,
@@ -117,7 +117,7 @@ describe('VercelModel', () => {
 
     it('updateConfig merges config and getConfig returns a copy', () => {
       const mock = createMockModel([])
-      const model = new VercelModel({ model: mock })
+      const model = new VercelModel({ provider: mock })
       model.updateConfig({ modelId: 'updated', maxTokens: 200 })
       const config1 = model.getConfig()
       const config2 = model.getConfig()
@@ -421,7 +421,7 @@ describe('VercelModel', () => {
             },
           }),
         })
-        const model = new VercelModel({ model: mock })
+        const model = new VercelModel({ provider: mock })
 
         await expect(collectIterator(model.stream([]))).rejects.toThrow(ModelThrottledError)
       })

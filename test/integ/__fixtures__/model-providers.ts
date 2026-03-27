@@ -209,7 +209,7 @@ export const vercelBedrock = {
       providerOptions?: Record<string, unknown>
     }
     return new VercelModel({
-      model: provider('us.anthropic.claude-sonnet-4-20250514-v1:0'),
+      provider: provider('us.anthropic.claude-sonnet-4-20250514-v1:0'),
       ...rest,
       ...(providerOptions && { providerOptions }),
     })
@@ -246,7 +246,7 @@ export const vercelOpenAI = {
       providerOptions?: Record<string, unknown>
     }
     return new VercelModel({
-      model: provider('gpt-4o'),
+      provider: provider('gpt-4o'),
       ...rest,
       ...(providerOptions && { providerOptions }),
     })

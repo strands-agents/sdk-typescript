@@ -81,7 +81,7 @@ export interface VercelModelOptions extends Partial<VercelModelConfig> {
   /**
    * A LanguageModelV3 instance from any Vercel provider.
    */
-  model: LanguageModelV3
+  provider: LanguageModelV3
 }
 
 /**
@@ -98,7 +98,7 @@ export interface VercelModelOptions extends Partial<VercelModelConfig> {
  * import { bedrock } from '@ai-sdk/amazon-bedrock'
  *
  * const agent = new Agent({
- *   model: new VercelModel({ model: bedrock('us.anthropic.claude-sonnet-4-20250514-v1:0') }),
+ *   model: new VercelModel({ provider: bedrock('us.anthropic.claude-sonnet-4-20250514-v1:0') }),
  * })
  *
  * for await (const event of agent.stream('Hello!')) {
@@ -119,10 +119,10 @@ export class VercelModel extends Model<VercelModelConfig> {
    */
   constructor(options: VercelModelOptions) {
     super()
-    const { model, modelId, maxTokens, ...callSettings } = options
-    this._model = model
+    const { provider, modelId, maxTokens, ...callSettings } = options
+    this._model = provider
     this._config = {
-      modelId: modelId ?? model.modelId,
+      modelId: modelId ?? provider.modelId,
       ...(maxTokens != null && { maxTokens }),
       ...callSettings,
     }
