@@ -210,10 +210,8 @@ export const vercelBedrock = {
     }
     return new VercelModel({
       model: provider('us.anthropic.claude-sonnet-4-20250514-v1:0'),
-      config: {
-        ...rest,
-        ...(providerOptions && { providerOptions }),
-      },
+      ...rest,
+      ...(providerOptions && { providerOptions }),
     })
   },
 }
@@ -249,10 +247,8 @@ export const vercelOpenAI = {
     }
     return new VercelModel({
       model: provider('gpt-4o'),
-      config: {
-        ...rest,
-        ...(providerOptions && { providerOptions }),
-      },
+      ...rest,
+      ...(providerOptions && { providerOptions }),
     })
   },
 }

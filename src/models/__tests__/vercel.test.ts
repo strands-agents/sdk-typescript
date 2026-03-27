@@ -68,7 +68,7 @@ function setupCaptureTest(
   collect: (messages: Message[], options?: Parameters<VercelModel['stream']>[1]) => ReturnType<typeof collectIterator>
 } {
   const mock = createMockModel(parts)
-  const model = new VercelModel({ model: mock, ...(config && { config }) })
+  const model = new VercelModel({ model: mock, ...config })
   return {
     model,
     mock,
@@ -86,23 +86,21 @@ describe('VercelModel', () => {
     it('uses model.modelId as default and allows override', () => {
       const mock = createMockModel([])
       expect(new VercelModel({ model: mock }).getConfig().modelId).toBe('test-model')
-      expect(new VercelModel({ model: mock, config: { modelId: 'custom-id' } }).getConfig().modelId).toBe('custom-id')
+      expect(new VercelModel({ model: mock, modelId: 'custom-id' }).getConfig().modelId).toBe('custom-id')
     })
 
     it('passes through all config fields', () => {
       const mock = createMockModel([])
       const model = new VercelModel({
         model: mock,
-        config: {
-          maxTokens: 100,
-          temperature: 0.5,
-          topP: 0.9,
-          topK: 40,
-          presencePenalty: 0.5,
-          frequencyPenalty: 0.3,
-          stopSequences: ['END'],
-          seed: 42,
-        },
+        maxTokens: 100,
+        temperature: 0.5,
+        topP: 0.9,
+        topK: 40,
+        presencePenalty: 0.5,
+        frequencyPenalty: 0.3,
+        stopSequences: ['END'],
+        seed: 42,
       })
       expect(model.getConfig()).toStrictEqual({
         modelId: 'test-model',

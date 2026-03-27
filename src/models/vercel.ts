@@ -77,16 +77,11 @@ export interface VercelModelConfig extends BaseModelConfig, LanguageModelCallSet
 /**
  * Options for creating a VercelModel instance.
  */
-export interface VercelModelOptions {
+export interface VercelModelOptions extends Partial<VercelModelConfig> {
   /**
    * A LanguageModelV3 instance from any Vercel provider.
    */
   model: LanguageModelV3
-
-  /**
-   * Optional configuration overrides.
-   */
-  config?: Partial<VercelModelConfig>
 }
 
 /**
@@ -124,10 +119,10 @@ export class VercelModel extends Model<VercelModelConfig> {
    */
   constructor(options: VercelModelOptions) {
     super()
-    this._model = options.model
-    const { modelId, maxTokens, ...callSettings } = options.config ?? {}
+    const { model, modelId, maxTokens, ...callSettings } = options
+    this._model = model
     this._config = {
-      modelId: modelId ?? options.model.modelId,
+      modelId: modelId ?? model.modelId,
       ...(maxTokens != null && { maxTokens }),
       ...callSettings,
     }
@@ -577,12 +572,6 @@ function formatToolResultOutput(
     return { type: 'error-text', value: errorText || 'Tool execution failed' }
   }
 
-  if (content.length === 1) {
-    const item = content[0]!
-    if (item.type === 'textBlock') return { type: 'text', value: item.text }
-    if (item.type === 'jsonBlock') return { type: 'json', value: item.json as Parameters<typeof JSON.stringify>[0] }
-  }
-
   const value: Array<{ type: 'text'; text: string } | { type: 'file-data'; data: string; mediaType: string }> = []
   for (const c of content) {
     switch (c.type) {
@@ -627,6 +616,11 @@ function formatToolResultOutput(
         }
         break
       }
+      default:
+        logger.warn(
+          `block_type=<${(c as unknown as { type: string }).type}> | unsupported content type in vercel tool result, skipping`
+        )
+        break
     }
   }
   return { type: 'content', value }
