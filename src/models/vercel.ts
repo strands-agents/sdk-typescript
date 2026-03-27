@@ -109,7 +109,7 @@ export interface VercelModelOptions extends Partial<VercelModelConfig> {
  * ```
  */
 export class VercelModel extends Model<VercelModelConfig> {
-  private _model: LanguageModelV3
+  private _provider: LanguageModelV3
   private _config: VercelModelConfig
 
   /**
@@ -120,7 +120,7 @@ export class VercelModel extends Model<VercelModelConfig> {
   constructor(options: VercelModelOptions) {
     super()
     const { provider, modelId, maxTokens, ...callSettings } = options
-    this._model = provider
+    this._provider = provider
     this._config = {
       modelId: modelId ?? provider.modelId,
       ...(maxTokens != null && { maxTokens }),
@@ -153,7 +153,7 @@ export class VercelModel extends Model<VercelModelConfig> {
 
     let result
     try {
-      result = await this._model.doStream(callOptions)
+      result = await this._provider.doStream(callOptions)
     } catch (error) {
       throw classifyError(error)
     }
