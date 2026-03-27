@@ -66,7 +66,6 @@ describe('SlidingWindowConversationManager', () => {
 
       const result = manager.reduce({
         agent: createMockAgent({ messages }),
-        model: {} as any,
         error: new ContextWindowOverflowError('overflow'),
       })
 
@@ -85,7 +84,6 @@ describe('SlidingWindowConversationManager', () => {
 
       const result = manager.reduce({
         agent: createMockAgent({ messages }),
-        model: {} as any,
         error: new ContextWindowOverflowError('overflow'),
       })
 
@@ -600,7 +598,6 @@ describe('SlidingWindowConversationManager', () => {
 
       const result = manager.reduce({
         agent: createMockAgent({ messages }),
-        model: {} as any,
         error: new ContextWindowOverflowError('Context overflow'),
       })
 

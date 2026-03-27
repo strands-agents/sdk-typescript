@@ -92,6 +92,10 @@ export class SummarizationConversationManager extends ConversationManager {
    * @returns `true` if the history was reduced, `false` otherwise
    */
   async reduce({ agent, model, error }: ConversationManagerReduceOptions): Promise<boolean> {
+    if (!model) {
+      throw new Error('SummarizationConversationManager requires a model to generate summaries')
+    }
+
     const messages = agent.messages
 
     // Calculate how many messages to summarize
