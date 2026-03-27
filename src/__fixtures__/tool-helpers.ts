@@ -9,6 +9,7 @@ import type { JSONValue } from '../types/json.js'
 import { StateStore } from '../state-store.js'
 import { ToolRegistry } from '../registry/tool-registry.js'
 import type { PlainToolResultBlock } from './slim-types.js'
+import type { LocalAgent } from '../types/agent.js'
 
 /**
  * Helper to create a mock ToolContext for testing.
@@ -29,7 +30,7 @@ export function createMockContext(
       messages: [],
       toolRegistry: new ToolRegistry(),
       addHook: () => () => {},
-    },
+    } as unknown as LocalAgent,
   }
 }
 
