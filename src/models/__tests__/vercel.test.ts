@@ -10,7 +10,7 @@ import { VercelModel } from '../vercel.js'
 import { ContextWindowOverflowError, ModelError, ModelThrottledError } from '../../errors.js'
 import { logger } from '../../logging/logger.js'
 import { collectIterator } from '../../__fixtures__/model-test-helpers.js'
-import { Message, TextBlock, ToolUseBlock, ToolResultBlock, ReasoningBlock } from '../../types/messages.js'
+import { Message, TextBlock, ToolUseBlock, ToolResultBlock, ReasoningBlock, JsonBlock } from '../../types/messages.js'
 import { DocumentBlock, ImageBlock, VideoBlock } from '../../types/media.js'
 import type { ToolSpec } from '../../tools/types.js'
 
@@ -693,6 +693,122 @@ describe('VercelModel', () => {
         const prompt = callArgs().prompt
         expect(prompt).toHaveLength(1)
         expect((prompt[0] as any).role).toBe('assistant')
+      })
+    })
+    describe('tool result output formatting', () => {
+      function toolResultMessages(
+        content: ToolResultBlock['content'],
+        status: 'success' | 'error' = 'success'
+      ): Message[] {
+        return [
+          new Message({
+            role: 'assistant',
+            content: [new ToolUseBlock({ name: 'tool', toolUseId: 'tu1', input: {} })],
+          }),
+          new Message({
+            role: 'user',
+            content: [new ToolResultBlock({ toolUseId: 'tu1', status, content })],
+          }),
+        ]
+      }
+
+      async function getToolOutput(content: ToolResultBlock['content'], status?: 'success' | 'error'): Promise<any> {
+        const { collect, callArgs } = setupCaptureTest()
+        await collect(toolResultMessages(content, status))
+        return (callArgs().prompt.find((m: any) => m.role === 'tool') as any).content[0].output
+      }
+
+      it('formats error status with text and fallback', async () => {
+        expect(await getToolOutput([new TextBlock('boom')], 'error')).toStrictEqual({
+          type: 'error-text',
+          value: 'boom',
+        })
+        expect(await getToolOutput([], 'error')).toStrictEqual({
+          type: 'error-text',
+          value: 'Tool execution failed',
+        })
+      })
+
+      it.each([
+        { name: 'text', content: [new TextBlock('result')], expected: [{ type: 'text', text: 'result' }] },
+        {
+          name: 'json',
+          content: [new JsonBlock({ json: { k: 'v' } })],
+          expected: [{ type: 'text', text: '{"k":"v"}' }],
+        },
+        {
+          name: 'image URL',
+          content: [new ImageBlock({ format: 'png', source: { url: 'https://example.com/img.png' } })],
+          expected: [{ type: 'text', text: 'https://example.com/img.png' }],
+        },
+        {
+          name: 'document text',
+          content: [new DocumentBlock({ format: 'txt', name: 'd', source: { text: 'doc' } })],
+          expected: [{ type: 'text', text: 'doc' }],
+        },
+        {
+          name: 'document content blocks',
+          content: [
+            new DocumentBlock({ format: 'txt', name: 'd', source: { content: [{ text: 'p1' }, { text: 'p2' }] } }),
+          ],
+          expected: [
+            { type: 'text', text: 'p1' },
+            { type: 'text', text: 'p2' },
+          ],
+        },
+      ])('formats $name content as text', async ({ content, expected }) => {
+        expect(await getToolOutput(content)).toStrictEqual({ type: 'content', value: expected })
+      })
+
+      it.each([
+        {
+          name: 'image bytes',
+          content: new ImageBlock({ format: 'png', source: { bytes: new Uint8Array([1]) } }),
+          mediaType: 'image/png',
+        },
+        {
+          name: 'document bytes',
+          content: new DocumentBlock({ format: 'pdf', name: 'd', source: { bytes: new Uint8Array([1]) } }),
+          mediaType: 'application/pdf',
+        },
+        {
+          name: 'video bytes',
+          content: new VideoBlock({ format: 'mp4', source: { bytes: new Uint8Array([1]) } }),
+          mediaType: 'video/mp4',
+        },
+      ])('formats $name as file-data', async ({ content, mediaType }) => {
+        const output = await getToolOutput([content])
+        expect(output.value[0]).toMatchObject({ type: 'file-data', mediaType })
+      })
+
+      it.each([
+        {
+          name: 'image S3',
+          block: new ImageBlock({
+            format: 'png',
+            source: { location: { type: 's3', uri: 's3://b/k', bucketOwner: '' } },
+          }),
+        },
+        {
+          name: 'document S3',
+          block: new DocumentBlock({
+            format: 'pdf',
+            name: 'd',
+            source: { location: { type: 's3', uri: 's3://b/k', bucketOwner: '' } },
+          } as any),
+        },
+        {
+          name: 'video S3',
+          block: new VideoBlock({
+            format: 'mp4',
+            source: { location: { type: 's3', uri: 's3://b/k', bucketOwner: '' } },
+          }),
+        },
+      ])('warns on unsupported $name source', async ({ block }) => {
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+        await getToolOutput([block])
+        expect(warnSpy).toHaveBeenCalled()
+        warnSpy.mockRestore()
       })
     })
   })
