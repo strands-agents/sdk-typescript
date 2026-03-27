@@ -5,6 +5,7 @@ import {
   type InvokeArgs,
   type InvokeOptions,
   type LocalAgent,
+  type localAgentSymbol,
 } from '../types/agent.js'
 import { BedrockModel } from '../models/bedrock.js'
 import {
@@ -167,6 +168,9 @@ const DEFAULT_AGENT_ID = 'agent'
  * and invoking the core decision-making loop.
  */
 export class Agent implements LocalAgent, InvokableAgent {
+  /** @internal */
+  declare readonly [localAgentSymbol]: true
+
   /**
    * The conversation history of messages between user and assistant.
    */

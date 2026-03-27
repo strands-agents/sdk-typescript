@@ -87,10 +87,25 @@ export interface InvokableAgent {
 }
 
 /**
+ * Branded symbol that prevents external implementations of {@link LocalAgent}.
+ *
+ * @internal
+ */
+export declare const localAgentSymbol: unique symbol
+
+/**
  * Interface for agents with locally accessible state, messages, tools, and hooks.
- * Used by ToolContext and hook events that need access to agent internals.
+ *
+ * This interface is exported for typing purposes only (e.g. in {@link ToolContext},
+ * hook events, and {@link Plugin.initAgent}). The Strands SDK is responsible for
+ * providing all implementations. External code should not implement this interface.
+ *
+ * @internal Not for external implementation. Use the {@link Agent} class instead.
  */
 export interface LocalAgent {
+  /** @internal Prevents external implementations of this interface. */
+  readonly [localAgentSymbol]: true
+
   /**
    * The unique identifier of the agent instance.
    */
