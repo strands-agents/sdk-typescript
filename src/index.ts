@@ -230,7 +230,7 @@ export type { SessionManagerConfig, SaveLatestStrategy } from './session/session
 export type { SnapshotManifest, SnapshotTriggerCallback, SnapshotTriggerParams } from './session/types.js'
 export type { SessionStorage, SnapshotStorage, SnapshotLocation } from './session/storage.js'
 export { FileStorage } from './session/file-storage.js'
-export type { Scope, Snapshot } from './agent/snapshot.js'
+export type { Scope, Snapshot } from './types/snapshot.js'
 
 // Local Traces
 export { AgentTrace } from './telemetry/tracer.js'
