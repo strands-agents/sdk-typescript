@@ -11,9 +11,9 @@
 import type { JSONValue } from '../types/json.js'
 import { Agent } from '../agent/agent.js'
 import {
-  createTimestamp,
   takeSnapshot as takeAgentSnapshot,
   loadSnapshot as loadAgentSnapshot,
+  createTimestamp,
 } from '../agent/snapshot.js'
 import type { TakeSnapshotOptions } from '../agent/snapshot.js'
 import { SNAPSHOT_SCHEMA_VERSION } from '../types/snapshot.js'
@@ -29,8 +29,8 @@ import { logger } from '../logging/logger.js'
  * Multi-agent snapshot presets.
  *
  * - `session` — lightweight: orchestratorId + MultiAgentState only.
- *   Placeholder for future session manager integration; additional fields
- *   (e.g. currentNodeId, routing state) will be added as needed.
+ *   Suitable for session manager integration; additional fields
+ *   (e.g. currentNodeId, routing state) can be added as needed.
  *
  * - `full` (default) — everything: orchestratorId + MultiAgentState + per-node agent snapshots.
  *   For checkpointing, debugging, or preserving agent base state across runs.
@@ -131,27 +131,6 @@ export function takeSnapshot(
  * @param snapshot - The snapshot to load
  * @param state - Optional MultiAgentState to restore execution state into
  */
-/**
- * Validates and casts a JSON value to a Snapshot at a deserialization boundary.
- *
- * @param data - The JSON value to validate
- * @returns The validated Snapshot
- * @throws Error if the data is not a valid snapshot structure
- */
-function asSnapshot(data: JSONValue): Snapshot {
-  const obj = data as Record<string, unknown>
-  if (typeof obj?.scope !== 'string') {
-    throw new Error(`Invalid snapshot: missing or non-string 'scope'`)
-  }
-  if (typeof obj.schemaVersion !== 'string') {
-    throw new Error(`Invalid snapshot: missing or non-string 'schemaVersion'`)
-  }
-  if (typeof obj.data !== 'object' || obj.data === null) {
-    throw new Error(`Invalid snapshot: missing or non-object 'data'`)
-  }
-  return data as unknown as Snapshot
-}
-
 export function loadSnapshot(orchestrator: Graph | Swarm, snapshot: Snapshot, state?: MultiAgentState): void {
   if (snapshot.scope !== 'multiAgent') {
     throw new Error(`Expected snapshot scope 'multiAgent', got '${snapshot.scope}'`)
@@ -177,7 +156,7 @@ export function loadSnapshot(orchestrator: Graph | Swarm, snapshot: Snapshot, st
         continue
       }
       if (node instanceof AgentNode && node.agent instanceof Agent) {
-        loadAgentSnapshot(node.agent, asSnapshot(data))
+        loadAgentSnapshot(node.agent, data as unknown as Snapshot)
       } else if (node instanceof AgentNode) {
         logger.warn(
           `node_id=<${id}> | AgentNode wraps a non-Agent InvokableAgent; ` +
@@ -185,17 +164,11 @@ export function loadSnapshot(orchestrator: Graph | Swarm, snapshot: Snapshot, st
         )
       } else if (node instanceof MultiAgentNode) {
         const child = node.orchestrator as Graph | Swarm
-        let childSnapshot: Snapshot
-        try {
-          childSnapshot = asSnapshot(data)
-        } catch {
-          logger.warn(`node_id=<${id}> | invalid nested snapshot structure, skipping`)
-          continue
-        }
+        const childSnapshot = data as unknown as Snapshot
 
         // Validate before recursing — warn and skip rather than throw,
         // since a stale nested snapshot shouldn't fail the entire load.
-        const childId = childSnapshot.data.orchestratorId as string | undefined
+        const childId = childSnapshot.data?.orchestratorId as string | undefined
         if (childId && childId !== child.id) {
           logger.warn(
             `node_id=<${id}> | nested orchestrator ID mismatch: ` + `expected '${child.id}', got '${childId}', skipping`
