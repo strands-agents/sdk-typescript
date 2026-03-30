@@ -59,6 +59,8 @@ import {
   type ModelStopData,
 } from '../hooks/events.js'
 import { StructuredOutputTool, STRUCTURED_OUTPUT_TOOL_NAME } from '../tools/structured-output-tool.js'
+import { AgentAsTool } from './agent-as-tool.js'
+import type { AgentAsToolOptions } from './agent-as-tool.js'
 
 import type { z } from 'zod'
 import type { SessionManager } from '../session/session-manager.js'
@@ -70,8 +72,12 @@ import { logger } from '../logging/logger.js'
 /**
  * Recursive type definition for nested tool arrays.
  * Allows tools to be organized in nested arrays of any depth.
+ *
+ * {@link Agent} instances in the array are automatically wrapped via
+ * {@link Agent.asTool}, so they can be passed directly without calling
+ * `.asTool()` explicitly.
  */
-export type ToolList = (Tool | McpClient | ToolList)[]
+export type ToolList = (Tool | McpClient | Agent | ToolList)[]
 
 /**
  * Configuration object for creating a new Agent.
@@ -105,6 +111,7 @@ export type AgentConfig = {
   /**
    * An initial set of tools to register with the agent.
    * Accepts nested arrays of tools at any depth, which will be flattened automatically.
+   * {@link Agent} instances are automatically wrapped as tools via {@link Agent.asTool}.
    */
   tools?: ToolList
   /**
@@ -442,6 +449,35 @@ export class Agent implements LocalAgent, InvokableAgent {
         result = await streamGenerator.next()
       }
     }
+  }
+
+  /**
+   * Returns a {@link Tool} that wraps this agent, allowing it to be used
+   * as a tool by another agent.
+   *
+   * The returned tool accepts a single `input` string parameter, invokes
+   * this agent, and returns the text response as a tool result.
+   *
+   * **Note:** You can also pass an Agent directly in another agent's
+   * {@link AgentConfig.tools | tools} array — it will be wrapped
+   * automatically via this method.
+   *
+   * @param options - Optional configuration for the tool name, description, and context preservation
+   * @returns A Tool wrapping this agent
+   *
+   * @example
+   * ```typescript
+   * const researcher = new Agent({ name: 'researcher', description: 'Finds info', printer: false })
+   *
+   * // Explicit wrapping
+   * const writer = new Agent({ tools: [researcher.asTool()] })
+   *
+   * // Automatic wrapping (equivalent)
+   * const writer = new Agent({ tools: [researcher] })
+   * ```
+   */
+  public asTool(options?: AgentAsToolOptions): Tool {
+    return new AgentAsTool({ agent: this, ...options })
   }
 
   /**
@@ -1113,6 +1149,8 @@ function flattenTools(toolList: ToolList): { tools: Tool[]; mcpClients: McpClien
       const { tools: nestedTools, mcpClients: nestedMcpClients } = flattenTools(item)
       tools.push(...nestedTools)
       mcpClients.push(...nestedMcpClients)
+    } else if (item instanceof Agent) {
+      tools.push(item.asTool())
     } else if (item instanceof McpClient) {
       mcpClients.push(item)
     } else {

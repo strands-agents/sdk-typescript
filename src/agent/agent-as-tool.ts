@@ -1,0 +1,186 @@
+/**
+ * Agent-as-tool adapter.
+ *
+ * This module provides the AgentAsTool class that wraps an Agent as a tool
+ * so it can be used by another agent. Agents passed directly in the tools
+ * array are automatically wrapped via {@link Agent.asTool}.
+ */
+
+import type { Agent } from './agent.js'
+import { takeSnapshot, loadSnapshot } from './snapshot.js'
+import type { Snapshot } from './snapshot.js'
+import type { JSONValue } from '../types/json.js'
+import { JsonBlock, TextBlock, ToolResultBlock } from '../types/messages.js'
+import { createErrorResult, Tool, ToolStreamEvent } from '../tools/tool.js'
+import type { ToolContext, ToolStreamGenerator } from '../tools/tool.js'
+import type { ToolSpec } from '../tools/types.js'
+
+/**
+ * Options for creating an agent tool via {@link Agent.asTool}.
+ */
+export interface AgentAsToolOptions {
+  /**
+   * Tool name exposed to the parent agent's model.
+   * Must match the pattern `[a-zA-Z0-9_-]{1,64}`.
+   *
+   * Defaults to the agent's name. Throws if the resolved name is not a valid
+   * tool name — provide an explicit name option to override.
+   */
+  name?: string
+
+  /**
+   * Tool description exposed to the parent agent's model.
+   * Helps the model understand when to use this tool.
+   *
+   * Defaults to the agent's description, or a generic description if the
+   * agent has no description set.
+   */
+  description?: string
+
+  /**
+   * Whether to preserve the agent's conversation history across invocations.
+   *
+   * When `false` (default), the agent's messages and state are reset to the
+   * values they had at the time the tool was created, ensuring every call
+   * starts from the same baseline.
+   *
+   * When `true`, the agent retains its conversation history across invocations,
+   * allowing it to build context over multiple calls.
+   *
+   * @defaultValue false
+   */
+  preserveContext?: boolean
+}
+
+/**
+ * Configuration for creating an AgentAsTool.
+ */
+interface AgentToolConfig extends AgentAsToolOptions {
+  agent: Agent
+}
+
+/**
+ * @internal Not for external use. Use {@link Agent.asTool} to create instances.
+ *
+ * Adapter that exposes an Agent as a tool for use by other agents.
+ *
+ * The tool accepts a single `input` string parameter, invokes the wrapped
+ * agent, and returns the text response.
+ *
+ * @example
+ * ```typescript
+ * import { Agent } from '@strands/sdk'
+ *
+ * const researcher = new Agent({
+ *   name: 'researcher',
+ *   description: 'Finds information on a topic',
+ *   printer: false,
+ * })
+ *
+ * // Use via convenience method (default: fresh conversation each call)
+ * const tool = researcher.asTool()
+ *
+ * // Preserve context across invocations
+ * const tool = researcher.asTool({ preserveContext: true })
+ *
+ * const writer = new Agent({ tools: [tool] })
+ * const result = await writer.invoke('Write about AI agents')
+ * ```
+ */
+export class AgentAsTool extends Tool {
+  readonly name: string
+  readonly description: string
+  readonly toolSpec: ToolSpec
+
+  private readonly _agent: Agent
+  private readonly _preserveContext: boolean
+  private readonly _initialSnapshot: Snapshot | undefined
+  private _busy = false
+
+  constructor(config: AgentToolConfig) {
+    super()
+    this._agent = config.agent
+    this._preserveContext = config.preserveContext ?? false
+
+    if (!this._preserveContext) {
+      this._initialSnapshot = takeSnapshot(this._agent, { include: ['messages', 'state'] })
+    }
+
+    this.name = config.name ?? config.agent.name
+
+    this.description =
+      config.description ??
+      config.agent.description ??
+      `Use the ${this.name} agent by providing a natural language input`
+
+    this.toolSpec = {
+      name: this.name,
+      description: this.description,
+      inputSchema: {
+        type: 'object',
+        properties: {
+          input: {
+            type: 'string',
+            description: 'The natural language input to send to the agent.',
+          },
+        },
+        required: ['input'],
+      },
+    }
+  }
+
+  /**
+   * The wrapped agent instance.
+   */
+  get agent(): Agent {
+    return this._agent
+  }
+
+  async *stream(toolContext: ToolContext): ToolStreamGenerator {
+    const { toolUse } = toolContext
+    const toolUseId = toolUse.toolUseId
+
+    // Concurrency guard: loadSnapshot + agent.stream() must not overlap.
+    if (this._busy) {
+      return createErrorResult(`Agent '${this.name}' is already processing a request`, toolUseId)
+    }
+
+    this._busy = true
+    try {
+      const { input } = toolUse.input as { input: string }
+
+      // Reset agent state if not preserving context
+      if (this._initialSnapshot) {
+        loadSnapshot(this._agent, this._initialSnapshot)
+      }
+
+      // Stream the sub-agent
+      const gen = this._agent.stream(input)
+      let next = await gen.next()
+      while (!next.done) {
+        yield new ToolStreamEvent({ data: next.value })
+        next = await gen.next()
+      }
+      const result = next.value
+
+      // Build the tool result
+      if (result.structuredOutput !== undefined) {
+        return new ToolResultBlock({
+          toolUseId,
+          status: 'success',
+          content: [new JsonBlock({ json: result.structuredOutput as JSONValue })],
+        })
+      }
+
+      return new ToolResultBlock({
+        toolUseId,
+        status: 'success',
+        content: [new TextBlock(result.toString())], // toString defined by AgentResult
+      })
+    } catch (error) {
+      return createErrorResult(error, toolUseId)
+    } finally {
+      this._busy = false
+    }
+  }
+}
