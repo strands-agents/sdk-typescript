@@ -10,6 +10,11 @@ import { ImageBlock, VideoBlock, DocumentBlock } from '../../types/media.js'
 import { CitationsBlock } from '../../types/citations.js'
 import type { StreamOptions } from '../model.js'
 import { collectIterator } from '../../__fixtures__/model-test-helpers.js'
+import { NOOP_TOOL_SPEC } from '../../tools/tool-helpers.js'
+
+const BEDROCK_NOOP_TOOL_CONFIG = {
+  tools: [{ toolSpec: { ...NOOP_TOOL_SPEC, inputSchema: { json: NOOP_TOOL_SPEC.inputSchema } } }],
+}
 
 /**
  * Helper function to mock BedrockRuntimeClient implementation with customizable config.
@@ -457,8 +462,68 @@ describe('BedrockModel', () => {
             role: 'user',
           },
         ],
+        toolConfig: BEDROCK_NOOP_TOOL_CONFIG,
         modelId: expect.any(String),
       })
+    })
+
+    it('injects noop tool config when messages have tool blocks but no toolSpecs', async () => {
+      const mockConverseStreamCommand = vi.mocked(ConverseStreamCommand)
+      const provider = new BedrockModel()
+      const messages = [
+        new Message({
+          role: 'assistant',
+          content: [new ToolUseBlock({ name: 'calc', toolUseId: 'id-1', input: { a: 1 } })],
+        }),
+        new Message({
+          role: 'user',
+          content: [new ToolResultBlock({ toolUseId: 'id-1', status: 'success', content: [new TextBlock('42')] })],
+        }),
+        new Message({ role: 'user', content: [new TextBlock('Summarize')] }),
+      ]
+
+      collectIterator(provider.stream(messages))
+
+      expect(mockConverseStreamCommand).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          toolConfig: BEDROCK_NOOP_TOOL_CONFIG,
+        })
+      )
+    })
+
+    it('does not inject noop tool config when messages have no tool blocks', async () => {
+      const mockConverseStreamCommand = vi.mocked(ConverseStreamCommand)
+      const provider = new BedrockModel()
+      const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
+
+      collectIterator(provider.stream(messages))
+
+      const call = mockConverseStreamCommand.mock.calls[0]![0] as unknown as Record<string, unknown>
+      expect(call.toolConfig).toBeUndefined()
+    })
+
+    it('does not inject noop tool config when toolSpecs are provided', async () => {
+      const mockConverseStreamCommand = vi.mocked(ConverseStreamCommand)
+      const provider = new BedrockModel()
+      const messages = [
+        new Message({
+          role: 'assistant',
+          content: [new ToolUseBlock({ name: 'calc', toolUseId: 'id-1', input: {} })],
+        }),
+        new Message({
+          role: 'user',
+          content: [new ToolResultBlock({ toolUseId: 'id-1', status: 'success', content: [new TextBlock('ok')] })],
+        }),
+      ]
+
+      const options: StreamOptions = {
+        toolSpecs: [{ name: 'calc', description: 'Calculator', inputSchema: { type: 'object', properties: {} } }],
+      }
+      collectIterator(provider.stream(messages, options))
+
+      const call = mockConverseStreamCommand.mock.calls[0]![0] as unknown as Record<string, unknown>
+      const toolConfig = call.toolConfig as { tools: Array<{ toolSpec?: { name: string } }> }
+      expect(toolConfig.tools[0]!.toolSpec!.name).toBe('calc')
     })
 
     it('formats reasoning messages properly', async () => {
@@ -2381,6 +2446,7 @@ describe('BedrockModel', () => {
               role: 'user',
             },
           ],
+          toolConfig: BEDROCK_NOOP_TOOL_CONFIG,
           modelId: expect.any(String),
         })
       })
@@ -2418,6 +2484,7 @@ describe('BedrockModel', () => {
               role: 'user',
             },
           ],
+          toolConfig: BEDROCK_NOOP_TOOL_CONFIG,
           modelId: expect.any(String),
         })
       })
@@ -2459,6 +2526,7 @@ describe('BedrockModel', () => {
               role: 'user',
             },
           ],
+          toolConfig: BEDROCK_NOOP_TOOL_CONFIG,
           modelId: 'anthropic.claude-3-5-sonnet-20241022-v2:0',
         })
       })
@@ -2498,6 +2566,7 @@ describe('BedrockModel', () => {
               role: 'user',
             },
           ],
+          toolConfig: BEDROCK_NOOP_TOOL_CONFIG,
           modelId: 'amazon.nova-lite-v1:0',
         })
       })

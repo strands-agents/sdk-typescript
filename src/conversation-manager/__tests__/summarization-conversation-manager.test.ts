@@ -53,6 +53,56 @@ describe('SummarizationConversationManager', () => {
       expect(mockAgent.messages.slice(-2)).toEqual(lastTwo)
     })
 
+    it('uses the config model over the reduce model when provided', async () => {
+      const configModel = new MockMessageModel()
+      configModel.addTurn({ type: 'textBlock', text: 'Config model summary' })
+      const reduceModel = new MockMessageModel()
+      reduceModel.addTurn({ type: 'textBlock', text: 'Reduce model summary' })
+
+      const manager = new SummarizationConversationManager({
+        model: configModel as unknown as Model,
+        summaryRatio: 0.5,
+        preserveRecentMessages: 2,
+      })
+      const messages = makeMessages(20)
+      const mockAgent = createMockAgent({ messages })
+
+      await manager.reduce({
+        agent: mockAgent,
+        model: reduceModel as unknown as Model,
+        error: new ContextWindowOverflowError('overflow'),
+      })
+
+      expect(mockAgent.messages[0]!.content[0]!).toEqual({
+        type: 'textBlock',
+        text: 'Config model summary',
+      })
+    })
+
+    it('uses the config model when no reduce model is provided', async () => {
+      const configModel = new MockMessageModel()
+      configModel.addTurn({ type: 'textBlock', text: 'Config model summary' })
+
+      const manager = new SummarizationConversationManager({
+        model: configModel as unknown as Model,
+        summaryRatio: 0.5,
+        preserveRecentMessages: 2,
+      })
+      const messages = makeMessages(20)
+      const mockAgent = createMockAgent({ messages })
+
+      const result = await manager.reduce({
+        agent: mockAgent,
+        error: new ContextWindowOverflowError('overflow'),
+      })
+
+      expect(result).toBe(true)
+      expect(mockAgent.messages[0]!.content[0]!).toEqual({
+        type: 'textBlock',
+        text: 'Config model summary',
+      })
+    })
+
     it('returns false when there are not enough messages to summarize', async () => {
       const model = new MockMessageModel()
       const manager = new SummarizationConversationManager({

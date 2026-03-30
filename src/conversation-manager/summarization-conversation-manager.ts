@@ -45,6 +45,13 @@ Example format:
  */
 export type SummarizationConversationManagerConfig = {
   /**
+   * Model to use for generating summaries. When provided, overrides the model
+   * attached to the agent. Useful when you want to use a different model than
+   * the one attached to the agent.
+   */
+  model?: Model
+
+  /**
    * Ratio of messages to summarize when context overflow occurs.
    * Value is clamped to [0.1, 0.8]. Defaults to 0.3 (summarize 30% of oldest messages).
    */
@@ -73,12 +80,14 @@ export type SummarizationConversationManagerConfig = {
 export class SummarizationConversationManager extends ConversationManager {
   readonly name = 'strands:summarization-conversation-manager'
 
+  private readonly _model: Model | undefined
   private readonly _summaryRatio: number
   private readonly _preserveRecentMessages: number
   private readonly _summarizationSystemPrompt: string
 
   constructor(config?: SummarizationConversationManagerConfig) {
     super()
+    this._model = config?.model
     // clamped [0.1, 0.8]
     this._summaryRatio = Math.max(0.1, Math.min(0.8, config?.summaryRatio ?? 0.3))
     this._preserveRecentMessages = config?.preserveRecentMessages ?? 10
@@ -92,7 +101,8 @@ export class SummarizationConversationManager extends ConversationManager {
    * @returns `true` if the history was reduced, `false` otherwise
    */
   async reduce({ agent, model, error }: ConversationManagerReduceOptions): Promise<boolean> {
-    if (!model) {
+    const resolvedModel = this._model ?? model
+    if (!resolvedModel) {
       throw new Error('SummarizationConversationManager requires a model to generate summaries')
     }
 
@@ -118,7 +128,7 @@ export class SummarizationConversationManager extends ConversationManager {
       const messagesToSummarize = messages.slice(0, messagesToSummarizeCount)
 
       // Generate summary via model call
-      const summaryMessage = await this._generateSummary(messagesToSummarize, model)
+      const summaryMessage = await this._generateSummary(messagesToSummarize, resolvedModel)
 
       // Replace summarized messages with the summary
       messages.splice(0, messagesToSummarizeCount, summaryMessage)

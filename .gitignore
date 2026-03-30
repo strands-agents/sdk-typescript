@@ -46,3 +46,6 @@ test/.artifacts
 
 # LLM
 CLAUDE.md
+
+# dev
+.vitest*

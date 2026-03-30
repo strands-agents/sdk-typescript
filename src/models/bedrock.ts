@@ -50,6 +50,7 @@ import type { JSONValue } from '../types/json.js'
 import { ContextWindowOverflowError, ModelThrottledError, normalizeError } from '../errors.js'
 import { ensureDefined } from '../types/validation.js'
 import { logger } from '../logging/logger.js'
+import { NOOP_TOOL_SPEC } from '../tools/tool-helpers.js'
 
 /**
  * Default Bedrock model ID.
@@ -550,8 +551,21 @@ export class BedrockModel extends Model<BedrockModelConfig> {
     }
 
     // Add tool configuration
-    if (options?.toolSpecs && options.toolSpecs.length > 0) {
-      const tools: Tool[] = options.toolSpecs.map(
+    // Bedrock requires toolConfig when messages contain tool use/result blocks.
+    // When no tools were provided but messages reference past tool usage (e.g. during
+    // summarization), inject a noop tool to satisfy the API requirement.
+    let toolSpecs = options?.toolSpecs ?? []
+    if (toolSpecs.length === 0) {
+      const hasToolBlocks = messages.some((msg) =>
+        msg.content.some((block) => block.type === 'toolUseBlock' || block.type === 'toolResultBlock')
+      )
+      if (hasToolBlocks) {
+        toolSpecs = [NOOP_TOOL_SPEC]
+      }
+    }
+
+    if (toolSpecs.length > 0) {
+      const tools: Tool[] = toolSpecs.map(
         (spec) =>
           ({
             toolSpec: {
@@ -570,7 +584,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
         tools: tools,
       }
 
-      if (options.toolChoice) {
+      if (options?.toolChoice) {
         toolConfig.toolChoice = options.toolChoice
       }
 
