@@ -305,19 +305,6 @@ describe('multiagent snapshot', () => {
       )
     })
 
-    it('allows missing orchestratorId in snapshot', () => {
-      const graph = makeGraph('g', ['a'])
-      const snapshot: Snapshot = {
-        scope: 'multiAgent',
-        schemaVersion: SNAPSHOT_SCHEMA_VERSION,
-        createdAt: MOCK_TIMESTAMP,
-        data: {},
-        appData: {},
-      }
-
-      expect(() => loadSnapshot(graph, snapshot)).not.toThrow()
-    })
-
     it('does not modify state when snapshot state is null', () => {
       const graph = makeGraph('g', ['a'])
       const snapshot: Snapshot = {

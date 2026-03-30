@@ -141,8 +141,8 @@ export function loadSnapshot(orchestrator: Graph | Swarm, snapshot: Snapshot, st
     )
   }
 
-  const orchestratorId = snapshot.data.orchestratorId as string | undefined
-  if (orchestratorId && orchestratorId !== orchestrator.id) {
+  const orchestratorId = snapshot.data.orchestratorId as string
+  if (orchestratorId !== orchestrator.id) {
     throw new Error(`Snapshot orchestrator ID mismatch: expected '${orchestrator.id}', got '${orchestratorId}'`)
   }
 
@@ -165,17 +165,13 @@ export function loadSnapshot(orchestrator: Graph | Swarm, snapshot: Snapshot, st
       } else if (node instanceof MultiAgentNode) {
         const child = node.orchestrator as Graph | Swarm
         const childSnapshot = data as unknown as Snapshot
-
-        // Validate before recursing — warn and skip rather than throw,
-        // since a stale nested snapshot shouldn't fail the entire load.
-        const childId = childSnapshot.data?.orchestratorId as string | undefined
-        if (childId && childId !== child.id) {
+        const childId = childSnapshot.data.orchestratorId as string
+        if (childId !== child.id) {
           logger.warn(
             `node_id=<${id}> | nested orchestrator ID mismatch: ` + `expected '${child.id}', got '${childId}', skipping`
           )
           continue
         }
-
         loadSnapshot(child, childSnapshot)
       }
     }
