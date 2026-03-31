@@ -34,10 +34,12 @@ sdk-typescript/
 │   │   ├── __tests__/        # Unit tests for conversation managers
 │   │   │   ├── conversation-manager.test.ts
 │   │   │   ├── null-conversation-manager.test.ts
-│   │   │   └── sliding-window-conversation-manager.test.ts
+│   │   │   ├── sliding-window-conversation-manager.test.ts
+│   │   │   └── summarizing-conversation-manager.test.ts
 │   │   ├── conversation-manager.ts        # Abstract base class
 │   │   ├── null-conversation-manager.ts   # No-op implementation
 │   │   ├── sliding-window-conversation-manager.ts  # Sliding window strategy
+│   │   ├── summarizing-conversation-manager.ts     # Summarization-based strategy
 │   │   └── index.ts          # Public exports
 │   │
 │   ├── hooks/                    # Hooks system for extensibility

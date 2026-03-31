@@ -11,6 +11,6 @@ export {
   type SlidingWindowConversationManagerConfig,
 } from './sliding-window-conversation-manager.js'
 export {
-  SummarizationConversationManager,
-  type SummarizationConversationManagerConfig,
-} from './summarization-conversation-manager.js'
+  SummarizingConversationManager,
+  type SummarizingConversationManagerConfig,
+} from './summarizing-conversation-manager.js'

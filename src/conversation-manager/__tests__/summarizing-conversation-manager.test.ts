@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { SummarizationConversationManager } from '../summarization-conversation-manager.js'
+import { SummarizingConversationManager } from '../summarizing-conversation-manager.js'
 import { ContextWindowOverflowError, Message, TextBlock, ToolUseBlock, ToolResultBlock } from '../../index.js'
 import { AfterModelCallEvent } from '../../hooks/events.js'
 import { createMockAgent, invokeTrackedHook } from '../../__fixtures__/agent-helpers.js'
@@ -14,11 +14,11 @@ function makeMessages(count: number): Message[] {
   return Array.from({ length: count }, (_, i) => textMsg(i % 2 === 0 ? 'user' : 'assistant', `Message ${i + 1}`))
 }
 
-describe('SummarizationConversationManager', () => {
+describe('SummarizingConversationManager', () => {
   describe('constructor', () => {
     it('clamps summaryRatio to [0.1, 0.8]', () => {
-      expect((new SummarizationConversationManager({ summaryRatio: 0 }) as any)._summaryRatio).toBe(0.1)
-      expect((new SummarizationConversationManager({ summaryRatio: 1.0 }) as any)._summaryRatio).toBe(0.8)
+      expect((new SummarizingConversationManager({ summaryRatio: 0 }) as any)._summaryRatio).toBe(0.1)
+      expect((new SummarizingConversationManager({ summaryRatio: 1.0 }) as any)._summaryRatio).toBe(0.8)
     })
   })
 
@@ -27,7 +27,7 @@ describe('SummarizationConversationManager', () => {
       const model = new MockMessageModel()
       model.addTurn({ type: 'textBlock', text: 'Summary of conversation' })
 
-      const manager = new SummarizationConversationManager({
+      const manager = new SummarizingConversationManager({
         summaryRatio: 0.5,
         preserveRecentMessages: 2,
       })
@@ -59,7 +59,7 @@ describe('SummarizationConversationManager', () => {
       const reduceModel = new MockMessageModel()
       reduceModel.addTurn({ type: 'textBlock', text: 'Reduce model summary' })
 
-      const manager = new SummarizationConversationManager({
+      const manager = new SummarizingConversationManager({
         model: configModel as unknown as Model,
         summaryRatio: 0.5,
         preserveRecentMessages: 2,
@@ -83,7 +83,7 @@ describe('SummarizationConversationManager', () => {
       const configModel = new MockMessageModel()
       configModel.addTurn({ type: 'textBlock', text: 'Config model summary' })
 
-      const manager = new SummarizationConversationManager({
+      const manager = new SummarizingConversationManager({
         model: configModel as unknown as Model,
         summaryRatio: 0.5,
         preserveRecentMessages: 2,
@@ -93,6 +93,7 @@ describe('SummarizationConversationManager', () => {
 
       const result = await manager.reduce({
         agent: mockAgent,
+        model: {} as Model,
         error: new ContextWindowOverflowError('overflow'),
       })
 
@@ -105,7 +106,7 @@ describe('SummarizationConversationManager', () => {
 
     it('returns false when there are not enough messages to summarize', async () => {
       const model = new MockMessageModel()
-      const manager = new SummarizationConversationManager({
+      const manager = new SummarizingConversationManager({
         preserveRecentMessages: 10,
       })
       const messages = makeMessages(8)
@@ -125,7 +126,7 @@ describe('SummarizationConversationManager', () => {
       const model = new MockMessageModel()
       model.addTurn(new Error('model failed'))
 
-      const manager = new SummarizationConversationManager({
+      const manager = new SummarizingConversationManager({
         summaryRatio: 0.5,
         preserveRecentMessages: 2,
       })
@@ -148,7 +149,7 @@ describe('SummarizationConversationManager', () => {
         throw err
       } as any)
 
-      const manager = new SummarizationConversationManager({
+      const manager = new SummarizingConversationManager({
         summaryRatio: 0.5,
         preserveRecentMessages: 2,
       })
@@ -169,7 +170,7 @@ describe('SummarizationConversationManager', () => {
       const streamSpy = vi.spyOn(model, 'stream')
 
       const customPrompt = 'Custom summarization prompt'
-      const manager = new SummarizationConversationManager({
+      const manager = new SummarizingConversationManager({
         summaryRatio: 0.5,
         preserveRecentMessages: 2,
         summarizationSystemPrompt: customPrompt,
@@ -200,7 +201,7 @@ describe('SummarizationConversationManager', () => {
       const model = new MockMessageModel()
       model.addTurn({ type: 'textBlock', text: 'Summary' })
 
-      const manager = new SummarizationConversationManager({
+      const manager = new SummarizingConversationManager({
         summaryRatio: 0.8,
         preserveRecentMessages: 18,
       })
@@ -225,7 +226,7 @@ describe('SummarizationConversationManager', () => {
       const model = new MockMessageModel()
       model.addTurn({ type: 'textBlock', text: 'Summary' })
 
-      const manager = new SummarizationConversationManager({
+      const manager = new SummarizingConversationManager({
         summaryRatio: 0.3,
         preserveRecentMessages: 2,
       })
@@ -260,7 +261,7 @@ describe('SummarizationConversationManager', () => {
 
     it('throws when no valid split point exists', async () => {
       const model = new MockMessageModel()
-      const manager = new SummarizationConversationManager({
+      const manager = new SummarizingConversationManager({
         summaryRatio: 0.5,
         preserveRecentMessages: 0,
       })
@@ -295,7 +296,7 @@ describe('SummarizationConversationManager', () => {
       const model = new MockMessageModel()
       model.addTurn({ type: 'textBlock', text: 'Summary' })
 
-      const manager = new SummarizationConversationManager({
+      const manager = new SummarizingConversationManager({
         summaryRatio: 0.5,
         preserveRecentMessages: 2,
       })

@@ -21,10 +21,10 @@ export type ConversationManagerReduceOptions = {
   agent: LocalAgent
 
   /**
-   * The model instance that triggered the overflow. Available for conversation
-   * managers that need a model for reduction (e.g. summarization).
+   * The model instance that triggered the overflow. Used by conversation
+   * managers that perform model-based reduction (e.g. summarization).
    */
-  model?: Model
+  model: Model
 
   /**
    * The {@link ContextWindowOverflowError} that triggered this call.
