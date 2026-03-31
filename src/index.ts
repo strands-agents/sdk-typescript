@@ -213,9 +213,9 @@ export {
   type SlidingWindowConversationManagerConfig,
 } from './conversation-manager/sliding-window-conversation-manager.js'
 export {
-  SummarizationConversationManager,
-  type SummarizationConversationManagerConfig,
-} from './conversation-manager/summarization-conversation-manager.js'
+  SummarizingConversationManager,
+  type SummarizingConversationManagerConfig,
+} from './conversation-manager/summarizing-conversation-manager.js'
 
 // Logging
 export { configureLogging } from './logging/logger.js'

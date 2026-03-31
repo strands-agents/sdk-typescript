@@ -3,7 +3,7 @@ import {
   Agent,
   ContextWindowOverflowError,
   Message,
-  SummarizationConversationManager,
+  SummarizingConversationManager,
   TextBlock,
   ToolResultBlock,
   ToolUseBlock,
@@ -30,7 +30,7 @@ const calculatorTool = tool({
   },
 })
 
-describe.skipIf(bedrock.skip)('SummarizationConversationManager Integration', () => {
+describe.skipIf(bedrock.skip)('SummarizingConversationManager Integration', () => {
   it('summarizes older messages and agent remains functional after summarization', async () => {
     const model = bedrock.createModel({ maxTokens: 1024 })
     const messages: Message[] = [
@@ -49,7 +49,7 @@ describe.skipIf(bedrock.skip)('SummarizationConversationManager Integration', ()
     ]
     const lastTwo = messages.slice(-2)
 
-    const manager = new SummarizationConversationManager({
+    const manager = new SummarizingConversationManager({
       summaryRatio: 0.5,
       preserveRecentMessages: 2,
     })
@@ -148,7 +148,7 @@ describe.skipIf(bedrock.skip)('SummarizationConversationManager Integration', ()
       /* 13 */ textMsg('assistant', 'The weather in San Francisco is sunny and 72°F.'),
     ]
 
-    const manager = new SummarizationConversationManager({
+    const manager = new SummarizingConversationManager({
       summaryRatio: 0.6,
       preserveRecentMessages: 3,
     })

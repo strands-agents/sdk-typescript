@@ -43,7 +43,7 @@ Example format:
 /**
  * Configuration for the summarization conversation manager.
  */
-export type SummarizationConversationManagerConfig = {
+export type SummarizingConversationManagerConfig = {
   /**
    * Model to use for generating summaries. When provided, overrides the model
    * attached to the agent. Useful when you want to use a different model than
@@ -77,15 +77,15 @@ export type SummarizationConversationManagerConfig = {
  * the oldest messages using a model call and replaces them with a single
  * summary message, preserving context that would otherwise be lost.
  */
-export class SummarizationConversationManager extends ConversationManager {
-  readonly name = 'strands:summarization-conversation-manager'
+export class SummarizingConversationManager extends ConversationManager {
+  readonly name = 'strands:summarizing-conversation-manager'
 
   private readonly _model: Model | undefined
   private readonly _summaryRatio: number
   private readonly _preserveRecentMessages: number
   private readonly _summarizationSystemPrompt: string
 
-  constructor(config?: SummarizationConversationManagerConfig) {
+  constructor(config?: SummarizingConversationManagerConfig) {
     super()
     this._model = config?.model
     // clamped [0.1, 0.8]
@@ -102,9 +102,6 @@ export class SummarizationConversationManager extends ConversationManager {
    */
   async reduce({ agent, model, error }: ConversationManagerReduceOptions): Promise<boolean> {
     const resolvedModel = this._model ?? model
-    if (!resolvedModel) {
-      throw new Error('SummarizationConversationManager requires a model to generate summaries')
-    }
 
     const messages = agent.messages
 

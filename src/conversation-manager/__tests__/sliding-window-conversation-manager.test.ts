@@ -1,6 +1,13 @@
 import { describe, it, expect, vi } from 'vitest'
 import { SlidingWindowConversationManager } from '../sliding-window-conversation-manager.js'
-import { ContextWindowOverflowError, Message, TextBlock, ToolUseBlock, ToolResultBlock } from '../../index.js'
+import {
+  ContextWindowOverflowError,
+  Message,
+  TextBlock,
+  ToolUseBlock,
+  ToolResultBlock,
+  type Model,
+} from '../../index.js'
 import { AfterInvocationEvent, AfterModelCallEvent } from '../../hooks/events.js'
 import { createMockAgent, invokeTrackedHook } from '../../__fixtures__/agent-helpers.js'
 import type { Agent } from '../../agent/agent.js'
@@ -66,6 +73,7 @@ describe('SlidingWindowConversationManager', () => {
 
       const result = manager.reduce({
         agent: createMockAgent({ messages }),
+        model: {} as Model,
         error: new ContextWindowOverflowError('overflow'),
       })
 
@@ -84,6 +92,7 @@ describe('SlidingWindowConversationManager', () => {
 
       const result = manager.reduce({
         agent: createMockAgent({ messages }),
+        model: {} as Model,
         error: new ContextWindowOverflowError('overflow'),
       })
 
@@ -598,6 +607,7 @@ describe('SlidingWindowConversationManager', () => {
 
       const result = manager.reduce({
         agent: createMockAgent({ messages }),
+        model: {} as Model,
         error: new ContextWindowOverflowError('Context overflow'),
       })
 
