@@ -10,11 +10,7 @@ import { ImageBlock, VideoBlock, DocumentBlock } from '../../types/media.js'
 import { CitationsBlock } from '../../types/citations.js'
 import type { StreamOptions } from '../model.js'
 import { collectIterator } from '../../__fixtures__/model-test-helpers.js'
-import { NOOP_TOOL_SPEC } from '../../tools/tool-helpers.js'
-
-const BEDROCK_NOOP_TOOL_CONFIG = {
-  tools: [{ toolSpec: { ...NOOP_TOOL_SPEC, inputSchema: { json: NOOP_TOOL_SPEC.inputSchema } } }],
-}
+import { NOOP_TOOL_SPEC } from '../../tools/noop-tool.js'
 
 /**
  * Helper function to mock BedrockRuntimeClient implementation with customizable config.
@@ -145,6 +141,10 @@ vi.mock('@aws-sdk/client-bedrock-runtime', async (importOriginal) => {
 })
 
 describe('BedrockModel', () => {
+  const BEDROCK_NOOP_TOOL_CONFIG = {
+    tools: [{ toolSpec: { ...NOOP_TOOL_SPEC, inputSchema: { json: NOOP_TOOL_SPEC.inputSchema } } }],
+  }
+
   beforeEach(() => {
     vi.clearAllMocks()
     // Reset mock to a working implementation to ensure test isolation
@@ -524,6 +524,7 @@ describe('BedrockModel', () => {
       const call = mockConverseStreamCommand.mock.calls[0]![0] as unknown as Record<string, unknown>
       const toolConfig = call.toolConfig as { tools: Array<{ toolSpec?: { name: string } }> }
       expect(toolConfig.tools[0]!.toolSpec!.name).toBe('calc')
+      expect(toolConfig.tools.length).toBe(1)
     })
 
     it('formats reasoning messages properly', async () => {

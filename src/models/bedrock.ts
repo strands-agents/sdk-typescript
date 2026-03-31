@@ -50,7 +50,7 @@ import type { JSONValue } from '../types/json.js'
 import { ContextWindowOverflowError, ModelThrottledError, normalizeError } from '../errors.js'
 import { ensureDefined } from '../types/validation.js'
 import { logger } from '../logging/logger.js'
-import { NOOP_TOOL_SPEC } from '../tools/tool-helpers.js'
+import { NOOP_TOOL_SPEC } from '../tools/noop-tool.js'
 
 /**
  * Default Bedrock model ID.
