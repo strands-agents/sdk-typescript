@@ -33,6 +33,17 @@ export class PluginRegistry {
     }
   }
 
+  /**
+   * Checks whether any registered or pending plugin is an instance of the given class.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  hasPluginOfType(ctor: abstract new (...args: any[]) => Plugin): boolean {
+    for (const p of this._plugins.values()) {
+      if (p instanceof ctor) return true
+    }
+    return this._pending.some((p) => p instanceof ctor)
+  }
+
   private async _addAndInit(plugin: Plugin, agent: LocalAgent): Promise<void> {
     if (this._plugins.has(plugin.name)) {
       throw new Error(`plugin_name=<${plugin.name}> | plugin already registered`)

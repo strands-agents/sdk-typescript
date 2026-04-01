@@ -6,6 +6,8 @@ import { collectGenerator } from '../../__fixtures__/model-test-helpers.js'
 import { createMockContext } from '../../__fixtures__/tool-helpers.js'
 import { ToolValidationError } from '../../errors.js'
 import { ToolStreamEvent } from '../../tools/tool.js'
+import { SessionManager } from '../../session/session-manager.js'
+import type { SnapshotStorage } from '../../session/storage.js'
 
 describe('AgentAsTool', () => {
   describe('properties', () => {
@@ -282,6 +284,51 @@ describe('AgentAsTool', () => {
       await collectGenerator(tool.stream(context2))
 
       expect(agent.messages.length).toBe(messagesAfterFirstTool)
+    })
+  })
+
+  describe('sessionManager validation', () => {
+    const mockStorage: SnapshotStorage = {
+      saveSnapshot: async () => {},
+      loadSnapshot: async () => null,
+      listSnapshotIds: async () => [],
+      deleteSession: async () => {},
+      loadManifest: async () => ({ schemaVersion: '1.0', updatedAt: '12:00:00' }),
+      saveManifest: async () => {},
+    }
+
+    it('throws when preserveContext is false and agent has a sessionManager', () => {
+      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hi' })
+      const sessionManager = new SessionManager({ storage: { snapshot: mockStorage } })
+      const agent = new Agent({ model, name: 'test-agent', sessionManager })
+
+      expect(() => new AgentAsTool({ agent })).toThrow(/SessionManager.*conflicts with preserveContext=false/)
+    })
+
+    it('throws when preserveContext is explicitly false and agent has a sessionManager', () => {
+      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hi' })
+      const sessionManager = new SessionManager({ storage: { snapshot: mockStorage } })
+      const agent = new Agent({ model, name: 'test-agent', sessionManager })
+
+      expect(() => new AgentAsTool({ agent, preserveContext: false })).toThrow(
+        /SessionManager.*conflicts with preserveContext=false/
+      )
+    })
+
+    it('allows preserveContext true with sessionManager', () => {
+      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hi' })
+      const sessionManager = new SessionManager({ storage: { snapshot: mockStorage } })
+      const agent = new Agent({ model, name: 'test-agent', sessionManager })
+
+      expect(() => new AgentAsTool({ agent, preserveContext: true })).not.toThrow()
+    })
+
+    it('throws when sessionManager is passed via plugins array', () => {
+      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hi' })
+      const sessionManager = new SessionManager({ storage: { snapshot: mockStorage } })
+      const agent = new Agent({ model, name: 'test-agent', plugins: [sessionManager] })
+
+      expect(() => new AgentAsTool({ agent })).toThrow(/SessionManager.*conflicts with preserveContext=false/)
     })
   })
 

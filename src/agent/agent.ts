@@ -359,6 +359,17 @@ export class Agent implements LocalAgent, InvokableAgent {
   }
 
   /**
+   * Checks whether the agent has a plugin of the given class.
+   *
+   * @param ctor - The plugin class to check for
+   * @returns `true` if a matching plugin is registered or pending
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  hasPluginOfType(ctor: abstract new (...args: any[]) => Plugin): boolean {
+    return this._pluginRegistry.hasPluginOfType(ctor)
+  }
+
+  /**
    * Invokes the agent and returns the final result.
    *
    * This is a convenience method that consumes the stream() method and returns
