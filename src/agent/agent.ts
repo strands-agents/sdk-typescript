@@ -439,20 +439,8 @@ export class Agent implements LocalAgent, InvokableAgent {
     } catch (error) {
       // Handle interrupt errors from hook callbacks
       if (error instanceof InterruptError) {
-        this._interruptState.activate()
-        const lastMessage =
-          this.messages.length > 0
-            ? this.messages[this.messages.length - 1]!
-            : new Message({ role: 'assistant', content: [] })
-
-        const interruptResult = new AgentResult({
-          stopReason: 'interrupt',
-          lastMessage,
-          interrupts: this._interruptState.getInterruptsList(),
-        })
-
+        const interruptResult = this._createInterruptResult({ includeMetrics: false })
         yield await this._invokeCallbacks(new AgentResultEvent({ agent: this, result: interruptResult }))
-
         return interruptResult
       }
       throw error
@@ -625,19 +613,7 @@ export class Agent implements LocalAgent, InvokableAgent {
 
           // Handle interrupt - return with stopReason: 'interrupt'
           if (error instanceof InterruptError) {
-            this._interruptState.activate()
-            const lastMessage =
-              this.messages.length > 0
-                ? this.messages[this.messages.length - 1]!
-                : new Message({ role: 'assistant', content: [] })
-
-            result = new AgentResult({
-              stopReason: 'interrupt',
-              lastMessage,
-              traces: this._tracer.localTraces,
-              metrics: this._meter.metrics,
-              interrupts: this._interruptState.getInterruptsList(),
-            })
+            result = this._createInterruptResult()
             return result
           }
 
@@ -647,19 +623,7 @@ export class Agent implements LocalAgent, InvokableAgent {
     } catch (error) {
       // Handle interrupt at top level (from hooks)
       if (error instanceof InterruptError) {
-        this._interruptState.activate()
-        const lastMessage =
-          this.messages.length > 0
-            ? this.messages[this.messages.length - 1]!
-            : new Message({ role: 'assistant', content: [] })
-
-        result = new AgentResult({
-          stopReason: 'interrupt',
-          lastMessage,
-          traces: this._tracer.localTraces,
-          metrics: this._meter.metrics,
-          interrupts: this._interruptState.getInterruptsList(),
-        })
+        result = this._createInterruptResult()
         return result
       }
 
@@ -709,6 +673,36 @@ export class Agent implements LocalAgent, InvokableAgent {
 
     const firstContent = toolResult.content[0]
     return firstContent?.type === 'jsonBlock' ? firstContent.json : undefined
+  }
+
+  /**
+   * Creates an AgentResult for interrupt conditions.
+   *
+   * This helper centralizes interrupt result creation to ensure consistent behavior
+   * across all interrupt handling points in the agent loop.
+   *
+   * @param options - Optional configuration for the result. If provided, `includeMetrics`
+   *                  controls whether to include traces and metrics (default: true).
+   * @returns AgentResult with stopReason 'interrupt' and the list of pending interrupts
+   */
+  private _createInterruptResult(options?: { includeMetrics?: boolean }): AgentResult {
+    const includeMetrics = options?.includeMetrics ?? true
+
+    this._interruptState.activate()
+    const lastMessage =
+      this.messages.length > 0
+        ? this.messages[this.messages.length - 1]!
+        : new Message({ role: 'assistant', content: [] })
+
+    return new AgentResult({
+      stopReason: 'interrupt',
+      lastMessage,
+      ...(includeMetrics && {
+        traces: this._tracer.localTraces,
+        metrics: this._meter.metrics,
+      }),
+      interrupts: this._interruptState.getInterruptsList(),
+    })
   }
 
   /**
@@ -946,6 +940,16 @@ export class Agent implements LocalAgent, InvokableAgent {
     beforeToolsEvent._interruptState = this._interruptState
     yield beforeToolsEvent
 
+    // Check if interrupt was triggered by hook - if so, throw to propagate
+    // This handles the case where hook threw InterruptError during callback invocation
+    // which doesn't automatically propagate into the generator
+    if (this._interruptState.activated) {
+      const pendingInterrupt = this._interruptState.getInterruptsList().find((i) => i.response === undefined)
+      if (pendingInterrupt) {
+        throw new InterruptError(pendingInterrupt)
+      }
+    }
+
     const toolResultBlocks: ToolResultBlock[] = []
     let toolResultMessage: Message
 
@@ -1024,6 +1028,16 @@ export class Agent implements LocalAgent, InvokableAgent {
       const beforeToolCallEvent = new BeforeToolCallEvent({ agent: this, toolUse, tool })
       beforeToolCallEvent._interruptState = this._interruptState
       yield beforeToolCallEvent
+
+      // Check if interrupt was triggered by hook - if so, throw to propagate
+      // This handles the case where hook threw InterruptError during callback invocation
+      // which doesn't automatically propagate into the generator
+      if (this._interruptState.activated) {
+        const pendingInterrupt = this._interruptState.getInterruptsList().find((i) => i.response === undefined)
+        if (pendingInterrupt) {
+          throw new InterruptError(pendingInterrupt)
+        }
+      }
 
       // Cancel individual tool if hook requested it
       if (beforeToolCallEvent.cancel) {

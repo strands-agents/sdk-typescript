@@ -221,6 +221,42 @@ describe('InterruptState', () => {
       expect(second).toBe(first)
       expect(second.response).toBe('user response')
     })
+
+    it('inherits response from matching name when activated and ID differs', () => {
+      const state = new InterruptState()
+
+      // First invoke: create interrupt with tool-1 ID
+      const first = state.getOrCreateInterrupt('tool:tool-1:0:confirm', 'confirm', 'reason')
+
+      // Activate (simulates interrupt being caught)
+      state.activate()
+
+      // Resume: add response to the first interrupt
+      first.response = { approved: true }
+
+      // Second invoke: try to get interrupt with different ID but same name
+      const second = state.getOrCreateInterrupt('tool:tool-2:0:confirm', 'confirm', 'reason')
+
+      // Should inherit the response from the first interrupt
+      expect(second.id).toBe('tool:tool-2:0:confirm')
+      expect(second.name).toBe('confirm')
+      expect(second.response).toEqual({ approved: true })
+    })
+
+    it('does not inherit response when not activated', () => {
+      const state = new InterruptState()
+
+      // Create first interrupt with response
+      const first = state.getOrCreateInterrupt('tool:tool-1:0:confirm', 'confirm', 'reason')
+      first.response = { approved: true }
+
+      // Don't activate - try to get interrupt with different ID
+      const second = state.getOrCreateInterrupt('tool:tool-2:0:confirm', 'confirm', 'reason')
+
+      // Should NOT inherit the response
+      expect(second.id).toBe('tool:tool-2:0:confirm')
+      expect(second.response).toBeUndefined()
+    })
   })
 
   describe('getInterruptsList', () => {

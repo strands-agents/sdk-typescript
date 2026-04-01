@@ -215,6 +215,8 @@ export class InterruptState {
   /**
    * Gets or creates an interrupt with the given ID.
    * If the interrupt already exists, returns it (potentially with a response).
+   * If not found by ID but an interrupt with the same name has a response,
+   * the response is inherited to support resume across model calls.
    *
    * @param id - Unique identifier for the interrupt
    * @param name - User-defined name for the interrupt
@@ -222,11 +224,30 @@ export class InterruptState {
    * @returns The interrupt (may have a response if resuming)
    */
   getOrCreateInterrupt(id: string, name: string, reason?: unknown): Interrupt {
+    // First check for exact ID match
     let interrupt = this._interrupts.get(id)
-    if (!interrupt) {
-      interrupt = new Interrupt({ id, name, reason })
-      this._interrupts.set(id, interrupt)
+    if (interrupt) {
+      return interrupt
     }
+
+    // If not found by ID but we're resuming, check for a matching interrupt by name
+    // that has a response (from a previous tool use ID). This allows resume to work
+    // even when the model returns a different tool use ID.
+    if (this._activated) {
+      for (const existingInterrupt of this._interrupts.values()) {
+        if (existingInterrupt.name === name && existingInterrupt.response !== undefined) {
+          // Create a new interrupt with the new ID but inherit the response
+          interrupt = new Interrupt({ id, name, reason })
+          interrupt.response = existingInterrupt.response
+          this._interrupts.set(id, interrupt)
+          return interrupt
+        }
+      }
+    }
+
+    // Create new interrupt
+    interrupt = new Interrupt({ id, name, reason })
+    this._interrupts.set(id, interrupt)
     return interrupt
   }
 

@@ -613,6 +613,7 @@ export class BeforeToolsEvent extends HookableEvent {
   /**
    * @internal
    * Counter for generating unique interrupt IDs within a single BeforeToolsEvent.
+   * Excluded from wire serialization as it's internal state.
    */
   private _interruptCounter: number = 0
 

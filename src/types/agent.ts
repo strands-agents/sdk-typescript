@@ -33,6 +33,9 @@ import type { Interrupt } from '../interrupt.js'
  * - `string` - User text input (wrapped in TextBlock, creates user Message)
  * - `ContentBlock[]` | `ContentBlockData[]` - Array of content blocks (creates single user Message)
  * - `Message[]` | `MessageData[]` - Array of messages (appends all to conversation)
+ *
+ * When resuming from an interrupt, pass an array of `InterruptResponseContent` objects.
+ * These are detected and extracted automatically.
  */
 export type InvokeArgs = string | ContentBlock[] | ContentBlockData[] | Message[] | MessageData[]
 
