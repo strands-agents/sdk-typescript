@@ -84,12 +84,13 @@ export function loadSnapshot(orchestrator: Graph | Swarm, snapshot: Snapshot, st
     )
   }
 
-  const orchestratorId = snapshot.data.orchestratorId as string
-  if (orchestratorId !== orchestrator.id) {
-    throw new Error(`Snapshot orchestrator ID mismatch: expected '${orchestrator.id}', got '${orchestratorId}'`)
+  if (snapshot.data.orchestratorId !== orchestrator.id) {
+    throw new Error(
+      `Snapshot orchestrator ID mismatch: expected '${orchestrator.id}', got '${snapshot.data.orchestratorId}'`
+    )
   }
 
-  if (state && 'state' in snapshot.data && snapshot.data.state != null) {
+  if (state && 'state' in snapshot.data) {
     loadStateSerializable(state, snapshot.data.state)
   }
 }

@@ -120,28 +120,14 @@ describe('multiagent snapshot', () => {
       }
     })
 
-    it('does not modify state when snapshot has no state or null state', () => {
+    it('does not modify state when snapshot has no state data', () => {
       const graph = makeGraph('g', ['a'])
 
-      // No state in snapshot (undefined)
       const snapshotNoState = takeSnapshot(graph, undefined)
-      const state1 = makeState(['a'])
-      state1.steps = 99
-      loadSnapshot(graph, snapshotNoState, state1)
-      expect(state1.steps).toBe(99)
-
-      // Null state in snapshot
-      const snapshotNullState: Snapshot = {
-        scope: 'multiAgent',
-        schemaVersion: SNAPSHOT_SCHEMA_VERSION,
-        createdAt: MOCK_TIMESTAMP,
-        data: { orchestratorId: 'g', state: null },
-        appData: {},
-      }
-      const state2 = makeState(['a'])
-      state2.steps = 99
-      loadSnapshot(graph, snapshotNullState, state2)
-      expect(state2.steps).toBe(99)
+      const state = makeState(['a'])
+      state.steps = 99
+      loadSnapshot(graph, snapshotNoState, state)
+      expect(state.steps).toBe(99)
     })
 
     it('throws on wrong scope', () => {
