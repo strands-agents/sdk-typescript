@@ -63,7 +63,7 @@ import { AgentAsTool } from './agent-as-tool.js'
 import type { AgentAsToolOptions } from './agent-as-tool.js'
 
 import type { z } from 'zod'
-import type { SessionManager } from '../session/session-manager.js'
+import { SessionManager } from '../session/session-manager.js'
 import { Tracer } from '../telemetry/tracer.js'
 import { Meter } from '../telemetry/meter.js'
 import type { AttributeValue } from '@opentelemetry/api'
@@ -214,6 +214,11 @@ export class Agent implements LocalAgent, InvokableAgent {
    */
   public readonly description?: string
 
+  /**
+   * The session manager for saving and restoring agent sessions, if configured.
+   */
+  public readonly sessionManager?: SessionManager | undefined
+
   private readonly _hooksRegistry: HookRegistryImplementation
   private readonly _pluginRegistry: PluginRegistry
   private _toolRegistry: ToolRegistry
@@ -239,6 +244,8 @@ export class Agent implements LocalAgent, InvokableAgent {
     this.name = config?.name ?? DEFAULT_AGENT_NAME
     this.id = config?.id ?? DEFAULT_AGENT_ID
     if (config?.description !== undefined) this.description = config.description
+    this.sessionManager =
+      config?.sessionManager ?? config?.plugins?.find((p): p is SessionManager => p instanceof SessionManager)
 
     if (typeof config?.model === 'string') {
       this.model = new BedrockModel({ modelId: config.model })
@@ -356,17 +363,6 @@ export class Agent implements LocalAgent, InvokableAgent {
    */
   get toolRegistry(): ToolRegistry {
     return this._toolRegistry
-  }
-
-  /**
-   * Checks whether the agent has a plugin of the given class.
-   *
-   * @param ctor - The plugin class to check for
-   * @returns `true` if a matching plugin is registered or pending
-   */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  hasPluginOfType(ctor: abstract new (...args: any[]) => Plugin): boolean {
-    return this._pluginRegistry.hasPluginOfType(ctor)
   }
 
   /**

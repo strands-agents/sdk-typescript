@@ -14,7 +14,6 @@ import { JsonBlock, TextBlock, ToolResultBlock } from '../types/messages.js'
 import { createErrorResult, Tool, ToolStreamEvent } from '../tools/tool.js'
 import type { ToolContext, ToolStreamGenerator } from '../tools/tool.js'
 import type { ToolSpec } from '../tools/types.js'
-import { SessionManager } from '../session/session-manager.js'
 
 /**
  * Options for creating an agent tool via {@link Agent.asTool}.
@@ -103,7 +102,7 @@ export class AgentAsTool extends Tool {
     this._agent = config.agent
     this._preserveContext = config.preserveContext ?? false
 
-    if (!this._preserveContext && this._agent.hasPluginOfType(SessionManager)) {
+    if (!this._preserveContext && this._agent.sessionManager != null) {
       throw new Error(
         `Agent '${this._agent.name}' has a SessionManager, which conflicts with preserveContext=false. ` +
           'The SessionManager persists conversation history externally, but preserveContext=false resets ' +
@@ -112,7 +111,7 @@ export class AgentAsTool extends Tool {
     }
 
     if (!this._preserveContext) {
-      this._initialSnapshot = takeSnapshot(this._agent, { include: ['messages', 'state'] })
+      this._initialSnapshot = takeSnapshot(this._agent, { preset: 'session' })
     }
 
     this.name = config.name ?? config.agent.name
