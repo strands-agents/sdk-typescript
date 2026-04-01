@@ -112,6 +112,12 @@ export interface StreamOptions {
    * Controls how the model selects tools to use.
    */
   toolChoice?: ToolChoice
+
+  /**
+   * Cancellation signal forwarded from the agent. The agent checks this signal
+   * between streaming events; model implementations do not need to handle it.
+   */
+  cancellationSignal?: AbortSignal
 }
 
 /**

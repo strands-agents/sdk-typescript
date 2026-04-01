@@ -43,6 +43,36 @@ export interface InvokeOptions {
    * Zod schema for structured output validation, overriding the constructor-provided schema for this invocation only.
    */
   structuredOutputSchema?: z.ZodSchema
+
+  /**
+   * External AbortSignal for cancelling the agent invocation.
+   *
+   * Use this when cancellation is driven by something outside the agent — for example,
+   * a client disconnect, a framework-managed request lifecycle, or a declarative timeout.
+   * The agent composes this signal with its own internal controller, so both
+   * `agent.cancel()` and this signal can trigger cancellation independently.
+   *
+   * When the signal fires, the agent stops at the next cancellation checkpoint and
+   * returns an AgentResult with `stopReason: 'cancelled'`. See
+   * {@link LocalAgent.cancellationSignal} for how tools can participate in cancellation.
+   *
+   * @example
+   * ```typescript
+   * // Timeout-based cancellation
+   * const result = await agent.invoke('Hello', {
+   *   cancellationSignal: AbortSignal.timeout(5000),
+   * })
+   *
+   * // Framework-driven cancellation (e.g., client disconnect)
+   * app.post('/chat', async (req, res) => {
+   *   const result = await agent.invoke(req.body.message, {
+   *     cancellationSignal: req.signal,
+   *   })
+   *   res.json(result)
+   * })
+   * ```
+   */
+  cancellationSignal?: AbortSignal
 }
 
 /**
@@ -130,6 +160,39 @@ export interface LocalAgent {
    * The system prompt to pass to the model provider.
    */
   systemPrompt?: SystemPrompt
+
+  /**
+   * The cancellation signal for the current invocation, or `undefined` when the agent is idle.
+   *
+   * Cancellation in the SDK is **cooperative**. The agent checks for cancellation at
+   * built-in checkpoints (between loop cycles, during model streaming, and between
+   * sequential tool executions), but once a tool callback is running, only the tool
+   * itself can respond to cancellation. There are two patterns:
+   *
+   * **Polling** — check `cancellationSignal.aborted` between steps in a loop:
+   * ```ts
+   * callback: async ({ items }, context) => {
+   *   const results = []
+   *   for (const item of items) {
+   *     if (context.agent.cancellationSignal?.aborted) return results
+   *     results.push(await process(item))
+   *   }
+   *   return results
+   * }
+   * ```
+   *
+   * **Signal forwarding** — pass to APIs that accept `AbortSignal`:
+   * ```ts
+   * callback: async ({ url }, context) => {
+   *   const res = await fetch(url, { signal: context.agent.cancellationSignal })
+   *   return res.text()
+   * }
+   * ```
+   *
+   * If a tool does neither, it will run to completion even after cancellation is
+   * requested. The agent will resume cancellation handling after the tool returns.
+   */
+  readonly cancellationSignal: AbortSignal | undefined
 
   /**
    * Register a hook callback for a specific event type.

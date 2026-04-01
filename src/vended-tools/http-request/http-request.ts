@@ -41,21 +41,17 @@ export const httpRequest = tool({
   description:
     'Makes HTTP requests to external APIs. Supports GET, POST, PUT, DELETE, PATCH, HEAD, and OPTIONS methods. Returns response with status, headers, and body.',
   inputSchema: httpRequestInputSchema,
-  callback: async (input) => {
+  callback: async (input, context) => {
     const { method, url, headers, body, timeout = 30 } = input
 
-    // Create AbortController for timeout
-    const controller = new AbortController()
-    const timeoutId = globalThis.setTimeout(() => controller.abort(), timeout * 1000)
+    // Abort on timeout or agent cancellation, whichever comes first
+    const timeoutSignal = AbortSignal.timeout(timeout * 1000)
+    const agentSignal = context?.agent.cancellationSignal
+    const signal = agentSignal ? AbortSignal.any([timeoutSignal, agentSignal]) : timeoutSignal
 
     try {
-      // Build fetch options
-      const fetchOptions: RequestInit = {
-        method,
-        signal: controller.signal,
-      }
+      const fetchOptions: RequestInit = { method, signal }
 
-      // Only add headers and body if they are defined
       if (headers !== undefined) {
         fetchOptions.headers = headers
       }
@@ -63,27 +59,18 @@ export const httpRequest = tool({
         fetchOptions.body = body
       }
 
-      // Make the fetch request
       const response = await globalThis.fetch(url, fetchOptions)
-
-      // Clear the timeout
-      globalThis.clearTimeout(timeoutId)
-
-      // Get response body as text
       const responseBody = await response.text()
 
-      // Convert headers to plain object
       const responseHeaders: Record<string, string> = {}
       response.headers.forEach((value, key) => {
         responseHeaders[key] = value
       })
 
-      // Check if response was successful
       if (!response.ok) {
         throw new Error(`HTTP ${response.status} ${response.statusText}: ${method} ${url}`)
       }
 
-      // Return successful response as JSON-serializable object
       return {
         status: response.status,
         statusText: response.statusText,
@@ -91,15 +78,10 @@ export const httpRequest = tool({
         body: responseBody,
       }
     } catch (error) {
-      // Clear timeout on error
-      globalThis.clearTimeout(timeoutId)
-
-      // Handle abort/timeout error
       if (error instanceof Error && error.name === 'AbortError') {
-        throw new Error(`Request timed out after ${timeout} seconds: ${method} ${url}`)
+        const reason = timeoutSignal.aborted ? `timed out after ${timeout} seconds` : 'cancelled'
+        throw new Error(`Request ${reason}: ${method} ${url}`)
       }
-
-      // Re-throw other errors (network errors, HTTP errors, etc.)
       throw error
     }
   },

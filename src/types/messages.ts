@@ -602,6 +602,7 @@ export class JsonBlock implements JsonBlockData, JSONSerializable<JsonBlockData>
 /**
  * Reason why the model stopped generating content.
  *
+ * - `cancelled` - Agent invocation was cancelled via `agent.cancel()`
  * - `contentFiltered` - Content was filtered by safety mechanisms
  * - `endTurn` - Natural end of the model's turn
  * - `guardrailIntervened` - A guardrail policy stopped generation
@@ -611,6 +612,7 @@ export class JsonBlock implements JsonBlockData, JSONSerializable<JsonBlockData>
  * - `modelContextWindowExceeded` - Input exceeded the model's context window
  */
 export type StopReason =
+  | 'cancelled'
   | 'contentFiltered'
   | 'endTurn'
   | 'guardrailIntervened'
