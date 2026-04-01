@@ -1,7 +1,7 @@
 import type { LocalAgent } from '../types/agent.js'
 
 // Re-export Snapshot and Scope from the canonical location
-export type { Snapshot, Scope } from '../agent/snapshot.js'
+export type { Snapshot, Scope } from '../types/snapshot.js'
 
 /**
  * Manifest tracks snapshot metadata.
