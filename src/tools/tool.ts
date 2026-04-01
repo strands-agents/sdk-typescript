@@ -2,6 +2,7 @@ import type { ToolSpec, ToolUse } from './types.js'
 import { TextBlock, ToolResultBlock } from '../types/messages.js'
 import type { LocalAgent } from '../types/agent.js'
 import { normalizeError } from '../errors.js'
+import type { InterruptParams } from '../types/interrupt.js'
 
 export type { ToolSpec } from './types.js'
 
@@ -21,6 +22,37 @@ export interface ToolContext {
    * Provides access to agent state and other agent-level information.
    */
   agent: LocalAgent
+
+  /**
+   * Triggers an interrupt for human-in-the-loop workflows.
+   *
+   * On first call (when agent is not resuming), throws an InterruptError to halt execution.
+   * On resume (when user has provided a response), returns the user's response.
+   *
+   * @param params - Interrupt parameters including name and optional reason
+   * @returns The user's response when resuming from an interrupt
+   * @throws InterruptError when interrupt is first raised
+   *
+   * @example
+   * ```typescript
+   * const tool = new FunctionTool({
+   *   name: 'transfer_money',
+   *   callback: async (input, context) => {
+   *     if (input.amount > 1000) {
+   *       const response = context.interrupt({
+   *         name: 'confirm_transfer',
+   *         reason: `Confirm transfer of $${input.amount}?`,
+   *       })
+   *       if (!response.confirmed) {
+   *         return { success: false, reason: 'Transfer cancelled' }
+   *       }
+   *     }
+   *     return { success: true }
+   *   },
+   * })
+   * ```
+   */
+  interrupt(params: InterruptParams): unknown
 }
 
 /**

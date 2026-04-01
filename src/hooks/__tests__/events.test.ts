@@ -131,6 +131,7 @@ describe('BeforeToolCallEvent', () => {
       toolUse: toolUse,
       tool: tool,
       cancel: false,
+      _interruptState: undefined,
     })
     // @ts-expect-error verifying that property is readonly
     event.agent = new Agent()
@@ -155,6 +156,7 @@ describe('BeforeToolCallEvent', () => {
       toolUse: toolUse,
       tool: undefined,
       cancel: false,
+      _interruptState: undefined,
     })
   })
 
@@ -528,6 +530,8 @@ describe('BeforeToolsEvent', () => {
       agent: agent,
       message: message,
       cancel: false,
+      _interruptState: undefined,
+      _interruptCounter: 0,
     })
     // @ts-expect-error verifying that property is readonly
     event.agent = new Agent()
@@ -920,7 +924,7 @@ describe('toJSON serialization completeness', () => {
    * If you add a new field to an event and it should be excluded from wire serialization,
    * add it here. Otherwise, add it to toJSON() so it gets serialized.
    */
-  const EXCLUDED_FIELDS = new Set(['agent', 'model', 'tool', 'cancel', 'retry'])
+  const EXCLUDED_FIELDS = new Set(['agent', 'model', 'tool', 'cancel', 'retry', '_interruptState', '_interruptCounter'])
 
   /**
    * Fields where toJSON() transforms the value (e.g., Error to message object).

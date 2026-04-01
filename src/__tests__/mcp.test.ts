@@ -306,6 +306,9 @@ describe('MCP Integration', () => {
     const toolContext: ToolContext = {
       toolUse: { toolUseId: 'id-123', name: 'weather', input: { city: 'NYC' } },
       agent: {} as LocalAgent,
+      interrupt: () => {
+        throw new Error('interrupt() is not available in test context')
+      },
     }
 
     it('returns text results on success', async () => {

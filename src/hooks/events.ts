@@ -4,6 +4,8 @@ import { type Tool, ToolStreamEvent } from '../tools/tool.js'
 import type { JSONValue } from '../types/json.js'
 import type { ModelStreamEvent } from '../models/streaming.js'
 import type { Model } from '../models/model.js'
+import type { InterruptParams } from '../types/interrupt.js'
+import { InterruptError, InterruptState } from '../interrupt.js'
 
 /**
  * Agent hook events.
@@ -196,6 +198,12 @@ export class BeforeToolCallEvent extends HookableEvent {
    */
   cancel: boolean | string = false
 
+  /**
+   * @internal
+   * Interrupt state for managing human-in-the-loop workflows.
+   */
+  _interruptState?: InterruptState
+
   constructor(data: {
     agent: LocalAgent
     toolUse: { name: string; toolUseId: string; input: JSONValue }
@@ -205,6 +213,46 @@ export class BeforeToolCallEvent extends HookableEvent {
     this.agent = data.agent
     this.toolUse = data.toolUse
     this.tool = data.tool
+  }
+
+  /**
+   * Triggers an interrupt for human-in-the-loop workflows.
+   *
+   * On first call (when agent is not resuming), throws an InterruptError to halt execution.
+   * On resume (when user has provided a response), returns the user's response.
+   *
+   * @param params - Interrupt parameters including name and optional reason
+   * @returns The user's response when resuming from an interrupt
+   * @throws InterruptError when interrupt is first raised
+   *
+   * @example
+   * ```typescript
+   * agent.addHook(BeforeToolCallEvent, (event) => {
+   *   if (event.toolUse.name === 'delete_file') {
+   *     const response = event.interrupt({
+   *       name: 'confirm_delete',
+   *       reason: 'Confirm file deletion?',
+   *     })
+   *     if (response !== 'approved') {
+   *       event.cancel = 'Deletion cancelled by user'
+   *     }
+   *   }
+   * })
+   * ```
+   */
+  interrupt(params: InterruptParams): unknown {
+    if (!this._interruptState) {
+      throw new Error('Interrupt state not available')
+    }
+
+    const interruptId = `beforeToolCall:${this.toolUse.toolUseId}:${params.name}`
+    const interrupt = this._interruptState.getOrCreateInterrupt(interruptId, params.name, params.reason)
+
+    if (interrupt.response !== undefined) {
+      return interrupt.response
+    }
+
+    throw new InterruptError(interrupt)
   }
 
   /**
@@ -556,10 +604,66 @@ export class BeforeToolsEvent extends HookableEvent {
    */
   cancel: boolean | string = false
 
+  /**
+   * @internal
+   * Interrupt state for managing human-in-the-loop workflows.
+   */
+  _interruptState?: InterruptState
+
+  /**
+   * @internal
+   * Counter for generating unique interrupt IDs within a single BeforeToolsEvent.
+   */
+  private _interruptCounter: number = 0
+
   constructor(data: { agent: LocalAgent; message: Message }) {
     super()
     this.agent = data.agent
     this.message = data.message
+  }
+
+  /**
+   * Triggers an interrupt for human-in-the-loop workflows.
+   *
+   * On first call (when agent is not resuming), throws an InterruptError to halt execution.
+   * On resume (when user has provided a response), returns the user's response.
+   *
+   * @param params - Interrupt parameters including name and optional reason
+   * @returns The user's response when resuming from an interrupt
+   * @throws InterruptError when interrupt is first raised
+   *
+   * @example
+   * ```typescript
+   * agent.addHook(BeforeToolsEvent, (event) => {
+   *   const dangerousTools = event.message.content
+   *     .filter((block) => block.type === 'toolUseBlock')
+   *     .filter((block) => ['delete_file'].includes(block.name))
+   *
+   *   if (dangerousTools.length > 0) {
+   *     const response = event.interrupt({
+   *       name: 'batch_approval',
+   *       reason: `Approve ${dangerousTools.length} dangerous tool calls?`,
+   *     })
+   *     if (!response.approved) {
+   *       event.cancel = 'Batch cancelled by user'
+   *     }
+   *   }
+   * })
+   * ```
+   */
+  interrupt(params: InterruptParams): unknown {
+    if (!this._interruptState) {
+      throw new Error('Interrupt state not available')
+    }
+
+    const interruptId = `beforeTools:${this._interruptCounter++}:${params.name}`
+    const interrupt = this._interruptState.getOrCreateInterrupt(interruptId, params.name, params.reason)
+
+    if (interrupt.response !== undefined) {
+      return interrupt.response
+    }
+
+    throw new InterruptError(interrupt)
   }
 
   /**

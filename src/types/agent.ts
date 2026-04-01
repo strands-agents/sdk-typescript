@@ -24,6 +24,7 @@ import type { HookCallback, HookableEventConstructor, HookCleanup } from '../hoo
 import type { ToolRegistry } from '../registry/tool-registry.js'
 import type { z } from 'zod'
 import { AgentMetrics } from '../telemetry/meter.js'
+import type { Interrupt } from '../interrupt.js'
 
 /**
  * Arguments for invoking an agent.
@@ -175,12 +176,19 @@ export class AgentResult {
    */
   readonly metrics?: AgentMetrics
 
+  /**
+   * Interrupts that caused the agent to stop for human input.
+   * Only populated when stopReason is 'interrupt'.
+   */
+  readonly interrupts?: Interrupt[]
+
   constructor(data: {
     stopReason: StopReason
     lastMessage: Message
     traces?: AgentTrace[]
     metrics?: AgentMetrics
     structuredOutput?: z.output<z.ZodType>
+    interrupts?: Interrupt[]
   }) {
     this.stopReason = data.stopReason
     this.lastMessage = data.lastMessage
@@ -192,6 +200,9 @@ export class AgentResult {
     }
     if (data.structuredOutput !== undefined) {
       this.structuredOutput = data.structuredOutput
+    }
+    if (data.interrupts !== undefined) {
+      this.interrupts = data.interrupts
     }
   }
 
@@ -211,6 +222,7 @@ export class AgentResult {
       stopReason: this.stopReason,
       lastMessage: this.lastMessage,
       ...(this.structuredOutput !== undefined && { structuredOutput: this.structuredOutput }),
+      ...(this.interrupts !== undefined && { interrupts: this.interrupts }),
     }
   }
 

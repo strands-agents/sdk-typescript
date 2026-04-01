@@ -21,6 +21,9 @@ describe('fileEditor tool', () => {
         input: {},
       },
       agent,
+      interrupt: () => {
+        throw new Error('interrupt() is not available in test context')
+      },
     }
     return { state: agent.appState, context: toolContext }
   }

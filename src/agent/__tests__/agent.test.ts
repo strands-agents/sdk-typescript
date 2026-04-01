@@ -139,12 +139,14 @@ describe('Agent', () => {
         const afterTools = items.find((e) => e.type === 'afterToolsEvent')
 
         expect(beforeTools).toEqual(
-          new BeforeToolsEvent({
+          expect.objectContaining({
+            type: 'beforeToolsEvent',
             agent: agent,
             message: new Message({
               role: 'assistant',
               content: [new ToolUseBlock({ name: 'testTool', toolUseId: 'tool-1', input: {} })],
             }),
+            cancel: false,
           })
         )
 

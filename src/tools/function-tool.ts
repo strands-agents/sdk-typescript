@@ -13,6 +13,7 @@ import {
   type ToolResultContentData,
 } from '../types/messages.js'
 import { DocumentBlock, ImageBlock, VideoBlock } from '../types/media.js'
+import { InterruptError } from '../interrupt.js'
 
 /**
  * Callback function for FunctionTool implementations.
@@ -204,7 +205,11 @@ export class FunctionTool extends Tool implements InvokableTool<unknown, JSONVal
         return this._wrapInToolResult(result, toolUse.toolUseId)
       }
     } catch (error) {
-      // Handle any errors and yield as error ToolResultBlock
+      // Re-throw InterruptError to allow interrupt handling in agent loop
+      if (error instanceof InterruptError) {
+        throw error
+      }
+      // Handle any other errors and yield as error ToolResultBlock
       return createErrorResult(error, toolUse.toolUseId)
     }
   }

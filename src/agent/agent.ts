@@ -59,6 +59,8 @@ import {
   type ModelStopData,
 } from '../hooks/events.js'
 import { StructuredOutputTool, STRUCTURED_OUTPUT_TOOL_NAME } from '../tools/structured-output-tool.js'
+import { InterruptError, InterruptState } from '../interrupt.js'
+import type { InterruptParams, InterruptResponseContent } from '../types/interrupt.js'
 
 import type { z } from 'zod'
 import type { SessionManager } from '../session/session-manager.js'
@@ -219,6 +221,8 @@ export class Agent implements LocalAgent, InvokableAgent {
   private _tracer: Tracer
   /** Meter instance for accumulating loop metrics during invocation. */
   private _meter: Meter
+  /** Interrupt state for human-in-the-loop workflows. */
+  private _interruptState: InterruptState
 
   /**
    * Creates an instance of the Agent.
@@ -271,6 +275,9 @@ export class Agent implements LocalAgent, InvokableAgent {
 
     // Initialize meter for local metrics accumulation
     this._meter = new Meter()
+
+    // Initialize interrupt state for human-in-the-loop workflows
+    this._interruptState = new InterruptState()
 
     this._initialized = false
   }
@@ -429,6 +436,26 @@ export class Agent implements LocalAgent, InvokableAgent {
       yield await this._invokeCallbacks(new AgentResultEvent({ agent: this, result: result.value }))
 
       return result.value
+    } catch (error) {
+      // Handle interrupt errors from hook callbacks
+      if (error instanceof InterruptError) {
+        this._interruptState.activate()
+        const lastMessage =
+          this.messages.length > 0
+            ? this.messages[this.messages.length - 1]!
+            : new Message({ role: 'assistant', content: [] })
+
+        const interruptResult = new AgentResult({
+          stopReason: 'interrupt',
+          lastMessage,
+          interrupts: this._interruptState.getInterruptsList(),
+        })
+
+        yield await this._invokeCallbacks(new AgentResultEvent({ agent: this, result: interruptResult }))
+
+        return interruptResult
+      }
+      throw error
     } finally {
       // Drain remaining events from _stream() so cleanup events (after events
       // from finally blocks) still get their hooks and printer invoked.
@@ -472,6 +499,12 @@ export class Agent implements LocalAgent, InvokableAgent {
   ): AsyncGenerator<AgentStreamEvent, AgentResult, undefined> {
     let currentArgs: InvokeArgs | undefined = args
     let result: AgentResult | undefined
+
+    // Handle interrupt responses if present in input
+    const interruptResponses = this._extractInterruptResponses(args)
+    if (interruptResponses.length > 0) {
+      this._interruptState.resume(interruptResponses)
+    }
 
     // Resolve structured output schema from per-invocation options or constructor config
     const structuredOutputSchema = options?.structuredOutputSchema ?? this._structuredOutputSchema
@@ -589,10 +622,47 @@ export class Agent implements LocalAgent, InvokableAgent {
         } catch (error) {
           this._meter.endCycle(cycleStartTime)
           this._tracer.endAgentLoopSpan(cycleSpan, { error: error as Error })
+
+          // Handle interrupt - return with stopReason: 'interrupt'
+          if (error instanceof InterruptError) {
+            this._interruptState.activate()
+            const lastMessage =
+              this.messages.length > 0
+                ? this.messages[this.messages.length - 1]!
+                : new Message({ role: 'assistant', content: [] })
+
+            result = new AgentResult({
+              stopReason: 'interrupt',
+              lastMessage,
+              traces: this._tracer.localTraces,
+              metrics: this._meter.metrics,
+              interrupts: this._interruptState.getInterruptsList(),
+            })
+            return result
+          }
+
           throw error
         }
       }
     } catch (error) {
+      // Handle interrupt at top level (from hooks)
+      if (error instanceof InterruptError) {
+        this._interruptState.activate()
+        const lastMessage =
+          this.messages.length > 0
+            ? this.messages[this.messages.length - 1]!
+            : new Message({ role: 'assistant', content: [] })
+
+        result = new AgentResult({
+          stopReason: 'interrupt',
+          lastMessage,
+          traces: this._tracer.localTraces,
+          metrics: this._meter.metrics,
+          interrupts: this._interruptState.getInterruptsList(),
+        })
+        return result
+      }
+
       caughtError = error as Error
       throw error
     } finally {
@@ -606,6 +676,11 @@ export class Agent implements LocalAgent, InvokableAgent {
       // Cleanup structured output tool
       if (structuredOutputTool) {
         this._toolRegistry.remove(STRUCTURED_OUTPUT_TOOL_NAME)
+      }
+
+      // Deactivate interrupt state if not interrupted
+      if (result?.stopReason !== 'interrupt') {
+        this._interruptState.deactivate()
       }
 
       // Always emit final event
@@ -655,6 +730,12 @@ export class Agent implements LocalAgent, InvokableAgent {
       } else if (Array.isArray(args) && args.length > 0) {
         const firstElement = args[0]!
 
+        // Check if it's interrupt responses - skip creating messages for these
+        if (typeof firstElement === 'object' && firstElement !== null && 'interruptResponse' in firstElement) {
+          // Pure interrupt responses: no messages to add
+          return []
+        }
+
         // Check if it's Message[] or MessageData[]
         if ('role' in firstElement && typeof firstElement.role === 'string') {
           // Check if it's a Message instance or MessageData
@@ -688,6 +769,36 @@ export class Agent implements LocalAgent, InvokableAgent {
     }
     // undefined or empty array: no messages to append
     return []
+  }
+
+  /**
+   * Extracts interrupt responses from the agent invocation input.
+   *
+   * @param args - Arguments for invoking the agent
+   * @returns Array of interrupt response content blocks
+   */
+  private _extractInterruptResponses(args: InvokeArgs): InterruptResponseContent[] {
+    if (!Array.isArray(args) || args.length === 0) {
+      return []
+    }
+
+    const responses: InterruptResponseContent[] = []
+
+    for (const item of args) {
+      // Check if item has interruptResponse property
+      if (typeof item === 'object' && item !== null && 'interruptResponse' in item) {
+        const content = item as InterruptResponseContent
+        if (
+          typeof content.interruptResponse === 'object' &&
+          content.interruptResponse !== null &&
+          'interruptId' in content.interruptResponse
+        ) {
+          responses.push(content)
+        }
+      }
+    }
+
+    return responses
   }
 
   /**
@@ -832,6 +943,7 @@ export class Agent implements LocalAgent, InvokableAgent {
     toolRegistry: ToolRegistry
   ): AsyncGenerator<AgentStreamEvent, Message, undefined> {
     const beforeToolsEvent = new BeforeToolsEvent({ agent: this, message: assistantMessage })
+    beforeToolsEvent._interruptState = this._interruptState
     yield beforeToolsEvent
 
     const toolResultBlocks: ToolResultBlock[] = []
@@ -910,6 +1022,7 @@ export class Agent implements LocalAgent, InvokableAgent {
     // Retry loop for tool execution
     while (true) {
       const beforeToolCallEvent = new BeforeToolCallEvent({ agent: this, toolUse, tool })
+      beforeToolCallEvent._interruptState = this._interruptState
       yield beforeToolCallEvent
 
       // Cancel individual tool if hook requested it
@@ -960,6 +1073,16 @@ export class Agent implements LocalAgent, InvokableAgent {
             input: toolUseBlock.input,
           },
           agent: this,
+          interrupt: (params: InterruptParams): unknown => {
+            const interruptId = `tool:${toolUseBlock.toolUseId}:${params.name}`
+            const interrupt = this._interruptState.getOrCreateInterrupt(interruptId, params.name, params.reason)
+
+            if (interrupt.response !== undefined) {
+              return interrupt.response
+            }
+
+            throw new InterruptError(interrupt)
+          },
         }
 
         try {
@@ -988,6 +1111,10 @@ export class Agent implements LocalAgent, InvokableAgent {
             error = result.error
           }
         } catch (e) {
+          // Re-throw InterruptError to allow interrupt handling
+          if (e instanceof InterruptError) {
+            throw e
+          }
           // Tool execution failed with error
           error = normalizeError(e)
           toolResult = new ToolResultBlock({

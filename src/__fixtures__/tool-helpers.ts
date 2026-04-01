@@ -31,6 +31,9 @@ export function createMockContext(
       toolRegistry: new ToolRegistry(),
       addHook: () => () => {},
     } as unknown as LocalAgent,
+    interrupt: (): never => {
+      throw new Error('interrupt() is not available in mock context')
+    },
   }
 }
 

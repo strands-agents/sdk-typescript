@@ -182,17 +182,20 @@ describe('Agent Hooks Integration', () => {
       // Verify BeforeToolCallEvent
       const beforeToolCall = beforeToolCallEvents[0] as BeforeToolCallEvent
       expect(beforeToolCall).toEqual(
-        new BeforeToolCallEvent({
+        expect.objectContaining({
+          type: 'beforeToolCallEvent',
           agent,
           toolUse: { name: 'testTool', toolUseId: 'tool-1', input: {} },
           tool,
+          cancel: false,
         })
       )
 
       // Verify AfterToolCallEvent
       const afterToolCall = afterToolCallEvents[0] as AfterToolCallEvent
       expect(afterToolCall).toEqual(
-        new AfterToolCallEvent({
+        expect.objectContaining({
+          type: 'afterToolCallEvent',
           agent,
           toolUse: { name: 'testTool', toolUseId: 'tool-1', input: {} },
           tool,
