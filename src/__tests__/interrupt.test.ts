@@ -163,11 +163,11 @@ describe('InterruptError', () => {
 
 describe('InterruptState', () => {
   describe('initial state', () => {
-    it('starts with empty interrupts and context', () => {
+    it('starts with empty interrupts and no resume responses', () => {
       const state = new InterruptState()
 
       expect(state.interrupts.size).toBe(0)
-      expect(state.context.size).toBe(0)
+      expect(state.resumeResponses).toBeUndefined()
       expect(state.activated).toBe(false)
     })
   })
@@ -183,16 +183,15 @@ describe('InterruptState', () => {
   })
 
   describe('deactivate', () => {
-    it('clears interrupts, context, and sets activated to false', () => {
+    it('clears interrupts, resume responses, and sets activated to false', () => {
       const state = new InterruptState()
       state.getOrCreateInterrupt('int-1', 'test')
-      state.context.set('key', 'value')
       state.activate()
 
       state.deactivate()
 
       expect(state.interrupts.size).toBe(0)
-      expect(state.context.size).toBe(0)
+      expect(state.resumeResponses).toBeUndefined()
       expect(state.activated).toBe(false)
     })
   })
@@ -324,7 +323,7 @@ describe('InterruptState', () => {
       }).toThrow('interrupt_id=<unknown> | no interrupt found')
     })
 
-    it('stores responses in context', () => {
+    it('stores responses as resumeResponses', () => {
       const state = new InterruptState()
       state.getOrCreateInterrupt('int-1', 'test')
       state.activate()
@@ -332,7 +331,7 @@ describe('InterruptState', () => {
       const responses = [{ interruptResponse: { interruptId: 'int-1', response: 'yes' } }]
       state.resume(responses)
 
-      expect(state.context.get('responses')).toBe(responses)
+      expect(state.resumeResponses).toBe(responses)
     })
   })
 
@@ -342,22 +341,19 @@ describe('InterruptState', () => {
 
       expect(state.toJSON()).toStrictEqual({
         interrupts: {},
-        context: {},
         activated: false,
       })
     })
 
-    it('serializes state with interrupts and context', () => {
+    it('serializes state with interrupts', () => {
       const state = new InterruptState()
       state.getOrCreateInterrupt('int-1', 'test', 'reason')
-      state.context.set('key', 'value')
       state.activate()
 
       expect(state.toJSON()).toStrictEqual({
         interrupts: {
           'int-1': { id: 'int-1', name: 'test', reason: 'reason' },
         },
-        context: { key: 'value' },
         activated: true,
       })
     })
@@ -367,12 +363,11 @@ describe('InterruptState', () => {
     it('deserializes empty state', () => {
       const state = InterruptState.fromJSON({
         interrupts: {},
-        context: {},
         activated: false,
       })
 
       expect(state.interrupts.size).toBe(0)
-      expect(state.context.size).toBe(0)
+      expect(state.resumeResponses).toBeUndefined()
       expect(state.activated).toBe(false)
     })
 
@@ -381,7 +376,7 @@ describe('InterruptState', () => {
         interrupts: {
           'int-1': { id: 'int-1', name: 'test', reason: 'reason', response: 'yes' },
         },
-        context: { key: 'value' },
+        resumeResponses: [{ interruptResponse: { interruptId: 'int-1', response: 'yes' } }],
         activated: true,
       })
 
@@ -392,7 +387,7 @@ describe('InterruptState', () => {
         reason: 'reason',
         response: 'yes',
       })
-      expect(state.context.get('key')).toBe('value')
+      expect(state.resumeResponses).toStrictEqual([{ interruptResponse: { interruptId: 'int-1', response: 'yes' } }])
       expect(state.activated).toBe(true)
     })
 
@@ -400,7 +395,6 @@ describe('InterruptState', () => {
       const original = new InterruptState()
       original.getOrCreateInterrupt('int-1', 'test', { complex: 'reason' })
       original.interrupts.get('int-1')!.response = ['array', 'response']
-      original.context.set('data', { nested: 'object' })
       original.activate()
 
       const serialized = JSON.stringify(original)

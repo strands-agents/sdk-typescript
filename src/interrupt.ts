@@ -13,7 +13,6 @@
  * 6. On resume, `interrupt()` returns the user's response
  */
 
-import type { JSONValue } from './types/json.js'
 import type { InterruptResponseContent } from './types/interrupt.js'
 import {
   contentBlockFromData,
@@ -108,9 +107,9 @@ export interface InterruptStateData {
   interrupts: Record<string, { id: string; name: string; reason?: unknown; response?: unknown }>
 
   /**
-   * Additional context associated with the interrupt state.
+   * Resume responses that were provided when resuming from an interrupt.
    */
-  context: Record<string, JSONValue>
+  resumeResponses?: InterruptResponseContent[]
 
   /**
    * Whether the agent is in an interrupted state.
@@ -148,9 +147,9 @@ export class InterruptState {
   private _interrupts: Map<string, Interrupt>
 
   /**
-   * Additional context associated with the interrupt state.
+   * Resume responses provided when resuming from an interrupt.
    */
-  private _context: Map<string, unknown>
+  private _resumeResponses: InterruptResponseContent[] | undefined
 
   /**
    * Whether the agent is in an interrupted state.
@@ -167,7 +166,7 @@ export class InterruptState {
 
   constructor() {
     this._interrupts = new Map()
-    this._context = new Map()
+    this._resumeResponses = undefined
     this._activated = false
     this._pendingToolExecution = undefined
   }
@@ -180,10 +179,10 @@ export class InterruptState {
   }
 
   /**
-   * Gets the context map.
+   * Gets the resume responses provided when resuming from an interrupt.
    */
-  get context(): Map<string, unknown> {
-    return this._context
+  get resumeResponses(): InterruptResponseContent[] | undefined {
+    return this._resumeResponses
   }
 
   /**
@@ -262,7 +261,7 @@ export class InterruptState {
    */
   deactivate(): void {
     this._interrupts.clear()
-    this._context.clear()
+    this._resumeResponses = undefined
     this._activated = false
     this._pendingToolExecution = undefined
   }
@@ -292,7 +291,7 @@ export class InterruptState {
       interrupt.response = response
     }
 
-    this._context.set('responses', responses)
+    this._resumeResponses = responses
   }
 
   /**
@@ -343,14 +342,9 @@ export class InterruptState {
       interrupts[id] = interrupt.toJSON()
     }
 
-    const context: Record<string, JSONValue> = {}
-    for (const [key, value] of this._context) {
-      context[key] = value as JSONValue
-    }
-
     return {
       interrupts,
-      context,
+      ...(this._resumeResponses && { resumeResponses: this._resumeResponses }),
       activated: this._activated,
     }
   }
@@ -369,8 +363,8 @@ export class InterruptState {
       state._interrupts.set(id, Interrupt.fromJSON(interruptData))
     }
 
-    for (const [key, value] of Object.entries(data.context)) {
-      state._context.set(key, value)
+    if (data.resumeResponses) {
+      state._resumeResponses = data.resumeResponses as InterruptResponseContent[]
     }
 
     return state
