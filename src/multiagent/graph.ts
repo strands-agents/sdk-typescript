@@ -103,6 +103,7 @@ export class Graph implements MultiAgent {
   private readonly _sources: Node[]
   private readonly _tracer: Tracer
   private _initialized: boolean
+  private _snapshotState?: MultiAgentState | undefined
 
   constructor(options: GraphOptions) {
     const { id, nodes, edges, sources, plugins, traceAttributes, ...config } = options
@@ -189,8 +190,19 @@ export class Graph implements MultiAgent {
     }
   }
 
+  /**
+   * Loads a previously saved MultiAgentState so the next invocation resumes from it.
+   * The state is consumed on the next stream()/invoke() call and cleared afterward.
+   */
+  loadState(state: MultiAgentState): void {
+    this._snapshotState = state
+  }
+
   private async *_stream(input: MultiAgentInput): AsyncGenerator<MultiAgentStreamEvent, MultiAgentResult, undefined> {
-    const state = new MultiAgentState({ nodeIds: [...this.nodes.keys()] })
+    const state = this._snapshotState ?? new MultiAgentState({ nodeIds: [...this.nodes.keys()] })
+    this._snapshotState = undefined
+    // TODO: When resume logic is implemented, skip nodes that are already COMPLETED/CANCELLED.
+    // Currently, restored state is consumed but all nodes re-execute from scratch.
 
     const queue = new Queue()
     const targets = [...this._sources]

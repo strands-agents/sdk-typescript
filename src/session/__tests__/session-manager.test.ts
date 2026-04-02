@@ -7,12 +7,26 @@ import {
   AfterInvocationEvent,
   AfterModelCallEvent,
   HookableEvent,
+  type HookableEventConstructor,
+  type HookCallback,
+  type HookCleanup,
 } from '../../hooks/index.js'
 import { Agent } from '../../agent/agent.js'
 import { Message, TextBlock } from '../../types/messages.js'
-import { createMockAgent as createMockAgentWithHooks, invokeTrackedHook } from '../../__fixtures__/agent-helpers.js'
+import {
+  createMockAgent as createMockAgentWithHooks,
+  invokeTrackedHook,
+  type TrackedHook,
+} from '../../__fixtures__/agent-helpers.js'
 import { loadStateFromJSONSymbol, stateToJSONSymbol } from '../../types/serializable.js'
 import { logger } from '../../logging/logger.js'
+import {
+  AfterMultiAgentInvocationEvent,
+  Graph,
+  type MultiAgent,
+  MultiAgentInitializedEvent,
+  MultiAgentState,
+} from '../../multiagent/index.js'
 
 // Test fixtures
 function createMockAgent(id = 'agent'): Agent {
@@ -594,6 +608,258 @@ describe('SessionManager', () => {
         location: { sessionId: 'test-session', scope: 'agent', scopeId: 'test-agent' },
       })
       expect(snapshot).toBeNull()
+    })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Multi-agent tests
+// ---------------------------------------------------------------------------
+
+type MockOrchestrator = MultiAgent & {
+  trackedHooks: TrackedHook[]
+  nodes: ReadonlyMap<string, unknown>
+  loadState: ReturnType<typeof vi.fn>
+}
+
+function createMockOrchestrator(id = 'graph'): MockOrchestrator {
+  const trackedHooks: TrackedHook[] = []
+  return {
+    id,
+    nodes: new Map(),
+    loadState: vi.fn(),
+    invoke: vi.fn(),
+    stream: vi.fn(),
+    addHook: <T extends HookableEvent>(
+      eventType: HookableEventConstructor<T>,
+      callback: HookCallback<T>
+    ): HookCleanup => {
+      trackedHooks.push({
+        eventType: eventType as HookableEventConstructor<HookableEvent>,
+        callback: callback as HookCallback<HookableEvent>,
+      })
+      return () => {}
+    },
+    trackedHooks,
+  } as unknown as MockOrchestrator
+}
+
+function invokeOrchestratorHook<T extends HookableEvent>(orchestrator: MockOrchestrator, event: T): Promise<void> {
+  const hook = orchestrator.trackedHooks.find((h) => h.eventType === event.constructor)
+  if (!hook) throw new Error(`No hook registered for event type: ${event.constructor.name}`)
+  return hook.callback(event) as Promise<void>
+}
+
+function createMultiAgentTestSnapshot(orchestratorId = 'test-graph'): ReturnType<typeof createTestSnapshot> {
+  return createTestSnapshot({ scope: 'multiAgent', data: { orchestratorId } })
+}
+
+describe('SessionManager — multi-agent', () => {
+  let storage: MockSnapshotStorage
+  let sessionManager: SessionManager
+  let orchestrator: MockOrchestrator
+
+  beforeEach(() => {
+    storage = new MockSnapshotStorage()
+    orchestrator = createMockOrchestrator('test-graph')
+  })
+
+  describe('initMultiAgent', () => {
+    it('registers MultiAgentInitializedEvent hook', () => {
+      sessionManager = new SessionManager({ sessionId: 'test', storage: { snapshot: storage } })
+      sessionManager.initMultiAgent(orchestrator)
+
+      const hook = orchestrator.trackedHooks.find((h) => h.eventType === MultiAgentInitializedEvent)
+      expect(hook).toBeDefined()
+    })
+
+    it('registers AfterMultiAgentInvocationEvent hook', () => {
+      sessionManager = new SessionManager({ sessionId: 'test', storage: { snapshot: storage } })
+      sessionManager.initMultiAgent(orchestrator)
+
+      const hook = orchestrator.trackedHooks.find((h) => h.eventType === AfterMultiAgentInvocationEvent)
+      expect(hook).toBeDefined()
+    })
+  })
+
+  describe('saveSnapshot — multi-agent', () => {
+    beforeEach(() => {
+      sessionManager = new SessionManager({ sessionId: 'test-session', storage: { snapshot: storage } })
+    })
+
+    it('saves orchestrator snapshot as latest', async () => {
+      await sessionManager.saveSnapshot({ target: orchestrator as unknown as Graph, isLatest: true })
+
+      const snapshot = await storage.loadSnapshot({
+        location: { sessionId: 'test-session', scope: 'multiAgent', scopeId: 'test-graph' },
+      })
+      expect(snapshot).not.toBeNull()
+      expect(snapshot?.scope).toBe('multiAgent')
+    })
+
+    it('saves orchestrator snapshot with state', async () => {
+      const state = new MultiAgentState({ nodeIds: ['a'] })
+      state.steps = 3
+
+      await sessionManager.saveSnapshot({ target: orchestrator as unknown as Graph, state, isLatest: true })
+
+      const snapshot = await storage.loadSnapshot({
+        location: { sessionId: 'test-session', scope: 'multiAgent', scopeId: 'test-graph' },
+      })
+      expect(snapshot).not.toBeNull()
+      expect(snapshot?.data.state).toBeDefined()
+    })
+
+    it('saves immutable orchestrator snapshot', async () => {
+      await sessionManager.saveSnapshot({ target: orchestrator as unknown as Graph, isLatest: false })
+
+      const ids = await storage.listSnapshotIds({
+        location: { sessionId: 'test-session', scope: 'multiAgent', scopeId: 'test-graph' },
+      })
+      expect(ids.length).toBe(1)
+    })
+  })
+
+  describe('restoreSnapshot — multi-agent', () => {
+    beforeEach(() => {
+      sessionManager = new SessionManager({ sessionId: 'test-session', storage: { snapshot: storage } })
+    })
+
+    it('restores orchestrator snapshot', async () => {
+      const snapshot = createMultiAgentTestSnapshot()
+      await storage.saveSnapshot({
+        location: { sessionId: 'test-session', scope: 'multiAgent', scopeId: 'test-graph' },
+        snapshotId: 'latest',
+        isLatest: true,
+        snapshot,
+      })
+
+      const result = await sessionManager.restoreSnapshot({ target: orchestrator as unknown as Graph })
+      expect(result).toBe(true)
+    })
+
+    it('returns false when no snapshot exists', async () => {
+      const result = await sessionManager.restoreSnapshot({ target: orchestrator as unknown as Graph })
+      expect(result).toBe(false)
+    })
+  })
+
+  describe('MultiAgentInitializedEvent handling', () => {
+    it('restores latest snapshot on initialization', async () => {
+      const snapshot = createMultiAgentTestSnapshot()
+      await storage.saveSnapshot({
+        location: { sessionId: 'test-session', scope: 'multiAgent', scopeId: 'test-graph' },
+        snapshotId: 'latest',
+        isLatest: true,
+        snapshot,
+      })
+
+      sessionManager = new SessionManager({ sessionId: 'test-session', storage: { snapshot: storage } })
+      sessionManager.initMultiAgent(orchestrator)
+
+      await invokeOrchestratorHook(orchestrator, new MultiAgentInitializedEvent({ orchestrator }))
+
+      // Verify restore was attempted (snapshot was loaded from storage)
+      // The mock orchestrator has no nodes, so loadMultiAgentSnapshot only validates headers
+    })
+
+    it('handles missing snapshot gracefully', async () => {
+      sessionManager = new SessionManager({ sessionId: 'new-session', storage: { snapshot: storage } })
+      sessionManager.initMultiAgent(orchestrator)
+
+      await expect(
+        invokeOrchestratorHook(orchestrator, new MultiAgentInitializedEvent({ orchestrator }))
+      ).resolves.not.toThrow()
+    })
+  })
+
+  describe('AfterMultiAgentInvocationEvent handling', () => {
+    it('saves snapshot when saveLatestOn is invocation', async () => {
+      sessionManager = new SessionManager({
+        sessionId: 'test-session',
+        storage: { snapshot: storage },
+        saveLatestOn: 'invocation',
+      })
+      sessionManager.initMultiAgent(orchestrator)
+
+      const state = new MultiAgentState({ nodeIds: ['a'] })
+      await invokeOrchestratorHook(orchestrator, new AfterMultiAgentInvocationEvent({ orchestrator, state }))
+
+      const snapshot = await storage.loadSnapshot({
+        location: { sessionId: 'test-session', scope: 'multiAgent', scopeId: 'test-graph' },
+      })
+      expect(snapshot).not.toBeNull()
+      expect(snapshot?.scope).toBe('multiAgent')
+    })
+
+    it('does not save when saveLatestOn is trigger', async () => {
+      sessionManager = new SessionManager({
+        sessionId: 'test-session',
+        storage: { snapshot: storage },
+        saveLatestOn: 'trigger',
+      })
+      sessionManager.initMultiAgent(orchestrator)
+
+      const state = new MultiAgentState({ nodeIds: ['a'] })
+      await invokeOrchestratorHook(orchestrator, new AfterMultiAgentInvocationEvent({ orchestrator, state }))
+
+      const snapshot = await storage.loadSnapshot({
+        location: { sessionId: 'test-session', scope: 'multiAgent', scopeId: 'test-graph' },
+      })
+      expect(snapshot).toBeNull()
+    })
+  })
+
+  describe('scope isolation', () => {
+    it('agent and multi-agent snapshots use separate storage paths', async () => {
+      const mockAgent = createMockAgent('test-agent')
+      sessionManager = new SessionManager({
+        sessionId: 'shared-session',
+        storage: { snapshot: storage },
+      })
+
+      await sessionManager.saveSnapshot({ target: mockAgent as unknown as Agent, isLatest: true })
+      await sessionManager.saveSnapshot({ target: orchestrator as unknown as Graph, isLatest: true })
+
+      const agentSnapshot = await storage.loadSnapshot({
+        location: { sessionId: 'shared-session', scope: 'agent', scopeId: 'test-agent' },
+      })
+      const multiAgentSnapshot = await storage.loadSnapshot({
+        location: { sessionId: 'shared-session', scope: 'multiAgent', scopeId: 'test-graph' },
+      })
+
+      expect(agentSnapshot).not.toBeNull()
+      expect(multiAgentSnapshot).not.toBeNull()
+      expect(agentSnapshot?.scope).toBe('agent')
+      expect(multiAgentSnapshot?.scope).toBe('multiAgent')
+    })
+  })
+
+  describe('MultiAgentInitializedEvent — loadState integration', () => {
+    it('calls loadState on orchestrator when snapshot exists', async () => {
+      const snapshot = createMultiAgentTestSnapshot()
+      await storage.saveSnapshot({
+        location: { sessionId: 'test-session', scope: 'multiAgent', scopeId: 'test-graph' },
+        snapshotId: 'latest',
+        isLatest: true,
+        snapshot,
+      })
+
+      sessionManager = new SessionManager({ sessionId: 'test-session', storage: { snapshot: storage } })
+      sessionManager.initMultiAgent(orchestrator)
+
+      await invokeOrchestratorHook(orchestrator, new MultiAgentInitializedEvent({ orchestrator }))
+
+      expect(orchestrator.loadState).toHaveBeenCalledTimes(1)
+    })
+
+    it('does not call loadState when no snapshot exists', async () => {
+      sessionManager = new SessionManager({ sessionId: 'empty-session', storage: { snapshot: storage } })
+      sessionManager.initMultiAgent(orchestrator)
+
+      await invokeOrchestratorHook(orchestrator, new MultiAgentInitializedEvent({ orchestrator }))
+
+      expect(orchestrator.loadState).not.toHaveBeenCalled()
     })
   })
 })

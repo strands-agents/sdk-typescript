@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { Agent } from '../../agent/agent.js'
 import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
 import { collectGenerator } from '../../__fixtures__/model-test-helpers.js'
-import { BeforeNodeCallEvent, MultiAgentInitializedEvent } from '../events.js'
+import { BeforeNodeCallEvent, BeforeMultiAgentInvocationEvent, MultiAgentInitializedEvent } from '../events.js'
 import type { JSONValue } from '../../types/json.js'
 import { TextBlock } from '../../types/messages.js'
 import { Status, MultiAgentState } from '../state.js'
@@ -378,6 +378,57 @@ describe('Swarm', () => {
       expect(cancelEvent).toEqual(
         expect.objectContaining({ nodeId: 'a', state: expect.any(MultiAgentState), message: 'agent not ready' })
       )
+    })
+  })
+
+  describe('loadState', () => {
+    it('uses restored state instead of creating fresh state', async () => {
+      const swarm = new Swarm({
+        nodes: [createFinalAgent('a', 'done')],
+        start: 'a',
+      })
+
+      const restored = new MultiAgentState({ nodeIds: ['a'] })
+      restored.steps = 5
+      swarm.loadState(restored)
+
+      let observedState: MultiAgentState | undefined
+      swarm.addHook(BeforeMultiAgentInvocationEvent, (event) => {
+        observedState = event.state
+      })
+
+      await swarm.invoke('go')
+
+      expect(observedState).toBe(restored)
+      expect(observedState!.steps).toBeGreaterThanOrEqual(5)
+    })
+
+    it('consumes state once — second invocation gets fresh state', async () => {
+      const restored = new MultiAgentState({ nodeIds: ['a'] })
+      restored.steps = 99
+
+      const swarm = new Swarm({
+        nodes: [createFinalAgent('a', 'done')],
+        start: 'a',
+      })
+
+      swarm.loadState(restored)
+
+      let firstState: MultiAgentState | undefined
+      let secondState: MultiAgentState | undefined
+      let callCount = 0
+      swarm.addHook(BeforeMultiAgentInvocationEvent, (event) => {
+        callCount++
+        if (callCount === 1) firstState = event.state
+        if (callCount === 2) secondState = event.state
+      })
+
+      await swarm.invoke('first')
+      await swarm.invoke('second')
+
+      expect(firstState).toBe(restored)
+      expect(secondState).not.toBe(restored)
+      expect(secondState).toBeInstanceOf(MultiAgentState)
     })
   })
 })

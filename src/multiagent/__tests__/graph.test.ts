@@ -2,7 +2,12 @@ import { describe, expect, it, vi } from 'vitest'
 import { Agent } from '../../agent/agent.js'
 import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
 import { collectGenerator } from '../../__fixtures__/model-test-helpers.js'
-import { AfterNodeCallEvent, BeforeNodeCallEvent, MultiAgentInitializedEvent } from '../events.js'
+import {
+  AfterNodeCallEvent,
+  BeforeNodeCallEvent,
+  BeforeMultiAgentInvocationEvent,
+  MultiAgentInitializedEvent,
+} from '../events.js'
 import { TextBlock, type ContentBlockData } from '../../types/messages.js'
 import { Status, MultiAgentState } from '../state.js'
 import { AgentNode, MultiAgentNode } from '../nodes.js'
@@ -587,6 +592,57 @@ describe('Graph', () => {
       // Simulates consumer break — should not hang waiting for node streams
       const result = await gen.return(undefined as never)
       expect(result.done).toBe(true)
+    })
+  })
+
+  describe('loadState', () => {
+    it('uses restored state instead of creating fresh state', async () => {
+      const graph = new Graph({
+        nodes: [makeAgent('a', 'a-reply'), makeAgent('b', 'b-reply')],
+        edges: [['a', 'b']],
+      })
+
+      const restored = new MultiAgentState({ nodeIds: ['a', 'b'] })
+      restored.steps = 5
+      graph.loadState(restored)
+
+      let observedState: MultiAgentState | undefined
+      graph.addHook(BeforeMultiAgentInvocationEvent, (event) => {
+        observedState = event.state
+      })
+
+      await graph.invoke('go')
+
+      expect(observedState).toBe(restored)
+      expect(observedState!.steps).toBeGreaterThanOrEqual(5)
+    })
+
+    it('consumes state once — second invocation gets fresh state', async () => {
+      const restored = new MultiAgentState({ nodeIds: ['a'] })
+      restored.steps = 99
+
+      const graph = new Graph({
+        nodes: [makeAgent('a', 'a-reply')],
+        edges: [],
+      })
+
+      graph.loadState(restored)
+
+      let firstState: MultiAgentState | undefined
+      let secondState: MultiAgentState | undefined
+      let callCount = 0
+      graph.addHook(BeforeMultiAgentInvocationEvent, (event) => {
+        callCount++
+        if (callCount === 1) firstState = event.state
+        if (callCount === 2) secondState = event.state
+      })
+
+      await graph.invoke('first')
+      await graph.invoke('second')
+
+      expect(firstState).toBe(restored)
+      expect(secondState).not.toBe(restored)
+      expect(secondState).toBeInstanceOf(MultiAgentState)
     })
   })
 })
