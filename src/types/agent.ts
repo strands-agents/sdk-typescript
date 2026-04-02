@@ -1,5 +1,6 @@
 import type { StateStore } from '../state-store.js'
 import type { ContentBlock, ContentBlockData, Message, MessageData, StopReason, SystemPrompt } from './messages.js'
+import type { InterruptResponseContent } from './interrupt.js'
 import type { AgentTrace } from '../telemetry/tracer.js'
 import type {
   BeforeInvocationEvent,
@@ -37,7 +38,13 @@ import type { Interrupt } from '../interrupt.js'
  * When resuming from an interrupt, pass an array of `InterruptResponseContent` objects.
  * These are detected and extracted automatically.
  */
-export type InvokeArgs = string | ContentBlock[] | ContentBlockData[] | Message[] | MessageData[]
+export type InvokeArgs =
+  | string
+  | ContentBlock[]
+  | ContentBlockData[]
+  | Message[]
+  | MessageData[]
+  | InterruptResponseContent[]
 
 /**
  * Options for a single agent invocation.

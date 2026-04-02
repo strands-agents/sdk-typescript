@@ -333,6 +333,31 @@ describe('Graph', () => {
       expect(input.map((b) => b.text)).toStrictEqual(['data-input', '[node: a]', 'from-a'])
     })
 
+    it('passes InterruptResponseContent[] through without merging dependency content', async () => {
+      const agentA = makeAgent('a', 'from-a')
+      const agentB = makeAgent('b')
+      const streamSpy = vi.spyOn(agentB, 'stream')
+
+      const graph = new Graph({
+        nodes: [agentA, agentB],
+        edges: [['a', 'b']],
+      })
+
+      // First run to populate dependency content from node A
+      await graph.invoke('initial')
+
+      // Second run with interrupt responses — should pass through as-is
+      const interruptInput = [{ interruptResponse: { interruptId: 'int-1', response: 'yes' } }]
+      await graph.invoke(interruptInput)
+
+      // The last call to B should receive the interrupt responses unchanged
+      const lastCall = streamSpy.mock.calls[streamSpy.mock.calls.length - 1]!
+      const input = lastCall[0]
+      expect(Array.isArray(input)).toBe(true)
+      expect(input).toHaveLength(1)
+      expect((input as Record<string, unknown>[])[0]).toHaveProperty('interruptResponse')
+    })
+
     it('returns failed result when agent throws', async () => {
       const model = new MockMessageModel().addTurn(new Error('agent exploded'))
       const agent = new Agent({ model, printer: false, id: 'a' })

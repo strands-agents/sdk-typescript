@@ -430,15 +430,24 @@ export class Agent implements LocalAgent, InvokableAgent {
       let result = await streamGenerator.next()
 
       while (!result.done) {
-        yield await this._invokeCallbacks(result.value)
-        result = await streamGenerator.next()
+        try {
+          yield await this._invokeCallbacks(result.value)
+          result = await streamGenerator.next()
+        } catch (error) {
+          // Throw interrupt errors back into _stream so executeTools can store the
+          // assistant message as pending execution state for resume.
+          if (error instanceof InterruptError) {
+            result = await streamGenerator.throw(error)
+          } else {
+            throw error
+          }
+        }
       }
 
       yield await this._invokeCallbacks(new AgentResultEvent({ agent: this, result: result.value }))
 
       return result.value
     } catch (error) {
-      // Handle interrupt errors from hook callbacks
       if (error instanceof InterruptError) {
         const interruptResult = this._createInterruptResult()
         yield await this._invokeCallbacks(new AgentResultEvent({ agent: this, result: interruptResult }))
@@ -944,7 +953,18 @@ export class Agent implements LocalAgent, InvokableAgent {
       message: assistantMessage,
       interruptState: this._interruptState,
     })
-    yield beforeToolsEvent
+
+    try {
+      yield beforeToolsEvent
+    } catch (error) {
+      if (error instanceof InterruptError) {
+        this._interruptState.setPendingToolExecution({
+          assistantMessageData: assistantMessage.toJSON(),
+          completedToolResults: {},
+        })
+      }
+      throw error
+    }
 
     // Check if a hook raised an interrupt — if so, store pending state and propagate
     const beforeToolsInterrupt = this._interruptState.getUnansweredInterrupt()

@@ -5,7 +5,6 @@ import { createMockTool } from '../../__fixtures__/tool-helpers.js'
 import { TextBlock, ToolResultBlock } from '../../types/messages.js'
 import { BeforeToolCallEvent, BeforeToolsEvent } from '../../hooks/events.js'
 import { FunctionTool } from '../../tools/function-tool.js'
-import type { InvokeArgs } from '../../types/agent.js'
 
 describe('Agent interrupt system', () => {
   describe('interrupt from tool callback', () => {
@@ -168,7 +167,7 @@ describe('Agent interrupt system', () => {
             response: { approved: true },
           },
         },
-      ] as unknown as InvokeArgs)
+      ])
 
       expect(finalResult.stopReason).toBe('endTurn')
       expect(receivedResponse).toEqual({ approved: true })
@@ -249,7 +248,7 @@ describe('Agent interrupt system', () => {
             response: { approved: true },
           },
         },
-      ] as unknown as InvokeArgs)
+      ])
 
       expect(finalResult.stopReason).toBe('endTurn')
       // A and B should NOT have re-executed, only C should have completed
@@ -399,14 +398,6 @@ describe('Agent interrupt system', () => {
           toolUseId: 'tool-1',
           input: {},
         })
-        // Turn consumed on resume when no pending execution is stored
-        // (hook-level interrupts don't store pending execution like tool-level interrupts do)
-        .addTurn({
-          type: 'toolUseBlock',
-          name: 'testTool',
-          toolUseId: 'tool-1',
-          input: {},
-        })
         .addTurn({ type: 'textBlock', text: 'All approved' })
 
       let securityResponse: unknown
@@ -438,7 +429,8 @@ describe('Agent interrupt system', () => {
       const interruptResult = await agent.invoke('Test')
       expect(interruptResult.stopReason).toBe('interrupt')
       expect(interruptResult.interrupts).toHaveLength(2)
-      expect(hookCallCount).toBe(2) // Both hooks fired
+      expect(hookCallCount).toBe(2)
+      expect(model.callCount).toBe(1)
 
       // Resume with responses for both interrupts
       const finalResult = await agent.invoke(
@@ -447,10 +439,12 @@ describe('Agent interrupt system', () => {
             interruptId: interrupt.id,
             response: `approved:${interrupt.name}`,
           },
-        })) as unknown as InvokeArgs
+        }))
       )
 
       expect(finalResult.stopReason).toBe('endTurn')
+      // Resume skips model call: 1 (initial) + 0 (resume) + 1 (post-tool-result) = 2
+      expect(model.callCount).toBe(2)
       expect(securityResponse).toBe('approved:security_check')
       expect(budgetResponse).toBe('approved:budget_check')
     })
