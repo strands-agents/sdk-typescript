@@ -202,17 +202,19 @@ export class BeforeToolCallEvent extends HookableEvent {
    * @internal
    * Interrupt state for managing human-in-the-loop workflows.
    */
-  private _interruptState?: InterruptState
+  private _interruptState: InterruptState | undefined
 
   constructor(data: {
     agent: LocalAgent
     toolUse: { name: string; toolUseId: string; input: JSONValue }
     tool: Tool | undefined
+    interruptState?: InterruptState
   }) {
     super()
     this.agent = data.agent
     this.toolUse = data.toolUse
     this.tool = data.tool
+    this._interruptState = data.interruptState
   }
 
   /**
@@ -608,7 +610,7 @@ export class BeforeToolsEvent extends HookableEvent {
    * @internal
    * Interrupt state for managing human-in-the-loop workflows.
    */
-  private _interruptState?: InterruptState
+  private _interruptState: InterruptState | undefined
 
   /**
    * @internal
@@ -617,10 +619,11 @@ export class BeforeToolsEvent extends HookableEvent {
    */
   private _interruptCounter: number = 0
 
-  constructor(data: { agent: LocalAgent; message: Message }) {
+  constructor(data: { agent: LocalAgent; message: Message; interruptState?: InterruptState }) {
     super()
     this.agent = data.agent
     this.message = data.message
+    this._interruptState = data.interruptState
   }
 
   /**

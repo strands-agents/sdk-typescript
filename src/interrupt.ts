@@ -82,18 +82,23 @@ export class Interrupt {
 
 /**
  * Error thrown when human input is required to continue agent execution.
- * This error is caught by the agent loop to trigger an interrupt stop.
+ * Caught by the agent loop to trigger an interrupt stop.
  */
 export class InterruptError extends Error {
   /**
-   * The interrupt that caused this error.
+   * The interrupts that caused this error.
    */
-  readonly interrupt: Interrupt
+  readonly interrupts: Interrupt[]
 
-  constructor(interrupt: Interrupt) {
-    super(`Interrupt raised: ${interrupt.name}`)
+  constructor(interrupt: Interrupt | Interrupt[]) {
+    const all = Array.isArray(interrupt) ? interrupt : [interrupt]
+    const message =
+      all.length === 1
+        ? `Interrupt raised: ${all[0]!.name}`
+        : `${all.length} interrupts raised: ${all.map((i) => i.name).join(', ')}`
+    super(message)
     this.name = 'InterruptError'
-    this.interrupt = interrupt
+    this.interrupts = all
   }
 }
 

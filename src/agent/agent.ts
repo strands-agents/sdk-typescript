@@ -177,7 +177,7 @@ export class Agent implements LocalAgent, InvokableAgent {
   /**
    * The conversation history of messages between user and assistant.
    */
-  public readonly messages: Message[]
+  public messages: Message[]
   /**
    * App state storage accessible to tools and application logic.
    * State is not passed to the model during inference.
@@ -440,7 +440,7 @@ export class Agent implements LocalAgent, InvokableAgent {
     } catch (error) {
       // Handle interrupt errors from hook callbacks
       if (error instanceof InterruptError) {
-        const interruptResult = this._createInterruptResult({ includeMetrics: false })
+        const interruptResult = this._createInterruptResult()
         yield await this._invokeCallbacks(new AgentResultEvent({ agent: this, result: interruptResult }))
         return interruptResult
       }
@@ -697,13 +697,9 @@ export class Agent implements LocalAgent, InvokableAgent {
    * This helper centralizes interrupt result creation to ensure consistent behavior
    * across all interrupt handling points in the agent loop.
    *
-   * @param options - Optional configuration for the result. If provided, `includeMetrics`
-   *                  controls whether to include traces and metrics (default: true).
    * @returns AgentResult with stopReason 'interrupt' and the list of pending interrupts
    */
-  private _createInterruptResult(options?: { includeMetrics?: boolean }): AgentResult {
-    const includeMetrics = options?.includeMetrics ?? true
-
+  private _createInterruptResult(): AgentResult {
     this._interruptState.activate()
     const lastMessage =
       this.messages.length > 0
@@ -713,10 +709,8 @@ export class Agent implements LocalAgent, InvokableAgent {
     return new AgentResult({
       stopReason: 'interrupt',
       lastMessage,
-      ...(includeMetrics && {
-        traces: this._tracer.localTraces,
-        metrics: this._meter.metrics,
-      }),
+      traces: this._tracer.localTraces,
+      metrics: this._meter.metrics,
       interrupts: this._interruptState.getInterruptsList(),
     })
   }
@@ -945,8 +939,11 @@ export class Agent implements LocalAgent, InvokableAgent {
     toolRegistry: ToolRegistry,
     completedToolResults?: Map<string, ToolResultBlock>
   ): AsyncGenerator<AgentStreamEvent, Message, undefined> {
-    const beforeToolsEvent = new BeforeToolsEvent({ agent: this, message: assistantMessage })
-    ;(beforeToolsEvent as unknown as Record<string, unknown>)['_interruptState'] = this._interruptState
+    const beforeToolsEvent = new BeforeToolsEvent({
+      agent: this,
+      message: assistantMessage,
+      interruptState: this._interruptState,
+    })
     yield beforeToolsEvent
 
     // Check if a hook raised an interrupt — if so, store pending state and propagate
@@ -1063,8 +1060,12 @@ export class Agent implements LocalAgent, InvokableAgent {
 
     // Retry loop for tool execution
     while (true) {
-      const beforeToolCallEvent = new BeforeToolCallEvent({ agent: this, toolUse, tool })
-      ;(beforeToolCallEvent as unknown as Record<string, unknown>)['_interruptState'] = this._interruptState
+      const beforeToolCallEvent = new BeforeToolCallEvent({
+        agent: this,
+        toolUse,
+        tool,
+        interruptState: this._interruptState,
+      })
       yield beforeToolCallEvent
 
       // Check if a hook raised an interrupt — if so, propagate

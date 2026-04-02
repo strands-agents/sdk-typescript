@@ -315,4 +315,144 @@ describe('Agent interrupt system', () => {
       }).toThrow('Interrupt state not available')
     })
   })
+
+  describe('multiple hook interrupts', () => {
+    it('collects interrupts from multiple BeforeToolCallEvent hooks', async () => {
+      const model = new MockMessageModel()
+        .addTurn({
+          type: 'toolUseBlock',
+          name: 'testTool',
+          toolUseId: 'tool-1',
+          input: {},
+        })
+        .addTurn({ type: 'textBlock', text: 'Should not reach this' })
+
+      const tool = createMockTool(
+        'testTool',
+        () =>
+          new ToolResultBlock({
+            toolUseId: 'tool-1',
+            status: 'success',
+            content: [new TextBlock('Success')],
+          })
+      )
+
+      const agent = new Agent({ model, tools: [tool], printer: false })
+
+      agent.addHook(BeforeToolCallEvent, (event) => {
+        event.interrupt({ name: 'security_check', reason: 'Security review required' })
+      })
+      agent.addHook(BeforeToolCallEvent, (event) => {
+        event.interrupt({ name: 'budget_check', reason: 'Budget approval required' })
+      })
+
+      const result = await agent.invoke('Test')
+
+      expect(result.stopReason).toBe('interrupt')
+      expect(result.interrupts).toHaveLength(2)
+      const names = result.interrupts!.map((i) => i.name).sort()
+      expect(names).toEqual(['budget_check', 'security_check'])
+    })
+
+    it('collects interrupts from multiple BeforeToolsEvent hooks', async () => {
+      const model = new MockMessageModel()
+        .addTurn({
+          type: 'toolUseBlock',
+          name: 'testTool',
+          toolUseId: 'tool-1',
+          input: {},
+        })
+        .addTurn({ type: 'textBlock', text: 'Should not reach this' })
+
+      const tool = createMockTool(
+        'testTool',
+        () =>
+          new ToolResultBlock({
+            toolUseId: 'tool-1',
+            status: 'success',
+            content: [new TextBlock('Success')],
+          })
+      )
+
+      const agent = new Agent({ model, tools: [tool], printer: false })
+
+      agent.addHook(BeforeToolsEvent, (event) => {
+        event.interrupt({ name: 'approval_a', reason: 'First approval' })
+      })
+      agent.addHook(BeforeToolsEvent, (event) => {
+        event.interrupt({ name: 'approval_b', reason: 'Second approval' })
+      })
+
+      const result = await agent.invoke('Test')
+
+      expect(result.stopReason).toBe('interrupt')
+      expect(result.interrupts).toHaveLength(2)
+      const names = result.interrupts!.map((i) => i.name).sort()
+      expect(names).toEqual(['approval_a', 'approval_b'])
+    })
+
+    it('resumes correctly after multiple interrupts are answered', async () => {
+      const model = new MockMessageModel()
+        .addTurn({
+          type: 'toolUseBlock',
+          name: 'testTool',
+          toolUseId: 'tool-1',
+          input: {},
+        })
+        // Turn consumed on resume when no pending execution is stored
+        // (hook-level interrupts don't store pending execution like tool-level interrupts do)
+        .addTurn({
+          type: 'toolUseBlock',
+          name: 'testTool',
+          toolUseId: 'tool-1',
+          input: {},
+        })
+        .addTurn({ type: 'textBlock', text: 'All approved' })
+
+      let securityResponse: unknown
+      let budgetResponse: unknown
+      let hookCallCount = 0
+
+      const tool = createMockTool(
+        'testTool',
+        () =>
+          new ToolResultBlock({
+            toolUseId: 'tool-1',
+            status: 'success',
+            content: [new TextBlock('Success')],
+          })
+      )
+
+      const agent = new Agent({ model, tools: [tool], printer: false })
+
+      agent.addHook(BeforeToolCallEvent, (event) => {
+        hookCallCount++
+        securityResponse = event.interrupt({ name: 'security_check', reason: 'Security review' })
+      })
+      agent.addHook(BeforeToolCallEvent, (event) => {
+        hookCallCount++
+        budgetResponse = event.interrupt({ name: 'budget_check', reason: 'Budget review' })
+      })
+
+      // First invocation — both hooks interrupt
+      const interruptResult = await agent.invoke('Test')
+      expect(interruptResult.stopReason).toBe('interrupt')
+      expect(interruptResult.interrupts).toHaveLength(2)
+      expect(hookCallCount).toBe(2) // Both hooks fired
+
+      // Resume with responses for both interrupts
+      const finalResult = await agent.invoke(
+        interruptResult.interrupts!.map((interrupt) => ({
+          interruptResponse: {
+            interruptId: interrupt.id,
+            response: `approved:${interrupt.name}`,
+          },
+        })) as unknown as InvokeArgs
+      )
+
+      expect(finalResult.stopReason).toBe('endTurn')
+      expect(securityResponse).toBe('approved:security_check')
+      expect(budgetResponse).toBe('approved:budget_check')
+    })
+  })
 })

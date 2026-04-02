@@ -47,14 +47,25 @@ describe('Interrupt', () => {
 })
 
 describe('InterruptError', () => {
-  it('creates catchable error with interrupt reference', () => {
+  it('creates catchable error with single interrupt', () => {
     const interrupt = new Interrupt({ id: 'int-1', name: 'confirm_delete' })
     const error = new InterruptError(interrupt)
 
     expect(error).toBeInstanceOf(Error)
     expect(error.name).toBe('InterruptError')
     expect(error.message).toBe('Interrupt raised: confirm_delete')
-    expect(error.interrupt).toBe(interrupt)
+    expect(error.interrupts).toEqual([interrupt])
+  })
+
+  it('creates error with multiple interrupts', () => {
+    const a = new Interrupt({ id: 'int-1', name: 'security_check' })
+    const b = new Interrupt({ id: 'int-2', name: 'budget_check' })
+    const error = new InterruptError([a, b])
+
+    expect(error).toBeInstanceOf(Error)
+    expect(error.name).toBe('InterruptError')
+    expect(error.message).toBe('2 interrupts raised: security_check, budget_check')
+    expect(error.interrupts).toEqual([a, b])
   })
 })
 
