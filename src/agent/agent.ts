@@ -492,6 +492,11 @@ export class Agent implements LocalAgent, InvokableAgent {
     const interruptResponses = this._extractInterruptResponses(args)
     if (interruptResponses.length > 0) {
       this._interruptState.resume(interruptResponses)
+    } else {
+      // If user sends a regular message (not interrupt responses), clear any pending state
+      // This allows the user to "abandon" an interrupted workflow and start fresh
+      this._interruptState.clearPendingToolExecution()
+      this._interruptState.deactivate()
     }
 
     // Resolve structured output schema from per-invocation options or constructor config
@@ -546,40 +551,68 @@ export class Agent implements LocalAgent, InvokableAgent {
             currentArgs = undefined
           }
 
-          const modelResult = yield* this._invokeModel(structuredOutputChoice)
+          // Check if we're resuming from a tool interrupt
+          const pendingExecution = this._interruptState.pendingToolExecution
+          let assistantMessage: Message
+          let completedToolResults: Map<string, ToolResultBlock> | undefined
 
-          if (modelResult.stopReason !== 'toolUse') {
-            // If structured output is required, force it
-            if (structuredOutputTool) {
-              if (structuredOutputChoice) {
-                throw new StructuredOutputError(
-                  'The model failed to invoke the structured output tool even after it was forced.'
-                )
+          if (pendingExecution) {
+            // Resume from stored state - skip model call
+            assistantMessage = Message.fromMessageData(pendingExecution.assistantMessageData as MessageData)
+
+            // Reconstruct completed tool results
+            completedToolResults = new Map()
+            for (const [toolUseId, resultData] of Object.entries(pendingExecution.completedToolResults)) {
+              const block = contentBlockFromData(resultData as ContentBlockData)
+              if (block.type === 'toolResultBlock') {
+                completedToolResults.set(toolUseId, block)
+              }
+            }
+
+            // Clear pending execution now that we're resuming
+            this._interruptState.clearPendingToolExecution()
+          } else {
+            const modelResult = yield* this._invokeModel(structuredOutputChoice)
+
+            if (modelResult.stopReason !== 'toolUse') {
+              // If structured output is required, force it
+              if (structuredOutputTool) {
+                if (structuredOutputChoice) {
+                  throw new StructuredOutputError(
+                    'The model failed to invoke the structured output tool even after it was forced.'
+                  )
+                }
+
+                structuredOutputChoice = { tool: { name: STRUCTURED_OUTPUT_TOOL_NAME } }
               }
 
-              structuredOutputChoice = { tool: { name: STRUCTURED_OUTPUT_TOOL_NAME } }
+              this._meter.endCycle(cycleStartTime)
+              this._tracer.endAgentLoopSpan(cycleSpan)
+
+              yield this._appendMessage(modelResult.message)
+
+              if (structuredOutputChoice) {
+                continue
+              }
+
+              result = new AgentResult({
+                stopReason: modelResult.stopReason,
+                lastMessage: modelResult.message,
+                traces: this._tracer.localTraces,
+                metrics: this._meter.metrics,
+              })
+              return result
             }
 
-            this._meter.endCycle(cycleStartTime)
-            this._tracer.endAgentLoopSpan(cycleSpan)
-
-            yield this._appendMessage(modelResult.message)
-
-            if (structuredOutputChoice) {
-              continue
-            }
-
-            result = new AgentResult({
-              stopReason: modelResult.stopReason,
-              lastMessage: modelResult.message,
-              traces: this._tracer.localTraces,
-              metrics: this._meter.metrics,
-            })
-            return result
+            assistantMessage = modelResult.message
           }
 
-          // Execute tools
-          const toolResultMessage = yield* this.executeTools(modelResult.message, this._toolRegistry)
+          // Execute tools (with optional completed results for resume)
+          const toolResultMessage = yield* this.executeTools(
+            assistantMessage,
+            this._toolRegistry,
+            completedToolResults
+          )
 
           /**
            * Deferred append: both messages are added AFTER tool execution completes.
@@ -587,7 +620,7 @@ export class Agent implements LocalAgent, InvokableAgent {
            * If interrupted during tool execution, messages has no dangling toolUse
            * without a matching toolResult, so the agent can be reinvoked cleanly.
            */
-          yield this._appendMessage(modelResult.message)
+          yield this._appendMessage(assistantMessage)
           yield this._appendMessage(toolResultMessage)
 
           this._meter.endCycle(cycleStartTime)
@@ -595,12 +628,12 @@ export class Agent implements LocalAgent, InvokableAgent {
 
           // Structured output captured: exit
           const structuredOutput = structuredOutputTool
-            ? this._extractStructuredOutput(modelResult.message, toolResultMessage)
+            ? this._extractStructuredOutput(assistantMessage, toolResultMessage)
             : undefined
           if (structuredOutput !== undefined) {
             result = new AgentResult({
-              stopReason: modelResult.stopReason,
-              lastMessage: modelResult.message,
+              stopReason: 'toolUse',
+              lastMessage: assistantMessage,
               traces: this._tracer.localTraces,
               structuredOutput,
               metrics: this._meter.metrics,
@@ -934,7 +967,8 @@ export class Agent implements LocalAgent, InvokableAgent {
    */
   private async *executeTools(
     assistantMessage: Message,
-    toolRegistry: ToolRegistry
+    toolRegistry: ToolRegistry,
+    completedToolResults?: Map<string, ToolResultBlock>
   ): AsyncGenerator<AgentStreamEvent, Message, undefined> {
     const beforeToolsEvent = new BeforeToolsEvent({ agent: this, message: assistantMessage })
     beforeToolsEvent._interruptState = this._interruptState
@@ -946,10 +980,17 @@ export class Agent implements LocalAgent, InvokableAgent {
     if (this._interruptState.activated) {
       const pendingInterrupt = this._interruptState.getInterruptsList().find((i) => i.response === undefined)
       if (pendingInterrupt) {
+        // Store pending state for resume
+        this._interruptState.setPendingToolExecution({
+          assistantMessageData: assistantMessage.toJSON(),
+          completedToolResults: {},
+        })
         throw new InterruptError(pendingInterrupt)
       }
     }
 
+    // Initialize or use provided completed results
+    const toolResults = completedToolResults ?? new Map<string, ToolResultBlock>()
     const toolResultBlocks: ToolResultBlock[] = []
     let toolResultMessage: Message
 
@@ -981,11 +1022,38 @@ export class Agent implements LocalAgent, InvokableAgent {
         toolResultBlocks.push(...cancelBlocks)
       } else {
         for (const toolUseBlock of toolUseBlocks) {
-          const toolResultBlock = yield* this.executeTool(toolUseBlock, toolRegistry)
-          toolResultBlocks.push(toolResultBlock)
+          // Check if this tool was already completed in a previous run
+          const existingResult = toolResults.get(toolUseBlock.toolUseId)
+          if (existingResult) {
+            // Skip already completed tools
+            toolResultBlocks.push(existingResult)
+            yield new ToolResultEvent({ agent: this, result: existingResult })
+            continue
+          }
 
-          // Yield the tool result event as it's created
-          yield new ToolResultEvent({ agent: this, result: toolResultBlock })
+          try {
+            const toolResultBlock = yield* this.executeTool(toolUseBlock, toolRegistry)
+            toolResultBlocks.push(toolResultBlock)
+
+            // Track completed tool for potential resume
+            toolResults.set(toolUseBlock.toolUseId, toolResultBlock)
+
+            // Yield the tool result event as it's created
+            yield new ToolResultEvent({ agent: this, result: toolResultBlock })
+          } catch (error) {
+            if (error instanceof InterruptError) {
+              // Store pending state for resume - save assistant message and completed results
+              const completedResultsData: Record<string, unknown> = {}
+              for (const [id, result] of toolResults) {
+                completedResultsData[id] = result.toJSON()
+              }
+              this._interruptState.setPendingToolExecution({
+                assistantMessageData: assistantMessage.toJSON(),
+                completedToolResults: completedResultsData,
+              })
+            }
+            throw error
+          }
         }
       }
     } finally {

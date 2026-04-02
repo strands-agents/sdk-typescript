@@ -112,6 +112,24 @@ export interface InterruptStateData {
 }
 
 /**
+ * Pending tool execution state stored when an interrupt occurs mid-execution.
+ * Contains all data needed to resume tool execution without re-calling the model.
+ */
+export interface PendingToolExecution {
+  /**
+   * The assistant message containing tool use blocks.
+   * Serialized as MessageData for storage.
+   */
+  assistantMessageData: unknown
+
+  /**
+   * Tool results that were completed before the interrupt.
+   * Maps toolUseId to serialized ToolResultBlock data.
+   */
+  completedToolResults: Record<string, unknown>
+}
+
+/**
  * Tracks the state of interrupt events raised during agent execution.
  *
  * Interrupt state is cleared after resuming.
@@ -132,10 +150,19 @@ export class InterruptState {
    */
   private _activated: boolean
 
+  /**
+   * Pending tool execution state for resume.
+   * When an interrupt occurs during tool execution, this stores the
+   * assistant message and completed tool results so we can resume
+   * without re-calling the model.
+   */
+  private _pendingToolExecution: PendingToolExecution | undefined
+
   constructor() {
     this._interrupts = new Map()
     this._context = new Map()
     this._activated = false
+    this._pendingToolExecution = undefined
   }
 
   /**
@@ -157,6 +184,29 @@ export class InterruptState {
    */
   get activated(): boolean {
     return this._activated
+  }
+
+  /**
+   * Gets the pending tool execution state.
+   */
+  get pendingToolExecution(): PendingToolExecution | undefined {
+    return this._pendingToolExecution
+  }
+
+  /**
+   * Sets the pending tool execution state.
+   * Called when an interrupt occurs during tool execution.
+   */
+  setPendingToolExecution(pending: PendingToolExecution): void {
+    this._pendingToolExecution = pending
+  }
+
+  /**
+   * Clears the pending tool execution state.
+   * Called when resuming completes or when starting fresh.
+   */
+  clearPendingToolExecution(): void {
+    this._pendingToolExecution = undefined
   }
 
   /**
@@ -182,6 +232,7 @@ export class InterruptState {
     this._interrupts.clear()
     this._context.clear()
     this._activated = false
+    this._pendingToolExecution = undefined
   }
 
   /**

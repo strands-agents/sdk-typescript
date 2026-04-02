@@ -115,10 +115,10 @@ describe('Agent interrupt system', () => {
   })
 
   describe('resume flow - interrupt → response → continue', () => {
-    it('resumes tool callback execution with user response after interrupt', async () => {
-      // Turn 0: Model returns tool use (interrupted)
-      // Turn 1: Model returns same tool use again (on resume)
-      // Turn 2: Model returns final response
+    it('resumes tool callback execution without re-calling model', async () => {
+      // Turn 0: Model returns tool use (will be interrupted)
+      // Turn 1: Model returns final response (after tool completes on resume)
+      // Note: Resume skips model call and uses stored message
       const model = new MockMessageModel()
         .addTurn({
           type: 'toolUseBlock',
@@ -126,14 +126,9 @@ describe('Agent interrupt system', () => {
           toolUseId: 'tool-1',
           input: { amount: 5000 },
         })
-        .addTurn({
-          type: 'toolUseBlock',
-          name: 'confirmTool',
-          toolUseId: 'tool-2',
-          input: { amount: 5000 },
-        })
         .addTurn({ type: 'textBlock', text: 'Transfer completed' })
 
+      let callCount = 0
       let receivedResponse: unknown
       const tool = new FunctionTool({
         name: 'confirmTool',
@@ -143,6 +138,7 @@ describe('Agent interrupt system', () => {
           properties: { amount: { type: 'number' } },
         },
         callback: (rawInput, context) => {
+          callCount++
           const input = rawInput as { amount: number }
           const response = context.interrupt({
             name: 'confirm_transfer',
@@ -161,8 +157,9 @@ describe('Agent interrupt system', () => {
       expect(interruptResult.stopReason).toBe('interrupt')
       expect(interruptResult.interrupts).toHaveLength(1)
       expect(interruptResult.interrupts?.[0]?.name).toBe('confirm_transfer')
+      expect(callCount).toBe(1) // Tool was called once before interrupt
 
-      // Resume with user response (cast to InvokeArgs since interrupt responses are accepted via duck typing)
+      // Resume with user response
       const finalResult = await agent.invoke([
         {
           interruptResponse: {
@@ -174,6 +171,7 @@ describe('Agent interrupt system', () => {
 
       expect(finalResult.stopReason).toBe('endTurn')
       expect(receivedResponse).toEqual({ approved: true })
+      expect(callCount).toBe(2) // Tool was called again on resume (same tool use)
 
       // Verify tool result was added to messages
       const toolResultMessage = agent.messages.find(
@@ -184,6 +182,80 @@ describe('Agent interrupt system', () => {
         | ToolResultBlock
         | undefined
       expect(toolResult?.content[0]).toMatchObject({ type: 'textBlock', text: 'Transfer approved' })
+    })
+
+    it('skips already-completed tools when resuming from partial execution', async () => {
+      // Scenario: Tools A, B, C where A & B succeed but C interrupts
+      // On resume: A & B should NOT re-execute, only C should execute
+      const model = new MockMessageModel()
+        .addTurn([
+          { type: 'toolUseBlock', name: 'toolA', toolUseId: 'tool-a', input: {} },
+          { type: 'toolUseBlock', name: 'toolB', toolUseId: 'tool-b', input: {} },
+          { type: 'toolUseBlock', name: 'toolC', toolUseId: 'tool-c', input: {} },
+        ])
+        .addTurn({ type: 'textBlock', text: 'All tools completed' })
+
+      const executionLog: string[] = []
+
+      const toolA = new FunctionTool({
+        name: 'toolA',
+        description: 'Tool A',
+        callback: () => {
+          executionLog.push('A')
+          return 'A result'
+        },
+      })
+
+      const toolB = new FunctionTool({
+        name: 'toolB',
+        description: 'Tool B',
+        callback: () => {
+          executionLog.push('B')
+          return 'B result'
+        },
+      })
+
+      const toolC = new FunctionTool({
+        name: 'toolC',
+        description: 'Tool C that requires confirmation',
+        callback: (_, context) => {
+          const response = context.interrupt({
+            name: 'confirm_c',
+            reason: 'Confirm tool C?',
+          })
+          executionLog.push('C')
+          return (response as { approved: boolean })?.approved ? 'C approved' : 'C denied'
+        },
+      })
+
+      const agent = new Agent({ model, tools: [toolA, toolB, toolC], printer: false })
+
+      // First invocation - A & B execute, C interrupts
+      const interruptResult = await agent.invoke('Run all tools')
+
+      expect(interruptResult.stopReason).toBe('interrupt')
+      expect(interruptResult.interrupts?.[0]?.name).toBe('confirm_c')
+      expect(executionLog).toEqual(['A', 'B']) // A and B executed, C interrupted before completing
+
+      // Resume with response for C
+      const finalResult = await agent.invoke([
+        {
+          interruptResponse: {
+            interruptId: interruptResult.interrupts![0]!.id,
+            response: { approved: true },
+          },
+        },
+      ] as unknown as InvokeArgs)
+
+      expect(finalResult.stopReason).toBe('endTurn')
+      // A and B should NOT have re-executed, only C should have completed
+      expect(executionLog).toEqual(['A', 'B', 'C'])
+
+      // Verify all tool results are present in messages
+      const toolResultMessage = agent.messages.find(
+        (m) => m.role === 'user' && m.content.filter((b) => b.type === 'toolResultBlock').length === 3
+      )
+      expect(toolResultMessage).toBeDefined()
     })
 
     it('clears interrupt state when resuming with new user message instead of interrupt response', async () => {
