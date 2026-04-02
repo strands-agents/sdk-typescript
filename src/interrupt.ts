@@ -15,6 +15,13 @@
 
 import type { JSONValue } from './types/json.js'
 import type { InterruptResponseContent } from './types/interrupt.js'
+import {
+  contentBlockFromData,
+  Message,
+  ToolResultBlock,
+  type ContentBlockData,
+  type MessageData,
+} from './types/messages.js'
 
 /**
  * Represents an interrupt that can pause agent execution for human-in-the-loop workflows.
@@ -191,6 +198,31 @@ export class InterruptState {
    */
   get pendingToolExecution(): PendingToolExecution | undefined {
     return this._pendingToolExecution
+  }
+
+  /**
+   * Gets the pending tool execution state with reconstructed Message and ToolResultBlock objects.
+   * Returns undefined if there is no pending execution.
+   *
+   * @returns Object containing the assistant message and map of completed tool results,
+   *          or undefined if no pending execution exists.
+   */
+  getPendingExecution(): { assistantMessage: Message; completedToolResults: Map<string, ToolResultBlock> } | undefined {
+    if (!this._pendingToolExecution) {
+      return undefined
+    }
+
+    const assistantMessage = Message.fromMessageData(this._pendingToolExecution.assistantMessageData as MessageData)
+
+    const completedToolResults = new Map<string, ToolResultBlock>()
+    for (const [toolUseId, resultData] of Object.entries(this._pendingToolExecution.completedToolResults)) {
+      const block = contentBlockFromData(resultData as ContentBlockData)
+      if (block.type === 'toolResultBlock') {
+        completedToolResults.set(toolUseId, block)
+      }
+    }
+
+    return { assistantMessage, completedToolResults }
   }
 
   /**

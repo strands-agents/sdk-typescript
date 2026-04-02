@@ -552,22 +552,15 @@ export class Agent implements LocalAgent, InvokableAgent {
           }
 
           // Check if we're resuming from a tool interrupt
-          const pendingExecution = this._interruptState.pendingToolExecution
+          // Check if we're resuming from a tool interrupt
+          const pendingExecution = this._interruptState.getPendingExecution()
           let assistantMessage: Message
           let completedToolResults: Map<string, ToolResultBlock> | undefined
 
           if (pendingExecution) {
             // Resume from stored state - skip model call
-            assistantMessage = Message.fromMessageData(pendingExecution.assistantMessageData as MessageData)
-
-            // Reconstruct completed tool results
-            completedToolResults = new Map()
-            for (const [toolUseId, resultData] of Object.entries(pendingExecution.completedToolResults)) {
-              const block = contentBlockFromData(resultData as ContentBlockData)
-              if (block.type === 'toolResultBlock') {
-                completedToolResults.set(toolUseId, block)
-              }
-            }
+            assistantMessage = pendingExecution.assistantMessage
+            completedToolResults = pendingExecution.completedToolResults
 
             // Clear pending execution now that we're resuming
             this._interruptState.clearPendingToolExecution()
@@ -608,11 +601,7 @@ export class Agent implements LocalAgent, InvokableAgent {
           }
 
           // Execute tools (with optional completed results for resume)
-          const toolResultMessage = yield* this.executeTools(
-            assistantMessage,
-            this._toolRegistry,
-            completedToolResults
-          )
+          const toolResultMessage = yield* this.executeTools(assistantMessage, this._toolRegistry, completedToolResults)
 
           /**
            * Deferred append: both messages are added AFTER tool execution completes.
