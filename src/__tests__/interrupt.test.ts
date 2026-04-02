@@ -81,25 +81,16 @@ describe('InterruptState', () => {
       expect(second.response).toBe('user response')
     })
 
-    it('inherits response from matching name when activated and ID differs', () => {
+    it('creates separate interrupts for different IDs with same name', () => {
       const state = new InterruptState()
-      const first = state.getOrCreateInterrupt('tool:tool-1:0:confirm', 'confirm', 'reason')
       state.activate()
-      first.response = { approved: true }
-
-      const second = state.getOrCreateInterrupt('tool:tool-2:0:confirm', 'confirm', 'reason')
-
-      expect(second.id).toBe('tool:tool-2:0:confirm')
-      expect(second.response).toEqual({ approved: true })
-    })
-
-    it('does not inherit response when not activated', () => {
-      const state = new InterruptState()
       const first = state.getOrCreateInterrupt('tool:tool-1:0:confirm', 'confirm', 'reason')
       first.response = { approved: true }
 
       const second = state.getOrCreateInterrupt('tool:tool-2:0:confirm', 'confirm', 'reason')
 
+      expect(second).not.toBe(first)
+      expect(second.id).toBe('tool:tool-2:0:confirm')
       expect(second.response).toBeUndefined()
     })
   })
@@ -168,6 +159,30 @@ describe('InterruptState', () => {
       const deserialized = InterruptState.fromJSON(JSON.parse(serialized))
 
       expect(deserialized.toJSON()).toStrictEqual(original.toJSON())
+    })
+
+    it('round-trips pendingToolExecution through JSON', () => {
+      const original = new InterruptState()
+      original.getOrCreateInterrupt('int-1', 'test')
+      original.activate()
+      original.setPendingToolExecution({
+        assistantMessageData: {
+          role: 'assistant' as const,
+          content: [{ toolUse: { name: 'tool', toolUseId: 't-1', input: {} } }],
+        },
+        completedToolResults: {
+          't-0': { toolResult: { toolUseId: 't-0', status: 'success' as const, content: [] } },
+        },
+      })
+
+      const serialized = JSON.stringify(original)
+      const deserialized = InterruptState.fromJSON(JSON.parse(serialized))
+
+      expect(deserialized.toJSON()).toStrictEqual(original.toJSON())
+      expect(deserialized.pendingToolExecution).toBeDefined()
+      expect(deserialized.pendingToolExecution!.completedToolResults).toStrictEqual(
+        original.pendingToolExecution!.completedToolResults
+      )
     })
 
     it('deserializes state with resumeResponses', () => {

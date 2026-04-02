@@ -202,7 +202,7 @@ export class BeforeToolCallEvent extends HookableEvent {
    * @internal
    * Interrupt state for managing human-in-the-loop workflows.
    */
-  _interruptState?: InterruptState
+  private _interruptState?: InterruptState
 
   constructor(data: {
     agent: LocalAgent
@@ -240,7 +240,7 @@ export class BeforeToolCallEvent extends HookableEvent {
    * })
    * ```
    */
-  interrupt(params: InterruptParams): unknown {
+  interrupt<T = unknown>(params: InterruptParams): T {
     if (!this._interruptState) {
       throw new Error('Interrupt state not available')
     }
@@ -249,7 +249,7 @@ export class BeforeToolCallEvent extends HookableEvent {
     const interrupt = this._interruptState.getOrCreateInterrupt(interruptId, params.name, params.reason)
 
     if (interrupt.response !== undefined) {
-      return interrupt.response
+      return interrupt.response as T
     }
 
     throw new InterruptError(interrupt)
@@ -608,7 +608,7 @@ export class BeforeToolsEvent extends HookableEvent {
    * @internal
    * Interrupt state for managing human-in-the-loop workflows.
    */
-  _interruptState?: InterruptState
+  private _interruptState?: InterruptState
 
   /**
    * @internal
@@ -652,7 +652,7 @@ export class BeforeToolsEvent extends HookableEvent {
    * })
    * ```
    */
-  interrupt(params: InterruptParams): unknown {
+  interrupt<T = unknown>(params: InterruptParams): T {
     if (!this._interruptState) {
       throw new Error('Interrupt state not available')
     }
@@ -661,7 +661,7 @@ export class BeforeToolsEvent extends HookableEvent {
     const interrupt = this._interruptState.getOrCreateInterrupt(interruptId, params.name, params.reason)
 
     if (interrupt.response !== undefined) {
-      return interrupt.response
+      return interrupt.response as T
     }
 
     throw new InterruptError(interrupt)

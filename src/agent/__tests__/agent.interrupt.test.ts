@@ -158,6 +158,7 @@ describe('Agent interrupt system', () => {
       expect(interruptResult.interrupts).toHaveLength(1)
       expect(interruptResult.interrupts?.[0]?.name).toBe('confirm_transfer')
       expect(callCount).toBe(1) // Tool was called once before interrupt
+      expect(model.callCount).toBe(1) // Model was called once
 
       // Resume with user response
       const finalResult = await agent.invoke([
@@ -172,6 +173,8 @@ describe('Agent interrupt system', () => {
       expect(finalResult.stopReason).toBe('endTurn')
       expect(receivedResponse).toEqual({ approved: true })
       expect(callCount).toBe(2) // Tool was called again on resume (same tool use)
+      // Model call count: 1 (initial) + 0 (resume skips model) + 1 (post-tool-result) = 2
+      expect(model.callCount).toBe(2)
 
       // Verify tool result was added to messages
       const toolResultMessage = agent.messages.find(
@@ -236,6 +239,7 @@ describe('Agent interrupt system', () => {
       expect(interruptResult.stopReason).toBe('interrupt')
       expect(interruptResult.interrupts?.[0]?.name).toBe('confirm_c')
       expect(executionLog).toEqual(['A', 'B']) // A and B executed, C interrupted before completing
+      expect(model.callCount).toBe(1) // Model called once for initial invocation
 
       // Resume with response for C
       const finalResult = await agent.invoke([
@@ -250,6 +254,8 @@ describe('Agent interrupt system', () => {
       expect(finalResult.stopReason).toBe('endTurn')
       // A and B should NOT have re-executed, only C should have completed
       expect(executionLog).toEqual(['A', 'B', 'C'])
+      // Model call count: 1 (initial) + 0 (resume skips model) + 1 (post-tool-result) = 2
+      expect(model.callCount).toBe(2)
 
       // Verify all tool results are present in messages
       const toolResultMessage = agent.messages.find(

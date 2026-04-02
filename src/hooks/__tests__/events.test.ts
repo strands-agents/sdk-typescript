@@ -131,7 +131,6 @@ describe('BeforeToolCallEvent', () => {
       toolUse: toolUse,
       tool: tool,
       cancel: false,
-      _interruptState: undefined,
     })
     // @ts-expect-error verifying that property is readonly
     event.agent = new Agent()
@@ -156,7 +155,6 @@ describe('BeforeToolCallEvent', () => {
       toolUse: toolUse,
       tool: undefined,
       cancel: false,
-      _interruptState: undefined,
     })
   })
 
@@ -530,7 +528,6 @@ describe('BeforeToolsEvent', () => {
       agent: agent,
       message: message,
       cancel: false,
-      _interruptState: undefined,
       _interruptCounter: 0,
     })
     // @ts-expect-error verifying that property is readonly

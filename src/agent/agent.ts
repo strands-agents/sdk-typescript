@@ -60,7 +60,8 @@ import {
 } from '../hooks/events.js'
 import { StructuredOutputTool, STRUCTURED_OUTPUT_TOOL_NAME } from '../tools/structured-output-tool.js'
 import { InterruptError, InterruptState } from '../interrupt.js'
-import type { InterruptParams, InterruptResponseContent } from '../types/interrupt.js'
+import type { InterruptParams } from '../types/interrupt.js'
+import { isInterruptResponseContent, type InterruptResponseContent } from '../types/interrupt.js'
 
 import type { z } from 'zod'
 import type { SessionManager } from '../session/session-manager.js'
@@ -176,7 +177,7 @@ export class Agent implements LocalAgent, InvokableAgent {
   /**
    * The conversation history of messages between user and assistant.
    */
-  public messages: Message[]
+  public readonly messages: Message[]
   /**
    * App state storage accessible to tools and application logic.
    * State is not passed to the model during inference.
@@ -552,7 +553,6 @@ export class Agent implements LocalAgent, InvokableAgent {
           }
 
           // Check if we're resuming from a tool interrupt
-          // Check if we're resuming from a tool interrupt
           const pendingExecution = this._interruptState.getPendingExecution()
           let assistantMessage: Message
           let completedToolResults: Map<string, ToolResultBlock> | undefined
@@ -643,12 +643,6 @@ export class Agent implements LocalAgent, InvokableAgent {
         }
       }
     } catch (error) {
-      // Handle interrupt at top level (from hooks)
-      if (error instanceof InterruptError) {
-        result = this._createInterruptResult()
-        return result
-      }
-
       caughtError = error as Error
       throw error
     } finally {
@@ -747,7 +741,7 @@ export class Agent implements LocalAgent, InvokableAgent {
         const firstElement = args[0]!
 
         // Check if it's interrupt responses - skip creating messages for these
-        if (typeof firstElement === 'object' && firstElement !== null && 'interruptResponse' in firstElement) {
+        if (isInterruptResponseContent(firstElement)) {
           // Pure interrupt responses: no messages to add
           return []
         }
@@ -801,16 +795,8 @@ export class Agent implements LocalAgent, InvokableAgent {
     const responses: InterruptResponseContent[] = []
 
     for (const item of args) {
-      // Check if item has interruptResponse property
-      if (typeof item === 'object' && item !== null && 'interruptResponse' in item) {
-        const content = item as InterruptResponseContent
-        if (
-          typeof content.interruptResponse === 'object' &&
-          content.interruptResponse !== null &&
-          'interruptId' in content.interruptResponse
-        ) {
-          responses.push(content)
-        }
+      if (isInterruptResponseContent(item)) {
+        responses.push(item)
       }
     }
 
@@ -960,22 +946,17 @@ export class Agent implements LocalAgent, InvokableAgent {
     completedToolResults?: Map<string, ToolResultBlock>
   ): AsyncGenerator<AgentStreamEvent, Message, undefined> {
     const beforeToolsEvent = new BeforeToolsEvent({ agent: this, message: assistantMessage })
-    beforeToolsEvent._interruptState = this._interruptState
+    ;(beforeToolsEvent as unknown as Record<string, unknown>)['_interruptState'] = this._interruptState
     yield beforeToolsEvent
 
-    // Check if interrupt was triggered by hook - if so, throw to propagate
-    // This handles the case where hook threw InterruptError during callback invocation
-    // which doesn't automatically propagate into the generator
-    if (this._interruptState.activated) {
-      const pendingInterrupt = this._interruptState.getInterruptsList().find((i) => i.response === undefined)
-      if (pendingInterrupt) {
-        // Store pending state for resume
-        this._interruptState.setPendingToolExecution({
-          assistantMessageData: assistantMessage.toJSON(),
-          completedToolResults: {},
-        })
-        throw new InterruptError(pendingInterrupt)
-      }
+    // Check if a hook raised an interrupt — if so, store pending state and propagate
+    const beforeToolsInterrupt = this._interruptState.getUnansweredInterrupt()
+    if (beforeToolsInterrupt) {
+      this._interruptState.setPendingToolExecution({
+        assistantMessageData: assistantMessage.toJSON(),
+        completedToolResults: {},
+      })
+      throw new InterruptError(beforeToolsInterrupt)
     }
 
     // Initialize or use provided completed results
@@ -1032,7 +1013,7 @@ export class Agent implements LocalAgent, InvokableAgent {
           } catch (error) {
             if (error instanceof InterruptError) {
               // Store pending state for resume - save assistant message and completed results
-              const completedResultsData: Record<string, unknown> = {}
+              const completedResultsData: Record<string, ContentBlockData> = {}
               for (const [id, result] of toolResults) {
                 completedResultsData[id] = result.toJSON()
               }
@@ -1083,17 +1064,13 @@ export class Agent implements LocalAgent, InvokableAgent {
     // Retry loop for tool execution
     while (true) {
       const beforeToolCallEvent = new BeforeToolCallEvent({ agent: this, toolUse, tool })
-      beforeToolCallEvent._interruptState = this._interruptState
+      ;(beforeToolCallEvent as unknown as Record<string, unknown>)['_interruptState'] = this._interruptState
       yield beforeToolCallEvent
 
-      // Check if interrupt was triggered by hook - if so, throw to propagate
-      // This handles the case where hook threw InterruptError during callback invocation
-      // which doesn't automatically propagate into the generator
-      if (this._interruptState.activated) {
-        const pendingInterrupt = this._interruptState.getInterruptsList().find((i) => i.response === undefined)
-        if (pendingInterrupt) {
-          throw new InterruptError(pendingInterrupt)
-        }
+      // Check if a hook raised an interrupt — if so, propagate
+      const beforeToolCallInterrupt = this._interruptState.getUnansweredInterrupt()
+      if (beforeToolCallInterrupt) {
+        throw new InterruptError(beforeToolCallInterrupt)
       }
 
       // Cancel individual tool if hook requested it
@@ -1144,12 +1121,12 @@ export class Agent implements LocalAgent, InvokableAgent {
             input: toolUseBlock.input,
           },
           agent: this,
-          interrupt: (params: InterruptParams): unknown => {
+          interrupt: <T = unknown>(params: InterruptParams): T => {
             const interruptId = `tool:${toolUseBlock.toolUseId}:${params.name}`
             const interrupt = this._interruptState.getOrCreateInterrupt(interruptId, params.name, params.reason)
 
             if (interrupt.response !== undefined) {
-              return interrupt.response
+              return interrupt.response as T
             }
 
             throw new InterruptError(interrupt)

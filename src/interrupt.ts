@@ -115,6 +115,11 @@ export interface InterruptStateData {
    * Whether the agent is in an interrupted state.
    */
   activated: boolean
+
+  /**
+   * Pending tool execution state for resume after interrupt.
+   */
+  pendingToolExecution?: PendingToolExecution
 }
 
 /**
@@ -123,16 +128,15 @@ export interface InterruptStateData {
  */
 export interface PendingToolExecution {
   /**
-   * The assistant message containing tool use blocks.
-   * Serialized as MessageData for storage.
+   * The assistant message containing tool use blocks, serialized as MessageData.
    */
-  assistantMessageData: unknown
+  assistantMessageData: MessageData
 
   /**
    * Tool results that were completed before the interrupt.
    * Maps toolUseId to serialized ToolResultBlock data.
    */
-  completedToolResults: Record<string, unknown>
+  completedToolResults: Record<string, ContentBlockData>
 }
 
 /**
@@ -211,11 +215,11 @@ export class InterruptState {
       return undefined
     }
 
-    const assistantMessage = Message.fromMessageData(this._pendingToolExecution.assistantMessageData as MessageData)
+    const assistantMessage = Message.fromMessageData(this._pendingToolExecution.assistantMessageData)
 
     const completedToolResults = new Map<string, ToolResultBlock>()
     for (const [toolUseId, resultData] of Object.entries(this._pendingToolExecution.completedToolResults)) {
-      const block = contentBlockFromData(resultData as ContentBlockData)
+      const block = contentBlockFromData(resultData)
       if (block.type === 'toolResultBlock') {
         completedToolResults.set(toolUseId, block)
       }
@@ -245,6 +249,19 @@ export class InterruptState {
    */
   getInterruptsList(): Interrupt[] {
     return Array.from(this._interrupts.values())
+  }
+
+  /**
+   * Returns the first interrupt that has no response (i.e., was raised but not yet answered).
+   * Used after yielding hook events to detect if a hook raised an interrupt.
+   */
+  getUnansweredInterrupt(): Interrupt | undefined {
+    for (const interrupt of this._interrupts.values()) {
+      if (interrupt.response === undefined) {
+        return interrupt
+      }
+    }
+    return undefined
   }
 
   /**
@@ -297,8 +314,6 @@ export class InterruptState {
   /**
    * Gets or creates an interrupt with the given ID.
    * If the interrupt already exists, returns it (potentially with a response).
-   * If not found by ID but an interrupt with the same name has a response,
-   * the response is inherited to support resume across model calls.
    *
    * @param id - Unique identifier for the interrupt
    * @param name - User-defined name for the interrupt
@@ -306,29 +321,12 @@ export class InterruptState {
    * @returns The interrupt (may have a response if resuming)
    */
   getOrCreateInterrupt(id: string, name: string, reason?: unknown): Interrupt {
-    // First check for exact ID match
-    let interrupt = this._interrupts.get(id)
-    if (interrupt) {
-      return interrupt
+    const existing = this._interrupts.get(id)
+    if (existing) {
+      return existing
     }
 
-    // If not found by ID but we're resuming, check for a matching interrupt by name
-    // that has a response (from a previous tool use ID). This allows resume to work
-    // even when the model returns a different tool use ID.
-    if (this._activated) {
-      for (const existingInterrupt of this._interrupts.values()) {
-        if (existingInterrupt.name === name && existingInterrupt.response !== undefined) {
-          // Create a new interrupt with the new ID but inherit the response
-          interrupt = new Interrupt({ id, name, reason })
-          interrupt.response = existingInterrupt.response
-          this._interrupts.set(id, interrupt)
-          return interrupt
-        }
-      }
-    }
-
-    // Create new interrupt
-    interrupt = new Interrupt({ id, name, reason })
+    const interrupt = new Interrupt({ id, name, reason })
     this._interrupts.set(id, interrupt)
     return interrupt
   }
@@ -346,6 +344,7 @@ export class InterruptState {
       interrupts,
       ...(this._resumeResponses && { resumeResponses: this._resumeResponses }),
       activated: this._activated,
+      ...(this._pendingToolExecution && { pendingToolExecution: this._pendingToolExecution }),
     }
   }
 
@@ -365,6 +364,10 @@ export class InterruptState {
 
     if (data.resumeResponses) {
       state._resumeResponses = data.resumeResponses as InterruptResponseContent[]
+    }
+
+    if (data.pendingToolExecution) {
+      state._pendingToolExecution = data.pendingToolExecution
     }
 
     return state

@@ -52,7 +52,7 @@ export interface ToolContext {
    * })
    * ```
    */
-  interrupt(params: InterruptParams): unknown
+  interrupt<T = unknown>(params: InterruptParams): T
 }
 
 /**
