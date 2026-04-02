@@ -808,6 +808,29 @@ describe('SessionManager — multi-agent', () => {
       })
       expect(snapshot).toBeNull()
     })
+
+    it('warns and saves on invocation when saveLatestOn is message (fallback)', async () => {
+      const warnSpy = vi.spyOn(logger, 'warn')
+      sessionManager = new SessionManager({
+        sessionId: 'test-session',
+        storage: { snapshot: storage },
+        saveLatestOn: 'message',
+      })
+      sessionManager.initMultiAgent(orchestrator)
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining("saveLatestOn 'message' has no multi-agent equivalent")
+      )
+
+      const state = new MultiAgentState({ nodeIds: ['a'] })
+      await invokeOrchestratorHook(orchestrator, new AfterMultiAgentInvocationEvent({ orchestrator, state }))
+
+      const snapshot = await storage.loadSnapshot({
+        location: { sessionId: 'test-session', scope: 'multiAgent', scopeId: 'test-graph' },
+      })
+      expect(snapshot).not.toBeNull()
+      warnSpy.mockRestore()
+    })
   })
 
   describe('scope isolation', () => {
