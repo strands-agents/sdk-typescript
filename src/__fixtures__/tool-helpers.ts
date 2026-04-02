@@ -4,7 +4,7 @@
  */
 
 import type { Tool, ToolContext } from '../tools/tool.js'
-import { ToolResultBlock } from '../types/messages.js'
+import { ToolResultBlock, TextBlock } from '../types/messages.js'
 import type { JSONValue } from '../types/json.js'
 import { StateStore } from '../state-store.js'
 import { ToolRegistry } from '../registry/tool-registry.js'
@@ -38,15 +38,18 @@ export function createMockContext(
 }
 
 /**
- * Result function type for createMockTool - accepts plain objects or class instances.
+ * Result function type for createMockTool.
+ * Can return a ToolResultBlock directly, or a simple value (string, etc.) that will be auto-wrapped.
  */
-type ToolResultFn = () => PlainToolResultBlock | AsyncGenerator<never, PlainToolResultBlock, never>
+type ToolResultFn =
+  | ((context: ToolContext) => PlainToolResultBlock | string | void)
+  | ((context: ToolContext) => AsyncGenerator<never, PlainToolResultBlock, never>)
 
 /**
  * Helper to create a mock tool for testing.
  *
  * @param name - The name of the mock tool
- * @param resultFn - Function that returns a ToolResultBlock (plain object or class instance) or an AsyncGenerator
+ * @param resultFn - Function that returns a ToolResultBlock, a string (auto-wrapped), or an AsyncGenerator
  * @returns Mock Tool object
  */
 export function createMockTool(name: string, resultFn: ToolResultFn): Tool {
@@ -59,10 +62,9 @@ export function createMockTool(name: string, resultFn: ToolResultFn): Tool {
       inputSchema: { type: 'object', properties: {} },
     },
     // eslint-disable-next-line require-yield
-    async *stream(_context): AsyncGenerator<never, ToolResultBlock, never> {
-      const result = resultFn()
+    async *stream(context): AsyncGenerator<never, ToolResultBlock, never> {
+      const result = resultFn(context)
       if (typeof result === 'object' && result !== null && Symbol.asyncIterator in result) {
-        // For generators that throw errors
         const gen = result as AsyncGenerator<never, ToolResultBlock, never>
         let done = false
         while (!done) {
@@ -72,10 +74,17 @@ export function createMockTool(name: string, resultFn: ToolResultFn): Tool {
             return value
           }
         }
-        // This should never be reached but TypeScript needs a return
         throw new Error('Generator ended unexpectedly')
+      } else if (result instanceof ToolResultBlock) {
+        return result
       } else {
-        return result as ToolResultBlock
+        // Auto-wrap string or void into a ToolResultBlock
+        const text = typeof result === 'string' ? result : 'mock result'
+        return new ToolResultBlock({
+          toolUseId: context.toolUse.toolUseId,
+          status: 'success' as const,
+          content: [new TextBlock(text)],
+        })
       }
     },
   }
@@ -91,13 +100,5 @@ export function createMockTool(name: string, resultFn: ToolResultFn): Tool {
  */
 export function createRandomTool(name?: string): Tool {
   const toolName = name ?? globalThis.crypto.randomUUID()
-  return createMockTool(
-    toolName,
-    () =>
-      new ToolResultBlock({
-        toolUseId: 'test-id',
-        status: 'success' as const,
-        content: [],
-      })
-  )
+  return createMockTool(toolName, () => {})
 }

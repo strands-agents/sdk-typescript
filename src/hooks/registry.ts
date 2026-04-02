@@ -78,7 +78,6 @@ export class HookRegistryImplementation implements HookRegistry {
         await callback(event)
       } catch (error) {
         if (error instanceof InterruptError) {
-          // Collect all interrupts from this error — continue invoking remaining callbacks
           collectedInterrupts.push(...error.interrupts)
         } else {
           throw error
@@ -86,9 +85,14 @@ export class HookRegistryImplementation implements HookRegistry {
       }
     }
 
-    // After all callbacks have run, propagate collected interrupts as a single error.
-    // All interrupts are already registered in InterruptState via getOrCreateInterrupt().
     if (collectedInterrupts.length > 0) {
+      const seen = new Set<string>()
+      for (const interrupt of collectedInterrupts) {
+        if (seen.has(interrupt.name)) {
+          throw new Error(`interrupt_name=<${interrupt.name}> | interrupt name used more than once`)
+        }
+        seen.add(interrupt.name)
+      }
       throw new InterruptError(collectedInterrupts)
     }
 

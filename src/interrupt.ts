@@ -1,16 +1,12 @@
 /**
  * Human-in-the-loop interrupt system for agent workflows.
  *
- * This module provides the core classes for implementing interrupts that can pause
- * agent execution to collect user input, confirmation, or clarification.
- *
  * Interrupt Flow:
  * 1. Hook or tool calls `event.interrupt()` or `context.interrupt()`
  * 2. If resuming (response exists), the response is returned
- * 3. Otherwise, `InterruptError` is thrown to halt execution
- * 4. Agent returns with `stopReason: 'interrupt'` and `interrupts` array
- * 5. User resumes by invoking agent with `interruptResponse` content blocks
- * 6. On resume, `interrupt()` returns the user's response
+ * 3. Otherwise, agent execution halts with `stopReason: 'interrupt'`
+ * 4. User resumes by invoking agent with `interruptResponse` content blocks
+ * 5. On resume, `interrupt()` returns the user's response
  */
 
 import type { InterruptResponseContent } from './types/interrupt.js'
@@ -150,80 +146,38 @@ export interface PendingToolExecution {
  * Interrupt state is cleared after resuming.
  */
 export class InterruptState {
-  /**
-   * Map of interrupt IDs to Interrupt instances.
-   */
-  private _interrupts: Map<string, Interrupt>
+  /** Map of interrupt IDs to Interrupt instances. */
+  interrupts: Map<string, Interrupt>
 
-  /**
-   * Resume responses provided when resuming from an interrupt.
-   */
-  private _resumeResponses: InterruptResponseContent[] | undefined
+  /** Resume responses provided when resuming from an interrupt. */
+  resumeResponses: InterruptResponseContent[] | undefined
 
-  /**
-   * Whether the agent is in an interrupted state.
-   */
-  private _activated: boolean
+  /** Whether the agent is in an interrupted state. */
+  activated: boolean
 
-  /**
-   * Pending tool execution state for resume.
-   * When an interrupt occurs during tool execution, this stores the
-   * assistant message and completed tool results so we can resume
-   * without re-calling the model.
-   */
-  private _pendingToolExecution: PendingToolExecution | undefined
+  /** Pending tool execution state for resume. */
+  pendingToolExecution: PendingToolExecution | undefined
 
   constructor() {
-    this._interrupts = new Map()
-    this._resumeResponses = undefined
-    this._activated = false
-    this._pendingToolExecution = undefined
-  }
-
-  /**
-   * Gets all interrupts.
-   */
-  get interrupts(): Map<string, Interrupt> {
-    return this._interrupts
-  }
-
-  /**
-   * Gets the resume responses provided when resuming from an interrupt.
-   */
-  get resumeResponses(): InterruptResponseContent[] | undefined {
-    return this._resumeResponses
-  }
-
-  /**
-   * Returns whether the agent is in an interrupted state.
-   */
-  get activated(): boolean {
-    return this._activated
-  }
-
-  /**
-   * Gets the pending tool execution state.
-   */
-  get pendingToolExecution(): PendingToolExecution | undefined {
-    return this._pendingToolExecution
+    this.interrupts = new Map()
+    this.resumeResponses = undefined
+    this.activated = false
+    this.pendingToolExecution = undefined
   }
 
   /**
    * Gets the pending tool execution state with reconstructed Message and ToolResultBlock objects.
    * Returns undefined if there is no pending execution.
-   *
-   * @returns Object containing the assistant message and map of completed tool results,
-   *          or undefined if no pending execution exists.
    */
   getPendingExecution(): { assistantMessage: Message; completedToolResults: Map<string, ToolResultBlock> } | undefined {
-    if (!this._pendingToolExecution) {
+    if (!this.pendingToolExecution) {
       return undefined
     }
 
-    const assistantMessage = Message.fromMessageData(this._pendingToolExecution.assistantMessageData)
+    const assistantMessage = Message.fromMessageData(this.pendingToolExecution.assistantMessageData)
 
     const completedToolResults = new Map<string, ToolResultBlock>()
-    for (const [toolUseId, resultData] of Object.entries(this._pendingToolExecution.completedToolResults)) {
+    for (const [toolUseId, resultData] of Object.entries(this.pendingToolExecution.completedToolResults)) {
       const block = contentBlockFromData(resultData)
       if (block.type === 'toolResultBlock') {
         completedToolResults.set(toolUseId, block)
@@ -235,33 +189,30 @@ export class InterruptState {
 
   /**
    * Sets the pending tool execution state.
-   * Called when an interrupt occurs during tool execution.
    */
   setPendingToolExecution(pending: PendingToolExecution): void {
-    this._pendingToolExecution = pending
+    this.pendingToolExecution = pending
   }
 
   /**
    * Clears the pending tool execution state.
-   * Called when resuming completes or when starting fresh.
    */
   clearPendingToolExecution(): void {
-    this._pendingToolExecution = undefined
+    this.pendingToolExecution = undefined
   }
 
   /**
    * Returns the list of interrupts as an array.
    */
   getInterruptsList(): Interrupt[] {
-    return Array.from(this._interrupts.values())
+    return Array.from(this.interrupts.values())
   }
 
   /**
    * Returns the first interrupt that has no response (i.e., was raised but not yet answered).
-   * Used after yielding hook events to detect if a hook raised an interrupt.
    */
   getUnansweredInterrupt(): Interrupt | undefined {
-    for (const interrupt of this._interrupts.values()) {
+    for (const interrupt of this.interrupts.values()) {
       if (interrupt.response === undefined) {
         return interrupt
       }
@@ -271,21 +222,19 @@ export class InterruptState {
 
   /**
    * Activates the interrupt state.
-   * Called when an interrupt is raised.
    */
   activate(): void {
-    this._activated = true
+    this.activated = true
   }
 
   /**
    * Deactivates the interrupt state and clears all interrupts and context.
-   * Called when resuming completes successfully.
    */
   deactivate(): void {
-    this._interrupts.clear()
-    this._resumeResponses = undefined
-    this._activated = false
-    this._pendingToolExecution = undefined
+    this.interrupts.clear()
+    this.resumeResponses = undefined
+    this.activated = false
+    this.pendingToolExecution = undefined
   }
 
   /**
@@ -293,11 +242,10 @@ export class InterruptState {
    * Populates interrupt responses from the provided content blocks.
    *
    * @param responses - Array of interrupt response content blocks
-   * @throws TypeError if in interrupt state but responses are invalid
    * @throws Error if an interrupt ID is not found
    */
   resume(responses: InterruptResponseContent[]): void {
-    if (!this._activated) {
+    if (!this.activated) {
       return
     }
 
@@ -305,7 +253,7 @@ export class InterruptState {
       const interruptId = content.interruptResponse.interruptId
       const response = content.interruptResponse.response
 
-      const interrupt = this._interrupts.get(interruptId)
+      const interrupt = this.interrupts.get(interruptId)
       if (!interrupt) {
         throw new Error(`interrupt_id=<${interruptId}> | no interrupt found`)
       }
@@ -313,7 +261,7 @@ export class InterruptState {
       interrupt.response = response
     }
 
-    this._resumeResponses = responses
+    this.resumeResponses = responses
   }
 
   /**
@@ -326,13 +274,13 @@ export class InterruptState {
    * @returns The interrupt (may have a response if resuming)
    */
   getOrCreateInterrupt(id: string, name: string, reason?: unknown): Interrupt {
-    const existing = this._interrupts.get(id)
+    const existing = this.interrupts.get(id)
     if (existing) {
       return existing
     }
 
     const interrupt = new Interrupt({ id, name, reason })
-    this._interrupts.set(id, interrupt)
+    this.interrupts.set(id, interrupt)
     return interrupt
   }
 
@@ -341,15 +289,15 @@ export class InterruptState {
    */
   toJSON(): InterruptStateData {
     const interrupts: Record<string, { id: string; name: string; reason?: unknown; response?: unknown }> = {}
-    for (const [id, interrupt] of this._interrupts) {
+    for (const [id, interrupt] of this.interrupts) {
       interrupts[id] = interrupt.toJSON()
     }
 
     return {
       interrupts,
-      ...(this._resumeResponses && { resumeResponses: this._resumeResponses }),
-      activated: this._activated,
-      ...(this._pendingToolExecution && { pendingToolExecution: this._pendingToolExecution }),
+      ...(this.resumeResponses && { resumeResponses: this.resumeResponses }),
+      activated: this.activated,
+      ...(this.pendingToolExecution && { pendingToolExecution: this.pendingToolExecution }),
     }
   }
 
@@ -361,18 +309,18 @@ export class InterruptState {
    */
   static fromJSON(data: InterruptStateData): InterruptState {
     const state = new InterruptState()
-    state._activated = data.activated
+    state.activated = data.activated
 
     for (const [id, interruptData] of Object.entries(data.interrupts)) {
-      state._interrupts.set(id, Interrupt.fromJSON(interruptData))
+      state.interrupts.set(id, Interrupt.fromJSON(interruptData))
     }
 
     if (data.resumeResponses) {
-      state._resumeResponses = data.resumeResponses as InterruptResponseContent[]
+      state.resumeResponses = data.resumeResponses as InterruptResponseContent[]
     }
 
     if (data.pendingToolExecution) {
-      state._pendingToolExecution = data.pendingToolExecution
+      state.pendingToolExecution = data.pendingToolExecution
     }
 
     return state

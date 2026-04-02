@@ -220,12 +220,11 @@ export class BeforeToolCallEvent extends HookableEvent {
   /**
    * Triggers an interrupt for human-in-the-loop workflows.
    *
-   * On first call (when agent is not resuming), throws an InterruptError to halt execution.
+   * On first call, halts agent execution with `stopReason: 'interrupt'`.
    * On resume (when user has provided a response), returns the user's response.
    *
    * @param params - Interrupt parameters including name and optional reason
    * @returns The user's response when resuming from an interrupt
-   * @throws InterruptError when interrupt is first raised
    *
    * @example
    * ```typescript
@@ -612,13 +611,6 @@ export class BeforeToolsEvent extends HookableEvent {
    */
   private _interruptState: InterruptState | undefined
 
-  /**
-   * @internal
-   * Counter for generating unique interrupt IDs within a single BeforeToolsEvent.
-   * Excluded from wire serialization as it's internal state.
-   */
-  private _interruptCounter: number = 0
-
   constructor(data: { agent: LocalAgent; message: Message; interruptState?: InterruptState }) {
     super()
     this.agent = data.agent
@@ -629,12 +621,11 @@ export class BeforeToolsEvent extends HookableEvent {
   /**
    * Triggers an interrupt for human-in-the-loop workflows.
    *
-   * On first call (when agent is not resuming), throws an InterruptError to halt execution.
+   * On first call, halts agent execution with `stopReason: 'interrupt'`.
    * On resume (when user has provided a response), returns the user's response.
    *
    * @param params - Interrupt parameters including name and optional reason
    * @returns The user's response when resuming from an interrupt
-   * @throws InterruptError when interrupt is first raised
    *
    * @example
    * ```typescript
@@ -660,7 +651,7 @@ export class BeforeToolsEvent extends HookableEvent {
       throw new Error('Interrupt state not available')
     }
 
-    const interruptId = `beforeTools:${this._interruptCounter++}:${params.name}`
+    const interruptId = `beforeTools:${params.name}`
     const interrupt = this._interruptState.getOrCreateInterrupt(interruptId, params.name, params.reason)
 
     if (interrupt.response !== undefined) {

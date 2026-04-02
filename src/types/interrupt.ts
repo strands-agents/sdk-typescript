@@ -53,12 +53,9 @@ export interface InterruptResponseContent {
  * Type guard that checks whether a value is an {@link InterruptResponseContent}.
  */
 export function isInterruptResponseContent(value: unknown): value is InterruptResponseContent {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'interruptResponse' in value &&
-    typeof (value as InterruptResponseContent).interruptResponse === 'object' &&
-    (value as InterruptResponseContent).interruptResponse !== null &&
-    'interruptId' in (value as InterruptResponseContent).interruptResponse
-  )
+  if (typeof value !== 'object' || value === null || !('interruptResponse' in value)) {
+    return false
+  }
+  const { interruptResponse } = value as InterruptResponseContent
+  return typeof interruptResponse === 'object' && interruptResponse !== null && 'interruptId' in interruptResponse
 }

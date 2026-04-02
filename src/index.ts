@@ -29,7 +29,7 @@ export {
 } from './errors.js'
 
 // Interrupt system
-export { Interrupt, InterruptError, InterruptState } from './interrupt.js'
+export { Interrupt } from './interrupt.js'
 export type { InterruptParams, InterruptResponse, InterruptResponseContent } from './types/interrupt.js'
 
 // JSON types

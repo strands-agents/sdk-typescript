@@ -282,7 +282,7 @@ describe('HookRegistryImplementation', () => {
       }
     })
 
-    it('still propagates non-interrupt errors immediately even if interrupt was collected', async () => {
+    it('runs all callbacks when only some raise interrupts', async () => {
       const interruptState = new InterruptState()
       const event = new BeforeToolCallEvent({
         agent: mockAgent,
@@ -334,6 +334,27 @@ describe('HookRegistryImplementation', () => {
 
       expect(callOrder).toEqual(['first', 'second-no-interrupt', 'third'])
       expect(interruptState.interrupts.size).toBe(2)
+    })
+
+    it('throws when two callbacks use the same interrupt name', async () => {
+      const interruptState = new InterruptState()
+      const event = new BeforeToolCallEvent({
+        agent: mockAgent,
+        toolUse: { name: 'test', toolUseId: 'tool-1', input: {} },
+        tool: undefined,
+        interruptState,
+      })
+
+      registry.addCallback(BeforeToolCallEvent, () => {
+        event.interrupt({ name: 'confirm', reason: 'First' })
+      })
+      registry.addCallback(BeforeToolCallEvent, () => {
+        event.interrupt({ name: 'confirm', reason: 'Second' })
+      })
+
+      await expect(registry.invokeCallbacks(event)).rejects.toThrow(
+        'interrupt_name=<confirm> | interrupt name used more than once'
+      )
     })
   })
 })

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { Agent } from '../agent.js'
 import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
 import { createMockTool } from '../../__fixtures__/tool-helpers.js'
-import { TextBlock, ToolResultBlock } from '../../types/messages.js'
+import { ToolResultBlock } from '../../types/messages.js'
 import { BeforeToolCallEvent, BeforeToolsEvent } from '../../hooks/events.js'
 import { FunctionTool } from '../../tools/function-tool.js'
 
@@ -19,23 +19,15 @@ describe('Agent interrupt system', () => {
         })
         .addTurn({ type: 'textBlock', text: 'Should not reach this' })
 
-      const tool = new FunctionTool({
-        name: 'confirmTool',
-        description: 'Tool that requires confirmation',
-        callback: (_, context) => {
-          context.interrupt({ name: 'confirm', reason: 'Please confirm' })
-          return 'not reached'
-        },
+      const tool = createMockTool('confirmTool', (context) => {
+        context.interrupt({ name: 'confirm', reason: 'Please confirm' })
       })
 
       const agent = new Agent({ model, tools: [tool], printer: false })
       const result = await agent.invoke('Test')
 
       expect(result.stopReason).toBe('interrupt')
-      expect(result.interrupts).toBeDefined()
-      expect(result.interrupts).toHaveLength(1)
-      expect(result.interrupts?.[0]?.name).toBe('confirm')
-      expect(result.interrupts?.[0]?.reason).toBe('Please confirm')
+      expect(result.interrupts).toStrictEqual([expect.objectContaining({ name: 'confirm', reason: 'Please confirm' })])
     })
   })
 
@@ -51,15 +43,7 @@ describe('Agent interrupt system', () => {
         })
         .addTurn({ type: 'textBlock', text: 'Should not reach this' })
 
-      const tool = createMockTool(
-        'testTool',
-        () =>
-          new ToolResultBlock({
-            toolUseId: 'tool-1',
-            status: 'success',
-            content: [new TextBlock('Success')],
-          })
-      )
+      const tool = createMockTool('testTool', () => 'Success')
 
       const agent = new Agent({ model, tools: [tool], printer: false })
 
@@ -72,8 +56,9 @@ describe('Agent interrupt system', () => {
       const result = await agent.invoke('Test')
 
       expect(result.stopReason).toBe('interrupt')
-      expect(result.interrupts).toHaveLength(1)
-      expect(result.interrupts?.[0]?.name).toBe('confirm_tool')
+      expect(result.interrupts).toStrictEqual([
+        expect.objectContaining({ name: 'confirm_tool', reason: 'Confirm tool execution?' }),
+      ])
     })
   })
 
@@ -89,15 +74,7 @@ describe('Agent interrupt system', () => {
         })
         .addTurn({ type: 'textBlock', text: 'Should not reach this' })
 
-      const tool = createMockTool(
-        'testTool',
-        () =>
-          new ToolResultBlock({
-            toolUseId: 'tool-1',
-            status: 'success',
-            content: [new TextBlock('Success')],
-          })
-      )
+      const tool = createMockTool('testTool', () => 'Success')
 
       const agent = new Agent({ model, tools: [tool], printer: false })
 
@@ -108,8 +85,9 @@ describe('Agent interrupt system', () => {
       const result = await agent.invoke('Test')
 
       expect(result.stopReason).toBe('interrupt')
-      expect(result.interrupts).toHaveLength(1)
-      expect(result.interrupts?.[0]?.name).toBe('batch_approval')
+      expect(result.interrupts).toStrictEqual([
+        expect.objectContaining({ name: 'batch_approval', reason: 'Approve all tools?' }),
+      ])
     })
   })
 
@@ -199,35 +177,23 @@ describe('Agent interrupt system', () => {
 
       const executionLog: string[] = []
 
-      const toolA = new FunctionTool({
-        name: 'toolA',
-        description: 'Tool A',
-        callback: () => {
-          executionLog.push('A')
-          return 'A result'
-        },
+      const toolA = createMockTool('toolA', () => {
+        executionLog.push('A')
+        return 'A result'
       })
 
-      const toolB = new FunctionTool({
-        name: 'toolB',
-        description: 'Tool B',
-        callback: () => {
-          executionLog.push('B')
-          return 'B result'
-        },
+      const toolB = createMockTool('toolB', () => {
+        executionLog.push('B')
+        return 'B result'
       })
 
-      const toolC = new FunctionTool({
-        name: 'toolC',
-        description: 'Tool C that requires confirmation',
-        callback: (_, context) => {
-          const response = context.interrupt({
-            name: 'confirm_c',
-            reason: 'Confirm tool C?',
-          })
-          executionLog.push('C')
-          return (response as { approved: boolean })?.approved ? 'C approved' : 'C denied'
-        },
+      const toolC = createMockTool('toolC', (context) => {
+        const response = context.interrupt({
+          name: 'confirm_c',
+          reason: 'Confirm tool C?',
+        })
+        executionLog.push('C')
+        return (response as { approved: boolean })?.approved ? 'C approved' : 'C denied'
       })
 
       const agent = new Agent({ model, tools: [toolA, toolB, toolC], printer: false })
@@ -275,13 +241,8 @@ describe('Agent interrupt system', () => {
         })
         .addTurn({ type: 'textBlock', text: 'Different response' })
 
-      const tool = new FunctionTool({
-        name: 'confirmTool',
-        description: 'Tool that requires confirmation',
-        callback: (_, context) => {
-          context.interrupt({ name: 'confirm', reason: 'Confirm?' })
-          return 'not reached'
-        },
+      const tool = createMockTool('confirmTool', (context) => {
+        context.interrupt({ name: 'confirm', reason: 'Confirm?' })
       })
 
       const agent = new Agent({ model, tools: [tool], printer: false })
@@ -326,15 +287,7 @@ describe('Agent interrupt system', () => {
         })
         .addTurn({ type: 'textBlock', text: 'Should not reach this' })
 
-      const tool = createMockTool(
-        'testTool',
-        () =>
-          new ToolResultBlock({
-            toolUseId: 'tool-1',
-            status: 'success',
-            content: [new TextBlock('Success')],
-          })
-      )
+      const tool = createMockTool('testTool', () => 'Success')
 
       const agent = new Agent({ model, tools: [tool], printer: false })
 
@@ -348,9 +301,12 @@ describe('Agent interrupt system', () => {
       const result = await agent.invoke('Test')
 
       expect(result.stopReason).toBe('interrupt')
-      expect(result.interrupts).toHaveLength(2)
-      const names = result.interrupts!.map((i) => i.name).sort()
-      expect(names).toEqual(['budget_check', 'security_check'])
+      expect(result.interrupts).toStrictEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ name: 'security_check', reason: 'Security review required' }),
+          expect.objectContaining({ name: 'budget_check', reason: 'Budget approval required' }),
+        ])
+      )
     })
 
     it('collects interrupts from multiple BeforeToolsEvent hooks', async () => {
@@ -363,15 +319,7 @@ describe('Agent interrupt system', () => {
         })
         .addTurn({ type: 'textBlock', text: 'Should not reach this' })
 
-      const tool = createMockTool(
-        'testTool',
-        () =>
-          new ToolResultBlock({
-            toolUseId: 'tool-1',
-            status: 'success',
-            content: [new TextBlock('Success')],
-          })
-      )
+      const tool = createMockTool('testTool', () => 'Success')
 
       const agent = new Agent({ model, tools: [tool], printer: false })
 
@@ -385,9 +333,12 @@ describe('Agent interrupt system', () => {
       const result = await agent.invoke('Test')
 
       expect(result.stopReason).toBe('interrupt')
-      expect(result.interrupts).toHaveLength(2)
-      const names = result.interrupts!.map((i) => i.name).sort()
-      expect(names).toEqual(['approval_a', 'approval_b'])
+      expect(result.interrupts).toStrictEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ name: 'approval_a', reason: 'First approval' }),
+          expect.objectContaining({ name: 'approval_b', reason: 'Second approval' }),
+        ])
+      )
     })
 
     it('resumes correctly after multiple interrupts are answered', async () => {
@@ -404,15 +355,7 @@ describe('Agent interrupt system', () => {
       let budgetResponse: unknown
       let hookCallCount = 0
 
-      const tool = createMockTool(
-        'testTool',
-        () =>
-          new ToolResultBlock({
-            toolUseId: 'tool-1',
-            status: 'success',
-            content: [new TextBlock('Success')],
-          })
-      )
+      const tool = createMockTool('testTool', () => 'Success')
 
       const agent = new Agent({ model, tools: [tool], printer: false })
 

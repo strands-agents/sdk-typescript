@@ -26,12 +26,11 @@ export interface ToolContext {
   /**
    * Triggers an interrupt for human-in-the-loop workflows.
    *
-   * On first call (when agent is not resuming), throws an InterruptError to halt execution.
+   * On first call, halts agent execution with `stopReason: 'interrupt'`.
    * On resume (when user has provided a response), returns the user's response.
    *
    * @param params - Interrupt parameters including name and optional reason
    * @returns The user's response when resuming from an interrupt
-   * @throws InterruptError when interrupt is first raised
    *
    * @example
    * ```typescript
