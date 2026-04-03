@@ -330,6 +330,52 @@ describe('Message.fromMessageData', () => {
     } as unknown as MessageData
     expect(() => Message.fromMessageData(messageData)).toThrow('Unknown ContentBlockData type')
   })
+  it('handles ToolUseBlock data with type discriminator instead of nested wrapper (issue #533)', () => {
+    // When content blocks are spread ({...block}) or stored by ORMs that flatten
+    // the nested structure, the data has {type: 'toolUseBlock', name, toolUseId, input}
+    // instead of {toolUse: {name, toolUseId, input}}
+    const messageData = {
+      role: 'assistant' as const,
+      content: [
+        { type: 'toolUseBlock', name: 'greet', toolUseId: 'tu_123', input: { name: 'Alice' } },
+      ],
+    } as unknown as MessageData
+    const message = Message.fromMessageData(messageData)
+    expect(message.content).toHaveLength(1)
+    expect(message.content[0].type).toBe('toolUseBlock')
+    const block = message.content[0] as ToolUseBlock
+    expect(block.name).toBe('greet')
+    expect(block.toolUseId).toBe('tu_123')
+    expect(block.input).toEqual({ name: 'Alice' })
+  })
+
+  it('handles TextBlock data with type discriminator instead of nested wrapper', () => {
+    const messageData = {
+      role: 'user' as const,
+      content: [
+        { type: 'textBlock', text: 'hello' },
+      ],
+    } as unknown as MessageData
+    const message = Message.fromMessageData(messageData)
+    expect(message.content).toHaveLength(1)
+    expect(message.content[0].type).toBe('textBlock')
+    expect((message.content[0] as TextBlock).text).toBe('hello')
+  })
+
+  it('handles ToolResultBlock data with type discriminator instead of nested wrapper', () => {
+    const messageData = {
+      role: 'user' as const,
+      content: [
+        { type: 'toolResultBlock', toolUseId: 'tu_123', content: [], status: 'success' },
+      ],
+    } as unknown as MessageData
+    const message = Message.fromMessageData(messageData)
+    expect(message.content).toHaveLength(1)
+    expect(message.content[0].type).toBe('toolResultBlock')
+    const block = message.content[0] as ToolResultBlock
+    expect(block.toolUseId).toBe('tu_123')
+  })
+
 })
 
 describe('systemPromptFromData', () => {
