@@ -272,6 +272,67 @@ describe('Meter', () => {
     })
   })
 
+  describe('latestContextSize', () => {
+    it('is undefined when no invocations have occurred', () => {
+      expect(meter.metrics.latestContextSize).toBeUndefined()
+    })
+
+    it('returns the most recent inputTokens after a model call', () => {
+      meter.updateCycle({
+        type: 'modelMetadataEvent',
+        usage: { inputTokens: 100, outputTokens: 50, totalTokens: 150 },
+      })
+
+      expect(meter.metrics.latestContextSize).toBe(100)
+    })
+
+    it('updates across multiple cycles', () => {
+      meter.updateCycle({
+        type: 'modelMetadataEvent',
+        usage: { inputTokens: 100, outputTokens: 50, totalTokens: 150 },
+      })
+      meter.updateCycle({
+        type: 'modelMetadataEvent',
+        usage: { inputTokens: 200, outputTokens: 80, totalTokens: 280 },
+      })
+
+      expect(meter.metrics.latestContextSize).toBe(200)
+    })
+
+    it('updates across multiple invocations', () => {
+      meter.startNewInvocation()
+      meter.startCycle()
+      meter.updateCycle({
+        type: 'modelMetadataEvent',
+        usage: { inputTokens: 100, outputTokens: 50, totalTokens: 150 },
+      })
+
+      meter.startNewInvocation()
+      meter.startCycle()
+      meter.updateCycle({
+        type: 'modelMetadataEvent',
+        usage: { inputTokens: 300, outputTokens: 100, totalTokens: 400 },
+      })
+
+      expect(meter.metrics.latestContextSize).toBe(300)
+    })
+
+    it('remains undefined when metadata has no usage', () => {
+      meter.updateCycle({
+        type: 'modelMetadataEvent',
+        metrics: { latencyMs: 100 },
+      })
+
+      expect(meter.metrics.latestContextSize).toBeUndefined()
+    })
+
+    it('remains undefined when updateCycle is called with undefined', () => {
+      meter.updateCycle(undefined)
+
+      expect(meter.metrics.latestContextSize).toBeUndefined()
+    })
+  })
+
   describe('updateCycle', () => {
     it('accumulates usage and latency from metadata', () => {
       meter.updateCycle({
@@ -599,6 +660,18 @@ describe('AgentMetrics', () => {
           search: { callCount: 2, successCount: 1, errorCount: 1, totalTime: 2.0 },
         },
       })
+    })
+  })
+
+  describe('toJSON with latestContextSize', () => {
+    it('includes latestContextSize when set', () => {
+      const metrics = new AgentMetrics({ latestContextSize: 42 })
+      expect(metrics.toJSON()).toHaveProperty('latestContextSize', 42)
+    })
+
+    it('omits latestContextSize when undefined', () => {
+      const metrics = new AgentMetrics()
+      expect(metrics.toJSON()).not.toHaveProperty('latestContextSize')
     })
   })
 

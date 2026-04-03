@@ -196,6 +196,54 @@ describe('AgentResult', () => {
     })
   })
 
+  describe('contextSize', () => {
+    it('returns latestContextSize from metrics', () => {
+      const message = new Message({
+        role: 'assistant',
+        content: [new TextBlock('Hello')],
+      })
+
+      const metrics = new AgentMetrics({ latestContextSize: 500 })
+
+      const result = new AgentResult({
+        stopReason: 'endTurn',
+        lastMessage: message,
+        metrics,
+      })
+
+      expect(result.contextSize).toBe(500)
+    })
+
+    it('returns undefined when metrics has no latestContextSize', () => {
+      const message = new Message({
+        role: 'assistant',
+        content: [new TextBlock('Hello')],
+      })
+
+      const result = new AgentResult({
+        stopReason: 'endTurn',
+        lastMessage: message,
+        metrics: new AgentMetrics(),
+      })
+
+      expect(result.contextSize).toBeUndefined()
+    })
+
+    it('returns undefined when no metrics are available', () => {
+      const message = new Message({
+        role: 'assistant',
+        content: [new TextBlock('Hello')],
+      })
+
+      const result = new AgentResult({
+        stopReason: 'endTurn',
+        lastMessage: message,
+      })
+
+      expect(result.contextSize).toBeUndefined()
+    })
+  })
+
   describe('toJSON', () => {
     it('excludes traces and metrics from serialization', () => {
       const message = new Message({
