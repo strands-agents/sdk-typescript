@@ -237,6 +237,7 @@ export { AgentTrace } from './telemetry/tracer.js'
 
 // Local Metrics
 export { AgentMetrics } from './telemetry/meter.js'
+export type { MeterConfig, InvocationMetricsData } from './telemetry/meter.js'
 
 // Multi-agent orchestration
 export { Graph } from './multiagent/index.js'

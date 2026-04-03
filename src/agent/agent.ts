@@ -64,6 +64,7 @@ import type { z } from 'zod'
 import type { SessionManager } from '../session/session-manager.js'
 import { Tracer } from '../telemetry/tracer.js'
 import { Meter } from '../telemetry/meter.js'
+import type { InvocationMetricsData } from '../telemetry/meter.js'
 import type { AttributeValue } from '@opentelemetry/api'
 import { logger } from '../logging/logger.js'
 
@@ -154,6 +155,18 @@ export type AgentConfig = {
    * Optional unique identifier for the agent. Defaults to "agent".
    */
   id?: string
+  /**
+   * Maximum number of invocation history entries to retain.
+   * When exceeded, oldest entries are evicted. Defaults to Infinity (unbounded).
+   * Set to a finite value for long-lived agents to prevent memory growth.
+   */
+  maxInvocationHistory?: number
+  /**
+   * Called with evicted invocation entries before removal.
+   * Invoked fire-and-forget; errors are caught and ignored.
+   * Use to persist evicted history to a database or metrics backend.
+   */
+  onInvocationHistoryFlush?: (evicted: InvocationMetricsData[]) => void | Promise<void>
 }
 
 /** Default name assigned to agents when none is provided. */
@@ -270,7 +283,10 @@ export class Agent implements LocalAgent, InvokableAgent {
     this._tracer = new Tracer(config?.traceAttributes)
 
     // Initialize meter for local metrics accumulation
-    this._meter = new Meter()
+    this._meter = new Meter({
+      maxInvocationHistory: config?.maxInvocationHistory,
+      onInvocationHistoryFlush: config?.onInvocationHistoryFlush,
+    })
 
     this._initialized = false
   }

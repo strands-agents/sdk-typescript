@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { metrics as otelMetrics, type Meter as OtelMeter } from '@opentelemetry/api'
-import { Meter, AgentMetrics } from '../meter.js'
+import { Meter, AgentMetrics, type InvocationMetricsData } from '../meter.js'
 import { MockMeter } from '../../__fixtures__/mock-meter.js'
 import type { ToolUse } from '../../tools/types.js'
 
@@ -560,6 +560,8 @@ describe('AgentMetrics', () => {
         accumulatedMetrics: { latencyMs: 0 },
         agentInvocations: [],
         toolMetrics: {},
+        totalCycleDurationMs: 0,
+        totalCycleCount: 0,
       })
     })
 
@@ -569,6 +571,8 @@ describe('AgentMetrics', () => {
         toolMetrics: {
           search: { callCount: 2, successCount: 1, errorCount: 1, totalTime: 2.0 },
         },
+        totalCycleDurationMs: 0,
+        totalCycleCount: 0,
         accumulatedUsage: { inputTokens: 30, outputTokens: 15, totalTokens: 45 },
         accumulatedMetrics: { latencyMs: 350 },
         agentInvocations: [
@@ -598,6 +602,8 @@ describe('AgentMetrics', () => {
         toolMetrics: {
           search: { callCount: 2, successCount: 1, errorCount: 1, totalTime: 2.0 },
         },
+        totalCycleDurationMs: 0,
+        totalCycleCount: 0,
       })
     })
   })
@@ -622,6 +628,8 @@ describe('AgentMetrics', () => {
           search: { callCount: 2, successCount: 2, errorCount: 0, totalTime: 1.5 },
           calc: { callCount: 1, successCount: 0, errorCount: 1, totalTime: 0.3 },
         },
+        totalCycleDurationMs: 0,
+        totalCycleCount: 0,
       })
 
       const json = JSON.stringify(original)
@@ -701,6 +709,8 @@ describe('AgentMetrics', () => {
         toolMetrics: {
           search: { callCount: 2, successCount: 1, errorCount: 1, totalTime: 2.0 },
         },
+        totalCycleDurationMs: 0,
+        totalCycleCount: 0,
       })
 
       expect(metrics.toolUsage).toStrictEqual({
@@ -720,6 +730,8 @@ describe('AgentMetrics', () => {
         toolMetrics: {
           broken: { callCount: 0, successCount: 0, errorCount: 0, totalTime: 0 },
         },
+        totalCycleDurationMs: 0,
+        totalCycleCount: 0,
       })
 
       expect(metrics.toolUsage).toStrictEqual({
@@ -740,3 +752,82 @@ describe('AgentMetrics', () => {
     })
   })
 })
+
+  describe('bounded invocation history', () => {
+    it('evicts oldest entries when maxInvocationHistory is exceeded', () => {
+      const meter = new Meter({ maxInvocationHistory: 2 })
+
+      meter.startNewInvocation() // inv 1
+      const { startTime: s1 } = meter.startCycle()
+      meter.endCycle(s1 - 100)
+
+      meter.startNewInvocation() // inv 2
+      const { startTime: s2 } = meter.startCycle()
+      meter.endCycle(s2 - 200)
+
+      meter.startNewInvocation() // inv 3 — should evict inv 1
+
+      const { agentInvocations } = meter.metrics
+      expect(agentInvocations).toHaveLength(2)
+      // inv 1 (with ~100ms cycle) was evicted; remaining are inv 2 and inv 3
+    })
+
+    it('calls onInvocationHistoryFlush with evicted entries', () => {
+      const flushed: InvocationMetricsData[][] = []
+      const meter = new Meter({
+        maxInvocationHistory: 1,
+        onInvocationHistoryFlush: (evicted) => {
+          flushed.push(evicted)
+        },
+      })
+
+      meter.startNewInvocation() // inv 1
+      meter.startNewInvocation() // inv 2 — evicts inv 1
+
+      expect(flushed).toHaveLength(1)
+      expect(flushed[0]).toHaveLength(1)
+    })
+
+    it('preserves lifetime totalDuration after eviction', () => {
+      const meter = new Meter({ maxInvocationHistory: 1 })
+
+      meter.startNewInvocation()
+      const { startTime: s1 } = meter.startCycle()
+      meter.endCycle(s1 - 1000) // ~1000ms cycle
+
+      meter.startNewInvocation() // evicts first invocation
+      const { startTime: s2 } = meter.startCycle()
+      meter.endCycle(s2 - 500) // ~500ms cycle
+
+      const metrics = meter.metrics
+      // totalDuration reflects ALL cycles, not just retained ones
+      expect(metrics.totalDuration).toBeGreaterThanOrEqual(1400)
+      // Only 1 invocation retained
+      expect(metrics.agentInvocations).toHaveLength(1)
+    })
+
+    it('defaults to unbounded when no config is provided', () => {
+      const meter = new Meter()
+
+      for (let i = 0; i < 100; i++) {
+        meter.startNewInvocation()
+      }
+
+      expect(meter.metrics.agentInvocations).toHaveLength(100)
+    })
+
+    it('swallows errors from onInvocationHistoryFlush', () => {
+      const meter = new Meter({
+        maxInvocationHistory: 1,
+        onInvocationHistoryFlush: () => {
+          throw new Error('flush failed')
+        },
+      })
+
+      // Should not throw
+      expect(() => {
+        meter.startNewInvocation()
+        meter.startNewInvocation()
+      }).not.toThrow()
+    })
+  })

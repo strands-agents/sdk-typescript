@@ -106,6 +106,16 @@ export interface AgentMetricsData {
    * Per-tool execution metrics keyed by tool name.
    */
   toolMetrics: Record<string, ToolMetricsData>
+
+  /**
+   * Lifetime total duration of all cycles in milliseconds (survives eviction).
+   */
+  totalCycleDurationMs?: number
+
+  /**
+   * Lifetime total number of cycles (survives eviction).
+   */
+  totalCycleCount?: number
 }
 
 /**
@@ -171,12 +181,24 @@ export class AgentMetrics implements JSONSerializable<AgentMetricsData> {
    */
   readonly toolMetrics: Record<string, ToolMetricsData>
 
+  /**
+   * @internal Lifetime total cycle duration (survives eviction).
+   */
+  private readonly _totalCycleDurationMs: number
+
+  /**
+   * @internal Lifetime total cycle count (survives eviction).
+   */
+  private readonly _totalCycleCount: number
+
   constructor(data?: Partial<AgentMetricsData>) {
     this.cycleCount = data?.cycleCount ?? 0
     this.accumulatedUsage = data?.accumulatedUsage ?? createEmptyUsage()
     this.accumulatedMetrics = data?.accumulatedMetrics ?? { latencyMs: 0 }
     this.agentInvocations = data?.agentInvocations ?? []
     this.toolMetrics = data?.toolMetrics ?? {}
+    this._totalCycleDurationMs = data?.totalCycleDurationMs ?? 0
+    this._totalCycleCount = data?.totalCycleCount ?? 0
   }
 
   /**
@@ -197,6 +219,10 @@ export class AgentMetrics implements JSONSerializable<AgentMetricsData> {
    * Total duration of all cycles in milliseconds.
    */
   get totalDuration(): number {
+    if (this._totalCycleDurationMs > 0) {
+      return this._totalCycleDurationMs
+    }
+    // Fallback for metrics constructed without lifetime scalars
     return this.agentInvocations.flatMap((inv) => inv.cycles.map((c) => c.duration)).reduce((sum, d) => sum + d, 0)
   }
 
@@ -204,6 +230,10 @@ export class AgentMetrics implements JSONSerializable<AgentMetricsData> {
    * Average cycle duration in milliseconds, or 0 if no cycles exist.
    */
   get averageCycleTime(): number {
+    if (this._totalCycleCount > 0) {
+      return this._totalCycleDurationMs / this._totalCycleCount
+    }
+    // Fallback for metrics constructed without lifetime scalars
     const durations = this.agentInvocations.flatMap((inv) => inv.cycles.map((c) => c.duration))
     return durations.length > 0 ? durations.reduce((sum, d) => sum + d, 0) / durations.length : 0
   }
@@ -236,6 +266,8 @@ export class AgentMetrics implements JSONSerializable<AgentMetricsData> {
       accumulatedMetrics: this.accumulatedMetrics,
       agentInvocations: this.agentInvocations,
       toolMetrics: this.toolMetrics,
+      totalCycleDurationMs: this._totalCycleDurationMs,
+      totalCycleCount: this._totalCycleCount,
     }
   }
 }
@@ -251,6 +283,24 @@ export class AgentMetrics implements JSONSerializable<AgentMetricsData> {
  * as OTEL counters and histograms via the global metrics API. If no
  * provider is registered the OTEL meter is a no-op and adds no overhead.
  */
+
+/**
+ * Configuration options for the Meter.
+ */
+export interface MeterConfig {
+  /**
+   * Maximum number of invocation history entries to retain.
+   * When exceeded, oldest entries are evicted. Defaults to Infinity.
+   */
+  maxInvocationHistory?: number | undefined
+
+  /**
+   * Called with evicted invocation entries before removal.
+   * Invoked fire-and-forget; errors are caught and ignored.
+   */
+  onInvocationHistoryFlush?: ((evicted: InvocationMetricsData[]) => void | Promise<void>) | undefined
+}
+
 export class Meter {
   /**
    * Number of agent loop cycles executed.
@@ -277,6 +327,26 @@ export class Meter {
    */
   private readonly _toolMetrics: Record<string, ToolMetricsData> = {}
 
+  /**
+   * Maximum invocation history entries to retain.
+   */
+  private readonly _maxInvocationHistory: number
+
+  /**
+   * Callback for evicted invocation entries.
+   */
+  private readonly _onInvocationHistoryFlush?: ((evicted: InvocationMetricsData[]) => void | Promise<void>) | undefined
+
+  /**
+   * Running total of all cycle durations (survives eviction).
+   */
+  private _totalCycleDurationMs: number = 0
+
+  /**
+   * Running total of all cycles (survives eviction).
+   */
+  private _totalCycleCount: number = 0
+
   // OTEL instruments (no-op when no MeterProvider is registered)
   private readonly _otelMeter: OtelMeter
   private readonly _otelCycleCounter: Counter
@@ -290,7 +360,9 @@ export class Meter {
   private readonly _otelModelLatency: Histogram
   private readonly _otelTimeToFirstToken: Histogram
 
-  constructor() {
+  constructor(config?: MeterConfig) {
+    this._maxInvocationHistory = config?.maxInvocationHistory ?? Infinity
+    this._onInvocationHistoryFlush = config?.onInvocationHistoryFlush
     this._otelMeter = otelMetrics.getMeter(getServiceName())
 
     this._otelCycleCounter = this._otelMeter.createCounter('gen_ai.agent.cycle.count', {
@@ -340,6 +412,21 @@ export class Meter {
       usage: createEmptyUsage(),
     })
     this._otelInvocationCounter.add(1)
+
+    // Evict oldest entries if over the cap
+    if (this._maxInvocationHistory < Infinity && this._agentInvocations.length > this._maxInvocationHistory) {
+      const evictCount = this._agentInvocations.length - this._maxInvocationHistory
+      const evicted = this._agentInvocations.splice(0, evictCount)
+
+      if (this._onInvocationHistoryFlush && evicted.length > 0) {
+        try {
+          // Fire-and-forget — never block the agent loop
+          void Promise.resolve(this._onInvocationHistoryFlush(evicted)).catch(() => {})
+        } catch {
+          // Swallow synchronous errors from the callback
+        }
+      }
+    }
   }
 
   /**
@@ -374,6 +461,8 @@ export class Meter {
   endCycle(startTime: number): void {
     const duration = Date.now() - startTime
     this._otelCycleDuration.record(duration)
+    this._totalCycleDurationMs += duration
+    this._totalCycleCount++
 
     const latestInvocation = this._latestAgentInvocation
     if (latestInvocation) {
@@ -438,6 +527,8 @@ export class Meter {
       accumulatedMetrics: this._accumulatedMetrics,
       agentInvocations: this._agentInvocations,
       toolMetrics: this._toolMetrics,
+      totalCycleDurationMs: this._totalCycleDurationMs,
+      totalCycleCount: this._totalCycleCount,
     })
   }
 
