@@ -447,13 +447,6 @@ export class Agent implements LocalAgent, InvokableAgent {
       yield await this._invokeCallbacks(new AgentResultEvent({ agent: this, result: result.value }))
 
       return result.value
-    } catch (error) {
-      if (error instanceof InterruptError) {
-        const interruptResult = this._createInterruptResult()
-        yield await this._invokeCallbacks(new AgentResultEvent({ agent: this, result: interruptResult }))
-        return interruptResult
-      }
-      throw error
     } finally {
       // Drain remaining events from _stream() so cleanup events (after events
       // from finally blocks) still get their hooks and printer invoked.
