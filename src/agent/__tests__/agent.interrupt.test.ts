@@ -263,9 +263,10 @@ describe('Agent interrupt system', () => {
   })
 
   describe('error handling', () => {
-    it('throws error when interrupt() called without interrupt state', async () => {
+    it('throws error when interrupt() called on event with non-Agent implementation', async () => {
+      const mockLocalAgent = { id: 'mock' } as unknown as Agent
       const event = new BeforeToolCallEvent({
-        agent: new Agent({ printer: false }),
+        agent: mockLocalAgent,
         toolUse: { name: 'test', toolUseId: 'id', input: {} },
         tool: undefined,
       })

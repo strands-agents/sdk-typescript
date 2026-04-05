@@ -198,23 +198,15 @@ export class BeforeToolCallEvent extends HookableEvent {
    */
   cancel: boolean | string = false
 
-  /**
-   * @internal
-   * Interrupt state for managing human-in-the-loop workflows.
-   */
-  private _interruptState: InterruptState | undefined
-
   constructor(data: {
     agent: LocalAgent
     toolUse: { name: string; toolUseId: string; input: JSONValue }
     tool: Tool | undefined
-    interruptState?: InterruptState
   }) {
     super()
     this.agent = data.agent
     this.toolUse = data.toolUse
     this.tool = data.tool
-    this._interruptState = data.interruptState
   }
 
   /**
@@ -242,12 +234,13 @@ export class BeforeToolCallEvent extends HookableEvent {
    * ```
    */
   interrupt<T = unknown>(params: InterruptParams): T {
-    if (!this._interruptState) {
+    const interruptState = (this.agent as unknown as { _interruptState?: InterruptState })._interruptState
+    if (!interruptState) {
       throw new Error('Interrupt state not available')
     }
 
     const interruptId = `beforeToolCall:${this.toolUse.toolUseId}:${params.name}`
-    const interrupt = this._interruptState.getOrCreateInterrupt(interruptId, params.name, params.reason)
+    const interrupt = interruptState.getOrCreateInterrupt(interruptId, params.name, params.reason)
 
     if (interrupt.response !== undefined) {
       return interrupt.response as T
@@ -605,17 +598,10 @@ export class BeforeToolsEvent extends HookableEvent {
    */
   cancel: boolean | string = false
 
-  /**
-   * @internal
-   * Interrupt state for managing human-in-the-loop workflows.
-   */
-  private _interruptState: InterruptState | undefined
-
-  constructor(data: { agent: LocalAgent; message: Message; interruptState?: InterruptState }) {
+  constructor(data: { agent: LocalAgent; message: Message }) {
     super()
     this.agent = data.agent
     this.message = data.message
-    this._interruptState = data.interruptState
   }
 
   /**
@@ -647,12 +633,13 @@ export class BeforeToolsEvent extends HookableEvent {
    * ```
    */
   interrupt<T = unknown>(params: InterruptParams): T {
-    if (!this._interruptState) {
+    const interruptState = (this.agent as unknown as { _interruptState?: InterruptState })._interruptState
+    if (!interruptState) {
       throw new Error('Interrupt state not available')
     }
 
     const interruptId = `beforeTools:${params.name}`
-    const interrupt = this._interruptState.getOrCreateInterrupt(interruptId, params.name, params.reason)
+    const interrupt = interruptState.getOrCreateInterrupt(interruptId, params.name, params.reason)
 
     if (interrupt.response !== undefined) {
       return interrupt.response as T

@@ -8,6 +8,9 @@ describe('HookRegistryImplementation', () => {
   let registry: HookRegistryImplementation
   let mockAgent: Agent
 
+  const getInterruptState = (agent: Agent): InterruptState =>
+    (agent as unknown as { _interruptState: InterruptState })._interruptState
+
   beforeEach(() => {
     registry = new HookRegistryImplementation()
     mockAgent = new Agent()
@@ -223,14 +226,15 @@ describe('HookRegistryImplementation', () => {
   })
 
   describe('InterruptError collection', () => {
-    it('collects InterruptErrors from multiple callbacks and invokes all of them', async () => {
-      const interruptState = new InterruptState()
-      const event = new BeforeToolCallEvent({
+    const createEvent = () =>
+      new BeforeToolCallEvent({
         agent: mockAgent,
         toolUse: { name: 'test', toolUseId: 'tool-1', input: {} },
         tool: undefined,
-        interruptState,
       })
+
+    it('collects InterruptErrors from multiple callbacks and invokes all of them', async () => {
+      const event = createEvent()
 
       const callback1 = vi.fn(() => {
         event.interrupt({ name: 'interrupt_a', reason: 'Reason A' })
@@ -244,24 +248,16 @@ describe('HookRegistryImplementation', () => {
 
       await expect(registry.invokeCallbacks(event)).rejects.toThrow(InterruptError)
 
-      // Both callbacks were invoked
       expect(callback1).toHaveBeenCalledOnce()
       expect(callback2).toHaveBeenCalledOnce()
 
-      // Both interrupts are registered in the state
-      expect(interruptState.interrupts.size).toBe(2)
-      const interrupts = interruptState.getInterruptsList()
-      expect(interrupts.map((i) => i.name).sort()).toEqual(['interrupt_a', 'interrupt_b'])
+      const state = getInterruptState(mockAgent)
+      expect(state.interrupts.size).toBe(2)
+      expect(state.getInterruptsList().map((i) => i.name).sort()).toEqual(['interrupt_a', 'interrupt_b'])
     })
 
     it('throws InterruptError with all collected interrupts after all callbacks run', async () => {
-      const interruptState = new InterruptState()
-      const event = new BeforeToolCallEvent({
-        agent: mockAgent,
-        toolUse: { name: 'test', toolUseId: 'tool-1', input: {} },
-        tool: undefined,
-        interruptState,
-      })
+      const event = createEvent()
 
       registry.addCallback(BeforeToolCallEvent, () => {
         event.interrupt({ name: 'first', reason: 'First' })
@@ -282,15 +278,8 @@ describe('HookRegistryImplementation', () => {
       }
     })
 
-    it('runs all callbacks when only some raise interrupts', async () => {
-      const interruptState = new InterruptState()
-      const event = new BeforeToolCallEvent({
-        agent: mockAgent,
-        toolUse: { name: 'test', toolUseId: 'tool-1', input: {} },
-        tool: undefined,
-        interruptState,
-      })
-
+    it('stops on non-interrupt error even when interrupts were collected', async () => {
+      const event = createEvent()
       const callback3 = vi.fn()
 
       registry.addCallback(BeforeToolCallEvent, () => {
@@ -302,20 +291,11 @@ describe('HookRegistryImplementation', () => {
       registry.addCallback(BeforeToolCallEvent, callback3)
 
       await expect(registry.invokeCallbacks(event)).rejects.toThrow('Non-interrupt failure')
-
-      // Third callback was not called because non-interrupt error stops execution
       expect(callback3).not.toHaveBeenCalled()
     })
 
     it('runs all callbacks when only some raise interrupts', async () => {
-      const interruptState = new InterruptState()
-      const event = new BeforeToolCallEvent({
-        agent: mockAgent,
-        toolUse: { name: 'test', toolUseId: 'tool-1', input: {} },
-        tool: undefined,
-        interruptState,
-      })
-
+      const event = createEvent()
       const callOrder: string[] = []
 
       registry.addCallback(BeforeToolCallEvent, () => {
@@ -331,19 +311,15 @@ describe('HookRegistryImplementation', () => {
       })
 
       await expect(registry.invokeCallbacks(event)).rejects.toThrow(InterruptError)
-
       expect(callOrder).toEqual(['first', 'second-no-interrupt', 'third'])
-      expect(interruptState.interrupts.size).toBe(2)
+
+      const state = getInterruptState(mockAgent)
+      expect(state.interrupts.size).toBe(2)
+      expect(state.getInterruptsList().map((i) => i.name).sort()).toEqual(['interrupt_a', 'interrupt_b'])
     })
 
     it('throws when two callbacks use the same interrupt name', async () => {
-      const interruptState = new InterruptState()
-      const event = new BeforeToolCallEvent({
-        agent: mockAgent,
-        toolUse: { name: 'test', toolUseId: 'tool-1', input: {} },
-        tool: undefined,
-        interruptState,
-      })
+      const event = createEvent()
 
       registry.addCallback(BeforeToolCallEvent, () => {
         event.interrupt({ name: 'confirm', reason: 'First' })
@@ -358,13 +334,7 @@ describe('HookRegistryImplementation', () => {
     })
 
     it('reports all duplicate interrupt names in error', async () => {
-      const interruptState = new InterruptState()
-      const event = new BeforeToolCallEvent({
-        agent: mockAgent,
-        toolUse: { name: 'test', toolUseId: 'tool-1', input: {} },
-        tool: undefined,
-        interruptState,
-      })
+      const event = createEvent()
 
       registry.addCallback(BeforeToolCallEvent, () => {
         event.interrupt({ name: 'alpha' })

@@ -956,7 +956,6 @@ export class Agent implements LocalAgent, InvokableAgent {
     const beforeToolsEvent = new BeforeToolsEvent({
       agent: this,
       message: assistantMessage,
-      interruptState: this._interruptState,
     })
 
     try {
@@ -1089,7 +1088,6 @@ export class Agent implements LocalAgent, InvokableAgent {
         agent: this,
         toolUse,
         tool,
-        interruptState: this._interruptState,
       })
       yield beforeToolCallEvent
 
