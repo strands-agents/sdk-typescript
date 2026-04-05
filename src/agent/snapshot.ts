@@ -17,11 +17,8 @@ import { Message, systemPromptFromData, systemPromptToData } from '../types/mess
 import { loadStateSerializable, serializeStateSerializable } from '../types/serializable.js'
 import type { LocalAgent } from '../types/agent.js'
 import { InterruptState, type InterruptStateData } from '../interrupt.js'
-
-/**
- * Current schema version of the snapshot format.
- */
-export const SNAPSHOT_SCHEMA_VERSION = '1.0'
+import { SNAPSHOT_SCHEMA_VERSION } from '../types/snapshot.js'
+import type { Snapshot } from '../types/snapshot.js'
 
 /**
  * All available fields that can be included in a snapshot.
@@ -45,41 +42,6 @@ export type SnapshotPreset = keyof typeof SNAPSHOT_PRESETS
  * Valid snapshot field names.
  */
 export type SnapshotField = (typeof ALL_SNAPSHOT_FIELDS)[number]
-
-/**
- * Scope defines the context for snapshot data.
- */
-export type Scope = 'agent' | 'multiAgent'
-
-/**
- * Point-in-time capture of agent state.
- */
-export interface Snapshot {
-  /**
-   * Scope identifying the snapshot context (agent or multi-agent).
-   */
-  scope: Scope
-
-  /**
-   * Schema version string for forward compatibility.
-   */
-  schemaVersion: string
-
-  /**
-   * ISO 8601 timestamp of when snapshot was created.
-   */
-  createdAt: string
-
-  /**
-   * Agent's evolving state (messages, state, systemPrompt). Strands-owned.
-   */
-  data: Record<string, JSONValue>
-
-  /**
-   * Application-owned data. Strands does not read or modify this.
-   */
-  appData: Record<string, JSONValue>
-}
 
 /**
  * Creates an ISO 8601 timestamp string.
@@ -167,6 +129,9 @@ export function takeSnapshot(agent: LocalAgent, options: TakeSnapshotOptions): S
  * @param snapshot - The snapshot to load
  */
 export function loadSnapshot(agent: LocalAgent, snapshot: Snapshot): void {
+  if (snapshot.scope !== 'agent') {
+    throw new Error(`Expected snapshot scope 'agent', got '${snapshot.scope}'`)
+  }
   if (snapshot.schemaVersion !== SNAPSHOT_SCHEMA_VERSION) {
     throw new Error(
       `Unsupported snapshot schema version: ${snapshot.schemaVersion}. Current version: ${SNAPSHOT_SCHEMA_VERSION}`

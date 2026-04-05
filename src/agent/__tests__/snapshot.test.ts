@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { Agent } from '../agent.js'
-import type { Snapshot } from '../snapshot.js'
+import type { Snapshot } from '../../types/snapshot.js'
+import { SNAPSHOT_SCHEMA_VERSION } from '../../types/snapshot.js'
 import { InterruptState } from '../../interrupt.js'
 import {
-  SNAPSHOT_SCHEMA_VERSION,
   ALL_SNAPSHOT_FIELDS,
   SNAPSHOT_PRESETS,
   createTimestamp,
@@ -150,6 +150,18 @@ describe('Snapshot API', () => {
       expect(() => loadSnapshot(agent, snapshot)).toThrow(
         'Unsupported snapshot schema version: 2.0. Current version: 1.0'
       )
+    })
+
+    it('throws error for wrong scope', () => {
+      const snapshot: Snapshot = {
+        scope: 'multiAgent',
+        schemaVersion: SNAPSHOT_SCHEMA_VERSION,
+        createdAt: createTimestamp(),
+        data: {},
+        appData: {},
+      }
+
+      expect(() => loadSnapshot(agent, snapshot)).toThrow("Expected snapshot scope 'agent', got 'multiAgent'")
     })
 
     it('restores messages from snapshot', () => {

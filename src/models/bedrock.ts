@@ -83,6 +83,7 @@ const BEDROCK_CONTEXT_WINDOW_OVERFLOW_MESSAGES = [
   'Input is too long for requested model',
   'input length and `max_tokens` exceed context limit',
   'too many total text bytes',
+  'prompt is too long',
 ]
 
 /**
