@@ -392,4 +392,41 @@ describe('Agent interrupt system', () => {
       expect(budgetResponse).toBe('approved:budget_check')
     })
   })
+
+  describe('multi-cycle interrupts', () => {
+    it('interrupts again on cycle 2 after resuming from cycle 1 (BeforeToolsEvent)', async () => {
+      // Cycle 1: model returns tool use → hook interrupts → user resumes → tool executes
+      // Cycle 2: model returns another tool use → same hook should interrupt again
+      const model = new MockMessageModel()
+        .addTurn({ type: 'toolUseBlock', name: 'testTool', toolUseId: 'tool-1', input: {} })
+        .addTurn({ type: 'toolUseBlock', name: 'testTool', toolUseId: 'tool-2', input: {} })
+        .addTurn({ type: 'textBlock', text: 'Done' })
+
+      const tool = createMockTool('testTool', () => 'ok')
+
+      let interruptCount = 0
+      const agent = new Agent({ model, tools: [tool], printer: false })
+
+      agent.addHook(BeforeToolsEvent, (event) => {
+        interruptCount++
+        event.interrupt({ name: 'approval', reason: 'Approve?' })
+      })
+
+      // Cycle 1: interrupt
+      const result1 = await agent.invoke('Go')
+      expect(result1.stopReason).toBe('interrupt')
+      expect(interruptCount).toBe(1)
+
+      // Resume cycle 1
+      const result2 = await agent.invoke(
+        result1.interrupts!.map((i) => ({
+          interruptResponse: { interruptId: i.id, response: 'yes' },
+        }))
+      )
+
+      // Cycle 2: should interrupt again, not silently pass through
+      expect(result2.stopReason).toBe('interrupt')
+      expect(interruptCount).toBe(3) // hook fired on resume (returned response) + hook fired on cycle 2 (new interrupt)
+    })
+  })
 })

@@ -621,6 +621,11 @@ export class Agent implements LocalAgent, InvokableAgent {
           yield this._appendMessage(assistantMessage)
           yield this._appendMessage(toolResultMessage)
 
+          // Clear interrupt state after successful tool execution so the next cycle
+          // starts fresh. Without this, hooks like BeforeToolsEvent would see stale
+          // interrupts from the previous cycle and silently return old responses.
+          this._interruptState.deactivate()
+
           this._meter.endCycle(cycleStartTime)
           this._tracer.endAgentLoopSpan(cycleSpan)
 
