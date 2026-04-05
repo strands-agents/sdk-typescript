@@ -16,6 +16,7 @@ import type { MessageData, SystemPromptData } from '../types/messages.js'
 import { Message, systemPromptFromData, systemPromptToData } from '../types/messages.js'
 import { loadStateSerializable, serializeStateSerializable } from '../types/serializable.js'
 import type { LocalAgent } from '../types/agent.js'
+import { InterruptState, type InterruptStateData } from '../interrupt.js'
 
 /**
  * Current schema version of the snapshot format.
@@ -25,14 +26,14 @@ export const SNAPSHOT_SCHEMA_VERSION = '1.0'
 /**
  * All available fields that can be included in a snapshot.
  */
-export const ALL_SNAPSHOT_FIELDS = ['messages', 'state', 'systemPrompt'] as const
+export const ALL_SNAPSHOT_FIELDS = ['messages', 'state', 'systemPrompt', 'interrupts'] as const
 
 /**
  * Strongly typed preset definitions for snapshot field selection.
  * This object allows easy evolution of presets and type-safe access.
  */
 export const SNAPSHOT_PRESETS = {
-  session: ['messages', 'state', 'systemPrompt'] as const,
+  session: ['messages', 'state', 'systemPrompt', 'interrupts'] as const,
 } as const
 
 /**
@@ -142,6 +143,11 @@ export function takeSnapshot(agent: LocalAgent, options: TakeSnapshotOptions): S
     data.systemPrompt = agent.systemPrompt !== undefined ? (systemPromptToData(agent.systemPrompt) as JSONValue) : null
   }
 
+  if (fields.has('interrupts')) {
+    const interruptState = (agent as unknown as { _interruptState?: InterruptState })._interruptState
+    data.interrupts = interruptState ? (interruptState.toJSON() as unknown as JSONValue) : null
+  }
+
   return {
     scope: 'agent',
     schemaVersion: SNAPSHOT_SCHEMA_VERSION,
@@ -187,6 +193,14 @@ export function loadSnapshot(agent: LocalAgent, snapshot: Snapshot): void {
       agent.systemPrompt = systemPromptFromData(systemPrompt as SystemPromptData)
     } else {
       delete agent.systemPrompt
+    }
+  }
+
+  if ('interrupts' in snapshot.data) {
+    const interruptStateData = snapshot.data.interrupts
+    if (interruptStateData !== null) {
+      const agentRecord = agent as unknown as { _interruptState: InterruptState }
+      agentRecord._interruptState = InterruptState.fromJSON(interruptStateData as unknown as InterruptStateData)
     }
   }
 }
