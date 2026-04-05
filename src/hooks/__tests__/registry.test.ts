@@ -253,7 +253,12 @@ describe('HookRegistryImplementation', () => {
 
       const state = getInterruptState(mockAgent)
       expect(state.interrupts.size).toBe(2)
-      expect(state.getInterruptsList().map((i) => i.name).sort()).toEqual(['interrupt_a', 'interrupt_b'])
+      expect(
+        state
+          .getInterruptsList()
+          .map((i) => i.name)
+          .sort()
+      ).toEqual(['interrupt_a', 'interrupt_b'])
     })
 
     it('throws InterruptError with all collected interrupts after all callbacks run', async () => {
@@ -315,7 +320,12 @@ describe('HookRegistryImplementation', () => {
 
       const state = getInterruptState(mockAgent)
       expect(state.interrupts.size).toBe(2)
-      expect(state.getInterruptsList().map((i) => i.name).sort()).toEqual(['interrupt_a', 'interrupt_b'])
+      expect(
+        state
+          .getInterruptsList()
+          .map((i) => i.name)
+          .sort()
+      ).toEqual(['interrupt_a', 'interrupt_b'])
     })
 
     it('throws when two callbacks use the same interrupt name', async () => {

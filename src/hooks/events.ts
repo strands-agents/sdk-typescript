@@ -81,6 +81,33 @@ export abstract class HookableEvent extends StreamEvent {
 }
 
 /**
+ * Interface for events that support human-in-the-loop interrupts.
+ * Mirrors Python's `_Interruptible` protocol.
+ */
+interface Interruptible {
+  interrupt<T = unknown>(params: InterruptParams): T
+}
+
+/**
+ * Shared interrupt logic for hook events.
+ * Accesses the agent's interrupt state to register or resume an interrupt.
+ */
+function _interruptFromAgent<T>(agent: LocalAgent, interruptId: string, params: InterruptParams): T {
+  const interruptState = (agent as unknown as { _interruptState?: InterruptState })._interruptState
+  if (!interruptState) {
+    throw new Error('Interrupt state not available')
+  }
+
+  const interrupt = interruptState.getOrCreateInterrupt(interruptId, params.name, params.reason)
+
+  if (interrupt.response !== undefined) {
+    return interrupt.response as T
+  }
+
+  throw new InterruptError(interrupt)
+}
+
+/**
  * Event triggered when an agent has finished initialization.
  * Fired after the agent has been fully constructed and all built-in components have been initialized.
  */
@@ -181,7 +208,7 @@ export class MessageAddedEvent extends HookableEvent {
  * Fired after tool lookup but before execution begins.
  * Hook callbacks can set {@link cancel} to prevent the tool from executing.
  */
-export class BeforeToolCallEvent extends HookableEvent {
+export class BeforeToolCallEvent extends HookableEvent implements Interruptible {
   readonly type = 'beforeToolCallEvent' as const
   readonly agent: LocalAgent
   readonly toolUse: {
@@ -234,19 +261,7 @@ export class BeforeToolCallEvent extends HookableEvent {
    * ```
    */
   interrupt<T = unknown>(params: InterruptParams): T {
-    const interruptState = (this.agent as unknown as { _interruptState?: InterruptState })._interruptState
-    if (!interruptState) {
-      throw new Error('Interrupt state not available')
-    }
-
-    const interruptId = `beforeToolCall:${this.toolUse.toolUseId}:${params.name}`
-    const interrupt = interruptState.getOrCreateInterrupt(interruptId, params.name, params.reason)
-
-    if (interrupt.response !== undefined) {
-      return interrupt.response as T
-    }
-
-    throw new InterruptError(interrupt)
+    return _interruptFromAgent<T>(this.agent, `beforeToolCall:${this.toolUse.toolUseId}:${params.name}`, params)
   }
 
   /**
@@ -586,7 +601,7 @@ export class AgentResultEvent extends HookableEvent {
  * Fired when the model returns tool use blocks that need to be executed.
  * Hook callbacks can set {@link cancel} to prevent all tools from executing.
  */
-export class BeforeToolsEvent extends HookableEvent {
+export class BeforeToolsEvent extends HookableEvent implements Interruptible {
   readonly type = 'beforeToolsEvent' as const
   readonly agent: LocalAgent
   readonly message: Message
@@ -633,19 +648,7 @@ export class BeforeToolsEvent extends HookableEvent {
    * ```
    */
   interrupt<T = unknown>(params: InterruptParams): T {
-    const interruptState = (this.agent as unknown as { _interruptState?: InterruptState })._interruptState
-    if (!interruptState) {
-      throw new Error('Interrupt state not available')
-    }
-
-    const interruptId = `beforeTools:${params.name}`
-    const interrupt = interruptState.getOrCreateInterrupt(interruptId, params.name, params.reason)
-
-    if (interrupt.response !== undefined) {
-      return interrupt.response as T
-    }
-
-    throw new InterruptError(interrupt)
+    return _interruptFromAgent<T>(this.agent, `beforeTools:${params.name}`, params)
   }
 
   /**
