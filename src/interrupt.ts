@@ -10,6 +10,7 @@
  */
 
 import type { InterruptResponseContent } from './types/interrupt.js'
+import type { JSONValue } from './types/json.js'
 import {
   contentBlockFromData,
   Message,
@@ -35,14 +36,14 @@ export class Interrupt {
   /**
    * User-provided reason for raising the interrupt.
    */
-  readonly reason?: unknown
+  readonly reason?: JSONValue
 
   /**
    * Human response provided when resuming the agent after an interrupt.
    */
-  response?: unknown
+  response?: JSONValue
 
-  constructor(data: { id: string; name: string; reason?: unknown; response?: unknown }) {
+  constructor(data: { id: string; name: string; reason?: JSONValue; response?: JSONValue }) {
     this.id = data.id
     this.name = data.name
     if (data.reason !== undefined) {
@@ -56,7 +57,7 @@ export class Interrupt {
   /**
    * Serializes the interrupt to a JSON-compatible object.
    */
-  toJSON(): { id: string; name: string; reason?: unknown; response?: unknown } {
+  toJSON(): { id: string; name: string; reason?: JSONValue; response?: JSONValue } {
     return {
       id: this.id,
       name: this.name,
@@ -71,7 +72,7 @@ export class Interrupt {
    * @param data - JSON data to deserialize
    * @returns Interrupt instance
    */
-  static fromJSON(data: { id: string; name: string; reason?: unknown; response?: unknown }): Interrupt {
+  static fromJSON(data: { id: string; name: string; reason?: JSONValue; response?: JSONValue }): Interrupt {
     return new Interrupt(data)
   }
 }
@@ -105,7 +106,7 @@ export interface InterruptStateData {
   /**
    * Map of interrupt IDs to interrupt data.
    */
-  interrupts: Record<string, { id: string; name: string; reason?: unknown; response?: unknown }>
+  interrupts: Record<string, { id: string; name: string; reason?: JSONValue; response?: JSONValue }>
 
   /**
    * Resume responses that were provided when resuming from an interrupt.
@@ -273,13 +274,13 @@ export class InterruptState {
    * @param reason - Optional reason for the interrupt
    * @returns The interrupt (may have a response if resuming)
    */
-  getOrCreateInterrupt(id: string, name: string, reason?: unknown): Interrupt {
+  getOrCreateInterrupt(id: string, name: string, reason?: JSONValue): Interrupt {
     const existing = this.interrupts.get(id)
     if (existing) {
       return existing
     }
 
-    const interrupt = new Interrupt({ id, name, reason })
+    const interrupt = new Interrupt({ id, name, ...(reason !== undefined && { reason }) })
     this.interrupts.set(id, interrupt)
     return interrupt
   }
@@ -288,7 +289,7 @@ export class InterruptState {
    * Serializes the interrupt state to a JSON-compatible object.
    */
   toJSON(): InterruptStateData {
-    const interrupts: Record<string, { id: string; name: string; reason?: unknown; response?: unknown }> = {}
+    const interrupts: Record<string, { id: string; name: string; reason?: JSONValue; response?: JSONValue }> = {}
     for (const [id, interrupt] of this.interrupts) {
       interrupts[id] = interrupt.toJSON()
     }

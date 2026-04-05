@@ -5,6 +5,8 @@
  * interrupt responses to resume execution.
  */
 
+import type { JSONValue } from './json.js'
+
 /**
  * Parameters for raising an interrupt.
  */
@@ -17,9 +19,8 @@ export interface InterruptParams {
 
   /**
    * User-provided reason for the interrupt.
-   * Can be any value (string, object, etc.) to provide context to the user.
    */
-  reason?: unknown
+  reason?: JSONValue
 }
 
 /**
@@ -33,9 +34,8 @@ export interface InterruptResponse {
 
   /**
    * User's response to the interrupt.
-   * Can be any value that the hook or tool expects.
    */
-  response: unknown
+  response: JSONValue
 }
 
 /**
