@@ -353,7 +353,34 @@ describe('HookRegistryImplementation', () => {
       })
 
       await expect(registry.invokeCallbacks(event)).rejects.toThrow(
-        'interrupt_name=<confirm> | interrupt name used more than once'
+        'interrupt_names=<confirm> | duplicate interrupt names'
+      )
+    })
+
+    it('reports all duplicate interrupt names in error', async () => {
+      const interruptState = new InterruptState()
+      const event = new BeforeToolCallEvent({
+        agent: mockAgent,
+        toolUse: { name: 'test', toolUseId: 'tool-1', input: {} },
+        tool: undefined,
+        interruptState,
+      })
+
+      registry.addCallback(BeforeToolCallEvent, () => {
+        event.interrupt({ name: 'alpha' })
+      })
+      registry.addCallback(BeforeToolCallEvent, () => {
+        event.interrupt({ name: 'alpha' })
+      })
+      registry.addCallback(BeforeToolCallEvent, () => {
+        event.interrupt({ name: 'beta' })
+      })
+      registry.addCallback(BeforeToolCallEvent, () => {
+        event.interrupt({ name: 'beta' })
+      })
+
+      await expect(registry.invokeCallbacks(event)).rejects.toThrow(
+        'interrupt_names=<alpha, beta> | duplicate interrupt names'
       )
     })
   })

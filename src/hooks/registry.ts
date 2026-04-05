@@ -87,11 +87,16 @@ export class HookRegistryImplementation implements HookRegistry {
 
     if (collectedInterrupts.length > 0) {
       const seen = new Set<string>()
+      const duplicates = new Set<string>()
       for (const interrupt of collectedInterrupts) {
         if (seen.has(interrupt.name)) {
-          throw new Error(`interrupt_name=<${interrupt.name}> | interrupt name used more than once`)
+          duplicates.add(interrupt.name)
         }
         seen.add(interrupt.name)
+      }
+      if (duplicates.size > 0) {
+        const names = [...duplicates].join(', ')
+        throw new Error(`interrupt_names=<${names}> | duplicate interrupt names`)
       }
       throw new InterruptError(collectedInterrupts)
     }
