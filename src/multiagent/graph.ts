@@ -3,7 +3,6 @@ import type { InvokableAgent } from '../types/agent.js'
 import type { MultiAgentInput } from './multiagent.js'
 import type { ContentBlock, ContentBlockData } from '../types/messages.js'
 import { TextBlock, contentBlockFromData } from '../types/messages.js'
-import { isInterruptResponseContent } from '../types/interrupt.js'
 import { HookableEvent } from '../hooks/events.js'
 import { HookRegistryImplementation } from '../hooks/registry.js'
 import type { HookCallback, HookableEventConstructor, HookCleanup } from '../hooks/types.js'
@@ -491,11 +490,6 @@ export class Graph implements MultiAgent {
     }
 
     if (deps.length === 0) return input
-
-    // InterruptResponseContent[] passes through to the agent — cannot be merged with deps
-    if (Array.isArray(input) && input.length > 0 && isInterruptResponseContent(input[0])) {
-      return input
-    }
 
     const blocks =
       typeof input === 'string'
