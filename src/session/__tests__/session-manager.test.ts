@@ -745,11 +745,10 @@ describe('SessionManager — multi-agent', () => {
   })
 
   describe('AfterMultiAgentInvocationEvent handling', () => {
-    it('saves snapshot when saveLatestOn is invocation', async () => {
+    it('saves snapshot when multiagentSaveLatestOn is invocation (default)', async () => {
       sessionManager = new SessionManager({
         sessionId: 'test-session',
         storage: { snapshot: storage },
-        saveLatestOn: 'invocation',
       })
       sessionManager.initMultiAgent(orchestrator)
 
@@ -763,35 +762,14 @@ describe('SessionManager — multi-agent', () => {
       expect(snapshot?.scope).toBe('multiAgent')
     })
 
-    it('does not save when saveLatestOn is trigger', async () => {
+    it('saves snapshot independently of agent saveLatestOn setting', async () => {
       sessionManager = new SessionManager({
         sessionId: 'test-session',
         storage: { snapshot: storage },
         saveLatestOn: 'trigger',
+        multiAgentSaveLatestOn: 'invocation',
       })
       sessionManager.initMultiAgent(orchestrator)
-
-      const state = new MultiAgentState({ nodeIds: ['a'] })
-      await invokeOrchestratorHook(orchestrator, new AfterMultiAgentInvocationEvent({ orchestrator, state }))
-
-      const snapshot = await storage.loadSnapshot({
-        location: { sessionId: 'test-session', scope: 'multiAgent', scopeId: 'test-graph' },
-      })
-      expect(snapshot).toBeNull()
-    })
-
-    it('warns and saves on invocation when saveLatestOn is message (fallback)', async () => {
-      const warnSpy = vi.spyOn(logger, 'warn')
-      sessionManager = new SessionManager({
-        sessionId: 'test-session',
-        storage: { snapshot: storage },
-        saveLatestOn: 'message',
-      })
-      sessionManager.initMultiAgent(orchestrator)
-
-      expect(warnSpy).toHaveBeenCalledWith(
-        expect.stringContaining("saveLatestOn 'message' has no multi-agent equivalent")
-      )
 
       const state = new MultiAgentState({ nodeIds: ['a'] })
       await invokeOrchestratorHook(orchestrator, new AfterMultiAgentInvocationEvent({ orchestrator, state }))
@@ -800,7 +778,6 @@ describe('SessionManager — multi-agent', () => {
         location: { sessionId: 'test-session', scope: 'multiAgent', scopeId: 'test-graph' },
       })
       expect(snapshot).not.toBeNull()
-      warnSpy.mockRestore()
     })
   })
 

@@ -5,7 +5,7 @@
 
 // Core types
 export { SessionManager } from './session-manager.js'
-export type { SessionManagerConfig, SaveLatestStrategy } from './session-manager.js'
+export type { SessionManagerConfig, SaveLatestStrategy, MultiAgentSaveLatestStrategy } from './session-manager.js'
 export type { SnapshotManifest, SnapshotTriggerCallback, SnapshotTriggerParams } from './types.js'
 
 // Storage layer

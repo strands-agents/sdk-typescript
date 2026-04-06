@@ -35,6 +35,16 @@ import type { Swarm } from '../multiagent/swarm.js'
  */
 export type SaveLatestStrategy = 'message' | 'invocation' | 'trigger'
 
+/**
+ * Controls when `snapshot_latest` is saved for multi-agent orchestrators.
+ *
+ * Currently only `'invocation'` is supported. Additional strategies may be added
+ * in future releases as multi-agent persistence patterns evolve.
+ *
+ * - `'invocation'`: after every orchestrator invocation completes (default)
+ */
+export type MultiAgentSaveLatestStrategy = 'invocation'
+
 export interface SessionManagerConfig {
   /** Pluggable storage backends for snapshot persistence. Defaults to FileStorage in Node.js; required in browser environments. */
   storage: {
@@ -46,6 +56,8 @@ export interface SessionManagerConfig {
   saveLatestOn?: SaveLatestStrategy
   /** Callback invoked after each invocation to decide whether to create an immutable snapshot. */
   snapshotTrigger?: SnapshotTriggerCallback
+  /** When to save snapshot_latest for multi-agent orchestrators. Default: `'invocation'` (after each orchestrator invocation completes). See {@link MultiAgentSaveLatestStrategy} for details. */
+  multiAgentSaveLatestOn?: MultiAgentSaveLatestStrategy
 }
 
 /**
@@ -71,6 +83,7 @@ export class SessionManager implements Plugin, MultiAgentPlugin {
   private readonly _storage: { snapshot: SnapshotStorage }
   private readonly _saveLatestOn: SaveLatestStrategy
   private readonly _snapshotTrigger?: SnapshotTriggerCallback | undefined
+  private readonly _multiAgentSaveLatestOn: MultiAgentSaveLatestStrategy
   private _multiAgentRestoredIds = new Set<string>()
 
   /**
@@ -84,6 +97,7 @@ export class SessionManager implements Plugin, MultiAgentPlugin {
     this._sessionId = validateIdentifier(config.sessionId ?? 'default-session')
     this._storage = { snapshot: config.storage.snapshot }
     this._saveLatestOn = config.saveLatestOn ?? 'invocation'
+    this._multiAgentSaveLatestOn = config.multiAgentSaveLatestOn ?? 'invocation'
     this._snapshotTrigger = config.snapshotTrigger
   }
 
@@ -225,13 +239,6 @@ export class SessionManager implements Plugin, MultiAgentPlugin {
 
   /** Initializes the multi-agent plugin by registering orchestrator lifecycle hooks. */
   public initMultiAgent(orchestrator: MultiAgent): void {
-    if (this._saveLatestOn === 'message') {
-      logger.warn(
-        `orchestrator_id=<${orchestrator.id}>, session_id=<${this._sessionId}> | ` +
-          `saveLatestOn 'message' has no multi-agent equivalent; falling back to 'invocation'`
-      )
-    }
-
     orchestrator.addHook(BeforeMultiAgentInvocationEvent, async (event) => {
       await this._onBeforeMultiAgentInvocation(event)
     })
@@ -258,7 +265,7 @@ export class SessionManager implements Plugin, MultiAgentPlugin {
 
   /** Saves latest orchestrator snapshot after invocation completes. */
   private async _onAfterMultiAgentInvocation(event: AfterMultiAgentInvocationEvent): Promise<void> {
-    if (this._saveLatestOn === 'invocation' || this._saveLatestOn === 'message') {
+    if (this._multiAgentSaveLatestOn === 'invocation') {
       await this.saveSnapshot({
         target: event.orchestrator as Graph | Swarm,
         state: event.state,
