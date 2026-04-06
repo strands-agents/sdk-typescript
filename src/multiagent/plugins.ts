@@ -1,7 +1,7 @@
 /**
  * Plugin interface and registry for extending multi-agent orchestrator functionality.
  *
- * This module defines the MultiAgentPlugin abstract class and MultiAgentPluginRegistry,
+ * This module defines the MultiAgentPlugin interface and MultiAgentPluginRegistry,
  * which provide a composable way to add behavior to multi-agent orchestrators (e.g. Swarm, Graph)
  * through hook registration and custom initialization.
  */
@@ -9,19 +9,20 @@
 import type { MultiAgent } from './multiagent.js'
 
 /**
- * Abstract base class for plugins that extend multi-agent orchestrator functionality.
+ * Interface for objects that extend multi-agent orchestrator functionality.
  *
- * MultiAgentPlugins provide a composable way to add behavior to orchestrators
- * by registering hook callbacks in their `initMultiAgent` method.
+ * Plugins provide a composable way to add behavior to orchestrators by registering
+ * hook callbacks in their `initMultiAgent` method. Each plugin must have a unique name
+ * for identification, logging, and duplicate prevention.
  *
  * @example
  * ```typescript
- * class LoggingPlugin extends MultiAgentPlugin {
+ * class LoggingPlugin implements MultiAgentPlugin {
  *   get name(): string {
  *     return 'logging-plugin'
  *   }
  *
- *   override initMultiAgent(orchestrator: MultiAgent): void {
+ *   initMultiAgent(orchestrator: MultiAgent): void {
  *     orchestrator.addHook(BeforeNodeCallEvent, (event) => {
  *       console.log(`Node ${event.nodeId} starting`)
  *     })
@@ -35,21 +36,21 @@ import type { MultiAgent } from './multiagent.js'
  * })
  * ```
  */
-export abstract class MultiAgentPlugin {
+export interface MultiAgentPlugin {
   /**
    * A stable string identifier for the plugin.
    * Used for logging, duplicate detection, and plugin management.
    */
-  abstract readonly name: string
+  readonly name: string
 
   /**
    * Initialize the plugin with the orchestrator instance.
    *
-   * Override this method to register hooks and perform custom initialization.
+   * Implement this method to register hooks and perform custom initialization.
    *
    * @param orchestrator - The orchestrator this plugin is being attached to
    */
-  abstract initMultiAgent(orchestrator: MultiAgent): void | Promise<void>
+  initMultiAgent(orchestrator: MultiAgent): void | Promise<void>
 }
 
 /**
