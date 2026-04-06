@@ -5,7 +5,8 @@ import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
 import { collectGenerator } from '../../__fixtures__/model-test-helpers.js'
 import { createMockContext } from '../../__fixtures__/tool-helpers.js'
 import { ToolValidationError } from '../../errors.js'
-import { ToolStreamEvent } from '../../tools/tool.js'
+import { Tool, ToolStreamEvent } from '../../tools/tool.js'
+import { ToolResultBlock } from '../../types/messages.js'
 import { SessionManager } from '../../session/session-manager.js'
 import type { SnapshotStorage } from '../../session/storage.js'
 
@@ -147,6 +148,67 @@ describe('AgentAsTool', () => {
       for (const item of items) {
         expect(item).toBeInstanceOf(ToolStreamEvent)
       }
+    })
+
+    it('unwraps toolStreamUpdateEvent by yielding inner ToolStreamEvent directly', async () => {
+      // Create a tool that yields ToolStreamEvents during execution.
+      // When the sub-agent runs this tool, the agent loop wraps each yielded
+      // ToolStreamEvent in a ToolStreamUpdateEvent. The AgentAsTool should
+      // unwrap these back to bare ToolStreamEvents instead of double-wrapping.
+      const streamingTool = {
+        name: 'streaming-tool',
+        description: 'A tool that yields stream events',
+        toolSpec: {
+          name: 'streaming-tool',
+          description: 'A tool that yields stream events',
+          inputSchema: { type: 'object' as const, properties: {} },
+        },
+        async *stream(context: any) {
+          yield new ToolStreamEvent({ data: 'progress-1' })
+          yield new ToolStreamEvent({ data: 'progress-2' })
+          return new ToolResultBlock({
+            toolUseId: context.toolUse.toolUseId,
+            status: 'success' as const,
+            content: [],
+          })
+        },
+      } as Tool
+
+      // Turn 1: model requests tool use → triggers the streaming tool
+      // Turn 2: model responds with text after tool result
+      const model = new MockMessageModel()
+        .addTurn({
+          type: 'toolUseBlock',
+          name: 'streaming-tool',
+          toolUseId: 'sub-tool-1',
+          input: {},
+        })
+        .addTurn({ type: 'textBlock', text: 'Final response' })
+
+      const agent = new Agent({ model, name: 'test-agent', tools: [streamingTool], printer: false })
+      const tool = new AgentAsTool({ agent })
+
+      const context = createMockContext({
+        name: 'test-agent',
+        toolUseId: 'outer-tool-1',
+        input: { input: 'Do something' },
+      })
+
+      const { items } = await collectGenerator(tool.stream(context))
+
+      // All yielded items should be ToolStreamEvent instances
+      for (const item of items) {
+        expect(item).toBeInstanceOf(ToolStreamEvent)
+      }
+
+      // Find the unwrapped events from the streaming tool.
+      // If unwrapping works correctly, data is the original string.
+      // If double-wrapped, data would be a ToolStreamUpdateEvent object.
+      const progressEvents = items.filter((item) => item.data === 'progress-1' || item.data === 'progress-2')
+
+      expect(progressEvents).toHaveLength(2)
+      expect(progressEvents[0]!.data).toBe('progress-1')
+      expect(progressEvents[1]!.data).toBe('progress-2')
     })
 
     it('returns error result on agent failure', async () => {
@@ -321,14 +383,6 @@ describe('AgentAsTool', () => {
       const agent = new Agent({ model, name: 'test-agent', sessionManager })
 
       expect(() => new AgentAsTool({ agent, preserveContext: true })).not.toThrow()
-    })
-
-    it('throws when sessionManager is passed via plugins array', () => {
-      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hi' })
-      const sessionManager = new SessionManager({ storage: { snapshot: mockStorage } })
-      const agent = new Agent({ model, name: 'test-agent', plugins: [sessionManager] })
-
-      expect(() => new AgentAsTool({ agent })).toThrow(/SessionManager.*conflicts with preserveContext=false/)
     })
   })
 

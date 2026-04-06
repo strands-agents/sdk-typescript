@@ -244,8 +244,7 @@ export class Agent implements LocalAgent, InvokableAgent {
     this.name = config?.name ?? DEFAULT_AGENT_NAME
     this.id = config?.id ?? DEFAULT_AGENT_ID
     if (config?.description !== undefined) this.description = config.description
-    this.sessionManager =
-      config?.sessionManager ?? config?.plugins?.find((p): p is SessionManager => p instanceof SessionManager)
+    this.sessionManager = config?.sessionManager
 
     if (typeof config?.model === 'string') {
       this.model = new BedrockModel({ modelId: config.model })

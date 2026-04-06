@@ -8,7 +8,7 @@
 
 import type { Agent } from './agent.js'
 import { takeSnapshot, loadSnapshot } from './snapshot.js'
-import type { Snapshot } from './snapshot.js'
+import type { Snapshot } from '../types/snapshot.js'
 import type { JSONValue } from '../types/json.js'
 import { JsonBlock, TextBlock, ToolResultBlock } from '../types/messages.js'
 import { createErrorResult, Tool, ToolStreamEvent } from '../tools/tool.js'
@@ -69,7 +69,7 @@ interface AgentToolConfig extends AgentAsToolOptions {
  *
  * @example
  * ```typescript
- * import { Agent } from '@strands/sdk'
+ * import { Agent } from '@strands-agents/sdk'
  *
  * const researcher = new Agent({
  *   name: 'researcher',
@@ -166,7 +166,13 @@ export class AgentAsTool extends Tool {
       const gen = this._agent.stream(input)
       let next = await gen.next()
       while (!next.done) {
-        yield new ToolStreamEvent({ data: next.value })
+        const event = next.value
+        if (event.type == 'toolStreamUpdateEvent') {
+          yield event.event
+        } else {
+          yield new ToolStreamEvent({ data: next.value })
+        }
+
         next = await gen.next()
       }
       const result = next.value
