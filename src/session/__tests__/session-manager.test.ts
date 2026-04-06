@@ -25,7 +25,6 @@ import {
   BeforeMultiAgentInvocationEvent,
   Graph,
   type MultiAgent,
-  MultiAgentInitializedEvent,
   MultiAgentState,
   NodeResult,
   Status,
@@ -666,11 +665,11 @@ describe('SessionManager — multi-agent', () => {
   })
 
   describe('initMultiAgent', () => {
-    it('registers MultiAgentInitializedEvent hook', () => {
+    it('registers BeforeMultiAgentInvocationEvent hook', () => {
       sessionManager = new SessionManager({ sessionId: 'test', storage: { snapshot: storage } })
       sessionManager.initMultiAgent(orchestrator)
 
-      const hook = orchestrator.trackedHooks.find((h) => h.eventType === MultiAgentInitializedEvent)
+      const hook = orchestrator.trackedHooks.find((h) => h.eventType === BeforeMultiAgentInvocationEvent)
       expect(hook).toBeDefined()
     })
 
@@ -679,14 +678,6 @@ describe('SessionManager — multi-agent', () => {
       sessionManager.initMultiAgent(orchestrator)
 
       const hook = orchestrator.trackedHooks.find((h) => h.eventType === AfterMultiAgentInvocationEvent)
-      expect(hook).toBeDefined()
-    })
-
-    it('registers BeforeMultiAgentInvocationEvent hook', () => {
-      sessionManager = new SessionManager({ sessionId: 'test', storage: { snapshot: storage } })
-      sessionManager.initMultiAgent(orchestrator)
-
-      const hook = orchestrator.trackedHooks.find((h) => h.eventType === BeforeMultiAgentInvocationEvent)
       expect(hook).toBeDefined()
     })
   })
@@ -750,35 +741,6 @@ describe('SessionManager — multi-agent', () => {
     it('returns false when no snapshot exists', async () => {
       const result = await sessionManager.restoreSnapshot({ target: orchestrator as unknown as Graph })
       expect(result).toBe(false)
-    })
-  })
-
-  describe('MultiAgentInitializedEvent handling', () => {
-    it('restores latest snapshot on initialization', async () => {
-      const snapshot = createMultiAgentTestSnapshot()
-      await storage.saveSnapshot({
-        location: { sessionId: 'test-session', scope: 'multiAgent', scopeId: 'test-graph' },
-        snapshotId: 'latest',
-        isLatest: true,
-        snapshot,
-      })
-
-      sessionManager = new SessionManager({ sessionId: 'test-session', storage: { snapshot: storage } })
-      sessionManager.initMultiAgent(orchestrator)
-
-      await invokeOrchestratorHook(orchestrator, new MultiAgentInitializedEvent({ orchestrator }))
-
-      // Verify restore was attempted (snapshot was loaded from storage)
-      // The mock orchestrator has no nodes, so loadMultiAgentSnapshot only validates headers
-    })
-
-    it('handles missing snapshot gracefully', async () => {
-      sessionManager = new SessionManager({ sessionId: 'new-session', storage: { snapshot: storage } })
-      sessionManager.initMultiAgent(orchestrator)
-
-      await expect(
-        invokeOrchestratorHook(orchestrator, new MultiAgentInitializedEvent({ orchestrator }))
-      ).resolves.not.toThrow()
     })
   })
 
@@ -891,8 +853,6 @@ describe('SessionManager — multi-agent', () => {
       sessionManager = new SessionManager({ sessionId: 'test-session', storage: { snapshot: storage } })
       sessionManager.initMultiAgent(orchestrator)
 
-      await invokeOrchestratorHook(orchestrator, new MultiAgentInitializedEvent({ orchestrator }))
-
       const freshState = new MultiAgentState({ nodeIds: ['a'] })
       await invokeOrchestratorHook(
         orchestrator,
@@ -910,8 +870,6 @@ describe('SessionManager — multi-agent', () => {
     it('does not modify state when no snapshot exists', async () => {
       sessionManager = new SessionManager({ sessionId: 'empty-session', storage: { snapshot: storage } })
       sessionManager.initMultiAgent(orchestrator)
-
-      await invokeOrchestratorHook(orchestrator, new MultiAgentInitializedEvent({ orchestrator }))
 
       const freshState = new MultiAgentState({ nodeIds: ['a'] })
       await invokeOrchestratorHook(
@@ -938,8 +896,6 @@ describe('SessionManager — multi-agent', () => {
 
       sessionManager = new SessionManager({ sessionId: 'test-session', storage: { snapshot: storage } })
       sessionManager.initMultiAgent(orchestrator)
-
-      await invokeOrchestratorHook(orchestrator, new MultiAgentInitializedEvent({ orchestrator }))
 
       // First invocation — state is restored
       const firstState = new MultiAgentState({ nodeIds: ['a'] })
