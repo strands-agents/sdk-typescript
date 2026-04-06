@@ -1,6 +1,6 @@
 import { Agent, BedrockModel } from '@strands-agents/sdk'
-import { OpenAIModel } from '@strands-agents/sdk/openai'
-import { AnthropicModel } from '@strands-agents/sdk/anthropic'
+import { OpenAIModel } from '@strands-agents/sdk/models/openai'
+import { AnthropicModel } from '@strands-agents/sdk/models/anthropic'
 import { updateCanvasTool } from './tools'
 import { marked } from 'marked'
 
@@ -80,6 +80,7 @@ function getModel(): BedrockModel | AnthropicModel | OpenAIModel {
   }
 
   return new OpenAIModel({
+    api: 'chat',
     apiKey: credentials['openai_api_key'],
     clientConfig: {
       dangerouslyAllowBrowser: true,
@@ -147,7 +148,8 @@ Be concise in your text responses.`,
       sendBtn.disabled = false
       messagesDiv.innerHTML = WELCOME_HTML
       showToast('Settings saved!')
-    } catch {
+    } catch (err) {
+      console.error('Failed to initialize agent:', err)
       userInput.disabled = true
       sendBtn.disabled = true
       showToast('Failed to initialize agent. Check your credentials.')

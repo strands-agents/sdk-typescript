@@ -9,8 +9,11 @@
         "preview": "vite preview"
     },
     "dependencies": {
+        "@anthropic-ai/sdk": "^0.82.0",
         "@strands-agents/sdk": "*",
-        "marked": "^17.0.3"
+        "anthropic": "^0.0.0",
+        "marked": "^17.0.3",
+        "openai": "^6.33.0"
     },
     "devDependencies": {
         "typescript": "^5.5.0",
