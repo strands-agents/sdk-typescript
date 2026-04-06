@@ -413,7 +413,9 @@ export class Agent implements LocalAgent, InvokableAgent {
    * ```
    */
   public cancel(): void {
-    this._abortController.abort()
+    if (this._isInvoking) {
+      this._abortController.abort()
+    }
   }
 
   /**

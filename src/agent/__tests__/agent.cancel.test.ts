@@ -14,6 +14,8 @@ describe('Agent Cancellation', () => {
 
       expect(agent.cancelSignal.aborted).toBe(false)
       agent.cancel() // Should not throw
+      expect(agent.cancelSignal.aborted).toBe(false)
+      expect(agent.isCancelled).toBe(false)
     })
   })
 

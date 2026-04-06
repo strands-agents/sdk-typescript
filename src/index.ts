@@ -18,6 +18,8 @@ export type { AgentAsToolOptions } from './agent/agent-as-tool.js'
 export type { LocalAgent } from './types/agent.js'
 
 // Error types
+// Note: CancelledError is intentionally not exported — it is an internal
+// control-flow mechanism, never thrown to consumers. See its docstring in errors.ts.
 export {
   ModelError,
   ContextWindowOverflowError,
