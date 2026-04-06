@@ -880,6 +880,50 @@ describe('SessionManager — multi-agent', () => {
       expect(freshState.steps).toBe(0)
     })
 
+    it('restores state independently for two orchestrators sharing one SessionManager', async () => {
+      const { serializeStateSerializable } = await import('../../types/serializable.js')
+
+      // Set up snapshots for two different orchestrators
+      const orchestratorA = createMockOrchestrator('graph-a')
+      const orchestratorB = createMockOrchestrator('swarm-b')
+
+      for (const [orch, steps] of [
+        [orchestratorA, 3],
+        [orchestratorB, 5],
+      ] as const) {
+        const snap = createMultiAgentTestSnapshot(orch.id)
+        const st = new MultiAgentState({ nodeIds: ['x'] })
+        st.steps = steps
+        snap.data.state = serializeStateSerializable(st)
+        await storage.saveSnapshot({
+          location: { sessionId: 'test-session', scope: 'multiAgent', scopeId: orch.id },
+          snapshotId: 'latest',
+          isLatest: true,
+          snapshot: snap,
+        })
+      }
+
+      sessionManager = new SessionManager({ sessionId: 'test-session', storage: { snapshot: storage } })
+      sessionManager.initMultiAgent(orchestratorA)
+      sessionManager.initMultiAgent(orchestratorB)
+
+      // First orchestrator restores its own state
+      const stateA = new MultiAgentState({ nodeIds: ['x'] })
+      await invokeOrchestratorHook(
+        orchestratorA,
+        new BeforeMultiAgentInvocationEvent({ orchestrator: orchestratorA, state: stateA })
+      )
+      expect(stateA.steps).toBe(3)
+
+      // Second orchestrator also restores — not blocked by the first
+      const stateB = new MultiAgentState({ nodeIds: ['x'] })
+      await invokeOrchestratorHook(
+        orchestratorB,
+        new BeforeMultiAgentInvocationEvent({ orchestrator: orchestratorB, state: stateB })
+      )
+      expect(stateB.steps).toBe(5)
+    })
+
     it('consumes snapshot once — second invocation gets fresh state', async () => {
       const snapshot = createMultiAgentTestSnapshot()
       const state = new MultiAgentState({ nodeIds: ['a'] })

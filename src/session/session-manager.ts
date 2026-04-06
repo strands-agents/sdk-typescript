@@ -16,7 +16,6 @@ import {
 import { AfterMultiAgentInvocationEvent, BeforeMultiAgentInvocationEvent } from '../multiagent/events.js'
 import type { Graph } from '../multiagent/graph.js'
 import type { Swarm } from '../multiagent/swarm.js'
-import { loadStateSerializable } from '../types/serializable.js'
 
 /**
  * Controls when `snapshot_latest` is saved automatically.
@@ -72,7 +71,7 @@ export class SessionManager implements Plugin, MultiAgentPlugin {
   private readonly _storage: { snapshot: SnapshotStorage }
   private readonly _saveLatestOn: SaveLatestStrategy
   private readonly _snapshotTrigger?: SnapshotTriggerCallback | undefined
-  private _multiAgentRestored = false
+  private _multiAgentRestoredIds = new Set<string>()
 
   /**
    * Unique identifier for this plugin.
@@ -245,16 +244,16 @@ export class SessionManager implements Plugin, MultiAgentPlugin {
     return { sessionId: this._sessionId, scope: 'multiAgent', scopeId: orchestrator.id }
   }
 
-  /** Restores orchestrator state on first invocation (loads snapshot from storage once, then no-ops). */
+  /** Restores orchestrator state on first invocation (loads snapshot from storage once per orchestrator, then no-ops). */
   private async _onBeforeMultiAgentInvocation(event: BeforeMultiAgentInvocationEvent): Promise<void> {
-    if (this._multiAgentRestored) return
-    this._multiAgentRestored = true
+    if (this._multiAgentRestoredIds.has(event.orchestrator.id)) return
+    this._multiAgentRestoredIds.add(event.orchestrator.id)
 
     const location = this._multiAgentLocation(event.orchestrator)
     const snapshot = await this._storage.snapshot.loadSnapshot({ location })
-    if (snapshot && 'state' in snapshot.data) {
-      loadStateSerializable(event.state, snapshot.data.state)
-    }
+    if (!snapshot) return
+
+    loadMultiAgentSnapshot(event.orchestrator as Graph | Swarm, snapshot, event.state)
   }
 
   /** Saves latest orchestrator snapshot after invocation completes. */
