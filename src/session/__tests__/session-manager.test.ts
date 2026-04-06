@@ -27,6 +27,8 @@ import {
   type MultiAgent,
   MultiAgentInitializedEvent,
   MultiAgentState,
+  NodeResult,
+  Status,
 } from '../../multiagent/index.js'
 
 // Test fixtures
@@ -868,9 +870,14 @@ describe('SessionManager — multi-agent', () => {
   describe('BeforeMultiAgentInvocationEvent — state restore', () => {
     it('restores state into event.state when snapshot exists', async () => {
       const snapshot = createMultiAgentTestSnapshot()
-      // Add state data to the snapshot
+      // Build state with a completed node and result
       const state = new MultiAgentState({ nodeIds: ['a'] })
       state.steps = 7
+      const nodeState = state.node('a')!
+      nodeState.status = Status.COMPLETED
+      nodeState.results.push(
+        new NodeResult({ nodeId: 'a', status: Status.COMPLETED, duration: 100, content: [new TextBlock('done')] })
+      )
       const { serializeStateSerializable } = await import('../../types/serializable.js')
       snapshot.data.state = serializeStateSerializable(state)
 
@@ -884,10 +891,8 @@ describe('SessionManager — multi-agent', () => {
       sessionManager = new SessionManager({ sessionId: 'test-session', storage: { snapshot: storage } })
       sessionManager.initMultiAgent(orchestrator)
 
-      // Fire initialized to load the snapshot
       await invokeOrchestratorHook(orchestrator, new MultiAgentInitializedEvent({ orchestrator }))
 
-      // Fire before-invocation to restore into state
       const freshState = new MultiAgentState({ nodeIds: ['a'] })
       await invokeOrchestratorHook(
         orchestrator,
@@ -895,6 +900,11 @@ describe('SessionManager — multi-agent', () => {
       )
 
       expect(freshState.steps).toBe(7)
+      expect(freshState.node('a')?.status).toBe(Status.COMPLETED)
+      expect(freshState.node('a')?.results).toHaveLength(1)
+      expect(freshState.node('a')?.results[0]?.nodeId).toBe('a')
+      expect(freshState.node('a')?.results[0]?.status).toBe(Status.COMPLETED)
+      expect(freshState.node('a')?.content[0]).toEqual(expect.objectContaining({ text: 'done' }))
     })
 
     it('does not modify state when no snapshot exists', async () => {
