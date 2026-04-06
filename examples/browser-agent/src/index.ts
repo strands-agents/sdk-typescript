@@ -149,7 +149,7 @@ Be concise in your text responses.`,
       messagesDiv.innerHTML = WELCOME_HTML
       showToast('Settings saved!')
     } catch (err) {
-      console.error('Failed to initialize agent:', err)
+      console.error(`error=<${err}> | failed to initialize agent`)
       userInput.disabled = true
       sendBtn.disabled = true
       showToast('Failed to initialize agent. Check your credentials.')
