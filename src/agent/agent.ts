@@ -68,7 +68,7 @@ import { Tracer } from '../telemetry/tracer.js'
 import { Meter } from '../telemetry/meter.js'
 import type { AttributeValue } from '@opentelemetry/api'
 import { logger } from '../logging/logger.js'
-import { AgentCancelInterrupt } from './agent-cancel-interrupt.js'
+import { CancelledError } from '../errors.js'
 
 /**
  * Recursive type definition for nested tool arrays.
@@ -226,10 +226,8 @@ export class Agent implements LocalAgent, InvokableAgent {
   private _mcpClients: McpClient[]
   private _initialized: boolean
   private _isInvoking: boolean = false
-  /** AbortController instance — call .abort() to cancel */
-  private _abortController: AbortController | null = null
-  /** Composed cancellation signal (may include an external signal via AbortSignal.any()) */
-  private _composedSignal: AbortSignal | null = null
+  private _abortController = new AbortController()
+  private _abortSignal: AbortSignal = this._abortController.signal
   private _printer?: Printer
   private _structuredOutputSchema?: z.ZodSchema | undefined
   /** Tracer instance for creating and managing OpenTelemetry spans. */
@@ -356,12 +354,12 @@ export class Agent implements LocalAgent, InvokableAgent {
   }
 
   /**
-   * Throws {@link AgentCancelInterrupt} if cancellation has been requested.
+   * Throws {@link CancelledError} if cancellation has been requested.
    * Called at cancellation checkpoints within the agent loop.
    */
   private _throwIfCancelled(): void {
     if (this.isCancelled) {
-      throw new AgentCancelInterrupt()
+      throw new CancelledError()
     }
   }
 
@@ -380,13 +378,13 @@ export class Agent implements LocalAgent, InvokableAgent {
   }
 
   /**
-   * The cancellation signal for the current invocation, or `undefined` when the agent is idle.
+   * The cancellation signal for the current invocation.
    *
-   * Tools can pass this to cancellable operations (e.g., `fetch(url, { signal: agent.cancellationSignal })`).
-   * Hooks can check `event.agent.cancellationSignal?.aborted` to detect cancellation.
+   * Tools can pass this to cancellable operations (e.g., `fetch(url, { signal: agent.cancelSignal })`).
+   * Hooks can check `event.agent.cancelSignal?.aborted` to detect cancellation.
    */
-  get cancellationSignal(): AbortSignal | undefined {
-    return this._composedSignal ?? undefined
+  get cancelSignal(): AbortSignal {
+    return this._abortSignal
   }
 
   /**
@@ -399,7 +397,7 @@ export class Agent implements LocalAgent, InvokableAgent {
    * - At the top of each agent loop cycle
    *
    * If a tool is already executing, it will run to completion unless
-   * the tool checks {@link LocalAgent.cancellationSignal | cancellationSignal} internally.
+   * the tool checks {@link LocalAgent.cancelSignal | cancelSignal} internally.
    *
    * The stream/invoke call will return an AgentResult with `stopReason: 'cancelled'`.
    * If the agent is not currently invoking, this is a no-op.
@@ -415,7 +413,7 @@ export class Agent implements LocalAgent, InvokableAgent {
    * ```
    */
   public cancel(): void {
-    this._abortController?.abort()
+    this._abortController.abort()
   }
 
   /**
@@ -423,7 +421,7 @@ export class Agent implements LocalAgent, InvokableAgent {
    * Returns `false` when the agent is idle.
    */
   get isCancelled(): boolean {
-    return this._composedSignal?.aborted ?? false
+    return this._abortSignal.aborted
   }
 
   /**
@@ -491,8 +489,8 @@ export class Agent implements LocalAgent, InvokableAgent {
 
     // Create AbortController for this invocation and compose with external signal
     this._abortController = new AbortController()
-    this._composedSignal = options?.cancellationSignal
-      ? AbortSignal.any([this._abortController.signal, options.cancellationSignal])
+    this._abortSignal = options?.cancelSignal
+      ? AbortSignal.any([this._abortController.signal, options.cancelSignal])
       : this._abortController.signal
 
     await this.initialize()
@@ -530,9 +528,9 @@ export class Agent implements LocalAgent, InvokableAgent {
         result = await streamGenerator.next()
       }
 
-      // Reset controller and signal since they are scoped to a single execution
-      this._abortController = null
-      this._composedSignal = null
+      // Reset controller and signal for next invocation
+      this._abortController = new AbortController()
+      this._abortSignal = this._abortController.signal
     }
   }
 
@@ -746,7 +744,7 @@ export class Agent implements LocalAgent, InvokableAgent {
         }
       }
     } catch (error) {
-      if (error instanceof AgentCancelInterrupt) {
+      if (error instanceof CancelledError) {
         // Cancelled during model streaming or at the top of a cycle.
         // No partial messages have been appended (deferred append pattern).
         const cancelMessage = new Message({
@@ -892,11 +890,6 @@ export class Agent implements LocalAgent, InvokableAgent {
       streamOptions.toolChoice = toolChoice
     }
 
-    // Forward cancellation signal to model streaming
-    if (this._composedSignal) {
-      streamOptions.cancellationSignal = this._composedSignal
-    }
-
     yield new BeforeModelCallEvent({ agent: this, model: this.model })
 
     // Start model span within loop span context
@@ -945,8 +938,8 @@ export class Agent implements LocalAgent, InvokableAgent {
 
       return result
     } catch (error) {
-      // Let AgentCancelInterrupt propagate directly — no AfterModelCallEvent, no retry
-      if (error instanceof AgentCancelInterrupt) {
+      // Let CancelledError propagate directly — no AfterModelCallEvent, no retry
+      if (error instanceof CancelledError) {
         this._tracer.endModelInvokeSpan(modelSpan)
         throw error
       }

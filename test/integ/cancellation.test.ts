@@ -94,7 +94,7 @@ describe.each(allProviders)('Cancellation with $name', ({ name, skip, createMode
       })
 
       const result = await agent.invoke('Write a 10000 word story', {
-        cancellationSignal: AbortSignal.timeout(500),
+        cancelSignal: AbortSignal.timeout(500),
       })
 
       expect(result.stopReason).toBe('cancelled')

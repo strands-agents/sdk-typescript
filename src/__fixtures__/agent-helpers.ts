@@ -65,7 +65,7 @@ export function createMockAgent(data?: MockAgentData): MockAgent {
     messages: data?.messages ?? [],
     appState: new StateStore(data?.appState ?? {}),
     toolRegistry: data?.toolRegistry ?? new ToolRegistry(),
-    cancellationSignal: undefined,
+    cancelSignal: new AbortController().signal,
     addHook: <T extends HookableEvent>(eventType: HookableEventConstructor<T>, callback: HookCallback<T>) => {
       trackedHooks.push({
         eventType: eventType as HookableEventConstructor<HookableEvent>,

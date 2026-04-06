@@ -8,13 +8,12 @@ import { tool } from '../../tools/tool-factory.js'
 
 describe('Agent Cancellation', () => {
   describe('cancel() when idle', () => {
-    it('is a no-op and cancellationSignal is undefined', () => {
+    it('is a no-op and cancelSignal is not aborted', () => {
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
       const agent = new Agent({ model })
 
-      expect(agent.cancellationSignal).toBeUndefined()
+      expect(agent.cancelSignal.aborted).toBe(false)
       agent.cancel() // Should not throw
-      expect(agent.cancellationSignal).toBeUndefined()
     })
   })
 
@@ -26,7 +25,7 @@ describe('Agent Cancellation', () => {
       const controller = new AbortController()
       controller.abort()
 
-      const result = await agent.invoke('Hi', { cancellationSignal: controller.signal })
+      const result = await agent.invoke('Hi', { cancelSignal: controller.signal })
 
       expect(result.stopReason).toBe('cancelled')
       expect(result.lastMessage.content[0]).toEqual(new TextBlock('Cancelled by user'))
@@ -199,7 +198,7 @@ describe('Agent Cancellation', () => {
     })
   })
 
-  describe('InvokeOptions.cancellationSignal', () => {
+  describe('InvokeOptions.cancelSignal', () => {
     it('cancels via external AbortSignal', async () => {
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
       const agent = new Agent({ model, printer: false })
@@ -209,7 +208,7 @@ describe('Agent Cancellation', () => {
         controller.abort()
       })
 
-      const result = await agent.invoke('Hi', { cancellationSignal: controller.signal })
+      const result = await agent.invoke('Hi', { cancelSignal: controller.signal })
 
       expect(result.stopReason).toBe('cancelled')
     })
@@ -366,14 +365,14 @@ describe('Agent Cancellation', () => {
   })
 
   describe('tool-level cancellation cooperation', () => {
-    it('exposes cancellationSignal to tools via context.agent', async () => {
+    it('exposes cancelSignal to tools via context.agent', async () => {
       let signalSeen: AbortSignal | undefined
 
       const signalTool = tool({
         name: 'signalTool',
         description: 'Tool that reads the cancellation signal',
         callback: (_input, context) => {
-          signalSeen = context?.agent.cancellationSignal
+          signalSeen = context?.agent.cancelSignal
           return 'done'
         },
       })
@@ -385,7 +384,6 @@ describe('Agent Cancellation', () => {
       const agent = new Agent({ model, tools: [signalTool], printer: false })
       await agent.invoke('Go')
 
-      expect(signalSeen).toBeDefined()
       expect(signalSeen).toBeInstanceOf(AbortSignal)
       expect(signalSeen!.aborted).toBe(false)
     })
@@ -399,7 +397,7 @@ describe('Agent Cancellation', () => {
         description: 'Tool that cancels then checks the signal',
         callback: (_input, context) => {
           agent.cancel()
-          signalAborted = context?.agent.cancellationSignal?.aborted
+          signalAborted = context?.agent.cancelSignal.aborted
           return 'done'
         },
       })

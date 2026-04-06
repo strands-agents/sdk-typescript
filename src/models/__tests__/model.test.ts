@@ -780,9 +780,6 @@ describe('Model', () => {
         expect(result.redaction?.userMessage).toBeUndefined()
       })
     })
-
-    // Cancellation is handled by the agent layer (in _streamFromModel), not by the model.
-    // See agent.cancel.test.ts for cancellation tests.
   })
 })
 
