@@ -110,7 +110,6 @@ export class Swarm implements MultiAgent {
   private readonly _tracer: Tracer
   readonly start: AgentNode
   private _initialized: boolean
-  private _snapshotState?: MultiAgentState | undefined
 
   constructor(options: SwarmOptions) {
     const { id, nodes, start, plugins, traceAttributes, ...config } = options
@@ -190,23 +189,10 @@ export class Swarm implements MultiAgent {
     return next.value
   }
 
-  /**
-   * Loads a previously saved MultiAgentState so the next invocation resumes from it.
-   * The state is consumed on the next stream()/invoke() call and cleared afterward.
-   */
-  loadState(state: MultiAgentState): void {
-    this._snapshotState = state
-  }
-
   private async *_stream(input: MultiAgentInput): AsyncGenerator<MultiAgentStreamEvent, MultiAgentResult, undefined> {
-    const state =
-      this._snapshotState ??
-      new MultiAgentState({
-        nodeIds: [...this.nodes.keys()],
-      })
-    this._snapshotState = undefined
-    // TODO: When resume logic is implemented, skip nodes that are already COMPLETED/CANCELLED.
-    // Currently, restored state is consumed but all nodes re-execute from scratch.
+    const state = new MultiAgentState({
+      nodeIds: [...this.nodes.keys()],
+    })
 
     const multiAgentSpan = this._tracer.startMultiAgentSpan({
       orchestratorId: this.id,
