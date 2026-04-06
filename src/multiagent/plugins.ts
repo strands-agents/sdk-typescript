@@ -9,11 +9,10 @@
 import type { MultiAgent } from './multiagent.js'
 
 /**
- * Interface for objects that extend multi-agent orchestrator functionality.
+ * Interface for objects that implement multi-agent orchestrator plugin functionality.
  *
- * Plugins provide a composable way to add behavior to orchestrators by registering
- * hook callbacks in their `initMultiAgent` method. Each plugin must have a unique name
- * for identification, logging, and duplicate prevention.
+ * MultiAgentPlugins provide a composable way to add behavior to orchestrators
+ * by registering hook callbacks in their `initMultiAgent` method.
  *
  * @example
  * ```typescript
