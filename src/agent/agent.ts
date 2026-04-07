@@ -490,7 +490,7 @@ export class Agent implements LocalAgent, InvokableAgent {
     args: InvokeArgs,
     options?: InvokeOptions
   ): AsyncGenerator<AgentStreamEvent, AgentResult, undefined> {
-    this.acquireLock()
+    using _lock = this.acquireLock()
 
     // Create AbortController for this invocation and compose with external signal
     this._abortController = new AbortController()
@@ -502,6 +502,7 @@ export class Agent implements LocalAgent, InvokableAgent {
 
     // Delegate to _stream and process events through printer and hooks
     const streamGenerator = this._stream(args, options)
+    let caughtError: Error | undefined
     try {
       let result = await streamGenerator.next()
 
@@ -513,20 +514,21 @@ export class Agent implements LocalAgent, InvokableAgent {
       yield await this._invokeCallbacks(new AgentResultEvent({ agent: this, result: result.value }))
 
       return result.value
+    } catch (error) {
+      caughtError = error as Error
+      throw error
     } finally {
-      // Release the invocation lock before any yields. The drain loop below
-      // yields events, and when for-await-of breaks, .return() only consumes
-      // one yield — any subsequent yield orphans the generator. Releasing the
-      // lock first ensures the agent can always be reinvoked.
-      this._isInvoking = false
-
-      // Drain remaining events from _stream() BEFORE clearing the abort
-      // signals, so that _stream's finally block can still inspect
-      // cancellation state and append a cancel message when needed.
+      // Drain _stream() so cleanup hooks and printer still fire.
+      // Yield only on error (consumer may still be iterating); on a consumer
+      // break, yielding would suspend the generator and leak the lock.
       let result = await streamGenerator.return(undefined as never)
       while (!result.done) {
         try {
-          yield await this._invokeCallbacks(result.value)
+          if (caughtError) {
+            yield await this._invokeCallbacks(result.value)
+          } else {
+            await this._invokeCallbacks(result.value)
+          }
         } catch (error) {
           logger.warn(`event_type=<${result.value.type}>, error=<${error}> | error invoking callbacks during cleanup`)
         }

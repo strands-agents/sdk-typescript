@@ -181,7 +181,7 @@ describe('Agent', () => {
     })
 
     describe('hook error cleanup', () => {
-      it('fires AfterInvocationEvent when consumer breaks from stream', async () => {
+      it('fires AfterInvocationEvent when consumer breaks from stream and allows reinvocation', async () => {
         const model = new MockMessageModel()
           .addTurn({ type: 'toolUseBlock', name: 'testTool', toolUseId: 'tool-1', input: {} })
           .addTurn({ type: 'textBlock', text: 'Done' })
@@ -208,6 +208,10 @@ describe('Agent', () => {
         }
 
         expect(afterInvocationCallback).toHaveBeenCalledOnce()
+
+        const result = await agent.invoke('Test again')
+        expect(result.stopReason).toBe('endTurn')
+        expect(result.lastMessage.content[0]).toEqual(new TextBlock('Done'))
       })
     })
   })
