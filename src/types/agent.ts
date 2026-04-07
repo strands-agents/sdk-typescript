@@ -191,6 +191,8 @@ export interface LocalAgent {
    *
    * If a tool does neither, it will run to completion even after cancellation is
    * requested. The agent will resume cancellation handling after the tool returns.
+   *
+   * The cancelSignal can also be utilized in hook callbacks.
    */
   readonly cancelSignal: AbortSignal
 

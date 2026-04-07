@@ -381,7 +381,7 @@ export class Agent implements LocalAgent, InvokableAgent {
    * The cancellation signal for the current invocation.
    *
    * Tools can pass this to cancellable operations (e.g., `fetch(url, { signal: agent.cancelSignal })`).
-   * Hooks can check `event.agent.cancelSignal?.aborted` to detect cancellation.
+   * Hooks can check `event.agent.cancelSignal.aborted` to detect cancellation.
    */
   get cancelSignal(): AbortSignal {
     return this._abortSignal
@@ -398,6 +398,9 @@ export class Agent implements LocalAgent, InvokableAgent {
    *
    * If a tool is already executing, it will run to completion unless
    * the tool checks {@link LocalAgent.cancelSignal | cancelSignal} internally.
+   *
+   * Hook callbacks can check `event.agent.cancelSignal.aborted` to detect
+   * cancellation and adjust their behavior accordingly.
    *
    * The stream/invoke call will return an AgentResult with `stopReason: 'cancelled'`.
    * If the agent is not currently invoking, this is a no-op.
@@ -422,7 +425,7 @@ export class Agent implements LocalAgent, InvokableAgent {
    * Whether the current invocation has been cancelled.
    * Returns `false` when the agent is idle.
    */
-  get isCancelled(): boolean {
+  private get isCancelled(): boolean {
     return this._abortSignal.aborted
   }
 
@@ -769,7 +772,7 @@ export class Agent implements LocalAgent, InvokableAgent {
       // If cancelled but the catch block was bypassed (generator terminated
       // via .return() when the consumer breaks out of for-await), append an
       // assistant message so the agent can be reinvoked with a new user prompt.
-      if (!result && this.isCancelled) {
+      if (!caughtError && !result && this.isCancelled) {
         const cancelMessage = new Message({
           role: 'assistant',
           content: [new TextBlock('Cancelled by user')],
@@ -940,12 +943,6 @@ export class Agent implements LocalAgent, InvokableAgent {
 
       return result
     } catch (error) {
-      // Let CancelledError propagate directly — no AfterModelCallEvent, no retry
-      if (error instanceof CancelledError) {
-        this._tracer.endModelInvokeSpan(modelSpan)
-        throw error
-      }
-
       const modelError = normalizeError(error)
 
       // End model span with error
@@ -956,6 +953,12 @@ export class Agent implements LocalAgent, InvokableAgent {
 
       // Yield error event - stream will invoke hooks
       yield errorEvent
+
+      // Let CancelledError propagate directly — no retry
+      // (we emit the AfterModelCall because we already emitted Before and we guarentee the pair)
+      if (error instanceof CancelledError) {
+        throw error
+      }
 
       // After yielding, hooks have been invoked and may have set retry
       if (errorEvent.retry) {
