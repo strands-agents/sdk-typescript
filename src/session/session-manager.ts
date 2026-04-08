@@ -18,7 +18,7 @@ import type { Graph } from '../multiagent/graph.js'
 import type { Swarm } from '../multiagent/swarm.js'
 
 /**
- * Controls when `snapshot_latest` is saved automatically.
+ * Controls when `snapshot_latest` is saved automatically for agents.
  *
  * There are two kinds of snapshots:
  * - **`snapshot_latest`**: A single mutable snapshot that is overwritten on each save. Used to
@@ -29,8 +29,9 @@ import type { Swarm } from '../multiagent/swarm.js'
  *   just the latest.
  *
  * `SaveLatestStrategy` controls how frequently `snapshot_latest` is updated:
- * - `'invocation'`: after every agent or orchestrator invocation completes (default; balances durability and I/O)
- * - `'message'`: after every message added and after model calls with guardrail redactions (agent only; most durable, highest I/O)
+ * - `'invocation'`: after every agent invocation completes (default; balances durability and I/O)
+ * - `'message'`: after every message added and after model calls with guardrail redactions
+ *   (most durable, highest I/O)
  * - `'trigger'`: only when a `snapshotTrigger` fires (or manually via `saveSnapshot`)
  */
 export type SaveLatestStrategy = 'message' | 'invocation' | 'trigger'
@@ -56,7 +57,11 @@ export interface SessionManagerConfig {
   saveLatestOn?: SaveLatestStrategy
   /** Callback invoked after each invocation to decide whether to create an immutable snapshot. */
   snapshotTrigger?: SnapshotTriggerCallback
-  /** When to save snapshot_latest for multi-agent orchestrators. Default: `'invocation'` (after each orchestrator invocation completes). See {@link MultiAgentSaveLatestStrategy} for details. */
+  /**
+   * When to save snapshot_latest for multi-agent orchestrators.
+   * Default: `'invocation'` (after each orchestrator invocation completes).
+   * See {@link MultiAgentSaveLatestStrategy} for details.
+   */
   multiAgentSaveLatestOn?: MultiAgentSaveLatestStrategy
 }
 

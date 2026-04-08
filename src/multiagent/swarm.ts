@@ -202,8 +202,10 @@ export class Swarm implements MultiAgent {
 
     yield new BeforeMultiAgentInvocationEvent({ orchestrator: this, state })
 
-    let node = this.start
-    let handoff: HandoffResult | undefined
+    // Resume: if state was restored from a snapshot, derive the next node from the last handoff
+    const resumeNode = this._findResumeNode(state)
+    let node = resumeNode?.node ?? this.start
+    let handoff: HandoffResult | undefined = resumeNode?.lastHandoff
     let caughtError: Error | undefined
     let result: MultiAgentResult | undefined
 
@@ -381,6 +383,37 @@ export class Swarm implements MultiAgent {
     if (handoff?.agentId && state.steps >= this.config.maxSteps) {
       throw new Error(`max_steps=<${this.config.maxSteps}> | swarm reached step limit`)
     }
+  }
+
+  /**
+   * Finds the next node to execute from a restored {@link MultiAgentState}.
+   *
+   * When the session manager restores state from a snapshot, `state.results`
+   * contains results from the previous invocation. The last result's structured
+   * output contains the handoff decision — if it has an `agentId`, that is the
+   * node the previous run intended to hand off to but never executed (e.g. due
+   * to a crash). We resume from that handoff target.
+   *
+   * If the last result has no `agentId`, the previous run completed normally
+   * and there is nothing to resume.
+   *
+   * @returns The handoff target node and its handoff context, or `undefined` for a fresh start
+   */
+  private _findResumeNode(state: MultiAgentState): { node: AgentNode; lastHandoff: HandoffResult } | undefined {
+    if (state.results.length === 0) return undefined
+
+    const lastResult = state.results[state.results.length - 1]!
+    const lastNodeHandoff = lastResult.structuredOutput as HandoffResult | undefined
+    if (!lastNodeHandoff?.agentId) return undefined
+
+    const nextNode = this.nodes.get(lastNodeHandoff.agentId)
+    if (!nextNode) {
+      logger.warn(`node_id=<${lastNodeHandoff.agentId}> | resume target not found in swarm, starting fresh`)
+      return undefined
+    }
+
+    logger.debug(`node_id=<${nextNode.id}>, prior_steps=<${state.steps}> | resuming swarm from restored state`)
+    return { node: nextNode, lastHandoff: lastNodeHandoff }
   }
 
   private _buildHandoffSchema(nodeId: string): z.ZodType<HandoffResult> {
