@@ -638,6 +638,94 @@ describe('Model', () => {
       })
     })
 
+    describe('when modelMessageStopEvent arrives without modelMessageStartEvent', () => {
+      it('creates assistant message with empty content instead of throwing', async () => {
+        const provider = new TestModelProvider(async function* () {
+          // Bedrock may return messageStop without messageStart when the model
+          // produces an empty response (e.g., after certain tool results)
+          yield { type: 'modelMessageStopEvent', stopReason: 'endTurn' }
+          yield {
+            type: 'modelMetadataEvent',
+            usage: { inputTokens: 100, outputTokens: 0, totalTokens: 100 },
+          }
+        })
+
+        const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
+
+        const { result } = await collectGenerator(provider.streamAggregated(messages))
+
+        expect(result.message.role).toBe('assistant')
+        expect(result.message.content).toEqual([])
+        expect(result.stopReason).toBe('endTurn')
+        expect(result.metadata).toEqual({
+          type: 'modelMetadataEvent',
+          usage: { inputTokens: 100, outputTokens: 0, totalTokens: 100 },
+        })
+      })
+
+      it('preserves content blocks accumulated before messageStop without messageStart', async () => {
+        const provider = new TestModelProvider(async function* () {
+          // Edge case: content blocks arrive but messageStart was missed/skipped
+          yield { type: 'modelContentBlockStartEvent' }
+          yield {
+            type: 'modelContentBlockDeltaEvent',
+            delta: { type: 'textDelta', text: 'partial' },
+          }
+          yield { type: 'modelContentBlockStopEvent' }
+          yield { type: 'modelMessageStopEvent', stopReason: 'endTurn' }
+        })
+
+        const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
+
+        const { items, result } = await collectGenerator(provider.streamAggregated(messages))
+
+        expect(result.message.role).toBe('assistant')
+        expect(result.message.content).toHaveLength(1)
+        expect(result.message.content[0]!.type).toBe('textBlock')
+        expect(result.stopReason).toBe('endTurn')
+
+        // Content block should still be yielded
+        const contentBlocks = items.filter((i: any) => i.type === 'textBlock')
+        expect(contentBlocks).toHaveLength(1)
+      })
+
+      it('handles toolUse stopReason without messageStart', async () => {
+        const provider = new TestModelProvider(async function* () {
+          yield { type: 'modelMessageStopEvent', stopReason: 'toolUse' }
+          yield {
+            type: 'modelMetadataEvent',
+            usage: { inputTokens: 50, outputTokens: 0, totalTokens: 50 },
+          }
+        })
+
+        const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
+
+        const { result } = await collectGenerator(provider.streamAggregated(messages))
+
+        expect(result.message.role).toBe('assistant')
+        expect(result.message.content).toEqual([])
+        expect(result.stopReason).toBe('toolUse')
+      })
+    })
+
+    describe('when stream is completely empty', () => {
+      it('throws ModelError when no events are received', async () => {
+        const provider = new TestModelProvider(async function* () {
+          // Completely empty stream — no events at all
+        })
+
+        const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
+
+        try {
+          await collectGenerator(provider.streamAggregated(messages))
+          expect.fail('Expected error to be thrown')
+        } catch (error) {
+          expect(error).toBeInstanceOf(ModelError)
+          expect((error as ModelError).message).toBe('Stream ended without completing a message')
+        }
+      })
+    })
+
     describe('when stream() throws an error', () => {
       it('wraps non-ModelError errors in ModelError with original as cause', async () => {
         const originalError = new Error('API connection failed')
