@@ -3987,5 +3987,35 @@ describe('BedrockModel', () => {
         })
       )
     })
+
+    it('preserves thinking when no tool choice is provided', () => {
+      collectIterator(provider.stream(messages, { toolSpecs }))
+
+      expect(mockConverseStreamCommand).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          additionalModelRequestFields: {
+            thinking: { type: 'enabled', budget_tokens: 5000 },
+            some_other_field: 'value',
+          },
+        })
+      )
+    })
+
+    it('omits additionalModelRequestFields when thinking is the only field and tool choice forces tool use', () => {
+      const thinkingOnlyProvider = new BedrockModel({
+        modelId: 'anthropic.claude-sonnet-4-20250514-v1:0',
+        additionalRequestFields: {
+          thinking: { type: 'enabled', budget_tokens: 5000 },
+        },
+      })
+
+      collectIterator(thinkingOnlyProvider.stream(messages, { toolSpecs, toolChoice: { any: {} } }))
+
+      expect(mockConverseStreamCommand).toHaveBeenLastCalledWith(
+        expect.not.objectContaining({
+          additionalModelRequestFields: expect.anything(),
+        })
+      )
+    })
   })
 })
