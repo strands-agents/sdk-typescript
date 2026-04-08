@@ -63,7 +63,7 @@ export interface SessionManagerConfig {
   snapshotTrigger?: SnapshotTriggerCallback
   /**
    * When to save snapshot_latest for multi-agent orchestrators.
-   * Default: `'invocation'` (after each orchestrator invocation completes).
+   * Default: `'node'` (after each node invocation completes).
    * See {@link MultiAgentSaveLatestStrategy} for details.
    */
   multiAgentSaveLatestOn?: MultiAgentSaveLatestStrategy

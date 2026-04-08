@@ -384,10 +384,7 @@ describe('Swarm', () => {
   })
 
   describe('resume with session manager', () => {
-    function makeResumeSwarm(
-      storage: MockSnapshotStorage,
-      options: { maxSteps?: number } = {}
-    ): { swarm: Swarm; agentSpies?: Record<string, ReturnType<typeof vi.spyOn>> } {
+    function makeResumeSwarm(storage: MockSnapshotStorage, options: { maxSteps?: number } = {}): Swarm {
       const sessionManager = new SessionManager({
         sessionId: 'test-session',
         storage: { snapshot: storage },
@@ -399,16 +396,16 @@ describe('Swarm', () => {
         plugins: [sessionManager],
         ...options,
       })
-      return { swarm }
+      return swarm
     }
 
     it('resumes from the pending handoff target after a crash (A→B stopped, resumes at B)', async () => {
       const storage = new MockSnapshotStorage()
 
-      const { swarm: swarm1 } = makeResumeSwarm(storage, { maxSteps: 1 })
+      const swarm1 = makeResumeSwarm(storage, { maxSteps: 1 })
       await expect(swarm1.invoke('start')).rejects.toThrow('swarm reached step limit')
 
-      const { swarm: swarm2 } = makeResumeSwarm(storage)
+      const swarm2 = makeResumeSwarm(storage)
       const result = await swarm2.invoke('start')
 
       expect(result.status).toBe(Status.COMPLETED)
@@ -464,10 +461,10 @@ describe('Swarm', () => {
     it('carries forward steps count from the previous invocation', async () => {
       const storage = new MockSnapshotStorage()
 
-      const { swarm: swarm1 } = makeResumeSwarm(storage, { maxSteps: 1 })
+      const swarm1 = makeResumeSwarm(storage, { maxSteps: 1 })
       await expect(swarm1.invoke('start')).rejects.toThrow('swarm reached step limit')
 
-      const { swarm: swarm2 } = makeResumeSwarm(storage, { maxSteps: 2 })
+      const swarm2 = makeResumeSwarm(storage, { maxSteps: 2 })
       const result = await swarm2.invoke('start')
 
       expect(result.status).toBe(Status.COMPLETED)

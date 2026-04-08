@@ -409,10 +409,15 @@ export class Swarm implements MultiAgent {
     // We use state.nodes rather than state.results because with the 'node' save strategy,
     // AfterNodeCallEvent fires before state.results is populated.
     let lastCompletedResult: NodeResult | undefined
+    let latestStartTime = -1
     for (const [, ns] of state.nodes) {
       if (ns.status !== Status.COMPLETED) continue
+      if (ns.startTime <= latestStartTime) continue
       const nodeResult = ns.results[ns.results.length - 1]
-      if (nodeResult) lastCompletedResult = nodeResult
+      if (nodeResult) {
+        lastCompletedResult = nodeResult
+        latestStartTime = ns.startTime
+      }
     }
 
     if (!lastCompletedResult) return undefined
