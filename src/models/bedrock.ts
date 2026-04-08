@@ -604,8 +604,9 @@ export class BedrockModel extends Model<BedrockModelConfig> {
     }
 
     // Add additional request fields
-    if (this._config.additionalRequestFields) {
-      request.additionalModelRequestFields = this._config.additionalRequestFields
+    const additionalRequestFields = this._getAdditionalRequestFields(options)
+    if (additionalRequestFields) {
+      request.additionalModelRequestFields = additionalRequestFields
     }
 
     // Add additional response field paths
@@ -631,6 +632,30 @@ export class BedrockModel extends Model<BedrockModelConfig> {
     }
 
     return request
+  }
+
+  /**
+   * Get additional request fields, adjusted for compatibility with the current stream options.
+   *
+   * Certain additional request fields are incompatible with specific API options. For example,
+   * Bedrock does not allow thinking mode when tool_choice forces tool use.
+   *
+   * @param options - The stream options for the current request
+   * @returns The additional request fields, or undefined if none
+   */
+  private _getAdditionalRequestFields(options?: StreamOptions): JSONValue | undefined {
+    const fields = this._config.additionalRequestFields as Record<string, JSONValue> | undefined
+    if (!fields || !('thinking' in fields)) {
+      return fields
+    }
+
+    const toolChoice = options?.toolChoice
+    if (!toolChoice || 'auto' in toolChoice) {
+      return fields
+    }
+
+    const { thinking: _, ...rest } = fields
+    return Object.keys(rest).length > 0 ? rest : undefined
   }
 
   /**
