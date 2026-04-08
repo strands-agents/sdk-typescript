@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { FunctionTool } from '../function-tool.js'
+import { FunctionTool, fromJsonSchema } from '../function-tool.js'
 import { Tool, ToolStreamEvent } from '../tool.js'
 import type { ToolContext } from '../tool.js'
 import type { JSONValue } from '../../types/json.js'
@@ -8,6 +8,31 @@ import { createMockContext } from '../../__fixtures__/tool-helpers.js'
 import { collectGenerator } from '../../__fixtures__/model-test-helpers.js'
 
 describe('FunctionTool', () => {
+  describe('fromJsonSchema', () => {
+    it('matches constructor with inputSchema', () => {
+      const schema = {
+        type: 'object' as const,
+        properties: { id: { type: 'string' as const } },
+        required: ['id'],
+      }
+      const viaHelper = fromJsonSchema({
+        name: 'lookup',
+        description: 'Looks up by id',
+        schema,
+        callback: (input) => (input as { id: string }).id,
+      })
+      const viaCtor = new FunctionTool({
+        name: 'lookup',
+        description: 'Looks up by id',
+        inputSchema: schema,
+        callback: (input) => (input as { id: string }).id,
+      })
+      expect(viaHelper.name).toBe(viaCtor.name)
+      expect(viaHelper.description).toBe(viaCtor.description)
+      expect(viaHelper.toolSpec).toEqual(viaCtor.toolSpec)
+    })
+  })
+
   describe('properties', () => {
     it('has a non-empty toolName', () => {
       const tool = new FunctionTool({

@@ -117,8 +117,8 @@ export type { InvokableTool, ToolContext, ToolStreamEventData, ToolStreamGenerat
 export { Tool, ToolStreamEvent } from './tools/tool.js'
 
 // FunctionTool implementation
-export { FunctionTool } from './tools/function-tool.js'
-export type { FunctionToolConfig, FunctionToolCallback } from './tools/function-tool.js'
+export { FunctionTool, fromJsonSchema } from './tools/function-tool.js'
+export type { FunctionToolConfig, FunctionToolCallback, FromJsonSchemaConfig } from './tools/function-tool.js'
 
 // ZodTool implementation
 export { ZodTool } from './tools/zod-tool.js'
