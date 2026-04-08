@@ -1,6 +1,8 @@
 /**
- * Integration tests for multi-agent session management (Swarm & Graph).
+ * Integration tests for multi-agent session management (Swarm resume).
  * Node-only: uses FileStorage which requires fs.
+ *
+ * TODO: Add Graph resume tests once Graph resume is implemented.
  */
 import { describe, expect, it, beforeAll, afterAll } from 'vitest'
 import { promises as fs } from 'fs'
@@ -17,6 +19,26 @@ import { bedrock } from '../__fixtures__/model-providers.js'
 
 function makeSessionManager(sessionId: string, storageDir: string): SessionManager {
   return new SessionManager({ sessionId, storage: { snapshot: new FileStorage(storageDir) } })
+}
+
+function createResearcherWriterNodes(createModel: () => ReturnType<typeof bedrock.createModel>) {
+  return [
+    new Agent({
+      model: createModel(),
+      printer: false,
+      id: 'researcher',
+      description: 'Researches a topic then hands off to the writer.',
+      systemPrompt:
+        'You are a researcher. Research the answer, then always hand off to the writer. Never produce a final response yourself.',
+    }),
+    new Agent({
+      model: createModel(),
+      printer: false,
+      id: 'writer',
+      description: 'Writes a polished final answer in one sentence.',
+      systemPrompt: 'Write the final answer in one sentence. Do not hand off.',
+    }),
+  ]
 }
 
 // ─── Swarm Resume ────────────────────────────────────────────────────────────
@@ -41,23 +63,7 @@ describe.skipIf(bedrock.skip)('Multi-Agent Session Management - Swarm', () => {
     // First invocation: researcher hands off to writer, but maxSteps=1 stops before writer runs
     const swarm1 = new Swarm({
       id: swarmId,
-      nodes: [
-        new Agent({
-          model: createModel(),
-          printer: false,
-          id: 'researcher',
-          description: 'Researches a topic then hands off to the writer.',
-          systemPrompt:
-            'You are a researcher. Research the answer, then always hand off to the writer. Never produce a final response yourself.',
-        }),
-        new Agent({
-          model: createModel(),
-          printer: false,
-          id: 'writer',
-          description: 'Writes a polished final answer in one sentence.',
-          systemPrompt: 'Write the final answer in one sentence. Do not hand off.',
-        }),
-      ],
+      nodes: createResearcherWriterNodes(createModel),
       start: 'researcher',
       maxSteps: 1,
       plugins: [makeSessionManager(sessionId, tempDir)],
@@ -68,23 +74,7 @@ describe.skipIf(bedrock.skip)('Multi-Agent Session Management - Swarm', () => {
     // Second invocation: new Swarm + SessionManager simulates process restart
     const swarm2 = new Swarm({
       id: swarmId,
-      nodes: [
-        new Agent({
-          model: createModel(),
-          printer: false,
-          id: 'researcher',
-          description: 'Researches a topic then hands off to the writer.',
-          systemPrompt:
-            'You are a researcher. Research the answer, then always hand off to the writer. Never produce a final response yourself.',
-        }),
-        new Agent({
-          model: createModel(),
-          printer: false,
-          id: 'writer',
-          description: 'Writes a polished final answer in one sentence.',
-          systemPrompt: 'Write the final answer in one sentence. Do not hand off.',
-        }),
-      ],
+      nodes: createResearcherWriterNodes(createModel),
       start: 'researcher',
       plugins: [makeSessionManager(sessionId, tempDir)],
     })
@@ -92,16 +82,7 @@ describe.skipIf(bedrock.skip)('Multi-Agent Session Management - Swarm', () => {
     const result = await swarm2.invoke('What is the tallest mountain?')
 
     expect(result.status).toBe(Status.COMPLETED)
-
-    // The resumed invocation should have started at writer, not researcher.
-    // result.results includes both prior results (restored from snapshot) and new ones.
-    // The prior results come from the first invocation (researcher), the new result is writer.
-    const nodeIds = result.results.map((r) => r.nodeId)
-    expect(nodeIds[nodeIds.length - 1]).toBe('writer')
-
-    // Researcher should appear only once (from the first invocation's restored results),
-    // not twice — proving it was not re-executed.
-    expect(nodeIds.filter((id) => id === 'researcher')).toHaveLength(1)
+    expect(result.results.map((r) => r.nodeId)).toStrictEqual(['researcher', 'writer'])
 
     const text = result.content.find((b) => b.type === 'textBlock')
     expect(text?.text).toMatch(/Everest/i)

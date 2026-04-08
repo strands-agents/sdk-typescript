@@ -200,6 +200,7 @@ export class Swarm implements MultiAgent {
       input,
     })
 
+    // Plugins (e.g. SessionManager) may restore state.results here via the hook
     yield new BeforeMultiAgentInvocationEvent({ orchestrator: this, state })
 
     // Resume: if state was restored from a snapshot, derive the next node from the last handoff
