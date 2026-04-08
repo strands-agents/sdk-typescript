@@ -205,6 +205,10 @@ export class Swarm implements MultiAgent {
 
     // Resume: if state was restored from a snapshot, derive the next node from the last handoff
     const resumeNode = this._findResumeNode(state)
+    if (resumeNode) {
+      // Drop non-completed results — those nodes will be re-executed on resume
+      state.results.splice(0, state.results.length, ...state.results.filter((r) => r.status === Status.COMPLETED))
+    }
     let node = resumeNode?.node ?? this.start
     let handoff: HandoffResult | undefined = resumeNode?.lastHandoff
     let caughtError: Error | undefined
@@ -401,10 +405,19 @@ export class Swarm implements MultiAgent {
    * @returns The handoff target node and its handoff context, or `undefined` for a fresh start
    */
   private _findResumeNode(state: MultiAgentState): { node: AgentNode; lastHandoff: HandoffResult } | undefined {
-    if (state.results.length === 0) return undefined
+    // Find the last completed node by checking per-node state.
+    // We use state.nodes rather than state.results because with the 'node' save strategy,
+    // AfterNodeCallEvent fires before state.results is populated.
+    let lastCompletedResult: NodeResult | undefined
+    for (const [, ns] of state.nodes) {
+      if (ns.status !== Status.COMPLETED) continue
+      const nodeResult = ns.results[ns.results.length - 1]
+      if (nodeResult) lastCompletedResult = nodeResult
+    }
 
-    const lastResult = state.results[state.results.length - 1]!
-    const lastNodeHandoff = lastResult.structuredOutput as HandoffResult | undefined
+    if (!lastCompletedResult) return undefined
+
+    const lastNodeHandoff = lastCompletedResult.structuredOutput as HandoffResult | undefined
     if (!lastNodeHandoff?.agentId) return undefined
 
     const nextNode = this.nodes.get(lastNodeHandoff.agentId)

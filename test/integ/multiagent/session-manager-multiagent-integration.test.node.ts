@@ -10,7 +10,7 @@ import { join } from 'path'
 import { tmpdir } from 'os'
 import { v7 as uuidv7 } from 'uuid'
 import { Agent } from '$/sdk/agent/agent.js'
-import { Swarm, Status } from '$/sdk/multiagent/index.js'
+import { Swarm, Status, BeforeNodeCallEvent } from '$/sdk/multiagent/index.js'
 import { SessionManager } from '$/sdk/session/session-manager.js'
 import { FileStorage } from '$/sdk/session/file-storage.js'
 import { bedrock } from '../__fixtures__/model-providers.js'
@@ -56,22 +56,33 @@ describe.skipIf(bedrock.skip)('Multi-Agent Session Management - Swarm', () => {
     await fs.rm(tempDir, { recursive: true, force: true })
   })
 
-  it('resumes from the pending handoff target after maxSteps stops the swarm', async () => {
+  it('resumes from writer after researcher completes and writer is cancelled', async () => {
     const sessionId = uuidv7()
     const swarmId = 'resume-swarm'
 
-    // First invocation: researcher hands off to writer, but maxSteps=1 stops before writer runs
+    // First invocation: researcher completes (per-node save fires),
+    // then writer is cancelled via hook — simulating a stop after one node
     const swarm1 = new Swarm({
       id: swarmId,
       nodes: createResearcherWriterNodes(createModel),
       start: 'researcher',
-      maxSteps: 1,
       plugins: [makeSessionManager(sessionId, tempDir)],
     })
 
-    await expect(swarm1.invoke('What is the tallest mountain?')).rejects.toThrow('swarm reached step limit')
+    swarm1.addHook(BeforeNodeCallEvent, (event) => {
+      if (event.nodeId === 'writer') {
+        event.cancel = 'simulated stop'
+      }
+    })
 
-    // Second invocation: new Swarm + SessionManager simulates process restart
+    const result1 = await swarm1.invoke('What is the tallest mountain?')
+
+    // Researcher completed, writer was cancelled
+    expect(result1.status).toBe(Status.CANCELLED)
+    expect(result1.results.map((r) => r.nodeId)).toContain('researcher')
+
+    // Second invocation: new Swarm + SessionManager simulates process restart.
+    // The per-node snapshot saved after researcher should allow resume at writer.
     const swarm2 = new Swarm({
       id: swarmId,
       nodes: createResearcherWriterNodes(createModel),
@@ -79,12 +90,16 @@ describe.skipIf(bedrock.skip)('Multi-Agent Session Management - Swarm', () => {
       plugins: [makeSessionManager(sessionId, tempDir)],
     })
 
-    const result = await swarm2.invoke('What is the tallest mountain?')
+    const result2 = await swarm2.invoke('What is the tallest mountain?')
 
-    expect(result.status).toBe(Status.COMPLETED)
-    expect(result.results.map((r) => r.nodeId)).toStrictEqual(['researcher', 'writer'])
+    expect(result2.status).toBe(Status.COMPLETED)
 
-    const text = result.content.find((b) => b.type === 'textBlock')
+    // Writer should have executed (the resume target), researcher should not re-execute
+    const nodeIds = result2.results.map((r) => r.nodeId)
+    expect(nodeIds.filter((id) => id === 'researcher')).toHaveLength(1)
+    expect(nodeIds[nodeIds.length - 1]).toBe('writer')
+
+    const text = result2.content.find((b) => b.type === 'textBlock')
     expect(text?.text).toMatch(/Everest/i)
   })
 })

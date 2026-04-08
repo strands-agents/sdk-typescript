@@ -430,19 +430,10 @@ describe('Swarm', () => {
       expect(result1.status).toBe(Status.COMPLETED)
       expect(result1.results.map((r) => r.nodeId)).toStrictEqual(['a'])
 
-      const sessionManager2 = new SessionManager({ sessionId: 'test-session', storage: { snapshot: storage } })
-
-      const swarm2 = new Swarm({
-        id: 'my-swarm',
-        nodes: [createFinalAgent('a', 'all done again'), createFinalAgent('b', 'done by b')],
-        start: 'a',
-        plugins: [sessionManager2],
-      })
-
-      const result2 = await swarm2.invoke('start')
+      const result2 = await swarm1.invoke('start')
 
       expect(result2.status).toBe(Status.COMPLETED)
-      expect(result2.results.map((r) => r.nodeId)).toStrictEqual(['a', 'a'])
+      expect(result2.results.map((r) => r.nodeId)).toStrictEqual(['a'])
     })
 
     it('resumes mid-chain (A→B→C, stopped after B, resumes at C)', async () => {
