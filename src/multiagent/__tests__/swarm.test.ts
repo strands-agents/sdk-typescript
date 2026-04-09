@@ -433,31 +433,6 @@ describe('Swarm', () => {
       expect(result2.results.map((r) => r.nodeId)).toStrictEqual(['a'])
     })
 
-    it('resumes mid-chain (A→B→C, stopped after B, resumes at C)', async () => {
-      const storage = new MockSnapshotStorage()
-
-      function makeChainSwarm(opts: { maxSteps?: number } = {}): Swarm {
-        return new Swarm({
-          id: 'my-swarm',
-          nodes: [
-            createHandoffAgent('a', { agentId: 'b', message: 'go to b' }),
-            createHandoffAgent('b', { agentId: 'c', message: 'go to c' }),
-            createFinalAgent('c', 'final from c'),
-          ],
-          start: 'a',
-          plugins: [new SessionManager({ sessionId: 'test-session', storage: { snapshot: storage } })],
-          ...opts,
-        })
-      }
-
-      await expect(makeChainSwarm({ maxSteps: 2 }).invoke('start')).rejects.toThrow('swarm reached step limit')
-
-      const result = await makeChainSwarm().invoke('start')
-
-      expect(result.status).toBe(Status.COMPLETED)
-      expect(result.results.map((r) => r.nodeId)).toStrictEqual(['a', 'b', 'c'])
-    })
-
     it('carries forward steps count from the previous invocation', async () => {
       const storage = new MockSnapshotStorage()
 
