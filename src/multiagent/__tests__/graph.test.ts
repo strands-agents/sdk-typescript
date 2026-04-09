@@ -299,6 +299,18 @@ describe('Graph', () => {
       expect(result.results.map((r) => r.nodeId)).toStrictEqual(['a', 'b'])
     })
 
+    it('evaluates conditional edges on join node (A -> C false, B -> C)', async () => {
+      const graph = new Graph({
+        nodes: [makeAgent('a', 'a-reply'), makeAgent('b', 'b-reply'), makeAgent('c', 'c-reply')],
+        edges: [{ source: 'a', target: 'c', handler: () => false }, ['b', 'c']],
+      })
+
+      const result = await graph.invoke('start')
+
+      expect(result.status).toBe(Status.COMPLETED)
+      expect(result.results.map((r) => r.nodeId).sort()).toStrictEqual(['a', 'b'])
+    })
+
     it('passes task + dependency content to downstream nodes', async () => {
       const agentB = makeAgent('b')
       const streamSpy = vi.spyOn(agentB, 'stream')

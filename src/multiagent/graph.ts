@@ -506,7 +506,7 @@ export class Graph implements MultiAgent {
 
   /**
    * Finds downstream nodes that are ready to execute after a node completes.
-   * A target is ready when all its incoming edge sources are COMPLETED.
+   * A target is ready when all its incoming edge sources are COMPLETED and all edge handlers return true.
    */
   private async _findReady(
     node: Node,
@@ -519,14 +519,17 @@ export class Graph implements MultiAgent {
     const ready: Node[] = []
 
     for (const edge of this.edges.filter((e) => e.source.id === node.id)) {
-      if (!(await edge.handler(state))) continue
-
       if (streams.has(edge.target.id) || targets.some((n) => n.id === edge.target.id)) continue
 
       const deps = this.edges.filter((e) => e.target.id === edge.target.id)
-      if (deps.every((e) => state.node(e.source.id)?.status === Status.COMPLETED)) {
-        ready.push(edge.target)
-      }
+
+      // skip if any source node has not completed
+      if (deps.some((e) => state.node(e.source.id)?.status !== Status.COMPLETED)) continue
+
+      // skip if any edge handler rejects the transition
+      if (!(await Promise.all(deps.map((e) => e.handler(state)))).every(Boolean)) continue
+
+      ready.push(edge.target)
     }
 
     return ready
