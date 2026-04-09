@@ -507,6 +507,12 @@ export class Graph implements MultiAgent {
   /**
    * Finds downstream nodes that are ready to execute after a node completes.
    * A target is ready when all its incoming edge sources are COMPLETED and all edge handlers return true.
+   *
+   * @param node - The node that just completed execution.
+   * @param state - Current multi-agent execution state.
+   * @param streams - Map of node IDs to their in-flight execution promises.
+   * @param targets - Nodes already queued for execution.
+   * @returns Nodes that are ready to execute.
    */
   private async _findReady(
     node: Node,
@@ -519,6 +525,7 @@ export class Graph implements MultiAgent {
     const ready: Node[] = []
 
     for (const edge of this.edges.filter((e) => e.source.id === node.id)) {
+      // skip if the target is already running or queued
       if (streams.has(edge.target.id) || targets.some((n) => n.id === edge.target.id)) continue
 
       const deps = this.edges.filter((e) => e.target.id === edge.target.id)
