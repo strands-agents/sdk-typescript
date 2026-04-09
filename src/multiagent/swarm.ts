@@ -205,10 +205,6 @@ export class Swarm implements MultiAgent {
 
     // Resume: if state was restored from a snapshot, derive the next node from the last handoff
     const resumeNode = this._findResumeNode(state)
-    if (resumeNode) {
-      // Drop non-completed results — those nodes will be re-executed on resume
-      state.results.splice(0, state.results.length, ...state.results.filter((r) => r.status === Status.COMPLETED))
-    }
     let node = resumeNode?.node ?? this.start
     let handoff: HandoffResult | undefined = resumeNode?.lastHandoff
     let caughtError: Error | undefined
