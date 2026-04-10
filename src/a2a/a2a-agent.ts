@@ -9,7 +9,7 @@
 
 import type { AgentCard, Part } from '@a2a-js/sdk'
 import type { Client as A2AClientSdk } from '@a2a-js/sdk/client'
-import { ClientFactory, ClientFactoryOptions } from '@a2a-js/sdk/client'
+import { ClientFactory } from '@a2a-js/sdk/client'
 import type { InvokableAgent, InvokeArgs, InvokeOptions } from '../types/agent.js'
 import { AgentResult } from '../types/agent.js'
 import { Message, TextBlock, type ContentBlock, type ContentBlockData, type MessageData } from '../types/messages.js'
@@ -32,27 +32,29 @@ export interface A2AAgentConfig {
   /** Optional description. If not provided, populated from the agent card after connection. */
   description?: string
   /**
-   * Options passed to the underlying A2A SDK {@link ClientFactory}.
+   * Pre-configured {@link ClientFactory} for the underlying A2A SDK.
    *
    * Use this to configure authentication, custom transports, interceptors,
-   * or a custom agent card resolver. Partial options are merged with the SDK
-   * defaults via `ClientFactoryOptions.createFrom`.
+   * or a custom agent card resolver. When not provided, a default
+   * `ClientFactory` is created with no authentication.
    *
    * @example
    * ```typescript
-   * import { DefaultAgentCardResolver, createAuthenticatingFetchWithRetry } from '@a2a-js/sdk/client'
+   * import { ClientFactory, ClientFactoryOptions, DefaultAgentCardResolver, createAuthenticatingFetchWithRetry } from '@a2a-js/sdk/client'
+   *
+   * const factory = new ClientFactory(ClientFactoryOptions.createFrom(ClientFactoryOptions.default, {
+   *   cardResolver: new DefaultAgentCardResolver({
+   *     fetchImpl: createAuthenticatingFetchWithRetry(fetch, myAuthHandler),
+   *   }),
+   * }))
    *
    * const agent = new A2AAgent({
    *   url: 'https://protected-agent.example.com',
-   *   clientFactoryOptions: {
-   *     cardResolver: new DefaultAgentCardResolver({
-   *       fetchImpl: createAuthenticatingFetchWithRetry(fetch, myAuthHandler),
-   *     }),
-   *   },
+   *   clientFactory: factory,
    * })
    * ```
    */
-  clientFactoryOptions?: Partial<ClientFactoryOptions>
+  clientFactory?: ClientFactory
 }
 
 /**
@@ -192,10 +194,7 @@ export class A2AAgent implements InvokableAgent {
 
     logExperimentalWarning()
 
-    const factoryOptions = this._config.clientFactoryOptions
-    const factory = factoryOptions
-      ? new ClientFactory(ClientFactoryOptions.createFrom(ClientFactoryOptions.default, factoryOptions))
-      : new ClientFactory()
+    const factory = this._config.clientFactory ?? new ClientFactory()
     const client = await factory.createFromUrl(this._config.url, this._config.agentCardPath)
     this._agentCard = await client.getAgentCard()
     if (this.name === undefined && this._agentCard?.name) {

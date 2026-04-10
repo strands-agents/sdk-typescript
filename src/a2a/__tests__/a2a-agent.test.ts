@@ -29,17 +29,8 @@ vi.mock('@a2a-js/sdk/client', () => {
     }
   }
 
-  const mockCreateFrom = vi.fn().mockImplementation((_original: unknown, overrides: unknown) => ({
-    transports: [],
-    ...(overrides as Record<string, unknown>),
-  }))
-
   return {
     ClientFactory: MockClientFactory,
-    ClientFactoryOptions: {
-      default: { transports: [] },
-      createFrom: mockCreateFrom,
-    },
   }
 })
 
@@ -148,48 +139,34 @@ describe('A2AAgent', () => {
     })
   })
 
-  describe('clientFactoryOptions', () => {
-    it('creates ClientFactory with no arguments when clientFactoryOptions is not provided', async () => {
+  describe('clientFactory', () => {
+    it('creates a default ClientFactory when clientFactory is not provided', async () => {
       const agent = new A2AAgent({ url: 'http://localhost:9000' })
 
       await agent.invoke('Hello')
 
+      // Default factory created with no arguments
       expect(clientFactoryConstructorArgs).toHaveLength(1)
       expect(clientFactoryConstructorArgs[0]).toHaveLength(0)
     })
 
-    it('creates ClientFactory with merged options when clientFactoryOptions is provided', async () => {
-      const { ClientFactoryOptions } = await import('@a2a-js/sdk/client')
-      const customOptions = {
-        clientConfig: { interceptors: [] },
-      }
+    it('uses the provided ClientFactory instead of creating a new one', async () => {
+      const { ClientFactory } = await import('@a2a-js/sdk/client')
+      const customFactory = new ClientFactory()
+
+      // Reset tracking after factory construction
+      clientFactoryConstructorArgs.length = 0
+
       const agent = new A2AAgent({
         url: 'http://localhost:9000',
-        clientFactoryOptions: customOptions,
+        clientFactory: customFactory,
       })
 
       await agent.invoke('Hello')
 
-      expect(ClientFactoryOptions.createFrom).toHaveBeenCalledWith(ClientFactoryOptions.default, customOptions)
-      expect(clientFactoryConstructorArgs).toHaveLength(1)
-      expect(clientFactoryConstructorArgs[0]![0]).toEqual(
-        expect.objectContaining({ clientConfig: { interceptors: [] } })
-      )
-    })
-
-    it('passes custom cardResolver through to ClientFactory', async () => {
-      const { ClientFactoryOptions } = await import('@a2a-js/sdk/client')
-      const mockResolver = { resolve: vi.fn() }
-      const agent = new A2AAgent({
-        url: 'http://localhost:9000',
-        clientFactoryOptions: { cardResolver: mockResolver },
-      })
-
-      await agent.invoke('Hello')
-
-      expect(ClientFactoryOptions.createFrom).toHaveBeenCalledWith(ClientFactoryOptions.default, {
-        cardResolver: mockResolver,
-      })
+      // No new factory created — the provided one is used directly
+      expect(clientFactoryConstructorArgs).toHaveLength(0)
+      expect(mockCreateFromUrl).toHaveBeenCalledWith('http://localhost:9000', undefined)
     })
 
     it('passes agentCardPath to createFromUrl', async () => {
@@ -200,6 +177,23 @@ describe('A2AAgent', () => {
 
       await agent.invoke('Hello')
 
+      expect(mockCreateFromUrl).toHaveBeenCalledWith('http://localhost:9000', '/custom/card.json')
+    })
+
+    it('passes agentCardPath to createFromUrl with custom factory', async () => {
+      const { ClientFactory } = await import('@a2a-js/sdk/client')
+      const customFactory = new ClientFactory()
+      clientFactoryConstructorArgs.length = 0
+
+      const agent = new A2AAgent({
+        url: 'http://localhost:9000',
+        agentCardPath: '/custom/card.json',
+        clientFactory: customFactory,
+      })
+
+      await agent.invoke('Hello')
+
+      expect(clientFactoryConstructorArgs).toHaveLength(0)
       expect(mockCreateFromUrl).toHaveBeenCalledWith('http://localhost:9000', '/custom/card.json')
     })
   })
