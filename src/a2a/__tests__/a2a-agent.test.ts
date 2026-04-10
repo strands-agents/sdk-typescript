@@ -14,20 +14,34 @@ import type { InvokeArgs } from '../../types/agent.js'
 // Mock the A2A SDK client
 const mockSendMessageStream = vi.fn()
 const mockGetAgentCard = vi.fn()
+const mockCreateFromUrl = vi.fn()
 
-vi.mock('@a2a-js/sdk/client', () => ({
-  ClientFactory: class MockClientFactory {
-    async createFromUrl(): Promise<{
-      sendMessageStream: typeof mockSendMessageStream
-      getAgentCard: typeof mockGetAgentCard
-    }> {
-      return {
-        sendMessageStream: mockSendMessageStream,
-        getAgentCard: mockGetAgentCard,
-      }
+// Track ClientFactory constructor calls
+const clientFactoryConstructorArgs: unknown[][] = []
+
+vi.mock('@a2a-js/sdk/client', () => {
+  class MockClientFactory {
+    constructor(...args: unknown[]) {
+      clientFactoryConstructorArgs.push(args)
     }
-  },
-}))
+    async createFromUrl(...args: unknown[]) {
+      return mockCreateFromUrl(...args)
+    }
+  }
+
+  const mockCreateFrom = vi.fn().mockImplementation((_original: unknown, overrides: unknown) => ({
+    transports: [],
+    ...(overrides as Record<string, unknown>),
+  }))
+
+  return {
+    ClientFactory: MockClientFactory,
+    ClientFactoryOptions: {
+      default: { transports: [] },
+      createFrom: mockCreateFrom,
+    },
+  }
+})
 
 const mockAgentCard: AgentCard = {
   name: 'Remote Agent',
@@ -77,8 +91,13 @@ async function collectStream(
 describe('A2AAgent', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    clientFactoryConstructorArgs.length = 0
     mockGetAgentCard.mockResolvedValue(mockAgentCard)
     mockSendMessageStream.mockReturnValue(mockStream(createMockTaskResponse()))
+    mockCreateFromUrl.mockResolvedValue({
+      sendMessageStream: mockSendMessageStream,
+      getAgentCard: mockGetAgentCard,
+    })
   })
 
   describe('identity properties', () => {
@@ -126,6 +145,62 @@ describe('A2AAgent', () => {
 
       expect(agent.name).toBe('Custom Name')
       expect(agent.description).toBe('Custom description')
+    })
+  })
+
+  describe('clientFactoryOptions', () => {
+    it('creates ClientFactory with no arguments when clientFactoryOptions is not provided', async () => {
+      const agent = new A2AAgent({ url: 'http://localhost:9000' })
+
+      await agent.invoke('Hello')
+
+      expect(clientFactoryConstructorArgs).toHaveLength(1)
+      expect(clientFactoryConstructorArgs[0]).toHaveLength(0)
+    })
+
+    it('creates ClientFactory with merged options when clientFactoryOptions is provided', async () => {
+      const { ClientFactoryOptions } = await import('@a2a-js/sdk/client')
+      const customOptions = {
+        clientConfig: { interceptors: [] },
+      }
+      const agent = new A2AAgent({
+        url: 'http://localhost:9000',
+        clientFactoryOptions: customOptions,
+      })
+
+      await agent.invoke('Hello')
+
+      expect(ClientFactoryOptions.createFrom).toHaveBeenCalledWith(ClientFactoryOptions.default, customOptions)
+      expect(clientFactoryConstructorArgs).toHaveLength(1)
+      expect(clientFactoryConstructorArgs[0]![0]).toEqual(
+        expect.objectContaining({ clientConfig: { interceptors: [] } })
+      )
+    })
+
+    it('passes custom cardResolver through to ClientFactory', async () => {
+      const { ClientFactoryOptions } = await import('@a2a-js/sdk/client')
+      const mockResolver = { resolve: vi.fn() }
+      const agent = new A2AAgent({
+        url: 'http://localhost:9000',
+        clientFactoryOptions: { cardResolver: mockResolver },
+      })
+
+      await agent.invoke('Hello')
+
+      expect(ClientFactoryOptions.createFrom).toHaveBeenCalledWith(ClientFactoryOptions.default, {
+        cardResolver: mockResolver,
+      })
+    })
+
+    it('passes agentCardPath to createFromUrl', async () => {
+      const agent = new A2AAgent({
+        url: 'http://localhost:9000',
+        agentCardPath: '/custom/card.json',
+      })
+
+      await agent.invoke('Hello')
+
+      expect(mockCreateFromUrl).toHaveBeenCalledWith('http://localhost:9000', '/custom/card.json')
     })
   })
 
@@ -243,14 +318,12 @@ describe('A2AAgent', () => {
       const agent = new A2AAgent({ url: 'http://localhost:9000' })
       const { events } = await collectStream(agent.stream('Hello'))
 
-      // 3 A2AStreamUpdateEvents + 1 A2AResultEvent
       expect(events).toHaveLength(4)
       expect(events[0]).toBeInstanceOf(A2AStreamUpdateEvent)
       expect(events[1]).toBeInstanceOf(A2AStreamUpdateEvent)
       expect(events[2]).toBeInstanceOf(A2AStreamUpdateEvent)
       expect(events[3]).toBeInstanceOf(A2AResultEvent)
 
-      // Final result built from last complete event (status-update with completed state)
       const resultEvent = events[3] as A2AResultEvent
       expect((resultEvent.result.lastMessage.content[0] as TextBlock).text).toBe('Final answer')
     })
@@ -306,7 +379,7 @@ describe('A2AAgent', () => {
       const agent = new A2AAgent({ url: 'http://localhost:9000' })
       const { events, result } = await collectStream(agent.stream('Hello'))
 
-      expect(events).toHaveLength(1) // only A2AResultEvent
+      expect(events).toHaveLength(1)
       expect(events[0]).toBeInstanceOf(A2AResultEvent)
       expect((result as { lastMessage: Message }).lastMessage.content[0]).toBeInstanceOf(TextBlock)
       expect(((result as { lastMessage: Message }).lastMessage.content[0] as TextBlock).text).toBe('')
@@ -339,7 +412,12 @@ describe('A2AAgent', () => {
 describe('response text extraction via invoke', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    clientFactoryConstructorArgs.length = 0
     mockGetAgentCard.mockResolvedValue(mockAgentCard)
+    mockCreateFromUrl.mockResolvedValue({
+      sendMessageStream: mockSendMessageStream,
+      getAgentCard: mockGetAgentCard,
+    })
   })
 
   it('joins multiple text parts from Task artifacts', async () => {
