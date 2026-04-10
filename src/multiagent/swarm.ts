@@ -8,6 +8,7 @@ import { HookRegistryImplementation } from '../hooks/registry.js'
 import type { HookCallback, HookableEventConstructor, HookCleanup } from '../hooks/types.js'
 import type { MultiAgentPlugin } from './plugins.js'
 import { MultiAgentPluginRegistry } from './plugins.js'
+import type { SessionManager } from '../session/session-manager.js'
 import type { ContentBlock } from '../types/messages.js'
 import { TextBlock } from '../types/messages.js'
 import type { AgentNodeOptions } from './nodes.js'
@@ -67,6 +68,8 @@ export interface SwarmOptions extends SwarmConfig {
   nodes: SwarmNodeDefinition[]
   /** Agent id that receives the initial input. Defaults to the first agent in `nodes`. */
   start?: string
+  /** Session manager for saving and restoring swarm sessions. */
+  sessionManager?: SessionManager
   /** Plugins for event-driven extensibility. */
   plugins?: MultiAgentPlugin[]
   /** Custom trace attributes to include on all spans. */
@@ -109,10 +112,11 @@ export class Swarm implements MultiAgent {
   private readonly _hookRegistry: HookRegistryImplementation
   private readonly _tracer: Tracer
   readonly start: AgentNode
+  readonly sessionManager?: SessionManager | undefined
   private _initialized: boolean
 
   constructor(options: SwarmOptions) {
-    const { id, nodes, start, plugins, traceAttributes, ...config } = options
+    const { id, nodes, start, sessionManager, plugins, traceAttributes, ...config } = options
 
     this.id = id ?? 'swarm'
 
@@ -124,8 +128,17 @@ export class Swarm implements MultiAgent {
     this.nodes = this._resolveNodes(nodes)
     this.start = this._resolveStart(start)
 
+    this.sessionManager = sessionManager
+
+    if (sessionManager && plugins?.some((p) => p.name === sessionManager.name)) {
+      throw new Error('sessionManager was provided as both a constructor argument and in the plugins array')
+    }
+
     this._hookRegistry = new HookRegistryImplementation()
-    this._pluginRegistry = new MultiAgentPluginRegistry(plugins)
+    this._pluginRegistry = new MultiAgentPluginRegistry([
+      ...(plugins ?? []),
+      ...(sessionManager ? [sessionManager] : []),
+    ])
     this._tracer = new Tracer(traceAttributes)
     this._initialized = false
   }
@@ -200,7 +213,7 @@ export class Swarm implements MultiAgent {
       input,
     })
 
-    // Plugins (e.g. SessionManager) may restore state.results here via the hook
+    // SessionManager (or plugins) may restore state.results here via the hook
     yield new BeforeMultiAgentInvocationEvent({ orchestrator: this, state })
 
     // Resume: if state was restored from a snapshot, derive the next node from the last handoff
@@ -217,7 +230,6 @@ export class Swarm implements MultiAgent {
         // Execute current node
         const nodeResult = yield* this._streamNode(node, input, state, handoff, multiAgentSpan)
         handoff = nodeResult.structuredOutput as HandoffResult | undefined
-        state.results.push(nodeResult)
 
         // Check for terminal conditions
         if (nodeResult.status === Status.FAILED || !handoff?.agentId) {
@@ -276,6 +288,7 @@ export class Swarm implements MultiAgent {
       const result = new NodeResult({ nodeId: node.id, status: Status.CANCELLED, duration: 0 })
       nodeState.status = Status.CANCELLED
       nodeState.results.push(result)
+      state.results.push(result)
       yield new NodeCancelEvent({ nodeId: node.id, state, message })
       yield new AfterNodeCallEvent({ orchestrator: this, state, nodeId: node.id })
       this._tracer.endNodeSpan(nodeSpan, { status: Status.CANCELLED, duration: 0 })
@@ -296,6 +309,7 @@ export class Swarm implements MultiAgent {
 
       const result = next.value
       this._tracer.endNodeSpan(nodeSpan, { status: result.status, duration: result.duration, usage: result.usage })
+      state.results.push(result)
 
       yield new AfterNodeCallEvent({ orchestrator: this, state, nodeId: node.id })
       return result
@@ -401,24 +415,12 @@ export class Swarm implements MultiAgent {
    * @returns The handoff target node and its handoff context, or `undefined` for a fresh start
    */
   private _findResumeNode(state: MultiAgentState): { node: AgentNode; lastHandoff: HandoffResult } | undefined {
-    // Find the last completed node by checking per-node state.
-    // We use state.nodes rather than state.results because with the 'node' save strategy,
-    // AfterNodeCallEvent fires before state.results is populated.
-    let lastCompletedResult: NodeResult | undefined
-    let latestStartTime = -1
-    for (const [, ns] of state.nodes) {
-      if (ns.status !== Status.COMPLETED) continue
-      if (ns.startTime <= latestStartTime) continue
-      const nodeResult = ns.results[ns.results.length - 1]
-      if (nodeResult) {
-        lastCompletedResult = nodeResult
-        latestStartTime = ns.startTime
-      }
-    }
+    // state.results is pushed in completion order (inside _streamNode, before AfterNodeCallEvent),
+    // so the last item is always the most recent completed node.
+    const lastResult = state.results[state.results.length - 1]
+    if (!lastResult) return undefined
 
-    if (!lastCompletedResult) return undefined
-
-    const lastNodeHandoff = lastCompletedResult.structuredOutput as HandoffResult | undefined
+    const lastNodeHandoff = lastResult.structuredOutput as HandoffResult | undefined
     if (!lastNodeHandoff?.agentId) return undefined
 
     const nextNode = this.nodes.get(lastNodeHandoff.agentId)
