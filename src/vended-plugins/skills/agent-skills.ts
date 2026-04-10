@@ -1,0 +1,384 @@
+/**
+ * AgentSkills plugin for integrating Agent Skills into Strands agents.
+ *
+ * This module provides the AgentSkillsPlugin class that implements the Plugin
+ * interface to add Agent Skills support. The plugin registers a tool for
+ * activating skills and injects skill metadata into the system prompt.
+ */
+
+import { readdirSync, statSync, existsSync } from 'fs'
+import { join, relative, sep } from 'path'
+import { z } from 'zod'
+import { tool } from '../../tools/tool-factory.js'
+import { BeforeInvocationEvent } from '../../hooks/events.js'
+import { TextBlock, type SystemContentBlock } from '../../types/messages.js'
+import { logger } from '../../logging/logger.js'
+import { Skill } from './skill.js'
+import type { Plugin } from '../../plugins/plugin.js'
+import type { LocalAgent } from '../../types/agent.js'
+import type { Tool } from '../../tools/tool.js'
+import type { ToolContext } from '../../tools/tool.js'
+
+/** A single skill source: filesystem path string or Skill instance. */
+export type SkillSource = string | Skill
+
+/** Configuration for the AgentSkillsPlugin. */
+export interface AgentSkillsPluginConfig {
+  /**
+   * One or more skill sources. Each element can be:
+   * - A `Skill` instance
+   * - A path to a skill directory (containing SKILL.md)
+   * - A path to a parent directory (containing skill subdirectories)
+   */
+  skills: SkillSource[]
+
+  /** Maximum number of resource files to list in skill responses. Defaults to 20. */
+  maxResourceFiles?: number | undefined
+
+  /** If true, throw on skill validation issues. If false (default), warn and load anyway. */
+  strict?: boolean | undefined
+}
+
+const SKILLS_MARKER_START = '<!-- strands:agent-skills:start -->'
+const SKILLS_MARKER_END = '<!-- strands:agent-skills:end -->'
+const SKILLS_MARKER_REGEX = new RegExp(`${escapeRegex(SKILLS_MARKER_START)}[\\s\\S]*?${escapeRegex(SKILLS_MARKER_END)}`)
+
+const STATE_KEY_ACTIVATED = 'strands:agent-skills:activated'
+const RESOURCE_DIRS = ['scripts', 'references', 'assets']
+const DEFAULT_MAX_RESOURCE_FILES = 20
+
+/**
+ * Escape special regex characters in a string.
+ */
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+/**
+ * Escape XML special characters in text content.
+ */
+function escapeXml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;')
+}
+
+/**
+ * Plugin that integrates Agent Skills into a Strands agent.
+ *
+ * Provides:
+ * 1. A `skills` tool that allows the agent to activate skills on demand
+ * 2. System prompt injection of available skill metadata before each invocation
+ * 3. Session persistence of activated skill state via `agent.appState`
+ *
+ * Skills can be provided as filesystem paths (to individual skill directories or
+ * parent directories containing multiple skills) or as pre-built `Skill` instances.
+ *
+ * @example
+ * ```typescript
+ * import { Agent } from '@strands-agents/sdk'
+ * import { Skill, AgentSkillsPlugin } from '@strands-agents/sdk/vended-plugins/skills'
+ *
+ * // Load from filesystem
+ * const plugin = new AgentSkillsPlugin({
+ *   skills: ['./skills/pdf-processing', './skills/'],
+ * })
+ *
+ * // Or provide Skill instances directly
+ * const skill = new Skill({ name: 'my-skill', description: 'A custom skill', instructions: 'Do the thing' })
+ * const plugin = new AgentSkillsPlugin({ skills: [skill] })
+ *
+ * const agent = new Agent({ model, plugins: [plugin] })
+ * ```
+ */
+export class AgentSkillsPlugin implements Plugin {
+  readonly name = 'strands:agent-skills'
+
+  private _skills: Map<string, Skill>
+  private readonly _maxResourceFiles: number
+  /** When true, skill validation errors throw instead of logging warnings. */
+  private readonly _strict: boolean
+
+  constructor(config: AgentSkillsPluginConfig) {
+    this._strict = config.strict ?? false
+    this._maxResourceFiles = config.maxResourceFiles ?? DEFAULT_MAX_RESOURCE_FILES
+    this._skills = this._resolveSkills(config.skills)
+  }
+
+  /**
+   * Initialize the plugin with the agent instance.
+   *
+   * Registers a BeforeInvocationEvent hook that injects skill metadata
+   * into the system prompt before each invocation.
+   */
+  initAgent(agent: LocalAgent): void {
+    if (this._skills.size === 0) {
+      logger.warn('no skills were loaded, the agent will have no skills available')
+    }
+    logger.debug(`skill_count=<${this._skills.size}> | skills plugin initialized`)
+
+    agent.addHook(BeforeInvocationEvent, (event) => {
+      this._injectSkillsXml(event.agent)
+    })
+  }
+
+  /**
+   * Returns the skills activation tool for auto-registration with the agent.
+   */
+  getTools(): Tool[] {
+    return [this._createSkillsTool()]
+  }
+
+  /**
+   * Get the list of available skills.
+   */
+  getAvailableSkills(): readonly Skill[] {
+    return [...this._skills.values()]
+  }
+
+  /**
+   * Replace all available skills.
+   *
+   * Note: this does not deactivate skills on any agent. Active skill
+   * state is managed per-agent and will be reconciled on the next
+   * tool call or invocation.
+   */
+  setAvailableSkills(skills: SkillSource[]): void {
+    this._skills = this._resolveSkills(skills)
+  }
+
+  /**
+   * Get the list of skills activated by the given agent.
+   * Returns skill names in activation order (most recent last).
+   */
+  getActivatedSkills(agent: LocalAgent): readonly string[] {
+    return (agent.appState.get(STATE_KEY_ACTIVATED) as string[] | undefined) ?? []
+  }
+
+  /**
+   * Resolve skill sources into a name→Skill map.
+   *
+   * For each source:
+   * - Skill instance: added directly
+   * - String path: tries Skill.fromFile first (handles dirs with SKILL.md and SKILL.md files),
+   *   falls back to Skill.fromDirectory (handles parent dirs containing skill subdirs)
+   */
+  private _resolveSkills(sources: SkillSource[]): Map<string, Skill> {
+    const resolved = new Map<string, Skill>()
+
+    for (const source of sources) {
+      if (source instanceof Skill) {
+        if (resolved.has(source.name)) {
+          logger.warn(`name=<${source.name}> | duplicate skill name, overwriting previous skill`)
+        }
+        resolved.set(source.name, source)
+      } else {
+        try {
+          // Try loading as a single skill (directory with SKILL.md or SKILL.md file)
+          const skill = Skill.fromFile(source, { strict: this._strict })
+          if (resolved.has(skill.name)) {
+            logger.warn(`name=<${skill.name}> | duplicate skill name, overwriting previous skill`)
+          }
+          resolved.set(skill.name, skill)
+        } catch (singleSkillError) {
+          // Fall back to loading as a parent directory containing skill subdirectories
+          logger.debug(`path=<${source}> | not a single skill (${singleSkillError}), trying as directory`)
+          try {
+            for (const skill of Skill.fromDirectory(source, { strict: this._strict })) {
+              if (resolved.has(skill.name)) {
+                logger.warn(`name=<${skill.name}> | duplicate skill name, overwriting previous skill`)
+              }
+              resolved.set(skill.name, skill)
+            }
+          } catch (error) {
+            logger.warn(`path=<${source}> | failed to resolve skill source: ${error}`)
+          }
+        }
+      }
+    }
+
+    logger.debug(`source_count=<${sources.length}>, resolved_count=<${resolved.size}> | skills resolved`)
+    return resolved
+  }
+
+  /**
+   * Create the skills activation tool using the tool() factory with Zod schema.
+   */
+  private _createSkillsTool(): Tool {
+    return tool({
+      name: 'skills',
+      description:
+        'Activate a skill to load its full instructions. ' +
+        'Use this tool to load the complete instructions for a skill listed in ' +
+        'the available_skills section of your system prompt.',
+      inputSchema: z.object({
+        skill_name: z.string().min(1).describe('Name of the skill to activate'),
+      }),
+      callback: (input: { skill_name: string }, context?: ToolContext): string => {
+        if (context == null) {
+          throw new Error('skills tool requires a ToolContext with an agent reference')
+        }
+        return this._activateSkill(input.skill_name, context)
+      },
+    })
+  }
+
+  /**
+   * Handle skill activation from the tool callback.
+   */
+  private _activateSkill(skillName: string, context: ToolContext): string {
+    const found = this._skills.get(skillName)
+    if (found == null) {
+      const available = [...this._skills.keys()].join(', ')
+      return `Skill '${skillName}' not found. Available skills: ${available}`
+    }
+
+    logger.debug(`skill_name=<${skillName}> | skill activated`)
+    this._trackActivatedSkill(context.agent, skillName)
+    return this._formatSkillResponse(found)
+  }
+
+  /**
+   * Record a skill activation in agent state.
+   * Maintains an ordered list of activated skill names (most recent last), without duplicates.
+   */
+  private _trackActivatedSkill(agent: LocalAgent, skillName: string): void {
+    const activated = (agent.appState.get(STATE_KEY_ACTIVATED) as string[] | undefined) ?? []
+    agent.appState.set(STATE_KEY_ACTIVATED, [...activated.filter((n) => n !== skillName), skillName])
+  }
+
+  /**
+   * Inject skill metadata into the agent's system prompt.
+   *
+   * Uses deterministic markers to find and replace the skills block,
+   * eliminating the need for state-tracked exact string matching.
+   */
+  private _injectSkillsXml(agent: LocalAgent): void {
+    const skillsXml = this._generateSkillsXml()
+    const wrappedBlock = `${SKILLS_MARKER_START}\n${skillsXml}\n${SKILLS_MARKER_END}`
+
+    const systemPrompt = agent.systemPrompt
+
+    if (systemPrompt == null) {
+      agent.systemPrompt = wrappedBlock
+    } else if (typeof systemPrompt === 'string') {
+      // Strip existing markers, then append fresh block
+      const stripped = systemPrompt.replace(SKILLS_MARKER_REGEX, '').trimEnd()
+      agent.systemPrompt = stripped ? `${stripped}\n\n${wrappedBlock}` : wrappedBlock
+    } else {
+      // SystemContentBlock[] — filter out the TextBlock containing our marker, append new one
+      const filtered: SystemContentBlock[] = systemPrompt.filter(
+        (block) => !(block.type === 'textBlock' && block.text.includes(SKILLS_MARKER_START))
+      )
+      filtered.push(new TextBlock(wrappedBlock))
+      agent.systemPrompt = filtered
+    }
+  }
+
+  /**
+   * Generate the XML block listing available skills for the system prompt.
+   *
+   * @example Output with skills:
+   * ```xml
+   * <available_skills>
+   * <skill>
+   * <name>pdf-processing</name>
+   * <description>Extract text and tables from PDF files</description>
+   * <location>/path/to/pdf-processing/SKILL.md</location>
+   * </skill>
+   * </available_skills>
+   * ```
+   */
+  private _generateSkillsXml(): string {
+    if (this._skills.size === 0) {
+      return '<available_skills>\nNo skills are currently available.\n</available_skills>'
+    }
+
+    const lines: string[] = ['<available_skills>']
+
+    for (const skill of this._skills.values()) {
+      lines.push('<skill>')
+      lines.push(`<name>${escapeXml(skill.name)}</name>`)
+      lines.push(`<description>${escapeXml(skill.description)}</description>`)
+      if (skill.path != null) {
+        lines.push(`<location>${escapeXml(join(skill.path, 'SKILL.md'))}</location>`)
+      }
+      lines.push('</skill>')
+    }
+
+    lines.push('</available_skills>')
+    return lines.join('\n')
+  }
+
+  /**
+   * Format the tool response when a skill is activated.
+   *
+   * Includes the full instructions along with relevant metadata fields
+   * and a listing of available resource files.
+   */
+  private _formatSkillResponse(skill: Skill): string {
+    if (!skill.instructions) {
+      return `Skill '${skill.name}' activated (no instructions available).`
+    }
+
+    const parts: string[] = [skill.instructions]
+
+    const metadataLines: string[] = []
+    if (skill.allowedTools != null && skill.allowedTools.length > 0) {
+      metadataLines.push(`Allowed tools: ${skill.allowedTools.join(', ')}`)
+    }
+    if (skill.compatibility != null) {
+      metadataLines.push(`Compatibility: ${skill.compatibility}`)
+    }
+    if (skill.path != null) {
+      metadataLines.push(`Location: ${join(skill.path, 'SKILL.md')}`)
+    }
+
+    if (metadataLines.length > 0) {
+      parts.push('\n---\n' + metadataLines.join('\n'))
+    }
+
+    if (skill.path != null) {
+      const resources = this._listSkillResources(skill.path)
+      if (resources.length > 0) {
+        parts.push('\nAvailable resources:\n' + resources.map((r) => `  ${r}`).join('\n'))
+      }
+    }
+
+    return parts.join('\n')
+  }
+
+  /**
+   * List resource files in a skill's optional directories.
+   *
+   * Scans `scripts/`, `references/`, and `assets/` subdirectories for files,
+   * returning relative paths. Results are capped at maxResourceFiles.
+   */
+  private _listSkillResources(skillPath: string): string[] {
+    const files: string[] = []
+
+    for (const dirName of RESOURCE_DIRS) {
+      const resourceDir = join(skillPath, dirName)
+      if (!existsSync(resourceDir) || !statSync(resourceDir).isDirectory()) {
+        continue
+      }
+
+      const entries = readdirSync(resourceDir, { recursive: true, encoding: 'utf-8' })
+      for (const entry of [...entries].sort()) {
+        const fullPath = join(resourceDir, entry)
+        if (!existsSync(fullPath) || !statSync(fullPath).isFile()) continue
+
+        files.push(relative(skillPath, fullPath).split(sep).join('/'))
+        if (files.length >= this._maxResourceFiles) {
+          files.push(`... (truncated at ${this._maxResourceFiles} files)`)
+          return files
+        }
+      }
+    }
+
+    return files
+  }
+}

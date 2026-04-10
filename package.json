@@ -69,6 +69,10 @@
     "./telemetry": {
       "types": "./dist/src/telemetry/index.d.ts",
       "default": "./dist/src/telemetry/index.js"
+    },
+    "./vended-plugins/skills": {
+      "types": "./dist/src/vended-plugins/skills/index.d.ts",
+      "default": "./dist/src/vended-plugins/skills/index.js"
     }
   },
   "scripts": {
@@ -132,9 +136,9 @@
     "@vitest/browser": "^4.0.15",
     "@vitest/browser-playwright": "^4.0.15",
     "@vitest/coverage-v8": "^4.0.15",
-    "express": "^5.2.1",
     "eslint": "^9.0.0",
     "eslint-plugin-tsdoc": "^0.5.0",
+    "express": "^5.2.1",
     "husky": "^9.1.7",
     "openai": "^6.7.0",
     "playwright": "^1.56.1",
@@ -157,7 +161,8 @@
   "dependencies": {
     "@aws-sdk/client-bedrock-runtime": "^3.943.0",
     "@types/json-schema": "^7.0.15",
-    "uuid": "^13.0.0"
+    "uuid": "^13.0.0",
+    "yaml": "^2.8.3"
   },
   "peerDependencies": {
     "@a2a-js/sdk": "^0.3.10",
