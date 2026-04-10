@@ -53,9 +53,6 @@ interface HandoffResult {
 }
 
 /**
- * Options for creating a Swarm instance.
- */
-/**
  * Input type for swarm nodes. Pass an {@link InvokableAgent} directly for the simple case,
  * or {@link AgentNodeOptions} for per-node config.
  */
@@ -404,10 +401,10 @@ export class Swarm implements MultiAgent {
    * Finds the next node to execute from a restored {@link MultiAgentState}.
    *
    * When the session manager restores state from a snapshot, `state.results`
-   * contains results from the previous invocation. The last result's structured
-   * output contains the handoff decision — if it has an `agentId`, that is the
-   * node the previous run intended to hand off to but never executed (e.g. due
-   * to a crash). We resume from that handoff target.
+   * contains results from the previous invocation in completion order. The last
+   * result's structured output contains the handoff decision — if it has an
+   * `agentId`, that is the node the previous run intended to hand off to but
+   * never executed (e.g. due to a crash). We resume from that handoff target.
    *
    * If the last result has no `agentId`, the previous run completed normally
    * and there is nothing to resume.
@@ -415,8 +412,6 @@ export class Swarm implements MultiAgent {
    * @returns The handoff target node and its handoff context, or `undefined` for a fresh start
    */
   private _findResumeNode(state: MultiAgentState): { node: AgentNode; lastHandoff: HandoffResult } | undefined {
-    // state.results is pushed in completion order (inside _streamNode, before AfterNodeCallEvent),
-    // so the last item is always the most recent completed node.
     const lastResult = state.results[state.results.length - 1]
     if (!lastResult) return undefined
 
