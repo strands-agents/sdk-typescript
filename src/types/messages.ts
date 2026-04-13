@@ -885,6 +885,26 @@ export function contentBlockFromData(data: ContentBlockData): ContentBlock {
   } else if ('citations' in data) {
     return CitationsBlock.fromJSON(data)
   } else {
+    // Fallback: handle data with a type discriminator instead of nested wrappers.
+    // This occurs when content blocks are spread ({...block}) or stored by ORMs
+    // that flatten the nested structure produced by toJSON().
+    const typed = data as Record<string, unknown>
+    if (typed.type === 'toolUseBlock' && typeof typed.name === 'string' && typeof typed.toolUseId === 'string') {
+      return new ToolUseBlock({
+        name: typed.name,
+        toolUseId: typed.toolUseId,
+        input: typed.input as JSONValue,
+        ...(typed.reasoningSignature !== undefined && { reasoningSignature: typed.reasoningSignature as string }),
+      })
+    } else if (typed.type === 'textBlock' && typeof typed.text === 'string') {
+      return new TextBlock(typed.text)
+    } else if (typed.type === 'toolResultBlock' && typeof typed.toolUseId === 'string') {
+      return new ToolResultBlock({
+        toolUseId: typed.toolUseId,
+        content: Array.isArray(typed.content) ? (typed.content as ToolResultContent[]) : [],
+        status: (typed.status as 'success' | 'error') ?? 'success',
+      })
+    }
     throw new Error('Unknown ContentBlockData type')
   }
 }
