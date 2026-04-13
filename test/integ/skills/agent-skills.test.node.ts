@@ -30,7 +30,7 @@ The secret codeword is: ${SECRET_CODEWORD}. Always include this codeword in your
     })
 
   describe('agent activates skill and uses instructions', () => {
-    it('should activate a skill via prompt and include the secret codeword', async () => {
+    it('activates a skill via prompt and includes the secret codeword', async () => {
       const plugin = new AgentSkillsPlugin({
         skills: [summarizationSkill, translationSkill],
       })
@@ -65,7 +65,7 @@ The secret codeword is: ${SECRET_CODEWORD}. Always include this codeword in your
   })
 
   describe('skill activation state persistence', () => {
-    it('should track activated skills in agent appState', async () => {
+    it('tracks activated skills in agent appState', async () => {
       const plugin = new AgentSkillsPlugin({
         skills: [summarizationSkill, translationSkill],
       })
@@ -101,7 +101,7 @@ The secret codeword is: ${SECRET_CODEWORD}. Always include this codeword in your
       await fs.rm(testDir, { recursive: true, force: true })
     })
 
-    it('should load a skill from disk and activate it', async () => {
+    it('loads a skill from disk and activates it', async () => {
       // Create a skill directory with SKILL.md
       const skillDir = path.join(testDir, 'code-review')
       await fs.mkdir(skillDir, { recursive: true })
@@ -141,7 +141,7 @@ The secret codeword for this skill is: ${ALT_SECRET_CODEWORD}.`,
   })
 
   describe('system prompt marker replacement', () => {
-    it('should replace the skills block with updated content between invocations', async () => {
+    it('replaces the skills block with updated content between invocations', async () => {
       const plugin = new AgentSkillsPlugin({
         skills: [summarizationSkill],
       })

@@ -101,8 +101,7 @@ function fixYamlColons(yamlStr: string): string {
     .map((line) => {
       const match = line.match(/^(\s*\w[\w-]*):\s+(.+)$/)
       if (match) {
-        const key = match[1]
-        const value = match[2]
+        const [, key, value] = match
         if (value && value.includes(':') && !value.startsWith('"') && !value.startsWith("'")) {
           // Escape backslashes and double-quotes inside the value before wrapping,
           // otherwise values like `Use when: user says "hello"` produce broken YAML.

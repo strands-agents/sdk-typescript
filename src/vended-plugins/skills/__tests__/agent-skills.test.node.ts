@@ -44,27 +44,27 @@ describe('AgentSkillsPlugin', () => {
   // ── Constructor & skill resolution ──────────────────────────────────
 
   describe('constructor', () => {
-    it('should resolve Skill instances directly', () => {
+    it('resolves Skill instances directly', () => {
       const skill = makeSkill('my-skill')
       const plugin = new AgentSkillsPlugin({ skills: [skill] })
       expect(plugin.getAvailableSkills()).toHaveLength(1)
       expect(plugin.getAvailableSkills()[0]!.name).toBe('my-skill')
     })
 
-    it('should resolve a skill directory path', async () => {
+    it('resolves a skill directory path', async () => {
       await createSkillDir('my-skill', '---\nname: my-skill\ndescription: A skill\n---\nBody.')
       const plugin = new AgentSkillsPlugin({ skills: [path.join(testDir, 'my-skill')] })
       expect(plugin.getAvailableSkills()).toHaveLength(1)
     })
 
-    it('should resolve a parent directory with multiple skills', async () => {
+    it('resolves a parent directory with multiple skills', async () => {
       await createSkillDir('skill-a', '---\nname: skill-a\ndescription: Skill A\n---\nA.')
       await createSkillDir('skill-b', '---\nname: skill-b\ndescription: Skill B\n---\nB.')
       const plugin = new AgentSkillsPlugin({ skills: [testDir] })
       expect(plugin.getAvailableSkills()).toHaveLength(2)
     })
 
-    it('should handle mixed sources', async () => {
+    it('handles mixed sources', async () => {
       await createSkillDir('file-skill', '---\nname: file-skill\ndescription: From file\n---\nBody.')
       const directSkill = makeSkill('direct-skill')
       const plugin = new AgentSkillsPlugin({
@@ -73,7 +73,7 @@ describe('AgentSkillsPlugin', () => {
       expect(plugin.getAvailableSkills()).toHaveLength(2)
     })
 
-    it('should warn on duplicate names and keep the last', () => {
+    it('warns on duplicate names and keeps the last', () => {
       const skill1 = makeSkill('dup', 'First')
       const skill2 = makeSkill('dup', 'Second')
       const plugin = new AgentSkillsPlugin({ skills: [skill1, skill2] })
@@ -81,12 +81,12 @@ describe('AgentSkillsPlugin', () => {
       expect(plugin.getAvailableSkills()[0]!.description).toBe('Second')
     })
 
-    it('should warn and skip non-existent paths', () => {
+    it('warns and skips non-existent paths', () => {
       const plugin = new AgentSkillsPlugin({ skills: ['/does/not/exist'] })
       expect(plugin.getAvailableSkills()).toHaveLength(0)
     })
 
-    it('should gracefully handle a path with malformed SKILL.md', async () => {
+    it('gracefully handles a path with malformed SKILL.md', async () => {
       const dirPath = path.join(testDir, 'bad-skill')
       await fs.mkdir(dirPath, { recursive: true })
       await fs.writeFile(path.join(dirPath, 'SKILL.md'), 'totally broken, no frontmatter at all', 'utf-8')
@@ -95,7 +95,7 @@ describe('AgentSkillsPlugin', () => {
       expect(plugin.getAvailableSkills()).toHaveLength(0)
     })
 
-    it('should load valid skills from a parent dir containing malformed siblings', async () => {
+    it('loads valid skills from a parent dir containing malformed siblings', async () => {
       await fs.mkdir(path.join(testDir, 'good-skill'), { recursive: true })
       await fs.writeFile(
         path.join(testDir, 'good-skill', 'SKILL.md'),
@@ -115,19 +115,19 @@ describe('AgentSkillsPlugin', () => {
   // ── Plugin interface ────────────────────────────────────────────────
 
   describe('plugin interface', () => {
-    it('should have the correct name', () => {
+    it('has the correct name', () => {
       const plugin = new AgentSkillsPlugin({ skills: [makeSkill('s')] })
       expect(plugin.name).toBe('strands:agent-skills')
     })
 
-    it('should return one tool named skills from getTools', () => {
+    it('returns one tool named skills from getTools', () => {
       const plugin = new AgentSkillsPlugin({ skills: [makeSkill('s')] })
       const tools = plugin.getTools()
       expect(tools).toHaveLength(1)
       expect(tools[0]!.name).toBe('skills')
     })
 
-    it('should register a BeforeInvocationEvent hook in initAgent', () => {
+    it('registers a BeforeInvocationEvent hook in initAgent', () => {
       const plugin = new AgentSkillsPlugin({ skills: [makeSkill('s')] })
       const agent = createMockAgent()
       plugin.initAgent(agent)
@@ -154,7 +154,7 @@ describe('AgentSkillsPlugin', () => {
       await invokeTrackedHook(agent, new BeforeInvocationEvent({ agent: agent as any }))
     }
 
-    it('should inject into undefined system prompt', async () => {
+    it('injects into undefined system prompt', async () => {
       delete (agent as any).systemPrompt
       await fireBeforeInvocation()
       expect(typeof agent.systemPrompt).toBe('string')
@@ -162,7 +162,7 @@ describe('AgentSkillsPlugin', () => {
       expect(agent.systemPrompt as unknown as string).toContain('pdf-skill')
     })
 
-    it('should inject into string system prompt', async () => {
+    it('injects into string system prompt', async () => {
       agent.systemPrompt = 'You are a helpful assistant.'
       await fireBeforeInvocation()
       const prompt = agent.systemPrompt as string
@@ -171,7 +171,7 @@ describe('AgentSkillsPlugin', () => {
       expect(prompt).toContain('pdf-skill')
     })
 
-    it('should inject into SystemContentBlock[] prompt', async () => {
+    it('injects into SystemContentBlock[] prompt', async () => {
       agent.systemPrompt = [new TextBlock('You are helpful.'), new CachePointBlock({ cacheType: 'default' })]
       await fireBeforeInvocation()
       const blocks = agent.systemPrompt as any[]
@@ -185,7 +185,7 @@ describe('AgentSkillsPlugin', () => {
       expect((blocks[2] as TextBlock).text).toContain('<available_skills>')
     })
 
-    it('should be idempotent — re-injection replaces previous block', async () => {
+    it('is idempotent — re-injection replaces previous block', async () => {
       agent.systemPrompt = 'Base prompt.'
       await fireBeforeInvocation()
       const first = agent.systemPrompt as string
@@ -200,7 +200,7 @@ describe('AgentSkillsPlugin', () => {
       expect(second).toContain('Base prompt.')
     })
 
-    it('should be idempotent with SystemContentBlock[] prompt', async () => {
+    it('is idempotent with SystemContentBlock[] prompt', async () => {
       agent.systemPrompt = [new TextBlock('Base.')]
       await fireBeforeInvocation()
       await fireBeforeInvocation()
@@ -210,7 +210,7 @@ describe('AgentSkillsPlugin', () => {
       expect(skillsBlocks).toHaveLength(1)
     })
 
-    it('should preserve external modifications to system prompt', async () => {
+    it('preserves external modifications to system prompt', async () => {
       agent.systemPrompt = 'Original.'
       await fireBeforeInvocation()
 
@@ -223,7 +223,7 @@ describe('AgentSkillsPlugin', () => {
       expect(prompt).toContain('<available_skills>')
     })
 
-    it('should XML-escape special characters in skill metadata', () => {
+    it('XML-escapes special characters in skill metadata', () => {
       const plugin2 = new AgentSkillsPlugin({
         skills: [makeSkill('test-skill', 'Use when: user says <hello> & "goodbye"')],
       })
@@ -240,7 +240,7 @@ describe('AgentSkillsPlugin', () => {
       expect(prompt).toContain('&quot;goodbye&quot;')
     })
 
-    it('should include skill location when path is set', async () => {
+    it('includes skill location when path is set', async () => {
       const dirPath = await createSkillDir(
         'located-skill',
         '---\nname: located-skill\ndescription: Has a path\n---\nBody.'
@@ -255,7 +255,7 @@ describe('AgentSkillsPlugin', () => {
       expect(prompt).toContain('SKILL.md')
     })
 
-    it('should show "no skills available" when empty', async () => {
+    it('shows "no skills available" when empty', async () => {
       const emptyPlugin = new AgentSkillsPlugin({ skills: [] })
       const emptyAgent = createMockAgent()
       emptyPlugin.initAgent(emptyAgent)
@@ -265,7 +265,7 @@ describe('AgentSkillsPlugin', () => {
       expect(prompt).toContain('No skills are currently available.')
     })
 
-    it('should inject into null system prompt', async () => {
+    it('injects into null system prompt', async () => {
       agent.systemPrompt = null as any
       await fireBeforeInvocation()
       expect(typeof agent.systemPrompt).toBe('string')
@@ -273,7 +273,7 @@ describe('AgentSkillsPlugin', () => {
       expect(agent.systemPrompt as unknown as string).toContain('pdf-skill')
     })
 
-    it('should reflect updated skills after setAvailableSkills', async () => {
+    it('reflects updated skills after setAvailableSkills', async () => {
       agent.systemPrompt = 'Base.'
       await fireBeforeInvocation()
       expect(agent.systemPrompt as string).toContain('pdf-skill')
@@ -286,7 +286,7 @@ describe('AgentSkillsPlugin', () => {
       expect(prompt).toContain('Base.')
     })
 
-    it('should list all skills when multiple are available', async () => {
+    it('lists all skills when multiple are available', async () => {
       const multiPlugin = new AgentSkillsPlugin({
         skills: [makeSkill('skill-a', 'First'), makeSkill('skill-b', 'Second'), makeSkill('skill-c', 'Third')],
       })
@@ -343,31 +343,31 @@ describe('AgentSkillsPlugin', () => {
       return content.map((b: any) => b.text ?? '').join('')
     }
 
-    it('should return instructions for a valid skill', async () => {
+    it('returns instructions for a valid skill', async () => {
       const result = await invokeTool('test-skill')
       expect(result).toContain('# Test')
       expect(result).toContain('Do the thing.')
     })
 
-    it('should include metadata in the response', async () => {
+    it('includes metadata in the response', async () => {
       const result = await invokeTool('test-skill')
       expect(result).toContain('Allowed tools: bash')
       expect(result).toContain('Compatibility: v1.0+')
     })
 
-    it('should return error for unknown skill', async () => {
+    it('returns error for unknown skill', async () => {
       const result = await invokeTool('nonexistent')
       expect(result).toContain("Skill 'nonexistent' not found")
       expect(result).toContain('test-skill')
     })
 
-    it('should track activated skills in appState', async () => {
+    it('tracks activated skills in appState', async () => {
       await invokeTool('test-skill')
       const activated = plugin.getActivatedSkills(agent as any)
       expect(activated).toEqual(['test-skill'])
     })
 
-    it('should maintain activation order without duplicates', async () => {
+    it('maintains activation order without duplicates', async () => {
       // Add a second skill
       plugin.setAvailableSkills([makeSkill('skill-a'), makeSkill('skill-b')])
 
@@ -379,13 +379,13 @@ describe('AgentSkillsPlugin', () => {
       expect(activated).toEqual(['skill-b', 'skill-a'])
     })
 
-    it('should handle skill with no instructions', async () => {
+    it('handles skill with no instructions', async () => {
       plugin.setAvailableSkills([new Skill({ name: 'empty', description: 'No instructions' })])
       const result = await invokeTool('empty')
       expect(result).toContain("Skill 'empty' activated (no instructions available).")
     })
 
-    it('should return validation error for empty skill_name', async () => {
+    it('returns validation error for empty skill_name', async () => {
       const result = await invokeTool('')
       // z.string().min(1) rejects empty strings at the schema level
       expect(result.toLowerCase()).toContain('too_small')
@@ -395,7 +395,7 @@ describe('AgentSkillsPlugin', () => {
   // ── Resource listing ────────────────────────────────────────────────
 
   describe('resource listing', () => {
-    it('should list files from scripts/, references/, assets/', async () => {
+    it('lists files from scripts/, references/, assets/', async () => {
       const dirPath = await createSkillDir(
         'resource-skill',
         '---\nname: resource-skill\ndescription: Has resources\n---\nBody.',
@@ -423,7 +423,7 @@ describe('AgentSkillsPlugin', () => {
       expect(text).toContain('assets/logo.png')
     })
 
-    it('should handle missing resource directories gracefully', async () => {
+    it('handles missing resource directories gracefully', async () => {
       const dirPath = await createSkillDir(
         'no-resources',
         '---\nname: no-resources\ndescription: No extras\n---\nBody.'
@@ -444,7 +444,7 @@ describe('AgentSkillsPlugin', () => {
       expect(text).not.toContain('Available resources')
     })
 
-    it('should truncate at maxResourceFiles', async () => {
+    it('truncates at maxResourceFiles', async () => {
       // Create more files than the limit
       const files: Record<string, string> = {}
       for (let i = 0; i < 5; i++) {
@@ -475,7 +475,7 @@ describe('AgentSkillsPlugin', () => {
   // ── setAvailableSkills / getAvailableSkills ─────────────────────────
 
   describe('setAvailableSkills', () => {
-    it('should replace all skills', () => {
+    it('replaces all skills', () => {
       const plugin2 = new AgentSkillsPlugin({ skills: [makeSkill('original')] })
       expect(plugin2.getAvailableSkills()).toHaveLength(1)
 

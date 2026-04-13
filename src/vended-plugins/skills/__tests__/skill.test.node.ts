@@ -24,7 +24,7 @@ describe('Skill', () => {
   })
 
   describe('constructor', () => {
-    it('should create a skill with required fields', () => {
+    it('creates a skill with required fields', () => {
       const skill = new Skill({ name: 'test-skill', description: 'A test skill' })
       expect(skill).toEqual(
         expect.objectContaining({
@@ -40,7 +40,7 @@ describe('Skill', () => {
       )
     })
 
-    it('should create a skill with all fields', () => {
+    it('creates a skill with all fields', () => {
       const skill = new Skill({
         name: 'full-skill',
         description: 'Full description',
@@ -67,7 +67,7 @@ describe('Skill', () => {
   })
 
   describe('fromContent', () => {
-    it('should parse valid SKILL.md content', () => {
+    it('parses valid SKILL.md content', () => {
       const content = `---
 name: my-skill
 description: Does something useful
@@ -81,7 +81,7 @@ Follow these steps.`
       expect(skill.instructions).toBe('# Instructions\nFollow these steps.')
     })
 
-    it('should parse content with allowed-tools as space-delimited string', () => {
+    it('parses content with allowed-tools as space-delimited string', () => {
       const content = `---
 name: my-skill
 description: A skill
@@ -93,7 +93,7 @@ Instructions here.`
       expect(skill.allowedTools).toEqual(['bash', 'file-editor'])
     })
 
-    it('should parse content with allowed-tools as YAML list', () => {
+    it('parses content with allowed-tools as YAML list', () => {
       const content = `---
 name: my-skill
 description: A skill
@@ -107,7 +107,7 @@ Instructions here.`
       expect(skill.allowedTools).toEqual(['bash', 'file-editor'])
     })
 
-    it('should parse content with allowed_tools underscore variant', () => {
+    it('parses content with allowed_tools underscore variant', () => {
       const content = `---
 name: my-skill
 description: A skill
@@ -119,7 +119,7 @@ Instructions here.`
       expect(skill.allowedTools).toEqual(['bash', 'notebook'])
     })
 
-    it('should parse content with metadata', () => {
+    it('parses content with metadata', () => {
       const content = `---
 name: my-skill
 description: A skill
@@ -133,7 +133,7 @@ Body.`
       expect(skill.metadata).toEqual({ author: 'test-user', version: 1 })
     })
 
-    it('should parse content with license and compatibility', () => {
+    it('parses content with license and compatibility', () => {
       const content = `---
 name: my-skill
 description: A skill
@@ -147,15 +147,15 @@ Body.`
       expect(skill.compatibility).toBe('strands-agents >= 1.0')
     })
 
-    it('should throw if content does not start with ---', () => {
+    it('throws if content does not start with ---', () => {
       expect(() => Skill.fromContent('no frontmatter')).toThrow('SKILL.md must start with --- frontmatter delimiter')
     })
 
-    it('should throw if closing --- is missing', () => {
+    it('throws if closing --- is missing', () => {
       expect(() => Skill.fromContent('---\nname: test\n')).toThrow('SKILL.md frontmatter missing closing --- delimiter')
     })
 
-    it('should throw if name is missing', () => {
+    it('throws if name is missing', () => {
       const content = `---
 description: no name
 ---
@@ -163,7 +163,7 @@ Body.`
       expect(() => Skill.fromContent(content)).toThrow("must have a 'name' field")
     })
 
-    it('should throw if description is missing', () => {
+    it('throws if description is missing', () => {
       const content = `---
 name: my-skill
 ---
@@ -171,7 +171,7 @@ Body.`
       expect(() => Skill.fromContent(content)).toThrow("must have a 'description' field")
     })
 
-    it('should handle empty body', () => {
+    it('handles empty body', () => {
       const content = `---
 name: my-skill
 description: A skill
@@ -181,7 +181,7 @@ description: A skill
       expect(skill.instructions).toBe('')
     })
 
-    it('should warn but not throw for invalid name in lenient mode', () => {
+    it('warns but does not throw for invalid name in lenient mode', () => {
       const content = `---
 name: INVALID_NAME
 description: A skill
@@ -193,7 +193,7 @@ Body.`
       expect(skill.name).toBe('INVALID_NAME')
     })
 
-    it('should throw for invalid name in strict mode', () => {
+    it('throws for invalid name in strict mode', () => {
       const content = `---
 name: INVALID_NAME
 description: A skill
@@ -203,7 +203,7 @@ Body.`
       expect(() => Skill.fromContent(content, { strict: true })).toThrow('skill name should be')
     })
 
-    it('should throw for empty name in strict mode', () => {
+    it('throws for empty name in strict mode', () => {
       const content = `---
 name: ""
 description: A skill
@@ -213,7 +213,7 @@ Body.`
       expect(() => Skill.fromContent(content)).toThrow("must have a 'name' field")
     })
 
-    it('should throw for name exceeding length limit in strict mode', () => {
+    it('throws for name exceeding length limit in strict mode', () => {
       const longName = 'a'.repeat(65)
       const content = `---
 name: ${longName}
@@ -224,7 +224,7 @@ Body.`
       expect(() => Skill.fromContent(content, { strict: true })).toThrow('exceeds 64 character limit')
     })
 
-    it('should throw for consecutive hyphens in strict mode', () => {
+    it('throws for consecutive hyphens in strict mode', () => {
       const content = `---
 name: my--skill
 description: A skill
@@ -234,7 +234,7 @@ Body.`
       expect(() => Skill.fromContent(content, { strict: true })).toThrow('consecutive hyphens')
     })
 
-    it('should handle body containing --- horizontal rules', () => {
+    it('handles body containing --- horizontal rules', () => {
       const content = `---
 name: my-skill
 description: A skill
@@ -258,7 +258,7 @@ Third section.`
       expect(skill.instructions).toContain('Third section.')
     })
 
-    it('should handle body with only whitespace after frontmatter', () => {
+    it('handles body with only whitespace after frontmatter', () => {
       const content = `---
 name: my-skill
 description: A skill
@@ -271,7 +271,7 @@ description: A skill
       expect(skill.instructions).toBe('')
     })
 
-    it('should handle frontmatter value containing --- inline', () => {
+    it('handles frontmatter value containing --- inline', () => {
       const content = `---
 name: my-skill
 description: Use this --- for special cases
@@ -283,7 +283,7 @@ Body.`
       expect(skill.description).toBe('Use this --- for special cases')
     })
 
-    it('should ignore non-object metadata', () => {
+    it('ignores non-object metadata', () => {
       const content = `---
 name: my-skill
 description: A skill
@@ -295,7 +295,7 @@ Body.`
       expect(skill.metadata).toEqual({})
     })
 
-    it('should ignore array metadata', () => {
+    it('ignores array metadata', () => {
       const content = `---
 name: my-skill
 description: A skill
@@ -309,7 +309,7 @@ Body.`
       expect(skill.metadata).toEqual({})
     })
 
-    it('should handle allowed-tools as empty string', () => {
+    it('handles allowed-tools as empty string', () => {
       const content = `---
 name: my-skill
 description: A skill
@@ -321,7 +321,7 @@ Body.`
       expect(skill.allowedTools).toBeUndefined()
     })
 
-    it('should filter null entries from allowed-tools array', () => {
+    it('filters null entries from allowed-tools array', () => {
       const content = `---
 name: my-skill
 description: A skill
@@ -338,7 +338,7 @@ Body.`
   })
 
   describe('fromFile', () => {
-    it('should load a skill from a directory', async () => {
+    it('loads a skill from a directory', async () => {
       const dirPath = await createSkillDir(
         'my-skill',
         `---
@@ -356,7 +356,7 @@ Do the thing.`
       expect(skill.path).toBe(dirPath)
     })
 
-    it('should load a skill from a SKILL.md file path', async () => {
+    it('loads a skill from a SKILL.md file path', async () => {
       const dirPath = await createSkillDir(
         'my-skill',
         `---
@@ -372,7 +372,7 @@ Body.`
       expect(skill.path).toBe(dirPath)
     })
 
-    it('should find lowercase skill.md as fallback', async () => {
+    it('finds lowercase skill.md as fallback', async () => {
       const dirPath = await createSkillDir(
         'my-skill',
         `---
@@ -387,11 +387,11 @@ Body.`,
       expect(skill.name).toBe('my-skill')
     })
 
-    it('should throw for non-existent path', () => {
+    it('throws for non-existent path', () => {
       expect(() => Skill.fromFile('/does/not/exist')).toThrow('does not exist')
     })
 
-    it('should warn when skill name does not match directory name', async () => {
+    it('warns when skill name does not match directory name', async () => {
       const dirPath = await createSkillDir(
         'wrong-dir-name',
         `---
@@ -406,7 +406,7 @@ Body.`
       expect(skill.name).toBe('actual-skill-name')
     })
 
-    it('should throw when skill name does not match directory in strict mode', async () => {
+    it('throws when skill name does not match directory in strict mode', async () => {
       const dirPath = await createSkillDir(
         'wrong-dir-name',
         `---
@@ -421,7 +421,7 @@ Body.`
   })
 
   describe('fromDirectory', () => {
-    it('should load all skills from a directory', async () => {
+    it('loads all skills from a directory', async () => {
       await createSkillDir(
         'skill-a',
         `---
@@ -444,7 +444,7 @@ Instructions B.`
       expect(skills.map((s) => s.name).sort()).toEqual(['skill-a', 'skill-b'])
     })
 
-    it('should skip directories without SKILL.md', async () => {
+    it('skips directories without SKILL.md', async () => {
       await createSkillDir(
         'valid-skill',
         `---
@@ -462,7 +462,7 @@ Body.`
       expect(skills[0]!.name).toBe('valid-skill')
     })
 
-    it('should skip non-directory children', async () => {
+    it('skips non-directory children', async () => {
       await createSkillDir(
         'valid-skill',
         `---
@@ -478,7 +478,7 @@ Body.`
       expect(skills).toHaveLength(1)
     })
 
-    it('should skip skills with invalid content', async () => {
+    it('skips skills with invalid content', async () => {
       await createSkillDir(
         'valid-skill',
         `---
@@ -500,16 +500,16 @@ Body.`
       expect(skills[0]!.name).toBe('valid-skill')
     })
 
-    it('should throw for non-existent directory', () => {
+    it('throws for non-existent directory', () => {
       expect(() => Skill.fromDirectory('/does/not/exist')).toThrow('skills directory does not exist')
     })
 
-    it('should return empty array for directory with no skills', async () => {
+    it('returns empty array for directory with no skills', async () => {
       const skills = Skill.fromDirectory(testDir)
       expect(skills).toEqual([])
     })
 
-    it('should skip skills with completely broken SKILL.md (no frontmatter)', async () => {
+    it('skips skills with completely broken SKILL.md (no frontmatter)', async () => {
       await createSkillDir(
         'valid-skill',
         `---
