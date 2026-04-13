@@ -190,6 +190,29 @@ describe('A2AAgent', () => {
       await agent.invoke('Hello')
       expect(mockGetAgentCard).toHaveBeenCalledOnce()
     })
+
+    it('uses custom clientFactory when provided', async () => {
+      const customSendMessageStream = vi.fn().mockReturnValue(mockStream(createMockTaskResponse()))
+      const customGetAgentCard = vi.fn().mockResolvedValue(mockAgentCard)
+      const customCreateFromUrl = vi.fn().mockResolvedValue({
+        sendMessageStream: customSendMessageStream,
+        getAgentCard: customGetAgentCard,
+      })
+      const customFactory = { createFromUrl: customCreateFromUrl }
+
+      const agent = new A2AAgent({
+        url: 'http://localhost:9000',
+        clientFactory: customFactory as never,
+      })
+
+      await agent.invoke('Hello')
+
+      expect(customCreateFromUrl).toHaveBeenCalledWith('http://localhost:9000', undefined)
+      expect(customGetAgentCard).toHaveBeenCalledOnce()
+      expect(customSendMessageStream).toHaveBeenCalledOnce()
+      // Default mock should not have been called
+      expect(mockSendMessageStream).not.toHaveBeenCalled()
+    })
   })
 
   describe('stream', () => {
