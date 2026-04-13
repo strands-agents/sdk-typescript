@@ -1,5 +1,5 @@
 /**
- * Integration tests for multi-agent session management (Swarm resume).
+ * Integration tests for multi-agent session management (Swarm and Graph resume).
  * Node-only: uses FileStorage which requires fs.
  *
  */

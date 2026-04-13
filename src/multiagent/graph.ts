@@ -548,11 +548,15 @@ export class Graph implements MultiAgent {
       }
     }
 
-    logger.debug(
-      `resume_targets=<${ready.map((n) => n.id).join(', ')}>, prior_steps=<${state.steps}> | resuming graph from restored state`
-    )
-    // Empty ready set means all nodes completed — start fresh
-    return ready.length > 0 ? ready : undefined
+    if (ready.length > 0) {
+      logger.debug(
+        `resume_targets=<${ready.map((n) => n.id).join(', ')}>, prior_steps=<${state.steps}> | resuming graph from restored state`
+      )
+      return ready
+    }
+
+    logger.debug('all nodes completed in restored state | starting fresh')
+    return undefined
   }
 
   /**

@@ -627,6 +627,19 @@ describe('Graph', () => {
       })
     }
 
+    it('throws when sessionManager appears in both constructor arg and plugins', () => {
+      const sm = makeSessionManager(new MockSnapshotStorage())
+      expect(
+        () =>
+          new Graph({
+            nodes: [makeAgent('a')],
+            edges: [],
+            sessionManager: sm,
+            plugins: [sm],
+          })
+      ).toThrow('sessionManager was provided as both a constructor argument and in the plugins array')
+    })
+
     it('resumes from the next ready node after a linear graph stops (A→B→C, A done, resumes at B)', async () => {
       const storage = new MockSnapshotStorage()
 
@@ -638,7 +651,7 @@ describe('Graph', () => {
           ['b', 'c'],
         ],
         maxSteps: 1,
-        plugins: [makeSessionManager(storage)],
+        sessionManager: makeSessionManager(storage),
       })
 
       await expect(graph1.invoke('start')).rejects.toThrow('max steps reached')
@@ -650,7 +663,7 @@ describe('Graph', () => {
           ['a', 'b'],
           ['b', 'c'],
         ],
-        plugins: [makeSessionManager(storage)],
+        sessionManager: makeSessionManager(storage),
       })
 
       const result = await graph2.invoke('start')
