@@ -193,8 +193,11 @@ export class AgentSkillsPlugin implements Plugin {
               }
               resolved.set(skill.name, skill)
             }
-          } catch (error) {
-            logger.warn(`path=<${source}> | failed to resolve skill source: ${error}`)
+          } catch (dirError) {
+            logger.warn(
+              `path=<${source}> | failed to resolve skill source | ` +
+                `as file: ${singleSkillError} | as directory: ${dirError}`
+            )
           }
         }
       }
@@ -367,7 +370,7 @@ export class AgentSkillsPlugin implements Plugin {
       }
 
       const entries = readdirSync(resourceDir, { recursive: true, encoding: 'utf-8' })
-      for (const entry of [...entries].sort()) {
+      for (const entry of entries.sort()) {
         const fullPath = join(resourceDir, entry)
         if (!existsSync(fullPath) || !statSync(fullPath).isFile()) continue
 

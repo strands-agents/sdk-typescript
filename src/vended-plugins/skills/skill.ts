@@ -103,10 +103,10 @@ function fixYamlColons(yamlStr: string): string {
       if (match) {
         const key = match[1]
         const value = match[2]
-        if (value!.includes(':') && !value!.startsWith('"') && !value!.startsWith("'")) {
+        if (value && value.includes(':') && !value.startsWith('"') && !value.startsWith("'")) {
           // Escape backslashes and double-quotes inside the value before wrapping,
           // otherwise values like `Use when: user says "hello"` produce broken YAML.
-          const escaped = value!.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+          const escaped = value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
           return `${key}: "${escaped}"`
         }
       }

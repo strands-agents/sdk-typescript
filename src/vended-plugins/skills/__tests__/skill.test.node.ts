@@ -26,14 +26,18 @@ describe('Skill', () => {
   describe('constructor', () => {
     it('should create a skill with required fields', () => {
       const skill = new Skill({ name: 'test-skill', description: 'A test skill' })
-      expect(skill.name).toBe('test-skill')
-      expect(skill.description).toBe('A test skill')
-      expect(skill.instructions).toBe('')
-      expect(skill.path).toBeUndefined()
-      expect(skill.allowedTools).toBeUndefined()
-      expect(skill.metadata).toEqual({})
-      expect(skill.license).toBeUndefined()
-      expect(skill.compatibility).toBeUndefined()
+      expect(skill).toEqual(
+        expect.objectContaining({
+          name: 'test-skill',
+          description: 'A test skill',
+          instructions: '',
+          path: undefined,
+          allowedTools: undefined,
+          metadata: {},
+          license: undefined,
+          compatibility: undefined,
+        })
+      )
     })
 
     it('should create a skill with all fields', () => {
@@ -47,13 +51,18 @@ describe('Skill', () => {
         license: 'Apache-2.0',
         compatibility: 'v1.0+',
       })
-      expect(skill.name).toBe('full-skill')
-      expect(skill.instructions).toBe('# Instructions\nDo things')
-      expect(skill.path).toBe('/some/path')
-      expect(skill.allowedTools).toEqual(['bash', 'file-editor'])
-      expect(skill.metadata).toEqual({ author: 'test' })
-      expect(skill.license).toBe('Apache-2.0')
-      expect(skill.compatibility).toBe('v1.0+')
+      expect(skill).toEqual(
+        expect.objectContaining({
+          name: 'full-skill',
+          description: 'Full description',
+          instructions: '# Instructions\nDo things',
+          path: '/some/path',
+          allowedTools: ['bash', 'file-editor'],
+          metadata: { author: 'test' },
+          license: 'Apache-2.0',
+          compatibility: 'v1.0+',
+        })
+      )
     })
   })
 
