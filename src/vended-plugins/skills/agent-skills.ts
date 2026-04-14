@@ -39,20 +39,9 @@ export interface AgentSkillsPluginConfig {
   strict?: boolean | undefined
 }
 
-const SKILLS_MARKER_START = '<!-- strands:agent-skills:start -->'
-const SKILLS_MARKER_END = '<!-- strands:agent-skills:end -->'
-const SKILLS_MARKER_REGEX = new RegExp(`${escapeRegex(SKILLS_MARKER_START)}[\\s\\S]*?${escapeRegex(SKILLS_MARKER_END)}`)
-
-const STATE_KEY_ACTIVATED = 'strands:agent-skills:activated'
+const STATE_KEY = 'strands:agent-skills'
 const RESOURCE_DIRS = ['scripts', 'references', 'assets']
 const DEFAULT_MAX_RESOURCE_FILES = 20
-
-/**
- * Escape special regex characters in a string.
- */
-function escapeRegex(str: string): string {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
 
 /**
  * Escape XML special characters in text content.
@@ -155,7 +144,7 @@ export class AgentSkillsPlugin implements Plugin {
    * Returns skill names in activation order (most recent last).
    */
   getActivatedSkills(agent: LocalAgent): readonly string[] {
-    return (agent.appState.get(STATE_KEY_ACTIVATED) as string[] | undefined) ?? []
+    return (this._getStateField(agent, 'activatedSkills') as string[] | undefined) ?? []
   }
 
   /**
@@ -249,34 +238,80 @@ export class AgentSkillsPlugin implements Plugin {
    * Maintains an ordered list of activated skill names (most recent last), without duplicates.
    */
   private _trackActivatedSkill(agent: LocalAgent, skillName: string): void {
-    const activated = (agent.appState.get(STATE_KEY_ACTIVATED) as string[] | undefined) ?? []
-    agent.appState.set(STATE_KEY_ACTIVATED, [...activated.filter((n) => n !== skillName), skillName])
+    const activated = (this._getStateField(agent, 'activatedSkills') as string[] | undefined) ?? []
+    this._setStateField(agent, 'activatedSkills', [...activated.filter((n) => n !== skillName), skillName])
+  }
+
+  /**
+   * Get a field from the plugin's per-agent state dict.
+   */
+  private _getStateField(agent: LocalAgent, key: string): unknown {
+    const data = agent.appState.get(STATE_KEY)
+    if (data != null && typeof data === 'object' && !Array.isArray(data)) {
+      return (data as Record<string, unknown>)[key]
+    }
+    return undefined
+  }
+
+  /**
+   * Set a single field in the plugin's per-agent state dict.
+   */
+  private _setStateField(agent: LocalAgent, key: string, value: unknown): void {
+    let data = agent.appState.get(STATE_KEY)
+    if (data != null && (typeof data !== 'object' || Array.isArray(data))) {
+      throw new TypeError(`expected object for state key '${STATE_KEY}', got ${typeof data}`)
+    }
+    const record = (data ?? {}) as Record<string, unknown>
+    record[key] = value
+    agent.appState.set(STATE_KEY, record)
   }
 
   /**
    * Inject skill metadata into the agent's system prompt.
    *
-   * Uses deterministic markers to find and replace the skills block,
-   * eliminating the need for state-tracked exact string matching.
+   * Removes the previously injected XML block (if any) via exact string
+   * replacement, then appends a fresh one. Uses agent state to track the
+   * injected XML per-agent, so a single plugin instance can be shared
+   * across multiple agents safely.
    */
   private _injectSkillsXml(agent: LocalAgent): void {
     const skillsXml = this._generateSkillsXml()
-    const wrappedBlock = `${SKILLS_MARKER_START}\n${skillsXml}\n${SKILLS_MARKER_END}`
-
     const systemPrompt = agent.systemPrompt
 
-    if (systemPrompt == null) {
-      agent.systemPrompt = wrappedBlock
-    } else if (typeof systemPrompt === 'string') {
-      // Strip existing markers, then append fresh block
-      const stripped = systemPrompt.replace(SKILLS_MARKER_REGEX, '').trimEnd()
-      agent.systemPrompt = stripped ? `${stripped}\n\n${wrappedBlock}` : wrappedBlock
+    if (systemPrompt == null || typeof systemPrompt === 'string') {
+      let currentPrompt = systemPrompt ?? ''
+
+      // Remove previously injected XML by exact match
+      const lastInjectedXml = this._getStateField(agent, 'lastInjectedXml') as string | undefined
+      if (lastInjectedXml != null) {
+        if (currentPrompt.includes(lastInjectedXml)) {
+          currentPrompt = currentPrompt.replace(lastInjectedXml, '')
+        } else {
+          logger.warn('unable to find previously injected skills XML in system prompt, re-appending')
+        }
+      }
+
+      const injection = `\n\n${skillsXml}`
+      const newPrompt = currentPrompt ? `${currentPrompt}${injection}` : skillsXml
+      const newInjectedXml = currentPrompt ? injection : skillsXml
+
+      this._setStateField(agent, 'lastInjectedXml', newInjectedXml)
+      agent.systemPrompt = newPrompt
     } else {
-      // SystemContentBlock[] — filter out the TextBlock containing our marker, append new one
-      const filtered: SystemContentBlock[] = systemPrompt.filter(
-        (block) => !(block.type === 'textBlock' && block.text.includes(SKILLS_MARKER_START))
-      )
-      filtered.push(new TextBlock(wrappedBlock))
+      // SystemContentBlock[] — remove previous block by exact text match, append new one
+      const lastInjectedXml = this._getStateField(agent, 'lastInjectedXml') as string | undefined
+      let filtered: SystemContentBlock[]
+      if (lastInjectedXml != null) {
+        filtered = systemPrompt.filter((block) => !(block.type === 'textBlock' && block.text === lastInjectedXml))
+        if (filtered.length === systemPrompt.length) {
+          logger.warn('unable to find previously injected skills XML in system prompt, re-appending')
+        }
+      } else {
+        filtered = [...systemPrompt]
+      }
+
+      this._setStateField(agent, 'lastInjectedXml', skillsXml)
+      filtered.push(new TextBlock(skillsXml))
       agent.systemPrompt = filtered
     }
   }
