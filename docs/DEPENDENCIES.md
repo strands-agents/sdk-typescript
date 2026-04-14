@@ -31,3 +31,25 @@ const agent = new Agent({ model, tools: [calculator] })
 ```
 
 Mark peer dependencies as **optional** when not all users need them (e.g., model provider SDKs). Optional peer dependencies must also be added to `devDependencies` for SDK development and testing.
+
+## Package Lock File
+
+The `package-lock.json` file ensures reproducible builds by locking exact dependency versions.
+
+| Command | When to Use |
+|---------|-------------|
+| `npm ci` | Installing dependencies without changes (fresh clone, after pulling, CI pipelines) |
+| `npm install` | Adding, removing, or updating dependencies |
+
+`npm ci` installs exactly what's in the lock file without modifying it, failing if there's a mismatch. This prevents accidental lock file changes.
+
+**When to modify:**
+
+- Adding, removing, or updating dependencies in `package.json`
+- Running `npm audit fix` to patch security vulnerabilities
+
+**Rules:**
+
+1. Never manually edit `package-lock.json` - always use `npm install` or `npm update`
+2. Commit `package-lock.json` changes in the same commit as the corresponding `package.json` changes
+3. If `package-lock.json` has merge conflicts, delete it and run `npm install` to regenerate
