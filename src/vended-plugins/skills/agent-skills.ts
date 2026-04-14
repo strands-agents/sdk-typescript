@@ -257,7 +257,7 @@ export class AgentSkillsPlugin implements Plugin {
    * Set a single field in the plugin's per-agent state dict.
    */
   private _setStateField(agent: LocalAgent, key: string, value: unknown): void {
-    let data = agent.appState.get(STATE_KEY)
+    const data = agent.appState.get(STATE_KEY)
     if (data != null && (typeof data !== 'object' || Array.isArray(data))) {
       throw new TypeError(`expected object for state key '${STATE_KEY}', got ${typeof data}`)
     }
