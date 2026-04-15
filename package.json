@@ -76,7 +76,7 @@
     "check": "npm run lint && npm run format && npm run type-check && npm run check:browser-bundle && npm run test:coverage && npm run test:package",
     "check:browser-bundle": "esbuild src/index.ts --bundle --platform=browser --format=esm --packages=external --outfile=/dev/null",
     "clean": "rm -rf node_modules dist",
-    "lock:refresh": "npm install --package-lock-only --ignore-scripts --os=linux --os=darwin --os=win32 --cpu=x64 --cpu=arm64",
+    "lock:refresh": "rm -rf node_modules && npm install --ignore-scripts --os=linux --os=darwin --os=win32 --cpu=x64 --cpu=arm64 --cpu=wasm32",
     "test": "vitest run --project unit-node",
     "test:watch": "vitest --project unit-node",
     "test:coverage": "vitest run --coverage --project unit-node",
