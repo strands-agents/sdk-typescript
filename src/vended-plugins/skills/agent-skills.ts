@@ -19,7 +19,7 @@ import type { LocalAgent } from '../../types/agent.js'
 import type { Tool } from '../../tools/tool.js'
 import type { ToolContext } from '../../tools/tool.js'
 
-/** A single skill source: filesystem path string or Skill instance. */
+/** A single skill source: filesystem path string, HTTPS URL string, or Skill instance. */
 export type SkillSource = string | Skill
 
 /** Configuration for the AgentSkillsPlugin. */
@@ -29,6 +29,7 @@ export interface AgentSkillsPluginConfig {
    * - A `Skill` instance
    * - A path to a skill directory (containing SKILL.md)
    * - A path to a parent directory (containing skill subdirectories)
+   * - An `https://` URL pointing directly to raw SKILL.md content
    */
   skills: SkillSource[]
 
@@ -37,9 +38,12 @@ export interface AgentSkillsPluginConfig {
 
   /** If true, throw on skill validation issues. If false (default), warn and load anyway. */
   strict?: boolean | undefined
+
+  /** Custom key for storing plugin state in `agent.appState`. Defaults to `'agent_skills'`. */
+  stateKey?: string | undefined
 }
 
-const STATE_KEY = 'strands:agent-skills'
+const DEFAULT_STATE_KEY = 'agent_skills'
 const RESOURCE_DIRS = ['scripts', 'references', 'assets']
 const DEFAULT_MAX_RESOURCE_FILES = 20
 
@@ -64,7 +68,8 @@ function escapeXml(text: string): string {
  * 3. Session persistence of activated skill state via `agent.appState`
  *
  * Skills can be provided as filesystem paths (to individual skill directories or
- * parent directories containing multiple skills) or as pre-built `Skill` instances.
+ * parent directories containing multiple skills), HTTPS URLs pointing to raw
+ * SKILL.md content, or as pre-built `Skill` instances.
  *
  * @example
  * ```typescript
@@ -90,20 +95,29 @@ export class AgentSkillsPlugin implements Plugin {
   private readonly _maxResourceFiles: number
   /** When true, skill validation errors throw instead of logging warnings. */
   private readonly _strict: boolean
+  private readonly _stateKey: string
+  /** Resolves when all async skill sources (e.g. URLs) have been loaded. */
+  private _ready: Promise<void>
 
   constructor(config: AgentSkillsPluginConfig) {
     this._strict = config.strict ?? false
     this._maxResourceFiles = config.maxResourceFiles ?? DEFAULT_MAX_RESOURCE_FILES
-    this._skills = this._resolveSkills(config.skills)
+    this._stateKey = config.stateKey ?? DEFAULT_STATE_KEY
+    const { skills, ready } = this._resolveSkills(config.skills)
+    this._skills = skills
+    this._ready = ready
   }
 
   /**
    * Initialize the plugin with the agent instance.
    *
-   * Registers a BeforeInvocationEvent hook that injects skill metadata
+   * Waits for any async skill sources (e.g. URLs) to finish loading, then
+   * registers a BeforeInvocationEvent hook that injects skill metadata
    * into the system prompt before each invocation.
    */
-  initAgent(agent: LocalAgent): void {
+  async initAgent(agent: LocalAgent): Promise<void> {
+    await this._ready
+
     if (this._skills.size === 0) {
       logger.warn('no skills were loaded, the agent will have no skills available')
     }
@@ -131,12 +145,19 @@ export class AgentSkillsPlugin implements Plugin {
   /**
    * Replace all available skills.
    *
-   * Note: this does not deactivate skills on any agent. Active skill
-   * state is managed per-agent and will be reconciled on the next
-   * tool call or invocation.
+   * Each element can be a `Skill` instance, a path to a skill directory
+   * (containing SKILL.md), a path to a parent directory containing skill
+   * subdirectories, or an `https://` URL pointing directly to raw SKILL.md
+   * content.
+   *
+   * Note: this does not persist state or deactivate skills on any agent.
+   * Active skill state is managed per-agent and will be reconciled on the
+   * next tool call or invocation.
    */
   setAvailableSkills(skills: SkillSource[]): void {
-    this._skills = this._resolveSkills(skills)
+    const { skills: resolved, ready } = this._resolveSkills(skills)
+    this._skills = resolved
+    this._ready = ready
   }
 
   /**
@@ -148,15 +169,20 @@ export class AgentSkillsPlugin implements Plugin {
   }
 
   /**
-   * Resolve skill sources into a name→Skill map.
+   * Resolve a list of skill sources into Skill instances.
    *
-   * For each source:
-   * - Skill instance: added directly
-   * - String path: tries Skill.fromFile first (handles dirs with SKILL.md and SKILL.md files),
-   *   falls back to Skill.fromDirectory (handles parent dirs containing skill subdirs)
+   * Each source can be a Skill instance, a path to a skill directory,
+   * a path to a parent directory containing multiple skills, or an
+   * HTTPS URL pointing to a SKILL.md file.
+   *
+   * Synchronous sources (Skill instances and filesystem paths) are resolved
+   * immediately into the returned map. Async sources (URLs) are resolved in
+   * the background; the returned `ready` promise resolves when all URL
+   * fetches have completed and the map has been updated.
    */
-  private _resolveSkills(sources: SkillSource[]): Map<string, Skill> {
+  private _resolveSkills(sources: SkillSource[]): { skills: Map<string, Skill>; ready: Promise<void> } {
     const resolved = new Map<string, Skill>()
+    const asyncTasks: Promise<void>[] = []
 
     for (const source of sources) {
       if (source instanceof Skill) {
@@ -164,10 +190,24 @@ export class AgentSkillsPlugin implements Plugin {
           logger.warn(`name=<${source.name}> | duplicate skill name, overwriting previous skill`)
         }
         resolved.set(source.name, source)
+      } else if (typeof source === 'string' && source.startsWith('https://')) {
+        asyncTasks.push(
+          Skill.fromUrl(source, { strict: this._strict }).then(
+            (skill) => {
+              if (resolved.has(skill.name)) {
+                logger.warn(`name=<${skill.name}> | duplicate skill name, overwriting previous skill`)
+              }
+              resolved.set(skill.name, skill)
+            },
+            (error) => {
+              logger.warn(`url=<${source}> | failed to load skill from URL: ${error}`)
+            }
+          )
+        )
       } else {
         try {
           // Try loading as a single skill (directory with SKILL.md or SKILL.md file)
-          const skill = Skill.fromFile(source, { strict: this._strict })
+          const skill = Skill.fromFile(source as string, { strict: this._strict })
           if (resolved.has(skill.name)) {
             logger.warn(`name=<${skill.name}> | duplicate skill name, overwriting previous skill`)
           }
@@ -176,7 +216,7 @@ export class AgentSkillsPlugin implements Plugin {
           // Fall back to loading as a parent directory containing skill subdirectories
           logger.debug(`path=<${source}> | not a single skill (${singleSkillError}), trying as directory`)
           try {
-            for (const skill of Skill.fromDirectory(source, { strict: this._strict })) {
+            for (const skill of Skill.fromDirectory(source as string, { strict: this._strict })) {
               if (resolved.has(skill.name)) {
                 logger.warn(`name=<${skill.name}> | duplicate skill name, overwriting previous skill`)
               }
@@ -192,8 +232,19 @@ export class AgentSkillsPlugin implements Plugin {
       }
     }
 
-    logger.debug(`source_count=<${sources.length}>, resolved_count=<${resolved.size}> | skills resolved`)
-    return resolved
+    let ready: Promise<void>
+    if (asyncTasks.length > 0) {
+      ready = Promise.all(asyncTasks).then(() => {
+        logger.debug(
+          `source_count=<${sources.length}>, resolved_count=<${resolved.size}> | skills resolved (including async)`
+        )
+      })
+    } else {
+      logger.debug(`source_count=<${sources.length}>, resolved_count=<${resolved.size}> | skills resolved`)
+      ready = Promise.resolve()
+    }
+
+    return { skills: resolved, ready }
   }
 
   /**
@@ -246,7 +297,7 @@ export class AgentSkillsPlugin implements Plugin {
    * Get a field from the plugin's per-agent state dict.
    */
   private _getStateField(agent: LocalAgent, key: string): unknown {
-    const data = agent.appState.get(STATE_KEY)
+    const data = agent.appState.get(this._stateKey)
     if (data != null && typeof data === 'object' && !Array.isArray(data)) {
       return (data as Record<string, unknown>)[key]
     }
@@ -257,13 +308,13 @@ export class AgentSkillsPlugin implements Plugin {
    * Set a single field in the plugin's per-agent state dict.
    */
   private _setStateField(agent: LocalAgent, key: string, value: unknown): void {
-    const data = agent.appState.get(STATE_KEY)
+    const data = agent.appState.get(this._stateKey)
     if (data != null && (typeof data !== 'object' || Array.isArray(data))) {
-      throw new TypeError(`expected object for state key '${STATE_KEY}', got ${typeof data}`)
+      throw new TypeError(`expected object for state key '${this._stateKey}', got ${typeof data}`)
     }
     const record = (data ?? {}) as Record<string, unknown>
     record[key] = value
-    agent.appState.set(STATE_KEY, record)
+    agent.appState.set(this._stateKey, record)
   }
 
   /**

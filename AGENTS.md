@@ -443,6 +443,11 @@ export class Example {
 - Public fields MUST NOT use underscore prefix
 - This convention improves code readability and makes the distinction between public and private members immediately visible
 
+#### Naming Conventions for New Features
+
+When choosing names and constants that match an exisiting implementation in the Python SDK, use exactly the same literal used
+in the Python SDK. Wherever we can achieve compatibility, keep the previous convention.
+
 ### Documentation Requirements
 
 **TSDoc format** (required for all exported functions):

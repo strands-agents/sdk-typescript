@@ -2,9 +2,9 @@
  * Skill data model and loading utilities for AgentSkills.io skills.
  *
  * This module defines the Skill class and provides static methods for
- * discovering, parsing, and loading skills from the filesystem or raw content.
- * Skills are directories containing a SKILL.md file with YAML frontmatter
- * metadata and markdown instructions.
+ * discovering, parsing, and loading skills from the filesystem, raw content,
+ * or HTTPS URLs. Skills are directories containing a SKILL.md file with YAML
+ * frontmatter metadata and markdown instructions.
  */
 
 import { readFileSync, readdirSync, statSync, existsSync } from 'fs'
@@ -223,6 +223,9 @@ function buildSkillFromFrontmatter(
  *
  * // Load all skills from a parent directory
  * const skills = Skill.fromDirectory('./skills/')
+ *
+ * // From an HTTPS URL
+ * const skill = await Skill.fromUrl('https://example.com/SKILL.md')
  * ```
  */
 export class Skill {
@@ -340,6 +343,53 @@ export class Skill {
     validateSkillName(name, options?.path, { strict })
 
     return buildSkillFromFrontmatter(frontmatter, body, options?.path)
+  }
+
+  /**
+   * Load a skill by fetching its SKILL.md content from an HTTPS URL.
+   *
+   * Fetches the raw SKILL.md content over HTTPS and parses it using
+   * {@link fromContent}. The URL must point directly to the raw file
+   * content (not an HTML page).
+   *
+   * @example
+   * ```typescript
+   * const skill = await Skill.fromUrl(
+   *   'https://raw.githubusercontent.com/org/repo/main/SKILL.md'
+   * )
+   * ```
+   *
+   * @param url - An `https://` URL pointing directly to raw SKILL.md content.
+   * @param options - Optional settings. When `strict` is true, throws on any validation issue; otherwise warns and loads anyway.
+   * @returns A Promise resolving to a Skill instance populated from the fetched SKILL.md content.
+   * @throws If `url` is not an `https://` URL.
+   * @throws If the SKILL.md content cannot be fetched.
+   */
+  static async fromUrl(url: string, options?: { strict?: boolean }): Promise<Skill> {
+    if (!url.startsWith('https://')) {
+      throw new Error(`url=<${url}> | not a valid HTTPS URL`)
+    }
+
+    logger.info(`url=<${url}> | fetching skill content`)
+
+    let content: string
+    try {
+      const response = await globalThis.fetch(url, {
+        headers: { 'User-Agent': 'strands-agents-sdk' },
+        signal: AbortSignal.timeout(30_000),
+      })
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+      content = await response.text()
+    } catch (error) {
+      if (error instanceof Error && error.message.startsWith('HTTP ')) {
+        throw new Error(`url=<${url}> | ${error.message}`)
+      }
+      throw new Error(`url=<${url}> | failed to fetch skill: ${error instanceof Error ? error.message : error}`)
+    }
+
+    return Skill.fromContent(content, options)
   }
 
   /**

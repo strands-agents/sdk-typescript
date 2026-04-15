@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { AgentSkillsPlugin } from '../agent-skills.js'
 import { Skill } from '../skill.js'
 import { BeforeInvocationEvent } from '../../../hooks/events.js'
@@ -127,10 +127,10 @@ describe('AgentSkillsPlugin', () => {
       expect(tools[0]!.name).toBe('skills')
     })
 
-    it('registers a BeforeInvocationEvent hook in initAgent', () => {
+    it('registers a BeforeInvocationEvent hook in initAgent', async () => {
       const plugin = new AgentSkillsPlugin({ skills: [makeSkill('s')] })
       const agent = createMockAgent()
-      plugin.initAgent(agent)
+      await plugin.initAgent(agent)
       expect(agent.trackedHooks).toHaveLength(1)
       expect(agent.trackedHooks[0]!.eventType).toBe(BeforeInvocationEvent)
     })
@@ -142,12 +142,12 @@ describe('AgentSkillsPlugin', () => {
     let plugin: AgentSkillsPlugin
     let agent: MockAgent
 
-    beforeEach(() => {
+    beforeEach(async () => {
       plugin = new AgentSkillsPlugin({
         skills: [makeSkill('pdf-skill', 'Process PDFs')],
       })
       agent = createMockAgent()
-      plugin.initAgent(agent)
+      await plugin.initAgent(agent)
     })
 
     const fireBeforeInvocation = async () => {
@@ -223,12 +223,12 @@ describe('AgentSkillsPlugin', () => {
       expect(prompt).toContain('<available_skills>')
     })
 
-    it('XML-escapes special characters in skill metadata', () => {
+    it('XML-escapes special characters in skill metadata', async () => {
       const plugin2 = new AgentSkillsPlugin({
         skills: [makeSkill('test-skill', 'Use when: user says <hello> & "goodbye"')],
       })
       const agent2 = createMockAgent()
-      plugin2.initAgent(agent2)
+      await plugin2.initAgent(agent2)
 
       // Trigger injection synchronously by calling the hook
       const hook = agent2.trackedHooks[0]!
@@ -247,7 +247,7 @@ describe('AgentSkillsPlugin', () => {
       )
       const filePlugin = new AgentSkillsPlugin({ skills: [dirPath] })
       const fileAgent = createMockAgent()
-      filePlugin.initAgent(fileAgent)
+      await filePlugin.initAgent(fileAgent)
       await invokeTrackedHook(fileAgent, new BeforeInvocationEvent({ agent: fileAgent as any }))
 
       const prompt = fileAgent.systemPrompt as string
@@ -258,7 +258,7 @@ describe('AgentSkillsPlugin', () => {
     it('shows "no skills available" when empty', async () => {
       const emptyPlugin = new AgentSkillsPlugin({ skills: [] })
       const emptyAgent = createMockAgent()
-      emptyPlugin.initAgent(emptyAgent)
+      await emptyPlugin.initAgent(emptyAgent)
       await invokeTrackedHook(emptyAgent, new BeforeInvocationEvent({ agent: emptyAgent as any }))
 
       const prompt = emptyAgent.systemPrompt as string
@@ -291,7 +291,7 @@ describe('AgentSkillsPlugin', () => {
         skills: [makeSkill('skill-a', 'First'), makeSkill('skill-b', 'Second'), makeSkill('skill-c', 'Third')],
       })
       const multiAgent = createMockAgent()
-      multiPlugin.initAgent(multiAgent)
+      await multiPlugin.initAgent(multiAgent)
       await invokeTrackedHook(multiAgent, new BeforeInvocationEvent({ agent: multiAgent as any }))
 
       const prompt = multiAgent.systemPrompt as string
@@ -310,7 +310,7 @@ describe('AgentSkillsPlugin', () => {
     let plugin: AgentSkillsPlugin
     let agent: MockAgent
 
-    beforeEach(() => {
+    beforeEach(async () => {
       plugin = new AgentSkillsPlugin({
         skills: [
           new Skill({
@@ -323,7 +323,7 @@ describe('AgentSkillsPlugin', () => {
         ],
       })
       agent = createMockAgent()
-      plugin.initAgent(agent)
+      await plugin.initAgent(agent)
     })
 
     const invokeTool = async (skillName: string): Promise<string> => {
@@ -407,7 +407,7 @@ describe('AgentSkillsPlugin', () => {
       )
       const plugin2 = new AgentSkillsPlugin({ skills: [dirPath] })
       const agent2 = createMockAgent()
-      plugin2.initAgent(agent2)
+      await plugin2.initAgent(agent2)
 
       const tools = plugin2.getTools()
       const gen = tools[0]!.stream({
@@ -430,7 +430,7 @@ describe('AgentSkillsPlugin', () => {
       )
       const plugin2 = new AgentSkillsPlugin({ skills: [dirPath] })
       const agent2 = createMockAgent()
-      plugin2.initAgent(agent2)
+      await plugin2.initAgent(agent2)
 
       const tools = plugin2.getTools()
       const gen = tools[0]!.stream({
@@ -457,7 +457,7 @@ describe('AgentSkillsPlugin', () => {
       )
       const plugin2 = new AgentSkillsPlugin({ skills: [dirPath], maxResourceFiles: 3 })
       const agent2 = createMockAgent()
-      plugin2.initAgent(agent2)
+      await plugin2.initAgent(agent2)
 
       const tools = plugin2.getTools()
       const gen = tools[0]!.stream({
@@ -487,6 +487,86 @@ describe('AgentSkillsPlugin', () => {
           .map((s) => s.name)
           .sort()
       ).toEqual(['new-a', 'new-b'])
+    })
+  })
+
+  // ── URL skill resolution ──────────────────────────────────────────────
+
+  describe('URL skill resolution', () => {
+    const SAMPLE_CONTENT = '---\nname: url-skill\ndescription: A URL skill\n---\n# Instructions\n'
+
+    const mockFetchSuccess = (content: string) => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        text: () => Promise.resolve(content),
+      } as Response)
+    }
+
+    afterEach(() => {
+      vi.restoreAllMocks()
+    })
+
+    it('resolves a URL string as a skill source', async () => {
+      mockFetchSuccess(SAMPLE_CONTENT)
+
+      const plugin = new AgentSkillsPlugin({ skills: ['https://example.com/SKILL.md'] })
+      await plugin.initAgent(createMockAgent())
+
+      expect(plugin.getAvailableSkills()).toHaveLength(1)
+      expect(plugin.getAvailableSkills()[0]!.name).toBe('url-skill')
+    })
+
+    it('resolves a mix of URL and local filesystem sources', async () => {
+      mockFetchSuccess(SAMPLE_CONTENT)
+
+      await createSkillDir('local-skill', '---\nname: local-skill\ndescription: A local skill\n---\nBody.')
+
+      const plugin = new AgentSkillsPlugin({
+        skills: ['https://example.com/SKILL.md', path.join(testDir, 'local-skill')],
+      })
+      await plugin.initAgent(createMockAgent())
+
+      expect(plugin.getAvailableSkills()).toHaveLength(2)
+      const names = new Set(plugin.getAvailableSkills().map((s) => s.name))
+      expect(names).toEqual(new Set(['url-skill', 'local-skill']))
+    })
+
+    it('skips a failed URL fetch gracefully', async () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+        text: () => Promise.resolve(''),
+      } as Response)
+
+      const plugin = new AgentSkillsPlugin({ skills: ['https://example.com/broken/SKILL.md'] })
+      await plugin.initAgent(createMockAgent())
+
+      expect(plugin.getAvailableSkills()).toHaveLength(0)
+    })
+
+    it('warns on duplicate skill names from URLs', async () => {
+      mockFetchSuccess(SAMPLE_CONTENT)
+
+      const plugin = new AgentSkillsPlugin({
+        skills: ['https://example.com/a/SKILL.md', 'https://example.com/b/SKILL.md'],
+      })
+      await plugin.initAgent(createMockAgent())
+
+      expect(plugin.getAvailableSkills()).toHaveLength(1)
+    })
+
+    it('awaits URL sources in initAgent', async () => {
+      mockFetchSuccess(SAMPLE_CONTENT)
+
+      const plugin = new AgentSkillsPlugin({ skills: ['https://example.com/SKILL.md'] })
+      const agent = createMockAgent()
+      await plugin.initAgent(agent)
+
+      expect(plugin.getAvailableSkills()).toHaveLength(1)
+      expect(agent.trackedHooks).toHaveLength(1)
     })
   })
 })

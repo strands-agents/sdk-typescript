@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { Skill } from '../skill.js'
 import { promises as fs } from 'fs'
 import * as path from 'path'
@@ -523,6 +523,84 @@ Body.`
       const skills = Skill.fromDirectory(testDir)
       expect(skills).toHaveLength(1)
       expect(skills[0]!.name).toBe('valid-skill')
+    })
+  })
+
+  describe('fromUrl', () => {
+    const SAMPLE_CONTENT = '---\nname: my-skill\ndescription: A remote skill\n---\nRemote instructions.\n'
+
+    const mockFetchSuccess = (content: string) => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        text: () => Promise.resolve(content),
+      } as Response)
+    }
+
+    afterEach(() => {
+      vi.restoreAllMocks()
+    })
+
+    it('returns a Skill from a valid URL', async () => {
+      mockFetchSuccess(SAMPLE_CONTENT)
+
+      const skill = await Skill.fromUrl('https://raw.githubusercontent.com/org/repo/main/SKILL.md')
+
+      expect(skill).toBeInstanceOf(Skill)
+      expect(skill.name).toBe('my-skill')
+      expect(skill.description).toBe('A remote skill')
+      expect(skill.instructions).toContain('Remote instructions.')
+      expect(skill.path).toBeUndefined()
+    })
+
+    it('rejects non-HTTPS URLs', async () => {
+      await expect(Skill.fromUrl('./local-path')).rejects.toThrow('not a valid HTTPS URL')
+    })
+
+    it('rejects http:// URLs', async () => {
+      await expect(Skill.fromUrl('http://example.com/SKILL.md')).rejects.toThrow('not a valid HTTPS URL')
+    })
+
+    it('throws on HTTP error responses', async () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+        text: () => Promise.resolve(''),
+      } as Response)
+
+      await expect(Skill.fromUrl('https://example.com/SKILL.md')).rejects.toThrow('HTTP 404')
+    })
+
+    it('throws on network errors', async () => {
+      vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Connection refused'))
+
+      await expect(Skill.fromUrl('https://example.com/SKILL.md')).rejects.toThrow('failed to fetch')
+    })
+
+    it('forwards strict mode to fromContent', async () => {
+      const badContent = '---\nname: BAD_NAME\ndescription: Bad\n---\nBody.'
+      mockFetchSuccess(badContent)
+
+      await expect(Skill.fromUrl('https://example.com/SKILL.md', { strict: true })).rejects.toThrow(
+        'skill name should be'
+      )
+    })
+
+    it('throws on invalid content (e.g. HTML page)', async () => {
+      mockFetchSuccess('<html><body>Not a SKILL.md</body></html>')
+
+      await expect(Skill.fromUrl('https://example.com/SKILL.md')).rejects.toThrow('frontmatter')
+    })
+  })
+
+  describe('classmethods', () => {
+    it('has fromFile, fromContent, fromDirectory, and fromUrl', () => {
+      expect(typeof Skill.fromFile).toBe('function')
+      expect(typeof Skill.fromContent).toBe('function')
+      expect(typeof Skill.fromDirectory).toBe('function')
+      expect(typeof Skill.fromUrl).toBe('function')
     })
   })
 })
