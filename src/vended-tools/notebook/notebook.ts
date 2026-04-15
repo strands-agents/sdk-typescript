@@ -202,7 +202,7 @@ function handleWrite(
       throw new Error(`String '${oldStr}' not found in notebook '${name}'`)
     }
 
-    notebooks[name] = notebooks[name]!.replace(oldStr, newStr)
+    notebooks[name] = notebooks[name]!.replace(oldStr, () => newStr)
     return `Replaced text in notebook '${name}'`
   }
 
