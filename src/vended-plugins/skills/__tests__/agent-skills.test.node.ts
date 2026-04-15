@@ -230,9 +230,8 @@ describe('AgentSkillsPlugin', () => {
       const agent2 = createMockAgent()
       await plugin2.initAgent(agent2)
 
-      // Trigger injection synchronously by calling the hook
       const hook = agent2.trackedHooks[0]!
-      hook.callback(new BeforeInvocationEvent({ agent: agent2 as any }))
+      await hook.callback(new BeforeInvocationEvent({ agent: agent2 as any }))
 
       const prompt = agent2.systemPrompt as string
       expect(prompt).toContain('&lt;hello&gt;')

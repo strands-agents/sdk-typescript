@@ -445,7 +445,7 @@ export class Example {
 
 #### Naming Conventions for New Features
 
-When choosing names and constants that match an exisiting implementation in the Python SDK, use exactly the same literal used
+When choosing names and constants that match an existing implementation in the Python SDK, use exactly the same literal used
 in the Python SDK. Wherever we can achieve compatibility, keep the previous convention.
 
 ### Documentation Requirements

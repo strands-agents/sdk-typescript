@@ -7,7 +7,7 @@
  */
 
 import { readdirSync, statSync, existsSync } from 'fs'
-import { join, relative, sep } from 'path'
+import { join, resolve, relative, sep } from 'path'
 import { z } from 'zod'
 import { tool } from '../../tools/tool-factory.js'
 import { BeforeInvocationEvent } from '../../hooks/events.js'
@@ -123,7 +123,8 @@ export class AgentSkillsPlugin implements Plugin {
     }
     logger.debug(`skill_count=<${this._skills.size}> | skills plugin initialized`)
 
-    agent.addHook(BeforeInvocationEvent, (event) => {
+    agent.addHook(BeforeInvocationEvent, async (event) => {
+      await this._ready
       this._injectSkillsXml(event.agent)
     })
   }
@@ -205,29 +206,46 @@ export class AgentSkillsPlugin implements Plugin {
           )
         )
       } else {
-        try {
-          // Try loading as a single skill (directory with SKILL.md or SKILL.md file)
-          const skill = Skill.fromFile(source as string, { strict: this._strict })
-          if (resolved.has(skill.name)) {
-            logger.warn(`name=<${skill.name}> | duplicate skill name, overwriting previous skill`)
-          }
-          resolved.set(skill.name, skill)
-        } catch (singleSkillError) {
-          // Fall back to loading as a parent directory containing skill subdirectories
-          logger.debug(`path=<${source}> | not a single skill (${singleSkillError}), trying as directory`)
+        const p = source as string
+        const resolvedPath = resolve(p)
+
+        // Probe the filesystem to decide which loader to use instead of
+        // relying on exceptions for control flow.
+        const isDir = existsSync(resolvedPath) && statSync(resolvedPath).isDirectory()
+        const isSkillFile =
+          existsSync(resolvedPath) && statSync(resolvedPath).isFile() && resolvedPath.toLowerCase().endsWith('skill.md')
+        const hasSkillMd =
+          isDir &&
+          ['SKILL.md', 'skill.md'].some((name) => {
+            const candidate = join(resolvedPath, name)
+            return existsSync(candidate) && statSync(candidate).isFile()
+          })
+
+        if (isSkillFile || hasSkillMd) {
+          // Single skill directory (or direct SKILL.md path)
           try {
-            for (const skill of Skill.fromDirectory(source as string, { strict: this._strict })) {
+            const skill = Skill.fromFile(p, { strict: this._strict })
+            if (resolved.has(skill.name)) {
+              logger.warn(`name=<${skill.name}> | duplicate skill name, overwriting previous skill`)
+            }
+            resolved.set(skill.name, skill)
+          } catch (error) {
+            logger.warn(`path=<${p}> | failed to load skill: ${error}`)
+          }
+        } else if (isDir) {
+          // Parent directory containing skill subdirectories
+          try {
+            for (const skill of Skill.fromDirectory(p, { strict: this._strict })) {
               if (resolved.has(skill.name)) {
                 logger.warn(`name=<${skill.name}> | duplicate skill name, overwriting previous skill`)
               }
               resolved.set(skill.name, skill)
             }
-          } catch (dirError) {
-            logger.warn(
-              `path=<${source}> | failed to resolve skill source | ` +
-                `as file: ${singleSkillError} | as directory: ${dirError}`
-            )
+          } catch (error) {
+            logger.warn(`path=<${p}> | failed to load skills from directory: ${error}`)
           }
+        } else {
+          logger.warn(`path=<${p}> | skill source does not exist or is not a valid path`)
         }
       }
     }
@@ -260,10 +278,11 @@ export class AgentSkillsPlugin implements Plugin {
       inputSchema: z.object({
         skill_name: z.string().min(1).describe('Name of the skill to activate'),
       }),
-      callback: (input: { skill_name: string }, context?: ToolContext): string => {
+      callback: async (input: { skill_name: string }, context?: ToolContext): Promise<string> => {
         if (context == null) {
           throw new Error('skills tool requires a ToolContext with an agent reference')
         }
+        await this._ready
         return this._activateSkill(input.skill_name, context)
       },
     })

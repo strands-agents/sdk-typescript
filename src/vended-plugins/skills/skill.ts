@@ -14,6 +14,7 @@ import { logger } from '../../logging/logger.js'
 
 const SKILL_NAME_PATTERN = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/
 const MAX_SKILL_NAME_LENGTH = 64
+const SKILL_HTTPS_FETCH_TIMEOUT_MS = 30_000
 
 /**
  * Configuration for creating a Skill instance.
@@ -376,7 +377,7 @@ export class Skill {
     try {
       const response = await globalThis.fetch(url, {
         headers: { 'User-Agent': 'strands-agents-sdk' },
-        signal: AbortSignal.timeout(30_000),
+        signal: AbortSignal.timeout(SKILL_HTTPS_FETCH_TIMEOUT_MS),
       })
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`)
