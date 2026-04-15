@@ -48,8 +48,17 @@ The `package-lock.json` file ensures reproducible builds by locking exact depend
 - Adding, removing, or updating dependencies in `package.json`
 - Running `npm audit fix` to patch security vulnerabilities
 
+After modifying dependencies, regenerate the lock file for all platforms:
+
+```bash
+npm run lock:refresh
+```
+
+This generates a lock file that includes platform-specific optional dependencies for Linux, macOS, and Windows (both x64 and arm64), ensuring `npm ci` works in CI regardless of where the lock file was generated.
+
 **Rules:**
 
 1. Never manually edit `package-lock.json` - always use `npm install` or `npm update`
-2. Commit `package-lock.json` changes in the same commit as the corresponding `package.json` changes
-3. If `package-lock.json` has merge conflicts, delete it and run `npm install` to regenerate
+2. Always run `npm run lock:refresh` after modifying dependencies to ensure cross-platform compatibility
+3. Commit `package-lock.json` changes in the same commit as the corresponding `package.json` changes
+4. If `package-lock.json` has merge conflicts, delete it and run `npm run lock:refresh` to regenerate
