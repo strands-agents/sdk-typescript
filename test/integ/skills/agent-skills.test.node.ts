@@ -121,7 +121,7 @@ The secret codeword for this skill is: ${ALT_SECRET_CODEWORD}.`,
       })
 
       // Verify the skill was loaded from the directory
-      const availableSkills = plugin.getAvailableSkills()
+      const availableSkills = await plugin.getAvailableSkills()
       expect(availableSkills).toHaveLength(1)
       expect(availableSkills[0]!.name).toBe('code-review')
 

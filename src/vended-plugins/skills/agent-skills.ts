@@ -139,7 +139,8 @@ export class AgentSkillsPlugin implements Plugin {
   /**
    * Get the list of available skills.
    */
-  getAvailableSkills(): readonly Skill[] {
+  async getAvailableSkills(): Promise<readonly Skill[]> {
+    await this._ready
     return [...this._skills.values()]
   }
 
