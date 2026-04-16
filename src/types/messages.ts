@@ -4,6 +4,7 @@ import type { ImageBlockData, VideoBlockData, DocumentBlockData } from './media.
 import { ImageBlock, VideoBlock, DocumentBlock, encodeBase64, decodeBase64 } from './media.js'
 import type { CitationsBlockData } from './citations.js'
 import { CitationsBlock } from './citations.js'
+import type { Usage, Metrics } from '../models/streaming.js'
 
 /**
  * Message types and content blocks for conversational AI interactions.
@@ -12,6 +13,21 @@ import { CitationsBlock } from './citations.js'
  * for objects, while corresponding classes extend those interfaces with additional
  * functionality and type discrimination.
  */
+
+/**
+ * Optional metadata attached to a message.
+ *
+ * Not sent to model providers — model providers construct their own message format
+ * from `role` and `content` only. Persisted alongside the message in session storage.
+ */
+export interface MessageMetadata {
+  /** Token usage information from the model response. */
+  usage?: Usage
+  /** Performance metrics from the model response. */
+  metrics?: Metrics
+  /** Arbitrary user/framework metadata (e.g. compression provenance). */
+  custom?: Record<string, JSONValue>
+}
 
 /**
  * Data for a message.
@@ -26,6 +42,11 @@ export interface MessageData {
    * Array of content blocks that make up this message.
    */
   content: ContentBlockData[]
+
+  /**
+   * Optional metadata, not sent to model providers.
+   */
+  metadata?: MessageMetadata
 }
 
 /**
@@ -48,9 +69,17 @@ export class Message implements JSONSerializable<MessageData> {
    */
   readonly content: ContentBlock[]
 
-  constructor(data: { role: Role; content: ContentBlock[] }) {
+  /**
+   * Optional metadata, not sent to model providers.
+   */
+  readonly metadata?: MessageMetadata
+
+  constructor(data: { role: Role; content: ContentBlock[]; metadata?: MessageMetadata }) {
     this.role = data.role
     this.content = data.content
+    if (data.metadata !== undefined) {
+      this.metadata = data.metadata
+    }
   }
 
   /**
@@ -62,6 +91,7 @@ export class Message implements JSONSerializable<MessageData> {
     return new Message({
       role: data.role,
       content: contentBlocks,
+      ...(data.metadata !== undefined && { metadata: data.metadata }),
     })
   }
 
@@ -73,6 +103,7 @@ export class Message implements JSONSerializable<MessageData> {
     return {
       role: this.role,
       content: this.content.map((block) => block.toJSON() as ContentBlockData),
+      ...(this.metadata !== undefined && { metadata: this.metadata }),
     }
   }
 

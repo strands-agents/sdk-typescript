@@ -29,6 +29,89 @@ describe('Message', () => {
   })
 })
 
+describe('Message metadata', () => {
+  test('creates message without metadata', () => {
+    const message = new Message({ role: 'user', content: [new TextBlock('test')] })
+    expect(message.metadata).toBeUndefined()
+  })
+
+  test('creates message with metadata', () => {
+    const metadata = {
+      usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+      metrics: { latencyMs: 100 },
+    }
+    const message = new Message({ role: 'assistant', content: [new TextBlock('hello')], metadata })
+    expect(message.metadata).toStrictEqual(metadata)
+  })
+
+  test('creates message with custom metadata', () => {
+    const metadata = {
+      custom: { source: 'summarization', originalTurns: [5, 6, 7] },
+    }
+    const message = new Message({ role: 'assistant', content: [new TextBlock('summary')], metadata })
+    expect(message.metadata).toStrictEqual(metadata)
+  })
+
+  test('toJSON includes metadata when present', () => {
+    const metadata = {
+      usage: { inputTokens: 42, outputTokens: 10, totalTokens: 52 },
+      metrics: { latencyMs: 200 },
+    }
+    const message = new Message({ role: 'assistant', content: [new TextBlock('test')], metadata })
+    const json = message.toJSON()
+    expect(json.metadata).toStrictEqual(metadata)
+  })
+
+  test('toJSON omits metadata when not present', () => {
+    const message = new Message({ role: 'user', content: [new TextBlock('test')] })
+    const json = message.toJSON()
+    expect('metadata' in json).toBe(false)
+  })
+
+  test('fromMessageData preserves metadata', () => {
+    const data: MessageData = {
+      role: 'assistant',
+      content: [{ text: 'hello' }],
+      metadata: {
+        usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+        metrics: { latencyMs: 100 },
+      },
+    }
+    const message = Message.fromMessageData(data)
+    expect(message.metadata).toStrictEqual(data.metadata)
+  })
+
+  test('fromMessageData works without metadata', () => {
+    const data: MessageData = {
+      role: 'user',
+      content: [{ text: 'hello' }],
+    }
+    const message = Message.fromMessageData(data)
+    expect(message.metadata).toBeUndefined()
+  })
+
+  test('round-trips metadata through toJSON/fromJSON', () => {
+    const metadata = {
+      usage: { inputTokens: 42, outputTokens: 10, totalTokens: 52 },
+      metrics: { latencyMs: 200 },
+      custom: { source: 'test' },
+    }
+    const original = new Message({ role: 'assistant', content: [new TextBlock('test')], metadata })
+    const restored = Message.fromJSON(original.toJSON())
+    expect(restored.metadata).toStrictEqual(metadata)
+  })
+
+  test('round-trips metadata through JSON.stringify/parse', () => {
+    const metadata = {
+      usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+    }
+    const original = new Message({ role: 'assistant', content: [new TextBlock('test')], metadata })
+    const jsonString = JSON.stringify(original)
+    const restored = Message.fromJSON(JSON.parse(jsonString))
+    expect(restored.metadata).toStrictEqual(metadata)
+  })
+})
+
 describe('TextBlock', () => {
   test('creates text block with text', () => {
     const block = new TextBlock('hello')

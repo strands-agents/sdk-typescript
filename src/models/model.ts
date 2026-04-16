@@ -1,6 +1,7 @@
 import {
   type ContentBlock,
   Message,
+  type MessageMetadata,
   ReasoningBlock,
   type Role,
   type StopReason,
@@ -383,6 +384,19 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
       if (!stoppedMessage || !finalStopReason) {
         // If we exit the loop without completing a message or stop reason, throw an error
         throw new ModelError('Stream ended without completing a message')
+      }
+
+      // Attach metadata after redaction so it applies to the final message.
+      const messageMetadata: MessageMetadata = {
+        ...(metadata?.usage !== undefined && { usage: metadata.usage }),
+        ...(metadata?.metrics !== undefined && { metrics: metadata.metrics }),
+      }
+      if (Object.keys(messageMetadata).length > 0) {
+        stoppedMessage = new Message({
+          role: stoppedMessage.role,
+          content: stoppedMessage.content,
+          metadata: messageMetadata,
+        })
       }
 
       // Handle stop reason

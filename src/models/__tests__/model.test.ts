@@ -78,6 +78,9 @@ describe('Model', () => {
             type: 'message',
             role: 'assistant',
             content: [{ type: 'textBlock', text: 'Hello' }],
+            metadata: {
+              usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+            },
           },
           stopReason: 'endTurn',
           metadata: {
@@ -153,6 +156,9 @@ describe('Model', () => {
               { type: 'textBlock', text: 'First' },
               { type: 'textBlock', text: 'Second' },
             ],
+            metadata: {
+              usage: { inputTokens: 10, outputTokens: 10, totalTokens: 20 },
+            },
           },
           stopReason: 'endTurn',
           metadata: {
@@ -214,6 +220,9 @@ describe('Model', () => {
                 input: { location: 'Paris' },
               },
             ],
+            metadata: {
+              usage: { inputTokens: 10, outputTokens: 8, totalTokens: 18 },
+            },
           },
           stopReason: 'toolUse',
           metadata: {
@@ -269,6 +278,9 @@ describe('Model', () => {
                 input: {},
               },
             ],
+            metadata: {
+              usage: { inputTokens: 10, outputTokens: 8, totalTokens: 18 },
+            },
           },
           stopReason: 'toolUse',
           metadata: {
@@ -377,6 +389,9 @@ describe('Model', () => {
                 signature: 'sig1',
               },
             ],
+            metadata: {
+              usage: { inputTokens: 10, outputTokens: 10, totalTokens: 20 },
+            },
           },
           stopReason: 'endTurn',
           metadata: {
@@ -425,6 +440,9 @@ describe('Model', () => {
                 redactedContent: new Uint8Array(0),
               },
             ],
+            metadata: {
+              usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+            },
           },
           stopReason: 'endTurn',
           metadata: {
@@ -473,6 +491,9 @@ describe('Model', () => {
                 text: 'Thinking',
               },
             ],
+            metadata: {
+              usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+            },
           },
           stopReason: 'endTurn',
           metadata: {
@@ -541,6 +562,9 @@ describe('Model', () => {
               { type: 'toolUseBlock', toolUseId: 'tool1', name: 'get_weather', input: { city: 'Paris' } },
               { type: 'reasoningBlock', text: 'Reasoning', signature: 'sig1' },
             ],
+            metadata: {
+              usage: { inputTokens: 10, outputTokens: 15, totalTokens: 25 },
+            },
           },
           stopReason: 'endTurn',
           metadata: {
@@ -594,6 +618,10 @@ describe('Model', () => {
             type: 'message',
             role: 'assistant',
             content: [{ type: 'textBlock', text: 'Hello' }],
+            metadata: {
+              usage: { inputTokens: 20, outputTokens: 10, totalTokens: 30 },
+              metrics: { latencyMs: 100 },
+            },
           },
           stopReason: 'endTurn',
           metadata: {
