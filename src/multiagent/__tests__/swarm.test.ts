@@ -8,6 +8,8 @@ import { TextBlock } from '../../types/messages.js'
 import { Status, MultiAgentState } from '../state.js'
 import { AgentNode } from '../nodes.js'
 import { Swarm } from '../swarm.js'
+import { SessionManager } from '../../session/session-manager.js'
+import { MockSnapshotStorage } from '../../__fixtures__/mock-storage-provider.js'
 
 /**
  * Creates an agent that produces a structured output handoff via the strands_structured_output tool.
@@ -378,6 +380,139 @@ describe('Swarm', () => {
       expect(cancelEvent).toEqual(
         expect.objectContaining({ nodeId: 'a', state: expect.any(MultiAgentState), message: 'agent not ready' })
       )
+    })
+  })
+
+  describe('resume with session manager', () => {
+    function makeResumeSwarm(storage: MockSnapshotStorage, options: { maxSteps?: number } = {}): Swarm {
+      const sessionManager = new SessionManager({
+        sessionId: 'test-session',
+        storage: { snapshot: storage },
+      })
+      const swarm = new Swarm({
+        id: 'my-swarm',
+        nodes: [createHandoffAgent('a', { agentId: 'b', message: 'go to b' }), createFinalAgent('b', 'done by b')],
+        start: 'a',
+        plugins: [sessionManager],
+        ...options,
+      })
+      return swarm
+    }
+
+    it('resumes from the pending handoff target after a crash (A→B stopped, resumes at B)', async () => {
+      const storage = new MockSnapshotStorage()
+
+      const swarm1 = makeResumeSwarm(storage, { maxSteps: 1 })
+      await expect(swarm1.invoke('start')).rejects.toThrow('swarm reached step limit')
+
+      const swarm2 = makeResumeSwarm(storage)
+      const result = await swarm2.invoke('start')
+
+      expect(result.status).toBe(Status.COMPLETED)
+      expect(result.results.map((r) => r.nodeId)).toStrictEqual(['a', 'b'])
+    })
+
+    it('starts fresh when the previous run completed normally (no pending handoff)', async () => {
+      const storage = new MockSnapshotStorage()
+      const sessionManager1 = new SessionManager({ sessionId: 'test-session', storage: { snapshot: storage } })
+
+      const swarm1 = new Swarm({
+        id: 'my-swarm',
+        nodes: [createFinalAgent('a', 'all done'), createFinalAgent('b', 'done by b')],
+        start: 'a',
+        plugins: [sessionManager1],
+      })
+
+      const result1 = await swarm1.invoke('start')
+      expect(result1.status).toBe(Status.COMPLETED)
+      expect(result1.results.map((r) => r.nodeId)).toStrictEqual(['a'])
+
+      const result2 = await swarm1.invoke('start')
+
+      expect(result2.status).toBe(Status.COMPLETED)
+      expect(result2.results.map((r) => r.nodeId)).toStrictEqual(['a'])
+    })
+
+    it('carries forward steps count from the previous invocation', async () => {
+      const storage = new MockSnapshotStorage()
+
+      const swarm1 = makeResumeSwarm(storage, { maxSteps: 1 })
+      await expect(swarm1.invoke('start')).rejects.toThrow('swarm reached step limit')
+
+      const swarm2 = makeResumeSwarm(storage, { maxSteps: 2 })
+      const result = await swarm2.invoke('start')
+
+      expect(result.status).toBe(Status.COMPLETED)
+      expect(result.results.map((r) => r.nodeId)).toStrictEqual(['a', 'b'])
+    })
+
+    it('passes the last handoff context to the resumed node', async () => {
+      const storage = new MockSnapshotStorage()
+      const handoffContext = { research: 'quantum computing basics' }
+
+      const sessionManager1 = new SessionManager({ sessionId: 'test-session', storage: { snapshot: storage } })
+      const swarm1 = new Swarm({
+        id: 'my-swarm',
+        nodes: [
+          createHandoffAgent('a', { agentId: 'b', message: 'write this up', context: handoffContext }),
+          createFinalAgent('b', 'done'),
+        ],
+        start: 'a',
+        maxSteps: 1,
+        plugins: [sessionManager1],
+      })
+
+      await expect(swarm1.invoke('start')).rejects.toThrow('swarm reached step limit')
+
+      const sessionManager2 = new SessionManager({ sessionId: 'test-session', storage: { snapshot: storage } })
+      const agentB = createFinalAgent('b', 'done')
+      const streamSpy = vi.spyOn(agentB, 'stream')
+
+      const swarm2 = new Swarm({
+        id: 'my-swarm',
+        nodes: [createHandoffAgent('a', { agentId: 'b', message: 'write this up', context: handoffContext }), agentB],
+        start: 'a',
+        plugins: [sessionManager2],
+      })
+
+      await swarm2.invoke('start')
+
+      expect(streamSpy).toHaveBeenCalled()
+      const args = streamSpy.mock.calls[0]![0] as TextBlock[]
+      const texts = args.map((b) => b.text)
+      expect(texts).toContainEqual('write this up')
+      expect(texts).toContainEqual(expect.stringContaining(JSON.stringify(handoffContext, null, 2)))
+    })
+
+    it('starts fresh when the resume target agent was removed from the swarm', async () => {
+      const storage = new MockSnapshotStorage()
+
+      // First invocation: A hands off to B, maxSteps=1 stops
+      const sessionManager1 = new SessionManager({ sessionId: 'test-session', storage: { snapshot: storage } })
+      const swarm1 = new Swarm({
+        id: 'my-swarm',
+        nodes: [createHandoffAgent('a', { agentId: 'b', message: 'go to b' }), createFinalAgent('b', 'done by b')],
+        start: 'a',
+        maxSteps: 1,
+        plugins: [sessionManager1],
+      })
+
+      await expect(swarm1.invoke('start')).rejects.toThrow('swarm reached step limit')
+
+      // Second invocation: swarm reconfigured — B removed, C added
+      const sessionManager2 = new SessionManager({ sessionId: 'test-session', storage: { snapshot: storage } })
+      const swarm2 = new Swarm({
+        id: 'my-swarm',
+        nodes: [createFinalAgent('a', 'fresh start'), createFinalAgent('c', 'done by c')],
+        start: 'a',
+        plugins: [sessionManager2],
+      })
+
+      const result = await swarm2.invoke('start')
+
+      // B no longer exists, so _findResumeNode falls back to start node A
+      expect(result.status).toBe(Status.COMPLETED)
+      expect(result.results.map((r) => r.nodeId)).toStrictEqual(['a', 'a'])
     })
   })
 })

@@ -13,12 +13,16 @@ import {
   takeSnapshot as takeMultiAgentSnapshot,
   loadSnapshot as loadMultiAgentSnapshot,
 } from '../multiagent/snapshot.js'
-import { AfterMultiAgentInvocationEvent, BeforeMultiAgentInvocationEvent } from '../multiagent/events.js'
+import {
+  AfterMultiAgentInvocationEvent,
+  AfterNodeCallEvent,
+  BeforeMultiAgentInvocationEvent,
+} from '../multiagent/events.js'
 import type { Graph } from '../multiagent/graph.js'
 import type { Swarm } from '../multiagent/swarm.js'
 
 /**
- * Controls when `snapshot_latest` is saved automatically.
+ * Controls when `snapshot_latest` is saved automatically for agents.
  *
  * There are two kinds of snapshots:
  * - **`snapshot_latest`**: A single mutable snapshot that is overwritten on each save. Used to
@@ -29,8 +33,9 @@ import type { Swarm } from '../multiagent/swarm.js'
  *   just the latest.
  *
  * `SaveLatestStrategy` controls how frequently `snapshot_latest` is updated:
- * - `'invocation'`: after every agent or orchestrator invocation completes (default; balances durability and I/O)
- * - `'message'`: after every message added and after model calls with guardrail redactions (agent only; most durable, highest I/O)
+ * - `'invocation'`: after every agent invocation completes (default; balances durability and I/O)
+ * - `'message'`: after every message added and after model calls with guardrail redactions
+ *   (most durable, highest I/O)
  * - `'trigger'`: only when a `snapshotTrigger` fires (or manually via `saveSnapshot`)
  */
 export type SaveLatestStrategy = 'message' | 'invocation' | 'trigger'
@@ -38,12 +43,12 @@ export type SaveLatestStrategy = 'message' | 'invocation' | 'trigger'
 /**
  * Controls when `snapshot_latest` is saved for multi-agent orchestrators.
  *
- * Currently only `'invocation'` is supported. Additional strategies may be added
- * in future releases as multi-agent persistence patterns evolve.
- *
- * - `'invocation'`: after every orchestrator invocation completes (default)
+ * - `'node'`: after every node invocation completes (default; enables resume
+ *   from the last completed node after a crash or restart)
+ * - `'invocation'`: after every orchestrator invocation completes (lower I/O,
+ *   but only captures state at orchestrator invocation boundaries)
  */
-export type MultiAgentSaveLatestStrategy = 'invocation'
+export type MultiAgentSaveLatestStrategy = 'node' | 'invocation'
 
 export interface SessionManagerConfig {
   /** Pluggable storage backends for snapshot persistence. Defaults to FileStorage in Node.js; required in browser environments. */
@@ -56,7 +61,11 @@ export interface SessionManagerConfig {
   saveLatestOn?: SaveLatestStrategy
   /** Callback invoked after each invocation to decide whether to create an immutable snapshot. */
   snapshotTrigger?: SnapshotTriggerCallback
-  /** When to save snapshot_latest for multi-agent orchestrators. Default: `'invocation'` (after each orchestrator invocation completes). See {@link MultiAgentSaveLatestStrategy} for details. */
+  /**
+   * When to save snapshot_latest for multi-agent orchestrators.
+   * Default: `'node'` (after each node invocation completes).
+   * See {@link MultiAgentSaveLatestStrategy} for details.
+   */
   multiAgentSaveLatestOn?: MultiAgentSaveLatestStrategy
 }
 
@@ -97,7 +106,7 @@ export class SessionManager implements Plugin, MultiAgentPlugin {
     this._sessionId = validateIdentifier(config.sessionId ?? 'default-session')
     this._storage = { snapshot: config.storage.snapshot }
     this._saveLatestOn = config.saveLatestOn ?? 'invocation'
-    this._multiAgentSaveLatestOn = config.multiAgentSaveLatestOn ?? 'invocation'
+    this._multiAgentSaveLatestOn = config.multiAgentSaveLatestOn ?? 'node'
     this._snapshotTrigger = config.snapshotTrigger
   }
 
@@ -242,6 +251,11 @@ export class SessionManager implements Plugin, MultiAgentPlugin {
     orchestrator.addHook(BeforeMultiAgentInvocationEvent, async (event) => {
       await this._onBeforeMultiAgentInvocation(event)
     })
+    if (this._multiAgentSaveLatestOn === 'node') {
+      orchestrator.addHook(AfterNodeCallEvent, async (event) => {
+        await this._onAfterNodeCall(event)
+      })
+    }
     orchestrator.addHook(AfterMultiAgentInvocationEvent, async (event) => {
       await this._onAfterMultiAgentInvocation(event)
     })
@@ -263,14 +277,21 @@ export class SessionManager implements Plugin, MultiAgentPlugin {
     loadMultiAgentSnapshot(event.orchestrator as Graph | Swarm, snapshot, event.state)
   }
 
+  /** Saves latest orchestrator snapshot after each node completes. */
+  private async _onAfterNodeCall(event: AfterNodeCallEvent): Promise<void> {
+    await this.saveSnapshot({
+      target: event.orchestrator as Graph | Swarm,
+      state: event.state,
+      isLatest: true,
+    })
+  }
+
   /** Saves latest orchestrator snapshot after invocation completes. */
   private async _onAfterMultiAgentInvocation(event: AfterMultiAgentInvocationEvent): Promise<void> {
-    if (this._multiAgentSaveLatestOn === 'invocation') {
-      await this.saveSnapshot({
-        target: event.orchestrator as Graph | Swarm,
-        state: event.state,
-        isLatest: true,
-      })
-    }
+    await this.saveSnapshot({
+      target: event.orchestrator as Graph | Swarm,
+      state: event.state,
+      isLatest: true,
+    })
   }
 }

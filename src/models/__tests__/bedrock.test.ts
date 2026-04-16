@@ -3948,4 +3948,74 @@ describe('BedrockModel', () => {
       })
     })
   })
+
+  describe('thinking with forced tool choice', () => {
+    const mockConverseStreamCommand = vi.mocked(ConverseStreamCommand)
+
+    const provider = new BedrockModel({
+      modelId: 'anthropic.claude-sonnet-4-20250514-v1:0',
+      additionalRequestFields: {
+        thinking: { type: 'enabled', budget_tokens: 5000 },
+        some_other_field: 'value',
+      },
+    })
+    const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
+    const toolSpecs = [{ name: 'test_tool', description: 'test' }]
+
+    it.each([
+      { name: 'any', toolChoice: { any: {} } },
+      { name: 'tool', toolChoice: { tool: { name: 'test_tool' } } },
+    ])('strips thinking from additional request fields when tool choice is $name', ({ toolChoice }) => {
+      collectIterator(provider.stream(messages, { toolSpecs, toolChoice }))
+
+      expect(mockConverseStreamCommand).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          additionalModelRequestFields: { some_other_field: 'value' },
+        })
+      )
+    })
+
+    it('preserves thinking when tool choice is auto', () => {
+      collectIterator(provider.stream(messages, { toolSpecs, toolChoice: { auto: {} } }))
+
+      expect(mockConverseStreamCommand).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          additionalModelRequestFields: {
+            thinking: { type: 'enabled', budget_tokens: 5000 },
+            some_other_field: 'value',
+          },
+        })
+      )
+    })
+
+    it('preserves thinking when no tool choice is provided', () => {
+      collectIterator(provider.stream(messages, { toolSpecs }))
+
+      expect(mockConverseStreamCommand).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          additionalModelRequestFields: {
+            thinking: { type: 'enabled', budget_tokens: 5000 },
+            some_other_field: 'value',
+          },
+        })
+      )
+    })
+
+    it('omits additionalModelRequestFields when thinking is the only field and tool choice forces tool use', () => {
+      const thinkingOnlyProvider = new BedrockModel({
+        modelId: 'anthropic.claude-sonnet-4-20250514-v1:0',
+        additionalRequestFields: {
+          thinking: { type: 'enabled', budget_tokens: 5000 },
+        },
+      })
+
+      collectIterator(thinkingOnlyProvider.stream(messages, { toolSpecs, toolChoice: { any: {} } }))
+
+      expect(mockConverseStreamCommand).toHaveBeenLastCalledWith(
+        expect.not.objectContaining({
+          additionalModelRequestFields: expect.anything(),
+        })
+      )
+    })
+  })
 })

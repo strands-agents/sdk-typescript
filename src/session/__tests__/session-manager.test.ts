@@ -22,6 +22,7 @@ import { loadStateFromJSONSymbol, stateToJSONSymbol } from '../../types/serializ
 import { logger } from '../../logging/logger.js'
 import {
   AfterMultiAgentInvocationEvent,
+  AfterNodeCallEvent,
   BeforeMultiAgentInvocationEvent,
   Graph,
   type MultiAgent,
@@ -673,8 +674,20 @@ describe('SessionManager — multi-agent', () => {
       expect(hook).toBeDefined()
     })
 
-    it('registers AfterMultiAgentInvocationEvent hook', () => {
+    it('registers AfterNodeCallEvent hook by default (node strategy)', () => {
       sessionManager = new SessionManager({ sessionId: 'test', storage: { snapshot: storage } })
+      sessionManager.initMultiAgent(orchestrator)
+
+      const hook = orchestrator.trackedHooks.find((h) => h.eventType === AfterNodeCallEvent)
+      expect(hook).toBeDefined()
+    })
+
+    it('registers AfterMultiAgentInvocationEvent hook when strategy is invocation', () => {
+      sessionManager = new SessionManager({
+        sessionId: 'test',
+        storage: { snapshot: storage },
+        multiAgentSaveLatestOn: 'invocation',
+      })
       sessionManager.initMultiAgent(orchestrator)
 
       const hook = orchestrator.trackedHooks.find((h) => h.eventType === AfterMultiAgentInvocationEvent)
@@ -745,10 +758,28 @@ describe('SessionManager — multi-agent', () => {
   })
 
   describe('AfterMultiAgentInvocationEvent handling', () => {
-    it('saves snapshot when multiagentSaveLatestOn is invocation (default)', async () => {
+    it('saves snapshot after node call when multiAgentSaveLatestOn is node (default)', async () => {
       sessionManager = new SessionManager({
         sessionId: 'test-session',
         storage: { snapshot: storage },
+      })
+      sessionManager.initMultiAgent(orchestrator)
+
+      const state = new MultiAgentState({ nodeIds: ['a'] })
+      await invokeOrchestratorHook(orchestrator, new AfterNodeCallEvent({ orchestrator, state, nodeId: 'a' }))
+
+      const snapshot = await storage.loadSnapshot({
+        location: { sessionId: 'test-session', scope: 'multiAgent', scopeId: 'test-graph' },
+      })
+      expect(snapshot).not.toBeNull()
+      expect(snapshot?.scope).toBe('multiAgent')
+    })
+
+    it('saves snapshot after invocation when multiAgentSaveLatestOn is invocation', async () => {
+      sessionManager = new SessionManager({
+        sessionId: 'test-session',
+        storage: { snapshot: storage },
+        multiAgentSaveLatestOn: 'invocation',
       })
       sessionManager.initMultiAgent(orchestrator)
 

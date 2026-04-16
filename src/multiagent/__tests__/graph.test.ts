@@ -1,12 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
 import { Agent } from '../../agent/agent.js'
 import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
+import { MockSnapshotStorage } from '../../__fixtures__/mock-storage-provider.js'
 import { collectGenerator } from '../../__fixtures__/model-test-helpers.js'
 import { AfterNodeCallEvent, BeforeNodeCallEvent, MultiAgentInitializedEvent } from '../events.js'
 import { TextBlock, type ContentBlockData } from '../../types/messages.js'
 import { Status, MultiAgentState } from '../state.js'
 import { AgentNode, MultiAgentNode } from '../nodes.js'
 import { Graph } from '../graph.js'
+import { SessionManager } from '../../session/session-manager.js'
 
 function makeAgent(id: string, text = 'reply'): Agent {
   const model = new MockMessageModel().addTurn(new TextBlock(text))
@@ -299,6 +301,33 @@ describe('Graph', () => {
       expect(result.results.map((r) => r.nodeId)).toStrictEqual(['a', 'b'])
     })
 
+    it('evaluates conditional edges on join node (A -> C false, B -> C)', async () => {
+      const graph = new Graph({
+        nodes: [makeAgent('a', 'a-reply'), makeAgent('b', 'b-reply'), makeAgent('c', 'c-reply')],
+        edges: [{ source: 'a', target: 'c', handler: () => false }, ['b', 'c']],
+      })
+
+      const result = await graph.invoke('start')
+
+      expect(result.status).toBe(Status.COMPLETED)
+      expect(result.results.map((r) => r.nodeId).sort()).toStrictEqual(['a', 'b'])
+    })
+
+    it('evaluates conditional edges on join node (A -> C true, B -> C true)', async () => {
+      const graph = new Graph({
+        nodes: [makeAgent('a', 'a-reply'), makeAgent('b', 'b-reply'), makeAgent('c', 'c-reply')],
+        edges: [
+          { source: 'a', target: 'c', handler: () => true },
+          { source: 'b', target: 'c', handler: () => true },
+        ],
+      })
+
+      const result = await graph.invoke('start')
+
+      expect(result.status).toBe(Status.COMPLETED)
+      expect(result.results.map((r) => r.nodeId).sort()).toStrictEqual(['a', 'b', 'c'])
+    })
+
     it('passes task + dependency content to downstream nodes', async () => {
       const agentB = makeAgent('b')
       const streamSpy = vi.spyOn(agentB, 'stream')
@@ -587,6 +616,167 @@ describe('Graph', () => {
       // Simulates consumer break — should not hang waiting for node streams
       const result = await gen.return(undefined as never)
       expect(result.done).toBe(true)
+    })
+  })
+
+  describe('resume with session manager', () => {
+    function makeSessionManager(storage: MockSnapshotStorage): SessionManager {
+      return new SessionManager({
+        sessionId: 'test-session',
+        storage: { snapshot: storage },
+      })
+    }
+
+    it('throws when sessionManager appears in both constructor arg and plugins', () => {
+      const sm = makeSessionManager(new MockSnapshotStorage())
+      expect(
+        () =>
+          new Graph({
+            nodes: [makeAgent('a')],
+            edges: [],
+            sessionManager: sm,
+            plugins: [sm],
+          })
+      ).toThrow('sessionManager was provided as both a constructor argument and in the plugins array')
+    })
+
+    it('resumes from the next ready node after a linear graph stops (A→B→C, A done, resumes at B)', async () => {
+      const storage = new MockSnapshotStorage()
+
+      const graph1 = new Graph({
+        id: 'my-graph',
+        nodes: [makeAgent('a', 'a-reply'), makeAgent('b', 'b-reply'), makeAgent('c', 'c-reply')],
+        edges: [
+          ['a', 'b'],
+          ['b', 'c'],
+        ],
+        maxSteps: 1,
+        sessionManager: makeSessionManager(storage),
+      })
+
+      await expect(graph1.invoke('start')).rejects.toThrow('max steps reached')
+
+      const graph2 = new Graph({
+        id: 'my-graph',
+        nodes: [makeAgent('a', 'a-reply'), makeAgent('b', 'b-reply'), makeAgent('c', 'c-reply')],
+        edges: [
+          ['a', 'b'],
+          ['b', 'c'],
+        ],
+        sessionManager: makeSessionManager(storage),
+      })
+
+      const result = await graph2.invoke('start')
+
+      expect(result.status).toBe(Status.COMPLETED)
+      const completedIds = result.results.filter((r) => r.status === Status.COMPLETED).map((r) => r.nodeId)
+      expect(completedIds).toStrictEqual(['a', 'b', 'c'])
+    })
+
+    it('resumes parallel branches independently (A→B, A→C, B done, C cancelled, resumes at C)', async () => {
+      const storage = new MockSnapshotStorage()
+
+      const graph1 = new Graph({
+        id: 'my-graph',
+        nodes: [makeAgent('a', 'a-reply'), makeAgent('b', 'b-reply'), makeAgent('c', 'c-reply')],
+        edges: [
+          ['a', 'b'],
+          ['a', 'c'],
+        ],
+        plugins: [makeSessionManager(storage)],
+        maxConcurrency: 1,
+      })
+
+      graph1.addHook(BeforeNodeCallEvent, (event: BeforeNodeCallEvent) => {
+        if (event.nodeId === 'c') event.cancel = 'simulated stop'
+      })
+
+      await graph1.invoke('start')
+
+      const graph2 = new Graph({
+        id: 'my-graph',
+        nodes: [makeAgent('a', 'a-reply'), makeAgent('b', 'b-reply'), makeAgent('c', 'c-reply')],
+        edges: [
+          ['a', 'b'],
+          ['a', 'c'],
+        ],
+        plugins: [makeSessionManager(storage)],
+      })
+
+      const result = await graph2.invoke('start')
+
+      const completedIds = result.results.filter((r) => r.status === Status.COMPLETED).map((r) => r.nodeId)
+      expect(completedIds).toContain('a')
+      expect(completedIds).toContain('b')
+      expect(completedIds).toContain('c')
+      // A and B should appear once each (not re-executed)
+      expect(completedIds.filter((id) => id === 'a')).toHaveLength(1)
+      expect(completedIds.filter((id) => id === 'b')).toHaveLength(1)
+    })
+
+    it('starts fresh when all nodes completed in the previous run', async () => {
+      const storage = new MockSnapshotStorage()
+
+      const graph1 = new Graph({
+        id: 'my-graph',
+        nodes: [makeAgent('a', 'a-reply'), makeAgent('b', 'b-reply')],
+        edges: [['a', 'b']],
+        plugins: [makeSessionManager(storage)],
+      })
+
+      const result1 = await graph1.invoke('start')
+      expect(result1.status).toBe(Status.COMPLETED)
+
+      const graph2 = new Graph({
+        id: 'my-graph',
+        nodes: [makeAgent('a', 'a-reply'), makeAgent('b', 'b-reply')],
+        edges: [['a', 'b']],
+        plugins: [makeSessionManager(storage)],
+      })
+
+      const result2 = await graph2.invoke('start')
+
+      expect(result2.status).toBe(Status.COMPLETED)
+      // A should appear twice — once from restored state, once from fresh execution
+      const aCount = result2.results.filter((r) => r.nodeId === 'a' && r.status === Status.COMPLETED).length
+      expect(aCount).toBe(2)
+    })
+
+    it('respects conditional edges on resume', async () => {
+      const storage = new MockSnapshotStorage()
+
+      // A → B (always), A → C (condition: false)
+      // First run: A completes, B completes, C blocked by condition
+      // maxSteps=2 allows A and B but graph completes normally since C is blocked
+      const graph1 = new Graph({
+        id: 'my-graph',
+        nodes: [makeAgent('a', 'a-reply'), makeAgent('b', 'b-reply'), makeAgent('c', 'c-reply')],
+        edges: [
+          { source: 'a', target: 'b', handler: () => true },
+          { source: 'a', target: 'c', handler: () => false },
+        ],
+        plugins: [makeSessionManager(storage)],
+      })
+
+      const result1 = await graph1.invoke('start')
+      expect(result1.results.map((r) => r.nodeId)).toStrictEqual(['a', 'b'])
+
+      // Resume: C should still be blocked by the false condition
+      const graph2 = new Graph({
+        id: 'my-graph',
+        nodes: [makeAgent('a', 'a-reply'), makeAgent('b', 'b-reply'), makeAgent('c', 'c-reply')],
+        edges: [
+          { source: 'a', target: 'b', handler: () => true },
+          { source: 'a', target: 'c', handler: () => false },
+        ],
+        plugins: [makeSessionManager(storage)],
+      })
+
+      const result2 = await graph2.invoke('start')
+
+      // C should not appear — condition still blocks it
+      const completedIds = result2.results.filter((r) => r.status === Status.COMPLETED).map((r) => r.nodeId)
+      expect(completedIds).not.toContain('c')
     })
   })
 })

@@ -8,6 +8,7 @@ import { HookRegistryImplementation } from '../hooks/registry.js'
 import type { HookCallback, HookableEventConstructor, HookCleanup } from '../hooks/types.js'
 import type { MultiAgentPlugin } from './plugins.js'
 import { MultiAgentPluginRegistry } from './plugins.js'
+import type { SessionManager } from '../session/session-manager.js'
 import type { ContentBlock } from '../types/messages.js'
 import { TextBlock } from '../types/messages.js'
 import type { AgentNodeOptions } from './nodes.js'
@@ -52,9 +53,6 @@ interface HandoffResult {
 }
 
 /**
- * Options for creating a Swarm instance.
- */
-/**
  * Input type for swarm nodes. Pass an {@link InvokableAgent} directly for the simple case,
  * or {@link AgentNodeOptions} for per-node config.
  */
@@ -67,6 +65,8 @@ export interface SwarmOptions extends SwarmConfig {
   nodes: SwarmNodeDefinition[]
   /** Agent id that receives the initial input. Defaults to the first agent in `nodes`. */
   start?: string
+  /** Session manager for saving and restoring swarm sessions. */
+  sessionManager?: SessionManager
   /** Plugins for event-driven extensibility. */
   plugins?: MultiAgentPlugin[]
   /** Custom trace attributes to include on all spans. */
@@ -109,10 +109,11 @@ export class Swarm implements MultiAgent {
   private readonly _hookRegistry: HookRegistryImplementation
   private readonly _tracer: Tracer
   readonly start: AgentNode
+  readonly sessionManager?: SessionManager | undefined
   private _initialized: boolean
 
   constructor(options: SwarmOptions) {
-    const { id, nodes, start, plugins, traceAttributes, ...config } = options
+    const { id, nodes, start, sessionManager, plugins, traceAttributes, ...config } = options
 
     this.id = id ?? 'swarm'
 
@@ -124,8 +125,17 @@ export class Swarm implements MultiAgent {
     this.nodes = this._resolveNodes(nodes)
     this.start = this._resolveStart(start)
 
+    this.sessionManager = sessionManager
+
+    if (sessionManager && plugins?.some((p) => p.name === sessionManager.name)) {
+      throw new Error('sessionManager was provided as both a constructor argument and in the plugins array')
+    }
+
     this._hookRegistry = new HookRegistryImplementation()
-    this._pluginRegistry = new MultiAgentPluginRegistry(plugins)
+    this._pluginRegistry = new MultiAgentPluginRegistry([
+      ...(plugins ?? []),
+      ...(sessionManager ? [sessionManager] : []),
+    ])
     this._tracer = new Tracer(traceAttributes)
     this._initialized = false
   }
@@ -200,10 +210,13 @@ export class Swarm implements MultiAgent {
       input,
     })
 
+    // SessionManager (or plugins) may restore state.results here via the hook
     yield new BeforeMultiAgentInvocationEvent({ orchestrator: this, state })
 
-    let node = this.start
-    let handoff: HandoffResult | undefined
+    // Resume: if state was restored from a snapshot, derive the next node from the last handoff
+    const resumeNode = this._findResumeNode(state)
+    let node = resumeNode?.node ?? this.start
+    let handoff: HandoffResult | undefined = resumeNode?.lastHandoff
     let caughtError: Error | undefined
     let result: MultiAgentResult | undefined
 
@@ -214,7 +227,6 @@ export class Swarm implements MultiAgent {
         // Execute current node
         const nodeResult = yield* this._streamNode(node, input, state, handoff, multiAgentSpan)
         handoff = nodeResult.structuredOutput as HandoffResult | undefined
-        state.results.push(nodeResult)
 
         // Check for terminal conditions
         if (nodeResult.status === Status.FAILED || !handoff?.agentId) {
@@ -273,6 +285,7 @@ export class Swarm implements MultiAgent {
       const result = new NodeResult({ nodeId: node.id, status: Status.CANCELLED, duration: 0 })
       nodeState.status = Status.CANCELLED
       nodeState.results.push(result)
+      state.results.push(result)
       yield new NodeCancelEvent({ nodeId: node.id, state, message })
       yield new AfterNodeCallEvent({ orchestrator: this, state, nodeId: node.id })
       this._tracer.endNodeSpan(nodeSpan, { status: Status.CANCELLED, duration: 0 })
@@ -293,6 +306,7 @@ export class Swarm implements MultiAgent {
 
       const result = next.value
       this._tracer.endNodeSpan(nodeSpan, { status: result.status, duration: result.duration, usage: result.usage })
+      state.results.push(result)
 
       yield new AfterNodeCallEvent({ orchestrator: this, state, nodeId: node.id })
       return result
@@ -381,6 +395,37 @@ export class Swarm implements MultiAgent {
     if (handoff?.agentId && state.steps >= this.config.maxSteps) {
       throw new Error(`max_steps=<${this.config.maxSteps}> | swarm reached step limit`)
     }
+  }
+
+  /**
+   * Finds the next node to execute from a restored {@link MultiAgentState}.
+   *
+   * When the session manager restores state from a snapshot, `state.results`
+   * contains results from the previous invocation in completion order. The last
+   * result's structured output contains the handoff decision — if it has an
+   * `agentId`, that is the node the previous run intended to hand off to but
+   * never executed (e.g. due to a crash). We resume from that handoff target.
+   *
+   * If the last result has no `agentId`, the previous run completed normally
+   * and there is nothing to resume.
+   *
+   * @returns The handoff target node and its handoff context, or `undefined` for a fresh start
+   */
+  private _findResumeNode(state: MultiAgentState): { node: AgentNode; lastHandoff: HandoffResult } | undefined {
+    const lastResult = state.results[state.results.length - 1]
+    if (!lastResult) return undefined
+
+    const lastNodeHandoff = lastResult.structuredOutput as HandoffResult | undefined
+    if (!lastNodeHandoff?.agentId) return undefined
+
+    const nextNode = this.nodes.get(lastNodeHandoff.agentId)
+    if (!nextNode) {
+      logger.warn(`node_id=<${lastNodeHandoff.agentId}> | resume target not found in swarm, starting fresh`)
+      return undefined
+    }
+
+    logger.debug(`node_id=<${nextNode.id}>, prior_steps=<${state.steps}> | resuming swarm from restored state`)
+    return { node: nextNode, lastHandoff: lastNodeHandoff }
   }
 
   private _buildHandoffSchema(nodeId: string): z.ZodType<HandoffResult> {

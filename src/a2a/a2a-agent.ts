@@ -8,7 +8,7 @@
  */
 
 import type { AgentCard, Part } from '@a2a-js/sdk'
-import type { Client as A2AClientSdk } from '@a2a-js/sdk/client'
+import type { Client as A2AClientSdk, ClientFactory as ClientFactoryType } from '@a2a-js/sdk/client'
 import { ClientFactory } from '@a2a-js/sdk/client'
 import type { InvokableAgent, InvokeArgs, InvokeOptions } from '../types/agent.js'
 import { AgentResult } from '../types/agent.js'
@@ -31,6 +31,8 @@ export interface A2AAgentConfig {
   name?: string
   /** Optional description. If not provided, populated from the agent card after connection. */
   description?: string
+  /** Optional custom A2A ClientFactory for authenticating requests (e.g. SigV4, bearer token). */
+  clientFactory?: ClientFactoryType
 }
 
 /**
@@ -170,7 +172,7 @@ export class A2AAgent implements InvokableAgent {
 
     logExperimentalWarning()
 
-    const factory = new ClientFactory()
+    const factory = this._config.clientFactory ?? new ClientFactory()
     const client = await factory.createFromUrl(this._config.url, this._config.agentCardPath)
     this._agentCard = await client.getAgentCard()
     if (this.name === undefined && this._agentCard?.name) {

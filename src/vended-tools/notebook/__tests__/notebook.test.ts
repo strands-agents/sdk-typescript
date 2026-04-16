@@ -195,6 +195,22 @@ describe('notebook tool', () => {
       expect(notebooks!.default).toBe('# Todo List\n\n[x] Task 1\n[x] Task 2\n[x] Task 3')
     })
 
+    it('preserves dollar sign patterns in newStr literally', async () => {
+      const { state, context } = createFreshContext()
+      state.set('notebooks', { default: 'const value = getPrice()' })
+      const result = await notebook.invoke(
+        {
+          mode: 'write',
+          oldStr: 'getPrice()',
+          newStr: '$& is not $1 or $$',
+        },
+        context
+      )
+      expect(result).toBe("Replaced text in notebook 'default'")
+      const notebooks = state.get<NotebookState>('notebooks')
+      expect(notebooks!.default).toBe('const value = $& is not $1 or $$')
+    })
+
     it('throws error if old string not found', async () => {
       const { state, context } = createFreshContext()
       state.set('notebooks', { default: '# Todo List\n\n[ ] Task 1\n[ ] Task 2\n[x] Task 3' })

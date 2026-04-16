@@ -3,10 +3,12 @@ import type { InvokableAgent } from '../types/agent.js'
 import type { MultiAgentInput } from './multiagent.js'
 import type { ContentBlock } from '../types/messages.js'
 import { TextBlock, contentBlockFromData } from '../types/messages.js'
+import { logger } from '../logging/logger.js'
 import { HookableEvent } from '../hooks/events.js'
 import { HookRegistryImplementation } from '../hooks/registry.js'
 import type { HookCallback, HookableEventConstructor, HookCleanup } from '../hooks/types.js'
 import type { MultiAgentPlugin } from './plugins.js'
+import type { SessionManager } from '../session/session-manager.js'
 import { MultiAgentPluginRegistry } from './plugins.js'
 import type { NodeDefinition } from './nodes.js'
 import { AgentNode, MultiAgentNode, Node } from './nodes.js'
@@ -53,6 +55,8 @@ export interface GraphOptions extends GraphConfig {
   edges: EdgeDefinition[]
   /** Explicit source node IDs. If omitted, auto-detected from nodes with no incoming edges. */
   sources?: string[]
+  /** Session manager for saving and restoring graph sessions. */
+  sessionManager?: SessionManager
   /** Plugins for event-driven extensibility. */
   plugins?: MultiAgentPlugin[]
   /** Custom trace attributes to include on all spans. */
@@ -102,10 +106,11 @@ export class Graph implements MultiAgent {
   private readonly _hookRegistry: HookRegistryImplementation
   private readonly _sources: Node[]
   private readonly _tracer: Tracer
+  readonly sessionManager?: SessionManager | undefined
   private _initialized: boolean
 
   constructor(options: GraphOptions) {
-    const { id, nodes, edges, sources, plugins, traceAttributes, ...config } = options
+    const { id, nodes, edges, sources, sessionManager, plugins, traceAttributes, ...config } = options
 
     this.id = id ?? 'graph'
 
@@ -120,8 +125,17 @@ export class Graph implements MultiAgent {
     this._sources = this._resolveSources(sources)
     this._validateSources()
 
+    this.sessionManager = sessionManager
+
+    if (sessionManager && plugins?.some((p) => p.name === sessionManager.name)) {
+      throw new Error('sessionManager was provided as both a constructor argument and in the plugins array')
+    }
+
     this._hookRegistry = new HookRegistryImplementation()
-    this._pluginRegistry = new MultiAgentPluginRegistry(plugins)
+    this._pluginRegistry = new MultiAgentPluginRegistry([
+      ...(plugins ?? []),
+      ...(sessionManager ? [sessionManager] : []),
+    ])
     this._tracer = new Tracer(traceAttributes)
     this._initialized = false
   }
@@ -193,7 +207,6 @@ export class Graph implements MultiAgent {
     const state = new MultiAgentState({ nodeIds: [...this.nodes.keys()] })
 
     const queue = new Queue()
-    const targets = [...this._sources]
     const streams = new Map<string, Promise<void>>()
 
     const multiAgentSpan = this._tracer.startMultiAgentSpan({
@@ -202,7 +215,11 @@ export class Graph implements MultiAgent {
       input,
     })
 
+    // SessionManager (or plugins) may restore state.results here via the hook
     yield new BeforeMultiAgentInvocationEvent({ orchestrator: this, state })
+
+    // Resume: if state was restored, find nodes that are ready but haven't completed otherwise start from source nodes
+    const targets = (await this._findResumeTargets(state)) ?? [...this._sources]
 
     let caughtError: Error | undefined
     let result: MultiAgentResult | undefined
@@ -498,6 +515,61 @@ export class Graph implements MultiAgent {
     return [...blocks, ...deps]
   }
 
+  /**
+   * Finds nodes that should execute on resume from a restored {@link MultiAgentState}.
+   *
+   * Any node that did not complete is a candidate for re-execution, provided its
+   * dependencies are all COMPLETED and edge conditions are satisfied. This covers:
+   * - PENDING nodes that never started
+   * - EXECUTING/FAILED/CANCELLED nodes from the previous run
+   * - Source nodes (no incoming edges) that are not COMPLETED
+   *
+   * Works for all node types including {@link AgentNode} and {@link MultiAgentNode}
+   * (subgraphs/swarms). A `MultiAgentNode` that didn't complete will be re-executed
+   * from scratch — its inner orchestrator manages its own state independently.
+   *
+   * @returns Array of ready nodes, or `undefined` if state was not restored (fresh start)
+   */
+  private async _findResumeTargets(state: MultiAgentState): Promise<Node[] | undefined> {
+    // No completed nodes in state means fresh start (state was not restored)
+    const hasCompletedNodes = [...state.nodes.values()].some((ns) => ns.status === Status.COMPLETED)
+    if (!hasCompletedNodes) return undefined
+
+    const ready: Node[] = []
+    for (const [id, node] of this.nodes) {
+      if (state.node(id)?.status === Status.COMPLETED) continue
+
+      const incoming = this.edges.filter((e) => e.target.id === id)
+      if (incoming.length === 0) {
+        // Source node that hasn't completed
+        ready.push(node)
+      } else if (await this._allDependenciesSatisfied(incoming, state)) {
+        ready.push(node)
+      }
+    }
+
+    if (ready.length > 0) {
+      logger.debug(
+        `resume_targets=<${ready.map((n) => n.id).join(', ')}>, prior_steps=<${state.steps}> | resuming graph from restored state`
+      )
+      return ready
+    }
+
+    logger.debug('all nodes completed in restored state | starting fresh')
+    return undefined
+  }
+
+  /**
+   * Checks whether all incoming edges have completed sources with satisfied conditions.
+   */
+  private async _allDependenciesSatisfied(incoming: Edge[], state: MultiAgentState): Promise<boolean> {
+    for (const edge of incoming) {
+      if (state.node(edge.source.id)?.status !== Status.COMPLETED) return false
+      if (!(await edge.handler(state))) return false
+    }
+    return true
+  }
+
   private _checkSteps(state: MultiAgentState): void {
     if (state.steps >= this.config.maxSteps) {
       throw new Error(`steps=<${state.steps}> | max steps reached`)
@@ -506,7 +578,13 @@ export class Graph implements MultiAgent {
 
   /**
    * Finds downstream nodes that are ready to execute after a node completes.
-   * A target is ready when all its incoming edge sources are COMPLETED.
+   * A target is ready when all its incoming edge sources are COMPLETED and all edge handlers return true.
+   *
+   * @param node - The node that just completed execution.
+   * @param state - Current multi-agent execution state.
+   * @param streams - Map of node IDs to their in-flight execution promises.
+   * @param targets - Nodes already queued for execution.
+   * @returns Nodes that are ready to execute.
    */
   private async _findReady(
     node: Node,
@@ -519,12 +597,11 @@ export class Graph implements MultiAgent {
     const ready: Node[] = []
 
     for (const edge of this.edges.filter((e) => e.source.id === node.id)) {
-      if (!(await edge.handler(state))) continue
-
+      // skip if the target is already running or queued
       if (streams.has(edge.target.id) || targets.some((n) => n.id === edge.target.id)) continue
 
-      const deps = this.edges.filter((e) => e.target.id === edge.target.id)
-      if (deps.every((e) => state.node(e.source.id)?.status === Status.COMPLETED)) {
+      const incoming = this.edges.filter((e) => e.target.id === edge.target.id)
+      if (await this._allDependenciesSatisfied(incoming, state)) {
         ready.push(edge.target)
       }
     }
