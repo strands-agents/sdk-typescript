@@ -16,6 +16,14 @@ vi.mock('@opentelemetry/sdk-trace-base', async (importOriginal) => {
   }
 })
 
+/**
+ * Extracts the resource from an OTel provider via its private `_resource` field.
+ * OTel SDK v2 made the resource property private; this helper provides test access.
+ */
+function getProviderResource(provider: any): any {
+  return provider._resource
+}
+
 // resetModules clears the module cache so each test gets a fresh singleton.
 // Tests use dynamic await import() to re-import after the reset.
 
@@ -102,7 +110,7 @@ describe('setupTracer (node-specific)', () => {
 
       const provider = telemetry.setupTracer()
 
-      expect(provider.resource.attributes['service.name']).toBe('my-custom-service')
+      expect(getProviderResource(provider).attributes['service.name']).toBe('my-custom-service')
     })
 
     it('should use OTEL_SERVICE_NAMESPACE when set', async () => {
@@ -111,7 +119,7 @@ describe('setupTracer (node-specific)', () => {
 
       const provider = telemetry.setupTracer()
 
-      expect(provider.resource.attributes['service.namespace']).toBe('my-namespace')
+      expect(getProviderResource(provider).attributes['service.namespace']).toBe('my-namespace')
     })
 
     it('should use OTEL_DEPLOYMENT_ENVIRONMENT when set', async () => {
@@ -120,7 +128,7 @@ describe('setupTracer (node-specific)', () => {
 
       const provider = telemetry.setupTracer()
 
-      expect(provider.resource.attributes['deployment.environment']).toBe('production')
+      expect(getProviderResource(provider).attributes['deployment.environment']).toBe('production')
     })
 
     it('should merge OTEL_RESOURCE_ATTRIBUTES with defaults', async () => {
@@ -129,9 +137,9 @@ describe('setupTracer (node-specific)', () => {
 
       const provider = telemetry.setupTracer()
 
-      expect(provider.resource.attributes['service.version']).toBe('1.0.0')
-      expect(provider.resource.attributes['custom.team']).toBe('platform')
-      expect(provider.resource.attributes['service.name']).toBe('strands-agents')
+      expect(getProviderResource(provider).attributes['service.version']).toBe('1.0.0')
+      expect(getProviderResource(provider).attributes['custom.team']).toBe('platform')
+      expect(getProviderResource(provider).attributes['service.name']).toBe('strands-agents')
     })
 
     it('should allow OTEL_RESOURCE_ATTRIBUTES to override defaults', async () => {
@@ -140,8 +148,8 @@ describe('setupTracer (node-specific)', () => {
 
       const provider = telemetry.setupTracer()
 
-      expect(provider.resource.attributes['service.name']).toBe('custom-service')
-      expect(provider.resource.attributes['deployment.environment']).toBe('production')
+      expect(getProviderResource(provider).attributes['service.name']).toBe('custom-service')
+      expect(getProviderResource(provider).attributes['deployment.environment']).toBe('production')
     })
   })
 })
@@ -161,13 +169,19 @@ describe('setupMeter (node-specific)', () => {
   describe('resource attributes from environment', () => {
     it('should use OTEL_SERVICE_NAME when set', async () => {
       process.env.OTEL_SERVICE_NAME = 'my-meter-service'
-      const { InMemoryMetricExporter, PeriodicExportingMetricReader, AggregationTemporality } =
+      const { InMemoryMetricExporter, PeriodicExportingMetricReader, AggregationTemporality, MeterProvider } =
         await import('@opentelemetry/sdk-metrics')
+      const { resourceFromAttributes } = await import('@opentelemetry/resources')
       const telemetry = await import('../index.js')
 
       const exporter = new InMemoryMetricExporter(AggregationTemporality.CUMULATIVE)
-      const provider = telemetry.setupMeter()
-      provider.addMetricReader(new PeriodicExportingMetricReader({ exporter, exportIntervalMillis: 100 }))
+      const reader = new PeriodicExportingMetricReader({ exporter, exportIntervalMillis: 100 })
+      const provider = telemetry.setupMeter({
+        provider: new MeterProvider({
+          resource: resourceFromAttributes({ 'service.name': 'my-meter-service' }),
+          readers: [reader],
+        }),
+      })
 
       provider.getMeter('test').createCounter('probe').add(1)
       await provider.forceFlush()

@@ -1,5 +1,13 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 
+/**
+ * Extracts the resource from an OTel provider via its private `_resource` field.
+ * OTel SDK v2 made the resource property private; this helper provides test access.
+ */
+function getProviderResource(provider: any): any {
+  return provider._resource
+}
+
 // resetModules clears the module cache so each test gets a fresh singleton.
 // Tests use dynamic await import() to re-import after the reset.
 
@@ -37,7 +45,7 @@ describe('setupTracer', () => {
 
       const provider = telemetry.setupTracer()
 
-      expect(provider.resource.attributes['service.name']).toBe('strands-agents')
+      expect(getProviderResource(provider).attributes['service.name']).toBe('strands-agents')
     })
 
     it('should include default resource attributes', async () => {
@@ -45,11 +53,12 @@ describe('setupTracer', () => {
 
       const provider = telemetry.setupTracer()
 
-      expect(provider.resource.attributes['service.name']).toBe('strands-agents')
-      expect(provider.resource.attributes['service.namespace']).toBe('strands')
-      expect(provider.resource.attributes['deployment.environment']).toBe('development')
-      expect(provider.resource.attributes['telemetry.sdk.name']).toBe('opentelemetry')
-      expect(provider.resource.attributes['telemetry.sdk.language']).toBe('typescript')
+      const resource = getProviderResource(provider)
+      expect(resource.attributes['service.name']).toBe('strands-agents')
+      expect(resource.attributes['service.namespace']).toBe('strands')
+      expect(resource.attributes['deployment.environment']).toBe('development')
+      expect(resource.attributes['telemetry.sdk.name']).toBe('opentelemetry')
+      expect(resource.attributes['telemetry.sdk.language']).toBe('typescript')
     })
   })
 })
