@@ -22,6 +22,10 @@
       "types": "./dist/src/models/openai.d.ts",
       "default": "./dist/src/models/openai.js"
     },
+    "./models/openai-responses": {
+      "types": "./dist/src/models/openai-responses.d.ts",
+      "default": "./dist/src/models/openai-responses.js"
+    },
     "./models/bedrock": {
       "types": "./dist/src/models/bedrock.d.ts",
       "default": "./dist/src/models/bedrock.js"

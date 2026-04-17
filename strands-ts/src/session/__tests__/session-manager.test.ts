@@ -51,6 +51,7 @@ function createMockAgent(id = 'agent'): Agent {
         Object.entries(json).forEach(([k, v]) => this._m.set(k, v))
       },
     } as any,
+    modelState: {},
     systemPrompt: 'Test prompt',
   } as unknown as Agent
   return agent

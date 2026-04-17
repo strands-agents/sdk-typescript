@@ -190,7 +190,9 @@ export class AgentNode extends Node {
 
     // Only Agent instances support snapshot/restore for state isolation
     const snapshot =
-      this._agent instanceof Agent ? takeSnapshot(this._agent, { include: ['messages', 'state'] }) : undefined
+      this._agent instanceof Agent
+        ? takeSnapshot(this._agent, { include: ['messages', 'state', 'modelState'] })
+        : undefined
     try {
       const invokeOptions: InvokeOptions = {
         ...(options?.structuredOutputSchema && { structuredOutputSchema: options.structuredOutputSchema }),

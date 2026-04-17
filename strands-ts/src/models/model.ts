@@ -11,6 +11,7 @@ import {
 } from '../types/messages.js'
 import { CitationsBlock } from '../types/citations.js'
 import type { Citation, CitationGeneratedContent } from '../types/citations.js'
+import type { JSONValue } from '../types/json.js'
 import type { ToolChoice, ToolSpec } from '../tools/types.js'
 import {
   ModelContentBlockDeltaEvent,
@@ -23,7 +24,9 @@ import {
   type ModelStreamEvent,
 } from './streaming.js'
 import { MaxTokensError, ModelError, normalizeError } from '../errors.js'
-import type { Redaction } from '../hooks/events.js'
+import { AfterInvocationEvent, type Redaction } from '../hooks/events.js'
+import type { Plugin } from '../plugins/plugin.js'
+import type { LocalAgent } from '../types/agent.js'
 import { logger } from '../logging/logger.js'
 
 class CitationAccumulator {
@@ -120,6 +123,14 @@ export interface StreamOptions {
    * Controls how the model selects tools to use.
    */
   toolChoice?: ToolChoice
+
+  /**
+   * Runtime state for model providers that manage server-side conversation state.
+   * The model can read and write this state during streaming (e.g., to store a
+   * response ID for conversation chaining). The object is passed by reference,
+   * so mutations are visible to the caller.
+   */
+  modelState?: Record<string, JSONValue>
 }
 
 /**
@@ -195,6 +206,22 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
    */
   get modelId(): string | undefined {
     return this.getConfig().modelId
+  }
+
+  /**
+   * Whether this model manages conversation state server-side.
+   *
+   * When `true`, the server tracks conversation context across turns, so the SDK
+   * sends only the latest message instead of the full history. After each invocation,
+   * the agent's local message history is cleared automatically.
+   *
+   * Model providers that support server-side state management should override this
+   * to return `true`.
+   *
+   * @returns `false` by default
+   */
+  get stateful(): boolean {
+    return false
   }
 
   /**
@@ -558,5 +585,31 @@ function heuristicJson(obj: unknown): number {
   } catch {
     logger.debug('unable to serialize object for token estimation, skipping')
     return 0
+  }
+}
+
+/**
+ * Built-in plugin that manages model-related lifecycle hooks.
+ *
+ * When the model is stateful (server-managed conversation state), this plugin
+ * clears the agent's local message history after each invocation since the
+ * server holds the authoritative conversation state.
+ */
+export class ModelPlugin implements Plugin {
+  readonly name = 'strands:model'
+  private readonly _model: Model
+
+  constructor(model: Model) {
+    this._model = model
+  }
+
+  initAgent(agent: LocalAgent): void {
+    const model = this._model
+    agent.addHook(AfterInvocationEvent, () => {
+      if (model.stateful) {
+        agent.messages.length = 0
+        logger.debug('cleared messages for server-managed conversation')
+      }
+    })
   }
 }

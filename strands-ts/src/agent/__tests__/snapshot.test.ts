@@ -39,9 +39,9 @@ describe('Snapshot API', () => {
   describe('constants', () => {
     it('exports snapshot constants with correct values', () => {
       expect(SNAPSHOT_SCHEMA_VERSION).toBe('1.0')
-      expect(ALL_SNAPSHOT_FIELDS).toEqual(['messages', 'state', 'systemPrompt'])
+      expect(ALL_SNAPSHOT_FIELDS).toEqual(['messages', 'state', 'systemPrompt', 'modelState'])
       expect(SNAPSHOT_PRESETS).toEqual({
-        session: ['messages', 'state', 'systemPrompt'],
+        session: ['messages', 'state', 'systemPrompt', 'modelState'],
       })
     })
   })
@@ -59,7 +59,7 @@ describe('Snapshot API', () => {
 
     it('returns session preset fields when preset is "session"', () => {
       const fields = resolveSnapshotFields({ preset: 'session' })
-      expect(fields).toEqual(new Set(['messages', 'state', 'systemPrompt']))
+      expect(fields).toEqual(new Set(['messages', 'state', 'systemPrompt', 'modelState']))
     })
 
     it('returns explicit fields when include is specified', () => {
@@ -69,7 +69,7 @@ describe('Snapshot API', () => {
 
     it('applies exclude after preset', () => {
       const fields = resolveSnapshotFields({ preset: 'session', exclude: ['state'] })
-      expect(fields).toEqual(new Set(['messages', 'systemPrompt']))
+      expect(fields).toEqual(new Set(['messages', 'systemPrompt', 'modelState']))
     })
 
     it('throws error for invalid preset', () => {
@@ -105,6 +105,7 @@ describe('Snapshot API', () => {
           messages: [{ role: 'user', content: [{ text: 'Hello' }] }],
           state: { key: 'value' },
           systemPrompt: 'Test prompt',
+          modelState: {},
         },
         appData: {},
       })

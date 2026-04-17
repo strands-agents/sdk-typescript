@@ -1,4 +1,5 @@
 import type { StateStore } from '../state-store.js'
+import type { JSONValue } from './json.js'
 import type { ContentBlock, ContentBlockData, Message, MessageData, StopReason, SystemPrompt } from './messages.js'
 import type { AgentTrace } from '../telemetry/tracer.js'
 import type {
@@ -181,6 +182,13 @@ export interface LocalAgent {
    * The conversation history of messages between user and assistant.
    */
   messages: Message[]
+
+  /**
+   * Runtime state for the model provider. Used by stateful models to persist
+   * provider-specific data (e.g., response IDs for server-side conversation chaining)
+   * across invocations.
+   */
+  modelState: Record<string, JSONValue>
 
   /**
    * The tool registry for registering tools with the agent.
