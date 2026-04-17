@@ -69,6 +69,9 @@ import { Meter } from '../telemetry/meter.js'
 import type { AttributeValue } from '@opentelemetry/api'
 import { logger } from '../logging/logger.js'
 import { CancelledError } from '../errors.js'
+import { _InterruptState, InterruptException } from '../interrupt.js'
+import type { InterruptResponseContent } from '../interrupt.js'
+import { InterruptEvent } from '../hooks/events.js'
 
 /**
  * Recursive type definition for nested tool arrays.
@@ -236,6 +239,11 @@ export class Agent implements LocalAgent, InvokableAgent {
   private _meter: Meter
 
   /**
+   * @internal Interrupt state for human-in-the-loop workflows.
+   */
+  declare public _interruptState: _InterruptState
+
+  /**
    * Creates an instance of the Agent.
    * @param config - The configuration for the agent.
    */
@@ -287,6 +295,13 @@ export class Agent implements LocalAgent, InvokableAgent {
 
     // Initialize meter for local metrics accumulation
     this._meter = new Meter()
+
+    // Initialize interrupt state (non-enumerable to avoid breaking equality checks)
+    Object.defineProperty(this, '_interruptState', {
+      value: new _InterruptState(),
+      writable: true,
+      enumerable: false,
+    })
 
     this._initialized = false
   }
@@ -457,6 +472,17 @@ export class Agent implements LocalAgent, InvokableAgent {
   }
 
   /**
+   * Resume from an interrupt by providing responses.
+   *
+   * @param responses - Array of interrupt response content blocks
+   * @returns Promise that resolves to the final AgentResult
+   */
+  public async resumeFromInterrupt(responses: InterruptResponseContent[]): Promise<AgentResult> {
+    this._interruptState.resume(responses)
+    return this.invoke([])
+  }
+
+  /**
    * Streams the agent execution, yielding events and returning the final result.
    *
    * The agent loop manages the conversation flow by:
@@ -578,7 +604,9 @@ export class Agent implements LocalAgent, InvokableAgent {
    */
   private async _invokeCallbacks(event: AgentStreamEvent): Promise<AgentStreamEvent> {
     if (event instanceof HookableEvent) {
-      await this._hooksRegistry.invokeCallbacks(event)
+      if (!event._hooksInvoked) {
+        await this._hooksRegistry.invokeCallbacks(event)
+      }
     }
     this._printer?.processEvent(event)
     return event
@@ -643,51 +671,60 @@ export class Agent implements LocalAgent, InvokableAgent {
           messages: this.messages,
         })
 
+        let modelMessage: Message
+
         try {
-          // Normalize input and append user messages on first invocation only
-          if (currentArgs !== undefined) {
-            const messagesToAppend = this._normalizeInput(currentArgs)
-            for (const message of messagesToAppend) {
-              yield this._appendMessage(message)
+          // If resuming from interrupt, skip model invocation and re-execute tools
+          if (this._interruptState?.activated) {
+            modelMessage = this._interruptState.context['toolUseMessage'] as Message
+          } else {
+            // Normalize input and append user messages on first invocation only
+            if (currentArgs !== undefined) {
+              const messagesToAppend = this._normalizeInput(currentArgs)
+              for (const message of messagesToAppend) {
+                yield this._appendMessage(message)
+              }
+              currentArgs = undefined
             }
-            currentArgs = undefined
-          }
 
-          const modelResult = yield* this._invokeModel(structuredOutputChoice)
+            const modelResult = yield* this._invokeModel(structuredOutputChoice)
 
-          if (modelResult.stopReason !== 'toolUse') {
-            // If structured output is required, force it
-            if (structuredOutputTool) {
-              if (structuredOutputChoice) {
-                throw new StructuredOutputError(
-                  'The model failed to invoke the structured output tool even after it was forced.'
-                )
+            if (modelResult.stopReason !== 'toolUse') {
+              // If structured output is required, force it
+              if (structuredOutputTool) {
+                if (structuredOutputChoice) {
+                  throw new StructuredOutputError(
+                    'The model failed to invoke the structured output tool even after it was forced.'
+                  )
+                }
+
+                structuredOutputChoice = { tool: { name: STRUCTURED_OUTPUT_TOOL_NAME } }
               }
 
-              structuredOutputChoice = { tool: { name: STRUCTURED_OUTPUT_TOOL_NAME } }
+              this._meter.endCycle(cycleStartTime)
+              this._tracer.endAgentLoopSpan(cycleSpan)
+
+              yield this._appendMessage(modelResult.message)
+
+              if (structuredOutputChoice) {
+                continue
+              }
+
+              result = new AgentResult({
+                stopReason: modelResult.stopReason,
+                lastMessage: modelResult.message,
+                traces: this._tracer.localTraces,
+                metrics: this._meter.metrics,
+              })
+              return result
             }
 
-            this._meter.endCycle(cycleStartTime)
-            this._tracer.endAgentLoopSpan(cycleSpan)
-
-            yield this._appendMessage(modelResult.message)
-
-            if (structuredOutputChoice) {
-              continue
-            }
-
-            result = new AgentResult({
-              stopReason: modelResult.stopReason,
-              lastMessage: modelResult.message,
-              traces: this._tracer.localTraces,
-              metrics: this._meter.metrics,
-            })
-            return result
+            modelMessage = modelResult.message
           }
 
           // Cancel before tool execution: create error results for all pending tools
           if (this.isCancelled) {
-            const toolUseBlocks = modelResult.message.content.filter(
+            const toolUseBlocks = modelMessage.content.filter(
               (block): block is ToolUseBlock => block.type === 'toolUseBlock'
             )
             const cancelBlocks = toolUseBlocks.map(
@@ -700,7 +737,7 @@ export class Agent implements LocalAgent, InvokableAgent {
             )
             const toolResultMessage = new Message({ role: 'user', content: cancelBlocks })
 
-            yield this._appendMessage(modelResult.message)
+            yield this._appendMessage(modelMessage)
             yield this._appendMessage(toolResultMessage)
 
             this._meter.endCycle(cycleStartTime)
@@ -708,15 +745,50 @@ export class Agent implements LocalAgent, InvokableAgent {
 
             result = new AgentResult({
               stopReason: 'cancelled',
-              lastMessage: modelResult.message,
+              lastMessage: modelMessage,
               traces: this._tracer.localTraces,
               metrics: this._meter.metrics,
             })
             return result
           }
 
-          // Execute tools
-          const toolResultMessage = yield* this.executeTools(modelResult.message, this._toolRegistry)
+          // Execute tools sequentially (handles interrupts internally)
+          const toolExecResult = yield* this.executeTools(modelMessage, this._toolRegistry)
+
+          // When stream() is aborted (e.g., hook error), .return() propagates through
+          // yield* and toolExecResult is undefined. Let the finally blocks handle cleanup.
+          if (!toolExecResult) {
+            return result!
+          }
+
+          if (toolExecResult.interrupted) {
+            // Interrupts were raised — save context and stop the loop
+            this._interruptState.context['toolUseMessage'] = modelMessage
+            this._interruptState.context['toolResults'] = toolExecResult.toolResults
+            this._interruptState.activate()
+
+            const interrupts = [...this._interruptState.interrupts.values()]
+            yield new InterruptEvent({ agent: this, interrupts })
+
+            // Append the assistant message so conversation state is valid
+            yield this._appendMessage(modelMessage)
+
+            // End cycle tracking
+            this._meter.endCycle(cycleStartTime)
+
+            // End cycle span
+            this._tracer.endAgentLoopSpan(cycleSpan)
+
+            result = new AgentResult({
+              stopReason: 'interrupt',
+              lastMessage: modelMessage,
+              interrupts,
+              metrics: this._meter.metrics,
+            })
+            return result
+          }
+
+          this._interruptState.deactivate()
 
           /**
            * Deferred append: both messages are added AFTER tool execution completes.
@@ -724,20 +796,20 @@ export class Agent implements LocalAgent, InvokableAgent {
            * If interrupted during tool execution, messages has no dangling toolUse
            * without a matching toolResult, so the agent can be reinvoked cleanly.
            */
-          yield this._appendMessage(modelResult.message)
-          yield this._appendMessage(toolResultMessage)
+          yield this._appendMessage(modelMessage)
+          yield this._appendMessage(toolExecResult.message)
 
           this._meter.endCycle(cycleStartTime)
           this._tracer.endAgentLoopSpan(cycleSpan)
 
           // Structured output captured: exit
           const structuredOutput = structuredOutputTool
-            ? this._extractStructuredOutput(modelResult.message, toolResultMessage)
+            ? this._extractStructuredOutput(modelMessage, toolExecResult.message)
             : undefined
           if (structuredOutput !== undefined) {
             result = new AgentResult({
-              stopReason: modelResult.stopReason,
-              lastMessage: modelResult.message,
+              stopReason: 'toolUse',
+              lastMessage: modelMessage,
               traces: this._tracer.localTraces,
               structuredOutput,
               metrics: this._meter.metrics,
@@ -829,6 +901,11 @@ export class Agent implements LocalAgent, InvokableAgent {
    * @returns Array of messages to append to the conversation
    */
   private _normalizeInput(args?: InvokeArgs): Message[] {
+    // When resuming from interrupt, don't add new messages
+    if (this._interruptState.activated) {
+      return []
+    }
+
     if (args !== undefined) {
       if (typeof args === 'string') {
         // String input: wrap in TextBlock and create user Message
@@ -1015,21 +1092,41 @@ export class Agent implements LocalAgent, InvokableAgent {
   }
 
   /**
+   * Result of tool execution, which may be interrupted.
+   */
+  private _toolExecResult(
+    toolResultBlocks: ToolResultBlock[],
+    interrupted: boolean
+  ): { message: Message; toolResults: ToolResultBlock[]; interrupted: boolean } {
+    return {
+      message: new Message({ role: 'user', content: toolResultBlocks }),
+      toolResults: toolResultBlocks,
+      interrupted,
+    }
+  }
+
+  /**
    * Executes tools sequentially and streams all tool events.
+   * Handles interrupt exceptions from hook callbacks and tool cancellation.
    *
    * @param assistantMessage - The assistant message containing tool use blocks
    * @param toolRegistry - Registry containing available tools
-   * @returns User message containing tool results
+   * @returns Object with the tool result message, results array, and whether interrupted
    */
   private async *executeTools(
     assistantMessage: Message,
     toolRegistry: ToolRegistry
-  ): AsyncGenerator<AgentStreamEvent, Message, undefined> {
+  ): AsyncGenerator<
+    AgentStreamEvent,
+    { message: Message; toolResults: ToolResultBlock[]; interrupted: boolean },
+    undefined
+  > {
     const beforeToolsEvent = new BeforeToolsEvent({ agent: this, message: assistantMessage })
     yield beforeToolsEvent
 
     const toolResultBlocks: ToolResultBlock[] = []
     let toolResultMessage: Message
+    let interrupted = false
 
     try {
       // Extract tool use blocks from assistant message
@@ -1058,7 +1155,19 @@ export class Agent implements LocalAgent, InvokableAgent {
         }
         toolResultBlocks.push(...cancelBlocks)
       } else {
-        for (const toolUseBlock of toolUseBlocks) {
+        // When resuming from interrupt, carry forward previous tool results
+        if (this._interruptState.activated) {
+          const prevResults = this._interruptState.context['toolResults'] as ToolResultBlock[] | undefined
+          if (prevResults) {
+            toolResultBlocks.push(...prevResults)
+          }
+        }
+
+        // Filter to only tools that don't already have results (for interrupt resume)
+        const completedToolUseIds = new Set(toolResultBlocks.map((r) => r.toolUseId))
+        const pendingToolUseBlocks = toolUseBlocks.filter((b) => !completedToolUseIds.has(b.toolUseId))
+
+        for (const toolUseBlock of pendingToolUseBlocks) {
           if (this.isCancelled) {
             const cancelBlock = new ToolResultBlock({
               toolUseId: toolUseBlock.toolUseId,
@@ -1071,6 +1180,13 @@ export class Agent implements LocalAgent, InvokableAgent {
           }
 
           const toolResultBlock = yield* this.executeTool(toolUseBlock, toolRegistry)
+
+          // Check if interrupted (executeTool returns null sentinel for interrupted tools)
+          if (toolResultBlock === null) {
+            interrupted = true
+            break
+          }
+
           toolResultBlocks.push(toolResultBlock)
           yield new ToolResultEvent({ agent: this, result: toolResultBlock })
         }
@@ -1084,23 +1200,21 @@ export class Agent implements LocalAgent, InvokableAgent {
       yield new AfterToolsEvent({ agent: this, message: toolResultMessage })
     }
 
-    return toolResultMessage
+    return this._toolExecResult(toolResultBlocks, interrupted)
   }
 
   /**
    * Executes a single tool and returns the result.
-   * If the tool is not found or fails to return a result, returns an error ToolResult
-   * instead of throwing an exception. This allows the agent loop to continue and
-   * let the model handle the error gracefully.
+   * Returns null if the tool was interrupted (hook raised InterruptException).
    *
    * @param toolUseBlock - Tool use block to execute
    * @param toolRegistry - Registry containing available tools
-   * @returns Tool result block
+   * @returns Tool result block, or null if interrupted
    */
   private async *executeTool(
     toolUseBlock: ToolUseBlock,
     toolRegistry: ToolRegistry
-  ): AsyncGenerator<AgentStreamEvent, ToolResultBlock, undefined> {
+  ): AsyncGenerator<AgentStreamEvent, ToolResultBlock | null, undefined> {
     const tool = toolRegistry.get(toolUseBlock.name)
 
     // Create toolUse object for hook events and telemetry
@@ -1113,6 +1227,21 @@ export class Agent implements LocalAgent, InvokableAgent {
     // Retry loop for tool execution
     while (true) {
       const beforeToolCallEvent = new BeforeToolCallEvent({ agent: this, toolUse, tool })
+      beforeToolCallEvent._interruptState = this._interruptState
+
+      // Invoke hooks — may throw InterruptException
+      try {
+        await this._hooksRegistry.invokeCallbacks(beforeToolCallEvent)
+        beforeToolCallEvent._hooksInvoked = true
+      } catch (e) {
+        if (e instanceof InterruptException) {
+          // Hook raised an interrupt — signal to caller
+          return null
+        }
+        throw e
+      }
+
+      this._printer?.processEvent(beforeToolCallEvent)
       yield beforeToolCallEvent
 
       // Cancel individual tool if hook requested it

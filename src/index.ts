@@ -199,11 +199,16 @@ export {
   ToolStreamUpdateEvent,
   AgentResultEvent,
   ModelStreamUpdateEvent,
+  InterruptEvent,
 } from './hooks/index.js'
 export type { HookCallback, HookableEventConstructor, ModelStopResponse, Redaction } from './hooks/index.js'
 
 // Plugin system
 export type { Plugin } from './plugins/index.js'
+
+// Interrupt system
+export { Interrupt, InterruptException } from './interrupt.js'
+export type { InterruptResponse, InterruptResponseContent } from './interrupt.js'
 
 // Conversation Manager
 export {
