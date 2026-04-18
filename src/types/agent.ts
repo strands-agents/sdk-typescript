@@ -24,6 +24,7 @@ import type { HookCallback, HookableEventConstructor, HookCleanup } from '../hoo
 import type { ToolRegistry } from '../registry/tool-registry.js'
 import type { z } from 'zod'
 import { AgentMetrics } from '../telemetry/meter.js'
+import type { RetryStrategyConfig } from '../event-loop/retry.js'
 
 /**
  * Arguments for invoking an agent.
@@ -73,6 +74,11 @@ export interface InvokeOptions {
    * ```
    */
   cancelSignal?: AbortSignal
+
+  /**
+   * Retry strategy to override the agent-level configuration for this specific invocation.
+   */
+  retryStrategy?: RetryStrategyConfig | null
 }
 
 /**

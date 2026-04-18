@@ -8,6 +8,10 @@
 // Agent class
 export { Agent } from './agent/agent.js'
 
+// Retry Strategy
+export { ModelRetryStrategy, ExponentialBackoff } from './event-loop/retry.js'
+export type { RetryStrategyConfig } from './event-loop/retry.js'
+
 // App state
 export { StateStore } from './state-store.js'
 

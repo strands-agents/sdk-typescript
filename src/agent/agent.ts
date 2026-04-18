@@ -61,6 +61,7 @@ import {
 import { StructuredOutputTool, STRUCTURED_OUTPUT_TOOL_NAME } from '../tools/structured-output-tool.js'
 import { AgentAsTool } from './agent-as-tool.js'
 import type { AgentAsToolOptions } from './agent-as-tool.js'
+import { ModelRetryStrategy, type RetryStrategyConfig } from '../event-loop/retry.js'
 
 import type { z } from 'zod'
 import { SessionManager } from '../session/session-manager.js'
@@ -162,6 +163,14 @@ export type AgentConfig = {
    * Optional unique identifier for the agent. Defaults to "agent".
    */
   id?: string
+  /**
+   * Retry strategy for handling model throttling.
+   *
+   * - Omit (default): Uses default RetryStrategyConfig.
+   * - Pass a RetryStrategyConfig object: Uses your custom configuration.
+   * - Pass null: Disables retries entirely.
+   */
+  retryStrategy?: RetryStrategyConfig | null
 }
 
 /** Default name assigned to agents when none is provided. */
@@ -234,6 +243,8 @@ export class Agent implements LocalAgent, InvokableAgent {
   private _tracer: Tracer
   /** Meter instance for accumulating loop metrics during invocation. */
   private _meter: Meter
+  /** The default retry strategy config for handling model throttling */
+  public readonly _defaultRetryStrategyConfig: RetryStrategyConfig | null
 
   /**
    * Creates an instance of the Agent.
@@ -261,6 +272,12 @@ export class Agent implements LocalAgent, InvokableAgent {
 
     // Initialize hooks registry
     this._hooksRegistry = new HookRegistryImplementation()
+
+    if (config?.retryStrategy === undefined) {
+      this._defaultRetryStrategyConfig = {}
+    } else {
+      this._defaultRetryStrategyConfig = config.retryStrategy
+    }
 
     // Initialize plugin registry with all plugins to be initialized during initialize()
     this._pluginRegistry = new PluginRegistry([
@@ -500,6 +517,19 @@ export class Agent implements LocalAgent, InvokableAgent {
 
     await this.initialize()
 
+    const retryConfig = options?.retryStrategy
+      ? { ...this._defaultRetryStrategyConfig, ...options.retryStrategy }
+      : this._defaultRetryStrategyConfig
+    const retryHooksCleanup: (() => void)[] = []
+
+    if (retryConfig !== null) {
+      const retryStrategy = new ModelRetryStrategy(retryConfig)
+      retryHooksCleanup.push(this.addHook(AfterModelCallEvent, retryStrategy.handleAfterModelCall.bind(retryStrategy)))
+      retryHooksCleanup.push(
+        this.addHook(AfterInvocationEvent, retryStrategy.handleAfterInvocation.bind(retryStrategy))
+      )
+    }
+
     // Delegate to _stream and process events through printer and hooks
     const streamGenerator = this._stream(args, options)
     let caughtError: Error | undefined
@@ -534,6 +564,9 @@ export class Agent implements LocalAgent, InvokableAgent {
         }
         result = await streamGenerator.next()
       }
+
+      // Cleanup dynamically bound hooks for this invocation
+      retryHooksCleanup.forEach((cleanup) => cleanup())
 
       // Reset controller and signal for next invocation
       this._abortController = new AbortController()
@@ -886,89 +919,91 @@ export class Agent implements LocalAgent, InvokableAgent {
   private async *_invokeModel(
     toolChoice?: ToolChoice
   ): AsyncGenerator<AgentStreamEvent, StreamAggregatedResult, undefined> {
-    const toolSpecs = this._toolRegistry.list().map((tool) => tool.toolSpec)
-    const streamOptions: StreamOptions = { toolSpecs }
-    if (this.systemPrompt !== undefined) {
-      streamOptions.systemPrompt = this.systemPrompt
-    }
+    while (true) {
+      const toolSpecs = this._toolRegistry.list().map((tool) => tool.toolSpec)
+      const streamOptions: StreamOptions = { toolSpecs }
+      if (this.systemPrompt !== undefined) {
+        streamOptions.systemPrompt = this.systemPrompt
+      }
 
-    // Add tool choice if provided
-    if (toolChoice) {
-      streamOptions.toolChoice = toolChoice
-    }
+      // Add tool choice if provided
+      if (toolChoice) {
+        streamOptions.toolChoice = toolChoice
+      }
 
-    yield new BeforeModelCallEvent({ agent: this, model: this.model })
+      yield new BeforeModelCallEvent({ agent: this, model: this.model })
 
-    // Start model span within loop span context
-    const modelId = this.model.modelId
-    const modelSpan = this._tracer.startModelInvokeSpan({
-      messages: this.messages,
-      ...(modelId && { modelId }),
-      ...(this.systemPrompt !== undefined && { systemPrompt: this.systemPrompt }),
-    })
-
-    try {
-      const result = yield* this._streamFromModel(this.messages, streamOptions)
-
-      // Accumulate token usage and model latency metrics
-      this._meter.updateCycle(result.metadata)
-
-      // End model span with usage
-      const usage = result.metadata?.usage
-      const metrics = result.metadata?.metrics
-      this._tracer.endModelInvokeSpan(modelSpan, {
-        output: result.message,
-        stopReason: result.stopReason,
-        ...(usage && { usage }),
-        ...(metrics && { metrics }),
+      // Start model span within loop span context
+      const modelId = this.model.modelId
+      const modelSpan = this._tracer.startModelInvokeSpan({
+        messages: this.messages,
+        ...(modelId && { modelId }),
+        ...(this.systemPrompt !== undefined && { systemPrompt: this.systemPrompt }),
       })
 
-      yield new ModelMessageEvent({ agent: this, message: result.message, stopReason: result.stopReason })
+      try {
+        const result = yield* this._streamFromModel(this.messages, streamOptions)
 
-      // Handle user content redaction if guardrails blocked input
-      if (result.redaction?.userMessage) {
-        this._redactLastMessage(result.redaction.userMessage)
-      }
+        // Accumulate token usage and model latency metrics
+        this._meter.updateCycle(result.metadata)
 
-      const stopData: ModelStopData = {
-        message: result.message,
-        stopReason: result.stopReason,
-        ...(result.redaction && { redaction: result.redaction }),
-      }
+        // End model span with usage
+        const usage = result.metadata?.usage
+        const metrics = result.metadata?.metrics
+        this._tracer.endModelInvokeSpan(modelSpan, {
+          output: result.message,
+          stopReason: result.stopReason,
+          ...(usage && { usage }),
+          ...(metrics && { metrics }),
+        })
 
-      const afterModelCallEvent = new AfterModelCallEvent({ agent: this, model: this.model, stopData })
-      yield afterModelCallEvent
+        yield new ModelMessageEvent({ agent: this, message: result.message, stopReason: result.stopReason })
 
-      if (afterModelCallEvent.retry) {
-        return yield* this._invokeModel(toolChoice)
-      }
+        // Handle user content redaction if guardrails blocked input
+        if (result.redaction?.userMessage) {
+          this._redactLastMessage(result.redaction.userMessage)
+        }
 
-      return result
-    } catch (error) {
-      const modelError = normalizeError(error)
+        const stopData: ModelStopData = {
+          message: result.message,
+          stopReason: result.stopReason,
+          ...(result.redaction && { redaction: result.redaction }),
+        }
 
-      // End model span with error
-      this._tracer.endModelInvokeSpan(modelSpan, { error: modelError })
+        const afterModelCallEvent = new AfterModelCallEvent({ agent: this, model: this.model, stopData })
+        yield afterModelCallEvent
 
-      // Create error event
-      const errorEvent = new AfterModelCallEvent({ agent: this, model: this.model, error: modelError })
+        if (afterModelCallEvent.retry) {
+          continue
+        }
 
-      // Yield error event - stream will invoke hooks
-      yield errorEvent
+        return result
+      } catch (error) {
+        const modelError = normalizeError(error)
 
-      // Let CancelledError propagate directly — no retry
-      // (we emit the AfterModelCall because we already emitted Before and we guarentee the pair)
-      if (error instanceof CancelledError) {
+        // End model span with error
+        this._tracer.endModelInvokeSpan(modelSpan, { error: modelError })
+
+        // Create error event
+        const errorEvent = new AfterModelCallEvent({ agent: this, model: this.model, error: modelError })
+
+        // Yield error event - stream will invoke hooks
+        yield errorEvent
+
+        // Let CancelledError propagate directly — no retry
+        // (we emit the AfterModelCall because we already emitted Before and we guarentee the pair)
+        if (error instanceof CancelledError) {
+          throw error
+        }
+
+        // After yielding, hooks have been invoked and may have set retry
+        if (errorEvent.retry) {
+          continue
+        }
+
+        // Re-throw error
         throw error
       }
-
-      // After yielding, hooks have been invoked and may have set retry
-      if (errorEvent.retry) {
-        return yield* this._invokeModel(toolChoice)
-      }
-
-      // Re-throw error
-      throw error
     }
   }
 
