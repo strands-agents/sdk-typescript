@@ -88,7 +88,7 @@ class BashSession {
     const effectiveTimeout = timeout ?? this._timeout
     let stdoutData = ''
     let stderrData = ''
-    // eslint-disable-next-line no-undef
+
     let timeoutHandle: ReturnType<typeof setTimeout> | null = null
     let isTimedOut = false
 
@@ -138,7 +138,6 @@ class BashSession {
       // Does NOT stop the process, preserving session state between calls.
       const cleanup = (): void => {
         if (timeoutHandle !== null) {
-          // eslint-disable-next-line no-undef
           clearTimeout(timeoutHandle)
           timeoutHandle = null
         }
@@ -152,7 +151,7 @@ class BashSession {
       }
 
       // Set up timeout
-      // eslint-disable-next-line no-undef
+
       timeoutHandle = setTimeout(() => {
         isTimedOut = true
         cleanup()
