@@ -140,6 +140,10 @@ export class AgentNode extends Node {
   constructor(options: AgentNodeOptions) {
     const { agent, ...config } = options
 
+    if (typeof agent.stream !== 'function') {
+      throw new Error(`node_id=<${agent.id ?? 'unknown'}> | agent must implement InvokableAgent`)
+    }
+
     super(agent.id, {
       ...config,
       ...(agent.description !== undefined && { description: agent.description }),
