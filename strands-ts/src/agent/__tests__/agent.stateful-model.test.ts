@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { Agent } from '../agent.js'
 import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
+import { MockSnapshotStorage } from '../../__fixtures__/mock-storage-provider.js'
 import { SlidingWindowConversationManager } from '../../conversation-manager/sliding-window-conversation-manager.js'
 import { NullConversationManager } from '../../conversation-manager/null-conversation-manager.js'
+import { SessionManager } from '../../session/session-manager.js'
 import type { Message, StreamOptions } from '../../index.js'
 import type { ModelStreamEvent } from '../../models/streaming.js'
 
@@ -75,6 +77,28 @@ describe('Agent with stateful model', () => {
       const agent = new Agent({ model, printer: false })
       await agent.invoke('First turn')
       expect(agent.messages).toEqual([])
+    })
+
+    it('clears messages before SessionManager snapshots on AfterInvocationEvent', async () => {
+      // Guards the ordering of ModelPlugin vs SessionManager hooks on
+      // AfterInvocationEvent: ModelPlugin must clear messages *before*
+      // SessionManager persists the snapshot, otherwise the stored snapshot
+      // would duplicate history that the server already owns.
+      const storage = new MockSnapshotStorage()
+      const sessionManager = new SessionManager({
+        sessionId: 'test-session',
+        storage: { snapshot: storage },
+      })
+      const model = new StatefulMockModel().addTurn({ type: 'textBlock', text: 'reply' })
+      const agent = new Agent({ id: 'agent-1', model, sessionManager, printer: false })
+
+      await agent.invoke('hi')
+
+      const snapshot = await storage.loadSnapshot({
+        location: { sessionId: 'test-session', scope: 'agent', scopeId: 'agent-1' },
+      })
+      expect(snapshot).not.toBeNull()
+      expect((snapshot!.data as { messages: unknown[] }).messages).toEqual([])
     })
 
     it('preserves modelState across invocations so previous_response_id chains', async () => {

@@ -161,7 +161,9 @@ export function loadSnapshot(agent: LocalAgent, snapshot: Snapshot): void {
 
   if ('modelState' in snapshot.data) {
     const newState = snapshot.data.modelState
-    // Clear existing keys while preserving the object reference
+    // Clear + reassign in place rather than replacing the object: `agent.modelState`
+    // is public, so callers (and the model mid-invocation via StreamOptions.modelState)
+    // may hold a reference to it.
     for (const key of Object.keys(agent.modelState)) {
       delete agent.modelState[key]
     }

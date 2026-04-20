@@ -6,7 +6,7 @@ import { collectIterator } from '$/sdk/__fixtures__/model-test-helpers.js'
 
 import { openaiResponses } from '../__fixtures__/model-providers.js'
 
-describe.skipIf(openaiResponses.skip)('OpenAIResponsesModel Integration Tests', () => {
+describe.skipIf(openaiResponses.skip)("OpenAIModel (api: 'responses') Integration Tests", () => {
   describe('Configuration', () => {
     it.concurrent('respects maxTokens configuration', async () => {
       const provider = openaiResponses.createModel({

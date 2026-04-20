@@ -175,10 +175,6 @@ export type {
   BedrockGuardrailRedactionConfig,
 } from './models/bedrock.js'
 
-// OpenAI Responses model provider
-export { OpenAIResponsesModel } from './models/openai-responses.js'
-export type { OpenAIResponsesModelConfig, OpenAIResponsesModelOptions } from './models/openai-responses.js'
-
 // Agent streaming event types
 export type { AgentStreamEvent } from './types/agent.js'
 

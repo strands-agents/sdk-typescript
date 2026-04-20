@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import OpenAI from 'openai'
 import { isNode } from '../../__fixtures__/environment.js'
-import { OpenAIModel } from '../openai.js'
+import { OpenAIModel } from '../openai/index.js'
 import { ContextWindowOverflowError, ModelThrottledError } from '../../errors.js'
 import { collectIterator } from '../../__fixtures__/model-test-helpers.js'
 import { Message, TextBlock, ToolUseBlock, ToolResultBlock, GuardContentBlock } from '../../types/messages.js'

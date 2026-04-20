@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import OpenAI from 'openai'
 import { isNode } from '../../__fixtures__/environment.js'
-import { OpenAIResponsesModel } from '../openai-responses.js'
+import { OpenAIModel } from '../openai/index.js'
 import { ContextWindowOverflowError, ModelThrottledError } from '../../errors.js'
 import { collectIterator } from '../../__fixtures__/model-test-helpers.js'
 import { Message, TextBlock, ToolUseBlock, ToolResultBlock } from '../../types/messages.js'
@@ -33,7 +33,7 @@ vi.mock('openai', () => {
   }
 })
 
-describe('OpenAIResponsesModel', () => {
+describe("OpenAIModel (api: 'responses')", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.restoreAllMocks()
@@ -51,14 +51,14 @@ describe('OpenAIResponsesModel', () => {
 
   describe('constructor', () => {
     it('uses API key from constructor parameter', () => {
-      new OpenAIResponsesModel({ modelId: 'gpt-4o', apiKey: 'sk-explicit' })
+      new OpenAIModel({ api: 'responses', modelId: 'gpt-4o', apiKey: 'sk-explicit' })
       expect(OpenAI).toHaveBeenCalledWith(expect.objectContaining({ apiKey: 'sk-explicit' }))
     })
 
     if (isNode) {
       it('uses API key from environment variable', () => {
         vi.stubEnv('OPENAI_API_KEY', 'sk-from-env')
-        new OpenAIResponsesModel({ modelId: 'gpt-4o' })
+        new OpenAIModel({ api: 'responses', modelId: 'gpt-4o' })
         expect(OpenAI).toHaveBeenCalled()
       })
     }
@@ -67,13 +67,13 @@ describe('OpenAIResponsesModel', () => {
       if (isNode) {
         vi.stubEnv('OPENAI_API_KEY', '')
       }
-      expect(() => new OpenAIResponsesModel({ modelId: 'gpt-4o' })).toThrow(/OpenAI API key is required/)
+      expect(() => new OpenAIModel({ api: 'responses', modelId: 'gpt-4o' })).toThrow(/OpenAI API key is required/)
     })
 
     it('uses provided client instance and skips OpenAI constructor', () => {
       vi.clearAllMocks()
       const client = {} as OpenAI
-      const model = new OpenAIResponsesModel({ client })
+      const model = new OpenAIModel({ api: 'responses', client })
       expect(OpenAI).not.toHaveBeenCalled()
       expect(model).toBeDefined()
     })
@@ -83,23 +83,23 @@ describe('OpenAIResponsesModel', () => {
         vi.stubEnv('OPENAI_API_KEY', '')
       }
       const client = {} as OpenAI
-      expect(() => new OpenAIResponsesModel({ client })).not.toThrow()
+      expect(() => new OpenAIModel({ api: 'responses', client })).not.toThrow()
     })
   })
 
   describe('stateful', () => {
     it('defaults to true', () => {
-      const model = new OpenAIResponsesModel({ client: {} as OpenAI })
+      const model = new OpenAIModel({ api: 'responses', client: {} as OpenAI })
       expect(model.stateful).toBe(true)
     })
 
     it('returns false when explicitly disabled', () => {
-      const model = new OpenAIResponsesModel({ client: {} as OpenAI, stateful: false })
+      const model = new OpenAIModel({ api: 'responses', client: {} as OpenAI, stateful: false })
       expect(model.stateful).toBe(false)
     })
 
     it('reflects updateConfig changes', () => {
-      const model = new OpenAIResponsesModel({ client: {} as OpenAI, stateful: false })
+      const model = new OpenAIModel({ api: 'responses', client: {} as OpenAI, stateful: false })
       expect(model.stateful).toBe(false)
       model.updateConfig({ stateful: true })
       expect(model.stateful).toBe(true)
@@ -108,7 +108,8 @@ describe('OpenAIResponsesModel', () => {
 
   describe('updateConfig / getConfig', () => {
     it('merges config without clobbering unspecified fields', () => {
-      const model = new OpenAIResponsesModel({
+      const model = new OpenAIModel({
+        api: 'responses',
         client: {} as OpenAI,
         modelId: 'gpt-4o',
         temperature: 0.5,
@@ -126,7 +127,7 @@ describe('OpenAIResponsesModel', () => {
   describe('managed params warning', () => {
     it('warns on construction when params contains provider-managed keys', () => {
       const warnSpy = vi.spyOn(logger, 'warn')
-      new OpenAIResponsesModel({ client: {} as OpenAI, params: { model: 'bad', store: false } })
+      new OpenAIModel({ api: 'responses', client: {} as OpenAI, params: { model: 'bad', store: false } })
       expect(warnSpy).toHaveBeenCalledTimes(2)
       expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("'model'"))
       expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("'store'"))
@@ -134,7 +135,7 @@ describe('OpenAIResponsesModel', () => {
     })
 
     it('warns on updateConfig when params contains provider-managed keys', () => {
-      const model = new OpenAIResponsesModel({ client: {} as OpenAI })
+      const model = new OpenAIModel({ api: 'responses', client: {} as OpenAI })
       const warnSpy = vi.spyOn(logger, 'warn')
       model.updateConfig({ params: { stream: true } })
       expect(warnSpy).toHaveBeenCalledTimes(1)
@@ -144,7 +145,7 @@ describe('OpenAIResponsesModel', () => {
 
     it('does not warn when params contains only non-managed keys', () => {
       const warnSpy = vi.spyOn(logger, 'warn')
-      new OpenAIResponsesModel({ client: {} as OpenAI, params: { reasoning: { summary: 'auto' } } })
+      new OpenAIModel({ api: 'responses', client: {} as OpenAI, params: { reasoning: { summary: 'auto' } } })
       expect(warnSpy).not.toHaveBeenCalled()
       warnSpy.mockRestore()
     })
@@ -154,16 +155,16 @@ describe('OpenAIResponsesModel', () => {
     const mkUserMessage = () => new Message({ role: 'user', content: [new TextBlock('Hi')] })
 
     async function runOnce(
-      modelOptions: ConstructorParameters<typeof OpenAIResponsesModel>[0] = {},
+      modelOptions: Omit<Extract<ConstructorParameters<typeof OpenAIModel>[0], { api: 'responses' }>, 'api'> = {},
       messages = [mkUserMessage()],
-      streamOptions: Parameters<OpenAIResponsesModel['stream']>[1] = undefined
+      streamOptions: Parameters<OpenAIModel['stream']>[1] = undefined
     ): Promise<any> {
       const capture: { request?: any } = {}
       const client = createMockClient(async function* () {
         yield { type: 'response.created', response: { id: 'resp_123' } }
         yield { type: 'response.completed', response: { usage: undefined } }
       }, capture)
-      const model = new OpenAIResponsesModel({ client, ...modelOptions })
+      const model = new OpenAIModel({ api: 'responses', client, ...modelOptions })
       await collectIterator(model.stream(messages, streamOptions))
       return capture.request
     }
@@ -320,7 +321,7 @@ describe('OpenAIResponsesModel', () => {
         yield { type: 'response.created', response: { id: 'resp_abc' } }
         yield { type: 'response.completed', response: {} }
       })
-      const model = new OpenAIResponsesModel({ client })
+      const model = new OpenAIModel({ api: 'responses', client })
       await collectIterator(
         model.stream([new Message({ role: 'user', content: [new TextBlock('hi')] })], { modelState })
       )
@@ -333,7 +334,7 @@ describe('OpenAIResponsesModel', () => {
         yield { type: 'response.created', response: { id: 'resp_abc' } }
         yield { type: 'response.completed', response: {} }
       })
-      const model = new OpenAIResponsesModel({ client, stateful: false })
+      const model = new OpenAIModel({ api: 'responses', client, stateful: false })
       await collectIterator(
         model.stream([new Message({ role: 'user', content: [new TextBlock('hi')] })], { modelState })
       )
@@ -347,7 +348,7 @@ describe('OpenAIResponsesModel', () => {
         yield { type: 'response.output_text.delta', delta: ' world' }
         yield { type: 'response.completed', response: {} }
       })
-      const model = new OpenAIResponsesModel({ client })
+      const model = new OpenAIModel({ api: 'responses', client })
       const events = await collectIterator(model.stream([new Message({ role: 'user', content: [new TextBlock('x')] })]))
       const types = events.map((e: any) => e.type)
       expect(types).toEqual([
@@ -372,7 +373,7 @@ describe('OpenAIResponsesModel', () => {
         yield { type: 'response.output_text.delta', delta: 'answer' }
         yield { type: 'response.completed', response: {} }
       })
-      const model = new OpenAIResponsesModel({ client })
+      const model = new OpenAIModel({ api: 'responses', client })
       const events = await collectIterator(model.stream([new Message({ role: 'user', content: [new TextBlock('x')] })]))
       const types = events.map((e: any) => e.type)
       expect(types).toEqual([
@@ -411,7 +412,7 @@ describe('OpenAIResponsesModel', () => {
         }
         yield { type: 'response.completed', response: {} }
       })
-      const model = new OpenAIResponsesModel({ client })
+      const model = new OpenAIModel({ api: 'responses', client })
       const events = await collectIterator(model.stream([new Message({ role: 'user', content: [new TextBlock('x')] })]))
       const startEvent = events.find(
         (e: any) => e.type === 'modelContentBlockStartEvent' && e.start?.type === 'toolUseStart'
@@ -441,7 +442,7 @@ describe('OpenAIResponsesModel', () => {
           },
         }
       })
-      const model = new OpenAIResponsesModel({ client })
+      const model = new OpenAIModel({ api: 'responses', client })
       const events = await collectIterator(model.stream([new Message({ role: 'user', content: [new TextBlock('x')] })]))
       const stop = events.find((e: any) => e.type === 'modelMessageStopEvent') as any
       expect(stop?.stopReason).toBe('maxTokens')
@@ -464,7 +465,7 @@ describe('OpenAIResponsesModel', () => {
         }
         yield { type: 'response.completed', response: {} }
       })
-      const model = new OpenAIResponsesModel({ client })
+      const model = new OpenAIModel({ api: 'responses', client })
       const events = await collectIterator(model.stream([new Message({ role: 'user', content: [new TextBlock('x')] })]))
       const citation = events.find(
         (e: any) => e.type === 'modelContentBlockDeltaEvent' && e.delta?.type === 'citationsDelta'
@@ -491,7 +492,7 @@ describe('OpenAIResponsesModel', () => {
         }
         yield { type: 'response.completed', response: {} }
       })
-      const model = new OpenAIResponsesModel({ client })
+      const model = new OpenAIModel({ api: 'responses', client })
       const events = await collectIterator(model.stream([new Message({ role: 'user', content: [new TextBlock('x')] })]))
       const types = events.map((e: any) => e.type)
       expect(types).toEqual([
@@ -526,7 +527,7 @@ describe('OpenAIResponsesModel', () => {
         yield { type: 'response.output_text.delta', delta: ' after' }
         yield { type: 'response.completed', response: {} }
       })
-      const model = new OpenAIResponsesModel({ client })
+      const model = new OpenAIModel({ api: 'responses', client })
       const events = await collectIterator(model.stream([new Message({ role: 'user', content: [new TextBlock('x')] })]))
       const types = events.map((e: any) => e.type)
       expect(types).toEqual([
@@ -562,7 +563,7 @@ describe('OpenAIResponsesModel', () => {
         }
         yield { type: 'response.completed', response: {} }
       })
-      const model = new OpenAIResponsesModel({ client })
+      const model = new OpenAIModel({ api: 'responses', client })
       const events = await collectIterator(model.stream([new Message({ role: 'user', content: [new TextBlock('x')] })]))
       const types = events.map((e: any) => e.type)
       expect(types).toEqual([
@@ -591,7 +592,7 @@ describe('OpenAIResponsesModel', () => {
         yield { type: 'response.output_text.delta', delta: 'end' }
         yield { type: 'response.completed', response: {} }
       })
-      const model = new OpenAIResponsesModel({ client })
+      const model = new OpenAIModel({ api: 'responses', client })
       const events = await collectIterator(model.stream([new Message({ role: 'user', content: [new TextBlock('x')] })]))
       const deltaTypes = events
         .filter((e: any) => e.type === 'modelContentBlockDeltaEvent')
@@ -616,7 +617,7 @@ describe('OpenAIResponsesModel', () => {
           }),
         },
       }
-      const model = new OpenAIResponsesModel({ client })
+      const model = new OpenAIModel({ api: 'responses', client })
       await expect(
         collectIterator(model.stream([new Message({ role: 'user', content: [new TextBlock('x')] })]))
       ).rejects.toBeInstanceOf(ModelThrottledError)
@@ -632,7 +633,7 @@ describe('OpenAIResponsesModel', () => {
           }),
         },
       }
-      const model = new OpenAIResponsesModel({ client })
+      const model = new OpenAIModel({ api: 'responses', client })
       await expect(
         collectIterator(model.stream([new Message({ role: 'user', content: [new TextBlock('x')] })]))
       ).rejects.toBeInstanceOf(ContextWindowOverflowError)
@@ -646,7 +647,7 @@ describe('OpenAIResponsesModel', () => {
           }),
         },
       }
-      const model = new OpenAIResponsesModel({ client })
+      const model = new OpenAIModel({ api: 'responses', client })
       await expect(
         collectIterator(model.stream([new Message({ role: 'user', content: [new TextBlock('x')] })]))
       ).rejects.toThrow('some other failure')

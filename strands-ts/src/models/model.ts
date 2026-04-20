@@ -24,9 +24,7 @@ import {
   type ModelStreamEvent,
 } from './streaming.js'
 import { MaxTokensError, ModelError, normalizeError } from '../errors.js'
-import { AfterInvocationEvent, type Redaction } from '../hooks/events.js'
-import type { Plugin } from '../plugins/plugin.js'
-import type { LocalAgent } from '../types/agent.js'
+import type { Redaction } from '../hooks/events.js'
 import { logger } from '../logging/logger.js'
 
 class CitationAccumulator {
@@ -588,28 +586,3 @@ function heuristicJson(obj: unknown): number {
   }
 }
 
-/**
- * Built-in plugin that manages model-related lifecycle hooks.
- *
- * When the model is stateful (server-managed conversation state), this plugin
- * clears the agent's local message history after each invocation since the
- * server holds the authoritative conversation state.
- */
-export class ModelPlugin implements Plugin {
-  readonly name = 'strands:model'
-  private readonly _model: Model
-
-  constructor(model: Model) {
-    this._model = model
-  }
-
-  initAgent(agent: LocalAgent): void {
-    const model = this._model
-    agent.addHook(AfterInvocationEvent, () => {
-      if (model.stateful) {
-        agent.messages.length = 0
-        logger.debug('cleared messages for server-managed conversation')
-      }
-    })
-  }
-}
