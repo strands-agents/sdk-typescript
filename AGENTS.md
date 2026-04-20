@@ -180,11 +180,6 @@ sdk-typescript/
 │   ├── vitest.config.ts          # Testing configuration
 │   └── eslint.config.js          # Linting configuration
 │
-├── test/                         # Root-level package compatibility tests
-│   └── packages/
-│       ├── cjs-module/
-│       └── esm-module/
-│
 ├── .github/                      # GitHub Actions workflows
 │   └── workflows/
 │
