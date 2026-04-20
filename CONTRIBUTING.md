@@ -34,7 +34,7 @@ When proposing solutions or reviewing code, we reference these principles to gui
    npm ci
    ```
 
-   This also installs git hooks (via husky) that automatically run tests, linting, formatting checks, and type checking before each commit.
+   This also installs git hooks (via husky) that automatically build the SDK, run tests, linting, formatting checks, and type checking before each commit.
 
    > **Note**: Use `npm ci` for installing dependencies. Use `npm install` only when intentionally adding or updating dependencies. See [Dependency Guidelines](docs/DEPENDENCIES.md) for details.
 

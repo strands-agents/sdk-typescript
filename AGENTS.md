@@ -186,8 +186,7 @@ sdk-typescript/
 │       └── esm-module/
 │
 ├── .github/                      # GitHub Actions workflows
-│   ├── workflows/
-│   └── agent-sops/
+│   └── workflows/
 │
 ├── .husky/                       # Git hooks (pre-commit checks)
 │
@@ -259,6 +258,7 @@ See [PR.md](docs/PR.md) for the complete guidance and template.
 ### 4. Quality Gates
 
 Pre-commit hooks automatically run:
+- Build (via npm run build, required for workspace type resolution)
 - Unit tests (via npm test)
 - Linting (via npm run lint)
 - Format checking (via npm run format:check)
