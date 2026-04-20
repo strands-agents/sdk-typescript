@@ -1,5 +1,9 @@
 echo "Running pre-commit checks..."
 
+# Build (required for integ type-check: workspace symlink resolves to dist/)
+echo "Building..."
+npm run build || { echo "Build failed. Commit aborted."; exit 1; }
+
 # Run tests
 echo "Running tests..."
 npm run test:coverage || { echo "Tests failed. Commit aborted."; exit 1; }
