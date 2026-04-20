@@ -306,7 +306,7 @@ Both patterns support streaming via `.stream()` for real-time access to handoff 
 For detailed guidance, tutorials, and concept overviews, please visit:
 
 - **[Official Documentation](https://strandsagents.com/)**: Comprehensive guides and tutorials
-- **[API Reference](https://strandsagents.com/latest/documentation/docs/api-reference/typescript/)**: Complete API documentation
+- **[API Reference](https://strandsagents.com/docs/api/typescript/)**: Complete API documentation
 - **[Examples](./strands-ts/examples/)**: Sample applications
   - **[First Agent](./strands-ts/examples/first-agent/)**: Basic Node.js agent
   - **[MCP](./strands-ts/examples/mcp/)**: MCP integration example
