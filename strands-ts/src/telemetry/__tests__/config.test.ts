@@ -37,7 +37,7 @@ describe('setupTracer', () => {
 
       const provider = telemetry.setupTracer()
 
-      expect(provider.resource.attributes['service.name']).toBe('strands-agents')
+      expect(provider['_resource'].attributes['service.name']).toBe('strands-agents')
     })
 
     it('should include default resource attributes', async () => {
@@ -45,11 +45,11 @@ describe('setupTracer', () => {
 
       const provider = telemetry.setupTracer()
 
-      expect(provider.resource.attributes['service.name']).toBe('strands-agents')
-      expect(provider.resource.attributes['service.namespace']).toBe('strands')
-      expect(provider.resource.attributes['deployment.environment']).toBe('development')
-      expect(provider.resource.attributes['telemetry.sdk.name']).toBe('opentelemetry')
-      expect(provider.resource.attributes['telemetry.sdk.language']).toBe('typescript')
+      expect(provider['_resource'].attributes['service.name']).toBe('strands-agents')
+      expect(provider['_resource'].attributes['service.namespace']).toBe('strands')
+      expect(provider['_resource'].attributes['deployment.environment']).toBe('development')
+      expect(provider['_resource'].attributes['telemetry.sdk.name']).toBe('opentelemetry')
+      expect(provider['_resource'].attributes['telemetry.sdk.language']).toBe('typescript')
     })
   })
 })

@@ -225,7 +225,7 @@ describe('zod-tool type tests', () => {
 
       expectTypeOf(optionalTool.invoke).parameter(0).toEqualTypeOf<{
         required: string
-        optional?: string
+        optional?: string | undefined
       }>()
     })
 

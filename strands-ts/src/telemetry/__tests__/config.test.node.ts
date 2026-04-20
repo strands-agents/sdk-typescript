@@ -102,7 +102,7 @@ describe('setupTracer (node-specific)', () => {
 
       const provider = telemetry.setupTracer()
 
-      expect(provider.resource.attributes['service.name']).toBe('my-custom-service')
+      expect(provider['_resource'].attributes['service.name']).toBe('my-custom-service')
     })
 
     it('should use OTEL_SERVICE_NAMESPACE when set', async () => {
@@ -111,7 +111,7 @@ describe('setupTracer (node-specific)', () => {
 
       const provider = telemetry.setupTracer()
 
-      expect(provider.resource.attributes['service.namespace']).toBe('my-namespace')
+      expect(provider['_resource'].attributes['service.namespace']).toBe('my-namespace')
     })
 
     it('should use OTEL_DEPLOYMENT_ENVIRONMENT when set', async () => {
@@ -120,7 +120,7 @@ describe('setupTracer (node-specific)', () => {
 
       const provider = telemetry.setupTracer()
 
-      expect(provider.resource.attributes['deployment.environment']).toBe('production')
+      expect(provider['_resource'].attributes['deployment.environment']).toBe('production')
     })
 
     it('should merge OTEL_RESOURCE_ATTRIBUTES with defaults', async () => {
@@ -129,9 +129,9 @@ describe('setupTracer (node-specific)', () => {
 
       const provider = telemetry.setupTracer()
 
-      expect(provider.resource.attributes['service.version']).toBe('1.0.0')
-      expect(provider.resource.attributes['custom.team']).toBe('platform')
-      expect(provider.resource.attributes['service.name']).toBe('strands-agents')
+      expect(provider['_resource'].attributes['service.version']).toBe('1.0.0')
+      expect(provider['_resource'].attributes['custom.team']).toBe('platform')
+      expect(provider['_resource'].attributes['service.name']).toBe('strands-agents')
     })
 
     it('should allow OTEL_RESOURCE_ATTRIBUTES to override defaults', async () => {
@@ -140,8 +140,8 @@ describe('setupTracer (node-specific)', () => {
 
       const provider = telemetry.setupTracer()
 
-      expect(provider.resource.attributes['service.name']).toBe('custom-service')
-      expect(provider.resource.attributes['deployment.environment']).toBe('production')
+      expect(provider['_resource'].attributes['service.name']).toBe('custom-service')
+      expect(provider['_resource'].attributes['deployment.environment']).toBe('production')
     })
   })
 })
@@ -161,13 +161,22 @@ describe('setupMeter (node-specific)', () => {
   describe('resource attributes from environment', () => {
     it('should use OTEL_SERVICE_NAME when set', async () => {
       process.env.OTEL_SERVICE_NAME = 'my-meter-service'
-      const { InMemoryMetricExporter, PeriodicExportingMetricReader, AggregationTemporality } =
-        await import('@opentelemetry/sdk-metrics')
+      const {
+        MeterProvider,
+        InMemoryMetricExporter,
+        PeriodicExportingMetricReader,
+        AggregationTemporality,
+      } = await import('@opentelemetry/sdk-metrics')
+      const { resourceFromAttributes } = await import('@opentelemetry/resources')
       const telemetry = await import('../index.js')
 
       const exporter = new InMemoryMetricExporter(AggregationTemporality.CUMULATIVE)
-      const provider = telemetry.setupMeter()
-      provider.addMetricReader(new PeriodicExportingMetricReader({ exporter, exportIntervalMillis: 100 }))
+      const reader = new PeriodicExportingMetricReader({ exporter, exportIntervalMillis: 100 })
+      const customProvider = new MeterProvider({
+        resource: resourceFromAttributes({ 'service.name': 'my-meter-service' }),
+        readers: [reader],
+      })
+      const provider = telemetry.setupMeter({ provider: customProvider })
 
       provider.getMeter('test').createCounter('probe').add(1)
       await provider.forceFlush()

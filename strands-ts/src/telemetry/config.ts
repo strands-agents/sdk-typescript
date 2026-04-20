@@ -16,14 +16,20 @@
 
 import { metrics as otelMetrics, trace } from '@opentelemetry/api'
 import type { Meter as OtelMeter, Tracer as OtelTracer } from '@opentelemetry/api'
-import { Resource, envDetectorSync } from '@opentelemetry/resources'
+import { resourceFromAttributes, envDetector } from '@opentelemetry/resources'
 import {
   BasicTracerProvider,
   ConsoleSpanExporter,
   SimpleSpanProcessor,
   BatchSpanProcessor,
+  type SpanProcessor,
 } from '@opentelemetry/sdk-trace-base'
-import { MeterProvider, PeriodicExportingMetricReader, ConsoleMetricExporter } from '@opentelemetry/sdk-metrics'
+import {
+  MeterProvider,
+  PeriodicExportingMetricReader,
+  ConsoleMetricExporter,
+  type MetricReader,
+} from '@opentelemetry/sdk-metrics'
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http'
 import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-http'
 import { logger } from '../logging/index.js'
@@ -145,13 +151,16 @@ export function setupTracer(config: TracerConfig = {}): BasicTracerProvider {
     return _provider
   }
 
-  _provider = config.provider ?? new DefaultTracerProvider({ resource: getOtelResource() })
+  if (config.provider) {
+    _provider = config.provider
+  } else {
+    const spanProcessors: SpanProcessor[] = []
+    if (config.exporters?.otlp) spanProcessors.push(new BatchSpanProcessor(new OTLPTraceExporter()))
+    if (config.exporters?.console) spanProcessors.push(new SimpleSpanProcessor(new ConsoleSpanExporter()))
+    _provider = new DefaultTracerProvider({ resource: getOtelResource(), spanProcessors })
+  }
 
-  // Exporters are additive — if a custom provider already has processors, these append to them.
-  if (config.exporters?.otlp) addOtlpTraceExporter(_provider)
-  if (config.exporters?.console) addConsoleTraceExporter(_provider)
-
-  _provider.register()
+  trace.setGlobalTracerProvider(_provider)
 
   if (typeof globalThis.process?.once === 'function') {
     globalThis.process.once('beforeExit', () => {
@@ -213,11 +222,15 @@ export function setupMeter(config: MeterConfig = {}): MeterProvider {
     return _meterProvider
   }
 
-  _meterProvider = config.provider ?? new MeterProvider({ resource: getOtelResource() })
-
-  // Exporters are additive — if a custom provider already has readers, these append to them.
-  if (config.exporters?.otlp) addOtlpMetricReader(_meterProvider)
-  if (config.exporters?.console) addConsoleMetricReader(_meterProvider)
+  if (config.provider) {
+    _meterProvider = config.provider
+  } else {
+    const readers: MetricReader[] = []
+    if (config.exporters?.otlp) readers.push(new PeriodicExportingMetricReader({ exporter: new OTLPMetricExporter() }))
+    if (config.exporters?.console)
+      readers.push(new PeriodicExportingMetricReader({ exporter: new ConsoleMetricExporter() }))
+    _meterProvider = new MeterProvider({ resource: getOtelResource(), readers })
+  }
 
   otelMetrics.setGlobalMeterProvider(_meterProvider)
 
@@ -234,51 +247,18 @@ export function setupMeter(config: MeterConfig = {}): MeterProvider {
   return _meterProvider
 }
 
-function addOtlpTraceExporter(provider: BasicTracerProvider): void {
-  try {
-    provider.addSpanProcessor(new BatchSpanProcessor(new OTLPTraceExporter()))
-  } catch (error) {
-    logger.warn(`error=<${error}> | failed to configure otlp trace exporter`)
-  }
-}
-
-function addConsoleTraceExporter(provider: BasicTracerProvider): void {
-  try {
-    provider.addSpanProcessor(new SimpleSpanProcessor(new ConsoleSpanExporter()))
-  } catch (error) {
-    logger.warn(`error=<${error}> | failed to configure console trace exporter`)
-  }
-}
-
-function addOtlpMetricReader(provider: MeterProvider): void {
-  try {
-    provider.addMetricReader(new PeriodicExportingMetricReader({ exporter: new OTLPMetricExporter() }))
-  } catch (error) {
-    logger.warn(`error=<${error}> | failed to configure otlp metric exporter`)
-  }
-}
-
-function addConsoleMetricReader(provider: MeterProvider): void {
-  try {
-    provider.addMetricReader(new PeriodicExportingMetricReader({ exporter: new ConsoleMetricExporter() }))
-  } catch (error) {
-    logger.warn(`error=<${error}> | failed to configure console metric exporter`)
-  }
-}
-
-function getOtelResource(): Resource {
+function getOtelResource() {
   const serviceName = getServiceName()
   const serviceNamespace = globalThis.process?.env?.OTEL_SERVICE_NAMESPACE || DEFAULT_SERVICE_NAMESPACE
   const deploymentEnvironment = globalThis.process?.env?.OTEL_DEPLOYMENT_ENVIRONMENT || DEFAULT_DEPLOYMENT_ENVIRONMENT
 
-  const defaultResource = new Resource({
+  const envAttributes = envDetector.detect().attributes ?? {}
+  return resourceFromAttributes({
     'service.name': serviceName,
     'service.namespace': serviceNamespace,
     'deployment.environment': deploymentEnvironment,
     'telemetry.sdk.name': 'opentelemetry',
     'telemetry.sdk.language': 'typescript',
+    ...envAttributes,
   })
-
-  const envResource = envDetectorSync.detect()
-  return defaultResource.merge(envResource)
 }
