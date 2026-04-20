@@ -27,6 +27,7 @@ __pycache__/
 
 # Generated
 **/_generated
+strands-wasm/generated
 
 # Coverage reports
 coverage/
