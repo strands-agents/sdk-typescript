@@ -285,7 +285,9 @@ function generate(opts?: { check?: boolean }): void {
 function clean(): void {
   try {
     run("npm run clean --workspaces");
-  } catch {}
+  } catch (e) {
+    console.warn("workspace clean failed (continuing):", (e as Error).message);
+  }
   run("rm -rf strands-py/target strands-py/.venv");
 }
 

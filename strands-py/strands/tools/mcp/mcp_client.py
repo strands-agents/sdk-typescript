@@ -342,7 +342,7 @@ class MCPClient:
 
     async def call_tool_async(self, tool_use_id: str, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         """Call a tool asynchronously."""
-        result = self._run_in_background(self._call_tool_async(name, arguments))
+        result = await self._call_tool_async(name, arguments)
         result["toolUseId"] = tool_use_id
         return result
 

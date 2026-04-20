@@ -31,6 +31,24 @@ updates:
           - 'minor'
           - 'patch'
       # Because major production updates aren't matched by any group, they will have individual PRs
+  - package-ecosystem: 'npm'
+    directory: '/strands-wasm'
+    schedule:
+      interval: 'daily'
+    commit-message:
+      prefix: ci
+  - package-ecosystem: 'npm'
+    directory: '/strands-dev'
+    schedule:
+      interval: 'daily'
+    commit-message:
+      prefix: ci
+  - package-ecosystem: 'pip'
+    directory: '/strands-py'
+    schedule:
+      interval: 'daily'
+    commit-message:
+      prefix: ci
   - package-ecosystem: 'github-actions'
     directory: '/'
     schedule:

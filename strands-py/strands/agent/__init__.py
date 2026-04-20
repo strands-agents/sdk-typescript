@@ -184,8 +184,9 @@ class _ToolProxy:
         def invoke(**kwargs: Any) -> dict[str, Any]:
             import uuid
 
+            max_retries = 3
             tool_use_id = f"tooluse_{uuid.uuid4().hex[:24]}"
-            while True:
+            for _attempt in range(max_retries + 1):
                 call_kwargs: dict[str, Any] = dict(kwargs)
                 if entry.context_param and agent is not None:
                     call_kwargs[entry.context_param] = ToolContext(

@@ -1,6 +1,7 @@
 """Human-in-the-loop interrupt system for agent workflows."""
 
-from dataclasses import asdict, dataclass
+import uuid
+from dataclasses import asdict, dataclass, field
 from typing import Any
 
 
@@ -15,8 +16,8 @@ class Interrupt:
         response: Human response provided when resuming the agent after an interrupt.
     """
 
-    id: str
     name: str
+    id: str = field(default_factory=lambda: str(uuid.uuid4()))
     reason: Any = None
     response: Any = None
 
