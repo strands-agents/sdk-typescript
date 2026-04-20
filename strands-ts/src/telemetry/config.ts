@@ -16,7 +16,7 @@
 
 import { metrics as otelMetrics, trace } from '@opentelemetry/api'
 import type { Meter as OtelMeter, Tracer as OtelTracer } from '@opentelemetry/api'
-import { resourceFromAttributes, envDetector } from '@opentelemetry/resources'
+import { resourceFromAttributes, envDetector, type Resource } from '@opentelemetry/resources'
 import {
   BasicTracerProvider,
   ConsoleSpanExporter,
@@ -247,7 +247,7 @@ export function setupMeter(config: MeterConfig = {}): MeterProvider {
   return _meterProvider
 }
 
-function getOtelResource() {
+function getOtelResource(): Resource {
   const serviceName = getServiceName()
   const serviceNamespace = globalThis.process?.env?.OTEL_SERVICE_NAMESPACE || DEFAULT_SERVICE_NAMESPACE
   const deploymentEnvironment = globalThis.process?.env?.OTEL_DEPLOYMENT_ENVIRONMENT || DEFAULT_DEPLOYMENT_ENVIRONMENT
