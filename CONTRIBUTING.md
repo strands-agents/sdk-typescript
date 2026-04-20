@@ -34,15 +34,16 @@ When proposing solutions or reviewing code, we reference these principles to gui
    npm ci
    ```
 
+   This also installs git hooks (via husky) that automatically run tests, linting, formatting checks, and type checking before each commit.
+
    > **Note**: Use `npm ci` for installing dependencies. Use `npm install` only when intentionally adding or updating dependencies. See [Dependency Guidelines](docs/DEPENDENCIES.md) for details.
 
 2. Install Playwright browsers for browser testing:
-
    ```bash
    npm run test:browser:install
    ```
 
-3. Verify your setup by running the test suite:
+3. Verify your setup:
    ```bash
    npm test
    npm run lint
@@ -50,44 +51,34 @@ When proposing solutions or reviewing code, we reference these principles to gui
    npm run type-check
    ```
 
-4. Install git hooks for automatic quality checks:
-   ```bash
-   npm run prepare
-   ```
-
-This will set up pre-commit hooks that automatically run tests, linting, formatting checks, and type checking before each commit.
+The repo is an npm workspace. The SDK source lives in `strands-ts/`, and the root `package.json` proxies common commands (`test`, `lint`, `format:check`, `type-check`, `build`) into that workspace. For commands that aren't proxied at root (like `test:integ` or `test:watch`), run them from `strands-ts/` directly.
 
 ## Testing Instructions and Best Practices
 
 ### Running Tests
 
+Common commands work from the repo root:
+
 ```bash
-# Run unit tests only (Node.js environment)
-npm test
+npm test                          # Unit tests (Node.js)
+npm run test:coverage             # Unit tests with coverage (required: 80%+)
+npm run test:all:coverage         # All environments with coverage
+```
 
-# Run unit tests for a single file
-npm test -- src/models/__tests__/openai.test.ts
+For the full set of test commands, run from `strands-ts/`:
 
-# Run tests with coverage (required: 80%+)
-npm run test:coverage
+```bash
+cd strands-ts
 
-# Run tests in watch mode during development
-npm run test:watch
-
-# Run only integration tests
-npm run test:integ
-
-# Run integ tests for a single file
-npm run test:integ -- test/integ/openai.test.ts
-
-# Run browser tests (Chromium)
-npm run test:browser
-
-# Run tests in all environments (Node.js + Browser)
-npm run test:all
-
-# Run tests in all environments with coverage
-npm run test:all:coverage
+npm test                                              # Unit tests (Node.js)
+npm test -- src/models/__tests__/openai.test.ts       # Single unit test file
+npm run test:watch                                    # Watch mode
+npm run test:coverage                                 # Unit tests with coverage
+npm run test:browser                                  # Unit tests in browser (Chromium)
+npm run test:all                                      # Unit tests in all environments
+npm run test:all:coverage                             # All environments with coverage
+npm run test:integ                                    # Integration tests
+npm run test:integ -- test/integ/models/openai.test.ts  # Single integ test file
 ```
 
 ### Test Requirements
