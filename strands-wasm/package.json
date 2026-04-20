@@ -1,0 +1,20 @@
+{
+  "name": "@strands-agents/wasm",
+  "version": "0.0.1-development",
+  "private": true,
+  "description": "WASM component build for Strands Agents SDK",
+  "type": "module",
+  "scripts": {
+    "generate": "jco guest-types ../wit --name strands:agent --world-name agent --out-dir generated",
+    "build": "node build.js",
+    "clean": "rm -rf dist node_modules package-lock.json"
+  },
+  "dependencies": {
+    "@strands-agents/sdk": "*"
+  },
+  "devDependencies": {
+    "@bytecodealliance/jco": "^1.16.1",
+    "@chaynabors/componentize-js": "^0.19.3",
+    "esbuild": "^0.27.4"
+  }
+}

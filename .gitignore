@@ -11,7 +11,22 @@ yarn-error.log*
 dist/
 build/
 *.tsbuildinfo
-__pycache__
+target/
+
+# Python
+__pycache__/
+.pycache/
+.pytest_cache/
+.ruff_cache/
+.venv/
+*.egg-info/
+*.pyd
+*.so
+*.dylib
+*.pdb
+
+# Generated
+**/_generated
 
 # Coverage reports
 coverage/
@@ -22,6 +37,7 @@ coverage/
 .idea/
 *.swp
 *.swo
+.gradle/
 
 # OS files
 .DS_Store
@@ -42,6 +58,11 @@ Thumbs.db
 
 # Test artifacts
 **/test/.artifacts
+
+# Misc
+*.backup
+**/mutants.out*/
+bin/
 
 # LLM
 CLAUDE.md

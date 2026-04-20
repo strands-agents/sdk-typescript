@@ -1,0 +1,243 @@
+package strands:agent;
+
+interface types {
+  enum stop-reason {
+    end-turn,
+    tool-use,
+    max-tokens,
+    error,
+    content-filtered,
+    guardrail-intervened,
+    stop-sequence,
+    model-context-window-exceeded,
+    cancelled,
+  }
+
+  record usage {
+    input-tokens: s32,
+    output-tokens: s32,
+    total-tokens: s32,
+    cache-read-input-tokens: option<s32>,
+    cache-write-input-tokens: option<s32>,
+  }
+
+  record metrics {
+    latency-ms: f64,
+  }
+
+  record metadata-event {
+    usage: option<usage>,
+    metrics: option<metrics>,
+  }
+
+  record tool-use-event {
+    name: string,
+    tool-use-id: string,
+    input: string,
+  }
+
+  record tool-result-event {
+    tool-use-id: string,
+    status: string,
+    content: string,
+  }
+
+  record tool-spec {
+    name: string,
+    description: string,
+    input-schema: string,
+  }
+
+  record stop-data {
+    reason: stop-reason,
+    usage: option<usage>,
+    metrics: option<metrics>,
+  }
+
+  enum lifecycle-event-type {
+    initialized,
+    before-invocation,
+    after-invocation,
+    before-model-call,
+    after-model-call,
+    before-tool-call,
+    after-tool-call,
+    message-added,
+  }
+
+  record lifecycle-event {
+    event-type: lifecycle-event-type,
+    tool-use: option<string>,
+    tool-result: option<string>,
+  }
+
+  variant stream-event {
+    text-delta(string),
+    tool-use(tool-use-event),
+    tool-result(tool-result-event),
+    metadata(metadata-event),
+    stop(stop-data),
+    error(string),
+    interrupt(string),
+    lifecycle(lifecycle-event),
+  }
+
+  record anthropic-config {
+    model-id: option<string>,
+    api-key: option<string>,
+    additional-config: option<string>,
+  }
+
+  record bedrock-config {
+    model-id: string,
+    region: option<string>,
+    access-key-id: option<string>,
+    secret-access-key: option<string>,
+    session-token: option<string>,
+    additional-config: option<string>,
+  }
+
+  record openai-config {
+    model-id: option<string>,
+    api-key: option<string>,
+    additional-config: option<string>,
+  }
+
+  record gemini-config {
+    model-id: option<string>,
+    api-key: option<string>,
+    additional-config: option<string>,
+  }
+
+  variant model-config {
+    anthropic(anthropic-config),
+    bedrock(bedrock-config),
+    openai(openai-config),
+    gemini(gemini-config),
+  }
+
+  record model-params {
+    max-tokens: option<s32>,
+    temperature: option<f64>,
+    top-p: option<f64>,
+  }
+
+  record file-storage-config {
+    base-dir: string,
+  }
+
+  record s3-storage-config {
+    bucket: string,
+    region: option<string>,
+    prefix: option<string>,
+  }
+
+  variant storage-config {
+    file(file-storage-config),
+    s3(s3-storage-config),
+  }
+
+  record session-config {
+    session-id: string,
+    storage: storage-config,
+    save-latest-on: option<string>,
+  }
+
+  record agent-config {
+    model: option<model-config>,
+    model-params: option<model-params>,
+    system-prompt: option<string>,
+    system-prompt-blocks: option<string>,
+    tools: option<list<tool-spec>>,
+    trace-context: option<string>,
+    session: option<session-config>,
+  }
+
+  record call-tool-args {
+    name: string,
+    input: string,
+    tool-use-id: string,
+  }
+
+  record call-tools-args {
+    calls: list<call-tool-args>,
+  }
+
+  record stream-args {
+    input: string,
+    tools: option<list<tool-spec>>,
+    tool-choice: option<string>,
+  }
+
+  record respond-args {
+    payload: string,
+  }
+
+  record set-messages-args {
+    json: string,
+  }
+}
+
+interface tool-provider {
+  use types.{call-tool-args, call-tools-args};
+
+  call-tool: func(args: call-tool-args) -> result<string, string>;
+  call-tools: func(args: call-tools-args) -> list<result<string, string>>;
+}
+
+/// Structured logging from guest to host.
+///
+/// The guest calls `log` at key decision points (tool dispatch, event
+/// mapping, errors).  The host routes entries to its own logging backend
+/// (e.g. Python `logging`).
+interface host-log {
+  enum log-level {
+    trace,
+    debug,
+    info,
+    warn,
+    error,
+  }
+
+  record log-entry {
+    level: log-level,
+    /// Human-readable message.
+    message: string,
+    /// Optional JSON blob with structured context (tool name, event
+    /// kind, JS stack trace on errors, …).
+    context: option<string>,
+  }
+
+  /// Emit a structured log entry visible to the host.
+  log: func(entry: log-entry);
+}
+
+interface api {
+  use types.{agent-config, stream-event, stream-args, respond-args, set-messages-args};
+
+  resource agent {
+    constructor(config: agent-config);
+    generate: func(args: stream-args) -> response-stream;
+    get-messages: func() -> string;
+    set-messages: func(args: set-messages-args);
+    save-session: func() -> result<_, string>;
+    list-snapshots: func() -> result<list<string>, string>;
+    delete-session: func() -> result<_, string>;
+  }
+
+  resource response-stream {
+    read-next: func() -> option<list<stream-event>>;
+    respond: func(args: respond-args);
+    cancel: func();
+  }
+}
+
+world agent {
+  import tool-provider;
+  import host-log;
+  export api;
+}
+
+world agent-types {
+  export types;
+}

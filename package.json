@@ -1,13 +1,14 @@
 {
   "name": "strands",
   "private": true,
-  "workspaces": ["strands-ts"],
+  "workspaces": ["strands-dev", "strands-ts", "strands-wasm"],
   "devDependencies": {
     "husky": "^9.1.7",
     "prettier": "^3.7.4"
   },
   "scripts": {
     "prepare": "husky",
+    "dev": "strands-dev",
     "build": "npm run build -w strands-ts",
     "test": "npm run test -w strands-ts",
     "test:coverage": "npm run test:coverage -w strands-ts",

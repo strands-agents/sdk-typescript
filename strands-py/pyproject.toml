@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "strands"
+version = "0.0.1"
+description = "Python host for the Strands Agent WASM component"
+requires-python = ">=3.10"
+dependencies = [
+    "wasmtime @ git+https://github.com/unshure/wasmtime-py.git@async-http",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "pydantic>=2.0",
+    "docstring-parser>=0.16",
+    "boto3>=1.35",
+    "tenacity>=8.0",
+]
+dev = [
+    "componentize-py"
+]
+
+[project.scripts]
+generate-types = "scripts.generate_types:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["strands*", "scripts*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests_integ"]
+asyncio_mode = "auto"
+cache_dir = ".pytest_cache"
+
+[tool.ruff]
+exclude = []
