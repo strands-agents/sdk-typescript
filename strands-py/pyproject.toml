@@ -17,7 +17,7 @@ test = [
     "pytest-asyncio>=0.23",
     "pydantic>=2.0",
     "docstring-parser>=0.16",
-    "boto3>=1.35",
+    "boto3>=1.42.92",
     "tenacity>=8.0",
 ]
 dev = [
