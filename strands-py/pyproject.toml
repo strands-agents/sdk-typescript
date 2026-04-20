@@ -18,7 +18,7 @@ test = [
     "pydantic>=2.13.3",
     "docstring-parser>=0.16",
     "boto3>=1.42.92",
-    "tenacity>=8.0",
+    "tenacity>=9.1.4",
 ]
 dev = [
     "componentize-py"
