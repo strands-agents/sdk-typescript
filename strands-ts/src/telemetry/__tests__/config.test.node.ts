@@ -161,12 +161,8 @@ describe('setupMeter (node-specific)', () => {
   describe('resource attributes from environment', () => {
     it('should use OTEL_SERVICE_NAME when set', async () => {
       process.env.OTEL_SERVICE_NAME = 'my-meter-service'
-      const {
-        MeterProvider,
-        InMemoryMetricExporter,
-        PeriodicExportingMetricReader,
-        AggregationTemporality,
-      } = await import('@opentelemetry/sdk-metrics')
+      const { MeterProvider, InMemoryMetricExporter, PeriodicExportingMetricReader, AggregationTemporality } =
+        await import('@opentelemetry/sdk-metrics')
       const { resourceFromAttributes } = await import('@opentelemetry/resources')
       const telemetry = await import('../index.js')
 
