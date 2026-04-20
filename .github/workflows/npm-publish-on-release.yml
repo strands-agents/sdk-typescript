@@ -67,17 +67,22 @@ jobs:
         fi
 
     - name: Update package.json version
+      working-directory: strands-ts
       run: |
         npm version ${{ steps.version.outputs.version }} --no-git-tag-version
 
-    - name: Install dependencies and build
+    - name: Install dependencies
       run: npm ci
+
+    - name: Build
+      run: npm run build
 
     - name: Store the distribution packages
       uses: actions/upload-artifact@v7
       with:
         name: npm-package-distributions
-        path: .
+        path: ./strands-ts
 
     - name: Publish to NPM
+      working-directory: strands-ts
       run: npm publish --access public --tag latest

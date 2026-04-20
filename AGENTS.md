@@ -697,7 +697,7 @@ export class ValidationError extends Error {
 - Supports stdio and HTTP transports
 - Resource cleanup with `Symbol.dispose`
 
-**See [`examples/mcp/`](examples/mcp/) for complete working examples.**
+**See [`examples/mcp/`](strands-ts/examples/mcp/) for complete working examples.**
 
 ### Test Assertions
 

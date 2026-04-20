@@ -5,7 +5,7 @@ yarn-debug.log*
 yarn-error.log*
 
 # Test lock files
-test/packages/**/package-lock.json
+**/test/packages/**/package-lock.json
 
 # Build outputs
 dist/
@@ -41,7 +41,7 @@ Thumbs.db
 .artifact
 
 # Test artifacts
-test/.artifacts
+**/test/.artifacts
 
 # LLM
 CLAUDE.md

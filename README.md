@@ -17,7 +17,7 @@
     <a href="https://github.com/strands-agents/sdk-typescript/graphs/commit-activity"><img alt="GitHub commit activity" src="https://img.shields.io/github/commit-activity/m/strands-agents/sdk-typescript"/></a>
     <a href="https://github.com/strands-agents/sdk-typescript/issues"><img alt="GitHub open issues" src="https://img.shields.io/github/issues/strands-agents/sdk-typescript"/></a>
     <a href="https://github.com/strands-agents/sdk-typescript/pulls"><img alt="GitHub open pull requests" src="https://img.shields.io/github/issues-pr/strands-agents/sdk-typescript"/></a>
-    <a href="https://github.com/strands-agents/sdk-typescript/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/strands-agents/sdk-typescript"/></a>
+    <a href="https://github.com/strands-agents/sdk-typescript/blob/main/LICENSE.APACHE"><img alt="License" src="https://img.shields.io/github/license/strands-agents/sdk-typescript"/></a>
     <a href="https://www.npmjs.com/package/@strands-agents/sdk"><img alt="NPM Version" src="https://img.shields.io/npm/v/@strands-agents/sdk"/></a>
   </div>
   
@@ -297,7 +297,7 @@ const swarm = new Swarm({
 const result = await swarm.invoke('What is the largest ocean?')
 ```
 
-Both patterns support streaming via `.stream()` for real-time access to handoff and node execution events. See the [examples](./examples/) directory for complete working samples.
+Both patterns support streaming via `.stream()` for real-time access to handoff and node execution events. See the [examples](./strands-ts/examples/) directory for complete working samples.
 
 ---
 
@@ -307,10 +307,10 @@ For detailed guidance, tutorials, and concept overviews, please visit:
 
 - **[Official Documentation](https://strandsagents.com/)**: Comprehensive guides and tutorials
 - **[API Reference](https://strandsagents.com/latest/documentation/docs/api-reference/typescript/)**: Complete API documentation
-- **[Examples](./examples/)**: Sample applications
-  - **[First Agent](./examples/first-agent/)**: Basic Node.js agent
-  - **[MCP](./examples/mcp/)**: MCP integration example
-  - **[Browser Agent](./examples/browser-agent/)**: Browser-based agent with DOM manipulation
+- **[Examples](./strands-ts/examples/)**: Sample applications
+  - **[First Agent](./strands-ts/examples/first-agent/)**: Basic Node.js agent
+  - **[MCP](./strands-ts/examples/mcp/)**: MCP integration example
+  - **[Browser Agent](./strands-ts/examples/browser-agent/)**: Browser-based agent with DOM manipulation
 
 - **[Contributing Guide](CONTRIBUTING.md)**: Development setup and guidelines
 
@@ -330,7 +330,7 @@ We welcome contributions! See our [Contributing Guide](CONTRIBUTING.md) for deta
 
 ## License
 
-This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE.APACHE) file for details.
 
 ---
 

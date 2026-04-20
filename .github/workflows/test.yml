@@ -46,7 +46,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: test-artifacts-${{ matrix.node-version }}-${{ matrix.os }}
-          path: ./test/.artifacts/
+          path: ./strands-ts/test/.artifacts/
           include-hidden-files: true # needed because the path has a directory starting with a '.'
           retention-days: 4
           if-no-files-found: ignore
