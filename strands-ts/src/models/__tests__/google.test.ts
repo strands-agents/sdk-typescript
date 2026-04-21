@@ -140,7 +140,10 @@ describe('GoogleModel', () => {
         modelId: 'gemini-2.5-flash',
         contextWindowLimit: 1_048_576,
       })
-      expect(provider.getConfig().contextWindowLimit).toBe(1_048_576)
+      expect(provider.getConfig()).toStrictEqual({
+        modelId: 'gemini-2.5-flash',
+        contextWindowLimit: 1_048_576,
+      })
     })
   })
 

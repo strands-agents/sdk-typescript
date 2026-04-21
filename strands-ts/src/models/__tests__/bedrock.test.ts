@@ -270,7 +270,10 @@ describe('BedrockModel', () => {
         modelId: 'anthropic.claude-sonnet-4-20250514-v1:0',
         contextWindowLimit: 200_000,
       })
-      expect(provider.getConfig().contextWindowLimit).toBe(200_000)
+      expect(provider.getConfig()).toStrictEqual({
+        modelId: 'anthropic.claude-sonnet-4-20250514-v1:0',
+        contextWindowLimit: 200_000,
+      })
     })
   })
 

@@ -250,7 +250,10 @@ describe('OpenAIModel', () => {
         apiKey: 'sk-test',
         contextWindowLimit: 128_000,
       })
-      expect(provider.getConfig().contextWindowLimit).toBe(128_000)
+      expect(provider.getConfig()).toStrictEqual({
+        modelId: 'gpt-4o',
+        contextWindowLimit: 128_000,
+      })
     })
   })
 
