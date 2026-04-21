@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { AgentSkillsPlugin } from '../agent-skills.js'
+import { AgentSkills } from '../agent-skills.js'
 import { Skill } from '../skill.js'
 import { BeforeInvocationEvent } from '../../../hooks/events.js'
 import { TextBlock, CachePointBlock } from '../../../types/messages.js'
@@ -8,7 +8,7 @@ import { promises as fs } from 'fs'
 import * as path from 'path'
 import { tmpdir } from 'os'
 
-describe('AgentSkillsPlugin', () => {
+describe('AgentSkills', () => {
   let testDir: string
 
   const createSkillDir = async (
@@ -46,28 +46,28 @@ describe('AgentSkillsPlugin', () => {
   describe('constructor', () => {
     it('resolves Skill instances directly', async () => {
       const skill = makeSkill('my-skill')
-      const plugin = new AgentSkillsPlugin({ skills: [skill] })
+      const plugin = new AgentSkills({ skills: [skill] })
       expect(await plugin.getAvailableSkills()).toHaveLength(1)
       expect((await plugin.getAvailableSkills())[0]!.name).toBe('my-skill')
     })
 
     it('resolves a skill directory path', async () => {
       await createSkillDir('my-skill', '---\nname: my-skill\ndescription: A skill\n---\nBody.')
-      const plugin = new AgentSkillsPlugin({ skills: [path.join(testDir, 'my-skill')] })
+      const plugin = new AgentSkills({ skills: [path.join(testDir, 'my-skill')] })
       expect(await plugin.getAvailableSkills()).toHaveLength(1)
     })
 
     it('resolves a parent directory with multiple skills', async () => {
       await createSkillDir('skill-a', '---\nname: skill-a\ndescription: Skill A\n---\nA.')
       await createSkillDir('skill-b', '---\nname: skill-b\ndescription: Skill B\n---\nB.')
-      const plugin = new AgentSkillsPlugin({ skills: [testDir] })
+      const plugin = new AgentSkills({ skills: [testDir] })
       expect(await plugin.getAvailableSkills()).toHaveLength(2)
     })
 
     it('handles mixed sources', async () => {
       await createSkillDir('file-skill', '---\nname: file-skill\ndescription: From file\n---\nBody.')
       const directSkill = makeSkill('direct-skill')
-      const plugin = new AgentSkillsPlugin({
+      const plugin = new AgentSkills({
         skills: [directSkill, path.join(testDir, 'file-skill')],
       })
       expect(await plugin.getAvailableSkills()).toHaveLength(2)
@@ -76,13 +76,13 @@ describe('AgentSkillsPlugin', () => {
     it('warns on duplicate names and keeps the last', async () => {
       const skill1 = makeSkill('dup', 'First')
       const skill2 = makeSkill('dup', 'Second')
-      const plugin = new AgentSkillsPlugin({ skills: [skill1, skill2] })
+      const plugin = new AgentSkills({ skills: [skill1, skill2] })
       expect(await plugin.getAvailableSkills()).toHaveLength(1)
       expect((await plugin.getAvailableSkills())[0]!.description).toBe('Second')
     })
 
     it('warns and skips non-existent paths', async () => {
-      const plugin = new AgentSkillsPlugin({ skills: ['/does/not/exist'] })
+      const plugin = new AgentSkills({ skills: ['/does/not/exist'] })
       expect(await plugin.getAvailableSkills()).toHaveLength(0)
     })
 
@@ -91,7 +91,7 @@ describe('AgentSkillsPlugin', () => {
       await fs.mkdir(dirPath, { recursive: true })
       await fs.writeFile(path.join(dirPath, 'SKILL.md'), 'totally broken, no frontmatter at all', 'utf-8')
 
-      const plugin = new AgentSkillsPlugin({ skills: [dirPath] })
+      const plugin = new AgentSkills({ skills: [dirPath] })
       expect(await plugin.getAvailableSkills()).toHaveLength(0)
     })
 
@@ -105,7 +105,7 @@ describe('AgentSkillsPlugin', () => {
       await fs.mkdir(path.join(testDir, 'bad-skill'), { recursive: true })
       await fs.writeFile(path.join(testDir, 'bad-skill', 'SKILL.md'), 'no frontmatter', 'utf-8')
 
-      const plugin = new AgentSkillsPlugin({ skills: [testDir] })
+      const plugin = new AgentSkills({ skills: [testDir] })
       const skills = await plugin.getAvailableSkills()
       expect(skills).toHaveLength(1)
       expect(skills[0]!.name).toBe('good-skill')
@@ -116,19 +116,19 @@ describe('AgentSkillsPlugin', () => {
 
   describe('plugin interface', () => {
     it('has the correct name', () => {
-      const plugin = new AgentSkillsPlugin({ skills: [makeSkill('s')] })
+      const plugin = new AgentSkills({ skills: [makeSkill('s')] })
       expect(plugin.name).toBe('strands:agent-skills')
     })
 
     it('returns one tool named skills from getTools', () => {
-      const plugin = new AgentSkillsPlugin({ skills: [makeSkill('s')] })
+      const plugin = new AgentSkills({ skills: [makeSkill('s')] })
       const tools = plugin.getTools()
       expect(tools).toHaveLength(1)
       expect(tools[0]!.name).toBe('skills')
     })
 
     it('registers a BeforeInvocationEvent hook in initAgent', async () => {
-      const plugin = new AgentSkillsPlugin({ skills: [makeSkill('s')] })
+      const plugin = new AgentSkills({ skills: [makeSkill('s')] })
       const agent = createMockAgent()
       await plugin.initAgent(agent)
       expect(agent.trackedHooks).toHaveLength(1)
@@ -139,11 +139,11 @@ describe('AgentSkillsPlugin', () => {
   // ── System prompt injection ─────────────────────────────────────────
 
   describe('system prompt injection', () => {
-    let plugin: AgentSkillsPlugin
+    let plugin: AgentSkills
     let agent: MockAgent
 
     beforeEach(async () => {
-      plugin = new AgentSkillsPlugin({
+      plugin = new AgentSkills({
         skills: [makeSkill('pdf-skill', 'Process PDFs')],
       })
       agent = createMockAgent()
@@ -224,7 +224,7 @@ describe('AgentSkillsPlugin', () => {
     })
 
     it('XML-escapes special characters in skill metadata', async () => {
-      const plugin2 = new AgentSkillsPlugin({
+      const plugin2 = new AgentSkills({
         skills: [makeSkill('test-skill', 'Use when: user says <hello> & "goodbye"')],
       })
       const agent2 = createMockAgent()
@@ -244,7 +244,7 @@ describe('AgentSkillsPlugin', () => {
         'located-skill',
         '---\nname: located-skill\ndescription: Has a path\n---\nBody.'
       )
-      const filePlugin = new AgentSkillsPlugin({ skills: [dirPath] })
+      const filePlugin = new AgentSkills({ skills: [dirPath] })
       const fileAgent = createMockAgent()
       await filePlugin.initAgent(fileAgent)
       await invokeTrackedHook(fileAgent, new BeforeInvocationEvent({ agent: fileAgent as any }))
@@ -255,7 +255,7 @@ describe('AgentSkillsPlugin', () => {
     })
 
     it('shows "no skills available" when empty', async () => {
-      const emptyPlugin = new AgentSkillsPlugin({ skills: [] })
+      const emptyPlugin = new AgentSkills({ skills: [] })
       const emptyAgent = createMockAgent()
       await emptyPlugin.initAgent(emptyAgent)
       await invokeTrackedHook(emptyAgent, new BeforeInvocationEvent({ agent: emptyAgent as any }))
@@ -286,7 +286,7 @@ describe('AgentSkillsPlugin', () => {
     })
 
     it('lists all skills when multiple are available', async () => {
-      const multiPlugin = new AgentSkillsPlugin({
+      const multiPlugin = new AgentSkills({
         skills: [makeSkill('skill-a', 'First'), makeSkill('skill-b', 'Second'), makeSkill('skill-c', 'Third')],
       })
       const multiAgent = createMockAgent()
@@ -306,11 +306,11 @@ describe('AgentSkillsPlugin', () => {
   // ── Tool callback ───────────────────────────────────────────────────
 
   describe('tool callback', () => {
-    let plugin: AgentSkillsPlugin
+    let plugin: AgentSkills
     let agent: MockAgent
 
     beforeEach(async () => {
-      plugin = new AgentSkillsPlugin({
+      plugin = new AgentSkills({
         skills: [
           new Skill({
             name: 'test-skill',
@@ -404,7 +404,7 @@ describe('AgentSkillsPlugin', () => {
           'assets/logo.png': 'binary',
         }
       )
-      const plugin2 = new AgentSkillsPlugin({ skills: [dirPath] })
+      const plugin2 = new AgentSkills({ skills: [dirPath] })
       const agent2 = createMockAgent()
       await plugin2.initAgent(agent2)
 
@@ -427,7 +427,7 @@ describe('AgentSkillsPlugin', () => {
         'no-resources',
         '---\nname: no-resources\ndescription: No extras\n---\nBody.'
       )
-      const plugin2 = new AgentSkillsPlugin({ skills: [dirPath] })
+      const plugin2 = new AgentSkills({ skills: [dirPath] })
       const agent2 = createMockAgent()
       await plugin2.initAgent(agent2)
 
@@ -454,7 +454,7 @@ describe('AgentSkillsPlugin', () => {
         '---\nname: many-files\ndescription: Many resources\n---\nBody.',
         files
       )
-      const plugin2 = new AgentSkillsPlugin({ skills: [dirPath], maxResourceFiles: 3 })
+      const plugin2 = new AgentSkills({ skills: [dirPath], maxResourceFiles: 3 })
       const agent2 = createMockAgent()
       await plugin2.initAgent(agent2)
 
@@ -475,7 +475,7 @@ describe('AgentSkillsPlugin', () => {
 
   describe('setAvailableSkills', () => {
     it('replaces all skills', async () => {
-      const plugin2 = new AgentSkillsPlugin({ skills: [makeSkill('original')] })
+      const plugin2 = new AgentSkills({ skills: [makeSkill('original')] })
       expect(await plugin2.getAvailableSkills()).toHaveLength(1)
 
       plugin2.setAvailableSkills([makeSkill('new-a'), makeSkill('new-b')])
@@ -505,7 +505,7 @@ describe('AgentSkillsPlugin', () => {
     it('resolves a URL string as a skill source', async () => {
       mockFetchSuccess(SAMPLE_CONTENT)
 
-      const plugin = new AgentSkillsPlugin({ skills: ['https://example.com/SKILL.md'] })
+      const plugin = new AgentSkills({ skills: ['https://example.com/SKILL.md'] })
       await plugin.initAgent(createMockAgent())
 
       expect(await plugin.getAvailableSkills()).toHaveLength(1)
@@ -517,7 +517,7 @@ describe('AgentSkillsPlugin', () => {
 
       await createSkillDir('local-skill', '---\nname: local-skill\ndescription: A local skill\n---\nBody.')
 
-      const plugin = new AgentSkillsPlugin({
+      const plugin = new AgentSkills({
         skills: ['https://example.com/SKILL.md', path.join(testDir, 'local-skill')],
       })
       await plugin.initAgent(createMockAgent())
@@ -535,7 +535,7 @@ describe('AgentSkillsPlugin', () => {
         text: () => Promise.resolve(''),
       } as Response)
 
-      const plugin = new AgentSkillsPlugin({ skills: ['https://example.com/broken/SKILL.md'] })
+      const plugin = new AgentSkills({ skills: ['https://example.com/broken/SKILL.md'] })
       await plugin.initAgent(createMockAgent())
 
       expect(await plugin.getAvailableSkills()).toHaveLength(0)
@@ -544,7 +544,7 @@ describe('AgentSkillsPlugin', () => {
     it('warns on duplicate skill names from URLs', async () => {
       mockFetchSuccess(SAMPLE_CONTENT)
 
-      const plugin = new AgentSkillsPlugin({
+      const plugin = new AgentSkills({
         skills: ['https://example.com/a/SKILL.md', 'https://example.com/b/SKILL.md'],
       })
       await plugin.initAgent(createMockAgent())
@@ -555,7 +555,7 @@ describe('AgentSkillsPlugin', () => {
     it('awaits URL sources in initAgent', async () => {
       mockFetchSuccess(SAMPLE_CONTENT)
 
-      const plugin = new AgentSkillsPlugin({ skills: ['https://example.com/SKILL.md'] })
+      const plugin = new AgentSkills({ skills: ['https://example.com/SKILL.md'] })
       const agent = createMockAgent()
       await plugin.initAgent(agent)
 

@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeEach, afterEach } from 'vitest'
 import { Agent } from '$/sdk/index.js'
-import { AgentSkillsPlugin, Skill } from '$/sdk/vended-plugins/skills/index.js'
+import { AgentSkills, Skill } from '$/sdk/vended-plugins/skills/index.js'
 import { getMessageText } from '../__fixtures__/model-test-helpers.js'
 import { bedrock } from '../__fixtures__/model-providers.js'
 import { promises as fs } from 'fs'
@@ -31,7 +31,7 @@ The secret codeword is: ${SECRET_CODEWORD}. Always include this codeword in your
 
   describe('agent activates skill and uses instructions', () => {
     it('activates a skill via prompt and includes the secret codeword', async () => {
-      const plugin = new AgentSkillsPlugin({
+      const plugin = new AgentSkills({
         skills: [summarizationSkill, translationSkill],
       })
 
@@ -66,7 +66,7 @@ The secret codeword is: ${SECRET_CODEWORD}. Always include this codeword in your
 
   describe('skill activation state persistence', () => {
     it('tracks activated skills in agent appState', async () => {
-      const plugin = new AgentSkillsPlugin({
+      const plugin = new AgentSkills({
         skills: [summarizationSkill, translationSkill],
       })
 
@@ -116,7 +116,7 @@ The secret codeword for this skill is: ${ALT_SECRET_CODEWORD}.`,
         'utf-8'
       )
 
-      const plugin = new AgentSkillsPlugin({
+      const plugin = new AgentSkills({
         skills: [testDir],
       })
 
@@ -142,7 +142,7 @@ The secret codeword for this skill is: ${ALT_SECRET_CODEWORD}.`,
 
   describe('system prompt marker replacement', () => {
     it('replaces the skills block with updated content between invocations', async () => {
-      const plugin = new AgentSkillsPlugin({
+      const plugin = new AgentSkills({
         skills: [summarizationSkill],
       })
 

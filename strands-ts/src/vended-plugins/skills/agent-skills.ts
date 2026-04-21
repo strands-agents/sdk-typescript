@@ -1,7 +1,7 @@
 /**
  * AgentSkills plugin for integrating Agent Skills into Strands agents.
  *
- * This module provides the AgentSkillsPlugin class that implements the Plugin
+ * This module provides the AgentSkills class that implements the Plugin
  * interface to add Agent Skills support. The plugin registers a tool for
  * activating skills and injects skill metadata into the system prompt.
  */
@@ -22,8 +22,8 @@ import type { ToolContext } from '../../tools/tool.js'
 /** A single skill source: filesystem path string, HTTPS URL string, or Skill instance. */
 export type SkillSource = string | Skill
 
-/** Configuration for the AgentSkillsPlugin. */
-export interface AgentSkillsPluginConfig {
+/** Configuration for the AgentSkills plugin. */
+export interface AgentSkillsConfig {
   /**
    * One or more skill sources. Each element can be:
    * - A `Skill` instance
@@ -74,21 +74,21 @@ function escapeXml(text: string): string {
  * @example
  * ```typescript
  * import { Agent } from '@strands-agents/sdk'
- * import { Skill, AgentSkillsPlugin } from '@strands-agents/sdk/vended-plugins/skills'
+ * import { Skill, AgentSkills } from '@strands-agents/sdk/vended-plugins/skills'
  *
  * // Load from filesystem
- * const plugin = new AgentSkillsPlugin({
+ * const plugin = new AgentSkills({
  *   skills: ['./skills/pdf-processing', './skills/'],
  * })
  *
  * // Or provide Skill instances directly
  * const skill = new Skill({ name: 'my-skill', description: 'A custom skill', instructions: 'Do the thing' })
- * const plugin = new AgentSkillsPlugin({ skills: [skill] })
+ * const plugin = new AgentSkills({ skills: [skill] })
  *
  * const agent = new Agent({ model, plugins: [plugin] })
  * ```
  */
-export class AgentSkillsPlugin implements Plugin {
+export class AgentSkills implements Plugin {
   readonly name = 'strands:agent-skills'
 
   private _skills: Map<string, Skill>
@@ -99,7 +99,7 @@ export class AgentSkillsPlugin implements Plugin {
   /** Resolves when all async skill sources (e.g. URLs) have been loaded. */
   private _ready: Promise<void>
 
-  constructor(config: AgentSkillsPluginConfig) {
+  constructor(config: AgentSkillsConfig) {
     this._strict = config.strict ?? false
     this._maxResourceFiles = config.maxResourceFiles ?? DEFAULT_MAX_RESOURCE_FILES
     this._stateKey = config.stateKey ?? DEFAULT_STATE_KEY

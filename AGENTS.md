@@ -472,6 +472,22 @@ export class Example {
 When choosing names and constants that match an existing implementation in the Python SDK, use exactly the same literal used
 in the Python SDK. Wherever we can achieve compatibility, keep the previous convention.
 
+#### Plugin Naming
+
+Name plugins for what they do, not for the `Plugin` interface they implement.
+
+```typescript
+// Good
+export class AgentSkills implements Plugin { ... }
+export class ModelRetryStrategy implements Plugin { ... }
+
+// Bad
+export class AgentSkillsPlugin implements Plugin { ... }
+export class ModelRetryStrategyPlugin implements Plugin { ... }
+```
+
+Same rule for the associated config (`AgentSkillsConfig`, not `AgentSkillsPluginConfig`).
+
 ### Documentation Requirements
 
 **TSDoc format** (required for all exported functions):
