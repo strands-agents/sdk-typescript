@@ -42,6 +42,7 @@ vi.mock('@anthropic-ai/sdk', () => {
 describe('AnthropicModel', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
     if (isNode) {
       vi.stubEnv('ANTHROPIC_API_KEY', 'sk-ant-test-env')
     }
@@ -59,7 +60,7 @@ describe('AnthropicModel', () => {
       const provider = new AnthropicModel({ apiKey: 'sk-ant-test' })
       const config = provider.getConfig()
       expect(config.modelId).toBe('claude-sonnet-4-6')
-      expect(config.maxTokens).toBe(4096)
+      expect(config.maxTokens).toBe(64_000)
     })
 
     it('uses provided model ID', () => {
@@ -96,6 +97,16 @@ describe('AnthropicModel', () => {
       const provider = new AnthropicModel({ client: mockClient })
       expect(Anthropic).not.toHaveBeenCalled()
       expect(provider).toBeDefined()
+    })
+
+    it('warns when maxTokens is not explicitly set', () => {
+      new AnthropicModel({ apiKey: 'sk-ant-test' })
+      expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('using default maxTokens'))
+    })
+
+    it('does not warn when maxTokens is explicitly set', () => {
+      new AnthropicModel({ apiKey: 'sk-ant-test', maxTokens: 4096 })
+      expect(console.warn).not.toHaveBeenCalledWith(expect.stringContaining('using default maxTokens'))
     })
   })
 

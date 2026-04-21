@@ -9,10 +9,17 @@ import { encodeBase64 } from '../types/media.js'
 import { logger } from '../logging/logger.js'
 
 const DEFAULT_ANTHROPIC_MODEL_ID = 'claude-sonnet-4-6'
+const DEFAULT_ANTHROPIC_MAX_TOKENS = 64_000
 const CONTEXT_WINDOW_OVERFLOW_ERRORS = ['prompt is too long', 'max_tokens exceeded', 'input too long']
 const TEXT_FILE_FORMATS = ['txt', 'md', 'markdown', 'csv', 'json', 'xml', 'html', 'yml', 'yaml', 'js', 'ts', 'py']
 
 export interface AnthropicModelConfig extends BaseModelConfig {
+  /**
+   * Maximum number of tokens the model can generate in a response.
+   *
+   * @defaultValue 64000 — subject to change between versions.
+   * Set this explicitly to avoid unexpected changes.
+   */
   maxTokens?: number
   stopSequences?: string[]
   params?: Record<string, unknown>
@@ -34,8 +41,14 @@ export class AnthropicModel extends Model<AnthropicModelConfig> {
 
     this._config = {
       modelId: DEFAULT_ANTHROPIC_MODEL_ID,
-      maxTokens: 4096,
+      maxTokens: DEFAULT_ANTHROPIC_MAX_TOKENS,
       ...modelConfig,
+    }
+
+    if (modelConfig.maxTokens === undefined) {
+      logger.warn(
+        `max_tokens=<${DEFAULT_ANTHROPIC_MAX_TOKENS}> | using default maxTokens, which is subject to change | set maxTokens explicitly to pin the value`
+      )
     }
 
     if (client) {
@@ -211,12 +224,9 @@ export class AnthropicModel extends Model<AnthropicModelConfig> {
   private _formatRequest(messages: Message[], options?: StreamOptions): Anthropic.MessageStreamParams {
     if (!this._config.modelId) throw new Error('Model ID is required')
 
-    // Set max_tokens based on model: Haiku 3 supports 4096, others support up to 32k
-    const maxTokens = this._config.maxTokens ?? (this._config.modelId.includes('haiku-3') ? 4096 : 32768)
-
     const request: Anthropic.MessageStreamParams = {
       model: this._config.modelId,
-      max_tokens: maxTokens,
+      max_tokens: this._config.maxTokens ?? DEFAULT_ANTHROPIC_MAX_TOKENS,
       messages: this._formatMessages(messages),
       stream: true,
     }
