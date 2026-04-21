@@ -52,9 +52,11 @@ describe('InterruptError', () => {
     const error = new InterruptError(interrupt)
 
     expect(error).toBeInstanceOf(Error)
-    expect(error.name).toBe('InterruptError')
-    expect(error.message).toBe('Interrupt raised: confirm_delete')
-    expect(error.interrupts).toEqual([interrupt])
+    expect(error).toMatchObject({
+      name: 'InterruptError',
+      message: 'Interrupt raised: confirm_delete',
+      interrupts: [interrupt],
+    })
   })
 
   it('creates error with multiple interrupts', () => {
@@ -63,9 +65,11 @@ describe('InterruptError', () => {
     const error = new InterruptError([a, b])
 
     expect(error).toBeInstanceOf(Error)
-    expect(error.name).toBe('InterruptError')
-    expect(error.message).toBe('2 interrupts raised: security_check, budget_check')
-    expect(error.interrupts).toEqual([a, b])
+    expect(error).toMatchObject({
+      name: 'InterruptError',
+      message: '2 interrupts raised: security_check, budget_check',
+      interrupts: [a, b],
+    })
   })
 })
 
@@ -115,9 +119,11 @@ describe('InterruptState', () => {
 
       state.deactivate()
 
-      expect(Object.keys(state.interrupts).length).toBe(0)
-      expect(state.resumeResponses).toBeUndefined()
-      expect(state.activated).toBe(false)
+      expect(state).toMatchObject({
+        interrupts: {},
+        resumeResponses: undefined,
+        activated: false,
+      })
     })
   })
 
@@ -143,8 +149,8 @@ describe('InterruptState', () => {
       ]
       state.resume(responses)
 
-      expect(state.interrupts['int-1']!.response).toBe('response1')
-      expect(state.interrupts['int-2']!.response).toStrictEqual({ complex: 'data' })
+      expect(state.interrupts['int-1']).toMatchObject({ response: 'response1' })
+      expect(state.interrupts['int-2']).toMatchObject({ response: { complex: 'data' } })
       expect(state.resumeResponses).toBe(responses)
     })
 
@@ -190,10 +196,7 @@ describe('InterruptState', () => {
       const deserialized = InterruptState.fromJSON(JSON.parse(serialized))
 
       expect(deserialized.toJSON()).toStrictEqual(original.toJSON())
-      expect(deserialized.pendingToolExecution).toBeDefined()
-      expect(deserialized.pendingToolExecution!.completedToolResults).toStrictEqual(
-        original.pendingToolExecution!.completedToolResults
-      )
+      expect(deserialized.pendingToolExecution).toStrictEqual(original.pendingToolExecution)
     })
 
     it('deserializes state with resumeResponses', () => {
@@ -205,15 +208,13 @@ describe('InterruptState', () => {
         activated: true,
       })
 
-      expect(Object.keys(state.interrupts).length).toBe(1)
-      expect(state.interrupts['int-1']).toEqual({
-        id: 'int-1',
-        name: 'test',
-        reason: 'reason',
-        response: 'yes',
+      expect(state).toMatchObject({
+        activated: true,
+        interrupts: {
+          'int-1': { id: 'int-1', name: 'test', reason: 'reason', response: 'yes' },
+        },
+        resumeResponses: [{ interruptResponse: { interruptId: 'int-1', response: 'yes' } }],
       })
-      expect(state.resumeResponses).toStrictEqual([{ interruptResponse: { interruptId: 'int-1', response: 'yes' } }])
-      expect(state.activated).toBe(true)
     })
   })
 })

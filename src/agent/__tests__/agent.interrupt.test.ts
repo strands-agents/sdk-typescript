@@ -26,8 +26,10 @@ describe('Agent interrupt system', () => {
       const agent = new Agent({ model, tools: [tool], printer: false })
       const result = await agent.invoke('Test')
 
-      expect(result.stopReason).toBe('interrupt')
-      expect(result.interrupts).toStrictEqual([expect.objectContaining({ name: 'confirm', reason: 'Please confirm' })])
+      expect(result).toMatchObject({
+        stopReason: 'interrupt',
+        interrupts: [{ name: 'confirm', reason: 'Please confirm' }],
+      })
     })
   })
 
@@ -55,10 +57,10 @@ describe('Agent interrupt system', () => {
 
       const result = await agent.invoke('Test')
 
-      expect(result.stopReason).toBe('interrupt')
-      expect(result.interrupts).toStrictEqual([
-        expect.objectContaining({ name: 'confirm_tool', reason: 'Confirm tool execution?' }),
-      ])
+      expect(result).toMatchObject({
+        stopReason: 'interrupt',
+        interrupts: [{ name: 'confirm_tool', reason: 'Confirm tool execution?' }],
+      })
     })
   })
 
@@ -84,10 +86,10 @@ describe('Agent interrupt system', () => {
 
       const result = await agent.invoke('Test')
 
-      expect(result.stopReason).toBe('interrupt')
-      expect(result.interrupts).toStrictEqual([
-        expect.objectContaining({ name: 'batch_approval', reason: 'Approve all tools?' }),
-      ])
+      expect(result).toMatchObject({
+        stopReason: 'interrupt',
+        interrupts: [{ name: 'batch_approval', reason: 'Approve all tools?' }],
+      })
     })
   })
 
@@ -131,9 +133,10 @@ describe('Agent interrupt system', () => {
       // First invocation - triggers interrupt
       const interruptResult = await agent.invoke('Transfer $5000')
 
-      expect(interruptResult.stopReason).toBe('interrupt')
-      expect(interruptResult.interrupts).toHaveLength(1)
-      expect(interruptResult.interrupts?.[0]?.name).toBe('confirm_transfer')
+      expect(interruptResult).toMatchObject({
+        stopReason: 'interrupt',
+        interrupts: [{ name: 'confirm_transfer', reason: 'Confirm transfer of $5000?' }],
+      })
       expect(callCount).toBe(1) // Tool was called once before interrupt
       expect(model.callCount).toBe(1) // Model was called once
 
@@ -149,8 +152,7 @@ describe('Agent interrupt system', () => {
 
       expect(finalResult.stopReason).toBe('endTurn')
       expect(receivedResponse).toEqual({ approved: true })
-      expect(callCount).toBe(2) // Tool was called again on resume (same tool use)
-      // Model call count: 1 (initial) + 0 (resume skips model) + 1 (post-tool-result) = 2
+      expect(callCount).toBe(2)
       expect(model.callCount).toBe(2)
 
       // Verify tool result was added to messages
@@ -201,10 +203,12 @@ describe('Agent interrupt system', () => {
       // First invocation - A & B execute, C interrupts
       const interruptResult = await agent.invoke('Run all tools')
 
-      expect(interruptResult.stopReason).toBe('interrupt')
-      expect(interruptResult.interrupts?.[0]?.name).toBe('confirm_c')
-      expect(executionLog).toEqual(['A', 'B']) // A and B executed, C interrupted before completing
-      expect(model.callCount).toBe(1) // Model called once for initial invocation
+      expect(interruptResult).toMatchObject({
+        stopReason: 'interrupt',
+        interrupts: [{ name: 'confirm_c', reason: 'Confirm tool C?' }],
+      })
+      expect(executionLog).toEqual(['A', 'B'])
+      expect(model.callCount).toBe(1)
 
       // Resume with response for C
       const finalResult = await agent.invoke([
@@ -217,9 +221,7 @@ describe('Agent interrupt system', () => {
       ])
 
       expect(finalResult.stopReason).toBe('endTurn')
-      // A and B should NOT have re-executed, only C should have completed
       expect(executionLog).toEqual(['A', 'B', 'C'])
-      // Model call count: 1 (initial) + 0 (resume skips model) + 1 (post-tool-result) = 2
       expect(model.callCount).toBe(2)
 
       // Verify all tool results are present in messages
@@ -249,7 +251,7 @@ describe('Agent interrupt system', () => {
 
       // First invocation - triggers interrupt
       const interruptResult = await agent.invoke('First message')
-      expect(interruptResult.stopReason).toBe('interrupt')
+      expect(interruptResult).toMatchObject({ stopReason: 'interrupt' })
 
       // Instead of resuming with interrupt response, send a new message
       // This should clear the interrupt state and start fresh
@@ -257,8 +259,7 @@ describe('Agent interrupt system', () => {
       const newResult = await agent.invoke('Different question')
 
       // Since we sent a new message (not interrupt responses), the interrupt state is cleared
-      // Model returns text, so we get endTurn
-      expect(newResult.stopReason).toBe('endTurn')
+      expect(newResult).toMatchObject({ stopReason: 'endTurn' })
     })
   })
 
@@ -301,13 +302,13 @@ describe('Agent interrupt system', () => {
 
       const result = await agent.invoke('Test')
 
-      expect(result.stopReason).toBe('interrupt')
-      expect(result.interrupts).toStrictEqual(
-        expect.arrayContaining([
+      expect(result).toMatchObject({
+        stopReason: 'interrupt',
+        interrupts: expect.arrayContaining([
           expect.objectContaining({ name: 'security_check', reason: 'Security review required' }),
           expect.objectContaining({ name: 'budget_check', reason: 'Budget approval required' }),
-        ])
-      )
+        ]),
+      })
     })
 
     it('collects interrupts from multiple BeforeToolsEvent hooks', async () => {
@@ -333,13 +334,13 @@ describe('Agent interrupt system', () => {
 
       const result = await agent.invoke('Test')
 
-      expect(result.stopReason).toBe('interrupt')
-      expect(result.interrupts).toStrictEqual(
-        expect.arrayContaining([
+      expect(result).toMatchObject({
+        stopReason: 'interrupt',
+        interrupts: expect.arrayContaining([
           expect.objectContaining({ name: 'approval_a', reason: 'First approval' }),
           expect.objectContaining({ name: 'approval_b', reason: 'Second approval' }),
-        ])
-      )
+        ]),
+      })
     })
 
     it('resumes correctly after multiple interrupts are answered', async () => {
@@ -371,7 +372,13 @@ describe('Agent interrupt system', () => {
 
       // First invocation — both hooks interrupt
       const interruptResult = await agent.invoke('Test')
-      expect(interruptResult.stopReason).toBe('interrupt')
+      expect(interruptResult).toMatchObject({
+        stopReason: 'interrupt',
+        interrupts: expect.arrayContaining([
+          expect.objectContaining({ name: 'security_check' }),
+          expect.objectContaining({ name: 'budget_check' }),
+        ]),
+      })
       expect(interruptResult.interrupts).toHaveLength(2)
       expect(hookCallCount).toBe(2)
       expect(model.callCount).toBe(1)
@@ -387,7 +394,6 @@ describe('Agent interrupt system', () => {
       )
 
       expect(finalResult.stopReason).toBe('endTurn')
-      // Resume skips model call: 1 (initial) + 0 (resume) + 1 (post-tool-result) = 2
       expect(model.callCount).toBe(2)
       expect(securityResponse).toBe('approved:security_check')
       expect(budgetResponse).toBe('approved:budget_check')
@@ -415,7 +421,10 @@ describe('Agent interrupt system', () => {
 
       // Cycle 1: interrupt
       const result1 = await agent.invoke('Go')
-      expect(result1.stopReason).toBe('interrupt')
+      expect(result1).toMatchObject({
+        stopReason: 'interrupt',
+        interrupts: [{ name: 'approval', reason: 'Approve?' }],
+      })
       expect(interruptCount).toBe(1)
 
       // Resume cycle 1
@@ -426,8 +435,8 @@ describe('Agent interrupt system', () => {
       )
 
       // Cycle 2: should interrupt again, not silently pass through
-      expect(result2.stopReason).toBe('interrupt')
-      expect(interruptCount).toBe(3) // hook fired on resume (returned response) + hook fired on cycle 2 (new interrupt)
+      expect(result2).toMatchObject({ stopReason: 'interrupt' })
+      expect(interruptCount).toBe(3)
     })
   })
 })
