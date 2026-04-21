@@ -38,7 +38,7 @@ function findSpans(spans: ReadableSpan[], prefix: string): ReadableSpan[] {
 
 function assertParentChild(parent: ReadableSpan, child: ReadableSpan): void {
   expect(child.spanContext().traceId).toBe(parent.spanContext().traceId)
-  expect(child.parentSpanContext?.spanId).toBe(parent.spanContext().spanId)
+  expect(child.parentSpanId).toBe(parent.spanContext().spanId)
 }
 
 function attr(span: ReadableSpan, key: string): unknown {
@@ -64,8 +64,9 @@ const failingTool = tool({
 describe.sequential('Telemetry Integration', () => {
   beforeAll(() => {
     exporter = new InMemorySpanExporter()
-    provider = new NodeTracerProvider({ spanProcessors: [new SimpleSpanProcessor(exporter)] })
-    trace.setGlobalTracerProvider(provider)
+    provider = new NodeTracerProvider()
+    provider.addSpanProcessor(new SimpleSpanProcessor(exporter))
+    provider.register()
   })
 
   beforeEach(() => {
@@ -727,10 +728,9 @@ describe.sequential('Telemetry Integration', () => {
 
     it('ignores later register() calls — spans stay in the first registered provider', async () => {
       const userExporter = new InMemorySpanExporter()
-      const userProvider = new NodeTracerProvider({
-        spanProcessors: [new SimpleSpanProcessor(userExporter)],
-      })
-      trace.setGlobalTracerProvider(userProvider) // no-op: global provider already set in beforeAll
+      const userProvider = new NodeTracerProvider()
+      userProvider.addSpanProcessor(new SimpleSpanProcessor(userExporter))
+      userProvider.register() // no-op: global provider already set in beforeAll
 
       const tracer = getTracer()
       const span = tracer.startSpan('user-provider-span')
@@ -751,16 +751,14 @@ describe.sequential('Telemetry Integration', () => {
 
     it('all spans land in the first registered provider even when multiple providers call register()', async () => {
       const exporterA = new InMemorySpanExporter()
-      const providerA = new NodeTracerProvider({
-        spanProcessors: [new SimpleSpanProcessor(exporterA)],
-      })
-      trace.setGlobalTracerProvider(providerA) // no-op
+      const providerA = new NodeTracerProvider()
+      providerA.addSpanProcessor(new SimpleSpanProcessor(exporterA))
+      providerA.register() // no-op
 
       const exporterB = new InMemorySpanExporter()
-      const providerB = new NodeTracerProvider({
-        spanProcessors: [new SimpleSpanProcessor(exporterB)],
-      })
-      trace.setGlobalTracerProvider(providerB) // no-op
+      const providerB = new NodeTracerProvider()
+      providerB.addSpanProcessor(new SimpleSpanProcessor(exporterB))
+      providerB.register() // no-op
 
       const tracer = getTracer()
       const span = tracer.startSpan('multi-register-span')
@@ -801,7 +799,7 @@ describe.sequential('Telemetry Integration', () => {
 
       expect(childSpan).toBeDefined()
       expect(childSpan.spanContext().traceId).toBe(agentReadableSpan.spanContext().traceId)
-      expect(childSpan.parentSpanContext?.spanId).toBe(agentReadableSpan.spanContext().spanId)
+      expect(childSpan.parentSpanId).toBe(agentReadableSpan.spanContext().spanId)
     })
   })
 })
@@ -824,9 +822,8 @@ describe.sequential('Metrics Integration', () => {
       exporter: metricExporter,
       exportIntervalMillis: 100,
     })
-    meterProvider = new MeterProvider({
-      readers: [metricReader],
-    })
+    meterProvider = new MeterProvider()
+    meterProvider.addMetricReader(metricReader)
     otelMetrics.setGlobalMeterProvider(meterProvider)
   })
 
