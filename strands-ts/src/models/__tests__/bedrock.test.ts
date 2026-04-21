@@ -264,6 +264,14 @@ describe('BedrockModel', () => {
         temperature: 0.5,
       })
     })
+
+    it('includes contextWindowLimit in config when provided', () => {
+      const provider = new BedrockModel({
+        modelId: 'anthropic.claude-sonnet-4-20250514-v1:0',
+        contextWindowLimit: 200_000,
+      })
+      expect(provider.getConfig().contextWindowLimit).toBe(200_000)
+    })
   })
 
   describe('updateConfig', () => {

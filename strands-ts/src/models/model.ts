@@ -92,6 +92,13 @@ export interface BaseModelConfig {
    * @see Provider-specific documentation for details
    */
   topP?: number
+
+  /**
+   * Maximum context window size in tokens for the model.
+   *
+   * This value represents the total token capacity shared between input and output.
+   */
+  contextWindowLimit?: number
 }
 
 /**

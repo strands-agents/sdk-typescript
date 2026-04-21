@@ -133,6 +133,15 @@ describe('GoogleModel', () => {
         params: { maxOutputTokens: 1024, temperature: 0.7 },
       })
     })
+
+    it('includes contextWindowLimit in config when provided', () => {
+      const provider = new GoogleModel({
+        apiKey: 'test-key',
+        modelId: 'gemini-2.5-flash',
+        contextWindowLimit: 1_048_576,
+      })
+      expect(provider.getConfig().contextWindowLimit).toBe(1_048_576)
+    })
   })
 
   describe('stream', () => {

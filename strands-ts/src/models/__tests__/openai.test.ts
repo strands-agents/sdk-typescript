@@ -242,6 +242,16 @@ describe('OpenAIModel', () => {
         temperature: 0.7,
       })
     })
+
+    it('includes contextWindowLimit in config when provided', () => {
+      const provider = new OpenAIModel({
+        api: 'chat',
+        modelId: 'gpt-4o',
+        apiKey: 'sk-test',
+        contextWindowLimit: 128_000,
+      })
+      expect(provider.getConfig().contextWindowLimit).toBe(128_000)
+    })
   })
 
   describe('stream', () => {
