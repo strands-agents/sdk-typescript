@@ -449,7 +449,9 @@ describe('Agent tracer integration', () => {
         ])
         .addTurn({ type: 'textBlock', text: 'Done' })
 
-      // Tools that sleep briefly so both spans are open at the same time.
+      // Tools sleep briefly so the concurrent executor has time to launch both
+      // before either resolves. The assertions below check call order, not
+      // wall-clock timing.
       const sleep = (ms: number) => new Promise<void>((r) => globalThis.setTimeout(r, ms))
       // eslint-disable-next-line require-yield
       async function* sleepThenReturn(toolUseId: string, text: string) {
@@ -462,25 +464,25 @@ describe('Agent tracer integration', () => {
       const agent = new Agent({ model, tools: [tool1, tool2], toolExecutor: 'concurrent' })
       const tracer = getLatestTracer()
 
-      // Stamp the time each span starts/ends so we can assert overlap.
-      const startTimes: Record<string, number> = {}
-      const endTimes: Record<string, number> = {}
+      // Record span lifecycle events in order. Sequential execution would
+      // produce [start:A, end:A, start:B, end:B]; concurrent execution
+      // interleaves so both starts precede both ends.
+      const events: string[] = []
       tracer.startToolCallSpan.mockImplementation((args: { tool: { toolUseId: string } }) => {
-        startTimes[args.tool.toolUseId] = Date.now()
+        events.push(`start:${args.tool.toolUseId}`)
         return { mock: 'toolSpan', id: args.tool.toolUseId }
       })
       tracer.endToolCallSpan.mockImplementation((span: { id: string } | null) => {
-        if (span && 'id' in span) endTimes[span.id] = Date.now()
+        if (span && 'id' in span) events.push(`end:${span.id}`)
       })
 
       await agent.invoke('Use tools')
 
       expect(tracer.startToolCallSpan).toHaveBeenCalledTimes(2)
       expect(tracer.endToolCallSpan).toHaveBeenCalledTimes(2)
-      // Both spans started before either ended → they're siblings, not nested.
-      const firstEnd = Math.min(endTimes['id-1']!, endTimes['id-2']!)
-      expect(startTimes['id-1']!).toBeLessThanOrEqual(firstEnd)
-      expect(startTimes['id-2']!).toBeLessThanOrEqual(firstEnd)
+      // Both starts happened before either end — i.e. the spans overlap.
+      expect(events.slice(0, 2).sort()).toEqual(['start:id-1', 'start:id-2'])
+      expect(events.slice(2, 4).sort()).toEqual(['end:id-1', 'end:id-2'])
     })
   })
 

@@ -1087,8 +1087,15 @@ export class Agent implements LocalAgent, InvokableAgent {
       }
 
       // Pre-launch cancel: hook requested cancel, or agent is already cancelled.
-      if (beforeToolsEvent.cancel || this.isCancelled) {
-        const cancelBlocks = this._cancelAllAsResults(toolUseBlocks, beforeToolsEvent.cancel)
+      if (beforeToolsEvent.cancel) {
+        const message = typeof beforeToolsEvent.cancel === 'string' ? beforeToolsEvent.cancel : 'Tool cancelled by hook'
+        const cancelBlocks = this._cancelAllAsResults(toolUseBlocks, message)
+        for (const result of cancelBlocks) {
+          yield new ToolResultEvent({ agent: this, result })
+        }
+        toolResultBlocks.push(...cancelBlocks)
+      } else if (this.isCancelled) {
+        const cancelBlocks = this._cancelAllAsResults(toolUseBlocks, 'Tool execution cancelled')
         for (const result of cancelBlocks) {
           yield new ToolResultEvent({ agent: this, result })
         }
@@ -1124,21 +1131,10 @@ export class Agent implements LocalAgent, InvokableAgent {
   }
 
   /**
-   * Produces error ToolResultBlocks for every tool use block, reflecting a
-   * pre-launch cancellation. Shared by sequential and concurrent executors.
-   *
-   * Message precedence:
-   * - Hook string (`BeforeToolsEvent.cancel = 'reason'`) → that string
-   * - Hook flag (`BeforeToolsEvent.cancel = true`) → `'Tool cancelled by hook'`
-   * - Otherwise (agent.cancel()) → `'Tool execution cancelled'`
+   * Produces one error ToolResultBlock per tool use block, each carrying
+   * `message` as its error text. Shared by pre-launch cancel paths.
    */
-  private _cancelAllAsResults(toolUseBlocks: ToolUseBlock[], beforeToolsCancel: boolean | string): ToolResultBlock[] {
-    const message =
-      typeof beforeToolsCancel === 'string'
-        ? beforeToolsCancel
-        : beforeToolsCancel === true
-          ? 'Tool cancelled by hook'
-          : 'Tool execution cancelled'
+  private _cancelAllAsResults(toolUseBlocks: ToolUseBlock[], message: string): ToolResultBlock[] {
     return toolUseBlocks.map(
       (block) =>
         new ToolResultBlock({
@@ -1177,12 +1173,21 @@ export class Agent implements LocalAgent, InvokableAgent {
     let toolResultMessage: Message
 
     // Pre-launch cancel: hook requested cancel, or agent is already cancelled.
-    if (beforeToolsEvent.cancel || this.isCancelled) {
-      const cancelBlocks = this._cancelAllAsResults(toolUseBlocks, beforeToolsEvent.cancel)
+    if (beforeToolsEvent.cancel) {
+      const message = typeof beforeToolsEvent.cancel === 'string' ? beforeToolsEvent.cancel : 'Tool cancelled by hook'
+      const cancelBlocks = this._cancelAllAsResults(toolUseBlocks, message)
       for (const result of cancelBlocks) {
         yield new ToolResultEvent({ agent: this, result })
       }
-
+      toolResultMessage = new Message({ role: 'user', content: cancelBlocks })
+      yield new AfterToolsEvent({ agent: this, message: toolResultMessage })
+      return toolResultMessage
+    }
+    if (this.isCancelled) {
+      const cancelBlocks = this._cancelAllAsResults(toolUseBlocks, 'Tool execution cancelled')
+      for (const result of cancelBlocks) {
+        yield new ToolResultEvent({ agent: this, result })
+      }
       toolResultMessage = new Message({ role: 'user', content: cancelBlocks })
       yield new AfterToolsEvent({ agent: this, message: toolResultMessage })
       return toolResultMessage

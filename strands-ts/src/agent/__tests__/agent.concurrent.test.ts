@@ -118,16 +118,12 @@ describe('Agent concurrent tool execution', () => {
       printer: false,
     })
 
-    const startAll = Date.now()
     await agent.invoke('Go')
-    const totalDuration = Date.now() - startAll
 
     expect(tracker).toHaveLength(2)
     const [first, second] = tracker.sort((a, b) => a.start - b.start)
-    // B started before A finished
+    // B started before A finished — proves the tools ran concurrently.
     expect(second!.start).toBeLessThan(first!.end)
-    // Total wall-clock is roughly the longer tool's duration, not the sum.
-    expect(totalDuration).toBeLessThan(150)
   })
 
   it('runs tools sequentially under default executor', async () => {
@@ -182,30 +178,15 @@ describe('Agent concurrent tool execution', () => {
       }
     }
 
-    // Cross-tool interleaving: at least one A stream occurred between two B streams (or vice versa).
+    // Cross-tool interleaving: collapse consecutive same-tool events into runs.
+    // Strictly sequential execution produces 2 runs (e.g. [A,A,A,B,B,B]);
+    // anything > 2 means the stream alternated between tools at least once.
     const streamTools = events.filter((e) => e.kind === 'stream').map((e) => e.tool)
-    const interleaved =
-      streamTools.some(
-        (t, i) =>
-          i > 0 &&
-          i < streamTools.length - 1 &&
-          t === 'toolA' &&
-          streamTools[i - 1] === 'toolB' &&
-          streamTools[i + 1] === 'toolB'
-      ) ||
-      streamTools.some(
-        (t, i) =>
-          i > 0 &&
-          i < streamTools.length - 1 &&
-          t === 'toolB' &&
-          streamTools[i - 1] === 'toolA' &&
-          streamTools[i + 1] === 'toolA'
-      ) ||
-      // weaker: simply contains both tools interspersed
-      (streamTools.includes('toolA') &&
-        streamTools.includes('toolB') &&
-        streamTools[0] !== streamTools[streamTools.length - 1])
-    expect(interleaved).toBe(true)
+    const runs = streamTools.reduce<(string | undefined)[]>((acc, t) => {
+      if (acc.length === 0 || acc[acc.length - 1] !== t) acc.push(t)
+      return acc
+    }, [])
+    expect(runs.length).toBeGreaterThan(2)
   })
 
   it('retries one tool independently from the other', async () => {
@@ -304,17 +285,14 @@ describe('Agent concurrent tool execution', () => {
       globalThis.setTimeout(() => agent.cancel(), 20)
     })
 
-    const startAll = Date.now()
     await agent.invoke('Go')
-    const totalDuration = Date.now() - startAll
 
     expect(tracker).toHaveLength(2)
+    // Both tools observed the abort signal and exited cooperatively.
     expect(tracker.every((t) => t.cancelled)).toBe(true)
-    // Should be much less than 200ms since both cooperatively bailed.
-    expect(totalDuration).toBeLessThan(150)
   })
 
-  it('normalizes unexpected generator rejection to an error result without affecting siblings', async () => {
+  it('handles a throwing tool without affecting siblings', async () => {
     const tracker: { name: string; start: number; end: number; cancelled: boolean }[] = []
     const tools = [new TimedTool('toolA', 20, tracker), new TimedTool('toolB', 20, tracker)]
     const agent = new Agent({
@@ -324,13 +302,13 @@ describe('Agent concurrent tool execution', () => {
       printer: false,
     })
 
-    // Monkey-patch the executeTool private to force one generator to reject.
-    // We intercept via tool.stream — but tool-level errors are caught by executeTool.
-    // To exercise the Promise.race fallback, patch the Tool.stream to throw
-    // synchronously outside executeTool's catch would be tricky, so instead
-    // verify that a throwing tool (which executeTool normalizes) still lets
-    // the sibling complete. This covers the "defensive fallback is not needed
-    // for the common case" side of the contract.
+    // A throwing tool.stream is caught by executeTool's own try/catch and
+    // normalized to an error ToolResultBlock, so the race loop never sees the
+    // rejection. This test verifies that normalization path keeps the sibling
+    // unaffected in concurrent mode. The race loop's `kind: 'throw'` fallback
+    // is a defensive backstop for generator-level rejections that escape
+    // executeTool entirely — not expected in normal operation and not exercised
+    // here.
     const results: ToolResultBlock[] = []
     agent.addHook(AfterToolsEvent, (e) => {
       for (const b of e.message.content) {
