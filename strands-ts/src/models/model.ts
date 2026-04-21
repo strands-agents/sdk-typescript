@@ -192,6 +192,23 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
   abstract stream(messages: Message[], options?: StreamOptions): AsyncIterable<ModelStreamEvent>
 
   /**
+   * Estimate token count for the given input before sending to the model.
+   *
+   * Used internally for proactive context management.
+   * The base implementation uses a character-based heuristic (chars/4 for text, chars/2 for JSON).
+   *
+   * Subclasses should override this method to use native token counting APIs for improved accuracy,
+   * falling back to `super.estimateTokens()` on API failure.
+   *
+   * @param messages - Array of conversation messages to estimate tokens for
+   * @param options - Optional streaming options containing system prompt and tool specs
+   * @returns Estimated total input tokens
+   */
+  protected async estimateTokens(messages: Message[], options?: StreamOptions): Promise<number> {
+    return estimateTokensHeuristic(messages, options)
+  }
+
+  /**
    * Converts event data to event class representation
    *
    * @param event_data - Interface representation of event
@@ -434,5 +451,95 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
       const normalizedError = normalizeError(error)
       throw new ModelError(normalizedError.message, { cause: error })
     }
+  }
+}
+
+/**
+ * Estimate tokens for a content block using character-based heuristics.
+ *
+ * @param block - Content block to estimate tokens for
+ * @returns Estimated token count
+ */
+function estimateContentBlockTokens(block: ContentBlock): number {
+  let total = 0
+
+  switch (block.type) {
+    case 'textBlock':
+      total += heuristicText(block.text)
+      break
+    case 'toolUseBlock':
+      total += heuristicText(block.name)
+      total += heuristicJson(block.input)
+      break
+    case 'toolResultBlock':
+      for (const item of block.content) {
+        if (item.type === 'textBlock') {
+          total += heuristicText(item.text)
+        } else if (item.type === 'jsonBlock') {
+          total += heuristicJson(item.json)
+        }
+      }
+      break
+    case 'reasoningBlock':
+      if (block.text) total += heuristicText(block.text)
+      break
+    case 'guardContentBlock':
+      if (block.text) total += heuristicText(block.text.text)
+      break
+    case 'citationsBlock':
+      for (const item of block.content) {
+        if ('text' in item) total += heuristicText(item.text)
+      }
+      break
+    default:
+      break
+  }
+
+  return total
+}
+
+/**
+ * Estimate token count using character-based heuristics (text: chars/4, JSON: chars/2).
+ * Dependency-free fallback used by the base Model class.
+ */
+function estimateTokensHeuristic(messages: Message[], options?: StreamOptions): number {
+  let total = 0
+
+  if (options?.systemPrompt) {
+    if (typeof options.systemPrompt === 'string') {
+      total += heuristicText(options.systemPrompt)
+    } else {
+      for (const block of options.systemPrompt) {
+        if (block.type === 'textBlock') total += heuristicText(block.text)
+        else if (block.type === 'guardContentBlock' && block.text) total += heuristicText(block.text.text)
+      }
+    }
+  }
+
+  for (const message of messages) {
+    for (const block of message.content) {
+      total += estimateContentBlockTokens(block)
+    }
+  }
+
+  if (options?.toolSpecs) {
+    for (const spec of options.toolSpecs) {
+      total += heuristicJson(spec)
+    }
+  }
+
+  return total
+}
+
+function heuristicText(text: string): number {
+  return Math.ceil(text.length / 4)
+}
+
+function heuristicJson(obj: unknown): number {
+  try {
+    return Math.ceil(JSON.stringify(obj).length / 2)
+  } catch {
+    logger.debug('unable to serialize object for token estimation, skipping')
+    return 0
   }
 }

@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest'
-import { Message, TextBlock } from '../../types/messages.js'
+import {
+  Message,
+  TextBlock,
+  ToolUseBlock,
+  ToolResultBlock,
+  ReasoningBlock,
+  GuardContentBlock,
+} from '../../types/messages.js'
+import { CitationsBlock } from '../../types/citations.js'
 import { TestModelProvider, collectGenerator } from '../../__fixtures__/model-test-helpers.js'
 import { MaxTokensError, ModelError } from '../../errors.js'
 import { Model } from '../model.js'
@@ -817,5 +825,192 @@ describe('Model.modelId', () => {
     provider.updateConfig({ modelId: 'my-model' })
 
     expect(provider.modelId).toBe('my-model')
+  })
+})
+
+describe('estimateTokens', () => {
+  it('estimates text block tokens using chars/4 heuristic', async () => {
+    const provider = new TestModelProvider()
+    const messages = [new Message({ role: 'user', content: [new TextBlock('Hello world')] })]
+
+    const result = await provider.testEstimateTokens(messages)
+
+    expect(result).toBe(3)
+  })
+
+  it('estimates toolUse block tokens (name + JSON input)', async () => {
+    const provider = new TestModelProvider()
+    const messages = [
+      new Message({
+        role: 'assistant',
+        content: [new ToolUseBlock({ name: 'get_weather', toolUseId: 'id1', input: { city: 'Seattle' } })],
+      }),
+    ]
+
+    const result = await provider.testEstimateTokens(messages)
+
+    expect(result).toBe(3 + 9)
+  })
+
+  it('estimates toolResult block tokens (text items only)', async () => {
+    const provider = new TestModelProvider()
+    const messages = [
+      new Message({
+        role: 'user',
+        content: [
+          new ToolResultBlock({
+            toolUseId: 'id1',
+            status: 'success',
+            content: [new TextBlock('72°F and sunny')],
+          }),
+        ],
+      }),
+    ]
+
+    const result = await provider.testEstimateTokens(messages)
+
+    expect(result).toBe(Math.ceil('72°F and sunny'.length / 4))
+  })
+
+  it('estimates reasoning block tokens', async () => {
+    const provider = new TestModelProvider()
+    const messages = [
+      new Message({
+        role: 'assistant',
+        content: [new ReasoningBlock({ text: 'Let me think about this step by step' })],
+      }),
+    ]
+
+    const result = await provider.testEstimateTokens(messages)
+
+    expect(result).toBe(Math.ceil('Let me think about this step by step'.length / 4))
+  })
+
+  it('estimates guardContent block tokens', async () => {
+    const provider = new TestModelProvider()
+    const messages = [
+      new Message({
+        role: 'user',
+        content: [
+          new GuardContentBlock({
+            text: { qualifiers: ['query'], text: 'Is this safe?' },
+          }),
+        ],
+      }),
+    ]
+
+    const result = await provider.testEstimateTokens(messages)
+
+    expect(result).toBe(Math.ceil('Is this safe?'.length / 4))
+  })
+
+  it('estimates citations block tokens', async () => {
+    const provider = new TestModelProvider()
+    const messages = [
+      new Message({
+        role: 'assistant',
+        content: [
+          new CitationsBlock({
+            citations: [],
+            content: [{ text: 'cited text here' }],
+          }),
+        ],
+      }),
+    ]
+
+    const result = await provider.testEstimateTokens(messages)
+
+    expect(result).toBe(Math.ceil('cited text here'.length / 4))
+  })
+
+  it('estimates string system prompt tokens', async () => {
+    const provider = new TestModelProvider()
+    const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
+
+    const result = await provider.testEstimateTokens(messages, {
+      systemPrompt: 'You are a helpful assistant',
+    })
+
+    expect(result).toBe(Math.ceil('You are a helpful assistant'.length / 4) + Math.ceil('Hi'.length / 4))
+  })
+
+  it('estimates array system prompt tokens', async () => {
+    const provider = new TestModelProvider()
+    const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
+
+    const result = await provider.testEstimateTokens(messages, {
+      systemPrompt: [new TextBlock('System instructions')],
+    })
+
+    expect(result).toBe(Math.ceil('System instructions'.length / 4) + Math.ceil('Hi'.length / 4))
+  })
+
+  it('estimates tool spec tokens', async () => {
+    const provider = new TestModelProvider()
+    const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
+    const toolSpecs = [{ name: 'get_weather', description: 'Get weather for a city' }]
+
+    const result = await provider.testEstimateTokens(messages, { toolSpecs })
+
+    const specJson = JSON.stringify(toolSpecs[0])
+    expect(result).toBe(Math.ceil('Hi'.length / 4) + Math.ceil(specJson.length / 2))
+  })
+
+  it('returns 0 for empty messages', async () => {
+    const provider = new TestModelProvider()
+
+    const result = await provider.testEstimateTokens([])
+
+    expect(result).toBe(0)
+  })
+
+  it('skips reasoning blocks without text', async () => {
+    const provider = new TestModelProvider()
+    const messages = [
+      new Message({
+        role: 'assistant',
+        content: [new ReasoningBlock({ signature: 'sig123' })],
+      }),
+    ]
+
+    const result = await provider.testEstimateTokens(messages)
+
+    expect(result).toBe(0)
+  })
+
+  it('estimates guardContent in array system prompt', async () => {
+    const provider = new TestModelProvider()
+    const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
+
+    const result = await provider.testEstimateTokens(messages, {
+      systemPrompt: [new GuardContentBlock({ text: { qualifiers: ['query'], text: 'Guard text here' } })],
+    })
+
+    expect(result).toBe(Math.ceil('Guard text here'.length / 4) + Math.ceil('Hi'.length / 4))
+  })
+
+  it('accumulates tokens across multiple messages with mixed content', async () => {
+    const provider = new TestModelProvider()
+    const messages = [
+      new Message({ role: 'user', content: [new TextBlock('What is the weather?')] }),
+      new Message({
+        role: 'assistant',
+        content: [new ToolUseBlock({ name: 'get_weather', toolUseId: 'id1', input: { city: 'Seattle' } })],
+      }),
+      new Message({
+        role: 'user',
+        content: [new ToolResultBlock({ toolUseId: 'id1', status: 'success', content: [new TextBlock('72F')] })],
+      }),
+    ]
+
+    const result = await provider.testEstimateTokens(messages, { systemPrompt: 'You are helpful' })
+
+    const expected =
+      Math.ceil('You are helpful'.length / 4) +
+      Math.ceil('What is the weather?'.length / 4) +
+      Math.ceil('get_weather'.length / 4) +
+      Math.ceil(JSON.stringify({ city: 'Seattle' }).length / 2) +
+      Math.ceil('72F'.length / 4)
+    expect(result).toBe(expected)
   })
 })
