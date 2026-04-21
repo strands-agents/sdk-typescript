@@ -226,6 +226,7 @@ export type { Logger } from './logging/types.js'
 
 // MCP Client types and implementations
 export { type McpClientConfig, type TasksConfig, McpClient } from './mcp.js'
+export type { ElicitationCallback, ElicitationContext } from './types/elicitation.js'
 
 // Session management
 export { SessionManager } from './session/session-manager.js'

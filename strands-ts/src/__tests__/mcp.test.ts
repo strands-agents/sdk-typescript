@@ -1,13 +1,19 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
-import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js'
+import {
+  McpError,
+  ErrorCode,
+  ElicitRequestSchema,
+  UrlElicitationRequiredError,
+} from '@modelcontextprotocol/sdk/types.js'
 import { McpClient } from '../mcp.js'
 import { McpTool } from '../tools/mcp-tool.js'
 import { JsonBlock, type TextBlock, type ToolResultBlock } from '../types/messages.js'
 import { ImageBlock } from '../types/media.js'
 import type { LocalAgent } from '../types/agent.js'
 import type { ToolContext } from '../tools/tool.js'
+import type { ElicitationCallback } from '../types/elicitation.js'
 import { context, propagation, trace, TraceFlags } from '@opentelemetry/api'
 import type { SpanContext } from '@opentelemetry/api'
 
@@ -28,6 +34,7 @@ vi.mock('@modelcontextprotocol/sdk/client/index.js', () => ({
       close: vi.fn(),
       listTools: vi.fn(),
       callTool: vi.fn(),
+      setRequestHandler: vi.fn(),
       experimental: {
         tasks: {
           callToolStream: vi.fn(),
@@ -94,6 +101,24 @@ describe('MCP Integration', () => {
     vi.restoreAllMocks()
   })
 
+  function createElicitationClient(callback: ElicitationCallback) {
+    const resultsLengthBefore = vi.mocked(Client).mock.results.length
+    const elicitClient = new McpClient({
+      applicationName: 'TestApp',
+      transport: mockTransport,
+      elicitationCallback: callback,
+    })
+    const elicitSdkClientMock = vi.mocked(Client).mock.results[resultsLengthBefore]!.value
+    return { elicitClient, elicitSdkClientMock }
+  }
+
+  async function connectAndGetElicitationHandler(callback: ElicitationCallback) {
+    const { elicitClient, elicitSdkClientMock } = createElicitationClient(callback)
+    await elicitClient.connect()
+    const handler = elicitSdkClientMock.setRequestHandler.mock.calls[0]![1]
+    return { handler, elicitSdkClientMock }
+  }
+
   describe('McpClient', () => {
     let client: McpClient
     let sdkClientMock: {
@@ -101,6 +126,7 @@ describe('MCP Integration', () => {
       close: ReturnType<typeof vi.fn>
       listTools: ReturnType<typeof vi.fn>
       callTool: ReturnType<typeof vi.fn>
+      setRequestHandler: ReturnType<typeof vi.fn>
       experimental: { tasks: { callToolStream: ReturnType<typeof vi.fn> } }
     }
 
@@ -113,7 +139,7 @@ describe('MCP Integration', () => {
     })
 
     it('initializes SDK client with correct configuration', () => {
-      expect(Client).toHaveBeenCalledWith({ name: 'TestApp', version: '0.0.1' })
+      expect(Client).toHaveBeenCalledWith({ name: 'TestApp', version: '0.0.1' }, undefined)
     })
 
     it('injects trace context into tool arguments when active span exists', async () => {
@@ -293,6 +319,109 @@ describe('MCP Integration', () => {
       await client.disconnect()
       expect(sdkClientMock.close).toHaveBeenCalled()
       expect(mockTransport.close).toHaveBeenCalled()
+    })
+
+    it('registers elicitation handler before connecting when callback is provided', async () => {
+      const resultsLengthBefore = vi.mocked(Client).mock.results.length
+      const callback: ElicitationCallback = vi.fn()
+      const elicitClient = new McpClient({
+        applicationName: 'TestApp',
+        transport: mockTransport,
+        elicitationCallback: callback,
+      })
+      const elicitSdkClientMock = vi.mocked(Client).mock.results[resultsLengthBefore]!.value
+
+      await elicitClient.connect()
+
+      expect(elicitSdkClientMock.setRequestHandler).toHaveBeenCalledWith(ElicitRequestSchema, expect.any(Function))
+      const setHandlerOrder = elicitSdkClientMock.setRequestHandler.mock.invocationCallOrder[0]!
+      const connectOrder = elicitSdkClientMock.connect.mock.invocationCallOrder[0]!
+      expect(setHandlerOrder).toBeLessThan(connectOrder)
+    })
+
+    it('does not register elicitation handler when no callback is provided', async () => {
+      await client.connect()
+
+      expect(sdkClientMock.setRequestHandler).not.toHaveBeenCalled()
+    })
+
+    it('passes elicitation capabilities to Client when callback is provided', () => {
+      const callback: ElicitationCallback = vi.fn()
+      new McpClient({
+        applicationName: 'TestApp',
+        transport: mockTransport,
+        elicitationCallback: callback,
+      })
+
+      const lastCall = vi.mocked(Client).mock.calls.at(-1)!
+      expect(lastCall[1]).toEqual({ capabilities: { elicitation: { form: {}, url: {} } } })
+    })
+
+    it('elicitation handler returns accepted result with content', async () => {
+      const callbackResult = { action: 'accept' as const, content: { username: 'alice' } }
+      const callback: ElicitationCallback = vi.fn().mockResolvedValue(callbackResult)
+      const { handler } = await connectAndGetElicitationHandler(callback)
+      const request = {
+        method: 'elicitation/create',
+        params: { message: 'Enter username', requestedSchema: { type: 'object' } },
+      }
+      const extra = { signal: new AbortController().signal }
+
+      const result = await handler(request, extra)
+
+      expect(callback).toHaveBeenCalledWith(extra, request.params)
+      expect(result).toEqual({ action: 'accept', content: { username: 'alice' } })
+    })
+
+    it.each([{ action: 'decline' as const }, { action: 'cancel' as const }])(
+      'elicitation handler returns $action result',
+      async (callbackResult) => {
+        const callback: ElicitationCallback = vi.fn().mockResolvedValue(callbackResult)
+        const { handler } = await connectAndGetElicitationHandler(callback)
+        const request = {
+          method: 'elicitation/create',
+          params: { message: 'Enter username', requestedSchema: { type: 'object' } },
+        }
+        const extra = { signal: new AbortController().signal }
+
+        const result = await handler(request, extra)
+
+        expect(callback).toHaveBeenCalledWith(extra, request.params)
+        expect(result).toEqual({ action: callbackResult.action })
+      }
+    )
+
+    it('elicitation handler works for URL mode params', async () => {
+      const callbackResult = { action: 'accept' as const }
+      const callback: ElicitationCallback = vi.fn().mockResolvedValue(callbackResult)
+      const { handler } = await connectAndGetElicitationHandler(callback)
+      const request = {
+        method: 'elicitation/create',
+        params: {
+          mode: 'url',
+          message: 'Please authenticate',
+          url: 'https://example.com/auth',
+          elicitationId: 'elicit-123',
+        },
+      }
+      const extra = { signal: new AbortController().signal }
+
+      const result = await handler(request, extra)
+
+      expect(callback).toHaveBeenCalledWith(extra, request.params)
+      expect(result).toEqual({ action: 'accept' })
+    })
+
+    it('elicitation callback errors propagate', async () => {
+      const callback: ElicitationCallback = vi.fn().mockRejectedValue(new Error('User cancelled'))
+      const { handler } = await connectAndGetElicitationHandler(callback)
+      const request = {
+        method: 'elicitation/create',
+        params: { message: 'Confirm?' },
+      }
+      const extra = { signal: new AbortController().signal }
+
+      await expect(handler(request, extra)).rejects.toThrow('User cancelled')
     })
   })
 
@@ -531,6 +660,59 @@ describe('MCP Integration', () => {
 
       expect(result.status).toBe('error')
       expect((result.content[0] as TextBlock).text).toBe('MCP error -32042: Authorization required')
+    })
+
+    it('surfaces elicitation data for UrlElicitationRequiredError', async () => {
+      const elicitations = [
+        {
+          mode: 'url' as const,
+          message: 'Please authorize',
+          elicitationId: 'e-1',
+          url: 'https://example.com/auth',
+        },
+      ]
+      const error = new UrlElicitationRequiredError(elicitations, 'Auth required')
+      vi.mocked(mockClientWrapper.callTool).mockRejectedValue(error)
+
+      const result = await runTool<ToolResultBlock>(tool.stream(toolContext))
+
+      expect(result.status).toBe('error')
+      expect((result.content[0] as TextBlock).text).toContain('MCP Elicitation required')
+      expect((result.content[0] as TextBlock).text).toContain('https://example.com/auth')
+    })
+
+    it('falls through to generic error for McpError -32042 with undefined data', async () => {
+      const mcpError = new McpError(ErrorCode.UrlElicitationRequired, 'Auth required')
+      vi.mocked(mockClientWrapper.callTool).mockRejectedValue(mcpError)
+
+      const result = await runTool<ToolResultBlock>(tool.stream(toolContext))
+
+      expect(result.status).toBe('error')
+      expect((result.content[0] as TextBlock).text).toBe('MCP error -32042: Auth required')
+    })
+
+    it('falls through to generic error for McpError -32042 with non-array elicitations', async () => {
+      const mcpError = new McpError(ErrorCode.UrlElicitationRequired, 'Auth required', {
+        elicitations: 'not-an-array',
+      })
+      vi.mocked(mockClientWrapper.callTool).mockRejectedValue(mcpError)
+
+      const result = await runTool<ToolResultBlock>(tool.stream(toolContext))
+
+      expect(result.status).toBe('error')
+      expect((result.content[0] as TextBlock).text).toBe('MCP error -32042: Auth required')
+    })
+
+    it('falls through to generic error for McpError -32042 with empty elicitations', async () => {
+      const mcpError = new McpError(ErrorCode.UrlElicitationRequired, 'Auth required', {
+        elicitations: [],
+      })
+      vi.mocked(mockClientWrapper.callTool).mockRejectedValue(mcpError)
+
+      const result = await runTool<ToolResultBlock>(tool.stream(toolContext))
+
+      expect(result.status).toBe('error')
+      expect((result.content[0] as TextBlock).text).toBe('MCP error -32042: Auth required')
     })
 
     it('falls through to generic error for McpError with a different code', async () => {

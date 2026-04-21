@@ -106,6 +106,39 @@ function createTestServer(): McpServer {
     }
   )
 
+  // Register confirm_action tool (tests elicitation)
+  server.registerTool(
+    'confirm_action',
+    {
+      title: 'Confirm Action Tool',
+      description: 'Asks the user to confirm before proceeding. Use this tool when you need user confirmation.',
+      inputSchema: {
+        action: z.string(),
+      },
+    },
+    async ({ action }) => {
+      const result = await server.server.elicitInput({
+        message: `Do you want to proceed with: ${action}?`,
+        requestedSchema: {
+          type: 'object',
+          properties: {
+            confirmed: { type: 'boolean', description: 'Whether the user confirms' },
+          },
+        },
+      })
+
+      if (result.action === 'accept') {
+        return {
+          content: [{ type: 'text', text: `Action "${action}" confirmed by user` }],
+        }
+      }
+
+      return {
+        content: [{ type: 'text', text: `Action "${action}" was ${result.action}d by user` }],
+      }
+    }
+  )
+
   // Register error tool
   server.registerTool(
     'error_tool',
