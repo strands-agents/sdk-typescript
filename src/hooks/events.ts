@@ -5,7 +5,7 @@ import type { JSONValue } from '../types/json.js'
 import type { ModelStreamEvent } from '../models/streaming.js'
 import type { Model } from '../models/model.js'
 import type { InterruptParams } from '../types/interrupt.js'
-import { InterruptError, InterruptState } from '../interrupt.js'
+import { interruptFromAgent, type Interruptible } from '../interrupt.js'
 
 /**
  * Agent hook events.
@@ -78,33 +78,6 @@ export abstract class HookableEvent extends StreamEvent {
   _shouldReverseCallbacks(): boolean {
     return false
   }
-}
-
-/**
- * Interface for events that support human-in-the-loop interrupts.
- * Mirrors Python's `_Interruptible` protocol.
- */
-interface Interruptible {
-  interrupt<T = unknown>(params: InterruptParams): T
-}
-
-/**
- * Shared interrupt logic for hook events.
- * Accesses the agent's interrupt state to register or resume an interrupt.
- */
-function _interruptFromAgent<T>(agent: LocalAgent, interruptId: string, params: InterruptParams): T {
-  const interruptState = (agent as unknown as { _interruptState?: InterruptState })._interruptState
-  if (!interruptState) {
-    throw new Error('Interrupt state not available')
-  }
-
-  const interrupt = interruptState.getOrCreateInterrupt(interruptId, params.name, params.reason)
-
-  if (interrupt.response !== undefined) {
-    return interrupt.response as T
-  }
-
-  throw new InterruptError(interrupt)
 }
 
 /**
@@ -260,8 +233,8 @@ export class BeforeToolCallEvent extends HookableEvent implements Interruptible 
    * })
    * ```
    */
-  interrupt<T = unknown>(params: InterruptParams): T {
-    return _interruptFromAgent<T>(this.agent, `beforeToolCall:${this.toolUse.toolUseId}:${params.name}`, params)
+  interrupt<T = JSONValue>(params: InterruptParams): T {
+    return interruptFromAgent<T>(this.agent, `beforeToolCall:${this.toolUse.toolUseId}:${params.name}`, params)
   }
 
   /**
@@ -647,8 +620,8 @@ export class BeforeToolsEvent extends HookableEvent implements Interruptible {
    * })
    * ```
    */
-  interrupt<T = unknown>(params: InterruptParams): T {
-    return _interruptFromAgent<T>(this.agent, `beforeTools:${params.name}`, params)
+  interrupt<T = JSONValue>(params: InterruptParams): T {
+    return interruptFromAgent<T>(this.agent, `beforeTools:${params.name}`, params)
   }
 
   /**

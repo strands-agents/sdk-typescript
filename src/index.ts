@@ -30,6 +30,7 @@ export {
 
 // Interrupt system
 export { Interrupt } from './interrupt.js'
+export type { Interruptible } from './interrupt.js'
 export type { InterruptParams, InterruptResponse, InterruptResponseContent } from './types/interrupt.js'
 
 // JSON types

@@ -1139,7 +1139,7 @@ export class Agent implements LocalAgent, InvokableAgent {
             input: toolUseBlock.input,
           },
           agent: this,
-          interrupt: <T = unknown>(params: InterruptParams): T => {
+          interrupt: <T = JSONValue>(params: InterruptParams): T => {
             const interruptId = `tool:${toolUseBlock.toolUseId}:${params.name}`
             const interrupt = this._interruptState.getOrCreateInterrupt(interruptId, params.name, params.reason)
 

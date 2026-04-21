@@ -9,8 +9,9 @@
  * 5. On resume, `interrupt()` returns the user's response
  */
 
-import type { InterruptResponseContent } from './types/interrupt.js'
+import type { InterruptResponseContent, InterruptParams } from './types/interrupt.js'
 import type { JSONValue } from './types/json.js'
+import type { LocalAgent } from './types/agent.js'
 import { Message, ToolResultBlock, type MessageData, type ToolResultBlockData } from './types/messages.js'
 
 /**
@@ -324,4 +325,38 @@ export class InterruptState implements InterruptStateData {
 
     return state
   }
+}
+
+/**
+ * Interface for objects that support human-in-the-loop interrupts.
+ * Implemented by hook events and tool contexts that can pause agent execution.
+ */
+export interface Interruptible {
+  interrupt<T = JSONValue>(params: InterruptParams): T
+}
+
+/**
+ * Shared interrupt logic that accesses the agent's interrupt state to register or resume an interrupt.
+ *
+ * @param agent - The agent whose interrupt state to access
+ * @param interruptId - Unique identifier for this interrupt instance
+ * @param params - Interrupt parameters including name and optional reason
+ * @returns The user's response when resuming from an interrupt
+ * @throws InterruptError when no response is available (first invocation)
+ *
+ * @internal
+ */
+export function interruptFromAgent<T>(agent: LocalAgent, interruptId: string, params: InterruptParams): T {
+  const interruptState = (agent as unknown as { _interruptState?: InterruptState })._interruptState
+  if (!interruptState) {
+    throw new Error('Interrupt state not available')
+  }
+
+  const interrupt = interruptState.getOrCreateInterrupt(interruptId, params.name, params.reason)
+
+  if (interrupt.response !== undefined) {
+    return interrupt.response as T
+  }
+
+  throw new InterruptError(interrupt)
 }

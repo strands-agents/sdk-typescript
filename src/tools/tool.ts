@@ -3,6 +3,7 @@ import { TextBlock, ToolResultBlock } from '../types/messages.js'
 import type { LocalAgent } from '../types/agent.js'
 import { normalizeError } from '../errors.js'
 import type { InterruptParams } from '../types/interrupt.js'
+import type { JSONValue } from '../types/json.js'
 
 export type { ToolSpec } from './types.js'
 
@@ -51,7 +52,7 @@ export interface ToolContext {
    * })
    * ```
    */
-  interrupt<T = unknown>(params: InterruptParams): T
+  interrupt<T = JSONValue>(params: InterruptParams): T
 }
 
 /**
