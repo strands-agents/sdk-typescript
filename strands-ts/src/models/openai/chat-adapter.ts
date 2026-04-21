@@ -18,6 +18,25 @@ import type { ChatStreamState, OpenAIChatConfig } from './types.js'
 
 export const DEFAULT_CHAT_MODEL_ID = 'gpt-5.4'
 
+const MANAGED_PARAMS = new Set(['model', 'messages', 'stream', 'stream_options'])
+
+/**
+ * Logs a warning for each managed key present in `params`. The warning fires at
+ * config time so callers notice before sending a request.
+ *
+ * @internal
+ */
+export function warnManagedParams(params: Record<string, unknown> | undefined): void {
+  if (!params) return
+  for (const key of Object.keys(params)) {
+    if (MANAGED_PARAMS.has(key)) {
+      logger.warn(
+        `params_key=<${key}> | '${key}' is managed by the provider and will be ignored in params — use the dedicated config property instead`
+      )
+    }
+  }
+}
+
 type OpenAIChatChoice = {
   delta?: {
     role?: string
@@ -46,12 +65,15 @@ export function formatChatRequest(
   messages: Message[],
   options?: StreamOptions
 ): OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming {
-  const request: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming = {
+  // User `params` are spread first so provider-managed fields always win.
+  // The managed-params warning fires at config time to surface the collision.
+  const request = {
+    ...(config.params ?? {}),
     model: config.modelId ?? DEFAULT_CHAT_MODEL_ID,
     messages: [] as OpenAI.Chat.Completions.ChatCompletionMessageParam[],
-    stream: true,
+    stream: true as const,
     stream_options: { include_usage: true },
-  }
+  } as OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming
 
   if (options?.systemPrompt !== undefined) {
     if (typeof options.systemPrompt === 'string') {
@@ -121,10 +143,6 @@ export function formatChatRequest(
         }
       }
     }
-  }
-
-  if (config.params) {
-    Object.assign(request, config.params)
   }
 
   if ('n' in request && request.n !== undefined && request.n !== null && request.n > 1) {

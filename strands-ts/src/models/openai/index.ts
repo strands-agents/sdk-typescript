@@ -17,4 +17,10 @@
  */
 
 export { OpenAIModel } from './model.js'
-export type { OpenAIApi, OpenAIModelConfig, OpenAIModelOptions } from './types.js'
+export type {
+  OpenAIApi,
+  OpenAIChatConfig,
+  OpenAIModelConfig,
+  OpenAIModelOptions,
+  OpenAIResponsesConfig,
+} from './types.js'

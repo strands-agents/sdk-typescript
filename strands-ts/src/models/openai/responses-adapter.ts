@@ -1,6 +1,16 @@
 /**
  * Responses API adapter for the OpenAI model provider.
  *
+ * Built-in tool support status:
+ * | Tool              | Support                                                  |
+ * |-------------------|----------------------------------------------------------|
+ * | web_search        | Full: includes URL citations                             |
+ * | file_search       | Partial: works but file citation annotations not emitted |
+ * | code_interpreter  | Partial: works but executed code/stdout not surfaced     |
+ * | mcp               | Partial: works but approval flow not supported           |
+ * | shell             | Partial: container mode only                             |
+ * | image_generation  | Not supported                                            |
+ *
  * @internal
  */
 
@@ -8,6 +18,7 @@ import type {
   ResponseStreamEvent,
   ResponseInputItem,
   ResponseFunctionToolCall,
+  ResponseCreateParamsStreaming,
 } from 'openai/resources/responses/responses'
 import type { Message, StopReason, ToolResultBlock } from '../../types/messages.js'
 import type { ImageBlock, DocumentBlock } from '../../types/media.js'
@@ -50,16 +61,19 @@ export function formatResponsesRequest(
   messages: Message[],
   options: StreamOptions | undefined,
   stateful: boolean
-): Record<string, unknown> {
+): ResponseCreateParamsStreaming {
   const input = formatResponsesMessages(messages)
 
-  const request: Record<string, unknown> = {
+  // User `params` are spread first so provider-managed fields (asserted
+  // required by `ResponseCreateParamsStreaming` below) always win. The
+  // managed-params warning fires at config time to surface the collision.
+  const request = {
     ...(config.params ?? {}),
     model: config.modelId ?? DEFAULT_RESPONSES_MODEL_ID,
     input,
-    stream: true,
+    stream: true as const,
     store: stateful,
-  }
+  } as ResponseCreateParamsStreaming
 
   if (stateful) {
     const responseId = options?.modelState?.responseId as string | undefined
@@ -85,14 +99,18 @@ export function formatResponsesRequest(
   }
 
   if (options?.toolSpecs && options.toolSpecs.length > 0) {
-    const existingTools = (request.tools as unknown[]) ?? []
+    const existingTools = request.tools ?? []
     request.tools = [
       ...existingTools,
       ...options.toolSpecs.map((spec) => ({
-        type: 'function',
+        type: 'function' as const,
         name: spec.name,
         description: spec.description ?? '',
-        parameters: spec.inputSchema,
+        parameters: (spec.inputSchema ?? {}) as Record<string, unknown>,
+        // `null` defers to the OpenAI server default. The SDK's typed
+        // contract requires a value; omitting it (as the Python SDK does)
+        // is not an option here.
+        strict: null,
       })),
     ]
 
@@ -382,9 +400,20 @@ export function mapResponsesEventToSDK(
     case 'response.output_item.added': {
       const item = event.item as unknown as Record<string, unknown>
       if (item.type === 'function_call') {
-        const callId = (item.call_id as string) ?? ''
-        const name = (item.name as string) ?? ''
-        const itemId = (item.id as string) ?? ''
+        const callId = typeof item.call_id === 'string' ? item.call_id : undefined
+        const name = typeof item.name === 'string' ? item.name : undefined
+        const itemId = typeof item.id === 'string' ? item.id : undefined
+        // All three identifiers are load-bearing: `itemId` keys subsequent
+        // argument delta/done events, `callId` becomes the emitted toolUseId,
+        // and `name` is the tool name. If any is missing, the tool call is
+        // unusable — warn and skip rather than silently collapsing to empty
+        // strings (which would also cause distinct calls to share a key).
+        if (!callId || !name || !itemId) {
+          logger.warn(
+            `call_id=<${callId}> name=<${name}> item_id=<${itemId}> | function_call event missing required identifier — skipping`
+          )
+          break
+        }
         state.toolCalls.set(itemId, { name, arguments: '', callId, itemId })
       }
       break

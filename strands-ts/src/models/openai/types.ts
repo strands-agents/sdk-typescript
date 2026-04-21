@@ -45,8 +45,10 @@ interface OpenAIBaseConfig extends BaseModelConfig {
   /**
    * Additional parameters passed through to the OpenAI API for forward compatibility.
    *
-   * For the Responses API, provider-managed fields (`model`, `input`, `stream`, `store`)
-   * cannot be overridden via `params` — use the dedicated config properties instead.
+   * Provider-managed fields cannot be overridden via `params` — use the dedicated
+   * config properties instead. A warning is logged at config time if any are present:
+   * - Chat Completions: `model`, `messages`, `stream`, `stream_options`
+   * - Responses API: `model`, `input`, `stream`, `store`
    */
   params?: Record<string, unknown>
 }

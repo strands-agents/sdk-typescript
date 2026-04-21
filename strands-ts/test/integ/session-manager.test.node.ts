@@ -19,7 +19,7 @@ import { STSClient, GetCallerIdentityCommand } from '@aws-sdk/client-sts'
 import { SessionManager } from '$/sdk/session/session-manager.js'
 import { FileStorage } from '$/sdk/session/file-storage.js'
 import { S3Storage } from '$/sdk/session/s3-storage.js'
-import { bedrock } from './__fixtures__/model-providers.js'
+import { bedrock, openaiResponses } from './__fixtures__/model-providers.js'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -151,6 +151,66 @@ describe.skipIf(bedrock.skip)('Session Management - FileStorage', () => {
     await agent2.initialize()
     await sessionManager2.restoreSnapshot({ target: agent2, snapshotId: snapshotIds[0]! })
     expect(agent2.messages).toHaveLength(2)
+  })
+})
+
+// ─── Stateful Model Tests ─────────────────────────────────────────────────────
+
+describe.skipIf(openaiResponses.skip)('Session Management - stateful model (OpenAI Responses)', () => {
+  let tempDir: string
+
+  beforeAll(async () => {
+    tempDir = join(tmpdir(), `strands-session-stateful-integ-${Date.now()}`)
+    await fs.mkdir(tempDir, { recursive: true })
+  })
+
+  afterAll(async () => {
+    await fs.rm(tempDir, { recursive: true, force: true })
+  })
+
+  it('persists modelState.responseId and restores a usable stateful agent', async () => {
+    const sessionId = uuidv7()
+    const manager1 = makeFileManager(sessionId, tempDir)
+    const agent1 = new Agent({
+      model: openaiResponses.createModel({ modelId: 'gpt-5.4-mini', stateful: true }),
+      sessionManager: manager1,
+      printer: false,
+      systemPrompt: 'Reply in one short sentence.',
+    })
+
+    await agent1.invoke('Hello.')
+    // Stateful invariant: server owns history, local messages stay empty.
+    expect(agent1.messages).toEqual([])
+    const firstResponseId = agent1.modelState.responseId
+    expect(firstResponseId).toEqual(expect.any(String))
+
+    // Persisted snapshot must reflect both: empty messages and the captured responseId.
+    const snap1 = await (manager1 as any)._storage.snapshot.loadSnapshot({
+      location: (manager1 as any)._location({ id: 'agent' }),
+    })
+    expect(snap1?.data?.messages).toEqual([])
+    expect(snap1?.data?.modelState).toEqual({ responseId: firstResponseId })
+
+    // Reload into a fresh agent/manager pair backed by the same storage.
+    const manager2 = makeFileManager(sessionId, tempDir)
+    const agent2 = new Agent({
+      model: openaiResponses.createModel({ modelId: 'gpt-5.4-mini', stateful: true }),
+      sessionManager: manager2,
+      printer: false,
+      systemPrompt: 'Reply in one short sentence.',
+    })
+    await agent2.initialize()
+
+    expect(agent2.messages).toEqual([])
+    expect(agent2.modelState.responseId).toBe(firstResponseId)
+
+    // The restored agent must be able to continue the conversation. We only
+    // assert mechanical outcomes — no model-output string checks, so no flake surface.
+    const turn2 = await agent2.invoke('Say something brief.')
+    expect(turn2.stopReason).toBe('endTurn')
+    expect(agent2.messages).toEqual([])
+    expect(agent2.modelState.responseId).toEqual(expect.any(String))
+    expect(agent2.modelState.responseId).not.toBe(firstResponseId)
   })
 })
 

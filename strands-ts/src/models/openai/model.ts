@@ -17,15 +17,14 @@ import type { Message } from '../../types/messages.js'
 import type { ModelStreamEvent } from '../streaming.js'
 import { ContextWindowOverflowError, ModelThrottledError } from '../../errors.js'
 import { logger } from '../../logging/logger.js'
-import { createOpenAIClient } from './client.js'
 import { classifyOpenAIError } from './errors.js'
-import { formatChatRequest, mapChatChunkToEvents } from './chat-adapter.js'
+import { formatChatRequest, mapChatChunkToEvents, warnManagedParams as warnChatManagedParams } from './chat-adapter.js'
 import {
   createResponsesStreamState,
   finalizeResponsesStream,
   formatResponsesRequest,
   mapResponsesEventToSDK,
-  warnManagedParams,
+  warnManagedParams as warnResponsesManagedParams,
 } from './responses-adapter.js'
 import type {
   ChatStreamState,
@@ -76,10 +75,7 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
 
   constructor(options: OpenAIModelOptions) {
     super()
-    const { apiKey, client, clientConfig, ...rest } = options
-    const api: OpenAIApi = (rest as { api?: OpenAIApi }).api ?? 'chat'
-    const { api: _ignored, ...modelConfig } = rest as { api?: OpenAIApi } & OpenAIModelConfig
-    void _ignored
+    const { apiKey, client, clientConfig, api = 'chat', ...modelConfig } = options
 
     if (api !== 'chat' && api !== 'responses') {
       throw new Error(`Unsupported OpenAI API: '${api}'. Supported values: 'chat', 'responses'`)
@@ -89,10 +85,26 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
     this._config = modelConfig
 
     if (api === 'responses') {
-      warnManagedParams(modelConfig.params)
+      warnResponsesManagedParams(modelConfig.params)
+    } else {
+      warnChatManagedParams(modelConfig.params)
     }
 
-    this._client = createOpenAIClient({ apiKey, client, clientConfig })
+    if (client) {
+      this._client = client
+    } else {
+      const hasEnvKey =
+        typeof process !== 'undefined' && typeof process.env !== 'undefined' && process.env.OPENAI_API_KEY
+      if (!apiKey && !hasEnvKey) {
+        throw new Error(
+          "OpenAI API key is required. Provide it via the 'apiKey' option (string or function) or set the OPENAI_API_KEY environment variable."
+        )
+      }
+      this._client = new OpenAI({
+        ...(apiKey ? { apiKey } : {}),
+        ...clientConfig,
+      })
+    }
   }
 
   /**
@@ -114,16 +126,15 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
    * management, `previous_response_id` chaining).
    */
   updateConfig(modelConfig: OpenAIModelConfig & { api?: OpenAIApi }): void {
-    if ('api' in modelConfig && modelConfig.api !== undefined) {
-      logger.warn(
-        `api=<${modelConfig.api}> | 'api' is construction-only and cannot be changed via updateConfig — ignoring`
-      )
+    const { api, ...rest } = modelConfig
+    if (api !== undefined) {
+      logger.warn(`api=<${api}> | 'api' is construction-only and cannot be changed via updateConfig — ignoring`)
     }
-    const { api: _api, ...rest } = modelConfig
-    void _api
 
     if (this._api === 'responses') {
-      warnManagedParams(rest.params)
+      warnResponsesManagedParams(rest.params)
+    } else {
+      warnChatManagedParams(rest.params)
     }
 
     this._config = { ...this._config, ...rest }
@@ -197,7 +208,7 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
   private async *_streamResponses(messages: Message[], options?: StreamOptions): AsyncIterable<ModelStreamEvent> {
     try {
       const request = formatResponsesRequest(this._config as OpenAIResponsesConfig, messages, options, this.stateful)
-      const stream = await this._client.responses.create(request as Parameters<typeof this._client.responses.create>[0])
+      const stream = await this._client.responses.create(request)
 
       const state = createResponsesStreamState()
 

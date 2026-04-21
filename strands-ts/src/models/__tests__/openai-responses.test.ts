@@ -216,6 +216,7 @@ describe("OpenAIModel (api: 'responses')", () => {
           name: 'calc',
           description: 'calculator',
           parameters: { type: 'object', properties: {} },
+          strict: null,
         },
       ])
     })

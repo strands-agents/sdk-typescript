@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { z } from 'zod'
 import type { ToolSpec } from '@strands-agents/sdk'
-import { Agent, Message, TextBlock } from '@strands-agents/sdk'
+import { Agent, Message, TextBlock, tool } from '@strands-agents/sdk'
 
 import { collectIterator } from '$/sdk/__fixtures__/model-test-helpers.js'
 
@@ -187,6 +188,45 @@ describe.skipIf(openaiResponses.skip)("OpenAIModel (api: 'responses') Integratio
         .join('')
         .toLowerCase()
       expect(text).toContain('alice')
+    })
+
+    it('completes an agent-loop round-trip with a user-defined function tool', async () => {
+      // Exercises the stateful + function-tool wire path end-to-end: the agent
+      // executes the callback, then sends a second Responses request carrying
+      // previous_response_id plus a function_call_output item. Nothing else in
+      // this suite covers that follow-up request — the existing toolUse test
+      // stops at the first chunk, and the built-in tool tests (web_search /
+      // code_interpreter) use a different serialization path. Assertions are
+      // purely mechanical to stay deterministic.
+      let callCount = 0
+      const pingTool = tool({
+        name: 'ping',
+        description: 'Returns a fixed acknowledgement. Use this when the user asks you to ping.',
+        inputSchema: z.object({}),
+        callback: async () => {
+          callCount++
+          return 'pong'
+        },
+      })
+
+      const model = openaiResponses.createModel({
+        modelId: 'gpt-5.4-mini',
+        stateful: true,
+      })
+      const agent = new Agent({
+        model,
+        printer: false,
+        systemPrompt: 'Use the ping tool when asked to ping.',
+        tools: [pingTool],
+      })
+
+      const result = await agent.invoke('Please ping.')
+
+      expect(result.stopReason).toBe('endTurn')
+      expect(callCount).toBeGreaterThanOrEqual(1)
+      expect(result.metrics?.toolMetrics['ping']?.successCount).toBeGreaterThanOrEqual(1)
+      expect(agent.messages).toEqual([])
+      expect(agent.modelState.responseId).toEqual(expect.any(String))
     })
   })
 
