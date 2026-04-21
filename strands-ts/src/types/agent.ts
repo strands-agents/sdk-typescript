@@ -1,3 +1,4 @@
+import type { Sandbox } from '../sandbox/base.js'
 import type { StateStore } from '../state-store.js'
 import type { ContentBlock, ContentBlockData, Message, MessageData, StopReason, SystemPrompt } from './messages.js'
 import type { AgentTrace } from '../telemetry/tracer.js'
@@ -155,6 +156,11 @@ export interface LocalAgent {
    * The tool registry for registering tools with the agent.
    */
   readonly toolRegistry: ToolRegistry
+
+  /**
+   * The sandbox for code execution and filesystem access.
+   */
+  readonly sandbox: Sandbox
 
   /**
    * The system prompt to pass to the model provider.

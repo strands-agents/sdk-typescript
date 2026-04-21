@@ -1,3 +1,5 @@
+import { Sandbox } from '../sandbox/base.js'
+import { HostSandbox } from '../sandbox/host.js'
 import {
   AgentResult,
   type AgentStreamEvent,
@@ -145,6 +147,12 @@ export type AgentConfig = {
    */
   sessionManager?: SessionManager
   /**
+   * Sandbox for code execution and filesystem access.
+   * Defaults to HostSandbox when not specified.
+   * Pass NoOpSandbox to disable sandbox functionality.
+   */
+  sandbox?: Sandbox
+  /**
    * Custom trace attributes to include in all spans.
    * These attributes are merged with standard attributes in telemetry spans.
    * Telemetry must be enabled globally via telemetry.setupTracer() for these to take effect.
@@ -219,6 +227,10 @@ export class Agent implements LocalAgent, InvokableAgent {
    * The session manager for saving and restoring agent sessions, if configured.
    */
   public readonly sessionManager?: SessionManager | undefined
+  /**
+   * The sandbox for code execution and filesystem access.
+   */
+  public readonly sandbox: Sandbox
 
   private readonly _hooksRegistry: HookRegistryImplementation
   private readonly _pluginRegistry: PluginRegistry
@@ -248,6 +260,7 @@ export class Agent implements LocalAgent, InvokableAgent {
     this.id = config?.id ?? DEFAULT_AGENT_ID
     if (config?.description !== undefined) this.description = config.description
     this.sessionManager = config?.sessionManager
+    this.sandbox = config?.sandbox ?? new HostSandbox()
 
     if (typeof config?.model === 'string') {
       this.model = new BedrockModel({ modelId: config.model })
