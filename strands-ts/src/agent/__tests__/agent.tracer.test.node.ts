@@ -440,6 +440,48 @@ describe('Agent tracer integration', () => {
       expect(tracer.startToolCallSpan).toHaveBeenCalledTimes(2)
       expect(tracer.endToolCallSpan).toHaveBeenCalledTimes(2)
     })
+
+    it('creates overlapping tool spans when toolExecutor is concurrent', async () => {
+      const model = new MockMessageModel()
+        .addTurn([
+          new ToolUseBlock({ name: 'tool1', toolUseId: 'id-1', input: {} }),
+          new ToolUseBlock({ name: 'tool2', toolUseId: 'id-2', input: {} }),
+        ])
+        .addTurn({ type: 'textBlock', text: 'Done' })
+
+      // Tools that sleep briefly so both spans are open at the same time.
+      const sleep = (ms: number) => new Promise<void>((r) => globalThis.setTimeout(r, ms))
+      // eslint-disable-next-line require-yield
+      async function* sleepThenReturn(toolUseId: string, text: string) {
+        await sleep(20)
+        return new ToolResultBlock({ toolUseId, status: 'success', content: [new TextBlock(text)] })
+      }
+      const tool1 = createMockTool('tool1', () => sleepThenReturn('id-1', 'R1'))
+      const tool2 = createMockTool('tool2', () => sleepThenReturn('id-2', 'R2'))
+
+      const agent = new Agent({ model, tools: [tool1, tool2], toolExecutor: 'concurrent' })
+      const tracer = getLatestTracer()
+
+      // Stamp the time each span starts/ends so we can assert overlap.
+      const startTimes: Record<string, number> = {}
+      const endTimes: Record<string, number> = {}
+      tracer.startToolCallSpan.mockImplementation((args: { tool: { toolUseId: string } }) => {
+        startTimes[args.tool.toolUseId] = Date.now()
+        return { mock: 'toolSpan', id: args.tool.toolUseId }
+      })
+      tracer.endToolCallSpan.mockImplementation((span: { id: string } | null) => {
+        if (span && 'id' in span) endTimes[span.id] = Date.now()
+      })
+
+      await agent.invoke('Use tools')
+
+      expect(tracer.startToolCallSpan).toHaveBeenCalledTimes(2)
+      expect(tracer.endToolCallSpan).toHaveBeenCalledTimes(2)
+      // Both spans started before either ended → they're siblings, not nested.
+      const firstEnd = Math.min(endTimes['id-1']!, endTimes['id-2']!)
+      expect(startTimes['id-1']!).toBeLessThanOrEqual(firstEnd)
+      expect(startTimes['id-2']!).toBeLessThanOrEqual(firstEnd)
+    })
   })
 
   describe('token usage accumulation', () => {

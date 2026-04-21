@@ -8,8 +8,8 @@
     "prettier": "^3.7.4"
   },
   "scripts": {
-    "prepare": "husky",
     "dev": "strands-dev",
+    "prepare": "husky && npm run build",
     "build": "npm run build -w strands-ts",
     "test": "npm run test -w strands-ts",
     "test:coverage": "npm run test:coverage -w strands-ts",
@@ -18,6 +18,7 @@
     "test:browser:install": "npm run test:browser:install -w strands-ts",
     "test:package": "npm run test:package -w strands-ts",
     "lint": "npm run lint -w strands-ts",
+    "format": "npm run format -w strands-ts",
     "format:check": "npm run format:check -w strands-ts",
     "type-check": "npm run type-check -w strands-ts",
     "check:browser-bundle": "npm run check:browser-bundle -w strands-ts"
