@@ -368,8 +368,8 @@ describe('Snapshot API', () => {
 
       const restored = (agent as unknown as { _interruptState: InterruptState })._interruptState
       expect(restored.activated).toBe(true)
-      expect(restored.interrupts.size).toBe(1)
-      expect(restored.interrupts.get('int-1')?.name).toBe('confirm')
+      expect(Object.keys(restored.interrupts).length).toBe(1)
+      expect(restored.interrupts['int-1']?.name).toBe('confirm')
       expect(restored.pendingToolExecution).toBeDefined()
     })
   })

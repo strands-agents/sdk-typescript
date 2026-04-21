@@ -77,7 +77,7 @@ describe('InterruptState', () => {
       const interrupt = state.getOrCreateInterrupt('int-1', 'test', 'reason')
 
       expect(interrupt).toEqual({ id: 'int-1', name: 'test', reason: 'reason' })
-      expect(state.interrupts.get('int-1')).toBe(interrupt)
+      expect(state.interrupts['int-1']).toBe(interrupt)
       expect(state.getInterruptsList()).toStrictEqual([interrupt])
     })
 
@@ -115,7 +115,7 @@ describe('InterruptState', () => {
 
       state.deactivate()
 
-      expect(state.interrupts.size).toBe(0)
+      expect(Object.keys(state.interrupts).length).toBe(0)
       expect(state.resumeResponses).toBeUndefined()
       expect(state.activated).toBe(false)
     })
@@ -128,7 +128,7 @@ describe('InterruptState', () => {
 
       state.resume([{ interruptResponse: { interruptId: 'int-1', response: 'yes' } }])
 
-      expect(state.interrupts.get('int-1')!.response).toBeUndefined()
+      expect(state.interrupts['int-1']!.response).toBeUndefined()
     })
 
     it('populates interrupt responses and stores resumeResponses when activated', () => {
@@ -143,8 +143,8 @@ describe('InterruptState', () => {
       ]
       state.resume(responses)
 
-      expect(state.interrupts.get('int-1')!.response).toBe('response1')
-      expect(state.interrupts.get('int-2')!.response).toStrictEqual({ complex: 'data' })
+      expect(state.interrupts['int-1']!.response).toBe('response1')
+      expect(state.interrupts['int-2']!.response).toStrictEqual({ complex: 'data' })
       expect(state.resumeResponses).toBe(responses)
     })
 
@@ -163,7 +163,7 @@ describe('InterruptState', () => {
     it('round-trips through JSON with full state', () => {
       const original = new InterruptState()
       original.getOrCreateInterrupt('int-1', 'test', { complex: 'reason' })
-      original.interrupts.get('int-1')!.response = ['array', 'response']
+      original.interrupts['int-1']!.response = ['array', 'response']
       original.activate()
 
       const serialized = JSON.stringify(original)
@@ -205,8 +205,8 @@ describe('InterruptState', () => {
         activated: true,
       })
 
-      expect(state.interrupts.size).toBe(1)
-      expect(state.interrupts.get('int-1')).toEqual({
+      expect(Object.keys(state.interrupts).length).toBe(1)
+      expect(state.interrupts['int-1']).toEqual({
         id: 'int-1',
         name: 'test',
         reason: 'reason',

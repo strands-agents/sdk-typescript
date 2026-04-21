@@ -252,7 +252,7 @@ describe('HookRegistryImplementation', () => {
       expect(callback2).toHaveBeenCalledOnce()
 
       const state = getInterruptState(mockAgent)
-      expect(state.interrupts.size).toBe(2)
+      expect(Object.keys(state.interrupts).length).toBe(2)
       expect(
         state
           .getInterruptsList()
@@ -319,7 +319,7 @@ describe('HookRegistryImplementation', () => {
       expect(callOrder).toEqual(['first', 'second-no-interrupt', 'third'])
 
       const state = getInterruptState(mockAgent)
-      expect(state.interrupts.size).toBe(2)
+      expect(Object.keys(state.interrupts).length).toBe(2)
       expect(
         state
           .getInterruptsList()

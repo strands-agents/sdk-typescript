@@ -18,6 +18,7 @@ import {
   type SystemPromptData,
   TextBlock,
   ToolResultBlock,
+  type ToolResultBlockData,
   ToolUseBlock,
 } from '../types/messages.js'
 import type { JSONValue } from '../types/json.js'
@@ -718,7 +719,7 @@ export class Agent implements LocalAgent, InvokableAgent {
       lastMessage,
       traces: this._tracer.localTraces,
       metrics: this._meter.metrics,
-      interrupts: this._interruptState.getInterruptsList(),
+      interrupts: this._interruptState.getUnansweredInterrupts(),
     })
   }
 
@@ -1027,7 +1028,7 @@ export class Agent implements LocalAgent, InvokableAgent {
           } catch (error) {
             if (error instanceof InterruptError) {
               // Store pending state for resume - save assistant message and completed results
-              const completedResultsData: Record<string, ContentBlockData> = {}
+              const completedResultsData: Record<string, { toolResult: ToolResultBlockData }> = {}
               for (const [id, result] of toolResults) {
                 completedResultsData[id] = result.toJSON()
               }
