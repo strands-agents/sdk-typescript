@@ -229,7 +229,11 @@ export { type McpClientConfig, type TasksConfig, McpClient } from './mcp.js'
 
 // Session management
 export { SessionManager } from './session/session-manager.js'
-export type { SessionManagerConfig, SaveLatestStrategy } from './session/session-manager.js'
+export type {
+  SessionManagerConfig,
+  SaveLatestStrategy,
+  MultiAgentSaveLatestStrategy,
+} from './session/session-manager.js'
 export type { SnapshotManifest, SnapshotTriggerCallback, SnapshotTriggerParams } from './session/types.js'
 export type { SessionStorage, SnapshotStorage, SnapshotLocation } from './session/storage.js'
 export { FileStorage } from './session/file-storage.js'
