@@ -1,5 +1,6 @@
 {
   "name": "strands",
+  "version": "0.0.0",
   "private": true,
   "workspaces": ["strands-dev", "strands-ts", "strands-wasm"],
   "devDependencies": {
