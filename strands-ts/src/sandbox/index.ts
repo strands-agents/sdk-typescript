@@ -8,6 +8,7 @@
  * Class hierarchy:
  * - `Sandbox` (abstract, all operations abstract + convenience helpers)
  *   - `HostSandbox` — native Node.js methods for host execution (default)
+ *   - `ShellBasedSandbox` — shell-based defaults for remote environments (Docker, SSH)
  *   - `NoOpSandbox` — no-op implementation that disables all functionality
  */
 
@@ -15,4 +16,5 @@ export { Sandbox } from './base.js'
 export type { ExecutionResult, ExecuteOptions, FileInfo, OutputFile, StreamChunk, StreamType } from './base.js'
 export { HostSandbox } from './host.js'
 export type { HostSandboxConfig } from './host.js'
+export { ShellBasedSandbox } from './shell-based.js'
 export { NoOpSandbox } from './noop.js'

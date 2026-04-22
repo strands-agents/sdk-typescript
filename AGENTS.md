@@ -138,6 +138,14 @@ sdk-typescript/
 │   │   │   ├── snapshot.ts
 │   │   │   └── validation.ts
 │   │   │
+│   │   ├── sandbox/              # Sandbox abstraction for code execution
+│   │   │   ├── __tests__/
+│   │   │   ├── base.ts           # Sandbox ABC, types (ExecutionResult, FileInfo, etc.)
+│   │   │   ├── host.ts           # HostSandbox — native Node.js execution (default)
+│   │   │   ├── shell-based.ts    # ShellBasedSandbox — shell-based for remote environments
+│   │   │   ├── noop.ts           # NoOpSandbox — disables sandbox functionality
+│   │   │   └── index.ts
+│   │   │
 │   │   ├── vended-plugins/       # Optional vended plugins
 │   │   │   └── skills/           # AgentSkills plugin
 │   │   │
@@ -256,6 +264,7 @@ sdk-typescript/
 - **`strands-ts/src/telemetry/`**: OpenTelemetry tracing and metrics
 - **`strands-ts/src/tools/`**: Tool definitions, types, and structured output validation with Zod schemas
 - **`strands-ts/src/types/`**: Core type definitions used across the SDK
+- **`strands-ts/src/sandbox/`**: Sandbox abstraction for agent code/command execution and filesystem access
 - **`strands-ts/src/vended-plugins/`**: Optional vended plugins (not part of core SDK, independently importable)
 - **`strands-ts/src/vended-tools/`**: Optional vended tools (bash, file-editor, http-request, notebook)
 - **`strands-ts/test/integ/`**: Integration tests (tests public API and external integrations)

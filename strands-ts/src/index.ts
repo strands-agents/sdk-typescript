@@ -250,7 +250,7 @@ export { Graph } from './multiagent/index.js'
 export { Swarm } from './multiagent/index.js'
 
 // Sandbox
-export { Sandbox, HostSandbox, NoOpSandbox } from './sandbox/index.js'
+export { Sandbox, HostSandbox, ShellBasedSandbox, NoOpSandbox } from './sandbox/index.js'
 export type {
   ExecutionResult,
   ExecuteOptions,

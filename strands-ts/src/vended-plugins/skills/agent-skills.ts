@@ -19,7 +19,7 @@ import type { LocalAgent } from '../../types/agent.js'
 import type { Tool } from '../../tools/tool.js'
 import type { ToolContext } from '../../tools/tool.js'
 
-/** A single skill source: filesystem path string, HTTPS URL string, or Skill instance. */
+/** A single skill source: filesystem path string, HTTPS URL string, `sandbox:/path` string, or Skill instance. */
 export type SkillSource = string | Skill
 
 /** Configuration for the AgentSkills plugin. */
@@ -30,6 +30,7 @@ export interface AgentSkillsConfig {
    * - A path to a skill directory (containing SKILL.md)
    * - A path to a parent directory (containing skill subdirectories)
    * - An `https://` URL pointing directly to raw SKILL.md content
+   * - A `sandbox:/path` URI to load from the agent's sandbox at init time
    */
   skills: SkillSource[]
 
@@ -46,6 +47,7 @@ export interface AgentSkillsConfig {
 const DEFAULT_STATE_KEY = 'agent_skills'
 const RESOURCE_DIRS = ['scripts', 'references', 'assets']
 const DEFAULT_MAX_RESOURCE_FILES = 20
+const SANDBOX_PREFIX = 'sandbox:'
 
 /**
  * Escape XML special characters in text content.
@@ -98,14 +100,17 @@ export class AgentSkills implements Plugin {
   private readonly _stateKey: string
   /** Resolves when all async skill sources (e.g. URLs) have been loaded. */
   private _ready: Promise<void>
+  /** Sandbox paths to resolve during initAgent(). */
+  private _sandboxSources: string[]
 
   constructor(config: AgentSkillsConfig) {
     this._strict = config.strict ?? false
     this._maxResourceFiles = config.maxResourceFiles ?? DEFAULT_MAX_RESOURCE_FILES
     this._stateKey = config.stateKey ?? DEFAULT_STATE_KEY
-    const { skills, ready } = this._resolveSkills(config.skills)
+    const { skills, ready, sandboxSources } = this._resolveSkills(config.skills)
     this._skills = skills
     this._ready = ready
+    this._sandboxSources = sandboxSources
   }
 
   /**
@@ -117,6 +122,11 @@ export class AgentSkills implements Plugin {
    */
   async initAgent(agent: LocalAgent): Promise<void> {
     await this._ready
+
+    // Resolve deferred sandbox sources using the agent's sandbox
+    if (this._sandboxSources.length > 0) {
+      await this._resolveSandboxSources(agent)
+    }
 
     if (this._skills.size === 0) {
       logger.warn('no skills were loaded, the agent will have no skills available')
@@ -157,9 +167,17 @@ export class AgentSkills implements Plugin {
    * next tool call or invocation.
    */
   setAvailableSkills(skills: SkillSource[]): void {
-    const { skills: resolved, ready } = this._resolveSkills(skills)
+    for (const source of skills) {
+      if (typeof source === 'string' && source.startsWith(SANDBOX_PREFIX)) {
+        throw new Error(
+          'Sandbox sources are not supported in setAvailableSkills(). Use sandbox sources in the AgentSkills constructor instead.'
+        )
+      }
+    }
+    const { skills: resolved, ready, sandboxSources } = this._resolveSkills(skills)
     this._skills = resolved
     this._ready = ready
+    this._sandboxSources = sandboxSources
   }
 
   /**
@@ -182,11 +200,20 @@ export class AgentSkills implements Plugin {
    * the background; the returned `ready` promise resolves when all URL
    * fetches have completed and the map has been updated.
    */
-  private _resolveSkills(sources: SkillSource[]): { skills: Map<string, Skill>; ready: Promise<void> } {
+  private _resolveSkills(sources: SkillSource[]): {
+    skills: Map<string, Skill>
+    ready: Promise<void>
+    sandboxSources: string[]
+  } {
     const resolved = new Map<string, Skill>()
     const asyncTasks: Promise<void>[] = []
+    const sandboxSources: string[] = []
 
     for (const source of sources) {
+      if (typeof source === 'string' && source.startsWith(SANDBOX_PREFIX)) {
+        sandboxSources.push(source.slice(SANDBOX_PREFIX.length))
+        continue
+      }
       if (source instanceof Skill) {
         if (resolved.has(source.name)) {
           logger.warn(`name=<${source.name}> | duplicate skill name, overwriting previous skill`)
@@ -263,7 +290,46 @@ export class AgentSkills implements Plugin {
       ready = Promise.resolve()
     }
 
-    return { skills: resolved, ready }
+    return { skills: resolved, ready, sandboxSources }
+  }
+
+  /**
+   * Resolve sandbox skill sources using the agent's sandbox.
+   *
+   * Each sandbox source path is treated as either a single skill directory
+   * (if it contains SKILL.md) or a parent directory of skill subdirectories.
+   */
+  private async _resolveSandboxSources(agent: LocalAgent): Promise<void> {
+    const { Skill } = await import('./skill.js')
+    const sandbox = agent.sandbox
+
+    for (const sandboxPath of this._sandboxSources) {
+      logger.debug(`sandbox_path=<${sandboxPath}> | resolving sandbox skill source`)
+
+      try {
+        // Try as a single skill directory first
+        const skill = await Skill.fromSandbox(sandbox, sandboxPath, { strict: this._strict })
+        if (this._skills.has(skill.name)) {
+          logger.warn(`name=<${skill.name}> | duplicate skill name, overwriting previous skill`)
+        }
+        this._skills.set(skill.name, skill)
+        logger.debug(`sandbox_path=<${sandboxPath}>, name=<${skill.name}> | loaded single skill from sandbox`)
+      } catch {
+        // Fall back to parent directory
+        try {
+          const skills = await Skill.fromSandboxDirectory(sandbox, sandboxPath, { strict: this._strict })
+          for (const skill of skills) {
+            if (this._skills.has(skill.name)) {
+              logger.warn(`name=<${skill.name}> | duplicate skill name, overwriting previous skill`)
+            }
+            this._skills.set(skill.name, skill)
+          }
+          logger.debug(`sandbox_path=<${sandboxPath}>, count=<${skills.length}> | loaded skills from sandbox directory`)
+        } catch (error) {
+          logger.warn(`sandbox_path=<${sandboxPath}> | failed to load sandbox skills: ${error}`)
+        }
+      }
+    }
   }
 
   /**
