@@ -3,7 +3,7 @@ import { Agent } from '../agent.js'
 import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
 import { createMockTool } from '../../__fixtures__/tool-helpers.js'
 import { ToolResultBlock } from '../../types/messages.js'
-import { BeforeToolCallEvent, BeforeToolsEvent } from '../../hooks/events.js'
+import { AfterToolCallEvent, BeforeToolCallEvent, BeforeToolsEvent } from '../../hooks/events.js'
 import { FunctionTool } from '../../tools/function-tool.js'
 
 describe('Agent interrupt system', () => {
@@ -231,9 +231,7 @@ describe('Agent interrupt system', () => {
       expect(toolResultMessage).toBeDefined()
     })
 
-    it('clears interrupt state when resuming with new user message instead of interrupt response', async () => {
-      // Turn 0: First call with tool use (interrupted)
-      // Turn 1: Second call - new user message means fresh start, model returns text response
+    it('throws TypeError when sending a new message while in interrupted state', async () => {
       const model = new MockMessageModel()
         .addTurn({
           type: 'toolUseBlock',
@@ -253,13 +251,9 @@ describe('Agent interrupt system', () => {
       const interruptResult = await agent.invoke('First message')
       expect(interruptResult).toMatchObject({ stopReason: 'interrupt' })
 
-      // Instead of resuming with interrupt response, send a new message
-      // This should clear the interrupt state and start fresh
-      // Model returns text response (endTurn), not another tool use
-      const newResult = await agent.invoke('Different question')
-
-      // Since we sent a new message (not interrupt responses), the interrupt state is cleared
-      expect(newResult).toMatchObject({ stopReason: 'endTurn' })
+      // Sending a new message instead of interrupt responses should throw
+      await expect(agent.invoke('Different question')).rejects.toThrow(TypeError)
+      await expect(agent.invoke('Different question')).rejects.toThrow('Agent is in an interrupted state')
     })
   })
 
@@ -516,6 +510,69 @@ describe('Agent interrupt system', () => {
       // Cycle 2: should interrupt again, not silently pass through
       expect(result2).toMatchObject({ stopReason: 'interrupt' })
       expect(interruptCount).toBe(3)
+    })
+  })
+
+  describe('event contract during interrupt', () => {
+    it('does not fire AfterToolCallEvent when BeforeToolCallEvent interrupt triggers', async () => {
+      const model = new MockMessageModel()
+        .addTurn({
+          type: 'toolUseBlock',
+          name: 'testTool',
+          toolUseId: 'tool-1',
+          input: {},
+        })
+        .addTurn({ type: 'textBlock', text: 'Done' })
+
+      const tool = createMockTool('testTool', () => 'Success')
+      const agent = new Agent({ model, tools: [tool], printer: false })
+
+      const firedEvents: string[] = []
+
+      agent.addHook(BeforeToolCallEvent, (event) => {
+        firedEvents.push('BeforeToolCallEvent')
+        event.interrupt({ name: 'confirm', reason: 'Confirm?' })
+      })
+      agent.addHook(AfterToolCallEvent, () => {
+        firedEvents.push('AfterToolCallEvent')
+      })
+
+      const result = await agent.invoke('Test')
+
+      expect(result.stopReason).toBe('interrupt')
+      expect(firedEvents).toContain('BeforeToolCallEvent')
+      expect(firedEvents).not.toContain('AfterToolCallEvent')
+    })
+
+    it('does not fire AfterToolCallEvent when tool callback interrupts', async () => {
+      const model = new MockMessageModel()
+        .addTurn({
+          type: 'toolUseBlock',
+          name: 'confirmTool',
+          toolUseId: 'tool-1',
+          input: {},
+        })
+        .addTurn({ type: 'textBlock', text: 'Done' })
+
+      const tool = createMockTool('confirmTool', (context) => {
+        context.interrupt({ name: 'confirm', reason: 'Confirm?' })
+      })
+      const agent = new Agent({ model, tools: [tool], printer: false })
+
+      const firedEvents: string[] = []
+
+      agent.addHook(BeforeToolCallEvent, () => {
+        firedEvents.push('BeforeToolCallEvent')
+      })
+      agent.addHook(AfterToolCallEvent, () => {
+        firedEvents.push('AfterToolCallEvent')
+      })
+
+      const result = await agent.invoke('Test')
+
+      expect(result.stopReason).toBe('interrupt')
+      expect(firedEvents).toContain('BeforeToolCallEvent')
+      expect(firedEvents).not.toContain('AfterToolCallEvent')
     })
   })
 })

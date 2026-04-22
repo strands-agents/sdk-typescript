@@ -622,11 +622,13 @@ export class Agent implements LocalAgent, InvokableAgent {
     const interruptResponses = this._extractInterruptResponses(args)
     if (interruptResponses.length > 0) {
       this._interruptState.resume(interruptResponses)
-    } else {
-      // If user sends a regular message (not interrupt responses), clear any pending state
-      // This allows the user to "abandon" an interrupted workflow and start fresh
-      this._interruptState.clearPendingToolExecution()
-      this._interruptState.deactivate()
+    } else if (this._interruptState.activated) {
+      // Match Python SDK: throw if the agent is in an interrupted state but the user
+      // sends a regular message instead of interrupt responses. This prevents silent
+      // state loss — the user must explicitly respond to pending interrupts.
+      throw new TypeError(
+        'Agent is in an interrupted state. Must resume with a list of interruptResponse content blocks.'
+      )
     }
 
     // Resolve structured output schema from per-invocation options or constructor config
