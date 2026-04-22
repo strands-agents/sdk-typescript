@@ -475,4 +475,3 @@ describe('MCP Integration', () => {
     })
   })
 })
-

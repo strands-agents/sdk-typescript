@@ -187,4 +187,3 @@ export class McpTool extends Tool {
     return (IMAGE_FORMATS as readonly string[]).includes(format)
   }
 }
-
