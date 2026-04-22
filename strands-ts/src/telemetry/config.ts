@@ -14,7 +14,8 @@
  * environments without async_hooks support.
  */
 
-import { metrics as otelMetrics, trace } from '@opentelemetry/api'
+import { context as otelContext, metrics as otelMetrics, propagation, trace } from '@opentelemetry/api'
+import type { ContextManager, TextMapPropagator } from '@opentelemetry/api'
 import type { Meter as OtelMeter, Tracer as OtelTracer } from '@opentelemetry/api'
 import { resourceFromAttributes, envDetector, type Resource } from '@opentelemetry/resources'
 import {
@@ -36,12 +37,19 @@ import { logger } from '../logging/index.js'
 import { getServiceName } from './utils.js'
 
 let DefaultTracerProvider: typeof BasicTracerProvider = BasicTracerProvider
+let DefaultContextManager: (new () => ContextManager) | undefined
+let DefaultPropagator: TextMapPropagator | undefined
 if (typeof globalThis.process?.getBuiltinModule === 'function') {
   try {
     const nodeModule = globalThis.process.getBuiltinModule('node:module') as typeof import('module') | undefined
     if (nodeModule) {
       const req = nodeModule.createRequire(import.meta.url)
       DefaultTracerProvider = req('@opentelemetry/sdk-trace-node').NodeTracerProvider
+      DefaultContextManager = req('@opentelemetry/context-async-hooks').AsyncLocalStorageContextManager
+      const { W3CTraceContextPropagator, W3CBaggagePropagator, CompositePropagator } = req('@opentelemetry/core')
+      DefaultPropagator = new CompositePropagator({
+        propagators: [new W3CTraceContextPropagator(), new W3CBaggagePropagator()],
+      })
     }
   } catch {
     logger.info('sdk-trace-node not available | using BasicTracerProvider without async context propagation')
@@ -161,6 +169,8 @@ export function setupTracer(config: TracerConfig = {}): BasicTracerProvider {
   }
 
   trace.setGlobalTracerProvider(_provider)
+  if (DefaultContextManager) otelContext.setGlobalContextManager(new DefaultContextManager())
+  if (DefaultPropagator) propagation.setGlobalPropagator(DefaultPropagator)
 
   if (typeof globalThis.process?.once === 'function') {
     globalThis.process.once('beforeExit', () => {

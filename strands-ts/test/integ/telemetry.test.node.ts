@@ -65,7 +65,7 @@ describe.sequential('Telemetry Integration', () => {
   beforeAll(() => {
     exporter = new InMemorySpanExporter()
     provider = new NodeTracerProvider({ spanProcessors: [new SimpleSpanProcessor(exporter)] })
-    trace.setGlobalTracerProvider(provider)
+    provider.register()
   })
 
   beforeEach(() => {
