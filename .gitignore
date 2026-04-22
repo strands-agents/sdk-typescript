@@ -3,16 +3,31 @@ node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-package-lock.json
 
 # Test lock files
-test/packages/**/package-lock.json
+**/test/packages/**/package-lock.json
 
 # Build outputs
 dist/
 build/
 *.tsbuildinfo
-__pycache__
+target/
+
+# Python
+__pycache__/
+.pycache/
+.pytest_cache/
+.ruff_cache/
+.venv/
+*.egg-info/
+*.pyd
+*.so
+*.dylib
+*.pdb
+
+# Generated
+**/_generated
+strands-wasm/generated
 
 # Coverage reports
 coverage/
@@ -23,6 +38,7 @@ coverage/
 .idea/
 *.swp
 *.swo
+.gradle/
 
 # OS files
 .DS_Store
@@ -42,7 +58,12 @@ Thumbs.db
 .artifact
 
 # Test artifacts
-test/.artifacts
+**/test/.artifacts
+
+# Misc
+*.backup
+**/mutants.out*/
+bin/
 
 # LLM
 CLAUDE.md
