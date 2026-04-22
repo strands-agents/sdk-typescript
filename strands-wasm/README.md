@@ -1,6 +1,6 @@
-# Strands
+# strands-wasm
 
-A multi-language AI agent SDK built on a WebAssembly component architecture. A single TypeScript agent runtime is compiled to a WASM component and hosted directly by Python via `wasmtime-py` — one implementation serving all languages through a shared binary.
+WASM build tooling and monorepo developer guide. Describes the WebAssembly component architecture, build pipeline, WIT contracts, and cross-package development workflow.
 
 ## Getting started
 
@@ -55,7 +55,7 @@ graph TD
 - `strands-ts/generated/`
 - `strands-wasm/generated/`
 
-Generated files are checked in and marked with `// @generated`. Do not edit them by hand. CI runs `generate --check` and fails if they are stale.
+Generated files are created by running `npm run dev -- generate` (or `bootstrap`) and are gitignored. Do not edit them by hand. CI runs `generate --check` and fails if they are stale.
 
 Python types are auto-generated into `strands-py/strands/_generated/types.py` by `strands-py/scripts/generate_types.py`.
 
