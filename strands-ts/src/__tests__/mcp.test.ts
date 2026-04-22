@@ -38,7 +38,7 @@ vi.mock('@modelcontextprotocol/sdk/client/index.js', () => ({
 }))
 
 vi.mock('../tools/tool.js', () => ({
-  Tool: class {},
+  Tool: class { },
   createErrorResult: (err: unknown, toolUseId: string) => ({
     type: 'toolResultBlock',
     status: 'error',
@@ -74,7 +74,7 @@ function mockActiveSpan(traceId: string = '1234567890abcdef1234567890abcdef', tr
   vi.spyOn(trace, 'getSpan').mockReturnValue(mockSpan as unknown as ReturnType<typeof trace.getSpan>)
   vi.spyOn(propagation, 'inject').mockImplementation((_context, carrier) => {
     if (carrier && typeof carrier === 'object') {
-      ;(carrier as Record<string, string>).traceparent = `00-${traceId}-1234567890abcdef-01`
+      ; (carrier as Record<string, string>).traceparent = `00-${traceId}-1234567890abcdef-01`
     }
   })
 }
@@ -473,6 +473,8 @@ describe('MCP Integration', () => {
       expect((result.content[0] as TextBlock).text).toBe('Here is the image:')
       expect(result.content[1]).toBeInstanceOf(ImageBlock)
       expect((result.content[2] as TextBlock).text).toBe('Some notes')
+    })
+
     it('surfaces elicitation data for McpError with code -32042', async () => {
       const elicitations = [
         {
