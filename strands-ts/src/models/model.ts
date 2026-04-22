@@ -194,17 +194,18 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
   /**
    * Estimate token count for the given input before sending to the model.
    *
-   * Used internally for proactive context management.
+   * Used for proactive context management (e.g., triggering compression at a threshold).
    * The base implementation uses a character-based heuristic (chars/4 for text, chars/2 for JSON).
    *
-   * Subclasses should override this method to use native token counting APIs for improved accuracy,
-   * falling back to `super.estimateTokens()` on API failure.
+   * Subclasses may override this method to use native token counting APIs
+   * (e.g., Bedrock CountTokens, Anthropic countTokens, Gemini countTokens)
+   * for improved accuracy, falling back to `super.estimateTokens()` on API failure.
    *
    * @param messages - Array of conversation messages to estimate tokens for
    * @param options - Optional streaming options containing system prompt and tool specs
    * @returns Estimated total input tokens
    */
-  protected async estimateTokens(messages: Message[], options?: StreamOptions): Promise<number> {
+  async estimateTokens(messages: Message[], options?: StreamOptions): Promise<number> {
     return estimateTokensHeuristic(messages, options)
   }
 

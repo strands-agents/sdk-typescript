@@ -54,11 +54,6 @@ export class TestModelProvider extends Model<BaseModelConfig> {
     }
     yield* this.eventGenerator()
   }
-
-  /** Exposes protected estimateTokens for testing. */
-  async testEstimateTokens(messages: Message[], options?: StreamOptions): Promise<number> {
-    return this.estimateTokens(messages, options)
-  }
 }
 
 /**
