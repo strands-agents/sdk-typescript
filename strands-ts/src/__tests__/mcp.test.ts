@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
+import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js'
 import { McpClient } from '../mcp.js'
 import { McpTool } from '../tools/mcp-tool.js'
 import { JsonBlock, type TextBlock, type ToolResultBlock } from '../types/messages.js'
@@ -369,6 +370,74 @@ describe('MCP Integration', () => {
 
       expect(result.status).toBe('error')
       expect((result.content[0] as TextBlock).text).toContain('missing content array')
+    })
+
+    it('surfaces elicitation data for McpError with code -32042', async () => {
+      const elicitations = [
+        {
+          mode: 'url',
+          message: 'Please authorize with GitHub',
+          elicitationId: 'e-123',
+          url: 'https://github.com/login/oauth/authorize?client_id=abc',
+        },
+      ]
+      const mcpError = new McpError(ErrorCode.UrlElicitationRequired, 'Authorization required', { elicitations })
+      vi.mocked(mockClientWrapper.callTool).mockRejectedValue(mcpError)
+
+      const result = await runTool<ToolResultBlock>(tool.stream(toolContext))
+
+      expect(result.status).toBe('error')
+      expect((result.content[0] as TextBlock).text).toBe(
+        `MCP Elicitation required: [${String(mcpError)}] with data ${JSON.stringify(elicitations)}`
+      )
+    })
+
+    it('surfaces multiple elicitations for McpError with code -32042', async () => {
+      const elicitations = [
+        {
+          mode: 'url',
+          message: 'Authorize with GitHub',
+          elicitationId: 'e-1',
+          url: 'https://github.com/login/oauth/authorize',
+        },
+        {
+          mode: 'url',
+          message: 'Authorize with Google',
+          elicitationId: 'e-2',
+          url: 'https://accounts.google.com/o/oauth2/auth',
+        },
+      ]
+      const mcpError = new McpError(ErrorCode.UrlElicitationRequired, 'Authorization required', { elicitations })
+      vi.mocked(mockClientWrapper.callTool).mockRejectedValue(mcpError)
+
+      const result = await runTool<ToolResultBlock>(tool.stream(toolContext))
+
+      expect(result.status).toBe('error')
+      expect((result.content[0] as TextBlock).text).toBe(
+        `MCP Elicitation required: [${String(mcpError)}] with data ${JSON.stringify(elicitations)}`
+      )
+    })
+
+    it('falls through to generic error for McpError -32042 with malformed data', async () => {
+      const mcpError = new McpError(ErrorCode.UrlElicitationRequired, 'Authorization required', {
+        unexpected: 'shape',
+      })
+      vi.mocked(mockClientWrapper.callTool).mockRejectedValue(mcpError)
+
+      const result = await runTool<ToolResultBlock>(tool.stream(toolContext))
+
+      expect(result.status).toBe('error')
+      expect((result.content[0] as TextBlock).text).toBe('MCP error -32042: Authorization required')
+    })
+
+    it('falls through to generic error for McpError with a different code', async () => {
+      const mcpError = new McpError(ErrorCode.InvalidRequest, 'Bad request')
+      vi.mocked(mockClientWrapper.callTool).mockRejectedValue(mcpError)
+
+      const result = await runTool<ToolResultBlock>(tool.stream(toolContext))
+
+      expect(result.status).toBe('error')
+      expect((result.content[0] as TextBlock).text).toBe('MCP error -32600: Bad request')
     })
   })
 })
