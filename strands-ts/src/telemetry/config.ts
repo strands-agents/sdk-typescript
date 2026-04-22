@@ -15,8 +15,7 @@
  */
 
 import { context as otelContext, metrics as otelMetrics, propagation, trace } from '@opentelemetry/api'
-import type { ContextManager, TextMapPropagator } from '@opentelemetry/api'
-import type { Meter as OtelMeter, Tracer as OtelTracer } from '@opentelemetry/api'
+import type { ContextManager, Meter as OtelMeter, TextMapPropagator, TracerProvider, Tracer as OtelTracer } from '@opentelemetry/api'
 import { resourceFromAttributes, envDetector, type Resource } from '@opentelemetry/resources'
 import {
   BasicTracerProvider,
@@ -120,7 +119,7 @@ export interface TracerConfig {
    * Custom TracerProvider instance. If not provided, NodeTracerProvider is
    * used when available, otherwise BasicTracerProvider.
    */
-  provider?: BasicTracerProvider
+  provider?: TracerProvider
 
   /**
    * Exporter configuration.
@@ -139,9 +138,15 @@ export interface TracerConfig {
 }
 
 let _provider: BasicTracerProvider | null = null
+let _customProvider: TracerProvider | null = null
 
 /**
  * Set up the tracer provider with the given configuration.
+ *
+ * When called without a custom provider, returns a BasicTracerProvider and
+ * registers the async context manager + W3C propagators for trace propagation.
+ * When a custom provider is passed, the caller is responsible for their own
+ * context manager / propagator setup (e.g. via provider.register()).
  *
  * @param config - Tracer configuration options
  * @returns The configured tracer provider
@@ -153,34 +158,34 @@ let _provider: BasicTracerProvider | null = null
  * telemetry.setupTracer({ exporters: { otlp: true } })
  * ```
  */
-export function setupTracer(config: TracerConfig = {}): BasicTracerProvider {
-  if (_provider) {
+export function setupTracer(config?: Omit<TracerConfig, 'provider'>): BasicTracerProvider
+export function setupTracer(config: TracerConfig): TracerProvider
+export function setupTracer(config: TracerConfig = {}): TracerProvider {
+  if (_provider || _customProvider) {
     logger.warn('tracer provider already initialized, returning existing provider')
-    return _provider
+    return _customProvider ?? _provider!
   }
 
   if (config.provider) {
-    _provider = config.provider
-  } else {
-    const spanProcessors: SpanProcessor[] = []
-    if (config.exporters?.otlp) spanProcessors.push(new BatchSpanProcessor(new OTLPTraceExporter()))
-    if (config.exporters?.console) spanProcessors.push(new SimpleSpanProcessor(new ConsoleSpanExporter()))
-    _provider = new DefaultTracerProvider({ resource: getOtelResource(), spanProcessors })
+    _customProvider = config.provider
+    trace.setGlobalTracerProvider(_customProvider)
+    return _customProvider
   }
 
+  const spanProcessors: SpanProcessor[] = []
+  if (config.exporters?.otlp) spanProcessors.push(new BatchSpanProcessor(new OTLPTraceExporter()))
+  if (config.exporters?.console) spanProcessors.push(new SimpleSpanProcessor(new ConsoleSpanExporter()))
+  _provider = new DefaultTracerProvider({ resource: getOtelResource(), spanProcessors })
+
   trace.setGlobalTracerProvider(_provider)
-  if (!config.provider) {
-    if (DefaultContextManager) otelContext.setGlobalContextManager(new DefaultContextManager())
-    if (DefaultPropagator) propagation.setGlobalPropagator(DefaultPropagator)
-  }
+  if (DefaultContextManager) otelContext.setGlobalContextManager(new DefaultContextManager())
+  if (DefaultPropagator) propagation.setGlobalPropagator(DefaultPropagator)
 
   if (typeof globalThis.process?.once === 'function') {
     globalThis.process.once('beforeExit', () => {
-      if (_provider) {
-        _provider.forceFlush().catch((err: unknown) => {
-          logger.warn(`error=<${err}> | failed to flush tracer provider on exit`)
-        })
-      }
+      _provider?.forceFlush()?.catch((err: unknown) => {
+        logger.warn(`error=<${err}> | failed to flush tracer provider on exit`)
+      })
     })
   }
 
