@@ -276,6 +276,85 @@ describe('Agent interrupt system', () => {
         event.interrupt({ name: 'test', reason: 'test' })
       }).toThrow('Interrupt state not available')
     })
+
+    it('throws TypeError when interrupt responses are mixed with other content blocks', async () => {
+      const model = new MockMessageModel()
+        .addTurn({
+          type: 'toolUseBlock',
+          name: 'confirmTool',
+          toolUseId: 'tool-1',
+          input: {},
+        })
+        .addTurn({ type: 'textBlock', text: 'Done' })
+
+      const tool = createMockTool('confirmTool', (context) => {
+        context.interrupt({ name: 'confirm', reason: 'Confirm?' })
+      })
+
+      const agent = new Agent({ model, tools: [tool], printer: false })
+
+      // First invocation - triggers interrupt
+      const interruptResult = await agent.invoke('Test')
+      expect(interruptResult.stopReason).toBe('interrupt')
+
+      // Resume with mixed content: interrupt response + text block
+      await expect(
+        agent.invoke([
+          {
+            interruptResponse: {
+              interruptId: interruptResult.interrupts![0]!.id,
+              response: 'yes',
+            },
+          },
+          { type: 'textBlock', text: 'extra text' },
+        ] as any)
+      ).rejects.toThrow(TypeError)
+
+      await expect(
+        agent.invoke([
+          {
+            interruptResponse: {
+              interruptId: interruptResult.interrupts![0]!.id,
+              response: 'yes',
+            },
+          },
+          { type: 'textBlock', text: 'extra text' },
+        ] as any)
+      ).rejects.toThrow('Must resume from interrupt with a list of interruptResponse content blocks only')
+    })
+
+    it('allows pure interrupt response arrays without error', async () => {
+      const model = new MockMessageModel()
+        .addTurn({
+          type: 'toolUseBlock',
+          name: 'confirmTool',
+          toolUseId: 'tool-1',
+          input: {},
+        })
+        .addTurn({ type: 'textBlock', text: 'Done' })
+
+      const tool = createMockTool('confirmTool', (context) => {
+        const response = context.interrupt({ name: 'confirm', reason: 'Confirm?' })
+        return `Got: ${response}`
+      })
+
+      const agent = new Agent({ model, tools: [tool], printer: false })
+
+      const interruptResult = await agent.invoke('Test')
+      expect(interruptResult.stopReason).toBe('interrupt')
+
+      // Resume with pure interrupt responses — should succeed
+      const finalResult = await agent.invoke([
+        {
+          interruptResponse: {
+            interruptId: interruptResult.interrupts![0]!.id,
+            response: 'approved',
+          },
+        },
+      ])
+
+      expect(finalResult.stopReason).toBe('endTurn')
+    })
   })
 
   describe('multiple hook interrupts', () => {

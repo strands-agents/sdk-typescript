@@ -795,11 +795,20 @@ export class Agent implements LocalAgent, InvokableAgent {
     }
 
     const responses: InterruptResponseContent[] = []
+    let hasNonInterrupt = false
 
     for (const item of args) {
       if (isInterruptResponseContent(item)) {
         responses.push(item)
+      } else {
+        hasNonInterrupt = true
       }
+    }
+
+    // If we found both interrupt responses and non-interrupt content, reject the input.
+    // Matches Python SDK behavior: resume input must be purely interrupt responses.
+    if (responses.length > 0 && hasNonInterrupt) {
+      throw new TypeError('Must resume from interrupt with a list of interruptResponse content blocks only')
     }
 
     return responses
