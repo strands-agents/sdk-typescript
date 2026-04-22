@@ -162,7 +162,7 @@ export {
 } from './models/streaming.js'
 
 // Model provider types
-export type { BaseModelConfig, StreamOptions, CacheConfig } from './models/model.js'
+export type { BaseModelConfig, CountTokensOptions, StreamOptions, CacheConfig } from './models/model.js'
 
 export { Model } from './models/model.js'
 

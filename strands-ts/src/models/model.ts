@@ -123,6 +123,22 @@ export interface StreamOptions {
 }
 
 /**
+ * Options for counting tokens in a set of messages.
+ */
+export interface CountTokensOptions {
+  /**
+   * System prompt to guide the model's behavior.
+   * Can be a simple string or an array of content blocks for advanced caching.
+   */
+  systemPrompt?: SystemPrompt
+
+  /**
+   * Array of tool specifications to include in the count.
+   */
+  toolSpecs?: ToolSpec[]
+}
+
+/**
  * Result interface for the streamAggregated method.
  * Contains the complete message, stop reason, and optional metadata.
  */
@@ -192,19 +208,20 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
   abstract stream(messages: Message[], options?: StreamOptions): AsyncIterable<ModelStreamEvent>
 
   /**
-   * Estimate token count for the given input before sending to the model.
+   * Count tokens for the given input before sending to the model.
    *
-   * Used internally for proactive context management.
+   * Used for proactive context management (e.g., triggering compression at a threshold).
    * The base implementation uses a character-based heuristic (chars/4 for text, chars/2 for JSON).
    *
-   * Subclasses should override this method to use native token counting APIs for improved accuracy,
-   * falling back to `super.estimateTokens()` on API failure.
+   * Subclasses should override this method to use native token counting APIs
+   * (e.g., Bedrock CountTokens, Anthropic countTokens, Gemini countTokens)
+   * for improved accuracy, falling back to `super.countTokens()` on API failure.
    *
-   * @param messages - Array of conversation messages to estimate tokens for
-   * @param options - Optional streaming options containing system prompt and tool specs
-   * @returns Estimated total input tokens
+   * @param messages - Array of conversation messages to count tokens for
+   * @param options - Optional options containing system prompt and tool specs
+   * @returns Total input token count
    */
-  protected async estimateTokens(messages: Message[], options?: StreamOptions): Promise<number> {
+  async countTokens(messages: Message[], options?: CountTokensOptions): Promise<number> {
     return estimateTokensHeuristic(messages, options)
   }
 
@@ -502,7 +519,7 @@ function estimateContentBlockTokens(block: ContentBlock): number {
  * Estimate token count using character-based heuristics (text: chars/4, JSON: chars/2).
  * Dependency-free fallback used by the base Model class.
  */
-function estimateTokensHeuristic(messages: Message[], options?: StreamOptions): number {
+function estimateTokensHeuristic(messages: Message[], options?: CountTokensOptions): number {
   let total = 0
 
   if (options?.systemPrompt) {

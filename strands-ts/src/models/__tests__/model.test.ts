@@ -828,12 +828,12 @@ describe('Model.modelId', () => {
   })
 })
 
-describe('estimateTokens', () => {
+describe('countTokens', () => {
   it('estimates text block tokens using chars/4 heuristic', async () => {
     const provider = new TestModelProvider()
     const messages = [new Message({ role: 'user', content: [new TextBlock('Hello world')] })]
 
-    const result = await provider.testEstimateTokens(messages)
+    const result = await provider.countTokens(messages)
 
     expect(result).toBe(3)
   })
@@ -847,7 +847,7 @@ describe('estimateTokens', () => {
       }),
     ]
 
-    const result = await provider.testEstimateTokens(messages)
+    const result = await provider.countTokens(messages)
 
     expect(result).toBe(3 + 9)
   })
@@ -867,7 +867,7 @@ describe('estimateTokens', () => {
       }),
     ]
 
-    const result = await provider.testEstimateTokens(messages)
+    const result = await provider.countTokens(messages)
 
     expect(result).toBe(Math.ceil('72°F and sunny'.length / 4))
   })
@@ -881,7 +881,7 @@ describe('estimateTokens', () => {
       }),
     ]
 
-    const result = await provider.testEstimateTokens(messages)
+    const result = await provider.countTokens(messages)
 
     expect(result).toBe(Math.ceil('Let me think about this step by step'.length / 4))
   })
@@ -899,7 +899,7 @@ describe('estimateTokens', () => {
       }),
     ]
 
-    const result = await provider.testEstimateTokens(messages)
+    const result = await provider.countTokens(messages)
 
     expect(result).toBe(Math.ceil('Is this safe?'.length / 4))
   })
@@ -918,7 +918,7 @@ describe('estimateTokens', () => {
       }),
     ]
 
-    const result = await provider.testEstimateTokens(messages)
+    const result = await provider.countTokens(messages)
 
     expect(result).toBe(Math.ceil('cited text here'.length / 4))
   })
@@ -927,7 +927,7 @@ describe('estimateTokens', () => {
     const provider = new TestModelProvider()
     const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
 
-    const result = await provider.testEstimateTokens(messages, {
+    const result = await provider.countTokens(messages, {
       systemPrompt: 'You are a helpful assistant',
     })
 
@@ -938,7 +938,7 @@ describe('estimateTokens', () => {
     const provider = new TestModelProvider()
     const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
 
-    const result = await provider.testEstimateTokens(messages, {
+    const result = await provider.countTokens(messages, {
       systemPrompt: [new TextBlock('System instructions')],
     })
 
@@ -950,7 +950,7 @@ describe('estimateTokens', () => {
     const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
     const toolSpecs = [{ name: 'get_weather', description: 'Get weather for a city' }]
 
-    const result = await provider.testEstimateTokens(messages, { toolSpecs })
+    const result = await provider.countTokens(messages, { toolSpecs })
 
     const specJson = JSON.stringify(toolSpecs[0])
     expect(result).toBe(Math.ceil('Hi'.length / 4) + Math.ceil(specJson.length / 2))
@@ -959,7 +959,7 @@ describe('estimateTokens', () => {
   it('returns 0 for empty messages', async () => {
     const provider = new TestModelProvider()
 
-    const result = await provider.testEstimateTokens([])
+    const result = await provider.countTokens([])
 
     expect(result).toBe(0)
   })
@@ -973,7 +973,7 @@ describe('estimateTokens', () => {
       }),
     ]
 
-    const result = await provider.testEstimateTokens(messages)
+    const result = await provider.countTokens(messages)
 
     expect(result).toBe(0)
   })
@@ -982,7 +982,7 @@ describe('estimateTokens', () => {
     const provider = new TestModelProvider()
     const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
 
-    const result = await provider.testEstimateTokens(messages, {
+    const result = await provider.countTokens(messages, {
       systemPrompt: [new GuardContentBlock({ text: { qualifiers: ['query'], text: 'Guard text here' } })],
     })
 
@@ -1003,7 +1003,7 @@ describe('estimateTokens', () => {
       }),
     ]
 
-    const result = await provider.testEstimateTokens(messages, { systemPrompt: 'You are helpful' })
+    const result = await provider.countTokens(messages, { systemPrompt: 'You are helpful' })
 
     const expected =
       Math.ceil('You are helpful'.length / 4) +
