@@ -169,8 +169,10 @@ export function setupTracer(config: TracerConfig = {}): BasicTracerProvider {
   }
 
   trace.setGlobalTracerProvider(_provider)
-  if (DefaultContextManager) otelContext.setGlobalContextManager(new DefaultContextManager())
-  if (DefaultPropagator) propagation.setGlobalPropagator(DefaultPropagator)
+  if (!config.provider) {
+    if (DefaultContextManager) otelContext.setGlobalContextManager(new DefaultContextManager())
+    if (DefaultPropagator) propagation.setGlobalPropagator(DefaultPropagator)
+  }
 
   if (typeof globalThis.process?.once === 'function') {
     globalThis.process.once('beforeExit', () => {
