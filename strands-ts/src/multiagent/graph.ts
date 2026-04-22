@@ -1,7 +1,7 @@
 import type { AttributeValue } from '@opentelemetry/api'
 import type { InvokableAgent } from '../types/agent.js'
 import type { MultiAgentInput } from './multiagent.js'
-import type { ContentBlock, ContentBlockData } from '../types/messages.js'
+import type { ContentBlock } from '../types/messages.js'
 import { TextBlock, contentBlockFromData } from '../types/messages.js'
 import { logger } from '../logging/logger.js'
 import { HookableEvent } from '../hooks/events.js'
@@ -511,9 +511,7 @@ export class Graph implements MultiAgent {
     const blocks =
       typeof input === 'string'
         ? [new TextBlock(input)]
-        : (input as Exclude<typeof input, string>).map((b) =>
-            'type' in b ? (b as ContentBlock) : contentBlockFromData(b as ContentBlockData)
-          )
+        : input.map((b) => ('type' in b ? (b as ContentBlock) : contentBlockFromData(b)))
     return [...blocks, ...deps]
   }
 
