@@ -4,6 +4,7 @@ import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
 import { McpClient } from '../mcp.js'
 import { McpTool } from '../tools/mcp-tool.js'
 import { JsonBlock, type TextBlock, type ToolResultBlock } from '../types/messages.js'
+import { ImageBlock } from '../types/media.js'
 import type { LocalAgent } from '../types/agent.js'
 import type { ToolContext } from '../tools/tool.js'
 import { context, propagation, trace, TraceFlags } from '@opentelemetry/api'
@@ -370,5 +371,108 @@ describe('MCP Integration', () => {
       expect(result.status).toBe('error')
       expect((result.content[0] as TextBlock).text).toContain('missing content array')
     })
+
+    it('maps MCP image content to ImageBlock', async () => {
+      // "iVBOR..." is a minimal base64 PNG prefix
+      const base64Data = 'iVBORw0KGgoAAAANSUhEUg=='
+      vi.mocked(mockClientWrapper.callTool).mockResolvedValue({
+        content: [{ type: 'image', data: base64Data, mimeType: 'image/png' }],
+      })
+
+      const result = await runTool<ToolResultBlock>(tool.stream(toolContext))
+
+      expect(result.status).toBe('success')
+      expect(result.content).toHaveLength(1)
+      const imageBlock = result.content[0] as ImageBlock
+      expect(imageBlock).toBeInstanceOf(ImageBlock)
+      expect(imageBlock.format).toBe('png')
+      expect(imageBlock.source.type).toBe('imageSourceBytes')
+    })
+
+    it('falls back to JsonBlock for unsupported image mime type', async () => {
+      vi.mocked(mockClientWrapper.callTool).mockResolvedValue({
+        content: [{ type: 'image', data: 'abc123', mimeType: 'image/bmp' }],
+      })
+
+      const result = await runTool<ToolResultBlock>(tool.stream(toolContext))
+
+      expect(result.content[0]).toBeInstanceOf(JsonBlock)
+    })
+
+    it('falls back to JsonBlock for image content missing data', async () => {
+      vi.mocked(mockClientWrapper.callTool).mockResolvedValue({
+        content: [{ type: 'image', mimeType: 'image/png' }],
+      })
+
+      const result = await runTool<ToolResultBlock>(tool.stream(toolContext))
+
+      expect(result.content[0]).toBeInstanceOf(JsonBlock)
+    })
+
+    it('maps MCP text resource to TextBlock', async () => {
+      vi.mocked(mockClientWrapper.callTool).mockResolvedValue({
+        content: [
+          { type: 'resource', resource: { uri: 'file:///doc.txt', text: 'hello world', mimeType: 'text/plain' } },
+        ],
+      })
+
+      const result = await runTool<ToolResultBlock>(tool.stream(toolContext))
+
+      expect(result.status).toBe('success')
+      expect((result.content[0] as TextBlock).text).toBe('hello world')
+    })
+
+    it('maps MCP blob resource with image mime type to ImageBlock', async () => {
+      const base64Data = 'iVBORw0KGgoAAAANSUhEUg=='
+      vi.mocked(mockClientWrapper.callTool).mockResolvedValue({
+        content: [{ type: 'resource', resource: { uri: 'file:///img.png', blob: base64Data, mimeType: 'image/jpeg' } }],
+      })
+
+      const result = await runTool<ToolResultBlock>(tool.stream(toolContext))
+
+      expect(result.content[0]).toBeInstanceOf(ImageBlock)
+      expect((result.content[0] as ImageBlock).format).toBe('jpeg')
+    })
+
+    it('falls back to JsonBlock for blob resource with non-image mime type', async () => {
+      vi.mocked(mockClientWrapper.callTool).mockResolvedValue({
+        content: [
+          { type: 'resource', resource: { uri: 'file:///doc.pdf', blob: 'abc123', mimeType: 'application/pdf' } },
+        ],
+      })
+
+      const result = await runTool<ToolResultBlock>(tool.stream(toolContext))
+
+      expect(result.content[0]).toBeInstanceOf(JsonBlock)
+    })
+
+    it('falls back to JsonBlock for resource with neither text nor blob', async () => {
+      vi.mocked(mockClientWrapper.callTool).mockResolvedValue({
+        content: [{ type: 'resource', resource: { uri: 'file:///unknown' } }],
+      })
+
+      const result = await runTool<ToolResultBlock>(tool.stream(toolContext))
+
+      expect(result.content[0]).toBeInstanceOf(JsonBlock)
+    })
+
+    it('handles mixed content types in a single result', async () => {
+      const base64Data = 'iVBORw0KGgoAAAANSUhEUg=='
+      vi.mocked(mockClientWrapper.callTool).mockResolvedValue({
+        content: [
+          { type: 'text', text: 'Here is the image:' },
+          { type: 'image', data: base64Data, mimeType: 'image/png' },
+          { type: 'resource', resource: { uri: 'file:///notes.txt', text: 'Some notes' } },
+        ],
+      })
+
+      const result = await runTool<ToolResultBlock>(tool.stream(toolContext))
+
+      expect(result.content).toHaveLength(3)
+      expect((result.content[0] as TextBlock).text).toBe('Here is the image:')
+      expect(result.content[1]).toBeInstanceOf(ImageBlock)
+      expect((result.content[2] as TextBlock).text).toBe('Some notes')
+    })
   })
 })
+

@@ -4,7 +4,9 @@
  * Provides bidirectional mapping between media formats and MIME types.
  */
 
-export type ImageFormat = 'png' | 'jpg' | 'jpeg' | 'gif' | 'webp'
+export const IMAGE_FORMATS = ['png', 'jpg', 'jpeg', 'gif', 'webp'] as const
+
+export type ImageFormat = (typeof IMAGE_FORMATS)[number]
 
 export type VideoFormat = 'mkv' | 'mov' | 'mp4' | 'webm' | 'flv' | 'mpeg' | 'mpg' | 'wmv' | '3gp'
 

@@ -1,8 +1,11 @@
 import { createErrorResult, Tool, type ToolContext, type ToolStreamGenerator } from './tool.js'
 import type { ToolSpec } from './types.js'
 import type { JSONSchema, JSONValue } from '../types/json.js'
-import { JsonBlock, TextBlock, ToolResultBlock } from '../types/messages.js'
+import { JsonBlock, TextBlock, ToolResultBlock, type ToolResultContent } from '../types/messages.js'
+import { ImageBlock, decodeBase64 } from '../types/media.js'
+import { toMediaFormat, IMAGE_FORMATS, type ImageFormat } from '../mime.js'
 import type { McpClient } from '../mcp.js'
+import { logger } from '../logging/logger.js'
 
 export interface McpToolConfig {
   name: string
@@ -48,13 +51,11 @@ export class McpTool extends Tool {
         throw new Error('Invalid tool result from MCP Client: missing content array')
       }
 
-      const content = rawResult.content.map((item: unknown) => {
-        if (this._isMcpTextContent(item)) {
-          return new TextBlock(item.text)
-        }
+      const content: ToolResultContent[] = []
 
-        return new JsonBlock({ json: item as JSONValue })
-      })
+      for (const item of rawResult.content) {
+        content.push(this._mapMcpContent(item))
+      }
 
       if (content.length === 0) {
         content.push(new TextBlock('Tool execution completed successfully with no output.'))
@@ -68,6 +69,100 @@ export class McpTool extends Tool {
     } catch (error) {
       return createErrorResult(error, toolUseId)
     }
+  }
+
+  /**
+   * Maps a single MCP content item to an SDK ToolResultContent block.
+   *
+   * @param item - MCP content item from tool result
+   * @returns Mapped content block
+   */
+  private _mapMcpContent(item: unknown): ToolResultContent {
+    if (!item || typeof item !== 'object') {
+      return new JsonBlock({ json: item as JSONValue })
+    }
+
+    const record = item as Record<string, unknown>
+
+    switch (record.type) {
+      case 'text':
+        if (typeof record.text === 'string') {
+          return new TextBlock(record.text)
+        }
+        return new JsonBlock({ json: item as JSONValue })
+
+      case 'image':
+        return this._mapMcpImageContent(record)
+
+      case 'resource':
+        return this._mapMcpEmbeddedResource(record)
+
+      default:
+        return new JsonBlock({ json: item as JSONValue })
+    }
+  }
+
+  /**
+   * Maps an MCP image content item to an ImageBlock.
+   *
+   * @param record - MCP image content with data (base64) and mimeType
+   * @returns ImageBlock or TextBlock fallback if format is unsupported
+   */
+  private _mapMcpImageContent(record: Record<string, unknown>): ToolResultContent {
+    const data = record.data
+    const mimeType = record.mimeType
+
+    if (typeof data !== 'string' || typeof mimeType !== 'string') {
+      logger.warn('content_type=<image> | mcp image content missing data or mimeType, falling back to json')
+      return new JsonBlock({ json: record as JSONValue })
+    }
+
+    const format = toMediaFormat(mimeType)
+    if (!format || !this._isImageFormat(format)) {
+      logger.warn(`mime_type=<${mimeType}> | unsupported mcp image mime type, falling back to json`)
+      return new JsonBlock({ json: record as JSONValue })
+    }
+
+    return new ImageBlock({
+      format,
+      source: { bytes: decodeBase64(data) },
+    })
+  }
+
+  /**
+   * Maps an MCP embedded resource to an SDK content block.
+   * Text resources become TextBlock, blob resources with image MIME types become ImageBlock.
+   *
+   * @param record - MCP embedded resource content
+   * @returns Mapped content block or undefined if unsupported
+   */
+  private _mapMcpEmbeddedResource(record: Record<string, unknown>): ToolResultContent {
+    const resource = record.resource
+    if (!resource || typeof resource !== 'object') {
+      return new JsonBlock({ json: record as JSONValue })
+    }
+
+    const res = resource as Record<string, unknown>
+
+    // Text resource
+    if (typeof res.text === 'string') {
+      return new TextBlock(res.text)
+    }
+
+    // Blob resource
+    if (typeof res.blob === 'string' && typeof res.mimeType === 'string') {
+      const format = toMediaFormat(res.mimeType)
+      if (format && this._isImageFormat(format)) {
+        return new ImageBlock({
+          format,
+          source: { bytes: decodeBase64(res.blob) },
+        })
+      }
+      // Non-image blob: fall back to json
+      logger.warn(`mime_type=<${res.mimeType}> | unsupported mcp resource blob mime type, falling back to json`)
+    }
+
+    return new JsonBlock({ json: record as JSONValue })
   }
 
   /**
@@ -86,16 +181,10 @@ export class McpTool extends Tool {
   }
 
   /**
-   * Type Guard: Checks if an item is a Text content block.
-   * \{ type: 'text'; text: string \}
+   * Type Guard: Checks if a media format is a supported image format.
    */
-  private _isMcpTextContent(value: unknown): value is { type: 'text'; text: string } {
-    if (typeof value !== 'object' || value === null) {
-      return false
-    }
-
-    const record = value as Record<string, unknown>
-
-    return record.type === 'text' && typeof record.text === 'string'
+  private _isImageFormat(format: string): format is ImageFormat {
+    return (IMAGE_FORMATS as readonly string[]).includes(format)
   }
 }
+
