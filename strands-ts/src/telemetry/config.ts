@@ -15,7 +15,13 @@
  */
 
 import { context as otelContext, metrics as otelMetrics, propagation, trace } from '@opentelemetry/api'
-import type { ContextManager, Meter as OtelMeter, TextMapPropagator, TracerProvider, Tracer as OtelTracer } from '@opentelemetry/api'
+import type {
+  ContextManager,
+  Meter as OtelMeter,
+  TextMapPropagator,
+  TracerProvider,
+  Tracer as OtelTracer,
+} from '@opentelemetry/api'
 import { resourceFromAttributes, envDetector, type Resource } from '@opentelemetry/resources'
 import {
   BasicTracerProvider,
