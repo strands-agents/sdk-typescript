@@ -104,7 +104,6 @@ Most commands accept layer flags (`--ts`, `--wasm`, `--py`). No flags means all 
 | `validate <layer>` | Rebuild and test the layers affected by a change                       |
 | `ci`               | Full pipeline: generate, format, lint, build, test                     |
 | `rebuild`          | Clean rebuild: clean, generate, build                                  |
-| `report`           | Status report from `tasks.toml` (`--full` for task-level detail)       |
 | `clean`            | Remove all build artifacts                                             |
 | `example <name>`   | Run an example (`--py`, `--ts`)                                        |
 
@@ -126,5 +125,4 @@ Comments are normative statements that describe what code does or why a decision
 
 - Run `npm run dev -- ci` before pushing. This is the same pipeline CI runs.
 - Keep PRs focused on a single change.
-- Use conventional commit messages scoped to the layer: `feat(strands-wasm): add new export`, `fix(strands-py): handle empty tool result`.
-  Valid scopes: `strands-ts`, `strands-wasm`, `strands-py`, `strands-dev`.
+- Use conventional commit messages: `feat:`, `fix:`, `refactor:`, `docs:`, etc.
