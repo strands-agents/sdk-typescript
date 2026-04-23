@@ -109,11 +109,41 @@ interface types {
     additional-config: option<string>,
   }
 
+  /// Opaque config for a host-side model provider.
+  /// The guest does not interpret this — it passes it back to the host
+  /// via the model-provider import.
+  record host-model-config {
+    /// Provider-specific configuration as a JSON blob.
+    config: string,
+  }
+
   variant model-config {
     anthropic(anthropic-config),
     bedrock(bedrock-config),
     openai(openai-config),
     gemini(gemini-config),
+    host-model(host-model-config),
+  }
+
+  /// Arguments for a host-side model invocation.
+  record model-invoke-args {
+    /// Conversation messages as a JSON array.
+    messages: string,
+    /// System prompt (optional).
+    system-prompt: option<string>,
+    /// Tool specifications available to the model.
+    tool-specs: option<list<tool-spec>>,
+    /// Provider-specific config JSON (passed through from host-model-config).
+    config: string,
+  }
+
+  /// A single model stream event serialized as JSON.
+  /// Currently unused in the invoke return type due to a wasmtime-py
+  /// limitation — see the comment on model-provider.invoke below.
+  /// Retained for future use when the return type can be upgraded to
+  /// result<list<model-event>, string>.
+  record model-event {
+    data: string,
   }
 
   record model-params {
@@ -212,6 +242,25 @@ interface host-log {
   log: func(entry: log-entry);
 }
 
+/// Host-side model provider.
+///
+/// When the agent is configured with a `host-model` model-config, the guest
+/// delegates model inference to the host via this import instead of
+/// making HTTP calls directly.
+interface model-provider {
+  use types.{model-invoke-args, model-event};
+
+  /// Invoke the host-side model and return the full sequence of events as a JSON array.
+  ///
+  /// Stopgap: the ideal signature is result<list<model-event>, string>,
+  /// but wasmtime-py's async component model cannot correctly return
+  /// list<record> from import callbacks during async execution (triggers
+  /// "cannot enter component instance" trap). Using result<string, string>
+  /// with a JSON-encoded event array as a workaround until the wasmtime-py
+  /// fork merges async component model fixes upstream.
+  invoke: func(args: model-invoke-args) -> result<string, string>;
+}
+
 interface api {
   use types.{agent-config, stream-event, stream-args, respond-args, set-messages-args};
 
@@ -235,9 +284,11 @@ interface api {
 world agent {
   import tool-provider;
   import host-log;
+  import model-provider;
   export api;
 }
 
 world agent-types {
   export types;
 }
+

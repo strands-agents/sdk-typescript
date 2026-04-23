@@ -26,11 +26,14 @@ import type {
 
 import { callTool } from 'strands:agent/tool-provider';
 import { log as hostLog } from 'strands:agent/host-log';
-import { Agent, FunctionTool, SessionManager, FileStorage, S3Storage } from '@strands-agents/sdk';
-import { AnthropicModel } from '@strands-agents/sdk/anthropic';
-import { BedrockModel } from '@strands-agents/sdk/bedrock';
-import { OpenAIModel } from '@strands-agents/sdk/openai';
-import { GeminiModel } from '@strands-agents/sdk/gemini';
+import { invoke as hostModelInvoke } from 'strands:agent/model-provider';
+import { Agent, FunctionTool, SessionManager, FileStorage } from '@strands-agents/sdk';
+import { S3Storage } from '@strands-agents/sdk/session/s3-storage';
+import { AnthropicModel } from '@strands-agents/sdk/models/anthropic';
+import { BedrockModel } from '@strands-agents/sdk/models/bedrock';
+import { OpenAIModel } from '@strands-agents/sdk/models/openai';
+import { GoogleModel } from '@strands-agents/sdk/models/google';
+import { HostModel } from '@strands-agents/sdk/models/host-model';
 import type { StopReason, AgentStreamEvent, Model, BaseModelConfig } from '@strands-agents/sdk';
 
 // All log calls go through `hostLog` (the WIT import).  The host can
@@ -164,6 +167,27 @@ function modelParamsConfig(params?: ModelParams): Record<string, unknown> {
   };
 }
 
+/** Unwrap the result<string, string> from hostModelInvoke into {data}[] for HostModel. */
+function unwrapHostModelResult(args: {
+  messages: string;
+  systemPrompt?: string;
+  toolSpecs?: Array<{ name: string; description: string; inputSchema: string }>;
+  config: string;
+}): Array<{ data: string }> {
+  const result = hostModelInvoke(args);
+  let jsonStr: string;
+  if (typeof result === 'object' && result !== null && 'tag' in result) {
+    if ((result as any).tag === 'err') {
+      throw new Error((result as any).val);
+    }
+    jsonStr = (result as any).val;
+  } else {
+    jsonStr = result as any;
+  }
+  const eventStrings: string[] = JSON.parse(jsonStr);
+  return eventStrings.map((s: string) => ({ data: s }));
+}
+
 function createModel(config?: ModelConfig, params?: ModelParams): Model<BaseModelConfig> {
   const base = modelParamsConfig(params);
 
@@ -215,12 +239,19 @@ function createModel(config?: ModelConfig, params?: ModelParams): Model<BaseMode
     case 'gemini': {
       glog('info', 'createModel: Gemini', { modelId: config.val.modelId });
       const extra = config.val.additionalConfig ? JSON.parse(config.val.additionalConfig) : {};
-      return new GeminiModel({
+      return new GoogleModel({
         ...base,
         ...(config.val.modelId ? { modelId: config.val.modelId } : {}),
         ...(config.val.apiKey ? { apiKey: config.val.apiKey } : {}),
         ...extra,
       });
+    }
+    case 'host-model': {
+      glog('info', 'createModel: Host (delegating to host model provider)');
+      return new HostModel(
+        { ...base, hostConfig: config.val.config },
+        unwrapHostModelResult,
+      );
     }
     default:
       throw new Error(`Unknown model provider: ${(config as any).tag}`);
@@ -418,9 +449,12 @@ class AgentImpl {
 
     if (args.tools) {
       const requestTools = createTools(args.tools);
-      this.agent.toolRegistry.clear();
+      // Remove all existing tools and add the request-specific ones
+      for (const t of this.agent.toolRegistry.list()) {
+        this.agent.toolRegistry.remove(t.name);
+      }
       if (requestTools) {
-        this.agent.toolRegistry.addAll(requestTools);
+        this.agent.toolRegistry.add(requestTools);
       }
     }
 
@@ -487,9 +521,11 @@ class ResponseStreamImpl {
     if (this.originalModel) {
       (this.agent as any).model = this.originalModel;
     }
-    this.agent.toolRegistry.clear();
+    for (const t of this.agent.toolRegistry.list()) {
+      this.agent.toolRegistry.remove(t.name);
+    }
     if (this.defaultTools) {
-      this.agent.toolRegistry.addAll(this.defaultTools);
+      this.agent.toolRegistry.add(this.defaultTools);
     }
   }
 
