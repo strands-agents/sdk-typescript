@@ -165,6 +165,20 @@ interface types {
     save-latest-on: option<string>,
   }
 
+  /// Sliding window conversation manager config.
+  record sliding-window-config {
+    window-size: s32,
+    should-truncate-results: bool,
+  }
+
+  /// Conversation manager configuration.
+  /// The `strategy` field selects the manager: "none" or "sliding-window".
+  record conversation-manager-config {
+    strategy: string,
+    window-size: s32,
+    should-truncate-results: bool,
+  }
+
   /// Top-level agent configuration.
   record agent-config {
     model: option<model-config>,
@@ -174,6 +188,7 @@ interface types {
     tools: option<list<tool-spec>>,
     trace-context: option<string>,
     session: option<session-config>,
+    conversation-manager: option<conversation-manager-config>,
   }
 
   /// Arguments for a single tool call from guest to host.

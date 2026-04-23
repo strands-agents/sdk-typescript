@@ -240,6 +240,7 @@ class Agent:
         structured_output_model: type | None = None,
         agent_id: str | None = None,
         session_manager: Any = None,
+        conversation_manager: Any = None,
         **kwargs: Any,
     ):
         if kwargs:
@@ -293,6 +294,23 @@ class Agent:
             else None
         )
 
+        # Translate conversation manager to config dict for the WASM guest.
+        # The Python instance is used only for config extraction — it must NOT be
+        # registered as a hook provider, since conversation management runs in the TS SDK.
+        cm_config: dict[str, Any] | None = None
+        if conversation_manager is not None:
+            from strands.agent.conversation_manager import NullConversationManager as _NullCM
+            from strands.agent.conversation_manager import SlidingWindowConversationManager as _SlidingCM
+
+            if isinstance(conversation_manager, _NullCM):
+                cm_config = {"type": "none"}
+            elif isinstance(conversation_manager, _SlidingCM):
+                cm_config = {"type": "sliding-window", "window_size": conversation_manager.window_size}
+            elif isinstance(conversation_manager, dict):
+                cm_config = conversation_manager
+            else:
+                log.warning("unknown conversation_manager type: %s, ignoring", type(conversation_manager).__name__)
+
         self._wasm_agent = _WasmAgent(
             model=model_config,
             system_prompt=sp_str,
@@ -300,6 +318,7 @@ class Agent:
             tools=tool_specs,
             tool_dispatcher=self._dispatcher,
             log_handler=_LogHandler(),
+            conversation_manager_config=cm_config,
             use_callback_relay=False,
         )
 

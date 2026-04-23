@@ -26,12 +26,14 @@ import type {
 
 import { callTool } from 'strands:agent/tool-provider';
 import { log as hostLog } from 'strands:agent/host-log';
-import { Agent, FunctionTool, SessionManager, FileStorage, S3Storage } from '@strands-agents/sdk';
-import { AnthropicModel } from '@strands-agents/sdk/anthropic';
-import { BedrockModel } from '@strands-agents/sdk/bedrock';
-import { OpenAIModel } from '@strands-agents/sdk/openai';
-import { GeminiModel } from '@strands-agents/sdk/gemini';
+import { Agent, FunctionTool, SessionManager, FileStorage } from '@strands-agents/sdk';
+import { S3Storage } from '@strands-agents/sdk/session/s3-storage';
+import { AnthropicModel } from '@strands-agents/sdk/models/anthropic';
+import { BedrockModel } from '@strands-agents/sdk/models/bedrock';
+import { OpenAIModel } from '@strands-agents/sdk/models/openai';
+import { GoogleModel } from '@strands-agents/sdk/models/google';
 import type { StopReason, AgentStreamEvent, Model, BaseModelConfig } from '@strands-agents/sdk';
+import { NullConversationManager, SlidingWindowConversationManager } from '@strands-agents/sdk';
 
 // All log calls go through `hostLog` (the WIT import).  The host can
 // route them to the host language's logging framework (e.g. Python `logging`).
@@ -221,7 +223,7 @@ function createModel(config?: ModelConfig, params?: ModelParams): Model<BaseMode
     case 'gemini': {
       glog('info', 'createModel: Gemini', { modelId: config.val.modelId });
       const extra = config.val.additionalConfig ? JSON.parse(config.val.additionalConfig) : {};
-      return new GeminiModel({
+      return new GoogleModel({
         ...base,
         ...(config.val.modelId ? { modelId: config.val.modelId } : {}),
         ...(config.val.apiKey ? { apiKey: config.val.apiKey } : {}),
@@ -390,6 +392,26 @@ function createSessionManager(config: AgentConfig): SessionManager | undefined {
   });
 }
 
+/** Instantiate a conversation manager from the WIT config. Defaults to sliding window (size 40). */
+function createConversationManager(config: AgentConfig): any {
+  const cmConfig = (config as any).conversationManager;
+  if (!cmConfig) {
+    return new SlidingWindowConversationManager({ windowSize: 40 });
+  }
+  switch (cmConfig.strategy) {
+    case 'none':
+      return new NullConversationManager();
+    case 'sliding-window':
+      return new SlidingWindowConversationManager({
+        windowSize: cmConfig.windowSize,
+        shouldTruncateResults: cmConfig.shouldTruncateResults,
+      });
+    default:
+      glog('warn', `unknown conversation manager strategy: ${cmConfig.strategy}, using default`);
+      return new SlidingWindowConversationManager({ windowSize: 40 });
+  }
+}
+
 class AgentImpl {
   private agent: Agent;
   private defaultTools: FunctionTool[] | undefined;
@@ -408,6 +430,7 @@ class AgentImpl {
     this.defaultTools = createTools(config.tools);
     this.lifecycleBridge = new LifecycleBridge();
     this.sessionManager = createSessionManager(config);
+    const conversationManager = createConversationManager(config);
 
     const hooks: any[] = [this.lifecycleBridge];
     if (this.sessionManager) hooks.push(this.sessionManager);
@@ -417,6 +440,7 @@ class AgentImpl {
       systemPrompt: buildSystemPrompt(config),
       tools: this.defaultTools,
       hooks,
+      conversationManager,
       printer: false,
     });
   }
@@ -430,9 +454,11 @@ class AgentImpl {
 
     if (args.tools) {
       const requestTools = createTools(args.tools);
-      this.agent.toolRegistry.clear();
+      for (const t of this.agent.toolRegistry.list()) {
+        this.agent.toolRegistry.remove(t.name);
+      }
       if (requestTools) {
-        this.agent.toolRegistry.addAll(requestTools);
+        this.agent.toolRegistry.add(requestTools);
       }
     }
 
@@ -499,9 +525,11 @@ class ResponseStreamImpl {
     if (this.originalModel) {
       (this.agent as any).model = this.originalModel;
     }
-    this.agent.toolRegistry.clear();
+    for (const t of this.agent.toolRegistry.list()) {
+      this.agent.toolRegistry.remove(t.name);
+    }
     if (this.defaultTools) {
-      this.agent.toolRegistry.addAll(this.defaultTools);
+      this.agent.toolRegistry.add(this.defaultTools);
     }
   }
 
