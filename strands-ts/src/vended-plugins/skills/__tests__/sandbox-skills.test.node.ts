@@ -53,9 +53,9 @@ function createMockSandbox(files: Record<string, string> = {}): Sandbox {
   } as unknown as Sandbox
 }
 
-function createMockAgent(sandbox: Sandbox): LocalAgent {
+function createMockAgent(sandbox: Sandbox, id = 'test-agent'): LocalAgent {
   return {
-    id: 'test-agent',
+    id,
     sandbox,
     appState: new StateStore(),
     messages: [],
@@ -150,7 +150,7 @@ describe('AgentSkills sandbox sources', () => {
 
     await plugin.initAgent(agent)
 
-    const skills = await plugin.getAvailableSkills()
+    const skills = await plugin.getAvailableSkills(agent)
     expect(skills).toHaveLength(1)
     expect(skills[0]!.name).toBe('test-skill')
   })
@@ -168,7 +168,7 @@ describe('AgentSkills sandbox sources', () => {
 
     await plugin.initAgent(agent)
 
-    const skills = await plugin.getAvailableSkills()
+    const skills = await plugin.getAvailableSkills(agent)
     expect(skills).toHaveLength(2)
   })
 
@@ -185,7 +185,7 @@ describe('AgentSkills sandbox sources', () => {
 
     await plugin.initAgent(agent)
 
-    const skills = await plugin.getAvailableSkills()
+    const skills = await plugin.getAvailableSkills(agent)
     expect(skills).toHaveLength(2)
     expect(skills.map((s) => s.name).sort()).toStrictEqual(['local-skill', 'sandbox-skill'])
   })
@@ -195,5 +195,148 @@ describe('AgentSkills sandbox sources', () => {
     expect(() => plugin.setAvailableSkills(['sandbox:/nope'])).toThrow(
       'Sandbox sources are not supported in setAvailableSkills'
     )
+  })
+})
+
+describe('AgentSkills per-agent skill isolation', () => {
+  it('two agents with different sandboxes get different skill catalogs', async () => {
+    const sandboxA = createMockSandbox({
+      '/skills/docker-skill/SKILL.md': '---\nname: docker-skill\ndescription: Docker skill\n---\nDocker instructions',
+    })
+    const sandboxB = createMockSandbox({
+      '/skills/s3-skill/SKILL.md': '---\nname: s3-skill\ndescription: S3 skill\n---\nS3 instructions',
+    })
+
+    const agentA = createMockAgent(sandboxA, 'agent-a')
+    const agentB = createMockAgent(sandboxB, 'agent-b')
+
+    const plugin = new AgentSkills({
+      skills: ['sandbox:/skills'],
+    })
+
+    await plugin.initAgent(agentA)
+    await plugin.initAgent(agentB)
+
+    // Agent A should only see docker-skill
+    const skillsA = await plugin.getAvailableSkills(agentA)
+    expect(skillsA).toHaveLength(1)
+    expect(skillsA[0]!.name).toBe('docker-skill')
+
+    // Agent B should only see s3-skill
+    const skillsB = await plugin.getAvailableSkills(agentB)
+    expect(skillsB).toHaveLength(1)
+    expect(skillsB[0]!.name).toBe('s3-skill')
+  })
+
+  it('shared base skills are present for all agents, sandbox skills are per-agent', async () => {
+    const baseSkill = new Skill({ name: 'shared-skill', description: 'shared' })
+
+    const sandboxA = createMockSandbox({
+      '/skills/skill-a/SKILL.md': '---\nname: skill-a\ndescription: A\n---\nA',
+    })
+    const sandboxB = createMockSandbox({
+      '/skills/skill-b/SKILL.md': '---\nname: skill-b\ndescription: B\n---\nB',
+    })
+
+    const agentA = createMockAgent(sandboxA, 'agent-a')
+    const agentB = createMockAgent(sandboxB, 'agent-b')
+
+    const plugin = new AgentSkills({
+      skills: [baseSkill, 'sandbox:/skills'],
+    })
+
+    await plugin.initAgent(agentA)
+    await plugin.initAgent(agentB)
+
+    // Agent A: shared + skill-a
+    const skillsA = await plugin.getAvailableSkills(agentA)
+    expect(skillsA.map((s) => s.name).sort()).toStrictEqual(['shared-skill', 'skill-a'])
+
+    // Agent B: shared + skill-b
+    const skillsB = await plugin.getAvailableSkills(agentB)
+    expect(skillsB.map((s) => s.name).sort()).toStrictEqual(['shared-skill', 'skill-b'])
+  })
+
+  it('overlapping skill names in different sandboxes do not cross-contaminate', async () => {
+    const sandboxA = createMockSandbox({
+      '/skills/common/SKILL.md': '---\nname: common\ndescription: Version A\n---\nInstructions A',
+    })
+    const sandboxB = createMockSandbox({
+      '/skills/common/SKILL.md': '---\nname: common\ndescription: Version B\n---\nInstructions B',
+    })
+
+    const agentA = createMockAgent(sandboxA, 'agent-a')
+    const agentB = createMockAgent(sandboxB, 'agent-b')
+
+    const plugin = new AgentSkills({
+      skills: ['sandbox:/skills'],
+    })
+
+    await plugin.initAgent(agentA)
+    await plugin.initAgent(agentB)
+
+    const skillsA = await plugin.getAvailableSkills(agentA)
+    const skillsB = await plugin.getAvailableSkills(agentB)
+
+    expect(skillsA).toHaveLength(1)
+    expect(skillsB).toHaveLength(1)
+
+    // Each agent should have ITS OWN version of the 'common' skill
+    expect(skillsA[0]!.description).toBe('Version A')
+    expect(skillsA[0]!.instructions).toContain('Instructions A')
+    expect(skillsB[0]!.description).toBe('Version B')
+    expect(skillsB[0]!.instructions).toContain('Instructions B')
+  })
+
+  it('getAvailableSkills without agent returns only base skills', async () => {
+    const baseSkill = new Skill({ name: 'base-skill', description: 'base' })
+    const sandbox = createMockSandbox({
+      '/skills/sandbox-skill/SKILL.md': '---\nname: sandbox-skill\ndescription: sandbox\n---\nInstructions',
+    })
+    const agent = createMockAgent(sandbox)
+
+    const plugin = new AgentSkills({
+      skills: [baseSkill, 'sandbox:/skills'],
+    })
+
+    // Before initAgent — only base skills
+    const beforeInit = await plugin.getAvailableSkills()
+    expect(beforeInit).toHaveLength(1)
+    expect(beforeInit[0]!.name).toBe('base-skill')
+
+    await plugin.initAgent(agent)
+
+    // With agent — base + sandbox
+    const withAgent = await plugin.getAvailableSkills(agent)
+    expect(withAgent).toHaveLength(2)
+
+    // Without agent — still only base
+    const withoutAgent = await plugin.getAvailableSkills()
+    expect(withoutAgent).toHaveLength(1)
+    expect(withoutAgent[0]!.name).toBe('base-skill')
+  })
+
+  it('setAvailableSkills resets per-agent caches', async () => {
+    const sandbox = createMockSandbox({
+      '/skills/sandbox-skill/SKILL.md': '---\nname: sandbox-skill\ndescription: sandbox\n---\nInstructions',
+    })
+    const agent = createMockAgent(sandbox)
+
+    const plugin = new AgentSkills({
+      skills: ['sandbox:/skills'],
+    })
+
+    await plugin.initAgent(agent)
+    const before = await plugin.getAvailableSkills(agent)
+    expect(before).toHaveLength(1)
+
+    // Replace all skills — should clear per-agent caches
+    const newSkill = new Skill({ name: 'new-skill', description: 'new' })
+    plugin.setAvailableSkills([newSkill])
+
+    // Agent's cache should be gone — falls back to new base skills
+    const after = await plugin.getAvailableSkills(agent)
+    expect(after).toHaveLength(1)
+    expect(after[0]!.name).toBe('new-skill')
   })
 })

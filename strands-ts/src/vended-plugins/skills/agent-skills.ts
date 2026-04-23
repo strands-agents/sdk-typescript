@@ -4,6 +4,14 @@
  * This module provides the AgentSkills class that implements the Plugin
  * interface to add Agent Skills support. The plugin registers a tool for
  * activating skills and injects skill metadata into the system prompt.
+ *
+ * Sandbox skill sources (e.g., `"sandbox:/home/skills"`) are loaded
+ * asynchronously during `initAgent()` using the agent's sandbox instance,
+ * following the same deferred-loading pattern as the Python SDK.
+ *
+ * The skill catalog is maintained **per-agent** using a `WeakMap`,
+ * so a single plugin instance can be safely shared across multiple agents
+ * (even with different sandboxes) without skill cross-contamination.
  */
 
 import { readdirSync, statSync, existsSync } from 'fs'
@@ -71,7 +79,13 @@ function escapeXml(text: string): string {
  *
  * Skills can be provided as filesystem paths (to individual skill directories or
  * parent directories containing multiple skills), HTTPS URLs pointing to raw
- * SKILL.md content, or as pre-built `Skill` instances.
+ * SKILL.md content, `sandbox:/path` URIs that load from the agent's sandbox at
+ * init time, or as pre-built `Skill` instances.
+ *
+ * The skill catalog is stored **per-agent** so that a single plugin instance
+ * can be safely attached to multiple agents with different sandboxes.
+ * Synchronous sources (filesystem, URL, Skill instances) are shared as the
+ * base set; sandbox-resolved skills are added per-agent on top of that base.
  *
  * @example
  * ```typescript
@@ -83,17 +97,21 @@ function escapeXml(text: string): string {
  *   skills: ['./skills/pdf-processing', './skills/'],
  * })
  *
- * // Or provide Skill instances directly
- * const skill = new Skill({ name: 'my-skill', description: 'A custom skill', instructions: 'Do the thing' })
- * const plugin = new AgentSkills({ skills: [skill] })
+ * // Load from agent's sandbox (resolved at agent init)
+ * const plugin = new AgentSkills({ skills: ['sandbox:/home/skills'] })
  *
- * const agent = new Agent({ model, plugins: [plugin] })
+ * // Safe to share across multiple agents with different sandboxes
+ * const agent_a = new Agent({ model, sandbox: sandboxA, plugins: [plugin] })
+ * const agent_b = new Agent({ model, sandbox: sandboxB, plugins: [plugin] })
  * ```
  */
 export class AgentSkills implements Plugin {
   readonly name = 'strands:agent-skills'
 
-  private _skills: Map<string, Skill>
+  /** Base skills resolved synchronously (filesystem, URL, Skill instances). Shared across all agents. */
+  private _baseSkills: Map<string, Skill>
+  /** Per-agent skill catalogs (base + sandbox-resolved). Entries are cleaned up when agents are GC'd. */
+  private _agentSkills: WeakMap<LocalAgent, Map<string, Skill>>
   private readonly _maxResourceFiles: number
   /** When true, skill validation errors throw instead of logging warnings. */
   private readonly _strict: boolean
@@ -107,31 +125,60 @@ export class AgentSkills implements Plugin {
     this._strict = config.strict ?? false
     this._maxResourceFiles = config.maxResourceFiles ?? DEFAULT_MAX_RESOURCE_FILES
     this._stateKey = config.stateKey ?? DEFAULT_STATE_KEY
+    this._agentSkills = new WeakMap()
     const { skills, ready, sandboxSources } = this._resolveSkills(config.skills)
-    this._skills = skills
+    this._baseSkills = skills
     this._ready = ready
     this._sandboxSources = sandboxSources
   }
 
   /**
+   * Get the skill catalog for a specific agent.
+   *
+   * Returns the per-agent catalog if the agent has been initialized,
+   * otherwise falls back to the base (sync-resolved) skills.
+   */
+  private _getSkills(agent?: LocalAgent): Map<string, Skill> {
+    if (agent != null) {
+      const agentSkills = this._agentSkills.get(agent)
+      if (agentSkills != null) {
+        return agentSkills
+      }
+    }
+    return this._baseSkills
+  }
+
+  /**
    * Initialize the plugin with the agent instance.
    *
-   * Waits for any async skill sources (e.g. URLs) to finish loading, then
-   * registers a BeforeInvocationEvent hook that injects skill metadata
-   * into the system prompt before each invocation.
+   * Creates a per-agent skill catalog by copying the base skills and
+   * then resolving any sandbox sources using the agent's sandbox. This
+   * ensures each agent gets its own skill set without cross-contamination.
    */
   async initAgent(agent: LocalAgent): Promise<void> {
     await this._ready
 
-    // Resolve deferred sandbox sources using the agent's sandbox
+    // Start with a COPY of base skills for this agent
+    const agentSkills = new Map(this._baseSkills)
+
+    // Resolve deferred sandbox sources from THIS agent's sandbox
     if (this._sandboxSources.length > 0) {
-      await this._resolveSandboxSources(agent)
+      const sandboxSkills = await this._resolveSandboxSources(agent)
+      for (const [name, skill] of sandboxSkills) {
+        if (agentSkills.has(name)) {
+          logger.warn(`name=<${name}> | duplicate skill name, overwriting previous skill`)
+        }
+        agentSkills.set(name, skill)
+      }
     }
 
-    if (this._skills.size === 0) {
+    // Store per-agent catalog
+    this._agentSkills.set(agent, agentSkills)
+
+    if (agentSkills.size === 0) {
       logger.warn('no skills were loaded, the agent will have no skills available')
     }
-    logger.debug(`skill_count=<${this._skills.size}> | skills plugin initialized`)
+    logger.debug(`skill_count=<${agentSkills.size}> | skills plugin initialized for agent`)
 
     agent.addHook(BeforeInvocationEvent, async (event) => {
       await this._ready
@@ -148,10 +195,14 @@ export class AgentSkills implements Plugin {
 
   /**
    * Get the list of available skills.
+   *
+   * When called with an agent, returns that agent's full skill catalog
+   * (base + sandbox-resolved). Without an agent, returns only the base
+   * (sync-resolved) skills.
    */
-  async getAvailableSkills(): Promise<readonly Skill[]> {
+  async getAvailableSkills(agent?: LocalAgent): Promise<readonly Skill[]> {
     await this._ready
-    return [...this._skills.values()]
+    return [...this._getSkills(agent).values()]
   }
 
   /**
@@ -162,9 +213,13 @@ export class AgentSkills implements Plugin {
    * subdirectories, or an `https://` URL pointing directly to raw SKILL.md
    * content.
    *
-   * Note: this does not persist state or deactivate skills on any agent.
-   * Active skill state is managed per-agent and will be reconciled on the
-   * next tool call or invocation.
+   * Note: Sandbox sources (`"sandbox:/path"`) are NOT supported in
+   * `setAvailableSkills` because no agent context is available.
+   * Use sandbox sources in the `AgentSkills` constructor instead.
+   *
+   * Note: this replaces the base skill set. Per-agent caches from previous
+   * `initAgent()` calls are NOT automatically invalidated — new agents will
+   * pick up the updated base skills on their next `initAgent()`.
    */
   setAvailableSkills(skills: SkillSource[]): void {
     for (const source of skills) {
@@ -175,9 +230,11 @@ export class AgentSkills implements Plugin {
       }
     }
     const { skills: resolved, ready, sandboxSources } = this._resolveSkills(skills)
-    this._skills = resolved
+    this._baseSkills = resolved
     this._ready = ready
     this._sandboxSources = sandboxSources
+    // Reset per-agent caches — new WeakMap so existing entries can be GC'd
+    this._agentSkills = new WeakMap()
   }
 
   /**
@@ -199,6 +256,9 @@ export class AgentSkills implements Plugin {
    * immediately into the returned map. Async sources (URLs) are resolved in
    * the background; the returned `ready` promise resolves when all URL
    * fetches have completed and the map has been updated.
+   *
+   * Sandbox sources are separated out and returned in `sandboxSources` for
+   * deferred resolution during `initAgent()`.
    */
   private _resolveSkills(sources: SkillSource[]): {
     skills: Map<string, Skill>
@@ -298,10 +358,13 @@ export class AgentSkills implements Plugin {
    *
    * Each sandbox source path is treated as either a single skill directory
    * (if it contains SKILL.md) or a parent directory of skill subdirectories.
+   *
+   * Returns a new Map of resolved skills instead of mutating shared state.
    */
-  private async _resolveSandboxSources(agent: LocalAgent): Promise<void> {
+  private async _resolveSandboxSources(agent: LocalAgent): Promise<Map<string, Skill>> {
     const { Skill } = await import('./skill.js')
     const sandbox = agent.sandbox
+    const resolved = new Map<string, Skill>()
 
     for (const sandboxPath of this._sandboxSources) {
       logger.debug(`sandbox_path=<${sandboxPath}> | resolving sandbox skill source`)
@@ -309,20 +372,20 @@ export class AgentSkills implements Plugin {
       try {
         // Try as a single skill directory first
         const skill = await Skill.fromSandbox(sandbox, sandboxPath, { strict: this._strict })
-        if (this._skills.has(skill.name)) {
+        if (resolved.has(skill.name)) {
           logger.warn(`name=<${skill.name}> | duplicate skill name, overwriting previous skill`)
         }
-        this._skills.set(skill.name, skill)
+        resolved.set(skill.name, skill)
         logger.debug(`sandbox_path=<${sandboxPath}>, name=<${skill.name}> | loaded single skill from sandbox`)
       } catch {
         // Fall back to parent directory
         try {
           const skills = await Skill.fromSandboxDirectory(sandbox, sandboxPath, { strict: this._strict })
           for (const skill of skills) {
-            if (this._skills.has(skill.name)) {
+            if (resolved.has(skill.name)) {
               logger.warn(`name=<${skill.name}> | duplicate skill name, overwriting previous skill`)
             }
-            this._skills.set(skill.name, skill)
+            resolved.set(skill.name, skill)
           }
           logger.debug(`sandbox_path=<${sandboxPath}>, count=<${skills.length}> | loaded skills from sandbox directory`)
         } catch (error) {
@@ -330,6 +393,8 @@ export class AgentSkills implements Plugin {
         }
       }
     }
+
+    return resolved
   }
 
   /**
@@ -359,9 +424,10 @@ export class AgentSkills implements Plugin {
    * Handle skill activation from the tool callback.
    */
   private _activateSkill(skillName: string, context: ToolContext): string {
-    const found = this._skills.get(skillName)
+    const agentSkills = this._getSkills(context.agent)
+    const found = agentSkills.get(skillName)
     if (found == null) {
-      const available = [...this._skills.keys()].join(', ')
+      const available = [...agentSkills.keys()].join(', ')
       return `Skill '${skillName}' not found. Available skills: ${available}`
     }
 
@@ -412,7 +478,7 @@ export class AgentSkills implements Plugin {
    * across multiple agents safely.
    */
   private _injectSkillsXml(agent: LocalAgent): void {
-    const skillsXml = this._generateSkillsXml()
+    const skillsXml = this._generateSkillsXml(agent)
     const systemPrompt = agent.systemPrompt
 
     if (systemPrompt == null || typeof systemPrompt === 'string') {
@@ -456,25 +522,19 @@ export class AgentSkills implements Plugin {
   /**
    * Generate the XML block listing available skills for the system prompt.
    *
-   * @example Output with skills:
-   * ```xml
-   * <available_skills>
-   * <skill>
-   * <name>pdf-processing</name>
-   * <description>Extract text and tables from PDF files</description>
-   * <location>/path/to/pdf-processing/SKILL.md</location>
-   * </skill>
-   * </available_skills>
-   * ```
+   * When called with an agent, uses that agent's full skill catalog
+   * (base + sandbox-resolved). Without an agent, uses only the base skills.
    */
-  private _generateSkillsXml(): string {
-    if (this._skills.size === 0) {
+  private _generateSkillsXml(agent?: LocalAgent): string {
+    const skills = this._getSkills(agent)
+
+    if (skills.size === 0) {
       return '<available_skills>\nNo skills are currently available.\n</available_skills>'
     }
 
     const lines: string[] = ['<available_skills>']
 
-    for (const skill of this._skills.values()) {
+    for (const skill of skills.values()) {
       lines.push('<skill>')
       lines.push(`<name>${escapeXml(skill.name)}</name>`)
       lines.push(`<description>${escapeXml(skill.description)}</description>`)
