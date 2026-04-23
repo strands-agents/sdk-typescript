@@ -1,5 +1,5 @@
 import Anthropic, { type ClientOptions } from '@anthropic-ai/sdk'
-import { Model, type BaseModelConfig, type StreamOptions } from '../models/model.js'
+import { Model, type BaseModelConfig, type CountTokensOptions, type StreamOptions } from '../models/model.js'
 import type { Message, ContentBlock } from '../types/messages.js'
 import type { ModelStreamEvent } from '../models/streaming.js'
 import { createEmptyUsage } from '../models/streaming.js'
@@ -82,6 +82,37 @@ export class AnthropicModel extends Model<AnthropicModelConfig> {
 
   getConfig(): AnthropicModelConfig {
     return this._config
+  }
+
+  /**
+   * Count tokens using Anthropic's native countTokens API.
+   *
+   * Uses the same message format as the Messages API to get accurate token counts
+   * directly from the Anthropic service. Falls back to the base class heuristic on failure.
+   *
+   * @param messages - Array of conversation messages to count tokens for
+   * @param options - Optional options containing system prompt and tool specs
+   * @returns Total input token count
+   */
+  override async countTokens(messages: Message[], options?: CountTokensOptions): Promise<number> {
+    try {
+      const request = this._formatRequest(messages, options)
+      const params: Anthropic.MessageCountTokensParams = {
+        model: request.model,
+        messages: request.messages,
+        ...(request.system && { system: request.system }),
+        ...(request.tools && { tools: request.tools }),
+        ...(request.tool_choice && { tool_choice: request.tool_choice }),
+      }
+
+      const response = await this._client.messages.countTokens(params)
+
+      logger.debug(`total_tokens=<${response.input_tokens}> | native token count`)
+      return response.input_tokens
+    } catch (error) {
+      logger.warn(`error=<${error}> | native token counting failed, falling back to estimation`)
+      return super.countTokens(messages, options)
+    }
   }
 
   async *stream(messages: Message[], options?: StreamOptions): AsyncIterable<ModelStreamEvent> {
