@@ -12,6 +12,8 @@ import {
   AfterToolCallEvent,
   BeforeModelCallEvent,
   AfterModelCallEvent,
+  ToolResultEvent,
+  ToolStreamUpdateEvent,
 } from '../hooks/index.js'
 import type { HookableEventConstructor } from '../hooks/types.js'
 
@@ -37,6 +39,8 @@ export class MockPlugin implements Plugin {
       AfterToolCallEvent,
       BeforeModelCallEvent,
       AfterModelCallEvent,
+      ToolResultEvent,
+      ToolStreamUpdateEvent,
     ]
 
     for (const eventType of eventTypes) {

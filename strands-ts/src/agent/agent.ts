@@ -83,8 +83,7 @@ export type ToolList = (Tool | McpClient | Agent | ToolList)[]
 /**
  * Strategy for executing tool calls that the model emits in a single assistant turn.
  *
- * - `'sequential'` (default) — runs tool calls one at a time, matching the historical
- *   behavior of the agent loop.
+ * - `'sequential'` (default) — runs tool calls one at a time
  * - `'concurrent'` — runs all tool calls from a single turn in parallel. Per-tool event
  *   order (`BeforeToolCallEvent` → `ToolStreamUpdateEvent*` → `AfterToolCallEvent` →
  *   `ToolResultEvent`) is preserved, while cross-tool events may interleave.
@@ -94,7 +93,7 @@ export type ToolList = (Tool | McpClient | Agent | ToolList)[]
  * In concurrent mode, prompt batch-wide cancellation requires every in-flight tool
  * to honor the signal.
  */
-export type ToolExecutor = 'sequential' | 'concurrent'
+export type ToolExecutorStrategy = 'sequential' | 'concurrent'
 
 /**
  * Configuration object for creating a new Agent.
@@ -180,9 +179,9 @@ export type AgentConfig = {
   id?: string
   /**
    * Strategy for executing tool calls from a single assistant turn.
-   * Defaults to `'sequential'`. See {@link ToolExecutor} for details.
+   * Defaults to `'sequential'`. See {@link ToolExecutorStrategy} for details.
    */
-  toolExecutor?: ToolExecutor
+  toolExecutor?: ToolExecutorStrategy
 }
 
 /** Default name assigned to agents when none is provided. */
@@ -255,7 +254,8 @@ export class Agent implements LocalAgent, InvokableAgent {
   private _tracer: Tracer
   /** Meter instance for accumulating loop metrics during invocation. */
   private _meter: Meter
-  private readonly _toolExecutor: ToolExecutor
+  /** Strategy for executing tool calls from a single assistant turn. */
+  private readonly _toolExecutor: ToolExecutorStrategy
 
   /**
    * Creates an instance of the Agent.
@@ -1040,7 +1040,10 @@ export class Agent implements LocalAgent, InvokableAgent {
   }
 
   /**
-   * Dispatches to the configured tool executor. See {@link ToolExecutor}.
+   * Emits `BeforeToolsEvent`, handles the pre-launch cancel paths, then
+   * delegates per-tool execution to the configured {@link ToolExecutorStrategy}.
+   * Always pairs `BeforeToolsEvent` with a terminal `AfterToolsEvent`, even on
+   * the invariant-violation throw path.
    *
    * @param assistantMessage - The assistant message containing tool use blocks
    * @param toolRegistry - Registry containing available tools
@@ -1050,11 +1053,33 @@ export class Agent implements LocalAgent, InvokableAgent {
     assistantMessage: Message,
     toolRegistry: ToolRegistry
   ): AsyncGenerator<AgentStreamEvent, Message, undefined> {
+    const beforeToolsEvent = new BeforeToolsEvent({ agent: this, message: assistantMessage })
+    yield beforeToolsEvent
+
+    const toolUseBlocks = assistantMessage.content.filter(
+      (block): block is ToolUseBlock => block.type === 'toolUseBlock'
+    )
+    if (toolUseBlocks.length === 0) {
+      // Preserve BeforeToolsEvent/AfterToolsEvent bracket symmetry even on
+      // this invariant-violation branch.
+      yield new AfterToolsEvent({ agent: this, message: new Message({ role: 'user', content: [] }) })
+      throw new Error('Model indicated toolUse but no tool use blocks found in message')
+    }
+
+    // Pre-launch cancel paths are strategy-independent.
+    if (beforeToolsEvent.cancel) {
+      const message = typeof beforeToolsEvent.cancel === 'string' ? beforeToolsEvent.cancel : 'Tool cancelled by hook'
+      return yield* this._yieldCancelledToolResults(toolUseBlocks, message)
+    }
+    if (this.isCancelled) {
+      return yield* this._yieldCancelledToolResults(toolUseBlocks, 'Tool execution cancelled')
+    }
+
     switch (this._toolExecutor) {
       case 'sequential':
-        return yield* this._executeToolsSequential(assistantMessage, toolRegistry)
+        return yield* this._executeToolsSequential(toolUseBlocks, toolRegistry)
       case 'concurrent':
-        return yield* this._executeToolsConcurrent(assistantMessage, toolRegistry)
+        return yield* this._executeToolsConcurrent(toolUseBlocks, toolRegistry)
       default: {
         const _exhaustive: never = this._toolExecutor
         throw new Error(`Unknown toolExecutor: ${_exhaustive as string}`)
@@ -1063,67 +1088,53 @@ export class Agent implements LocalAgent, InvokableAgent {
   }
 
   /**
-   * Executes tools sequentially and streams all tool events.
+   * Emits a `ToolResultEvent` for every block plus an `AfterToolsEvent`, and
+   * returns the resulting tool-result message. Used by the pre-launch cancel
+   * paths shared across executors.
+   */
+  private async *_yieldCancelledToolResults(
+    toolUseBlocks: ToolUseBlock[],
+    message: string
+  ): AsyncGenerator<AgentStreamEvent, Message, undefined> {
+    const cancelBlocks = this._cancelAllAsResults(toolUseBlocks, message)
+    for (const result of cancelBlocks) {
+      yield new ToolResultEvent({ agent: this, result })
+    }
+    const toolResultMessage = new Message({ role: 'user', content: cancelBlocks })
+    yield new AfterToolsEvent({ agent: this, message: toolResultMessage })
+    return toolResultMessage
+  }
+
+  /**
+   * Executes tools one at a time, honoring `agent.cancelSignal` between
+   * iterations to short-circuit not-yet-started tools.
    */
   private async *_executeToolsSequential(
-    assistantMessage: Message,
+    toolUseBlocks: ToolUseBlock[],
     toolRegistry: ToolRegistry
   ): AsyncGenerator<AgentStreamEvent, Message, undefined> {
-    const beforeToolsEvent = new BeforeToolsEvent({ agent: this, message: assistantMessage })
-    yield beforeToolsEvent
-
     const toolResultBlocks: ToolResultBlock[] = []
     let toolResultMessage: Message
 
     try {
-      // Extract tool use blocks from assistant message
-      const toolUseBlocks = assistantMessage.content.filter(
-        (block): block is ToolUseBlock => block.type === 'toolUseBlock'
-      )
-
-      if (toolUseBlocks.length === 0) {
-        // No tool use blocks found even though stopReason is toolUse
-        throw new Error('Model indicated toolUse but no tool use blocks found in message')
-      }
-
-      // Pre-launch cancel: hook requested cancel, or agent is already cancelled.
-      if (beforeToolsEvent.cancel) {
-        const message = typeof beforeToolsEvent.cancel === 'string' ? beforeToolsEvent.cancel : 'Tool cancelled by hook'
-        const cancelBlocks = this._cancelAllAsResults(toolUseBlocks, message)
-        for (const result of cancelBlocks) {
-          yield new ToolResultEvent({ agent: this, result })
+      for (const toolUseBlock of toolUseBlocks) {
+        if (this.isCancelled) {
+          const cancelBlock = new ToolResultBlock({
+            toolUseId: toolUseBlock.toolUseId,
+            status: 'error',
+            content: [new TextBlock('Tool execution cancelled')],
+          })
+          toolResultBlocks.push(cancelBlock)
+          yield new ToolResultEvent({ agent: this, result: cancelBlock })
+          continue
         }
-        toolResultBlocks.push(...cancelBlocks)
-      } else if (this.isCancelled) {
-        const cancelBlocks = this._cancelAllAsResults(toolUseBlocks, 'Tool execution cancelled')
-        for (const result of cancelBlocks) {
-          yield new ToolResultEvent({ agent: this, result })
-        }
-        toolResultBlocks.push(...cancelBlocks)
-      } else {
-        for (const toolUseBlock of toolUseBlocks) {
-          if (this.isCancelled) {
-            const cancelBlock = new ToolResultBlock({
-              toolUseId: toolUseBlock.toolUseId,
-              status: 'error',
-              content: [new TextBlock('Tool execution cancelled')],
-            })
-            toolResultBlocks.push(cancelBlock)
-            yield new ToolResultEvent({ agent: this, result: cancelBlock })
-            continue
-          }
 
-          const toolResultBlock = yield* this.executeTool(toolUseBlock, toolRegistry)
-          toolResultBlocks.push(toolResultBlock)
-          yield new ToolResultEvent({ agent: this, result: toolResultBlock })
-        }
+        const toolResultBlock = yield* this.executeTool(toolUseBlock, toolRegistry)
+        toolResultBlocks.push(toolResultBlock)
+        yield new ToolResultEvent({ agent: this, result: toolResultBlock })
       }
     } finally {
-      toolResultMessage = new Message({
-        role: 'user',
-        content: toolResultBlocks,
-      })
-
+      toolResultMessage = new Message({ role: 'user', content: toolResultBlocks })
       yield new AfterToolsEvent({ agent: this, message: toolResultMessage })
     }
 
@@ -1156,73 +1167,41 @@ export class Agent implements LocalAgent, InvokableAgent {
    * disturb its siblings.
    */
   private async *_executeToolsConcurrent(
-    assistantMessage: Message,
+    toolUseBlocks: ToolUseBlock[],
     toolRegistry: ToolRegistry
   ): AsyncGenerator<AgentStreamEvent, Message, undefined> {
-    const beforeToolsEvent = new BeforeToolsEvent({ agent: this, message: assistantMessage })
-    yield beforeToolsEvent
-
-    const toolUseBlocks = assistantMessage.content.filter(
-      (block): block is ToolUseBlock => block.type === 'toolUseBlock'
-    )
-
-    if (toolUseBlocks.length === 0) {
-      throw new Error('Model indicated toolUse but no tool use blocks found in message')
-    }
-
     let toolResultMessage: Message
-
-    // Pre-launch cancel: hook requested cancel, or agent is already cancelled.
-    if (beforeToolsEvent.cancel) {
-      const message = typeof beforeToolsEvent.cancel === 'string' ? beforeToolsEvent.cancel : 'Tool cancelled by hook'
-      const cancelBlocks = this._cancelAllAsResults(toolUseBlocks, message)
-      for (const result of cancelBlocks) {
-        yield new ToolResultEvent({ agent: this, result })
-      }
-      toolResultMessage = new Message({ role: 'user', content: cancelBlocks })
-      yield new AfterToolsEvent({ agent: this, message: toolResultMessage })
-      return toolResultMessage
-    }
-    if (this.isCancelled) {
-      const cancelBlocks = this._cancelAllAsResults(toolUseBlocks, 'Tool execution cancelled')
-      for (const result of cancelBlocks) {
-        yield new ToolResultEvent({ agent: this, result })
-      }
-      toolResultMessage = new Message({ role: 'user', content: cancelBlocks })
-      yield new AfterToolsEvent({ agent: this, message: toolResultMessage })
-      return toolResultMessage
-    }
 
     // Wrap each in-flight `.next()` so the raced promise always resolves to a
     // tagged Step. That prevents one generator rejection from rejecting the
     // whole race and lets us convert per-tool failures into ToolResultBlocks
     // without orphaning other generators.
     type Step =
-      | { i: number; kind: 'next'; r: IteratorResult<AgentStreamEvent, ToolResultBlock> }
-      | { i: number; kind: 'throw'; error: unknown }
+      | { idx: number; kind: 'next'; res: IteratorResult<AgentStreamEvent, ToolResultBlock> }
+      | { idx: number; kind: 'throw'; error: unknown }
 
     const gens = toolUseBlocks.map((block) => ({
       block,
       gen: this.executeTool(block, toolRegistry),
     }))
 
-    const step = (i: number): Promise<Step> =>
-      gens[i]!.gen.next().then(
-        (r): Step => ({ i, kind: 'next', r }),
-        (error: unknown): Step => ({ i, kind: 'throw', error })
+    const step = (idx: number): Promise<Step> =>
+      gens[idx]!.gen.next().then(
+        (res): Step => ({ idx, kind: 'next', res }),
+        (error: unknown): Step => ({ idx, kind: 'throw', error })
       )
 
-    const pendingNext = new Map<number, Promise<Step>>(gens.map((_, i) => [i, step(i)]))
+    const pendingNext = new Map<number, Promise<Step>>(gens.map((_, idx) => [idx, step(idx)]))
     const resultsByToolUseId = new Map<string, ToolResultBlock>()
 
     try {
       while (pendingNext.size > 0) {
         const winner = await Promise.race(pendingNext.values())
-        const { i } = winner
-        const block = gens[i]!.block
+        const { idx } = winner
+        const block = gens[idx]!.block
 
         if (winner.kind === 'throw') {
-          pendingNext.delete(i)
+          pendingNext.delete(idx)
           const err = normalizeError(winner.error)
           const result = new ToolResultBlock({
             toolUseId: block.toolUseId,
@@ -1235,19 +1214,19 @@ export class Agent implements LocalAgent, InvokableAgent {
           continue
         }
 
-        if (winner.r.done) {
-          pendingNext.delete(i)
-          resultsByToolUseId.set(block.toolUseId, winner.r.value)
-          yield new ToolResultEvent({ agent: this, result: winner.r.value })
+        if (winner.res.done) {
+          pendingNext.delete(idx)
+          resultsByToolUseId.set(block.toolUseId, winner.res.value)
+          yield new ToolResultEvent({ agent: this, result: winner.res.value })
         } else {
-          yield winner.r.value
-          pendingNext.set(i, step(i))
+          yield winner.res.value
+          pendingNext.set(idx, step(idx))
         }
       }
     } finally {
       // Close any generators still in-flight (e.g. consumer broke out of stream).
       await Promise.allSettled(
-        Array.from(pendingNext.keys(), (i) => gens[i]!.gen.return(undefined as unknown as ToolResultBlock))
+        Array.from(pendingNext.keys(), (idx) => gens[idx]!.gen.return(undefined as unknown as ToolResultBlock))
       )
 
       // Build the result message from whatever completed, in source order.
