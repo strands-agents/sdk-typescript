@@ -48,6 +48,7 @@ function errContext(err: unknown, extra?: Record<string, unknown>): Record<strin
   return { error: e.message, stack: e.stack, ...extra };
 }
 
+/** Convert TS SDK Usage to WIT Usage. */
 function mapUsage(src: any): import('strands:agent/types').Usage | undefined {
   if (src == null) return undefined;
   return {
@@ -59,11 +60,13 @@ function mapUsage(src: any): import('strands:agent/types').Usage | undefined {
   };
 }
 
+/** Convert TS SDK Metrics to WIT Metrics. */
 function mapMetrics(src: any): import('strands:agent/types').Metrics | undefined {
   if (src == null) return undefined;
   return { latencyMs: typeof src.latencyMs === 'number' ? src.latencyMs : 0 };
 }
 
+/** Convert a TS SDK StopReason to a WIT StopData with usage/metrics. */
 function mapStopReason(reason: StopReason, agentResult?: any): StopData {
   const mapped: StopData['reason'] = (() => {
     switch (reason) {
@@ -81,6 +84,7 @@ function mapStopReason(reason: StopReason, agentResult?: any): StopData {
   return { reason: mapped, usage: mapUsage(agentResult?.usage), metrics: mapMetrics(agentResult?.metrics) };
 }
 
+/** Convert a TS SDK AgentStreamEvent to a WIT StreamEvent for the host. */
 function mapEvent(event: AgentStreamEvent): StreamEvent | null {
   if ('interrupt' in event || ('type' in event && (event as any).type === 'interrupt')) {
     return { tag: 'interrupt', val: JSON.stringify(event) };
@@ -155,6 +159,7 @@ function mapEvent(event: AgentStreamEvent): StreamEvent | null {
   return null;
 }
 
+/** Extract WIT ModelParams into a plain config object for TS model constructors. */
 function modelParamsConfig(params?: ModelParams): Record<string, unknown> {
   if (!params) return {};
   return {
@@ -164,6 +169,7 @@ function modelParamsConfig(params?: ModelParams): Record<string, unknown> {
   };
 }
 
+/** Instantiate a TS SDK Model from the WIT ModelConfig variant. */
 function createModel(config?: ModelConfig, params?: ModelParams): Model<BaseModelConfig> {
   const base = modelParamsConfig(params);
 
@@ -227,6 +233,7 @@ function createModel(config?: ModelConfig, params?: ModelParams): Model<BaseMode
   }
 }
 
+/** Convert WIT ToolSpecs into TS FunctionTools that call back to the host via tool-provider. */
 function createTools(specs: ToolSpec[] | undefined): FunctionTool[] | undefined {
   if (!specs || specs.length === 0) return undefined;
 
@@ -273,6 +280,7 @@ function createTools(specs: ToolSpec[] | undefined): FunctionTool[] | undefined 
   );
 }
 
+/** Build a system prompt from the agent config (string or JSON content blocks). */
 function buildSystemPrompt(config: AgentConfig): any {
   if (config.systemPromptBlocks) {
     return JSON.parse(config.systemPromptBlocks);
@@ -280,6 +288,7 @@ function buildSystemPrompt(config: AgentConfig): any {
   return config.systemPrompt ?? undefined;
 }
 
+/** Wrap a model in a Proxy that injects toolChoice into every stream() call. */
 function createToolChoiceProxy(baseModel: any, toolChoice: any): any {
   return new Proxy(baseModel, {
     get(target: any, prop: string | symbol, receiver: any) {
@@ -305,6 +314,7 @@ import {
   MessageAddedEvent,
 } from '@strands-agents/sdk';
 
+/** Bridges TS SDK lifecycle hooks to WIT StreamEvent lifecycle variants for the host. */
 class LifecycleBridge implements HookProvider {
   queue: StreamEvent[] = [];
 
@@ -341,6 +351,7 @@ class LifecycleBridge implements HookProvider {
   }
 }
 
+/** Parse user input — JSON arrays pass through, plain strings stay as-is. */
 function parseInput(input: string): any {
   try {
     const parsed = JSON.parse(input);
@@ -349,6 +360,7 @@ function parseInput(input: string): any {
   return input;
 }
 
+/** Build a SessionManager from the WIT session config. */
 function createSessionManager(config: AgentConfig): SessionManager | undefined {
   if (!config.session) return undefined;
 

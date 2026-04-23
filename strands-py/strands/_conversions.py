@@ -3,6 +3,11 @@
 Stream events are Union-typed dataclasses (one per variant case) with a
 ``.value`` payload.  Functions here convert these to the dict format the
 upstream Python SDK expects.
+
+Message format note:
+  The TS SDK uses class-based discriminators: {"type": "textBlock", "text": "..."}
+  The Python SDK uses wrapper keys:          {"text": "..."}
+  convert_message() and _convert_block() handle this translation.
 """
 
 from __future__ import annotations
