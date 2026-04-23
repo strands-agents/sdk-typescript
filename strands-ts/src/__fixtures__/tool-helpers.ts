@@ -9,18 +9,20 @@ import type { JSONValue } from '../types/json.js'
 import { StateStore } from '../state-store.js'
 import { ToolRegistry } from '../registry/tool-registry.js'
 import type { PlainToolResultBlock } from './slim-types.js'
-import type { LocalAgent } from '../types/agent.js'
+import type { InvocationState, LocalAgent } from '../types/agent.js'
 
 /**
  * Helper to create a mock ToolContext for testing.
  *
  * @param toolUse - The tool use request
  * @param appState - Optional initial app state
+ * @param invocationState - Optional initial invocation state
  * @returns Mock ToolContext object
  */
 export function createMockContext(
   toolUse: { name: string; toolUseId: string; input: JSONValue },
-  appState?: Record<string, JSONValue>
+  appState?: Record<string, JSONValue>,
+  invocationState?: InvocationState
 ): ToolContext {
   return {
     toolUse,
@@ -31,6 +33,7 @@ export function createMockContext(
       toolRegistry: new ToolRegistry(),
       addHook: () => () => {},
     } as unknown as LocalAgent,
+    invocationState: invocationState ?? {},
   }
 }
 

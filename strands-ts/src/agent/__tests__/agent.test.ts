@@ -63,7 +63,7 @@ describe('Agent', () => {
 
         expect(items.length).toBeGreaterThan(0)
         const firstItem = items[0]
-        expect(firstItem).toEqual(new BeforeInvocationEvent({ agent: agent }))
+        expect(firstItem).toEqual(new BeforeInvocationEvent({ agent: agent, invocationState: {} }))
       })
 
       it('returns AgentResult as generator return value', async () => {
@@ -146,6 +146,7 @@ describe('Agent', () => {
               role: 'assistant',
               content: [new ToolUseBlock({ name: 'testTool', toolUseId: 'tool-1', input: {} })],
             }),
+            invocationState: {},
           })
         )
 

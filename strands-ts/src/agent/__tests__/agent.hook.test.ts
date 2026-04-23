@@ -39,17 +39,27 @@ describe('Agent Hooks Integration', () => {
       expect(lifecyclePlugin.invocations).toHaveLength(7)
 
       expect(lifecyclePlugin.invocations[0]).toEqual(new InitializedEvent({ agent }))
-      expect(lifecyclePlugin.invocations[1]).toEqual(new BeforeInvocationEvent({ agent }))
+      expect(lifecyclePlugin.invocations[1]).toEqual(new BeforeInvocationEvent({ agent, invocationState: {} }))
       expect(lifecyclePlugin.invocations[2]).toEqual(
-        new MessageAddedEvent({ agent, message: new Message({ role: 'user', content: [new TextBlock('Hi')] }) })
+        new MessageAddedEvent({
+          agent,
+          message: new Message({ role: 'user', content: [new TextBlock('Hi')] }),
+          invocationState: {},
+        })
       )
       expect(lifecyclePlugin.invocations[3]).toEqual(
-        new BeforeModelCallEvent({ agent, model: agent.model, projectedInputTokens: expect.any(Number) as number })
+        new BeforeModelCallEvent({
+          agent,
+          model: agent.model,
+          invocationState: {},
+          projectedInputTokens: expect.any(Number) as number,
+        })
       )
       expect(lifecyclePlugin.invocations[4]).toEqual(
         new AfterModelCallEvent({
           agent,
           model: agent.model,
+          invocationState: {},
           stopData: {
             stopReason: 'endTurn',
             message: new Message({ role: 'assistant', content: [new TextBlock('Hello')] }),
@@ -60,9 +70,10 @@ describe('Agent Hooks Integration', () => {
         new MessageAddedEvent({
           agent,
           message: new Message({ role: 'assistant', content: [new TextBlock('Hello')] }),
+          invocationState: {},
         })
       )
-      expect(lifecyclePlugin.invocations[6]).toEqual(new AfterInvocationEvent({ agent }))
+      expect(lifecyclePlugin.invocations[6]).toEqual(new AfterInvocationEvent({ agent, invocationState: {} }))
     })
 
     it('fires hooks during stream', async () => {
@@ -75,20 +86,27 @@ describe('Agent Hooks Integration', () => {
       expect(lifecyclePlugin.invocations).toHaveLength(7)
 
       expect(lifecyclePlugin.invocations[0]).toEqual(new InitializedEvent({ agent }))
-      expect(lifecyclePlugin.invocations[1]).toEqual(new BeforeInvocationEvent({ agent }))
+      expect(lifecyclePlugin.invocations[1]).toEqual(new BeforeInvocationEvent({ agent, invocationState: {} }))
       expect(lifecyclePlugin.invocations[2]).toEqual(
         new MessageAddedEvent({
           agent,
           message: new Message({ role: 'user', content: [new TextBlock('Hi')] }),
+          invocationState: {},
         })
       )
       expect(lifecyclePlugin.invocations[3]).toEqual(
-        new BeforeModelCallEvent({ agent, model: agent.model, projectedInputTokens: expect.any(Number) as number })
+        new BeforeModelCallEvent({
+          agent,
+          model: agent.model,
+          invocationState: {},
+          projectedInputTokens: expect.any(Number) as number,
+        })
       )
       expect(lifecyclePlugin.invocations[4]).toEqual(
         new AfterModelCallEvent({
           agent,
           model: agent.model,
+          invocationState: {},
           stopData: {
             stopReason: 'endTurn',
             message: new Message({ role: 'assistant', content: [new TextBlock('Hello')] }),
@@ -99,9 +117,10 @@ describe('Agent Hooks Integration', () => {
         new MessageAddedEvent({
           agent,
           message: new Message({ role: 'assistant', content: [new TextBlock('Hello')] }),
+          invocationState: {},
         })
       )
-      expect(lifecyclePlugin.invocations[6]).toEqual(new AfterInvocationEvent({ agent }))
+      expect(lifecyclePlugin.invocations[6]).toEqual(new AfterInvocationEvent({ agent, invocationState: {} }))
     })
   })
 
@@ -122,8 +141,8 @@ describe('Agent Hooks Integration', () => {
       await agent.invoke('Hi')
 
       expect(invocations).toHaveLength(2)
-      expect(invocations[0]).toEqual(new BeforeInvocationEvent({ agent }))
-      expect(invocations[1]).toEqual(new AfterInvocationEvent({ agent }))
+      expect(invocations[0]).toEqual(new BeforeInvocationEvent({ agent, invocationState: {} }))
+      expect(invocations[1]).toEqual(new AfterInvocationEvent({ agent, invocationState: {} }))
     })
   })
 
@@ -191,6 +210,7 @@ describe('Agent Hooks Integration', () => {
           agent,
           toolUse: { name: 'testTool', toolUseId: 'tool-1', input: {} },
           tool,
+          invocationState: {},
         })
       )
 
@@ -206,6 +226,7 @@ describe('Agent Hooks Integration', () => {
             status: 'success',
             content: [new TextBlock('Tool result')],
           }),
+          invocationState: {},
         })
       )
     })
@@ -246,6 +267,7 @@ describe('Agent Hooks Integration', () => {
             content: [new TextBlock('Tool execution failed')],
           }),
           error: new Error('Tool execution failed'),
+          invocationState: {},
         })
       )
     })
@@ -302,12 +324,14 @@ describe('Agent Hooks Integration', () => {
         new MessageAddedEvent({
           agent,
           message: new Message({ role: 'user', content: [new TextBlock('New message')] }),
+          invocationState: {},
         })
       )
       expect(messageAddedEvents[1]).toEqual(
         new MessageAddedEvent({
           agent,
           message: new Message({ role: 'assistant', content: [new TextBlock('Response')] }),
+          invocationState: {},
         })
       )
     })

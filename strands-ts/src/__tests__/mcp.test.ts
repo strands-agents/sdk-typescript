@@ -437,6 +437,7 @@ describe('MCP Integration', () => {
     const toolContext: ToolContext = {
       toolUse: { toolUseId: 'id-123', name: 'weather', input: { city: 'NYC' } },
       agent: {} as LocalAgent,
+      invocationState: {},
     }
 
     it('returns text results on success', async () => {

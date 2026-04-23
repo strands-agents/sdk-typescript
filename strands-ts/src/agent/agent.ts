@@ -1,6 +1,7 @@
 import {
   AgentResult,
   type AgentStreamEvent,
+  type InvocationState,
   type InvokableAgent,
   type InvokeArgs,
   type InvokeOptions,
@@ -536,7 +537,9 @@ export class Agent implements LocalAgent, InvokableAgent {
         result = await streamGenerator.next()
       }
 
-      yield await this._invokeCallbacks(new AgentResultEvent({ agent: this, result: result.value }))
+      yield await this._invokeCallbacks(
+        new AgentResultEvent({ agent: this, result: result.value, invocationState: result.value.invocationState })
+      )
 
       return result.value
     } catch (error) {
@@ -629,20 +632,27 @@ export class Agent implements LocalAgent, InvokableAgent {
     const structuredOutputTool = structuredOutputSchema ? new StructuredOutputTool(structuredOutputSchema) : undefined
     let structuredOutputChoice: ToolChoice | undefined
 
-    const beforeInvocationEvent = new BeforeInvocationEvent({ agent: this })
+    // Resolve per-invocation state once. The same object is threaded through
+    // every lifecycle hook event, every tool context, and is surfaced on the
+    // AgentResult. Mutations by hooks/tools are visible across all recursive
+    // agent loop cycles within this invocation.
+    const invocationState: InvocationState = options?.invocationState ?? {}
+
+    const beforeInvocationEvent = new BeforeInvocationEvent({ agent: this, invocationState })
     yield beforeInvocationEvent
 
     if (beforeInvocationEvent.cancel) {
       const cancelText =
         typeof beforeInvocationEvent.cancel === 'string' ? beforeInvocationEvent.cancel : 'invocation denied by hook'
       const message = new Message({ role: 'assistant', content: [new TextBlock(cancelText)] })
-      yield this._appendMessage(message)
-      yield new AfterInvocationEvent({ agent: this })
+      yield this._appendMessage(message, invocationState)
+      yield new AfterInvocationEvent({ agent: this, invocationState })
       return new AgentResult({
         stopReason: 'endTurn',
         lastMessage: message,
         traces: this._tracer.localTraces,
         metrics: this._meter.metrics,
+        invocationState,
       })
     }
 
@@ -687,12 +697,12 @@ export class Agent implements LocalAgent, InvokableAgent {
           if (currentArgs !== undefined) {
             const messagesToAppend = this._normalizeInput(currentArgs)
             for (const message of messagesToAppend) {
-              yield this._appendMessage(message)
+              yield this._appendMessage(message, invocationState)
             }
             currentArgs = undefined
           }
 
-          const modelResult = yield* this._invokeModel(structuredOutputChoice)
+          const modelResult = yield* this._invokeModel(invocationState, structuredOutputChoice)
 
           if (modelResult.stopReason !== 'toolUse') {
             // If structured output is required, force it
@@ -709,7 +719,7 @@ export class Agent implements LocalAgent, InvokableAgent {
             this._meter.endCycle(cycleStartTime)
             this._tracer.endAgentLoopSpan(cycleSpan)
 
-            yield this._appendMessage(modelResult.message)
+            yield this._appendMessage(modelResult.message, invocationState)
 
             if (structuredOutputChoice) {
               continue
@@ -720,6 +730,7 @@ export class Agent implements LocalAgent, InvokableAgent {
               lastMessage: modelResult.message,
               traces: this._tracer.localTraces,
               metrics: this._meter.metrics,
+              invocationState,
             })
             return result
           }
@@ -739,8 +750,8 @@ export class Agent implements LocalAgent, InvokableAgent {
             )
             const toolResultMessage = new Message({ role: 'user', content: cancelBlocks })
 
-            yield this._appendMessage(modelResult.message)
-            yield this._appendMessage(toolResultMessage)
+            yield this._appendMessage(modelResult.message, invocationState)
+            yield this._appendMessage(toolResultMessage, invocationState)
 
             this._meter.endCycle(cycleStartTime)
             this._tracer.endAgentLoopSpan(cycleSpan)
@@ -750,12 +761,13 @@ export class Agent implements LocalAgent, InvokableAgent {
               lastMessage: modelResult.message,
               traces: this._tracer.localTraces,
               metrics: this._meter.metrics,
+              invocationState,
             })
             return result
           }
 
           // Execute tools
-          const toolResultMessage = yield* this.executeTools(modelResult.message, this._toolRegistry)
+          const toolResultMessage = yield* this.executeTools(modelResult.message, this._toolRegistry, invocationState)
 
           /**
            * Deferred append: both messages are added AFTER tool execution completes.
@@ -763,8 +775,8 @@ export class Agent implements LocalAgent, InvokableAgent {
            * If interrupted during tool execution, messages has no dangling toolUse
            * without a matching toolResult, so the agent can be reinvoked cleanly.
            */
-          yield this._appendMessage(modelResult.message)
-          yield this._appendMessage(toolResultMessage)
+          yield this._appendMessage(modelResult.message, invocationState)
+          yield this._appendMessage(toolResultMessage, invocationState)
 
           this._meter.endCycle(cycleStartTime)
           this._tracer.endAgentLoopSpan(cycleSpan)
@@ -780,6 +792,7 @@ export class Agent implements LocalAgent, InvokableAgent {
               traces: this._tracer.localTraces,
               structuredOutput,
               metrics: this._meter.metrics,
+              invocationState,
             })
             return result
           }
@@ -797,13 +810,14 @@ export class Agent implements LocalAgent, InvokableAgent {
           role: 'assistant',
           content: [new TextBlock('Cancelled by user')],
         })
-        yield this._appendMessage(cancelMessage)
+        yield this._appendMessage(cancelMessage, invocationState)
 
         result = new AgentResult({
           stopReason: 'cancelled',
           lastMessage: cancelMessage,
           traces: this._tracer.localTraces,
           metrics: this._meter.metrics,
+          invocationState,
         })
         return result
       }
@@ -818,7 +832,7 @@ export class Agent implements LocalAgent, InvokableAgent {
           role: 'assistant',
           content: [new TextBlock('Cancelled by user')],
         })
-        yield this._appendMessage(cancelMessage)
+        yield this._appendMessage(cancelMessage, invocationState)
       }
 
       this._tracer.endAgentSpan(agentSpan, {
@@ -834,7 +848,7 @@ export class Agent implements LocalAgent, InvokableAgent {
       }
 
       // Always emit final event
-      yield new AfterInvocationEvent({ agent: this })
+      yield new AfterInvocationEvent({ agent: this, invocationState })
     }
   }
 
@@ -923,6 +937,7 @@ export class Agent implements LocalAgent, InvokableAgent {
    * @returns Object containing the assistant message, stop reason, and optional redaction message
    */
   private async *_invokeModel(
+    invocationState: InvocationState,
     toolChoice?: ToolChoice
   ): AsyncGenerator<AgentStreamEvent, StreamAggregatedResult, undefined> {
     const toolSpecs = this._toolRegistry.list().map((tool) => tool.toolSpec)
@@ -947,6 +962,7 @@ export class Agent implements LocalAgent, InvokableAgent {
     const beforeModelCallEvent = new BeforeModelCallEvent({
       agent: this,
       model: this.model,
+      invocationState,
       ...(projectedInputTokens !== undefined && { projectedInputTokens }),
     })
     yield beforeModelCallEvent
@@ -956,11 +972,16 @@ export class Agent implements LocalAgent, InvokableAgent {
         typeof beforeModelCallEvent.cancel === 'string' ? beforeModelCallEvent.cancel : 'model call denied by hook'
       const message = new Message({ role: 'assistant', content: [new TextBlock(cancelText)] })
       const stopData: ModelStopData = { message, stopReason: 'endTurn' }
-      const afterModelCallEvent = new AfterModelCallEvent({ agent: this, model: this.model, stopData })
+      const afterModelCallEvent = new AfterModelCallEvent({
+        agent: this,
+        model: this.model,
+        stopData,
+        invocationState,
+      })
       yield afterModelCallEvent
 
       if (afterModelCallEvent.retry) {
-        return yield* this._invokeModel(toolChoice)
+        return yield* this._invokeModel(invocationState, toolChoice)
       }
 
       return { message, stopReason: 'endTurn' }
@@ -975,7 +996,7 @@ export class Agent implements LocalAgent, InvokableAgent {
     })
 
     try {
-      const result = yield* this._streamFromModel(this.messages, streamOptions)
+      const result = yield* this._streamFromModel(this.messages, streamOptions, invocationState)
 
       // Accumulate token usage and model latency metrics
       this._meter.updateCycle(result.metadata)
@@ -990,7 +1011,12 @@ export class Agent implements LocalAgent, InvokableAgent {
         ...(metrics && { metrics }),
       })
 
-      yield new ModelMessageEvent({ agent: this, message: result.message, stopReason: result.stopReason })
+      yield new ModelMessageEvent({
+        agent: this,
+        message: result.message,
+        stopReason: result.stopReason,
+        invocationState,
+      })
 
       // Handle user content redaction if guardrails blocked input
       if (result.redaction?.userMessage) {
@@ -1003,11 +1029,16 @@ export class Agent implements LocalAgent, InvokableAgent {
         ...(result.redaction && { redaction: result.redaction }),
       }
 
-      const afterModelCallEvent = new AfterModelCallEvent({ agent: this, model: this.model, stopData })
+      const afterModelCallEvent = new AfterModelCallEvent({
+        agent: this,
+        model: this.model,
+        stopData,
+        invocationState,
+      })
       yield afterModelCallEvent
 
       if (afterModelCallEvent.retry) {
-        return yield* this._invokeModel(toolChoice)
+        return yield* this._invokeModel(invocationState, toolChoice)
       }
 
       return result
@@ -1018,7 +1049,12 @@ export class Agent implements LocalAgent, InvokableAgent {
       this._tracer.endModelInvokeSpan(modelSpan, { error: modelError })
 
       // Create error event
-      const errorEvent = new AfterModelCallEvent({ agent: this, model: this.model, error: modelError })
+      const errorEvent = new AfterModelCallEvent({
+        agent: this,
+        model: this.model,
+        error: modelError,
+        invocationState,
+      })
 
       // Yield error event - stream will invoke hooks
       yield errorEvent
@@ -1031,7 +1067,7 @@ export class Agent implements LocalAgent, InvokableAgent {
 
       // After yielding, hooks have been invoked and may have set retry
       if (errorEvent.retry) {
-        return yield* this._invokeModel(toolChoice)
+        return yield* this._invokeModel(invocationState, toolChoice)
       }
 
       // Re-throw error
@@ -1057,7 +1093,8 @@ export class Agent implements LocalAgent, InvokableAgent {
    */
   private async *_streamFromModel(
     messages: Message[],
-    streamOptions: StreamOptions
+    streamOptions: StreamOptions,
+    invocationState: InvocationState
   ): AsyncGenerator<AgentStreamEvent, StreamAggregatedResult, undefined> {
     const streamGenerator = this.model.streamAggregated(messages, streamOptions)
     let result = await streamGenerator.next()
@@ -1069,10 +1106,10 @@ export class Agent implements LocalAgent, InvokableAgent {
 
       if (isModelStreamEvent(event)) {
         // ModelStreamEvent: wrap in ModelStreamUpdateEvent
-        yield new ModelStreamUpdateEvent({ agent: this, event })
+        yield new ModelStreamUpdateEvent({ agent: this, event, invocationState })
       } else {
         // ContentBlock: wrap in ContentBlockEvent
-        yield new ContentBlockEvent({ agent: this, contentBlock: event })
+        yield new ContentBlockEvent({ agent: this, contentBlock: event, invocationState })
       }
       result = await streamGenerator.next()
     }
@@ -1093,9 +1130,10 @@ export class Agent implements LocalAgent, InvokableAgent {
    */
   private async *executeTools(
     assistantMessage: Message,
-    toolRegistry: ToolRegistry
+    toolRegistry: ToolRegistry,
+    invocationState: InvocationState
   ): AsyncGenerator<AgentStreamEvent, Message, undefined> {
-    const beforeToolsEvent = new BeforeToolsEvent({ agent: this, message: assistantMessage })
+    const beforeToolsEvent = new BeforeToolsEvent({ agent: this, message: assistantMessage, invocationState })
     yield beforeToolsEvent
 
     const toolUseBlocks = assistantMessage.content.filter(
@@ -1104,24 +1142,28 @@ export class Agent implements LocalAgent, InvokableAgent {
     if (toolUseBlocks.length === 0) {
       // Preserve BeforeToolsEvent/AfterToolsEvent bracket symmetry even on
       // this invariant-violation branch.
-      yield new AfterToolsEvent({ agent: this, message: new Message({ role: 'user', content: [] }) })
+      yield new AfterToolsEvent({
+        agent: this,
+        message: new Message({ role: 'user', content: [] }),
+        invocationState,
+      })
       throw new Error('Model indicated toolUse but no tool use blocks found in message')
     }
 
     // Pre-launch cancel paths are strategy-independent.
     if (beforeToolsEvent.cancel) {
       const message = typeof beforeToolsEvent.cancel === 'string' ? beforeToolsEvent.cancel : 'Tool cancelled by hook'
-      return yield* this._yieldCancelledToolResults(toolUseBlocks, message)
+      return yield* this._yieldCancelledToolResults(toolUseBlocks, message, invocationState)
     }
     if (this.isCancelled) {
-      return yield* this._yieldCancelledToolResults(toolUseBlocks, 'Tool execution cancelled')
+      return yield* this._yieldCancelledToolResults(toolUseBlocks, 'Tool execution cancelled', invocationState)
     }
 
     switch (this._toolExecutor) {
       case 'sequential':
-        return yield* this._executeToolsSequential(toolUseBlocks, toolRegistry)
+        return yield* this._executeToolsSequential(toolUseBlocks, toolRegistry, invocationState)
       case 'concurrent':
-        return yield* this._executeToolsConcurrent(toolUseBlocks, toolRegistry)
+        return yield* this._executeToolsConcurrent(toolUseBlocks, toolRegistry, invocationState)
       default: {
         const _exhaustive: never = this._toolExecutor
         throw new Error(`Unknown toolExecutor: ${_exhaustive as string}`)
@@ -1136,14 +1178,15 @@ export class Agent implements LocalAgent, InvokableAgent {
    */
   private async *_yieldCancelledToolResults(
     toolUseBlocks: ToolUseBlock[],
-    message: string
+    message: string,
+    invocationState: InvocationState
   ): AsyncGenerator<AgentStreamEvent, Message, undefined> {
     const cancelBlocks = this._cancelAllAsResults(toolUseBlocks, message)
     for (const result of cancelBlocks) {
-      yield new ToolResultEvent({ agent: this, result })
+      yield new ToolResultEvent({ agent: this, result, invocationState })
     }
     const toolResultMessage = new Message({ role: 'user', content: cancelBlocks })
-    yield new AfterToolsEvent({ agent: this, message: toolResultMessage })
+    yield new AfterToolsEvent({ agent: this, message: toolResultMessage, invocationState })
     return toolResultMessage
   }
 
@@ -1153,7 +1196,8 @@ export class Agent implements LocalAgent, InvokableAgent {
    */
   private async *_executeToolsSequential(
     toolUseBlocks: ToolUseBlock[],
-    toolRegistry: ToolRegistry
+    toolRegistry: ToolRegistry,
+    invocationState: InvocationState
   ): AsyncGenerator<AgentStreamEvent, Message, undefined> {
     const toolResultBlocks: ToolResultBlock[] = []
     let toolResultMessage: Message
@@ -1167,17 +1211,17 @@ export class Agent implements LocalAgent, InvokableAgent {
             content: [new TextBlock('Tool execution cancelled')],
           })
           toolResultBlocks.push(cancelBlock)
-          yield new ToolResultEvent({ agent: this, result: cancelBlock })
+          yield new ToolResultEvent({ agent: this, result: cancelBlock, invocationState })
           continue
         }
 
-        const toolResultBlock = yield* this.executeTool(toolUseBlock, toolRegistry)
+        const toolResultBlock = yield* this.executeTool(toolUseBlock, toolRegistry, invocationState)
         toolResultBlocks.push(toolResultBlock)
-        yield new ToolResultEvent({ agent: this, result: toolResultBlock })
+        yield new ToolResultEvent({ agent: this, result: toolResultBlock, invocationState })
       }
     } finally {
       toolResultMessage = new Message({ role: 'user', content: toolResultBlocks })
-      yield new AfterToolsEvent({ agent: this, message: toolResultMessage })
+      yield new AfterToolsEvent({ agent: this, message: toolResultMessage, invocationState })
     }
 
     return toolResultMessage
@@ -1210,7 +1254,8 @@ export class Agent implements LocalAgent, InvokableAgent {
    */
   private async *_executeToolsConcurrent(
     toolUseBlocks: ToolUseBlock[],
-    toolRegistry: ToolRegistry
+    toolRegistry: ToolRegistry,
+    invocationState: InvocationState
   ): AsyncGenerator<AgentStreamEvent, Message, undefined> {
     let toolResultMessage: Message
 
@@ -1224,7 +1269,7 @@ export class Agent implements LocalAgent, InvokableAgent {
 
     const gens = toolUseBlocks.map((block) => ({
       block,
-      gen: this.executeTool(block, toolRegistry),
+      gen: this.executeTool(block, toolRegistry, invocationState),
     }))
 
     const step = (idx: number): Promise<Step> =>
@@ -1252,14 +1297,14 @@ export class Agent implements LocalAgent, InvokableAgent {
             error: err,
           })
           resultsByToolUseId.set(block.toolUseId, result)
-          yield new ToolResultEvent({ agent: this, result })
+          yield new ToolResultEvent({ agent: this, result, invocationState })
           continue
         }
 
         if (winner.res.done) {
           pendingNext.delete(idx)
           resultsByToolUseId.set(block.toolUseId, winner.res.value)
-          yield new ToolResultEvent({ agent: this, result: winner.res.value })
+          yield new ToolResultEvent({ agent: this, result: winner.res.value, invocationState })
         } else {
           yield winner.res.value
           pendingNext.set(idx, step(idx))
@@ -1291,7 +1336,7 @@ export class Agent implements LocalAgent, InvokableAgent {
       }
 
       toolResultMessage = new Message({ role: 'user', content: toolResultBlocks })
-      yield new AfterToolsEvent({ agent: this, message: toolResultMessage })
+      yield new AfterToolsEvent({ agent: this, message: toolResultMessage, invocationState })
     }
 
     return toolResultMessage
@@ -1309,7 +1354,8 @@ export class Agent implements LocalAgent, InvokableAgent {
    */
   private async *executeTool(
     toolUseBlock: ToolUseBlock,
-    toolRegistry: ToolRegistry
+    toolRegistry: ToolRegistry,
+    invocationState: InvocationState
   ): AsyncGenerator<AgentStreamEvent, ToolResultBlock, undefined> {
     const tool = toolRegistry.get(toolUseBlock.name)
 
@@ -1322,7 +1368,7 @@ export class Agent implements LocalAgent, InvokableAgent {
 
     // Retry loop for tool execution
     while (true) {
-      const beforeToolCallEvent = new BeforeToolCallEvent({ agent: this, toolUse, tool })
+      const beforeToolCallEvent = new BeforeToolCallEvent({ agent: this, toolUse, tool, invocationState })
       yield beforeToolCallEvent
 
       // Cancel individual tool if hook requested it
@@ -1339,6 +1385,7 @@ export class Agent implements LocalAgent, InvokableAgent {
           toolUse,
           tool,
           result: toolResult,
+          invocationState,
         })
         yield afterToolCallEvent
         if (afterToolCallEvent.retry) {
@@ -1374,6 +1421,7 @@ export class Agent implements LocalAgent, InvokableAgent {
             input: toolUseBlock.input,
           },
           agent: this,
+          invocationState,
         }
 
         try {
@@ -1385,7 +1433,7 @@ export class Agent implements LocalAgent, InvokableAgent {
           const toolGenerator = this._tracer.withSpanContext(toolSpan, () => tool.stream(toolContext))
           let toolNext = await this._tracer.withSpanContext(toolSpan, () => toolGenerator.next())
           while (!toolNext.done) {
-            yield new ToolStreamUpdateEvent({ agent: this, event: toolNext.value })
+            yield new ToolStreamUpdateEvent({ agent: this, event: toolNext.value, invocationState })
             toolNext = await this._tracer.withSpanContext(toolSpan, () => toolGenerator.next())
           }
           const result = toolNext.value
@@ -1429,6 +1477,7 @@ export class Agent implements LocalAgent, InvokableAgent {
         toolUse,
         tool,
         result: toolResult,
+        invocationState,
         ...(error !== undefined && { error }),
       })
       yield afterToolCallEvent
@@ -1540,9 +1589,9 @@ export class Agent implements LocalAgent, InvokableAgent {
    * @param message - The message to append
    * @returns MessageAddedEvent to be yielded
    */
-  private _appendMessage(message: Message): MessageAddedEvent {
+  private _appendMessage(message: Message, invocationState: InvocationState): MessageAddedEvent {
     this.messages.push(message)
-    return new MessageAddedEvent({ agent: this, message })
+    return new MessageAddedEvent({ agent: this, message, invocationState })
   }
 }
 

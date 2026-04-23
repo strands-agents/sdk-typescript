@@ -21,6 +21,7 @@ describe('fileEditor tool', () => {
         input: {},
       },
       agent,
+      invocationState: {},
     }
     return { state: agent.appState, context: toolContext }
   }

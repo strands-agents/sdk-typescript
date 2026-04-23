@@ -1,5 +1,5 @@
 import { HookableEvent, StreamEvent } from '../hooks/events.js'
-import type { AgentStreamEvent } from '../types/agent.js'
+import type { AgentStreamEvent, InvocationState } from '../types/agent.js'
 import type { MultiAgentResult, MultiAgentState, NodeResult } from './state.js'
 import type { MultiAgent } from './multiagent.js'
 import type { NodeType } from './nodes.js'
@@ -28,11 +28,13 @@ export class BeforeMultiAgentInvocationEvent extends HookableEvent {
   readonly type = 'beforeMultiAgentInvocationEvent' as const
   readonly orchestrator: MultiAgent
   readonly state: MultiAgentState
+  readonly invocationState: InvocationState
 
-  constructor(data: { orchestrator: MultiAgent; state: MultiAgentState }) {
+  constructor(data: { orchestrator: MultiAgent; state: MultiAgentState; invocationState: InvocationState }) {
     super()
     this.orchestrator = data.orchestrator
     this.state = data.state
+    this.invocationState = data.invocationState
   }
 
   toJSON(): Pick<BeforeMultiAgentInvocationEvent, 'type'> {
@@ -47,11 +49,13 @@ export class AfterMultiAgentInvocationEvent extends HookableEvent {
   readonly type = 'afterMultiAgentInvocationEvent' as const
   readonly orchestrator: MultiAgent
   readonly state: MultiAgentState
+  readonly invocationState: InvocationState
 
-  constructor(data: { orchestrator: MultiAgent; state: MultiAgentState }) {
+  constructor(data: { orchestrator: MultiAgent; state: MultiAgentState; invocationState: InvocationState }) {
     super()
     this.orchestrator = data.orchestrator
     this.state = data.state
+    this.invocationState = data.invocationState
   }
 
   override _shouldReverseCallbacks(): boolean {
@@ -72,6 +76,7 @@ export class BeforeNodeCallEvent extends HookableEvent {
   readonly orchestrator: MultiAgent
   readonly state: MultiAgentState
   readonly nodeId: string
+  readonly invocationState: InvocationState
 
   /**
    * Set by hook callbacks to cancel node execution.
@@ -80,11 +85,17 @@ export class BeforeNodeCallEvent extends HookableEvent {
    */
   cancel: boolean | string = false
 
-  constructor(data: { orchestrator: MultiAgent; state: MultiAgentState; nodeId: string }) {
+  constructor(data: {
+    orchestrator: MultiAgent
+    state: MultiAgentState
+    nodeId: string
+    invocationState: InvocationState
+  }) {
     super()
     this.orchestrator = data.orchestrator
     this.state = data.state
     this.nodeId = data.nodeId
+    this.invocationState = data.invocationState
   }
 
   toJSON(): Pick<BeforeNodeCallEvent, 'type' | 'nodeId'> {
@@ -100,13 +111,21 @@ export class AfterNodeCallEvent extends HookableEvent {
   readonly orchestrator: MultiAgent
   readonly state: MultiAgentState
   readonly nodeId: string
+  readonly invocationState: InvocationState
   readonly error?: Error
 
-  constructor(data: { orchestrator: MultiAgent; state: MultiAgentState; nodeId: string; error?: Error }) {
+  constructor(data: {
+    orchestrator: MultiAgent
+    state: MultiAgentState
+    nodeId: string
+    invocationState: InvocationState
+    error?: Error
+  }) {
     super()
     this.orchestrator = data.orchestrator
     this.state = data.state
     this.nodeId = data.nodeId
+    this.invocationState = data.invocationState
     if (data.error !== undefined) {
       this.error = data.error
     }
@@ -157,13 +176,21 @@ export class NodeStreamUpdateEvent extends HookableEvent {
   readonly nodeType: NodeType
   readonly state: MultiAgentState
   readonly inner: NodeStreamUpdateInnerEvent
+  readonly invocationState: InvocationState
 
-  constructor(data: { nodeId: string; nodeType: NodeType; state: MultiAgentState; inner: NodeStreamUpdateInnerEvent }) {
+  constructor(data: {
+    nodeId: string
+    nodeType: NodeType
+    state: MultiAgentState
+    inner: NodeStreamUpdateInnerEvent
+    invocationState: InvocationState
+  }) {
     super()
     this.nodeId = data.nodeId
     this.nodeType = data.nodeType
     this.state = data.state
     this.inner = data.inner
+    this.invocationState = data.invocationState
   }
 
   toJSON(): Pick<NodeStreamUpdateEvent, 'type' | 'nodeId' | 'nodeType' | 'inner'> {
@@ -181,13 +208,21 @@ export class NodeResultEvent extends HookableEvent {
   readonly nodeType: NodeType
   readonly state: MultiAgentState
   readonly result: NodeResult
+  readonly invocationState: InvocationState
 
-  constructor(data: { nodeId: string; nodeType: NodeType; state: MultiAgentState; result: NodeResult }) {
+  constructor(data: {
+    nodeId: string
+    nodeType: NodeType
+    state: MultiAgentState
+    result: NodeResult
+    invocationState: InvocationState
+  }) {
     super()
     this.nodeId = data.nodeId
     this.nodeType = data.nodeType
     this.state = data.state
     this.result = data.result
+    this.invocationState = data.invocationState
   }
 
   toJSON(): Pick<NodeResultEvent, 'type' | 'nodeId' | 'nodeType' | 'result'> {
@@ -203,12 +238,14 @@ export class MultiAgentHandoffEvent extends HookableEvent {
   readonly source: string
   readonly targets: string[]
   readonly state: MultiAgentState
+  readonly invocationState: InvocationState
 
-  constructor(data: { source: string; targets: string[]; state: MultiAgentState }) {
+  constructor(data: { source: string; targets: string[]; state: MultiAgentState; invocationState: InvocationState }) {
     super()
     this.source = data.source
     this.targets = data.targets
     this.state = data.state
+    this.invocationState = data.invocationState
   }
 
   toJSON(): Pick<MultiAgentHandoffEvent, 'type' | 'source' | 'targets'> {
@@ -224,12 +261,14 @@ export class NodeCancelEvent extends HookableEvent {
   readonly nodeId: string
   readonly state: MultiAgentState
   readonly message: string
+  readonly invocationState: InvocationState
 
-  constructor(data: { nodeId: string; state: MultiAgentState; message: string }) {
+  constructor(data: { nodeId: string; state: MultiAgentState; message: string; invocationState: InvocationState }) {
     super()
     this.nodeId = data.nodeId
     this.state = data.state
     this.message = data.message
+    this.invocationState = data.invocationState
   }
 
   toJSON(): Pick<NodeCancelEvent, 'type' | 'nodeId' | 'message'> {
@@ -244,10 +283,12 @@ export class NodeCancelEvent extends HookableEvent {
 export class MultiAgentResultEvent extends HookableEvent {
   readonly type = 'multiAgentResultEvent' as const
   readonly result: MultiAgentResult
+  readonly invocationState: InvocationState
 
-  constructor(data: { result: MultiAgentResult }) {
+  constructor(data: { result: MultiAgentResult; invocationState: InvocationState }) {
     super()
     this.result = data.result
+    this.invocationState = data.invocationState
   }
 
   toJSON(): Pick<MultiAgentResultEvent, 'type' | 'result'> {

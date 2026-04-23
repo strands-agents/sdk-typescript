@@ -1,4 +1,4 @@
-import type { InvokeArgs } from '../types/agent.js'
+import type { InvocationState, InvokeArgs } from '../types/agent.js'
 import type { Message, MessageData } from '../types/messages.js'
 import type { HookableEvent } from '../hooks/events.js'
 import type { HookCallback, HookableEventConstructor, HookCleanup } from '../hooks/types.js'
@@ -12,6 +12,18 @@ import type { MultiAgentResult } from './state.js'
 export type MultiAgentInput = Exclude<InvokeArgs, Message[] | MessageData[]>
 
 /**
+ * Options for a single multi-agent orchestrator invocation.
+ */
+export interface MultiAgentInvokeOptions {
+  /**
+   * Per-invocation state forwarded to every node's child agent. Mutable —
+   * one node's hooks/tools can read state written by a previous node. See
+   * {@link InvocationState} for details. Defaults to `{}` when omitted.
+   */
+  invocationState?: InvocationState
+}
+
+/**
  * Interface for any multi-agent orchestrator that can stream execution.
  * Implement this interface to create custom orchestration patterns that can be
  * composed as nodes within other orchestrators via {@link MultiAgentNode}.
@@ -23,16 +35,21 @@ export interface MultiAgent {
   /**
    * Execute the orchestrator and return the final result.
    * @param input - Input to pass to the orchestrator
+   * @param options - Optional per-invocation options
    * @returns The aggregate result from all executed nodes
    */
-  invoke(input: MultiAgentInput): Promise<MultiAgentResult>
+  invoke(input: MultiAgentInput, options?: MultiAgentInvokeOptions): Promise<MultiAgentResult>
 
   /**
    * Execute the orchestrator and stream events as they occur.
    * @param input - Input to pass to the orchestrator
+   * @param options - Optional per-invocation options
    * @returns Async generator yielding events and returning the final result
    */
-  stream(input: MultiAgentInput): AsyncGenerator<MultiAgentStreamEvent, MultiAgentResult, undefined>
+  stream(
+    input: MultiAgentInput,
+    options?: MultiAgentInvokeOptions
+  ): AsyncGenerator<MultiAgentStreamEvent, MultiAgentResult, undefined>
 
   /**
    * Register a hook callback for a specific orchestrator event type.

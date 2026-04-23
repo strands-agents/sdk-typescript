@@ -10,7 +10,7 @@
 import type { AgentCard, Part } from '@a2a-js/sdk'
 import type { Client as A2AClientSdk, ClientFactory as ClientFactoryType } from '@a2a-js/sdk/client'
 import { ClientFactory } from '@a2a-js/sdk/client'
-import type { InvokableAgent, InvokeArgs, InvokeOptions } from '../types/agent.js'
+import type { InvocationState, InvokableAgent, InvokeArgs, InvokeOptions } from '../types/agent.js'
 import { AgentResult } from '../types/agent.js'
 import { Message, TextBlock, type ContentBlock, type ContentBlockData, type MessageData } from '../types/messages.js'
 import { A2AStreamUpdateEvent, A2AResultEvent, type A2AEventData, type A2AStreamEvent } from './events.js'
@@ -91,7 +91,7 @@ export class A2AAgent implements InvokableAgent {
    * Built on top of `stream()` — consumes the full event stream and returns the final result.
    *
    * @param args - Arguments for invoking the agent
-   * @param options - Optional invocation options (unused for remote agents)
+   * @param options - Optional invocation options. See {@link stream} for behavior.
    * @returns Promise that resolves to the AgentResult
    */
   async invoke(args: InvokeArgs, options?: InvokeOptions): Promise<AgentResult> {
@@ -111,12 +111,16 @@ export class A2AAgent implements InvokableAgent {
    * containing the final result built from the last complete event.
    *
    * @param args - Arguments for invoking the agent
-   * @param _options - Optional invocation options (unused for remote agents)
+   * @param options - Optional invocation options. If `invocationState` is
+   *   provided, it is returned on the resulting `AgentResult`. The remote
+   *   agent runs in another process and cannot read or mutate it. Other
+   *   fields on `options` are ignored.
    * @returns Async generator that yields AgentStreamEvent objects and returns AgentResult
    */
-  async *stream(args: InvokeArgs, _options?: InvokeOptions): AsyncGenerator<A2AStreamEvent, AgentResult, undefined> {
+  async *stream(args: InvokeArgs, options?: InvokeOptions): AsyncGenerator<A2AStreamEvent, AgentResult, undefined> {
     const client = await this._getClient()
     const text = this._extractTextFromArgs(args)
+    const invocationState = options?.invocationState ?? {}
 
     let lastEvent: A2AEventData | undefined
     let lastCompleteEvent: A2AEventData | undefined
@@ -153,7 +157,7 @@ export class A2AAgent implements InvokableAgent {
 
     const finalEvent = lastCompleteEvent ?? lastEvent
     const accumulatedText = [...artifactTexts.values()].map((chunks) => chunks.join('')).join('\n')
-    const result = this._buildResult(finalEvent, accumulatedText)
+    const result = this._buildResult(finalEvent, invocationState, accumulatedText)
 
     yield new A2AResultEvent({ result })
     return result
@@ -239,15 +243,21 @@ export class A2AAgent implements InvokableAgent {
    * Builds an AgentResult from the final A2A streaming event.
    *
    * @param event - The final A2A event, or undefined if no events were received
+   * @param invocationState - Caller-provided invocation state, threaded through to the result
+   * @param accumulatedText - Optional accumulated text from streaming artifacts
    * @returns The constructed AgentResult
    */
-  private _buildResult(event: A2AEventData | undefined, accumulatedText?: string): AgentResult {
+  private _buildResult(
+    event: A2AEventData | undefined,
+    invocationState: InvocationState,
+    accumulatedText?: string
+  ): AgentResult {
     const text = this._extractTextFromEvent(event) || accumulatedText || ''
     const lastMessage = new Message({
       role: 'assistant',
       content: [new TextBlock(text)],
     })
-    return new AgentResult({ stopReason: 'endTurn', lastMessage })
+    return new AgentResult({ stopReason: 'endTurn', lastMessage, invocationState })
   }
 
   /**

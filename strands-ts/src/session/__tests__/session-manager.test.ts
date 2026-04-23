@@ -59,11 +59,11 @@ function createMockAgent(id = 'agent'): Agent {
 const MOCK_MESSAGE = new Message({ role: 'user', content: [new TextBlock('test')] })
 
 function createMockEvent(agent: Agent) {
-  return { agent }
+  return { agent, invocationState: {} }
 }
 
 function createMockMessageEvent(agent: Agent) {
-  return { agent, message: MOCK_MESSAGE }
+  return { agent, message: MOCK_MESSAGE, invocationState: {} }
 }
 
 async function initPluginAndInvokeHook<T extends HookableEvent>(
@@ -766,7 +766,10 @@ describe('SessionManager — multi-agent', () => {
       sessionManager.initMultiAgent(orchestrator)
 
       const state = new MultiAgentState({ nodeIds: ['a'] })
-      await invokeOrchestratorHook(orchestrator, new AfterNodeCallEvent({ orchestrator, state, nodeId: 'a' }))
+      await invokeOrchestratorHook(
+        orchestrator,
+        new AfterNodeCallEvent({ orchestrator, state, nodeId: 'a', invocationState: {} })
+      )
 
       const snapshot = await storage.loadSnapshot({
         location: { sessionId: 'test-session', scope: 'multiAgent', scopeId: 'test-graph' },
@@ -784,7 +787,10 @@ describe('SessionManager — multi-agent', () => {
       sessionManager.initMultiAgent(orchestrator)
 
       const state = new MultiAgentState({ nodeIds: ['a'] })
-      await invokeOrchestratorHook(orchestrator, new AfterMultiAgentInvocationEvent({ orchestrator, state }))
+      await invokeOrchestratorHook(
+        orchestrator,
+        new AfterMultiAgentInvocationEvent({ orchestrator, state, invocationState: {} })
+      )
 
       const snapshot = await storage.loadSnapshot({
         location: { sessionId: 'test-session', scope: 'multiAgent', scopeId: 'test-graph' },
@@ -803,7 +809,10 @@ describe('SessionManager — multi-agent', () => {
       sessionManager.initMultiAgent(orchestrator)
 
       const state = new MultiAgentState({ nodeIds: ['a'] })
-      await invokeOrchestratorHook(orchestrator, new AfterMultiAgentInvocationEvent({ orchestrator, state }))
+      await invokeOrchestratorHook(
+        orchestrator,
+        new AfterMultiAgentInvocationEvent({ orchestrator, state, invocationState: {} })
+      )
 
       const snapshot = await storage.loadSnapshot({
         location: { sessionId: 'test-session', scope: 'multiAgent', scopeId: 'test-graph' },
@@ -864,7 +873,7 @@ describe('SessionManager — multi-agent', () => {
       const freshState = new MultiAgentState({ nodeIds: ['a'] })
       await invokeOrchestratorHook(
         orchestrator,
-        new BeforeMultiAgentInvocationEvent({ orchestrator, state: freshState })
+        new BeforeMultiAgentInvocationEvent({ orchestrator, state: freshState, invocationState: {} })
       )
 
       expect(freshState.steps).toBe(7)
@@ -882,7 +891,7 @@ describe('SessionManager — multi-agent', () => {
       const freshState = new MultiAgentState({ nodeIds: ['a'] })
       await invokeOrchestratorHook(
         orchestrator,
-        new BeforeMultiAgentInvocationEvent({ orchestrator, state: freshState })
+        new BeforeMultiAgentInvocationEvent({ orchestrator, state: freshState, invocationState: {} })
       )
 
       expect(freshState.steps).toBe(0)
@@ -919,7 +928,7 @@ describe('SessionManager — multi-agent', () => {
       const stateA = new MultiAgentState({ nodeIds: ['x'] })
       await invokeOrchestratorHook(
         orchestratorA,
-        new BeforeMultiAgentInvocationEvent({ orchestrator: orchestratorA, state: stateA })
+        new BeforeMultiAgentInvocationEvent({ orchestrator: orchestratorA, state: stateA, invocationState: {} })
       )
       expect(stateA.steps).toBe(3)
 
@@ -927,7 +936,7 @@ describe('SessionManager — multi-agent', () => {
       const stateB = new MultiAgentState({ nodeIds: ['x'] })
       await invokeOrchestratorHook(
         orchestratorB,
-        new BeforeMultiAgentInvocationEvent({ orchestrator: orchestratorB, state: stateB })
+        new BeforeMultiAgentInvocationEvent({ orchestrator: orchestratorB, state: stateB, invocationState: {} })
       )
       expect(stateB.steps).toBe(5)
     })
@@ -953,7 +962,7 @@ describe('SessionManager — multi-agent', () => {
       const firstState = new MultiAgentState({ nodeIds: ['a'] })
       await invokeOrchestratorHook(
         orchestrator,
-        new BeforeMultiAgentInvocationEvent({ orchestrator, state: firstState })
+        new BeforeMultiAgentInvocationEvent({ orchestrator, state: firstState, invocationState: {} })
       )
       expect(firstState.steps).toBe(7)
 
@@ -961,7 +970,7 @@ describe('SessionManager — multi-agent', () => {
       const secondState = new MultiAgentState({ nodeIds: ['a'] })
       await invokeOrchestratorHook(
         orchestrator,
-        new BeforeMultiAgentInvocationEvent({ orchestrator, state: secondState })
+        new BeforeMultiAgentInvocationEvent({ orchestrator, state: secondState, invocationState: {} })
       )
       expect(secondState.steps).toBe(0)
     })

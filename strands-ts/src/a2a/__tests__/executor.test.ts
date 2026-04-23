@@ -166,15 +166,18 @@ describe('A2AExecutor', () => {
           yield new ModelStreamUpdateEvent({
             agent,
             event: { type: 'modelContentBlockDeltaEvent', delta: { type: 'textDelta', text: 'Here is the image:' } },
+            invocationState: {},
           })
           // Image content block
           yield new ContentBlockEvent({
             agent,
             contentBlock: new ImageBlock({ format: 'png', source: { bytes: imageBytes } }),
+            invocationState: {},
           })
           return new AgentResult({
             stopReason: 'endTurn',
             lastMessage: new Message({ role: 'assistant', content: [new TextBlock('Here is the image:')] }),
+            invocationState: {},
           })
         },
       }

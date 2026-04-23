@@ -18,6 +18,7 @@ describe.skipIf(process.platform === 'win32')('bash tool', () => {
         input: {},
       },
       agent,
+      invocationState: {},
     }
     return { state: agent.appState, context }
   }

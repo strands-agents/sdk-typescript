@@ -309,6 +309,7 @@ describe('SummarizingConversationManager', () => {
         agent,
         model: model as unknown as Model,
         error: new ContextWindowOverflowError('overflow'),
+        invocationState: {},
       })
       await invokeTrackedHook(pluginAgent, event)
 

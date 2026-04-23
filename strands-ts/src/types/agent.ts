@@ -36,6 +36,26 @@ import { AgentMetrics } from '../telemetry/meter.js'
 export type InvokeArgs = string | ContentBlock[] | ContentBlockData[] | Message[] | MessageData[]
 
 /**
+ * Per-invocation state threaded through hooks and tools for a single agent
+ * invocation, and returned on {@link AgentResult.invocationState}. One object
+ * per invocation, shared by reference; mutations by hooks or tools are visible
+ * to subsequent hooks, tools, and recursive loop cycles.
+ *
+ * Typically used for request-scoped context (`userId`, `requestId`, `traceId`)
+ * or cross-hook counters. The SDK writes no keys into it — the key space is
+ * entirely the caller's.
+ *
+ * Distinct from {@link LocalAgent.appState}: `appState` is durable across
+ * invocations, JSON-serializable, and deep-copied. `invocationState` is
+ * ephemeral and accepts arbitrary values.
+ *
+ * Excluded from `toJSON()` on {@link AgentResult} and all hook events because
+ * values may not be serializable; callers produce a serialized form explicitly
+ * if needed.
+ */
+export type InvocationState = Record<string, unknown>
+
+/**
  * Options for a single agent invocation.
  */
 export interface InvokeOptions {
@@ -43,6 +63,15 @@ export interface InvokeOptions {
    * Zod schema for structured output validation, overriding the constructor-provided schema for this invocation only.
    */
   structuredOutputSchema?: z.ZodSchema
+
+  /**
+   * Per-invocation state. Passed to lifecycle hook events and tools, and
+   * returned on {@link AgentResult.invocationState}. Mutable — hooks and tools
+   * may read and write. See {@link InvocationState} for details.
+   *
+   * Defaults to an empty object when omitted.
+   */
+  invocationState?: InvocationState
 
   /**
    * External AbortSignal for cancelling the agent invocation.
@@ -240,15 +269,25 @@ export class AgentResult {
    */
   readonly metrics?: AgentMetrics
 
+  /**
+   * Per-invocation state passed into the agent, threaded through hooks and
+   * tools, and surfaced here at the end of the invocation. See
+   * {@link InvocationState} for details. Always defined — defaults to `{}` when
+   * no `invocationState` was provided in {@link InvokeOptions}.
+   */
+  readonly invocationState: InvocationState
+
   constructor(data: {
     stopReason: StopReason
     lastMessage: Message
+    invocationState: InvocationState
     traces?: AgentTrace[]
     metrics?: AgentMetrics
     structuredOutput?: z.output<z.ZodType>
   }) {
     this.stopReason = data.stopReason
     this.lastMessage = data.lastMessage
+    this.invocationState = data.invocationState
     if (data.traces !== undefined) {
       this.traces = data.traces
     }
@@ -279,14 +318,14 @@ export class AgentResult {
   }
 
   /**
-   * Custom JSON serialization that excludes traces and metrics by default.
-   * This prevents accidentally sending large trace/metric data over the wire
-   * when serializing AgentResult for API responses.
+   * Custom JSON serialization that excludes traces, metrics, and invocationState.
+   * Traces and metrics are excluded to avoid sending large payloads over the wire
+   * in API responses; `invocationState` is excluded because its values are
+   * caller-owned and may not be serializable (see {@link InvocationState}).
    *
-   * Traces and metrics remain accessible via their properties for debugging,
-   * but won't be included in JSON.stringify() output.
+   * All three remain accessible via their properties for debugging.
    *
-   * @returns Object representation without traces/metrics for safe serialization
+   * @returns Object representation for safe serialization
    */
   public toJSON(): object {
     return {
