@@ -30,6 +30,7 @@ class ToolContext:
 
 
 # Type aliases matching the existing SDK.
+ToolChoice = dict[str, Any]
 ToolResult = dict[str, Any]
 ToolSpec = dict[str, Any]
 ToolUse = dict[str, Any]

@@ -82,6 +82,22 @@ class LogHandlerBase(ABC):
         raise NotImplementedError
 
 
+class ModelProviderBase(ABC):
+    @abstractmethod
+    def invoke(
+        self,
+        messages: str,
+        system_prompt: typing.Optional[str],
+        tool_specs: typing.Optional[str],
+        config: str,
+    ) -> list[str]:
+        """Invoke the host-side model provider.
+
+        Returns a list of model event JSON strings.
+        """
+        raise NotImplementedError
+
+
 def _run_sync(coro: typing.Coroutine) -> typing.Any:
     """Run an async coroutine from sync context, even if an event loop is running."""
     try:
@@ -212,6 +228,9 @@ def _build_model_config_variant(cfg: ModelConfigInput) -> Variant:
             }
         )
         return Variant("gemini", payload)
+    if provider == "host-model":
+        payload = _rec(config=cfg.additional_config or "{}")
+        return Variant("host-model", payload)
     raise ValueError(f"unknown model provider: {provider}")
 
 
@@ -476,6 +495,47 @@ def _make_log_fn(handler: LogHandlerBase | None) -> typing.Callable[..., None]:
     return log_fn
 
 
+def _make_model_invoke_fn(
+    provider: ModelProviderBase | None,
+) -> typing.Callable[..., typing.Any]:
+    """Create the callback for the model-provider.invoke WIT import."""
+
+    async def invoke_fn(store_ctx: typing.Any, args: typing.Any) -> Variant:
+        if provider is None:
+            return Variant("err", "no host model provider configured")
+        messages = getattr(args, "messages")
+        system_prompt = getattr(args, "system-prompt")
+        config = getattr(args, "config")
+
+        # Serialize tool specs if present
+        raw_specs = getattr(args, "tool-specs")
+        tool_specs_json: str | None = None
+        if raw_specs is not None:
+            import json as _json
+
+            tool_specs_json = _json.dumps(
+                [
+                    {
+                        "name": getattr(s, "name"),
+                        "description": getattr(s, "description"),
+                        "inputSchema": getattr(s, "input-schema"),
+                    }
+                    for s in raw_specs
+                ]
+            )
+
+        try:
+            event_jsons = provider.invoke(messages, system_prompt, tool_specs_json, config)
+            log.debug("model-provider invoke returned %d events", len(event_jsons))
+            import json as _json2
+            return Variant("ok", _json2.dumps(event_jsons))
+        except Exception as exc:
+            log.error("model-provider invoke failed: %s", exc)
+            return Variant("err", str(exc))
+
+    return invoke_fn
+
+
 # ---------------------------------------------------------------------------
 # WasmAgent — drop-in replacement for the former native Agent class
 # ---------------------------------------------------------------------------
@@ -491,6 +551,7 @@ class WasmAgent:
         tools: list[ToolSpec] | None,
         tool_dispatcher: ToolDispatcherBase | None,
         log_handler: LogHandlerBase | None,
+        model_provider: ModelProviderBase | None = None,
         use_callback_relay: bool = False,
     ):
         engine, component = _get_engine_and_component()
@@ -506,6 +567,8 @@ class WasmAgent:
                 tp.add_func("call-tools", _make_call_tools_fn(tool_dispatcher))
             with root.add_instance("strands:agent/host-log") as hl:
                 hl.add_func("log", _make_log_fn(log_handler))
+            with root.add_instance("strands:agent/model-provider") as mp:
+                mp.add_func_async("invoke", _make_model_invoke_fn(model_provider))
 
         # --- store ---
         store = Store(engine)

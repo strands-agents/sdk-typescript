@@ -34,6 +34,10 @@
       "types": "./dist/src/models/vercel.d.ts",
       "default": "./dist/src/models/vercel.js"
     },
+    "./models/host-model": {
+      "types": "./dist/src/models/host-model.d.ts",
+      "default": "./dist/src/models/host-model.js"
+    },
     "./multiagent": {
       "types": "./dist/src/multiagent/index.d.ts",
       "default": "./dist/src/multiagent/index.js"

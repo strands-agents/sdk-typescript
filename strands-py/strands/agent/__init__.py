@@ -279,7 +279,20 @@ class Agent:
             sp_blocks = json.dumps(system_prompt)
             sp_str = None
 
-        model_config = self._build_model_config(resolve_model(model))
+        # Detect host-side model providers (have stream() method — e.g. SageMaker, Mistral, Writer).
+        # These run on the Python side and are invoked by the WASM guest via model-provider import.
+        model_provider_callback = None
+        if model is not None and hasattr(model, "stream") and callable(getattr(model, "stream", None)):
+            from strands.models.host_adapter import HostModelAdapter
+
+            model_provider_callback = HostModelAdapter(model)
+            model_config = _ModelConfigInput(
+                provider="host-model",
+                additional_config=json.dumps({"provider_type": type(model).__name__}),
+            )
+        else:
+            model_config = self._build_model_config(resolve_model(model))
+
         tool_specs = (
             [
                 _ToolSpec(
@@ -300,6 +313,7 @@ class Agent:
             tools=tool_specs,
             tool_dispatcher=self._dispatcher,
             log_handler=_LogHandler(),
+            model_provider=model_provider_callback,
             use_callback_relay=False,
         )
 
