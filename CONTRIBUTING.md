@@ -53,6 +53,30 @@ When proposing solutions or reviewing code, we reference these principles to gui
 
 The repo is an npm workspace. The SDK source lives in `strands-ts/`, and the root `package.json` proxies common commands (`test`, `lint`, `format:check`, `type-check`, `build`) into that workspace. For commands that aren't proxied at root (like `test:integ` or `test:watch`), run them from `strands-ts/` directly.
 
+### WASM and Python Development
+
+If you're working on the WASM bridge (`strands-wasm/`) or the Python SDK (`strands-py/`), additional setup is needed:
+
+1. Build the full pipeline (TS → WASM → Python types):
+   ```bash
+   npm run dev -- bootstrap
+   ```
+
+2. Set up the Python virtual environment:
+   ```bash
+   python3 -m venv strands-py/.venv
+   source strands-py/.venv/bin/activate
+   pip install -e "strands-py[dev]"
+   pip install componentize-py boto3 pytest pytest-asyncio
+   ```
+
+3. Run Python integration tests (from `strands-py/`, venv activated):
+   ```bash
+   python3 -m pytest tests_integ/models/test_model_bedrock.py -xvs
+   ```
+
+See [strands-wasm/README.md](strands-wasm/README.md) for the full architecture guide and `validate` commands.
+
 ## Testing Instructions and Best Practices
 
 ### Running Tests

@@ -2,6 +2,16 @@
 
 Loads the WASM component, links WASI + custom imports, and provides
 a ``WasmAgent`` class with the same API as the former native ``Agent``.
+
+Data flow across the WASM boundary:
+
+  Exports (TS implements, Python calls in):
+    api — agent construction, generate, get/set messages, session ops.
+    All model HTTP calls (Bedrock, Anthropic, etc.) happen inside the guest.
+
+  Imports (Python implements, TS calls back):
+    tool-provider — the guest calls call-tool when the model requests tool use.
+    host-log — the guest emits structured log entries for Python's logging.
 """
 
 from __future__ import annotations
