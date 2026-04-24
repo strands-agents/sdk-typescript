@@ -604,8 +604,24 @@ export class Agent implements LocalAgent, InvokableAgent {
     const structuredOutputTool = structuredOutputSchema ? new StructuredOutputTool(structuredOutputSchema) : undefined
     let structuredOutputChoice: ToolChoice | undefined
 
-    // Emit event before the try block
-    yield new BeforeInvocationEvent({ agent: this })
+    const beforeInvocationEvent = new BeforeInvocationEvent({ agent: this })
+    yield beforeInvocationEvent
+
+    if (beforeInvocationEvent.cancel) {
+      const cancelText =
+        typeof beforeInvocationEvent.cancel === 'string'
+          ? beforeInvocationEvent.cancel
+          : 'invocation denied by hook'
+      const message = new Message({ role: 'assistant', content: [new TextBlock(cancelText)] })
+      yield this._appendMessage(message)
+      yield new AfterInvocationEvent({ agent: this })
+      return new AgentResult({
+        stopReason: 'endTurn',
+        lastMessage: message,
+        traces: this._tracer.localTraces,
+        metrics: this._meter.metrics,
+      })
+    }
 
     // Normalize input to get the user messages for telemetry
     const inputMessages = this._normalizeInput(args)
@@ -897,7 +913,25 @@ export class Agent implements LocalAgent, InvokableAgent {
       streamOptions.toolChoice = toolChoice
     }
 
-    yield new BeforeModelCallEvent({ agent: this, model: this.model })
+    const beforeModelCallEvent = new BeforeModelCallEvent({ agent: this, model: this.model })
+    yield beforeModelCallEvent
+
+    if (beforeModelCallEvent.cancel) {
+      const cancelText =
+        typeof beforeModelCallEvent.cancel === 'string'
+          ? beforeModelCallEvent.cancel
+          : 'model call denied by hook'
+      const message = new Message({ role: 'assistant', content: [new TextBlock(cancelText)] })
+      const stopData: ModelStopData = { message, stopReason: 'endTurn' }
+      const afterModelCallEvent = new AfterModelCallEvent({ agent: this, model: this.model, stopData })
+      yield afterModelCallEvent
+
+      if (afterModelCallEvent.retry) {
+        return yield* this._invokeModel(toolChoice)
+      }
+
+      return { message, stopReason: 'endTurn' }
+    }
 
     // Start model span within loop span context
     const modelId = this.model.modelId

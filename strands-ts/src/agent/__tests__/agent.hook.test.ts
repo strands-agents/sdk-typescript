@@ -13,6 +13,7 @@ import {
   ModelStreamUpdateEvent,
   InitializedEvent,
   HookableEvent,
+  ModelMessageEvent,
 } from '../../hooks/index.js'
 import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
 import { MockPlugin } from '../../__fixtures__/mock-plugin.js'
@@ -803,6 +804,144 @@ describe('Agent Hooks Integration', () => {
       expect(result.stopReason).toBe('endTurn')
       expect(beforeCount).toBe(2)
       expect(toolCallCount).toBe(1) // Only executed on second attempt
+    })
+  })
+
+  describe('cancel invocation via hooks', () => {
+    it('cancels invocation with default message when cancel is true', async () => {
+      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
+      const agent = new Agent({ model, plugins: [mockPlugin] })
+      agent.addHook(BeforeInvocationEvent, (event: BeforeInvocationEvent) => {
+        event.cancel = true
+      })
+
+      const result = await agent.invoke('Test')
+
+      expect(result.stopReason).toBe('endTurn')
+      expect(result.lastMessage.content[0]).toEqual(new TextBlock('invocation denied by hook'))
+
+      const beforeModelCallEvents = mockPlugin.invocations.filter((e) => e instanceof BeforeModelCallEvent)
+      expect(beforeModelCallEvents).toHaveLength(0)
+    })
+
+    it('cancels invocation with custom message when cancel is a string', async () => {
+      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
+      const agent = new Agent({ model, plugins: [mockPlugin] })
+      agent.addHook(BeforeInvocationEvent, (event: BeforeInvocationEvent) => {
+        event.cancel = 'Unauthorized user'
+      })
+
+      const result = await agent.invoke('Test')
+
+      expect(result.stopReason).toBe('endTurn')
+      expect(result.lastMessage.content[0]).toEqual(new TextBlock('Unauthorized user'))
+    })
+
+    it('does not append user message when invocation is cancelled', async () => {
+      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
+      const agent = new Agent({ model })
+      agent.addHook(BeforeInvocationEvent, (event: BeforeInvocationEvent) => {
+        event.cancel = true
+      })
+
+      await agent.invoke('Test')
+
+      expect(agent.messages).toHaveLength(1)
+      expect(agent.messages[0]!.role).toBe('assistant')
+    })
+
+    it('emits AfterInvocationEvent when invocation is cancelled', async () => {
+      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
+      const agent = new Agent({ model, plugins: [mockPlugin] })
+      agent.addHook(BeforeInvocationEvent, (event: BeforeInvocationEvent) => {
+        event.cancel = true
+      })
+
+      await agent.invoke('Test')
+
+      const beforeInvocationEvents = mockPlugin.invocations.filter((e) => e instanceof BeforeInvocationEvent)
+      const afterInvocationEvents = mockPlugin.invocations.filter((e) => e instanceof AfterInvocationEvent)
+      expect(beforeInvocationEvents).toHaveLength(1)
+      expect(afterInvocationEvents).toHaveLength(1)
+    })
+  })
+
+  describe('cancel model call via hooks', () => {
+    it('cancels model call with default message when cancel is true', async () => {
+      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
+      const agent = new Agent({ model, plugins: [mockPlugin] })
+      agent.addHook(BeforeModelCallEvent, (event: BeforeModelCallEvent) => {
+        event.cancel = true
+      })
+
+      const result = await agent.invoke('Test')
+
+      expect(result.stopReason).toBe('endTurn')
+      expect(result.lastMessage.content[0]).toEqual(new TextBlock('model call denied by hook'))
+    })
+
+    it('cancels model call with custom message when cancel is a string', async () => {
+      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
+      const agent = new Agent({ model, plugins: [mockPlugin] })
+      agent.addHook(BeforeModelCallEvent, (event: BeforeModelCallEvent) => {
+        event.cancel = 'Rate limited'
+      })
+
+      const result = await agent.invoke('Test')
+
+      expect(result.stopReason).toBe('endTurn')
+      expect(result.lastMessage.content[0]).toEqual(new TextBlock('Rate limited'))
+    })
+
+    it('emits AfterModelCallEvent when model call is cancelled', async () => {
+      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
+      const agent = new Agent({ model, plugins: [mockPlugin] })
+      agent.addHook(BeforeModelCallEvent, (event: BeforeModelCallEvent) => {
+        event.cancel = true
+      })
+
+      await agent.invoke('Test')
+
+      const beforeModelCallEvents = mockPlugin.invocations.filter((e) => e instanceof BeforeModelCallEvent)
+      const afterModelCallEvents = mockPlugin.invocations.filter((e) => e instanceof AfterModelCallEvent)
+      expect(beforeModelCallEvents).toHaveLength(1)
+      expect(afterModelCallEvents).toHaveLength(1)
+    })
+
+    it('does not emit ModelMessageEvent when model call is cancelled', async () => {
+      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
+      const agent = new Agent({ model, plugins: [mockPlugin] })
+      agent.addHook(BeforeModelCallEvent, (event: BeforeModelCallEvent) => {
+        event.cancel = true
+      })
+
+      await agent.invoke('Test')
+
+      const modelMessageEvents = mockPlugin.invocations.filter((e) => e instanceof ModelMessageEvent)
+      expect(modelMessageEvents).toHaveLength(0)
+    })
+
+    it('allows retry after cancel on model call', async () => {
+      let beforeCount = 0
+      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
+      const agent = new Agent({ model, plugins: [mockPlugin] })
+      agent.addHook(BeforeModelCallEvent, (event: BeforeModelCallEvent) => {
+        beforeCount++
+        if (beforeCount === 1) {
+          event.cancel = 'Not yet'
+        }
+      })
+      agent.addHook(AfterModelCallEvent, (event: AfterModelCallEvent) => {
+        if (beforeCount === 1) {
+          event.retry = true
+        }
+      })
+
+      const result = await agent.invoke('Test')
+
+      expect(result.stopReason).toBe('endTurn')
+      expect(beforeCount).toBe(2)
+      expect(result.lastMessage.content[0]).toEqual(new TextBlock('Hello'))
     })
   })
 })

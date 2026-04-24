@@ -52,6 +52,7 @@ describe('BeforeInvocationEvent', () => {
     expect(event).toEqual({
       type: 'beforeInvocationEvent',
       agent: agent,
+      cancel: false,
     })
     // @ts-expect-error verifying that property is readonly
     event.agent = new Agent()
@@ -61,6 +62,23 @@ describe('BeforeInvocationEvent', () => {
     const agent = new Agent()
     const event = new BeforeInvocationEvent({ agent })
     expect(event._shouldReverseCallbacks()).toBe(false)
+  })
+
+  it('allows cancel to be set to true', () => {
+    const agent = new Agent()
+    const event = new BeforeInvocationEvent({ agent })
+
+    expect(event.cancel).toBe(false)
+    event.cancel = true
+    expect(event.cancel).toBe(true)
+  })
+
+  it('allows cancel to be set to a string message', () => {
+    const agent = new Agent()
+    const event = new BeforeInvocationEvent({ agent })
+
+    event.cancel = 'unauthorized'
+    expect(event.cancel).toBe('unauthorized')
   })
 })
 
@@ -303,6 +321,7 @@ describe('BeforeModelCallEvent', () => {
       type: 'beforeModelCallEvent',
       agent: agent,
       model: agent.model,
+      cancel: false,
     })
     // @ts-expect-error verifying that property is readonly
     event.agent = new Agent()
@@ -312,6 +331,23 @@ describe('BeforeModelCallEvent', () => {
     const agent = new Agent()
     const event = new BeforeModelCallEvent({ agent, model: agent.model })
     expect(event._shouldReverseCallbacks()).toBe(false)
+  })
+
+  it('allows cancel to be set to true', () => {
+    const agent = new Agent()
+    const event = new BeforeModelCallEvent({ agent, model: agent.model })
+
+    expect(event.cancel).toBe(false)
+    event.cancel = true
+    expect(event.cancel).toBe(true)
+  })
+
+  it('allows cancel to be set to a string message', () => {
+    const agent = new Agent()
+    const event = new BeforeModelCallEvent({ agent, model: agent.model })
+
+    event.cancel = 'rate limited'
+    expect(event.cancel).toBe('rate limited')
   })
 })
 

@@ -108,6 +108,13 @@ export class BeforeInvocationEvent extends HookableEvent {
   readonly type = 'beforeInvocationEvent' as const
   readonly agent: LocalAgent
 
+  /**
+   * Set by hook callbacks to cancel this invocation.
+   * When set to `true`, a default cancel message is used.
+   * When set to a string, that string is used as the assistant response message.
+   */
+  cancel: boolean | string = false
+
   constructor(data: { agent: LocalAgent }) {
     super()
     this.agent = data.agent
@@ -283,6 +290,13 @@ export class BeforeModelCallEvent extends HookableEvent {
   readonly type = 'beforeModelCallEvent' as const
   readonly agent: LocalAgent
   readonly model: Model
+
+  /**
+   * Set by hook callbacks to cancel this model call.
+   * When set to `true`, a default cancel message is used.
+   * When set to a string, that string is used as the assistant response message.
+   */
+  cancel: boolean | string = false
 
   constructor(data: { agent: LocalAgent; model: Model }) {
     super()
