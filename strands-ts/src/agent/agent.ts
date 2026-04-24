@@ -1133,7 +1133,7 @@ export class Agent implements LocalAgent, InvokableAgent {
         if (afterToolCallEvent.retry) {
           continue
         }
-        return toolResult
+        return afterToolCallEvent.result
       }
 
       // Start tool span within loop span context
@@ -1226,7 +1226,7 @@ export class Agent implements LocalAgent, InvokableAgent {
         continue
       }
 
-      return toolResult
+      return afterToolCallEvent.result
     }
   }
 

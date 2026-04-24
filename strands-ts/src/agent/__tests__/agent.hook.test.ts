@@ -804,5 +804,40 @@ describe('Agent Hooks Integration', () => {
       expect(beforeCount).toBe(2)
       expect(toolCallCount).toBe(1) // Only executed on second attempt
     })
+
+    it('allows hooks to replace result on AfterToolCallEvent', async () => {
+      const tool = createMockTool('myTool', () => {
+        return new ToolResultBlock({
+          toolUseId: 'tool-1',
+          status: 'success',
+          content: [new TextBlock('original result')],
+        })
+      })
+
+      const model = new MockMessageModel()
+        .addTurn({ type: 'toolUseBlock', name: 'myTool', toolUseId: 'tool-1', input: {} })
+        .addTurn({ type: 'textBlock', text: 'Done' })
+
+      const agent = new Agent({ model, tools: [tool] })
+      agent.addHook(AfterToolCallEvent, (event: AfterToolCallEvent) => {
+        event.result = new ToolResultBlock({
+          toolUseId: event.result.toolUseId,
+          status: 'success',
+          content: [new TextBlock('replaced result')],
+        })
+      })
+
+      await agent.invoke('Test')
+
+      const toolResultMessage = agent.messages.find(
+        (m) => m.role === 'user' && m.content.some((b) => b.type === 'toolResultBlock')
+      )
+      expect(toolResultMessage).toBeDefined()
+      const toolResultBlock = toolResultMessage!.content.find(
+        (b): b is ToolResultBlock => b.type === 'toolResultBlock'
+      )
+      expect(toolResultBlock).toBeDefined()
+      expect(toolResultBlock!.content).toEqual([new TextBlock('replaced result')])
+    })
   })
 })

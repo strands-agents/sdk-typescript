@@ -230,7 +230,9 @@ export class AfterToolCallEvent extends HookableEvent {
     input: JSONValue
   }
   readonly tool: Tool | undefined
-  readonly result: ToolResultBlock
+
+  result: ToolResultBlock
+
   readonly error?: Error
 
   /**
