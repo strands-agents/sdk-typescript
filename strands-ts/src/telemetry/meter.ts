@@ -112,6 +112,12 @@ export interface AgentMetricsData {
    * Represents the current context window utilization.
    */
   latestContextSize?: number
+
+  /**
+   * Projected context size for the next model call (inputTokens + outputTokens from the last call).
+   * Represents the baseline token count the next invocation will start with.
+   */
+  projectedContextSize?: number
 }
 
 /**
@@ -184,6 +190,13 @@ export class AgentMetrics implements JSONSerializable<AgentMetricsData> {
    */
   readonly latestContextSize: number | undefined
 
+  /**
+   * Projected context size for the next model call (inputTokens + outputTokens from the last call).
+   * Represents the baseline token count the next invocation will start with.
+   * Returns `undefined` when no invocations have occurred.
+   */
+  readonly projectedContextSize: number | undefined
+
   constructor(data?: Partial<AgentMetricsData>) {
     this.cycleCount = data?.cycleCount ?? 0
     this.accumulatedUsage = data?.accumulatedUsage ?? createEmptyUsage()
@@ -191,6 +204,7 @@ export class AgentMetrics implements JSONSerializable<AgentMetricsData> {
     this.agentInvocations = data?.agentInvocations ?? []
     this.toolMetrics = data?.toolMetrics ?? {}
     this.latestContextSize = data?.latestContextSize
+    this.projectedContextSize = data?.projectedContextSize
   }
 
   /**
@@ -251,6 +265,7 @@ export class AgentMetrics implements JSONSerializable<AgentMetricsData> {
       agentInvocations: this.agentInvocations,
       toolMetrics: this.toolMetrics,
       ...(this.latestContextSize !== undefined && { latestContextSize: this.latestContextSize }),
+      ...(this.projectedContextSize !== undefined && { projectedContextSize: this.projectedContextSize }),
     }
   }
 }
@@ -296,6 +311,11 @@ export class Meter {
    * The most recent input token count from the last model invocation.
    */
   private _latestContextSize: number | undefined
+
+  /**
+   * Projected context size for the next model call (inputTokens + outputTokens).
+   */
+  private _projectedContextSize: number | undefined
 
   // OTEL instruments (no-op when no MeterProvider is registered)
   private readonly _otelMeter: OtelMeter
@@ -459,6 +479,7 @@ export class Meter {
       agentInvocations: this._agentInvocations,
       toolMetrics: this._toolMetrics,
       ...(this._latestContextSize !== undefined && { latestContextSize: this._latestContextSize }),
+      ...(this._projectedContextSize !== undefined && { projectedContextSize: this._projectedContextSize }),
     })
   }
 
@@ -496,6 +517,7 @@ export class Meter {
   private _updateUsage(usage: Usage): void {
     accumulateUsage(this._accumulatedUsage, usage)
     this._latestContextSize = usage.inputTokens
+    this._projectedContextSize = usage.inputTokens + usage.outputTokens
 
     this._otelInputTokens.add(usage.inputTokens)
     this._otelOutputTokens.add(usage.outputTokens)

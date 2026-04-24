@@ -609,9 +609,7 @@ export class Agent implements LocalAgent, InvokableAgent {
 
     if (beforeInvocationEvent.cancel) {
       const cancelText =
-        typeof beforeInvocationEvent.cancel === 'string'
-          ? beforeInvocationEvent.cancel
-          : 'invocation denied by hook'
+        typeof beforeInvocationEvent.cancel === 'string' ? beforeInvocationEvent.cancel : 'invocation denied by hook'
       const message = new Message({ role: 'assistant', content: [new TextBlock(cancelText)] })
       yield this._appendMessage(message)
       yield new AfterInvocationEvent({ agent: this })
@@ -913,14 +911,24 @@ export class Agent implements LocalAgent, InvokableAgent {
       streamOptions.toolChoice = toolChoice
     }
 
-    const beforeModelCallEvent = new BeforeModelCallEvent({ agent: this, model: this.model })
+    // Estimate input tokens for the upcoming model call (non-fatal if estimation fails)
+    let projectedInputTokens: number | undefined
+    try {
+      projectedInputTokens = await this._estimateInputTokens(streamOptions)
+    } catch (e) {
+      logger.debug(`error=<${e}> | token estimation failed, proceeding without estimate`)
+    }
+
+    const beforeModelCallEvent = new BeforeModelCallEvent({
+      agent: this,
+      model: this.model,
+      ...(projectedInputTokens !== undefined && { projectedInputTokens }),
+    })
     yield beforeModelCallEvent
 
     if (beforeModelCallEvent.cancel) {
       const cancelText =
-        typeof beforeModelCallEvent.cancel === 'string'
-          ? beforeModelCallEvent.cancel
-          : 'model call denied by hook'
+        typeof beforeModelCallEvent.cancel === 'string' ? beforeModelCallEvent.cancel : 'model call denied by hook'
       const message = new Message({ role: 'assistant', content: [new TextBlock(cancelText)] })
       const stopData: ModelStopData = { message, stopReason: 'endTurn' }
       const afterModelCallEvent = new AfterModelCallEvent({ agent: this, model: this.model, stopData })
@@ -1313,6 +1321,48 @@ export class Agent implements LocalAgent, InvokableAgent {
         )
       }
     }
+  }
+
+  /**
+   * Estimate the input token count for the next model call.
+   *
+   * Uses the token counting strategy: reads inputTokens + outputTokens
+   * from the last assistant message's metadata as a known baseline, then estimates
+   * only new messages added after it. Falls back to full estimation when no metadata
+   * is available (cold start or first call).
+   *
+   * @param streamOptions - The stream options containing system prompt and tool specs
+   * @returns Estimated input token count
+   */
+  private async _estimateInputTokens(streamOptions: StreamOptions): Promise<number> {
+    // Find the last assistant message with usage metadata
+    let lastAssistantIdx = -1
+    for (let i = this.messages.length - 1; i >= 0; i--) {
+      if (this.messages[i]!.role === 'assistant' && this.messages[i]!.metadata?.usage) {
+        lastAssistantIdx = i
+        break
+      }
+    }
+
+    let estimate: number
+    if (lastAssistantIdx >= 0) {
+      const usage = this.messages[lastAssistantIdx]!.metadata!.usage!
+      const knownBaseline = usage.inputTokens + usage.outputTokens
+      const newMessages = this.messages.slice(lastAssistantIdx + 1)
+      if (newMessages.length === 0) {
+        estimate = knownBaseline
+      } else {
+        // System prompt and tool spec tokens are already included in the baseline from the prior model call
+        estimate = knownBaseline + (await this.model.countTokens(newMessages))
+      }
+    } else {
+      estimate = await this.model.countTokens(this.messages, {
+        ...(streamOptions.systemPrompt !== undefined && { systemPrompt: streamOptions.systemPrompt }),
+        ...(streamOptions.toolSpecs !== undefined && { toolSpecs: streamOptions.toolSpecs }),
+      })
+    }
+
+    return estimate
   }
 
   /**

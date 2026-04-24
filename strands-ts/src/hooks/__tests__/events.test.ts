@@ -340,6 +340,31 @@ describe('BeforeModelCallEvent', () => {
     event.agent = new Agent()
   })
 
+  it('includes projectedInputTokens when provided', () => {
+    const agent = new Agent()
+    const event = new BeforeModelCallEvent({ agent, model: agent.model, projectedInputTokens: 500 })
+
+    expect(event).toEqual({
+      type: 'beforeModelCallEvent',
+      agent,
+      model: agent.model,
+      cancel: false,
+      projectedInputTokens: 500,
+    })
+    expect(event.toJSON()).toStrictEqual({
+      type: 'beforeModelCallEvent',
+      projectedInputTokens: 500,
+    })
+  })
+
+  it('excludes projectedInputTokens from toJSON when not provided', () => {
+    const agent = new Agent()
+    const event = new BeforeModelCallEvent({ agent, model: agent.model })
+
+    expect(event.projectedInputTokens).toBeUndefined()
+    expect(event.toJSON()).toStrictEqual({ type: 'beforeModelCallEvent' })
+  })
+
   it('returns false for _shouldReverseCallbacks', () => {
     const agent = new Agent()
     const event = new BeforeModelCallEvent({ agent, model: agent.model })
@@ -1002,7 +1027,10 @@ describe('toJSON serialization completeness', () => {
       { name: 'InitializedEvent', event: new InitializedEvent({ agent }) },
       { name: 'BeforeInvocationEvent', event: new BeforeInvocationEvent({ agent }) },
       { name: 'AfterInvocationEvent', event: new AfterInvocationEvent({ agent }) },
-      { name: 'BeforeModelCallEvent', event: new BeforeModelCallEvent({ agent, model: agent.model }) },
+      {
+        name: 'BeforeModelCallEvent',
+        event: new BeforeModelCallEvent({ agent, model: agent.model, projectedInputTokens: 100 }),
+      },
       {
         name: 'AfterModelCallEvent',
         event: Object.assign(new AfterModelCallEvent({ agent, model: agent.model, stopData, error }), { retry: true }),

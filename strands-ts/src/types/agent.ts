@@ -270,6 +270,15 @@ export class AgentResult {
   }
 
   /**
+   * Projected context size for the next model call (inputTokens + outputTokens from the last call).
+   * Convenience accessor that delegates to `metrics.projectedContextSize`.
+   * Returns `undefined` when no metrics or invocations are available.
+   */
+  get projectedContextSize(): number | undefined {
+    return this.metrics?.projectedContextSize
+  }
+
+  /**
    * Custom JSON serialization that excludes traces and metrics by default.
    * This prevents accidentally sending large trace/metric data over the wire
    * when serializing AgentResult for API responses.

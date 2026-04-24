@@ -333,6 +333,34 @@ describe('Meter', () => {
     })
   })
 
+  describe('projectedContextSize', () => {
+    it('is undefined when no invocations have occurred', () => {
+      expect(meter.metrics.projectedContextSize).toBeUndefined()
+    })
+
+    it('returns inputTokens + outputTokens after a model call', () => {
+      meter.updateCycle({
+        type: 'modelMetadataEvent',
+        usage: { inputTokens: 100, outputTokens: 50, totalTokens: 150 },
+      })
+
+      expect(meter.metrics.projectedContextSize).toBe(150)
+    })
+
+    it('updates across multiple cycles', () => {
+      meter.updateCycle({
+        type: 'modelMetadataEvent',
+        usage: { inputTokens: 100, outputTokens: 50, totalTokens: 150 },
+      })
+      meter.updateCycle({
+        type: 'modelMetadataEvent',
+        usage: { inputTokens: 200, outputTokens: 80, totalTokens: 280 },
+      })
+
+      expect(meter.metrics.projectedContextSize).toBe(280)
+    })
+  })
+
   describe('updateCycle', () => {
     it('accumulates usage and latency from metadata', () => {
       meter.updateCycle({

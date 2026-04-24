@@ -244,6 +244,40 @@ describe('AgentResult', () => {
     })
   })
 
+  describe('projectedContextSize', () => {
+    it('returns projectedContextSize from metrics', () => {
+      const message = new Message({
+        role: 'assistant',
+        content: [new TextBlock('Hello')],
+      })
+
+      const metrics = new AgentMetrics({ projectedContextSize: 750 })
+
+      const result = new AgentResult({
+        stopReason: 'endTurn',
+        lastMessage: message,
+        metrics,
+      })
+
+      expect(result.projectedContextSize).toBe(750)
+    })
+
+    it('returns undefined when metrics has no projectedContextSize', () => {
+      const message = new Message({
+        role: 'assistant',
+        content: [new TextBlock('Hello')],
+      })
+
+      const result = new AgentResult({
+        stopReason: 'endTurn',
+        lastMessage: message,
+        metrics: new AgentMetrics(),
+      })
+
+      expect(result.projectedContextSize).toBeUndefined()
+    })
+  })
+
   describe('toJSON', () => {
     it('excludes traces and metrics from serialization', () => {
       const message = new Message({
