@@ -33,7 +33,7 @@ import { BedrockModel } from '@strands-agents/sdk/models/bedrock';
 import { OpenAIModel } from '@strands-agents/sdk/models/openai';
 import { GoogleModel } from '@strands-agents/sdk/models/google';
 import type { StopReason, AgentStreamEvent, Model, BaseModelConfig } from '@strands-agents/sdk';
-import { NullConversationManager, SlidingWindowConversationManager } from '@strands-agents/sdk';
+import { NullConversationManager, SlidingWindowConversationManager, SummarizingConversationManager } from '@strands-agents/sdk';
 
 // All log calls go through `hostLog` (the WIT import).  The host can
 // route them to the host language's logging framework (e.g. Python `logging`).
@@ -406,6 +406,23 @@ function createConversationManager(config: AgentConfig): any {
         windowSize: cmConfig.windowSize,
         shouldTruncateResults: cmConfig.shouldTruncateResults,
       });
+    case 'summarizing': {
+      let summaryModel: Model<BaseModelConfig> | undefined;
+      if (cmConfig.summarizationModelConfig) {
+        try {
+          const parsed = JSON.parse(cmConfig.summarizationModelConfig);
+          summaryModel = createModel(parsed);
+        } catch (e) {
+          glog('warn', 'failed to parse summarization model config, using agent model', errContext(e));
+        }
+      }
+      return new SummarizingConversationManager({
+        model: summaryModel,
+        summaryRatio: cmConfig.summaryRatio ?? undefined,
+        preserveRecentMessages: cmConfig.preserveRecentMessages ?? undefined,
+        summarizationSystemPrompt: cmConfig.summarizationSystemPrompt ?? undefined,
+      });
+    }
     default:
       glog('warn', `unknown conversation manager strategy: ${cmConfig.strategy}, using default`);
       return new SlidingWindowConversationManager({ windowSize: 40 });

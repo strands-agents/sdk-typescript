@@ -301,11 +301,24 @@ class Agent:
         if conversation_manager is not None:
             from strands.agent.conversation_manager import NullConversationManager as _NullCM
             from strands.agent.conversation_manager import SlidingWindowConversationManager as _SlidingCM
+            from strands.agent.conversation_manager import SummarizingConversationManager as _SummarizingCM
 
             if isinstance(conversation_manager, _NullCM):
                 cm_config = {"type": "none"}
             elif isinstance(conversation_manager, _SlidingCM):
-                cm_config = {"type": "sliding-window", "window_size": conversation_manager.window_size}
+                cm_config = {
+                    "type": "sliding-window",
+                    "window_size": conversation_manager.window_size,
+                    "should_truncate_results": conversation_manager.should_truncate_results,
+                }
+            elif isinstance(conversation_manager, _SummarizingCM):
+                cm_config = {
+                    "type": "summarizing",
+                    "summary_ratio": conversation_manager.summary_ratio,
+                    "preserve_recent_messages": conversation_manager.preserve_recent_messages,
+                    "summarization_system_prompt": conversation_manager.summarization_system_prompt,
+                    "summarization_model_config": conversation_manager.summarization_model_config,
+                }
             elif isinstance(conversation_manager, dict):
                 cm_config = conversation_manager
             else:

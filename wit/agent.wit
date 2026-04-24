@@ -172,11 +172,20 @@ interface types {
   }
 
   /// Conversation manager configuration.
-  /// The `strategy` field selects the manager: "none" or "sliding-window".
+  /// The `strategy` field selects the manager: "none", "sliding-window", or "summarizing".
   record conversation-manager-config {
     strategy: string,
     window-size: s32,
     should-truncate-results: bool,
+    /// Ratio of messages to summarize (0.1–0.8). Only used when strategy is "summarizing".
+    summary-ratio: option<f64>,
+    /// Minimum number of recent messages to preserve. Only used when strategy is "summarizing".
+    preserve-recent-messages: option<s32>,
+    /// Custom system prompt for summarization. Only used when strategy is "summarizing".
+    summarization-system-prompt: option<string>,
+    /// JSON-serialized model config for the summarization model. Only used when strategy is "summarizing".
+    /// When absent, the agent's primary model is used.
+    summarization-model-config: option<string>,
   }
 
   /// Top-level agent configuration.

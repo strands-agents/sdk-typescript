@@ -237,10 +237,17 @@ def _build_conversation_manager_variant(
     if config is None:
         return None
     cm_type = config.get("type")
+    summarizing_defaults = {
+        "summary-ratio": None,
+        "preserve-recent-messages": None,
+        "summarization-system-prompt": None,
+        "summarization-model-config": None,
+    }
     if cm_type == "none":
         return _rec(
             strategy="none",
             **{"window-size": 0, "should-truncate-results": False},
+            **summarizing_defaults,
         )
     if cm_type == "sliding-window":
         return _rec(
@@ -248,6 +255,19 @@ def _build_conversation_manager_variant(
             **{
                 "window-size": config.get("window_size", 40),
                 "should-truncate-results": config.get("should_truncate_results", True),
+            },
+            **summarizing_defaults,
+        )
+    if cm_type == "summarizing":
+        return _rec(
+            strategy="summarizing",
+            **{
+                "window-size": 0,
+                "should-truncate-results": False,
+                "summary-ratio": config.get("summary_ratio"),
+                "preserve-recent-messages": config.get("preserve_recent_messages"),
+                "summarization-system-prompt": config.get("summarization_system_prompt"),
+                "summarization-model-config": config.get("summarization_model_config"),
             },
         )
     raise ValueError(f"unknown conversation manager type: {cm_type}")

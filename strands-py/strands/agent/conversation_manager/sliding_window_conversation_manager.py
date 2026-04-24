@@ -11,8 +11,9 @@ class SlidingWindowConversationManager(HookProvider):
     Preserves tool-use / tool-result pairs so the message sequence stays valid.
     """
 
-    def __init__(self, window_size: int = 40, **_kwargs: Any) -> None:
+    def __init__(self, window_size: int = 40, should_truncate_results: bool = True, **_kwargs: Any) -> None:
         self.window_size = window_size
+        self.should_truncate_results = should_truncate_results
 
     def register_hooks(self, registry: HookRegistry) -> None:
         registry.add_callback(AfterInvocationEvent, self._trim)
