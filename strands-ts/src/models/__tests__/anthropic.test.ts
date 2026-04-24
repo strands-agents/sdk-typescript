@@ -99,8 +99,10 @@ describe('AnthropicModel', () => {
       expect(provider).toBeDefined()
     })
 
-    it('warns when maxTokens is not explicitly set', () => {
-      new AnthropicModel({ apiKey: 'sk-ant-test' })
+    it('warns when maxTokens is not explicitly set', async () => {
+      vi.resetModules()
+      const { AnthropicModel: FreshAnthropicModel } = await import('../anthropic.js')
+      new FreshAnthropicModel({ apiKey: 'sk-ant-test' })
       expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('using default maxTokens'))
     })
 

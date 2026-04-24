@@ -7,9 +7,9 @@ import { ContextWindowOverflowError, ModelThrottledError, normalizeError } from 
 import type { ImageBlock, DocumentBlock } from '../types/media.js'
 import { encodeBase64 } from '../types/media.js'
 import { logger } from '../logging/logger.js'
+import { claimFirstWarning } from '../logging/claim-first-warning.js'
+import { MODEL_DEFAULTS, defaultMaxTokensWarningMessage, defaultModelWarningMessage } from './defaults.js'
 
-const DEFAULT_ANTHROPIC_MODEL_ID = 'claude-sonnet-4-6'
-const DEFAULT_ANTHROPIC_MAX_TOKENS = 64_000
 const CONTEXT_WINDOW_OVERFLOW_ERRORS = ['prompt is too long', 'max_tokens exceeded', 'input too long']
 const TEXT_FILE_FORMATS = ['txt', 'md', 'markdown', 'csv', 'json', 'xml', 'html', 'yml', 'yaml', 'js', 'ts', 'py']
 
@@ -40,15 +40,23 @@ export class AnthropicModel extends Model<AnthropicModelConfig> {
     const { apiKey, client, clientConfig, ...modelConfig } = options || {}
 
     this._config = {
-      modelId: DEFAULT_ANTHROPIC_MODEL_ID,
-      maxTokens: DEFAULT_ANTHROPIC_MAX_TOKENS,
+      modelId: MODEL_DEFAULTS.anthropic.modelId,
+      maxTokens: MODEL_DEFAULTS.anthropic.maxTokens,
       ...modelConfig,
     }
 
+    if (modelConfig.modelId === undefined) {
+      const msg = defaultModelWarningMessage(MODEL_DEFAULTS.anthropic.modelId)
+      if (claimFirstWarning(msg)) {
+        logger.warn(msg)
+      }
+    }
+
     if (modelConfig.maxTokens === undefined) {
-      logger.warn(
-        `max_tokens=<${DEFAULT_ANTHROPIC_MAX_TOKENS}> | using default maxTokens, which is subject to change | set maxTokens explicitly to pin the value`
-      )
+      const msg = defaultMaxTokensWarningMessage(MODEL_DEFAULTS.anthropic.maxTokens)
+      if (claimFirstWarning(msg)) {
+        logger.warn(msg)
+      }
     }
 
     if (client) {
@@ -226,7 +234,7 @@ export class AnthropicModel extends Model<AnthropicModelConfig> {
 
     const request: Anthropic.MessageStreamParams = {
       model: this._config.modelId,
-      max_tokens: this._config.maxTokens ?? DEFAULT_ANTHROPIC_MAX_TOKENS,
+      max_tokens: this._config.maxTokens ?? MODEL_DEFAULTS.anthropic.maxTokens,
       messages: this._formatMessages(messages),
       stream: true,
     }

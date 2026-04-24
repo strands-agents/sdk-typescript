@@ -19,14 +19,14 @@ import type { ModelStreamEvent } from '../models/streaming.js'
 import { ContextWindowOverflowError, ModelThrottledError } from '../errors.js'
 import type { ChatCompletionContentPartText } from 'openai/resources/index.mjs'
 import { logger } from '../logging/logger.js'
+import { claimFirstWarning } from '../logging/claim-first-warning.js'
+import { MODEL_DEFAULTS, defaultModelWarningMessage } from './defaults.js'
 
 /**
  * Supported OpenAI API types.
  * - 'chat': OpenAI Chat Completions API
  */
 export type OpenAIApi = 'chat'
-
-const DEFAULT_OPENAI_MODEL_ID = 'gpt-5.4'
 
 /**
  * Error message patterns that indicate context window overflow.
@@ -263,6 +263,13 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
     // Initialize model config
     this._config = modelConfig
 
+    if (modelConfig.modelId === undefined) {
+      const msg = defaultModelWarningMessage(MODEL_DEFAULTS.openai.modelId)
+      if (claimFirstWarning(msg)) {
+        logger.warn(msg)
+      }
+    }
+
     // Use provided client or create a new one
     if (client) {
       this._client = client
@@ -466,7 +473,7 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
   ): OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming {
     // Start with required fields
     const request: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming = {
-      model: this._config.modelId ?? DEFAULT_OPENAI_MODEL_ID,
+      model: this._config.modelId ?? MODEL_DEFAULTS.openai.modelId,
       messages: [] as OpenAI.Chat.Completions.ChatCompletionMessageParam[],
       stream: true,
       stream_options: { include_usage: true },

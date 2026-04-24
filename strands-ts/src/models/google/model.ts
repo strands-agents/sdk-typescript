@@ -22,11 +22,9 @@ import type { GoogleModelConfig, GoogleModelOptions, GoogleStreamState } from '.
 export type { GoogleModelConfig, GoogleModelOptions }
 import { classifyGoogleError } from './errors.js'
 import { formatMessages, mapChunkToEvents } from './adapters.js'
-
-/**
- * Default Gemini model ID.
- */
-const DEFAULT_GEMINI_MODEL_ID = 'gemini-2.5-flash'
+import { MODEL_DEFAULTS, defaultModelWarningMessage } from '../defaults.js'
+import { claimFirstWarning } from '../../logging/claim-first-warning.js'
+import { logger } from '../../logging/logger.js'
 
 /**
  * Google model provider implementation.
@@ -93,6 +91,13 @@ export class GoogleModel extends Model<GoogleModelConfig> {
     const { apiKey, client, clientConfig, ...modelConfig } = options || {}
 
     this._config = modelConfig
+
+    if (modelConfig.modelId === undefined) {
+      const msg = defaultModelWarningMessage(MODEL_DEFAULTS.gemini.modelId)
+      if (claimFirstWarning(msg)) {
+        logger.warn(msg)
+      }
+    }
 
     if (client) {
       this._client = client
@@ -296,7 +301,7 @@ export class GoogleModel extends Model<GoogleModelConfig> {
     }
 
     return {
-      model: this._config.modelId ?? DEFAULT_GEMINI_MODEL_ID,
+      model: this._config.modelId ?? MODEL_DEFAULTS.gemini.modelId,
       contents,
       config,
     }

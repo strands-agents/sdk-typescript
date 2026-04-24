@@ -1,0 +1,32 @@
+/**
+ * Default values for model providers.
+ *
+ * These defaults are subject to change between versions. Set values explicitly
+ * on model configurations to pin behavior across upgrades.
+ */
+
+export const MODEL_DEFAULTS = {
+  anthropic: {
+    modelId: 'claude-sonnet-4-6',
+    maxTokens: 64_000,
+  },
+  bedrock: {
+    modelId: 'global.anthropic.claude-sonnet-4-6',
+    region: 'us-west-2',
+  },
+  openai: {
+    modelId: 'gpt-5.4',
+  },
+  gemini: {
+    modelId: 'gemini-2.5-flash',
+  },
+} as const
+
+export function defaultModelWarningMessage(defaultModelId: string): string {
+  return `model_id=<${defaultModelId}> | using default modelId, which is subject to change | set modelId explicitly to pin the value`
+}
+
+export function defaultMaxTokensWarningMessage(defaultMaxTokens: number): string {
+  return `max_tokens=<${defaultMaxTokens}> | using default maxTokens, which is subject to change | set maxTokens explicitly to pin the value`
+}
+

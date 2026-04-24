@@ -50,15 +50,10 @@ import type { JSONValue } from '../types/json.js'
 import { ContextWindowOverflowError, ModelThrottledError, normalizeError } from '../errors.js'
 import { ensureDefined } from '../types/validation.js'
 import { logger } from '../logging/logger.js'
+import { claimFirstWarning } from '../logging/claim-first-warning.js'
 import { NOOP_TOOL_SPEC } from '../tools/noop-tool.js'
+import { MODEL_DEFAULTS, defaultModelWarningMessage } from './defaults.js'
 
-/**
- * Default Bedrock model ID.
- * Uses Claude Sonnet 4 with global inference profile for cross-region availability.
- */
-const DEFAULT_BEDROCK_MODEL_ID = 'global.anthropic.claude-sonnet-4-6'
-
-const DEFAULT_BEDROCK_REGION = 'us-west-2'
 const DEFAULT_BEDROCK_REGION_SUPPORTS_FIP = false
 
 /**
@@ -360,8 +355,15 @@ export class BedrockModel extends Model<BedrockModelConfig> {
 
     // Initialize model config with default model ID if not provided
     this._config = {
-      modelId: DEFAULT_BEDROCK_MODEL_ID,
+      modelId: MODEL_DEFAULTS.bedrock.modelId,
       ...modelConfig,
+    }
+
+    if (modelConfig.modelId === undefined) {
+      const msg = defaultModelWarningMessage(MODEL_DEFAULTS.bedrock.modelId)
+      if (claimFirstWarning(msg)) {
+        logger.warn(msg)
+      }
     }
 
     // Build user agent string (extend if provided, otherwise use SDK identifier)
@@ -1635,7 +1637,7 @@ function applyDefaultRegion(config: BedrockRuntimeClientResolvedConfig): void {
       // Note: it was observed that the browser version of the BedrockClient
       // uses a string instead of an error object - thus the normalizeError call
       if (normalizeError(error).message === 'Region is missing') {
-        return DEFAULT_BEDROCK_REGION
+        return MODEL_DEFAULTS.bedrock.region
       }
 
       throw error

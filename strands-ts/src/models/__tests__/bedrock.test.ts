@@ -1327,8 +1327,8 @@ describe('BedrockModel', () => {
     })
 
     it('does not warn when array system prompt is provided without cacheConfig', async () => {
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
       const provider = new BedrockModel()
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
       const options: StreamOptions = {
         systemPrompt: [
