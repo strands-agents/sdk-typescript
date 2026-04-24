@@ -609,6 +609,39 @@ describe('Meter', () => {
       expect(mockMeter.getHistogram('gen_ai.server.time_to_first_token')?.dataPoints).toStrictEqual([])
     })
   })
+
+  describe('estimatedNextContextSize', () => {
+    it('is undefined by default', () => {
+      expect(meter.metrics.estimatedNextContextSize).toBeUndefined()
+    })
+
+    it('is set by updateEstimatedNextContextSize', () => {
+      meter.updateEstimatedNextContextSize(500)
+      expect(meter.metrics.estimatedNextContextSize).toBe(500)
+    })
+
+    it('is overwritten on subsequent calls', () => {
+      meter.updateEstimatedNextContextSize(500)
+      meter.updateEstimatedNextContextSize(800)
+      expect(meter.metrics.estimatedNextContextSize).toBe(800)
+    })
+
+    it('is included in toJSON when set', () => {
+      meter.updateEstimatedNextContextSize(500)
+      expect(meter.metrics.toJSON()).toStrictEqual({
+        cycleCount: 0,
+        accumulatedUsage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+        accumulatedMetrics: { latencyMs: 0 },
+        agentInvocations: [],
+        toolMetrics: {},
+        estimatedNextContextSize: 500,
+      })
+    })
+
+    it('is excluded from toJSON when not set', () => {
+      expect(meter.metrics.toJSON()).not.toHaveProperty('estimatedNextContextSize')
+    })
+  })
 })
 
 describe('AgentMetrics', () => {

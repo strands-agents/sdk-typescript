@@ -284,18 +284,32 @@ export class BeforeModelCallEvent extends HookableEvent {
   readonly agent: LocalAgent
   readonly model: Model
 
-  constructor(data: { agent: LocalAgent; model: Model }) {
+  /**
+   * Estimated input token count for the upcoming model call.
+   * Computed by the agent loop from message metadata and token estimation.
+   * Available for hooks and plugins (e.g. conversation managers) to make
+   * proactive decisions about context management.
+   */
+  readonly estimatedInputTokens?: number
+
+  constructor(data: { agent: LocalAgent; model: Model; estimatedInputTokens?: number }) {
     super()
     this.agent = data.agent
     this.model = data.model
+    if (data.estimatedInputTokens !== undefined) {
+      this.estimatedInputTokens = data.estimatedInputTokens
+    }
   }
 
   /**
    * Serializes for wire transport, excluding the agent reference.
    * Called automatically by JSON.stringify().
    */
-  toJSON(): Pick<BeforeModelCallEvent, 'type'> {
-    return { type: this.type }
+  toJSON(): Pick<BeforeModelCallEvent, 'type' | 'estimatedInputTokens'> {
+    return {
+      type: this.type,
+      ...(this.estimatedInputTokens !== undefined && { estimatedInputTokens: this.estimatedInputTokens }),
+    }
   }
 }
 

@@ -42,7 +42,9 @@ describe('Agent Hooks Integration', () => {
       expect(lifecyclePlugin.invocations[2]).toEqual(
         new MessageAddedEvent({ agent, message: new Message({ role: 'user', content: [new TextBlock('Hi')] }) })
       )
-      expect(lifecyclePlugin.invocations[3]).toEqual(new BeforeModelCallEvent({ agent, model: agent.model }))
+      expect(lifecyclePlugin.invocations[3]).toEqual(
+        new BeforeModelCallEvent({ agent, model: agent.model, estimatedInputTokens: expect.any(Number) as number })
+      )
       expect(lifecyclePlugin.invocations[4]).toEqual(
         new AfterModelCallEvent({
           agent,
@@ -79,7 +81,9 @@ describe('Agent Hooks Integration', () => {
           message: new Message({ role: 'user', content: [new TextBlock('Hi')] }),
         })
       )
-      expect(lifecyclePlugin.invocations[3]).toEqual(new BeforeModelCallEvent({ agent, model: agent.model }))
+      expect(lifecyclePlugin.invocations[3]).toEqual(
+        new BeforeModelCallEvent({ agent, model: agent.model, estimatedInputTokens: expect.any(Number) as number })
+      )
       expect(lifecyclePlugin.invocations[4]).toEqual(
         new AfterModelCallEvent({
           agent,

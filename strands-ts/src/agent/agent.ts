@@ -897,7 +897,19 @@ export class Agent implements LocalAgent, InvokableAgent {
       streamOptions.toolChoice = toolChoice
     }
 
-    yield new BeforeModelCallEvent({ agent: this, model: this.model })
+    // Estimate input tokens for the upcoming model call (non-fatal if estimation fails)
+    let estimatedInputTokens: number | undefined
+    try {
+      estimatedInputTokens = await this._estimateInputTokens(streamOptions)
+    } catch {
+      // Estimation is best-effort; proceed without it
+    }
+
+    yield new BeforeModelCallEvent({
+      agent: this,
+      model: this.model,
+      ...(estimatedInputTokens !== undefined && { estimatedInputTokens }),
+    })
 
     // Start model span within loop span context
     const modelId = this.model.modelId
@@ -1279,6 +1291,49 @@ export class Agent implements LocalAgent, InvokableAgent {
         )
       }
     }
+  }
+
+  /**
+   * Estimate the input token count for the next model call.
+   *
+   * Uses the token counting strategy from the design: reads inputTokens + outputTokens
+   * from the last assistant message's metadata as a known baseline, then estimates
+   * only new messages added after it. Falls back to full estimation when no metadata
+   * is available (cold start or first call).
+   *
+   * @param streamOptions - The stream options containing system prompt and tool specs
+   * @returns Estimated input token count
+   */
+  private async _estimateInputTokens(streamOptions: StreamOptions): Promise<number> {
+    // Find the last assistant message with usage metadata
+    let lastAssistantIdx = -1
+    for (let i = this.messages.length - 1; i >= 0; i--) {
+      if (this.messages[i]!.role === 'assistant' && this.messages[i]!.metadata?.usage) {
+        lastAssistantIdx = i
+        break
+      }
+    }
+
+    let estimate: number
+    if (lastAssistantIdx >= 0) {
+      const usage = this.messages[lastAssistantIdx]!.metadata!.usage!
+      const knownBaseline = usage.inputTokens + usage.outputTokens
+      const newMessages = this.messages.slice(lastAssistantIdx + 1)
+      if (newMessages.length === 0) {
+        estimate = knownBaseline
+      } else {
+        // System prompt and tool spec tokens are already included in the baseline from the prior model call
+        estimate = knownBaseline + (await this.model.countTokens(newMessages))
+      }
+    } else {
+      estimate = await this.model.countTokens(this.messages, {
+        ...(streamOptions.systemPrompt !== undefined && { systemPrompt: streamOptions.systemPrompt }),
+        ...(streamOptions.toolSpecs !== undefined && { toolSpecs: streamOptions.toolSpecs }),
+      })
+    }
+
+    this._meter.updateEstimatedNextContextSize(estimate)
+    return estimate
   }
 
   /**

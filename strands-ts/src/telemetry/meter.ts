@@ -112,6 +112,12 @@ export interface AgentMetricsData {
    * Represents the current context window utilization.
    */
   latestContextSize?: number
+
+  /**
+   * Estimated input token count for the next model call.
+   * Computed from the last model call's usage plus any new messages added since.
+   */
+  estimatedNextContextSize?: number
 }
 
 /**
@@ -184,6 +190,13 @@ export class AgentMetrics implements JSONSerializable<AgentMetricsData> {
    */
   readonly latestContextSize: number | undefined
 
+  /**
+   * Estimated input token count for the next model call.
+   * Computed from the last model call's usage plus any new messages added since.
+   * Returns `undefined` when no estimation has been performed.
+   */
+  readonly estimatedNextContextSize: number | undefined
+
   constructor(data?: Partial<AgentMetricsData>) {
     this.cycleCount = data?.cycleCount ?? 0
     this.accumulatedUsage = data?.accumulatedUsage ?? createEmptyUsage()
@@ -191,6 +204,7 @@ export class AgentMetrics implements JSONSerializable<AgentMetricsData> {
     this.agentInvocations = data?.agentInvocations ?? []
     this.toolMetrics = data?.toolMetrics ?? {}
     this.latestContextSize = data?.latestContextSize
+    this.estimatedNextContextSize = data?.estimatedNextContextSize
   }
 
   /**
@@ -251,6 +265,9 @@ export class AgentMetrics implements JSONSerializable<AgentMetricsData> {
       agentInvocations: this.agentInvocations,
       toolMetrics: this.toolMetrics,
       ...(this.latestContextSize !== undefined && { latestContextSize: this.latestContextSize }),
+      ...(this.estimatedNextContextSize !== undefined && {
+        estimatedNextContextSize: this.estimatedNextContextSize,
+      }),
     }
   }
 }
@@ -296,6 +313,11 @@ export class Meter {
    * The most recent input token count from the last model invocation.
    */
   private _latestContextSize: number | undefined
+
+  /**
+   * Estimated input token count for the next model call.
+   */
+  private _estimatedNextContextSize: number | undefined
 
   // OTEL instruments (no-op when no MeterProvider is registered)
   private readonly _otelMeter: OtelMeter
@@ -448,6 +470,15 @@ export class Meter {
   }
 
   /**
+   * Record the estimated input token count for the next model call.
+   *
+   * @param estimate - The estimated input token count
+   */
+  updateEstimatedNextContextSize(estimate: number): void {
+    this._estimatedNextContextSize = estimate
+  }
+
+  /**
    * Read-only snapshot of the accumulated metrics.
    * Returns an AgentMetrics instance suitable for inclusion in AgentResult.
    */
@@ -459,6 +490,9 @@ export class Meter {
       agentInvocations: this._agentInvocations,
       toolMetrics: this._toolMetrics,
       ...(this._latestContextSize !== undefined && { latestContextSize: this._latestContextSize }),
+      ...(this._estimatedNextContextSize !== undefined && {
+        estimatedNextContextSize: this._estimatedNextContextSize,
+      }),
     })
   }
 
