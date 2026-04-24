@@ -5,8 +5,9 @@
  * Verifies that agents can successfully use MCP tools via the Bedrock model.
  */
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import { McpClient, Agent } from '@strands-agents/sdk'
+import type { ElicitationCallback } from '@strands-agents/sdk'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { resolve } from 'node:path'
@@ -115,5 +116,51 @@ describe('MCP Integration Tests', () => {
       )
       expect(hasErrorResult).toBe(true)
     }, 30000)
+  })
+
+  // Elicitation handler registration is transport-agnostic (happens in McpClient.connect),
+  // so a single transport suffices here.
+  describe('elicitation', () => {
+    it('agent can use MCP tool that requests elicitation', async () => {
+      const elicitationCallback: ElicitationCallback = vi.fn().mockResolvedValue({
+        action: 'accept',
+        content: { confirmed: true },
+      })
+
+      const client = new McpClient({
+        applicationName: 'test-mcp-elicitation',
+        transport: new StdioClientTransport({
+          command: 'npx',
+          args: ['tsx', serverPath],
+        }),
+        elicitationCallback,
+      })
+
+      const model = bedrock.createModel({ maxTokens: 300 })
+
+      const agent = new Agent({
+        systemPrompt: 'You are a helpful assistant. Use the confirm_action tool when asked to confirm something.',
+        tools: [client],
+        model,
+      })
+
+      const result = await agent.invoke('Use the confirm_action tool to confirm "deploy to production"')
+
+      expect(result).toBeDefined()
+      expect(result.stopReason).toBeDefined()
+      expect(elicitationCallback).toHaveBeenCalled()
+
+      const hasConfirmUse = agent.messages.some((msg) =>
+        msg.content.some((block) => block.type === 'toolUseBlock' && block.name === 'confirm_action')
+      )
+      expect(hasConfirmUse).toBe(true)
+
+      const hasSuccessResult = agent.messages.some((msg) =>
+        msg.content.some((block) => block.type === 'toolResultBlock' && block.status === 'success')
+      )
+      expect(hasSuccessResult).toBe(true)
+
+      await client.disconnect()
+    }, 60000)
   })
 })

@@ -1,4 +1,4 @@
-import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js'
+import { McpError, ErrorCode, UrlElicitationRequiredError } from '@modelcontextprotocol/sdk/types.js'
 
 import { createErrorResult, Tool, type ToolContext, type ToolStreamGenerator } from './tool.js'
 import type { ToolSpec } from './types.js'
@@ -69,21 +69,22 @@ export class McpTool extends Tool {
         content,
       })
     } catch (error) {
-      if (error instanceof McpError && error.code === ErrorCode.UrlElicitationRequired) {
-        try {
-          const data = error.data as Record<string, unknown> | undefined
-          const elicitations = data?.elicitations
-          if (Array.isArray(elicitations)) {
-            return new ToolResultBlock({
-              toolUseId,
-              status: 'error',
-              content: [
-                new TextBlock(`MCP Elicitation required: [${String(error)}] with data ${JSON.stringify(elicitations)}`),
-              ],
-            })
-          }
-        } catch {
-          // Intentionally empty — fall through to createErrorResult below
+      if (
+        error instanceof UrlElicitationRequiredError ||
+        (error instanceof McpError && error.code === ErrorCode.UrlElicitationRequired)
+      ) {
+        const elicitations =
+          error instanceof UrlElicitationRequiredError
+            ? error.elicitations
+            : (error.data as Record<string, unknown> | undefined)?.elicitations
+        if (Array.isArray(elicitations) && elicitations.length > 0) {
+          return new ToolResultBlock({
+            toolUseId,
+            status: 'error',
+            content: [
+              new TextBlock(`MCP Elicitation required: [${String(error)}] with data ${JSON.stringify(elicitations)}`),
+            ],
+          })
         }
       }
       return createErrorResult(error, toolUseId)

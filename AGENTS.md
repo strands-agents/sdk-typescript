@@ -131,6 +131,7 @@ sdk-typescript/
 │   │   │   ├── __tests__/
 │   │   │   ├── agent.ts
 │   │   │   ├── citations.ts
+│   │   │   ├── elicitation.ts
 │   │   │   ├── json.ts
 │   │   │   ├── media.ts
 │   │   │   ├── messages.ts
