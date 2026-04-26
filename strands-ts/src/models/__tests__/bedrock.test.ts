@@ -913,6 +913,76 @@ describe('BedrockModel', () => {
       expect(events).toContainEqual({ stopReason: 'endTurn', type: 'modelMessageStopEvent' })
     })
 
+    it('handles citation delta key as alias for citationsContent', async () => {
+      // Bedrock Converse API sends "citation" key in stream deltas,
+      // not "citationsContent". Both must be handled. See #910.
+      const bedrockCitationsData = {
+        citations: [
+          {
+            location: { documentChar: { documentIndex: 0, start: 0, end: 20 } },
+            sourceContent: [{ text: 'source' }],
+            source: 'doc-0',
+            title: 'Citation Key Test',
+          },
+        ],
+        content: [{ text: 'cited text' }],
+      }
+
+      const mockSend = vi.fn(async () => {
+        if (stream) {
+          return {
+            stream: (async function* (): AsyncGenerator<unknown> {
+              yield { messageStart: { role: 'assistant' } }
+              yield { contentBlockStart: {} }
+              yield {
+                contentBlockDelta: {
+                  delta: { citation: bedrockCitationsData },
+                },
+              }
+              yield { contentBlockStop: {} }
+              yield { messageStop: { stopReason: 'end_turn' } }
+              yield {
+                metadata: { usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 }, metrics: { latencyMs: 100 } },
+              }
+            })(),
+          }
+        } else {
+          return {
+            output: {
+              message: {
+                role: 'assistant',
+                content: [{ citation: bedrockCitationsData }],
+              },
+            },
+            stopReason: 'end_turn',
+            usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+            metrics: { latencyMs: 100 },
+          }
+        }
+      })
+      mockBedrockClientImplementation({ send: mockSend })
+
+      const provider = new BedrockModel({ stream })
+      const messages = [new Message({ role: 'user', content: [new TextBlock('Cite this.')] })]
+      const events = await collectIterator(provider.stream(messages))
+
+      expect(events).toContainEqual({
+        type: 'modelContentBlockDeltaEvent',
+        delta: {
+          type: 'citationsDelta',
+          citations: [
+            {
+              location: { type: 'documentChar', documentIndex: 0, start: 0, end: 20 },
+              sourceContent: [{ text: 'source' }],
+              source: 'doc-0',
+              title: 'Citation Key Test',
+            },
+          ],
+          content: [{ text: 'cited text' }],
+        },
+      })
+    })
+
     describe('error handling', async () => {
       it.each([
         {
