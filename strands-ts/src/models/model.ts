@@ -585,4 +585,3 @@ function heuristicJson(obj: unknown): number {
     return 0
   }
 }
-

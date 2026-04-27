@@ -121,15 +121,15 @@ interface OpenAIClientOptions {
 /**
  * Options for constructing an {@link OpenAIModel}.
  *
- * Discriminated on `api` so that selecting `'responses'` type-narrows to expose
- * `stateful`, and selecting `'chat'` (or omitting `api`) narrows to expose
- * `frequencyPenalty` / `presencePenalty`.
+ * Discriminated on `api` so that selecting `'chat'` type-narrows to expose
+ * `frequencyPenalty` / `presencePenalty`, and selecting `'responses'` (or
+ * omitting `api`) narrows to expose `stateful`.
  *
  * `api` is construction-only: it cannot be changed via {@link OpenAIModel.updateConfig}.
  */
 export type OpenAIModelOptions =
-  | ({ api?: 'chat' } & OpenAIChatConfig & OpenAIClientOptions)
-  | ({ api: 'responses' } & OpenAIResponsesConfig & OpenAIClientOptions)
+  | ({ api?: 'responses' } & OpenAIResponsesConfig & OpenAIClientOptions)
+  | ({ api: 'chat' } & OpenAIChatConfig & OpenAIClientOptions)
 
 /**
  * Internal stream state for the Chat Completions adapter.

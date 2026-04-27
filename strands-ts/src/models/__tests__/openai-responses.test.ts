@@ -5,6 +5,7 @@ import { OpenAIModel } from '../openai/index.js'
 import { ContextWindowOverflowError, ModelThrottledError } from '../../errors.js'
 import { collectIterator } from '../../__fixtures__/model-test-helpers.js'
 import { Message, TextBlock, ToolUseBlock, ToolResultBlock } from '../../types/messages.js'
+import { ImageBlock, DocumentBlock } from '../../types/media.js'
 import type { JSONValue } from '../../types/json.js'
 import { logger } from '../../logging/logger.js'
 
@@ -98,11 +99,14 @@ describe("OpenAIModel (api: 'responses')", () => {
       expect(model.stateful).toBe(false)
     })
 
-    it('reflects updateConfig changes', () => {
+    it('is construction-only and cannot be changed via updateConfig', () => {
       const model = new OpenAIModel({ api: 'responses', client: {} as OpenAI, stateful: false })
+      const warnSpy = vi.spyOn(logger, 'warn')
       expect(model.stateful).toBe(false)
       model.updateConfig({ stateful: true })
-      expect(model.stateful).toBe(true)
+      expect(model.stateful).toBe(false)
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("'stateful' is construction-only"))
+      warnSpy.mockRestore()
     })
   })
 
@@ -155,7 +159,7 @@ describe("OpenAIModel (api: 'responses')", () => {
     const mkUserMessage = () => new Message({ role: 'user', content: [new TextBlock('Hi')] })
 
     async function runOnce(
-      modelOptions: Omit<Extract<ConstructorParameters<typeof OpenAIModel>[0], { api: 'responses' }>, 'api'> = {},
+      modelOptions: Omit<Extract<ConstructorParameters<typeof OpenAIModel>[0], { api?: 'responses' }>, 'api'> = {},
       messages = [mkUserMessage()],
       streamOptions: Parameters<OpenAIModel['stream']>[1] = undefined
     ): Promise<any> {
@@ -171,7 +175,7 @@ describe("OpenAIModel (api: 'responses')", () => {
 
     it('includes model, input, stream, and store=true by default', async () => {
       const req = await runOnce()
-      expect(req.model).toBe('gpt-4o')
+      expect(req.model).toBe('gpt-5.4')
       expect(req.stream).toBe(true)
       expect(req.store).toBe(true)
       expect(Array.isArray(req.input)).toBe(true)
@@ -312,6 +316,80 @@ describe("OpenAIModel (api: 'responses')", () => {
       const req = await runOnce({}, messages)
       const out = req.input.find((i: any) => i.type === 'function_call_output')
       expect(out.output).toBe('[ERROR] boom')
+    })
+
+    it('emits an array output with input_image when a tool result carries image bytes', async () => {
+      const imageBytes = new Uint8Array([1, 2, 3, 4])
+      const messages = [
+        new Message({ role: 'user', content: [new TextBlock('fetch')] }),
+        new Message({
+          role: 'user',
+          content: [
+            new ToolResultBlock({
+              toolUseId: 'img_tool',
+              status: 'success',
+              content: [
+                new TextBlock('here is the image'),
+                new ImageBlock({ format: 'png', source: { bytes: imageBytes } }),
+              ],
+            }),
+          ],
+        }),
+      ]
+      const req = await runOnce({}, messages)
+      const out = req.input.find((i: any) => i.type === 'function_call_output')
+      expect(Array.isArray(out.output)).toBe(true)
+      expect(out.output).toEqual([
+        { type: 'input_text', text: 'here is the image' },
+        { type: 'input_image', image_url: expect.stringMatching(/^data:image\/png;base64,/) },
+      ])
+    })
+
+    it('emits an array output with input_file when a tool result carries a document', async () => {
+      const docBytes = new Uint8Array([5, 6, 7, 8])
+      const messages = [
+        new Message({ role: 'user', content: [new TextBlock('read')] }),
+        new Message({
+          role: 'user',
+          content: [
+            new ToolResultBlock({
+              toolUseId: 'doc_tool',
+              status: 'success',
+              content: [new DocumentBlock({ name: 'report.pdf', format: 'pdf', source: { bytes: docBytes } })],
+            }),
+          ],
+        }),
+      ]
+      const req = await runOnce({}, messages)
+      const out = req.input.find((i: any) => i.type === 'function_call_output')
+      expect(Array.isArray(out.output)).toBe(true)
+      expect(out.output).toEqual([
+        {
+          type: 'input_file',
+          file_data: expect.stringMatching(/^data:application\/pdf;base64,/),
+          filename: 'report.pdf',
+        },
+      ])
+    })
+
+    it('keeps tool result output as a plain string when only text is present', async () => {
+      const messages = [
+        new Message({ role: 'user', content: [new TextBlock('ping')] }),
+        new Message({
+          role: 'user',
+          content: [
+            new ToolResultBlock({
+              toolUseId: 'text_tool',
+              status: 'success',
+              content: [new TextBlock('pong')],
+            }),
+          ],
+        }),
+      ]
+      const req = await runOnce({}, messages)
+      const out = req.input.find((i: any) => i.type === 'function_call_output')
+      expect(typeof out.output).toBe('string')
+      expect(out.output).toBe('pong')
     })
   })
 

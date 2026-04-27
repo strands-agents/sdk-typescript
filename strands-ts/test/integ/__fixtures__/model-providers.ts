@@ -118,7 +118,7 @@ export const openaiResponses = {
     return inject('provider-openai').shouldSkip
   },
   createModel: (
-    config: Omit<Extract<OpenAIModelOptions, { api: 'responses' }>, 'api' | 'client'> = {}
+    config: Omit<Extract<OpenAIModelOptions, { api?: 'responses' }>, 'api' | 'client'> = {}
   ): OpenAIModel => {
     const apiKey = inject('provider-openai')?.apiKey
     if (!apiKey) {

@@ -1,18 +1,17 @@
 /**
  * OpenAI model provider.
  *
- * Supports both the Chat Completions API (default) and the Responses API
- * (with server-managed conversation state).
+ * Defaults to the Responses API. Pass `api: 'chat'` to use Chat Completions.
  *
  * @example
  * ```typescript
  * import { OpenAIModel } from '@strands-agents/sdk/models/openai'
  *
- * // Chat Completions (default)
+ * // Responses API (default)
  * const model = new OpenAIModel({ modelId: 'gpt-5.4', apiKey: 'sk-...' })
  *
- * // Responses API (stateful)
- * const model = new OpenAIModel({ api: 'responses', modelId: 'gpt-4o', apiKey: 'sk-...' })
+ * // Chat Completions
+ * const model = new OpenAIModel({ api: 'chat', modelId: 'gpt-5.4', apiKey: 'sk-...' })
  * ```
  */
 

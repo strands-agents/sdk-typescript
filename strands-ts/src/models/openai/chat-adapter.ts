@@ -13,28 +13,21 @@ import { toMimeType } from '../../mime.js'
 import type { ModelStreamEvent } from '../streaming.js'
 import type { StreamOptions } from '../model.js'
 import { logger } from '../../logging/logger.js'
-import { formatImageDataUrl } from './formatting.js'
+import { MODEL_DEFAULTS } from '../defaults.js'
+import { formatImageDataUrl, warnManagedParams as warnManagedParamsShared } from './formatting.js'
 import type { ChatStreamState, OpenAIChatConfig } from './types.js'
 
-export const DEFAULT_CHAT_MODEL_ID = 'gpt-5.4'
+export const DEFAULT_CHAT_MODEL_ID = MODEL_DEFAULTS.openai.modelId
 
-const MANAGED_PARAMS = new Set(['model', 'messages', 'stream', 'stream_options'])
+const MANAGED_PARAMS: ReadonlySet<string> = new Set(['model', 'messages', 'stream', 'stream_options'])
 
 /**
- * Logs a warning for each managed key present in `params`. The warning fires at
- * config time so callers notice before sending a request.
+ * Logs a warning for each chat-managed key present in `params`.
  *
  * @internal
  */
 export function warnManagedParams(params: Record<string, unknown> | undefined): void {
-  if (!params) return
-  for (const key of Object.keys(params)) {
-    if (MANAGED_PARAMS.has(key)) {
-      logger.warn(
-        `params_key=<${key}> | '${key}' is managed by the provider and will be ignored in params — use the dedicated config property instead`
-      )
-    }
-  }
+  warnManagedParamsShared(params, MANAGED_PARAMS)
 }
 
 type OpenAIChatChoice = {

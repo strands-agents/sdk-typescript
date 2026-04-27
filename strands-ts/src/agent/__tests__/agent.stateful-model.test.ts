@@ -5,8 +5,11 @@ import { MockSnapshotStorage } from '../../__fixtures__/mock-storage-provider.js
 import { SlidingWindowConversationManager } from '../../conversation-manager/sliding-window-conversation-manager.js'
 import { NullConversationManager } from '../../conversation-manager/null-conversation-manager.js'
 import { SessionManager } from '../../session/session-manager.js'
-import type { Message, StreamOptions } from '../../index.js'
+import { SNAPSHOT_SCHEMA_VERSION } from '../../types/snapshot.js'
+import { Message } from '../../types/messages.js'
+import type { StreamOptions } from '../../index.js'
 import type { ModelStreamEvent } from '../../models/streaming.js'
+import type { JSONValue } from '../../types/json.js'
 
 /**
  * Mock model that advertises itself as stateful and records the modelState
@@ -132,6 +135,57 @@ describe('Agent with stateful model', () => {
       const convo = new SlidingWindowConversationManager({ windowSize: 7 })
       const agent = new Agent({ model, conversationManager: convo })
       expect((agent as unknown as { _conversationManager: unknown })._conversationManager).toBe(convo)
+    })
+  })
+
+  describe('SessionManager restore guard', () => {
+    // Pre-seeds a session snapshot with messages, then verifies that SessionManager
+    // discards those messages on restore when the model is stateful.
+    async function setupStorageWithMessages(agentId: string, sessionId: string): Promise<MockSnapshotStorage> {
+      const storage = new MockSnapshotStorage()
+      await storage.saveSnapshot({
+        location: { sessionId, scope: 'agent', scopeId: agentId },
+        snapshotId: 'latest',
+        isLatest: true,
+        snapshot: {
+          scope: 'agent',
+          schemaVersion: SNAPSHOT_SCHEMA_VERSION,
+          createdAt: new Date().toISOString(),
+          data: {
+            messages: [{ role: 'user', content: [{ text: 'old turn' }] }] as unknown as JSONValue,
+            state: {},
+            systemPrompt: null,
+            modelState: {},
+          },
+          appData: {},
+        },
+      })
+      return storage
+    }
+
+    it('discards restored messages when the model is stateful', async () => {
+      const storage = await setupStorageWithMessages('agent-1', 'session-stateful')
+      const sessionManager = new SessionManager({
+        sessionId: 'session-stateful',
+        storage: { snapshot: storage },
+      })
+      const model = new StatefulMockModel()
+      const agent = new Agent({ id: 'agent-1', model, sessionManager, printer: false })
+      await agent.initialize()
+      expect(agent.messages).toEqual([])
+    })
+
+    it('restores messages when the model is stateless', async () => {
+      const storage = await setupStorageWithMessages('agent-2', 'session-stateless')
+      const sessionManager = new SessionManager({
+        sessionId: 'session-stateless',
+        storage: { snapshot: storage },
+      })
+      const model = new MockMessageModel()
+      const agent = new Agent({ id: 'agent-2', model, sessionManager, printer: false })
+      await agent.initialize()
+      expect(agent.messages).toHaveLength(1)
+      expect(agent.messages[0]!.role).toBe('user')
     })
   })
 })

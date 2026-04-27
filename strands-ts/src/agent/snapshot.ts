@@ -105,7 +105,10 @@ export function takeSnapshot(agent: LocalAgent, options: TakeSnapshotOptions): S
   }
 
   if (fields.has('modelState')) {
-    data.modelState = JSON.parse(JSON.stringify(agent.modelState)) as JSONValue
+    // Shallow copy so later top-level mutations don't bleed into the snapshot.
+    // Today all provider values are primitives (e.g. responseId); if a provider
+    // starts writing nested objects, upgrade to a deep clone here.
+    data.modelState = { ...agent.modelState }
   }
 
   return {

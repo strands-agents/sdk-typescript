@@ -199,6 +199,18 @@ export class SessionManager implements Plugin, MultiAgentPlugin {
         `agent_id=<${event.agent.id}>, session_id=<${this._sessionId}> | agent had existing messages that were overwritten by session restore`
       )
     }
+
+    // Stateful models manage conversation history server-side, so any messages
+    // loaded from the snapshot would drift from the server's view on the next
+    // invocation. Duck-type the agent's `model` since `LocalAgent` does not
+    // expose it — `Agent` is the only implementor and always has one.
+    const statefulModel = (event.agent as { model?: { stateful?: boolean } }).model?.stateful === true
+    if (restored && statefulModel && event.agent.messages.length > 0) {
+      logger.debug(
+        `agent_id=<${event.agent.id}>, message_count=<${event.agent.messages.length}> | discarding restored messages for stateful model`
+      )
+      event.agent.messages.length = 0
+    }
   }
 
   /** Saves latest on invocation and fires the snapshot trigger if configured. */

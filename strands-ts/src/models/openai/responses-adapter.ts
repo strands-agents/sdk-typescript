@@ -18,37 +18,32 @@ import type {
   ResponseStreamEvent,
   ResponseInputItem,
   ResponseFunctionToolCall,
+  ResponseFunctionCallOutputItem,
   ResponseCreateParamsStreaming,
 } from 'openai/resources/responses/responses'
 import type { Message, StopReason, ToolResultBlock } from '../../types/messages.js'
 import type { ImageBlock, DocumentBlock } from '../../types/media.js'
 import { encodeBase64 } from '../../types/media.js'
 import { toMimeType } from '../../mime.js'
+import type { JSONValue } from '../../types/json.js'
 import type { ModelStreamEvent } from '../streaming.js'
 import type { StreamOptions } from '../model.js'
 import { logger } from '../../logging/logger.js'
-import { formatImageDataUrl } from './formatting.js'
+import { MODEL_DEFAULTS } from '../defaults.js'
+import { formatImageDataUrl, warnManagedParams as warnManagedParamsShared } from './formatting.js'
 import type { OpenAIResponsesConfig } from './types.js'
 
-export const DEFAULT_RESPONSES_MODEL_ID = 'gpt-4o'
+export const DEFAULT_RESPONSES_MODEL_ID = MODEL_DEFAULTS.openai.modelId
 
-const MANAGED_PARAMS = new Set(['model', 'input', 'stream', 'store'])
+const MANAGED_PARAMS: ReadonlySet<string> = new Set(['model', 'input', 'stream', 'store'])
 
 /**
- * Logs a warning for each managed key present in `params`. The warning fires at
- * config time so callers notice before sending a request.
+ * Logs a warning for each responses-managed key present in `params`.
  *
  * @internal
  */
 export function warnManagedParams(params: Record<string, unknown> | undefined): void {
-  if (!params) return
-  for (const key of Object.keys(params)) {
-    if (MANAGED_PARAMS.has(key)) {
-      logger.warn(
-        `params_key=<${key}> | '${key}' is managed by the provider and will be ignored in params — use the dedicated config property instead`
-      )
-    }
-  }
+  warnManagedParamsShared(params, MANAGED_PARAMS)
 }
 
 /**
@@ -194,18 +189,19 @@ function formatResponsesMessages(messages: Message[]): ResponseInputItem[] {
 
         case 'toolResultBlock': {
           const resultBlock = block as ToolResultBlock
-          const output = formatToolResultOutput(resultBlock)
           const result: ResponseInputItem.FunctionCallOutput = {
             type: 'function_call_output',
             call_id: resultBlock.toolUseId,
-            output,
+            output: formatToolResultOutput(resultBlock),
           }
           toolResultItems.push(result)
           break
         }
 
         case 'reasoningBlock': {
-          logger.warn('block_type=<reasoningBlock> | reasoning blocks cannot be re-submitted to responses api')
+          logger.warn(
+            'block_type=<reasoningBlock> | reasoning content is not yet supported in multi-turn conversations with the responses api'
+          )
           break
         }
 
@@ -235,35 +231,68 @@ function formatResponsesMessages(messages: Message[]): ResponseInputItem[] {
   return input
 }
 
-function formatToolResultOutput(resultBlock: ToolResultBlock): string {
-  const parts: string[] = []
+/**
+ * Builds a Responses API `function_call_output.output` value from a SDK
+ * `toolResultBlock`. Returns a plain string for text-only results (joined with
+ * newlines) or the content-item array shape when the result carries image or
+ * document data.
+ */
+function formatToolResultOutput(resultBlock: ToolResultBlock): string | ResponseFunctionCallOutputItem[] {
+  const parts: ResponseFunctionCallOutputItem[] = []
+  let hasMedia = false
 
   for (const c of resultBlock.content) {
     switch (c.type) {
       case 'textBlock':
-        parts.push(c.text)
+        parts.push({ type: 'input_text', text: c.text })
         break
       case 'jsonBlock': {
         const jsonBlock = c as { json: unknown }
         try {
-          parts.push(JSON.stringify(jsonBlock.json))
+          parts.push({ type: 'input_text', text: JSON.stringify(jsonBlock.json) })
         } catch {
-          parts.push('[JSON serialization error]')
+          parts.push({ type: 'input_text', text: '[JSON serialization error]' })
         }
         break
       }
-      case 'imageBlock':
-        parts.push('[image content]')
+      case 'imageBlock': {
+        const url = formatImageDataUrl(c as ImageBlock)
+        if (url) {
+          hasMedia = true
+          parts.push({ type: 'input_image', image_url: url })
+        }
         break
-      case 'documentBlock':
-        parts.push('[document content]')
+      }
+      case 'documentBlock': {
+        const docBlock = c as DocumentBlock
+        if (docBlock.source.type === 'documentSourceBytes') {
+          const base64 = encodeBase64(docBlock.source.bytes)
+          const mimeType = toMimeType(docBlock.format) || `application/${docBlock.format}`
+          hasMedia = true
+          parts.push({
+            type: 'input_file',
+            file_data: `data:${mimeType};base64,${base64}`,
+            filename: docBlock.name,
+          })
+        } else {
+          logger.warn(
+            `source_type=<${docBlock.source.type}> | only byte source documents supported in responses api tool results`
+          )
+        }
         break
+      }
       default:
         logger.warn(`block_type=<${c.type}> | unsupported tool result content type for responses api`)
     }
   }
 
-  const text = parts.join('\n')
+  if (hasMedia) return parts
+
+  // Text-only: collapse to a single string to match the API's simpler shape.
+  const text = parts
+    .filter((p): p is { type: 'input_text'; text: string } => p.type === 'input_text')
+    .map((p) => p.text)
+    .join('\n')
   if (resultBlock.status === 'error') {
     return `[ERROR] ${text}`
   }
@@ -328,7 +357,7 @@ export function mapResponsesEventToSDK(
   event: ResponseStreamEvent,
   state: ResponsesStreamState,
   stateful: boolean,
-  modelState: Record<string, unknown> | undefined
+  modelState: Record<string, JSONValue> | undefined
 ): ModelStreamEvent[] {
   const events: ModelStreamEvent[] = []
 
@@ -363,7 +392,9 @@ export function mapResponsesEventToSDK(
     }
 
     case 'response.output_text.annotation.added': {
-      const annotation = event.annotation as Record<string, unknown>
+      // The SDK types `event.annotation` as `unknown` and doesn't export a
+      // named annotation union, so we narrow structurally on the fields we use.
+      const annotation = event.annotation as { type: string; url?: string; title?: string; cited_text?: string }
       if (annotation.type === 'url_citation') {
         // Close the in-flight text block before the citation delta.
         // model.ts finalization picks ONE block kind per open block
@@ -381,37 +412,30 @@ export function mapResponsesEventToSDK(
               {
                 location: {
                   type: 'web' as const,
-                  url: (annotation.url as string) ?? '',
+                  url: annotation.url ?? '',
                 },
-                source: (annotation.url as string) ?? '',
+                source: annotation.url ?? '',
                 sourceContent: [],
-                title: (annotation.title as string) ?? '',
+                title: annotation.title ?? '',
               },
             ],
-            content: [{ text: (annotation.cited_text as string) ?? '' }],
+            content: [{ text: annotation.cited_text ?? '' }],
           },
         })
       } else {
-        logger.warn(`annotation_type=<${annotation.type as string}> | unsupported annotation type in responses api`)
+        logger.warn(`annotation_type=<${annotation.type}> | unsupported annotation type in responses api`)
       }
       break
     }
 
     case 'response.output_item.added': {
-      const item = event.item as unknown as Record<string, unknown>
-      if (item.type === 'function_call') {
-        const callId = typeof item.call_id === 'string' ? item.call_id : undefined
-        const name = typeof item.name === 'string' ? item.name : undefined
-        const itemId = typeof item.id === 'string' ? item.id : undefined
-        // All three identifiers are load-bearing: `itemId` keys subsequent
-        // argument delta/done events, `callId` becomes the emitted toolUseId,
-        // and `name` is the tool name. If any is missing, the tool call is
-        // unusable — warn and skip rather than silently collapsing to empty
-        // strings (which would also cause distinct calls to share a key).
-        if (!callId || !name || !itemId) {
-          logger.warn(
-            `call_id=<${callId}> name=<${name}> item_id=<${itemId}> | function_call event missing required identifier — skipping`
-          )
+      if (event.item.type === 'function_call') {
+        // `id` is optional in the SDK type but load-bearing here: it keys
+        // subsequent argument delta/done events. Skip rather than collapse
+        // to an empty string, which would let distinct calls share a key.
+        const { id: itemId, call_id: callId, name } = event.item
+        if (!itemId) {
+          logger.warn(`call_id=<${callId}> name=<${name}> | function_call event missing item id — skipping`)
           break
         }
         state.toolCalls.set(itemId, { name, arguments: '', callId, itemId })
@@ -444,8 +468,7 @@ export function mapResponsesEventToSDK(
           totalTokens: resp.usage.total_tokens,
         }
       }
-      const details = resp.incomplete_details as { reason?: string } | null
-      if (details?.reason === 'max_output_tokens') {
+      if (resp.incomplete_details?.reason === 'max_output_tokens') {
         state.stopReason = 'maxTokens'
       }
       break

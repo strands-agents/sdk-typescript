@@ -1,12 +1,11 @@
 /**
  * OpenAI model provider implementation.
  *
- * Supports both the Chat Completions API (stateless) and the Responses API
- * (stateful, with server-managed conversation state). Selected via the `api`
- * option at construction time.
+ * Supports both the Responses API (default) and the Chat Completions API.
+ * Selected via the `api` option at construction time.
  *
- * @see https://platform.openai.com/docs/api-reference/chat
  * @see https://platform.openai.com/docs/api-reference/responses
+ * @see https://platform.openai.com/docs/api-reference/chat
  */
 
 import OpenAI from 'openai'
@@ -17,6 +16,8 @@ import type { Message } from '../../types/messages.js'
 import type { ModelStreamEvent } from '../streaming.js'
 import { ContextWindowOverflowError, ModelThrottledError } from '../../errors.js'
 import { logger } from '../../logging/logger.js'
+import { warnOnce } from '../../logging/warn-once.js'
+import { MODEL_DEFAULTS, defaultModelWarningMessage } from '../defaults.js'
 import { classifyOpenAIError } from './errors.js'
 import { formatChatRequest, mapChatChunkToEvents, warnManagedParams as warnChatManagedParams } from './chat-adapter.js'
 import {
@@ -38,32 +39,27 @@ import type {
 /**
  * OpenAI model provider.
  *
- * Construct with `api: 'chat'` (default) for Chat Completions, or
- * `api: 'responses'` for the Responses API. The `api` field is
- * construction-only — it cannot be changed via {@link OpenAIModel.updateConfig}.
+ * Defaults to the Responses API. Pass `api: 'chat'` to use Chat Completions.
+ * The `api` field is construction-only — it cannot be changed via
+ * {@link OpenAIModel.updateConfig}.
  *
  * @example
  * ```typescript
- * // Chat Completions (default)
+ * // Responses API (default)
  * const model = new OpenAIModel({ modelId: 'gpt-5.4', apiKey: 'sk-...' })
  * ```
  *
  * @example
  * ```typescript
- * // Responses API (stateful by default — server tracks conversation state)
- * const model = new OpenAIModel({
- *   api: 'responses',
- *   modelId: 'gpt-4o',
- *   apiKey: 'sk-...',
- * })
+ * // Chat Completions
+ * const model = new OpenAIModel({ api: 'chat', modelId: 'gpt-5.4', apiKey: 'sk-...' })
  * ```
  *
  * @example
  * ```typescript
  * // Responses API with built-in web search
  * const model = new OpenAIModel({
- *   api: 'responses',
- *   modelId: 'gpt-4o',
+ *   modelId: 'gpt-5.4',
  *   params: { tools: [{ type: 'web_search' }] },
  * })
  * ```
@@ -75,14 +71,20 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
 
   constructor(options: OpenAIModelOptions) {
     super()
-    const { apiKey, client, clientConfig, api = 'chat', ...modelConfig } = options
+    const { apiKey, client, clientConfig, api = 'responses', ...modelConfig } = options
 
     if (api !== 'chat' && api !== 'responses') {
       throw new Error(`Unsupported OpenAI API: '${api}'. Supported values: 'chat', 'responses'`)
     }
 
     this._api = api
+    // `stateful` only exists on the responses branch of the discriminated union.
+    // Storing as the merged OpenAIModelConfig matches what `getConfig` returns.
     this._config = modelConfig
+
+    if (modelConfig.modelId === undefined) {
+      warnOnce(logger, defaultModelWarningMessage(MODEL_DEFAULTS.openai.modelId))
+    }
 
     if (api === 'responses') {
       warnResponsesManagedParams(modelConfig.params)
@@ -108,6 +110,14 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
   }
 
   /**
+   * The OpenAI API mode this model operates in (`'chat'` or `'responses'`).
+   * Set at construction and immutable; exposed for debugging and serialization.
+   */
+  get api(): OpenAIApi {
+    return this._api
+  }
+
+  /**
    * Whether this model manages conversation state server-side.
    *
    * `true` only for `api: 'responses'` with `stateful !== false`. Chat Completions
@@ -120,15 +130,20 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
   /**
    * Updates the model configuration.
    *
-   * The `api` field is construction-only — if present in `modelConfig`, it is
-   * stripped with a warning. Changing the API mode at runtime would invalidate
-   * the invariants the agent builds on top of `stateful` (message history
-   * management, `previous_response_id` chaining).
+   * `api` and `stateful` are construction-only — if present in `modelConfig`,
+   * they are stripped with a warning. Changing either at runtime would
+   * invalidate the invariants the agent builds on top of `stateful` (message
+   * history management, `previous_response_id` chaining).
    */
   updateConfig(modelConfig: OpenAIModelConfig & { api?: OpenAIApi }): void {
-    const { api, ...rest } = modelConfig
+    const { api, stateful, ...rest } = modelConfig
     if (api !== undefined) {
       logger.warn(`api=<${api}> | 'api' is construction-only and cannot be changed via updateConfig — ignoring`)
+    }
+    if (stateful !== undefined) {
+      logger.warn(
+        `stateful=<${stateful}> | 'stateful' is construction-only and cannot be changed via updateConfig — ignoring`
+      )
     }
 
     if (this._api === 'responses') {
