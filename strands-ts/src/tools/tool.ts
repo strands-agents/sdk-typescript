@@ -2,8 +2,7 @@ import type { ToolSpec, ToolUse } from './types.js'
 import { TextBlock, ToolResultBlock } from '../types/messages.js'
 import type { LocalAgent } from '../types/agent.js'
 import { normalizeError } from '../errors.js'
-import type { InterruptParams } from '../types/interrupt.js'
-import type { JSONValue } from '../types/json.js'
+import type { Interruptible } from '../interrupt.js'
 
 export type { ToolSpec } from './types.js'
 
@@ -11,7 +10,7 @@ export type { ToolSpec } from './types.js'
  * Context provided to tool implementations during execution.
  * Contains framework-level state and information from the agent invocation.
  */
-export interface ToolContext {
+export interface ToolContext extends Interruptible {
   /**
    * The tool use request that triggered this tool execution.
    * Contains the tool name, toolUseId, and input parameters.
@@ -23,36 +22,6 @@ export interface ToolContext {
    * Provides access to agent state, conversation history, and cancellation state.
    */
   agent: LocalAgent
-
-  /**
-   * Triggers an interrupt for human-in-the-loop workflows.
-   *
-   * On first call, halts agent execution with `stopReason: 'interrupt'`.
-   * On resume (when user has provided a response), returns the user's response.
-   *
-   * @param params - Interrupt parameters including name and optional reason
-   * @returns The user's response when resuming from an interrupt
-   *
-   * @example
-   * ```typescript
-   * const tool = new FunctionTool({
-   *   name: 'transfer_money',
-   *   callback: async (input, context) => {
-   *     if (input.amount > 1000) {
-   *       const response = context.interrupt({
-   *         name: 'confirm_transfer',
-   *         reason: `Confirm transfer of $${input.amount}?`,
-   *       })
-   *       if (!response.confirmed) {
-   *         return { success: false, reason: 'Transfer cancelled' }
-   *       }
-   *     }
-   *     return { success: true }
-   *   },
-   * })
-   * ```
-   */
-  interrupt<T = JSONValue>(params: InterruptParams): T
 }
 
 /**
