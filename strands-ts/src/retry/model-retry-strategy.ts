@@ -64,102 +64,95 @@ export interface ModelRetryStrategyOptions {
 export class ModelRetryStrategy implements Plugin {
   readonly name = 'strands:model-retry-strategy'
 
-  private readonly maxAttempts: number
-  private readonly backoff: BackoffStrategy
+  private readonly _maxAttempts: number
+  private readonly _backoff: BackoffStrategy
 
-  private currentAttempt = 0
-  private lastDelayMs: number | undefined
-  private firstFailureAt: number | undefined
-  private attachedAgent: LocalAgent | undefined
+  private _currentAttempt = 0
+  private _lastDelayMs: number | undefined
+  private _firstFailureAt: number | undefined
+  private _attachedAgent: LocalAgent | undefined
 
   constructor(opts: ModelRetryStrategyOptions = {}) {
     const maxAttempts = opts.maxAttempts ?? DEFAULT_MAX_ATTEMPTS
     if (!Number.isInteger(maxAttempts) || maxAttempts < 1) {
       throw new Error(`ModelRetryStrategy: maxAttempts must be an integer >= 1 (got ${maxAttempts})`)
     }
-    this.maxAttempts = maxAttempts
-    this.backoff =
+    this._maxAttempts = maxAttempts
+    this._backoff =
       opts.backoff ?? new ExponentialBackoff({ baseMs: DEFAULT_BACKOFF_BASE_MS, maxMs: DEFAULT_BACKOFF_MAX_MS })
   }
 
   initAgent(agent: LocalAgent): void {
-    if (this.attachedAgent !== undefined && this.attachedAgent !== agent) {
+    if (this._attachedAgent !== undefined && this._attachedAgent !== agent) {
       throw new Error(
         'ModelRetryStrategy: instance is already attached to another agent. ' +
           'Create a separate ModelRetryStrategy per agent.'
       )
     }
-    this.attachedAgent = agent
-    agent.addHook(AfterModelCallEvent, (event) => this.onAfterModelCall(event))
-    agent.addHook(AfterInvocationEvent, () => this.resetState())
+    this._attachedAgent = agent
+    agent.addHook(AfterModelCallEvent, (event) => this._onAfterModelCall(event))
+    agent.addHook(AfterInvocationEvent, () => this._resetState())
   }
 
-  private async onAfterModelCall(event: AfterModelCallEvent): Promise<void> {
+  private async _onAfterModelCall(event: AfterModelCallEvent): Promise<void> {
     // Another hook already requested retry — don't stack a second delay on top.
     if (event.retry) return
 
     // Success: reset state for the next model call in this invocation.
     if (event.error === undefined) {
-      this.resetState()
+      this._resetState()
       return
     }
 
-    if (!this.isRetryable(event.error)) return
+    if (!this._isRetryable(event.error)) return
 
-    // currentAttempt represents the attempt that just failed.
-    this.currentAttempt += 1
-    if (this.currentAttempt >= this.maxAttempts) {
+    // _currentAttempt represents the attempt that just failed.
+    this._currentAttempt += 1
+    if (this._currentAttempt >= this._maxAttempts) {
       logger.debug(
-        `current_attempt=<${this.currentAttempt}> max_attempts=<${this.maxAttempts}> | max retry attempts reached`
+        `current_attempt=<${this._currentAttempt}> max_attempts=<${this._maxAttempts}> | max retry attempts reached`
       )
       return
     }
 
-    if (this.firstFailureAt === undefined) {
-      this.firstFailureAt = Date.now()
+    if (this._firstFailureAt === undefined) {
+      this._firstFailureAt = Date.now()
     }
 
-    const delayMs = this.resolveBackoff(event.error).nextDelay(this.buildContext())
+    // Per-error-class backoff selection is a future extension; today every
+    // retryable error uses the single configured backoff.
+    const delayMs = this._backoff.nextDelay(this._buildContext())
 
     logger.debug(
-      `retry_delay_ms=<${delayMs}> attempt=<${this.currentAttempt}> max_attempts=<${this.maxAttempts}> ` +
+      `retry_delay_ms=<${delayMs}> attempt=<${this._currentAttempt}> max_attempts=<${this._maxAttempts}> ` +
         `| retryable model error, delaying before retry`
     )
 
     await sleep(delayMs)
 
-    this.lastDelayMs = delayMs
+    this._lastDelayMs = delayMs
     event.retry = true
   }
 
-  private buildContext(): BackoffContext {
+  private _buildContext(): BackoffContext {
     const ctx: BackoffContext = {
-      attempt: this.currentAttempt,
-      elapsedMs: this.firstFailureAt === undefined ? 0 : Date.now() - this.firstFailureAt,
+      attempt: this._currentAttempt,
+      elapsedMs: this._firstFailureAt === undefined ? 0 : Date.now() - this._firstFailureAt,
     }
-    if (this.lastDelayMs !== undefined) {
-      ctx.lastDelayMs = this.lastDelayMs
+    if (this._lastDelayMs !== undefined) {
+      ctx.lastDelayMs = this._lastDelayMs
     }
     return ctx
   }
 
-  /**
-   * Returns the backoff to use for a given error. Today this always returns
-   * the configured strategy; the indirection exists so a future per-error-type
-   * map can be layered in without changing the public API.
-   */
-  private resolveBackoff(_error: Error): BackoffStrategy {
-    return this.backoff
-  }
-
-  private isRetryable(error: Error): boolean {
+  private _isRetryable(error: Error): boolean {
     return error instanceof ModelThrottledError
   }
 
-  private resetState(): void {
-    this.currentAttempt = 0
-    this.lastDelayMs = undefined
-    this.firstFailureAt = undefined
+  private _resetState(): void {
+    this._currentAttempt = 0
+    this._lastDelayMs = undefined
+    this._firstFailureAt = undefined
   }
 }
 

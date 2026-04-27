@@ -187,8 +187,10 @@ describe('ModelRetryStrategy', () => {
     await p1
 
     expect(nextDelay).toHaveBeenCalledTimes(1)
-    expect(nextDelay.mock.calls[0]![0]!.attempt).toBe(1)
-    expect(nextDelay.mock.calls[0]![0]!.lastDelayMs).toBeUndefined()
+    expect(nextDelay.mock.calls[0]![0]).toEqual({
+      attempt: 1,
+      elapsedMs: expect.any(Number),
+    })
 
     const e2 = makeErrorEvent(agent, new ModelThrottledError('x'))
     const p2 = invokeTrackedHook(agent, e2)
@@ -196,7 +198,10 @@ describe('ModelRetryStrategy', () => {
     await p2
 
     expect(nextDelay).toHaveBeenCalledTimes(2)
-    expect(nextDelay.mock.calls[1]![0]!.attempt).toBe(2)
-    expect(nextDelay.mock.calls[1]![0]!.lastDelayMs).toBe(5)
+    expect(nextDelay.mock.calls[1]![0]).toEqual({
+      attempt: 2,
+      elapsedMs: expect.any(Number),
+      lastDelayMs: 5,
+    })
   })
 })

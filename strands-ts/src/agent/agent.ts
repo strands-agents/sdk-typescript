@@ -275,7 +275,10 @@ export class Agent implements LocalAgent, InvokableAgent {
     const modelRetryStrategy =
       config?.modelRetryStrategy === null ? undefined : (config?.modelRetryStrategy ?? new ModelRetryStrategy())
 
-    // Initialize plugin registry with all plugins to be initialized during initialize()
+    // Initialize plugin registry with all plugins to be initialized during initialize().
+    // Ordering is not load-bearing for retry correctness: `ModelRetryStrategy`
+    // guards on `event.retry` so a user hook that already set it short-circuits
+    // the strategy regardless of registration order.
     this._pluginRegistry = new PluginRegistry([
       this._conversationManager,
       ...(modelRetryStrategy ? [modelRetryStrategy] : []),

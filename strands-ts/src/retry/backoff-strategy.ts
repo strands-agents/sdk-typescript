@@ -66,15 +66,15 @@ export interface ConstantBackoffOptions {
  * Constant backoff: returns the same delay for every retry.
  */
 export class ConstantBackoff implements BackoffStrategy {
-  private readonly delayMs: number
+  private readonly _delayMs: number
 
   constructor(opts: ConstantBackoffOptions = {}) {
-    this.delayMs = opts.delayMs ?? 1000
+    this._delayMs = opts.delayMs ?? 1000
   }
 
   nextDelay(ctx: BackoffContext): number {
     validateAttempt(ctx.attempt, 'ConstantBackoff')
-    return this.delayMs
+    return this._delayMs
   }
 }
 
@@ -94,20 +94,20 @@ export interface LinearBackoffOptions {
  * Linear backoff: delay grows as `baseMs * attempt`, capped at `maxMs`, then jittered.
  */
 export class LinearBackoff implements BackoffStrategy {
-  private readonly baseMs: number
-  private readonly maxMs: number
-  private readonly jitter: JitterKind
+  private readonly _baseMs: number
+  private readonly _maxMs: number
+  private readonly _jitter: JitterKind
 
   constructor(opts: LinearBackoffOptions = {}) {
-    this.baseMs = opts.baseMs ?? 1000
-    this.maxMs = opts.maxMs ?? 30_000
-    this.jitter = opts.jitter ?? 'full'
+    this._baseMs = opts.baseMs ?? 1000
+    this._maxMs = opts.maxMs ?? 30_000
+    this._jitter = opts.jitter ?? 'full'
   }
 
   nextDelay(ctx: BackoffContext): number {
     validateAttempt(ctx.attempt, 'LinearBackoff')
-    const raw = Math.min(this.maxMs, this.baseMs * ctx.attempt)
-    return jitter(raw, this.jitter, this.baseMs, this.maxMs, ctx.lastDelayMs)
+    const raw = Math.min(this._maxMs, this._baseMs * ctx.attempt)
+    return jitter(raw, this._jitter, this._baseMs, this._maxMs, ctx.lastDelayMs)
   }
 }
 
@@ -130,22 +130,22 @@ export interface ExponentialBackoffOptions {
  * capped at `maxMs`, then jittered.
  */
 export class ExponentialBackoff implements BackoffStrategy {
-  private readonly baseMs: number
-  private readonly maxMs: number
-  private readonly multiplier: number
-  private readonly jitter: JitterKind
+  private readonly _baseMs: number
+  private readonly _maxMs: number
+  private readonly _multiplier: number
+  private readonly _jitter: JitterKind
 
   constructor(opts: ExponentialBackoffOptions = {}) {
-    this.baseMs = opts.baseMs ?? 1000
-    this.maxMs = opts.maxMs ?? 30_000
-    this.multiplier = opts.multiplier ?? 2
-    this.jitter = opts.jitter ?? 'full'
+    this._baseMs = opts.baseMs ?? 1000
+    this._maxMs = opts.maxMs ?? 30_000
+    this._multiplier = opts.multiplier ?? 2
+    this._jitter = opts.jitter ?? 'full'
   }
 
   nextDelay(ctx: BackoffContext): number {
     validateAttempt(ctx.attempt, 'ExponentialBackoff')
-    const raw = Math.min(this.maxMs, this.baseMs * this.multiplier ** (ctx.attempt - 1))
-    return jitter(raw, this.jitter, this.baseMs, this.maxMs, ctx.lastDelayMs)
+    const raw = Math.min(this._maxMs, this._baseMs * this._multiplier ** (ctx.attempt - 1))
+    return jitter(raw, this._jitter, this._baseMs, this._maxMs, ctx.lastDelayMs)
   }
 }
 
