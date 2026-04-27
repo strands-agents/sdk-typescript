@@ -58,6 +58,7 @@ sdk-typescript/
 │   │   ├── logging/              # Structured logging
 │   │   │   ├── __tests__/
 │   │   │   ├── logger.ts
+│   │   │   ├── warn-once.ts      # Dedupe warnings by message content
 │   │   │   ├── types.ts
 │   │   │   └── index.ts
 │   │   │
@@ -68,6 +69,7 @@ sdk-typescript/
 │   │   │   ├── bedrock.ts        # AWS Bedrock
 │   │   │   ├── openai.ts         # OpenAI
 │   │   │   ├── vercel.ts         # Vercel AI SDK
+│   │   │   ├── defaults.ts       # Centralized model defaults + warning messages
 │   │   │   ├── model.ts          # Base model interface
 │   │   │   └── streaming.ts      # Streaming event types
 │   │   │
