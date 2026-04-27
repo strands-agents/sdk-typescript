@@ -22,10 +22,22 @@ export const MODEL_DEFAULTS = {
   },
 } as const
 
+/**
+ * Builds a warning message for when the default model ID is used.
+ *
+ * @param defaultModelId - The default model ID being used
+ * @returns Formatted warning message string
+ */
 export function defaultModelWarningMessage(defaultModelId: string): string {
   return `model_id=<${defaultModelId}> | using default modelId, which is subject to change | set modelId explicitly to pin the value`
 }
 
+/**
+ * Builds a warning message for when the default max tokens value is used.
+ *
+ * @param defaultMaxTokens - The default max tokens value being used
+ * @returns Formatted warning message string
+ */
 export function defaultMaxTokensWarningMessage(defaultMaxTokens: number): string {
   return `max_tokens=<${defaultMaxTokens}> | using default maxTokens, which is subject to change | set maxTokens explicitly to pin the value`
 }

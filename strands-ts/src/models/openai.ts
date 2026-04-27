@@ -19,7 +19,7 @@ import type { ModelStreamEvent } from '../models/streaming.js'
 import { ContextWindowOverflowError, ModelThrottledError } from '../errors.js'
 import type { ChatCompletionContentPartText } from 'openai/resources/index.mjs'
 import { logger } from '../logging/logger.js'
-import { claimFirstWarning } from '../logging/claim-first-warning.js'
+import { warnOnce } from '../logging/warn-once.js'
 import { MODEL_DEFAULTS, defaultModelWarningMessage } from './defaults.js'
 
 /**
@@ -264,10 +264,7 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
     this._config = modelConfig
 
     if (modelConfig.modelId === undefined) {
-      const msg = defaultModelWarningMessage(MODEL_DEFAULTS.openai.modelId)
-      if (claimFirstWarning(msg)) {
-        logger.warn(msg)
-      }
+      warnOnce(logger, defaultModelWarningMessage(MODEL_DEFAULTS.openai.modelId))
     }
 
     // Use provided client or create a new one

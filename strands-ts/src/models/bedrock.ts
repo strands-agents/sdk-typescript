@@ -50,7 +50,7 @@ import type { JSONValue } from '../types/json.js'
 import { ContextWindowOverflowError, ModelThrottledError, normalizeError } from '../errors.js'
 import { ensureDefined } from '../types/validation.js'
 import { logger } from '../logging/logger.js'
-import { claimFirstWarning } from '../logging/claim-first-warning.js'
+import { warnOnce } from '../logging/warn-once.js'
 import { NOOP_TOOL_SPEC } from '../tools/noop-tool.js'
 import { MODEL_DEFAULTS, defaultModelWarningMessage } from './defaults.js'
 
@@ -360,10 +360,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
     }
 
     if (modelConfig.modelId === undefined) {
-      const msg = defaultModelWarningMessage(MODEL_DEFAULTS.bedrock.modelId)
-      if (claimFirstWarning(msg)) {
-        logger.warn(msg)
-      }
+      warnOnce(logger, defaultModelWarningMessage(MODEL_DEFAULTS.bedrock.modelId))
     }
 
     // Build user agent string (extend if provided, otherwise use SDK identifier)

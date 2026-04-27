@@ -7,7 +7,7 @@ import { ContextWindowOverflowError, ModelThrottledError, normalizeError } from 
 import type { ImageBlock, DocumentBlock } from '../types/media.js'
 import { encodeBase64 } from '../types/media.js'
 import { logger } from '../logging/logger.js'
-import { claimFirstWarning } from '../logging/claim-first-warning.js'
+import { warnOnce } from '../logging/warn-once.js'
 import { MODEL_DEFAULTS, defaultMaxTokensWarningMessage, defaultModelWarningMessage } from './defaults.js'
 
 const CONTEXT_WINDOW_OVERFLOW_ERRORS = ['prompt is too long', 'max_tokens exceeded', 'input too long']
@@ -46,17 +46,11 @@ export class AnthropicModel extends Model<AnthropicModelConfig> {
     }
 
     if (modelConfig.modelId === undefined) {
-      const msg = defaultModelWarningMessage(MODEL_DEFAULTS.anthropic.modelId)
-      if (claimFirstWarning(msg)) {
-        logger.warn(msg)
-      }
+      warnOnce(logger, defaultModelWarningMessage(MODEL_DEFAULTS.anthropic.modelId))
     }
 
     if (modelConfig.maxTokens === undefined) {
-      const msg = defaultMaxTokensWarningMessage(MODEL_DEFAULTS.anthropic.maxTokens)
-      if (claimFirstWarning(msg)) {
-        logger.warn(msg)
-      }
+      warnOnce(logger, defaultMaxTokensWarningMessage(MODEL_DEFAULTS.anthropic.maxTokens))
     }
 
     if (client) {

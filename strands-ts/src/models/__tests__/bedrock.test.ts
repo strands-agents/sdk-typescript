@@ -11,6 +11,7 @@ import { CitationsBlock } from '../../types/citations.js'
 import type { StreamOptions } from '../model.js'
 import { collectIterator } from '../../__fixtures__/model-test-helpers.js'
 import { NOOP_TOOL_SPEC } from '../../tools/noop-tool.js'
+import { warnOnce } from '../../logging/warn-once.js'
 
 /**
  * Helper function to mock BedrockRuntimeClient implementation with customizable config.
@@ -140,6 +141,10 @@ vi.mock('@aws-sdk/client-bedrock-runtime', async (importOriginal) => {
   }
 })
 
+vi.mock('../../logging/warn-once.js', () => ({
+  warnOnce: vi.fn(),
+}))
+
 describe('BedrockModel', () => {
   const BEDROCK_NOOP_TOOL_CONFIG = {
     tools: [{ toolSpec: { ...NOOP_TOOL_SPEC, inputSchema: { json: NOOP_TOOL_SPEC.inputSchema } } }],
@@ -171,6 +176,16 @@ describe('BedrockModel', () => {
       const provider = new BedrockModel()
       const config = provider.getConfig()
       expect(config.modelId).toBeDefined()
+    })
+
+    it('warns when modelId is not explicitly set', () => {
+      new BedrockModel()
+      expect(warnOnce).toHaveBeenCalledWith(expect.objectContaining({ warn: expect.any(Function) }), expect.stringContaining('using default modelId'))
+    })
+
+    it('does not warn when modelId is explicitly set', () => {
+      new BedrockModel({ modelId: 'us.anthropic.claude-3-5-sonnet-20241022-v2:0' })
+      expect(warnOnce).not.toHaveBeenCalledWith(expect.objectContaining({ warn: expect.any(Function) }), expect.stringContaining('using default modelId'))
     })
 
     it('uses provided model ID ', () => {
@@ -2763,7 +2778,7 @@ describe('BedrockModel', () => {
 
         expect(mockConverseStreamCommand).toHaveBeenLastCalledWith(
           expect.not.objectContaining({
-            guardrailConfig: expect.anything(),
+            guardrailConfig: expect.objectContaining({ warn: expect.any(Function) }),
           })
         )
       })
@@ -4024,7 +4039,7 @@ describe('BedrockModel', () => {
 
       expect(mockConverseStreamCommand).toHaveBeenLastCalledWith(
         expect.not.objectContaining({
-          additionalModelRequestFields: expect.anything(),
+          additionalModelRequestFields: expect.objectContaining({ warn: expect.any(Function) }),
         })
       )
     })

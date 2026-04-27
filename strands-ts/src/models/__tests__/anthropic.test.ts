@@ -13,6 +13,7 @@ import {
   JsonBlock,
 } from '../../types/messages.js'
 import { ImageBlock, DocumentBlock, VideoBlock } from '../../types/media.js'
+import { warnOnce } from '../../logging/warn-once.js'
 
 /**
  * Helper to create a mock Anthropic client with streaming support
@@ -39,10 +40,13 @@ vi.mock('@anthropic-ai/sdk', () => {
   }
 })
 
+vi.mock('../../logging/warn-once.js', () => ({
+  warnOnce: vi.fn(),
+}))
+
 describe('AnthropicModel', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
     if (isNode) {
       vi.stubEnv('ANTHROPIC_API_KEY', 'sk-ant-test-env')
     }
@@ -99,16 +103,24 @@ describe('AnthropicModel', () => {
       expect(provider).toBeDefined()
     })
 
-    it('warns when maxTokens is not explicitly set', async () => {
-      vi.resetModules()
-      const { AnthropicModel: FreshAnthropicModel } = await import('../anthropic.js')
-      new FreshAnthropicModel({ apiKey: 'sk-ant-test' })
-      expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('using default maxTokens'))
+    it('warns when maxTokens is not explicitly set', () => {
+      new AnthropicModel({ apiKey: 'sk-ant-test' })
+      expect(warnOnce).toHaveBeenCalledWith(expect.objectContaining({ warn: expect.any(Function) }), expect.stringContaining('using default maxTokens'))
     })
 
     it('does not warn when maxTokens is explicitly set', () => {
       new AnthropicModel({ apiKey: 'sk-ant-test', maxTokens: 4096 })
-      expect(console.warn).not.toHaveBeenCalledWith(expect.stringContaining('using default maxTokens'))
+      expect(warnOnce).not.toHaveBeenCalledWith(expect.objectContaining({ warn: expect.any(Function) }), expect.stringContaining('using default maxTokens'))
+    })
+
+    it('warns when modelId is not explicitly set', () => {
+      new AnthropicModel({ apiKey: 'sk-ant-test' })
+      expect(warnOnce).toHaveBeenCalledWith(expect.objectContaining({ warn: expect.any(Function) }), expect.stringContaining('using default modelId'))
+    })
+
+    it('does not warn when modelId is explicitly set', () => {
+      new AnthropicModel({ apiKey: 'sk-ant-test', modelId: 'claude-3-opus-20240229' })
+      expect(warnOnce).not.toHaveBeenCalledWith(expect.objectContaining({ warn: expect.any(Function) }), expect.stringContaining('using default modelId'))
     })
   })
 

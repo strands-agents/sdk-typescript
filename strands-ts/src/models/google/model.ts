@@ -23,7 +23,7 @@ export type { GoogleModelConfig, GoogleModelOptions }
 import { classifyGoogleError } from './errors.js'
 import { formatMessages, mapChunkToEvents } from './adapters.js'
 import { MODEL_DEFAULTS, defaultModelWarningMessage } from '../defaults.js'
-import { claimFirstWarning } from '../../logging/claim-first-warning.js'
+import { warnOnce } from '../../logging/warn-once.js'
 import { logger } from '../../logging/logger.js'
 
 /**
@@ -93,10 +93,7 @@ export class GoogleModel extends Model<GoogleModelConfig> {
     this._config = modelConfig
 
     if (modelConfig.modelId === undefined) {
-      const msg = defaultModelWarningMessage(MODEL_DEFAULTS.gemini.modelId)
-      if (claimFirstWarning(msg)) {
-        logger.warn(msg)
-      }
+      warnOnce(logger, defaultModelWarningMessage(MODEL_DEFAULTS.gemini.modelId))
     }
 
     if (client) {
