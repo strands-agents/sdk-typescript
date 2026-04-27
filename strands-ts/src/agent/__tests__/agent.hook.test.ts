@@ -832,12 +832,14 @@ describe('Agent Hooks Integration', () => {
       const toolResultMessage = agent.messages.find(
         (m) => m.role === 'user' && m.content.some((b) => b.type === 'toolResultBlock')
       )
-      expect(toolResultMessage).toBeDefined()
-      const toolResultBlock = toolResultMessage!.content.find(
-        (b): b is ToolResultBlock => b.type === 'toolResultBlock'
+      const toolResultBlock = toolResultMessage!.content.find((b): b is ToolResultBlock => b.type === 'toolResultBlock')
+      expect(toolResultBlock).toStrictEqual(
+        new ToolResultBlock({
+          toolUseId: 'tool-1',
+          status: 'success',
+          content: [new TextBlock('replaced result')],
+        })
       )
-      expect(toolResultBlock).toBeDefined()
-      expect(toolResultBlock!.content).toEqual([new TextBlock('replaced result')])
     })
   })
 })

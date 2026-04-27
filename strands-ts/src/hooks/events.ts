@@ -231,6 +231,10 @@ export class AfterToolCallEvent extends HookableEvent {
   }
   readonly tool: Tool | undefined
 
+  /**
+   * The tool result. Can be replaced by hook callbacks to transform the result
+   * before it enters the conversation history.
+   */
   result: ToolResultBlock
 
   readonly error?: Error
