@@ -14,6 +14,6 @@ const warned = new Set<string>()
  */
 export function warnOnce(logger: Logger, msg: string): void {
   if (warned.has(msg)) return
-  warned.add(msg)
   logger.warn(msg)
+  warned.add(msg)
 }
