@@ -180,12 +180,18 @@ describe('BedrockModel', () => {
 
     it('warns when modelId is not explicitly set', () => {
       new BedrockModel()
-      expect(warnOnce).toHaveBeenCalledWith(expect.objectContaining({ warn: expect.any(Function) }), expect.stringContaining('using default modelId'))
+      expect(warnOnce).toHaveBeenCalledWith(
+        expect.objectContaining({ warn: expect.any(Function) }),
+        expect.stringContaining('using default modelId')
+      )
     })
 
     it('does not warn when modelId is explicitly set', () => {
       new BedrockModel({ modelId: 'us.anthropic.claude-3-5-sonnet-20241022-v2:0' })
-      expect(warnOnce).not.toHaveBeenCalledWith(expect.objectContaining({ warn: expect.any(Function) }), expect.stringContaining('using default modelId'))
+      expect(warnOnce).not.toHaveBeenCalledWith(
+        expect.objectContaining({ warn: expect.any(Function) }),
+        expect.stringContaining('using default modelId')
+      )
     })
 
     it('uses provided model ID ', () => {

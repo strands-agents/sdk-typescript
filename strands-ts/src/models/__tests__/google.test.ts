@@ -117,12 +117,18 @@ describe('GoogleModel', () => {
 
     it('warns when modelId is not explicitly set', () => {
       new GoogleModel({ apiKey: 'test-key' })
-      expect(warnOnce).toHaveBeenCalledWith(expect.objectContaining({ warn: expect.any(Function) }), expect.stringContaining('using default modelId'))
+      expect(warnOnce).toHaveBeenCalledWith(
+        expect.objectContaining({ warn: expect.any(Function) }),
+        expect.stringContaining('using default modelId')
+      )
     })
 
     it('does not warn when modelId is explicitly set', () => {
       new GoogleModel({ apiKey: 'test-key', modelId: 'gemini-2.5-flash' })
-      expect(warnOnce).not.toHaveBeenCalledWith(expect.objectContaining({ warn: expect.any(Function) }), expect.stringContaining('using default modelId'))
+      expect(warnOnce).not.toHaveBeenCalledWith(
+        expect.objectContaining({ warn: expect.any(Function) }),
+        expect.stringContaining('using default modelId')
+      )
     })
   })
 

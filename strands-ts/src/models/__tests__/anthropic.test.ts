@@ -105,22 +105,34 @@ describe('AnthropicModel', () => {
 
     it('warns when maxTokens is not explicitly set', () => {
       new AnthropicModel({ apiKey: 'sk-ant-test' })
-      expect(warnOnce).toHaveBeenCalledWith(expect.objectContaining({ warn: expect.any(Function) }), expect.stringContaining('using default maxTokens'))
+      expect(warnOnce).toHaveBeenCalledWith(
+        expect.objectContaining({ warn: expect.any(Function) }),
+        expect.stringContaining('using default maxTokens')
+      )
     })
 
     it('does not warn when maxTokens is explicitly set', () => {
       new AnthropicModel({ apiKey: 'sk-ant-test', maxTokens: 4096 })
-      expect(warnOnce).not.toHaveBeenCalledWith(expect.objectContaining({ warn: expect.any(Function) }), expect.stringContaining('using default maxTokens'))
+      expect(warnOnce).not.toHaveBeenCalledWith(
+        expect.objectContaining({ warn: expect.any(Function) }),
+        expect.stringContaining('using default maxTokens')
+      )
     })
 
     it('warns when modelId is not explicitly set', () => {
       new AnthropicModel({ apiKey: 'sk-ant-test' })
-      expect(warnOnce).toHaveBeenCalledWith(expect.objectContaining({ warn: expect.any(Function) }), expect.stringContaining('using default modelId'))
+      expect(warnOnce).toHaveBeenCalledWith(
+        expect.objectContaining({ warn: expect.any(Function) }),
+        expect.stringContaining('using default modelId')
+      )
     })
 
     it('does not warn when modelId is explicitly set', () => {
       new AnthropicModel({ apiKey: 'sk-ant-test', modelId: 'claude-3-opus-20240229' })
-      expect(warnOnce).not.toHaveBeenCalledWith(expect.objectContaining({ warn: expect.any(Function) }), expect.stringContaining('using default modelId'))
+      expect(warnOnce).not.toHaveBeenCalledWith(
+        expect.objectContaining({ warn: expect.any(Function) }),
+        expect.stringContaining('using default modelId')
+      )
     })
   })
 

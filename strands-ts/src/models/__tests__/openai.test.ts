@@ -88,12 +88,18 @@ describe('OpenAIModel', () => {
 
     it('warns when modelId is not explicitly set', () => {
       new OpenAIModel({ api: 'chat', apiKey: 'sk-test' })
-      expect(warnOnce).toHaveBeenCalledWith(expect.objectContaining({ warn: expect.any(Function) }), expect.stringContaining('using default modelId'))
+      expect(warnOnce).toHaveBeenCalledWith(
+        expect.objectContaining({ warn: expect.any(Function) }),
+        expect.stringContaining('using default modelId')
+      )
     })
 
     it('does not warn when modelId is explicitly set', () => {
       new OpenAIModel({ api: 'chat', modelId: 'gpt-5.4', apiKey: 'sk-test' })
-      expect(warnOnce).not.toHaveBeenCalledWith(expect.objectContaining({ warn: expect.any(Function) }), expect.stringContaining('using default modelId'))
+      expect(warnOnce).not.toHaveBeenCalledWith(
+        expect.objectContaining({ warn: expect.any(Function) }),
+        expect.stringContaining('using default modelId')
+      )
     })
 
     it('uses API key from constructor parameter', () => {

@@ -41,4 +41,3 @@ export function defaultModelWarningMessage(defaultModelId: string): string {
 export function defaultMaxTokensWarningMessage(defaultMaxTokens: number): string {
   return `max_tokens=<${defaultMaxTokens}> | using default maxTokens, which is subject to change | set maxTokens explicitly to pin the value`
 }
-
