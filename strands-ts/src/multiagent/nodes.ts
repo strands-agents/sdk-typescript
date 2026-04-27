@@ -184,10 +184,8 @@ export class AgentNode extends Node {
     state: MultiAgentState,
     options?: NodeInputOptions
   ): AsyncGenerator<MultiAgentStreamEvent, NodeResultUpdate, undefined> {
-    // Resolve invocationState once so every NodeStreamUpdateEvent and the
-    // inner agent's invocation share one reference. Node.stream normally
-    // passes this through already, but resolving here makes handle() safe to
-    // call directly.
+    // Resolve once per handle() call — Node.stream() normally supplies this;
+    // handle() is public API, so direct callers get per-call state.
     const invocationState: InvocationState = options?.invocationState ?? {}
 
     // Only Agent instances support snapshot/restore for state isolation
@@ -273,8 +271,8 @@ export class MultiAgentNode extends Node {
     state: MultiAgentState,
     options?: NodeInputOptions
   ): AsyncGenerator<MultiAgentStreamEvent, NodeResultUpdate, undefined> {
-    // Resolve once so every wrapped NodeStreamUpdateEvent and the nested
-    // orchestrator's invocation share the same reference.
+    // Resolve once per handle() call — Node.stream() normally supplies this;
+    // handle() is public API, so direct callers get per-call state.
     const invocationState: InvocationState = options?.invocationState ?? {}
 
     const gen = this._orchestrator.stream(input, { invocationState })

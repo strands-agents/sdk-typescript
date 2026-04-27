@@ -22,8 +22,7 @@ describe('AgentAsTool invocationState forwarding', () => {
 
     const result = await outer.invoke('run inner', { invocationState: { userId: 'u-1' } })
 
-    expect(innerSawState?.userId).toBe('u-1')
-    expect(result.invocationState.innerTouched).toBe(true)
-    expect(result.invocationState.userId).toBe('u-1')
+    expect(innerSawState).toEqual({ userId: 'u-1', innerTouched: true })
+    expect(result.invocationState).toEqual({ userId: 'u-1', innerTouched: true })
   })
 })

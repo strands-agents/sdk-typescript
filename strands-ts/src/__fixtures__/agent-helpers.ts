@@ -130,6 +130,13 @@ export interface AgentResultMatcher extends Omit<LoopMetricsMatcher, 'cycleCount
    * When omitted, asserts traces array exists with at least one element.
    */
   traceCount?: number
+
+  /**
+   * Expected `invocationState` on the result. When provided, the full object
+   * must match exactly — extra keys fail. When omitted, only asserts
+   * `invocationState` is present (any object).
+   */
+  invocationState?: Record<string, unknown>
 }
 
 /**
@@ -149,7 +156,7 @@ export interface AgentResultMatcher extends Omit<LoopMetricsMatcher, 'cycleCount
  * ```
  */
 export function expectAgentResult(options: AgentResultMatcher): AgentResult {
-  const { stopReason, messageText, cycleCount, traceCount, toolNames, usage } = options
+  const { stopReason, messageText, cycleCount, traceCount, toolNames, usage, invocationState } = options
 
   const expectedLastMessage = messageText
     ? expect.objectContaining({
@@ -178,5 +185,6 @@ export function expectAgentResult(options: AgentResultMatcher): AgentResult {
     lastMessage: expectedLastMessage,
     metrics: expectLoopMetrics(metricsOptions),
     traces: expectedTraces,
+    invocationState: invocationState ?? expect.any(Object),
   }) as AgentResult
 }

@@ -42,8 +42,10 @@ export type InvokeArgs = string | ContentBlock[] | ContentBlockData[] | Message[
  * to subsequent hooks, tools, and recursive loop cycles.
  *
  * Typically used for request-scoped context (`userId`, `requestId`, `traceId`)
- * or cross-hook counters. The SDK writes no keys into it — the key space is
- * entirely the caller's.
+ * or cross-hook counters. The core agent loop writes no keys into it — the
+ * key space is the caller's. Transport bridges may populate reserved keys
+ * (e.g. `A2AExecutor` sets `a2aRequestContext`); those bridges document their
+ * own reserved keys.
  *
  * Distinct from {@link LocalAgent.appState}: `appState` is durable across
  * invocations, JSON-serializable, and deep-copied. `invocationState` is

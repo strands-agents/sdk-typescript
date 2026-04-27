@@ -60,8 +60,8 @@ describe('invocationState', () => {
 
       const result = await agent.invoke('Hi')
 
-      expect(seenInAfter?.counter).toBe(1)
-      expect(result.invocationState.counter).toBe(1)
+      expect(seenInAfter).toEqual({ counter: 1 })
+      expect(result.invocationState).toEqual({ counter: 1 })
     })
 
     it('shares the same invocationState object across all lifecycle events in one invocation', async () => {
@@ -122,8 +122,8 @@ describe('invocationState', () => {
       const result = await agent.invoke('Run ping')
 
       expect(modelCalls).toBe(2)
-      expect(cycle2State?.toolCompleted).toBe(true)
-      expect(result.invocationState.toolCompleted).toBe(true)
+      expect(cycle2State).toEqual({ toolCompleted: true })
+      expect(result.invocationState).toEqual({ toolCompleted: true })
     })
   })
 
@@ -152,9 +152,11 @@ describe('invocationState', () => {
 
       const result = await agent.invoke('Run writer', { invocationState: { userId: 'u-42' } })
 
-      expect(result.invocationState.callCount).toBe(1)
-      expect(result.invocationState.lastToolSeenUserId).toBe('u-42')
-      expect(result.invocationState.userId).toBe('u-42')
+      expect(result.invocationState).toEqual({
+        userId: 'u-42',
+        callCount: 1,
+        lastToolSeenUserId: 'u-42',
+      })
     })
   })
 
@@ -190,8 +192,8 @@ describe('invocationState', () => {
       const first = await agent.invoke('1')
       const second = await agent.invoke('2')
 
-      expect(first.invocationState.seen).toBe(true)
-      expect(second.invocationState.seen).toBe(true)
+      expect(first.invocationState).toEqual({ seen: true })
+      expect(second.invocationState).toEqual({ seen: true })
       expect(first.invocationState).not.toBe(second.invocationState)
     })
   })
@@ -228,8 +230,7 @@ describe('invocationState', () => {
         expect(observed).toBe(result.invocationState)
       }
       // Mutations from the first attempt survive into the retry.
-      expect(result.invocationState.userId).toBe('u-1')
-      expect(result.invocationState.modelCalls).toBe(2)
+      expect(result.invocationState).toEqual({ userId: 'u-1', modelCalls: 2 })
     })
 
     it('preserves same invocationState reference across AfterToolCallEvent retry', async () => {
@@ -269,8 +270,7 @@ describe('invocationState', () => {
       for (const observed of seen) {
         expect(observed).toBe(result.invocationState)
       }
-      expect(result.invocationState.requestId).toBe('r-1')
-      expect(result.invocationState.toolAttempts).toBe(2)
+      expect(result.invocationState).toEqual({ requestId: 'r-1', toolAttempts: 2 })
     })
   })
 })
