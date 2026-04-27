@@ -2778,7 +2778,7 @@ describe('BedrockModel', () => {
 
         expect(mockConverseStreamCommand).toHaveBeenLastCalledWith(
           expect.not.objectContaining({
-            guardrailConfig: expect.objectContaining({ warn: expect.any(Function) }),
+            guardrailConfig: expect.anything(),
           })
         )
       })
@@ -4039,7 +4039,7 @@ describe('BedrockModel', () => {
 
       expect(mockConverseStreamCommand).toHaveBeenLastCalledWith(
         expect.not.objectContaining({
-          additionalModelRequestFields: expect.objectContaining({ warn: expect.any(Function) }),
+          additionalModelRequestFields: expect.anything(),
         })
       )
     })
