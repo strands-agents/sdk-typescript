@@ -1,4 +1,4 @@
-import type { LocalAgent, AgentResult, InvocationState } from '../types/agent.js'
+import type { LocalAgent, AgentResult, InvocationState, InvokeArgs } from '../types/agent.js'
 import type { ContentBlock, Message, StopReason, ToolResultBlock } from '../types/messages.js'
 import { type Tool, ToolStreamEvent } from '../tools/tool.js'
 import type { JSONValue } from '../types/json.js'
@@ -10,8 +10,9 @@ import type { Model } from '../models/model.js'
  *
  * All events extend {@link StreamEvent} with a `readonly type` discriminator
  * (camelCase of the class name) for switch-based narrowing. Constructor takes
- * a single data-object parameter. All properties are readonly except explicit
- * mutable flags (`retry`).
+ * a single data-object parameter. Most properties are readonly — writable fields
+ * are the hook-driven control/data fields documented per event
+ * (e.g. `cancel`, `retry`, `selectedTool`, `resume`, and mutable `toolUse` / `result`).
  *
  * All current events extend {@link HookableEvent} (which itself extends {@link StreamEvent}),
  * making them both streamable and subscribable via hook callbacks. {@link StreamEvent} exists
@@ -157,6 +158,15 @@ export class AfterInvocationEvent extends HookableEvent {
   readonly agent: LocalAgent
   readonly invocationState: InvocationState
 
+  /**
+   * Set by hook callbacks to trigger a follow-up agent invocation with new input.
+   * When set, after this event's callbacks complete the agent re-enters its loop
+   * with these args as new input, under the same invocation lock. A fresh
+   * {@link BeforeInvocationEvent}/{@link AfterInvocationEvent} pair fires for the
+   * resumed run. Ignored if the invocation ended with an error.
+   */
+  resume: InvokeArgs | undefined = undefined
+
   constructor(data: { agent: LocalAgent; invocationState: InvocationState }) {
     super()
     this.agent = data.agent
@@ -168,7 +178,8 @@ export class AfterInvocationEvent extends HookableEvent {
   }
 
   /**
-   * Serializes for wire transport, excluding the agent reference and invocationState.
+   * Serializes for wire transport, excluding the agent reference, invocationState,
+   * and mutable resume field.
    * Called automatically by JSON.stringify().
    */
   toJSON(): Pick<AfterInvocationEvent, 'type'> {
@@ -206,12 +217,18 @@ export class MessageAddedEvent extends HookableEvent {
 /**
  * Event triggered just before a tool is executed.
  * Fired after tool lookup but before execution begins.
- * Hook callbacks can set {@link cancel} to prevent the tool from executing.
+ *
+ * Hook callbacks can:
+ * - Set {@link cancel} to prevent the tool from executing.
+ * - Set {@link selectedTool} to execute a different tool in place of the registry's match.
+ * - Mutate {@link toolUse} to rewrite the tool input, id, or name before execution.
+ *   If `name` is changed and `selectedTool` is not set, the tool is re-resolved from
+ *   the registry under the new name.
  */
 export class BeforeToolCallEvent extends HookableEvent {
   readonly type = 'beforeToolCallEvent' as const
   readonly agent: LocalAgent
-  readonly toolUse: {
+  toolUse: {
     name: string
     toolUseId: string
     input: JSONValue
@@ -225,6 +242,13 @@ export class BeforeToolCallEvent extends HookableEvent {
    * When set to a string, that string is used as the tool result error message.
    */
   cancel: boolean | string = false
+
+  /**
+   * Set by hook callbacks to execute a replacement tool instead of {@link tool}.
+   * When undefined, the tool looked up from the registry (or re-resolved from a
+   * mutated `toolUse.name`) is used.
+   */
+  selectedTool: Tool | undefined = undefined
 
   constructor(data: {
     agent: LocalAgent
@@ -240,7 +264,8 @@ export class BeforeToolCallEvent extends HookableEvent {
   }
 
   /**
-   * Serializes for wire transport, excluding the agent reference, tool instance, invocationState, and mutable cancel flag.
+   * Serializes for wire transport, excluding the agent reference, tool instance,
+   * invocationState, and mutable cancel / selectedTool fields.
    * Called automatically by JSON.stringify().
    */
   toJSON(): Pick<BeforeToolCallEvent, 'type' | 'toolUse'> {
@@ -252,6 +277,9 @@ export class BeforeToolCallEvent extends HookableEvent {
  * Event triggered after a tool execution completes.
  * Fired after tool execution finishes, whether successful or failed.
  * Uses reverse callback ordering for proper cleanup semantics.
+ *
+ * Hook callbacks can mutate {@link result} to rewrite the tool result before it
+ * propagates to the model (e.g. to redact or truncate output).
  */
 export class AfterToolCallEvent extends HookableEvent {
   readonly type = 'afterToolCallEvent' as const
