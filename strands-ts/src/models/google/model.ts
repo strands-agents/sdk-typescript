@@ -13,7 +13,7 @@ import {
   type GenerateContentConfig,
   type GenerateContentParameters,
 } from '@google/genai'
-import { Model } from '../model.js'
+import { Model, configWithResolvedLimit } from '../model.js'
 import type { CountTokensOptions, StreamOptions } from '../model.js'
 import type { Message } from '../../types/messages.js'
 import type { ModelStreamEvent } from '../streaming.js'
@@ -22,7 +22,7 @@ import type { GoogleModelConfig, GoogleModelOptions, GoogleStreamState } from '.
 export type { GoogleModelConfig, GoogleModelOptions }
 import { classifyGoogleError } from './errors.js'
 import { formatMessages, mapChunkToEvents } from './adapters.js'
-import { MODEL_DEFAULTS, defaultModelWarningMessage, getContextWindowLimit } from '../defaults.js'
+import { MODEL_DEFAULTS, defaultModelWarningMessage } from '../defaults.js'
 import { warnOnce } from '../../logging/warn-once.js'
 import { logger } from '../../logging/logger.js'
 
@@ -96,11 +96,6 @@ export class GoogleModel extends Model<GoogleModelConfig> {
       warnOnce(logger, defaultModelWarningMessage(MODEL_DEFAULTS.gemini.modelId))
     }
 
-    if (this._config.contextWindowLimit === undefined) {
-      const contextWindowLimit = getContextWindowLimit(this._config.modelId ?? MODEL_DEFAULTS.gemini.modelId)
-      if (contextWindowLimit !== undefined) this._config.contextWindowLimit = contextWindowLimit
-    }
-
     if (client) {
       this._client = client
     } else {
@@ -149,7 +144,7 @@ export class GoogleModel extends Model<GoogleModelConfig> {
    * ```
    */
   getConfig(): GoogleModelConfig {
-    return this._config
+    return configWithResolvedLimit(this._config, this._config.modelId ?? MODEL_DEFAULTS.gemini.modelId)
   }
 
   /**

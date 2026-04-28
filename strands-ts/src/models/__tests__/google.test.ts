@@ -142,6 +142,30 @@ describe('GoogleModel', () => {
         contextWindowLimit: 1_048_576,
       })
     })
+
+    it('re-resolves contextWindowLimit when modelId changes and it was auto-resolved', () => {
+      const provider = new GoogleModel({ apiKey: 'test-key' })
+      expect(provider.getConfig().contextWindowLimit).toBe(1_048_576)
+
+      provider.updateConfig({ modelId: 'gemini-2.0-flash' })
+      expect(provider.getConfig().contextWindowLimit).toBe(1_048_576)
+    })
+
+    it('clears contextWindowLimit when modelId changes to unknown model', () => {
+      const provider = new GoogleModel({ apiKey: 'test-key' })
+      expect(provider.getConfig().contextWindowLimit).toBe(1_048_576)
+
+      provider.updateConfig({ modelId: 'my-custom-finetuned-model' })
+      expect(provider.getConfig().contextWindowLimit).toBeUndefined()
+    })
+
+    it('preserves explicit contextWindowLimit when modelId changes', () => {
+      const provider = new GoogleModel({ apiKey: 'test-key', contextWindowLimit: 50_000 })
+      expect(provider.getConfig().contextWindowLimit).toBe(50_000)
+
+      provider.updateConfig({ modelId: 'gemini-2.0-flash' })
+      expect(provider.getConfig().contextWindowLimit).toBe(50_000)
+    })
   })
 
   describe('getConfig', () => {
@@ -172,12 +196,17 @@ describe('GoogleModel', () => {
 
     it('auto-populates contextWindowLimit from model ID lookup', () => {
       const provider = new GoogleModel({ apiKey: 'test-key', modelId: 'gemini-2.5-pro' })
-      expect(provider.getConfig().contextWindowLimit).toBe(1_048_576)
+      expect(provider.getConfig()).toStrictEqual({
+        modelId: 'gemini-2.5-pro',
+        contextWindowLimit: 1_048_576,
+      })
     })
 
     it('auto-populates contextWindowLimit for default model ID', () => {
       const provider = new GoogleModel({ apiKey: 'test-key' })
-      expect(provider.getConfig().contextWindowLimit).toBe(1_048_576)
+      expect(provider.getConfig()).toStrictEqual({
+        contextWindowLimit: 1_048_576,
+      })
     })
 
     it('does not override explicit contextWindowLimit', () => {
@@ -186,12 +215,17 @@ describe('GoogleModel', () => {
         modelId: 'gemini-2.5-flash',
         contextWindowLimit: 500_000,
       })
-      expect(provider.getConfig().contextWindowLimit).toBe(500_000)
+      expect(provider.getConfig()).toStrictEqual({
+        modelId: 'gemini-2.5-flash',
+        contextWindowLimit: 500_000,
+      })
     })
 
     it('leaves contextWindowLimit undefined for unknown model IDs', () => {
       const provider = new GoogleModel({ apiKey: 'test-key', modelId: 'unknown-model' })
-      expect(provider.getConfig().contextWindowLimit).toBeUndefined()
+      expect(provider.getConfig()).toStrictEqual({
+        modelId: 'unknown-model',
+      })
     })
   })
 

@@ -298,12 +298,17 @@ describe('OpenAIModel', () => {
 
     it('auto-populates contextWindowLimit from model ID lookup', () => {
       const provider = new OpenAIModel({ api: 'chat', modelId: 'gpt-4o', apiKey: 'sk-test' })
-      expect(provider.getConfig().contextWindowLimit).toBe(128_000)
+      expect(provider.getConfig()).toStrictEqual({
+        modelId: 'gpt-4o',
+        contextWindowLimit: 128_000,
+      })
     })
 
     it('auto-populates contextWindowLimit for default model ID', () => {
       const provider = new OpenAIModel({ api: 'chat', apiKey: 'sk-test' })
-      expect(provider.getConfig().contextWindowLimit).toBe(1_050_000)
+      expect(provider.getConfig()).toStrictEqual({
+        contextWindowLimit: 1_050_000,
+      })
     })
 
     it('does not override explicit contextWindowLimit', () => {
@@ -313,12 +318,17 @@ describe('OpenAIModel', () => {
         apiKey: 'sk-test',
         contextWindowLimit: 50_000,
       })
-      expect(provider.getConfig().contextWindowLimit).toBe(50_000)
+      expect(provider.getConfig()).toStrictEqual({
+        modelId: 'gpt-4o',
+        contextWindowLimit: 50_000,
+      })
     })
 
     it('leaves contextWindowLimit undefined for unknown model IDs', () => {
       const provider = new OpenAIModel({ api: 'chat', modelId: 'unknown-model', apiKey: 'sk-test' })
-      expect(provider.getConfig().contextWindowLimit).toBeUndefined()
+      expect(provider.getConfig()).toStrictEqual({
+        modelId: 'unknown-model',
+      })
     })
   })
 
