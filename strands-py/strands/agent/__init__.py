@@ -5,7 +5,14 @@ import logging
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, Union, cast
+
+if TYPE_CHECKING:
+    from strands.agent.conversation_manager import (
+        NullConversationManager,
+        SlidingWindowConversationManager,
+        SummarizingConversationManager,
+    )
 
 from strands._conversions import (
     convert_message,
@@ -240,7 +247,13 @@ class Agent:
         structured_output_model: type | None = None,
         agent_id: str | None = None,
         session_manager: Any = None,
-        conversation_manager: Any = None,
+        conversation_manager: Union[
+            "NullConversationManager",
+            "SlidingWindowConversationManager",
+            "SummarizingConversationManager",
+            dict[str, Any],
+            None,
+        ] = None,
         **kwargs: Any,
     ):
         if kwargs:
@@ -317,7 +330,7 @@ class Agent:
                     "summary_ratio": conversation_manager.summary_ratio,
                     "preserve_recent_messages": conversation_manager.preserve_recent_messages,
                     "summarization_system_prompt": conversation_manager.summarization_system_prompt,
-                    "summarization_model_config": conversation_manager.summarization_model_config,
+                    "summarization_model_config": conversation_manager.serialize_model_config(),
                 }
             elif isinstance(conversation_manager, dict):
                 cm_config = conversation_manager

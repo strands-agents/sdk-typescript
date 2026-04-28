@@ -165,12 +165,6 @@ interface types {
     save-latest-on: option<string>,
   }
 
-  /// Sliding window conversation manager config.
-  record sliding-window-config {
-    window-size: s32,
-    should-truncate-results: bool,
-  }
-
   /// Conversation manager configuration.
   /// The `strategy` field selects the manager: "none", "sliding-window", or "summarizing".
   record conversation-manager-config {

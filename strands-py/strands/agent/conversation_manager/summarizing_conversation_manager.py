@@ -39,19 +39,26 @@ class SummarizingConversationManager(HookProvider):
         self.summary_ratio = max(0.1, min(0.8, summary_ratio))
         self.preserve_recent_messages = preserve_recent_messages
         self.summarization_system_prompt = summarization_system_prompt
-        self.summarization_model_config: str | None = None
-        if summarization_model_config is not None:
-            self.summarization_model_config = self._serialize_model_config(summarization_model_config)
+        self.summarization_model_config = summarization_model_config
 
-    @staticmethod
-    def _serialize_model_config(config: dict[str, Any]) -> str:
-        """Serialize a model config dict into the WIT-compatible JSON format.
+    def serialize_model_config(self) -> str | None:
+        """Serialize the model config dict into the WIT-compatible JSON format.
 
         Converts from the Python-friendly format:
             {"provider": "bedrock", "model_id": "us.anthropic.claude-sonnet-4-20250514"}
         to the WIT ModelConfig variant format:
             {"tag": "bedrock", "val": {"modelId": "us.anthropic.claude-sonnet-4-20250514"}}
+
+        The output uses camelCase field names (modelId, apiKey, etc.) to match
+        what ``createModel()`` in ``strands-wasm/entry.ts`` expects when parsing
+        the JSON string from the WIT ``summarization-model-config`` field.
+
+        Returns:
+            JSON string for the WIT contract, or None if no model config is set.
         """
+        if self.summarization_model_config is None:
+            return None
+        config = self.summarization_model_config
         provider = config.get("provider", "bedrock")
         if provider == "bedrock":
             val: dict[str, Any] = {
