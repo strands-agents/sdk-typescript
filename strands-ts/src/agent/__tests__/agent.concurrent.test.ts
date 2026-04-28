@@ -450,45 +450,6 @@ describe('Agent concurrent tool execution', () => {
     expect(blocks.map((b) => b.toolUseId)).toEqual(['a', 'b'])
   })
 
-  it('AfterToolsEvent.message contains completed results when consumer breaks mid-stream', async () => {
-    const toolA = new GatedTool('toolA')
-    const toolB = new GatedTool('toolB') // never released
-    const agent = new Agent({
-      model: twoToolTurn(),
-      tools: [toolA, toolB],
-      toolExecutor: 'concurrent',
-      printer: false,
-    })
-
-    agent.addHook(BeforeToolCallEvent, (e) => {
-      if (e.toolUse.name === 'toolA') toolA.release()
-    })
-
-    let afterToolsMessage: Message | undefined
-    agent.addHook(AfterToolsEvent, (e) => {
-      afterToolsMessage = e.message
-    })
-
-    let toolResultsSeen = 0
-    for await (const event of agent.stream('Go')) {
-      if (event.type === 'toolResultEvent') {
-        toolResultsSeen++
-        if (toolResultsSeen === 1) {
-          // Cancel so toolB (still parked on its gate) observes cancelSignal
-          // and exits cooperatively — otherwise gen.return() stays blocked on
-          // a suspended await.
-          agent.cancel()
-          break
-        }
-      }
-    }
-
-    expect(afterToolsMessage).toBeDefined()
-    const blocks = afterToolsMessage!.content.filter((b): b is ToolResultBlock => b.type === 'toolResultBlock')
-    expect(blocks.length).toBeGreaterThanOrEqual(1)
-    expect(blocks.some((b) => b.toolUseId === 'a')).toBe(true)
-  })
-
   it('pre-launch agent.cancel() during BeforeToolsEvent produces "Tool execution cancelled" (concurrent)', async () => {
     const toolA = new GatedTool('toolA')
     const toolB = new GatedTool('toolB')
@@ -560,5 +521,74 @@ describe('Agent concurrent tool execution', () => {
     expect(blocks.map((b) => b.toolUseId)).toEqual(['a', 'b'])
     expect(blocks.find((b) => b.toolUseId === 'a')!.status).toBe('success')
     expect(blocks.find((b) => b.toolUseId === 'b')!.status).toBe('error')
+  })
+
+  it('surfaces mid-tool ToolStreamUpdateEvents through agent.stream in concurrent mode', async () => {
+    const toolA = new GatedStreamingTool('toolA')
+    const toolB = new GatedStreamingTool('toolB')
+    const agent = new Agent({
+      model: twoToolTurn(),
+      tools: [toolA, toolB],
+      toolExecutor: 'concurrent',
+      printer: false,
+    })
+
+    const streamEvents: { tool: string; step: number }[] = []
+    const invocation = (async () => {
+      for await (const event of agent.stream('Go')) {
+        if (event.type === 'toolStreamUpdateEvent') {
+          const data = event.event.data as { tool: string; step: number }
+          streamEvents.push(data)
+        }
+      }
+    })()
+
+    await toolA.emit({ tool: 'toolA', step: 0 })
+    await toolB.emit({ tool: 'toolB', step: 0 })
+    await toolA.emit({ tool: 'toolA', step: 1 })
+    await toolB.emit({ tool: 'toolB', step: 1 })
+    await toolA.complete()
+    await toolB.complete()
+    await invocation
+
+    // All four mid-tool events should have been surfaced through agent.stream.
+    expect(streamEvents).toHaveLength(4)
+    expect(streamEvents.filter((e) => e.tool === 'toolA').map((e) => e.step)).toEqual([0, 1])
+    expect(streamEvents.filter((e) => e.tool === 'toolB').map((e) => e.step)).toEqual([0, 1])
+  })
+
+  it('BeforeToolCallEvent.cancel cancels the individual tool without affecting siblings (concurrent)', async () => {
+    const toolA = new GatedTool('toolA')
+    const toolB = new GatedTool('toolB')
+    const agent = new Agent({
+      model: twoToolTurn(),
+      tools: [toolA, toolB],
+      toolExecutor: 'concurrent',
+      printer: false,
+    })
+
+    agent.addHook(BeforeToolCallEvent, (e) => {
+      if (e.toolUse.name === 'toolA') e.cancel = 'A cancelled by hook'
+    })
+
+    let afterMessage: Message | undefined
+    agent.addHook(AfterToolsEvent, (e) => {
+      afterMessage = e.message
+    })
+
+    const invocation = agent.invoke('Go')
+    await toolB.started
+    // toolA never runs because its BeforeToolCallEvent.cancel short-circuits.
+    expect(toolA.observations.started).toBe(false)
+    toolB.release()
+    await invocation
+
+    const blocks = afterMessage!.content as ToolResultBlock[]
+    expect(blocks).toHaveLength(2)
+    const a = blocks.find((b) => b.toolUseId === 'a')!
+    const b = blocks.find((b) => b.toolUseId === 'b')!
+    expect(a.status).toBe('error')
+    expect((a.content[0] as TextBlock).text).toBe('A cancelled by hook')
+    expect(b.status).toBe('success')
   })
 })
