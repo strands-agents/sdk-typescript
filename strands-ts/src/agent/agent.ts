@@ -60,7 +60,7 @@ import {
   type ModelStopData,
 } from '../hooks/events.js'
 import { StructuredOutputTool, STRUCTURED_OUTPUT_TOOL_NAME } from '../tools/structured-output-tool.js'
-import { InterruptError, InterruptState } from '../interrupt.js'
+import { InterruptError, InterruptState, interruptFromAgent } from '../interrupt.js'
 import type { InterruptParams } from '../types/interrupt.js'
 import { isInterruptResponseContent, type InterruptResponseContent } from '../types/interrupt.js'
 import { AgentAsTool } from './agent-as-tool.js'
@@ -1160,6 +1160,8 @@ export class Agent implements LocalAgent, InvokableAgent {
     try {
       yield beforeToolsEvent
     } catch (error) {
+      // Store pending state before re-throwing so the agent can resume from this point.
+      // The error must still propagate to _stream which handles the interrupt stop.
       if (error instanceof InterruptError) {
         this._interruptState.setPendingToolExecution({
           assistantMessageData: assistantMessage.toJSON(),
@@ -1215,9 +1217,9 @@ export class Agent implements LocalAgent, InvokableAgent {
           // Check if this tool was already completed in a previous run
           const existingResult = toolResults.get(toolUseBlock.toolUseId)
           if (existingResult) {
-            // Skip already completed tools
+            // Skip already completed tools — no events emitted.
+            // The result is included in the final tool result message.
             toolResultBlocks.push(existingResult)
-            yield new ToolResultEvent({ agent: this, result: existingResult })
             continue
           }
 
@@ -1356,14 +1358,7 @@ export class Agent implements LocalAgent, InvokableAgent {
           },
           agent: this,
           interrupt: <T = JSONValue>(params: InterruptParams): T => {
-            const interruptId = `tool:${toolUseBlock.toolUseId}:${params.name}`
-            const interrupt = this._interruptState.getOrCreateInterrupt(interruptId, params.name, params.reason)
-
-            if (interrupt.response !== undefined) {
-              return interrupt.response as T
-            }
-
-            throw new InterruptError(interrupt)
+            return interruptFromAgent<T>(this, `tool:${toolUseBlock.toolUseId}:${params.name}`, params)
           },
         }
 

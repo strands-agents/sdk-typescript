@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { Agent, BeforeToolCallEvent, tool } from '@strands-agents/sdk'
-import type { AgentResult, InterruptResponseContent, JSONValue } from '@strands-agents/sdk'
+import type { AgentResult, InterruptResponseContentData, JSONValue } from '@strands-agents/sdk'
 import { z } from 'zod'
 import { bedrock } from './__fixtures__/model-providers.js'
 
@@ -42,7 +42,7 @@ async function resumeUntilDone(
 ): Promise<AgentResult> {
   let current = result
   for (let i = 0; i < maxRounds && current.stopReason === 'interrupt'; i++) {
-    const responses: InterruptResponseContent[] = current.interrupts!.map((interrupt) => ({
+    const responses: InterruptResponseContentData[] = current.interrupts!.map((interrupt) => ({
       interruptResponse: {
         interruptId: interrupt.id,
         response: respond(interrupt),

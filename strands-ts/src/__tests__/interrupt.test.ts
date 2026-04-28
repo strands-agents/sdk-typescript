@@ -137,7 +137,6 @@ describe('InterruptState', () => {
         response: 'user response',
       })
     })
-
   })
 
   describe('activate / deactivate', () => {
