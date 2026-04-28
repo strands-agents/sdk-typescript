@@ -27,7 +27,6 @@ export {
   JsonValidationError,
   ConcurrentInvocationError,
   ModelThrottledError,
-  ProviderTokenCountError,
   ToolValidationError,
   StructuredOutputError,
 } from './errors.js'
