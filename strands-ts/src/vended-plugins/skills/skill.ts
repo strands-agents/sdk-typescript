@@ -11,6 +11,7 @@ import { readFileSync, readdirSync, statSync, existsSync } from 'fs'
 import { resolve, join, basename } from 'path'
 import { parse as parseYaml } from 'yaml'
 import { logger } from '../../logging/logger.js'
+import type { Sandbox } from '../../sandbox/base.js'
 
 const SKILL_NAME_PATTERN = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/
 const MAX_SKILL_NAME_LENGTH = 64
@@ -433,6 +434,108 @@ export class Skill {
     }
 
     logger.debug(`path=<${resolvedDir}>, count=<${skills.length}> | loaded skills from directory`)
+    return skills
+  }
+
+  /**
+   * Load a single skill from a sandbox filesystem.
+   *
+   * Reads a SKILL.md file from the sandbox and parses it into a Skill
+   * instance. The sandbox can be any implementation (host, Docker, cloud).
+   *
+   * @example
+   * ```typescript
+   * import { HostSandbox } from '@strands-agents/sdk/sandbox'
+   *
+   * const sandbox = new HostSandbox()
+   * const skill = await Skill.fromSandbox(sandbox, '/home/skills/my-skill')
+   * ```
+   *
+   * @param sandbox - The sandbox to read from.
+   * @param skillPath - Path to a skill directory or the SKILL.md file itself within the sandbox.
+   * @param options - Optional settings. When `strict` is true, throws on any validation issue.
+   * @returns A Promise resolving to a Skill instance populated from the sandbox SKILL.md file.
+   */
+  static async fromSandbox(sandbox: Sandbox, skillPath: string, options?: { strict?: boolean }): Promise<Skill> {
+    let skillMdPath: string | undefined
+
+    // Check if the path points directly to a SKILL.md file
+    const lowerPath = skillPath.toLowerCase()
+    if (lowerPath.endsWith('skill.md')) {
+      skillMdPath = skillPath
+    } else {
+      // Try to find SKILL.md in the directory
+      for (const name of ['SKILL.md', 'skill.md']) {
+        const candidate = skillPath.endsWith('/') ? `${skillPath}${name}` : `${skillPath}/${name}`
+        try {
+          await sandbox.readFile(candidate)
+          skillMdPath = candidate
+          break
+        } catch {
+          // File doesn't exist, try next
+        }
+      }
+    }
+
+    if (skillMdPath == null) {
+      throw new Error(`path=<${skillPath}> | no SKILL.md found in sandbox skill directory`)
+    }
+
+    logger.debug(`sandbox_path=<${skillMdPath}> | loading skill from sandbox`)
+
+    const content = await sandbox.readText(skillMdPath)
+    const skill = Skill.fromContent(content, options)
+
+    logger.debug(`name=<${skill.name}>, sandbox_path=<${skillMdPath}> | skill loaded from sandbox`)
+    return skill
+  }
+
+  /**
+   * Load all skills from a parent directory in a sandbox.
+   *
+   * Lists subdirectories in the given sandbox path and loads any that
+   * contain a SKILL.md file.
+   *
+   * @example
+   * ```typescript
+   * import { HostSandbox } from '@strands-agents/sdk/sandbox'
+   *
+   * const sandbox = new HostSandbox()
+   * const skills = await Skill.fromSandboxDirectory(sandbox, '/home/skills')
+   * ```
+   *
+   * @param sandbox - The sandbox to read from.
+   * @param skillsDir - Path to a parent directory containing skill subdirectories within the sandbox.
+   * @param options - Optional settings. When `strict` is true, throws on any validation issue.
+   * @returns A Promise resolving to a list of Skill instances loaded from the sandbox directory.
+   */
+  static async fromSandboxDirectory(
+    sandbox: Sandbox,
+    skillsDir: string,
+    options?: { strict?: boolean }
+  ): Promise<Skill[]> {
+    let entries
+    try {
+      entries = await sandbox.listFiles(skillsDir)
+    } catch (error) {
+      logger.warn(`sandbox_path=<${skillsDir}> | failed to list sandbox directory: ${error}`)
+      return []
+    }
+
+    const skills: Skill[] = []
+    for (const entry of entries) {
+      if (!entry.isDir) continue
+
+      const childPath = skillsDir.endsWith('/') ? `${skillsDir}${entry.name}` : `${skillsDir}/${entry.name}`
+      try {
+        const skill = await Skill.fromSandbox(sandbox, childPath, options)
+        skills.push(skill)
+      } catch (error) {
+        logger.debug(`sandbox_path=<${childPath}> | skipping directory: ${error}`)
+      }
+    }
+
+    logger.debug(`sandbox_path=<${skillsDir}>, count=<${skills.length}> | loaded skills from sandbox directory`)
     return skills
   }
 }

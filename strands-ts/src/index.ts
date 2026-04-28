@@ -249,3 +249,15 @@ export { AgentMetrics } from './telemetry/meter.js'
 // Multi-agent orchestration
 export { Graph } from './multiagent/index.js'
 export { Swarm } from './multiagent/index.js'
+
+// Sandbox
+export { Sandbox, HostSandbox, ShellBasedSandbox, NoOpSandbox } from './sandbox/index.js'
+export type {
+  ExecutionResult,
+  ExecuteOptions,
+  FileInfo,
+  OutputFile,
+  StreamChunk,
+  StreamType,
+  HostSandboxConfig,
+} from './sandbox/index.js'
