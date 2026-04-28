@@ -8,6 +8,16 @@ import type { ElicitationCallback } from './types/elicitation.js'
 import { McpTool } from './tools/mcp-tool.js'
 import { logger } from './logging/index.js'
 
+/**
+ * Widened transport type that accepts MCP transport implementations without requiring explicit casts.
+ *
+ * Under `exactOptionalPropertyTypes`, `StreamableHTTPClientTransport` is not directly assignable
+ * to `Transport` because its `sessionId` getter returns `string | undefined`, while `Transport`
+ * declares `sessionId?: string` (absent or string, but not explicitly undefined).
+ * This type relaxes that constraint so users can pass any MCP transport without `as Transport`.
+ */
+export type McpTransport = Omit<Transport, 'sessionId'> & { sessionId?: string | undefined }
+
 /** Temporary placeholder for RuntimeConfig */
 export interface RuntimeConfig {
   applicationName?: string
@@ -40,7 +50,7 @@ export interface TasksConfig {
 
 /** Arguments for configuring an MCP Client. */
 export type McpClientConfig = RuntimeConfig & {
-  transport: Transport
+  transport: McpTransport
 
   /** Disable OpenTelemetry MCP instrumentation. */
   disableMcpInstrumentation?: boolean
@@ -80,7 +90,7 @@ export class McpClient {
   constructor(args: McpClientConfig) {
     this._clientName = args.applicationName || 'strands-agents-ts-sdk'
     this._clientVersion = args.applicationVersion || '0.0.1'
-    this._transport = args.transport
+    this._transport = args.transport as Transport
     this._connected = false
     this._tasksConfig = args.tasksConfig
     this._elicitationCallback = args.elicitationCallback

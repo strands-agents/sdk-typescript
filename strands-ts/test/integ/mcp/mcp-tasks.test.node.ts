@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { McpClient, Agent } from '@strands-agents/sdk'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
-import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
 import { startTaskHTTPServer, type TaskHttpServerInfo } from '../__fixtures__/test-mcp-task-server.js'
 import { startHTTPServer, type HttpServerInfo } from '../__fixtures__/test-mcp-server.js'
 import { bedrock } from '../__fixtures__/model-providers.js'
@@ -19,7 +18,7 @@ import type { TasksConfig } from '@strands-agents/sdk'
 function createClient(serverUrl: string, appName: string, tasksConfig?: TasksConfig): McpClient {
   return new McpClient({
     applicationName: appName,
-    transport: new StreamableHTTPClientTransport(new URL(serverUrl)) as Transport,
+    transport: new StreamableHTTPClientTransport(new URL(serverUrl)),
     ...(tasksConfig !== undefined && { tasksConfig }),
   })
 }
