@@ -498,7 +498,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
       logger.debug(`total_tokens=<${response.inputTokens}> | native token count`)
       return response.inputTokens
     } catch (error) {
-      logger.warn(`error=<${error}> | native token counting failed, falling back to estimation`)
+      logger.debug(`error=<${error}> | native token counting failed, falling back to estimation`)
       return super.countTokens(messages, options)
     }
   }

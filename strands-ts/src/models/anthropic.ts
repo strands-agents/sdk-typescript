@@ -110,7 +110,7 @@ export class AnthropicModel extends Model<AnthropicModelConfig> {
       logger.debug(`total_tokens=<${response.input_tokens}> | native token count`)
       return response.input_tokens
     } catch (error) {
-      logger.warn(`error=<${error}> | native token counting failed, falling back to estimation`)
+      logger.debug(`error=<${error}> | native token counting failed, falling back to estimation`)
       return super.countTokens(messages, options)
     }
   }

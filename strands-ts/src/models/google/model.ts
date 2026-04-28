@@ -189,7 +189,7 @@ export class GoogleModel extends Model<GoogleModelConfig> {
       logger.debug(`total_tokens=<${totalTokens}> | native token count`)
       return totalTokens
     } catch (error) {
-      logger.warn(`error=<${error}> | native token counting failed, falling back to estimation`)
+      logger.debug(`error=<${error}> | native token counting failed, falling back to estimation`)
       return super.countTokens(messages, options)
     }
   }
