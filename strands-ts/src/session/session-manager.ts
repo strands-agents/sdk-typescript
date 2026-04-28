@@ -204,7 +204,7 @@ export class SessionManager implements Plugin, MultiAgentPlugin {
     // loaded from the snapshot would drift from the server's view on the next
     // invocation. Duck-type the agent's `model` since `LocalAgent` does not
     // expose it — `Agent` is the only implementor and always has one.
-    const statefulModel = (event.agent as { model?: { stateful?: boolean } }).model?.stateful === true
+    const statefulModel = (event.agent as { model?: { stateful?: boolean } }).model?.stateful
     if (restored && statefulModel && event.agent.messages.length > 0) {
       logger.debug(
         `agent_id=<${event.agent.id}>, message_count=<${event.agent.messages.length}> | discarding restored messages for stateful model`

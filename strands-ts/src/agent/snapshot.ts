@@ -105,10 +105,7 @@ export function takeSnapshot(agent: LocalAgent, options: TakeSnapshotOptions): S
   }
 
   if (fields.has('modelState')) {
-    // Shallow copy so later top-level mutations don't bleed into the snapshot.
-    // Today all provider values are primitives (e.g. responseId); if a provider
-    // starts writing nested objects, upgrade to a deep clone here.
-    data.modelState = { ...agent.modelState }
+    data.modelState = serializeStateSerializable(agent.modelState)
   }
 
   return {
@@ -163,16 +160,7 @@ export function loadSnapshot(agent: LocalAgent, snapshot: Snapshot): void {
   }
 
   if ('modelState' in snapshot.data) {
-    const newState = snapshot.data.modelState
-    // Clear + reassign in place rather than replacing the object: `agent.modelState`
-    // is public, so callers (and the model mid-invocation via StreamOptions.modelState)
-    // may hold a reference to it.
-    for (const key of Object.keys(agent.modelState)) {
-      delete agent.modelState[key]
-    }
-    if (newState !== null && typeof newState === 'object' && !Array.isArray(newState)) {
-      Object.assign(agent.modelState, newState)
-    }
+    loadStateSerializable(agent.modelState, snapshot.data.modelState)
   }
 }
 

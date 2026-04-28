@@ -1,14 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import OpenAI from 'openai'
-import { isNode } from '../../__fixtures__/environment.js'
-import { OpenAIModel } from '../openai/index.js'
-import { ContextWindowOverflowError, ModelThrottledError } from '../../errors.js'
-import { collectIterator } from '../../__fixtures__/model-test-helpers.js'
-import { Message, TextBlock, ToolUseBlock, ToolResultBlock, GuardContentBlock } from '../../types/messages.js'
-import type { SystemContentBlock } from '../../types/messages.js'
-import { ImageBlock, DocumentBlock, VideoBlock } from '../../types/media.js'
-import { warnOnce } from '../../logging/warn-once.js'
-import { logger } from '../../logging/logger.js'
+import { isNode } from '../../../__fixtures__/environment.js'
+import { OpenAIModel } from '../index.js'
+import { ContextWindowOverflowError, ModelThrottledError } from '../../../errors.js'
+import { collectIterator } from '../../../__fixtures__/model-test-helpers.js'
+import { Message, TextBlock, ToolUseBlock, ToolResultBlock, GuardContentBlock } from '../../../types/messages.js'
+import type { SystemContentBlock } from '../../../types/messages.js'
+import { ImageBlock, DocumentBlock, VideoBlock } from '../../../types/media.js'
+import { warnOnce } from '../../../logging/warn-once.js'
+import { logger } from '../../../logging/logger.js'
 
 /**
  * Helper to create a mock OpenAI client with streaming support
@@ -33,7 +33,7 @@ vi.mock('openai', () => {
   }
 })
 
-vi.mock('../../logging/warn-once.js', () => ({
+vi.mock('../../../logging/warn-once.js', () => ({
   warnOnce: vi.fn(),
 }))
 

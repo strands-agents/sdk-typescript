@@ -5,7 +5,7 @@ import { Agent, Message, TextBlock, tool } from '@strands-agents/sdk'
 
 import { collectIterator } from '$/sdk/__fixtures__/model-test-helpers.js'
 
-import { openaiResponses } from '../__fixtures__/model-providers.js'
+import { openaiResponses } from '../../__fixtures__/model-providers.js'
 
 describe.skipIf(openaiResponses.skip)("OpenAIModel (api: 'responses') Integration Tests", () => {
   describe('Configuration', () => {
@@ -226,7 +226,7 @@ describe.skipIf(openaiResponses.skip)("OpenAIModel (api: 'responses') Integratio
       expect(callCount).toBeGreaterThanOrEqual(1)
       expect(result.metrics?.toolMetrics['ping']?.successCount).toBeGreaterThanOrEqual(1)
       expect(agent.messages).toEqual([])
-      expect(agent.modelState.responseId).toEqual(expect.any(String))
+      expect(agent.modelState.get('responseId')).toEqual(expect.any(String))
     })
   })
 

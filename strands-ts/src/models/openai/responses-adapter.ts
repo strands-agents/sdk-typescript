@@ -25,7 +25,7 @@ import type { Message, StopReason, ToolResultBlock } from '../../types/messages.
 import type { ImageBlock, DocumentBlock } from '../../types/media.js'
 import { encodeBase64 } from '../../types/media.js'
 import { toMimeType } from '../../mime.js'
-import type { JSONValue } from '../../types/json.js'
+import type { StateStore } from '../../state-store.js'
 import type { ModelStreamEvent } from '../streaming.js'
 import type { StreamOptions } from '../model.js'
 import { logger } from '../../logging/logger.js'
@@ -71,7 +71,7 @@ export function formatResponsesRequest(
   } as ResponseCreateParamsStreaming
 
   if (stateful) {
-    const responseId = options?.modelState?.responseId as string | undefined
+    const responseId = options?.modelState?.get('responseId') as string | undefined
     if (responseId) {
       request.previous_response_id = responseId
     }
@@ -239,20 +239,25 @@ function formatResponsesMessages(messages: Message[]): ResponseInputItem[] {
  */
 function formatToolResultOutput(resultBlock: ToolResultBlock): string | ResponseFunctionCallOutputItem[] {
   const parts: ResponseFunctionCallOutputItem[] = []
+  const texts: string[] = []
   let hasMedia = false
 
   for (const c of resultBlock.content) {
     switch (c.type) {
       case 'textBlock':
+        texts.push(c.text)
         parts.push({ type: 'input_text', text: c.text })
         break
       case 'jsonBlock': {
         const jsonBlock = c as { json: unknown }
+        let text: string
         try {
-          parts.push({ type: 'input_text', text: JSON.stringify(jsonBlock.json) })
+          text = JSON.stringify(jsonBlock.json)
         } catch {
-          parts.push({ type: 'input_text', text: '[JSON serialization error]' })
+          text = '[JSON serialization error]'
         }
+        texts.push(text)
+        parts.push({ type: 'input_text', text })
         break
       }
       case 'imageBlock': {
@@ -289,10 +294,7 @@ function formatToolResultOutput(resultBlock: ToolResultBlock): string | Response
   if (hasMedia) return parts
 
   // Text-only: collapse to a single string to match the API's simpler shape.
-  const text = parts
-    .filter((p): p is { type: 'input_text'; text: string } => p.type === 'input_text')
-    .map((p) => p.text)
-    .join('\n')
+  const text = texts.join('\n')
   if (resultBlock.status === 'error') {
     return `[ERROR] ${text}`
   }
@@ -357,14 +359,14 @@ export function mapResponsesEventToSDK(
   event: ResponseStreamEvent,
   state: ResponsesStreamState,
   stateful: boolean,
-  modelState: Record<string, JSONValue> | undefined
+  modelState: StateStore | undefined
 ): ModelStreamEvent[] {
   const events: ModelStreamEvent[] = []
 
   switch (event.type) {
     case 'response.created': {
       if (stateful && modelState) {
-        modelState.responseId = event.response.id
+        modelState.set('responseId', event.response.id)
       }
       events.push({ type: 'modelMessageStartEvent', role: 'assistant' as const })
       break

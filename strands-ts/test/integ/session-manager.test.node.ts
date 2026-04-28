@@ -181,7 +181,7 @@ describe.skipIf(openaiResponses.skip)('Session Management - stateful model (Open
     await agent1.invoke('Hello.')
     // Stateful invariant: server owns history, local messages stay empty.
     expect(agent1.messages).toEqual([])
-    const firstResponseId = agent1.modelState.responseId
+    const firstResponseId = agent1.modelState.get('responseId')
     expect(firstResponseId).toEqual(expect.any(String))
 
     // Persisted snapshot must reflect both: empty messages and the captured responseId.
@@ -202,15 +202,15 @@ describe.skipIf(openaiResponses.skip)('Session Management - stateful model (Open
     await agent2.initialize()
 
     expect(agent2.messages).toEqual([])
-    expect(agent2.modelState.responseId).toBe(firstResponseId)
+    expect(agent2.modelState.get('responseId')).toBe(firstResponseId)
 
     // The restored agent must be able to continue the conversation. We only
     // assert mechanical outcomes — no model-output string checks, so no flake surface.
     const turn2 = await agent2.invoke('Say something brief.')
     expect(turn2.stopReason).toBe('endTurn')
     expect(agent2.messages).toEqual([])
-    expect(agent2.modelState.responseId).toEqual(expect.any(String))
-    expect(agent2.modelState.responseId).not.toBe(firstResponseId)
+    expect(agent2.modelState.get('responseId')).toEqual(expect.any(String))
+    expect(agent2.modelState.get('responseId')).not.toBe(firstResponseId)
   })
 })
 

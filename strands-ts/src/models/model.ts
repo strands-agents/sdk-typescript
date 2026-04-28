@@ -11,7 +11,7 @@ import {
 } from '../types/messages.js'
 import { CitationsBlock } from '../types/citations.js'
 import type { Citation, CitationGeneratedContent } from '../types/citations.js'
-import type { JSONValue } from '../types/json.js'
+import type { StateStore } from '../state-store.js'
 import type { ToolChoice, ToolSpec } from '../tools/types.js'
 import {
   ModelContentBlockDeltaEvent,
@@ -125,10 +125,10 @@ export interface StreamOptions {
   /**
    * Runtime state for model providers that manage server-side conversation state.
    * The model can read and write this state during streaming (e.g., to store a
-   * response ID for conversation chaining). The object is passed by reference,
-   * so mutations are visible to the caller.
+   * response ID for conversation chaining). Mutations via `set`/`delete` are
+   * visible to the caller after the stream completes.
    */
-  modelState?: Record<string, JSONValue>
+  modelState?: StateStore
 }
 
 /**

@@ -120,11 +120,11 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
   /**
    * Whether this model manages conversation state server-side.
    *
-   * `true` only for `api: 'responses'` with `stateful !== false`. Chat Completions
-   * is always stateless.
+   * `true` only for `api: 'responses'` with `stateful === true`. Chat Completions
+   * is always stateless, and Responses defaults to stateless.
    */
   override get stateful(): boolean {
-    return this._api === 'responses' && this._config.stateful !== false
+    return this._api === 'responses' && this._config.stateful === true
   }
 
   /**

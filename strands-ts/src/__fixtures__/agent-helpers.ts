@@ -64,7 +64,7 @@ export function createMockAgent(data?: MockAgentData): MockAgent {
   return {
     messages: data?.messages ?? [],
     appState: new StateStore(data?.appState ?? {}),
-    modelState: {},
+    modelState: new StateStore(),
     toolRegistry: data?.toolRegistry ?? new ToolRegistry(),
     cancelSignal: new AbortController().signal,
     addHook: <T extends HookableEvent>(eventType: HookableEventConstructor<T>, callback: HookCallback<T>) => {

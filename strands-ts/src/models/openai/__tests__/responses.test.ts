@@ -1,13 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import OpenAI from 'openai'
-import { isNode } from '../../__fixtures__/environment.js'
-import { OpenAIModel } from '../openai/index.js'
-import { ContextWindowOverflowError, ModelThrottledError } from '../../errors.js'
-import { collectIterator } from '../../__fixtures__/model-test-helpers.js'
-import { Message, TextBlock, ToolUseBlock, ToolResultBlock } from '../../types/messages.js'
-import { ImageBlock, DocumentBlock } from '../../types/media.js'
-import type { JSONValue } from '../../types/json.js'
-import { logger } from '../../logging/logger.js'
+import { isNode } from '../../../__fixtures__/environment.js'
+import { OpenAIModel } from '../index.js'
+import { ContextWindowOverflowError, ModelThrottledError } from '../../../errors.js'
+import { collectIterator } from '../../../__fixtures__/model-test-helpers.js'
+import { Message, TextBlock, ToolUseBlock, ToolResultBlock } from '../../../types/messages.js'
+import { ImageBlock, DocumentBlock } from '../../../types/media.js'
+import { StateStore } from '../../../state-store.js'
+import { logger } from '../../../logging/logger.js'
 
 /**
  * Build a mock OpenAI client whose `responses.create` returns the given async generator.
@@ -89,14 +89,14 @@ describe("OpenAIModel (api: 'responses')", () => {
   })
 
   describe('stateful', () => {
-    it('defaults to true', () => {
+    it('defaults to false', () => {
       const model = new OpenAIModel({ api: 'responses', client: {} as OpenAI })
-      expect(model.stateful).toBe(true)
+      expect(model.stateful).toBe(false)
     })
 
-    it('returns false when explicitly disabled', () => {
-      const model = new OpenAIModel({ api: 'responses', client: {} as OpenAI, stateful: false })
-      expect(model.stateful).toBe(false)
+    it('returns true when explicitly enabled', () => {
+      const model = new OpenAIModel({ api: 'responses', client: {} as OpenAI, stateful: true })
+      expect(model.stateful).toBe(true)
     })
 
     it('is construction-only and cannot be changed via updateConfig', () => {
@@ -173,28 +173,28 @@ describe("OpenAIModel (api: 'responses')", () => {
       return capture.request
     }
 
-    it('includes model, input, stream, and store=true by default', async () => {
+    it('includes model, input, stream, and store=false by default', async () => {
       const req = await runOnce()
       expect(req.model).toBe('gpt-5.4')
       expect(req.stream).toBe(true)
-      expect(req.store).toBe(true)
+      expect(req.store).toBe(false)
       expect(Array.isArray(req.input)).toBe(true)
     })
 
-    it('sets store=false when stateful is disabled', async () => {
-      const req = await runOnce({ stateful: false })
-      expect(req.store).toBe(false)
+    it('sets store=true when stateful is enabled', async () => {
+      const req = await runOnce({ stateful: true })
+      expect(req.store).toBe(true)
     })
 
     it('chains previous_response_id when stateful and modelState has responseId', async () => {
-      const modelState: Record<string, JSONValue> = { responseId: 'resp_prev' }
-      const req = await runOnce({}, [mkUserMessage()], { modelState })
+      const modelState = new StateStore({ responseId: 'resp_prev' })
+      const req = await runOnce({ stateful: true }, [mkUserMessage()], { modelState })
       expect(req.previous_response_id).toBe('resp_prev')
     })
 
     it('omits previous_response_id when stateful is disabled, even with responseId in modelState', async () => {
-      const modelState: Record<string, JSONValue> = { responseId: 'resp_prev' }
-      const req = await runOnce({ stateful: false }, [mkUserMessage()], { modelState })
+      const modelState = new StateStore({ responseId: 'resp_prev' })
+      const req = await runOnce({}, [mkUserMessage()], { modelState })
       expect(req.previous_response_id).toBeUndefined()
     })
 
@@ -256,6 +256,7 @@ describe("OpenAIModel (api: 'responses')", () => {
       const warnSpy = vi.spyOn(logger, 'warn')
       const req = await runOnce({
         modelId: 'gpt-4o',
+        stateful: true,
         params: { model: 'attacker-model', input: 'hijacked', stream: false, store: false },
       })
       expect(req.model).toBe('gpt-4o')
@@ -395,7 +396,20 @@ describe("OpenAIModel (api: 'responses')", () => {
 
   describe('stream event mapping', () => {
     it('captures responseId on response.created when stateful', async () => {
-      const modelState: Record<string, JSONValue> = {}
+      const modelState = new StateStore()
+      const client = createMockClient(async function* () {
+        yield { type: 'response.created', response: { id: 'resp_abc' } }
+        yield { type: 'response.completed', response: {} }
+      })
+      const model = new OpenAIModel({ api: 'responses', client, stateful: true })
+      await collectIterator(
+        model.stream([new Message({ role: 'user', content: [new TextBlock('hi')] })], { modelState })
+      )
+      expect(modelState.get('responseId')).toBe('resp_abc')
+    })
+
+    it('does NOT capture responseId when stateful is disabled', async () => {
+      const modelState = new StateStore()
       const client = createMockClient(async function* () {
         yield { type: 'response.created', response: { id: 'resp_abc' } }
         yield { type: 'response.completed', response: {} }
@@ -404,20 +418,7 @@ describe("OpenAIModel (api: 'responses')", () => {
       await collectIterator(
         model.stream([new Message({ role: 'user', content: [new TextBlock('hi')] })], { modelState })
       )
-      expect(modelState.responseId).toBe('resp_abc')
-    })
-
-    it('does NOT capture responseId when stateful is disabled', async () => {
-      const modelState: Record<string, JSONValue> = {}
-      const client = createMockClient(async function* () {
-        yield { type: 'response.created', response: { id: 'resp_abc' } }
-        yield { type: 'response.completed', response: {} }
-      })
-      const model = new OpenAIModel({ api: 'responses', client, stateful: false })
-      await collectIterator(
-        model.stream([new Message({ role: 'user', content: [new TextBlock('hi')] })], { modelState })
-      )
-      expect(modelState.responseId).toBeUndefined()
+      expect(modelState.get('responseId')).toBeUndefined()
     })
 
     it('emits text deltas inside a content block', async () => {

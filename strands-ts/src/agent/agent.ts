@@ -140,6 +140,11 @@ export type AgentConfig = {
   /** Optional initial state values for the agent. */
   appState?: Record<string, JSONValue>
   /**
+   * Optional initial model-provider state (e.g., restoring `responseId` from a
+   * prior session). Typically only set when hydrating from a snapshot.
+   */
+  modelState?: Record<string, JSONValue>
+  /**
    * Enable automatic printing of agent output to console.
    * When true, prints text generation, reasoning, and tool usage as they occur.
    * Defaults to true.
@@ -216,7 +221,7 @@ export class Agent implements LocalAgent, InvokableAgent {
    * provider-specific data (e.g., response IDs for conversation chaining)
    * across invocations.
    */
-  public modelState: Record<string, JSONValue>
+  public readonly modelState: StateStore
   private readonly _conversationManager: ConversationManager
 
   /**
@@ -274,7 +279,7 @@ export class Agent implements LocalAgent, InvokableAgent {
     // Initialize public fields
     this.messages = (config?.messages ?? []).map((msg) => (msg instanceof Message ? msg : Message.fromMessageData(msg)))
     this.appState = new StateStore(config?.appState)
-    this.modelState = {}
+    this.modelState = new StateStore(config?.modelState)
     this.name = config?.name ?? DEFAULT_AGENT_NAME
     this.id = config?.id ?? DEFAULT_AGENT_ID
     if (config?.description !== undefined) this.description = config.description

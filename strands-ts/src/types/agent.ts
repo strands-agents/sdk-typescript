@@ -1,5 +1,4 @@
 import type { StateStore } from '../state-store.js'
-import type { JSONValue } from './json.js'
 import type { ContentBlock, ContentBlockData, Message, MessageData, StopReason, SystemPrompt } from './messages.js'
 import type { AgentTrace } from '../telemetry/tracer.js'
 import type {
@@ -188,7 +187,7 @@ export interface LocalAgent {
    * provider-specific data (e.g., response IDs for server-side conversation chaining)
    * across invocations.
    */
-  modelState: Record<string, JSONValue>
+  modelState: StateStore
 
   /**
    * The tool registry for registering tools with the agent.

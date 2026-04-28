@@ -19,6 +19,7 @@ import {
   type TrackedHook,
 } from '../../__fixtures__/agent-helpers.js'
 import { loadStateFromJSONSymbol, stateToJSONSymbol } from '../../types/serializable.js'
+import { StateStore } from '../../state-store.js'
 import { logger } from '../../logging/logger.js'
 import {
   AfterMultiAgentInvocationEvent,
@@ -51,7 +52,7 @@ function createMockAgent(id = 'agent'): Agent {
         Object.entries(json).forEach(([k, v]) => this._m.set(k, v))
       },
     } as any,
-    modelState: {},
+    modelState: new StateStore(),
     systemPrompt: 'Test prompt',
   } as unknown as Agent
   return agent

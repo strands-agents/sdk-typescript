@@ -65,9 +65,17 @@ sdk-typescript/
 │   │   ├── models/               # Model provider implementations
 │   │   │   ├── __tests__/
 │   │   │   ├── google/           # Google Gemini provider
+│   │   │   ├── openai/           # OpenAI provider (Chat Completions + Responses API)
+│   │   │   │   ├── __tests__/    # Unit tests (chat.test.ts, responses.test.ts)
+│   │   │   │   ├── chat-adapter.ts
+│   │   │   │   ├── responses-adapter.ts
+│   │   │   │   ├── formatting.ts
+│   │   │   │   ├── errors.ts
+│   │   │   │   ├── model.ts
+│   │   │   │   ├── types.ts
+│   │   │   │   └── index.ts
 │   │   │   ├── anthropic.ts      # Anthropic Claude
 │   │   │   ├── bedrock.ts        # AWS Bedrock
-│   │   │   ├── openai.ts         # OpenAI
 │   │   │   ├── vercel.ts         # Vercel AI SDK
 │   │   │   ├── defaults.ts       # Centralized model defaults + warning messages
 │   │   │   ├── model.ts          # Base model interface

@@ -10,7 +10,7 @@ import type { BaseModelConfig } from '../model.js'
 /**
  * Supported OpenAI API modes.
  * - `'chat'`: Chat Completions API (stateless)
- * - `'responses'`: Responses API (server-managed conversation state)
+ * - `'responses'`: Responses API (optional server-managed conversation state via `stateful: true`)
  *
  * @see https://platform.openai.com/docs/api-reference/chat
  * @see https://platform.openai.com/docs/api-reference/responses
@@ -75,11 +75,12 @@ export interface OpenAIChatConfig extends OpenAIBaseConfig {
  */
 export interface OpenAIResponsesConfig extends OpenAIBaseConfig {
   /**
-   * When `true` (default for `api: 'responses'`), the server manages conversation
-   * state: the request sets `store: true` and chains turns via `previous_response_id`,
-   * the Agent clears its local message history after each invocation, and a
-   * `conversationManager` cannot be supplied. Set to `false` to use the Responses
-   * API in stateless mode, where the full message history is sent on every turn.
+   * When `true`, the server manages conversation state: the request sets
+   * `store: true` and chains turns via `previous_response_id`, the Agent
+   * clears its local message history after each invocation, and a
+   * `conversationManager` cannot be supplied. Defaults to `false` — the
+   * Responses API is used in stateless mode, where the full message history
+   * is sent on every turn.
    */
   stateful?: boolean
 }

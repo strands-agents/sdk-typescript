@@ -34,7 +34,7 @@ class StatefulMockModel extends MockMessageModel {
     if (options?.modelState) {
       const next = this._responseIds[this.receivedOptions.length - 1]
       if (next !== undefined) {
-        options.modelState.responseId = next
+        options.modelState.set('responseId', next)
       }
     }
     yield* super.stream(messages, options)
@@ -59,10 +59,16 @@ describe('Agent with stateful model', () => {
       )
     })
 
-    it('initializes modelState as an empty object', () => {
+    it('initializes modelState as an empty store', () => {
       const model = new StatefulMockModel()
       const agent = new Agent({ model, printer: false })
-      expect(agent.modelState).toEqual({})
+      expect(agent.modelState.getAll()).toEqual({})
+    })
+
+    it('hydrates modelState from AgentConfig.modelState', () => {
+      const model = new StatefulMockModel()
+      const agent = new Agent({ model, printer: false, modelState: { responseId: 'resp_restored' } })
+      expect(agent.modelState.getAll()).toEqual({ responseId: 'resp_restored' })
     })
   })
 
@@ -72,7 +78,7 @@ describe('Agent with stateful model', () => {
       const agent = new Agent({ model, printer: false })
       await agent.invoke('Hello')
       expect(model.receivedOptions[0]?.modelState).toBe(agent.modelState)
-      expect(agent.modelState).toEqual({ responseId: 'resp_first' })
+      expect(agent.modelState.getAll()).toEqual({ responseId: 'resp_first' })
     })
 
     it('clears messages after invocation since the server holds history', async () => {
@@ -111,10 +117,10 @@ describe('Agent with stateful model', () => {
       const agent = new Agent({ model, printer: false })
 
       await agent.invoke('turn 1')
-      expect(agent.modelState).toEqual({ responseId: 'resp_1' })
+      expect(agent.modelState.getAll()).toEqual({ responseId: 'resp_1' })
 
       await agent.invoke('turn 2')
-      expect(agent.modelState).toEqual({ responseId: 'resp_2' })
+      expect(agent.modelState.getAll()).toEqual({ responseId: 'resp_2' })
 
       // Both turns should have seen the state at invocation time.
       expect(model.receivedOptions).toHaveLength(2)
