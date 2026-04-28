@@ -1,6 +1,6 @@
 import type { StateStore } from '../state-store.js'
 import type { ContentBlock, ContentBlockData, Message, MessageData, StopReason, SystemPrompt } from './messages.js'
-import type { InterruptResponseContent } from './interrupt.js'
+import type { InterruptResponseContent, InterruptResponseContentData } from './interrupt.js'
 import type { AgentTrace } from '../telemetry/tracer.js'
 import type {
   BeforeInvocationEvent,
@@ -45,6 +45,7 @@ export type InvokeArgs =
   | Message[]
   | MessageData[]
   | InterruptResponseContent[]
+  | InterruptResponseContentData[]
 
 /**
  * Options for a single agent invocation.

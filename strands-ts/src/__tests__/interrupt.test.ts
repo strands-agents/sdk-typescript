@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { Interrupt, InterruptError, InterruptState, interruptFromAgent } from '../interrupt.js'
+import { InterruptResponseContent } from '../types/interrupt.js'
 
 describe('Interrupt', () => {
   it('constructs with all fields and supports response mutation', () => {
@@ -161,7 +162,7 @@ describe('InterruptState', () => {
       const state = new InterruptState()
       state.getOrCreateInterrupt('int-1', 'test')
 
-      state.resume([{ interruptResponse: { interruptId: 'int-1', response: 'yes' } }])
+      state.resume([new InterruptResponseContent({ interruptId: 'int-1', response: 'yes' })])
 
       expect(state.interrupts['int-1']!.response).toBeUndefined()
     })
@@ -173,8 +174,8 @@ describe('InterruptState', () => {
       state.activate()
 
       const responses = [
-        { interruptResponse: { interruptId: 'int-1', response: 'response1' } },
-        { interruptResponse: { interruptId: 'int-2', response: { complex: 'data' } } },
+        new InterruptResponseContent({ interruptId: 'int-1', response: 'response1' }),
+        new InterruptResponseContent({ interruptId: 'int-2', response: { complex: 'data' } }),
       ]
       state.resume(responses)
 
@@ -189,7 +190,7 @@ describe('InterruptState', () => {
       state.activate()
 
       expect(() => {
-        state.resume([{ interruptResponse: { interruptId: 'unknown', response: 'yes' } }])
+        state.resume([new InterruptResponseContent({ interruptId: 'unknown', response: 'yes' })])
       }).toThrow('interrupt_id=<unknown> | no interrupt found')
     })
   })

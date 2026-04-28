@@ -9,7 +9,7 @@
  * 5. On resume, `interrupt()` returns the user's response
  */
 
-import type { InterruptResponseContent, InterruptParams } from './types/interrupt.js'
+import { InterruptResponseContent, type InterruptResponseContentData, type InterruptParams } from './types/interrupt.js'
 import type { JSONValue } from './types/json.js'
 import type { LocalAgent } from './types/agent.js'
 import { Message, ToolResultBlock, type MessageData, type ToolResultBlockData } from './types/messages.js'
@@ -106,7 +106,7 @@ export interface InterruptStateData {
   /**
    * Resume responses that were provided when resuming from an interrupt.
    */
-  resumeResponses?: InterruptResponseContent[] | undefined
+  resumeResponses?: InterruptResponseContentData[] | undefined
 
   /**
    * Whether the agent is in an interrupted state.
@@ -324,7 +324,7 @@ export class InterruptState implements InterruptStateData {
     }
 
     if (data.resumeResponses) {
-      state.resumeResponses = data.resumeResponses as InterruptResponseContent[]
+      state.resumeResponses = data.resumeResponses.map((r) => InterruptResponseContent.fromJSON(r))
     }
 
     if (data.pendingToolExecution) {

@@ -6,6 +6,7 @@
  */
 
 import type { JSONValue } from './json.js'
+import type { JSONSerializable } from './json.js'
 
 /**
  * Parameters for raising an interrupt.
@@ -57,10 +58,9 @@ export interface InterruptResponse {
 }
 
 /**
- * Content block containing a user response to an interrupt.
- * Used when invoking an agent to resume from an interrupted state.
+ * Data format for a content block containing a user response to an interrupt.
  */
-export interface InterruptResponseContent {
+export interface InterruptResponseContentData {
   /**
    * The interrupt response data.
    */
@@ -68,12 +68,65 @@ export interface InterruptResponseContent {
 }
 
 /**
+ * Content block containing a user response to an interrupt.
+ * Used when invoking an agent to resume from an interrupted state.
+ *
+ * @example
+ * ```typescript
+ * const content = new InterruptResponseContent({
+ *   interruptId: interrupt.id,
+ *   response: 'approved',
+ * })
+ * ```
+ */
+export class InterruptResponseContent
+  implements InterruptResponseContentData, JSONSerializable<InterruptResponseContentData>
+{
+  /**
+   * Discriminator for interrupt response content blocks.
+   */
+  readonly type = 'interruptResponseContent' as const
+
+  /**
+   * The interrupt response data.
+   */
+  readonly interruptResponse: InterruptResponse
+
+  constructor(data: InterruptResponse) {
+    this.interruptResponse = data
+  }
+
+  /**
+   * Serializes to a JSON-compatible {@link InterruptResponseContentData} object.
+   * Called automatically by `JSON.stringify()`.
+   */
+  toJSON(): InterruptResponseContentData {
+    return { interruptResponse: this.interruptResponse }
+  }
+
+  /**
+   * Creates an InterruptResponseContent instance from data.
+   *
+   * @param data - Data to deserialize
+   * @returns InterruptResponseContent instance
+   */
+  static fromJSON(data: InterruptResponseContentData): InterruptResponseContent {
+    return new InterruptResponseContent(data.interruptResponse)
+  }
+}
+
+/**
  * Type guard that checks whether a value is an {@link InterruptResponseContent}.
+ *
+ * @internal
  */
 export function isInterruptResponseContent(value: unknown): value is InterruptResponseContent {
+  if (value instanceof InterruptResponseContent) {
+    return true
+  }
   if (typeof value !== 'object' || value === null || !('interruptResponse' in value)) {
     return false
   }
-  const { interruptResponse } = value as InterruptResponseContent
+  const { interruptResponse } = value as InterruptResponseContentData
   return typeof interruptResponse === 'object' && interruptResponse !== null && 'interruptId' in interruptResponse
 }
