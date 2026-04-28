@@ -59,7 +59,7 @@ import { ensureDefined } from '../types/validation.js'
 import { logger } from '../logging/logger.js'
 import { warnOnce } from '../logging/warn-once.js'
 import { NOOP_TOOL_SPEC } from '../tools/noop-tool.js'
-import { MODEL_DEFAULTS, defaultModelWarningMessage } from './defaults.js'
+import { MODEL_DEFAULTS, defaultModelWarningMessage, getContextWindowLimit } from './defaults.js'
 
 const DEFAULT_BEDROCK_REGION_SUPPORTS_FIP = false
 
@@ -368,6 +368,11 @@ export class BedrockModel extends Model<BedrockModelConfig> {
 
     if (modelConfig.modelId === undefined) {
       warnOnce(logger, defaultModelWarningMessage(MODEL_DEFAULTS.bedrock.modelId))
+    }
+
+    if (this._config.contextWindowLimit === undefined) {
+      const contextWindowLimit = getContextWindowLimit(this._config.modelId ?? MODEL_DEFAULTS.bedrock.modelId)
+      if (contextWindowLimit !== undefined) this._config.contextWindowLimit = contextWindowLimit
     }
 
     // Build user agent string (extend if provided, otherwise use SDK identifier)

@@ -8,7 +8,12 @@ import type { ImageBlock, DocumentBlock } from '../types/media.js'
 import { encodeBase64 } from '../types/media.js'
 import { logger } from '../logging/logger.js'
 import { warnOnce } from '../logging/warn-once.js'
-import { MODEL_DEFAULTS, defaultMaxTokensWarningMessage, defaultModelWarningMessage } from './defaults.js'
+import {
+  MODEL_DEFAULTS,
+  defaultMaxTokensWarningMessage,
+  defaultModelWarningMessage,
+  getContextWindowLimit,
+} from './defaults.js'
 
 const CONTEXT_WINDOW_OVERFLOW_ERRORS = ['prompt is too long', 'max_tokens exceeded', 'input too long']
 const TEXT_FILE_FORMATS = ['txt', 'md', 'markdown', 'csv', 'json', 'xml', 'html', 'yml', 'yaml', 'js', 'ts', 'py']
@@ -51,6 +56,11 @@ export class AnthropicModel extends Model<AnthropicModelConfig> {
 
     if (modelConfig.maxTokens === undefined) {
       warnOnce(logger, defaultMaxTokensWarningMessage(MODEL_DEFAULTS.anthropic.maxTokens))
+    }
+
+    if (this._config.contextWindowLimit === undefined) {
+      const contextWindowLimit = getContextWindowLimit(this._config.modelId ?? MODEL_DEFAULTS.anthropic.modelId)
+      if (contextWindowLimit !== undefined) this._config.contextWindowLimit = contextWindowLimit
     }
 
     if (client) {

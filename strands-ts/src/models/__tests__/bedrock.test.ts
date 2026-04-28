@@ -208,6 +208,7 @@ describe('BedrockModel', () => {
       const provider = new BedrockModel({ modelId: customModelId })
       expect(provider.getConfig()).toStrictEqual({
         modelId: customModelId,
+        contextWindowLimit: 200_000,
       })
     })
 
@@ -292,6 +293,7 @@ describe('BedrockModel', () => {
       expect(config).toStrictEqual({
         modelId: 'global.anthropic.claude-sonnet-4-6',
         temperature: 0.5,
+        contextWindowLimit: 1_000_000,
       })
     })
 
@@ -305,6 +307,34 @@ describe('BedrockModel', () => {
         contextWindowLimit: 200_000,
       })
     })
+
+    it('auto-populates contextWindowLimit from model ID lookup', () => {
+      const provider = new BedrockModel({ modelId: 'anthropic.claude-sonnet-4-20250514-v1:0' })
+      expect(provider.getConfig().contextWindowLimit).toBe(1_000_000)
+    })
+
+    it('auto-populates contextWindowLimit for cross-region model IDs', () => {
+      const provider = new BedrockModel({ modelId: 'us.anthropic.claude-sonnet-4-6' })
+      expect(provider.getConfig().contextWindowLimit).toBe(1_000_000)
+    })
+
+    it('auto-populates contextWindowLimit for default model ID', () => {
+      const provider = new BedrockModel()
+      expect(provider.getConfig().contextWindowLimit).toBe(1_000_000)
+    })
+
+    it('does not override explicit contextWindowLimit', () => {
+      const provider = new BedrockModel({
+        modelId: 'anthropic.claude-sonnet-4-20250514-v1:0',
+        contextWindowLimit: 100_000,
+      })
+      expect(provider.getConfig().contextWindowLimit).toBe(100_000)
+    })
+
+    it('leaves contextWindowLimit undefined for unknown model IDs', () => {
+      const provider = new BedrockModel({ modelId: 'unknown.model-v1:0' })
+      expect(provider.getConfig().contextWindowLimit).toBeUndefined()
+    })
   })
 
   describe('updateConfig', () => {
@@ -315,6 +345,7 @@ describe('BedrockModel', () => {
         modelId: 'global.anthropic.claude-sonnet-4-6',
         temperature: 0.8,
         maxTokens: 2048,
+        contextWindowLimit: 1_000_000,
       })
     })
 

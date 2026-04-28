@@ -136,6 +136,30 @@ describe('AnthropicModel', () => {
         expect.stringContaining('using default modelId')
       )
     })
+
+    it('auto-populates contextWindowLimit from model ID lookup', () => {
+      const provider = new AnthropicModel({ apiKey: 'sk-test', modelId: 'claude-sonnet-4-20250514' })
+      expect(provider.getConfig().contextWindowLimit).toBe(1_000_000)
+    })
+
+    it('auto-populates contextWindowLimit for default model ID', () => {
+      const provider = new AnthropicModel({ apiKey: 'sk-test' })
+      expect(provider.getConfig().contextWindowLimit).toBe(1_000_000)
+    })
+
+    it('does not override explicit contextWindowLimit', () => {
+      const provider = new AnthropicModel({
+        apiKey: 'sk-test',
+        modelId: 'claude-sonnet-4-20250514',
+        contextWindowLimit: 100_000,
+      })
+      expect(provider.getConfig().contextWindowLimit).toBe(100_000)
+    })
+
+    it('leaves contextWindowLimit undefined for unknown model IDs', () => {
+      const provider = new AnthropicModel({ apiKey: 'sk-test', modelId: 'unknown-model' })
+      expect(provider.getConfig().contextWindowLimit).toBeUndefined()
+    })
   })
 
   describe('updateConfig', () => {

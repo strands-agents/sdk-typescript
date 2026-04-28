@@ -22,7 +22,7 @@ import type { GoogleModelConfig, GoogleModelOptions, GoogleStreamState } from '.
 export type { GoogleModelConfig, GoogleModelOptions }
 import { classifyGoogleError } from './errors.js'
 import { formatMessages, mapChunkToEvents } from './adapters.js'
-import { MODEL_DEFAULTS, defaultModelWarningMessage } from '../defaults.js'
+import { MODEL_DEFAULTS, defaultModelWarningMessage, getContextWindowLimit } from '../defaults.js'
 import { warnOnce } from '../../logging/warn-once.js'
 import { logger } from '../../logging/logger.js'
 
@@ -94,6 +94,11 @@ export class GoogleModel extends Model<GoogleModelConfig> {
 
     if (modelConfig.modelId === undefined) {
       warnOnce(logger, defaultModelWarningMessage(MODEL_DEFAULTS.gemini.modelId))
+    }
+
+    if (this._config.contextWindowLimit === undefined) {
+      const contextWindowLimit = getContextWindowLimit(this._config.modelId ?? MODEL_DEFAULTS.gemini.modelId)
+      if (contextWindowLimit !== undefined) this._config.contextWindowLimit = contextWindowLimit
     }
 
     if (client) {

@@ -139,6 +139,7 @@ describe('GoogleModel', () => {
       expect(provider.getConfig()).toStrictEqual({
         modelId: 'gemini-2.5-flash',
         params: { temperature: 0.5 },
+        contextWindowLimit: 1_048_576,
       })
     })
   })
@@ -153,6 +154,7 @@ describe('GoogleModel', () => {
       expect(provider.getConfig()).toStrictEqual({
         modelId: 'gemini-2.5-flash',
         params: { maxOutputTokens: 1024, temperature: 0.7 },
+        contextWindowLimit: 1_048_576,
       })
     })
 
@@ -166,6 +168,30 @@ describe('GoogleModel', () => {
         modelId: 'gemini-2.5-flash',
         contextWindowLimit: 1_048_576,
       })
+    })
+
+    it('auto-populates contextWindowLimit from model ID lookup', () => {
+      const provider = new GoogleModel({ apiKey: 'test-key', modelId: 'gemini-2.5-pro' })
+      expect(provider.getConfig().contextWindowLimit).toBe(1_048_576)
+    })
+
+    it('auto-populates contextWindowLimit for default model ID', () => {
+      const provider = new GoogleModel({ apiKey: 'test-key' })
+      expect(provider.getConfig().contextWindowLimit).toBe(1_048_576)
+    })
+
+    it('does not override explicit contextWindowLimit', () => {
+      const provider = new GoogleModel({
+        apiKey: 'test-key',
+        modelId: 'gemini-2.5-flash',
+        contextWindowLimit: 500_000,
+      })
+      expect(provider.getConfig().contextWindowLimit).toBe(500_000)
+    })
+
+    it('leaves contextWindowLimit undefined for unknown model IDs', () => {
+      const provider = new GoogleModel({ apiKey: 'test-key', modelId: 'unknown-model' })
+      expect(provider.getConfig().contextWindowLimit).toBeUndefined()
     })
   })
 

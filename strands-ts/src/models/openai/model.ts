@@ -17,7 +17,7 @@ import type { ModelStreamEvent } from '../streaming.js'
 import { ContextWindowOverflowError, ModelThrottledError } from '../../errors.js'
 import { logger } from '../../logging/logger.js'
 import { warnOnce } from '../../logging/warn-once.js'
-import { MODEL_DEFAULTS, defaultModelWarningMessage } from '../defaults.js'
+import { MODEL_DEFAULTS, defaultModelWarningMessage, getContextWindowLimit } from '../defaults.js'
 import { classifyOpenAIError } from './errors.js'
 import { formatChatRequest, mapChatChunkToEvents, warnManagedParams as warnChatManagedParams } from './chat-adapter.js'
 import {
@@ -68,6 +68,7 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
   private readonly _api: OpenAIApi
   private _config: OpenAIModelConfig
   private _client: OpenAI
+  private _autoResolvedContextWindow = false
 
   constructor(options: OpenAIModelOptions) {
     super()
@@ -84,6 +85,14 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
 
     if (modelConfig.modelId === undefined) {
       warnOnce(logger, defaultModelWarningMessage(MODEL_DEFAULTS.openai.modelId))
+    }
+
+    if (this._config.contextWindowLimit === undefined) {
+      const contextWindowLimit = getContextWindowLimit(this._config.modelId ?? MODEL_DEFAULTS.openai.modelId)
+      if (contextWindowLimit !== undefined) {
+        this._config.contextWindowLimit = contextWindowLimit
+        this._autoResolvedContextWindow = true
+      }
     }
 
     if (api === 'responses') {
@@ -152,7 +161,16 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
       warnChatManagedParams(rest.params)
     }
 
+    const modelIdChanged = rest.modelId && rest.modelId !== this._config.modelId
     this._config = { ...this._config, ...rest }
+    
+    // Re-resolve contextWindowLimit if it was auto-resolved initially and modelId changed
+    if (this._autoResolvedContextWindow && modelIdChanged && !rest.contextWindowLimit) {
+      const contextWindowLimit = getContextWindowLimit(this._config.modelId!)
+      if (contextWindowLimit !== undefined) {
+        this._config.contextWindowLimit = contextWindowLimit
+      }
+    }
   }
 
   getConfig(): OpenAIModelConfig {
