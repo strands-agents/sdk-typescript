@@ -449,17 +449,27 @@ describe('Agent tracer integration', () => {
         ])
         .addTurn({ type: 'textBlock', text: 'Done' })
 
-      // Tools sleep briefly so the concurrent executor has time to launch both
-      // before either resolves. The assertions below check call order, not
-      // wall-clock timing.
-      const sleep = (ms: number) => new Promise<void>((r) => globalThis.setTimeout(r, ms))
+      // Both tools wait for the other to signal "I started" before resolving,
+      // so neither can complete until the concurrent executor has launched
+      // both. This replaces wall-clock sleeps with cooperative signaling so
+      // the test is deterministic rather than timing-dependent.
+      let resolveStart1!: () => void
+      let resolveStart2!: () => void
+      const started1 = new Promise<void>((r) => (resolveStart1 = r))
+      const started2 = new Promise<void>((r) => (resolveStart2 = r))
       // eslint-disable-next-line require-yield
-      async function* sleepThenReturn(toolUseId: string, text: string) {
-        await sleep(20)
+      async function* awaitPeerThenReturn(
+        toolUseId: string,
+        text: string,
+        signalStarted: () => void,
+        peerStarted: Promise<void>
+      ) {
+        signalStarted()
+        await peerStarted
         return new ToolResultBlock({ toolUseId, status: 'success', content: [new TextBlock(text)] })
       }
-      const tool1 = createMockTool('tool1', () => sleepThenReturn('id-1', 'R1'))
-      const tool2 = createMockTool('tool2', () => sleepThenReturn('id-2', 'R2'))
+      const tool1 = createMockTool('tool1', () => awaitPeerThenReturn('id-1', 'R1', resolveStart1, started2))
+      const tool2 = createMockTool('tool2', () => awaitPeerThenReturn('id-2', 'R2', resolveStart2, started1))
 
       const agent = new Agent({ model, tools: [tool1, tool2], toolExecutor: 'concurrent' })
       const tracer = getLatestTracer()
