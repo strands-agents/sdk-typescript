@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { Interrupt, InterruptError, InterruptState } from '../interrupt.js'
+import { Interrupt, InterruptError, InterruptState, interruptFromAgent } from '../interrupt.js'
 
 describe('Interrupt', () => {
   it('constructs with all fields and supports response mutation', () => {
@@ -108,6 +108,35 @@ describe('InterruptState', () => {
       expect(second.id).toBe('tool:tool-2:0:confirm')
       expect(second.response).toBeUndefined()
     })
+
+    it('creates interrupt with preemptive response', () => {
+      const state = new InterruptState()
+      const interrupt = state.getOrCreateInterrupt('int-1', 'confirm', 'reason', 'pre-approved')
+
+      expect(interrupt).toEqual({
+        id: 'int-1',
+        name: 'confirm',
+        reason: 'reason',
+        response: 'pre-approved',
+      })
+    })
+
+    it('ignores preemptive response when interrupt already exists', () => {
+      const state = new InterruptState()
+      const first = state.getOrCreateInterrupt('int-1', 'confirm', 'reason')
+      first.response = 'user response'
+
+      const second = state.getOrCreateInterrupt('int-1', 'confirm', 'reason', 'preemptive')
+
+      expect(second).toBe(first)
+      expect(second).toEqual({
+        id: 'int-1',
+        name: 'confirm',
+        reason: 'reason',
+        response: 'user response',
+      })
+    })
+
   })
 
   describe('activate / deactivate', () => {
@@ -215,6 +244,71 @@ describe('InterruptState', () => {
         },
         resumeResponses: [{ interruptResponse: { interruptId: 'int-1', response: 'yes' } }],
       })
+    })
+  })
+})
+
+describe('interruptFromAgent', () => {
+  // Minimal agent-like object with _interruptState
+  function createMockAgent(state: InterruptState) {
+    return { _interruptState: state } as unknown as import('../types/agent.js').LocalAgent
+  }
+
+  it('returns preemptive response immediately without throwing', () => {
+    const state = new InterruptState()
+    const agent = createMockAgent(state)
+
+    const result = interruptFromAgent(agent, 'test-id', {
+      name: 'confirm',
+      reason: 'need approval',
+      response: 'pre-approved',
+    })
+
+    expect(result).toBe('pre-approved')
+    expect(state.interrupts['test-id']).toEqual({
+      id: 'test-id',
+      name: 'confirm',
+      reason: 'need approval',
+      response: 'pre-approved',
+    })
+  })
+
+  it('returns resume response over preemptive response for existing interrupt', () => {
+    const state = new InterruptState()
+    state.getOrCreateInterrupt('test-id', 'confirm', 'need approval')
+    state.interrupts['test-id']!.response = 'user-provided'
+
+    const agent = createMockAgent(state)
+
+    const result = interruptFromAgent(agent, 'test-id', {
+      name: 'confirm',
+      reason: 'need approval',
+      response: 'preemptive',
+    })
+
+    expect(result).toBe('user-provided')
+    expect(state.interrupts['test-id']).toEqual({
+      id: 'test-id',
+      name: 'confirm',
+      reason: 'need approval',
+      response: 'user-provided',
+    })
+  })
+
+  it('does not interrupt when preemptive response is null', () => {
+    const state = new InterruptState()
+    const agent = createMockAgent(state)
+
+    const result = interruptFromAgent(agent, 'test-id', {
+      name: 'confirm',
+      response: null,
+    })
+
+    expect(result).toBeNull()
+    expect(state.interrupts['test-id']).toEqual({
+      id: 'test-id',
+      name: 'confirm',
+      response: null,
     })
   })
 })

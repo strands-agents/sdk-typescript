@@ -267,19 +267,27 @@ export class InterruptState implements InterruptStateData {
   /**
    * Gets or creates an interrupt with the given ID.
    * If the interrupt already exists, returns it (potentially with a response).
+   * If a preemptive response is provided and the interrupt is new, the response
+   * is stored on the interrupt so it returns immediately without halting execution.
    *
    * @param id - Unique identifier for the interrupt
    * @param name - User-defined name for the interrupt
    * @param reason - Optional reason for the interrupt
-   * @returns The interrupt (may have a response if resuming)
+   * @param response - Optional preemptive response to skip the interrupt
+   * @returns The interrupt (may have a response if resuming or preemptive)
    */
-  getOrCreateInterrupt(id: string, name: string, reason?: JSONValue): Interrupt {
+  getOrCreateInterrupt(id: string, name: string, reason?: JSONValue, response?: JSONValue): Interrupt {
     const existing = this.interrupts[id]
     if (existing) {
       return existing
     }
 
-    const interrupt = new Interrupt({ id, name, ...(reason !== undefined && { reason }) })
+    const interrupt = new Interrupt({
+      id,
+      name,
+      ...(reason !== undefined && { reason }),
+      ...(response !== undefined && { response }),
+    })
     this.interrupts[id] = interrupt
     return interrupt
   }
@@ -352,7 +360,7 @@ export function interruptFromAgent<T>(agent: LocalAgent, interruptId: string, pa
     throw new Error('Interrupt state not available')
   }
 
-  const interrupt = interruptState.getOrCreateInterrupt(interruptId, params.name, params.reason)
+  const interrupt = interruptState.getOrCreateInterrupt(interruptId, params.name, params.reason, params.response)
 
   if (interrupt.response !== undefined) {
     return interrupt.response as T

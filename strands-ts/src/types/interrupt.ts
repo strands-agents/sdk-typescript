@@ -21,6 +21,24 @@ export interface InterruptParams {
    * User-provided reason for the interrupt.
    */
   reason?: JSONValue
+
+  /**
+   * Preemptive response to use if available.
+   * When provided, the interrupt returns this value immediately without
+   * halting agent execution. Useful for session-managed trust responses
+   * where a previous user response can be reused.
+   *
+   * @example
+   * ```typescript
+   * // If user already approved in a previous session, skip the interrupt
+   * const approval = context.interrupt({
+   *   name: 'confirm_delete',
+   *   reason: 'Confirm deletion?',
+   *   response: agent.appState['savedApproval'],
+   * })
+   * ```
+   */
+  response?: JSONValue
 }
 
 /**
