@@ -99,6 +99,7 @@ sdk-typescript/
 │   │   │   ├── __tests__/
 │   │   │   ├── plugin.ts
 │   │   │   ├── registry.ts
+│   │   │   ├── model-plugin.ts   # Clears agent messages after invocation when model is stateful
 │   │   │   └── index.ts
 │   │   │
 │   │   ├── registry/             # Tool registry
