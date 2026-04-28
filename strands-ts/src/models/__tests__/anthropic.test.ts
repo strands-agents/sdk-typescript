@@ -139,12 +139,20 @@ describe('AnthropicModel', () => {
 
     it('auto-populates contextWindowLimit from model ID lookup', () => {
       const provider = new AnthropicModel({ apiKey: 'sk-test', modelId: 'claude-sonnet-4-20250514' })
-      expect(provider.getConfig().contextWindowLimit).toBe(1_000_000)
+      expect(provider.getConfig()).toStrictEqual({
+        modelId: 'claude-sonnet-4-20250514',
+        maxTokens: 64_000,
+        contextWindowLimit: 1_000_000,
+      })
     })
 
     it('auto-populates contextWindowLimit for default model ID', () => {
       const provider = new AnthropicModel({ apiKey: 'sk-test' })
-      expect(provider.getConfig().contextWindowLimit).toBe(1_000_000)
+      expect(provider.getConfig()).toStrictEqual({
+        modelId: 'claude-sonnet-4-6',
+        maxTokens: 64_000,
+        contextWindowLimit: 1_000_000,
+      })
     })
 
     it('does not override explicit contextWindowLimit', () => {
@@ -153,12 +161,19 @@ describe('AnthropicModel', () => {
         modelId: 'claude-sonnet-4-20250514',
         contextWindowLimit: 100_000,
       })
-      expect(provider.getConfig().contextWindowLimit).toBe(100_000)
+      expect(provider.getConfig()).toStrictEqual({
+        modelId: 'claude-sonnet-4-20250514',
+        maxTokens: 64_000,
+        contextWindowLimit: 100_000,
+      })
     })
 
     it('leaves contextWindowLimit undefined for unknown model IDs', () => {
       const provider = new AnthropicModel({ apiKey: 'sk-test', modelId: 'unknown-model' })
-      expect(provider.getConfig().contextWindowLimit).toBeUndefined()
+      expect(provider.getConfig()).toStrictEqual({
+        modelId: 'unknown-model',
+        maxTokens: 64_000,
+      })
     })
   })
 
@@ -170,6 +185,22 @@ describe('AnthropicModel', () => {
         temperature: 0.8,
         maxTokens: 8192,
       })
+    })
+
+    it('re-resolves contextWindowLimit when modelId changes and it was auto-resolved', () => {
+      const provider = new AnthropicModel({ apiKey: 'sk-test' })
+      expect(provider.getConfig().contextWindowLimit).toBe(1_000_000) // claude-sonnet-4-6 default
+
+      provider.updateConfig({ modelId: 'claude-sonnet-4-20250514' })
+      expect(provider.getConfig().contextWindowLimit).toBe(1_000_000) // claude-sonnet-4-20250514 value
+    })
+
+    it('preserves explicit contextWindowLimit when modelId changes', () => {
+      const provider = new AnthropicModel({ apiKey: 'sk-test', contextWindowLimit: 50_000 })
+      expect(provider.getConfig().contextWindowLimit).toBe(50_000)
+
+      provider.updateConfig({ modelId: 'claude-sonnet-4-20250514' })
+      expect(provider.getConfig().contextWindowLimit).toBe(50_000) // preserved
     })
   })
 

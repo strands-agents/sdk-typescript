@@ -43,110 +43,108 @@ export function defaultMaxTokensWarningMessage(defaultMaxTokens: number): string
 }
 
 /**
- * Metadata for known model IDs.
+ * Context window limits (in tokens) for known model IDs.
+ *
+ * Best-effort lookup table — unknown models return `undefined` and callers
+ * fall back gracefully (e.g. proactive compression is disabled).
+ * Entries can be pruned when a model is no longer available from the provider.
+ * Users can always override with an explicit `contextWindowLimit` in their model config.
  *
  * Values sourced from provider documentation and
  * https://github.com/BerriAI/litellm/blob/litellm_internal_staging/model_prices_and_context_window.json
  *
  * For Bedrock models with cross-region prefixes (e.g. `us.`, `eu.`, `global.`),
- * {@link getModelMetadata} strips the prefix before lookup so only the base model ID is needed here.
+ * {@link getContextWindowLimit} strips the prefix before lookup so only the base model ID is needed here.
  */
-export interface ModelMetadataEntry {
-  /**
-   * Maximum context window size in tokens (input + output combined).
-   */
-  contextWindowLimit: number
-}
-
-export const MODEL_METADATA: Record<string, ModelMetadataEntry> = {
+const CONTEXT_WINDOW_LIMITS: Record<string, number> = {
   // Anthropic (direct API)
-  'claude-sonnet-4-6': { contextWindowLimit: 1_000_000 },
-  'claude-sonnet-4-20250514': { contextWindowLimit: 1_000_000 },
-  'claude-sonnet-4-5': { contextWindowLimit: 200_000 },
-  'claude-sonnet-4-5-20250929': { contextWindowLimit: 200_000 },
-  'claude-opus-4-6': { contextWindowLimit: 1_000_000 },
-  'claude-opus-4-6-20260205': { contextWindowLimit: 1_000_000 },
-  'claude-opus-4-7': { contextWindowLimit: 1_000_000 },
-  'claude-opus-4-7-20260416': { contextWindowLimit: 1_000_000 },
-  'claude-opus-4-5': { contextWindowLimit: 200_000 },
-  'claude-opus-4-5-20251101': { contextWindowLimit: 200_000 },
-  'claude-opus-4-20250514': { contextWindowLimit: 200_000 },
-  'claude-opus-4-1': { contextWindowLimit: 200_000 },
-  'claude-opus-4-1-20250805': { contextWindowLimit: 200_000 },
-  'claude-haiku-4-5': { contextWindowLimit: 200_000 },
-  'claude-haiku-4-5-20251001': { contextWindowLimit: 200_000 },
-  'claude-3-7-sonnet-20250219': { contextWindowLimit: 200_000 },
-  'claude-3-5-sonnet-20241022': { contextWindowLimit: 200_000 },
-  'claude-3-5-sonnet-20240620': { contextWindowLimit: 200_000 },
-  'claude-3-5-haiku-20241022': { contextWindowLimit: 200_000 },
-  'claude-3-opus-20240229': { contextWindowLimit: 200_000 },
-  'claude-3-haiku-20240307': { contextWindowLimit: 200_000 },
+  'claude-sonnet-4-6': 1_000_000,
+  'claude-sonnet-4-20250514': 1_000_000,
+  'claude-sonnet-4-5': 200_000,
+  'claude-sonnet-4-5-20250929': 200_000,
+  'claude-opus-4-6': 1_000_000,
+  'claude-opus-4-6-20260205': 1_000_000,
+  'claude-opus-4-7': 1_000_000,
+  'claude-opus-4-7-20260416': 1_000_000,
+  'claude-opus-4-5': 200_000,
+  'claude-opus-4-5-20251101': 200_000,
+  'claude-opus-4-20250514': 200_000,
+  'claude-opus-4-1': 200_000,
+  'claude-opus-4-1-20250805': 200_000,
+  'claude-haiku-4-5': 200_000,
+  'claude-haiku-4-5-20251001': 200_000,
+  'claude-3-7-sonnet-20250219': 200_000,
+  'claude-3-5-sonnet-20241022': 200_000,
+  'claude-3-5-sonnet-20240620': 200_000,
+  'claude-3-5-haiku-20241022': 200_000,
+  'claude-3-opus-20240229': 200_000,
+  'claude-3-haiku-20240307': 200_000,
 
-  // Bedrock Anthropic (base model IDs — cross-region prefixes stripped by getModelMetadata)
-  'anthropic.claude-sonnet-4-6': { contextWindowLimit: 1_000_000 },
-  'anthropic.claude-sonnet-4-20250514-v1:0': { contextWindowLimit: 1_000_000 },
-  'anthropic.claude-sonnet-4-5-20250929-v1:0': { contextWindowLimit: 200_000 },
-  'anthropic.claude-opus-4-6-v1': { contextWindowLimit: 1_000_000 },
-  'anthropic.claude-opus-4-7': { contextWindowLimit: 1_000_000 },
-  'anthropic.claude-opus-4-5-20251101-v1:0': { contextWindowLimit: 200_000 },
-  'anthropic.claude-opus-4-20250514-v1:0': { contextWindowLimit: 200_000 },
-  'anthropic.claude-opus-4-1-20250805-v1:0': { contextWindowLimit: 200_000 },
-  'anthropic.claude-haiku-4-5-20251001-v1:0': { contextWindowLimit: 200_000 },
-  'anthropic.claude-haiku-4-5@20251001': { contextWindowLimit: 200_000 },
-  'anthropic.claude-3-7-sonnet-20250219-v1:0': { contextWindowLimit: 200_000 },
-  'anthropic.claude-3-7-sonnet-20240620-v1:0': { contextWindowLimit: 200_000 },
-  'anthropic.claude-3-5-sonnet-20241022-v2:0': { contextWindowLimit: 200_000 },
-  'anthropic.claude-3-5-sonnet-20240620-v1:0': { contextWindowLimit: 200_000 },
-  'anthropic.claude-3-5-haiku-20241022-v1:0': { contextWindowLimit: 200_000 },
-  'anthropic.claude-3-opus-20240229-v1:0': { contextWindowLimit: 200_000 },
-  'anthropic.claude-3-haiku-20240307-v1:0': { contextWindowLimit: 200_000 },
-  'anthropic.claude-3-sonnet-20240229-v1:0': { contextWindowLimit: 200_000 },
-  'anthropic.claude-mythos-preview': { contextWindowLimit: 1_000_000 },
+  // Bedrock Anthropic (base model IDs — cross-region prefixes stripped by getContextWindowLimit)
+  'anthropic.claude-sonnet-4-6': 1_000_000,
+  'anthropic.claude-sonnet-4-20250514-v1:0': 1_000_000,
+  'anthropic.claude-sonnet-4-5-20250929-v1:0': 200_000,
+  'anthropic.claude-opus-4-6-v1': 1_000_000,
+  'anthropic.claude-opus-4-7': 1_000_000,
+  'anthropic.claude-opus-4-5-20251101-v1:0': 200_000,
+  'anthropic.claude-opus-4-20250514-v1:0': 200_000,
+  'anthropic.claude-opus-4-1-20250805-v1:0': 200_000,
+  'anthropic.claude-haiku-4-5-20251001-v1:0': 200_000,
+  'anthropic.claude-haiku-4-5@20251001': 200_000,
+  'anthropic.claude-3-7-sonnet-20250219-v1:0': 200_000,
+  'anthropic.claude-3-7-sonnet-20240620-v1:0': 200_000,
+  'anthropic.claude-3-5-sonnet-20241022-v2:0': 200_000,
+  'anthropic.claude-3-5-sonnet-20240620-v1:0': 200_000,
+  'anthropic.claude-3-5-haiku-20241022-v1:0': 200_000,
+  'anthropic.claude-3-opus-20240229-v1:0': 200_000,
+  'anthropic.claude-3-haiku-20240307-v1:0': 200_000,
+  'anthropic.claude-3-sonnet-20240229-v1:0': 200_000,
+  'anthropic.claude-mythos-preview': 1_000_000,
 
   // Bedrock Amazon Nova
-  'amazon.nova-pro-v1:0': { contextWindowLimit: 300_000 },
-  'amazon.nova-lite-v1:0': { contextWindowLimit: 300_000 },
-  'amazon.nova-micro-v1:0': { contextWindowLimit: 128_000 },
-  'amazon.nova-premier-v1:0': { contextWindowLimit: 1_000_000 },
-  'amazon.nova-2-lite-v1:0': { contextWindowLimit: 1_000_000 },
-  'amazon.nova-2-pro-preview-20251202-v1:0': { contextWindowLimit: 1_000_000 },
+  'amazon.nova-pro-v1:0': 300_000,
+  'amazon.nova-lite-v1:0': 300_000,
+  'amazon.nova-micro-v1:0': 128_000,
+  'amazon.nova-premier-v1:0': 1_000_000,
+  'amazon.nova-2-lite-v1:0': 1_000_000,
+  'amazon.nova-2-pro-preview-20251202-v1:0': 1_000_000,
 
   // OpenAI
-  'gpt-5.5': { contextWindowLimit: 1_050_000 },
-  'gpt-5.5-pro': { contextWindowLimit: 1_050_000 },
-  'gpt-5.4': { contextWindowLimit: 1_050_000 },
-  'gpt-5.4-pro': { contextWindowLimit: 1_050_000 },
-  'gpt-5.4-mini': { contextWindowLimit: 272_000 },
-  'gpt-5.4-nano': { contextWindowLimit: 272_000 },
-  'gpt-5.2': { contextWindowLimit: 272_000 },
-  'gpt-5.2-pro': { contextWindowLimit: 272_000 },
-  'gpt-5.1': { contextWindowLimit: 272_000 },
-  'gpt-5': { contextWindowLimit: 272_000 },
-  'gpt-5-mini': { contextWindowLimit: 272_000 },
-  'gpt-5-nano': { contextWindowLimit: 272_000 },
-  'gpt-5-pro': { contextWindowLimit: 128_000 },
-  'gpt-4.1': { contextWindowLimit: 1_047_576 },
-  'gpt-4.1-mini': { contextWindowLimit: 1_047_576 },
-  'gpt-4.1-nano': { contextWindowLimit: 1_047_576 },
-  'gpt-4o': { contextWindowLimit: 128_000 },
-  'gpt-4o-mini': { contextWindowLimit: 128_000 },
-  'gpt-4-turbo': { contextWindowLimit: 128_000 },
-  o3: { contextWindowLimit: 200_000 },
-  'o3-mini': { contextWindowLimit: 200_000 },
-  'o3-pro': { contextWindowLimit: 200_000 },
-  'o4-mini': { contextWindowLimit: 200_000 },
-  o1: { contextWindowLimit: 200_000 },
+  'gpt-5.5': 1_050_000,
+  'gpt-5.5-pro': 1_050_000,
+  'gpt-5.4': 1_050_000,
+  'gpt-5.4-pro': 1_050_000,
+  'gpt-5.4-mini': 272_000,
+  'gpt-5.4-nano': 272_000,
+  'gpt-5.2': 272_000,
+  'gpt-5.2-pro': 272_000,
+  'gpt-5.1': 272_000,
+  'gpt-5': 272_000,
+  'gpt-5-mini': 272_000,
+  'gpt-5-nano': 272_000,
+  'gpt-5-pro': 128_000,
+  'gpt-4.1': 1_047_576,
+  'gpt-4.1-mini': 1_047_576,
+  'gpt-4.1-nano': 1_047_576,
+  'gpt-4o': 128_000,
+  'gpt-4o-mini': 128_000,
+  'gpt-4-turbo': 128_000,
+  o3: 200_000,
+  'o3-mini': 200_000,
+  'o3-pro': 200_000,
+  'o4-mini': 200_000,
+  o1: 200_000,
 
   // Google Gemini
-  'gemini-2.5-flash': { contextWindowLimit: 1_048_576 },
-  'gemini-2.5-flash-lite': { contextWindowLimit: 1_048_576 },
-  'gemini-2.5-pro': { contextWindowLimit: 1_048_576 },
-  'gemini-2.0-flash': { contextWindowLimit: 1_048_576 },
-  'gemini-2.0-flash-lite': { contextWindowLimit: 1_048_576 },
-  'gemini-3-pro-preview': { contextWindowLimit: 1_048_576 },
-  'gemini-3-flash-preview': { contextWindowLimit: 1_048_576 },
-  'gemini-3.1-pro-preview': { contextWindowLimit: 1_048_576 },
-  'gemini-3.1-flash-lite-preview': { contextWindowLimit: 1_048_576 },
+  'gemini-2.5-flash': 1_048_576,
+  'gemini-2.5-flash-lite': 1_048_576,
+  'gemini-2.5-pro': 1_048_576,
+  'gemini-2.0-flash': 1_048_576,
+  'gemini-2.0-flash-lite': 1_048_576,
+  'gemini-3-pro-preview': 1_048_576,
+  'gemini-3-flash-preview': 1_048_576,
+  'gemini-3.1-pro-preview': 1_048_576,
+  'gemini-3.1-flash-lite-preview': 1_048_576,
 }
 
 /**
@@ -157,16 +155,16 @@ export const MODEL_METADATA: Record<string, ModelMetadataEntry> = {
 const BEDROCK_REGION_PREFIXES = new Set(['us', 'eu', 'ap', 'global', 'apac', 'au', 'jp', 'us-gov'])
 
 /**
- * Looks up metadata for a model ID.
+ * Looks up the context window limit for a model ID.
  *
  * For Bedrock cross-region model IDs (e.g. `us.anthropic.claude-sonnet-4-6`),
  * the region prefix is stripped before lookup.
  *
  * @param modelId - The model ID to look up
- * @returns The metadata entry, or undefined if not found
+ * @returns The context window limit in tokens, or undefined if not found
  */
-export function getModelMetadata(modelId: string): ModelMetadataEntry | undefined {
-  const direct = MODEL_METADATA[modelId]
+export function getContextWindowLimit(modelId: string): number | undefined {
+  const direct = CONTEXT_WINDOW_LIMITS[modelId]
   if (direct !== undefined) return direct
 
   // Strip known Bedrock cross-region prefixes
@@ -174,19 +172,9 @@ export function getModelMetadata(modelId: string): ModelMetadataEntry | undefine
   if (dotIndex !== -1) {
     const prefix = modelId.substring(0, dotIndex)
     if (BEDROCK_REGION_PREFIXES.has(prefix)) {
-      return MODEL_METADATA[modelId.substring(dotIndex + 1)]
+      return CONTEXT_WINDOW_LIMITS[modelId.substring(dotIndex + 1)]
     }
   }
 
   return undefined
-}
-
-/**
- * Looks up the context window limit for a model ID.
- *
- * @param modelId - The model ID to look up
- * @returns The context window limit in tokens, or undefined if not found
- */
-export function getContextWindowLimit(modelId: string): number | undefined {
-  return getModelMetadata(modelId)?.contextWindowLimit
 }

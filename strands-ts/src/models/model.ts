@@ -26,6 +26,23 @@ import {
 import { MaxTokensError, ModelError, normalizeError } from '../errors.js'
 import type { Redaction } from '../hooks/events.js'
 import { logger } from '../logging/logger.js'
+import { getContextWindowLimit } from './defaults.js'
+
+/**
+ * Resolves model metadata fields on a config object from built-in lookup tables
+ * when not explicitly set. Explicit values pass through unchanged.
+ *
+ * @internal
+ * @param config - The stored model config
+ * @param modelId - The model ID to look up
+ * @returns A new config with resolved metadata, or the original config if nothing to resolve
+ */
+export function resolveConfigMetadata<T extends BaseModelConfig>(config: T, modelId: string): T {
+  if (config.contextWindowLimit !== undefined) return config
+  const limit = getContextWindowLimit(modelId)
+  if (limit === undefined) return config
+  return { ...config, contextWindowLimit: limit }
+}
 
 class CitationAccumulator {
   citations: Citation[] = []
@@ -98,6 +115,11 @@ export interface BaseModelConfig {
    * Maximum context window size in tokens for the model.
    *
    * This value represents the total token capacity shared between input and output.
+   * When not provided, it is automatically resolved from a built-in lookup table
+   * based on the configured model ID. An explicit value always takes precedence.
+   *
+   * When `modelId` is changed via `updateConfig()`, this value is automatically
+   * re-resolved if it was initially auto-populated. Explicitly set values are preserved.
    */
   contextWindowLimit?: number
 }
