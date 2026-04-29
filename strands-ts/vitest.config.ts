@@ -7,7 +7,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 // Conditionally exclude bash tool from coverage on Windows
 // since tests are skipped on Windows (bash not available)
-const coverageExclude = ['src/**/__tests__/**', 'src/**/__fixtures__/**', 'src/vended-tools/**/__tests__/**']
+const coverageExclude = ['src/**/__tests__/**', 'src/**/__fixtures__/**', 'src/vended-tools/**/__tests__/**', 'src/vended-plugins/**/__tests__/**']
 if (process.platform === 'win32') {
   coverageExclude.push('src/vended-tools/bash/**')
 }
@@ -28,6 +28,8 @@ export default defineConfig({
             'src/**/__tests__/**/*.test.node.ts',
             'src/vended-tools/**/__tests__/**/*.test.ts',
             'src/vended-tools/**/__tests__/**/*.test.node.ts',
+            'src/vended-plugins/**/__tests__/**/*.test.ts',
+            'src/vended-plugins/**/__tests__/**/*.test.node.ts',
           ],
           name: { label: 'unit-node', color: 'green' },
           typecheck: {
@@ -44,6 +46,8 @@ export default defineConfig({
             'src/**/__tests__/**/*.test.browser.ts',
             'src/vended-tools/**/__tests__/**/*.test.ts',
             'src/vended-tools/**/__tests__/**/*.test.browser.ts',
+            'src/vended-plugins/**/__tests__/**/*.test.ts',
+            'src/vended-plugins/**/__tests__/**/*.test.browser.ts',
           ],
           name: { label: 'unit-browser', color: 'cyan' },
           browser: {
@@ -112,7 +116,7 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
       reportsDirectory: 'test/.artifacts/coverage',
-      include: ['src/**/*.{ts,js}', 'src/vended-tools/**/*.{ts,js}'],
+      include: ['src/**/*.{ts,js}', 'src/vended-tools/**/*.{ts,js}', 'src/vended-plugins/**/*.{ts,js}'],
       exclude: coverageExclude,
       thresholds: {
         lines: 80,

@@ -75,6 +75,10 @@
     "./vended-plugins/skills": {
       "types": "./dist/src/vended-plugins/skills/index.d.ts",
       "default": "./dist/src/vended-plugins/skills/index.js"
+    },
+    "./vended-plugins/context-offloader": {
+      "types": "./dist/src/vended-plugins/context-offloader/index.d.ts",
+      "default": "./dist/src/vended-plugins/context-offloader/index.js"
     }
   },
   "scripts": {
