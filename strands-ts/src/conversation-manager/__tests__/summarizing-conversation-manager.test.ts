@@ -1,10 +1,10 @@
 import { describe, it, expect, vi } from 'vitest'
 import { SummarizingConversationManager } from '../summarizing-conversation-manager.js'
 import { ContextWindowOverflowError, Message, TextBlock, ToolUseBlock, ToolResultBlock } from '../../index.js'
-import { AfterModelCallEvent } from '../../hooks/events.js'
+import { AfterModelCallEvent, BeforeModelCallEvent } from '../../hooks/events.js'
 import { createMockAgent, invokeTrackedHook } from '../../__fixtures__/agent-helpers.js'
 import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
-import type { Model } from '../../models/model.js'
+import type { Model, BaseModelConfig } from '../../models/model.js'
 
 function textMsg(role: 'user' | 'assistant', text: string): Message {
   return new Message({ role, content: [new TextBlock(text)] })
@@ -315,6 +315,94 @@ describe('SummarizingConversationManager', () => {
 
       expect(event.retry).toBe(true)
       expect(agent.messages).toHaveLength(11)
+    })
+  })
+
+  describe('reduceOnThreshold', () => {
+    it('summarizes oldest messages when threshold is exceeded', async () => {
+      const model = new MockMessageModel()
+      model.addTurn({ type: 'textBlock', text: 'Summary of conversation' })
+
+      const manager = new SummarizingConversationManager({
+        model: model as unknown as Model,
+        summaryRatio: 0.5,
+        preserveRecentMessages: 2,
+        threshold: 0.7,
+      })
+      const messages = makeMessages(20)
+      const mockAgent = createMockAgent({ messages })
+      const mockModel = { getConfig: () => ({ contextWindowLimit: 1000 }) as BaseModelConfig } as any
+
+      manager.initAgent(mockAgent)
+
+      const event = new BeforeModelCallEvent({
+        agent: mockAgent,
+        model: mockModel,
+        invocationState: {},
+        projectedInputTokens: 800,
+      })
+      await invokeTrackedHook(mockAgent, event)
+
+      // 20 * 0.5 = 10 summarized → 1 summary + 10 remaining = 11
+      expect(mockAgent.messages).toHaveLength(11)
+      expect(mockAgent.messages[0]!.role).toBe('user')
+      expect(mockAgent.messages[0]!.content[0]!).toEqual({
+        type: 'textBlock',
+        text: 'Summary of conversation',
+      })
+    })
+
+    it('does not summarize when below threshold', async () => {
+      const model = new MockMessageModel()
+      model.addTurn({ type: 'textBlock', text: 'Summary' })
+
+      const manager = new SummarizingConversationManager({
+        model: model as unknown as Model,
+        threshold: 0.7,
+      })
+      const messages = makeMessages(20)
+      const mockAgent = createMockAgent({ messages })
+      const mockModel = { getConfig: () => ({ contextWindowLimit: 1000 }) as BaseModelConfig } as any
+
+      manager.initAgent(mockAgent)
+
+      const event = new BeforeModelCallEvent({
+        agent: mockAgent,
+        model: mockModel,
+        invocationState: {},
+        projectedInputTokens: 500,
+      })
+      await invokeTrackedHook(mockAgent, event)
+
+      expect(mockAgent.messages).toHaveLength(20)
+    })
+
+    it('returns false and does not throw when summarization fails', async () => {
+      const model = new MockMessageModel()
+      model.addTurn(new Error('model failed'))
+
+      const manager = new SummarizingConversationManager({
+        model: model as unknown as Model,
+        summaryRatio: 0.5,
+        preserveRecentMessages: 2,
+        threshold: 0.7,
+      })
+      const messages = makeMessages(20)
+      const mockAgent = createMockAgent({ messages })
+      const mockModel = { getConfig: () => ({ contextWindowLimit: 1000 }) as BaseModelConfig } as any
+
+      manager.initAgent(mockAgent)
+
+      const event = new BeforeModelCallEvent({
+        agent: mockAgent,
+        model: mockModel,
+        invocationState: {},
+        projectedInputTokens: 800,
+      })
+
+      // Should not throw — reduceOnThreshold is best-effort
+      await invokeTrackedHook(mockAgent, event)
+      expect(mockAgent.messages).toHaveLength(20)
     })
   })
 })

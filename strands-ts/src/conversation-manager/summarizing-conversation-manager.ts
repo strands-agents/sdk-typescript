@@ -7,7 +7,13 @@
  */
 
 import { Message, TextBlock } from '../types/messages.js'
-import { ConversationManager, type ConversationManagerReduceOptions } from './conversation-manager.js'
+import type { LocalAgent } from '../types/agent.js'
+import {
+  ConversationManager,
+  type ConversationManagerConfig,
+  type ConversationManagerReduceOptions,
+  type ConversationManagerThresholdOptions,
+} from './conversation-manager.js'
 import { logger } from '../logging/logger.js'
 import type { Model } from '../models/model.js'
 
@@ -43,7 +49,7 @@ Example format:
 /**
  * Configuration for the summarization conversation manager.
  */
-export type SummarizingConversationManagerConfig = {
+export type SummarizingConversationManagerConfig = ConversationManagerConfig & {
   /**
    * Model to use for generating summaries. When provided, overrides the model
    * attached to the agent. Useful when you want to use a different model than
@@ -86,7 +92,7 @@ export class SummarizingConversationManager extends ConversationManager {
   private readonly _summarizationSystemPrompt: string
 
   constructor(config?: SummarizingConversationManagerConfig) {
-    super()
+    super(config)
     this._model = config?.model
     // clamped [0.1, 0.8]
     this._summaryRatio = Math.max(0.1, Math.min(0.8, config?.summaryRatio ?? 0.3))
@@ -101,8 +107,40 @@ export class SummarizingConversationManager extends ConversationManager {
    * @returns `true` if the history was reduced, `false` otherwise
    */
   async reduce({ agent, model, error }: ConversationManagerReduceOptions): Promise<boolean> {
-    const resolvedModel = this._model ?? model
+    try {
+      return await this._summarizeOldest(agent, this._model ?? model)
+    } catch (summarizationError) {
+      logger.error(`error=<${summarizationError}> | summarization failed`)
+      const wrapped = summarizationError instanceof Error ? summarizationError : new Error(String(summarizationError))
+      wrapped.cause = error
+      throw wrapped
+    }
+  }
 
+  /**
+   * Proactively reduce context by summarizing oldest messages.
+   *
+   * @param options - The threshold reduction options
+   * @returns `true` if the history was reduced, `false` otherwise
+   */
+  async reduceOnThreshold({ agent, model }: ConversationManagerThresholdOptions): Promise<boolean> {
+    // Best-effort: swallow errors so the model call can still proceed
+    try {
+      return await this._summarizeOldest(agent, this._model ?? model)
+    } catch (summarizationError) {
+      logger.error(`error=<${summarizationError}> | proactive summarization failed`)
+      return false
+    }
+  }
+
+  /**
+   * Summarize the oldest messages and replace them with a summary.
+   *
+   * @param agent - The agent instance
+   * @param model - The model to use for summarization
+   * @returns `true` if the history was reduced, `false` otherwise
+   */
+  private async _summarizeOldest(agent: LocalAgent, model: Model): Promise<boolean> {
     const messages = agent.messages
 
     // Calculate how many messages to summarize
@@ -121,22 +159,15 @@ export class SummarizingConversationManager extends ConversationManager {
     // Adjust split point to avoid breaking tool use/result pairs
     messagesToSummarizeCount = this._adjustSplitPointForToolPairs(messages, messagesToSummarizeCount)
 
-    try {
-      const messagesToSummarize = messages.slice(0, messagesToSummarizeCount)
+    const messagesToSummarize = messages.slice(0, messagesToSummarizeCount)
 
-      // Generate summary via model call
-      const summaryMessage = await this._generateSummary(messagesToSummarize, resolvedModel)
+    // Generate summary via model call
+    const summaryMessage = await this._generateSummary(messagesToSummarize, model)
 
-      // Replace summarized messages with the summary
-      messages.splice(0, messagesToSummarizeCount, summaryMessage)
+    // Replace summarized messages with the summary
+    messages.splice(0, messagesToSummarizeCount, summaryMessage)
 
-      return true
-    } catch (summarizationError) {
-      logger.error(`error=<${summarizationError}> | summarization failed`)
-      const wrapped = summarizationError instanceof Error ? summarizationError : new Error(String(summarizationError))
-      wrapped.cause = error
-      throw wrapped
-    }
+    return true
   }
 
   /**

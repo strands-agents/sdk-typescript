@@ -208,7 +208,9 @@ export type { Plugin } from './plugins/index.js'
 // Conversation Manager
 export {
   ConversationManager,
+  type ConversationManagerConfig,
   type ConversationManagerReduceOptions,
+  type ConversationManagerThresholdOptions,
 } from './conversation-manager/conversation-manager.js'
 export { NullConversationManager } from './conversation-manager/null-conversation-manager.js'
 export {
