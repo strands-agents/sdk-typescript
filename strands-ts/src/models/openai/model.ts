@@ -10,7 +10,7 @@
 
 import OpenAI from 'openai'
 import type { ResponseStreamEvent } from 'openai/resources/responses/responses'
-import { Model } from '../model.js'
+import { Model, configWithResolvedLimit } from '../model.js'
 import type { StreamOptions } from '../model.js'
 import type { Message } from '../../types/messages.js'
 import type { ModelStreamEvent } from '../streaming.js'
@@ -156,7 +156,7 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
   }
 
   getConfig(): OpenAIModelConfig {
-    return this._config
+    return configWithResolvedLimit(this._config, this._config.modelId ?? MODEL_DEFAULTS.openai.modelId)
   }
 
   async *stream(messages: Message[], options?: StreamOptions): AsyncIterable<ModelStreamEvent> {

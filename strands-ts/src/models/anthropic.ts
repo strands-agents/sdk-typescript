@@ -1,5 +1,11 @@
 import Anthropic, { type ClientOptions } from '@anthropic-ai/sdk'
-import { Model, type BaseModelConfig, type CountTokensOptions, type StreamOptions } from '../models/model.js'
+import {
+  Model,
+  type BaseModelConfig,
+  type CountTokensOptions,
+  type StreamOptions,
+  configWithResolvedLimit,
+} from '../models/model.js'
 import type { Message, ContentBlock } from '../types/messages.js'
 import type { ModelStreamEvent } from '../models/streaming.js'
 import { createEmptyUsage } from '../models/streaming.js'
@@ -81,7 +87,7 @@ export class AnthropicModel extends Model<AnthropicModelConfig> {
   }
 
   getConfig(): AnthropicModelConfig {
-    return this._config
+    return configWithResolvedLimit(this._config, this._config.modelId ?? MODEL_DEFAULTS.anthropic.modelId)
   }
 
   /**

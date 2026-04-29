@@ -13,7 +13,7 @@ import {
   type GenerateContentConfig,
   type GenerateContentParameters,
 } from '@google/genai'
-import { Model } from '../model.js'
+import { Model, configWithResolvedLimit } from '../model.js'
 import type { CountTokensOptions, StreamOptions } from '../model.js'
 import type { Message } from '../../types/messages.js'
 import type { ModelStreamEvent } from '../streaming.js'
@@ -144,7 +144,7 @@ export class GoogleModel extends Model<GoogleModelConfig> {
    * ```
    */
   getConfig(): GoogleModelConfig {
-    return this._config
+    return configWithResolvedLimit(this._config, this._config.modelId ?? MODEL_DEFAULTS.gemini.modelId)
   }
 
   /**

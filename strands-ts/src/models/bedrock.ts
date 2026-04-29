@@ -48,6 +48,7 @@ import {
   type CountTokensOptions,
   Model,
   type StreamOptions,
+  configWithResolvedLimit,
 } from '../models/model.js'
 import type { ContentBlock, Message, StopReason, ToolUseBlock } from '../types/messages.js'
 import type { ImageSource, VideoSource, DocumentSource } from '../types/media.js'
@@ -463,7 +464,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
    * ```
    */
   getConfig(): BedrockModelConfig {
-    return this._config
+    return configWithResolvedLimit(this._config, this._config.modelId ?? MODEL_DEFAULTS.bedrock.modelId)
   }
 
   /**
