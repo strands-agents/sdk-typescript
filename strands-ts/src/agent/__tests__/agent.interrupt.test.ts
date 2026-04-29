@@ -62,6 +62,134 @@ describe('Agent interrupt system', () => {
         interrupts: [{ name: 'confirm_tool', reason: 'Confirm tool execution?' }],
       })
     })
+
+    it('stores pending state and resumes correctly after interrupt', async () => {
+      const model = new MockMessageModel()
+        .addTurn({
+          type: 'toolUseBlock',
+          name: 'deleteTool',
+          toolUseId: 'tool-1',
+          input: { key: 'X' },
+        })
+        .addTurn({ type: 'textBlock', text: 'Deleted' })
+
+      let toolExecuted = false
+      const tool = createMockTool('deleteTool', () => {
+        toolExecuted = true
+        return 'deleted'
+      })
+
+      const agent = new Agent({ model, tools: [tool], printer: false })
+
+      agent.addHook(BeforeToolCallEvent, (event) => {
+        if (event.toolUse.name === 'deleteTool') {
+          const approval = event.interrupt<string>({ name: 'approve_delete', reason: 'Confirm delete?' })
+          if (approval !== 'yes') {
+            event.cancel = 'not approved'
+          }
+        }
+      })
+
+      // First invocation — hook interrupts before tool runs
+      const interruptResult = await agent.invoke('Delete X')
+
+      expect(interruptResult.stopReason).toBe('interrupt')
+      expect(interruptResult.interrupts).toEqual([
+        { id: expect.any(String), name: 'approve_delete', reason: 'Confirm delete?' },
+      ])
+      expect(toolExecuted).toBe(false)
+      expect(model.callCount).toBe(1)
+
+      // Verify pending execution state was stored (the core of pgrayy's concern:
+      // the InterruptError thrown back into the generator at `yield beforeToolCallEvent`
+      // must propagate to executeTools' catch block which stores this state)
+      const pendingExecution = (agent as unknown as { _interruptState: { pendingToolExecution: unknown } })
+        ._interruptState.pendingToolExecution
+      expect(pendingExecution).toEqual({
+        assistantMessageData: {
+          role: 'assistant',
+          content: [{ toolUse: { name: 'deleteTool', toolUseId: 'tool-1', input: { key: 'X' } } }],
+        },
+        completedToolResults: {},
+      })
+
+      // Resume with approval — tool should now execute
+      const finalResult = await agent.invoke([
+        {
+          interruptResponse: {
+            interruptId: interruptResult.interrupts![0]!.id,
+            response: 'yes',
+          },
+        },
+      ])
+
+      expect(finalResult.stopReason).toBe('endTurn')
+      expect(toolExecuted).toBe(true)
+      expect(model.callCount).toBe(2)
+    })
+
+    it('preserves completed tool results when interrupt fires on a later tool', async () => {
+      // Tools A, B, C — hook interrupts on B's BeforeToolCallEvent
+      // A should complete, B and C should not execute
+      // On resume, A is skipped, B and C execute
+      const model = new MockMessageModel()
+        .addTurn([
+          { type: 'toolUseBlock', name: 'toolA', toolUseId: 'tool-a', input: {} },
+          { type: 'toolUseBlock', name: 'toolB', toolUseId: 'tool-b', input: {} },
+          { type: 'toolUseBlock', name: 'toolC', toolUseId: 'tool-c', input: {} },
+        ])
+        .addTurn({ type: 'textBlock', text: 'All done' })
+
+      const executionLog: string[] = []
+
+      const toolA = createMockTool('toolA', () => {
+        executionLog.push('A')
+        return 'A result'
+      })
+      const toolB = createMockTool('toolB', () => {
+        executionLog.push('B')
+        return 'B result'
+      })
+      const toolC = createMockTool('toolC', () => {
+        executionLog.push('C')
+        return 'C result'
+      })
+
+      const agent = new Agent({ model, tools: [toolA, toolB, toolC], printer: false })
+
+      agent.addHook(BeforeToolCallEvent, (event) => {
+        if (event.toolUse.name === 'toolB') {
+          event.interrupt({ name: 'approve_b', reason: 'Approve B?' })
+        }
+      })
+
+      const interruptResult = await agent.invoke('Run all')
+
+      expect(interruptResult.stopReason).toBe('interrupt')
+      expect(executionLog).toEqual(['A'])
+
+      // Verify pending state includes A's completed result
+      const pendingExecution = (agent as unknown as { _interruptState: { pendingToolExecution: unknown } })
+        ._interruptState.pendingToolExecution as {
+        completedToolResults: Record<string, { toolResult: { toolUseId: string } }>
+      }
+      expect(Object.keys(pendingExecution.completedToolResults)).toEqual(['tool-a'])
+      expect(pendingExecution.completedToolResults['tool-a']!.toolResult.toolUseId).toBe('tool-a')
+
+      // Resume — A should be skipped, B and C should execute
+      const finalResult = await agent.invoke([
+        {
+          interruptResponse: {
+            interruptId: interruptResult.interrupts![0]!.id,
+            response: 'approved',
+          },
+        },
+      ])
+
+      expect(finalResult.stopReason).toBe('endTurn')
+      expect(executionLog).toEqual(['A', 'B', 'C'])
+      expect(model.callCount).toBe(2)
+    })
   })
 
   describe('interrupt from BeforeToolsEvent hook', () => {
