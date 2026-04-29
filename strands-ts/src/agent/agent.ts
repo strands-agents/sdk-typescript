@@ -1433,6 +1433,15 @@ export class Agent implements LocalAgent, InvokableAgent {
       })
       yield beforeToolCallEvent
 
+      // Resolve the tool that would actually execute. selectedTool wins;
+      // otherwise if the hook renamed toolUse.name, re-resolve from the
+      // registry under the new name; otherwise use the original registry
+      // lookup. Resolved before the cancel check so AfterToolCallEvent.tool
+      // is consistent whether the cancel or execution branch runs.
+      const effectiveTool =
+        beforeToolCallEvent.selectedTool ??
+        (toolUse.name !== toolUseBlock.name ? toolRegistry.get(toolUse.name) : registryTool)
+
       // Cancel individual tool if hook requested it
       if (beforeToolCallEvent.cancel) {
         const cancelMessage =
@@ -1445,7 +1454,7 @@ export class Agent implements LocalAgent, InvokableAgent {
         const afterToolCallEvent = new AfterToolCallEvent({
           agent: this,
           toolUse,
-          tool: registryTool,
+          tool: effectiveTool,
           result: cancelResult,
           invocationState,
         })
@@ -1455,13 +1464,6 @@ export class Agent implements LocalAgent, InvokableAgent {
         }
         return afterToolCallEvent.result
       }
-
-      // Resolve the tool to actually execute. selectedTool wins; otherwise if
-      // the hook renamed toolUse.name, re-resolve from the registry under the
-      // new name; otherwise use the original registry lookup.
-      const effectiveTool =
-        beforeToolCallEvent.selectedTool ??
-        (toolUse.name !== toolUseBlock.name ? toolRegistry.get(toolUse.name) : registryTool)
 
       // Start tool span within loop span context
       const toolSpan = this._tracer.startToolCallSpan({

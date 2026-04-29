@@ -96,6 +96,18 @@ export abstract class HookableEvent extends StreamEvent {
 }
 
 /**
+ * Mutable tool-use descriptor carried on tool-call hook events.
+ * Matches the shape of the tool use block the model emitted; hooks on
+ * {@link BeforeToolCallEvent} may mutate its fields (or reassign the object)
+ * to rewrite the input, id, or tool name before the tool executes.
+ */
+export interface ToolUseData {
+  name: string
+  toolUseId: string
+  input: JSONValue
+}
+
+/**
  * Event triggered when an agent has finished initialization.
  * Fired after the agent has been fully constructed and all built-in components have been initialized.
  */
@@ -164,6 +176,8 @@ export class AfterInvocationEvent extends HookableEvent {
    * with these args as new input, under the same invocation lock. A fresh
    * {@link BeforeInvocationEvent}/{@link AfterInvocationEvent} pair fires for the
    * resumed run. Ignored if the invocation ended with an error.
+   *
+   * If multiple callbacks set `resume`, the last callback to run wins.
    */
   resume: InvokeArgs | undefined = undefined
 
@@ -228,11 +242,7 @@ export class MessageAddedEvent extends HookableEvent {
 export class BeforeToolCallEvent extends HookableEvent {
   readonly type = 'beforeToolCallEvent' as const
   readonly agent: LocalAgent
-  toolUse: {
-    name: string
-    toolUseId: string
-    input: JSONValue
-  }
+  toolUse: ToolUseData
   readonly tool: Tool | undefined
   readonly invocationState: InvocationState
 
@@ -247,12 +257,16 @@ export class BeforeToolCallEvent extends HookableEvent {
    * Set by hook callbacks to execute a replacement tool instead of {@link tool}.
    * When undefined, the tool looked up from the registry (or re-resolved from a
    * mutated `toolUse.name`) is used.
+   *
+   * If multiple callbacks set `selectedTool`, the last callback to run wins.
+   * Callbacks run in registration order for this event, so the last-registered
+   * callback's value is the one used.
    */
   selectedTool: Tool | undefined = undefined
 
   constructor(data: {
     agent: LocalAgent
-    toolUse: { name: string; toolUseId: string; input: JSONValue }
+    toolUse: ToolUseData
     tool: Tool | undefined
     invocationState: InvocationState
   }) {
@@ -284,11 +298,7 @@ export class BeforeToolCallEvent extends HookableEvent {
 export class AfterToolCallEvent extends HookableEvent {
   readonly type = 'afterToolCallEvent' as const
   readonly agent: LocalAgent
-  readonly toolUse: {
-    name: string
-    toolUseId: string
-    input: JSONValue
-  }
+  readonly toolUse: ToolUseData
   readonly tool: Tool | undefined
 
   /**
@@ -308,7 +318,7 @@ export class AfterToolCallEvent extends HookableEvent {
 
   constructor(data: {
     agent: LocalAgent
-    toolUse: { name: string; toolUseId: string; input: JSONValue }
+    toolUse: ToolUseData
     tool: Tool | undefined
     result: ToolResultBlock
     invocationState: InvocationState

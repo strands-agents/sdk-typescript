@@ -20,6 +20,7 @@ import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
 import { MockPlugin } from '../../__fixtures__/mock-plugin.js'
 import { collectIterator } from '../../__fixtures__/model-test-helpers.js'
 import { createMockTool } from '../../__fixtures__/tool-helpers.js'
+import { expectAgentResult } from '../../__fixtures__/agent-helpers.js'
 import { Message, TextBlock, ToolResultBlock } from '../../types/messages.js'
 
 describe('Agent Hooks Integration', () => {
@@ -1057,7 +1058,7 @@ describe('Agent Hooks Integration', () => {
         .addTurn({ type: 'toolUseBlock', name: 'registryTool', toolUseId: 'tool-1', input: {} })
         .addTurn({ type: 'textBlock', text: 'Done' })
 
-      const agent = new Agent({ model, tools: [registryTool] })
+      const agent = new Agent({ model, tools: [registryTool], plugins: [mockPlugin] })
       agent.addHook(BeforeToolCallEvent, (event: BeforeToolCallEvent) => {
         event.selectedTool = replacementTool
         event.cancel = 'blocked'
@@ -1066,6 +1067,51 @@ describe('Agent Hooks Integration', () => {
       await agent.invoke('Test')
 
       expect(replacementExecuted).toBe(false)
+
+      // AfterToolCallEvent.tool should report the selectedTool even on the cancel path,
+      // so observability hooks see a consistent `tool` value regardless of branch.
+      const afterToolCallEvents = mockPlugin.invocations.filter((e) => e instanceof AfterToolCallEvent)
+      expect(afterToolCallEvents).toHaveLength(1)
+      expect((afterToolCallEvents[0] as AfterToolCallEvent).tool).toBe(replacementTool)
+    })
+
+    it('works with concurrent tool executor', async () => {
+      let originalExecuted = false
+      let replacementExecuted = false
+      const originalTool = createMockTool('originalTool', () => {
+        originalExecuted = true
+        return new ToolResultBlock({ toolUseId: 'tool-1', status: 'success', content: [new TextBlock('original')] })
+      })
+      const replacementTool = createMockTool('replacementTool', () => {
+        replacementExecuted = true
+        return new ToolResultBlock({ toolUseId: 'tool-1', status: 'success', content: [new TextBlock('replacement')] })
+      })
+      const otherTool = createMockTool('otherTool', () => {
+        return new ToolResultBlock({ toolUseId: 'tool-2', status: 'success', content: [new TextBlock('other')] })
+      })
+
+      const model = new MockMessageModel()
+        .addTurn([
+          { type: 'toolUseBlock', name: 'originalTool', toolUseId: 'tool-1', input: {} },
+          { type: 'toolUseBlock', name: 'otherTool', toolUseId: 'tool-2', input: {} },
+        ])
+        .addTurn({ type: 'textBlock', text: 'Done' })
+
+      const agent = new Agent({
+        model,
+        tools: [originalTool, otherTool],
+        toolExecutor: 'concurrent',
+      })
+      agent.addHook(BeforeToolCallEvent, (event: BeforeToolCallEvent) => {
+        if (event.toolUse.name === 'originalTool') {
+          event.selectedTool = replacementTool
+        }
+      })
+
+      await agent.invoke('Test')
+
+      expect(originalExecuted).toBe(false)
+      expect(replacementExecuted).toBe(true)
     })
   })
 
@@ -1123,6 +1169,49 @@ describe('Agent Hooks Integration', () => {
 
       expect(origExecuted).toBe(false)
       expect(renamedExecuted).toBe(true)
+    })
+
+    it('works with concurrent tool executor', async () => {
+      const capturedInputs: Record<string, unknown> = {}
+      const baseA = createMockTool('toolA', () => {
+        return new ToolResultBlock({ toolUseId: 'a', status: 'success', content: [new TextBlock('a done')] })
+      })
+      const baseB = createMockTool('toolB', () => {
+        return new ToolResultBlock({ toolUseId: 'b', status: 'success', content: [new TextBlock('b done')] })
+      })
+      const toolA = {
+        ...baseA,
+        async *stream(context: Parameters<typeof baseA.stream>[0]) {
+          capturedInputs[context.toolUse.name] = context.toolUse.input
+          return yield* baseA.stream(context)
+        },
+      }
+      const toolB = {
+        ...baseB,
+        async *stream(context: Parameters<typeof baseB.stream>[0]) {
+          capturedInputs[context.toolUse.name] = context.toolUse.input
+          return yield* baseB.stream(context)
+        },
+      }
+
+      const model = new MockMessageModel()
+        .addTurn([
+          { type: 'toolUseBlock', name: 'toolA', toolUseId: 'a', input: { original: 'a' } },
+          { type: 'toolUseBlock', name: 'toolB', toolUseId: 'b', input: { original: 'b' } },
+        ])
+        .addTurn({ type: 'textBlock', text: 'Done' })
+
+      const agent = new Agent({ model, tools: [toolA, toolB], toolExecutor: 'concurrent' })
+      agent.addHook(BeforeToolCallEvent, (event: BeforeToolCallEvent) => {
+        event.toolUse.input = { mutated: event.toolUse.name }
+      })
+
+      await agent.invoke('Test')
+
+      expect(capturedInputs).toEqual({
+        toolA: { mutated: 'toolA' },
+        toolB: { mutated: 'toolB' },
+      })
     })
   })
 
@@ -1212,12 +1301,14 @@ describe('Agent Hooks Integration', () => {
       const result = await agent.invoke('initial')
 
       expect(invocationCount).toBe(2)
-      expect(result.lastMessage.content[0]).toEqual({ type: 'textBlock', text: 'second' })
-      // Both user prompts should be in the conversation
-      const userTexts = agent.messages
-        .filter((m) => m.role === 'user')
-        .flatMap((m) => m.content.filter((b): b is TextBlock => b.type === 'textBlock').map((b) => b.text))
-      expect(userTexts).toEqual(['initial', 'follow-up'])
+      expect(result).toEqual(
+        expectAgentResult({
+          stopReason: 'endTurn',
+          messageText: 'second',
+          // Meter cycleCount is cumulative across the resume chain (1 cycle per invocation x 2).
+          cycleCount: 2,
+        })
+      )
     })
 
     it('chains multiple resumes', async () => {
