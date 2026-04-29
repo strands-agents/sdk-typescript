@@ -95,6 +95,13 @@ sdk-typescript/
 │   │   │   ├── plugins.ts        # Multi-agent plugins
 │   │   │   └── index.ts
 │   │   │
+│   │   ├── interventions/         # Intervention system for authorization, guardrails, steering
+│   │   │   ├── __tests__/
+│   │   │   ├── actions.ts
+│   │   │   ├── handler.ts
+│   │   │   ├── registry.ts
+│   │   │   └── index.ts
+│   │   │
 │   │   ├── plugins/              # Plugin system
 │   │   │   ├── __tests__/
 │   │   │   ├── plugin.ts

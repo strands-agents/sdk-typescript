@@ -35,6 +35,8 @@ import { ToolRegistry } from '../registry/tool-registry.js'
 import { StateStore } from '../state-store.js'
 import { AgentPrinter, getDefaultAppender, type Printer } from './printer.js'
 import type { Plugin } from '../plugins/plugin.js'
+import type { InterventionHandler } from '../interventions/handler.js'
+import { InterventionRegistry } from '../interventions/registry.js'
 import { PluginRegistry } from '../plugins/registry.js'
 import { SlidingWindowConversationManager } from '../conversation-manager/sliding-window-conversation-manager.js'
 import { NullConversationManager } from '../conversation-manager/null-conversation-manager.js'
@@ -160,6 +162,10 @@ export type AgentConfig = {
    */
   plugins?: Plugin[]
   /**
+   * Intervention handlers evaluated in registration order at each lifecycle point.
+   */
+  interventions?: InterventionHandler[]
+  /**
    * Zod schema for structured output validation.
    */
   structuredOutputSchema?: z.ZodSchema
@@ -256,6 +262,7 @@ export class Agent implements LocalAgent, InvokableAgent {
 
   private readonly _hooksRegistry: HookRegistryImplementation
   private readonly _pluginRegistry: PluginRegistry
+  private readonly _interventionRegistry?: InterventionRegistry
   private _toolRegistry: ToolRegistry
   private _mcpClients: McpClient[]
   private _initialized: boolean
@@ -310,6 +317,14 @@ export class Agent implements LocalAgent, InvokableAgent {
 
     // Initialize hooks registry
     this._hooksRegistry = new HookRegistryImplementation()
+
+    // Register intervention hooks before plugins so they run first on Before* events.
+    // For After* events (reversed order), interventions run last. If a future handler
+    // needs to preempt plugins on After* events, the hook registry will need a
+    // priority mechanism.
+    if (config?.interventions && config.interventions.length > 0) {
+      this._interventionRegistry = new InterventionRegistry(config.interventions, this._hooksRegistry)
+    }
 
     // Initialize plugin registry with all plugins to be initialized during initialize()
     // ModelPlugin is registered last so that on AfterInvocationEvent (which uses reverse
@@ -382,6 +397,8 @@ export class Agent implements LocalAgent, InvokableAgent {
       })
     )
 
+    await this._interventionRegistry?.initialize(this)
+
     await this._pluginRegistry.initialize(this)
 
     await this._hooksRegistry.invokeCallbacks(new InitializedEvent({ agent: this }))
@@ -430,6 +447,14 @@ export class Agent implements LocalAgent, InvokableAgent {
    */
   get toolRegistry(): ToolRegistry {
     return this._toolRegistry
+  }
+
+  /**
+   * Access to the intervention system — handlers, audit trail, and log management.
+   * Returns undefined if no interventions were configured.
+   */
+  get interventions(): InterventionRegistry | undefined {
+    return this._interventionRegistry
   }
 
   /**
