@@ -5,11 +5,17 @@ import type { HookCallback, HookableEventConstructor, HookCleanup } from '../hoo
 import type { MultiAgentStreamEvent } from './events.js'
 import type { MultiAgentResult } from './state.js'
 
+import type { InterruptResponseContent, InterruptResponseContentData } from '../types/interrupt.js'
+
 /**
- * Input type for multi-agent orchestrators. Excludes `Message[]` and `MessageData[]`
- * from {@link InvokeArgs} since orchestrators route content blocks between nodes.
+ * Input type for multi-agent orchestrators. Excludes `Message[]`, `MessageData[]`,
+ * and `InterruptResponseContent[]` from {@link InvokeArgs} since orchestrators route
+ * content blocks between nodes. Graph interrupts will be handled separately.
  */
-export type MultiAgentInput = Exclude<InvokeArgs, Message[] | MessageData[]>
+export type MultiAgentInput = Exclude<
+  InvokeArgs,
+  Message[] | MessageData[] | InterruptResponseContent[] | InterruptResponseContentData[]
+>
 
 /**
  * Options for a single multi-agent orchestrator invocation.

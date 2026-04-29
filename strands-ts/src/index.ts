@@ -31,6 +31,11 @@ export {
   StructuredOutputError,
 } from './errors.js'
 
+// Interrupt system
+export type { Interrupt } from './interrupt.js'
+export type { InterruptParams, InterruptResponse, InterruptResponseContentData } from './types/interrupt.js'
+export { InterruptResponseContent } from './types/interrupt.js'
+
 // JSON types
 export type { JSONSchema, JSONValue } from './types/json.js'
 

@@ -438,6 +438,9 @@ describe('MCP Integration', () => {
       toolUse: { toolUseId: 'id-123', name: 'weather', input: { city: 'NYC' } },
       agent: {} as LocalAgent,
       invocationState: {},
+      interrupt: () => {
+        throw new Error('interrupt not available in mock context')
+      },
     }
 
     it('returns text results on success', async () => {

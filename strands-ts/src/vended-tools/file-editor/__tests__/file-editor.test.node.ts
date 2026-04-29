@@ -22,6 +22,9 @@ describe('fileEditor tool', () => {
       },
       agent,
       invocationState: {},
+      interrupt: () => {
+        throw new Error('interrupt not available in mock context')
+      },
     }
     return { state: agent.appState, context: toolContext }
   }

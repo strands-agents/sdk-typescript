@@ -637,6 +637,7 @@ export class JsonBlock implements JsonBlockData, JSONSerializable<JsonBlockData>
  * - `contentFiltered` - Content was filtered by safety mechanisms
  * - `endTurn` - Natural end of the model's turn
  * - `guardrailIntervened` - A guardrail policy stopped generation
+ * - `interrupt` - Agent execution was interrupted for human input
  * - `maxTokens` - Maximum token limit was reached
  * - `stopSequence` - A stop sequence was encountered
  * - `toolUse` - Model wants to use a tool
@@ -647,6 +648,7 @@ export type StopReason =
   | 'contentFiltered'
   | 'endTurn'
   | 'guardrailIntervened'
+  | 'interrupt'
   | 'maxTokens'
   | 'stopSequence'
   | 'toolUse'

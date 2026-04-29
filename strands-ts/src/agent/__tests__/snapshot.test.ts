@@ -12,6 +12,8 @@ import {
 } from '../snapshot.js'
 import { Message, TextBlock, ToolUseBlock, ToolResultBlock } from '../../types/messages.js'
 import { TestModelProvider } from '../../__fixtures__/model-test-helpers.js'
+import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
+import { createMockTool } from '../../__fixtures__/tool-helpers.js'
 
 // Fixed timestamp for testing
 const MOCK_TIMESTAMP = '2026-01-15T12:00:00.000Z'
@@ -39,9 +41,9 @@ describe('Snapshot API', () => {
   describe('constants', () => {
     it('exports snapshot constants with correct values', () => {
       expect(SNAPSHOT_SCHEMA_VERSION).toBe('1.0')
-      expect(ALL_SNAPSHOT_FIELDS).toEqual(['messages', 'state', 'systemPrompt', 'modelState'])
+      expect(ALL_SNAPSHOT_FIELDS).toEqual(['messages', 'state', 'systemPrompt', 'modelState', 'interrupts'])
       expect(SNAPSHOT_PRESETS).toEqual({
-        session: ['messages', 'state', 'systemPrompt', 'modelState'],
+        session: ['messages', 'state', 'systemPrompt', 'modelState', 'interrupts'],
       })
     })
   })
@@ -59,7 +61,7 @@ describe('Snapshot API', () => {
 
     it('returns session preset fields when preset is "session"', () => {
       const fields = resolveSnapshotFields({ preset: 'session' })
-      expect(fields).toEqual(new Set(['messages', 'state', 'systemPrompt', 'modelState']))
+      expect(fields).toEqual(new Set(['messages', 'state', 'systemPrompt', 'modelState', 'interrupts']))
     })
 
     it('returns explicit fields when include is specified', () => {
@@ -69,7 +71,7 @@ describe('Snapshot API', () => {
 
     it('applies exclude after preset', () => {
       const fields = resolveSnapshotFields({ preset: 'session', exclude: ['state'] })
-      expect(fields).toEqual(new Set(['messages', 'systemPrompt', 'modelState']))
+      expect(fields).toEqual(new Set(['messages', 'systemPrompt', 'modelState', 'interrupts']))
     })
 
     it('throws error for invalid preset', () => {
@@ -106,6 +108,7 @@ describe('Snapshot API', () => {
           state: { key: 'value' },
           systemPrompt: 'Test prompt',
           modelState: {},
+          interrupts: { interrupts: {}, activated: false },
         },
         appData: {},
       })
@@ -380,6 +383,57 @@ describe('Snapshot API', () => {
 
       expect(newAgent.messages).toHaveLength(1)
       expect(newAgent.appState.getAll()).toEqual({ key: 'value' })
+    })
+  })
+
+  describe('interrupt state round-trip', () => {
+    it('preserves interrupt state through snapshot and restores for resume', async () => {
+      // Set up agent that will interrupt
+      const model = new MockMessageModel()
+        .addTurn({
+          type: 'toolUseBlock',
+          name: 'confirmTool',
+          toolUseId: 'tool-1',
+          input: { action: 'delete' },
+        })
+        .addTurn({ type: 'textBlock', text: 'Done' })
+
+      const tool = createMockTool('confirmTool', (context) => {
+        const response = context.interrupt<string>({ name: 'confirm', reason: 'Confirm delete?' })
+        return `confirmed: ${response}`
+      })
+
+      const agent = new Agent({ model, tools: [tool], printer: false })
+
+      // Trigger interrupt
+      const interruptResult = await agent.invoke('Delete it')
+      expect(interruptResult.stopReason).toBe('interrupt')
+      expect(interruptResult.interrupts).toHaveLength(1)
+
+      // Snapshot the interrupted agent
+      const snapshot = takeSnapshot(agent, { preset: 'session' })
+      expect(snapshot.data.interrupts).toBeDefined()
+
+      // Create a fresh agent and restore from snapshot
+      const model2 = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Done' })
+      const tool2 = createMockTool('confirmTool', (context) => {
+        const response = context.interrupt<string>({ name: 'confirm', reason: 'Confirm delete?' })
+        return `confirmed: ${response}`
+      })
+      const restoredAgent = new Agent({ model: model2, tools: [tool2], printer: false })
+      loadSnapshot(restoredAgent, snapshot)
+
+      // Resume from the restored agent
+      const finalResult = await restoredAgent.invoke([
+        {
+          interruptResponse: {
+            interruptId: interruptResult.interrupts![0]!.id,
+            response: 'yes',
+          },
+        },
+      ])
+
+      expect(finalResult.stopReason).toBe('endTurn')
     })
   })
 })

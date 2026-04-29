@@ -1,5 +1,6 @@
 import type { HookableEvent } from './events.js'
 import type { HookCallback, HookableEventConstructor, HookCleanup } from './types.js'
+import { InterruptError, Interrupt } from '../interrupt.js'
 
 /**
  * Represents a registered callback entry.
@@ -61,14 +62,45 @@ export class HookRegistryImplementation implements HookRegistry {
    * Invoke all registered callbacks for the given event.
    * Awaits each callback, supporting both sync and async.
    *
+   * InterruptErrors are collected across callbacks rather than immediately thrown,
+   * allowing all hooks to register their interrupts. Non-interrupt errors propagate immediately.
+   *
    * @param event - The event to invoke callbacks for
    * @returns The event after all callbacks have been invoked
+   * @throws InterruptError with all collected interrupts after all callbacks complete
    */
   async invokeCallbacks<T extends HookableEvent>(event: T): Promise<T> {
     const callbacks = this.getCallbacksFor(event)
+    const collectedInterrupts: Interrupt[] = []
+
     for (const callback of callbacks) {
-      await callback(event)
+      try {
+        await callback(event)
+      } catch (error) {
+        if (error instanceof InterruptError) {
+          collectedInterrupts.push(...error.interrupts)
+        } else {
+          throw error
+        }
+      }
     }
+
+    if (collectedInterrupts.length > 0) {
+      const seen = new Set<string>()
+      const duplicates = new Set<string>()
+      for (const interrupt of collectedInterrupts) {
+        if (seen.has(interrupt.name)) {
+          duplicates.add(interrupt.name)
+        }
+        seen.add(interrupt.name)
+      }
+      if (duplicates.size > 0) {
+        const names = [...duplicates].join(', ')
+        throw new Error(`interrupt_names=<${names}> | duplicate interrupt names`)
+      }
+      throw new InterruptError(collectedInterrupts)
+    }
+
     return event
   }
 

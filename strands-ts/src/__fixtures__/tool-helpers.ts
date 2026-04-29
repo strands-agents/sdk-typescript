@@ -4,7 +4,7 @@
  */
 
 import type { Tool, ToolContext } from '../tools/tool.js'
-import { ToolResultBlock } from '../types/messages.js'
+import { TextBlock, ToolResultBlock } from '../types/messages.js'
 import type { JSONValue } from '../types/json.js'
 import { StateStore } from '../state-store.js'
 import { ToolRegistry } from '../registry/tool-registry.js'
@@ -34,13 +34,21 @@ export function createMockContext(
       addHook: () => () => {},
     } as unknown as LocalAgent,
     invocationState: invocationState ?? {},
+    interrupt: (): never => {
+      throw new Error('interrupt not available in mock context')
+    },
   }
 }
 
 /**
  * Result function type for createMockTool - accepts plain objects or class instances.
+ * Can optionally receive the ToolContext for interrupt-aware tools.
  */
-type ToolResultFn = () => PlainToolResultBlock | AsyncGenerator<never, PlainToolResultBlock, never>
+type ToolResultFn =
+  | (() => PlainToolResultBlock | AsyncGenerator<never, PlainToolResultBlock, never>)
+  | ((
+      context: ToolContext
+    ) => PlainToolResultBlock | AsyncGenerator<never, PlainToolResultBlock, never> | string | void)
 
 /**
  * Helper to create a mock tool for testing.
@@ -59,8 +67,22 @@ export function createMockTool(name: string, resultFn: ToolResultFn): Tool {
       inputSchema: { type: 'object', properties: {} },
     },
     // eslint-disable-next-line require-yield
-    async *stream(_context): AsyncGenerator<never, ToolResultBlock, never> {
-      const result = resultFn()
+    async *stream(context): AsyncGenerator<never, ToolResultBlock, never> {
+      const result = resultFn(context)
+      if (typeof result === 'string') {
+        return new ToolResultBlock({
+          toolUseId: context.toolUse.toolUseId,
+          status: 'success',
+          content: [new TextBlock(result)],
+        })
+      }
+      if (result === undefined || result === null) {
+        return new ToolResultBlock({
+          toolUseId: context.toolUse.toolUseId,
+          status: 'success',
+          content: [],
+        })
+      }
       if (typeof result === 'object' && result !== null && Symbol.asyncIterator in result) {
         // For generators that throw errors
         const gen = result as AsyncGenerator<never, ToolResultBlock, never>

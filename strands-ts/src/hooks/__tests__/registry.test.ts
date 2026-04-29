@@ -1,11 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { HookRegistryImplementation } from '../registry.js'
-import { AfterInvocationEvent, BeforeInvocationEvent } from '../events.js'
+import { AfterInvocationEvent, BeforeInvocationEvent, BeforeToolCallEvent } from '../events.js'
 import { Agent } from '../../agent/agent.js'
+import { InterruptError, InterruptState } from '../../interrupt.js'
 
 describe('HookRegistryImplementation', () => {
   let registry: HookRegistryImplementation
   let mockAgent: Agent
+
+  const getInterruptState = (agent: Agent): InterruptState =>
+    (agent as unknown as { _interruptState: InterruptState })._interruptState
 
   beforeEach(() => {
     registry = new HookRegistryImplementation()
@@ -114,7 +118,7 @@ describe('HookRegistryImplementation', () => {
       ).rejects.toThrow('Hook failed')
     })
 
-    it('stops execution on first error', async () => {
+    it('stops execution on first non-interrupt error', async () => {
       const callback1 = vi.fn(() => {
         throw new Error('First callback failed')
       })
@@ -218,6 +222,147 @@ describe('HookRegistryImplementation', () => {
 
       expect(callback1).toHaveBeenCalledOnce()
       expect(callback2).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('InterruptError collection', () => {
+    const createEvent = () =>
+      new BeforeToolCallEvent({
+        agent: mockAgent,
+        toolUse: { name: 'test', toolUseId: 'tool-1', input: {} },
+        tool: undefined,
+        invocationState: {},
+      })
+
+    it('collects InterruptErrors from multiple callbacks and invokes all of them', async () => {
+      const event = createEvent()
+
+      const callback1 = vi.fn(() => {
+        event.interrupt({ name: 'interrupt_a', reason: 'Reason A' })
+      })
+      const callback2 = vi.fn(() => {
+        event.interrupt({ name: 'interrupt_b', reason: 'Reason B' })
+      })
+
+      registry.addCallback(BeforeToolCallEvent, callback1)
+      registry.addCallback(BeforeToolCallEvent, callback2)
+
+      await expect(registry.invokeCallbacks(event)).rejects.toThrow(InterruptError)
+
+      expect(callback1).toHaveBeenCalledOnce()
+      expect(callback2).toHaveBeenCalledOnce()
+
+      const state = getInterruptState(mockAgent)
+      expect(Object.keys(state.interrupts).length).toBe(2)
+      expect(
+        state
+          .getInterruptsList()
+          .map((i) => i.name)
+          .sort()
+      ).toEqual(['interrupt_a', 'interrupt_b'])
+    })
+
+    it('throws InterruptError with all collected interrupts after all callbacks run', async () => {
+      const event = createEvent()
+
+      registry.addCallback(BeforeToolCallEvent, () => {
+        event.interrupt({ name: 'first', reason: 'First' })
+      })
+      registry.addCallback(BeforeToolCallEvent, () => {
+        event.interrupt({ name: 'second', reason: 'Second' })
+      })
+
+      try {
+        await registry.invokeCallbacks(event)
+        expect.unreachable('should have thrown')
+      } catch (error) {
+        expect(error).toBeInstanceOf(InterruptError)
+        const ie = error as InterruptError
+        expect(ie.interrupts).toHaveLength(2)
+        expect(ie.interrupts.map((i) => i.name)).toEqual(['first', 'second'])
+        expect(ie.message).toBe('2 interrupts raised: first, second')
+      }
+    })
+
+    it('stops on non-interrupt error even when interrupts were collected', async () => {
+      const event = createEvent()
+      const callback3 = vi.fn()
+
+      registry.addCallback(BeforeToolCallEvent, () => {
+        event.interrupt({ name: 'interrupt_a', reason: 'Reason A' })
+      })
+      registry.addCallback(BeforeToolCallEvent, () => {
+        throw new Error('Non-interrupt failure')
+      })
+      registry.addCallback(BeforeToolCallEvent, callback3)
+
+      await expect(registry.invokeCallbacks(event)).rejects.toThrow('Non-interrupt failure')
+      expect(callback3).not.toHaveBeenCalled()
+    })
+
+    it('runs all callbacks when only some raise interrupts', async () => {
+      const event = createEvent()
+      const callOrder: string[] = []
+
+      registry.addCallback(BeforeToolCallEvent, () => {
+        callOrder.push('first')
+        event.interrupt({ name: 'interrupt_a', reason: 'Reason A' })
+      })
+      registry.addCallback(BeforeToolCallEvent, () => {
+        callOrder.push('second-no-interrupt')
+      })
+      registry.addCallback(BeforeToolCallEvent, () => {
+        callOrder.push('third')
+        event.interrupt({ name: 'interrupt_b', reason: 'Reason B' })
+      })
+
+      await expect(registry.invokeCallbacks(event)).rejects.toThrow(InterruptError)
+      expect(callOrder).toEqual(['first', 'second-no-interrupt', 'third'])
+
+      const state = getInterruptState(mockAgent)
+      expect(Object.keys(state.interrupts).length).toBe(2)
+      expect(
+        state
+          .getInterruptsList()
+          .map((i) => i.name)
+          .sort()
+      ).toEqual(['interrupt_a', 'interrupt_b'])
+    })
+
+    it('throws when two callbacks use the same interrupt name', async () => {
+      const event = createEvent()
+
+      registry.addCallback(BeforeToolCallEvent, () => {
+        event.interrupt({ name: 'confirm', reason: 'First' })
+      })
+      registry.addCallback(BeforeToolCallEvent, () => {
+        event.interrupt({ name: 'confirm', reason: 'Second' })
+      })
+
+      await expect(registry.invokeCallbacks(event)).rejects.toThrow(
+        'interrupt_names=<confirm> | duplicate interrupt names'
+      )
+    })
+
+    it('reports all duplicate interrupt names in error', async () => {
+      const event = createEvent()
+
+      registry.addCallback(BeforeToolCallEvent, () => {
+        event.interrupt({ name: 'alpha' })
+      })
+      registry.addCallback(BeforeToolCallEvent, () => {
+        event.interrupt({ name: 'alpha' })
+      })
+      registry.addCallback(BeforeToolCallEvent, () => {
+        event.interrupt({ name: 'beta' })
+      })
+      registry.addCallback(BeforeToolCallEvent, () => {
+        event.interrupt({ name: 'beta' })
+      })
+
+      await expect(registry.invokeCallbacks(event)).rejects.toThrow(
+        'interrupt_names=<alpha, beta> | duplicate interrupt names'
+      )
     })
   })
 })

@@ -2,6 +2,7 @@ import type { ToolSpec, ToolUse } from './types.js'
 import { TextBlock, ToolResultBlock } from '../types/messages.js'
 import type { InvocationState, LocalAgent } from '../types/agent.js'
 import { normalizeError } from '../errors.js'
+import type { Interruptible } from '../interrupt.js'
 
 export type { ToolSpec } from './types.js'
 
@@ -9,7 +10,7 @@ export type { ToolSpec } from './types.js'
  * Context provided to tool implementations during execution.
  * Contains framework-level state and information from the agent invocation.
  */
-export interface ToolContext {
+export interface ToolContext extends Interruptible {
   /**
    * The tool use request that triggered this tool execution.
    * Contains the tool name, toolUseId, and input parameters.

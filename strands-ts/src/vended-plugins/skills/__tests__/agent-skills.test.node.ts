@@ -333,6 +333,9 @@ describe('AgentSkills', () => {
         toolUse: { name: 'skills', toolUseId: 'test-id', input: { skill_name: skillName } },
         agent: agent as any,
         invocationState: {},
+        interrupt: () => {
+          throw new Error('interrupt not available in mock context')
+        },
       })
       let result = await gen.next()
       while (!result.done) {
@@ -414,6 +417,9 @@ describe('AgentSkills', () => {
         toolUse: { name: 'skills', toolUseId: 'id', input: { skill_name: 'resource-skill' } },
         agent: agent2 as any,
         invocationState: {},
+        interrupt: () => {
+          throw new Error('interrupt not available in mock context')
+        },
       })
       let result = await gen.next()
       while (!result.done) result = await gen.next()
@@ -438,6 +444,9 @@ describe('AgentSkills', () => {
         toolUse: { name: 'skills', toolUseId: 'id', input: { skill_name: 'no-resources' } },
         agent: agent2 as any,
         invocationState: {},
+        interrupt: () => {
+          throw new Error('interrupt not available in mock context')
+        },
       })
       let result = await gen.next()
       while (!result.done) result = await gen.next()
@@ -466,6 +475,9 @@ describe('AgentSkills', () => {
         toolUse: { name: 'skills', toolUseId: 'id', input: { skill_name: 'many-files' } },
         agent: agent2 as any,
         invocationState: {},
+        interrupt: () => {
+          throw new Error('interrupt not available in mock context')
+        },
       })
       let result = await gen.next()
       while (!result.done) result = await gen.next()
