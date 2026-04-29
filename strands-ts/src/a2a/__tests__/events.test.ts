@@ -41,6 +41,7 @@ describe('A2AResultEvent', () => {
       stopReason: 'endTurn',
       lastMessage: new Message({ role: 'assistant', content: [new TextBlock('Done')] }),
       metrics: new AgentMetrics(),
+      invocationState: {},
     })
     const event = new A2AResultEvent({ result })
 
@@ -54,6 +55,7 @@ describe('A2AResultEvent', () => {
         stopReason: 'endTurn',
         lastMessage: new Message({ role: 'assistant', content: [new TextBlock('Done')] }),
         metrics: new AgentMetrics(),
+        invocationState: {},
       }),
     })
 

@@ -5,7 +5,14 @@ import logging
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, Union, cast
+
+if TYPE_CHECKING:
+    from strands.agent.conversation_manager import (
+        NullConversationManager,
+        SlidingWindowConversationManager,
+        SummarizingConversationManager,
+    )
 
 from strands._conversions import (
     convert_message,
@@ -240,6 +247,13 @@ class Agent:
         structured_output_model: type | None = None,
         agent_id: str | None = None,
         session_manager: Any = None,
+        conversation_manager: Union[
+            "NullConversationManager",
+            "SlidingWindowConversationManager",
+            "SummarizingConversationManager",
+            dict[str, Any],
+            None,
+        ] = None,
         **kwargs: Any,
     ):
         if kwargs:
@@ -293,6 +307,36 @@ class Agent:
             else None
         )
 
+        # Translate conversation manager to config dict for the WASM guest.
+        # The Python instance is used only for config extraction — it must NOT be
+        # registered as a hook provider, since conversation management runs in the TS SDK.
+        cm_config: dict[str, Any] | None = None
+        if conversation_manager is not None:
+            from strands.agent.conversation_manager import NullConversationManager as _NullCM
+            from strands.agent.conversation_manager import SlidingWindowConversationManager as _SlidingCM
+            from strands.agent.conversation_manager import SummarizingConversationManager as _SummarizingCM
+
+            if isinstance(conversation_manager, _NullCM):
+                cm_config = {"type": "none"}
+            elif isinstance(conversation_manager, _SlidingCM):
+                cm_config = {
+                    "type": "sliding-window",
+                    "window_size": conversation_manager.window_size,
+                    "should_truncate_results": conversation_manager.should_truncate_results,
+                }
+            elif isinstance(conversation_manager, _SummarizingCM):
+                cm_config = {
+                    "type": "summarizing",
+                    "summary_ratio": conversation_manager.summary_ratio,
+                    "preserve_recent_messages": conversation_manager.preserve_recent_messages,
+                    "summarization_system_prompt": conversation_manager.summarization_system_prompt,
+                    "summarization_model_config": conversation_manager.serialize_model_config(),
+                }
+            elif isinstance(conversation_manager, dict):
+                cm_config = conversation_manager
+            else:
+                log.warning("unknown conversation_manager type: %s, ignoring", type(conversation_manager).__name__)
+
         self._wasm_agent = _WasmAgent(
             model=model_config,
             system_prompt=sp_str,
@@ -300,6 +344,7 @@ class Agent:
             tools=tool_specs,
             tool_dispatcher=self._dispatcher,
             log_handler=_LogHandler(),
+            conversation_manager_config=cm_config,
             use_callback_relay=False,
         )
 

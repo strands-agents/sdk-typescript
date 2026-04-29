@@ -18,6 +18,7 @@ describe('AgentResult', () => {
           stopReason: 'endTurn',
           lastMessage: message,
           metrics: new AgentMetrics(),
+          invocationState: {},
         })
 
         expect(result.toString()).toBe('')
@@ -35,6 +36,7 @@ describe('AgentResult', () => {
           stopReason: 'endTurn',
           lastMessage: message,
           metrics: new AgentMetrics(),
+          invocationState: {},
         })
 
         expect(result.toString()).toBe('Hello, world!')
@@ -52,6 +54,7 @@ describe('AgentResult', () => {
           stopReason: 'endTurn',
           lastMessage: message,
           metrics: new AgentMetrics(),
+          invocationState: {},
         })
 
         expect(result.toString()).toBe('First line\nSecond line\nThird line')
@@ -69,6 +72,7 @@ describe('AgentResult', () => {
           stopReason: 'endTurn',
           lastMessage: message,
           metrics: new AgentMetrics(),
+          invocationState: {},
         })
 
         expect(result.toString()).toBe('💭 Reasoning:\n   Let me think about this...')
@@ -86,6 +90,7 @@ describe('AgentResult', () => {
           stopReason: 'endTurn',
           lastMessage: message,
           metrics: new AgentMetrics(),
+          invocationState: {},
         })
 
         expect(result.toString()).toBe('')
@@ -107,6 +112,7 @@ describe('AgentResult', () => {
           stopReason: 'endTurn',
           lastMessage: message,
           metrics: new AgentMetrics(),
+          invocationState: {},
         })
 
         expect(result.toString()).toBe(
@@ -134,6 +140,7 @@ describe('AgentResult', () => {
           stopReason: 'toolUse',
           lastMessage: message,
           metrics: new AgentMetrics(),
+          invocationState: {},
         })
 
         expect(result.toString()).toBe('')
@@ -157,6 +164,7 @@ describe('AgentResult', () => {
           stopReason: 'toolUse',
           lastMessage: message,
           metrics: new AgentMetrics(),
+          invocationState: {},
         })
 
         expect(result.toString()).toBe('Before tool\n💭 Reasoning:\n   Thinking...\nAfter tool')
@@ -174,6 +182,7 @@ describe('AgentResult', () => {
           stopReason: 'endTurn',
           lastMessage: message,
           metrics: new AgentMetrics(),
+          invocationState: {},
         })
 
         expect(String(result)).toBe('Hello')
@@ -189,6 +198,7 @@ describe('AgentResult', () => {
           stopReason: 'endTurn',
           lastMessage: message,
           metrics: new AgentMetrics(),
+          invocationState: {},
         })
 
         expect(`Response: ${result}`).toBe('Response: World')
@@ -209,6 +219,7 @@ describe('AgentResult', () => {
         stopReason: 'endTurn',
         lastMessage: message,
         metrics,
+        invocationState: {},
       })
 
       expect(result.contextSize).toBe(500)
@@ -224,6 +235,7 @@ describe('AgentResult', () => {
         stopReason: 'endTurn',
         lastMessage: message,
         metrics: new AgentMetrics(),
+        invocationState: {},
       })
 
       expect(result.contextSize).toBeUndefined()
@@ -238,9 +250,46 @@ describe('AgentResult', () => {
       const result = new AgentResult({
         stopReason: 'endTurn',
         lastMessage: message,
+        invocationState: {},
       })
 
       expect(result.contextSize).toBeUndefined()
+    })
+  })
+
+  describe('projectedContextSize', () => {
+    it('returns projectedContextSize from metrics', () => {
+      const message = new Message({
+        role: 'assistant',
+        content: [new TextBlock('Hello')],
+      })
+
+      const metrics = new AgentMetrics({ projectedContextSize: 750 })
+
+      const result = new AgentResult({
+        stopReason: 'endTurn',
+        lastMessage: message,
+        metrics,
+        invocationState: {},
+      })
+
+      expect(result.projectedContextSize).toBe(750)
+    })
+
+    it('returns undefined when metrics has no projectedContextSize', () => {
+      const message = new Message({
+        role: 'assistant',
+        content: [new TextBlock('Hello')],
+      })
+
+      const result = new AgentResult({
+        stopReason: 'endTurn',
+        lastMessage: message,
+        metrics: new AgentMetrics(),
+        invocationState: {},
+      })
+
+      expect(result.projectedContextSize).toBeUndefined()
     })
   })
 
@@ -259,6 +308,7 @@ describe('AgentResult', () => {
         lastMessage: message,
         traces,
         metrics,
+        invocationState: {},
       })
 
       const json = result.toJSON()
@@ -282,6 +332,7 @@ describe('AgentResult', () => {
         stopReason: 'endTurn',
         lastMessage: message,
         structuredOutput,
+        invocationState: {},
       })
 
       const json = result.toJSON()
@@ -298,6 +349,7 @@ describe('AgentResult', () => {
       const result = new AgentResult({
         stopReason: 'endTurn',
         lastMessage: message,
+        invocationState: {},
       })
 
       const json = result.toJSON()
@@ -319,6 +371,7 @@ describe('AgentResult', () => {
         lastMessage: message,
         traces,
         metrics,
+        invocationState: {},
       })
 
       const jsonString = JSON.stringify(result)
@@ -348,6 +401,7 @@ describe('AgentResult', () => {
         lastMessage: message,
         traces,
         metrics,
+        invocationState: {},
       })
 
       // Properties are still accessible
@@ -380,6 +434,7 @@ describe('AgentResult', () => {
         lastMessage: message,
         traces,
         metrics,
+        invocationState: {},
       })
 
       // Simulate what happens in Express/Next.js: res.json(result)

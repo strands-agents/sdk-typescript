@@ -1,12 +1,19 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
-import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js'
+import {
+  McpError,
+  ErrorCode,
+  ElicitRequestSchema,
+  UrlElicitationRequiredError,
+} from '@modelcontextprotocol/sdk/types.js'
 import { McpClient } from '../mcp.js'
 import { McpTool } from '../tools/mcp-tool.js'
 import { JsonBlock, type TextBlock, type ToolResultBlock } from '../types/messages.js'
+import { ImageBlock } from '../types/media.js'
 import type { LocalAgent } from '../types/agent.js'
 import type { ToolContext } from '../tools/tool.js'
+import type { ElicitationCallback } from '../types/elicitation.js'
 import { context, propagation, trace, TraceFlags } from '@opentelemetry/api'
 import type { SpanContext } from '@opentelemetry/api'
 
@@ -27,6 +34,7 @@ vi.mock('@modelcontextprotocol/sdk/client/index.js', () => ({
       close: vi.fn(),
       listTools: vi.fn(),
       callTool: vi.fn(),
+      setRequestHandler: vi.fn(),
       experimental: {
         tasks: {
           callToolStream: vi.fn(),
@@ -93,6 +101,24 @@ describe('MCP Integration', () => {
     vi.restoreAllMocks()
   })
 
+  function createElicitationClient(callback: ElicitationCallback) {
+    const resultsLengthBefore = vi.mocked(Client).mock.results.length
+    const elicitClient = new McpClient({
+      applicationName: 'TestApp',
+      transport: mockTransport,
+      elicitationCallback: callback,
+    })
+    const elicitSdkClientMock = vi.mocked(Client).mock.results[resultsLengthBefore]!.value
+    return { elicitClient, elicitSdkClientMock }
+  }
+
+  async function connectAndGetElicitationHandler(callback: ElicitationCallback) {
+    const { elicitClient, elicitSdkClientMock } = createElicitationClient(callback)
+    await elicitClient.connect()
+    const handler = elicitSdkClientMock.setRequestHandler.mock.calls[0]![1]
+    return { handler, elicitSdkClientMock }
+  }
+
   describe('McpClient', () => {
     let client: McpClient
     let sdkClientMock: {
@@ -100,6 +126,7 @@ describe('MCP Integration', () => {
       close: ReturnType<typeof vi.fn>
       listTools: ReturnType<typeof vi.fn>
       callTool: ReturnType<typeof vi.fn>
+      setRequestHandler: ReturnType<typeof vi.fn>
       experimental: { tasks: { callToolStream: ReturnType<typeof vi.fn> } }
     }
 
@@ -112,7 +139,7 @@ describe('MCP Integration', () => {
     })
 
     it('initializes SDK client with correct configuration', () => {
-      expect(Client).toHaveBeenCalledWith({ name: 'TestApp', version: '0.0.1' })
+      expect(Client).toHaveBeenCalledWith({ name: 'TestApp', version: '0.0.1' }, undefined)
     })
 
     it('injects trace context into tool arguments when active span exists', async () => {
@@ -293,6 +320,109 @@ describe('MCP Integration', () => {
       expect(sdkClientMock.close).toHaveBeenCalled()
       expect(mockTransport.close).toHaveBeenCalled()
     })
+
+    it('registers elicitation handler before connecting when callback is provided', async () => {
+      const resultsLengthBefore = vi.mocked(Client).mock.results.length
+      const callback: ElicitationCallback = vi.fn()
+      const elicitClient = new McpClient({
+        applicationName: 'TestApp',
+        transport: mockTransport,
+        elicitationCallback: callback,
+      })
+      const elicitSdkClientMock = vi.mocked(Client).mock.results[resultsLengthBefore]!.value
+
+      await elicitClient.connect()
+
+      expect(elicitSdkClientMock.setRequestHandler).toHaveBeenCalledWith(ElicitRequestSchema, expect.any(Function))
+      const setHandlerOrder = elicitSdkClientMock.setRequestHandler.mock.invocationCallOrder[0]!
+      const connectOrder = elicitSdkClientMock.connect.mock.invocationCallOrder[0]!
+      expect(setHandlerOrder).toBeLessThan(connectOrder)
+    })
+
+    it('does not register elicitation handler when no callback is provided', async () => {
+      await client.connect()
+
+      expect(sdkClientMock.setRequestHandler).not.toHaveBeenCalled()
+    })
+
+    it('passes elicitation capabilities to Client when callback is provided', () => {
+      const callback: ElicitationCallback = vi.fn()
+      new McpClient({
+        applicationName: 'TestApp',
+        transport: mockTransport,
+        elicitationCallback: callback,
+      })
+
+      const lastCall = vi.mocked(Client).mock.calls.at(-1)!
+      expect(lastCall[1]).toEqual({ capabilities: { elicitation: { form: {}, url: {} } } })
+    })
+
+    it('elicitation handler returns accepted result with content', async () => {
+      const callbackResult = { action: 'accept' as const, content: { username: 'alice' } }
+      const callback: ElicitationCallback = vi.fn().mockResolvedValue(callbackResult)
+      const { handler } = await connectAndGetElicitationHandler(callback)
+      const request = {
+        method: 'elicitation/create',
+        params: { message: 'Enter username', requestedSchema: { type: 'object' } },
+      }
+      const extra = { signal: new AbortController().signal }
+
+      const result = await handler(request, extra)
+
+      expect(callback).toHaveBeenCalledWith(extra, request.params)
+      expect(result).toEqual({ action: 'accept', content: { username: 'alice' } })
+    })
+
+    it.each([{ action: 'decline' as const }, { action: 'cancel' as const }])(
+      'elicitation handler returns $action result',
+      async (callbackResult) => {
+        const callback: ElicitationCallback = vi.fn().mockResolvedValue(callbackResult)
+        const { handler } = await connectAndGetElicitationHandler(callback)
+        const request = {
+          method: 'elicitation/create',
+          params: { message: 'Enter username', requestedSchema: { type: 'object' } },
+        }
+        const extra = { signal: new AbortController().signal }
+
+        const result = await handler(request, extra)
+
+        expect(callback).toHaveBeenCalledWith(extra, request.params)
+        expect(result).toEqual({ action: callbackResult.action })
+      }
+    )
+
+    it('elicitation handler works for URL mode params', async () => {
+      const callbackResult = { action: 'accept' as const }
+      const callback: ElicitationCallback = vi.fn().mockResolvedValue(callbackResult)
+      const { handler } = await connectAndGetElicitationHandler(callback)
+      const request = {
+        method: 'elicitation/create',
+        params: {
+          mode: 'url',
+          message: 'Please authenticate',
+          url: 'https://example.com/auth',
+          elicitationId: 'elicit-123',
+        },
+      }
+      const extra = { signal: new AbortController().signal }
+
+      const result = await handler(request, extra)
+
+      expect(callback).toHaveBeenCalledWith(extra, request.params)
+      expect(result).toEqual({ action: 'accept' })
+    })
+
+    it('elicitation callback errors propagate', async () => {
+      const callback: ElicitationCallback = vi.fn().mockRejectedValue(new Error('User cancelled'))
+      const { handler } = await connectAndGetElicitationHandler(callback)
+      const request = {
+        method: 'elicitation/create',
+        params: { message: 'Confirm?' },
+      }
+      const extra = { signal: new AbortController().signal }
+
+      await expect(handler(request, extra)).rejects.toThrow('User cancelled')
+    })
   })
 
   describe('McpTool', () => {
@@ -307,8 +437,9 @@ describe('MCP Integration', () => {
     const toolContext: ToolContext = {
       toolUse: { toolUseId: 'id-123', name: 'weather', input: { city: 'NYC' } },
       agent: {} as LocalAgent,
+      invocationState: {},
       interrupt: () => {
-        throw new Error('interrupt() is not available in test context')
+        throw new Error('interrupt not available in mock context')
       },
     }
 
@@ -375,6 +506,108 @@ describe('MCP Integration', () => {
       expect((result.content[0] as TextBlock).text).toContain('missing content array')
     })
 
+    it('maps MCP image content to ImageBlock', async () => {
+      // "iVBOR..." is a minimal base64 PNG prefix
+      const base64Data = 'iVBORw0KGgoAAAANSUhEUg=='
+      vi.mocked(mockClientWrapper.callTool).mockResolvedValue({
+        content: [{ type: 'image', data: base64Data, mimeType: 'image/png' }],
+      })
+
+      const result = await runTool<ToolResultBlock>(tool.stream(toolContext))
+
+      expect(result.status).toBe('success')
+      expect(result.content).toHaveLength(1)
+      const imageBlock = result.content[0] as ImageBlock
+      expect(imageBlock).toBeInstanceOf(ImageBlock)
+      expect(imageBlock.format).toBe('png')
+      expect(imageBlock.source.type).toBe('imageSourceBytes')
+    })
+
+    it('falls back to JsonBlock for unsupported image mime type', async () => {
+      vi.mocked(mockClientWrapper.callTool).mockResolvedValue({
+        content: [{ type: 'image', data: 'abc123', mimeType: 'image/bmp' }],
+      })
+
+      const result = await runTool<ToolResultBlock>(tool.stream(toolContext))
+
+      expect(result.content[0]).toBeInstanceOf(JsonBlock)
+    })
+
+    it('falls back to JsonBlock for image content missing data', async () => {
+      vi.mocked(mockClientWrapper.callTool).mockResolvedValue({
+        content: [{ type: 'image', mimeType: 'image/png' }],
+      })
+
+      const result = await runTool<ToolResultBlock>(tool.stream(toolContext))
+
+      expect(result.content[0]).toBeInstanceOf(JsonBlock)
+    })
+
+    it('maps MCP text resource to TextBlock', async () => {
+      vi.mocked(mockClientWrapper.callTool).mockResolvedValue({
+        content: [
+          { type: 'resource', resource: { uri: 'file:///doc.txt', text: 'hello world', mimeType: 'text/plain' } },
+        ],
+      })
+
+      const result = await runTool<ToolResultBlock>(tool.stream(toolContext))
+
+      expect(result.status).toBe('success')
+      expect((result.content[0] as TextBlock).text).toBe('hello world')
+    })
+
+    it('maps MCP blob resource with image mime type to ImageBlock', async () => {
+      const base64Data = 'iVBORw0KGgoAAAANSUhEUg=='
+      vi.mocked(mockClientWrapper.callTool).mockResolvedValue({
+        content: [{ type: 'resource', resource: { uri: 'file:///img.png', blob: base64Data, mimeType: 'image/jpeg' } }],
+      })
+
+      const result = await runTool<ToolResultBlock>(tool.stream(toolContext))
+
+      expect(result.content[0]).toBeInstanceOf(ImageBlock)
+      expect((result.content[0] as ImageBlock).format).toBe('jpeg')
+    })
+
+    it('falls back to JsonBlock for blob resource with non-image mime type', async () => {
+      vi.mocked(mockClientWrapper.callTool).mockResolvedValue({
+        content: [
+          { type: 'resource', resource: { uri: 'file:///doc.pdf', blob: 'abc123', mimeType: 'application/pdf' } },
+        ],
+      })
+
+      const result = await runTool<ToolResultBlock>(tool.stream(toolContext))
+
+      expect(result.content[0]).toBeInstanceOf(JsonBlock)
+    })
+
+    it('falls back to JsonBlock for resource with neither text nor blob', async () => {
+      vi.mocked(mockClientWrapper.callTool).mockResolvedValue({
+        content: [{ type: 'resource', resource: { uri: 'file:///unknown' } }],
+      })
+
+      const result = await runTool<ToolResultBlock>(tool.stream(toolContext))
+
+      expect(result.content[0]).toBeInstanceOf(JsonBlock)
+    })
+
+    it('handles mixed content types in a single result', async () => {
+      const base64Data = 'iVBORw0KGgoAAAANSUhEUg=='
+      vi.mocked(mockClientWrapper.callTool).mockResolvedValue({
+        content: [
+          { type: 'text', text: 'Here is the image:' },
+          { type: 'image', data: base64Data, mimeType: 'image/png' },
+          { type: 'resource', resource: { uri: 'file:///notes.txt', text: 'Some notes' } },
+        ],
+      })
+
+      const result = await runTool<ToolResultBlock>(tool.stream(toolContext))
+
+      expect(result.content).toHaveLength(3)
+      expect((result.content[0] as TextBlock).text).toBe('Here is the image:')
+      expect(result.content[1]).toBeInstanceOf(ImageBlock)
+      expect((result.content[2] as TextBlock).text).toBe('Some notes')
+    })
+
     it('surfaces elicitation data for McpError with code -32042', async () => {
       const elicitations = [
         {
@@ -431,6 +664,59 @@ describe('MCP Integration', () => {
 
       expect(result.status).toBe('error')
       expect((result.content[0] as TextBlock).text).toBe('MCP error -32042: Authorization required')
+    })
+
+    it('surfaces elicitation data for UrlElicitationRequiredError', async () => {
+      const elicitations = [
+        {
+          mode: 'url' as const,
+          message: 'Please authorize',
+          elicitationId: 'e-1',
+          url: 'https://example.com/auth',
+        },
+      ]
+      const error = new UrlElicitationRequiredError(elicitations, 'Auth required')
+      vi.mocked(mockClientWrapper.callTool).mockRejectedValue(error)
+
+      const result = await runTool<ToolResultBlock>(tool.stream(toolContext))
+
+      expect(result.status).toBe('error')
+      expect((result.content[0] as TextBlock).text).toContain('MCP Elicitation required')
+      expect((result.content[0] as TextBlock).text).toContain('https://example.com/auth')
+    })
+
+    it('falls through to generic error for McpError -32042 with undefined data', async () => {
+      const mcpError = new McpError(ErrorCode.UrlElicitationRequired, 'Auth required')
+      vi.mocked(mockClientWrapper.callTool).mockRejectedValue(mcpError)
+
+      const result = await runTool<ToolResultBlock>(tool.stream(toolContext))
+
+      expect(result.status).toBe('error')
+      expect((result.content[0] as TextBlock).text).toBe('MCP error -32042: Auth required')
+    })
+
+    it('falls through to generic error for McpError -32042 with non-array elicitations', async () => {
+      const mcpError = new McpError(ErrorCode.UrlElicitationRequired, 'Auth required', {
+        elicitations: 'not-an-array',
+      })
+      vi.mocked(mockClientWrapper.callTool).mockRejectedValue(mcpError)
+
+      const result = await runTool<ToolResultBlock>(tool.stream(toolContext))
+
+      expect(result.status).toBe('error')
+      expect((result.content[0] as TextBlock).text).toBe('MCP error -32042: Auth required')
+    })
+
+    it('falls through to generic error for McpError -32042 with empty elicitations', async () => {
+      const mcpError = new McpError(ErrorCode.UrlElicitationRequired, 'Auth required', {
+        elicitations: [],
+      })
+      vi.mocked(mockClientWrapper.callTool).mockRejectedValue(mcpError)
+
+      const result = await runTool<ToolResultBlock>(tool.stream(toolContext))
+
+      expect(result.status).toBe('error')
+      expect((result.content[0] as TextBlock).text).toBe('MCP error -32042: Auth required')
     })
 
     it('falls through to generic error for McpError with a different code', async () => {

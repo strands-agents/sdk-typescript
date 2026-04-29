@@ -440,6 +440,50 @@ describe('Agent tracer integration', () => {
       expect(tracer.startToolCallSpan).toHaveBeenCalledTimes(2)
       expect(tracer.endToolCallSpan).toHaveBeenCalledTimes(2)
     })
+
+    it('creates overlapping tool spans when toolExecutor is concurrent', async () => {
+      const model = new MockMessageModel()
+        .addTurn([
+          new ToolUseBlock({ name: 'tool1', toolUseId: 'id-1', input: {} }),
+          new ToolUseBlock({ name: 'tool2', toolUseId: 'id-2', input: {} }),
+        ])
+        .addTurn({ type: 'textBlock', text: 'Done' })
+
+      // Tools sleep briefly so the concurrent executor has time to launch both
+      // before either resolves. The assertions below check call order, not
+      // wall-clock timing.
+      const sleep = (ms: number) => new Promise<void>((r) => globalThis.setTimeout(r, ms))
+      // eslint-disable-next-line require-yield
+      async function* sleepThenReturn(toolUseId: string, text: string) {
+        await sleep(20)
+        return new ToolResultBlock({ toolUseId, status: 'success', content: [new TextBlock(text)] })
+      }
+      const tool1 = createMockTool('tool1', () => sleepThenReturn('id-1', 'R1'))
+      const tool2 = createMockTool('tool2', () => sleepThenReturn('id-2', 'R2'))
+
+      const agent = new Agent({ model, tools: [tool1, tool2], toolExecutor: 'concurrent' })
+      const tracer = getLatestTracer()
+
+      // Record span lifecycle events in order. Sequential execution would
+      // produce [start:A, end:A, start:B, end:B]; concurrent execution
+      // interleaves so both starts precede both ends.
+      const events: string[] = []
+      tracer.startToolCallSpan.mockImplementation((args: { tool: { toolUseId: string } }) => {
+        events.push(`start:${args.tool.toolUseId}`)
+        return { mock: 'toolSpan', id: args.tool.toolUseId }
+      })
+      tracer.endToolCallSpan.mockImplementation((span: { id: string } | null) => {
+        if (span && 'id' in span) events.push(`end:${span.id}`)
+      })
+
+      await agent.invoke('Use tools')
+
+      expect(tracer.startToolCallSpan).toHaveBeenCalledTimes(2)
+      expect(tracer.endToolCallSpan).toHaveBeenCalledTimes(2)
+      // Both starts happened before either end — i.e. the spans overlap.
+      expect(events.slice(0, 2).sort()).toEqual(['start:id-1', 'start:id-2'])
+      expect(events.slice(2, 4).sort()).toEqual(['end:id-1', 'end:id-2'])
+    })
   })
 
   describe('token usage accumulation', () => {

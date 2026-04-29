@@ -1,10 +1,22 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
 import { takeResult } from '@modelcontextprotocol/sdk/shared/responseMessage.js'
+import { ElicitRequestSchema } from '@modelcontextprotocol/sdk/types.js'
 import { context, propagation, trace } from '@opentelemetry/api'
 import type { JSONSchema, JSONValue } from './types/json.js'
+import type { ElicitationCallback } from './types/elicitation.js'
 import { McpTool } from './tools/mcp-tool.js'
 import { logger } from './logging/index.js'
+
+/**
+ * Widened transport type that accepts MCP transport implementations without requiring explicit casts.
+ *
+ * Under `exactOptionalPropertyTypes`, `StreamableHTTPClientTransport` is not directly assignable
+ * to `Transport` because its `sessionId` getter returns `string | undefined`, while `Transport`
+ * declares `sessionId?: string` (absent or string, but not explicitly undefined).
+ * This type relaxes that constraint so users can pass any MCP transport without `as Transport`.
+ */
+export type McpTransport = Omit<Transport, 'sessionId'> & { sessionId?: string | undefined }
 
 /** Temporary placeholder for RuntimeConfig */
 export interface RuntimeConfig {
@@ -38,7 +50,7 @@ export interface TasksConfig {
 
 /** Arguments for configuring an MCP Client. */
 export type McpClientConfig = RuntimeConfig & {
-  transport: Transport
+  transport: McpTransport
 
   /** Disable OpenTelemetry MCP instrumentation. */
   disableMcpInstrumentation?: boolean
@@ -49,6 +61,13 @@ export type McpClientConfig = RuntimeConfig & {
    * When undefined, tools are called directly without task management.
    */
   tasksConfig?: TasksConfig
+
+  /**
+   * Callback to handle server-initiated elicitation requests.
+   * When provided, the client advertises elicitation support (form + url modes)
+   * and routes incoming elicitation requests to this callback.
+   */
+  elicitationCallback?: ElicitationCallback
 }
 
 /** MCP Client for interacting with Model Context Protocol servers. */
@@ -66,17 +85,22 @@ export class McpClient {
   private _client: Client
   private _disableMcpInstrumentation: boolean
   private _tasksConfig: TasksConfig | undefined
+  private _elicitationCallback: ElicitationCallback | undefined
 
   constructor(args: McpClientConfig) {
     this._clientName = args.applicationName || 'strands-agents-ts-sdk'
     this._clientVersion = args.applicationVersion || '0.0.1'
-    this._transport = args.transport
+    this._transport = args.transport as Transport
     this._connected = false
     this._tasksConfig = args.tasksConfig
-    this._client = new Client({
-      name: this._clientName,
-      version: this._clientVersion,
-    })
+    this._elicitationCallback = args.elicitationCallback
+    this._client = new Client(
+      {
+        name: this._clientName,
+        version: this._clientVersion,
+      },
+      this._elicitationCallback ? { capabilities: { elicitation: { form: {}, url: {} } } } : undefined
+    )
 
     this._disableMcpInstrumentation = args.disableMcpInstrumentation ?? false
   }
@@ -102,8 +126,14 @@ export class McpClient {
       this._connected = false
     }
 
-    await this._client.connect(this._transport)
+    if (this._elicitationCallback) {
+      const callback = this._elicitationCallback
+      this._client.setRequestHandler(ElicitRequestSchema, async (request, extra) => {
+        return await callback(extra, request.params)
+      })
+    }
 
+    await this._client.connect(this._transport)
     this._connected = true
   }
 

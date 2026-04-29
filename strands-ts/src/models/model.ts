@@ -11,6 +11,7 @@ import {
 } from '../types/messages.js'
 import { CitationsBlock } from '../types/citations.js'
 import type { Citation, CitationGeneratedContent } from '../types/citations.js'
+import type { StateStore } from '../state-store.js'
 import type { ToolChoice, ToolSpec } from '../tools/types.js'
 import {
   ModelContentBlockDeltaEvent,
@@ -120,6 +121,30 @@ export interface StreamOptions {
    * Controls how the model selects tools to use.
    */
   toolChoice?: ToolChoice
+
+  /**
+   * Runtime state for model providers that manage server-side conversation state.
+   * The model can read and write this state during streaming (e.g., to store a
+   * response ID for conversation chaining). Mutations via `set`/`delete` are
+   * visible to the caller after the stream completes.
+   */
+  modelState?: StateStore
+}
+
+/**
+ * Options for counting tokens in a set of messages.
+ */
+export interface CountTokensOptions {
+  /**
+   * System prompt to guide the model's behavior.
+   * Can be a simple string or an array of content blocks for advanced caching.
+   */
+  systemPrompt?: SystemPrompt
+
+  /**
+   * Array of tool specifications to include in the count.
+   */
+  toolSpecs?: ToolSpec[]
 }
 
 /**
@@ -182,6 +207,22 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
   }
 
   /**
+   * Whether this model manages conversation state server-side.
+   *
+   * When `true`, the server tracks conversation context across turns, so the SDK
+   * sends only the latest message instead of the full history. After each invocation,
+   * the agent's local message history is cleared automatically.
+   *
+   * Model providers that support server-side state management should override this
+   * to return `true`.
+   *
+   * @returns `false` by default
+   */
+  get stateful(): boolean {
+    return false
+  }
+
+  /**
    * Streams a conversation with the model.
    * Returns an async iterable that yields streaming events as they occur.
    *
@@ -190,6 +231,24 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
    * @returns Async iterable of streaming events
    */
   abstract stream(messages: Message[], options?: StreamOptions): AsyncIterable<ModelStreamEvent>
+
+  /**
+   * Count tokens for the given input before sending to the model.
+   *
+   * Used for proactive context management (e.g., triggering compression at a threshold).
+   * The base implementation uses a character-based heuristic (chars/4 for text, chars/2 for JSON).
+   *
+   * Subclasses should override this method to use native token counting APIs
+   * (e.g., Bedrock CountTokens, Anthropic countTokens, Gemini countTokens)
+   * for improved accuracy, falling back to `super.countTokens()` on API failure.
+   *
+   * @param messages - Array of conversation messages to count tokens for
+   * @param options - Optional options containing system prompt and tool specs
+   * @returns Total input token count
+   */
+  async countTokens(messages: Message[], options?: CountTokensOptions): Promise<number> {
+    return estimateTokensHeuristic(messages, options)
+  }
 
   /**
    * Converts event data to event class representation
@@ -434,5 +493,95 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
       const normalizedError = normalizeError(error)
       throw new ModelError(normalizedError.message, { cause: error })
     }
+  }
+}
+
+/**
+ * Estimate tokens for a content block using character-based heuristics.
+ *
+ * @param block - Content block to estimate tokens for
+ * @returns Estimated token count
+ */
+function estimateContentBlockTokens(block: ContentBlock): number {
+  let total = 0
+
+  switch (block.type) {
+    case 'textBlock':
+      total += heuristicText(block.text)
+      break
+    case 'toolUseBlock':
+      total += heuristicText(block.name)
+      total += heuristicJson(block.input)
+      break
+    case 'toolResultBlock':
+      for (const item of block.content) {
+        if (item.type === 'textBlock') {
+          total += heuristicText(item.text)
+        } else if (item.type === 'jsonBlock') {
+          total += heuristicJson(item.json)
+        }
+      }
+      break
+    case 'reasoningBlock':
+      if (block.text) total += heuristicText(block.text)
+      break
+    case 'guardContentBlock':
+      if (block.text) total += heuristicText(block.text.text)
+      break
+    case 'citationsBlock':
+      for (const item of block.content) {
+        if ('text' in item) total += heuristicText(item.text)
+      }
+      break
+    default:
+      break
+  }
+
+  return total
+}
+
+/**
+ * Estimate token count using character-based heuristics (text: chars/4, JSON: chars/2).
+ * Dependency-free fallback used by the base Model class.
+ */
+function estimateTokensHeuristic(messages: Message[], options?: CountTokensOptions): number {
+  let total = 0
+
+  if (options?.systemPrompt) {
+    if (typeof options.systemPrompt === 'string') {
+      total += heuristicText(options.systemPrompt)
+    } else {
+      for (const block of options.systemPrompt) {
+        if (block.type === 'textBlock') total += heuristicText(block.text)
+        else if (block.type === 'guardContentBlock' && block.text) total += heuristicText(block.text.text)
+      }
+    }
+  }
+
+  for (const message of messages) {
+    for (const block of message.content) {
+      total += estimateContentBlockTokens(block)
+    }
+  }
+
+  if (options?.toolSpecs) {
+    for (const spec of options.toolSpecs) {
+      total += heuristicJson(spec)
+    }
+  }
+
+  return total
+}
+
+function heuristicText(text: string): number {
+  return Math.ceil(text.length / 4)
+}
+
+function heuristicJson(obj: unknown): number {
+  try {
+    return Math.ceil(JSON.stringify(obj).length / 2)
+  } catch {
+    logger.debug('unable to serialize object for token estimation, skipping')
+    return 0
   }
 }

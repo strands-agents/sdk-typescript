@@ -1,5 +1,5 @@
 import { Agent } from '../agent/agent.js'
-import type { InvokeOptions, InvokableAgent, AgentStreamEvent } from '../types/agent.js'
+import type { InvocationState, InvokeOptions, InvokableAgent, AgentStreamEvent } from '../types/agent.js'
 import type { MultiAgentInput } from './multiagent.js'
 import { takeSnapshot, loadSnapshot } from '../agent/snapshot.js'
 import type { MultiAgentStreamEvent } from './events.js'
@@ -34,6 +34,13 @@ export interface NodeInputOptions {
    * Structured output schema for this node invocation.
    */
   structuredOutputSchema?: z.ZodSchema
+
+  /**
+   * Per-invocation state forwarded to the node's underlying agent. See
+   * {@link InvocationState}. Shared by reference across all nodes so one node's
+   * hooks/tools can read state written by a previous node.
+   */
+  invocationState?: InvocationState
 }
 
 /**
@@ -77,9 +84,14 @@ export abstract class Node {
     nodeState.status = Status.EXECUTING
     nodeState.startTime = Date.now()
 
+    // Resolve invocationState once — the same reference is threaded into handle()
+    // and into NodeResultEvent so callbacks see one object for the whole node run.
+    const invocationState: InvocationState = options?.invocationState ?? {}
+    const resolvedOptions: NodeInputOptions = { ...options, invocationState }
+
     let result: NodeResult
     try {
-      const update = yield* this.handle(input, state, options)
+      const update = yield* this.handle(input, state, resolvedOptions)
       result = new NodeResult({
         nodeId: this.id,
         status: Status.COMPLETED,
@@ -100,7 +112,13 @@ export abstract class Node {
       nodeState.results.push(result!)
     }
 
-    yield new NodeResultEvent({ nodeId: this.id, nodeType: this.type, state, result })
+    yield new NodeResultEvent({
+      nodeId: this.id,
+      nodeType: this.type,
+      state,
+      result,
+      invocationState,
+    })
     return result
   }
 
@@ -166,12 +184,19 @@ export class AgentNode extends Node {
     state: MultiAgentState,
     options?: NodeInputOptions
   ): AsyncGenerator<MultiAgentStreamEvent, NodeResultUpdate, undefined> {
+    // Resolve once per handle() call — Node.stream() normally supplies this;
+    // handle() is public API, so direct callers get per-call state.
+    const invocationState: InvocationState = options?.invocationState ?? {}
+
     // Only Agent instances support snapshot/restore for state isolation
     const snapshot =
-      this._agent instanceof Agent ? takeSnapshot(this._agent, { include: ['messages', 'state'] }) : undefined
+      this._agent instanceof Agent
+        ? takeSnapshot(this._agent, { include: ['messages', 'state', 'modelState'] })
+        : undefined
     try {
       const invokeOptions: InvokeOptions = {
         ...(options?.structuredOutputSchema && { structuredOutputSchema: options.structuredOutputSchema }),
+        invocationState,
       }
 
       const gen = this._agent.stream(input, invokeOptions)
@@ -185,6 +210,7 @@ export class AgentNode extends Node {
             this._agent instanceof Agent
               ? { source: 'agent', event: next.value as AgentStreamEvent }
               : { source: 'custom', event: next.value },
+          invocationState,
         })
         next = await gen.next()
       }
@@ -238,15 +264,20 @@ export class MultiAgentNode extends Node {
    *
    * @param input - Input to pass to the orchestrator
    * @param state - The current multi-agent state
-   * @param _options - Per-invocation options (unused by orchestrator nodes)
+   * @param options - Per-invocation options. `invocationState` is forwarded to the
+   *   nested orchestrator; `structuredOutputSchema` is not applicable here.
    * @returns Async generator yielding streaming events and returning the orchestrator's content
    */
   async *handle(
     input: MultiAgentInput,
     state: MultiAgentState,
-    _options?: NodeInputOptions
+    options?: NodeInputOptions
   ): AsyncGenerator<MultiAgentStreamEvent, NodeResultUpdate, undefined> {
-    const gen = this._orchestrator.stream(input)
+    // Resolve once per handle() call — Node.stream() normally supplies this;
+    // handle() is public API, so direct callers get per-call state.
+    const invocationState: InvocationState = options?.invocationState ?? {}
+
+    const gen = this._orchestrator.stream(input, { invocationState })
     let next = await gen.next()
     while (!next.done) {
       const event = next.value
@@ -258,6 +289,7 @@ export class MultiAgentNode extends Node {
           nodeType: this.type,
           state,
           inner: { source: 'multiAgent', event },
+          invocationState,
         })
       }
       next = await gen.next()

@@ -133,11 +133,25 @@ describe('A2AExecutor', () => {
 
       await executor.execute(context, eventBus)
 
-      expect(agent.stream).toHaveBeenCalledWith([
-        new TextBlock('Line 1'),
-        new TextBlock('[File: file (file://test.txt)]'),
-        new TextBlock('Line 2'),
-      ])
+      expect(agent.stream).toHaveBeenCalledWith(
+        [new TextBlock('Line 1'), new TextBlock('[File: file (file://test.txt)]'), new TextBlock('Line 2')],
+        { invocationState: { a2aRequestContext: context } }
+      )
+    })
+
+    it('forwards the A2A request context to the agent via invocationState', async () => {
+      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Response' })
+      const agent = new Agent({ model, printer: false })
+      const streamSpy = vi.spyOn(agent, 'stream')
+      const executor = new A2AExecutor(agent)
+      const eventBus = createMockEventBus()
+      const context = createRequestContext('hello', 'task-42')
+
+      await executor.execute(context, eventBus)
+
+      expect(streamSpy).toHaveBeenCalledTimes(1)
+      const [, options] = streamSpy.mock.calls[0]!
+      expect(options?.invocationState).toEqual({ a2aRequestContext: context })
     })
 
     it('re-throws when agent throws, publishing only the initial task event', async () => {
@@ -166,15 +180,18 @@ describe('A2AExecutor', () => {
           yield new ModelStreamUpdateEvent({
             agent,
             event: { type: 'modelContentBlockDeltaEvent', delta: { type: 'textDelta', text: 'Here is the image:' } },
+            invocationState: {},
           })
           // Image content block
           yield new ContentBlockEvent({
             agent,
             contentBlock: new ImageBlock({ format: 'png', source: { bytes: imageBytes } }),
+            invocationState: {},
           })
           return new AgentResult({
             stopReason: 'endTurn',
             lastMessage: new Message({ role: 'assistant', content: [new TextBlock('Here is the image:')] }),
+            invocationState: {},
           })
         },
       }

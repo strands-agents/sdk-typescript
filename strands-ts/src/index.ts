@@ -13,9 +13,9 @@ export { StateStore } from './state-store.js'
 
 // Agent types
 export { AgentResult } from './types/agent.js'
-export type { AgentConfig, ToolList } from './agent/agent.js'
+export type { AgentConfig, ToolList, ToolExecutorStrategy } from './agent/agent.js'
 export type { AgentAsToolOptions } from './agent/agent-as-tool.js'
-export type { LocalAgent, InvokeOptions } from './types/agent.js'
+export type { InvocationState, InvokeOptions, LocalAgent } from './types/agent.js'
 
 // Error types
 // Note: CancelledError is intentionally not exported — it is an internal
@@ -167,7 +167,7 @@ export {
 } from './models/streaming.js'
 
 // Model provider types
-export type { BaseModelConfig, StreamOptions, CacheConfig } from './models/model.js'
+export type { BaseModelConfig, CountTokensOptions, StreamOptions, CacheConfig } from './models/model.js'
 
 export { Model } from './models/model.js'
 
@@ -230,11 +230,16 @@ export { configureLogging } from './logging/logger.js'
 export type { Logger } from './logging/types.js'
 
 // MCP Client types and implementations
-export { type McpClientConfig, type TasksConfig, McpClient } from './mcp.js'
+export { type McpClientConfig, type McpTransport, type TasksConfig, McpClient } from './mcp.js'
+export type { ElicitationCallback, ElicitationContext } from './types/elicitation.js'
 
 // Session management
 export { SessionManager } from './session/session-manager.js'
-export type { SessionManagerConfig, SaveLatestStrategy } from './session/session-manager.js'
+export type {
+  SessionManagerConfig,
+  SaveLatestStrategy,
+  MultiAgentSaveLatestStrategy,
+} from './session/session-manager.js'
 export type { SnapshotManifest, SnapshotTriggerCallback, SnapshotTriggerParams } from './session/types.js'
 export type { SessionStorage, SnapshotStorage, SnapshotLocation } from './session/storage.js'
 export { FileStorage } from './session/file-storage.js'

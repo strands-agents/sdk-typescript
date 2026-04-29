@@ -32,6 +32,12 @@ import { BedrockModel } from '@strands-agents/sdk/bedrock';
 import { OpenAIModel } from '@strands-agents/sdk/openai';
 import { GeminiModel } from '@strands-agents/sdk/gemini';
 import type { StopReason, AgentStreamEvent, Model, BaseModelConfig } from '@strands-agents/sdk';
+import {
+  ConversationManager,
+  NullConversationManager,
+  SlidingWindowConversationManager,
+  SummarizingConversationManager,
+} from '@strands-agents/sdk';
 
 // All log calls go through `hostLog` (the WIT import).  The host can
 // route them to the host language's logging framework (e.g. Python `logging`).
@@ -48,6 +54,7 @@ function errContext(err: unknown, extra?: Record<string, unknown>): Record<strin
   return { error: e.message, stack: e.stack, ...extra };
 }
 
+/** Convert TS SDK Usage to WIT Usage. */
 function mapUsage(src: any): import('strands:agent/types').Usage | undefined {
   if (src == null) return undefined;
   return {
@@ -59,11 +66,13 @@ function mapUsage(src: any): import('strands:agent/types').Usage | undefined {
   };
 }
 
+/** Convert TS SDK Metrics to WIT Metrics. */
 function mapMetrics(src: any): import('strands:agent/types').Metrics | undefined {
   if (src == null) return undefined;
   return { latencyMs: typeof src.latencyMs === 'number' ? src.latencyMs : 0 };
 }
 
+/** Convert a TS SDK StopReason to a WIT StopData with usage/metrics. */
 function mapStopReason(reason: StopReason, agentResult?: any): StopData {
   const mapped: StopData['reason'] = (() => {
     switch (reason) {
@@ -81,6 +90,7 @@ function mapStopReason(reason: StopReason, agentResult?: any): StopData {
   return { reason: mapped, usage: mapUsage(agentResult?.usage), metrics: mapMetrics(agentResult?.metrics) };
 }
 
+/** Convert a TS SDK AgentStreamEvent to a WIT StreamEvent for the host. */
 function mapEvent(event: AgentStreamEvent): StreamEvent | null {
   if ('interrupt' in event || ('type' in event && (event as any).type === 'interrupt')) {
     return { tag: 'interrupt', val: JSON.stringify(event) };
@@ -155,6 +165,7 @@ function mapEvent(event: AgentStreamEvent): StreamEvent | null {
   return null;
 }
 
+/** Extract WIT ModelParams into a plain config object for TS model constructors. */
 function modelParamsConfig(params?: ModelParams): Record<string, unknown> {
   if (!params) return {};
   return {
@@ -164,6 +175,7 @@ function modelParamsConfig(params?: ModelParams): Record<string, unknown> {
   };
 }
 
+/** Instantiate a TS SDK Model from the WIT ModelConfig variant. */
 function createModel(config?: ModelConfig, params?: ModelParams): Model<BaseModelConfig> {
   const base = modelParamsConfig(params);
 
@@ -227,6 +239,7 @@ function createModel(config?: ModelConfig, params?: ModelParams): Model<BaseMode
   }
 }
 
+/** Convert WIT ToolSpecs into TS FunctionTools that call back to the host via tool-provider. */
 function createTools(specs: ToolSpec[] | undefined): FunctionTool[] | undefined {
   if (!specs || specs.length === 0) return undefined;
 
@@ -273,6 +286,7 @@ function createTools(specs: ToolSpec[] | undefined): FunctionTool[] | undefined 
   );
 }
 
+/** Build a system prompt from the agent config (string or JSON content blocks). */
 function buildSystemPrompt(config: AgentConfig): any {
   if (config.systemPromptBlocks) {
     return JSON.parse(config.systemPromptBlocks);
@@ -280,6 +294,7 @@ function buildSystemPrompt(config: AgentConfig): any {
   return config.systemPrompt ?? undefined;
 }
 
+/** Wrap a model in a Proxy that injects toolChoice into every stream() call. */
 function createToolChoiceProxy(baseModel: any, toolChoice: any): any {
   return new Proxy(baseModel, {
     get(target: any, prop: string | symbol, receiver: any) {
@@ -305,6 +320,7 @@ import {
   MessageAddedEvent,
 } from '@strands-agents/sdk';
 
+/** Bridges TS SDK lifecycle hooks to WIT StreamEvent lifecycle variants for the host. */
 class LifecycleBridge implements HookProvider {
   queue: StreamEvent[] = [];
 
@@ -341,6 +357,7 @@ class LifecycleBridge implements HookProvider {
   }
 }
 
+/** Parse user input — JSON arrays pass through, plain strings stay as-is. */
 function parseInput(input: string): any {
   try {
     const parsed = JSON.parse(input);
@@ -349,6 +366,7 @@ function parseInput(input: string): any {
   return input;
 }
 
+/** Build a SessionManager from the WIT session config. */
 function createSessionManager(config: AgentConfig): SessionManager | undefined {
   if (!config.session) return undefined;
 
@@ -378,6 +396,43 @@ function createSessionManager(config: AgentConfig): SessionManager | undefined {
   });
 }
 
+/** Instantiate a conversation manager from the WIT config, or undefined to use the TS Agent default. */
+function createConversationManager(config: AgentConfig): ConversationManager | undefined {
+  const cmConfig = (config as any).conversationManager;
+  if (!cmConfig) {
+    return undefined;
+  }
+  switch (cmConfig.strategy) {
+    case 'none':
+      return new NullConversationManager();
+    case 'sliding-window':
+      return new SlidingWindowConversationManager({
+        windowSize: cmConfig.windowSize,
+        shouldTruncateResults: cmConfig.shouldTruncateResults,
+      });
+    case 'summarizing': {
+      let summaryModel: Model<BaseModelConfig> | undefined;
+      if (cmConfig.summarizationModelConfig) {
+        try {
+          const parsed = JSON.parse(cmConfig.summarizationModelConfig);
+          summaryModel = createModel(parsed);
+        } catch (e) {
+          glog('warn', 'failed to parse summarization model config, using agent model', errContext(e));
+        }
+      }
+      return new SummarizingConversationManager({
+        model: summaryModel,
+        summaryRatio: cmConfig.summaryRatio ?? undefined,
+        preserveRecentMessages: cmConfig.preserveRecentMessages ?? undefined,
+        summarizationSystemPrompt: cmConfig.summarizationSystemPrompt ?? undefined,
+      });
+    }
+    default:
+      glog('warn', `unknown conversation manager strategy: ${cmConfig.strategy}, using default`);
+      return undefined;
+  }
+}
+
 class AgentImpl {
   private agent: Agent;
   private defaultTools: FunctionTool[] | undefined;
@@ -396,6 +451,7 @@ class AgentImpl {
     this.defaultTools = createTools(config.tools);
     this.lifecycleBridge = new LifecycleBridge();
     this.sessionManager = createSessionManager(config);
+    const conversationManager = createConversationManager(config);
 
     const hooks: any[] = [this.lifecycleBridge];
     if (this.sessionManager) hooks.push(this.sessionManager);
@@ -405,6 +461,7 @@ class AgentImpl {
       systemPrompt: buildSystemPrompt(config),
       tools: this.defaultTools,
       hooks,
+      conversationManager,
       printer: false,
     });
   }

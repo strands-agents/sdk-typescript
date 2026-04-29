@@ -182,7 +182,7 @@ describe('PluginRegistry', () => {
 
       const callback = registeredHooks[0]?.callback
       const mockAgentData = {} as LocalAgent
-      callback?.(new BeforeInvocationEvent({ agent: mockAgentData }))
+      callback?.(new BeforeInvocationEvent({ agent: mockAgentData, invocationState: {} }))
 
       expect(plugin.hookRegistered).toBe(true)
     })

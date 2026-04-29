@@ -2,6 +2,16 @@
 
 Loads the WASM component, links WASI + custom imports, and provides
 a ``WasmAgent`` class with the same API as the former native ``Agent``.
+
+Data flow across the WASM boundary:
+
+  Exports (TS implements, Python calls in):
+    api — agent construction, generate, get/set messages, session ops.
+    All model HTTP calls (Bedrock, Anthropic, etc.) happen inside the guest.
+
+  Imports (Python implements, TS calls back):
+    tool-provider — the guest calls call-tool when the model requests tool use.
+    host-log — the guest emits structured log entries for Python's logging.
 """
 
 from __future__ import annotations
@@ -215,11 +225,60 @@ def _build_model_config_variant(cfg: ModelConfigInput) -> Variant:
     raise ValueError(f"unknown model provider: {provider}")
 
 
+def _build_conversation_manager_variant(
+    config: dict[str, typing.Any] | None,
+) -> Record | None:
+    """Build the conversation-manager WIT record.
+
+    Returns None when no config is provided (uses TS SDK default).
+    Uses a flat record with a string strategy discriminator to avoid
+    wasmtime-py limitations with option<variant>.
+    """
+    if config is None:
+        return None
+    cm_type = config.get("type")
+    summarizing_defaults = {
+        "summary-ratio": None,
+        "preserve-recent-messages": None,
+        "summarization-system-prompt": None,
+        "summarization-model-config": None,
+    }
+    if cm_type == "none":
+        return _rec(
+            strategy="none",
+            **{"window-size": 0, "should-truncate-results": False},
+            **summarizing_defaults,
+        )
+    if cm_type == "sliding-window":
+        return _rec(
+            strategy="sliding-window",
+            **{
+                "window-size": config.get("window_size", 40),
+                "should-truncate-results": config.get("should_truncate_results", True),
+            },
+            **summarizing_defaults,
+        )
+    if cm_type == "summarizing":
+        return _rec(
+            strategy="summarizing",
+            **{
+                "window-size": 0,
+                "should-truncate-results": False,
+                "summary-ratio": config.get("summary_ratio"),
+                "preserve-recent-messages": config.get("preserve_recent_messages"),
+                "summarization-system-prompt": config.get("summarization_system_prompt"),
+                "summarization-model-config": config.get("summarization_model_config"),
+            },
+        )
+    raise ValueError(f"unknown conversation manager type: {cm_type}")
+
+
 def _build_agent_config(
     model: ModelConfigInput | None,
     system_prompt: str | None,
     system_prompt_blocks: str | None,
     tools: list[ToolSpec] | None,
+    conversation_manager_config: dict[str, typing.Any] | None = None,
 ) -> Record:
     model_variant = None
     if model is not None:
@@ -229,19 +288,21 @@ def _build_agent_config(
         model_variant = _inject_aws_credentials_default()
 
     tool_recs = [_build_tool_spec(t) for t in tools] if tools else None
+    cm_variant = _build_conversation_manager_variant(conversation_manager_config)
+
+    rec_kwargs: dict[str, typing.Any] = {
+        "model-params": None,
+        "system-prompt": system_prompt,
+        "system-prompt-blocks": system_prompt_blocks,
+        "trace-context": None,
+        "session": None,
+        "conversation-manager": cm_variant,
+    }
 
     return _rec(
         model=model_variant,
-        **{
-            "model-params": None,
-            "system-prompt": system_prompt,
-            "system-prompt-blocks": system_prompt_blocks,
-        },
         tools=tool_recs,
-        **{
-            "trace-context": None,
-            "session": None,
-        },
+        **rec_kwargs,
     )
 
 
@@ -491,6 +552,7 @@ class WasmAgent:
         tools: list[ToolSpec] | None,
         tool_dispatcher: ToolDispatcherBase | None,
         log_handler: LogHandlerBase | None,
+        conversation_manager_config: dict[str, typing.Any] | None = None,
         use_callback_relay: bool = False,
     ):
         engine, component = _get_engine_and_component()
@@ -522,7 +584,7 @@ class WasmAgent:
         self._component = component
 
         # --- instantiate + construct agent (async, run synchronously) ---
-        agent_config = _build_agent_config(model, system_prompt, system_prompt_blocks, tools)
+        agent_config = _build_agent_config(model, system_prompt, system_prompt_blocks, tools, conversation_manager_config)
         _run_sync(self._init_async(linker, store, component, agent_config))
 
     async def _init_async(

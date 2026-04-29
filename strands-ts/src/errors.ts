@@ -173,6 +173,19 @@ export class SessionError extends Error {
 }
 
 /**
+ * Thrown when a model provider's native token counting API fails.
+ *
+ * This error is used as internal control flow within provider `countTokens()` overrides.
+ * When caught, the provider falls back to the base class heuristic estimation.
+ */
+export class ProviderTokenCountError extends ModelError {
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options)
+    this.name = 'ProviderTokenCountError'
+  }
+}
+
+/**
  * Thrown when a tool fails validation during registration.
  */
 export class ToolValidationError extends Error {

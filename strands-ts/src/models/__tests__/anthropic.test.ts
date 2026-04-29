@@ -13,6 +13,7 @@ import {
   JsonBlock,
 } from '../../types/messages.js'
 import { ImageBlock, DocumentBlock, VideoBlock } from '../../types/media.js'
+import { warnOnce } from '../../logging/warn-once.js'
 
 /**
  * Helper to create a mock Anthropic client with streaming support
@@ -21,6 +22,7 @@ function createMockClient(streamGenerator: () => AsyncGenerator<unknown>): Anthr
   return {
     messages: {
       stream: vi.fn(() => streamGenerator()),
+      countTokens: vi.fn(),
     },
   } as unknown as Anthropic
 }
@@ -31,6 +33,7 @@ vi.mock('@anthropic-ai/sdk', () => {
     return {
       messages: {
         stream: vi.fn(),
+        countTokens: vi.fn(),
       },
     }
   })
@@ -39,10 +42,13 @@ vi.mock('@anthropic-ai/sdk', () => {
   }
 })
 
+vi.mock('../../logging/warn-once.js', () => ({
+  warnOnce: vi.fn(),
+}))
+
 describe('AnthropicModel', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
     if (isNode) {
       vi.stubEnv('ANTHROPIC_API_KEY', 'sk-ant-test-env')
     }
@@ -101,12 +107,34 @@ describe('AnthropicModel', () => {
 
     it('warns when maxTokens is not explicitly set', () => {
       new AnthropicModel({ apiKey: 'sk-ant-test' })
-      expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('using default maxTokens'))
+      expect(warnOnce).toHaveBeenCalledWith(
+        expect.objectContaining({ warn: expect.any(Function) }),
+        expect.stringContaining('using default maxTokens')
+      )
     })
 
     it('does not warn when maxTokens is explicitly set', () => {
       new AnthropicModel({ apiKey: 'sk-ant-test', maxTokens: 4096 })
-      expect(console.warn).not.toHaveBeenCalledWith(expect.stringContaining('using default maxTokens'))
+      expect(warnOnce).not.toHaveBeenCalledWith(
+        expect.objectContaining({ warn: expect.any(Function) }),
+        expect.stringContaining('using default maxTokens')
+      )
+    })
+
+    it('warns when modelId is not explicitly set', () => {
+      new AnthropicModel({ apiKey: 'sk-ant-test' })
+      expect(warnOnce).toHaveBeenCalledWith(
+        expect.objectContaining({ warn: expect.any(Function) }),
+        expect.stringContaining('using default modelId')
+      )
+    })
+
+    it('does not warn when modelId is explicitly set', () => {
+      new AnthropicModel({ apiKey: 'sk-ant-test', modelId: 'claude-3-opus-20240229' })
+      expect(warnOnce).not.toHaveBeenCalledWith(
+        expect.objectContaining({ warn: expect.any(Function) }),
+        expect.stringContaining('using default modelId')
+      )
     })
   })
 
@@ -638,6 +666,102 @@ describe('AnthropicModel', () => {
         expect(warnSpy).toHaveBeenCalled()
         warnSpy.mockRestore()
       })
+    })
+  })
+
+  describe('countTokens', () => {
+    const messages: Message[] = [new Message({ role: 'user', content: [new TextBlock('hello')] })]
+    const toolSpecs = [
+      { name: 'test_tool', description: 'A test tool', inputSchema: { type: 'object' as const, properties: {} } },
+    ]
+
+    function createCountTokensClient(mockCountTokens: ReturnType<typeof vi.fn>): Anthropic {
+      return {
+        messages: {
+          stream: vi.fn(),
+          countTokens: mockCountTokens,
+        },
+      } as unknown as Anthropic
+    }
+
+    it('should return native token count on success', async () => {
+      const mockCountTokens = vi.fn(async () => ({ input_tokens: 42 }))
+      const client = createCountTokensClient(mockCountTokens)
+      const model = new AnthropicModel({ client, modelId: 'claude-sonnet-4-6' })
+
+      const result = await model.countTokens(messages)
+
+      expect(result).toBe(42)
+      expect(mockCountTokens).toHaveBeenCalledOnce()
+    })
+
+    it('should include system prompt in request', async () => {
+      const mockCountTokens = vi.fn(async () => ({ input_tokens: 55 }))
+      const client = createCountTokensClient(mockCountTokens)
+      const model = new AnthropicModel({ client, modelId: 'claude-sonnet-4-6' })
+
+      const result = await model.countTokens(messages, { systemPrompt: 'Be helpful.' })
+
+      expect(result).toBe(55)
+      expect(mockCountTokens).toHaveBeenCalledWith({
+        model: 'claude-sonnet-4-6',
+        messages: [{ role: 'user', content: [{ type: 'text', text: 'hello' }] }],
+        system: 'Be helpful.',
+      })
+    })
+
+    it('should include tool specs in request', async () => {
+      const mockCountTokens = vi.fn(async () => ({ input_tokens: 100 }))
+      const client = createCountTokensClient(mockCountTokens)
+      const model = new AnthropicModel({ client, modelId: 'claude-sonnet-4-6' })
+
+      const result = await model.countTokens(messages, { toolSpecs })
+
+      expect(result).toBe(100)
+      expect(mockCountTokens).toHaveBeenCalledWith({
+        model: 'claude-sonnet-4-6',
+        messages: [{ role: 'user', content: [{ type: 'text', text: 'hello' }] }],
+        tools: [{ name: 'test_tool', description: 'A test tool', input_schema: { type: 'object', properties: {} } }],
+      })
+    })
+
+    it('should strip max_tokens from request', async () => {
+      const mockCountTokens = vi.fn(async () => ({ input_tokens: 10 }))
+      const client = createCountTokensClient(mockCountTokens)
+      const model = new AnthropicModel({ client, modelId: 'claude-sonnet-4-6' })
+
+      await model.countTokens(messages)
+
+      expect(mockCountTokens).toHaveBeenCalledWith({
+        model: 'claude-sonnet-4-6',
+        messages: [{ role: 'user', content: [{ type: 'text', text: 'hello' }] }],
+      })
+    })
+
+    it('should fall back to estimation on API error', async () => {
+      const mockCountTokens = vi.fn(async () => {
+        throw new Error('Unsupported')
+      })
+      const client = createCountTokensClient(mockCountTokens)
+      const model = new AnthropicModel({ client, modelId: 'claude-sonnet-4-6' })
+
+      const result = await model.countTokens(messages)
+
+      expect(typeof result).toBe('number')
+      expect(result).toBeGreaterThanOrEqual(0)
+    })
+
+    it('should fall back to estimation on generic exception', async () => {
+      const mockCountTokens = vi.fn(async () => {
+        throw new Error('Connection failed')
+      })
+      const client = createCountTokensClient(mockCountTokens)
+      const model = new AnthropicModel({ client, modelId: 'claude-sonnet-4-6' })
+
+      const result = await model.countTokens(messages)
+
+      expect(typeof result).toBe('number')
+      expect(result).toBeGreaterThanOrEqual(0)
     })
   })
 })

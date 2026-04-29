@@ -67,6 +67,7 @@ bin/
 
 # LLM
 CLAUDE.md
+.claude
 
 # dev
 .vitest*

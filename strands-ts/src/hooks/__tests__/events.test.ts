@@ -47,11 +47,13 @@ describe('InitializedEvent', () => {
 describe('BeforeInvocationEvent', () => {
   it('creates instance with correct properties', () => {
     const agent = new Agent()
-    const event = new BeforeInvocationEvent({ agent })
+    const event = new BeforeInvocationEvent({ agent, invocationState: {} })
 
     expect(event).toEqual({
       type: 'beforeInvocationEvent',
       agent: agent,
+      cancel: false,
+      invocationState: {},
     })
     // @ts-expect-error verifying that property is readonly
     event.agent = new Agent()
@@ -59,19 +61,37 @@ describe('BeforeInvocationEvent', () => {
 
   it('returns false for _shouldReverseCallbacks', () => {
     const agent = new Agent()
-    const event = new BeforeInvocationEvent({ agent })
+    const event = new BeforeInvocationEvent({ agent, invocationState: {} })
     expect(event._shouldReverseCallbacks()).toBe(false)
+  })
+
+  it('allows cancel to be set to true', () => {
+    const agent = new Agent()
+    const event = new BeforeInvocationEvent({ agent, invocationState: {} })
+
+    expect(event.cancel).toBe(false)
+    event.cancel = true
+    expect(event.cancel).toBe(true)
+  })
+
+  it('allows cancel to be set to a string message', () => {
+    const agent = new Agent()
+    const event = new BeforeInvocationEvent({ agent, invocationState: {} })
+
+    event.cancel = 'unauthorized'
+    expect(event.cancel).toBe('unauthorized')
   })
 })
 
 describe('AfterInvocationEvent', () => {
   it('creates instance with correct properties', () => {
     const agent = new Agent()
-    const event = new AfterInvocationEvent({ agent })
+    const event = new AfterInvocationEvent({ agent, invocationState: {} })
 
     expect(event).toEqual({
       type: 'afterInvocationEvent',
       agent: agent,
+      invocationState: {},
     })
     // @ts-expect-error verifying that property is readonly
     event.agent = new Agent()
@@ -79,7 +99,7 @@ describe('AfterInvocationEvent', () => {
 
   it('returns true for _shouldReverseCallbacks', () => {
     const agent = new Agent()
-    const event = new AfterInvocationEvent({ agent })
+    const event = new AfterInvocationEvent({ agent, invocationState: {} })
     expect(event._shouldReverseCallbacks()).toBe(true)
   })
 })
@@ -88,12 +108,13 @@ describe('MessageAddedEvent', () => {
   it('creates instance with correct properties', () => {
     const agent = new Agent()
     const message = new Message({ role: 'assistant', content: [new TextBlock('Hello')] })
-    const event = new MessageAddedEvent({ agent, message })
+    const event = new MessageAddedEvent({ agent, message, invocationState: {} })
 
     expect(event).toEqual({
       type: 'messageAddedEvent',
       agent: agent,
       message: message,
+      invocationState: {},
     })
     // @ts-expect-error verifying that property is readonly
     event.agent = new Agent()
@@ -104,7 +125,7 @@ describe('MessageAddedEvent', () => {
   it('returns false for _shouldReverseCallbacks', () => {
     const agent = new Agent()
     const message = new Message({ role: 'assistant', content: [] })
-    const event = new MessageAddedEvent({ agent, message })
+    const event = new MessageAddedEvent({ agent, message, invocationState: {} })
     expect(event._shouldReverseCallbacks()).toBe(false)
   })
 })
@@ -123,7 +144,7 @@ describe('BeforeToolCallEvent', () => {
       toolUseId: 'test-id',
       input: { arg: 'value' },
     }
-    const event = new BeforeToolCallEvent({ agent, toolUse, tool })
+    const event = new BeforeToolCallEvent({ agent, toolUse, tool, invocationState: {} })
 
     expect(event).toEqual({
       type: 'beforeToolCallEvent',
@@ -131,6 +152,7 @@ describe('BeforeToolCallEvent', () => {
       toolUse: toolUse,
       tool: tool,
       cancel: false,
+      invocationState: {},
     })
     // @ts-expect-error verifying that property is readonly
     event.agent = new Agent()
@@ -147,7 +169,7 @@ describe('BeforeToolCallEvent', () => {
       toolUseId: 'test-id',
       input: {},
     }
-    const event = new BeforeToolCallEvent({ agent, toolUse, tool: undefined })
+    const event = new BeforeToolCallEvent({ agent, toolUse, tool: undefined, invocationState: {} })
 
     expect(event).toEqual({
       type: 'beforeToolCallEvent',
@@ -155,20 +177,21 @@ describe('BeforeToolCallEvent', () => {
       toolUse: toolUse,
       tool: undefined,
       cancel: false,
+      invocationState: {},
     })
   })
 
   it('returns false for _shouldReverseCallbacks', () => {
     const agent = new Agent()
     const toolUse = { name: 'test', toolUseId: 'id', input: {} }
-    const event = new BeforeToolCallEvent({ agent, toolUse, tool: undefined })
+    const event = new BeforeToolCallEvent({ agent, toolUse, tool: undefined, invocationState: {} })
     expect(event._shouldReverseCallbacks()).toBe(false)
   })
 
   it('allows cancel to be set to true', () => {
     const agent = new Agent()
     const toolUse = { name: 'test', toolUseId: 'id', input: {} }
-    const event = new BeforeToolCallEvent({ agent, toolUse, tool: undefined })
+    const event = new BeforeToolCallEvent({ agent, toolUse, tool: undefined, invocationState: {} })
 
     expect(event.cancel).toBe(false)
     event.cancel = true
@@ -178,7 +201,7 @@ describe('BeforeToolCallEvent', () => {
   it('allows cancel to be set to a string message', () => {
     const agent = new Agent()
     const toolUse = { name: 'test', toolUseId: 'id', input: {} }
-    const event = new BeforeToolCallEvent({ agent, toolUse, tool: undefined })
+    const event = new BeforeToolCallEvent({ agent, toolUse, tool: undefined, invocationState: {} })
 
     event.cancel = 'tool not allowed'
     expect(event.cancel).toBe('tool not allowed')
@@ -204,7 +227,7 @@ describe('AfterToolCallEvent', () => {
       status: 'success',
       content: [new TextBlock('Success')],
     })
-    const event = new AfterToolCallEvent({ agent, toolUse, tool, result })
+    const event = new AfterToolCallEvent({ agent, toolUse, tool, result, invocationState: {} })
 
     expect(event).toEqual({
       type: 'afterToolCallEvent',
@@ -213,6 +236,7 @@ describe('AfterToolCallEvent', () => {
       tool: tool,
       result: result,
       error: undefined,
+      invocationState: {},
     })
     // @ts-expect-error verifying that property is readonly
     event.agent = new Agent()
@@ -220,8 +244,21 @@ describe('AfterToolCallEvent', () => {
     event.toolUse = toolUse
     // @ts-expect-error verifying that property is readonly
     event.tool = tool
-    // @ts-expect-error verifying that property is readonly
-    event.result = result
+  })
+
+  it('allows result to be replaced', () => {
+    const agent = new Agent()
+    const toolUse = { name: 'test', toolUseId: 'id', input: {} }
+    const result = new ToolResultBlock({ toolUseId: 'id', status: 'success', content: [new TextBlock('original')] })
+    const event = new AfterToolCallEvent({ agent, toolUse, tool: undefined, result, invocationState: {} })
+
+    const replacedResult = new ToolResultBlock({
+      toolUseId: 'id',
+      status: 'success',
+      content: [new TextBlock('replaced')],
+    })
+    event.result = replacedResult
+    expect(event.result).toBe(replacedResult)
   })
 
   it('creates instance with error property when tool execution fails', () => {
@@ -233,7 +270,7 @@ describe('AfterToolCallEvent', () => {
       content: [new TextBlock('Error')],
     })
     const error = new Error('Tool failed')
-    const event = new AfterToolCallEvent({ agent, toolUse, tool: undefined, result, error })
+    const event = new AfterToolCallEvent({ agent, toolUse, tool: undefined, result, error, invocationState: {} })
 
     expect(event).toEqual({
       type: 'afterToolCallEvent',
@@ -242,6 +279,7 @@ describe('AfterToolCallEvent', () => {
       tool: undefined,
       result: result,
       error: error,
+      invocationState: {},
     })
   })
 
@@ -253,7 +291,7 @@ describe('AfterToolCallEvent', () => {
       status: 'success',
       content: [],
     })
-    const event = new AfterToolCallEvent({ agent, toolUse, tool: undefined, result })
+    const event = new AfterToolCallEvent({ agent, toolUse, tool: undefined, result, invocationState: {} })
     expect(event._shouldReverseCallbacks()).toBe(true)
   })
 
@@ -266,7 +304,7 @@ describe('AfterToolCallEvent', () => {
       content: [new TextBlock('Error')],
     })
     const error = new Error('Tool failed')
-    const event = new AfterToolCallEvent({ agent, toolUse, tool: undefined, result, error })
+    const event = new AfterToolCallEvent({ agent, toolUse, tool: undefined, result, error, invocationState: {} })
 
     expect(event.retry).toBeUndefined()
 
@@ -285,7 +323,7 @@ describe('AfterToolCallEvent', () => {
       status: 'success',
       content: [new TextBlock('Success')],
     })
-    const event = new AfterToolCallEvent({ agent, toolUse, tool: undefined, result })
+    const event = new AfterToolCallEvent({ agent, toolUse, tool: undefined, result, invocationState: {} })
 
     expect(event.retry).toBeUndefined()
 
@@ -297,21 +335,71 @@ describe('AfterToolCallEvent', () => {
 describe('BeforeModelCallEvent', () => {
   it('creates instance with correct properties', () => {
     const agent = new Agent()
-    const event = new BeforeModelCallEvent({ agent, model: agent.model })
+    const event = new BeforeModelCallEvent({ agent, model: agent.model, invocationState: {} })
 
     expect(event).toEqual({
       type: 'beforeModelCallEvent',
       agent: agent,
       model: agent.model,
+      cancel: false,
+      invocationState: {},
     })
     // @ts-expect-error verifying that property is readonly
     event.agent = new Agent()
   })
 
+  it('includes projectedInputTokens when provided', () => {
+    const agent = new Agent()
+    const event = new BeforeModelCallEvent({
+      agent,
+      model: agent.model,
+      invocationState: {},
+      projectedInputTokens: 500,
+    })
+
+    expect(event).toEqual({
+      type: 'beforeModelCallEvent',
+      agent,
+      model: agent.model,
+      cancel: false,
+      invocationState: {},
+      projectedInputTokens: 500,
+    })
+    expect(event.toJSON()).toStrictEqual({
+      type: 'beforeModelCallEvent',
+      projectedInputTokens: 500,
+    })
+  })
+
+  it('excludes projectedInputTokens from toJSON when not provided', () => {
+    const agent = new Agent()
+    const event = new BeforeModelCallEvent({ agent, model: agent.model, invocationState: {} })
+
+    expect(event.projectedInputTokens).toBeUndefined()
+    expect(event.toJSON()).toStrictEqual({ type: 'beforeModelCallEvent' })
+  })
+
   it('returns false for _shouldReverseCallbacks', () => {
     const agent = new Agent()
-    const event = new BeforeModelCallEvent({ agent, model: agent.model })
+    const event = new BeforeModelCallEvent({ agent, model: agent.model, invocationState: {} })
     expect(event._shouldReverseCallbacks()).toBe(false)
+  })
+
+  it('allows cancel to be set to true', () => {
+    const agent = new Agent()
+    const event = new BeforeModelCallEvent({ agent, model: agent.model, invocationState: {} })
+
+    expect(event.cancel).toBe(false)
+    event.cancel = true
+    expect(event.cancel).toBe(true)
+  })
+
+  it('allows cancel to be set to a string message', () => {
+    const agent = new Agent()
+    const event = new BeforeModelCallEvent({ agent, model: agent.model, invocationState: {} })
+
+    event.cancel = 'rate limited'
+    expect(event.cancel).toBe('rate limited')
   })
 })
 
@@ -321,7 +409,7 @@ describe('AfterModelCallEvent', () => {
     const message = new Message({ role: 'assistant', content: [new TextBlock('Response')] })
     const stopReason = 'endTurn'
     const response = { message, stopReason }
-    const event = new AfterModelCallEvent({ agent, model: agent.model, stopData: response })
+    const event = new AfterModelCallEvent({ agent, model: agent.model, stopData: response, invocationState: {} })
 
     expect(event).toEqual({
       type: 'afterModelCallEvent',
@@ -329,6 +417,7 @@ describe('AfterModelCallEvent', () => {
       model: agent.model,
       stopData: response,
       error: undefined,
+      invocationState: {},
     })
     // @ts-expect-error verifying that property is readonly
     event.agent = new Agent()
@@ -341,7 +430,7 @@ describe('AfterModelCallEvent', () => {
     const message = new Message({ role: 'assistant', content: [] })
     const error = new Error('Model failed')
     const response = { message, stopReason: 'error' }
-    const event = new AfterModelCallEvent({ agent, model: agent.model, stopData: response, error })
+    const event = new AfterModelCallEvent({ agent, model: agent.model, stopData: response, error, invocationState: {} })
 
     expect(event).toEqual({
       type: 'afterModelCallEvent',
@@ -349,6 +438,7 @@ describe('AfterModelCallEvent', () => {
       model: agent.model,
       stopData: response,
       error: error,
+      invocationState: {},
     })
   })
 
@@ -356,14 +446,14 @@ describe('AfterModelCallEvent', () => {
     const agent = new Agent()
     const message = new Message({ role: 'assistant', content: [] })
     const response = { message, stopReason: 'endTurn' }
-    const event = new AfterModelCallEvent({ agent, model: agent.model, stopData: response })
+    const event = new AfterModelCallEvent({ agent, model: agent.model, stopData: response, invocationState: {} })
     expect(event._shouldReverseCallbacks()).toBe(true)
   })
 
   it('allows retry to be set when error is present', () => {
     const agent = new Agent()
     const error = new Error('Model failed')
-    const event = new AfterModelCallEvent({ agent, model: agent.model, error })
+    const event = new AfterModelCallEvent({ agent, model: agent.model, error, invocationState: {} })
 
     // Initially undefined
     expect(event.retry).toBeUndefined()
@@ -380,7 +470,7 @@ describe('AfterModelCallEvent', () => {
   it('retry is optional and defaults to undefined', () => {
     const agent = new Agent()
     const error = new Error('Model failed')
-    const event = new AfterModelCallEvent({ agent, model: agent.model, error })
+    const event = new AfterModelCallEvent({ agent, model: agent.model, error, invocationState: {} })
 
     expect(event.retry).toBeUndefined()
   })
@@ -393,12 +483,13 @@ describe('ModelStreamUpdateEvent', () => {
       type: 'modelMessageStartEvent' as const,
       role: 'assistant' as const,
     }
-    const hookEvent = new ModelStreamUpdateEvent({ agent, event: streamEvent })
+    const hookEvent = new ModelStreamUpdateEvent({ agent, event: streamEvent, invocationState: {} })
 
     expect(hookEvent).toEqual({
       type: 'modelStreamUpdateEvent',
       agent: agent,
       event: streamEvent,
+      invocationState: {},
     })
     // @ts-expect-error verifying that property is readonly
     hookEvent.agent = new Agent()
@@ -411,12 +502,13 @@ describe('ContentBlockEvent', () => {
   it('creates instance with correct properties', () => {
     const agent = new Agent()
     const contentBlock = new TextBlock('Hello')
-    const event = new ContentBlockEvent({ agent, contentBlock })
+    const event = new ContentBlockEvent({ agent, contentBlock, invocationState: {} })
 
     expect(event).toEqual({
       type: 'contentBlockEvent',
       agent: agent,
       contentBlock: contentBlock,
+      invocationState: {},
     })
     // @ts-expect-error verifying that property is readonly
     event.agent = new Agent()
@@ -429,13 +521,14 @@ describe('ModelMessageEvent', () => {
   it('creates instance with correct properties', () => {
     const agent = new Agent()
     const message = new Message({ role: 'assistant', content: [new TextBlock('Hello')] })
-    const event = new ModelMessageEvent({ agent, message, stopReason: 'endTurn' })
+    const event = new ModelMessageEvent({ agent, message, stopReason: 'endTurn', invocationState: {} })
 
     expect(event).toEqual({
       type: 'modelMessageEvent',
       agent: agent,
       message: message,
       stopReason: 'endTurn',
+      invocationState: {},
     })
     // @ts-expect-error verifying that property is readonly
     event.agent = new Agent()
@@ -454,12 +547,13 @@ describe('ToolResultEvent', () => {
       status: 'success',
       content: [new TextBlock('Result')],
     })
-    const event = new ToolResultEvent({ agent, result: toolResult })
+    const event = new ToolResultEvent({ agent, result: toolResult, invocationState: {} })
 
     expect(event).toEqual({
       type: 'toolResultEvent',
       agent: agent,
       result: toolResult,
+      invocationState: {},
     })
     // @ts-expect-error verifying that property is readonly
     event.agent = new Agent()
@@ -472,12 +566,13 @@ describe('ToolStreamUpdateEvent', () => {
   it('creates instance with correct properties', () => {
     const agent = new Agent()
     const toolStreamEvent = new ToolStreamEvent({ data: 'progress' })
-    const event = new ToolStreamUpdateEvent({ agent, event: toolStreamEvent })
+    const event = new ToolStreamUpdateEvent({ agent, event: toolStreamEvent, invocationState: {} })
 
     expect(event).toEqual({
       type: 'toolStreamUpdateEvent',
       agent: agent,
       event: toolStreamEvent,
+      invocationState: {},
     })
     // @ts-expect-error verifying that property is readonly
     event.agent = new Agent()
@@ -493,13 +588,15 @@ describe('AgentResultEvent', () => {
       stopReason: 'endTurn',
       lastMessage: new Message({ role: 'assistant', content: [new TextBlock('Done')] }),
       metrics: new AgentMetrics(),
+      invocationState: {},
     })
-    const event = new AgentResultEvent({ agent, result })
+    const event = new AgentResultEvent({ agent, result, invocationState: {} })
 
     expect(event).toEqual({
       type: 'agentResultEvent',
       agent: agent,
       result: result,
+      invocationState: {},
     })
     // @ts-expect-error verifying that property is readonly
     event.agent = new Agent()
@@ -521,13 +618,14 @@ describe('BeforeToolsEvent', () => {
         }),
       ],
     })
-    const event = new BeforeToolsEvent({ agent, message })
+    const event = new BeforeToolsEvent({ agent, message, invocationState: {} })
 
     expect(event).toEqual({
       type: 'beforeToolsEvent',
       agent: agent,
       message: message,
       cancel: false,
+      invocationState: {},
     })
     // @ts-expect-error verifying that property is readonly
     event.agent = new Agent()
@@ -538,14 +636,14 @@ describe('BeforeToolsEvent', () => {
   it('returns false for _shouldReverseCallbacks', () => {
     const agent = new Agent()
     const message = new Message({ role: 'assistant', content: [] })
-    const event = new BeforeToolsEvent({ agent, message })
+    const event = new BeforeToolsEvent({ agent, message, invocationState: {} })
     expect(event._shouldReverseCallbacks()).toBe(false)
   })
 
   it('allows cancel to be set to true', () => {
     const agent = new Agent()
     const message = new Message({ role: 'assistant', content: [] })
-    const event = new BeforeToolsEvent({ agent, message })
+    const event = new BeforeToolsEvent({ agent, message, invocationState: {} })
 
     expect(event.cancel).toBe(false)
     event.cancel = true
@@ -555,7 +653,7 @@ describe('BeforeToolsEvent', () => {
   it('allows cancel to be set to a string message', () => {
     const agent = new Agent()
     const message = new Message({ role: 'assistant', content: [] })
-    const event = new BeforeToolsEvent({ agent, message })
+    const event = new BeforeToolsEvent({ agent, message, invocationState: {} })
 
     event.cancel = 'tools not allowed'
     expect(event.cancel).toBe('tools not allowed')
@@ -575,12 +673,13 @@ describe('AfterToolsEvent', () => {
         }),
       ],
     })
-    const event = new AfterToolsEvent({ agent, message })
+    const event = new AfterToolsEvent({ agent, message, invocationState: {} })
 
     expect(event).toEqual({
       type: 'afterToolsEvent',
       agent: agent,
       message: message,
+      invocationState: {},
     })
     // @ts-expect-error verifying that property is readonly
     event.agent = new Agent()
@@ -591,7 +690,7 @@ describe('AfterToolsEvent', () => {
   it('returns true for _shouldReverseCallbacks', () => {
     const agent = new Agent()
     const message = new Message({ role: 'user', content: [] })
-    const event = new AfterToolsEvent({ agent, message })
+    const event = new AfterToolsEvent({ agent, message, invocationState: {} })
     expect(event._shouldReverseCallbacks()).toBe(true)
   })
 })
@@ -612,7 +711,7 @@ describe('toJSON serialization', () => {
   describe('BeforeInvocationEvent', () => {
     it('excludes agent and returns only type', () => {
       const agent = new Agent()
-      const event = new BeforeInvocationEvent({ agent })
+      const event = new BeforeInvocationEvent({ agent, invocationState: {} })
       const json = JSON.parse(JSON.stringify(event))
 
       expect(json).toStrictEqual({ type: 'beforeInvocationEvent' })
@@ -622,7 +721,7 @@ describe('toJSON serialization', () => {
   describe('AfterInvocationEvent', () => {
     it('excludes agent and returns only type', () => {
       const agent = new Agent()
-      const event = new AfterInvocationEvent({ agent })
+      const event = new AfterInvocationEvent({ agent, invocationState: {} })
       const json = JSON.parse(JSON.stringify(event))
 
       expect(json).toStrictEqual({ type: 'afterInvocationEvent' })
@@ -632,7 +731,7 @@ describe('toJSON serialization', () => {
   describe('BeforeModelCallEvent', () => {
     it('excludes agent and model and returns only type', () => {
       const agent = new Agent()
-      const event = new BeforeModelCallEvent({ agent, model: agent.model })
+      const event = new BeforeModelCallEvent({ agent, model: agent.model, invocationState: {} })
       const json = JSON.parse(JSON.stringify(event))
 
       expect(json).toStrictEqual({ type: 'beforeModelCallEvent' })
@@ -643,7 +742,7 @@ describe('toJSON serialization', () => {
     it('includes message and excludes agent', () => {
       const agent = new Agent()
       const message = new Message({ role: 'assistant', content: [new TextBlock('Hello')] })
-      const event = new MessageAddedEvent({ agent, message })
+      const event = new MessageAddedEvent({ agent, message, invocationState: {} })
       const json = JSON.parse(JSON.stringify(event))
 
       expect(json).toStrictEqual({
@@ -660,7 +759,7 @@ describe('toJSON serialization', () => {
         type: 'modelContentBlockDeltaEvent' as const,
         delta: { type: 'textDelta' as const, text: 'Hi' },
       }
-      const event = new ModelStreamUpdateEvent({ agent, event: streamEvent })
+      const event = new ModelStreamUpdateEvent({ agent, event: streamEvent, invocationState: {} })
       const json = JSON.parse(JSON.stringify(event))
 
       expect(json).toStrictEqual({
@@ -674,7 +773,7 @@ describe('toJSON serialization', () => {
     it('includes content block and excludes agent', () => {
       const agent = new Agent()
       const contentBlock = new TextBlock('Hello world')
-      const event = new ContentBlockEvent({ agent, contentBlock })
+      const event = new ContentBlockEvent({ agent, contentBlock, invocationState: {} })
       const json = JSON.parse(JSON.stringify(event))
 
       expect(json).toStrictEqual({
@@ -688,7 +787,7 @@ describe('toJSON serialization', () => {
     it('includes message and stopReason, excludes agent', () => {
       const agent = new Agent()
       const message = new Message({ role: 'assistant', content: [new TextBlock('Done')] })
-      const event = new ModelMessageEvent({ agent, message, stopReason: 'endTurn' })
+      const event = new ModelMessageEvent({ agent, message, stopReason: 'endTurn', invocationState: {} })
       const json = JSON.parse(JSON.stringify(event))
 
       expect(json).toStrictEqual({
@@ -707,7 +806,7 @@ describe('toJSON serialization', () => {
         status: 'success',
         content: [new TextBlock('42')],
       })
-      const event = new ToolResultEvent({ agent, result })
+      const event = new ToolResultEvent({ agent, result, invocationState: {} })
       const json = JSON.parse(JSON.stringify(event))
 
       expect(json).toStrictEqual({
@@ -721,7 +820,7 @@ describe('toJSON serialization', () => {
     it('includes tool stream event and excludes agent', () => {
       const agent = new Agent()
       const toolStreamEvent = new ToolStreamEvent({ data: { progress: 50 } })
-      const event = new ToolStreamUpdateEvent({ agent, event: toolStreamEvent })
+      const event = new ToolStreamUpdateEvent({ agent, event: toolStreamEvent, invocationState: {} })
       const json = JSON.parse(JSON.stringify(event))
 
       expect(json).toStrictEqual({
@@ -738,8 +837,9 @@ describe('toJSON serialization', () => {
         stopReason: 'endTurn',
         lastMessage: new Message({ role: 'assistant', content: [new TextBlock('Done')] }),
         metrics: new AgentMetrics(),
+        invocationState: {},
       })
-      const event = new AgentResultEvent({ agent, result })
+      const event = new AgentResultEvent({ agent, result, invocationState: {} })
       const json = JSON.parse(JSON.stringify(event))
 
       expect(json).toStrictEqual({
@@ -763,7 +863,7 @@ describe('toJSON serialization', () => {
         callback: () => 'result',
       })
       const toolUse = { name: 'testTool', toolUseId: 'id-1', input: { query: 'hello' } }
-      const event = new BeforeToolCallEvent({ agent, toolUse, tool })
+      const event = new BeforeToolCallEvent({ agent, toolUse, tool, invocationState: {} })
       const json = JSON.parse(JSON.stringify(event))
 
       expect(json).toStrictEqual({
@@ -782,7 +882,7 @@ describe('toJSON serialization', () => {
         status: 'success',
         content: [new TextBlock('42')],
       })
-      const event = new AfterToolCallEvent({ agent, toolUse, tool: undefined, result })
+      const event = new AfterToolCallEvent({ agent, toolUse, tool: undefined, result, invocationState: {} })
       const json = JSON.parse(JSON.stringify(event))
 
       expect(json).toStrictEqual({
@@ -801,7 +901,7 @@ describe('toJSON serialization', () => {
         content: [new TextBlock('Error')],
       })
       const error = new Error('Tool crashed')
-      const event = new AfterToolCallEvent({ agent, toolUse, tool: undefined, result, error })
+      const event = new AfterToolCallEvent({ agent, toolUse, tool: undefined, result, error, invocationState: {} })
       event.retry = true
       const json = JSON.parse(JSON.stringify(event))
 
@@ -819,7 +919,7 @@ describe('toJSON serialization', () => {
       const agent = new Agent()
       const message = new Message({ role: 'assistant', content: [new TextBlock('Hi')] })
       const stopData = { message, stopReason: 'endTurn' as const }
-      const event = new AfterModelCallEvent({ agent, model: agent.model, stopData })
+      const event = new AfterModelCallEvent({ agent, model: agent.model, stopData, invocationState: {} })
       const json = JSON.parse(JSON.stringify(event))
 
       expect(json).toStrictEqual({
@@ -834,7 +934,7 @@ describe('toJSON serialization', () => {
     it('converts error to message string and excludes retry', () => {
       const agent = new Agent()
       const error = new Error('Model failed')
-      const event = new AfterModelCallEvent({ agent, model: agent.model, error })
+      const event = new AfterModelCallEvent({ agent, model: agent.model, error, invocationState: {} })
       event.retry = true
       const json = JSON.parse(JSON.stringify(event))
 
@@ -852,7 +952,7 @@ describe('toJSON serialization', () => {
         role: 'assistant',
         content: [new ToolUseBlock({ name: 'calc', toolUseId: 'id-1', input: {} })],
       })
-      const event = new BeforeToolsEvent({ agent, message })
+      const event = new BeforeToolsEvent({ agent, message, invocationState: {} })
       event.cancel = 'not allowed'
       const json = JSON.parse(JSON.stringify(event))
 
@@ -876,7 +976,7 @@ describe('toJSON serialization', () => {
           }),
         ],
       })
-      const event = new AfterToolsEvent({ agent, message })
+      const event = new AfterToolsEvent({ agent, message, invocationState: {} })
       const json = JSON.parse(JSON.stringify(event))
 
       expect(json).toStrictEqual({
@@ -898,6 +998,7 @@ describe('toJSON serialization', () => {
       const event = new ModelStreamUpdateEvent({
         agent,
         event: { type: 'modelContentBlockDeltaEvent', delta: { type: 'textDelta', text: 'Hi' } },
+        invocationState: {},
       })
       const json = JSON.stringify(event)
 
@@ -920,7 +1021,7 @@ describe('toJSON serialization completeness', () => {
    * If you add a new field to an event and it should be excluded from wire serialization,
    * add it here. Otherwise, add it to toJSON() so it gets serialized.
    */
-  const EXCLUDED_FIELDS = new Set(['agent', 'model', 'tool', 'cancel', 'retry'])
+  const EXCLUDED_FIELDS = new Set(['agent', 'model', 'tool', 'cancel', 'retry', 'invocationState'])
 
   /**
    * Fields where toJSON() transforms the value (e.g., Error to message object).
@@ -947,31 +1048,54 @@ describe('toJSON serialization completeness', () => {
       stopReason: 'endTurn',
       lastMessage: message,
       metrics: new AgentMetrics(),
+      invocationState: {},
     })
 
     return [
       { name: 'InitializedEvent', event: new InitializedEvent({ agent }) },
-      { name: 'BeforeInvocationEvent', event: new BeforeInvocationEvent({ agent }) },
-      { name: 'AfterInvocationEvent', event: new AfterInvocationEvent({ agent }) },
-      { name: 'BeforeModelCallEvent', event: new BeforeModelCallEvent({ agent, model: agent.model }) },
+      { name: 'BeforeInvocationEvent', event: new BeforeInvocationEvent({ agent, invocationState: {} }) },
+      { name: 'AfterInvocationEvent', event: new AfterInvocationEvent({ agent, invocationState: {} }) },
+      {
+        name: 'BeforeModelCallEvent',
+        event: new BeforeModelCallEvent({
+          agent,
+          model: agent.model,
+          invocationState: {},
+          projectedInputTokens: 100,
+        }),
+      },
       {
         name: 'AfterModelCallEvent',
-        event: Object.assign(new AfterModelCallEvent({ agent, model: agent.model, stopData, error }), { retry: true }),
+        event: Object.assign(
+          new AfterModelCallEvent({ agent, model: agent.model, stopData, error, invocationState: {} }),
+          { retry: true }
+        ),
       },
-      { name: 'MessageAddedEvent', event: new MessageAddedEvent({ agent, message }) },
-      { name: 'ModelStreamUpdateEvent', event: new ModelStreamUpdateEvent({ agent, event: streamEvent }) },
-      { name: 'ContentBlockEvent', event: new ContentBlockEvent({ agent, contentBlock }) },
-      { name: 'ModelMessageEvent', event: new ModelMessageEvent({ agent, message, stopReason: 'endTurn' }) },
-      { name: 'ToolResultEvent', event: new ToolResultEvent({ agent, result }) },
-      { name: 'ToolStreamUpdateEvent', event: new ToolStreamUpdateEvent({ agent, event: toolStreamEvent }) },
-      { name: 'AgentResultEvent', event: new AgentResultEvent({ agent, result: agentResult }) },
-      { name: 'BeforeToolCallEvent', event: new BeforeToolCallEvent({ agent, toolUse, tool }) },
+      { name: 'MessageAddedEvent', event: new MessageAddedEvent({ agent, message, invocationState: {} }) },
+      {
+        name: 'ModelStreamUpdateEvent',
+        event: new ModelStreamUpdateEvent({ agent, event: streamEvent, invocationState: {} }),
+      },
+      { name: 'ContentBlockEvent', event: new ContentBlockEvent({ agent, contentBlock, invocationState: {} }) },
+      {
+        name: 'ModelMessageEvent',
+        event: new ModelMessageEvent({ agent, message, stopReason: 'endTurn', invocationState: {} }),
+      },
+      { name: 'ToolResultEvent', event: new ToolResultEvent({ agent, result, invocationState: {} }) },
+      {
+        name: 'ToolStreamUpdateEvent',
+        event: new ToolStreamUpdateEvent({ agent, event: toolStreamEvent, invocationState: {} }),
+      },
+      { name: 'AgentResultEvent', event: new AgentResultEvent({ agent, result: agentResult, invocationState: {} }) },
+      { name: 'BeforeToolCallEvent', event: new BeforeToolCallEvent({ agent, toolUse, tool, invocationState: {} }) },
       {
         name: 'AfterToolCallEvent',
-        event: Object.assign(new AfterToolCallEvent({ agent, toolUse, tool, result, error }), { retry: true }),
+        event: Object.assign(new AfterToolCallEvent({ agent, toolUse, tool, result, error, invocationState: {} }), {
+          retry: true,
+        }),
       },
-      { name: 'BeforeToolsEvent', event: new BeforeToolsEvent({ agent, message }) },
-      { name: 'AfterToolsEvent', event: new AfterToolsEvent({ agent, message }) },
+      { name: 'BeforeToolsEvent', event: new BeforeToolsEvent({ agent, message, invocationState: {} }) },
+      { name: 'AfterToolsEvent', event: new AfterToolsEvent({ agent, message, invocationState: {} }) },
     ]
   }
 

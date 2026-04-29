@@ -4,7 +4,7 @@
 
 import { inject } from 'vitest'
 import { BedrockModel, type BedrockModelOptions } from '$/sdk/models/bedrock.js'
-import { OpenAIModel, type OpenAIModelOptions } from '$/sdk/models/openai.js'
+import { OpenAIModel, type OpenAIModelOptions } from '$/sdk/models/openai/index.js'
 import { AnthropicModel, type AnthropicModelOptions } from '$/sdk/models/anthropic.js'
 import { GoogleModel, type GoogleModelOptions } from '$/sdk/models/google/model.js'
 import { VercelModel, type VercelModelConfig } from '$/sdk/models/vercel.js'
@@ -93,6 +93,41 @@ export const openai = {
       api: 'chat',
       apiKey,
       clientConfig: { ...(config.clientConfig ?? {}), dangerouslyAllowBrowser: true },
+    })
+  },
+}
+
+export const openaiResponses = {
+  name: "OpenAIModel (api: 'responses')",
+  supports: {
+    reasoning: true,
+    tools: true,
+    toolThinking: false,
+    builtInTools: true,
+    images: true,
+    documents: true,
+    video: false,
+    citations: true,
+  } satisfies ProviderFeatures,
+  models: {
+    default: {},
+    reasoning: { modelId: 'o4-mini' },
+    video: {},
+  },
+  get skip() {
+    return inject('provider-openai').shouldSkip
+  },
+  createModel: (
+    config: Omit<Extract<OpenAIModelOptions, { api?: 'responses' }>, 'api' | 'client'> = {}
+  ): OpenAIModel => {
+    const apiKey = inject('provider-openai')?.apiKey
+    if (!apiKey) {
+      throw new Error('No OpenAI apiKey provided')
+    }
+    return new OpenAIModel({
+      ...config,
+      api: 'responses',
+      apiKey,
     })
   },
 }

@@ -159,4 +159,31 @@ describe.skipIf(anthropic.skip)('AnthropicModel Integration Tests', () => {
       }
     })
   })
+
+  describe('countTokens', () => {
+    const messages = [
+      new Message({ role: 'user', content: [new TextBlock('What is the capital of France? Explain in detail.')] }),
+    ]
+    const toolSpecs = [
+      {
+        name: 'get_weather',
+        description: 'Get the current weather for a location',
+        inputSchema: { type: 'object' as const, properties: { location: { type: 'string' as const } } },
+      },
+    ]
+
+    it.concurrent('should count tokens for messages only', async () => {
+      const model = anthropic.createModel()
+      const result = await model.countTokens(messages)
+      expect(typeof result).toBe('number')
+      expect(result).toBeGreaterThan(0)
+    })
+
+    it.concurrent('should return more tokens with tools and system prompt', async () => {
+      const model = anthropic.createModel()
+      const without = await model.countTokens(messages)
+      const withTools = await model.countTokens(messages, { toolSpecs, systemPrompt: 'Be helpful.' })
+      expect(withTools).toBeGreaterThan(without)
+    })
+  })
 })

@@ -13,6 +13,7 @@ import {
   ModelStreamUpdateEvent,
   InitializedEvent,
   HookableEvent,
+  ModelMessageEvent,
 } from '../../hooks/index.js'
 import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
 import { MockPlugin } from '../../__fixtures__/mock-plugin.js'
@@ -38,15 +39,27 @@ describe('Agent Hooks Integration', () => {
       expect(lifecyclePlugin.invocations).toHaveLength(7)
 
       expect(lifecyclePlugin.invocations[0]).toEqual(new InitializedEvent({ agent }))
-      expect(lifecyclePlugin.invocations[1]).toEqual(new BeforeInvocationEvent({ agent }))
+      expect(lifecyclePlugin.invocations[1]).toEqual(new BeforeInvocationEvent({ agent, invocationState: {} }))
       expect(lifecyclePlugin.invocations[2]).toEqual(
-        new MessageAddedEvent({ agent, message: new Message({ role: 'user', content: [new TextBlock('Hi')] }) })
+        new MessageAddedEvent({
+          agent,
+          message: new Message({ role: 'user', content: [new TextBlock('Hi')] }),
+          invocationState: {},
+        })
       )
-      expect(lifecyclePlugin.invocations[3]).toEqual(new BeforeModelCallEvent({ agent, model: agent.model }))
+      expect(lifecyclePlugin.invocations[3]).toEqual(
+        new BeforeModelCallEvent({
+          agent,
+          model: agent.model,
+          invocationState: {},
+          projectedInputTokens: expect.any(Number) as number,
+        })
+      )
       expect(lifecyclePlugin.invocations[4]).toEqual(
         new AfterModelCallEvent({
           agent,
           model: agent.model,
+          invocationState: {},
           stopData: {
             stopReason: 'endTurn',
             message: new Message({ role: 'assistant', content: [new TextBlock('Hello')] }),
@@ -57,9 +70,10 @@ describe('Agent Hooks Integration', () => {
         new MessageAddedEvent({
           agent,
           message: new Message({ role: 'assistant', content: [new TextBlock('Hello')] }),
+          invocationState: {},
         })
       )
-      expect(lifecyclePlugin.invocations[6]).toEqual(new AfterInvocationEvent({ agent }))
+      expect(lifecyclePlugin.invocations[6]).toEqual(new AfterInvocationEvent({ agent, invocationState: {} }))
     })
 
     it('fires hooks during stream', async () => {
@@ -72,18 +86,27 @@ describe('Agent Hooks Integration', () => {
       expect(lifecyclePlugin.invocations).toHaveLength(7)
 
       expect(lifecyclePlugin.invocations[0]).toEqual(new InitializedEvent({ agent }))
-      expect(lifecyclePlugin.invocations[1]).toEqual(new BeforeInvocationEvent({ agent }))
+      expect(lifecyclePlugin.invocations[1]).toEqual(new BeforeInvocationEvent({ agent, invocationState: {} }))
       expect(lifecyclePlugin.invocations[2]).toEqual(
         new MessageAddedEvent({
           agent,
           message: new Message({ role: 'user', content: [new TextBlock('Hi')] }),
+          invocationState: {},
         })
       )
-      expect(lifecyclePlugin.invocations[3]).toEqual(new BeforeModelCallEvent({ agent, model: agent.model }))
+      expect(lifecyclePlugin.invocations[3]).toEqual(
+        new BeforeModelCallEvent({
+          agent,
+          model: agent.model,
+          invocationState: {},
+          projectedInputTokens: expect.any(Number) as number,
+        })
+      )
       expect(lifecyclePlugin.invocations[4]).toEqual(
         new AfterModelCallEvent({
           agent,
           model: agent.model,
+          invocationState: {},
           stopData: {
             stopReason: 'endTurn',
             message: new Message({ role: 'assistant', content: [new TextBlock('Hello')] }),
@@ -94,9 +117,10 @@ describe('Agent Hooks Integration', () => {
         new MessageAddedEvent({
           agent,
           message: new Message({ role: 'assistant', content: [new TextBlock('Hello')] }),
+          invocationState: {},
         })
       )
-      expect(lifecyclePlugin.invocations[6]).toEqual(new AfterInvocationEvent({ agent }))
+      expect(lifecyclePlugin.invocations[6]).toEqual(new AfterInvocationEvent({ agent, invocationState: {} }))
     })
   })
 
@@ -117,8 +141,8 @@ describe('Agent Hooks Integration', () => {
       await agent.invoke('Hi')
 
       expect(invocations).toHaveLength(2)
-      expect(invocations[0]).toEqual(new BeforeInvocationEvent({ agent }))
-      expect(invocations[1]).toEqual(new AfterInvocationEvent({ agent }))
+      expect(invocations[0]).toEqual(new BeforeInvocationEvent({ agent, invocationState: {} }))
+      expect(invocations[1]).toEqual(new AfterInvocationEvent({ agent, invocationState: {} }))
     })
   })
 
@@ -186,6 +210,7 @@ describe('Agent Hooks Integration', () => {
           agent,
           toolUse: { name: 'testTool', toolUseId: 'tool-1', input: {} },
           tool,
+          invocationState: {},
         })
       )
 
@@ -201,6 +226,7 @@ describe('Agent Hooks Integration', () => {
             status: 'success',
             content: [new TextBlock('Tool result')],
           }),
+          invocationState: {},
         })
       )
     })
@@ -241,6 +267,7 @@ describe('Agent Hooks Integration', () => {
             content: [new TextBlock('Tool execution failed')],
           }),
           error: new Error('Tool execution failed'),
+          invocationState: {},
         })
       )
     })
@@ -297,12 +324,14 @@ describe('Agent Hooks Integration', () => {
         new MessageAddedEvent({
           agent,
           message: new Message({ role: 'user', content: [new TextBlock('New message')] }),
+          invocationState: {},
         })
       )
       expect(messageAddedEvents[1]).toEqual(
         new MessageAddedEvent({
           agent,
           message: new Message({ role: 'assistant', content: [new TextBlock('Response')] }),
+          invocationState: {},
         })
       )
     })
@@ -545,7 +574,7 @@ describe('Agent Hooks Integration', () => {
         new ToolResultBlock({
           toolUseId: 'tool-1',
           status: 'error',
-          content: [new TextBlock('tool cancelled by hook')],
+          content: [new TextBlock('Tool cancelled by hook')],
         })
       )
     })
@@ -655,7 +684,7 @@ describe('Agent Hooks Integration', () => {
         new ToolResultBlock({
           toolUseId: 'tool-1',
           status: 'error',
-          content: [new TextBlock('tool cancelled by hook')],
+          content: [new TextBlock('Tool cancelled by hook')],
         })
       )
     })
@@ -803,6 +832,181 @@ describe('Agent Hooks Integration', () => {
       expect(result.stopReason).toBe('endTurn')
       expect(beforeCount).toBe(2)
       expect(toolCallCount).toBe(1) // Only executed on second attempt
+    })
+
+    it('allows hooks to replace result on AfterToolCallEvent', async () => {
+      const tool = createMockTool('myTool', () => {
+        return new ToolResultBlock({
+          toolUseId: 'tool-1',
+          status: 'success',
+          content: [new TextBlock('original result')],
+        })
+      })
+
+      const model = new MockMessageModel()
+        .addTurn({ type: 'toolUseBlock', name: 'myTool', toolUseId: 'tool-1', input: {} })
+        .addTurn({ type: 'textBlock', text: 'Done' })
+
+      const agent = new Agent({ model, tools: [tool] })
+      agent.addHook(AfterToolCallEvent, (event: AfterToolCallEvent) => {
+        event.result = new ToolResultBlock({
+          toolUseId: event.result.toolUseId,
+          status: 'success',
+          content: [new TextBlock('replaced result')],
+        })
+      })
+
+      await agent.invoke('Test')
+
+      const toolResultMessage = agent.messages.find(
+        (m) => m.role === 'user' && m.content.some((b) => b.type === 'toolResultBlock')
+      )
+      const toolResultBlock = toolResultMessage!.content.find((b): b is ToolResultBlock => b.type === 'toolResultBlock')
+      expect(toolResultBlock).toStrictEqual(
+        new ToolResultBlock({
+          toolUseId: 'tool-1',
+          status: 'success',
+          content: [new TextBlock('replaced result')],
+        })
+      )
+    })
+  })
+
+  describe('cancel invocation via hooks', () => {
+    it('cancels invocation with default message when cancel is true', async () => {
+      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
+      const agent = new Agent({ model, plugins: [mockPlugin] })
+      agent.addHook(BeforeInvocationEvent, (event: BeforeInvocationEvent) => {
+        event.cancel = true
+      })
+
+      const result = await agent.invoke('Test')
+
+      expect(result.stopReason).toBe('endTurn')
+      expect(result.lastMessage.content[0]).toEqual(new TextBlock('invocation denied by hook'))
+
+      const beforeModelCallEvents = mockPlugin.invocations.filter((e) => e instanceof BeforeModelCallEvent)
+      expect(beforeModelCallEvents).toHaveLength(0)
+    })
+
+    it('cancels invocation with custom message when cancel is a string', async () => {
+      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
+      const agent = new Agent({ model, plugins: [mockPlugin] })
+      agent.addHook(BeforeInvocationEvent, (event: BeforeInvocationEvent) => {
+        event.cancel = 'Unauthorized user'
+      })
+
+      const result = await agent.invoke('Test')
+
+      expect(result.stopReason).toBe('endTurn')
+      expect(result.lastMessage.content[0]).toEqual(new TextBlock('Unauthorized user'))
+    })
+
+    it('does not append user message when invocation is cancelled', async () => {
+      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
+      const agent = new Agent({ model })
+      agent.addHook(BeforeInvocationEvent, (event: BeforeInvocationEvent) => {
+        event.cancel = true
+      })
+
+      await agent.invoke('Test')
+
+      expect(agent.messages).toHaveLength(1)
+      expect(agent.messages[0]!.role).toBe('assistant')
+    })
+
+    it('emits AfterInvocationEvent when invocation is cancelled', async () => {
+      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
+      const agent = new Agent({ model, plugins: [mockPlugin] })
+      agent.addHook(BeforeInvocationEvent, (event: BeforeInvocationEvent) => {
+        event.cancel = true
+      })
+
+      await agent.invoke('Test')
+
+      const beforeInvocationEvents = mockPlugin.invocations.filter((e) => e instanceof BeforeInvocationEvent)
+      const afterInvocationEvents = mockPlugin.invocations.filter((e) => e instanceof AfterInvocationEvent)
+      expect(beforeInvocationEvents).toHaveLength(1)
+      expect(afterInvocationEvents).toHaveLength(1)
+    })
+  })
+
+  describe('cancel model call via hooks', () => {
+    it('cancels model call with default message when cancel is true', async () => {
+      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
+      const agent = new Agent({ model, plugins: [mockPlugin] })
+      agent.addHook(BeforeModelCallEvent, (event: BeforeModelCallEvent) => {
+        event.cancel = true
+      })
+
+      const result = await agent.invoke('Test')
+
+      expect(result.stopReason).toBe('endTurn')
+      expect(result.lastMessage.content[0]).toEqual(new TextBlock('model call denied by hook'))
+    })
+
+    it('cancels model call with custom message when cancel is a string', async () => {
+      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
+      const agent = new Agent({ model, plugins: [mockPlugin] })
+      agent.addHook(BeforeModelCallEvent, (event: BeforeModelCallEvent) => {
+        event.cancel = 'Rate limited'
+      })
+
+      const result = await agent.invoke('Test')
+
+      expect(result.stopReason).toBe('endTurn')
+      expect(result.lastMessage.content[0]).toEqual(new TextBlock('Rate limited'))
+    })
+
+    it('emits AfterModelCallEvent when model call is cancelled', async () => {
+      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
+      const agent = new Agent({ model, plugins: [mockPlugin] })
+      agent.addHook(BeforeModelCallEvent, (event: BeforeModelCallEvent) => {
+        event.cancel = true
+      })
+
+      await agent.invoke('Test')
+
+      const beforeModelCallEvents = mockPlugin.invocations.filter((e) => e instanceof BeforeModelCallEvent)
+      const afterModelCallEvents = mockPlugin.invocations.filter((e) => e instanceof AfterModelCallEvent)
+      expect(beforeModelCallEvents).toHaveLength(1)
+      expect(afterModelCallEvents).toHaveLength(1)
+    })
+
+    it('does not emit ModelMessageEvent when model call is cancelled', async () => {
+      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
+      const agent = new Agent({ model, plugins: [mockPlugin] })
+      agent.addHook(BeforeModelCallEvent, (event: BeforeModelCallEvent) => {
+        event.cancel = true
+      })
+
+      await agent.invoke('Test')
+
+      const modelMessageEvents = mockPlugin.invocations.filter((e) => e instanceof ModelMessageEvent)
+      expect(modelMessageEvents).toHaveLength(0)
+    })
+
+    it('allows retry after cancel on model call', async () => {
+      let beforeCount = 0
+      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
+      const agent = new Agent({ model, plugins: [mockPlugin] })
+      agent.addHook(BeforeModelCallEvent, (event: BeforeModelCallEvent) => {
+        beforeCount++
+        if (beforeCount === 1) {
+          event.cancel = 'Not yet'
+        }
+      })
+      agent.addHook(AfterModelCallEvent, (event: AfterModelCallEvent) => {
+        if (beforeCount === 1) {
+          event.retry = true
+        }
+      })
+
+      const result = await agent.invoke('Test')
+
+      expect(result.stopReason).toBe('endTurn')
+      expect(beforeCount).toBe(2)
+      expect(result.lastMessage.content[0]).toEqual(new TextBlock('Hello'))
     })
   })
 })

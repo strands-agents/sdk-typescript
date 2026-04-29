@@ -1,6 +1,6 @@
 import type { AttributeValue } from '@opentelemetry/api'
-import type { InvokableAgent } from '../types/agent.js'
-import type { MultiAgentInput } from './multiagent.js'
+import type { InvocationState, InvokableAgent } from '../types/agent.js'
+import type { MultiAgentInput, MultiAgentInvokeOptions } from './multiagent.js'
 import type { ContentBlock } from '../types/messages.js'
 import { TextBlock, contentBlockFromData } from '../types/messages.js'
 import { logger } from '../logging/logger.js'
@@ -155,10 +155,11 @@ export class Graph implements MultiAgent {
    * Invoke graph and return final result (consumes stream).
    *
    * @param input - The input to pass to entry point nodes
+   * @param options - Optional per-invocation options (e.g., {@link InvocationState})
    * @returns Promise resolving to the final MultiAgentResult
    */
-  async invoke(input: MultiAgentInput): Promise<MultiAgentResult> {
-    const gen = this.stream(input)
+  async invoke(input: MultiAgentInput, options?: MultiAgentInvokeOptions): Promise<MultiAgentResult> {
+    const gen = this.stream(input, options)
     let next = await gen.next()
     while (!next.done) {
       next = await gen.next()
@@ -182,12 +183,20 @@ export class Graph implements MultiAgent {
    * Invokes hook callbacks for each event before yielding.
    *
    * @param input - The input to pass to entry nodes
+   * @param options - Optional per-invocation options (e.g., {@link InvocationState})
    * @returns Async generator yielding streaming events and returning a MultiAgentResult
    */
-  async *stream(input: MultiAgentInput): AsyncGenerator<MultiAgentStreamEvent, MultiAgentResult, undefined> {
+  async *stream(
+    input: MultiAgentInput,
+    options?: MultiAgentInvokeOptions
+  ): AsyncGenerator<MultiAgentStreamEvent, MultiAgentResult, undefined> {
     await this.initialize()
 
-    const gen = this._stream(input)
+    // Resolve invocationState once; the same object is threaded to every node's
+    // child agent so mutations in one node are visible in the next.
+    const invocationState: InvocationState = options?.invocationState ?? {}
+
+    const gen = this._stream(input, invocationState)
     try {
       let next = await gen.next()
       while (!next.done) {
@@ -203,7 +212,10 @@ export class Graph implements MultiAgent {
     }
   }
 
-  private async *_stream(input: MultiAgentInput): AsyncGenerator<MultiAgentStreamEvent, MultiAgentResult, undefined> {
+  private async *_stream(
+    input: MultiAgentInput,
+    invocationState: InvocationState
+  ): AsyncGenerator<MultiAgentStreamEvent, MultiAgentResult, undefined> {
     const state = new MultiAgentState({ nodeIds: [...this.nodes.keys()] })
 
     const queue = new Queue()
@@ -216,7 +228,7 @@ export class Graph implements MultiAgent {
     })
 
     // SessionManager (or plugins) may restore state.results here via the hook
-    yield new BeforeMultiAgentInvocationEvent({ orchestrator: this, state })
+    yield new BeforeMultiAgentInvocationEvent({ orchestrator: this, state, invocationState })
 
     // Resume: if state was restored, find nodes that are ready but haven't completed otherwise start from source nodes
     const targets = (await this._findResumeTargets(state)) ?? [...this._sources]
@@ -231,7 +243,7 @@ export class Graph implements MultiAgent {
           this._checkSteps(state)
           state.steps++
 
-          streams.set(node.id, this._streamNode(node, input, state, queue, multiAgentSpan))
+          streams.set(node.id, this._streamNode(node, input, state, queue, multiAgentSpan, invocationState))
         }
 
         await queue.wait()
@@ -262,6 +274,7 @@ export class Graph implements MultiAgent {
               source: node.id,
               targets: ready.map((n) => n.id),
               state,
+              invocationState,
             })
             targets.push(...ready)
           }
@@ -286,10 +299,10 @@ export class Graph implements MultiAgent {
         ...(caughtError && { error: caughtError }),
       })
 
-      yield new AfterMultiAgentInvocationEvent({ orchestrator: this, state })
+      yield new AfterMultiAgentInvocationEvent({ orchestrator: this, state, invocationState })
     }
 
-    yield new MultiAgentResultEvent({ result })
+    yield new MultiAgentResultEvent({ result, invocationState })
     return result
   }
 
@@ -301,7 +314,8 @@ export class Graph implements MultiAgent {
     input: MultiAgentInput,
     state: MultiAgentState,
     queue: Queue,
-    multiAgentSpan: Span | null
+    multiAgentSpan: Span | null,
+    invocationState: InvocationState
   ): Promise<void> {
     const nodeState = state.node(node.id)!
 
@@ -309,7 +323,7 @@ export class Graph implements MultiAgent {
       this._tracer.startNodeSpan({ nodeId: node.id, nodeType: node.type })
     )
 
-    const beforeEvent = new BeforeNodeCallEvent({ orchestrator: this, state, nodeId: node.id })
+    const beforeEvent = new BeforeNodeCallEvent({ orchestrator: this, state, nodeId: node.id, invocationState })
     await queue.send({ type: 'event', node, event: beforeEvent })
 
     if (beforeEvent.cancel) {
@@ -321,12 +335,12 @@ export class Graph implements MultiAgent {
       await queue.send({
         type: 'event',
         node,
-        event: new NodeCancelEvent({ nodeId: node.id, state, message }),
+        event: new NodeCancelEvent({ nodeId: node.id, state, message, invocationState }),
       })
       await queue.send({
         type: 'event',
         node,
-        event: new AfterNodeCallEvent({ orchestrator: this, state, nodeId: node.id }),
+        event: new AfterNodeCallEvent({ orchestrator: this, state, nodeId: node.id, invocationState }),
       })
       this._tracer.endNodeSpan(nodeSpan, { status: Status.CANCELLED, duration: 0 })
       queue.push({ type: 'result', node, result })
@@ -336,7 +350,7 @@ export class Graph implements MultiAgent {
     try {
       const nodeInput = this._resolveNodeInput(node, input, state)
 
-      const gen = this._tracer.withSpanContext(nodeSpan, () => node.stream(nodeInput, state))
+      const gen = this._tracer.withSpanContext(nodeSpan, () => node.stream(nodeInput, state, { invocationState }))
       let next = await this._tracer.withSpanContext(nodeSpan, () => gen.next())
       while (!next.done) {
         await queue.send({ type: 'event', node, event: next.value })
@@ -349,7 +363,7 @@ export class Graph implements MultiAgent {
       await queue.send({
         type: 'event',
         node,
-        event: new AfterNodeCallEvent({ orchestrator: this, state, nodeId: node.id }),
+        event: new AfterNodeCallEvent({ orchestrator: this, state, nodeId: node.id, invocationState }),
       })
     } catch (error) {
       const nodeError = normalizeError(error)
@@ -362,6 +376,7 @@ export class Graph implements MultiAgent {
           orchestrator: this,
           state,
           nodeId: node.id,
+          invocationState,
           error: nodeError,
         }),
       })

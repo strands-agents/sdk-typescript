@@ -16,21 +16,20 @@ import type { MessageData, SystemPromptData } from '../types/messages.js'
 import { Message, systemPromptFromData, systemPromptToData } from '../types/messages.js'
 import { loadStateSerializable, serializeStateSerializable } from '../types/serializable.js'
 import type { LocalAgent } from '../types/agent.js'
-import { InterruptState, type InterruptStateData } from '../interrupt.js'
 import { SNAPSHOT_SCHEMA_VERSION } from '../types/snapshot.js'
 import type { Snapshot } from '../types/snapshot.js'
 
 /**
  * All available fields that can be included in a snapshot.
  */
-export const ALL_SNAPSHOT_FIELDS = ['messages', 'state', 'systemPrompt', 'interrupts'] as const
+export const ALL_SNAPSHOT_FIELDS = ['messages', 'state', 'systemPrompt', 'modelState'] as const
 
 /**
  * Strongly typed preset definitions for snapshot field selection.
  * This object allows easy evolution of presets and type-safe access.
  */
 export const SNAPSHOT_PRESETS = {
-  session: ['messages', 'state', 'systemPrompt', 'interrupts'] as const,
+  session: ['messages', 'state', 'systemPrompt', 'modelState'] as const,
 } as const
 
 /**
@@ -105,9 +104,8 @@ export function takeSnapshot(agent: LocalAgent, options: TakeSnapshotOptions): S
     data.systemPrompt = agent.systemPrompt !== undefined ? (systemPromptToData(agent.systemPrompt) as JSONValue) : null
   }
 
-  if (fields.has('interrupts')) {
-    const interruptState = (agent as unknown as { _interruptState?: InterruptState })._interruptState
-    data.interrupts = interruptState ? (interruptState.toJSON() as unknown as JSONValue) : null
+  if (fields.has('modelState')) {
+    data.modelState = serializeStateSerializable(agent.modelState)
   }
 
   return {
@@ -161,12 +159,8 @@ export function loadSnapshot(agent: LocalAgent, snapshot: Snapshot): void {
     }
   }
 
-  if ('interrupts' in snapshot.data) {
-    const interruptStateData = snapshot.data.interrupts
-    if (interruptStateData !== null) {
-      const agentRecord = agent as unknown as { _interruptState: InterruptState }
-      agentRecord._interruptState = InterruptState.fromJSON(interruptStateData as unknown as InterruptStateData)
-    }
+  if ('modelState' in snapshot.data) {
+    loadStateSerializable(agent.modelState, snapshot.data.modelState)
   }
 }
 

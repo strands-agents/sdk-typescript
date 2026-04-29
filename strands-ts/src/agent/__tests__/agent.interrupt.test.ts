@@ -5,6 +5,7 @@ import { createMockTool } from '../../__fixtures__/tool-helpers.js'
 import { ToolResultBlock } from '../../types/messages.js'
 import { AfterToolCallEvent, BeforeToolCallEvent, BeforeToolsEvent } from '../../hooks/events.js'
 import { FunctionTool } from '../../tools/function-tool.js'
+import { InterruptResponseContent } from '../../types/interrupt.js'
 
 describe('Agent interrupt system', () => {
   describe('interrupt from tool callback', () => {
@@ -115,12 +116,10 @@ describe('Agent interrupt system', () => {
 
       // Resume with approval — tool should now execute
       const finalResult = await agent.invoke([
-        {
-          interruptResponse: {
-            interruptId: interruptResult.interrupts![0]!.id,
-            response: 'yes',
-          },
-        },
+        new InterruptResponseContent({
+          interruptId: interruptResult.interrupts![0]!.id,
+          response: 'yes',
+        }),
       ])
 
       expect(finalResult.stopReason).toBe('endTurn')
@@ -178,12 +177,10 @@ describe('Agent interrupt system', () => {
 
       // Resume — A should be skipped, B and C should execute
       const finalResult = await agent.invoke([
-        {
-          interruptResponse: {
-            interruptId: interruptResult.interrupts![0]!.id,
-            response: 'approved',
-          },
-        },
+        new InterruptResponseContent({
+          interruptId: interruptResult.interrupts![0]!.id,
+          response: 'approved',
+        }),
       ])
 
       expect(finalResult.stopReason).toBe('endTurn')
@@ -270,12 +267,10 @@ describe('Agent interrupt system', () => {
 
       // Resume with user response
       const finalResult = await agent.invoke([
-        {
-          interruptResponse: {
-            interruptId: interruptResult.interrupts![0]!.id,
-            response: { approved: true },
-          },
-        },
+        new InterruptResponseContent({
+          interruptId: interruptResult.interrupts![0]!.id,
+          response: { approved: true },
+        }),
       ])
 
       expect(finalResult.stopReason).toBe('endTurn')
@@ -340,12 +335,10 @@ describe('Agent interrupt system', () => {
 
       // Resume with response for C
       const finalResult = await agent.invoke([
-        {
-          interruptResponse: {
-            interruptId: interruptResult.interrupts![0]!.id,
-            response: { approved: true },
-          },
-        },
+        new InterruptResponseContent({
+          interruptId: interruptResult.interrupts![0]!.id,
+          response: { approved: true },
+        }),
       ])
 
       expect(finalResult.stopReason).toBe('endTurn')
@@ -392,6 +385,7 @@ describe('Agent interrupt system', () => {
         agent: mockLocalAgent,
         toolUse: { name: 'test', toolUseId: 'id', input: {} },
         tool: undefined,
+        invocationState: {},
       })
 
       expect(() => {
@@ -422,24 +416,20 @@ describe('Agent interrupt system', () => {
       // Resume with mixed content: interrupt response + text block
       await expect(
         agent.invoke([
-          {
-            interruptResponse: {
-              interruptId: interruptResult.interrupts![0]!.id,
-              response: 'yes',
-            },
-          },
+          new InterruptResponseContent({
+            interruptId: interruptResult.interrupts![0]!.id,
+            response: 'yes',
+          }),
           { type: 'textBlock', text: 'extra text' },
         ] as any)
       ).rejects.toThrow(TypeError)
 
       await expect(
         agent.invoke([
-          {
-            interruptResponse: {
-              interruptId: interruptResult.interrupts![0]!.id,
-              response: 'yes',
-            },
-          },
+          new InterruptResponseContent({
+            interruptId: interruptResult.interrupts![0]!.id,
+            response: 'yes',
+          }),
           { type: 'textBlock', text: 'extra text' },
         ] as any)
       ).rejects.toThrow('Must resume from interrupt with a list of interruptResponse content blocks only')
@@ -467,12 +457,10 @@ describe('Agent interrupt system', () => {
 
       // Resume with pure interrupt responses — should succeed
       const finalResult = await agent.invoke([
-        {
-          interruptResponse: {
-            interruptId: interruptResult.interrupts![0]!.id,
-            response: 'approved',
-          },
-        },
+        new InterruptResponseContent({
+          interruptId: interruptResult.interrupts![0]!.id,
+          response: 'approved',
+        }),
       ])
 
       expect(finalResult.stopReason).toBe('endTurn')
@@ -586,12 +574,13 @@ describe('Agent interrupt system', () => {
 
       // Resume with responses for both interrupts
       const finalResult = await agent.invoke(
-        interruptResult.interrupts!.map((interrupt) => ({
-          interruptResponse: {
-            interruptId: interrupt.id,
-            response: `approved:${interrupt.name}`,
-          },
-        }))
+        interruptResult.interrupts!.map(
+          (interrupt) =>
+            new InterruptResponseContent({
+              interruptId: interrupt.id,
+              response: `approved:${interrupt.name}`,
+            })
+        )
       )
 
       expect(finalResult.stopReason).toBe('endTurn')
@@ -630,9 +619,13 @@ describe('Agent interrupt system', () => {
 
       // Resume cycle 1
       const result2 = await agent.invoke(
-        result1.interrupts!.map((i) => ({
-          interruptResponse: { interruptId: i.id, response: 'yes' },
-        }))
+        result1.interrupts!.map(
+          (i) =>
+            new InterruptResponseContent({
+              interruptId: i.id,
+              response: 'yes',
+            })
+        )
       )
 
       // Cycle 2: should interrupt again, not silently pass through

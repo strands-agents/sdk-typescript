@@ -58,16 +58,26 @@ sdk-typescript/
 │   │   ├── logging/              # Structured logging
 │   │   │   ├── __tests__/
 │   │   │   ├── logger.ts
+│   │   │   ├── warn-once.ts      # Dedupe warnings by message content
 │   │   │   ├── types.ts
 │   │   │   └── index.ts
 │   │   │
 │   │   ├── models/               # Model provider implementations
 │   │   │   ├── __tests__/
 │   │   │   ├── google/           # Google Gemini provider
+│   │   │   ├── openai/           # OpenAI provider (Chat Completions + Responses API)
+│   │   │   │   ├── __tests__/    # Unit tests (chat.test.ts, responses.test.ts)
+│   │   │   │   ├── chat-adapter.ts
+│   │   │   │   ├── responses-adapter.ts
+│   │   │   │   ├── formatting.ts
+│   │   │   │   ├── errors.ts
+│   │   │   │   ├── model.ts
+│   │   │   │   ├── types.ts
+│   │   │   │   └── index.ts
 │   │   │   ├── anthropic.ts      # Anthropic Claude
 │   │   │   ├── bedrock.ts        # AWS Bedrock
-│   │   │   ├── openai.ts         # OpenAI
 │   │   │   ├── vercel.ts         # Vercel AI SDK
+│   │   │   ├── defaults.ts       # Centralized model defaults + warning messages
 │   │   │   ├── model.ts          # Base model interface
 │   │   │   └── streaming.ts      # Streaming event types
 │   │   │
@@ -89,6 +99,7 @@ sdk-typescript/
 │   │   │   ├── __tests__/
 │   │   │   ├── plugin.ts
 │   │   │   ├── registry.ts
+│   │   │   ├── model-plugin.ts   # Clears agent messages after invocation when model is stateful
 │   │   │   └── index.ts
 │   │   │
 │   │   ├── registry/             # Tool registry
@@ -131,6 +142,7 @@ sdk-typescript/
 │   │   │   ├── __tests__/
 │   │   │   ├── agent.ts
 │   │   │   ├── citations.ts
+│   │   │   ├── elicitation.ts
 │   │   │   ├── json.ts
 │   │   │   ├── media.ts
 │   │   │   ├── messages.ts

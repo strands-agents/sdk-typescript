@@ -14,19 +14,17 @@ import {
   type GenerateContentParameters,
 } from '@google/genai'
 import { Model } from '../model.js'
-import type { StreamOptions } from '../model.js'
+import type { CountTokensOptions, StreamOptions } from '../model.js'
 import type { Message } from '../../types/messages.js'
 import type { ModelStreamEvent } from '../streaming.js'
-import { ContextWindowOverflowError, ModelThrottledError } from '../../errors.js'
+import { ContextWindowOverflowError, ModelThrottledError, ProviderTokenCountError } from '../../errors.js'
 import type { GoogleModelConfig, GoogleModelOptions, GoogleStreamState } from './types.js'
 export type { GoogleModelConfig, GoogleModelOptions }
 import { classifyGoogleError } from './errors.js'
 import { formatMessages, mapChunkToEvents } from './adapters.js'
-
-/**
- * Default Gemini model ID.
- */
-const DEFAULT_GEMINI_MODEL_ID = 'gemini-2.5-flash'
+import { MODEL_DEFAULTS, defaultModelWarningMessage } from '../defaults.js'
+import { warnOnce } from '../../logging/warn-once.js'
+import { logger } from '../../logging/logger.js'
 
 /**
  * Google model provider implementation.
@@ -94,6 +92,10 @@ export class GoogleModel extends Model<GoogleModelConfig> {
 
     this._config = modelConfig
 
+    if (modelConfig.modelId === undefined) {
+      warnOnce(logger, defaultModelWarningMessage(MODEL_DEFAULTS.gemini.modelId))
+    }
+
     if (client) {
       this._client = client
     } else {
@@ -143,6 +145,53 @@ export class GoogleModel extends Model<GoogleModelConfig> {
    */
   getConfig(): GoogleModelConfig {
     return this._config
+  }
+
+  /**
+   * Count tokens using Gemini's native countTokens API.
+   *
+   * Uses the Gemini countTokens API for message contents. System instructions and tools
+   * are estimated via the base class heuristic because the Gemini API (non-Vertex backend)
+   * does not support these in CountTokensConfig.
+   * Falls back to the base class heuristic on failure.
+   *
+   * @param messages - Array of conversation messages to count tokens for
+   * @param options - Optional options containing system prompt and tool specs
+   * @returns Total input token count
+   */
+  override async countTokens(messages: Message[], options?: CountTokensOptions): Promise<number> {
+    try {
+      const params = this._formatRequest(messages, options)
+      const modelId = params.model
+
+      // The Gemini API (non-Vertex backend) raises an error for systemInstruction and tools
+      // in CountTokensConfig. Use native counting for message contents only, then add the
+      // heuristic estimate for system prompt and tools.
+      const response = await this._client.models.countTokens({
+        model: modelId,
+        contents: params.contents,
+      })
+
+      if (response.totalTokens == null) {
+        throw new ProviderTokenCountError('Gemini countTokens returned null for totalTokens')
+      }
+
+      let totalTokens = response.totalTokens
+
+      // Add heuristic estimate for system prompt and tools (not supported by the API)
+      if (options?.systemPrompt || options?.toolSpecs) {
+        totalTokens += await super.countTokens([], {
+          ...(options.systemPrompt && { systemPrompt: options.systemPrompt }),
+          ...(options.toolSpecs && { toolSpecs: options.toolSpecs }),
+        })
+      }
+
+      logger.debug(`total_tokens=<${totalTokens}> | native token count`)
+      return totalTokens
+    } catch (error) {
+      logger.debug(`error=<${error}> | native token counting failed, falling back to estimation`)
+      return super.countTokens(messages, options)
+    }
   }
 
   /**
@@ -296,7 +345,7 @@ export class GoogleModel extends Model<GoogleModelConfig> {
     }
 
     return {
-      model: this._config.modelId ?? DEFAULT_GEMINI_MODEL_ID,
+      model: this._config.modelId ?? MODEL_DEFAULTS.gemini.modelId,
       contents,
       config,
     }

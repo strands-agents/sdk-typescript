@@ -16,6 +16,11 @@ import type { ContentBlock } from '../../types/messages.js'
 import { formatMessages, mapChunkToEvents } from '../google/adapters.js'
 import type { GoogleStreamState } from '../google/types.js'
 import { ImageBlock, DocumentBlock, VideoBlock } from '../../types/media.js'
+import { warnOnce } from '../../logging/warn-once.js'
+
+vi.mock('../../logging/warn-once.js', () => ({
+  warnOnce: vi.fn(),
+}))
 
 /**
  * Helper to create a mock Gemini client with streaming support
@@ -84,6 +89,7 @@ function formatBlock(block: ContentBlock, role: 'user' | 'assistant' = 'user'): 
 
 describe('GoogleModel', () => {
   beforeEach(() => {
+    vi.clearAllMocks()
     vi.stubEnv('GEMINI_API_KEY', 'test-api-key')
   })
 
@@ -107,6 +113,22 @@ describe('GoogleModel', () => {
       })
 
       expect(() => new GoogleModel({ client: mockClient })).not.toThrow()
+    })
+
+    it('warns when modelId is not explicitly set', () => {
+      new GoogleModel({ apiKey: 'test-key' })
+      expect(warnOnce).toHaveBeenCalledWith(
+        expect.objectContaining({ warn: expect.any(Function) }),
+        expect.stringContaining('using default modelId')
+      )
+    })
+
+    it('does not warn when modelId is explicitly set', () => {
+      new GoogleModel({ apiKey: 'test-key', modelId: 'gemini-2.5-flash' })
+      expect(warnOnce).not.toHaveBeenCalledWith(
+        expect.objectContaining({ warn: expect.any(Function) }),
+        expect.stringContaining('using default modelId')
+      )
     })
   })
 
@@ -1158,6 +1180,90 @@ describe('GoogleModel', () => {
       })
       expect(events[3]).toEqual({ type: 'modelContentBlockStopEvent' })
       expect(events[4]).toEqual({ type: 'modelMessageStopEvent', stopReason: 'toolUse' })
+    })
+  })
+
+  describe('countTokens', () => {
+    const messages: Message[] = [new Message({ role: 'user', content: [new TextBlock('hello')] })]
+    const toolSpecs = [
+      { name: 'test_tool', description: 'A test tool', inputSchema: { type: 'object' as const, properties: {} } },
+    ]
+
+    function createCountTokensClient(mockCountTokens: ReturnType<typeof vi.fn>): GoogleGenAI {
+      return {
+        models: {
+          generateContentStream: vi.fn(),
+          countTokens: mockCountTokens,
+        },
+      } as unknown as GoogleGenAI
+    }
+
+    it('should return native token count on success', async () => {
+      const mockCountTokens = vi.fn(async () => ({ totalTokens: 42 }))
+      const client = createCountTokensClient(mockCountTokens)
+      const model = new GoogleModel({ client, modelId: 'gemini-2.5-flash' })
+
+      const result = await model.countTokens(messages)
+
+      expect(result).toBe(42)
+      expect(mockCountTokens).toHaveBeenCalledOnce()
+    })
+
+    it('should add heuristic estimate for system prompt', async () => {
+      const mockCountTokens = vi.fn(async () => ({ totalTokens: 55 }))
+      const client = createCountTokensClient(mockCountTokens)
+      const model = new GoogleModel({ client, modelId: 'gemini-2.5-flash' })
+
+      const result = await model.countTokens(messages, { systemPrompt: 'Be helpful.' })
+
+      expect(result).toBeGreaterThan(55) // native (55) + heuristic for system prompt
+    })
+
+    it('should add heuristic estimate for tool specs', async () => {
+      const mockCountTokens = vi.fn(async () => ({ totalTokens: 100 }))
+      const client = createCountTokensClient(mockCountTokens)
+      const model = new GoogleModel({ client, modelId: 'gemini-2.5-flash' })
+
+      const result = await model.countTokens(messages, { toolSpecs })
+
+      expect(result).toBeGreaterThan(100) // native (100) + heuristic for tools
+    })
+
+    it('should fall back on null totalTokens', async () => {
+      const mockCountTokens = vi.fn(async () => ({ totalTokens: null }))
+      const client = createCountTokensClient(mockCountTokens)
+      const model = new GoogleModel({ client, modelId: 'gemini-2.5-flash' })
+
+      const result = await model.countTokens(messages)
+
+      expect(typeof result).toBe('number')
+      expect(result).toBeGreaterThanOrEqual(0)
+    })
+
+    it('should fall back to estimation on API error', async () => {
+      const mockCountTokens = vi.fn(async () => {
+        throw new Error('Unsupported')
+      })
+      const client = createCountTokensClient(mockCountTokens)
+      const model = new GoogleModel({ client, modelId: 'gemini-2.5-flash' })
+
+      const result = await model.countTokens(messages)
+
+      expect(typeof result).toBe('number')
+      expect(result).toBeGreaterThanOrEqual(0)
+    })
+
+    it('should fall back to estimation on generic exception', async () => {
+      const mockCountTokens = vi.fn(async () => {
+        throw new Error('Connection failed')
+      })
+      const client = createCountTokensClient(mockCountTokens)
+      const model = new GoogleModel({ client, modelId: 'gemini-2.5-flash' })
+
+      const result = await model.countTokens(messages)
+
+      expect(typeof result).toBe('number')
+      expect(result).toBeGreaterThanOrEqual(0)
     })
   })
 })

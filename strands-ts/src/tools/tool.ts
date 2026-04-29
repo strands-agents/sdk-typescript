@@ -1,6 +1,6 @@
 import type { ToolSpec, ToolUse } from './types.js'
 import { TextBlock, ToolResultBlock } from '../types/messages.js'
-import type { LocalAgent } from '../types/agent.js'
+import type { InvocationState, LocalAgent } from '../types/agent.js'
 import { normalizeError } from '../errors.js'
 import type { Interruptible } from '../interrupt.js'
 
@@ -22,6 +22,17 @@ export interface ToolContext extends Interruptible {
    * Provides access to agent state, conversation history, and cancellation state.
    */
   agent: LocalAgent
+
+  /**
+   * Per-invocation state shared across hooks and tools for the current
+   * agent invocation. Mutable — read and write freely; changes are visible to
+   * subsequent hooks, tools, and on {@link AgentResult.invocationState}.
+   *
+   * Distinct from `agent.appState`: `invocationState` is ephemeral and accepts
+   * arbitrary values, while `appState` is durable, JSON-serializable, and
+   * deep-copied on read/write.
+   */
+  invocationState: InvocationState
 }
 
 /**

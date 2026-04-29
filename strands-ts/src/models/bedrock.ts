@@ -16,6 +16,7 @@ import {
   ConverseCommand,
   type ConverseCommandOutput,
   ConverseStreamCommand,
+  CountTokensCommand,
   type ConverseStreamCommandInput,
   type ConverseStreamMetadataEvent as BedrockConverseStreamMetadataEvent,
   type ConverseStreamOutput,
@@ -41,24 +42,25 @@ import {
   type CitationsContentBlock as BedrockCitationsContentBlock,
   type GuardrailTraceAssessment,
 } from '@aws-sdk/client-bedrock-runtime'
-import { type BaseModelConfig, type CacheConfig, Model, type StreamOptions } from '../models/model.js'
+import {
+  type BaseModelConfig,
+  type CacheConfig,
+  type CountTokensOptions,
+  Model,
+  type StreamOptions,
+} from '../models/model.js'
 import type { ContentBlock, Message, StopReason, ToolUseBlock } from '../types/messages.js'
 import type { ImageSource, VideoSource, DocumentSource } from '../types/media.js'
 import type { CitationsDelta, ModelStreamEvent, ReasoningContentDelta, Usage } from '../models/streaming.js'
 import type { Citation, CitationLocation, CitationsBlockData } from '../types/citations.js'
 import type { JSONValue } from '../types/json.js'
-import { ContextWindowOverflowError, ModelThrottledError, normalizeError } from '../errors.js'
+import { ContextWindowOverflowError, ModelThrottledError, ProviderTokenCountError, normalizeError } from '../errors.js'
 import { ensureDefined } from '../types/validation.js'
 import { logger } from '../logging/logger.js'
+import { warnOnce } from '../logging/warn-once.js'
 import { NOOP_TOOL_SPEC } from '../tools/noop-tool.js'
+import { MODEL_DEFAULTS, defaultModelWarningMessage } from './defaults.js'
 
-/**
- * Default Bedrock model ID.
- * Uses Claude Sonnet 4 with global inference profile for cross-region availability.
- */
-const DEFAULT_BEDROCK_MODEL_ID = 'global.anthropic.claude-sonnet-4-6'
-
-const DEFAULT_BEDROCK_REGION = 'us-west-2'
 const DEFAULT_BEDROCK_REGION_SUPPORTS_FIP = false
 
 /**
@@ -360,8 +362,12 @@ export class BedrockModel extends Model<BedrockModelConfig> {
 
     // Initialize model config with default model ID if not provided
     this._config = {
-      modelId: DEFAULT_BEDROCK_MODEL_ID,
+      modelId: MODEL_DEFAULTS.bedrock.modelId,
       ...modelConfig,
+    }
+
+    if (modelConfig.modelId === undefined) {
+      warnOnce(logger, defaultModelWarningMessage(MODEL_DEFAULTS.bedrock.modelId))
     }
 
     // Build user agent string (extend if provided, otherwise use SDK identifier)
@@ -458,6 +464,43 @@ export class BedrockModel extends Model<BedrockModelConfig> {
    */
   getConfig(): BedrockModelConfig {
     return this._config
+  }
+
+  /**
+   * Count tokens using Bedrock's native CountTokens API.
+   *
+   * Uses the same message format as the Converse API to get accurate token counts
+   * directly from the Bedrock service. Falls back to the base class heuristic on failure.
+   *
+   * @param messages - Array of conversation messages to count tokens for
+   * @param options - Optional options containing system prompt and tool specs
+   * @returns Total input token count
+   */
+  override async countTokens(messages: Message[], options?: CountTokensOptions): Promise<number> {
+    try {
+      const request = this._formatRequest(messages, options)
+      const converseInput: Record<string, unknown> = {}
+      if (request.messages) converseInput.messages = request.messages
+      if (request.system) converseInput.system = request.system
+      if (request.toolConfig) converseInput.toolConfig = request.toolConfig
+
+      const response = await this._client.send(
+        new CountTokensCommand({
+          modelId: this._config.modelId,
+          input: { converse: converseInput },
+        })
+      )
+
+      if (response.inputTokens == null) {
+        throw new ProviderTokenCountError('Bedrock CountTokens returned undefined for inputTokens')
+      }
+
+      logger.debug(`total_tokens=<${response.inputTokens}> | native token count`)
+      return response.inputTokens
+    } catch (error) {
+      logger.debug(`error=<${error}> | native token counting failed, falling back to estimation`)
+      return super.countTokens(messages, options)
+    }
   }
 
   /**
@@ -1635,7 +1678,7 @@ function applyDefaultRegion(config: BedrockRuntimeClientResolvedConfig): void {
       // Note: it was observed that the browser version of the BedrockClient
       // uses a string instead of an error object - thus the normalizeError call
       if (normalizeError(error).message === 'Region is missing') {
-        return DEFAULT_BEDROCK_REGION
+        return MODEL_DEFAULTS.bedrock.region
       }
 
       throw error

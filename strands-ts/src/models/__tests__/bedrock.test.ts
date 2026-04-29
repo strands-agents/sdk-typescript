@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { BedrockRuntimeClient, ConverseStreamCommand, ValidationException } from '@aws-sdk/client-bedrock-runtime'
+import {
+  BedrockRuntimeClient,
+  ConverseStreamCommand,
+  CountTokensCommand,
+  ValidationException,
+} from '@aws-sdk/client-bedrock-runtime'
 import { isNode } from '../../__fixtures__/environment.js'
 import { BedrockModel } from '../bedrock.js'
 import { ContextWindowOverflowError, ModelThrottledError } from '../../errors.js'
@@ -11,6 +16,7 @@ import { CitationsBlock } from '../../types/citations.js'
 import type { StreamOptions } from '../model.js'
 import { collectIterator } from '../../__fixtures__/model-test-helpers.js'
 import { NOOP_TOOL_SPEC } from '../../tools/noop-tool.js'
+import { warnOnce } from '../../logging/warn-once.js'
 
 /**
  * Helper function to mock BedrockRuntimeClient implementation with customizable config.
@@ -114,6 +120,9 @@ vi.mock('@aws-sdk/client-bedrock-runtime', async (importOriginal) => {
     throw new Error('Unhandled command type in mock')
   })
 
+  // Create a mock CountTokensCommand class
+  const CountTokensCommand = vi.fn()
+
   // Create a mock ValidationException class
   class MockValidationException extends Error {
     constructor(opts: { message: string; $metadata: Record<string, unknown> }) {
@@ -136,9 +145,14 @@ vi.mock('@aws-sdk/client-bedrock-runtime', async (importOriginal) => {
     }),
     ConverseStreamCommand,
     ConverseCommand,
+    CountTokensCommand,
     ValidationException: MockValidationException,
   }
 })
+
+vi.mock('../../logging/warn-once.js', () => ({
+  warnOnce: vi.fn(),
+}))
 
 describe('BedrockModel', () => {
   const BEDROCK_NOOP_TOOL_CONFIG = {
@@ -171,6 +185,22 @@ describe('BedrockModel', () => {
       const provider = new BedrockModel()
       const config = provider.getConfig()
       expect(config.modelId).toBeDefined()
+    })
+
+    it('warns when modelId is not explicitly set', () => {
+      new BedrockModel()
+      expect(warnOnce).toHaveBeenCalledWith(
+        expect.objectContaining({ warn: expect.any(Function) }),
+        expect.stringContaining('using default modelId')
+      )
+    })
+
+    it('does not warn when modelId is explicitly set', () => {
+      new BedrockModel({ modelId: 'us.anthropic.claude-3-5-sonnet-20241022-v2:0' })
+      expect(warnOnce).not.toHaveBeenCalledWith(
+        expect.objectContaining({ warn: expect.any(Function) }),
+        expect.stringContaining('using default modelId')
+      )
     })
 
     it('uses provided model ID ', () => {
@@ -1327,8 +1357,8 @@ describe('BedrockModel', () => {
     })
 
     it('does not warn when array system prompt is provided without cacheConfig', async () => {
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
       const provider = new BedrockModel()
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
       const options: StreamOptions = {
         systemPrompt: [
@@ -4027,6 +4057,122 @@ describe('BedrockModel', () => {
           additionalModelRequestFields: expect.anything(),
         })
       )
+    })
+  })
+
+  describe('countTokens', () => {
+    const messages: Message[] = [new Message({ role: 'user', content: [new TextBlock('hello')] })]
+    const toolSpecs = [
+      { name: 'test_tool', description: 'A test tool', inputSchema: { type: 'object' as const, properties: {} } },
+    ]
+
+    beforeEach(() => {
+      vi.clearAllMocks()
+    })
+
+    it('should return native token count on success', async () => {
+      const mockSend = vi.fn(async () => ({ inputTokens: 42 }))
+      mockBedrockClientImplementation({ send: mockSend })
+      const model = new BedrockModel()
+
+      const result = await model.countTokens(messages)
+
+      expect(result).toBe(42)
+      expect(mockSend).toHaveBeenCalledOnce()
+    })
+
+    it('should include system prompt in request', async () => {
+      const mockSend = vi.fn(async () => ({ inputTokens: 55 }))
+      mockBedrockClientImplementation({ send: mockSend })
+      const model = new BedrockModel()
+
+      const result = await model.countTokens(messages, { systemPrompt: 'Be helpful.' })
+
+      expect(result).toBe(55)
+      const commandInput = vi.mocked(CountTokensCommand).mock.calls[0]![0]!
+      expect(commandInput).toStrictEqual({
+        modelId: expect.any(String),
+        input: {
+          converse: {
+            messages: [{ role: 'user', content: [{ text: 'hello' }] }],
+            system: [{ text: 'Be helpful.' }],
+          },
+        },
+      })
+    })
+
+    it('should include tool specs in request', async () => {
+      const mockSend = vi.fn(async () => ({ inputTokens: 100 }))
+      mockBedrockClientImplementation({ send: mockSend })
+      const model = new BedrockModel()
+
+      const result = await model.countTokens(messages, { toolSpecs })
+
+      expect(result).toBe(100)
+      const commandInput = vi.mocked(CountTokensCommand).mock.calls[0]![0]!
+      expect(commandInput).toStrictEqual({
+        modelId: expect.any(String),
+        input: {
+          converse: {
+            messages: [{ role: 'user', content: [{ text: 'hello' }] }],
+            toolConfig: {
+              tools: [
+                {
+                  toolSpec: {
+                    name: 'test_tool',
+                    description: 'A test tool',
+                    inputSchema: { json: { type: 'object', properties: {} } },
+                  },
+                },
+              ],
+            },
+          },
+        },
+      })
+    })
+
+    it('should strip inferenceConfig from request', async () => {
+      const mockSend = vi.fn(async () => ({ inputTokens: 10 }))
+      mockBedrockClientImplementation({ send: mockSend })
+      const model = new BedrockModel({ maxTokens: 100 })
+
+      await model.countTokens(messages)
+
+      const commandInput = vi.mocked(CountTokensCommand).mock.calls[0]![0]!
+      expect(commandInput).toStrictEqual({
+        modelId: expect.any(String),
+        input: {
+          converse: {
+            messages: [{ role: 'user', content: [{ text: 'hello' }] }],
+          },
+        },
+      })
+    })
+
+    it('should fall back to estimation on API error', async () => {
+      const mockSend = vi.fn(async () => {
+        throw new Error('API error')
+      })
+      mockBedrockClientImplementation({ send: mockSend })
+      const model = new BedrockModel()
+
+      const result = await model.countTokens(messages)
+
+      expect(typeof result).toBe('number')
+      expect(result).toBeGreaterThanOrEqual(0)
+    })
+
+    it('should fall back to estimation on generic exception', async () => {
+      const mockSend = vi.fn(async () => {
+        throw new Error('Connection failed')
+      })
+      mockBedrockClientImplementation({ send: mockSend })
+      const model = new BedrockModel()
+
+      const result = await model.countTokens(messages)
+
+      expect(typeof result).toBe('number')
+      expect(result).toBeGreaterThanOrEqual(0)
     })
   })
 })

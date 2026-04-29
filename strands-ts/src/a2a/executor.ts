@@ -22,6 +22,19 @@ import { logger } from '../logging/logger.js'
  * event bus. Text chunks are appended to a single artifact as they arrive,
  * implementing A2A-compliant streaming behavior.
  *
+ * ## Invocation state
+ *
+ * The executor populates the agent's `invocationState` with the incoming A2A
+ * {@link RequestContext} under the reserved key `a2aRequestContext`. Hooks and
+ * tools running inside the agent can read `event.invocationState.a2aRequestContext`
+ * to correlate with the A2A request (taskId, contextId, user message metadata)
+ * for logging, metrics, or audit.
+ *
+ * Because the A2A framework (not user code) drives `execute()`, there is no
+ * per-request path for the user to supply their own `invocationState`. If a
+ * user hook writes to the `a2aRequestContext` key, it will be overwritten on
+ * the next request.
+ *
  * @example
  * ```typescript
  * import { Agent } from '@strands-agents/sdk'
@@ -71,7 +84,12 @@ export class A2AExecutor implements AgentExecutor {
     let isFirstChunk = true
 
     try {
-      const stream = this._agent.stream(contentBlocks)
+      // Forward the A2A RequestContext to the agent under a reserved key so
+      // hooks and tools can correlate with the A2A request (taskId, contextId,
+      // user message metadata).
+      const stream = this._agent.stream(contentBlocks, {
+        invocationState: { a2aRequestContext: context },
+      })
       let next = await stream.next()
 
       while (!next.done) {

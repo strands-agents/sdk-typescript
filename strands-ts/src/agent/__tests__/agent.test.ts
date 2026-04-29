@@ -24,6 +24,7 @@ import {
   AfterToolCallEvent,
   AfterToolsEvent,
   BeforeInvocationEvent,
+  BeforeModelCallEvent,
   BeforeToolsEvent,
 } from '../../hooks/events.js'
 import { BedrockModel } from '../../models/bedrock.js'
@@ -62,7 +63,7 @@ describe('Agent', () => {
 
         expect(items.length).toBeGreaterThan(0)
         const firstItem = items[0]
-        expect(firstItem).toEqual(new BeforeInvocationEvent({ agent: agent }))
+        expect(firstItem).toEqual(new BeforeInvocationEvent({ agent: agent, invocationState: {} }))
       })
 
       it('returns AgentResult as generator return value', async () => {
@@ -145,6 +146,7 @@ describe('Agent', () => {
               role: 'assistant',
               content: [new ToolUseBlock({ name: 'testTool', toolUseId: 'tool-1', input: {} })],
             }),
+            invocationState: {},
           })
         )
 
@@ -1592,5 +1594,127 @@ describe('Agent._redactLastMessage', () => {
 
     expect(() => agent['_redactLastMessage'](redactMessage)).not.toThrow()
     expect(agent['messages']).toHaveLength(0)
+  })
+})
+
+describe('_estimateInputTokens', () => {
+  function captureProjectedTokens(agent: Agent): Promise<number | undefined> {
+    return new Promise((resolve) => {
+      agent.addHook(BeforeModelCallEvent, (event) => {
+        resolve(event.projectedInputTokens)
+      })
+    })
+  }
+
+  it('uses full estimation on cold start (no prior usage metadata)', async () => {
+    const model = new MockMessageModel()
+    model.addTurn({ type: 'textBlock', text: 'Hello' })
+    const countTokensSpy = vi.spyOn(model, 'countTokens')
+    countTokensSpy.mockResolvedValue(42)
+
+    const agent = new Agent({ model, printer: false })
+    const tokenPromise = captureProjectedTokens(agent)
+    await agent.invoke('Hi')
+
+    expect(await tokenPromise).toBe(42)
+    expect(countTokensSpy).toHaveBeenCalledWith(expect.any(Array), expect.any(Object))
+  })
+
+  it('uses known baseline when no new messages after last assistant', async () => {
+    const model = new MockMessageModel()
+    model.addTurn({ type: 'textBlock', text: 'Hello' })
+
+    const agent = new Agent({
+      model,
+      printer: false,
+      messages: [
+        new Message({ role: 'user', content: [new TextBlock('Hi')] }),
+        new Message({
+          role: 'assistant',
+          content: [new TextBlock('Hello')],
+          metadata: { usage: { inputTokens: 100, outputTokens: 20, totalTokens: 120 } },
+        }),
+      ],
+    })
+
+    // Invoke with no args — no new user message appended, so the last assistant
+    // message is still the final message and newMessages.length === 0
+    const tokenPromise = captureProjectedTokens(agent)
+    await agent.invoke([])
+
+    // baseline = inputTokens(100) + outputTokens(20) = 120
+    expect(await tokenPromise).toBe(120)
+  })
+
+  it('returns undefined projectedInputTokens when estimation fails', async () => {
+    const model = new MockMessageModel()
+    model.addTurn({ type: 'textBlock', text: 'Hello' })
+    vi.spyOn(model, 'countTokens').mockRejectedValue(new Error('API unavailable'))
+
+    const agent = new Agent({ model, printer: false })
+    const tokenPromise = captureProjectedTokens(agent)
+    await agent.invoke('Hi')
+
+    expect(await tokenPromise).toBeUndefined()
+  })
+
+  it('estimates delta for new messages after last assistant', async () => {
+    const model = new MockMessageModel()
+    model
+      .addTurn([{ type: 'toolUseBlock', name: 'test', toolUseId: 'id-1', input: {} }], {
+        usage: { inputTokens: 100, outputTokens: 30, totalTokens: 130 },
+      })
+      .addTurn({ type: 'textBlock', text: 'Done' })
+    const countTokensSpy = vi.spyOn(model, 'countTokens')
+    countTokensSpy.mockResolvedValue(50)
+
+    const tool = createMockTool(
+      'test',
+      () =>
+        new ToolResultBlock({
+          toolUseId: 'id-1',
+          status: 'success' as const,
+          content: [new TextBlock('result')],
+        })
+    )
+    const agent = new Agent({ model, tools: [tool], printer: false })
+
+    // Capture the second BeforeModelCallEvent (after tool execution)
+    let callCount = 0
+    const tokenPromise = new Promise<number | undefined>((resolve) => {
+      agent.addHook(BeforeModelCallEvent, (event) => {
+        callCount++
+        if (callCount === 2) resolve(event.projectedInputTokens)
+      })
+    })
+
+    await agent.invoke('Use the tool')
+
+    // baseline (100+30) + estimated delta (50) = 180
+    expect(await tokenPromise).toBe(180)
+    expect(countTokensSpy).toHaveBeenCalled()
+  })
+
+  it('uses baseline from prior invocation on second invoke', async () => {
+    const model = new MockMessageModel()
+    model
+      .addTurn(
+        { type: 'textBlock', text: 'First response' },
+        { usage: { inputTokens: 200, outputTokens: 50, totalTokens: 250 } }
+      )
+      .addTurn({ type: 'textBlock', text: 'Second response' })
+    const countTokensSpy = vi.spyOn(model, 'countTokens')
+    countTokensSpy.mockResolvedValue(15)
+
+    const agent = new Agent({ model, printer: false })
+    await agent.invoke('First question')
+
+    // Second invocation — the user message "Second question" is appended after
+    // the assistant message with usage metadata, so it hits the baseline + delta path
+    const tokenPromise = captureProjectedTokens(agent)
+    await agent.invoke('Second question')
+
+    // baseline (200+50) + estimated delta for new user message (15) = 265
+    expect(await tokenPromise).toBe(265)
   })
 })

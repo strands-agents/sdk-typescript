@@ -59,12 +59,17 @@ describe('MultiAgentInitializedEvent', () => {
 describe('BeforeMultiAgentInvocationEvent', () => {
   it('creates instance with correct properties', () => {
     const state = new MultiAgentState()
-    const event = new BeforeMultiAgentInvocationEvent({ orchestrator: mockOrchestrator, state })
+    const event = new BeforeMultiAgentInvocationEvent({
+      orchestrator: mockOrchestrator,
+      state,
+      invocationState: {},
+    })
 
     expect(event).toEqual({
       type: 'beforeMultiAgentInvocationEvent',
       orchestrator: mockOrchestrator,
       state,
+      invocationState: {},
     })
     // @ts-expect-error verifying that property is readonly
     event.orchestrator = mockOrchestrator
@@ -74,12 +79,20 @@ describe('BeforeMultiAgentInvocationEvent', () => {
 
   it('returns false for _shouldReverseCallbacks', () => {
     const state = new MultiAgentState()
-    const event = new BeforeMultiAgentInvocationEvent({ orchestrator: mockOrchestrator, state })
+    const event = new BeforeMultiAgentInvocationEvent({
+      orchestrator: mockOrchestrator,
+      state,
+      invocationState: {},
+    })
     expect(event._shouldReverseCallbacks()).toBe(false)
   })
 
   describe('toJSON', () => {
-    const event = new BeforeMultiAgentInvocationEvent({ orchestrator: mockOrchestrator, state: new MultiAgentState() })
+    const event = new BeforeMultiAgentInvocationEvent({
+      orchestrator: mockOrchestrator,
+      state: new MultiAgentState(),
+      invocationState: {},
+    })
 
     it('serializes', () => {
       expect(JSON.parse(JSON.stringify(event))).toStrictEqual({ type: 'beforeMultiAgentInvocationEvent' })
@@ -87,7 +100,7 @@ describe('BeforeMultiAgentInvocationEvent', () => {
 
     it('only excludes expected fields', () => {
       const json = event.toJSON()
-      expect(Object.keys(event).filter((k) => !(k in json))).toStrictEqual(['orchestrator', 'state'])
+      expect(Object.keys(event).filter((k) => !(k in json))).toStrictEqual(['orchestrator', 'state', 'invocationState'])
     })
   })
 })
@@ -95,12 +108,17 @@ describe('BeforeMultiAgentInvocationEvent', () => {
 describe('AfterMultiAgentInvocationEvent', () => {
   it('creates instance with correct properties', () => {
     const state = new MultiAgentState()
-    const event = new AfterMultiAgentInvocationEvent({ orchestrator: mockOrchestrator, state })
+    const event = new AfterMultiAgentInvocationEvent({
+      orchestrator: mockOrchestrator,
+      state,
+      invocationState: {},
+    })
 
     expect(event).toEqual({
       type: 'afterMultiAgentInvocationEvent',
       orchestrator: mockOrchestrator,
       state,
+      invocationState: {},
     })
     // @ts-expect-error verifying that property is readonly
     event.orchestrator = mockOrchestrator
@@ -110,12 +128,20 @@ describe('AfterMultiAgentInvocationEvent', () => {
 
   it('returns true for _shouldReverseCallbacks', () => {
     const state = new MultiAgentState()
-    const event = new AfterMultiAgentInvocationEvent({ orchestrator: mockOrchestrator, state })
+    const event = new AfterMultiAgentInvocationEvent({
+      orchestrator: mockOrchestrator,
+      state,
+      invocationState: {},
+    })
     expect(event._shouldReverseCallbacks()).toBe(true)
   })
 
   describe('toJSON', () => {
-    const event = new AfterMultiAgentInvocationEvent({ orchestrator: mockOrchestrator, state: new MultiAgentState() })
+    const event = new AfterMultiAgentInvocationEvent({
+      orchestrator: mockOrchestrator,
+      state: new MultiAgentState(),
+      invocationState: {},
+    })
 
     it('serializes', () => {
       expect(JSON.parse(JSON.stringify(event))).toStrictEqual({ type: 'afterMultiAgentInvocationEvent' })
@@ -123,7 +149,7 @@ describe('AfterMultiAgentInvocationEvent', () => {
 
     it('only excludes expected fields', () => {
       const json = event.toJSON()
-      expect(Object.keys(event).filter((k) => !(k in json))).toStrictEqual(['orchestrator', 'state'])
+      expect(Object.keys(event).filter((k) => !(k in json))).toStrictEqual(['orchestrator', 'state', 'invocationState'])
     })
   })
 })
@@ -131,7 +157,12 @@ describe('AfterMultiAgentInvocationEvent', () => {
 describe('BeforeNodeCallEvent', () => {
   it('creates instance with correct properties', () => {
     const state = new MultiAgentState()
-    const event = new BeforeNodeCallEvent({ orchestrator: mockOrchestrator, state, nodeId: 'node-1' })
+    const event = new BeforeNodeCallEvent({
+      orchestrator: mockOrchestrator,
+      state,
+      nodeId: 'node-1',
+      invocationState: {},
+    })
 
     expect(event).toEqual({
       type: 'beforeNodeCallEvent',
@@ -139,6 +170,7 @@ describe('BeforeNodeCallEvent', () => {
       state,
       nodeId: 'node-1',
       cancel: false,
+      invocationState: {},
     })
     // @ts-expect-error verifying that property is readonly
     event.orchestrator = mockOrchestrator
@@ -150,13 +182,23 @@ describe('BeforeNodeCallEvent', () => {
 
   it('returns false for _shouldReverseCallbacks', () => {
     const state = new MultiAgentState()
-    const event = new BeforeNodeCallEvent({ orchestrator: mockOrchestrator, state, nodeId: 'node-1' })
+    const event = new BeforeNodeCallEvent({
+      orchestrator: mockOrchestrator,
+      state,
+      nodeId: 'node-1',
+      invocationState: {},
+    })
     expect(event._shouldReverseCallbacks()).toBe(false)
   })
 
   it('allows cancel to be set to true', () => {
     const state = new MultiAgentState()
-    const event = new BeforeNodeCallEvent({ orchestrator: mockOrchestrator, state, nodeId: 'node-1' })
+    const event = new BeforeNodeCallEvent({
+      orchestrator: mockOrchestrator,
+      state,
+      nodeId: 'node-1',
+      invocationState: {},
+    })
 
     expect(event.cancel).toBe(false)
     event.cancel = true
@@ -165,7 +207,12 @@ describe('BeforeNodeCallEvent', () => {
 
   it('allows cancel to be set to a string message', () => {
     const state = new MultiAgentState()
-    const event = new BeforeNodeCallEvent({ orchestrator: mockOrchestrator, state, nodeId: 'node-1' })
+    const event = new BeforeNodeCallEvent({
+      orchestrator: mockOrchestrator,
+      state,
+      nodeId: 'node-1',
+      invocationState: {},
+    })
 
     event.cancel = 'node is not ready'
     expect(event.cancel).toBe('node is not ready')
@@ -176,6 +223,7 @@ describe('BeforeNodeCallEvent', () => {
       orchestrator: mockOrchestrator,
       state: new MultiAgentState(),
       nodeId: 'node-1',
+      invocationState: {},
     })
     event.cancel = true
 
@@ -188,7 +236,12 @@ describe('BeforeNodeCallEvent', () => {
 
     it('only excludes expected fields', () => {
       const json = event.toJSON()
-      expect(Object.keys(event).filter((k) => !(k in json))).toStrictEqual(['orchestrator', 'state', 'cancel'])
+      expect(Object.keys(event).filter((k) => !(k in json))).toStrictEqual([
+        'orchestrator',
+        'state',
+        'invocationState',
+        'cancel',
+      ])
     })
   })
 })
@@ -197,13 +250,20 @@ describe('AfterNodeCallEvent', () => {
   it('creates instance with correct properties', () => {
     const state = new MultiAgentState()
     const error = new Error('node failed')
-    const event = new AfterNodeCallEvent({ orchestrator: mockOrchestrator, state, nodeId: 'node-1', error })
+    const event = new AfterNodeCallEvent({
+      orchestrator: mockOrchestrator,
+      state,
+      nodeId: 'node-1',
+      invocationState: {},
+      error,
+    })
 
     expect(event).toEqual({
       type: 'afterNodeCallEvent',
       orchestrator: mockOrchestrator,
       state,
       nodeId: 'node-1',
+      invocationState: {},
       error,
     })
     // @ts-expect-error verifying that property is readonly
@@ -216,7 +276,12 @@ describe('AfterNodeCallEvent', () => {
 
   it('returns true for _shouldReverseCallbacks', () => {
     const state = new MultiAgentState()
-    const event = new AfterNodeCallEvent({ orchestrator: mockOrchestrator, state, nodeId: 'node-1' })
+    const event = new AfterNodeCallEvent({
+      orchestrator: mockOrchestrator,
+      state,
+      nodeId: 'node-1',
+      invocationState: {},
+    })
     expect(event._shouldReverseCallbacks()).toBe(true)
   })
 
@@ -225,6 +290,7 @@ describe('AfterNodeCallEvent', () => {
       orchestrator: mockOrchestrator,
       state: new MultiAgentState(),
       nodeId: 'node-1',
+      invocationState: {},
       error: new Error('node failed'),
     })
 
@@ -241,6 +307,7 @@ describe('AfterNodeCallEvent', () => {
         orchestrator: mockOrchestrator,
         state: new MultiAgentState(),
         nodeId: 'node-1',
+        invocationState: {},
       })
 
       expect(JSON.parse(JSON.stringify(event))).toStrictEqual({
@@ -251,7 +318,7 @@ describe('AfterNodeCallEvent', () => {
 
     it('only excludes expected fields', () => {
       const json = event.toJSON()
-      expect(Object.keys(event).filter((k) => !(k in json))).toStrictEqual(['orchestrator', 'state'])
+      expect(Object.keys(event).filter((k) => !(k in json))).toStrictEqual(['orchestrator', 'state', 'invocationState'])
     })
   })
 })
@@ -260,7 +327,13 @@ describe('NodeStreamUpdateEvent', () => {
   it('creates instance with correct properties', () => {
     const state = new MultiAgentState()
     const innerEvent = { source: 'agent', event: { type: 'beforeInvocationEvent' } as AgentStreamEvent } as const
-    const event = new NodeStreamUpdateEvent({ nodeId: 'node-1', nodeType: 'agentNode', state, inner: innerEvent })
+    const event = new NodeStreamUpdateEvent({
+      nodeId: 'node-1',
+      nodeType: 'agentNode',
+      state,
+      inner: innerEvent,
+      invocationState: {},
+    })
 
     expect(event).toEqual({
       type: 'nodeStreamUpdateEvent',
@@ -268,6 +341,7 @@ describe('NodeStreamUpdateEvent', () => {
       nodeType: 'agentNode',
       state,
       inner: innerEvent,
+      invocationState: {},
     })
     // @ts-expect-error verifying that property is readonly
     event.nodeId = 'node-1'
@@ -286,6 +360,7 @@ describe('NodeStreamUpdateEvent', () => {
       nodeType: 'agentNode',
       state: new MultiAgentState(),
       inner: innerEvent,
+      invocationState: {},
     })
 
     it('serializes', () => {
@@ -299,7 +374,7 @@ describe('NodeStreamUpdateEvent', () => {
 
     it('only excludes expected fields', () => {
       const json = event.toJSON()
-      expect(Object.keys(event).filter((k) => !(k in json))).toStrictEqual(['state'])
+      expect(Object.keys(event).filter((k) => !(k in json))).toStrictEqual(['state', 'invocationState'])
     })
   })
 })
@@ -308,7 +383,7 @@ describe('NodeResultEvent', () => {
   it('creates instance with correct properties', () => {
     const state = new MultiAgentState()
     const result = new NodeResult({ nodeId: 'node-1', status: Status.COMPLETED, duration: 100 })
-    const event = new NodeResultEvent({ nodeId: 'node-1', nodeType: 'agentNode', state, result })
+    const event = new NodeResultEvent({ nodeId: 'node-1', nodeType: 'agentNode', state, result, invocationState: {} })
 
     expect(event).toEqual({
       type: 'nodeResultEvent',
@@ -316,6 +391,7 @@ describe('NodeResultEvent', () => {
       nodeType: 'agentNode',
       state,
       result,
+      invocationState: {},
     })
     // @ts-expect-error verifying that property is readonly
     event.nodeId = 'node-1'
@@ -333,6 +409,7 @@ describe('NodeResultEvent', () => {
       nodeType: 'agentNode',
       state: new MultiAgentState(),
       result: new NodeResult({ nodeId: 'node-1', status: Status.COMPLETED, duration: 100 }),
+      invocationState: {},
     })
 
     it('serializes', () => {
@@ -352,7 +429,7 @@ describe('NodeResultEvent', () => {
 
     it('only excludes expected fields', () => {
       const json = event.toJSON()
-      expect(Object.keys(event).filter((k) => !(k in json))).toStrictEqual(['state'])
+      expect(Object.keys(event).filter((k) => !(k in json))).toStrictEqual(['state', 'invocationState'])
     })
   })
 })
@@ -360,13 +437,14 @@ describe('NodeResultEvent', () => {
 describe('NodeCancelEvent', () => {
   it('creates instance with correct properties', () => {
     const state = new MultiAgentState()
-    const event = new NodeCancelEvent({ nodeId: 'node-1', state, message: 'cancelled by hook' })
+    const event = new NodeCancelEvent({ nodeId: 'node-1', state, message: 'cancelled by hook', invocationState: {} })
 
     expect(event).toEqual({
       type: 'nodeCancelEvent',
       nodeId: 'node-1',
       state,
       message: 'cancelled by hook',
+      invocationState: {},
     })
     // @ts-expect-error verifying that property is readonly
     event.nodeId = 'node-1'
@@ -377,7 +455,12 @@ describe('NodeCancelEvent', () => {
   })
 
   describe('toJSON', () => {
-    const event = new NodeCancelEvent({ nodeId: 'node-1', state: new MultiAgentState(), message: 'cancelled by hook' })
+    const event = new NodeCancelEvent({
+      nodeId: 'node-1',
+      state: new MultiAgentState(),
+      message: 'cancelled by hook',
+      invocationState: {},
+    })
 
     it('serializes', () => {
       expect(JSON.parse(JSON.stringify(event))).toStrictEqual({
@@ -389,7 +472,7 @@ describe('NodeCancelEvent', () => {
 
     it('only excludes expected fields', () => {
       const json = event.toJSON()
-      expect(Object.keys(event).filter((k) => !(k in json))).toStrictEqual(['state'])
+      expect(Object.keys(event).filter((k) => !(k in json))).toStrictEqual(['state', 'invocationState'])
     })
   })
 })
@@ -397,13 +480,19 @@ describe('NodeCancelEvent', () => {
 describe('MultiAgentHandoffEvent', () => {
   it('creates instance with correct properties', () => {
     const state = new MultiAgentState()
-    const event = new MultiAgentHandoffEvent({ source: 'node-a', targets: ['node-b', 'node-c'], state })
+    const event = new MultiAgentHandoffEvent({
+      source: 'node-a',
+      targets: ['node-b', 'node-c'],
+      state,
+      invocationState: {},
+    })
 
     expect(event).toEqual({
       type: 'multiAgentHandoffEvent',
       source: 'node-a',
       targets: ['node-b', 'node-c'],
       state,
+      invocationState: {},
     })
     // @ts-expect-error verifying that property is readonly
     event.source = 'node-a'
@@ -418,6 +507,7 @@ describe('MultiAgentHandoffEvent', () => {
       source: 'node-a',
       targets: ['node-b', 'node-c'],
       state: new MultiAgentState(),
+      invocationState: {},
     })
 
     it('serializes', () => {
@@ -430,7 +520,7 @@ describe('MultiAgentHandoffEvent', () => {
 
     it('only excludes expected fields', () => {
       const json = event.toJSON()
-      expect(Object.keys(event).filter((k) => !(k in json))).toStrictEqual(['state'])
+      expect(Object.keys(event).filter((k) => !(k in json))).toStrictEqual(['state', 'invocationState'])
     })
   })
 })
@@ -438,18 +528,22 @@ describe('MultiAgentHandoffEvent', () => {
 describe('MultiAgentResultEvent', () => {
   it('creates instance with correct properties', () => {
     const result = new MultiAgentResult({ results: [], duration: 0 })
-    const event = new MultiAgentResultEvent({ result })
+    const event = new MultiAgentResultEvent({ result, invocationState: {} })
 
     expect(event).toEqual({
       type: 'multiAgentResultEvent',
       result,
+      invocationState: {},
     })
     // @ts-expect-error verifying that property is readonly
     event.result = result
   })
 
   describe('toJSON', () => {
-    const event = new MultiAgentResultEvent({ result: new MultiAgentResult({ results: [], duration: 500 }) })
+    const event = new MultiAgentResultEvent({
+      result: new MultiAgentResult({ results: [], duration: 500 }),
+      invocationState: {},
+    })
 
     it('serializes', () => {
       expect(JSON.parse(JSON.stringify(event))).toStrictEqual({
@@ -467,7 +561,7 @@ describe('MultiAgentResultEvent', () => {
 
     it('only excludes expected fields', () => {
       const json = event.toJSON()
-      expect(Object.keys(event).filter((k) => !(k in json))).toStrictEqual([])
+      expect(Object.keys(event).filter((k) => !(k in json))).toStrictEqual(['invocationState'])
     })
   })
 })

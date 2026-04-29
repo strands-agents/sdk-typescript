@@ -1,6 +1,7 @@
 import type { StateStore } from '../state-store.js'
 import type { ContentBlock, ContentBlockData, Message, MessageData, StopReason, SystemPrompt } from './messages.js'
-import type { InterruptResponseContent, InterruptResponseContentData } from './interrupt.js'
+import type { Interrupt } from '../interrupt.js'
+import type { InterruptResponseContent } from './interrupt.js'
 import type { AgentTrace } from '../telemetry/tracer.js'
 import type {
   BeforeInvocationEvent,
@@ -25,7 +26,6 @@ import type { HookCallback, HookableEventConstructor, HookCleanup } from '../hoo
 import type { ToolRegistry } from '../registry/tool-registry.js'
 import type { z } from 'zod'
 import { AgentMetrics } from '../telemetry/meter.js'
-import type { Interrupt } from '../interrupt.js'
 
 /**
  * Arguments for invoking an agent.
@@ -34,9 +34,7 @@ import type { Interrupt } from '../interrupt.js'
  * - `string` - User text input (wrapped in TextBlock, creates user Message)
  * - `ContentBlock[]` | `ContentBlockData[]` - Array of content blocks (creates single user Message)
  * - `Message[]` | `MessageData[]` - Array of messages (appends all to conversation)
- *
- * When resuming from an interrupt, pass an array of `InterruptResponseContent` objects.
- * These are detected and extracted automatically.
+ * - `InterruptResponseContent[]` - Array of interrupt responses (resumes from interrupted state)
  */
 export type InvokeArgs =
   | string
@@ -45,7 +43,28 @@ export type InvokeArgs =
   | Message[]
   | MessageData[]
   | InterruptResponseContent[]
-  | InterruptResponseContentData[]
+
+/**
+ * Per-invocation state threaded through hooks and tools for a single agent
+ * invocation, and returned on {@link AgentResult.invocationState}. One object
+ * per invocation, shared by reference; mutations by hooks or tools are visible
+ * to subsequent hooks, tools, and recursive loop cycles.
+ *
+ * Typically used for request-scoped context (`userId`, `requestId`, `traceId`)
+ * or cross-hook counters. The core agent loop writes no keys into it — the
+ * key space is the caller's. Transport bridges may populate reserved keys
+ * (e.g. `A2AExecutor` sets `a2aRequestContext`); those bridges document their
+ * own reserved keys.
+ *
+ * Distinct from {@link LocalAgent.appState}: `appState` is durable across
+ * invocations, JSON-serializable, and deep-copied. `invocationState` is
+ * ephemeral and accepts arbitrary values.
+ *
+ * Excluded from `toJSON()` on {@link AgentResult} and all hook events because
+ * values may not be serializable; callers produce a serialized form explicitly
+ * if needed.
+ */
+export type InvocationState = Record<string, unknown>
 
 /**
  * Options for a single agent invocation.
@@ -55,6 +74,15 @@ export interface InvokeOptions {
    * Zod schema for structured output validation, overriding the constructor-provided schema for this invocation only.
    */
   structuredOutputSchema?: z.ZodSchema
+
+  /**
+   * Per-invocation state. Passed to lifecycle hook events and tools, and
+   * returned on {@link AgentResult.invocationState}. Mutable — hooks and tools
+   * may read and write. See {@link InvocationState} for details.
+   *
+   * Defaults to an empty object when omitted.
+   */
+  invocationState?: InvocationState
 
   /**
    * External AbortSignal for cancelling the agent invocation.
@@ -164,6 +192,13 @@ export interface LocalAgent {
   messages: Message[]
 
   /**
+   * Runtime state for the model provider. Used by stateful models to persist
+   * provider-specific data (e.g., response IDs for server-side conversation chaining)
+   * across invocations.
+   */
+  modelState: StateStore
+
+  /**
    * The tool registry for registering tools with the agent.
    */
   readonly toolRegistry: ToolRegistry
@@ -253,14 +288,23 @@ export class AgentResult {
   readonly metrics?: AgentMetrics
 
   /**
-   * Interrupts that caused the agent to stop for human input.
-   * Only populated when stopReason is 'interrupt'.
+   * Per-invocation state passed into the agent, threaded through hooks and
+   * tools, and surfaced here at the end of the invocation. See
+   * {@link InvocationState} for details. Always defined — defaults to `{}` when
+   * no `invocationState` was provided in {@link InvokeOptions}.
+   */
+  readonly invocationState: InvocationState
+
+  /**
+   * Interrupts that caused the agent to stop, when `stopReason` is `'interrupt'`.
+   * Contains the unanswered interrupts that require human input to resume.
    */
   readonly interrupts?: Interrupt[]
 
   constructor(data: {
     stopReason: StopReason
     lastMessage: Message
+    invocationState: InvocationState
     traces?: AgentTrace[]
     metrics?: AgentMetrics
     structuredOutput?: z.output<z.ZodType>
@@ -268,6 +312,7 @@ export class AgentResult {
   }) {
     this.stopReason = data.stopReason
     this.lastMessage = data.lastMessage
+    this.invocationState = data.invocationState
     if (data.traces !== undefined) {
       this.traces = data.traces
     }
@@ -292,14 +337,23 @@ export class AgentResult {
   }
 
   /**
-   * Custom JSON serialization that excludes traces and metrics by default.
-   * This prevents accidentally sending large trace/metric data over the wire
-   * when serializing AgentResult for API responses.
+   * Projected context size for the next model call (inputTokens + outputTokens from the last call).
+   * Convenience accessor that delegates to `metrics.projectedContextSize`.
+   * Returns `undefined` when no metrics or invocations are available.
+   */
+  get projectedContextSize(): number | undefined {
+    return this.metrics?.projectedContextSize
+  }
+
+  /**
+   * Custom JSON serialization that excludes traces, metrics, and invocationState.
+   * Traces and metrics are excluded to avoid sending large payloads over the wire
+   * in API responses; `invocationState` is excluded because its values are
+   * caller-owned and may not be serializable (see {@link InvocationState}).
    *
-   * Traces and metrics remain accessible via their properties for debugging,
-   * but won't be included in JSON.stringify() output.
+   * All three remain accessible via their properties for debugging.
    *
-   * @returns Object representation without traces/metrics for safe serialization
+   * @returns Object representation for safe serialization
    */
   public toJSON(): object {
     return {
@@ -307,7 +361,6 @@ export class AgentResult {
       stopReason: this.stopReason,
       lastMessage: this.lastMessage,
       ...(this.structuredOutput !== undefined && { structuredOutput: this.structuredOutput }),
-      ...(this.interrupts !== undefined && { interrupts: this.interrupts }),
     }
   }
 

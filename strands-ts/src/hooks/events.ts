@@ -1,11 +1,11 @@
-import type { LocalAgent, AgentResult } from '../types/agent.js'
+import type { LocalAgent, AgentResult, InvocationState } from '../types/agent.js'
 import type { ContentBlock, Message, StopReason, ToolResultBlock } from '../types/messages.js'
 import { type Tool, ToolStreamEvent } from '../tools/tool.js'
 import type { JSONValue } from '../types/json.js'
 import type { ModelStreamEvent } from '../models/streaming.js'
 import type { Model } from '../models/model.js'
-import type { InterruptParams } from '../types/interrupt.js'
 import { interruptFromAgent, type Interruptible } from '../interrupt.js'
+import type { InterruptParams } from '../types/interrupt.js'
 
 /**
  * Agent hook events.
@@ -48,13 +48,29 @@ import { interruptFromAgent, type Interruptible } from '../interrupt.js'
  *
  * ## Field naming conventions
  *
- * | Field           | Usage                                            |
- * |-----------------|--------------------------------------------------|
- * | `agent`         | `LocalAgent` reference on all agent-loop events  |
- * | `.event`        | Inner event in update wrappers                   |
- * | `.result`       | Finished result object                           |
- * | `.message`      | Message object                                   |
- * | `.contentBlock` | Content block object                             |
+ * | Field              | Usage                                            |
+ * |--------------------|--------------------------------------------------|
+ * | `agent`            | `LocalAgent` reference on all agent-loop events  |
+ * | `invocationState`  | Per-invocation state — see below                 |
+ * | `.event`           | Inner event in update wrappers                   |
+ * | `.result`          | Finished result object                           |
+ * | `.message`         | Message object                                   |
+ * | `.contentBlock`    | Content block object                             |
+ *
+ * ## `invocationState` on events
+ *
+ * Every hookable event that fires **during** an invocation carries
+ * {@link InvocationState} — the per-invocation mutable bag shared across hooks
+ * and tools. This lets any callback (lifecycle, data, streaming, completion)
+ * correlate back to the caller's request context (`userId`, `traceId`, etc.)
+ * without closure workarounds.
+ *
+ * The only events without `invocationState` are the ones that fire **outside**
+ * any invocation scope: {@link InitializedEvent} and `MultiAgentInitializedEvent`,
+ * both of which fire at construction.
+ *
+ * New events should follow the same rule: carry `invocationState` unless the
+ * event fires before any invocation exists.
  */
 
 /**
@@ -109,14 +125,23 @@ export class InitializedEvent extends HookableEvent {
 export class BeforeInvocationEvent extends HookableEvent {
   readonly type = 'beforeInvocationEvent' as const
   readonly agent: LocalAgent
+  readonly invocationState: InvocationState
 
-  constructor(data: { agent: LocalAgent }) {
+  /**
+   * Set by hook callbacks to cancel this invocation.
+   * When set to `true`, a default cancel message is used.
+   * When set to a string, that string is used as the assistant response message.
+   */
+  cancel: boolean | string = false
+
+  constructor(data: { agent: LocalAgent; invocationState: InvocationState }) {
     super()
     this.agent = data.agent
+    this.invocationState = data.invocationState
   }
 
   /**
-   * Serializes for wire transport, excluding the agent reference.
+   * Serializes for wire transport, excluding the agent reference and invocationState.
    * Called automatically by JSON.stringify().
    */
   toJSON(): Pick<BeforeInvocationEvent, 'type'> {
@@ -132,10 +157,12 @@ export class BeforeInvocationEvent extends HookableEvent {
 export class AfterInvocationEvent extends HookableEvent {
   readonly type = 'afterInvocationEvent' as const
   readonly agent: LocalAgent
+  readonly invocationState: InvocationState
 
-  constructor(data: { agent: LocalAgent }) {
+  constructor(data: { agent: LocalAgent; invocationState: InvocationState }) {
     super()
     this.agent = data.agent
+    this.invocationState = data.invocationState
   }
 
   override _shouldReverseCallbacks(): boolean {
@@ -143,7 +170,7 @@ export class AfterInvocationEvent extends HookableEvent {
   }
 
   /**
-   * Serializes for wire transport, excluding the agent reference.
+   * Serializes for wire transport, excluding the agent reference and invocationState.
    * Called automatically by JSON.stringify().
    */
   toJSON(): Pick<AfterInvocationEvent, 'type'> {
@@ -160,15 +187,17 @@ export class MessageAddedEvent extends HookableEvent {
   readonly type = 'messageAddedEvent' as const
   readonly agent: LocalAgent
   readonly message: Message
+  readonly invocationState: InvocationState
 
-  constructor(data: { agent: LocalAgent; message: Message }) {
+  constructor(data: { agent: LocalAgent; message: Message; invocationState: InvocationState }) {
     super()
     this.agent = data.agent
     this.message = data.message
+    this.invocationState = data.invocationState
   }
 
   /**
-   * Serializes for wire transport, excluding the agent reference.
+   * Serializes for wire transport, excluding the agent reference and invocationState.
    * Called automatically by JSON.stringify().
    */
   toJSON(): Pick<MessageAddedEvent, 'type' | 'message'> {
@@ -190,6 +219,7 @@ export class BeforeToolCallEvent extends HookableEvent implements Interruptible 
     input: JSONValue
   }
   readonly tool: Tool | undefined
+  readonly invocationState: InvocationState
 
   /**
    * Set by hook callbacks to cancel this tool call.
@@ -202,43 +232,29 @@ export class BeforeToolCallEvent extends HookableEvent implements Interruptible 
     agent: LocalAgent
     toolUse: { name: string; toolUseId: string; input: JSONValue }
     tool: Tool | undefined
+    invocationState: InvocationState
   }) {
     super()
     this.agent = data.agent
     this.toolUse = data.toolUse
     this.tool = data.tool
+    this.invocationState = data.invocationState
   }
 
   /**
-   * Triggers an interrupt for human-in-the-loop workflows.
-   *
-   * On first call, halts agent execution with `stopReason: 'interrupt'`.
-   * On resume (when user has provided a response), returns the user's response.
+   * Raises an interrupt for human-in-the-loop workflows.
+   * If a response is available (from a previous resume), returns it immediately.
+   * Otherwise, throws an InterruptError to halt agent execution.
    *
    * @param params - Interrupt parameters including name and optional reason
    * @returns The user's response when resuming from an interrupt
-   *
-   * @example
-   * ```typescript
-   * agent.addHook(BeforeToolCallEvent, (event) => {
-   *   if (event.toolUse.name === 'delete_file') {
-   *     const response = event.interrupt({
-   *       name: 'confirm_delete',
-   *       reason: 'Confirm file deletion?',
-   *     })
-   *     if (response !== 'approved') {
-   *       event.cancel = 'Deletion cancelled by user'
-   *     }
-   *   }
-   * })
-   * ```
    */
   interrupt<T = JSONValue>(params: InterruptParams): T {
-    return interruptFromAgent<T>(this.agent, `beforeToolCall:${this.toolUse.toolUseId}:${params.name}`, params)
+    return interruptFromAgent<T>(this.agent, `hook:beforeToolCall:${this.toolUse.toolUseId}:${params.name}`, params)
   }
 
   /**
-   * Serializes for wire transport, excluding the agent reference, tool instance, and mutable cancel flag.
+   * Serializes for wire transport, excluding the agent reference, tool instance, invocationState, and mutable cancel flag.
    * Called automatically by JSON.stringify().
    */
   toJSON(): Pick<BeforeToolCallEvent, 'type' | 'toolUse'> {
@@ -260,8 +276,15 @@ export class AfterToolCallEvent extends HookableEvent {
     input: JSONValue
   }
   readonly tool: Tool | undefined
-  readonly result: ToolResultBlock
+
+  /**
+   * The tool result. Can be replaced by hook callbacks to transform the result
+   * before it enters the conversation history.
+   */
+  result: ToolResultBlock
+
   readonly error?: Error
+  readonly invocationState: InvocationState
 
   /**
    * Optional flag that can be set by hook callbacks to request a retry of the tool call.
@@ -274,6 +297,7 @@ export class AfterToolCallEvent extends HookableEvent {
     toolUse: { name: string; toolUseId: string; input: JSONValue }
     tool: Tool | undefined
     result: ToolResultBlock
+    invocationState: InvocationState
     error?: Error
   }) {
     super()
@@ -281,6 +305,7 @@ export class AfterToolCallEvent extends HookableEvent {
     this.toolUse = data.toolUse
     this.tool = data.tool
     this.result = data.result
+    this.invocationState = data.invocationState
     if (data.error !== undefined) {
       this.error = data.error
     }
@@ -291,7 +316,7 @@ export class AfterToolCallEvent extends HookableEvent {
   }
 
   /**
-   * Serializes for wire transport, excluding the agent reference, tool instance, and mutable retry flag.
+   * Serializes for wire transport, excluding the agent reference, tool instance, invocationState, and mutable retry flag.
    * Converts Error to an extensible object for safe wire serialization.
    * Called automatically by JSON.stringify().
    */
@@ -313,19 +338,47 @@ export class BeforeModelCallEvent extends HookableEvent {
   readonly type = 'beforeModelCallEvent' as const
   readonly agent: LocalAgent
   readonly model: Model
+  readonly invocationState: InvocationState
 
-  constructor(data: { agent: LocalAgent; model: Model }) {
+  /**
+   * Set by hook callbacks to cancel this model call.
+   * When set to `true`, a default cancel message is used.
+   * When set to a string, that string is used as the assistant response message.
+   */
+  cancel: boolean | string = false
+
+  /**
+   * Projected input token count for the upcoming model call.
+   * Computed by the agent loop from message metadata and token estimation.
+   * Available for hooks and plugins (e.g. conversation managers) to make
+   * proactive decisions about context management.
+   */
+  readonly projectedInputTokens?: number
+
+  constructor(data: {
+    agent: LocalAgent
+    model: Model
+    invocationState: InvocationState
+    projectedInputTokens?: number
+  }) {
     super()
     this.agent = data.agent
     this.model = data.model
+    this.invocationState = data.invocationState
+    if (data.projectedInputTokens !== undefined) {
+      this.projectedInputTokens = data.projectedInputTokens
+    }
   }
 
   /**
-   * Serializes for wire transport, excluding the agent reference.
+   * Serializes for wire transport, excluding the agent reference and invocationState.
    * Called automatically by JSON.stringify().
    */
-  toJSON(): Pick<BeforeModelCallEvent, 'type'> {
-    return { type: this.type }
+  toJSON(): Pick<BeforeModelCallEvent, 'type' | 'projectedInputTokens'> {
+    return {
+      type: this.type,
+      ...(this.projectedInputTokens !== undefined && { projectedInputTokens: this.projectedInputTokens }),
+    }
   }
 }
 
@@ -373,6 +426,7 @@ export class AfterModelCallEvent extends HookableEvent {
   readonly model: Model
   readonly stopData?: ModelStopData
   readonly error?: Error
+  readonly invocationState: InvocationState
 
   /**
    * Optional flag that can be set by hook callbacks to request a retry of the model call.
@@ -380,10 +434,17 @@ export class AfterModelCallEvent extends HookableEvent {
    */
   retry?: boolean
 
-  constructor(data: { agent: LocalAgent; model: Model; stopData?: ModelStopData; error?: Error }) {
+  constructor(data: {
+    agent: LocalAgent
+    model: Model
+    invocationState: InvocationState
+    stopData?: ModelStopData
+    error?: Error
+  }) {
     super()
     this.agent = data.agent
     this.model = data.model
+    this.invocationState = data.invocationState
     if (data.stopData !== undefined) {
       this.stopData = data.stopData
     }
@@ -397,7 +458,7 @@ export class AfterModelCallEvent extends HookableEvent {
   }
 
   /**
-   * Serializes for wire transport, excluding the agent reference and mutable retry flag.
+   * Serializes for wire transport, excluding the agent reference, invocationState, and mutable retry flag.
    * Converts Error to an extensible object for safe wire serialization.
    * Called automatically by JSON.stringify().
    */
@@ -420,15 +481,17 @@ export class ModelStreamUpdateEvent extends HookableEvent {
   readonly type = 'modelStreamUpdateEvent' as const
   readonly agent: LocalAgent
   readonly event: ModelStreamEvent
+  readonly invocationState: InvocationState
 
-  constructor(data: { agent: LocalAgent; event: ModelStreamEvent }) {
+  constructor(data: { agent: LocalAgent; event: ModelStreamEvent; invocationState: InvocationState }) {
     super()
     this.agent = data.agent
     this.event = data.event
+    this.invocationState = data.invocationState
   }
 
   /**
-   * Serializes for wire transport, excluding the agent reference.
+   * Serializes for wire transport, excluding the agent reference and invocationState.
    * Called automatically by JSON.stringify().
    */
   toJSON(): Pick<ModelStreamUpdateEvent, 'type' | 'event'> {
@@ -450,15 +513,17 @@ export class ContentBlockEvent extends HookableEvent {
   readonly type = 'contentBlockEvent' as const
   readonly agent: LocalAgent
   readonly contentBlock: ContentBlock
+  readonly invocationState: InvocationState
 
-  constructor(data: { agent: LocalAgent; contentBlock: ContentBlock }) {
+  constructor(data: { agent: LocalAgent; contentBlock: ContentBlock; invocationState: InvocationState }) {
     super()
     this.agent = data.agent
     this.contentBlock = data.contentBlock
+    this.invocationState = data.invocationState
   }
 
   /**
-   * Serializes for wire transport, excluding the agent reference.
+   * Serializes for wire transport, excluding the agent reference and invocationState.
    * Called automatically by JSON.stringify().
    */
   toJSON(): Pick<ContentBlockEvent, 'type' | 'contentBlock'> {
@@ -475,16 +540,18 @@ export class ModelMessageEvent extends HookableEvent {
   readonly agent: LocalAgent
   readonly message: Message
   readonly stopReason: StopReason
+  readonly invocationState: InvocationState
 
-  constructor(data: { agent: LocalAgent; message: Message; stopReason: StopReason }) {
+  constructor(data: { agent: LocalAgent; message: Message; stopReason: StopReason; invocationState: InvocationState }) {
     super()
     this.agent = data.agent
     this.message = data.message
     this.stopReason = data.stopReason
+    this.invocationState = data.invocationState
   }
 
   /**
-   * Serializes for wire transport, excluding the agent reference.
+   * Serializes for wire transport, excluding the agent reference and invocationState.
    * Called automatically by JSON.stringify().
    */
   toJSON(): Pick<ModelMessageEvent, 'type' | 'message' | 'stopReason'> {
@@ -500,15 +567,17 @@ export class ToolResultEvent extends HookableEvent {
   readonly type = 'toolResultEvent' as const
   readonly agent: LocalAgent
   readonly result: ToolResultBlock
+  readonly invocationState: InvocationState
 
-  constructor(data: { agent: LocalAgent; result: ToolResultBlock }) {
+  constructor(data: { agent: LocalAgent; result: ToolResultBlock; invocationState: InvocationState }) {
     super()
     this.agent = data.agent
     this.result = data.result
+    this.invocationState = data.invocationState
   }
 
   /**
-   * Serializes for wire transport, excluding the agent reference.
+   * Serializes for wire transport, excluding the agent reference and invocationState.
    * Called automatically by JSON.stringify().
    */
   toJSON(): Pick<ToolResultEvent, 'type' | 'result'> {
@@ -529,15 +598,17 @@ export class ToolStreamUpdateEvent extends HookableEvent {
   readonly type = 'toolStreamUpdateEvent' as const
   readonly agent: LocalAgent
   readonly event: ToolStreamEvent
+  readonly invocationState: InvocationState
 
-  constructor(data: { agent: LocalAgent; event: ToolStreamEvent }) {
+  constructor(data: { agent: LocalAgent; event: ToolStreamEvent; invocationState: InvocationState }) {
     super()
     this.agent = data.agent
     this.event = data.event
+    this.invocationState = data.invocationState
   }
 
   /**
-   * Serializes for wire transport, excluding the agent reference.
+   * Serializes for wire transport, excluding the agent reference and invocationState.
    * Called automatically by JSON.stringify().
    */
   toJSON(): Pick<ToolStreamUpdateEvent, 'type' | 'event'> {
@@ -553,15 +624,17 @@ export class AgentResultEvent extends HookableEvent {
   readonly type = 'agentResultEvent' as const
   readonly agent: LocalAgent
   readonly result: AgentResult
+  readonly invocationState: InvocationState
 
-  constructor(data: { agent: LocalAgent; result: AgentResult }) {
+  constructor(data: { agent: LocalAgent; result: AgentResult; invocationState: InvocationState }) {
     super()
     this.agent = data.agent
     this.result = data.result
+    this.invocationState = data.invocationState
   }
 
   /**
-   * Serializes for wire transport, excluding the agent reference.
+   * Serializes for wire transport, excluding the agent reference and invocationState.
    * Called automatically by JSON.stringify().
    */
   toJSON(): Pick<AgentResultEvent, 'type' | 'result'> {
@@ -578,6 +651,7 @@ export class BeforeToolsEvent extends HookableEvent implements Interruptible {
   readonly type = 'beforeToolsEvent' as const
   readonly agent: LocalAgent
   readonly message: Message
+  readonly invocationState: InvocationState
 
   /**
    * Set by hook callbacks to cancel all tool calls.
@@ -586,46 +660,27 @@ export class BeforeToolsEvent extends HookableEvent implements Interruptible {
    */
   cancel: boolean | string = false
 
-  constructor(data: { agent: LocalAgent; message: Message }) {
+  constructor(data: { agent: LocalAgent; message: Message; invocationState: InvocationState }) {
     super()
     this.agent = data.agent
     this.message = data.message
+    this.invocationState = data.invocationState
   }
 
   /**
-   * Triggers an interrupt for human-in-the-loop workflows.
-   *
-   * On first call, halts agent execution with `stopReason: 'interrupt'`.
-   * On resume (when user has provided a response), returns the user's response.
+   * Raises an interrupt for human-in-the-loop workflows.
+   * If a response is available (from a previous resume), returns it immediately.
+   * Otherwise, throws an InterruptError to halt agent execution.
    *
    * @param params - Interrupt parameters including name and optional reason
    * @returns The user's response when resuming from an interrupt
-   *
-   * @example
-   * ```typescript
-   * agent.addHook(BeforeToolsEvent, (event) => {
-   *   const dangerousTools = event.message.content
-   *     .filter((block) => block.type === 'toolUseBlock')
-   *     .filter((block) => ['delete_file'].includes(block.name))
-   *
-   *   if (dangerousTools.length > 0) {
-   *     const response = event.interrupt({
-   *       name: 'batch_approval',
-   *       reason: `Approve ${dangerousTools.length} dangerous tool calls?`,
-   *     })
-   *     if (!response.approved) {
-   *       event.cancel = 'Batch cancelled by user'
-   *     }
-   *   }
-   * })
-   * ```
    */
   interrupt<T = JSONValue>(params: InterruptParams): T {
-    return interruptFromAgent<T>(this.agent, `beforeTools:${params.name}`, params)
+    return interruptFromAgent<T>(this.agent, `hook:beforeTools:${params.name}`, params)
   }
 
   /**
-   * Serializes for wire transport, excluding the agent reference and mutable cancel flag.
+   * Serializes for wire transport, excluding the agent reference, invocationState, and mutable cancel flag.
    * Called automatically by JSON.stringify().
    */
   toJSON(): Pick<BeforeToolsEvent, 'type' | 'message'> {
@@ -642,11 +697,13 @@ export class AfterToolsEvent extends HookableEvent {
   readonly type = 'afterToolsEvent' as const
   readonly agent: LocalAgent
   readonly message: Message
+  readonly invocationState: InvocationState
 
-  constructor(data: { agent: LocalAgent; message: Message }) {
+  constructor(data: { agent: LocalAgent; message: Message; invocationState: InvocationState }) {
     super()
     this.agent = data.agent
     this.message = data.message
+    this.invocationState = data.invocationState
   }
 
   override _shouldReverseCallbacks(): boolean {
@@ -654,7 +711,7 @@ export class AfterToolsEvent extends HookableEvent {
   }
 
   /**
-   * Serializes for wire transport, excluding the agent reference.
+   * Serializes for wire transport, excluding the agent reference and invocationState.
    * Called automatically by JSON.stringify().
    */
   toJSON(): Pick<AfterToolsEvent, 'type' | 'message'> {

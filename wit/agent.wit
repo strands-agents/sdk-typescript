@@ -1,6 +1,8 @@
 package strands:agent;
 
+/// Shared types used across all interfaces.
 interface types {
+  /// Why the model stopped generating.
   enum stop-reason {
     end-turn,
     tool-use,
@@ -13,6 +15,7 @@ interface types {
     cancelled,
   }
 
+  /// Token consumption for a model invocation.
   record usage {
     input-tokens: s32,
     output-tokens: s32,
@@ -21,39 +24,46 @@ interface types {
     cache-write-input-tokens: option<s32>,
   }
 
+  /// Performance metrics for a model invocation.
   record metrics {
     latency-ms: f64,
   }
 
+  /// Usage and metrics attached to a stream.
   record metadata-event {
     usage: option<usage>,
     metrics: option<metrics>,
   }
 
+  /// Model requesting a tool call.
   record tool-use-event {
     name: string,
     tool-use-id: string,
     input: string,
   }
 
+  /// Result of a tool execution.
   record tool-result-event {
     tool-use-id: string,
     status: string,
     content: string,
   }
 
+  /// Tool definition passed to the model.
   record tool-spec {
     name: string,
     description: string,
     input-schema: string,
   }
 
+  /// Final stop data when the stream ends.
   record stop-data {
     reason: stop-reason,
     usage: option<usage>,
     metrics: option<metrics>,
   }
 
+  /// Hook event types fired during the agent loop.
   enum lifecycle-event-type {
     initialized,
     before-invocation,
@@ -65,12 +75,14 @@ interface types {
     message-added,
   }
 
+  /// A lifecycle hook event with optional tool context.
   record lifecycle-event {
     event-type: lifecycle-event-type,
     tool-use: option<string>,
     tool-result: option<string>,
   }
 
+  /// Events yielded during agent streaming.
   variant stream-event {
     text-delta(string),
     tool-use(tool-use-event),
@@ -82,12 +94,14 @@ interface types {
     lifecycle(lifecycle-event),
   }
 
+  /// Anthropic model provider config.
   record anthropic-config {
     model-id: option<string>,
     api-key: option<string>,
     additional-config: option<string>,
   }
 
+  /// AWS Bedrock model provider config.
   record bedrock-config {
     model-id: string,
     region: option<string>,
@@ -97,18 +111,21 @@ interface types {
     additional-config: option<string>,
   }
 
+  /// OpenAI model provider config.
   record openai-config {
     model-id: option<string>,
     api-key: option<string>,
     additional-config: option<string>,
   }
 
+  /// Google Gemini model provider config.
   record gemini-config {
     model-id: option<string>,
     api-key: option<string>,
     additional-config: option<string>,
   }
 
+  /// Which model provider to use.
   variant model-config {
     anthropic(anthropic-config),
     bedrock(bedrock-config),
@@ -116,33 +133,56 @@ interface types {
     gemini(gemini-config),
   }
 
+  /// Sampling parameters for model inference.
   record model-params {
     max-tokens: option<s32>,
     temperature: option<f64>,
     top-p: option<f64>,
   }
 
+  /// Local filesystem session storage config.
   record file-storage-config {
     base-dir: string,
   }
 
+  /// S3 session storage config.
   record s3-storage-config {
     bucket: string,
     region: option<string>,
     prefix: option<string>,
   }
 
+  /// Where to persist session snapshots.
   variant storage-config {
     file(file-storage-config),
     s3(s3-storage-config),
   }
 
+  /// Session persistence configuration.
   record session-config {
     session-id: string,
     storage: storage-config,
     save-latest-on: option<string>,
   }
 
+  /// Conversation manager configuration.
+  /// The `strategy` field selects the manager: "none", "sliding-window", or "summarizing".
+  record conversation-manager-config {
+    strategy: string,
+    window-size: s32,
+    should-truncate-results: bool,
+    /// Ratio of messages to summarize (0.1–0.8). Only used when strategy is "summarizing".
+    summary-ratio: option<f64>,
+    /// Minimum number of recent messages to preserve. Only used when strategy is "summarizing".
+    preserve-recent-messages: option<s32>,
+    /// Custom system prompt for summarization. Only used when strategy is "summarizing".
+    summarization-system-prompt: option<string>,
+    /// JSON-serialized model config for the summarization model. Only used when strategy is "summarizing".
+    /// When absent, the agent's primary model is used.
+    summarization-model-config: option<string>,
+  }
+
+  /// Top-level agent configuration.
   record agent-config {
     model: option<model-config>,
     model-params: option<model-params>,
@@ -151,33 +191,40 @@ interface types {
     tools: option<list<tool-spec>>,
     trace-context: option<string>,
     session: option<session-config>,
+    conversation-manager: option<conversation-manager-config>,
   }
 
+  /// Arguments for a single tool call from guest to host.
   record call-tool-args {
     name: string,
     input: string,
     tool-use-id: string,
   }
 
+  /// Batch tool call arguments.
   record call-tools-args {
     calls: list<call-tool-args>,
   }
 
+  /// Arguments for agent.generate().
   record stream-args {
     input: string,
     tools: option<list<tool-spec>>,
     tool-choice: option<string>,
   }
 
+  /// Payload for responding to an interrupt.
   record respond-args {
     payload: string,
   }
 
+  /// Arguments for agent.set-messages().
   record set-messages-args {
     json: string,
   }
 }
 
+/// Host-side tool execution. The guest calls these when the model requests tool use.
 interface tool-provider {
   use types.{call-tool-args, call-tools-args};
 
@@ -186,10 +233,6 @@ interface tool-provider {
 }
 
 /// Structured logging from guest to host.
-///
-/// The guest calls `log` at key decision points (tool dispatch, event
-/// mapping, errors).  The host routes entries to its own logging backend
-/// (e.g. Python `logging`).
 interface host-log {
   enum log-level {
     trace,
@@ -201,17 +244,15 @@ interface host-log {
 
   record log-entry {
     level: log-level,
-    /// Human-readable message.
     message: string,
-    /// Optional JSON blob with structured context (tool name, event
-    /// kind, JS stack trace on errors, …).
+    /// Optional JSON blob with structured context.
     context: option<string>,
   }
 
-  /// Emit a structured log entry visible to the host.
   log: func(entry: log-entry);
 }
 
+/// The main API exported by the WASM guest.
 interface api {
   use types.{agent-config, stream-event, stream-args, respond-args, set-messages-args};
 

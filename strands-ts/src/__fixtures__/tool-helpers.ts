@@ -4,23 +4,25 @@
  */
 
 import type { Tool, ToolContext } from '../tools/tool.js'
-import { ToolResultBlock, TextBlock } from '../types/messages.js'
+import { TextBlock, ToolResultBlock } from '../types/messages.js'
 import type { JSONValue } from '../types/json.js'
 import { StateStore } from '../state-store.js'
 import { ToolRegistry } from '../registry/tool-registry.js'
 import type { PlainToolResultBlock } from './slim-types.js'
-import type { LocalAgent } from '../types/agent.js'
+import type { InvocationState, LocalAgent } from '../types/agent.js'
 
 /**
  * Helper to create a mock ToolContext for testing.
  *
  * @param toolUse - The tool use request
  * @param appState - Optional initial app state
+ * @param invocationState - Optional initial invocation state
  * @returns Mock ToolContext object
  */
 export function createMockContext(
   toolUse: { name: string; toolUseId: string; input: JSONValue },
-  appState?: Record<string, JSONValue>
+  appState?: Record<string, JSONValue>,
+  invocationState?: InvocationState
 ): ToolContext {
   return {
     toolUse,
@@ -31,25 +33,28 @@ export function createMockContext(
       toolRegistry: new ToolRegistry(),
       addHook: () => () => {},
     } as unknown as LocalAgent,
+    invocationState: invocationState ?? {},
     interrupt: (): never => {
-      throw new Error('interrupt() is not available in mock context')
+      throw new Error('interrupt not available in mock context')
     },
   }
 }
 
 /**
- * Result function type for createMockTool.
- * Can return a ToolResultBlock directly, or a simple value (string, etc.) that will be auto-wrapped.
+ * Result function type for createMockTool - accepts plain objects or class instances.
+ * Can optionally receive the ToolContext for interrupt-aware tools.
  */
 type ToolResultFn =
-  | ((context: ToolContext) => PlainToolResultBlock | string | void)
-  | ((context: ToolContext) => AsyncGenerator<never, PlainToolResultBlock, never>)
+  | (() => PlainToolResultBlock | AsyncGenerator<never, PlainToolResultBlock, never>)
+  | ((
+      context: ToolContext
+    ) => PlainToolResultBlock | AsyncGenerator<never, PlainToolResultBlock, never> | string | void)
 
 /**
  * Helper to create a mock tool for testing.
  *
  * @param name - The name of the mock tool
- * @param resultFn - Function that returns a ToolResultBlock, a string (auto-wrapped), or an AsyncGenerator
+ * @param resultFn - Function that returns a ToolResultBlock (plain object or class instance) or an AsyncGenerator
  * @returns Mock Tool object
  */
 export function createMockTool(name: string, resultFn: ToolResultFn): Tool {
@@ -64,7 +69,22 @@ export function createMockTool(name: string, resultFn: ToolResultFn): Tool {
     // eslint-disable-next-line require-yield
     async *stream(context): AsyncGenerator<never, ToolResultBlock, never> {
       const result = resultFn(context)
+      if (typeof result === 'string') {
+        return new ToolResultBlock({
+          toolUseId: context.toolUse.toolUseId,
+          status: 'success',
+          content: [new TextBlock(result)],
+        })
+      }
+      if (result === undefined || result === null) {
+        return new ToolResultBlock({
+          toolUseId: context.toolUse.toolUseId,
+          status: 'success',
+          content: [],
+        })
+      }
       if (typeof result === 'object' && result !== null && Symbol.asyncIterator in result) {
+        // For generators that throw errors
         const gen = result as AsyncGenerator<never, ToolResultBlock, never>
         let done = false
         while (!done) {
@@ -74,17 +94,10 @@ export function createMockTool(name: string, resultFn: ToolResultFn): Tool {
             return value
           }
         }
+        // This should never be reached but TypeScript needs a return
         throw new Error('Generator ended unexpectedly')
-      } else if (result instanceof ToolResultBlock) {
-        return result
       } else {
-        // Auto-wrap string or void into a ToolResultBlock
-        const text = typeof result === 'string' ? result : 'mock result'
-        return new ToolResultBlock({
-          toolUseId: context.toolUse.toolUseId,
-          status: 'success' as const,
-          content: [new TextBlock(text)],
-        })
+        return result as ToolResultBlock
       }
     },
   }
@@ -100,5 +113,13 @@ export function createMockTool(name: string, resultFn: ToolResultFn): Tool {
  */
 export function createRandomTool(name?: string): Tool {
   const toolName = name ?? globalThis.crypto.randomUUID()
-  return createMockTool(toolName, () => {})
+  return createMockTool(
+    toolName,
+    () =>
+      new ToolResultBlock({
+        toolUseId: 'test-id',
+        status: 'success' as const,
+        content: [],
+      })
+  )
 }

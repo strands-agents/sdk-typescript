@@ -1,12 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import OpenAI from 'openai'
-import { isNode } from '../../__fixtures__/environment.js'
-import { OpenAIModel } from '../openai.js'
-import { ContextWindowOverflowError, ModelThrottledError } from '../../errors.js'
-import { collectIterator } from '../../__fixtures__/model-test-helpers.js'
-import { Message, TextBlock, ToolUseBlock, ToolResultBlock, GuardContentBlock } from '../../types/messages.js'
-import type { SystemContentBlock } from '../../types/messages.js'
-import { ImageBlock, DocumentBlock, VideoBlock } from '../../types/media.js'
+import { isNode } from '../../../__fixtures__/environment.js'
+import { OpenAIModel } from '../index.js'
+import { ContextWindowOverflowError, ModelThrottledError } from '../../../errors.js'
+import { collectIterator } from '../../../__fixtures__/model-test-helpers.js'
+import { Message, TextBlock, ToolUseBlock, ToolResultBlock, GuardContentBlock } from '../../../types/messages.js'
+import type { SystemContentBlock } from '../../../types/messages.js'
+import { ImageBlock, DocumentBlock, VideoBlock } from '../../../types/media.js'
+import { warnOnce } from '../../../logging/warn-once.js'
+import { logger } from '../../../logging/logger.js'
 
 /**
  * Helper to create a mock OpenAI client with streaming support
@@ -30,6 +32,10 @@ vi.mock('openai', () => {
     default: mockConstructor,
   }
 })
+
+vi.mock('../../../logging/warn-once.js', () => ({
+  warnOnce: vi.fn(),
+}))
 
 describe('OpenAIModel', () => {
   beforeEach(() => {
@@ -79,6 +85,22 @@ describe('OpenAIModel', () => {
       expect(provider.getConfig()).toStrictEqual({
         modelId: customModelId,
       })
+    })
+
+    it('warns when modelId is not explicitly set', () => {
+      new OpenAIModel({ api: 'chat', apiKey: 'sk-test' })
+      expect(warnOnce).toHaveBeenCalledWith(
+        expect.objectContaining({ warn: expect.any(Function) }),
+        expect.stringContaining('using default modelId')
+      )
+    })
+
+    it('does not warn when modelId is explicitly set', () => {
+      new OpenAIModel({ api: 'chat', modelId: 'gpt-5.4', apiKey: 'sk-test' })
+      expect(warnOnce).not.toHaveBeenCalledWith(
+        expect.objectContaining({ warn: expect.any(Function) }),
+        expect.stringContaining('using default modelId')
+      )
     })
 
     it('uses API key from constructor parameter', () => {
@@ -254,6 +276,62 @@ describe('OpenAIModel', () => {
         modelId: 'gpt-4o',
         contextWindowLimit: 128_000,
       })
+    })
+  })
+
+  describe('managed params warning', () => {
+    it('warns on construction when params contains provider-managed keys', () => {
+      const warnSpy = vi.spyOn(logger, 'warn')
+      new OpenAIModel({
+        api: 'chat',
+        client: {} as OpenAI,
+        params: { model: 'bad', stream: false },
+      })
+      expect(warnSpy).toHaveBeenCalledTimes(2)
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("'model'"))
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("'stream'"))
+      warnSpy.mockRestore()
+    })
+
+    it('warns on updateConfig when params contains provider-managed keys', () => {
+      const model = new OpenAIModel({ api: 'chat', client: {} as OpenAI })
+      const warnSpy = vi.spyOn(logger, 'warn')
+      model.updateConfig({ params: { stream_options: { include_usage: false } } })
+      expect(warnSpy).toHaveBeenCalledTimes(1)
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("'stream_options'"))
+      warnSpy.mockRestore()
+    })
+
+    it('does not warn when params contains only non-managed keys', () => {
+      const warnSpy = vi.spyOn(logger, 'warn')
+      new OpenAIModel({ api: 'chat', client: {} as OpenAI, params: { seed: 42 } })
+      expect(warnSpy).not.toHaveBeenCalled()
+      warnSpy.mockRestore()
+    })
+
+    it('provider-managed fields in params are overridden and cannot take effect', async () => {
+      const captured: { request: any } = { request: null }
+      const mockClient = createMockClientWithCapture(captured)
+      const warnSpy = vi.spyOn(logger, 'warn')
+      const provider = new OpenAIModel({
+        api: 'chat',
+        modelId: 'gpt-5.4',
+        client: mockClient,
+        params: {
+          model: 'attacker-model',
+          messages: [{ role: 'user', content: 'hijacked' }],
+          stream: false,
+          stream_options: { include_usage: false },
+        },
+      })
+      const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
+      await collectIterator(provider.stream(messages))
+      expect(captured.request.model).toBe('gpt-5.4')
+      expect(captured.request.stream).toBe(true)
+      expect(captured.request.stream_options).toEqual({ include_usage: true })
+      expect(Array.isArray(captured.request.messages)).toBe(true)
+      expect(captured.request.messages[0]).toEqual({ role: 'user', content: [{ type: 'text', text: 'Hi' }] })
+      warnSpy.mockRestore()
     })
   })
 

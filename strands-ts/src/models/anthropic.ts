@@ -1,5 +1,5 @@
 import Anthropic, { type ClientOptions } from '@anthropic-ai/sdk'
-import { Model, type BaseModelConfig, type StreamOptions } from '../models/model.js'
+import { Model, type BaseModelConfig, type CountTokensOptions, type StreamOptions } from '../models/model.js'
 import type { Message, ContentBlock } from '../types/messages.js'
 import type { ModelStreamEvent } from '../models/streaming.js'
 import { createEmptyUsage } from '../models/streaming.js'
@@ -7,9 +7,9 @@ import { ContextWindowOverflowError, ModelThrottledError, normalizeError } from 
 import type { ImageBlock, DocumentBlock } from '../types/media.js'
 import { encodeBase64 } from '../types/media.js'
 import { logger } from '../logging/logger.js'
+import { warnOnce } from '../logging/warn-once.js'
+import { MODEL_DEFAULTS, defaultMaxTokensWarningMessage, defaultModelWarningMessage } from './defaults.js'
 
-const DEFAULT_ANTHROPIC_MODEL_ID = 'claude-sonnet-4-6'
-const DEFAULT_ANTHROPIC_MAX_TOKENS = 64_000
 const CONTEXT_WINDOW_OVERFLOW_ERRORS = ['prompt is too long', 'max_tokens exceeded', 'input too long']
 const TEXT_FILE_FORMATS = ['txt', 'md', 'markdown', 'csv', 'json', 'xml', 'html', 'yml', 'yaml', 'js', 'ts', 'py']
 
@@ -40,15 +40,17 @@ export class AnthropicModel extends Model<AnthropicModelConfig> {
     const { apiKey, client, clientConfig, ...modelConfig } = options || {}
 
     this._config = {
-      modelId: DEFAULT_ANTHROPIC_MODEL_ID,
-      maxTokens: DEFAULT_ANTHROPIC_MAX_TOKENS,
+      modelId: MODEL_DEFAULTS.anthropic.modelId,
+      maxTokens: MODEL_DEFAULTS.anthropic.maxTokens,
       ...modelConfig,
     }
 
+    if (modelConfig.modelId === undefined) {
+      warnOnce(logger, defaultModelWarningMessage(MODEL_DEFAULTS.anthropic.modelId))
+    }
+
     if (modelConfig.maxTokens === undefined) {
-      logger.warn(
-        `max_tokens=<${DEFAULT_ANTHROPIC_MAX_TOKENS}> | using default maxTokens, which is subject to change | set maxTokens explicitly to pin the value`
-      )
+      warnOnce(logger, defaultMaxTokensWarningMessage(MODEL_DEFAULTS.anthropic.maxTokens))
     }
 
     if (client) {
@@ -80,6 +82,37 @@ export class AnthropicModel extends Model<AnthropicModelConfig> {
 
   getConfig(): AnthropicModelConfig {
     return this._config
+  }
+
+  /**
+   * Count tokens using Anthropic's native countTokens API.
+   *
+   * Uses the same message format as the Messages API to get accurate token counts
+   * directly from the Anthropic service. Falls back to the base class heuristic on failure.
+   *
+   * @param messages - Array of conversation messages to count tokens for
+   * @param options - Optional options containing system prompt and tool specs
+   * @returns Total input token count
+   */
+  override async countTokens(messages: Message[], options?: CountTokensOptions): Promise<number> {
+    try {
+      const request = this._formatRequest(messages, options)
+      const params: Anthropic.MessageCountTokensParams = {
+        model: request.model,
+        messages: request.messages,
+        ...(request.system && { system: request.system }),
+        ...(request.tools && { tools: request.tools }),
+        ...(request.tool_choice && { tool_choice: request.tool_choice }),
+      }
+
+      const response = await this._client.messages.countTokens(params)
+
+      logger.debug(`total_tokens=<${response.input_tokens}> | native token count`)
+      return response.input_tokens
+    } catch (error) {
+      logger.debug(`error=<${error}> | native token counting failed, falling back to estimation`)
+      return super.countTokens(messages, options)
+    }
   }
 
   async *stream(messages: Message[], options?: StreamOptions): AsyncIterable<ModelStreamEvent> {
@@ -226,7 +259,7 @@ export class AnthropicModel extends Model<AnthropicModelConfig> {
 
     const request: Anthropic.MessageStreamParams = {
       model: this._config.modelId,
-      max_tokens: this._config.maxTokens ?? DEFAULT_ANTHROPIC_MAX_TOKENS,
+      max_tokens: this._config.maxTokens ?? MODEL_DEFAULTS.anthropic.maxTokens,
       messages: this._formatMessages(messages),
       stream: true,
     }

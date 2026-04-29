@@ -64,6 +64,7 @@ describe('Node', () => {
         nodeType: 'node',
         state,
         result,
+        invocationState: {},
       })
 
       expect(result).toEqual({
@@ -90,6 +91,7 @@ describe('Node', () => {
         nodeType: 'node',
         state,
         result,
+        invocationState: {},
       })
 
       expect(result).toEqual({
@@ -223,12 +225,13 @@ describe('MultiAgentNode', () => {
 
   describe('handle', () => {
     it('passes through inner NodeStreamUpdateEvents', async () => {
-      const innerUpdate = new MultiAgentHandoffEvent({ source: 'x', targets: ['y'], state })
+      const innerUpdate = new MultiAgentHandoffEvent({ source: 'x', targets: ['y'], state, invocationState: {} })
       const innerEvent = new NodeStreamUpdateEvent({
         nodeId: 'deep-node',
         nodeType: 'agentNode',
         state,
         inner: { source: 'multiAgent', event: innerUpdate },
+        invocationState: {},
       })
       const orchestrator = mockOrchestrator('inner', [innerEvent])
       node = new MultiAgentNode({ orchestrator })
@@ -241,7 +244,7 @@ describe('MultiAgentNode', () => {
     })
 
     it('wraps non-NodeStreamUpdateEvents with this node identity', async () => {
-      const handoff = new MultiAgentHandoffEvent({ source: 'a', targets: ['b'], state })
+      const handoff = new MultiAgentHandoffEvent({ source: 'a', targets: ['b'], state, invocationState: {} })
       const orchestrator = mockOrchestrator('inner', [handoff])
       node = new MultiAgentNode({ orchestrator })
 

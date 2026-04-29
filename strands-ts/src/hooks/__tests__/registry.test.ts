@@ -21,7 +21,7 @@ describe('HookRegistryImplementation', () => {
       const callback = vi.fn()
       registry.addCallback(BeforeInvocationEvent, callback)
 
-      await registry.invokeCallbacks(new BeforeInvocationEvent({ agent: mockAgent }))
+      await registry.invokeCallbacks(new BeforeInvocationEvent({ agent: mockAgent, invocationState: {} }))
 
       expect(callback).toHaveBeenCalledOnce()
     })
@@ -33,7 +33,7 @@ describe('HookRegistryImplementation', () => {
       registry.addCallback(BeforeInvocationEvent, callback1)
       registry.addCallback(BeforeInvocationEvent, callback2)
 
-      await registry.invokeCallbacks(new BeforeInvocationEvent({ agent: mockAgent }))
+      await registry.invokeCallbacks(new BeforeInvocationEvent({ agent: mockAgent, invocationState: {} }))
 
       expect(callback1).toHaveBeenCalledOnce()
       expect(callback2).toHaveBeenCalledOnce()
@@ -46,12 +46,12 @@ describe('HookRegistryImplementation', () => {
       registry.addCallback(BeforeInvocationEvent, beforeCallback)
       registry.addCallback(AfterInvocationEvent, afterCallback)
 
-      await registry.invokeCallbacks(new BeforeInvocationEvent({ agent: mockAgent }))
+      await registry.invokeCallbacks(new BeforeInvocationEvent({ agent: mockAgent, invocationState: {} }))
 
       expect(beforeCallback).toHaveBeenCalledOnce()
       expect(afterCallback).not.toHaveBeenCalled()
 
-      await registry.invokeCallbacks(new AfterInvocationEvent({ agent: mockAgent }))
+      await registry.invokeCallbacks(new AfterInvocationEvent({ agent: mockAgent, invocationState: {} }))
 
       expect(afterCallback).toHaveBeenCalledOnce()
     })
@@ -70,7 +70,7 @@ describe('HookRegistryImplementation', () => {
       registry.addCallback(BeforeInvocationEvent, callback1)
       registry.addCallback(BeforeInvocationEvent, callback2)
 
-      await registry.invokeCallbacks(new BeforeInvocationEvent({ agent: mockAgent }))
+      await registry.invokeCallbacks(new BeforeInvocationEvent({ agent: mockAgent, invocationState: {} }))
 
       expect(callOrder).toEqual([1, 2])
     })
@@ -87,7 +87,7 @@ describe('HookRegistryImplementation', () => {
       registry.addCallback(AfterInvocationEvent, callback1)
       registry.addCallback(AfterInvocationEvent, callback2)
 
-      await registry.invokeCallbacks(new AfterInvocationEvent({ agent: mockAgent }))
+      await registry.invokeCallbacks(new AfterInvocationEvent({ agent: mockAgent, invocationState: {} }))
 
       expect(callOrder).toEqual([2, 1])
     })
@@ -101,7 +101,7 @@ describe('HookRegistryImplementation', () => {
 
       registry.addCallback(BeforeInvocationEvent, callback)
 
-      await registry.invokeCallbacks(new BeforeInvocationEvent({ agent: mockAgent }))
+      await registry.invokeCallbacks(new BeforeInvocationEvent({ agent: mockAgent, invocationState: {} }))
 
       expect(completed).toBe(true)
     })
@@ -113,9 +113,9 @@ describe('HookRegistryImplementation', () => {
 
       registry.addCallback(BeforeInvocationEvent, callback)
 
-      await expect(registry.invokeCallbacks(new BeforeInvocationEvent({ agent: mockAgent }))).rejects.toThrow(
-        'Hook failed'
-      )
+      await expect(
+        registry.invokeCallbacks(new BeforeInvocationEvent({ agent: mockAgent, invocationState: {} }))
+      ).rejects.toThrow('Hook failed')
     })
 
     it('stops execution on first non-interrupt error', async () => {
@@ -127,9 +127,9 @@ describe('HookRegistryImplementation', () => {
       registry.addCallback(BeforeInvocationEvent, callback1)
       registry.addCallback(BeforeInvocationEvent, callback2)
 
-      await expect(registry.invokeCallbacks(new BeforeInvocationEvent({ agent: mockAgent }))).rejects.toThrow(
-        'First callback failed'
-      )
+      await expect(
+        registry.invokeCallbacks(new BeforeInvocationEvent({ agent: mockAgent, invocationState: {} }))
+      ).rejects.toThrow('First callback failed')
 
       expect(callback2).not.toHaveBeenCalled()
     })
@@ -147,13 +147,13 @@ describe('HookRegistryImplementation', () => {
       registry.addCallback(BeforeInvocationEvent, syncCallback)
       registry.addCallback(BeforeInvocationEvent, asyncCallback)
 
-      await registry.invokeCallbacks(new BeforeInvocationEvent({ agent: mockAgent }))
+      await registry.invokeCallbacks(new BeforeInvocationEvent({ agent: mockAgent, invocationState: {} }))
 
       expect(callOrder).toEqual(['sync', 'async'])
     })
 
     it('returns the event after invocation', async () => {
-      const event = new BeforeInvocationEvent({ agent: mockAgent })
+      const event = new BeforeInvocationEvent({ agent: mockAgent, invocationState: {} })
       const result = await registry.invokeCallbacks(event)
       expect(result).toBe(event)
     })
@@ -166,7 +166,7 @@ describe('HookRegistryImplementation', () => {
       const cleanup = registry.addCallback(BeforeInvocationEvent, callback)
       cleanup()
 
-      await registry.invokeCallbacks(new BeforeInvocationEvent({ agent: mockAgent }))
+      await registry.invokeCallbacks(new BeforeInvocationEvent({ agent: mockAgent, invocationState: {} }))
 
       expect(callback).not.toHaveBeenCalled()
     })
@@ -179,7 +179,7 @@ describe('HookRegistryImplementation', () => {
       cleanup()
       cleanup()
 
-      await registry.invokeCallbacks(new BeforeInvocationEvent({ agent: mockAgent }))
+      await registry.invokeCallbacks(new BeforeInvocationEvent({ agent: mockAgent, invocationState: {} }))
 
       expect(callback).not.toHaveBeenCalled()
     })
@@ -192,7 +192,7 @@ describe('HookRegistryImplementation', () => {
       registry.addCallback(BeforeInvocationEvent, callback2)
       cleanup1()
 
-      await registry.invokeCallbacks(new BeforeInvocationEvent({ agent: mockAgent }))
+      await registry.invokeCallbacks(new BeforeInvocationEvent({ agent: mockAgent, invocationState: {} }))
 
       expect(callback1).not.toHaveBeenCalled()
       expect(callback2).toHaveBeenCalledOnce()
@@ -205,7 +205,7 @@ describe('HookRegistryImplementation', () => {
       cleanup()
 
       registry.addCallback(BeforeInvocationEvent, callback)
-      await registry.invokeCallbacks(new BeforeInvocationEvent({ agent: mockAgent }))
+      await registry.invokeCallbacks(new BeforeInvocationEvent({ agent: mockAgent, invocationState: {} }))
 
       expect(callback).toHaveBeenCalledTimes(1)
     })
@@ -218,7 +218,7 @@ describe('HookRegistryImplementation', () => {
       const cleanup2 = registry.addCallback(BeforeInvocationEvent, callback2)
       cleanup2()
 
-      await registry.invokeCallbacks(new BeforeInvocationEvent({ agent: mockAgent }))
+      await registry.invokeCallbacks(new BeforeInvocationEvent({ agent: mockAgent, invocationState: {} }))
 
       expect(callback1).toHaveBeenCalledOnce()
       expect(callback2).not.toHaveBeenCalled()
@@ -231,6 +231,7 @@ describe('HookRegistryImplementation', () => {
         agent: mockAgent,
         toolUse: { name: 'test', toolUseId: 'tool-1', input: {} },
         tool: undefined,
+        invocationState: {},
       })
 
     it('collects InterruptErrors from multiple callbacks and invokes all of them', async () => {

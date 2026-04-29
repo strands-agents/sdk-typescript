@@ -2,6 +2,17 @@
 
 WASM build tooling and monorepo developer guide. Describes the WebAssembly component architecture, build pipeline, WIT contracts, and cross-package development workflow.
 
+## How it works
+
+The TypeScript SDK is compiled into a WebAssembly component (`strands-agent.wasm`). Python loads this component via wasmtime-py and drives it.
+
+The WIT contract (`wit/agent.wit`) defines what crosses the WASM boundary:
+
+- **Exports** (TS implements, Python calls): The `api` interface — agent construction, streaming, conversation management. All model provider HTTP calls (Bedrock, Anthropic, OpenAI, Gemini) happen inside the WASM guest.
+- **Imports** (Python implements, TS calls back into): `tool-provider` for executing Python-defined tools, and `host-log` for routing log entries to Python's logging framework.
+
+In WIT terminology, the WASM component is the "guest" and Python is the "host". When the TS agent loop decides a tool needs to run, it calls the `tool-provider` import which crosses the WASM boundary back to Python where the actual tool function lives.
+
 ## Getting started
 
 ### Prerequisites

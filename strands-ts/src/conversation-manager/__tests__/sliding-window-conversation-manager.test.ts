@@ -15,7 +15,7 @@ import type { Agent } from '../../agent/agent.js'
 async function triggerSlidingWindow(manager: SlidingWindowConversationManager, agent: Agent): Promise<void> {
   const pluginAgent = createMockAgent()
   manager.initAgent(pluginAgent)
-  await invokeTrackedHook(pluginAgent, new AfterInvocationEvent({ agent }))
+  await invokeTrackedHook(pluginAgent, new AfterInvocationEvent({ agent, invocationState: {} }))
 }
 
 // Helper to trigger context overflow handling through hooks
@@ -26,7 +26,7 @@ async function triggerContextOverflow(
 ): Promise<{ retry?: boolean }> {
   const pluginAgent = createMockAgent()
   manager.initAgent(pluginAgent)
-  const event = new AfterModelCallEvent({ agent, model: {} as any, error })
+  const event = new AfterModelCallEvent({ agent, model: {} as any, error, invocationState: {} })
   await invokeTrackedHook(pluginAgent, event)
   return event
 }
@@ -633,7 +633,12 @@ describe('SlidingWindowConversationManager', () => {
 
       // The base class hook does not set event.retry when reduce returns false,
       // so the original error propagates out of the hook chain
-      const event = new AfterModelCallEvent({ agent: mockAgent, model: {} as any, error: originalError })
+      const event = new AfterModelCallEvent({
+        agent: mockAgent,
+        model: {} as any,
+        error: originalError,
+        invocationState: {},
+      })
       const pluginAgent = createMockAgent()
       manager.initAgent(pluginAgent)
       await invokeTrackedHook(pluginAgent, event)

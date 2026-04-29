@@ -2,7 +2,6 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { Agent } from '../agent.js'
 import type { Snapshot } from '../../types/snapshot.js'
 import { SNAPSHOT_SCHEMA_VERSION } from '../../types/snapshot.js'
-import { InterruptState } from '../../interrupt.js'
 import {
   ALL_SNAPSHOT_FIELDS,
   SNAPSHOT_PRESETS,
@@ -40,9 +39,9 @@ describe('Snapshot API', () => {
   describe('constants', () => {
     it('exports snapshot constants with correct values', () => {
       expect(SNAPSHOT_SCHEMA_VERSION).toBe('1.0')
-      expect(ALL_SNAPSHOT_FIELDS).toEqual(['messages', 'state', 'systemPrompt', 'interrupts'])
+      expect(ALL_SNAPSHOT_FIELDS).toEqual(['messages', 'state', 'systemPrompt', 'modelState'])
       expect(SNAPSHOT_PRESETS).toEqual({
-        session: ['messages', 'state', 'systemPrompt', 'interrupts'],
+        session: ['messages', 'state', 'systemPrompt', 'modelState'],
       })
     })
   })
@@ -60,7 +59,7 @@ describe('Snapshot API', () => {
 
     it('returns session preset fields when preset is "session"', () => {
       const fields = resolveSnapshotFields({ preset: 'session' })
-      expect(fields).toEqual(new Set(['messages', 'state', 'systemPrompt', 'interrupts']))
+      expect(fields).toEqual(new Set(['messages', 'state', 'systemPrompt', 'modelState']))
     })
 
     it('returns explicit fields when include is specified', () => {
@@ -70,7 +69,7 @@ describe('Snapshot API', () => {
 
     it('applies exclude after preset', () => {
       const fields = resolveSnapshotFields({ preset: 'session', exclude: ['state'] })
-      expect(fields).toEqual(new Set(['messages', 'systemPrompt', 'interrupts']))
+      expect(fields).toEqual(new Set(['messages', 'systemPrompt', 'modelState']))
     })
 
     it('throws error for invalid preset', () => {
@@ -106,7 +105,7 @@ describe('Snapshot API', () => {
           messages: [{ role: 'user', content: [{ text: 'Hello' }] }],
           state: { key: 'value' },
           systemPrompt: 'Test prompt',
-          interrupts: { interrupts: {}, activated: false },
+          modelState: {},
         },
         appData: {},
       })
@@ -344,33 +343,6 @@ describe('Snapshot API', () => {
       loadSnapshot(agent, snapshot)
 
       expect(agent.messages).toEqual(originalMessages)
-    })
-    it('preserves interrupt state through save/load cycle', () => {
-      // Set up interrupt state as if agent was interrupted mid-execution
-      const agentInterruptState = (agent as unknown as { _interruptState: InterruptState })._interruptState
-      agentInterruptState.getOrCreateInterrupt('int-1', 'confirm', 'Confirm?')
-      agentInterruptState.activate()
-      agentInterruptState.setPendingToolExecution({
-        assistantMessageData: {
-          role: 'assistant',
-          content: [{ toolUse: { name: 'test', toolUseId: 't-1', input: {} } }],
-        },
-        completedToolResults: {},
-      })
-
-      const snapshot = takeSnapshot(agent, { preset: 'session' })
-
-      // Modify agent interrupt state
-      agentInterruptState.deactivate()
-
-      // Restore
-      loadSnapshot(agent, snapshot)
-
-      const restored = (agent as unknown as { _interruptState: InterruptState })._interruptState
-      expect(restored.activated).toBe(true)
-      expect(Object.keys(restored.interrupts).length).toBe(1)
-      expect(restored.interrupts['int-1']?.name).toBe('confirm')
-      expect(restored.pendingToolExecution).toBeDefined()
     })
   })
 

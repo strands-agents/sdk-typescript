@@ -151,7 +151,7 @@ describe('AgentSkills', () => {
     })
 
     const fireBeforeInvocation = async () => {
-      await invokeTrackedHook(agent, new BeforeInvocationEvent({ agent: agent as any }))
+      await invokeTrackedHook(agent, new BeforeInvocationEvent({ agent: agent as any, invocationState: {} }))
     }
 
     it('injects into undefined system prompt', async () => {
@@ -231,7 +231,7 @@ describe('AgentSkills', () => {
       await plugin2.initAgent(agent2)
 
       const hook = agent2.trackedHooks[0]!
-      await hook.callback(new BeforeInvocationEvent({ agent: agent2 as any }))
+      await hook.callback(new BeforeInvocationEvent({ agent: agent2 as any, invocationState: {} }))
 
       const prompt = agent2.systemPrompt as string
       expect(prompt).toContain('&lt;hello&gt;')
@@ -247,7 +247,7 @@ describe('AgentSkills', () => {
       const filePlugin = new AgentSkills({ skills: [dirPath] })
       const fileAgent = createMockAgent()
       await filePlugin.initAgent(fileAgent)
-      await invokeTrackedHook(fileAgent, new BeforeInvocationEvent({ agent: fileAgent as any }))
+      await invokeTrackedHook(fileAgent, new BeforeInvocationEvent({ agent: fileAgent as any, invocationState: {} }))
 
       const prompt = fileAgent.systemPrompt as string
       expect(prompt).toContain('<location>')
@@ -258,7 +258,7 @@ describe('AgentSkills', () => {
       const emptyPlugin = new AgentSkills({ skills: [] })
       const emptyAgent = createMockAgent()
       await emptyPlugin.initAgent(emptyAgent)
-      await invokeTrackedHook(emptyAgent, new BeforeInvocationEvent({ agent: emptyAgent as any }))
+      await invokeTrackedHook(emptyAgent, new BeforeInvocationEvent({ agent: emptyAgent as any, invocationState: {} }))
 
       const prompt = emptyAgent.systemPrompt as string
       expect(prompt).toContain('No skills are currently available.')
@@ -291,7 +291,7 @@ describe('AgentSkills', () => {
       })
       const multiAgent = createMockAgent()
       await multiPlugin.initAgent(multiAgent)
-      await invokeTrackedHook(multiAgent, new BeforeInvocationEvent({ agent: multiAgent as any }))
+      await invokeTrackedHook(multiAgent, new BeforeInvocationEvent({ agent: multiAgent as any, invocationState: {} }))
 
       const prompt = multiAgent.systemPrompt as string
       expect(prompt).toContain('skill-a')
@@ -332,8 +332,9 @@ describe('AgentSkills', () => {
       const gen = skillsTool.stream({
         toolUse: { name: 'skills', toolUseId: 'test-id', input: { skill_name: skillName } },
         agent: agent as any,
+        invocationState: {},
         interrupt: () => {
-          throw new Error('Interrupt not expected in skills tests')
+          throw new Error('interrupt not available in mock context')
         },
       })
       let result = await gen.next()
@@ -415,8 +416,9 @@ describe('AgentSkills', () => {
       const gen = tools[0]!.stream({
         toolUse: { name: 'skills', toolUseId: 'id', input: { skill_name: 'resource-skill' } },
         agent: agent2 as any,
+        invocationState: {},
         interrupt: () => {
-          throw new Error('Interrupt not expected in skills tests')
+          throw new Error('interrupt not available in mock context')
         },
       })
       let result = await gen.next()
@@ -441,8 +443,9 @@ describe('AgentSkills', () => {
       const gen = tools[0]!.stream({
         toolUse: { name: 'skills', toolUseId: 'id', input: { skill_name: 'no-resources' } },
         agent: agent2 as any,
+        invocationState: {},
         interrupt: () => {
-          throw new Error('Interrupt not expected in skills tests')
+          throw new Error('interrupt not available in mock context')
         },
       })
       let result = await gen.next()
@@ -471,8 +474,9 @@ describe('AgentSkills', () => {
       const gen = tools[0]!.stream({
         toolUse: { name: 'skills', toolUseId: 'id', input: { skill_name: 'many-files' } },
         agent: agent2 as any,
+        invocationState: {},
         interrupt: () => {
-          throw new Error('Interrupt not expected in skills tests')
+          throw new Error('interrupt not available in mock context')
         },
       })
       let result = await gen.next()
