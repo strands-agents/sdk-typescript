@@ -267,7 +267,7 @@ describe('InterventionRegistry', () => {
       expect(event.cancel).toBe('DENIED: prompt injection detected')
     })
 
-    it('sets retry=false on AfterToolCallEvent', async () => {
+    it('has no effect on AfterToolCallEvent (tool already ran)', async () => {
       class AfterToolDeny extends InterventionHandler {
         readonly name = 'after-tool-deny'
         override afterToolCall(): InterventionAction {
@@ -279,7 +279,7 @@ describe('InterventionRegistry', () => {
 
       const event = makeAfterToolCallEvent()
       await hookRegistry.invokeCallbacks(event)
-      expect(event.retry).toBe(false)
+      expect(event.retry).toBeUndefined()
     })
   })
 

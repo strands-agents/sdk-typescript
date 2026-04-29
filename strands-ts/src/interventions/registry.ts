@@ -155,12 +155,8 @@ export class InterventionRegistry {
     event: HookableEvent,
     method: LifecycleMethod
   ): (action: InterventionAction, handlerName: string) => boolean {
-    // Before* events with cancel field: beforeInvocation, beforeToolCall, beforeModelCall
-    if (
-      event instanceof BeforeInvocationEvent ||
-      event instanceof BeforeToolCallEvent ||
-      event instanceof BeforeModelCallEvent
-    ) {
+    // beforeInvocation, beforeToolCall: cancel with feedback
+    if (event instanceof BeforeInvocationEvent || event instanceof BeforeToolCallEvent) {
       return (action, handlerName) => {
         switch (action.type) {
           case 'deny':
@@ -188,13 +184,40 @@ export class InterventionRegistry {
       }
     }
 
-    // afterToolCall: has retry and mutable result
-    if (event instanceof AfterToolCallEvent) {
+    // beforeModelCall: Guide injects feedback as a user message so the model sees
+    // it on this call, rather than cancelling (which would end the invocation).
+    if (event instanceof BeforeModelCallEvent) {
       return (action, handlerName) => {
         switch (action.type) {
           case 'deny':
-            event.retry = false
+            event.cancel = `DENIED: ${action.reason}`
             return true
+          case 'interrupt':
+            event.cancel = `REQUIRES APPROVAL: ${action.prompt}`
+            return true
+          case 'guide':
+            // Direct push bypasses MessageAddedEvent and conversation manager.
+            // This matches what plugins can do today via event.agent.messages.
+            event.agent.messages.push(new Message({ role: 'user', content: [new TextBlock(action.feedback)] }))
+            return false
+          case 'transform':
+            action.apply(event)
+            return false
+          case 'proceed':
+            return false
+          default:
+            logger.warn(
+              `handler=<${handlerName}>, event=<${method}> | ${(action as InterventionAction).type} has no effect on this event type`
+            )
+            return false
+        }
+      }
+    }
+
+    // afterToolCall: tool already ran, only Transform (e.g. redact result) is meaningful
+    if (event instanceof AfterToolCallEvent) {
+      return (action, handlerName) => {
+        switch (action.type) {
           case 'transform':
             action.apply(event)
             return false

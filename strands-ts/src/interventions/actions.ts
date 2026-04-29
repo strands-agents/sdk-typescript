@@ -40,9 +40,11 @@ export type Proceed = { type: 'proceed'; reason?: string }
 export type Deny = { type: 'deny'; reason: string }
 
 /**
- * Cancel the operation with feedback. On Before* events, the model sees the
- * feedback in the cancel message and can adjust. On afterModelCall, the response
- * is discarded and the model retries with the feedback injected as a user message.
+ * Provide feedback to steer behavior. On beforeToolCall/beforeInvocation, sets
+ * event.cancel so the model sees the feedback and adjusts. On beforeModelCall,
+ * injects feedback as a user message so the model sees it on this call.
+ * On afterModelCall, the response is discarded and the model retries with the
+ * feedback injected as a user message.
  *
  * @example
  * ```typescript
@@ -96,14 +98,19 @@ export type Transform = { type: 'transform'; apply: (event: LifecycleEvent) => v
 /**
  * Union of all intervention actions a handler can return.
  *
- * Action support per lifecycle method:
+ * | Action    | beforeInvocation | beforeToolCall | beforeModelCall | afterToolCall | afterModelCall |
+ * |-----------|------------------|----------------|-----------------|---------------|----------------|
+ * | Proceed   | —                | —              | —               | —             | —              |
+ * | Deny      | cancel           | cancel         | cancel          | —             | —              |
+ * | Guide     | cancel+          | cancel+        | inject          | —             | inject + retry |
+ * | Interrupt | cancel           | cancel         | cancel          | —             | —              |
+ * | Transform | apply            | apply          | apply           | apply         | apply          |
  *
- * | Action    | Before* events                   | afterToolCall.            | afterModelCall                               |
- * |-----------|----------------------------------|---------------------------|----------------------------------------------|
- * | Proceed   | no-op                            | no-op                     | no-op                                        |
- * | Deny      | sets event.cancel                | event.retry=false.        | no-op (model already responded)              |
- * | Guide     | sets event.cancel with feedback  | no-op                     | sets event.retry + injects feedback as user message |
- * | Interrupt | sets event.cancel with approval  | no-op                     | no-op (model already responded)              |
- * | Transform | calls action.apply(event)        | calls action.apply(event) | calls action.apply(event)                    |
+ * — = no-op (logged in audit trail, warns at runtime)
+ * cancel = sets event.cancel, short-circuits (remaining handlers skipped)
+ * cancel+ = sets event.cancel with accumulated feedback from all guiding handlers
+ * inject = appends accumulated feedback as a user message so the model sees it on this call
+ * inject + retry = appends accumulated feedback and retries so the model sees guidance
+ * apply = calls action.apply(event) for in-place mutation, later handlers see the change
  */
 export type InterventionAction = Proceed | Deny | Guide | Interrupt | Transform
