@@ -1337,7 +1337,7 @@ export class Agent implements LocalAgent, InvokableAgent {
           assistantMessage
         )
       case 'concurrent':
-        return yield* this._executeToolsConcurrent(toolUseBlocks, toolRegistry, invocationState)
+        return yield* this._executeToolsConcurrent(toolUseBlocks, toolRegistry, invocationState, completedToolResults, assistantMessage)
       default: {
         const _exhaustive: never = this._toolExecutor
         throw new Error(`Unknown toolExecutor: ${_exhaustive as string}`)
@@ -1462,7 +1462,9 @@ export class Agent implements LocalAgent, InvokableAgent {
   private async *_executeToolsConcurrent(
     toolUseBlocks: ToolUseBlock[],
     toolRegistry: ToolRegistry,
-    invocationState: InvocationState
+    invocationState: InvocationState,
+    completedToolResults?: Map<string, ToolResultBlock>,
+    assistantMessage?: Message
   ): AsyncGenerator<AgentStreamEvent, Message, undefined> {
     let toolResultMessage: Message
 
@@ -1476,17 +1478,35 @@ export class Agent implements LocalAgent, InvokableAgent {
 
     const gens = toolUseBlocks.map((block) => ({
       block,
-      gen: this.executeTool(block, toolRegistry, invocationState),
+      gen: completedToolResults?.has(block.toolUseId)
+        ? undefined // Skip already-completed tools
+        : this.executeTool(block, toolRegistry, invocationState),
     }))
 
     const step = (idx: number): Promise<Step> =>
-      gens[idx]!.gen.next().then(
+      gens[idx]!.gen!.next().then(
         (res): Step => ({ idx, kind: 'next', res }),
         (error: unknown): Step => ({ idx, kind: 'throw', error })
       )
 
-    const pendingNext = new Map<number, Promise<Step>>(gens.map((_, idx) => [idx, step(idx)]))
+    // Seed completed results from resume state
     const resultsByToolUseId = new Map<string, ToolResultBlock>()
+    if (completedToolResults) {
+      for (const [id, result] of completedToolResults) {
+        resultsByToolUseId.set(id, result)
+      }
+    }
+
+    // Only race tools that need execution
+    const pendingNext = new Map<number, Promise<Step>>()
+    for (let idx = 0; idx < gens.length; idx++) {
+      if (gens[idx]!.gen) {
+        pendingNext.set(idx, step(idx))
+      }
+    }
+
+    // Track interrupts — let all other tools finish before propagating
+    let interruptError: InterruptError | undefined
 
     try {
       while (pendingNext.size > 0) {
@@ -1496,6 +1516,13 @@ export class Agent implements LocalAgent, InvokableAgent {
 
         if (winner.kind === 'throw') {
           pendingNext.delete(idx)
+
+          // Detect InterruptError — don't convert to error result, track it
+          if (winner.error instanceof InterruptError) {
+            interruptError = winner.error
+            continue
+          }
+
           const err = normalizeError(winner.error)
           const result = new ToolResultBlock({
             toolUseId: block.toolUseId,
@@ -1513,14 +1540,37 @@ export class Agent implements LocalAgent, InvokableAgent {
           resultsByToolUseId.set(block.toolUseId, winner.res.value)
           yield new ToolResultEvent({ agent: this, result: winner.res.value, invocationState })
         } else {
-          yield winner.res.value
+          try {
+            yield winner.res.value
+          } catch (e) {
+            // InterruptError thrown back into generator from stream() error injection
+            if (e instanceof InterruptError) {
+              interruptError = e
+              pendingNext.delete(idx)
+              continue
+            }
+            throw e
+          }
           pendingNext.set(idx, step(idx))
         }
+      }
+
+      // After all tools finish, propagate interrupt if one was raised
+      if (interruptError) {
+        const completedSoFar: Record<string, { toolResult: ToolResultBlockData }> = {}
+        for (const [id, result] of resultsByToolUseId) {
+          completedSoFar[id] = result.toJSON()
+        }
+        this._interruptState.setPendingToolExecution({
+          assistantMessageData: assistantMessage!.toJSON(),
+          completedToolResults: completedSoFar,
+        })
+        throw interruptError
       }
     } finally {
       // Close any generators still in-flight (e.g. consumer broke out of stream).
       await Promise.allSettled(
-        Array.from(pendingNext.keys(), (idx) => gens[idx]!.gen.return(undefined as unknown as ToolResultBlock))
+        Array.from(pendingNext.keys(), (idx) => gens[idx]!.gen!.return(undefined as unknown as ToolResultBlock))
       )
 
       // Build the result message from whatever completed, in source order.

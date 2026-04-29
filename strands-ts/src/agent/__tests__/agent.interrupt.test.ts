@@ -6,6 +6,13 @@ import { ToolResultBlock } from '../../types/messages.js'
 import { AfterToolCallEvent, BeforeToolCallEvent, BeforeToolsEvent } from '../../hooks/events.js'
 import { FunctionTool } from '../../tools/function-tool.js'
 import { InterruptResponseContent } from '../../types/interrupt.js'
+import type { InterruptState, PendingToolExecution } from '../../interrupt.js'
+
+/** Access the agent's internal interrupt state for test assertions. */
+function getPendingToolExecution(agent: Agent): PendingToolExecution | undefined {
+  // yes it's dirty, but we don't want to expose this publicly
+  return (agent as unknown as { _interruptState: InterruptState })._interruptState.pendingToolExecution
+}
 
 describe('Agent interrupt system', () => {
   describe('interrupt from tool callback', () => {
@@ -104,8 +111,7 @@ describe('Agent interrupt system', () => {
       // Verify pending execution state was stored (the core of pgrayy's concern:
       // the InterruptError thrown back into the generator at `yield beforeToolCallEvent`
       // must propagate to executeTools' catch block which stores this state)
-      const pendingExecution = (agent as unknown as { _interruptState: { pendingToolExecution: unknown } })
-        ._interruptState.pendingToolExecution
+      const pendingExecution = getPendingToolExecution(agent)
       expect(pendingExecution).toEqual({
         assistantMessageData: {
           role: 'assistant',
@@ -168,12 +174,9 @@ describe('Agent interrupt system', () => {
       expect(executionLog).toEqual(['A'])
 
       // Verify pending state includes A's completed result
-      const pendingExecution = (agent as unknown as { _interruptState: { pendingToolExecution: unknown } })
-        ._interruptState.pendingToolExecution as {
-        completedToolResults: Record<string, { toolResult: { toolUseId: string } }>
-      }
-      expect(Object.keys(pendingExecution.completedToolResults)).toEqual(['tool-a'])
-      expect(pendingExecution.completedToolResults['tool-a']!.toolResult.toolUseId).toBe('tool-a')
+      const pendingExecution = getPendingToolExecution(agent)
+      expect(Object.keys(pendingExecution!.completedToolResults)).toEqual(['tool-a'])
+      expect(pendingExecution!.completedToolResults['tool-a']!.toolResult.toolUseId).toBe('tool-a')
 
       // Resume — A should be skipped, B and C should execute
       const finalResult = await agent.invoke([
@@ -694,6 +697,195 @@ describe('Agent interrupt system', () => {
       expect(result.stopReason).toBe('interrupt')
       expect(firedEvents).toContain('BeforeToolCallEvent')
       expect(firedEvents).not.toContain('AfterToolCallEvent')
+    })
+  })
+
+  describe('concurrent tool execution with interrupts', () => {
+    it('allows in-flight tool to complete when sibling interrupts', async () => {
+      // Use gated tools to prove concurrency: A completes AFTER B interrupts,
+      // demonstrating that the executor waits for in-flight tools.
+      const model = new MockMessageModel()
+        .addTurn([
+          { type: 'toolUseBlock', name: 'toolA', toolUseId: 'tool-a', input: {} },
+          { type: 'toolUseBlock', name: 'toolB', toolUseId: 'tool-b', input: {} },
+        ])
+        .addTurn({ type: 'textBlock', text: 'Done' })
+
+      let toolACompleted = false
+      let toolAResolve: () => void
+      const toolAGate = new Promise<void>((resolve) => (toolAResolve = resolve))
+      let toolAStartedResolve: () => void
+      const toolAStarted = new Promise<void>((resolve) => (toolAStartedResolve = resolve))
+
+      const toolA = new FunctionTool({
+        name: 'toolA',
+        description: 'Gated tool A',
+        inputSchema: { type: 'object', properties: {} },
+        callback: async () => {
+          toolAStartedResolve()
+          await toolAGate
+          toolACompleted = true
+          return 'A done'
+        },
+      })
+
+      const toolB = new FunctionTool({
+        name: 'toolB',
+        description: 'Interrupting tool B',
+        inputSchema: { type: 'object', properties: {} },
+        callback: (_input, context) => {
+          // Interrupt immediately — A is still in-flight
+          context!.interrupt({ name: 'confirm_b', reason: 'Approve B?' })
+          return 'B done'
+        },
+      })
+
+      const agent = new Agent({
+        model,
+        tools: [toolA, toolB],
+        toolExecutor: 'concurrent',
+        printer: false,
+      })
+
+      const invocation = agent.invoke('Go')
+
+      // Wait for A to start (proves both tools launched concurrently)
+      await toolAStarted
+
+      // B has already interrupted, but A is still in-flight
+      expect(toolACompleted).toBe(false)
+
+      // Release A — executor should let it finish
+      toolAResolve!()
+      const result = await invocation
+
+      expect(result.stopReason).toBe('interrupt')
+      expect(toolACompleted).toBe(true)
+      expect(result.interrupts).toEqual([{ id: expect.any(String), name: 'confirm_b', reason: 'Approve B?' }])
+
+      // Verify A's result was captured in pending state
+      const pendingExecution = getPendingToolExecution(agent)
+      expect(pendingExecution!.completedToolResults['tool-a']).toEqual({
+        toolResult: { toolUseId: 'tool-a', status: 'success', content: [{ text: 'A done' }] },
+      })
+    })
+
+    it('stores completed tool results and resumes only the interrupted tool', async () => {
+      const model = new MockMessageModel()
+        .addTurn([
+          { type: 'toolUseBlock', name: 'toolA', toolUseId: 'tool-a', input: {} },
+          { type: 'toolUseBlock', name: 'toolB', toolUseId: 'tool-b', input: {} },
+        ])
+        .addTurn({ type: 'textBlock', text: 'Done' })
+
+      let toolAResolve: () => void
+      const toolAGate = new Promise<void>((resolve) => (toolAResolve = resolve))
+      const executionLog: string[] = []
+
+      const toolA = new FunctionTool({
+        name: 'toolA',
+        description: 'Gated tool A',
+        inputSchema: { type: 'object', properties: {} },
+        callback: async () => {
+          executionLog.push('A')
+          await toolAGate
+          return 'A result'
+        },
+      })
+
+      const toolB = new FunctionTool({
+        name: 'toolB',
+        description: 'Interrupting tool B',
+        inputSchema: { type: 'object', properties: {} },
+        callback: (_input, context) => {
+          executionLog.push('B')
+          const response = context!.interrupt<string>({ name: 'confirm_b', reason: 'Approve?' })
+          return `B: ${response}`
+        },
+      })
+
+      const agent = new Agent({
+        model,
+        tools: [toolA, toolB],
+        toolExecutor: 'concurrent',
+        printer: false,
+      })
+
+      // Release A immediately so it completes
+      toolAResolve!()
+      const interruptResult = await agent.invoke('Go')
+
+      expect(interruptResult.stopReason).toBe('interrupt')
+      expect(executionLog).toEqual(['A', 'B'])
+
+      // Verify pending state has A's result
+      const pendingExecution = getPendingToolExecution(agent)
+      expect(Object.keys(pendingExecution!.completedToolResults)).toEqual(['tool-a'])
+
+      // Resume — only B should re-execute
+      executionLog.length = 0
+      const finalResult = await agent.invoke([
+        {
+          interruptResponse: {
+            interruptId: interruptResult.interrupts![0]!.id,
+            response: 'approved',
+          },
+        },
+      ])
+
+      expect(finalResult.stopReason).toBe('endTurn')
+      expect(executionLog).toEqual(['B'])
+    })
+
+    it('handles BeforeToolCallEvent interrupt in concurrent mode', async () => {
+      const model = new MockMessageModel()
+        .addTurn([
+          { type: 'toolUseBlock', name: 'toolA', toolUseId: 'tool-a', input: {} },
+          { type: 'toolUseBlock', name: 'toolB', toolUseId: 'tool-b', input: {} },
+        ])
+        .addTurn({ type: 'textBlock', text: 'Done' })
+
+      const executionLog: string[] = []
+
+      const toolA = new FunctionTool({
+        name: 'toolA',
+        description: 'Tool A',
+        inputSchema: { type: 'object', properties: {} },
+        callback: async () => {
+          executionLog.push('A')
+          return 'A result'
+        },
+      })
+      const toolB = new FunctionTool({
+        name: 'toolB',
+        description: 'Tool B',
+        inputSchema: { type: 'object', properties: {} },
+        callback: async () => {
+          executionLog.push('B')
+          return 'B result'
+        },
+      })
+
+      const agent = new Agent({
+        model,
+        tools: [toolA, toolB],
+        toolExecutor: 'concurrent',
+        printer: false,
+      })
+
+      agent.addHook(BeforeToolCallEvent, (event) => {
+        if (event.toolUse.name === 'toolB') {
+          event.interrupt({ name: 'approve_b', reason: 'Approve B?' })
+        }
+      })
+
+      const interruptResult = await agent.invoke('Go')
+
+      expect(interruptResult.stopReason).toBe('interrupt')
+      expect(interruptResult.interrupts).toEqual([{ id: expect.any(String), name: 'approve_b', reason: 'Approve B?' }])
+      // A should have executed, B should not (interrupted before execution)
+      expect(executionLog).toContain('A')
+      expect(executionLog).not.toContain('B')
     })
   })
 })
