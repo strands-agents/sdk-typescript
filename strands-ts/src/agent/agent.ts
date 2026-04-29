@@ -1383,8 +1383,9 @@ export class Agent implements LocalAgent, InvokableAgent {
         // Skip tools that were already completed before the interrupt
         if (completedToolResults?.has(toolUseBlock.toolUseId)) {
           const completedResult = completedToolResults.get(toolUseBlock.toolUseId)!
+          // No events emitted for already-completed tools.
+          // The result is included in the final tool result message.
           toolResultBlocks.push(completedResult)
-          yield new ToolResultEvent({ agent: this, result: completedResult, invocationState })
           continue
         }
 
