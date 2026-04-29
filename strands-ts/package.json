@@ -73,6 +73,10 @@
     "./vended-plugins/skills": {
       "types": "./dist/src/vended-plugins/skills/index.d.ts",
       "default": "./dist/src/vended-plugins/skills/index.js"
+    },
+    "./vended-plugins/steering": {
+      "types": "./dist/src/vended-plugins/steering/index.d.ts",
+      "default": "./dist/src/vended-plugins/steering/index.js"
     }
   },
   "scripts": {
@@ -161,6 +165,7 @@
   "dependencies": {
     "@aws-sdk/client-bedrock-runtime": "^3.943.0",
     "@types/json-schema": "^7.0.15",
+    "dedent": "^1.7.2",
     "uuid": "^13.0.0",
     "yaml": "^2.8.3"
   },
