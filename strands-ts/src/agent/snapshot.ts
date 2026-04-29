@@ -18,18 +18,19 @@ import { loadStateSerializable, serializeStateSerializable } from '../types/seri
 import type { LocalAgent } from '../types/agent.js'
 import { SNAPSHOT_SCHEMA_VERSION } from '../types/snapshot.js'
 import type { Snapshot } from '../types/snapshot.js'
+import { InterruptState, type InterruptStateData } from '../interrupt.js'
 
 /**
  * All available fields that can be included in a snapshot.
  */
-export const ALL_SNAPSHOT_FIELDS = ['messages', 'state', 'systemPrompt', 'modelState'] as const
+export const ALL_SNAPSHOT_FIELDS = ['messages', 'state', 'systemPrompt', 'modelState', 'interrupts'] as const
 
 /**
  * Strongly typed preset definitions for snapshot field selection.
  * This object allows easy evolution of presets and type-safe access.
  */
 export const SNAPSHOT_PRESETS = {
-  session: ['messages', 'state', 'systemPrompt', 'modelState'] as const,
+  session: ['messages', 'state', 'systemPrompt', 'modelState', 'interrupts'] as const,
 } as const
 
 /**
@@ -108,6 +109,11 @@ export function takeSnapshot(agent: LocalAgent, options: TakeSnapshotOptions): S
     data.modelState = serializeStateSerializable(agent.modelState)
   }
 
+  if (fields.has('interrupts')) {
+    const interruptState = (agent as unknown as { _interruptState?: InterruptState })._interruptState
+    data.interrupts = interruptState ? (interruptState.toJSON() as unknown as JSONValue) : null
+  }
+
   return {
     scope: 'agent',
     schemaVersion: SNAPSHOT_SCHEMA_VERSION,
@@ -161,6 +167,14 @@ export function loadSnapshot(agent: LocalAgent, snapshot: Snapshot): void {
 
   if ('modelState' in snapshot.data) {
     loadStateSerializable(agent.modelState, snapshot.data.modelState)
+  }
+
+  if ('interrupts' in snapshot.data) {
+    const interruptStateData = snapshot.data.interrupts
+    if (interruptStateData !== null) {
+      const agentRecord = agent as unknown as { _interruptState: InterruptState }
+      agentRecord._interruptState = InterruptState.fromJSON(interruptStateData as unknown as InterruptStateData)
+    }
   }
 }
 

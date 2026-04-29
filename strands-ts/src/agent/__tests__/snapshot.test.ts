@@ -39,9 +39,9 @@ describe('Snapshot API', () => {
   describe('constants', () => {
     it('exports snapshot constants with correct values', () => {
       expect(SNAPSHOT_SCHEMA_VERSION).toBe('1.0')
-      expect(ALL_SNAPSHOT_FIELDS).toEqual(['messages', 'state', 'systemPrompt', 'modelState'])
+      expect(ALL_SNAPSHOT_FIELDS).toEqual(['messages', 'state', 'systemPrompt', 'modelState', 'interrupts'])
       expect(SNAPSHOT_PRESETS).toEqual({
-        session: ['messages', 'state', 'systemPrompt', 'modelState'],
+        session: ['messages', 'state', 'systemPrompt', 'modelState', 'interrupts'],
       })
     })
   })
@@ -59,7 +59,7 @@ describe('Snapshot API', () => {
 
     it('returns session preset fields when preset is "session"', () => {
       const fields = resolveSnapshotFields({ preset: 'session' })
-      expect(fields).toEqual(new Set(['messages', 'state', 'systemPrompt', 'modelState']))
+      expect(fields).toEqual(new Set(['messages', 'state', 'systemPrompt', 'modelState', 'interrupts']))
     })
 
     it('returns explicit fields when include is specified', () => {
@@ -69,7 +69,7 @@ describe('Snapshot API', () => {
 
     it('applies exclude after preset', () => {
       const fields = resolveSnapshotFields({ preset: 'session', exclude: ['state'] })
-      expect(fields).toEqual(new Set(['messages', 'systemPrompt', 'modelState']))
+      expect(fields).toEqual(new Set(['messages', 'systemPrompt', 'modelState', 'interrupts']))
     })
 
     it('throws error for invalid preset', () => {
@@ -106,6 +106,7 @@ describe('Snapshot API', () => {
           state: { key: 'value' },
           systemPrompt: 'Test prompt',
           modelState: {},
+          interrupts: { interrupts: {}, activated: false },
         },
         appData: {},
       })
