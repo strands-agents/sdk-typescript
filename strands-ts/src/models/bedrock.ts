@@ -1203,6 +1203,19 @@ export class BedrockModel extends Model<BedrockModelConfig> {
         events.push({ type: 'modelContentBlockDeltaEvent', delta })
         events.push({ type: 'modelContentBlockStopEvent' })
       },
+      citation: (block: BedrockCitationsContentBlock): void => {
+        if (!block) return
+        events.push({ type: 'modelContentBlockStartEvent' })
+
+        const mapped = this._mapBedrockCitationsData(block)
+        const delta: CitationsDelta = {
+          type: 'citationsDelta',
+          citations: mapped.citations,
+          content: mapped.content,
+        }
+        events.push({ type: 'modelContentBlockDeltaEvent', delta })
+        events.push({ type: 'modelContentBlockStopEvent' })
+      },
     }
 
     const content = ensureDefined(message.content, 'message.content')
@@ -1334,6 +1347,16 @@ export class BedrockModel extends Model<BedrockModelConfig> {
             }
           },
           citationsContent: (block: BedrockCitationsContentBlock): void => {
+            if (!block) return
+            const mapped = this._mapBedrockCitationsData(block)
+            const delta: CitationsDelta = {
+              type: 'citationsDelta',
+              citations: mapped.citations,
+              content: mapped.content,
+            }
+            events.push({ type: 'modelContentBlockDeltaEvent', delta })
+          },
+          citation: (block: BedrockCitationsContentBlock): void => {
             if (!block) return
             const mapped = this._mapBedrockCitationsData(block)
             const delta: CitationsDelta = {
