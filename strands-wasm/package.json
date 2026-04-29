@@ -13,8 +13,8 @@
     "@strands-agents/sdk": "*"
   },
   "devDependencies": {
-    "@bytecodealliance/jco": "^1.16.1",
+    "@bytecodealliance/jco": "^1.19.0",
     "@chaynabors/componentize-js": "^0.19.3",
-    "esbuild": "^0.27.4"
+    "esbuild": "^0.28.0"
   }
 }
