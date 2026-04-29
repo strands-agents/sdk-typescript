@@ -128,9 +128,15 @@ export class InterventionRegistry {
 
       if (action.type === 'guide') {
         guides.push(`[${handler.name}] ${action.feedback}`)
-      } else if (apply(action, handler.name)) {
-        logger.debug(`handler=<${handler.name}>, event=<${method}> | short-circuited`)
-        return
+      } else {
+        try {
+          if (apply(action, handler.name)) {
+            logger.debug(`handler=<${handler.name}>, event=<${method}> | short-circuited`)
+            return
+          }
+        } catch (error) {
+          this._handleError(handler, method, error)
+        }
       }
     }
 

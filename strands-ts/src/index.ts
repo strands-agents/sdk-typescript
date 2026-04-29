@@ -208,7 +208,15 @@ export type { Plugin } from './plugins/index.js'
 // Intervention system
 export { InterventionHandler } from './interventions/index.js'
 export { InterventionRegistry } from './interventions/index.js'
-export type { InterventionAction, LifecycleEvent, Proceed, Deny, Guide, Interrupt, Transform } from './interventions/index.js'
+export type {
+  InterventionAction,
+  LifecycleEvent,
+  Proceed,
+  Deny,
+  Guide,
+  Interrupt,
+  Transform,
+} from './interventions/index.js'
 export type { OnError } from './interventions/index.js'
 export type { AuditRecord } from './interventions/index.js'
 

@@ -36,7 +36,7 @@ import { StateStore } from '../state-store.js'
 import { AgentPrinter, getDefaultAppender, type Printer } from './printer.js'
 import type { Plugin } from '../plugins/plugin.js'
 import type { InterventionHandler } from '../interventions/handler.js'
-import { InterventionRegistry, type AuditRecord } from '../interventions/registry.js'
+import { InterventionRegistry } from '../interventions/registry.js'
 import { PluginRegistry } from '../plugins/registry.js'
 import { SlidingWindowConversationManager } from '../conversation-manager/sliding-window-conversation-manager.js'
 import { NullConversationManager } from '../conversation-manager/null-conversation-manager.js'
@@ -453,14 +453,8 @@ export class Agent implements LocalAgent, InvokableAgent {
    * Access to the intervention system — handlers, audit trail, and log management.
    * Returns undefined if no interventions were configured.
    */
-  get interventions(): { readonly handlers: readonly InterventionHandler[]; readonly auditLog: readonly AuditRecord[]; clearAuditLog: () => void } | undefined {
-    if (!this._interventionRegistry) return undefined
-    const registry = this._interventionRegistry
-    return {
-      get handlers(): readonly InterventionHandler[] { return registry.handlers },
-      get auditLog(): readonly AuditRecord[] { return registry.auditLog },
-      clearAuditLog: (): void => registry.clearAuditLog(),
-    }
+  get interventions(): InterventionRegistry | undefined {
+    return this._interventionRegistry
   }
 
   /**
