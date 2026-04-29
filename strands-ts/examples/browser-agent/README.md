@@ -7,11 +7,10 @@ A browser-based AI agent that can modify DOM elements through natural language c
 ## Quick Start
 
 ```bash
-# Install dependencies (from repo root)
+# Install dependencies
 npm install
 
 # Start dev server
-cd examples/browser-agent
 npm run dev
 ```
 
