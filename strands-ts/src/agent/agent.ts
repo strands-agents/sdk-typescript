@@ -1337,7 +1337,13 @@ export class Agent implements LocalAgent, InvokableAgent {
           assistantMessage
         )
       case 'concurrent':
-        return yield* this._executeToolsConcurrent(toolUseBlocks, toolRegistry, invocationState, completedToolResults, assistantMessage)
+        return yield* this._executeToolsConcurrent(
+          toolUseBlocks,
+          toolRegistry,
+          invocationState,
+          completedToolResults,
+          assistantMessage
+        )
       default: {
         const _exhaustive: never = this._toolExecutor
         throw new Error(`Unknown toolExecutor: ${_exhaustive as string}`)

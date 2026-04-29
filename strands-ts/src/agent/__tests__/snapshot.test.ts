@@ -388,7 +388,6 @@ describe('Snapshot API', () => {
 
   describe('interrupt state round-trip', () => {
     it('preserves interrupt state through snapshot and restores for resume', async () => {
-
       // Set up agent that will interrupt
       const model = new MockMessageModel()
         .addTurn({
