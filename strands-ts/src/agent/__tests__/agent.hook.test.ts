@@ -20,6 +20,8 @@ import { MockPlugin } from '../../__fixtures__/mock-plugin.js'
 import { collectIterator } from '../../__fixtures__/model-test-helpers.js'
 import { createMockTool } from '../../__fixtures__/tool-helpers.js'
 import { Message, TextBlock, ToolResultBlock } from '../../types/messages.js'
+import type { Plugin } from '../../plugins/plugin.js'
+import type { LocalAgent } from '../../types/agent.js'
 
 describe('Agent Hooks Integration', () => {
   let mockPlugin: MockPlugin
@@ -1007,6 +1009,66 @@ describe('Agent Hooks Integration', () => {
       expect(result.stopReason).toBe('endTurn')
       expect(beforeCount).toBe(2)
       expect(result.lastMessage.content[0]).toEqual(new TextBlock('Hello'))
+    })
+  })
+
+  describe('queue-based lifecycle plugin (WASM bridge pattern)', () => {
+    function createLifecycleBridgePlugin(queue: string[]): Plugin {
+      return {
+        name: 'strands:lifecycle-bridge',
+        initAgent(agent: LocalAgent): void {
+          agent.addHook(InitializedEvent, () => {
+            queue.push('initialized')
+          })
+          agent.addHook(BeforeInvocationEvent, () => {
+            queue.push('before-invocation')
+          })
+          agent.addHook(AfterInvocationEvent, () => {
+            queue.push('after-invocation')
+          })
+          agent.addHook(BeforeModelCallEvent, () => {
+            queue.push('before-model-call')
+          })
+          agent.addHook(AfterModelCallEvent, () => {
+            queue.push('after-model-call')
+          })
+          agent.addHook(MessageAddedEvent, () => {
+            queue.push('message-added')
+          })
+          agent.addHook(BeforeToolCallEvent, () => {
+            queue.push('before-tool-call')
+          })
+          agent.addHook(AfterToolCallEvent, () => {
+            queue.push('after-tool-call')
+          })
+        },
+      }
+    }
+
+    it('receives lifecycle events when registered via plugins config', async () => {
+      const queue: string[] = []
+      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
+      const agent = new Agent({ model, plugins: [createLifecycleBridgePlugin(queue)] })
+      await agent.invoke('Hi')
+
+      expect(queue).toStrictEqual([
+        'initialized',
+        'before-invocation',
+        'message-added',
+        'before-model-call',
+        'after-model-call',
+        'message-added',
+        'after-invocation',
+      ])
+    })
+
+    it('receives no events when passed via non-existent hooks config field', async () => {
+      const queue: string[] = []
+      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
+      const agent = new Agent({ model, hooks: [createLifecycleBridgePlugin(queue)] } as any)
+      await agent.invoke('Hi')
+
+      expect(queue).toHaveLength(0)
     })
   })
 })
