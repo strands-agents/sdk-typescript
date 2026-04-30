@@ -1427,6 +1427,9 @@ describe('Agent Hooks Integration', () => {
       expect(agentResults).toHaveLength(1)
       const afterInvocations = items.filter((e) => e instanceof AfterInvocationEvent)
       expect(afterInvocations).toHaveLength(2)
+    })
+  })
+
   describe('queue-based lifecycle plugin (WASM bridge pattern)', () => {
     function createLifecycleBridgePlugin(queue: string[]): Plugin {
       return {
