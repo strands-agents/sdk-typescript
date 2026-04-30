@@ -3,6 +3,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { ModelRetryStrategy } from '../model-retry-strategy.js'
+import { RetryStrategy } from '../retry-strategy.js'
 import { ConstantBackoff, type BackoffStrategy } from '../backoff-strategy.js'
 import { AfterInvocationEvent, AfterModelCallEvent } from '../../hooks/events.js'
 import { ModelThrottledError } from '../../errors.js'
@@ -39,6 +40,10 @@ describe('ModelRetryStrategy', () => {
 
   it('exposes the plugin name', () => {
     expect(new ModelRetryStrategy().name).toBe('strands:model-retry-strategy')
+  })
+
+  it('is a RetryStrategy', () => {
+    expect(new ModelRetryStrategy()).toBeInstanceOf(RetryStrategy)
   })
 
   it('rejects maxAttempts below 1', () => {

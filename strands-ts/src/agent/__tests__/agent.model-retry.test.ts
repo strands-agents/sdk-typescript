@@ -9,7 +9,7 @@ import { ConstantBackoff } from '../../retry/backoff-strategy.js'
 import { ModelThrottledError } from '../../errors.js'
 import { AfterModelCallEvent } from '../../hooks/events.js'
 
-describe('Agent modelRetryStrategy wiring', () => {
+describe('Agent retryStrategy wiring', () => {
   beforeEach(() => {
     vi.useFakeTimers()
   })
@@ -24,7 +24,7 @@ describe('Agent modelRetryStrategy wiring', () => {
 
     const agent = new Agent({
       model,
-      modelRetryStrategy: new ModelRetryStrategy({
+      retryStrategy: new ModelRetryStrategy({
         maxAttempts: 3,
         backoff: new ConstantBackoff({ delayMs: 1 }),
       }),
@@ -43,7 +43,7 @@ describe('Agent modelRetryStrategy wiring', () => {
 
     const agent = new Agent({
       model,
-      modelRetryStrategy: new ModelRetryStrategy({
+      retryStrategy: new ModelRetryStrategy({
         maxAttempts: 3,
         backoff: new ConstantBackoff({ delayMs: 1 }),
       }),
@@ -79,7 +79,7 @@ describe('Agent modelRetryStrategy wiring', () => {
 
     const agent = new Agent({
       model,
-      modelRetryStrategy: new ModelRetryStrategy({
+      retryStrategy: new ModelRetryStrategy({
         maxAttempts: 2,
         backoff: new ConstantBackoff({ delayMs: 1 }),
       }),
@@ -91,10 +91,10 @@ describe('Agent modelRetryStrategy wiring', () => {
     await assertion
   })
 
-  it('disables retries when modelRetryStrategy is null', async () => {
+  it('disables retries when retryStrategy is null', async () => {
     const model = new MockMessageModel().addTurn(new ModelThrottledError('throttled'))
 
-    const agent = new Agent({ model, modelRetryStrategy: null })
+    const agent = new Agent({ model, retryStrategy: null })
 
     const invokePromise = agent.invoke('hi')
     const assertion = expect(invokePromise).rejects.toThrow(ModelThrottledError)
@@ -112,7 +112,7 @@ describe('Agent modelRetryStrategy wiring', () => {
       backoff: new ConstantBackoff({ delayMs: 10_000 }), // huge delay — if we slept on top, test would time out
     })
 
-    const agent = new Agent({ model, modelRetryStrategy: strategy })
+    const agent = new Agent({ model, retryStrategy: strategy })
     agent.addHook(AfterModelCallEvent, (event) => {
       if (event.error instanceof ModelThrottledError) {
         event.retry = true
@@ -131,13 +131,13 @@ describe('Agent modelRetryStrategy wiring', () => {
 
     const agent1 = new Agent({
       model: new MockMessageModel().addTurn({ type: 'textBlock', text: 'ok' }),
-      modelRetryStrategy: strategy,
+      retryStrategy: strategy,
     })
     await agent1.invoke('hi')
 
     const agent2 = new Agent({
       model: new MockMessageModel().addTurn({ type: 'textBlock', text: 'ok' }),
-      modelRetryStrategy: strategy,
+      retryStrategy: strategy,
     })
     await expect(agent2.invoke('hi')).rejects.toThrow(/already attached to another agent/)
   })

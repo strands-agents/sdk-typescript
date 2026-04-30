@@ -1,18 +1,18 @@
 /**
  * Retry strategy for model invocations.
  *
- * Registered as a {@link Plugin}; hooks into {@link AfterModelCallEvent} to
- * retry failed model calls, and {@link AfterInvocationEvent} to reset per-
- * invocation state.
+ * Overrides {@link RetryStrategy.retryModel} to retry failed model calls.
+ * Per-invocation state (attempt counters, timers) is cleared via
+ * {@link RetryStrategy.reset}, which the base class calls on
+ * {@link AfterInvocationEvent}.
  */
 
-import { AfterInvocationEvent, AfterModelCallEvent } from '../hooks/events.js'
+import type { AfterModelCallEvent } from '../hooks/events.js'
 import { ModelThrottledError } from '../errors.js'
 import { logger } from '../logging/logger.js'
-import type { Plugin } from '../plugins/plugin.js'
-import type { LocalAgent } from '../types/agent.js'
 import type { BackoffContext, BackoffStrategy } from './backoff-strategy.js'
 import { ExponentialBackoff } from './backoff-strategy.js'
+import { RetryStrategy } from './retry-strategy.js'
 
 const DEFAULT_MAX_ATTEMPTS = 6
 const DEFAULT_BACKOFF_BASE_MS = 4_000
@@ -57,11 +57,11 @@ export interface ModelRetryStrategyOptions {
  * ```ts
  * const agent = new Agent({
  *   model,
- *   modelRetryStrategy: new ModelRetryStrategy({ maxAttempts: 4 }),
+ *   retryStrategy: new ModelRetryStrategy({ maxAttempts: 4 }),
  * })
  * ```
  */
-export class ModelRetryStrategy implements Plugin {
+export class ModelRetryStrategy extends RetryStrategy {
   readonly name = 'strands:model-retry-strategy'
 
   private readonly _maxAttempts: number
@@ -70,9 +70,9 @@ export class ModelRetryStrategy implements Plugin {
   private _currentAttempt = 0
   private _lastDelayMs: number | undefined
   private _firstFailureAt: number | undefined
-  private _attachedAgent: LocalAgent | undefined
 
   constructor(opts: ModelRetryStrategyOptions = {}) {
+    super()
     const maxAttempts = opts.maxAttempts ?? DEFAULT_MAX_ATTEMPTS
     if (!Number.isInteger(maxAttempts) || maxAttempts < 1) {
       throw new Error(`ModelRetryStrategy: maxAttempts must be an integer >= 1 (got ${maxAttempts})`)
@@ -82,25 +82,13 @@ export class ModelRetryStrategy implements Plugin {
       opts.backoff ?? new ExponentialBackoff({ baseMs: DEFAULT_BACKOFF_BASE_MS, maxMs: DEFAULT_BACKOFF_MAX_MS })
   }
 
-  initAgent(agent: LocalAgent): void {
-    if (this._attachedAgent !== undefined && this._attachedAgent !== agent) {
-      throw new Error(
-        'ModelRetryStrategy: instance is already attached to another agent. ' +
-          'Create a separate ModelRetryStrategy per agent.'
-      )
-    }
-    this._attachedAgent = agent
-    agent.addHook(AfterModelCallEvent, (event) => this._onAfterModelCall(event))
-    agent.addHook(AfterInvocationEvent, () => this._resetState())
-  }
-
-  private async _onAfterModelCall(event: AfterModelCallEvent): Promise<void> {
+  override async retryModel(event: AfterModelCallEvent): Promise<void> {
     // Another hook already requested retry — don't stack a second delay on top.
     if (event.retry) return
 
     // Success: reset state for the next model call in this invocation.
     if (event.error === undefined) {
-      this._resetState()
+      this.reset()
       return
     }
 
@@ -149,7 +137,7 @@ export class ModelRetryStrategy implements Plugin {
     return error instanceof ModelThrottledError
   }
 
-  private _resetState(): void {
+  protected override reset(): void {
     this._currentAttempt = 0
     this._lastDelayMs = undefined
     this._firstFailureAt = undefined

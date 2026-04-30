@@ -98,6 +98,7 @@ sdk-typescript/
 │   │   ├── retry/                # Retry strategies for model calls
 │   │   │   ├── __tests__/
 │   │   │   ├── backoff-strategy.ts
+│   │   │   ├── retry-strategy.ts         # Abstract RetryStrategy base class
 │   │   │   ├── model-retry-strategy.ts
 │   │   │   └── index.ts
 │   │   │
@@ -258,7 +259,7 @@ sdk-typescript/
 - **`strands-ts/src/multiagent/`**: Multi-agent orchestration patterns (Graph for DAG execution, Swarm for handoff-based routing)
 - **`strands-ts/src/plugins/`**: Plugin system for extending agent functionality
 - **`strands-ts/src/registry/`**: Tool registry implementation
-- **`strands-ts/src/retry/`**: Retry strategies for model calls (backoff strategies, `ModelRetryStrategy` plugin)
+- **`strands-ts/src/retry/`**: Retry strategies for model calls (backoff strategies, abstract `RetryStrategy` plugin base class, concrete `ModelRetryStrategy`)
 - **`strands-ts/src/session/`**: Session management (file, S3, custom storage)
 - **`strands-ts/src/telemetry/`**: OpenTelemetry tracing and metrics
 - **`strands-ts/src/tools/`**: Tool definitions, types, and structured output validation with Zod schemas
