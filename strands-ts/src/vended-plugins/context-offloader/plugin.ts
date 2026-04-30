@@ -129,115 +129,78 @@ export class ContextOffloader implements Plugin {
     })
   }
 
-  private async _handleToolResult(event: AfterToolCallEvent): Promise<void> {
-    if (event.result.status === 'error') return
-
-    if (this._includeRetrievalTool && event.toolUse.name === RETRIEVAL_TOOL_NAME) return
-
-    const content = event.result.content
-    const toolUseId = event.result.toolUseId
-
+  private async _estimateTokens(event: AfterToolCallEvent): Promise<number> {
     const toolResultMessage = new Message({ role: 'user', content: [event.result] })
     // Cast: LocalAgent doesn't expose model yet. Tracked in https://github.com/strands-agents/sdk-typescript/pull/938
     // Falls back to 0 (no offloading) if model is unavailable — only affects non-Agent LocalAgent implementations.
     const model = (event.agent as unknown as { model?: Model }).model
-    const tokenCount = model ? await model.countTokens([toolResultMessage]) : 0
+    return model ? model.countTokens([toolResultMessage]) : 0
+  }
 
-    if (tokenCount <= this._maxResultTokens) return
-
-    const textPreviewParts: string[] = []
-    for (const block of content) {
-      if (block instanceof TextBlock && block.text) {
-        textPreviewParts.push(block.text)
-      } else if (block instanceof JsonBlock) {
-        textPreviewParts.push(JSON.stringify(block.json, null, 2))
-      }
+  private async _storeBlock(
+    block: ToolResultContent,
+    key: string
+  ): Promise<{ ref: string; contentType: string; description: string }> {
+    if (block instanceof TextBlock && block.text) {
+      const ref = await this._storage.store(key, new TextEncoder().encode(block.text), 'text/plain')
+      return { ref, contentType: 'text/plain', description: `text, ${block.text.length.toLocaleString()} chars` }
     }
-    const fullText = textPreviewParts.join('\n')
-
-    const references: Array<{ ref: string; contentType: string; description: string }> = []
-    try {
-      for (let i = 0; i < content.length; i++) {
-        const block = content[i]
-        const key = `${toolUseId}_${i}`
-
-        if (block instanceof TextBlock && block.text) {
-          const ref = await this._storage.store(key, new TextEncoder().encode(block.text), 'text/plain')
-          references.push({
-            ref,
-            contentType: 'text/plain',
-            description: `text, ${block.text.length.toLocaleString()} chars`,
-          })
-        } else if (block instanceof JsonBlock) {
-          const jsonStr = JSON.stringify(block.json, null, 2)
-          const jsonBytes = new TextEncoder().encode(jsonStr)
-          const ref = await this._storage.store(key, jsonBytes, 'application/json')
-          references.push({
-            ref,
-            contentType: 'application/json',
-            description: `json, ${jsonBytes.length.toLocaleString()} bytes`,
-          })
-        } else if (block instanceof ImageBlock) {
-          const imgBytes = getBytes(block)
-          if (imgBytes) {
-            const ref = await this._storage.store(key, imgBytes, `image/${block.format}`)
-            references.push({
-              ref,
-              contentType: `image/${block.format}`,
-              description: `image/${block.format}, ${imgBytes.length.toLocaleString()} bytes`,
-            })
-          } else {
-            references.push({
-              ref: '',
-              contentType: `image/${block.format}`,
-              description: `image/${block.format}, 0 bytes`,
-            })
-          }
-        } else if (block instanceof VideoBlock) {
-          const vidBytes = getBytes(block)
-          if (vidBytes) {
-            const ref = await this._storage.store(key, vidBytes, `video/${block.format}`)
-            references.push({
-              ref,
-              contentType: `video/${block.format}`,
-              description: `video/${block.format}, ${vidBytes.length.toLocaleString()} bytes`,
-            })
-          } else {
-            references.push({
-              ref: '',
-              contentType: `video/${block.format}`,
-              description: `video/${block.format}, 0 bytes`,
-            })
-          }
-        } else if (block instanceof DocumentBlock) {
-          const docBytes = getBytes(block)
-          if (docBytes) {
-            const ref = await this._storage.store(key, docBytes, `application/${block.format}`)
-            references.push({
-              ref,
-              contentType: `application/${block.format}`,
-              description: `${block.name}, ${docBytes.length.toLocaleString()} bytes`,
-            })
-          } else {
-            references.push({
-              ref: '',
-              contentType: `application/${block.format}`,
-              description: `${block.name}, 0 bytes`,
-            })
-          }
-        } else {
-          references.push({ ref: '', contentType: 'unknown', description: 'unknown block type' })
-        }
-      }
-    } catch (err) {
-      logger.warn(`tool_use_id=<${toolUseId}> | failed to offload tool result, keeping original`, err)
-      return
+    if (block instanceof JsonBlock) {
+      const jsonStr = JSON.stringify(block.json, null, 2)
+      const jsonBytes = new TextEncoder().encode(jsonStr)
+      const ref = await this._storage.store(key, jsonBytes, 'application/json')
+      return { ref, contentType: 'application/json', description: `json, ${jsonBytes.length.toLocaleString()} bytes` }
     }
+    if (block instanceof ImageBlock) {
+      return this._storeMediaBlock(block, key, `image/${block.format}`, `image/${block.format}`)
+    }
+    if (block instanceof VideoBlock) {
+      return this._storeMediaBlock(block, key, `video/${block.format}`, `video/${block.format}`)
+    }
+    if (block instanceof DocumentBlock) {
+      return this._storeMediaBlock(block, key, `application/${block.format}`, block.name)
+    }
+    return { ref: '', contentType: 'unknown', description: 'unknown block type' }
+  }
 
-    logger.debug(
-      `tool_use_id=<${toolUseId}>, blocks=<${references.length}>, tokens=<${tokenCount}> | tool result offloaded`
-    )
+  private async _storeMediaBlock(
+    block: ToolResultContent,
+    key: string,
+    contentType: string,
+    label: string
+  ): Promise<{ ref: string; contentType: string; description: string }> {
+    const bytes = getBytes(block)
+    if (bytes) {
+      const ref = await this._storage.store(key, bytes, contentType)
+      return { ref, contentType, description: `${label}, ${bytes.length.toLocaleString()} bytes` }
+    }
+    return { ref: '', contentType, description: `${label}, 0 bytes` }
+  }
 
+  private _buildMediaPlaceholder(block: ToolResultContent, ref: string): string | undefined {
+    let label: string | undefined
+    if (block instanceof ImageBlock) {
+      label = `image: ${block.format}`
+    } else if (block instanceof VideoBlock) {
+      label = `video: ${block.format}`
+    } else if (block instanceof DocumentBlock) {
+      label = `document: ${block.format}, ${block.name}`
+    }
+    if (!label) return undefined
+
+    const bytes = getBytes(block)
+    let placeholder = `[${label}, ${bytes ? bytes.length : 0} bytes`
+    if (ref) placeholder += ` | ref: ${ref}`
+    placeholder += ']'
+    return placeholder
+  }
+
+  private _buildPreviewText(
+    content: ToolResultContent[],
+    references: Array<{ ref: string; description: string }>,
+    tokenCount: number,
+    fullText: string
+  ): string {
     const preview = fullText ? slicePreview(fullText, this._previewTokens) : ''
     const refLines = references
       .filter((r) => r.ref)
@@ -252,37 +215,59 @@ export class ContextOffloader implements Plugin {
       guidance += '\nYou can also use retrieve_offloaded_content with a reference to get the full content.'
     }
 
-    const previewText =
+    return (
       `[Offloaded: ${content.length} blocks, ~${tokenCount.toLocaleString()} tokens]\n` +
       `${guidance}\n\n` +
       `${preview}\n\n` +
       `[Stored references:]\n${refLines}`
+    )
+  }
 
+  private async _handleToolResult(event: AfterToolCallEvent): Promise<void> {
+    if (event.result.status === 'error') return
+
+    // Skip results from the retrieval tool to prevent circular offloading
+    if (this._includeRetrievalTool && event.toolUse.name === RETRIEVAL_TOOL_NAME) return
+
+    const content = event.result.content
+    const toolUseId = event.result.toolUseId
+    const tokenCount = await this._estimateTokens(event)
+
+    if (tokenCount <= this._maxResultTokens) return
+
+    // Extract text preview from text/JSON blocks
+    const textPreviewParts: string[] = []
+    for (const block of content) {
+      if (block instanceof TextBlock && block.text) {
+        textPreviewParts.push(block.text)
+      } else if (block instanceof JsonBlock) {
+        textPreviewParts.push(JSON.stringify(block.json, null, 2))
+      }
+    }
+    const fullText = textPreviewParts.join('\n')
+
+    // Store each content block to the storage backend
+    let references: Array<{ ref: string; contentType: string; description: string }>
+    try {
+      references = await Promise.all(
+        content.map((block, i) => this._storeBlock(block, `${toolUseId}_${i}`))
+      )
+    } catch (err) {
+      logger.warn(`tool_use_id=<${toolUseId}> | failed to offload tool result, keeping original`, err)
+      return
+    }
+
+    logger.debug(
+      `tool_use_id=<${toolUseId}>, blocks=<${references.length}>, tokens=<${tokenCount}> | tool result offloaded`
+    )
+
+    // Build replacement content: preview text + media placeholders
+    const previewText = this._buildPreviewText(content, references, tokenCount, fullText)
     const newContent: ToolResultContent[] = [new TextBlock(previewText)]
 
     for (let i = 0; i < content.length; i++) {
-      const block = content[i]
-      const ref = references[i]?.ref ?? ''
-
-      if (block instanceof TextBlock || block instanceof JsonBlock) {
-        continue
-      } else if (block instanceof ImageBlock) {
-        const imgBytes = getBytes(block)
-        let placeholder = `[image: ${block.format}, ${imgBytes ? imgBytes.length : 0} bytes`
-        if (ref) placeholder += ` | ref: ${ref}`
-        placeholder += ']'
-        newContent.push(new TextBlock(placeholder))
-      } else if (block instanceof VideoBlock) {
-        const vidBytes = getBytes(block)
-        let placeholder = `[video: ${block.format}, ${vidBytes ? vidBytes.length : 0} bytes`
-        if (ref) placeholder += ` | ref: ${ref}`
-        placeholder += ']'
-        newContent.push(new TextBlock(placeholder))
-      } else if (block instanceof DocumentBlock) {
-        const docBytes = getBytes(block)
-        let placeholder = `[document: ${block.format}, ${block.name}, ${docBytes ? docBytes.length : 0} bytes`
-        if (ref) placeholder += ` | ref: ${ref}`
-        placeholder += ']'
+      const placeholder = this._buildMediaPlaceholder(content[i]!, references[i]?.ref ?? '')
+      if (placeholder) {
         newContent.push(new TextBlock(placeholder))
       }
     }
