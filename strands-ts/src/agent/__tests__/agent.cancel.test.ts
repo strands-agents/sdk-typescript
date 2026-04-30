@@ -181,7 +181,7 @@ describe('Agent Cancellation', () => {
         ])
         .addTurn({ type: 'textBlock', text: 'Should not reach' })
 
-      agent = new Agent({ model, tools: [tool1, tool2], printer: false })
+      agent = new Agent({ model, tools: [tool1, tool2], toolExecutor: 'sequential', printer: false })
       const result = await agent.invoke('Go')
 
       expect(result.stopReason).toBe('cancelled')
