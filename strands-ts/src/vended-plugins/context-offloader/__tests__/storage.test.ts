@@ -124,12 +124,10 @@ describe('S3Storage', () => {
 
   describe('retrieve', () => {
     it('retrieves content by s3:// URI', async () => {
-      mockSend
-        .mockResolvedValueOnce({})
-        .mockResolvedValueOnce({
-          Body: { transformToByteArray: () => Promise.resolve(new Uint8Array([1, 2, 3])) },
-          ContentType: 'image/png',
-        })
+      mockSend.mockResolvedValueOnce({}).mockResolvedValueOnce({
+        Body: { transformToByteArray: () => Promise.resolve(new Uint8Array([1, 2, 3])) },
+        ContentType: 'image/png',
+      })
 
       const storage = new S3Storage('my-bucket', { s3Client: mockS3Client as never })
       const ref = await storage.store('key1', new Uint8Array([1, 2, 3]), 'image/png')

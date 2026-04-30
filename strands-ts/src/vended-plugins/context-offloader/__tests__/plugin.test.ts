@@ -109,7 +109,12 @@ describe('ContextOffloader', () => {
 
     it('does not offload retrieval tool results', async () => {
       const storage = new InMemoryStorage()
-      const plugin = new ContextOffloader({ storage, maxResultTokens: 10, previewTokens: 5, includeRetrievalTool: true })
+      const plugin = new ContextOffloader({
+        storage,
+        maxResultTokens: 10,
+        previewTokens: 5,
+        includeRetrievalTool: true,
+      })
       const agent = createMockAgent()
       plugin.initAgent(agent)
 
@@ -273,7 +278,9 @@ describe('ContextOffloader', () => {
       const plugin = new ContextOffloader({ storage, includeRetrievalTool: true })
       const tools = plugin.getTools()
       const retrievalTool = tools[0]!
-      const result = await (retrievalTool as unknown as { invoke(input: unknown): Promise<unknown> }).invoke({ reference: ref })
+      const result = await (retrievalTool as unknown as { invoke(input: unknown): Promise<unknown> }).invoke({
+        reference: ref,
+      })
       expect(result).toBe('hello')
     })
 
@@ -284,7 +291,9 @@ describe('ContextOffloader', () => {
       const plugin = new ContextOffloader({ storage, includeRetrievalTool: true })
       const tools = plugin.getTools()
       const retrievalTool = tools[0]!
-      const result = await (retrievalTool as unknown as { invoke(input: unknown): Promise<unknown> }).invoke({ reference: ref })
+      const result = await (retrievalTool as unknown as { invoke(input: unknown): Promise<unknown> }).invoke({
+        reference: ref,
+      })
       expect(result).toEqual({ foo: 'bar' })
     })
 
@@ -296,7 +305,9 @@ describe('ContextOffloader', () => {
       const plugin = new ContextOffloader({ storage, includeRetrievalTool: true })
       const tools = plugin.getTools()
       const retrievalTool = tools[0]!
-      const result = await (retrievalTool as unknown as { invoke(input: unknown): Promise<unknown> }).invoke({ reference: ref })
+      const result = await (retrievalTool as unknown as { invoke(input: unknown): Promise<unknown> }).invoke({
+        reference: ref,
+      })
       expect(result).toBeInstanceOf(ImageBlock)
       expect((result as ImageBlock).format).toBe('png')
     })
@@ -309,7 +320,9 @@ describe('ContextOffloader', () => {
       const plugin = new ContextOffloader({ storage, includeRetrievalTool: true })
       const tools = plugin.getTools()
       const retrievalTool = tools[0]!
-      const result = await (retrievalTool as unknown as { invoke(input: unknown): Promise<unknown> }).invoke({ reference: ref })
+      const result = await (retrievalTool as unknown as { invoke(input: unknown): Promise<unknown> }).invoke({
+        reference: ref,
+      })
       expect(result).toBeInstanceOf(DocumentBlock)
       expect((result as DocumentBlock).format).toBe('pdf')
     })

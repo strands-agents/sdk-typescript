@@ -6,7 +6,6 @@ import { AfterToolCallEvent } from '../../hooks/events.js'
 import { TextBlock, JsonBlock, ToolResultBlock, Message } from '../../types/messages.js'
 import type { ToolResultContent } from '../../types/messages.js'
 import { ImageBlock, VideoBlock, DocumentBlock } from '../../types/media.js'
-import type { ImageFormat, DocumentFormat } from '../../types/media.js'
 import { tool } from '../../tools/tool-factory.js'
 import { z } from 'zod'
 import { logger } from '../../logging/logger.js'
@@ -38,11 +37,7 @@ function getBytes(block: ToolResultContent): Uint8Array | undefined {
   return undefined
 }
 
-function decodeStoredContent(
-  content: Uint8Array,
-  contentType: string,
-  reference: string
-): JSONValue | ImageBlock | DocumentBlock {
+function decodeStoredContent(content: Uint8Array, contentType: string, reference: string): JSONValue {
   if (contentType.startsWith('text/')) {
     return new TextDecoder().decode(content)
   }
@@ -54,29 +49,63 @@ function decodeStoredContent(
       return text
     }
   }
+  // Return native content blocks for binary types so the agent sees the actual content.
+  // FunctionTool._wrapInToolResult passes ImageBlock/VideoBlock/DocumentBlock through as-is
+  // at runtime, even though the callback type signature only accepts JSONValue.
   if (contentType.startsWith('image/')) {
+    const format = contentType.split('/').pop()!
     return new ImageBlock({
-      format: contentType.split('/').pop()! as ImageFormat,
+      format: format as import('../../types/media.js').ImageFormat,
       source: { bytes: content },
-    })
+    }) as unknown as JSONValue
+  }
+  if (contentType.startsWith('video/')) {
+    const format = contentType.split('/').pop()!
+    return new VideoBlock({
+      format: format as import('../../types/media.js').VideoFormat,
+      source: { bytes: content },
+    }) as unknown as JSONValue
   }
   if (contentType.startsWith('application/')) {
+    const format = contentType.split('/').pop()!
     return new DocumentBlock({
-      format: contentType.split('/').pop()! as DocumentFormat,
+      format: format as import('../../types/media.js').DocumentFormat,
       name: reference,
       source: { bytes: content },
-    })
+    }) as unknown as JSONValue
   }
   return new TextDecoder('utf-8', { fatal: false }).decode(content)
 }
 
+/** Configuration for the {@link ContextOffloader} plugin. */
 export interface ContextOffloaderConfig {
+  /** Storage backend for persisting offloaded content. */
   storage: Storage
+  /** Token threshold above which tool results are offloaded. Defaults to 2,500. */
   maxResultTokens?: number
+  /** Number of tokens to keep as an inline preview. Defaults to 1,000. */
   previewTokens?: number
+  /** Whether to register the `retrieve_offloaded_content` tool. Defaults to true. */
   includeRetrievalTool?: boolean
 }
 
+/**
+ * Plugin that offloads oversized tool results to reduce context consumption.
+ *
+ * When a tool result exceeds the configured token threshold, this plugin stores
+ * each content block to a storage backend and replaces the in-context result with
+ * a truncated text preview plus per-block storage references.
+ *
+ * @example
+ * ```typescript
+ * import { ContextOffloader, InMemoryStorage } from '@strands-agents/sdk/vended-plugins/context-offloader'
+ *
+ * const agent = new Agent({
+ *   model,
+ *   plugins: [new ContextOffloader({ storage: new InMemoryStorage() })],
+ * })
+ * ```
+ */
 export class ContextOffloader implements Plugin {
   readonly name = 'strands:context-offloader'
 
@@ -124,7 +153,7 @@ export class ContextOffloader implements Plugin {
       callback: async (input) => {
         try {
           const result = await storage.retrieve(input.reference)
-          return decodeStoredContent(result.content, result.contentType, input.reference) as JSONValue
+          return decodeStoredContent(result.content, result.contentType, input.reference)
         } catch {
           return `Error: reference not found: ${input.reference}`
         }
@@ -161,6 +190,7 @@ export class ContextOffloader implements Plugin {
       }
       return { ref: '', contentType, description: `${label}, 0 bytes` }
     }
+    logger.warn(`Unsupported content block type encountered during offloading, skipping`)
     return { ref: '', contentType: 'unknown', description: 'unknown block type' }
   }
 
