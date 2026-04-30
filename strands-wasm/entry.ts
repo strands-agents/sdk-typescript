@@ -26,11 +26,12 @@ import type {
 
 import { callTool } from 'strands:agent/tool-provider'
 import { log as hostLog } from 'strands:agent/host-log'
-import { Agent, FunctionTool, SessionManager, FileStorage, S3Storage } from '@strands-agents/sdk'
-import { AnthropicModel } from '@strands-agents/sdk/anthropic'
-import { BedrockModel } from '@strands-agents/sdk/bedrock'
-import { OpenAIModel } from '@strands-agents/sdk/openai'
-import { GeminiModel } from '@strands-agents/sdk/gemini'
+import { Agent, FunctionTool, SessionManager, FileStorage } from '@strands-agents/sdk'
+import { S3Storage } from '@strands-agents/sdk/session/s3-storage'
+import { AnthropicModel } from '@strands-agents/sdk/models/anthropic'
+import { BedrockModel } from '@strands-agents/sdk/models/bedrock'
+import { OpenAIModel } from '@strands-agents/sdk/models/openai'
+import { GoogleModel } from '@strands-agents/sdk/models/google'
 import type { StopReason, AgentStreamEvent, Model, BaseModelConfig, Plugin, LocalAgent } from '@strands-agents/sdk'
 import {
   ConversationManager,
@@ -69,8 +70,8 @@ function mapUsage(src: any): import('strands:agent/types').Usage | undefined {
     inputTokens: src.inputTokens ?? 0,
     outputTokens: src.outputTokens ?? 0,
     totalTokens: src.totalTokens ?? (src.inputTokens ?? 0) + (src.outputTokens ?? 0),
-    cacheReadInputTokens: src.cacheReadInputTokens ?? undefined,
-    cacheWriteInputTokens: src.cacheWriteInputTokens ?? undefined,
+    cacheReadInputTokens: src.cacheReadInputTokens,
+    cacheWriteInputTokens: src.cacheWriteInputTokens,
   }
 }
 
@@ -80,30 +81,35 @@ function mapMetrics(src: any): import('strands:agent/types').Metrics | undefined
   return { latencyMs: typeof src.latencyMs === 'number' ? src.latencyMs : 0 }
 }
 
+/** Map a TS SDK StopReason string to the WIT reason tag. */
+function mapStopReasonTag(reason: StopReason): StopData['reason'] {
+  switch (reason) {
+    case 'endTurn':
+      return 'end-turn'
+    case 'toolUse':
+      return 'tool-use'
+    case 'maxTokens':
+      return 'max-tokens'
+    case 'contentFiltered':
+      return 'content-filtered'
+    case 'guardrailIntervened':
+      return 'guardrail-intervened'
+    case 'stopSequence':
+      return 'stop-sequence'
+    case 'modelContextWindowExceeded':
+      return 'model-context-window-exceeded'
+    default:
+      return 'error'
+  }
+}
+
 /** Convert a TS SDK StopReason to a WIT StopData with usage/metrics. */
 function mapStopReason(reason: StopReason, agentResult?: any): StopData {
-  const mapped: StopData['reason'] = (() => {
-    switch (reason) {
-      case 'endTurn':
-        return 'end-turn'
-      case 'toolUse':
-        return 'tool-use'
-      case 'maxTokens':
-        return 'max-tokens'
-      case 'contentFiltered':
-        return 'content-filtered'
-      case 'guardrailIntervened':
-        return 'guardrail-intervened'
-      case 'stopSequence':
-        return 'stop-sequence'
-      case 'modelContextWindowExceeded':
-        return 'model-context-window-exceeded'
-      default:
-        return 'error'
-    }
-  })()
-
-  return { reason: mapped, usage: mapUsage(agentResult?.usage), metrics: mapMetrics(agentResult?.metrics) }
+  return {
+    reason: mapStopReasonTag(reason),
+    usage: mapUsage(agentResult?.usage),
+    metrics: mapMetrics(agentResult?.metrics),
+  }
 }
 
 /** Convert a TS SDK AgentStreamEvent to a WIT StreamEvent for the host. */
@@ -200,13 +206,14 @@ function createModel(config?: ModelConfig, params?: ModelParams): Model<BaseMode
 
   if (!config) {
     glog('info', 'createModel: defaulting to Bedrock')
-    return new BedrockModel({ ...base })
+    return new BedrockModel(base)
   }
+
+  const extra = config.val.additionalConfig ? JSON.parse(config.val.additionalConfig) : {}
 
   switch (config.tag) {
     case 'anthropic': {
       glog('info', 'createModel: Anthropic', { modelId: config.val.modelId })
-      const extra = config.val.additionalConfig ? JSON.parse(config.val.additionalConfig) : {}
       return new AnthropicModel({
         ...base,
         ...(config.val.modelId ? { modelId: config.val.modelId } : {}),
@@ -216,7 +223,6 @@ function createModel(config?: ModelConfig, params?: ModelParams): Model<BaseMode
     }
     case 'bedrock': {
       glog('info', 'createModel: Bedrock', { modelId: config.val.modelId, region: config.val.region })
-      const extra = config.val.additionalConfig ? JSON.parse(config.val.additionalConfig) : {}
       const clientConfig: Record<string, unknown> = extra.clientConfig ?? {}
       if (config.val.accessKeyId && config.val.secretAccessKey) {
         clientConfig.credentials = {
@@ -235,7 +241,6 @@ function createModel(config?: ModelConfig, params?: ModelParams): Model<BaseMode
     }
     case 'openai': {
       glog('info', 'createModel: OpenAI', { modelId: config.val.modelId })
-      const extra = config.val.additionalConfig ? JSON.parse(config.val.additionalConfig) : {}
       return new OpenAIModel({
         ...base,
         ...(config.val.modelId ? { modelId: config.val.modelId } : {}),
@@ -245,8 +250,7 @@ function createModel(config?: ModelConfig, params?: ModelParams): Model<BaseMode
     }
     case 'gemini': {
       glog('info', 'createModel: Gemini', { modelId: config.val.modelId })
-      const extra = config.val.additionalConfig ? JSON.parse(config.val.additionalConfig) : {}
-      return new GeminiModel({
+      return new GoogleModel({
         ...base,
         ...(config.val.modelId ? { modelId: config.val.modelId } : {}),
         ...(config.val.apiKey ? { apiKey: config.val.apiKey } : {}),
@@ -310,7 +314,7 @@ function buildSystemPrompt(config: AgentConfig): any {
   if (config.systemPromptBlocks) {
     return JSON.parse(config.systemPromptBlocks)
   }
-  return config.systemPrompt ?? undefined
+  return config.systemPrompt
 }
 
 /** Wrap a model in a Proxy that injects toolChoice into every stream() call. */
@@ -430,9 +434,9 @@ function createConversationManager(config: AgentConfig): ConversationManager | u
       }
       return new SummarizingConversationManager({
         model: summaryModel,
-        summaryRatio: cmConfig.summaryRatio ?? undefined,
-        preserveRecentMessages: cmConfig.preserveRecentMessages ?? undefined,
-        summarizationSystemPrompt: cmConfig.summarizationSystemPrompt ?? undefined,
+        summaryRatio: cmConfig.summaryRatio,
+        preserveRecentMessages: cmConfig.preserveRecentMessages,
+        summarizationSystemPrompt: cmConfig.summarizationSystemPrompt,
       })
     }
     default:
@@ -485,7 +489,7 @@ class AgentImpl {
       const requestTools = createTools(args.tools)
       this.agent.toolRegistry.clear()
       if (requestTools) {
-        this.agent.toolRegistry.addAll(requestTools)
+        this.agent.toolRegistry.add(requestTools)
       }
     }
 
@@ -541,7 +545,6 @@ class ResponseStreamImpl {
   private bridge: LifecycleBridge
   private defaultTools: FunctionTool[] | undefined
   private originalModel: any
-  private eventIndex = 0
 
   constructor(
     agent: Agent,
@@ -563,7 +566,7 @@ class ResponseStreamImpl {
     }
     this.agent.toolRegistry.clear()
     if (this.defaultTools) {
-      this.agent.toolRegistry.addAll(this.defaultTools)
+      this.agent.toolRegistry.add(this.defaultTools)
     }
   }
 
@@ -584,7 +587,6 @@ class ResponseStreamImpl {
         return lifecycle.length > 0 ? lifecycle : undefined
       }
 
-      this.eventIndex++
       const mapped = mapEvent(result.value)
       if (mapped) lifecycle.push(mapped)
       return lifecycle.length > 0 ? lifecycle : []

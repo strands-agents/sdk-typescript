@@ -52,6 +52,13 @@ export class ToolRegistry {
   }
 
   /**
+   * Removes all registered tools.
+   */
+  clear(): void {
+    this._tools.clear()
+  }
+
+  /**
    * Returns all registered tools.
    *
    * @returns Array of all registered tools
