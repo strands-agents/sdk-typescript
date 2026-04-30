@@ -7,7 +7,10 @@
   "types": "dist/src/index.d.ts",
   "type": "module",
   "files": [
-    "dist"
+    "dist",
+    "README.md",
+    "LICENSE.APACHE",
+    "LICENSE.MIT"
   ],
   "exports": {
     ".": {
@@ -77,7 +80,8 @@
   },
   "scripts": {
     "build": "tsc --project src/tsconfig.json",
-    "prepack": "npm run build",
+    "prepack": "npm run build && cp ../README.md ../LICENSE.APACHE ../LICENSE.MIT .",
+    "postpack": "rm -f README.md LICENSE.APACHE LICENSE.MIT",
     "check": "npm run lint && npm run format && npm run type-check && npm run check:browser-bundle && npm run test:coverage && npm run test:package",
     "check:browser-bundle": "esbuild src/index.ts --bundle --platform=browser --format=esm --packages=external --outfile=/dev/null",
     "clean": "rm -rf node_modules dist",
@@ -109,7 +113,7 @@
     "strands"
   ],
   "author": "Strands Agents",
-  "license": "Apache-2.0",
+  "license": "Apache-2.0 OR MIT",
   "devDependencies": {
     "@a2a-js/sdk": "^0.3.10",
     "@ai-sdk/amazon-bedrock": "^4.0.77",
