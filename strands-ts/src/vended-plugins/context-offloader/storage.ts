@@ -51,7 +51,7 @@ export class InMemoryStorage implements Storage {
   private _store = new Map<string, { content: Uint8Array; contentType: string }>()
   private _counter = 0
 
-  /** @inheritdoc */
+  /** {@inheritdoc} */
   async store(key: string, content: Uint8Array, contentType: string = 'text/plain'): Promise<string> {
     this._counter++
     const reference = `mem_${this._counter}_${key}`
@@ -59,7 +59,7 @@ export class InMemoryStorage implements Storage {
     return reference
   }
 
-  /** @inheritdoc */
+  /** {@inheritdoc} */
   async retrieve(reference: string): Promise<{ content: Uint8Array; contentType: string }> {
     const entry = this._store.get(reference)
     if (!entry) {
@@ -127,7 +127,7 @@ export class FileStorage implements Storage {
     await fs.writeFile(metadataPath, JSON.stringify(this._contentTypes), 'utf-8')
   }
 
-  /** @inheritdoc */
+  /** {@inheritdoc} */
   async store(key: string, content: Uint8Array, contentType: string = 'text/plain'): Promise<string> {
     const fs = await this._ensureDir()
     const path = await import('node:path')
@@ -148,7 +148,7 @@ export class FileStorage implements Storage {
     return filePath
   }
 
-  /** @inheritdoc */
+  /** {@inheritdoc} */
   async retrieve(reference: string): Promise<{ content: Uint8Array; contentType: string }> {
     const fs = await this._ensureDir()
     const path = await import('node:path')
@@ -204,7 +204,7 @@ export class S3Storage implements Storage {
     return this._client
   }
 
-  /** @inheritdoc */
+  /** {@inheritdoc} */
   async store(key: string, content: Uint8Array, contentType: string = 'text/plain'): Promise<string> {
     const client = await this._getClient()
     const { PutObjectCommand } = await import('@aws-sdk/client-s3')
@@ -226,7 +226,7 @@ export class S3Storage implements Storage {
     return `s3://${this._bucket}/${s3Key}`
   }
 
-  /** @inheritdoc */
+  /** {@inheritdoc} */
   async retrieve(reference: string): Promise<{ content: Uint8Array; contentType: string }> {
     const client = await this._getClient()
     const { GetObjectCommand } = await import('@aws-sdk/client-s3')
