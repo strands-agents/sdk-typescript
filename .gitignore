@@ -74,5 +74,4 @@ CLAUDE.md
 
 # Files copied into strands-ts/ during prepack (originals live at repo root)
 strands-ts/README.md
-strands-ts/LICENSE.APACHE
-strands-ts/LICENSE.MIT
+strands-ts/LICENSE
