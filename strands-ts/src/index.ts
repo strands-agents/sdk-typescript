@@ -200,7 +200,13 @@ export {
   AgentResultEvent,
   ModelStreamUpdateEvent,
 } from './hooks/index.js'
-export type { HookCallback, HookableEventConstructor, ModelStopResponse, Redaction } from './hooks/index.js'
+export type {
+  HookCallback,
+  HookableEventConstructor,
+  ModelStopResponse,
+  Redaction,
+  ToolUseData,
+} from './hooks/index.js'
 
 // Plugin system
 export type { Plugin } from './plugins/index.js'
