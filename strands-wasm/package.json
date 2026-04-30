@@ -7,6 +7,7 @@
   "scripts": {
     "generate": "jco guest-types ../wit --name strands:agent --world-name agent --out-dir generated",
     "build": "node build.js",
+    "type-check": "tsc",
     "clean": "rm -rf dist node_modules package-lock.json"
   },
   "dependencies": {
@@ -15,6 +16,7 @@
   "devDependencies": {
     "@bytecodealliance/jco": "^1.16.1",
     "@chaynabors/componentize-js": "^0.19.3",
-    "esbuild": "^0.27.4"
+    "esbuild": "^0.27.4",
+    "typescript": "^6.0.2"
   }
 }

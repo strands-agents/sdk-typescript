@@ -11,6 +11,7 @@
 
 /// <reference path="./generated/interfaces/strands-agent-types.d.ts" />
 /// <reference path="./generated/interfaces/strands-agent-host-log.d.ts" />
+/// <reference path="./generated/interfaces/strands-agent-tool-provider.d.ts" />
 
 import type {
   AgentConfig,
@@ -523,7 +524,7 @@ class AgentImpl {
     const location = (this.sessionManager as any)._location?.(this.agent) ?? {
       sessionId: (this.sessionManager as any)._sessionId,
       scope: 'agent',
-      scopeId: this.agent.agentId,
+      scopeId: this.agent.id,
     }
     return storage.listSnapshotIds({ location })
   }
