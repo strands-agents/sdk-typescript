@@ -6,9 +6,11 @@ import { AfterToolCallEvent } from '../../hooks/events.js'
 import { TextBlock, JsonBlock, ToolResultBlock, Message } from '../../types/messages.js'
 import type { ToolResultContent } from '../../types/messages.js'
 import { ImageBlock, VideoBlock, DocumentBlock } from '../../types/media.js'
+import type { ImageFormat, DocumentFormat } from '../../types/media.js'
 import { tool } from '../../tools/tool-factory.js'
 import { z } from 'zod'
 import { logger } from '../../logging/logger.js'
+import type { JSONValue } from '../../types/json.js'
 import type { Storage } from './storage.js'
 
 const CHARS_PER_TOKEN = 4
@@ -34,6 +36,38 @@ function getBytes(block: ToolResultContent): Uint8Array | undefined {
     if (block.source.type === 'documentSourceText') return new TextEncoder().encode(block.source.text)
   }
   return undefined
+}
+
+function decodeStoredContent(
+  content: Uint8Array,
+  contentType: string,
+  reference: string
+): JSONValue | ImageBlock | DocumentBlock {
+  if (contentType.startsWith('text/')) {
+    return new TextDecoder().decode(content)
+  }
+  if (contentType === 'application/json') {
+    const text = new TextDecoder().decode(content)
+    try {
+      return JSON.parse(text) as JSONValue
+    } catch {
+      return text
+    }
+  }
+  if (contentType.startsWith('image/')) {
+    return new ImageBlock({
+      format: contentType.split('/').pop()! as ImageFormat,
+      source: { bytes: content },
+    })
+  }
+  if (contentType.startsWith('application/')) {
+    return new DocumentBlock({
+      format: contentType.split('/').pop()! as DocumentFormat,
+      name: reference,
+      source: { bytes: content },
+    })
+  }
+  return new TextDecoder('utf-8', { fatal: false }).decode(content)
 }
 
 export interface ContextOffloaderConfig {
@@ -88,53 +122,14 @@ export class ContextOffloader implements Plugin {
         reference: z.string().describe('The reference string from the offload placeholder.'),
       }),
       callback: async (input) => {
-        let result: { content: Uint8Array; contentType: string }
         try {
-          result = await storage.retrieve(input.reference)
+          const result = await storage.retrieve(input.reference)
+          return decodeStoredContent(result.content, result.contentType, input.reference) as JSONValue
         } catch {
           return `Error: reference not found: ${input.reference}`
         }
-
-        if (result.contentType.startsWith('text/')) {
-          return new TextDecoder().decode(result.content)
-        }
-
-        if (result.contentType === 'application/json') {
-          try {
-            return JSON.parse(new TextDecoder().decode(result.content))
-          } catch {
-            return new TextDecoder().decode(result.content)
-          }
-        }
-
-        if (result.contentType.startsWith('image/')) {
-          const imgFormat = result.contentType.split('/').pop()!
-          return new ImageBlock({
-            format: imgFormat as import('../../types/media.js').ImageFormat,
-            source: { bytes: result.content },
-          })
-        }
-
-        if (result.contentType.startsWith('application/')) {
-          const docFormat = result.contentType.split('/').pop()!
-          return new DocumentBlock({
-            format: docFormat as import('../../types/media.js').DocumentFormat,
-            name: input.reference,
-            source: { bytes: result.content },
-          })
-        }
-
-        return new TextDecoder('utf-8', { fatal: false }).decode(result.content)
       },
     })
-  }
-
-  private async _estimateTokens(event: AfterToolCallEvent): Promise<number> {
-    const toolResultMessage = new Message({ role: 'user', content: [event.result] })
-    // Cast: LocalAgent doesn't expose model yet. Tracked in https://github.com/strands-agents/sdk-typescript/pull/938
-    // Falls back to 0 (no offloading) if model is unavailable — only affects non-Agent LocalAgent implementations.
-    const model = (event.agent as unknown as { model?: Model }).model
-    return model ? model.countTokens([toolResultMessage]) : 0
   }
 
   private async _storeBlock(
@@ -151,48 +146,22 @@ export class ContextOffloader implements Plugin {
       const ref = await this._storage.store(key, jsonBytes, 'application/json')
       return { ref, contentType: 'application/json', description: `json, ${jsonBytes.length.toLocaleString()} bytes` }
     }
-    if (block instanceof ImageBlock) {
-      return this._storeMediaBlock(block, key, `image/${block.format}`, `image/${block.format}`)
-    }
-    if (block instanceof VideoBlock) {
-      return this._storeMediaBlock(block, key, `video/${block.format}`, `video/${block.format}`)
-    }
-    if (block instanceof DocumentBlock) {
-      return this._storeMediaBlock(block, key, `application/${block.format}`, block.name)
+    if (block instanceof ImageBlock || block instanceof VideoBlock || block instanceof DocumentBlock) {
+      const bytes = getBytes(block)
+      const contentType =
+        block instanceof ImageBlock
+          ? `image/${block.format}`
+          : block instanceof VideoBlock
+            ? `video/${block.format}`
+            : `application/${block.format}`
+      const label = block instanceof DocumentBlock ? block.name : contentType
+      if (bytes) {
+        const ref = await this._storage.store(key, bytes, contentType)
+        return { ref, contentType, description: `${label}, ${bytes.length.toLocaleString()} bytes` }
+      }
+      return { ref: '', contentType, description: `${label}, 0 bytes` }
     }
     return { ref: '', contentType: 'unknown', description: 'unknown block type' }
-  }
-
-  private async _storeMediaBlock(
-    block: ToolResultContent,
-    key: string,
-    contentType: string,
-    label: string
-  ): Promise<{ ref: string; contentType: string; description: string }> {
-    const bytes = getBytes(block)
-    if (bytes) {
-      const ref = await this._storage.store(key, bytes, contentType)
-      return { ref, contentType, description: `${label}, ${bytes.length.toLocaleString()} bytes` }
-    }
-    return { ref: '', contentType, description: `${label}, 0 bytes` }
-  }
-
-  private _buildMediaPlaceholder(block: ToolResultContent, ref: string): string | undefined {
-    let label: string | undefined
-    if (block instanceof ImageBlock) {
-      label = `image: ${block.format}`
-    } else if (block instanceof VideoBlock) {
-      label = `video: ${block.format}`
-    } else if (block instanceof DocumentBlock) {
-      label = `document: ${block.format}, ${block.name}`
-    }
-    if (!label) return undefined
-
-    const bytes = getBytes(block)
-    let placeholder = `[${label}, ${bytes ? bytes.length : 0} bytes`
-    if (ref) placeholder += ` | ref: ${ref}`
-    placeholder += ']'
-    return placeholder
   }
 
   private _buildPreviewText(
@@ -231,27 +200,26 @@ export class ContextOffloader implements Plugin {
 
     const content = event.result.content
     const toolUseId = event.result.toolUseId
-    const tokenCount = await this._estimateTokens(event)
+
+    // Cast: LocalAgent doesn't expose model yet. Tracked in https://github.com/strands-agents/sdk-typescript/pull/938
+    // Falls back to 0 (no offloading) if model is unavailable — only affects non-Agent LocalAgent implementations.
+    const model = (event.agent as unknown as { model?: Model }).model
+    const tokenCount = model ? await model.countTokens([new Message({ role: 'user', content: [event.result] })]) : 0
 
     if (tokenCount <= this._maxResultTokens) return
 
     // Extract text preview from text/JSON blocks
-    const textPreviewParts: string[] = []
+    const textParts: string[] = []
     for (const block of content) {
-      if (block instanceof TextBlock && block.text) {
-        textPreviewParts.push(block.text)
-      } else if (block instanceof JsonBlock) {
-        textPreviewParts.push(JSON.stringify(block.json, null, 2))
-      }
+      if (block instanceof TextBlock && block.text) textParts.push(block.text)
+      else if (block instanceof JsonBlock) textParts.push(JSON.stringify(block.json, null, 2))
     }
-    const fullText = textPreviewParts.join('\n')
+    const fullText = textParts.join('\n')
 
     // Store each content block to the storage backend
     let references: Array<{ ref: string; contentType: string; description: string }>
     try {
-      references = await Promise.all(
-        content.map((block, i) => this._storeBlock(block, `${toolUseId}_${i}`))
-      )
+      references = await Promise.all(content.map((block, i) => this._storeBlock(block, `${toolUseId}_${i}`)))
     } catch (err) {
       logger.warn(`tool_use_id=<${toolUseId}> | failed to offload tool result, keeping original`, err)
       return
@@ -262,13 +230,22 @@ export class ContextOffloader implements Plugin {
     )
 
     // Build replacement content: preview text + media placeholders
-    const previewText = this._buildPreviewText(content, references, tokenCount, fullText)
-    const newContent: ToolResultContent[] = [new TextBlock(previewText)]
-
+    const newContent: ToolResultContent[] = [
+      new TextBlock(this._buildPreviewText(content, references, tokenCount, fullText)),
+    ]
     for (let i = 0; i < content.length; i++) {
-      const placeholder = this._buildMediaPlaceholder(content[i]!, references[i]?.ref ?? '')
-      if (placeholder) {
-        newContent.push(new TextBlock(placeholder))
+      const block = content[i]!
+      const ref = references[i]?.ref ?? ''
+      if (block instanceof TextBlock || block instanceof JsonBlock) continue
+
+      const bytes = getBytes(block)
+      const size = bytes ? bytes.length : 0
+      let label: string | undefined
+      if (block instanceof ImageBlock) label = `image: ${block.format}`
+      else if (block instanceof VideoBlock) label = `video: ${block.format}`
+      else if (block instanceof DocumentBlock) label = `document: ${block.format}, ${block.name}`
+      if (label) {
+        newContent.push(new TextBlock(`[${label}, ${size} bytes${ref ? ` | ref: ${ref}` : ''}]`))
       }
     }
 

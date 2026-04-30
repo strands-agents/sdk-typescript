@@ -1,8 +1,6 @@
 export interface Storage {
-  store(key: string, content: Uint8Array, contentType?: string): string | Promise<string>
-  retrieve(
-    reference: string
-  ): { content: Uint8Array; contentType: string } | Promise<{ content: Uint8Array; contentType: string }>
+  store(key: string, content: Uint8Array, contentType?: string): Promise<string>
+  retrieve(reference: string): Promise<{ content: Uint8Array; contentType: string }>
 }
 
 function sanitizeId(rawId: string): string {
@@ -16,14 +14,14 @@ export class InMemoryStorage implements Storage {
   private _store = new Map<string, { content: Uint8Array; contentType: string }>()
   private _counter = 0
 
-  store(key: string, content: Uint8Array, contentType: string = 'text/plain'): string {
+  async store(key: string, content: Uint8Array, contentType: string = 'text/plain'): Promise<string> {
     this._counter++
     const reference = `mem_${this._counter}_${key}`
     this._store.set(reference, { content, contentType })
     return reference
   }
 
-  retrieve(reference: string): { content: Uint8Array; contentType: string } {
+  async retrieve(reference: string): Promise<{ content: Uint8Array; contentType: string }> {
     const entry = this._store.get(reference)
     if (!entry) {
       throw new Error(`Reference not found: ${reference}`)

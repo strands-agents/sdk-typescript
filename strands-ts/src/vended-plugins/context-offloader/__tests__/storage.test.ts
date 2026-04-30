@@ -2,56 +2,57 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { InMemoryStorage, S3Storage } from '../storage.js'
 
 describe('InMemoryStorage', () => {
-  it('stores and retrieves text content', () => {
+  it('stores and retrieves text content', async () => {
     const storage = new InMemoryStorage()
     const content = new TextEncoder().encode('hello world')
-    const ref = storage.store('key1', content, 'text/plain')
+    const ref = await storage.store('key1', content, 'text/plain')
 
-    const result = storage.retrieve(ref)
+    const result = await storage.retrieve(ref)
     expect(new TextDecoder().decode(result.content)).toBe('hello world')
     expect(result.contentType).toBe('text/plain')
   })
 
-  it('stores and retrieves binary content', () => {
+  it('stores and retrieves binary content', async () => {
     const storage = new InMemoryStorage()
     const content = new Uint8Array([1, 2, 3, 4, 5])
-    const ref = storage.store('key1', content, 'image/png')
+    const ref = await storage.store('key1', content, 'image/png')
 
-    const result = storage.retrieve(ref)
+    const result = await storage.retrieve(ref)
     expect(result.content).toEqual(content)
     expect(result.contentType).toBe('image/png')
   })
 
-  it('generates unique references', () => {
+  it('generates unique references', async () => {
     const storage = new InMemoryStorage()
     const content = new TextEncoder().encode('test')
-    const ref1 = storage.store('key1', content)
-    const ref2 = storage.store('key2', content)
+    const ref1 = await storage.store('key1', content)
+    const ref2 = await storage.store('key2', content)
     expect(ref1).not.toBe(ref2)
   })
 
-  it('uses mem_ prefix in references', () => {
+  it('uses mem_ prefix in references', async () => {
     const storage = new InMemoryStorage()
-    const ref = storage.store('mykey', new TextEncoder().encode('test'))
+    const ref = await storage.store('mykey', new TextEncoder().encode('test'))
     expect(ref).toMatch(/^mem_\d+_mykey$/)
   })
 
-  it('throws on missing reference', () => {
+  it('throws on missing reference', async () => {
     const storage = new InMemoryStorage()
-    expect(() => storage.retrieve('nonexistent')).toThrow('Reference not found: nonexistent')
+    await expect(storage.retrieve('nonexistent')).rejects.toThrow('Reference not found: nonexistent')
   })
 
-  it('clears all stored content', () => {
+  it('clears all stored content', async () => {
     const storage = new InMemoryStorage()
-    const ref = storage.store('key1', new TextEncoder().encode('test'))
+    const ref = await storage.store('key1', new TextEncoder().encode('test'))
     storage.clear()
-    expect(() => storage.retrieve(ref)).toThrow('Reference not found')
+    await expect(storage.retrieve(ref)).rejects.toThrow('Reference not found')
   })
 
-  it('defaults content type to text/plain', () => {
+  it('defaults content type to text/plain', async () => {
     const storage = new InMemoryStorage()
-    const ref = storage.store('key1', new TextEncoder().encode('test'))
-    expect(storage.retrieve(ref).contentType).toBe('text/plain')
+    const ref = await storage.store('key1', new TextEncoder().encode('test'))
+    const result = await storage.retrieve(ref)
+    expect(result.contentType).toBe('text/plain')
   })
 })
 

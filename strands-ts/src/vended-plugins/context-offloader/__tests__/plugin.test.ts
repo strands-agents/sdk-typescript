@@ -260,7 +260,7 @@ describe('ContextOffloader', () => {
       const refMatch = preview.match(/mem_\d+_tool-123_0/)
       expect(refMatch).not.toBeNull()
 
-      const retrieved = storage.retrieve(refMatch![0])
+      const retrieved = await storage.retrieve(refMatch![0])
       expect(new TextDecoder().decode(retrieved.content)).toBe('hello world '.repeat(100))
     })
   })
@@ -268,7 +268,7 @@ describe('ContextOffloader', () => {
   describe('retrieval tool', () => {
     it('retrieves text content as string', async () => {
       const storage = new InMemoryStorage()
-      const ref = storage.store('k1', new TextEncoder().encode('hello'), 'text/plain')
+      const ref = await storage.store('k1', new TextEncoder().encode('hello'), 'text/plain')
 
       const plugin = new ContextOffloader({ storage, includeRetrievalTool: true })
       const tools = plugin.getTools()
@@ -279,7 +279,7 @@ describe('ContextOffloader', () => {
 
     it('retrieves JSON content as parsed object', async () => {
       const storage = new InMemoryStorage()
-      const ref = storage.store('k1', new TextEncoder().encode('{"foo":"bar"}'), 'application/json')
+      const ref = await storage.store('k1', new TextEncoder().encode('{"foo":"bar"}'), 'application/json')
 
       const plugin = new ContextOffloader({ storage, includeRetrievalTool: true })
       const tools = plugin.getTools()
@@ -291,7 +291,7 @@ describe('ContextOffloader', () => {
     it('retrieves image content as ImageBlock', async () => {
       const storage = new InMemoryStorage()
       const imgBytes = new Uint8Array([137, 80, 78, 71])
-      const ref = storage.store('k1', imgBytes, 'image/png')
+      const ref = await storage.store('k1', imgBytes, 'image/png')
 
       const plugin = new ContextOffloader({ storage, includeRetrievalTool: true })
       const tools = plugin.getTools()
@@ -304,7 +304,7 @@ describe('ContextOffloader', () => {
     it('retrieves document content as DocumentBlock', async () => {
       const storage = new InMemoryStorage()
       const docBytes = new Uint8Array([0x25, 0x50, 0x44, 0x46])
-      const ref = storage.store('k1', docBytes, 'application/pdf')
+      const ref = await storage.store('k1', docBytes, 'application/pdf')
 
       const plugin = new ContextOffloader({ storage, includeRetrievalTool: true })
       const tools = plugin.getTools()
