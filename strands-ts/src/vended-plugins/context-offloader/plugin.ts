@@ -6,6 +6,7 @@ import { AfterToolCallEvent } from '../../hooks/events.js'
 import { TextBlock, JsonBlock, ToolResultBlock, Message } from '../../types/messages.js'
 import type { ToolResultContent } from '../../types/messages.js'
 import { ImageBlock, VideoBlock, DocumentBlock } from '../../types/media.js'
+import type { ImageFormat, VideoFormat, DocumentFormat } from '../../types/media.js'
 import { tool } from '../../tools/tool-factory.js'
 import { z } from 'zod'
 import { logger } from '../../logging/logger.js'
@@ -55,21 +56,21 @@ function decodeStoredContent(content: Uint8Array, contentType: string, reference
   if (contentType.startsWith('image/')) {
     const format = contentType.split('/').pop()!
     return new ImageBlock({
-      format: format as import('../../types/media.js').ImageFormat,
+      format: format as ImageFormat,
       source: { bytes: content },
     }) as unknown as JSONValue
   }
   if (contentType.startsWith('video/')) {
     const format = contentType.split('/').pop()!
     return new VideoBlock({
-      format: format as import('../../types/media.js').VideoFormat,
+      format: format as VideoFormat,
       source: { bytes: content },
     }) as unknown as JSONValue
   }
   if (contentType.startsWith('application/')) {
     const format = contentType.split('/').pop()!
     return new DocumentBlock({
-      format: format as import('../../types/media.js').DocumentFormat,
+      format: format as DocumentFormat,
       name: reference,
       source: { bytes: content },
     }) as unknown as JSONValue
@@ -190,7 +191,7 @@ export class ContextOffloader implements Plugin {
       }
       return { ref: '', contentType, description: `${label}, 0 bytes` }
     }
-    logger.warn(`Unsupported content block type encountered during offloading, skipping`)
+    logger.warn('unsupported content block type encountered during offloading, skipping')
     return { ref: '', contentType: 'unknown', description: 'unknown block type' }
   }
 

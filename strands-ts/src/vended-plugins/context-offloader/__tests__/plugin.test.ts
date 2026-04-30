@@ -3,7 +3,7 @@ import { ContextOffloader } from '../plugin.js'
 import { InMemoryStorage } from '../storage.js'
 import { AfterToolCallEvent } from '../../../hooks/events.js'
 import { TextBlock, JsonBlock, ToolResultBlock } from '../../../types/messages.js'
-import { ImageBlock, DocumentBlock } from '../../../types/media.js'
+import { ImageBlock, VideoBlock, DocumentBlock } from '../../../types/media.js'
 import { createMockAgent, invokeTrackedHook } from '../../../__fixtures__/agent-helpers.js'
 import { MockMessageModel } from '../../../__fixtures__/mock-message-model.js'
 
@@ -14,7 +14,9 @@ function makeMockAgent() {
 }
 
 function makeEvent(
-  content: InstanceType<typeof TextBlock | typeof JsonBlock | typeof ImageBlock | typeof DocumentBlock>[],
+  content: InstanceType<
+    typeof TextBlock | typeof JsonBlock | typeof ImageBlock | typeof VideoBlock | typeof DocumentBlock
+  >[],
   overrides?: { status?: 'success' | 'error'; toolName?: string }
 ) {
   const agent = makeMockAgent()
@@ -310,6 +312,21 @@ describe('ContextOffloader', () => {
       })
       expect(result).toBeInstanceOf(ImageBlock)
       expect((result as ImageBlock).format).toBe('png')
+    })
+
+    it('retrieves video content as VideoBlock', async () => {
+      const storage = new InMemoryStorage()
+      const vidBytes = new Uint8Array([0x00, 0x00, 0x00, 0x1c])
+      const ref = await storage.store('k1', vidBytes, 'video/mp4')
+
+      const plugin = new ContextOffloader({ storage, includeRetrievalTool: true })
+      const tools = plugin.getTools()
+      const retrievalTool = tools[0]!
+      const result = await (retrievalTool as unknown as { invoke(input: unknown): Promise<unknown> }).invoke({
+        reference: ref,
+      })
+      expect(result).toBeInstanceOf(VideoBlock)
+      expect((result as VideoBlock).format).toBe('mp4')
     })
 
     it('retrieves document content as DocumentBlock', async () => {
