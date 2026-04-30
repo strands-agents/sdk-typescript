@@ -202,6 +202,9 @@ const DEFAULT_AGENT_NAME = 'Strands Agent'
 /** Default identifier assigned to agents when none is provided. */
 const DEFAULT_AGENT_ID = 'agent'
 
+/** Result returned by tool-execution generators, threading the AfterToolsEvent back to the main loop. */
+type ToolsExecutionResult = { message: Message; afterToolsEvent: AfterToolsEvent }
+
 /**
  * Orchestrates the interaction between a model, a set of tools, and MCP clients.
  * The Agent is responsible for managing the lifecycle of tools and clients
@@ -866,12 +869,21 @@ export class Agent implements LocalAgent, InvokableAgent {
           }
 
           // Execute tools
-          const toolResultMessage = yield* this.executeTools(
+          const toolsResult = yield* this.executeTools(
             assistantMessage,
             this._toolRegistry,
             invocationState,
             completedToolResults
           )
+
+          // When the consumer breaks the stream (e.g. agent.cancel() + break),
+          // yield* returns undefined because the inner generator was closed.
+          if (!toolsResult) {
+            this._meter.endCycle(cycleStartTime)
+            this._tracer.endAgentLoopSpan(cycleSpan)
+            continue
+          }
+          const toolResultMessage = toolsResult.message
 
           /**
            * Deferred append: both messages are added AFTER tool execution completes.
@@ -890,6 +902,28 @@ export class Agent implements LocalAgent, InvokableAgent {
 
           this._meter.endCycle(cycleStartTime)
           this._tracer.endAgentLoopSpan(cycleSpan)
+
+          // Hook requested halt: exit without calling the model again
+          const { afterToolsEvent } = toolsResult
+          if (afterToolsEvent.endTurn) {
+            let lastMessage: Message
+            if (typeof afterToolsEvent.endTurn === 'string') {
+              lastMessage = new Message({ role: 'assistant', content: [new TextBlock(afterToolsEvent.endTurn)] })
+              yield this._appendMessage(lastMessage, invocationState)
+            } else {
+              // Boolean true: lastMessage is the assistant message with toolUseBlock items, not natural-language text.
+              lastMessage = assistantMessage
+            }
+
+            result = new AgentResult({
+              stopReason: 'endTurn',
+              lastMessage,
+              traces: this._tracer.localTraces,
+              metrics: this._meter.metrics,
+              invocationState,
+            })
+            return result
+          }
 
           // Structured output captured: exit
           const structuredOutput = structuredOutputTool
@@ -1297,14 +1331,14 @@ export class Agent implements LocalAgent, InvokableAgent {
    *
    * @param assistantMessage - The assistant message containing tool use blocks
    * @param toolRegistry - Registry containing available tools
-   * @returns User message containing tool results
+   * @returns Tool-result message and the dispatched AfterToolsEvent
    */
   private async *executeTools(
     assistantMessage: Message,
     toolRegistry: ToolRegistry,
     invocationState: InvocationState,
     completedToolResults?: Map<string, ToolResultBlock>
-  ): AsyncGenerator<AgentStreamEvent, Message, undefined> {
+  ): AsyncGenerator<AgentStreamEvent, ToolsExecutionResult, undefined> {
     const beforeToolsEvent = new BeforeToolsEvent({ agent: this, message: assistantMessage, invocationState })
     try {
       yield beforeToolsEvent
@@ -1369,21 +1403,22 @@ export class Agent implements LocalAgent, InvokableAgent {
 
   /**
    * Emits a `ToolResultEvent` for every block plus an `AfterToolsEvent`, and
-   * returns the resulting tool-result message. Used by the pre-launch cancel
+   * returns the resulting tool-result message and dispatched event. Used by the pre-launch cancel
    * paths shared across executors.
    */
   private async *_yieldCancelledToolResults(
     toolUseBlocks: ToolUseBlock[],
     message: string,
     invocationState: InvocationState
-  ): AsyncGenerator<AgentStreamEvent, Message, undefined> {
+  ): AsyncGenerator<AgentStreamEvent, ToolsExecutionResult, undefined> {
     const cancelBlocks = this._cancelAllAsResults(toolUseBlocks, message)
     for (const result of cancelBlocks) {
       yield new ToolResultEvent({ agent: this, result, invocationState })
     }
     const toolResultMessage = new Message({ role: 'user', content: cancelBlocks })
-    yield new AfterToolsEvent({ agent: this, message: toolResultMessage, invocationState })
-    return toolResultMessage
+    const afterToolsEvent = new AfterToolsEvent({ agent: this, message: toolResultMessage, invocationState })
+    yield afterToolsEvent
+    return { message: toolResultMessage, afterToolsEvent }
   }
 
   /**
@@ -1396,9 +1431,10 @@ export class Agent implements LocalAgent, InvokableAgent {
     invocationState: InvocationState,
     completedToolResults?: Map<string, ToolResultBlock>,
     assistantMessage?: Message
-  ): AsyncGenerator<AgentStreamEvent, Message, undefined> {
+  ): AsyncGenerator<AgentStreamEvent, ToolsExecutionResult, undefined> {
     const toolResultBlocks: ToolResultBlock[] = []
     let toolResultMessage: Message
+    let afterToolsEvent: AfterToolsEvent
 
     try {
       for (const toolUseBlock of toolUseBlocks) {
@@ -1450,10 +1486,11 @@ export class Agent implements LocalAgent, InvokableAgent {
       }
     } finally {
       toolResultMessage = new Message({ role: 'user', content: toolResultBlocks })
-      yield new AfterToolsEvent({ agent: this, message: toolResultMessage, invocationState })
+      afterToolsEvent = new AfterToolsEvent({ agent: this, message: toolResultMessage, invocationState })
+      yield afterToolsEvent
     }
 
-    return toolResultMessage
+    return { message: toolResultMessage, afterToolsEvent }
   }
 
   /**
@@ -1487,8 +1524,9 @@ export class Agent implements LocalAgent, InvokableAgent {
     invocationState: InvocationState,
     completedToolResults?: Map<string, ToolResultBlock>,
     assistantMessage?: Message
-  ): AsyncGenerator<AgentStreamEvent, Message, undefined> {
+  ): AsyncGenerator<AgentStreamEvent, ToolsExecutionResult, undefined> {
     let toolResultMessage: Message
+    let afterToolsEvent: AfterToolsEvent
 
     // Wrap each in-flight `.next()` so the raced promise always resolves to a
     // tagged Step. That prevents one generator rejection from rejecting the
@@ -1615,10 +1653,11 @@ export class Agent implements LocalAgent, InvokableAgent {
       }
 
       toolResultMessage = new Message({ role: 'user', content: toolResultBlocks })
-      yield new AfterToolsEvent({ agent: this, message: toolResultMessage, invocationState })
+      afterToolsEvent = new AfterToolsEvent({ agent: this, message: toolResultMessage, invocationState })
+      yield afterToolsEvent
     }
 
-    return toolResultMessage
+    return { message: toolResultMessage, afterToolsEvent }
   }
 
   /**

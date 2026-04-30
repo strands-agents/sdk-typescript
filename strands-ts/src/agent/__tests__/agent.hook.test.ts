@@ -24,6 +24,7 @@ import { expectAgentResult } from '../../__fixtures__/agent-helpers.js'
 import { Message, TextBlock, ToolResultBlock } from '../../types/messages.js'
 import type { Plugin } from '../../plugins/plugin.js'
 import type { LocalAgent } from '../../types/agent.js'
+import type { Tool } from '../../tools/tool.js'
 
 describe('Agent Hooks Integration', () => {
   let mockPlugin: MockPlugin
@@ -873,6 +874,189 @@ describe('Agent Hooks Integration', () => {
           content: [new TextBlock('replaced result')],
         })
       )
+    })
+  })
+
+  describe('AfterToolsEvent.endTurn', () => {
+    const makeSingleToolSetup = (): { tool: Tool; model: MockMessageModel } => ({
+      tool: createMockTool('myTool', () => {
+        return new ToolResultBlock({ toolUseId: 'tool-1', status: 'success', content: [new TextBlock('result')] })
+      }),
+      model: new MockMessageModel()
+        .addTurn({ type: 'toolUseBlock', name: 'myTool', toolUseId: 'tool-1', input: {} })
+        .addTurn({ type: 'textBlock', text: 'Should not reach this' }),
+    })
+
+    it('halts the loop when endTurn is true', async () => {
+      const { tool, model } = makeSingleToolSetup()
+      const agent = new Agent({ model, tools: [tool], plugins: [mockPlugin] })
+      agent.addHook(AfterToolsEvent, (event: AfterToolsEvent) => {
+        event.endTurn = true
+      })
+
+      const result = await agent.invoke('Test')
+
+      expect(result).toEqual(
+        expect.objectContaining({
+          type: 'agentResult',
+          stopReason: 'endTurn',
+          lastMessage: expect.objectContaining({ role: 'assistant' }),
+        })
+      )
+      expect(model.callCount).toBe(1)
+    })
+
+    it('halts the loop with custom assistant message when endTurn is a string', async () => {
+      const { tool, model } = makeSingleToolSetup()
+      const agent = new Agent({ model, tools: [tool] })
+      agent.addHook(AfterToolsEvent, (event: AfterToolsEvent) => {
+        event.endTurn = 'enough information gathered'
+      })
+
+      const result = await agent.invoke('Test')
+
+      expect(result).toEqual(
+        expect.objectContaining({
+          type: 'agentResult',
+          stopReason: 'endTurn',
+          lastMessage: expect.objectContaining({
+            role: 'assistant',
+            content: expect.arrayContaining([
+              expect.objectContaining({ type: 'textBlock', text: 'enough information gathered' }),
+            ]),
+          }),
+        })
+      )
+      expect(model.callCount).toBe(1)
+    })
+
+    it('does not halt when endTurn is false (default)', async () => {
+      const { tool, model } = makeSingleToolSetup()
+      const agent = new Agent({ model, tools: [tool] })
+
+      const result = await agent.invoke('Test')
+
+      expect(result).toEqual(
+        expect.objectContaining({
+          type: 'agentResult',
+          stopReason: 'endTurn',
+          lastMessage: expect.objectContaining({ role: 'assistant' }),
+        })
+      )
+      expect(model.callCount).toBe(2)
+    })
+
+    it('treats empty string endTurn as falsy (does not halt)', async () => {
+      const { tool, model } = makeSingleToolSetup()
+      const agent = new Agent({ model, tools: [tool] })
+      agent.addHook(AfterToolsEvent, (event: AfterToolsEvent) => {
+        event.endTurn = ''
+      })
+
+      const result = await agent.invoke('Test')
+
+      expect(result).toEqual(
+        expect.objectContaining({
+          type: 'agentResult',
+          stopReason: 'endTurn',
+          lastMessage: expect.objectContaining({ role: 'assistant' }),
+        })
+      )
+      expect(model.callCount).toBe(2)
+    })
+
+    it('appends tool results to conversation history even on endTurn', async () => {
+      const { tool, model } = makeSingleToolSetup()
+      const agent = new Agent({ model, tools: [tool] })
+      agent.addHook(AfterToolsEvent, (event: AfterToolsEvent) => {
+        event.endTurn = true
+      })
+
+      await agent.invoke('Test')
+
+      expect(agent.messages).toHaveLength(3)
+
+      expect(agent.messages[0]!.role).toBe('user')
+      expect(agent.messages[1]!.role).toBe('assistant')
+      expect(agent.messages[1]!.content).toEqual(
+        expect.arrayContaining([expect.objectContaining({ type: 'toolUseBlock' })])
+      )
+      expect(agent.messages[2]!.role).toBe('user')
+      expect(agent.messages[2]!.content).toEqual(
+        expect.arrayContaining([expect.objectContaining({ type: 'toolResultBlock' })])
+      )
+    })
+
+    it('halts the loop with concurrent tool execution', async () => {
+      const tool1 = createMockTool('tool1', () => {
+        return new ToolResultBlock({ toolUseId: 'tool-1', status: 'success', content: [new TextBlock('Result 1')] })
+      })
+      const tool2 = createMockTool('tool2', () => {
+        return new ToolResultBlock({ toolUseId: 'tool-2', status: 'success', content: [new TextBlock('Result 2')] })
+      })
+
+      const model = new MockMessageModel()
+        .addTurn([
+          { type: 'toolUseBlock', name: 'tool1', toolUseId: 'tool-1', input: {} },
+          { type: 'toolUseBlock', name: 'tool2', toolUseId: 'tool-2', input: {} },
+        ])
+        .addTurn({ type: 'textBlock', text: 'Should not reach this' })
+
+      const agent = new Agent({ model, tools: [tool1, tool2], toolExecutor: 'concurrent' })
+      agent.addHook(AfterToolsEvent, (event: AfterToolsEvent) => {
+        event.endTurn = true
+      })
+
+      const result = await agent.invoke('Test')
+
+      expect(result).toEqual(
+        expect.objectContaining({
+          type: 'agentResult',
+          stopReason: 'endTurn',
+          lastMessage: expect.objectContaining({ role: 'assistant' }),
+        })
+      )
+      expect(model.callCount).toBe(1)
+    })
+
+    it('emits AfterToolsEvent with endTurn via stream()', async () => {
+      const { tool, model } = makeSingleToolSetup()
+      const agent = new Agent({ model, tools: [tool] })
+      agent.addHook(AfterToolsEvent, (event: AfterToolsEvent) => {
+        event.endTurn = true
+      })
+
+      const items = await collectIterator(agent.stream('Test'))
+
+      const afterToolsEvents = items.filter((e) => e instanceof AfterToolsEvent)
+      expect(afterToolsEvents).toHaveLength(1)
+      expect((afterToolsEvents[0] as AfterToolsEvent).endTurn).toBe(true)
+
+      const resultEvents = items.filter((e) => e instanceof AgentResultEvent)
+      expect(resultEvents).toHaveLength(1)
+      expect((resultEvents[0] as AgentResultEvent).result.stopReason).toBe('endTurn')
+    })
+
+    it('halts even when set on a cancelled-tools AfterToolsEvent', async () => {
+      const { tool, model } = makeSingleToolSetup()
+      const agent = new Agent({ model, tools: [tool] })
+      agent.addHook(BeforeToolsEvent, (event: BeforeToolsEvent) => {
+        event.cancel = true
+      })
+      agent.addHook(AfterToolsEvent, (event: AfterToolsEvent) => {
+        event.endTurn = true
+      })
+
+      const result = await agent.invoke('Test')
+
+      expect(result).toEqual(
+        expect.objectContaining({
+          type: 'agentResult',
+          stopReason: 'endTurn',
+          lastMessage: expect.objectContaining({ role: 'assistant' }),
+        })
+      )
+      expect(model.callCount).toBe(1)
     })
   })
 

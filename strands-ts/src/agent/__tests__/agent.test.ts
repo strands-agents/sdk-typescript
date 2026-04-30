@@ -1493,6 +1493,30 @@ describe('Agent', () => {
       const second = await agent.invoke('Second')
       expect(second.structuredOutput).toEqual({ name: 'Bob' })
     })
+
+    it('skips structured output extraction when AfterToolsEvent.endTurn halts the loop', async () => {
+      const schema = z.object({ name: z.string() })
+
+      const model = new MockMessageModel()
+        .addTurn({
+          type: 'toolUseBlock',
+          name: 'strands_structured_output',
+          toolUseId: 'tool-1',
+          input: { name: 'John' },
+        })
+        .addTurn({ type: 'textBlock', text: 'Done' })
+
+      const agent = new Agent({ model, structuredOutputSchema: schema })
+      agent.addHook(AfterToolsEvent, (event: AfterToolsEvent) => {
+        event.endTurn = true
+      })
+
+      const result = await agent.invoke('Test')
+
+      expect(result.stopReason).toBe('endTurn')
+      expect(result.structuredOutput).toBeUndefined()
+      expect(model.callCount).toBe(1)
+    })
   })
 })
 
