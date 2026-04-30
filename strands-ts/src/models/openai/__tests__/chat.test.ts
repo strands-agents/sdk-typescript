@@ -1590,12 +1590,18 @@ describe('OpenAIModel', () => {
       }).rejects.toThrow(ContextWindowOverflowError)
     })
 
-    it('throws ContextWindowOverflowError for error with message pattern', async () => {
+    it.each([
+      'maximum context length exceeded',
+      'Input is too long for requested model',
+      'input length and `max_tokens` exceed context limit',
+      'input length and max_tokens exceed context limit',
+      'too many total text bytes',
+    ])('throws ContextWindowOverflowError for error message pattern "%s"', async (message) => {
       const mockClient = {
         chat: {
           completions: {
             create: vi.fn(async () => {
-              throw new Error('maximum context length exceeded')
+              throw new Error(message)
             }),
           },
         },

@@ -719,6 +719,20 @@ describe("OpenAIModel (api: 'responses')", () => {
       ).rejects.toBeInstanceOf(ContextWindowOverflowError)
     })
 
+    it('wraps context overflow message patterns as ContextWindowOverflowError', async () => {
+      const client: any = {
+        responses: {
+          create: vi.fn(async () => {
+            throw new Error('too many total text bytes')
+          }),
+        },
+      }
+      const model = new OpenAIModel({ api: 'responses', client })
+      await expect(
+        collectIterator(model.stream([new Message({ role: 'user', content: [new TextBlock('x')] })]))
+      ).rejects.toBeInstanceOf(ContextWindowOverflowError)
+    })
+
     it('rethrows unknown errors untouched', async () => {
       const client: any = {
         responses: {
