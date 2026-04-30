@@ -14,6 +14,10 @@ const CONTEXT_WINDOW_OVERFLOW_PATTERNS = [
   'context_length_exceeded',
   'too many tokens',
   'context length',
+  'input is too long for requested model',
+  'input length and `max_tokens` exceed context limit',
+  'input length and max_tokens exceed context limit',
+  'too many total text bytes',
 ]
 
 /**
@@ -32,16 +36,13 @@ export type OpenAIErrorKind = 'contextOverflow' | 'throttling'
  */
 export function classifyOpenAIError(err: Error & { status?: number; code?: string }): OpenAIErrorKind | undefined {
   const message = err.message?.toLowerCase() ?? ''
+  const code = err.code?.toLowerCase() ?? ''
 
-  if (
-    err.status === 429 ||
-    err.code === 'rate_limit_exceeded' ||
-    RATE_LIMIT_PATTERNS.some((p) => message.includes(p))
-  ) {
+  if (err.status === 429 || code === 'rate_limit_exceeded' || RATE_LIMIT_PATTERNS.some((p) => message.includes(p))) {
     return 'throttling'
   }
 
-  if (err.code === 'context_length_exceeded' || CONTEXT_WINDOW_OVERFLOW_PATTERNS.some((p) => message.includes(p))) {
+  if (code === 'context_length_exceeded' || CONTEXT_WINDOW_OVERFLOW_PATTERNS.some((p) => message.includes(p))) {
     return 'contextOverflow'
   }
 
