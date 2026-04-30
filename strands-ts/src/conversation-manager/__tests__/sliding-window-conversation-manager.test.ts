@@ -8,9 +8,10 @@ import {
   ToolResultBlock,
   type Model,
 } from '../../index.js'
-import { AfterInvocationEvent, AfterModelCallEvent } from '../../hooks/events.js'
+import { AfterInvocationEvent, AfterModelCallEvent, BeforeModelCallEvent } from '../../hooks/events.js'
 import { createMockAgent, invokeTrackedHook } from '../../__fixtures__/agent-helpers.js'
 import type { Agent } from '../../agent/agent.js'
+import type { BaseModelConfig } from '../../models/model.js'
 
 async function triggerSlidingWindow(manager: SlidingWindowConversationManager, agent: Agent): Promise<void> {
   const pluginAgent = createMockAgent()
@@ -759,6 +760,54 @@ describe('SlidingWindowConversationManager', () => {
         const result = (manager as any)._truncateToolResults(messages, 0)
         expect(result).toBe(false)
       })
+    })
+  })
+
+  describe('reduceOnThreshold', () => {
+    it('trims oldest messages when threshold is exceeded', async () => {
+      const manager = new SlidingWindowConversationManager({ windowSize: 4, threshold: 0.7 })
+      const messages = [
+        new Message({ role: 'user', content: [new TextBlock('Message 1')] }),
+        new Message({ role: 'assistant', content: [new TextBlock('Response 1')] }),
+        new Message({ role: 'user', content: [new TextBlock('Message 2')] }),
+        new Message({ role: 'assistant', content: [new TextBlock('Response 2')] }),
+        new Message({ role: 'user', content: [new TextBlock('Message 3')] }),
+        new Message({ role: 'assistant', content: [new TextBlock('Response 3')] }),
+      ]
+      const mockModel = { getConfig: () => ({ contextWindowLimit: 1000 }) as BaseModelConfig } as any
+      const mockAgent = createMockAgent({ messages })
+      manager.initAgent(mockAgent)
+
+      const event = new BeforeModelCallEvent({
+        agent: mockAgent,
+        model: mockModel,
+        invocationState: {},
+        projectedInputTokens: 800,
+      })
+      await invokeTrackedHook(mockAgent, event)
+
+      expect(mockAgent.messages.length).toBe(4)
+    })
+
+    it('does not trim when below threshold', async () => {
+      const manager = new SlidingWindowConversationManager({ windowSize: 4, threshold: 0.7 })
+      const messages = [
+        new Message({ role: 'user', content: [new TextBlock('Message 1')] }),
+        new Message({ role: 'assistant', content: [new TextBlock('Response 1')] }),
+      ]
+      const mockModel = { getConfig: () => ({ contextWindowLimit: 1000 }) as BaseModelConfig } as any
+      const mockAgent = createMockAgent({ messages })
+      manager.initAgent(mockAgent)
+
+      const event = new BeforeModelCallEvent({
+        agent: mockAgent,
+        model: mockModel,
+        invocationState: {},
+        projectedInputTokens: 500,
+      })
+      await invokeTrackedHook(mockAgent, event)
+
+      expect(mockAgent.messages).toHaveLength(2)
     })
   })
 })

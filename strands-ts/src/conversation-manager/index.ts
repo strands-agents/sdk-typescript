@@ -4,7 +4,12 @@
  * This module exports conversation manager implementations.
  */
 
-export { ConversationManager, type ConversationManagerReduceOptions as ReduceOptions } from './conversation-manager.js'
+export {
+  ConversationManager,
+  type ConversationManagerConfig,
+  type ConversationManagerReduceOptions as ReduceOptions,
+  type ConversationManagerThresholdOptions,
+} from './conversation-manager.js'
 export { NullConversationManager } from './null-conversation-manager.js'
 export {
   SlidingWindowConversationManager,

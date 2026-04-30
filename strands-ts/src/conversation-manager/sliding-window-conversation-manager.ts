@@ -8,13 +8,18 @@
 import { Message, TextBlock, ToolResultBlock } from '../types/messages.js'
 import type { LocalAgent } from '../types/agent.js'
 import { AfterInvocationEvent } from '../hooks/events.js'
-import { ConversationManager, type ConversationManagerReduceOptions } from './conversation-manager.js'
+import {
+  ConversationManager,
+  type ConversationManagerConfig,
+  type ConversationManagerReduceOptions,
+  type ConversationManagerThresholdOptions,
+} from './conversation-manager.js'
 import { logger } from '../logging/logger.js'
 
 /**
  * Configuration for the sliding window conversation manager.
  */
-export type SlidingWindowConversationManagerConfig = {
+export type SlidingWindowConversationManagerConfig = ConversationManagerConfig & {
   /**
    * Maximum number of messages to keep in the conversation history.
    * Defaults to 40 messages.
@@ -55,7 +60,7 @@ export class SlidingWindowConversationManager extends ConversationManager {
    * @param config - Configuration options for the sliding window manager.
    */
   constructor(config?: SlidingWindowConversationManagerConfig) {
-    super()
+    super(config)
     this._windowSize = config?.windowSize ?? 40
     this._shouldTruncateResults = config?.shouldTruncateResults ?? true
   }
@@ -87,6 +92,16 @@ export class SlidingWindowConversationManager extends ConversationManager {
    */
   reduce({ agent, error }: ConversationManagerReduceOptions): boolean {
     return this._reduceContext(agent.messages, error)
+  }
+
+  /**
+   * Proactively reduce context by trimming oldest messages.
+   *
+   * @param options - The threshold reduction options
+   * @returns `true` if the history was reduced, `false` otherwise
+   */
+  reduceOnThreshold({ agent }: ConversationManagerThresholdOptions): boolean {
+    return this._reduceContext(agent.messages, undefined)
   }
 
   /**
