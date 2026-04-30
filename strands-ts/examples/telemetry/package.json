@@ -4,6 +4,7 @@
   "main": "dist/setup-tracer.js",
   "type": "module",
   "scripts": {
+    "prepare": "npm ci --prefix ../../..",
     "clean": "rm -rf dist node_modules package-lock.json",
     "build": "tsc",
     "start": "tsc && node dist/setup-tracer.js",

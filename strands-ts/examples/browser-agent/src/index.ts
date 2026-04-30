@@ -22,6 +22,7 @@ const anthropicKeyInput = document.getElementById('anthropic-key') as HTMLInputE
 const bedrockRegionInput = document.getElementById('bedrock-region') as HTMLInputElement
 const bedrockAccessKeyInput = document.getElementById('bedrock-access-key') as HTMLInputElement
 const bedrockSecretKeyInput = document.getElementById('bedrock-secret-key') as HTMLInputElement
+const bedrockSessionTokenInput = document.getElementById('bedrock-session-token') as HTMLInputElement
 const openaiFields = document.querySelector('.openai-fields') as HTMLElement
 const anthropicFields = document.querySelector('.anthropic-fields') as HTMLElement
 const bedrockFields = document.querySelector('.bedrock-fields') as HTMLElement
@@ -65,6 +66,9 @@ function getModel(): BedrockModel | AnthropicModel | OpenAIModel {
         credentials: {
           accessKeyId: credentials['bedrock_access_key'],
           secretAccessKey: credentials['bedrock_secret_key'],
+          ...(credentials['bedrock_session_token'] && {
+            sessionToken: credentials['bedrock_session_token'],
+          }),
         },
       },
     })
@@ -119,6 +123,7 @@ Be concise in your text responses.`,
     bedrockRegionInput.value = credentials['bedrock_region'] || 'us-west-2'
     bedrockAccessKeyInput.value = credentials['bedrock_access_key'] || ''
     bedrockSecretKeyInput.value = credentials['bedrock_secret_key'] || ''
+    bedrockSessionTokenInput.value = credentials['bedrock_session_token'] || ''
     toggleProviderFields(currentProvider)
     settingsModal.classList.add('show')
   })
@@ -138,6 +143,7 @@ Be concise in your text responses.`,
       credentials['bedrock_region'] = bedrockRegionInput.value
       credentials['bedrock_access_key'] = bedrockAccessKeyInput.value
       credentials['bedrock_secret_key'] = bedrockSecretKeyInput.value
+      credentials['bedrock_session_token'] = bedrockSessionTokenInput.value
     }
 
     settingsModal.classList.remove('show')

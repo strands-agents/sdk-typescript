@@ -140,13 +140,13 @@ function twoToolTurn(): MockMessageModel {
 }
 
 describe('Agent concurrent tool execution', () => {
-  it('runs multiple tools in parallel', async () => {
+  it('runs tools concurrently by default', async () => {
     const toolA = new GatedTool('toolA')
     const toolB = new GatedTool('toolB')
     const agent = new Agent({
       model: twoToolTurn(),
       tools: [toolA, toolB],
-      toolExecutor: 'concurrent',
+      // no toolExecutor — relies on the concurrent default
       printer: false,
     })
 
@@ -163,13 +163,13 @@ describe('Agent concurrent tool execution', () => {
     expect(toolB.observations.completed).toBe(true)
   })
 
-  it('runs tools sequentially under default executor', async () => {
+  it('runs tools sequentially when toolExecutor is sequential', async () => {
     const toolA = new GatedTool('toolA')
     const toolB = new GatedTool('toolB')
     const agent = new Agent({
       model: twoToolTurn(),
       tools: [toolA, toolB],
-      // default (sequential)
+      toolExecutor: 'sequential',
       printer: false,
     })
 

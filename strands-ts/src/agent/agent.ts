@@ -86,10 +86,10 @@ export type ToolList = (Tool | McpClient | Agent | ToolList)[]
 /**
  * Strategy for executing tool calls that the model emits in a single assistant turn.
  *
- * - `'sequential'` (default) — runs tool calls one at a time
- * - `'concurrent'` — runs all tool calls from a single turn in parallel. Per-tool event
+ * - `'concurrent'` (default) — runs all tool calls from a single turn in parallel. Per-tool event
  *   order (`BeforeToolCallEvent` → `ToolStreamUpdateEvent*` → `AfterToolCallEvent` →
  *   `ToolResultEvent`) is preserved, while cross-tool events may interleave.
+ * - `'sequential'` — runs tool calls one at a time
  *
  * Cancellation works identically in both modes: {@link Agent.cancel} flips
  * {@link Agent.cancelSignal} and tools must observe it cooperatively to stop early.
@@ -187,7 +187,7 @@ export type AgentConfig = {
   id?: string
   /**
    * Strategy for executing tool calls from a single assistant turn.
-   * Defaults to `'sequential'`. See {@link ToolExecutorStrategy} for details.
+   * Defaults to `'concurrent'`. See {@link ToolExecutorStrategy} for details.
    */
   toolExecutor?: ToolExecutorStrategy
 }
@@ -340,8 +340,7 @@ export class Agent implements LocalAgent, InvokableAgent {
     // Initialize meter for local metrics accumulation
     this._meter = new Meter()
 
-    // Default to sequential tool execution
-    this._toolExecutor = config?.toolExecutor ?? 'sequential'
+    this._toolExecutor = config?.toolExecutor ?? 'concurrent'
 
     this._initialized = false
   }

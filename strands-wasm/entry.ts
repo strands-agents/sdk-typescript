@@ -308,7 +308,7 @@ function createToolChoiceProxy(baseModel: any, toolChoice: any): any {
   });
 }
 
-import type { HookProvider, HookRegistry } from '@strands-agents/sdk';
+import type { Plugin, LocalAgent } from '@strands-agents/sdk';
 import {
   AfterInvocationEvent,
   AfterModelCallEvent,
@@ -321,7 +321,8 @@ import {
 } from '@strands-agents/sdk';
 
 /** Bridges TS SDK lifecycle hooks to WIT StreamEvent lifecycle variants for the host. */
-class LifecycleBridge implements HookProvider {
+class LifecycleBridge implements Plugin {
+  readonly name = 'strands:lifecycle-bridge';
   queue: StreamEvent[] = [];
 
   private push(eventType: string, toolUse?: unknown, toolResult?: unknown): void {
@@ -335,20 +336,20 @@ class LifecycleBridge implements HookProvider {
     } as any);
   }
 
-  registerCallbacks(registry: HookRegistry): void {
-    registry.addCallback(InitializedEvent, () => this.push('initialized'));
-    registry.addCallback(BeforeInvocationEvent, () => this.push('before-invocation'));
-    registry.addCallback(AfterInvocationEvent, () => this.push('after-invocation'));
-    registry.addCallback(BeforeModelCallEvent, () => this.push('before-model-call'));
-    registry.addCallback(AfterModelCallEvent, () => this.push('after-model-call'));
-    registry.addCallback(MessageAddedEvent, () => this.push('message-added'));
+  initAgent(agent: LocalAgent): void {
+    agent.addHook(InitializedEvent, () => this.push('initialized'));
+    agent.addHook(BeforeInvocationEvent, () => this.push('before-invocation'));
+    agent.addHook(AfterInvocationEvent, () => this.push('after-invocation'));
+    agent.addHook(BeforeModelCallEvent, () => this.push('before-model-call'));
+    agent.addHook(AfterModelCallEvent, () => this.push('after-model-call'));
+    agent.addHook(MessageAddedEvent, () => this.push('message-added'));
 
-    registry.addCallback(BeforeToolCallEvent, (event: InstanceType<typeof BeforeToolCallEvent>) => {
+    agent.addHook(BeforeToolCallEvent, (event) => {
       this.push('before-tool-call', event.toolUse);
     });
 
-    registry.addCallback(AfterToolCallEvent, (event: InstanceType<typeof AfterToolCallEvent>) => {
-      this.push('after-tool-call', event.toolUse, event.result as unknown);
+    agent.addHook(AfterToolCallEvent, (event) => {
+      this.push('after-tool-call', event.toolUse, event.result);
     });
   }
 
@@ -453,14 +454,14 @@ class AgentImpl {
     this.sessionManager = createSessionManager(config);
     const conversationManager = createConversationManager(config);
 
-    const hooks: any[] = [this.lifecycleBridge];
-    if (this.sessionManager) hooks.push(this.sessionManager);
+    const plugins: Plugin[] = [this.lifecycleBridge];
 
     this.agent = new Agent({
       model,
       systemPrompt: buildSystemPrompt(config),
       tools: this.defaultTools,
-      hooks,
+      plugins,
+      sessionManager: this.sessionManager,
       conversationManager,
       printer: false,
     });
