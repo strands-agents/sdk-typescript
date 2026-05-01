@@ -44,12 +44,6 @@ export type ConversationManagerThresholdOptions = {
    * The agent instance. Mutate `agent.messages` in place to reduce history.
    */
   agent: LocalAgent
-
-  /**
-   * The model instance for the upcoming call. Used by conversation
-   * managers that perform model-based reduction (e.g. summarization).
-   */
-  model: Model
 }
 
 /**
@@ -106,7 +100,7 @@ export abstract class ConversationManager implements Plugin {
       (config.compressionThreshold <= 0 || config.compressionThreshold > 1)
     ) {
       throw new Error(
-        `compression_threshold=<${config.compressionThreshold}> | must be between 0 (exclusive) and 1 (inclusive)`
+        `compressionThreshold must be between 0 (exclusive) and 1 (inclusive), got ${config.compressionThreshold}`
       )
     }
     this._compressionThreshold = config?.compressionThreshold
@@ -193,7 +187,7 @@ export abstract class ConversationManager implements Plugin {
           logger.debug(
             `projected_tokens=<${event.projectedInputTokens}>, limit=<${contextWindowLimit}>, ratio=<${ratio.toFixed(2)}>, compression_threshold=<${this._compressionThreshold}> | compression threshold exceeded, reducing context`
           )
-          await this.reduceOnThreshold!({ agent: event.agent, model: event.model })
+          await this.reduceOnThreshold!({ agent: event.agent })
         }
       })
     }

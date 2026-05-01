@@ -123,10 +123,10 @@ export class SummarizingConversationManager extends ConversationManager {
    * @param options - The threshold reduction options
    * @returns `true` if the history was reduced, `false` otherwise
    */
-  async reduceOnThreshold({ agent, model }: ConversationManagerThresholdOptions): Promise<boolean> {
+  async reduceOnThreshold({ agent }: ConversationManagerThresholdOptions): Promise<boolean> {
     // Best-effort: swallow errors so the model call can still proceed
     try {
-      return await this._summarizeOldest(agent, this._model ?? model)
+      return await this._summarizeOldest(agent, this._model ?? agent.model)
     } catch (summarizationError) {
       logger.error(`error=<${summarizationError}> | proactive summarization failed`)
       return false
