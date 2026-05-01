@@ -327,7 +327,8 @@ See [PR.md](docs/PR.md) for the complete guidance and template.
 Pre-commit hooks automatically run:
 
 - Build (via npm run build, required for workspace type resolution)
-- Unit tests (via npm test)
+- Unit tests with coverage (via npm run test:coverage)
+- WASM unit tests (via npm run test -w strands-wasm)
 - Linting (via npm run lint)
 - Format checking (via npm run format:check)
 - Type checking (via npm run type-check)

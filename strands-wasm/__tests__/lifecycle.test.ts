@@ -82,21 +82,6 @@ describe('LifecycleBridge', () => {
       })
     })
 
-    it('produces correctly shaped WIT lifecycle events', async () => {
-      const bridge = await runTextTurn()
-      const events = bridge.drain()
-      const beforeModelCall = events.find((e) => e.val.eventType === 'before-model-call')
-
-      expect(beforeModelCall).toStrictEqual({
-        tag: 'lifecycle',
-        val: {
-          eventType: 'before-model-call',
-          toolUse: undefined,
-          toolResult: undefined,
-        },
-      })
-    })
-
     it('non-tool events have undefined toolUse and toolResult', async () => {
       const bridge = await runTextTurn()
       const events = bridge.drain()

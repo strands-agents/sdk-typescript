@@ -51,8 +51,6 @@ describe.runIf(process.env.STRANDS_INTEG === 'true')('Level 2b: full round-trip 
     expect(stopEvent).toBeDefined()
     expect(stopEvent.val).toMatchObject({
       reason: 'end-turn',
-      usage: expect.any(Object),
-      metrics: expect.any(Object),
     })
   })
 

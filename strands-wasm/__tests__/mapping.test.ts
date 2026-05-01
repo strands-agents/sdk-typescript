@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest'
-import { mapUsage, mapMetrics, mapStopReasonTag, mapStopReason, mapEvent, parseInput } from '../../entry'
+import {
+  mapUsage,
+  mapMetrics,
+  mapStopReasonTag,
+  mapStopReason,
+  mapEvent,
+  parseInput,
+  parseSaveLatestStrategy,
+} from '../../entry'
 
 describe('mapUsage', () => {
   it.each([null, undefined])('returns undefined for %s input', (input) => {
@@ -54,12 +62,12 @@ describe('mapMetrics', () => {
     expect(mapMetrics({ latencyMs: 150 })).toStrictEqual({ latencyMs: 150 })
   })
 
-  it('defaults latencyMs to 0 for missing', () => {
+  it('defaults latencyMs to 0 when field is absent', () => {
     expect(mapMetrics({})).toStrictEqual({ latencyMs: 0 })
   })
 
-  it('defaults latencyMs to 0 for non-number', () => {
-    expect(mapMetrics({ latencyMs: 'fast' })).toStrictEqual({ latencyMs: 0 })
+  it('defaults latencyMs to 0 when field is explicitly undefined', () => {
+    expect(mapMetrics({ latencyMs: undefined })).toStrictEqual({ latencyMs: 0 })
   })
 })
 
@@ -283,5 +291,23 @@ describe('parseInput', () => {
 
   it('returns original string for malformed JSON', () => {
     expect(parseInput('{bad json')).toBe('{bad json')
+  })
+})
+
+describe('parseSaveLatestStrategy', () => {
+  it.each(['message', 'invocation', 'trigger'] as const)("accepts valid strategy '%s'", (strategy) => {
+    expect(parseSaveLatestStrategy(strategy)).toBe(strategy)
+  })
+
+  it('returns undefined for unknown strategy', () => {
+    expect(parseSaveLatestStrategy('unknown')).toBeUndefined()
+  })
+
+  it('returns undefined for undefined input', () => {
+    expect(parseSaveLatestStrategy(undefined)).toBeUndefined()
+  })
+
+  it('returns undefined for empty string', () => {
+    expect(parseSaveLatestStrategy('')).toBeUndefined()
   })
 })

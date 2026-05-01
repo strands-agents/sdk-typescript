@@ -23,6 +23,8 @@ import type {
   ModelParams,
   StopData,
   ToolSpec,
+  LifecycleEventType,
+  StreamEventLifecycle,
 } from 'strands:agent/types'
 
 import { callTool } from 'strands:agent/tool-provider'
@@ -33,7 +35,26 @@ import { AnthropicModel } from '@strands-agents/sdk/models/anthropic'
 import { BedrockModel } from '@strands-agents/sdk/models/bedrock'
 import { OpenAIModel } from '@strands-agents/sdk/models/openai'
 import { GoogleModel } from '@strands-agents/sdk/models/google'
-import type { StopReason, AgentStreamEvent, Model, BaseModelConfig, Plugin, LocalAgent } from '@strands-agents/sdk'
+import type {
+  StopReason,
+  AgentStreamEvent,
+  Model,
+  BaseModelConfig,
+  Plugin,
+  LocalAgent,
+  Usage,
+  Metrics,
+  AgentResult,
+  ToolContext,
+  SystemPrompt,
+  InvokeArgs,
+  Message,
+  StreamOptions,
+  ToolChoice,
+  ModelStreamEvent,
+  SaveLatestStrategy,
+  JSONValue,
+} from '@strands-agents/sdk'
 import {
   ConversationManager,
   NullConversationManager,
@@ -54,6 +75,8 @@ import {
 
 type LogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error'
 
+type WitResult = { tag: 'ok' | 'err'; val: string }
+
 function glog(level: LogLevel, message: string, context?: Record<string, unknown>): void {
   hostLog({ level, message, context: context ? JSON.stringify(context) : undefined })
 }
@@ -65,7 +88,7 @@ function errContext(err: unknown, extra?: Record<string, unknown>): Record<strin
 }
 
 /** Convert TS SDK Usage to WIT Usage. */
-function mapUsage(src: any): import('strands:agent/types').Usage | undefined {
+function mapUsage(src: Partial<Usage> | null | undefined): import('strands:agent/types').Usage | undefined {
   if (src == null) return undefined
   return {
     inputTokens: src.inputTokens ?? 0,
@@ -77,7 +100,7 @@ function mapUsage(src: any): import('strands:agent/types').Usage | undefined {
 }
 
 /** Convert TS SDK Metrics to WIT Metrics. */
-function mapMetrics(src: any): import('strands:agent/types').Metrics | undefined {
+function mapMetrics(src: Partial<Metrics> | null | undefined): import('strands:agent/types').Metrics | undefined {
   if (src == null) return undefined
   return { latencyMs: typeof src.latencyMs === 'number' ? src.latencyMs : 0 }
 }
@@ -107,11 +130,14 @@ function mapStopReasonTag(reason: StopReason): StopData['reason'] {
 }
 
 /** Convert a TS SDK StopReason to a WIT StopData with usage/metrics. */
-function mapStopReason(reason: StopReason, agentResult?: any): StopData {
+function mapStopReason(
+  reason: StopReason,
+  stopData?: { usage?: Partial<Usage>; metrics?: Partial<Metrics> }
+): StopData {
   return {
     reason: mapStopReasonTag(reason),
-    usage: mapUsage(agentResult?.usage),
-    metrics: mapMetrics(agentResult?.metrics),
+    usage: mapUsage(stopData?.usage),
+    metrics: mapMetrics(stopData?.metrics),
   }
 }
 
@@ -275,35 +301,41 @@ function createTools(specs: ToolSpec[] | undefined): FunctionTool[] | undefined 
         name: spec.name,
         description: spec.description,
         inputSchema: JSON.parse(spec.inputSchema),
-        callback: (input: unknown, toolContext: any) => {
-          const toolUseId = toolContext?.toolUse?.toolUseId ?? ''
+        callback: (input: unknown, toolContext: ToolContext) => {
+          const toolUseId = toolContext.toolUse.toolUseId
 
-          let result: any
+          let rawResult: unknown
           try {
-            result = callTool({
+            rawResult = callTool({
               name: spec.name,
               input: JSON.stringify(input),
               toolUseId,
             })
-          } catch (e: any) {
-            glog('error', 'callTool: host threw', errContext(e, { tool: spec.name }))
-            throw new Error(String(e?.message ?? e))
+          } catch (e: unknown) {
+            const err = e instanceof Error ? e : new Error(String(e))
+            glog('error', 'callTool: host threw', errContext(err, { tool: spec.name }))
+            throw err
           }
 
-          let parsed: any
-          if (typeof result === 'object' && result !== null && 'tag' in result) {
+          let json: string
+          if (typeof rawResult === 'object' && rawResult !== null && 'tag' in rawResult) {
+            const result = rawResult as WitResult
             if (result.tag === 'err') {
-              glog('warn', 'callTool: host returned error', { tool: spec.name, error: result.val })
               throw new Error(result.val)
             }
-            parsed = JSON.parse(result.val)
+            json = result.val
           } else {
-            parsed = JSON.parse(result)
+            json = rawResult as string
           }
 
-          // Return just the content if it's a wrapped tool result.
-          // The TS SDK expects content blocks, not the {status, content} wrapper.
-          if (parsed && typeof parsed === 'object' && 'status' in parsed && 'content' in parsed) {
+          const parsed = JSON.parse(json) as JSONValue
+          if (
+            parsed &&
+            typeof parsed === 'object' &&
+            !Array.isArray(parsed) &&
+            'status' in parsed &&
+            'content' in parsed
+          ) {
             return parsed.content
           }
           return parsed
@@ -313,25 +345,25 @@ function createTools(specs: ToolSpec[] | undefined): FunctionTool[] | undefined 
 }
 
 /** Build a system prompt from the agent config (string or JSON content blocks). */
-function buildSystemPrompt(config: AgentConfig): any {
+function buildSystemPrompt(config: AgentConfig): SystemPrompt | undefined {
   if (config.systemPromptBlocks) {
-    return JSON.parse(config.systemPromptBlocks)
+    return JSON.parse(config.systemPromptBlocks) as SystemPrompt
   }
   return config.systemPrompt
 }
 
 /** Wrap a model in a Proxy that injects toolChoice into every stream() call. */
-function createToolChoiceProxy(baseModel: any, toolChoice: any): any {
+function createToolChoiceProxy(baseModel: Model<BaseModelConfig>, toolChoice: ToolChoice): Model<BaseModelConfig> {
   return new Proxy(baseModel, {
-    get(target: any, prop: string | symbol, receiver: any) {
+    get(target, prop, receiver) {
       if (prop === 'stream') {
-        return async function* (messages: any[], options: any) {
+        return async function* (messages: Message[], options?: StreamOptions): AsyncIterable<ModelStreamEvent> {
           yield* target.stream(messages, { ...options, toolChoice })
         }
       }
       return Reflect.get(target, prop, receiver)
     },
-  })
+  }) as Model<BaseModelConfig>
 }
 
 /** Bridges TS SDK lifecycle hooks to WIT StreamEvent lifecycle variants for the host. */
@@ -339,15 +371,16 @@ class LifecycleBridge implements Plugin {
   readonly name = 'strands:lifecycle-bridge'
   queue: StreamEvent[] = []
 
-  private push(eventType: string, toolUse?: unknown, toolResult?: unknown): void {
-    this.queue.push({
+  private push(eventType: LifecycleEventType, toolUse?: unknown, toolResult?: unknown): void {
+    const event: StreamEventLifecycle = {
       tag: 'lifecycle',
       val: {
         eventType,
         toolUse: toolUse ? JSON.stringify(toolUse) : undefined,
         toolResult: toolResult ? JSON.stringify(toolResult) : undefined,
       },
-    } as any)
+    }
+    this.queue.push(event)
   }
 
   initAgent(agent: LocalAgent): void {
@@ -373,12 +406,21 @@ class LifecycleBridge implements Plugin {
 }
 
 /** Parse user input — JSON arrays pass through, plain strings stay as-is. */
-function parseInput(input: string): any {
+function parseInput(input: string): InvokeArgs {
   try {
     const parsed = JSON.parse(input)
-    if (Array.isArray(parsed)) return parsed
-  } catch {}
+    if (Array.isArray(parsed)) return parsed as InvokeArgs
+  } catch {
+    /* not JSON, treat as plain string */
+  }
   return input
+}
+
+/** Validate a WIT save-latest strategy string against the SDK's union type. */
+function parseSaveLatestStrategy(s?: string): SaveLatestStrategy | undefined {
+  if (s === 'message' || s === 'invocation' || s === 'trigger') return s
+  if (s) glog('warn', `save_latest_on=<${s}> | unknown strategy, using default`)
+  return undefined
 }
 
 /** Build a SessionManager from the WIT session config. */
@@ -404,16 +446,17 @@ function createSessionManager(config: AgentConfig): SessionManager | undefined {
       throw new Error(`Unknown storage type: ${(sc.storage as any).tag}`)
   }
 
+  const saveLatestOn = parseSaveLatestStrategy(sc.saveLatestOn)
   return new SessionManager({
     sessionId: sc.sessionId,
     storage: { snapshot: storage },
-    ...(sc.saveLatestOn ? { saveLatestOn: sc.saveLatestOn as any } : {}),
+    ...(saveLatestOn !== undefined ? { saveLatestOn } : {}),
   })
 }
 
 /** Instantiate a conversation manager from the WIT config, or undefined to use the TS Agent default. */
 function createConversationManager(config: AgentConfig): ConversationManager | undefined {
-  const cmConfig = (config as any).conversationManager
+  const cmConfig = config.conversationManager
   if (!cmConfig) {
     return undefined
   }
@@ -496,11 +539,11 @@ class AgentImpl {
       }
     }
 
-    let originalModel: any
+    let originalModel: Model<BaseModelConfig> | undefined
     if (args.toolChoice) {
-      const tc = JSON.parse(args.toolChoice)
-      originalModel = (this.agent as any).model
-      ;(this.agent as any).model = createToolChoiceProxy(originalModel, tc)
+      const tc = JSON.parse(args.toolChoice) as ToolChoice
+      originalModel = this.agent.model
+      this.agent.model = createToolChoiceProxy(originalModel, tc)
     }
 
     return new ResponseStreamImpl(this.agent, args.input, this.lifecycleBridge, this.defaultTools, originalModel)
@@ -522,13 +565,7 @@ class AgentImpl {
 
   async listSnapshots(): Promise<string[]> {
     if (!this.sessionManager) throw new Error('No session manager configured')
-    const storage = (this.sessionManager as any)._storage.snapshot
-    const location = (this.sessionManager as any)._location?.(this.agent) ?? {
-      sessionId: (this.sessionManager as any)._sessionId,
-      scope: 'agent',
-      scopeId: this.agent.id,
-    }
-    return storage.listSnapshotIds({ location })
+    return this.sessionManager.listSnapshotIds({ target: this.agent })
   }
 
   async deleteSession(): Promise<void> {
@@ -542,30 +579,30 @@ class AgentImpl {
 
 class ResponseStreamImpl {
   private done = false
-  private generator: AsyncGenerator<AgentStreamEvent, any, undefined>
+  private generator: AsyncGenerator<AgentStreamEvent, AgentResult | undefined, undefined>
   private interruptResolve: ((payload: string) => void) | null = null
   private agent: Agent
   private bridge: LifecycleBridge
   private defaultTools: FunctionTool[] | undefined
-  private originalModel: any
+  private originalModel: Model<BaseModelConfig> | undefined
 
   constructor(
     agent: Agent,
     input: string,
     bridge: LifecycleBridge,
     defaultTools?: FunctionTool[],
-    originalModel?: any
+    originalModel?: Model<BaseModelConfig>
   ) {
     this.agent = agent
     this.bridge = bridge
     this.defaultTools = defaultTools
     this.originalModel = originalModel
-    this.generator = agent.stream(parseInput(input) as any)
+    this.generator = agent.stream(parseInput(input))
   }
 
   private restoreDefaults(): void {
     if (this.originalModel) {
-      ;(this.agent as any).model = this.originalModel
+      this.agent.model = this.originalModel
     }
     this.agent.toolRegistry.clear()
     if (this.defaultTools) {
@@ -585,7 +622,16 @@ class ResponseStreamImpl {
         this.restoreDefaults()
         const agentResult = result.value
         if (agentResult) {
-          return [...lifecycle, { tag: 'stop', val: mapStopReason(agentResult.stopReason, agentResult) }]
+          return [
+            ...lifecycle,
+            {
+              tag: 'stop',
+              val: mapStopReason(agentResult.stopReason, {
+                usage: agentResult.metrics?.accumulatedUsage,
+                metrics: agentResult.metrics?.accumulatedMetrics,
+              }),
+            },
+          ]
         }
         return lifecycle.length > 0 ? lifecycle : undefined
       }
@@ -593,11 +639,11 @@ class ResponseStreamImpl {
       const mapped = mapEvent(result.value)
       if (mapped) lifecycle.push(mapped)
       return lifecycle.length > 0 ? lifecycle : []
-    } catch (err: any) {
+    } catch (err: unknown) {
       this.done = true
       this.restoreDefaults()
       const lifecycle = this.bridge.drain()
-      const msg = String(err?.message ?? err)
+      const msg = err instanceof Error ? err.message : String(err)
       return [...lifecycle, { tag: 'error', val: msg }]
     }
   }
@@ -611,6 +657,7 @@ class ResponseStreamImpl {
 
   cancel(): void {
     this.done = true
+    this.restoreDefaults()
     this.generator.return(undefined)
   }
 }
@@ -624,4 +671,15 @@ export const api = {
 // componentize-js generates bindings from the WIT world definition
 // (`world agent { export api; }`), which only declares the `api` export.
 // Additional ESM exports in bundle.js are inaccessible from the WASM boundary.
-export { mapEvent, mapStopReason, mapStopReasonTag, mapUsage, mapMetrics, parseInput, createTools, LifecycleBridge }
+export {
+  mapEvent,
+  mapStopReason,
+  mapStopReasonTag,
+  mapUsage,
+  mapMetrics,
+  parseInput,
+  createTools,
+  LifecycleBridge,
+  parseSaveLatestStrategy,
+  createToolChoiceProxy,
+}

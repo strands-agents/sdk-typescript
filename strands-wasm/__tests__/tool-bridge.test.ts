@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { createTools } from '../../entry'
 import { callTool } from 'strands:agent/tool-provider'
 
+const emptyToolContext = { toolUse: { toolUseId: '' } } as any
+
 describe('createTools', () => {
   describe('spec handling', () => {
     it('returns undefined for undefined specs', () => {
@@ -54,7 +56,7 @@ describe('createTools', () => {
     it('strips {status, content} wrapper from host result', async () => {
       const tools = makeTools()
       vi.mocked(callTool).mockReturnValue(JSON.stringify({ status: 'success', content: [{ text: 'hello' }] }))
-      const result = await tools[0].invoke({}, {})
+      const result = await tools[0].invoke({}, emptyToolContext)
       expect(result).toStrictEqual([{ text: 'hello' }])
     })
 
@@ -64,14 +66,14 @@ describe('createTools', () => {
         tag: 'ok',
         val: JSON.stringify({ status: 'success', content: [{ text: 'ok' }] }),
       })
-      const result = await tools[0].invoke({}, {})
+      const result = await tools[0].invoke({}, emptyToolContext)
       expect(result).toStrictEqual([{ text: 'ok' }])
     })
 
     it('throws on WIT Result err variant', async () => {
       const tools = makeTools()
       vi.mocked(callTool).mockReturnValue({ tag: 'err', val: 'tool failed' })
-      await expect(tools[0].invoke({}, {})).rejects.toThrow('tool failed')
+      await expect(tools[0].invoke({}, emptyToolContext)).rejects.toThrow('tool failed')
     })
 
     it('propagates host exceptions', async () => {
@@ -79,13 +81,13 @@ describe('createTools', () => {
       vi.mocked(callTool).mockImplementation(() => {
         throw new Error('host crashed')
       })
-      await expect(tools[0].invoke({}, {})).rejects.toThrow('host crashed')
+      await expect(tools[0].invoke({}, emptyToolContext)).rejects.toThrow('host crashed')
     })
 
     it('uses empty string for toolUseId when context is missing', async () => {
       const tools = makeTools()
       vi.mocked(callTool).mockReturnValue('{"value": 1}')
-      await tools[0].invoke({ x: 1 }, {})
+      await tools[0].invoke({ x: 1 }, emptyToolContext)
       expect(callTool).toHaveBeenCalledWith({
         name: 'calc',
         input: '{"x":1}',
@@ -96,7 +98,7 @@ describe('createTools', () => {
     it('returns parsed result directly when not a {status, content} wrapper', async () => {
       const tools = makeTools()
       vi.mocked(callTool).mockReturnValue('{"custom": "data"}')
-      const result = await tools[0].invoke({}, {})
+      const result = await tools[0].invoke({}, emptyToolContext)
       expect(result).toStrictEqual({ custom: 'data' })
     })
   })

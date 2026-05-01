@@ -59,7 +59,10 @@ describe('ResponseStreamImpl.readNext', () => {
       const { stream } = setupStream(async function* () {
         return {
           stopReason: 'endTurn',
-          usage: { inputTokens: 1, outputTokens: 2, totalTokens: 3 },
+          metrics: {
+            accumulatedUsage: { inputTokens: 1, outputTokens: 2, totalTokens: 3 },
+            accumulatedMetrics: { latencyMs: 100 },
+          },
         }
       })
       const batch = await stream.readNext()
@@ -76,7 +79,7 @@ describe('ResponseStreamImpl.readNext', () => {
               cacheReadInputTokens: undefined,
               cacheWriteInputTokens: undefined,
             },
-            metrics: undefined,
+            metrics: { latencyMs: 100 },
           },
         },
       ])
@@ -140,6 +143,28 @@ describe('ResponseStreamImpl.readNext', () => {
       const batch = await stream.readNext()
 
       expect(batch).toBeUndefined()
+    })
+
+    it('cancel restores default tools and model', async () => {
+      const agent = createAgent()
+      const bridge = new LifecycleBridge()
+      const defaultTools = [{ name: 'default_tool' }] as any[]
+      const clearSpy = vi.spyOn(agent.toolRegistry, 'clear')
+      const addSpy = vi.spyOn(agent.toolRegistry, 'add')
+
+      vi.spyOn(agent, 'stream').mockReturnValue(
+        (async function* () {
+          yield { type: 'modelContentBlockDeltaEvent', delta: { type: 'textDelta', text: 'hello' } }
+        })()
+      )
+
+      const stream = new ResponseStream(agent, 'test', bridge, defaultTools)
+      stream.cancel()
+
+      const batch = await stream.readNext()
+      expect(batch).toBeUndefined()
+      expect(clearSpy).toHaveBeenCalled()
+      expect(addSpy).toHaveBeenCalledWith(defaultTools)
     })
   })
 })
