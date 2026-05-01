@@ -7,7 +7,7 @@
   "scripts": {
     "generate": "jco guest-types ../wit --name strands:agent --world-name agent --out-dir generated",
     "build": "node build.js",
-    "type-check": "tsc",
+    "type-check": "npm run generate && tsc",
     "clean": "rm -rf dist node_modules package-lock.json"
   },
   "dependencies": {
