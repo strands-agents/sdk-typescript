@@ -254,6 +254,50 @@ describe('MCP Integration', () => {
       expect(tools[0]!.name).toBe('weather')
     })
 
+    it('paginates through all pages of tools', async () => {
+      sdkClientMock.listTools
+        .mockResolvedValueOnce({
+          tools: [{ name: 'tool_a', description: 'A', inputSchema: {} }],
+          nextCursor: 'page2',
+        })
+        .mockResolvedValueOnce({
+          tools: [{ name: 'tool_b', description: 'B', inputSchema: {} }],
+          nextCursor: 'page3',
+        })
+        .mockResolvedValueOnce({
+          tools: [{ name: 'tool_c', description: 'C', inputSchema: {} }],
+        })
+
+      const tools = await client.listTools()
+
+      expect(tools).toHaveLength(3)
+      expect(tools.map((t) => t.name)).toEqual(['tool_a', 'tool_b', 'tool_c'])
+      expect(sdkClientMock.listTools).toHaveBeenCalledTimes(3)
+      expect(sdkClientMock.listTools).toHaveBeenNthCalledWith(1, undefined)
+      expect(sdkClientMock.listTools).toHaveBeenNthCalledWith(2, { cursor: 'page2' })
+      expect(sdkClientMock.listTools).toHaveBeenNthCalledWith(3, { cursor: 'page3' })
+    })
+
+    it('generates description fallback when description is missing', async () => {
+      sdkClientMock.listTools.mockResolvedValue({
+        tools: [{ name: 'my_tool', inputSchema: {} }],
+      })
+
+      const tools = await client.listTools()
+
+      expect(tools[0]!.description).toBe('Tool which performs my_tool')
+    })
+
+    it('generates description fallback when description is empty string', async () => {
+      sdkClientMock.listTools.mockResolvedValue({
+        tools: [{ name: 'my_tool', description: '', inputSchema: {} }],
+      })
+
+      const tools = await client.listTools()
+
+      expect(tools[0]!.description).toBe('Tool which performs my_tool')
+    })
+
     it('uses callTool when tasksConfig is undefined (default)', async () => {
       const tool = new McpTool({ name: 'calc', description: '', inputSchema: {}, client })
       sdkClientMock.callTool.mockResolvedValue({ content: [] })
