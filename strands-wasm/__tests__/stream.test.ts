@@ -35,7 +35,10 @@ describe('ResponseStreamImpl.readNext', () => {
     it('returns lifecycle events interleaved with mapped event', async () => {
       const { stream } = setupStream(
         async function* () {
-          yield { type: 'modelContentBlockDeltaEvent', delta: { type: 'textDelta', text: 'hello' } }
+          yield {
+            type: 'modelStreamUpdateEvent',
+            event: { type: 'modelContentBlockDeltaEvent', delta: { type: 'textDelta', text: 'hello' } },
+          }
         },
         [beforeModelCallEvent]
       )
@@ -136,8 +139,14 @@ describe('ResponseStreamImpl.readNext', () => {
   describe('cancel', () => {
     it('cancel sets done state', async () => {
       const { stream } = setupStream(async function* () {
-        yield { type: 'modelContentBlockDeltaEvent', delta: { type: 'textDelta', text: 'hello' } }
-        yield { type: 'modelContentBlockDeltaEvent', delta: { type: 'textDelta', text: 'world' } }
+        yield {
+          type: 'modelStreamUpdateEvent',
+          event: { type: 'modelContentBlockDeltaEvent', delta: { type: 'textDelta', text: 'hello' } },
+        }
+        yield {
+          type: 'modelStreamUpdateEvent',
+          event: { type: 'modelContentBlockDeltaEvent', delta: { type: 'textDelta', text: 'world' } },
+        }
       })
       stream.cancel()
       const batch = await stream.readNext()
@@ -154,7 +163,10 @@ describe('ResponseStreamImpl.readNext', () => {
 
       vi.spyOn(agent, 'stream').mockReturnValue(
         (async function* () {
-          yield { type: 'modelContentBlockDeltaEvent', delta: { type: 'textDelta', text: 'hello' } }
+          yield {
+            type: 'modelStreamUpdateEvent',
+            event: { type: 'modelContentBlockDeltaEvent', delta: { type: 'textDelta', text: 'hello' } },
+          }
         })()
       )
 

@@ -52,6 +52,8 @@ import type {
   StreamOptions,
   ToolChoice,
   ModelStreamEvent,
+  ContentBlock,
+  ToolStreamEvent,
   SaveLatestStrategy,
   JSONValue,
 } from '@strands-agents/sdk'
@@ -143,80 +145,121 @@ function mapStopReason(
 
 /** Convert a TS SDK AgentStreamEvent to a WIT StreamEvent for the host. */
 function mapEvent(event: AgentStreamEvent): StreamEvent | null {
-  if ('interrupt' in event || ('type' in event && (event as any).type === 'interrupt')) {
+  if ('interrupt' in event) {
     return { tag: 'interrupt', val: JSON.stringify(event) }
   }
 
-  if (!('type' in event)) {
-    return null
-  }
+  switch (event.type) {
+    // Mapped to WIT stream events for the Python host
+    case 'modelStreamUpdateEvent':
+      return mapModelStreamEvent(event.event)
+    case 'contentBlockEvent':
+      return mapContentBlock(event.contentBlock)
+    case 'toolResultEvent':
+      return mapContentBlock(event.result)
+    case 'toolStreamUpdateEvent':
+      return mapToolStreamEvent(event.event)
 
-  const ev = event as any
+    // Handled by LifecycleBridge via hook subscriptions
+    case 'beforeInvocationEvent':
+    case 'afterInvocationEvent':
+    case 'beforeModelCallEvent':
+    case 'afterModelCallEvent':
+    case 'beforeToolCallEvent':
+    case 'afterToolCallEvent':
+    case 'messageAddedEvent':
 
-  if (ev.type === 'modelContentBlockDeltaEvent') {
-    const delta = ev.delta
-    if (delta?.type === 'textDelta' && typeof delta.text === 'string') {
-      return { tag: 'text-delta', val: delta.text }
+    // No WIT representation — data available through other channels
+    case 'modelMessageEvent':
+    case 'agentResultEvent':
+    case 'beforeToolsEvent':
+    case 'afterToolsEvent':
+      return null
+
+    default: {
+      const _: never = event
+      return null
     }
-    return null
   }
+}
 
-  if (ev.type === 'modelStreamUpdateEvent' && ev.event) {
-    return mapEvent(ev.event)
+/** Convert a ModelStreamEvent to a WIT StreamEvent. */
+function mapModelStreamEvent(event: ModelStreamEvent): StreamEvent | null {
+  switch (event.type) {
+    case 'modelContentBlockDeltaEvent':
+      return event.delta.type === 'textDelta' ? { tag: 'text-delta', val: event.delta.text } : null
+    case 'modelContentBlockStartEvent':
+      return event.start?.type === 'toolUseStart'
+        ? {
+            tag: 'tool-use',
+            val: {
+              name: event.start.name,
+              toolUseId: event.start.toolUseId,
+              input: JSON.stringify({}),
+            },
+          }
+        : null
+    case 'modelMetadataEvent':
+      return { tag: 'metadata', val: { usage: mapUsage(event.usage), metrics: mapMetrics(event.metrics) } }
+    case 'modelContentBlockStopEvent':
+    case 'modelMessageStartEvent':
+    case 'modelMessageStopEvent':
+    case 'modelRedactionEvent':
+      return null
+    default: {
+      const _: never = event
+      return null
+    }
   }
+}
 
-  if (ev.type === 'contentBlockEvent' && ev.contentBlock) {
-    return mapEvent(ev.contentBlock)
-  }
-
-  if (ev.type === 'toolResultEvent' && ev.result) {
-    return mapEvent(ev.result)
-  }
-
-  if (
-    ev.type === 'toolUseBlock' ||
-    (ev.type === 'modelContentBlockStartEvent' && ev.contentBlock?.type === 'tool_use')
-  ) {
-    const block = ev.type === 'toolUseBlock' ? ev : ev.contentBlock
-    if (block?.name) {
+/** Convert a ContentBlock to a WIT StreamEvent. */
+function mapContentBlock(block: ContentBlock): StreamEvent | null {
+  switch (block.type) {
+    case 'toolUseBlock':
       return {
         tag: 'tool-use',
         val: {
           name: block.name,
-          toolUseId: block.id ?? block.toolUseId ?? '',
+          toolUseId: block.toolUseId,
           input: JSON.stringify(block.input ?? {}),
         },
       }
+    case 'toolResultBlock':
+      return {
+        tag: 'tool-result',
+        val: {
+          toolUseId: block.toolUseId,
+          status: block.status,
+          content: JSON.stringify(block.content ?? []),
+        },
+      }
+    case 'textBlock':
+    case 'reasoningBlock':
+    case 'cachePointBlock':
+    case 'guardContentBlock':
+    case 'imageBlock':
+    case 'videoBlock':
+    case 'documentBlock':
+    case 'citationsBlock':
+      return null
+    default: {
+      const _: never = block
+      return null
     }
   }
+}
 
-  if (ev.type === 'toolResultBlock') {
-    return {
-      tag: 'tool-result',
-      val: {
-        toolUseId: ev.toolUseId ?? '',
-        status: ev.status ?? 'success',
-        content: JSON.stringify(ev.content ?? []),
-      },
-    }
+/** Convert a ToolStreamEvent to a WIT StreamEvent. */
+function mapToolStreamEvent(event: ToolStreamEvent): StreamEvent {
+  return {
+    tag: 'tool-result',
+    val: {
+      toolUseId: '',
+      status: 'success',
+      content: JSON.stringify({ data: event.data ?? null }),
+    },
   }
-
-  if (ev.type === 'toolStreamEvent') {
-    return {
-      tag: 'tool-result',
-      val: {
-        toolUseId: '',
-        status: 'success',
-        content: JSON.stringify({ data: ev.data ?? null }),
-      },
-    }
-  }
-
-  if (ev.type === 'modelMetadataEvent') {
-    return { tag: 'metadata', val: { usage: mapUsage(ev.usage), metrics: mapMetrics(ev.metrics) } }
-  }
-
-  return null
 }
 
 /** Extract WIT ModelParams into a plain config object for TS model constructors. */
@@ -673,6 +716,9 @@ export const api = {
 // Additional ESM exports in bundle.js are inaccessible from the WASM boundary.
 export {
   mapEvent,
+  mapModelStreamEvent,
+  mapContentBlock,
+  mapToolStreamEvent,
   mapStopReason,
   mapStopReasonTag,
   mapUsage,

@@ -5,9 +5,14 @@ import {
   mapStopReasonTag,
   mapStopReason,
   mapEvent,
+  mapModelStreamEvent,
+  mapContentBlock,
+  mapToolStreamEvent,
   parseInput,
   parseSaveLatestStrategy,
 } from '../../entry'
+import type { AgentStreamEvent, ModelStreamEvent, StopReason } from '@strands-agents/sdk'
+import { ToolStreamEvent, ToolUseBlock, ToolResultBlock, TextBlock, ReasoningBlock } from '@strands-agents/sdk'
 
 describe('mapUsage', () => {
   it.each([null, undefined])('returns undefined for %s input', (input) => {
@@ -72,19 +77,7 @@ describe('mapMetrics', () => {
 })
 
 describe('mapStopReasonTag', () => {
-  const witStopReasons: string[] = [
-    'end-turn',
-    'tool-use',
-    'max-tokens',
-    'error',
-    'content-filtered',
-    'guardrail-intervened',
-    'stop-sequence',
-    'model-context-window-exceeded',
-    'cancelled',
-  ]
-
-  it.each([
+  const mappings: [string, string][] = [
     ['endTurn', 'end-turn'],
     ['toolUse', 'tool-use'],
     ['maxTokens', 'max-tokens'],
@@ -93,25 +86,29 @@ describe('mapStopReasonTag', () => {
     ['stopSequence', 'stop-sequence'],
     ['modelContextWindowExceeded', 'model-context-window-exceeded'],
     ['cancelled', 'cancelled'],
-  ])("maps '%s' to '%s'", (input, expected) => {
-    expect(mapStopReasonTag(input as any)).toBe(expected)
+  ]
+
+  it.each(mappings)("maps '%s' to '%s'", (input, expected) => {
+    expect(mapStopReasonTag(input as StopReason)).toBe(expected)
   })
 
   it("maps unknown reason to 'error'", () => {
-    expect(mapStopReasonTag('unknownReason' as any)).toBe('error')
+    expect(mapStopReasonTag('unknownReason' as unknown as StopReason)).toBe('error')
   })
 
   it('covers every WIT StopReason variant except error', () => {
-    const mappedOutputs = [
+    const witStopReasons = [
       'end-turn',
       'tool-use',
       'max-tokens',
+      'error',
       'content-filtered',
       'guardrail-intervened',
       'stop-sequence',
       'model-context-window-exceeded',
       'cancelled',
     ]
+    const mappedOutputs = mappings.map(([, wit]) => wit)
     const nonErrorVariants = witStopReasons.filter((r) => r !== 'error')
     expect(mappedOutputs.sort()).toStrictEqual(nonErrorVariants.sort())
   })
@@ -146,128 +143,215 @@ describe('mapStopReason', () => {
   })
 })
 
-describe('mapEvent', () => {
-  describe('leaf events', () => {
-    it('maps text delta', () => {
-      expect(
-        mapEvent({ type: 'modelContentBlockDeltaEvent', delta: { type: 'textDelta', text: 'hello' } } as any)
-      ).toStrictEqual({ tag: 'text-delta', val: 'hello' })
-    })
+describe('mapModelStreamEvent', () => {
+  it('maps text delta', () => {
+    const event: ModelStreamEvent = { type: 'modelContentBlockDeltaEvent', delta: { type: 'textDelta', text: 'hello' } }
+    expect(mapModelStreamEvent(event)).toStrictEqual({ tag: 'text-delta', val: 'hello' })
+  })
 
-    it('maps toolUseBlock', () => {
-      expect(mapEvent({ type: 'toolUseBlock', name: 'calc', toolUseId: 'tu-1', input: { x: 1 } } as any)).toStrictEqual(
-        {
-          tag: 'tool-use',
-          val: { name: 'calc', toolUseId: 'tu-1', input: '{"x":1}' },
-        }
-      )
-    })
+  it('returns null for non-text delta', () => {
+    const event: ModelStreamEvent = {
+      type: 'modelContentBlockDeltaEvent',
+      delta: { type: 'toolUseInputDelta', input: '{}' },
+    }
+    expect(mapModelStreamEvent(event)).toBeNull()
+  })
 
-    it('maps modelContentBlockStartEvent with tool_use contentBlock', () => {
-      expect(
-        mapEvent({
-          type: 'modelContentBlockStartEvent',
-          contentBlock: { type: 'tool_use', name: 'calc', id: 'tu-5', input: { x: 1 } },
-        } as any)
-      ).toStrictEqual({
-        tag: 'tool-use',
-        val: { name: 'calc', toolUseId: 'tu-5', input: '{"x":1}' },
-      })
-    })
+  it('returns null for reasoningContentDelta', () => {
+    const event: ModelStreamEvent = {
+      type: 'modelContentBlockDeltaEvent',
+      delta: { type: 'reasoningContentDelta', text: 'thinking...' },
+    }
+    expect(mapModelStreamEvent(event)).toBeNull()
+  })
 
-    it('maps toolResultBlock', () => {
-      expect(
-        mapEvent({
-          type: 'toolResultBlock',
-          toolUseId: 'tu-1',
-          status: 'success',
-          content: [{ text: 'ok' }],
-        } as any)
-      ).toStrictEqual({
-        tag: 'tool-result',
-        val: { toolUseId: 'tu-1', status: 'success', content: '[{"text":"ok"}]' },
-      })
-    })
-
-    it('maps toolStreamEvent', () => {
-      expect(mapEvent({ type: 'toolStreamEvent', data: { value: 42 } } as any)).toStrictEqual({
-        tag: 'tool-result',
-        val: { toolUseId: '', status: 'success', content: '{"data":{"value":42}}' },
-      })
-    })
-
-    it('maps modelMetadataEvent', () => {
-      expect(
-        mapEvent({
-          type: 'modelMetadataEvent',
-          usage: { inputTokens: 10, outputTokens: 20, totalTokens: 30 },
-          metrics: { latencyMs: 50 },
-        } as any)
-      ).toStrictEqual({
-        tag: 'metadata',
-        val: {
-          usage: {
-            inputTokens: 10,
-            outputTokens: 20,
-            totalTokens: 30,
-            cacheReadInputTokens: undefined,
-            cacheWriteInputTokens: undefined,
-          },
-          metrics: { latencyMs: 50 },
-        },
-      })
-    })
-
-    it('maps interrupt event', () => {
-      const event = { interrupt: { reason: 'user' } }
-      expect(mapEvent(event as any)).toStrictEqual({ tag: 'interrupt', val: JSON.stringify(event) })
-    })
-
-    it('returns null for unrecognized event type', () => {
-      expect(mapEvent({ type: 'unknownEvent' } as any)).toBeNull()
-    })
-
-    it('returns null for non-text delta', () => {
-      expect(mapEvent({ type: 'modelContentBlockDeltaEvent', delta: { type: 'toolUseInputDelta' } } as any)).toBeNull()
+  it('maps modelContentBlockStartEvent with toolUseStart', () => {
+    const event: ModelStreamEvent = {
+      type: 'modelContentBlockStartEvent',
+      start: { type: 'toolUseStart', name: 'calc', toolUseId: 'tu-5' },
+    }
+    expect(mapModelStreamEvent(event)).toStrictEqual({
+      tag: 'tool-use',
+      val: { name: 'calc', toolUseId: 'tu-5', input: '{}' },
     })
   })
 
+  it('returns null for modelContentBlockStartEvent without start', () => {
+    const event: ModelStreamEvent = { type: 'modelContentBlockStartEvent' }
+    expect(mapModelStreamEvent(event)).toBeNull()
+  })
+
+  it('maps modelMetadataEvent', () => {
+    const event: ModelStreamEvent = {
+      type: 'modelMetadataEvent',
+      usage: { inputTokens: 10, outputTokens: 20, totalTokens: 30 },
+      metrics: { latencyMs: 50 },
+    }
+    expect(mapModelStreamEvent(event)).toStrictEqual({
+      tag: 'metadata',
+      val: {
+        usage: {
+          inputTokens: 10,
+          outputTokens: 20,
+          totalTokens: 30,
+          cacheReadInputTokens: undefined,
+          cacheWriteInputTokens: undefined,
+        },
+        metrics: { latencyMs: 50 },
+      },
+    })
+  })
+
+  it('returns null for unrecognized model event', () => {
+    const event: ModelStreamEvent = { type: 'modelMessageStartEvent', role: 'assistant' }
+    expect(mapModelStreamEvent(event)).toBeNull()
+  })
+
+  it('maps modelMetadataEvent without usage or metrics', () => {
+    const event: ModelStreamEvent = { type: 'modelMetadataEvent' }
+    expect(mapModelStreamEvent(event)).toStrictEqual({
+      tag: 'metadata',
+      val: { usage: undefined, metrics: undefined },
+    })
+  })
+})
+
+describe('mapContentBlock', () => {
+  it('maps toolUseBlock', () => {
+    const block = new ToolUseBlock({ name: 'calc', toolUseId: 'tu-1', input: { x: 1 } })
+    expect(mapContentBlock(block)).toStrictEqual({
+      tag: 'tool-use',
+      val: { name: 'calc', toolUseId: 'tu-1', input: '{"x":1}' },
+    })
+  })
+
+  it('maps toolUseBlock with null input to empty object', () => {
+    const block = new ToolUseBlock({ name: 'calc', toolUseId: 'tu-1', input: null })
+    expect(mapContentBlock(block)).toStrictEqual({
+      tag: 'tool-use',
+      val: { name: 'calc', toolUseId: 'tu-1', input: '{}' },
+    })
+  })
+
+  it('maps toolResultBlock', () => {
+    const block = new ToolResultBlock({
+      toolUseId: 'tu-1',
+      status: 'success',
+      content: [new TextBlock('ok')],
+    })
+    expect(mapContentBlock(block)).toStrictEqual({
+      tag: 'tool-result',
+      val: { toolUseId: 'tu-1', status: 'success', content: '[{"text":"ok"}]' },
+    })
+  })
+
+  it('returns null for textBlock', () => {
+    const block = new TextBlock('hello')
+    expect(mapContentBlock(block)).toBeNull()
+  })
+
+  it('returns null for reasoningBlock', () => {
+    const block = new ReasoningBlock({ text: '' })
+    expect(mapContentBlock(block)).toBeNull()
+  })
+})
+
+describe('mapToolStreamEvent', () => {
+  it('maps event with data', () => {
+    const event = new ToolStreamEvent({ data: { value: 42 } })
+    expect(mapToolStreamEvent(event)).toStrictEqual({
+      tag: 'tool-result',
+      val: { toolUseId: '', status: 'success', content: '{"data":{"value":42}}' },
+    })
+  })
+
+  it('maps event without data', () => {
+    const event = new ToolStreamEvent({})
+    expect(mapToolStreamEvent(event)).toStrictEqual({
+      tag: 'tool-result',
+      val: { toolUseId: '', status: 'success', content: '{"data":null}' },
+    })
+  })
+
+  it('maps event with string data', () => {
+    const event = new ToolStreamEvent({ data: 'processing step 1' })
+    expect(mapToolStreamEvent(event)).toStrictEqual({
+      tag: 'tool-result',
+      val: { toolUseId: '', status: 'success', content: '{"data":"processing step 1"}' },
+    })
+  })
+})
+
+describe('mapEvent', () => {
   describe('wrapper events', () => {
-    it('unwraps modelStreamUpdateEvent', () => {
-      expect(
-        mapEvent({
-          type: 'modelStreamUpdateEvent',
-          event: { type: 'modelContentBlockDeltaEvent', delta: { type: 'textDelta', text: 'wrapped' } },
-        } as any)
-      ).toStrictEqual({ tag: 'text-delta', val: 'wrapped' })
+    it('unwraps modelStreamUpdateEvent to mapModelStreamEvent', () => {
+      const event = {
+        type: 'modelStreamUpdateEvent',
+        event: { type: 'modelContentBlockDeltaEvent', delta: { type: 'textDelta', text: 'wrapped' } },
+      } as unknown as AgentStreamEvent
+      expect(mapEvent(event)).toStrictEqual({ tag: 'text-delta', val: 'wrapped' })
     })
 
-    it('unwraps contentBlockEvent wrapping toolUseBlock', () => {
-      expect(
-        mapEvent({
-          type: 'contentBlockEvent',
-          contentBlock: { type: 'toolUseBlock', name: 'tool1', toolUseId: 'tu-2', input: {} },
-        } as any)
-      ).toStrictEqual({
+    it('unwraps contentBlockEvent to mapContentBlock', () => {
+      const event = {
+        type: 'contentBlockEvent',
+        contentBlock: new ToolUseBlock({ name: 'tool1', toolUseId: 'tu-2', input: {} }),
+      } as unknown as AgentStreamEvent
+      expect(mapEvent(event)).toStrictEqual({
         tag: 'tool-use',
         val: { name: 'tool1', toolUseId: 'tu-2', input: '{}' },
       })
     })
 
-    it('unwraps toolResultEvent', () => {
-      expect(
-        mapEvent({
-          type: 'toolResultEvent',
-          result: { type: 'toolResultBlock', toolUseId: 'tu-3', status: 'error', content: [] },
-        } as any)
-      ).toStrictEqual({
+    it('unwraps toolResultEvent to mapContentBlock', () => {
+      const event = {
+        type: 'toolResultEvent',
+        result: new ToolResultBlock({ toolUseId: 'tu-3', status: 'error', content: [] }),
+      } as unknown as AgentStreamEvent
+      expect(mapEvent(event)).toStrictEqual({
         tag: 'tool-result',
         val: { toolUseId: 'tu-3', status: 'error', content: '[]' },
       })
     })
 
-    it('returns null for event without type property', () => {
-      expect(mapEvent({ someField: 'value' } as any)).toBeNull()
+    it('unwraps toolStreamUpdateEvent to mapToolStreamEvent', () => {
+      const event = {
+        type: 'toolStreamUpdateEvent',
+        event: new ToolStreamEvent({ data: { progress: 50 } }),
+      } as unknown as AgentStreamEvent
+      expect(mapEvent(event)).toStrictEqual({
+        tag: 'tool-result',
+        val: { toolUseId: '', status: 'success', content: '{"data":{"progress":50}}' },
+      })
+    })
+  })
+
+  describe('special events', () => {
+    it('maps interrupt event', () => {
+      const event = { interrupt: { reason: 'user' } }
+      expect(mapEvent(event as unknown as AgentStreamEvent)).toStrictEqual({
+        tag: 'interrupt',
+        val: JSON.stringify(event),
+      })
+    })
+  })
+
+  describe('dropped events', () => {
+    it.each([
+      'beforeInvocationEvent',
+      'afterInvocationEvent',
+      'beforeModelCallEvent',
+      'afterModelCallEvent',
+      'beforeToolCallEvent',
+      'afterToolCallEvent',
+      'messageAddedEvent',
+      'modelMessageEvent',
+      'agentResultEvent',
+      'beforeToolsEvent',
+      'afterToolsEvent',
+    ])('returns null for %s', (type) => {
+      const event = { type } as unknown as AgentStreamEvent
+      expect(mapEvent(event)).toBeNull()
     })
   })
 })
