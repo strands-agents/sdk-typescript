@@ -217,11 +217,16 @@ sdk-typescript/
 │   └── pyrightconfig.json        # Python type checking configuration
 │
 ├── strands-wasm/                 # WASM build tooling
+│   ├── __mocks__/                # Vitest module mocks for WIT imports
+│   ├── __tests__/                # Contract tests for the WASM bridge
+│   │   ├── guest/                # Tests that load the compiled WASM component
+│   │   └── unit/                 # Unit tests for entry.ts internals
 │   ├── entry.ts                  # WASM entry point (TS SDK surface for WASM compilation)
 │   ├── build.js                  # Build script for WASM compilation
 │   ├── patches/                  # Runtime patches for WASM compatibility
 │   │   └── getChunkedStream.js
 │   ├── package.json              # WASM package configuration
+│   ├── vitest.config.ts          # Test configuration (unit + guest projects)
 │   └── tsconfig.json             # TypeScript type-check configuration
 │
 ├── strands-dev/                  # Developer CLI tooling

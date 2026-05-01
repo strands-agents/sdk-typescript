@@ -99,6 +99,8 @@ function mapStopReasonTag(reason: StopReason): StopData['reason'] {
       return 'stop-sequence'
     case 'modelContextWindowExceeded':
       return 'model-context-window-exceeded'
+    case 'cancelled':
+      return 'cancelled'
     default:
       return 'error'
   }
@@ -617,3 +619,9 @@ export const api = {
   Agent: AgentImpl,
   ResponseStream: ResponseStreamImpl,
 }
+
+// Exported for contract testing. Not used by the WASM component build —
+// componentize-js generates bindings from the WIT world definition
+// (`world agent { export api; }`), which only declares the `api` export.
+// Additional ESM exports in bundle.js are inaccessible from the WASM boundary.
+export { mapEvent, mapStopReason, mapStopReasonTag, mapUsage, mapMetrics, parseInput, createTools, LifecycleBridge }
