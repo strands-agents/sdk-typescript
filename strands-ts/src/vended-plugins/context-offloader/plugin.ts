@@ -1,7 +1,6 @@
 import type { Plugin } from '../../plugins/plugin.js'
 import type { Tool } from '../../tools/tool.js'
 import type { LocalAgent } from '../../types/agent.js'
-import type { Model } from '../../models/model.js'
 import { AfterToolCallEvent } from '../../hooks/events.js'
 import { TextBlock, JsonBlock, ToolResultBlock, Message } from '../../types/messages.js'
 import type { ToolResultContent } from '../../types/messages.js'
@@ -232,10 +231,7 @@ export class ContextOffloader implements Plugin {
     const content = event.result.content
     const toolUseId = event.result.toolUseId
 
-    // Cast: LocalAgent doesn't expose model yet. Tracked in https://github.com/strands-agents/sdk-typescript/pull/938
-    // Falls back to 0 (no offloading) if model is unavailable — only affects non-Agent LocalAgent implementations.
-    const model = (event.agent as unknown as { model?: Model }).model
-    const tokenCount = model ? await model.countTokens([new Message({ role: 'user', content: [event.result] })]) : 0
+    const tokenCount = await event.agent.model.countTokens([new Message({ role: 'user', content: [event.result] })])
 
     if (tokenCount <= this._maxResultTokens) return
 
