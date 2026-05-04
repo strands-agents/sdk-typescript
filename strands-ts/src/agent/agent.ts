@@ -1320,16 +1320,6 @@ export class Agent implements LocalAgent, InvokableAgent {
       throw error
     }
 
-    // Check if a hook raised an interrupt — if so, store pending state and propagate
-    const beforeToolsInterrupt = this._interruptState.getUnansweredInterrupt()
-    if (beforeToolsInterrupt) {
-      this._interruptState.setPendingToolExecution({
-        assistantMessageData: assistantMessage.toJSON(),
-        completedToolResults: {},
-      })
-      throw new InterruptError(beforeToolsInterrupt)
-    }
-
     const toolUseBlocks = assistantMessage.content.filter(
       (block): block is ToolUseBlock => block.type === 'toolUseBlock'
     )
@@ -1665,12 +1655,6 @@ export class Agent implements LocalAgent, InvokableAgent {
         invocationState,
       })
       yield beforeToolCallEvent
-
-      // Check if a hook raised an interrupt — if so, propagate
-      const beforeToolCallInterrupt = this._interruptState.getUnansweredInterrupt()
-      if (beforeToolCallInterrupt) {
-        throw new InterruptError(beforeToolCallInterrupt)
-      }
 
       // Resolve the tool that would actually execute. selectedTool wins;
       // otherwise if the hook renamed toolUse.name, re-resolve from the

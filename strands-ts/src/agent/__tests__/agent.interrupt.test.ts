@@ -160,7 +160,7 @@ describe('Agent interrupt system', () => {
         return 'C result'
       })
 
-      const agent = new Agent({ model, tools: [toolA, toolB, toolC], printer: false })
+      const agent = new Agent({ model, tools: [toolA, toolB, toolC], toolExecutor: 'sequential', printer: false })
 
       agent.addHook(BeforeToolCallEvent, (event) => {
         if (event.toolUse.name === 'toolB') {
