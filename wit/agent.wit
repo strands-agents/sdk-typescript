@@ -70,6 +70,8 @@ interface types {
     after-invocation,
     before-model-call,
     after-model-call,
+    before-tools,
+    after-tools,
     before-tool-call,
     after-tool-call,
     message-added,
@@ -252,6 +254,75 @@ interface host-log {
   log: func(entry: log-entry);
 }
 
+/// Bidirectional hook control from host to guest.
+/// The guest calls these at lifecycle points and receives decisions
+/// that can cancel, retry, redirect, or mutate the operation.
+interface hook-provider {
+  /// Capability negotiation. The guest calls this once during init.
+  /// The host returns which hooks it supports. For unsupported hooks,
+  /// the guest skips the WIT import call and uses the default decision.
+  enum hook-capability {
+    before-invocation,
+    after-invocation,
+    before-model-call,
+    after-model-call,
+    before-tools,
+    after-tools,
+    before-tool-call,
+    after-tool-call,
+  }
+
+  get-capabilities: func() -> list<hook-capability>;
+
+  /// Invariant: cancel-message is only meaningful when cancel is true.
+  record invocation-decision {
+    cancel: bool,
+    cancel-message: option<string>,
+  }
+
+  record after-invocation-decision {
+    resume: option<string>,
+  }
+
+  record model-call-decision {
+    cancel: bool,
+    cancel-message: option<string>,
+  }
+
+  record after-model-call-decision {
+    retry: bool,
+  }
+
+  /// Dedicated decision type for before-tools (cancel all tool calls in a batch).
+  record tools-decision {
+    cancel: bool,
+    cancel-message: option<string>,
+  }
+
+  record tool-call-decision {
+    cancel: bool,
+    cancel-message: option<string>,
+    tool-use: option<string>,
+    selected-tool-name: option<string>,
+  }
+
+  record after-tool-call-decision {
+    retry: bool,
+    %result: option<string>,
+  }
+
+  record after-tools-decision {}
+
+  before-invocation: func() -> invocation-decision;
+  after-invocation: func() -> after-invocation-decision;
+  before-model-call: func(projected-input-tokens: option<s32>) -> model-call-decision;
+  after-model-call: func(stop-reason: option<string>, stop-data: option<string>, error: option<string>) -> after-model-call-decision;
+  before-tools: func(message: string) -> tools-decision;
+  after-tools: func() -> after-tools-decision;
+  before-tool-call: func(tool-use: string) -> tool-call-decision;
+  after-tool-call: func(tool-use: string, %result: string, error: option<string>) -> after-tool-call-decision;
+}
+
 /// The main API exported by the WASM guest.
 interface api {
   use types.{agent-config, stream-event, stream-args, respond-args, set-messages-args};
@@ -276,6 +347,7 @@ interface api {
 world agent {
   import tool-provider;
   import host-log;
+  import hook-provider;
   export api;
 }
 
