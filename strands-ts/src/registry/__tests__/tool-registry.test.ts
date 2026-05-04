@@ -147,6 +147,19 @@ describe('ToolRegistry', () => {
     })
   })
 
+  describe('clear', () => {
+    it('should remove all registered tools', () => {
+      registry.add([createMockTool({ name: 'tool-1' }), createMockTool({ name: 'tool-2' })])
+      registry.clear()
+      expect(registry.list()).toStrictEqual([])
+    })
+
+    it('should be a no-op on an empty registry', () => {
+      expect(() => registry.clear()).not.toThrow()
+      expect(registry.list()).toStrictEqual([])
+    })
+  })
+
   describe('constructor', () => {
     it('accepts initial tools', () => {
       const tool = createMockTool()

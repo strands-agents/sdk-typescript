@@ -208,6 +208,7 @@ describe('BedrockModel', () => {
       const provider = new BedrockModel({ modelId: customModelId })
       expect(provider.getConfig()).toStrictEqual({
         modelId: customModelId,
+        contextWindowLimit: 200_000,
       })
     })
 
@@ -292,6 +293,7 @@ describe('BedrockModel', () => {
       expect(config).toStrictEqual({
         modelId: 'global.anthropic.claude-sonnet-4-6',
         temperature: 0.5,
+        contextWindowLimit: 1_000_000,
       })
     })
 
@@ -305,6 +307,48 @@ describe('BedrockModel', () => {
         contextWindowLimit: 200_000,
       })
     })
+
+    it('auto-populates contextWindowLimit from model ID lookup', () => {
+      const provider = new BedrockModel({ modelId: 'anthropic.claude-sonnet-4-20250514-v1:0' })
+      expect(provider.getConfig()).toStrictEqual({
+        modelId: 'anthropic.claude-sonnet-4-20250514-v1:0',
+        contextWindowLimit: 1_000_000,
+      })
+    })
+
+    it('auto-populates contextWindowLimit for cross-region model IDs', () => {
+      const provider = new BedrockModel({ modelId: 'us.anthropic.claude-sonnet-4-6' })
+      expect(provider.getConfig()).toStrictEqual({
+        modelId: 'us.anthropic.claude-sonnet-4-6',
+        contextWindowLimit: 1_000_000,
+      })
+    })
+
+    it('auto-populates contextWindowLimit for default model ID', () => {
+      const provider = new BedrockModel()
+      expect(provider.getConfig()).toStrictEqual({
+        modelId: 'global.anthropic.claude-sonnet-4-6',
+        contextWindowLimit: 1_000_000,
+      })
+    })
+
+    it('does not override explicit contextWindowLimit', () => {
+      const provider = new BedrockModel({
+        modelId: 'anthropic.claude-sonnet-4-20250514-v1:0',
+        contextWindowLimit: 100_000,
+      })
+      expect(provider.getConfig()).toStrictEqual({
+        modelId: 'anthropic.claude-sonnet-4-20250514-v1:0',
+        contextWindowLimit: 100_000,
+      })
+    })
+
+    it('leaves contextWindowLimit undefined for unknown model IDs', () => {
+      const provider = new BedrockModel({ modelId: 'unknown.model-v1:0' })
+      expect(provider.getConfig()).toStrictEqual({
+        modelId: 'unknown.model-v1:0',
+      })
+    })
   })
 
   describe('updateConfig', () => {
@@ -315,6 +359,7 @@ describe('BedrockModel', () => {
         modelId: 'global.anthropic.claude-sonnet-4-6',
         temperature: 0.8,
         maxTokens: 2048,
+        contextWindowLimit: 1_000_000,
       })
     })
 
@@ -331,6 +376,30 @@ describe('BedrockModel', () => {
         temperature: 0.8,
         maxTokens: 1024,
       })
+    })
+
+    it('re-resolves contextWindowLimit when modelId changes and it was auto-resolved', () => {
+      const provider = new BedrockModel({ region: 'us-west-2' })
+      expect(provider.getConfig().contextWindowLimit).toBe(1_000_000)
+
+      provider.updateConfig({ modelId: 'anthropic.claude-haiku-4-5-20251001-v1:0' })
+      expect(provider.getConfig().contextWindowLimit).toBe(200_000)
+    })
+
+    it('clears contextWindowLimit when modelId changes to unknown model', () => {
+      const provider = new BedrockModel({ region: 'us-west-2' })
+      expect(provider.getConfig().contextWindowLimit).toBe(1_000_000)
+
+      provider.updateConfig({ modelId: 'my-custom-finetuned-model' })
+      expect(provider.getConfig().contextWindowLimit).toBeUndefined()
+    })
+
+    it('preserves explicit contextWindowLimit when modelId changes', () => {
+      const provider = new BedrockModel({ region: 'us-west-2', contextWindowLimit: 50_000 })
+      expect(provider.getConfig().contextWindowLimit).toBe(50_000)
+
+      provider.updateConfig({ modelId: 'anthropic.claude-haiku-4-5-20251001-v1:0' })
+      expect(provider.getConfig().contextWindowLimit).toBe(50_000)
     })
   })
 

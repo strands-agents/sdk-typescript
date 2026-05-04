@@ -157,17 +157,28 @@ export class McpClient {
   public async listTools(): Promise<McpTool[]> {
     await this.connect()
 
-    const result = await this._client.listTools()
+    const tools: McpTool[] = []
+    let cursor: string | undefined
 
-    // Map the tool specifications to fully functional McpTool instances
-    return result.tools.map((toolSpec) => {
-      return new McpTool({
-        name: toolSpec.name,
-        description: toolSpec.description ?? '',
-        inputSchema: toolSpec.inputSchema as JSONSchema,
-        client: this,
-      })
-    })
+    do {
+      const result = await this._client.listTools(cursor ? { cursor } : undefined)
+
+      tools.push(
+        ...result.tools.map(
+          (toolSpec) =>
+            new McpTool({
+              name: toolSpec.name,
+              description: toolSpec.description || `Tool which performs ${toolSpec.name}`,
+              inputSchema: toolSpec.inputSchema as JSONSchema,
+              client: this,
+            })
+        )
+      )
+
+      cursor = result.nextCursor
+    } while (cursor)
+
+    return tools
   }
 
   /**

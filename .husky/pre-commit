@@ -7,6 +7,7 @@ npm run build || { echo "Build failed. Commit aborted."; exit 1; }
 # Run tests
 echo "Running tests..."
 npm run test:coverage || { echo "Tests failed. Commit aborted."; exit 1; }
+npm run test -w strands-wasm || { echo "WASM tests failed. Commit aborted."; exit 1; }
 
 # Run linting
 echo "Running linting..."

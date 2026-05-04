@@ -51,7 +51,7 @@ When proposing solutions or reviewing code, we reference these principles to gui
    npm run type-check
    ```
 
-The repo is an npm workspace. The SDK source lives in `strands-ts/`, and the root `package.json` proxies common commands (`test`, `lint`, `format:check`, `type-check`, `build`) into that workspace. For commands that aren't proxied at root (like `test:integ` or `test:watch`), run them from `strands-ts/` directly.
+The repo is an npm workspace. The SDK source lives in `strands-ts/`, and the root `package.json` proxies common commands (`test`, `check`, `lint`, `build`, etc.) into that workspace. For commands that aren't proxied at root (like `test:watch`), run them from `strands-ts/` directly.
 
 ### WASM and Python Development
 

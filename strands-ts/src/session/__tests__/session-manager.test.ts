@@ -140,6 +140,55 @@ describe('SessionManager', () => {
     })
   })
 
+  describe('listSnapshotIds', () => {
+    beforeEach(() => {
+      mockAgent = createMockAgent('test-agent')
+      sessionManager = new SessionManager({
+        sessionId: 'test-session',
+        storage: { snapshot: storage },
+      })
+    })
+
+    it('returns empty array when no snapshots exist', async () => {
+      const ids = await sessionManager.listSnapshotIds({ target: mockAgent })
+      expect(ids).toStrictEqual([])
+    })
+
+    it('returns snapshot IDs for the target agent', async () => {
+      await sessionManager.saveSnapshot({ target: mockAgent, isLatest: false })
+      await sessionManager.saveSnapshot({ target: mockAgent, isLatest: false })
+
+      const ids = await sessionManager.listSnapshotIds({ target: mockAgent })
+      expect(ids).toHaveLength(2)
+    })
+
+    it('does not return latest snapshot ID', async () => {
+      await sessionManager.saveSnapshot({ target: mockAgent, isLatest: true })
+
+      const ids = await sessionManager.listSnapshotIds({ target: mockAgent })
+      expect(ids).toStrictEqual([])
+    })
+
+    it('forwards limit parameter', async () => {
+      await sessionManager.saveSnapshot({ target: mockAgent, isLatest: false })
+      await sessionManager.saveSnapshot({ target: mockAgent, isLatest: false })
+      await sessionManager.saveSnapshot({ target: mockAgent, isLatest: false })
+
+      const ids = await sessionManager.listSnapshotIds({ target: mockAgent, limit: 2 })
+      expect(ids).toHaveLength(2)
+    })
+
+    it('forwards startAfter parameter', async () => {
+      await sessionManager.saveSnapshot({ target: mockAgent, isLatest: false })
+      await sessionManager.saveSnapshot({ target: mockAgent, isLatest: false })
+
+      const allIds = await sessionManager.listSnapshotIds({ target: mockAgent })
+      const page2 = await sessionManager.listSnapshotIds({ target: mockAgent, startAfter: allIds[0]! })
+      expect(page2).toHaveLength(1)
+      expect(page2[0]).toBe(allIds[1])
+    })
+  })
+
   describe('restoreSnapshot', () => {
     beforeEach(() => {
       mockAgent = createMockAgent('test-agent')

@@ -10,8 +10,7 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "commander": "^12",
-    "smol-toml": "^1.6.0",
+    "commander": "^14",
     "tsx": "^4.21.0"
   },
   "devDependencies": {

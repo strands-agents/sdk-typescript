@@ -92,6 +92,7 @@ describe('AfterInvocationEvent', () => {
       type: 'afterInvocationEvent',
       agent: agent,
       invocationState: {},
+      resume: undefined,
     })
     // @ts-expect-error verifying that property is readonly
     event.agent = new Agent()
@@ -101,6 +102,16 @@ describe('AfterInvocationEvent', () => {
     const agent = new Agent()
     const event = new AfterInvocationEvent({ agent, invocationState: {} })
     expect(event._shouldReverseCallbacks()).toBe(true)
+  })
+
+  it('allows resume to be set to new input', () => {
+    const agent = new Agent()
+    const event = new AfterInvocationEvent({ agent, invocationState: {} })
+
+    expect(event.resume).toBeUndefined()
+
+    event.resume = 'follow-up prompt'
+    expect(event.resume).toBe('follow-up prompt')
   })
 })
 
@@ -153,11 +164,10 @@ describe('BeforeToolCallEvent', () => {
       tool: tool,
       cancel: false,
       invocationState: {},
+      selectedTool: undefined,
     })
     // @ts-expect-error verifying that property is readonly
     event.agent = new Agent()
-    // @ts-expect-error verifying that property is readonly
-    event.toolUse = toolUse
     // @ts-expect-error verifying that property is readonly
     event.tool = tool
   })
@@ -178,6 +188,7 @@ describe('BeforeToolCallEvent', () => {
       tool: undefined,
       cancel: false,
       invocationState: {},
+      selectedTool: undefined,
     })
   })
 
@@ -205,6 +216,42 @@ describe('BeforeToolCallEvent', () => {
 
     event.cancel = 'tool not allowed'
     expect(event.cancel).toBe('tool not allowed')
+  })
+
+  it('allows selectedTool to be set to a replacement tool', () => {
+    const agent = new Agent()
+    const toolUse = { name: 'test', toolUseId: 'id', input: {} }
+    const event = new BeforeToolCallEvent({ agent, toolUse, tool: undefined, invocationState: {} })
+
+    expect(event.selectedTool).toBeUndefined()
+
+    const replacement = new FunctionTool({
+      name: 'replacement',
+      description: 'Replacement',
+      inputSchema: {},
+      callback: () => 'ok',
+    })
+    event.selectedTool = replacement
+    expect(event.selectedTool).toBe(replacement)
+  })
+
+  it('allows mutating toolUse fields in-place', () => {
+    const agent = new Agent()
+    const toolUse = { name: 'orig', toolUseId: 'id', input: { a: 1 } }
+    const event = new BeforeToolCallEvent({ agent, toolUse, tool: undefined, invocationState: {} })
+
+    event.toolUse.input = { a: 2, b: 3 }
+    event.toolUse.name = 'renamed'
+    expect(event.toolUse).toEqual({ name: 'renamed', toolUseId: 'id', input: { a: 2, b: 3 } })
+  })
+
+  it('allows reassigning toolUse to a new object', () => {
+    const agent = new Agent()
+    const toolUse = { name: 'orig', toolUseId: 'id', input: {} }
+    const event = new BeforeToolCallEvent({ agent, toolUse, tool: undefined, invocationState: {} })
+
+    event.toolUse = { name: 'new', toolUseId: 'new-id', input: { x: 1 } }
+    expect(event.toolUse).toEqual({ name: 'new', toolUseId: 'new-id', input: { x: 1 } })
   })
 })
 
@@ -1021,7 +1068,16 @@ describe('toJSON serialization completeness', () => {
    * If you add a new field to an event and it should be excluded from wire serialization,
    * add it here. Otherwise, add it to toJSON() so it gets serialized.
    */
-  const EXCLUDED_FIELDS = new Set(['agent', 'model', 'tool', 'cancel', 'retry', 'invocationState'])
+  const EXCLUDED_FIELDS = new Set([
+    'agent',
+    'model',
+    'tool',
+    'cancel',
+    'retry',
+    'invocationState',
+    'selectedTool',
+    'resume',
+  ])
 
   /**
    * Fields where toJSON() transforms the value (e.g., Error to message object).

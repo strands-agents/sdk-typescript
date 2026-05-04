@@ -7,6 +7,11 @@
   "scripts": {
     "generate": "jco guest-types ../wit --name strands:agent --world-name agent --out-dir generated",
     "build": "node build.js",
+    "test": "vitest run --project unit",
+    "test:guest": "vitest run --project guest",
+    "test:guest:integ": "STRANDS_INTEG=true vitest run --project guest",
+    "transpile": "jco transpile dist/strands-agent.wasm -o dist/transpiled --instantiation async",
+    "type-check": "npm run generate && tsc",
     "clean": "rm -rf dist node_modules package-lock.json"
   },
   "dependencies": {
@@ -14,7 +19,10 @@
   },
   "devDependencies": {
     "@bytecodealliance/jco": "^1.16.1",
+    "@bytecodealliance/preview2-shim": "^0.17.9",
     "@chaynabors/componentize-js": "^0.19.3",
-    "esbuild": "^0.27.4"
+    "esbuild": "^0.27.4",
+    "typescript": "^6.0.2",
+    "vitest": "^3.2.1"
   }
 }

@@ -158,6 +158,15 @@ export class SessionManager implements Plugin, MultiAgentPlugin {
     await this._storage.snapshot.deleteSession({ sessionId: this._sessionId })
   }
 
+  /** Lists all available immutable snapshot IDs for the given agent target. */
+  async listSnapshotIds(params: { target: LocalAgent; limit?: number; startAfter?: string }): Promise<string[]> {
+    return this._storage.snapshot.listSnapshotIds({
+      location: this._location(params.target),
+      ...(params.limit !== undefined && { limit: params.limit }),
+      ...(params.startAfter !== undefined && { startAfter: params.startAfter }),
+    })
+  }
+
   /** Loads a snapshot from storage and restores it into the target. Returns false if no snapshot exists. */
   async restoreSnapshot(params: { target: LocalAgent; snapshotId?: string }): Promise<boolean>
   async restoreSnapshot(params: {

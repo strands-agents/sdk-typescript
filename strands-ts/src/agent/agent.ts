@@ -90,10 +90,10 @@ export type ToolList = (Tool | McpClient | Agent | ToolList)[]
 /**
  * Strategy for executing tool calls that the model emits in a single assistant turn.
  *
- * - `'sequential'` (default) — runs tool calls one at a time
- * - `'concurrent'` — runs all tool calls from a single turn in parallel. Per-tool event
+ * - `'concurrent'` (default) — runs all tool calls from a single turn in parallel. Per-tool event
  *   order (`BeforeToolCallEvent` → `ToolStreamUpdateEvent*` → `AfterToolCallEvent` →
  *   `ToolResultEvent`) is preserved, while cross-tool events may interleave.
+ * - `'sequential'` — runs tool calls one at a time
  *
  * Cancellation works identically in both modes: {@link Agent.cancel} flips
  * {@link Agent.cancelSignal} and tools must observe it cooperatively to stop early.
@@ -191,7 +191,7 @@ export type AgentConfig = {
   id?: string
   /**
    * Strategy for executing tool calls from a single assistant turn.
-   * Defaults to `'sequential'`. See {@link ToolExecutorStrategy} for details.
+   * Defaults to `'concurrent'`. See {@link ToolExecutorStrategy} for details.
    */
   toolExecutor?: ToolExecutorStrategy
 }
@@ -349,8 +349,7 @@ export class Agent implements LocalAgent, InvokableAgent {
     // Initialize interrupt state for human-in-the-loop workflows
     this._interruptState = new InterruptState()
 
-    // Default to sequential tool execution
-    this._toolExecutor = config?.toolExecutor ?? 'sequential'
+    this._toolExecutor = config?.toolExecutor ?? 'concurrent'
 
     this._initialized = false
   }
@@ -556,64 +555,91 @@ export class Agent implements LocalAgent, InvokableAgent {
   ): AsyncGenerator<AgentStreamEvent, AgentResult, undefined> {
     using _lock = this.acquireLock()
 
-    // Create AbortController for this invocation and compose with external signal
-    this._abortController = new AbortController()
-    this._abortSignal = options?.cancelSignal
-      ? AbortSignal.any([this._abortController.signal, options.cancelSignal])
-      : this._abortController.signal
-
     await this.initialize()
 
-    // Delegate to _stream and process events through printer and hooks
-    const streamGenerator = this._stream(args, options)
-    let caughtError: Error | undefined
-    try {
-      let result = await streamGenerator.next()
+    let currentArgs: InvokeArgs = args
 
-      while (!result.done) {
-        try {
-          yield await this._invokeCallbacks(result.value)
-          result = await streamGenerator.next()
-        } catch (error) {
-          // Throw interrupt errors back into _stream so executeTools can store the
-          // assistant message as pending execution state for resume.
-          if (error instanceof InterruptError) {
-            result = await streamGenerator.throw(error)
-          } else {
-            throw error
-          }
-        }
-      }
-
-      yield await this._invokeCallbacks(
-        new AgentResultEvent({ agent: this, result: result.value, invocationState: result.value.invocationState })
-      )
-
-      return result.value
-    } catch (error) {
-      caughtError = error as Error
-      throw error
-    } finally {
-      // Drain _stream() so cleanup hooks and printer still fire.
-      // Yield only on error (consumer may still be iterating); on a consumer
-      // break, yielding would suspend the generator and leak the lock.
-      let result = await streamGenerator.return(undefined as never)
-      while (!result.done) {
-        try {
-          if (caughtError) {
-            yield await this._invokeCallbacks(result.value)
-          } else {
-            await this._invokeCallbacks(result.value)
-          }
-        } catch (error) {
-          logger.warn(`event_type=<${result.value.type}>, error=<${error}> | error invoking callbacks during cleanup`)
-        }
-        result = await streamGenerator.next()
-      }
-
-      // Reset controller and signal for next invocation
+    // Outer loop: re-enters _stream when a hook sets AfterInvocationEvent.resume.
+    // One invocation lock spans the whole resume chain.
+    while (true) {
+      // Fresh AbortController per invocation iteration, composed with any external signal.
       this._abortController = new AbortController()
-      this._abortSignal = this._abortController.signal
+      this._abortSignal = options?.cancelSignal
+        ? AbortSignal.any([this._abortController.signal, options.cancelSignal])
+        : this._abortController.signal
+
+      const streamGenerator = this._stream(currentArgs, options)
+      let caughtError: Error | undefined
+      let lastAfterInvocation: AfterInvocationEvent | undefined
+      let iterationResult: IteratorResult<AgentStreamEvent, AgentResult>
+      try {
+        iterationResult = await streamGenerator.next()
+
+        while (!iterationResult.done) {
+          try {
+            const processed = await this._invokeCallbacks(iterationResult.value)
+            if (processed instanceof AfterInvocationEvent) {
+              lastAfterInvocation = processed
+            }
+            yield processed
+            iterationResult = await streamGenerator.next()
+          } catch (error) {
+            // Throw interrupt errors back into _stream so executeTools can store the
+            // assistant message as pending execution state for resume.
+            if (error instanceof InterruptError) {
+              iterationResult = await streamGenerator.throw(error)
+            } else {
+              throw error
+            }
+          }
+        }
+
+        // Suppress AgentResultEvent for resumed iterations — only the final
+        // invocation in a resume chain reports an agent result.
+        if (lastAfterInvocation?.resume === undefined) {
+          yield await this._invokeCallbacks(
+            new AgentResultEvent({
+              agent: this,
+              result: iterationResult.value,
+              invocationState: iterationResult.value.invocationState,
+            })
+          )
+        }
+      } catch (error) {
+        caughtError = error as Error
+        throw error
+      } finally {
+        // Drain _stream() so cleanup hooks and printer still fire.
+        // Yield only on error (consumer may still be iterating); on a consumer
+        // break, yielding would suspend the generator and leak the lock.
+        let drainResult = await streamGenerator.return(undefined as never)
+        while (!drainResult.done) {
+          try {
+            if (caughtError) {
+              yield await this._invokeCallbacks(drainResult.value)
+            } else {
+              await this._invokeCallbacks(drainResult.value)
+            }
+          } catch (error) {
+            logger.warn(
+              `event_type=<${drainResult.value.type}>, error=<${error}> | error invoking callbacks during cleanup`
+            )
+          }
+          drainResult = await streamGenerator.next()
+        }
+
+        // Reset controller and signal for next iteration / invocation
+        this._abortController = new AbortController()
+        this._abortSignal = this._abortController.signal
+      }
+
+      // Resume only on a clean invocation — errors propagate above.
+      if (lastAfterInvocation?.resume !== undefined) {
+        currentArgs = lastAfterInvocation.resume
+        continue
+      }
+
+      return iterationResult.value
     }
   }
 
@@ -1620,9 +1646,10 @@ export class Agent implements LocalAgent, InvokableAgent {
     toolRegistry: ToolRegistry,
     invocationState: InvocationState
   ): AsyncGenerator<AgentStreamEvent, ToolResultBlock, undefined> {
-    const tool = toolRegistry.get(toolUseBlock.name)
+    const registryTool = toolRegistry.get(toolUseBlock.name)
 
-    // Create toolUse object for hook events and telemetry
+    // Create toolUse object for hook events and telemetry. Callbacks may mutate
+    // this object's fields (input/name/toolUseId) inside BeforeToolCallEvent.
     const toolUse = {
       name: toolUseBlock.name,
       toolUseId: toolUseBlock.toolUseId,
@@ -1631,7 +1658,12 @@ export class Agent implements LocalAgent, InvokableAgent {
 
     // Retry loop for tool execution
     while (true) {
-      const beforeToolCallEvent = new BeforeToolCallEvent({ agent: this, toolUse, tool, invocationState })
+      const beforeToolCallEvent = new BeforeToolCallEvent({
+        agent: this,
+        toolUse,
+        tool: registryTool,
+        invocationState,
+      })
       yield beforeToolCallEvent
 
       // Check if a hook raised an interrupt — if so, propagate
@@ -1640,20 +1672,29 @@ export class Agent implements LocalAgent, InvokableAgent {
         throw new InterruptError(beforeToolCallInterrupt)
       }
 
+      // Resolve the tool that would actually execute. selectedTool wins;
+      // otherwise if the hook renamed toolUse.name, re-resolve from the
+      // registry under the new name; otherwise use the original registry
+      // lookup. Resolved before the cancel check so AfterToolCallEvent.tool
+      // is consistent whether the cancel or execution branch runs.
+      const effectiveTool =
+        beforeToolCallEvent.selectedTool ??
+        (toolUse.name !== toolUseBlock.name ? toolRegistry.get(toolUse.name) : registryTool)
+
       // Cancel individual tool if hook requested it
       if (beforeToolCallEvent.cancel) {
         const cancelMessage =
           typeof beforeToolCallEvent.cancel === 'string' ? beforeToolCallEvent.cancel : 'Tool cancelled by hook'
-        const toolResult = new ToolResultBlock({
-          toolUseId: toolUseBlock.toolUseId,
+        const cancelResult = new ToolResultBlock({
+          toolUseId: toolUse.toolUseId,
           status: 'error',
           content: [new TextBlock(cancelMessage)],
         })
         const afterToolCallEvent = new AfterToolCallEvent({
           agent: this,
           toolUse,
-          tool,
-          result: toolResult,
+          tool: effectiveTool,
+          result: cancelResult,
           invocationState,
         })
         yield afterToolCallEvent
@@ -1674,20 +1715,20 @@ export class Agent implements LocalAgent, InvokableAgent {
       let toolResult: ToolResultBlock
       let error: Error | undefined
 
-      if (!tool) {
+      if (!effectiveTool) {
         // Tool not found
         toolResult = new ToolResultBlock({
-          toolUseId: toolUseBlock.toolUseId,
+          toolUseId: toolUse.toolUseId,
           status: 'error',
-          content: [new TextBlock(`Tool '${toolUseBlock.name}' not found in registry`)],
+          content: [new TextBlock(`Tool '${toolUse.name}' not found in registry`)],
         })
       } else {
         // Execute tool within the tool span context
         const toolContext: ToolContext = {
           toolUse: {
-            name: toolUseBlock.name,
-            toolUseId: toolUseBlock.toolUseId,
-            input: toolUseBlock.input,
+            name: toolUse.name,
+            toolUseId: toolUse.toolUseId,
+            input: toolUse.input,
           },
           agent: this,
           invocationState,
@@ -1702,7 +1743,7 @@ export class Agent implements LocalAgent, InvokableAgent {
           // without knowledge of agents or hooks, and we wrap at the boundary.
           // Tool execution is ran within the tool span's context so that
           // downstream calls (e.g., MCP clients) can propagate trace context
-          const toolGenerator = this._tracer.withSpanContext(toolSpan, () => tool.stream(toolContext))
+          const toolGenerator = this._tracer.withSpanContext(toolSpan, () => effectiveTool.stream(toolContext))
           let toolNext = await this._tracer.withSpanContext(toolSpan, () => toolGenerator.next())
           while (!toolNext.done) {
             yield new ToolStreamUpdateEvent({ agent: this, event: toolNext.value, invocationState })
@@ -1713,9 +1754,9 @@ export class Agent implements LocalAgent, InvokableAgent {
           if (!result) {
             // Tool didn't return a result
             toolResult = new ToolResultBlock({
-              toolUseId: toolUseBlock.toolUseId,
+              toolUseId: toolUse.toolUseId,
               status: 'error',
-              content: [new TextBlock(`Tool '${toolUseBlock.name}' did not return a result`)],
+              content: [new TextBlock(`Tool '${toolUse.name}' did not return a result`)],
             })
           } else {
             toolResult = result
@@ -1729,7 +1770,7 @@ export class Agent implements LocalAgent, InvokableAgent {
           // Tool execution failed with error
           error = normalizeError(e)
           toolResult = new ToolResultBlock({
-            toolUseId: toolUseBlock.toolUseId,
+            toolUseId: toolUse.toolUseId,
             status: 'error',
             content: [new TextBlock(error.message)],
             error,
@@ -1737,7 +1778,8 @@ export class Agent implements LocalAgent, InvokableAgent {
         }
       }
 
-      // End tool span
+      // End tool span with the raw tool result — telemetry reflects what the
+      // tool actually returned, independent of AfterToolCallEvent mutations.
       this._tracer.endToolCallSpan(toolSpan, { toolResult, ...(error && { error }) })
 
       // End tool metrics tracking
@@ -1751,7 +1793,7 @@ export class Agent implements LocalAgent, InvokableAgent {
       const afterToolCallEvent = new AfterToolCallEvent({
         agent: this,
         toolUse,
-        tool,
+        tool: effectiveTool,
         result: toolResult,
         invocationState,
         ...(error !== undefined && { error }),
@@ -1762,6 +1804,8 @@ export class Agent implements LocalAgent, InvokableAgent {
         continue
       }
 
+      // Return the (possibly mutated) result so hook transformations propagate
+      // to ToolResultEvent and the conversation message the model will see.
       return afterToolCallEvent.result
     }
   }
