@@ -33,3 +33,10 @@ jobs:
       contents: read
     with:
       ref: ${{ github.event.pull_request.head.sha }}
+
+  call-test-package-pack:
+    uses: ./.github/workflows/test-package-pack.yml
+    permissions:
+      contents: read
+    with:
+      ref: ${{ github.event.pull_request.head.sha }}
