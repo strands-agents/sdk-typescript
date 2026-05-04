@@ -22,6 +22,7 @@ import type {
 } from '../hooks/events.js'
 import type { HookCallback, HookableEventConstructor, HookCleanup } from '../hooks/types.js'
 import type { ToolRegistry } from '../registry/tool-registry.js'
+import type { Model } from '../models/model.js'
 import type { z } from 'zod'
 import { AgentMetrics } from '../telemetry/meter.js'
 
@@ -193,6 +194,11 @@ export interface LocalAgent {
    * The tool registry for registering tools with the agent.
    */
   readonly toolRegistry: ToolRegistry
+
+  /**
+   * The model provider used by the agent for inference.
+   */
+  readonly model: Model
 
   /**
    * The system prompt to pass to the model provider.

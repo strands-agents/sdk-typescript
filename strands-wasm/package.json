@@ -11,7 +11,7 @@
     "test:guest": "vitest run --project guest",
     "test:guest:integ": "STRANDS_INTEG=true vitest run --project guest",
     "transpile": "jco transpile dist/strands-agent.wasm -o dist/transpiled --instantiation async",
-    "type-check": "tsc",
+    "type-check": "npm run generate && tsc",
     "clean": "rm -rf dist node_modules package-lock.json"
   },
   "dependencies": {
