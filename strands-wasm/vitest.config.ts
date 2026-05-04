@@ -13,6 +13,7 @@ export default defineConfig({
           alias: {
             'strands:agent/tool-provider': resolve(__dirname, '__fixtures__/tool-provider.ts'),
             'strands:agent/host-log': resolve(__dirname, '__fixtures__/host-log.ts'),
+            'strands:agent/hook-provider': resolve(__dirname, '__fixtures__/hook-provider.ts'),
             '$/fixtures': resolve(__dirname, '../strands-ts/src/__fixtures__'),
           },
         },

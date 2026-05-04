@@ -10,7 +10,7 @@ import {
   mapToolStreamEvent,
   parseInput,
   parseSaveLatestStrategy,
-} from '../../entry'
+} from '../entry'
 import type { AgentStreamEvent, ModelStreamEvent, StopReason } from '@strands-agents/sdk'
 import { ToolStreamEvent, ToolUseBlock, ToolResultBlock, TextBlock, ReasoningBlock } from '@strands-agents/sdk'
 

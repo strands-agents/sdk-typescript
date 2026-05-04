@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { LifecycleBridge } from '../../entry'
+import { LifecycleBridge } from '../entry'
 import { Agent, FunctionTool } from '@strands-agents/sdk'
 import { MockMessageModel } from '$/fixtures/mock-message-model'
 
@@ -135,6 +135,18 @@ describe('LifecycleBridge', () => {
       await agent.invoke('use the tool')
 
       const events = bridge.drain()
+
+      const beforeTools = events.find((e) => e.val.eventType === 'before-tools')
+      expect(beforeTools).toStrictEqual({
+        tag: 'lifecycle',
+        val: { eventType: 'before-tools', toolUse: undefined, toolResult: undefined },
+      })
+
+      const afterTools = events.find((e) => e.val.eventType === 'after-tools')
+      expect(afterTools).toStrictEqual({
+        tag: 'lifecycle',
+        val: { eventType: 'after-tools', toolUse: undefined, toolResult: undefined },
+      })
 
       const beforeToolCall = events.find((e) => e.val.eventType === 'before-tool-call')
       expect(beforeToolCall).toStrictEqual({

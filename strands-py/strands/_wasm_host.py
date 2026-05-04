@@ -101,11 +101,13 @@ def _run_sync(coro: typing.Coroutine) -> typing.Any:
     # Already inside a running loop — run in a fresh thread to avoid nesting
     result = [None]
     exc = [None]
+
     def _target():
         try:
             result[0] = asyncio.run(coro)
         except Exception as e:
             exc[0] = e
+
     t = threading.Thread(target=_target)
     t.start()
     t.join()
@@ -169,6 +171,7 @@ def _get_engine_and_component() -> tuple[Engine, Component]:
 # Record / Variant builders  (Python → WIT kebab-case)
 # ---------------------------------------------------------------------------
 
+
 def _rec(**kwargs: typing.Any) -> Record:
     """Build a wasmtime-py Record with the given kebab-case fields."""
     r = Record.__new__(Record)
@@ -178,7 +181,9 @@ def _rec(**kwargs: typing.Any) -> Record:
 
 
 def _build_tool_spec(ts: ToolSpec) -> Record:
-    return _rec(name=ts.name, description=ts.description, **{"input-schema": ts.input_schema})
+    return _rec(
+        name=ts.name, description=ts.description, **{"input-schema": ts.input_schema}
+    )
 
 
 def _build_model_config_variant(cfg: ModelConfigInput) -> Variant:
@@ -266,7 +271,9 @@ def _build_conversation_manager_variant(
                 "should-truncate-results": False,
                 "summary-ratio": config.get("summary_ratio"),
                 "preserve-recent-messages": config.get("preserve_recent_messages"),
-                "summarization-system-prompt": config.get("summarization_system_prompt"),
+                "summarization-system-prompt": config.get(
+                    "summarization_system_prompt"
+                ),
                 "summarization-model-config": config.get("summarization_model_config"),
             },
         )
@@ -318,6 +325,7 @@ def _build_stream_args(
 # ---------------------------------------------------------------------------
 # Variant → flat StreamEvent converters  (WIT → Python types)
 # ---------------------------------------------------------------------------
+
 
 def _opt_attr(rec: typing.Any, name: str) -> typing.Any:
     """Read an optional attribute from a wasmtime Record (kebab-case)."""
@@ -413,6 +421,7 @@ def _convert_stream_event(v: Variant) -> StreamEvent:
 # AWS credential injection
 # ---------------------------------------------------------------------------
 
+
 def _resolve_aws_credentials() -> tuple[str, str, str | None] | None:
     key_id = os.environ.get("AWS_ACCESS_KEY_ID")
     secret = os.environ.get("AWS_SECRET_ACCESS_KEY")
@@ -485,7 +494,10 @@ def _inject_aws_credentials_default() -> Variant | None:
 # Import callback factories
 # ---------------------------------------------------------------------------
 
-def _make_call_tool_fn(dispatcher: ToolDispatcherBase | None) -> typing.Callable[..., typing.Any]:
+
+def _make_call_tool_fn(
+    dispatcher: ToolDispatcherBase | None,
+) -> typing.Callable[..., typing.Any]:
     def call_tool(store_ctx: typing.Any, args: typing.Any) -> Variant:
         name = getattr(args, "name")
         input_json = getattr(args, "input")
@@ -497,10 +509,13 @@ def _make_call_tool_fn(dispatcher: ToolDispatcherBase | None) -> typing.Callable
             return Variant("ok", result)
         except Exception as exc:
             return Variant("err", str(exc))
+
     return call_tool
 
 
-def _make_call_tools_fn(dispatcher: ToolDispatcherBase | None) -> typing.Callable[..., typing.Any]:
+def _make_call_tools_fn(
+    dispatcher: ToolDispatcherBase | None,
+) -> typing.Callable[..., typing.Any]:
     def call_tools(store_ctx: typing.Any, args: typing.Any) -> list[Variant]:
         calls = getattr(args, "calls")
         results: list[Variant] = []
@@ -517,6 +532,7 @@ def _make_call_tools_fn(dispatcher: ToolDispatcherBase | None) -> typing.Callabl
             except Exception as exc:
                 results.append(Variant("err", str(exc)))
         return results
+
     return call_tools
 
 
@@ -529,17 +545,94 @@ def _make_log_fn(handler: LogHandlerBase | None) -> typing.Callable[..., None]:
             handler.log(level, message, context)
         else:
             logger = logging.getLogger("strands.wasm")
-            py_level = {"error": 40, "warn": 30, "info": 20, "debug": 10, "trace": 10}.get(
-                level, 20
-            )
+            py_level = {
+                "error": 40,
+                "warn": 30,
+                "info": 20,
+                "debug": 10,
+                "trace": 10,
+            }.get(level, 20)
             msg = f"{message} | {context}" if context else message
             logger.log(py_level, msg)
+
     return log_fn
+
+
+# ---------------------------------------------------------------------------
+# Hook-provider no-op callbacks (return zero-value decisions)
+# ---------------------------------------------------------------------------
+
+
+def _hook_get_capabilities(store_ctx: typing.Any) -> list[str]:
+    return []
+
+
+def _cancel_decision() -> Record:
+    """Default no-op cancellable decision."""
+    return _rec(cancel=False, **{"cancel-message": None})
+
+
+def _hook_before_invocation(store_ctx: typing.Any) -> Record:
+    return _cancel_decision()
+
+
+def _hook_after_invocation(store_ctx: typing.Any) -> Record:
+    return _rec(resume=None)
+
+
+def _hook_before_model_call(
+    store_ctx: typing.Any, projected_input_tokens: typing.Optional[int]
+) -> Record:
+    return _cancel_decision()
+
+
+def _hook_after_model_call(
+    store_ctx: typing.Any,
+    stop_reason: typing.Optional[str],
+    stop_data: typing.Optional[str],
+    error: typing.Optional[str],
+) -> Record:
+    return _rec(retry=False)
+
+
+def _hook_before_tools(store_ctx: typing.Any, message: str) -> Record:
+    return _cancel_decision()
+
+
+def _hook_after_tools(store_ctx: typing.Any) -> Record:
+    return _rec()
+
+
+def _hook_before_tool_call(store_ctx: typing.Any, tool_use: str) -> Record:
+    return _rec(
+        cancel=False,
+        **{"cancel-message": None, "tool-use": None, "selected-tool-name": None},
+    )
+
+
+def _hook_after_tool_call(
+    store_ctx: typing.Any, tool_use: str, result: str, error: typing.Optional[str]
+) -> Record:
+    return _rec(retry=False, result=None)
+
+
+_HOOK_PROVIDER_FUNCS: list[tuple[str, typing.Callable]] = [
+    ("get-capabilities", _hook_get_capabilities),
+    ("before-invocation", _hook_before_invocation),
+    ("after-invocation", _hook_after_invocation),
+    ("before-model-call", _hook_before_model_call),
+    ("after-model-call", _hook_after_model_call),
+    ("before-tools", _hook_before_tools),
+    ("after-tools", _hook_after_tools),
+    ("before-tool-call", _hook_before_tool_call),
+    ("after-tool-call", _hook_after_tool_call),
+]
 
 
 # ---------------------------------------------------------------------------
 # WasmAgent — drop-in replacement for the former native Agent class
 # ---------------------------------------------------------------------------
+
 
 class WasmAgent:
     """WASM-hosted agent with the same API as the former native ``Agent``."""
@@ -568,6 +661,9 @@ class WasmAgent:
                 tp.add_func("call-tools", _make_call_tools_fn(tool_dispatcher))
             with root.add_instance("strands:agent/host-log") as hl:
                 hl.add_func("log", _make_log_fn(log_handler))
+            with root.add_instance("strands:agent/hook-provider") as hp:
+                for name, fn in _HOOK_PROVIDER_FUNCS:
+                    hp.add_func(name, fn)
 
         # --- store ---
         store = Store(engine)
@@ -584,7 +680,13 @@ class WasmAgent:
         self._component = component
 
         # --- instantiate + construct agent (async, run synchronously) ---
-        agent_config = _build_agent_config(model, system_prompt, system_prompt_blocks, tools, conversation_manager_config)
+        agent_config = _build_agent_config(
+            model,
+            system_prompt,
+            system_prompt_blocks,
+            tools,
+            conversation_manager_config,
+        )
         _run_sync(self._init_async(linker, store, component, agent_config))
 
     async def _init_async(
@@ -622,9 +724,7 @@ class WasmAgent:
 
     async def start_stream(self, input_text: str) -> typing.Any:
         args = _build_stream_args(input_text, None, None)
-        return await self._generate_fn.call_async(
-            self._store, self._agent_handle, args
-        )
+        return await self._generate_fn.call_async(self._store, self._agent_handle, args)
 
     async def start_stream_with_options(
         self,
@@ -633,13 +733,9 @@ class WasmAgent:
         tool_choice: str | None,
     ) -> typing.Any:
         args = _build_stream_args(input_text, tools, tool_choice)
-        return await self._generate_fn.call_async(
-            self._store, self._agent_handle, args
-        )
+        return await self._generate_fn.call_async(self._store, self._agent_handle, args)
 
-    async def next_events(
-        self, stream_handle: typing.Any
-    ) -> list[StreamEvent] | None:
+    async def next_events(self, stream_handle: typing.Any) -> list[StreamEvent] | None:
         raw = await self._read_next_fn.call_async(self._store, stream_handle)
         if raw is None:
             return None

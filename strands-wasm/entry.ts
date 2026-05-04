@@ -12,6 +12,7 @@
 /// <reference path="./generated/interfaces/strands-agent-types.d.ts" />
 /// <reference path="./generated/interfaces/strands-agent-host-log.d.ts" />
 /// <reference path="./generated/interfaces/strands-agent-tool-provider.d.ts" />
+/// <reference path="./generated/interfaces/strands-agent-hook-provider.d.ts" />
 
 import type {
   AgentConfig,
@@ -29,6 +30,17 @@ import type {
 
 import { callTool } from 'strands:agent/tool-provider'
 import { log as hostLog } from 'strands:agent/host-log'
+import {
+  getCapabilities as hookGetCapabilities,
+  beforeInvocation as hookBeforeInvocation,
+  afterInvocation as hookAfterInvocation,
+  beforeModelCall as hookBeforeModelCall,
+  afterModelCall as hookAfterModelCall,
+  beforeTools as hookBeforeTools,
+  afterTools as hookAfterTools,
+  beforeToolCall as hookBeforeToolCall,
+  afterToolCall as hookAfterToolCall,
+} from 'strands:agent/hook-provider'
 import { Agent, FunctionTool, SessionManager, FileStorage } from '@strands-agents/sdk'
 import { S3Storage } from '@strands-agents/sdk/session/s3-storage'
 import { AnthropicModel } from '@strands-agents/sdk/models/anthropic'
@@ -69,7 +81,10 @@ import {
   BeforeInvocationEvent,
   BeforeModelCallEvent,
   BeforeToolCallEvent,
+  BeforeToolsEvent,
+  AfterToolsEvent,
   MessageAddedEvent,
+  ToolResultBlock,
 } from '@strands-agents/sdk'
 
 // All log calls go through `hostLog` (the WIT import).  The host can
@@ -432,6 +447,8 @@ class LifecycleBridge implements Plugin {
     agent.addHook(AfterInvocationEvent, () => this.push('after-invocation'))
     agent.addHook(BeforeModelCallEvent, () => this.push('before-model-call'))
     agent.addHook(AfterModelCallEvent, () => this.push('after-model-call'))
+    agent.addHook(BeforeToolsEvent, () => this.push('before-tools'))
+    agent.addHook(AfterToolsEvent, () => this.push('after-tools'))
     agent.addHook(MessageAddedEvent, () => this.push('message-added'))
 
     agent.addHook(BeforeToolCallEvent, (event) => {
@@ -445,6 +462,117 @@ class LifecycleBridge implements Plugin {
 
   drain(): StreamEvent[] {
     return this.queue.splice(0)
+  }
+}
+
+/** Bridges TS SDK hooks to WIT hook-provider imports for bidirectional host control. */
+class HookProviderBridge implements Plugin {
+  readonly name = 'strands:hook-provider-bridge'
+
+  /** Apply a cancel decision from a hook-provider response to a cancellable event. */
+  private applyCancel(
+    event: { cancel?: boolean | string },
+    decision: { cancel: boolean; cancelMessage?: string }
+  ): void {
+    if (decision.cancel) {
+      event.cancel = decision.cancelMessage ?? true
+    }
+  }
+
+  initAgent(agent: LocalAgent): void {
+    const caps = new Set(hookGetCapabilities())
+
+    if (caps.has('before-invocation')) {
+      agent.addHook(BeforeInvocationEvent, (event) => {
+        const decision = hookBeforeInvocation()
+        this.applyCancel(event, decision)
+      })
+    }
+
+    if (caps.has('after-invocation')) {
+      agent.addHook(AfterInvocationEvent, (event) => {
+        const decision = hookAfterInvocation()
+        if (decision.resume) {
+          try {
+            event.resume = JSON.parse(decision.resume)
+          } catch {
+            glog('warn', `hook_name=<after-invocation> | invalid JSON in resume field, ignoring`)
+          }
+        }
+      })
+    }
+
+    if (caps.has('before-model-call')) {
+      agent.addHook(BeforeModelCallEvent, (event) => {
+        const decision = hookBeforeModelCall(event.projectedInputTokens)
+        this.applyCancel(event, decision)
+      })
+    }
+
+    if (caps.has('after-model-call')) {
+      agent.addHook(AfterModelCallEvent, (event) => {
+        const decision = hookAfterModelCall(event.stopData?.stopReason, undefined, event.error?.message)
+        if (decision.retry) {
+          event.retry = true
+        }
+      })
+    }
+
+    if (caps.has('before-tools')) {
+      agent.addHook(BeforeToolsEvent, (event) => {
+        const decision = hookBeforeTools(JSON.stringify(event.message))
+        this.applyCancel(event, decision)
+      })
+    }
+
+    if (caps.has('after-tools')) {
+      agent.addHook(AfterToolsEvent, () => void hookAfterTools())
+    }
+
+    if (caps.has('before-tool-call')) {
+      agent.addHook(BeforeToolCallEvent, (event) => {
+        const decision = hookBeforeToolCall(JSON.stringify(event.toolUse))
+        this.applyCancel(event, decision)
+        if (decision.toolUse) {
+          try {
+            const rewritten = JSON.parse(decision.toolUse)
+            if (rewritten.name !== undefined) event.toolUse.name = rewritten.name
+            if (rewritten.toolUseId !== undefined) event.toolUse.toolUseId = rewritten.toolUseId
+            if (rewritten.input !== undefined) event.toolUse.input = rewritten.input
+          } catch {
+            glog('warn', `hook_name=<before-tool-call> | invalid JSON in toolUse field, ignoring`)
+          }
+        }
+        if (decision.selectedToolName) {
+          const tool = agent.toolRegistry.get(decision.selectedToolName)
+          if (tool) {
+            event.selectedTool = tool
+          } else {
+            glog(
+              'warn',
+              `hook_name=<before-tool-call>, tool_name=<${decision.selectedToolName}> | hook selected unknown tool, ignoring`
+            )
+          }
+        }
+      })
+    }
+
+    if (caps.has('after-tool-call')) {
+      agent.addHook(AfterToolCallEvent, (event) => {
+        const error = event.error?.message
+        const decision = hookAfterToolCall(JSON.stringify(event.toolUse), JSON.stringify(event.result), error)
+        if (decision.retry) {
+          event.retry = true
+        }
+        if (decision.result) {
+          try {
+            event.result = ToolResultBlock.fromJSON(JSON.parse(decision.result))
+          } catch {
+            glog('warn', `hook_name=<after-tool-call> | invalid JSON in result field, ignoring`)
+          }
+        }
+      })
+    }
   }
 }
 
@@ -554,7 +682,7 @@ class AgentImpl {
     this.sessionManager = createSessionManager(config)
     const conversationManager = createConversationManager(config)
 
-    const plugins: Plugin[] = [this.lifecycleBridge]
+    const plugins: Plugin[] = [this.lifecycleBridge, new HookProviderBridge()]
 
     this.agent = new Agent({
       model,
@@ -726,6 +854,7 @@ export {
   parseInput,
   createTools,
   LifecycleBridge,
+  HookProviderBridge,
   parseSaveLatestStrategy,
   createToolChoiceProxy,
 }
