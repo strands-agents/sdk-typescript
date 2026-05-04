@@ -281,4 +281,5 @@ world agent {
 
 world agent-types {
   export types;
+  export messages;
 }
