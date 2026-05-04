@@ -217,10 +217,10 @@ sdk-typescript/
 │   └── pyrightconfig.json        # Python type checking configuration
 │
 ├── strands-wasm/                 # WASM build tooling
-│   ├── __mocks__/                # Vitest module mocks for WIT imports
-│   ├── __tests__/                # Contract tests for the WASM bridge
-│   │   ├── guest/                # Tests that load the compiled WASM component
-│   │   └── unit/                 # Unit tests for entry.ts internals
+│   ├── __fixtures__/             # Vitest module mocks for WIT imports
+│   ├── __tests__/                # Unit tests for entry.ts internals
+│   ├── test/                     # Tests outside of source
+│   │   └── guest/                # Tests that load the compiled WASM component
 │   ├── entry.ts                  # WASM entry point (TS SDK surface for WASM compilation)
 │   ├── build.js                  # Build script for WASM compilation
 │   ├── patches/                  # Runtime patches for WASM compatibility

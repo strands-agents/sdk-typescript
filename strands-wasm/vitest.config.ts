@@ -7,12 +7,12 @@ export default defineConfig({
       {
         test: {
           name: { label: 'unit' },
-          include: ['__tests__/unit/**/*.test.ts'],
+          include: ['__tests__/**/*.test.ts'],
         },
         resolve: {
           alias: {
-            'strands:agent/tool-provider': resolve(__dirname, '__mocks__/tool-provider.ts'),
-            'strands:agent/host-log': resolve(__dirname, '__mocks__/host-log.ts'),
+            'strands:agent/tool-provider': resolve(__dirname, '__fixtures__/tool-provider.ts'),
+            'strands:agent/host-log': resolve(__dirname, '__fixtures__/host-log.ts'),
             '$/fixtures': resolve(__dirname, '../strands-ts/src/__fixtures__'),
           },
         },
@@ -20,7 +20,7 @@ export default defineConfig({
       {
         test: {
           name: { label: 'guest' },
-          include: ['__tests__/guest/**/*.test.ts'],
+          include: ['test/guest/**/*.test.ts'],
           testTimeout: 60_000,
           pool: 'forks',
         },
