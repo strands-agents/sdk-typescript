@@ -10,7 +10,7 @@ import type { LocalAgent } from '../types/agent.js'
 import { AfterInvocationEvent } from '../hooks/events.js'
 import {
   ConversationManager,
-  type ConversationManagerConfig,
+  type ProactiveCompressionConfig,
   type ConversationManagerReduceOptions,
   type ConversationManagerThresholdOptions,
 } from './conversation-manager.js'
@@ -19,7 +19,7 @@ import { logger } from '../logging/logger.js'
 /**
  * Configuration for the sliding window conversation manager.
  */
-export type SlidingWindowConversationManagerConfig = ConversationManagerConfig & {
+export type SlidingWindowConversationManagerConfig = {
   /**
    * Maximum number of messages to keep in the conversation history.
    * Defaults to 40 messages.
@@ -31,6 +31,15 @@ export type SlidingWindowConversationManagerConfig = ConversationManagerConfig &
    * Defaults to true.
    */
   shouldTruncateResults?: boolean
+
+  /**
+   * Enable proactive context compression before the model call.
+   *
+   * - `true`: compress when 70% of the context window is used (default threshold).
+   * - `{ compressionThreshold: number }`: compress at the specified ratio (0, 1].
+   * - `false` or omitted: disabled, only reactive overflow recovery is used.
+   */
+  compressProactively?: boolean | ProactiveCompressionConfig
 }
 
 /**
@@ -60,7 +69,7 @@ export class SlidingWindowConversationManager extends ConversationManager {
    * @param config - Configuration options for the sliding window manager.
    */
   constructor(config?: SlidingWindowConversationManagerConfig) {
-    super(config)
+    super(config?.compressProactively)
     this._windowSize = config?.windowSize ?? 40
     this._shouldTruncateResults = config?.shouldTruncateResults ?? true
   }

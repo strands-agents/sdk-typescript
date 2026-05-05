@@ -327,7 +327,7 @@ describe('SummarizingConversationManager', () => {
         model: model as unknown as Model,
         summaryRatio: 0.5,
         preserveRecentMessages: 2,
-        compressionThreshold: 0.7,
+        compressProactively: { compressionThreshold: 0.7 },
       })
       const messages = makeMessages(20)
       const mockAgent = createMockAgent({ messages })
@@ -358,7 +358,7 @@ describe('SummarizingConversationManager', () => {
 
       const manager = new SummarizingConversationManager({
         model: model as unknown as Model,
-        compressionThreshold: 0.7,
+        compressProactively: { compressionThreshold: 0.7 },
       })
       const messages = makeMessages(20)
       const mockAgent = createMockAgent({ messages })
@@ -385,7 +385,7 @@ describe('SummarizingConversationManager', () => {
         model: model as unknown as Model,
         summaryRatio: 0.5,
         preserveRecentMessages: 2,
-        compressionThreshold: 0.7,
+        compressProactively: { compressionThreshold: 0.7 },
       })
       const messages = makeMessages(20)
       const mockAgent = createMockAgent({ messages })

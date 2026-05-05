@@ -10,7 +10,7 @@ import { Message, TextBlock } from '../types/messages.js'
 import type { LocalAgent } from '../types/agent.js'
 import {
   ConversationManager,
-  type ConversationManagerConfig,
+  type ProactiveCompressionConfig,
   type ConversationManagerReduceOptions,
   type ConversationManagerThresholdOptions,
 } from './conversation-manager.js'
@@ -49,7 +49,7 @@ Example format:
 /**
  * Configuration for the summarization conversation manager.
  */
-export type SummarizingConversationManagerConfig = ConversationManagerConfig & {
+export type SummarizingConversationManagerConfig = {
   /**
    * Model to use for generating summaries. When provided, overrides the model
    * attached to the agent. Useful when you want to use a different model than
@@ -74,6 +74,15 @@ export type SummarizingConversationManagerConfig = ConversationManagerConfig & {
    * prompt that produces structured bullet-point summaries.
    */
   summarizationSystemPrompt?: string
+
+  /**
+   * Enable proactive context compression before the model call.
+   *
+   * - `true`: compress when 70% of the context window is used (default threshold).
+   * - `{ compressionThreshold: number }`: compress at the specified ratio (0, 1].
+   * - `false` or omitted: disabled, only reactive overflow recovery is used.
+   */
+  compressProactively?: boolean | ProactiveCompressionConfig
 }
 
 /**
@@ -92,7 +101,7 @@ export class SummarizingConversationManager extends ConversationManager {
   private readonly _summarizationSystemPrompt: string
 
   constructor(config?: SummarizingConversationManagerConfig) {
-    super(config)
+    super(config?.compressProactively)
     this._model = config?.model
     // clamped [0.1, 0.8]
     this._summaryRatio = Math.max(0.1, Math.min(0.8, config?.summaryRatio ?? 0.3))

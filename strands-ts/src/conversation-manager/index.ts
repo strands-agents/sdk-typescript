@@ -6,7 +6,7 @@
 
 export {
   ConversationManager,
-  type ConversationManagerConfig,
+  type ProactiveCompressionConfig,
   type ConversationManagerReduceOptions as ReduceOptions,
   type ConversationManagerThresholdOptions,
 } from './conversation-manager.js'

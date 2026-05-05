@@ -13,6 +13,9 @@ import type { Model } from '../models/model.js'
 import { logger } from '../logging/logger.js'
 import { warnOnce } from '../logging/warn-once.js'
 
+/** Default compression threshold ratio. */
+const DEFAULT_COMPRESSION_THRESHOLD = 0.7
+
 /**
  * Options passed to {@link ConversationManager.reduce}.
  */
@@ -47,15 +50,15 @@ export type ConversationManagerThresholdOptions = {
 }
 
 /**
- * Configuration for the conversation manager base class.
+ * Configuration for proactive compression when passed as an object.
  */
-export type ConversationManagerConfig = {
+export type ProactiveCompressionConfig = {
   /**
    * Ratio of context window usage that triggers proactive compression.
-   * Value between 0 and 1 (e.g. 0.7 means compress when 70% of the context window is used).
-   * When not set, proactive compression is disabled and only reactive overflow recovery is used.
+   * Value between 0 (exclusive) and 1 (inclusive).
+   * Defaults to 0.7 (compress when 70% of the context window is used).
    */
-  compressionThreshold?: number
+  compressionThreshold: number
 }
 
 /**
@@ -68,9 +71,9 @@ export type ConversationManagerConfig = {
  * the agent loop uncaught. This makes `reduce` a critical operation — implementations
  * must be able to make meaningful progress when called with `error` set.
  *
- * Optionally, a manager can enable proactive compression by setting `compressionThreshold`
- * in the config. When set, the base class registers a `BeforeModelCallEvent` hook that
- * checks projected input tokens against the model's context window limit and calls
+ * Subclasses can enable proactive compression by passing their `compressProactively`
+ * option to the base constructor. When set, the base class registers a `BeforeModelCallEvent`
+ * hook that checks projected input tokens against the model's context window limit and calls
  * {@link ConversationManager.reduceOnThreshold} when the threshold is exceeded.
  *
  * @example
@@ -94,16 +97,22 @@ export abstract class ConversationManager implements Plugin {
 
   protected readonly _compressionThreshold: number | undefined
 
-  constructor(config?: ConversationManagerConfig) {
-    if (
-      config?.compressionThreshold !== undefined &&
-      (config.compressionThreshold <= 0 || config.compressionThreshold > 1)
-    ) {
-      throw new Error(
-        `compressionThreshold must be between 0 (exclusive) and 1 (inclusive), got ${config.compressionThreshold}`
-      )
+  /**
+   * @param compressProactively - Enable proactive compression. `true` uses the default
+   *   threshold, a config object specifies a custom threshold, `undefined`/`false` disables.
+   */
+  constructor(compressProactively?: boolean | ProactiveCompressionConfig) {
+    const threshold =
+      compressProactively === true
+        ? DEFAULT_COMPRESSION_THRESHOLD
+        : compressProactively
+          ? compressProactively.compressionThreshold
+          : undefined
+
+    if (threshold !== undefined && (threshold <= 0 || threshold > 1)) {
+      throw new Error(`compressionThreshold must be between 0 (exclusive) and 1 (inclusive), got ${threshold}`)
     }
-    this._compressionThreshold = config?.compressionThreshold
+    this._compressionThreshold = threshold
   }
 
   /**
@@ -127,7 +136,7 @@ export abstract class ConversationManager implements Plugin {
   /**
    * Proactively reduce the conversation history before a model call.
    *
-   * Called when projected input tokens exceed the configured compressionThreshold
+   * Called when projected input tokens exceed the configured compression threshold
    * of the model's context window limit. Subclasses implement this to reduce
    * context before the model call, avoiding overflow errors.
    *
@@ -144,7 +153,7 @@ export abstract class ConversationManager implements Plugin {
    * calls {@link ConversationManager.reduce} and retries the model call if reduction succeeded.
    * If `reduce` returns `false`, the error propagates out of the agent loop uncaught.
    *
-   * When `compressionThreshold` is configured and the subclass implements `reduceOnThreshold`,
+   * When a compression threshold is configured and the subclass implements `reduceOnThreshold`,
    * also registers a `BeforeModelCallEvent` hook for proactive compression.
    *
    * Subclasses that override `initAgent` MUST call `super.initAgent(agent)` to
@@ -163,7 +172,7 @@ export abstract class ConversationManager implements Plugin {
 
     if (this._compressionThreshold !== undefined && !this.reduceOnThreshold) {
       logger.warn(
-        `conversation_manager=<${this.name}> | compressionThreshold is configured but reduceOnThreshold is not implemented, proactive compression is disabled`
+        `conversation_manager=<${this.name}> | compressProactively is enabled but reduceOnThreshold is not implemented, proactive compression is disabled`
       )
     }
 
