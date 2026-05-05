@@ -10,7 +10,7 @@ import {
   mapToolStreamEvent,
   parseInput,
   parseSaveLatestStrategy,
-} from '../../entry'
+} from '../entry'
 import type { AgentStreamEvent, ModelStreamEvent, StopReason } from '@strands-agents/sdk'
 import { ToolStreamEvent, ToolUseBlock, ToolResultBlock, TextBlock, ReasoningBlock } from '@strands-agents/sdk'
 
@@ -120,6 +120,7 @@ describe('mapStopReason', () => {
       reason: 'end-turn',
       usage: undefined,
       metrics: undefined,
+      structuredOutput: undefined,
     })
   })
 
@@ -139,6 +140,7 @@ describe('mapStopReason', () => {
         cacheWriteInputTokens: undefined,
       },
       metrics: { latencyMs: 100 },
+      structuredOutput: undefined,
     })
   })
 })
