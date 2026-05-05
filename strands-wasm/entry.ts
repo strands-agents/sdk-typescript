@@ -752,6 +752,7 @@ export {
   mapUsage,
   mapMetrics,
   parseInput,
+  parseStructuredOutputSchema,
   createTools,
   LifecycleBridge,
   parseSaveLatestStrategy,

@@ -83,6 +83,7 @@ describe('ResponseStreamImpl.readNext', () => {
               cacheWriteInputTokens: undefined,
             },
             metrics: { latencyMs: 100 },
+            structuredOutput: undefined,
           },
         },
       ])

@@ -9,6 +9,7 @@ import {
   mapContentBlock,
   mapToolStreamEvent,
   parseInput,
+  parseStructuredOutputSchema,
   parseSaveLatestStrategy,
 } from '../entry'
 import type { AgentStreamEvent, ModelStreamEvent, StopReason } from '@strands-agents/sdk'
@@ -120,6 +121,7 @@ describe('mapStopReason', () => {
       reason: 'end-turn',
       usage: undefined,
       metrics: undefined,
+      structuredOutput: undefined,
     })
   })
 
@@ -139,6 +141,37 @@ describe('mapStopReason', () => {
         cacheWriteInputTokens: undefined,
       },
       metrics: { latencyMs: 100 },
+      structuredOutput: undefined,
+    })
+  })
+
+  it('serializes structured output as JSON string', () => {
+    expect(
+      mapStopReason('endTurn', {
+        structuredOutput: { name: 'Alice', age: 30 },
+      })
+    ).toStrictEqual({
+      reason: 'end-turn',
+      usage: undefined,
+      metrics: undefined,
+      structuredOutput: '{"name":"Alice","age":30}',
+    })
+  })
+
+  it('sets structuredOutput to undefined when not present', () => {
+    expect(
+      mapStopReason('endTurn', { usage: { inputTokens: 5, outputTokens: 10, totalTokens: 15 } })
+    ).toStrictEqual({
+      reason: 'end-turn',
+      usage: {
+        inputTokens: 5,
+        outputTokens: 10,
+        totalTokens: 15,
+        cacheReadInputTokens: undefined,
+        cacheWriteInputTokens: undefined,
+      },
+      metrics: undefined,
+      structuredOutput: undefined,
     })
   })
 })
@@ -398,5 +431,33 @@ describe('parseSaveLatestStrategy', () => {
 
   it('returns undefined for empty string', () => {
     expect(parseSaveLatestStrategy('')).toBeUndefined()
+  })
+})
+
+describe('parseStructuredOutputSchema', () => {
+  it('returns undefined for undefined input', () => {
+    expect(parseStructuredOutputSchema(undefined)).toBeUndefined()
+  })
+
+  it('returns undefined for empty string', () => {
+    expect(parseStructuredOutputSchema('')).toBeUndefined()
+  })
+
+  it('parses a valid JSON schema into a Zod schema', () => {
+    const schema = parseStructuredOutputSchema(
+      JSON.stringify({ type: 'object', properties: { name: { type: 'string' } }, required: ['name'] })
+    )
+    expect(schema).toBeDefined()
+    expect(schema!.parse({ name: 'Alice' })).toStrictEqual({ name: 'Alice' })
+  })
+
+  it('throws on invalid JSON', () => {
+    expect(() => parseStructuredOutputSchema('not valid json')).toThrow('Invalid structured output schema')
+  })
+
+  it('throws on invalid schema', () => {
+    expect(() => parseStructuredOutputSchema(JSON.stringify({ type: 'invalid_type_xyz' }))).toThrow(
+      'Invalid structured output schema'
+    )
   })
 })
