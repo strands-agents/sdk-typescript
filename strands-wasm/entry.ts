@@ -145,7 +145,7 @@ function mapStopReason(
 
 /** Convert a TS SDK AgentStreamEvent to a WIT StreamEvent for the host. */
 function mapEvent(event: AgentStreamEvent): StreamEvent | null {
-  if ('interrupt' in event) {
+  if ('interrupt' in event && typeof (event as unknown as Record<string, unknown>).interrupt !== 'function') {
     return { tag: 'interrupt', val: JSON.stringify(event) }
   }
 

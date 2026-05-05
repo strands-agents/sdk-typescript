@@ -10,7 +10,7 @@ import {
   mapToolStreamEvent,
   parseInput,
   parseSaveLatestStrategy,
-} from '../../entry'
+} from '../entry'
 import type { AgentStreamEvent, ModelStreamEvent, StopReason } from '@strands-agents/sdk'
 import { ToolStreamEvent, ToolUseBlock, ToolResultBlock, TextBlock, ReasoningBlock } from '@strands-agents/sdk'
 
@@ -333,6 +333,11 @@ describe('mapEvent', () => {
         tag: 'interrupt',
         val: JSON.stringify(event),
       })
+    })
+
+    it('does not treat hook events with interrupt() method as interrupt stream events', () => {
+      const event = { type: 'beforeToolCallEvent', interrupt: () => {} }
+      expect(mapEvent(event as unknown as AgentStreamEvent)).toBeNull()
     })
   })
 
