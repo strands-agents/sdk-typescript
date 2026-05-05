@@ -26,7 +26,7 @@
     "lint": "npm run lint -w strands-ts",
     "format": "npm run format -w strands-ts",
     "format:check": "npm run format:check -w strands-ts",
-    "type-check": "npm run type-check -w strands-ts && npm run type-check -w strands-wasm",
+    "type-check": "npm run type-check -w strands-ts",
     "check": "npm run check -w strands-ts",
     "check:browser-bundle": "npm run check:browser-bundle -w strands-ts"
   }
