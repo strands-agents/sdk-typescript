@@ -346,7 +346,6 @@ describe.skipIf(bedrock.skip)('BedrockModel Integration Tests', () => {
         }
 
         console.log(`Waiting for guardrail to become active. Current status: ${status}`)
-        // eslint-disable-next-line no-undef
         await new Promise((resolve) => setTimeout(resolve, delayMs))
       }
 

@@ -1,4 +1,5 @@
 import { logger } from '../logging/logger.js'
+import { warnOnce } from '../logging/warn-once.js'
 import type { AttributeValue, Span } from '@opentelemetry/api'
 import type { InvocationState, InvokableAgent } from '../types/agent.js'
 import type { MultiAgentInput, MultiAgentInvokeOptions } from './multiagent.js'
@@ -33,8 +34,22 @@ import { normalizeError } from '../errors.js'
  * Runtime configuration for swarm execution.
  */
 export interface SwarmConfig {
-  /** Max total agent executions (including start). Defaults to Infinity. */
+  /** Max total agent executions (including start). Defaults to `Infinity` (no limit). */
   maxSteps?: number
+  /**
+   * Wall-clock ceiling for the entire swarm invocation, in milliseconds. Defaults to `Infinity`
+   * (no limit). Checked between steps — a long-running node may exceed this bound by up to its
+   * own `nodeTimeout` before the swarm throws.
+   */
+  timeout?: number
+  /**
+   * Fallback per-node wall-clock ceiling in milliseconds. Applied to any node that doesn't
+   * set its own `timeout`. Defaults to `Infinity` (no limit).
+   *
+   * Enforced via `AbortSignal` — cancellation is cooperative, so a tool that neither polls
+   * its cancel signal nor forwards it to a cancellable API can run past this deadline.
+   */
+  nodeTimeout?: number
 }
 
 /**
@@ -119,8 +134,14 @@ export class Swarm implements MultiAgent {
 
     this.config = {
       maxSteps: config.maxSteps ?? Infinity,
+      timeout: config.timeout ?? Infinity,
+      nodeTimeout: config.nodeTimeout ?? Infinity,
     }
     this._validateConfig()
+
+    if (this.config.maxSteps === Infinity && this.config.timeout === Infinity) {
+      warnOnce(logger, 'swarm has no maxSteps or timeout set; execution is unbounded')
+    }
 
     this.nodes = this._resolveNodes(nodes)
     this.start = this._resolveStart(start)
@@ -234,6 +255,10 @@ export class Swarm implements MultiAgent {
 
     try {
       while (state.steps < this.config.maxSteps) {
+        const elapsed = Date.now() - state.startTime
+        if (elapsed >= this.config.timeout) {
+          throw new Error(`timeout=<${this.config.timeout}> | swarm exceeded wall-clock budget`)
+        }
         state.steps++
 
         // Execute current node
@@ -307,14 +332,26 @@ export class Swarm implements MultiAgent {
 
     const nodeInput = this._resolveNodeInput(input, handoff)
 
+    const nodeTimeout = node.timeout ?? this.config.nodeTimeout
+    const timeoutController = Number.isFinite(nodeTimeout) ? new AbortController() : undefined
+    const timeoutHandle = timeoutController ? setTimeout(() => timeoutController.abort(), nodeTimeout) : undefined
+
     try {
       const gen = this._tracer.withSpanContext(nodeSpan, () =>
-        node.stream(nodeInput, state, { structuredOutputSchema: handoffSchema, invocationState })
+        node.stream(nodeInput, state, {
+          structuredOutputSchema: handoffSchema,
+          invocationState,
+          ...(timeoutController && { cancelSignal: timeoutController.signal }),
+        })
       )
       let next = await this._tracer.withSpanContext(nodeSpan, () => gen.next())
       while (!next.done) {
         yield next.value
         next = await this._tracer.withSpanContext(nodeSpan, () => gen.next())
+      }
+
+      if (timeoutController?.signal.aborted) {
+        throw new Error(`node_timeout=<${nodeTimeout}>, node_id=<${node.id}> | node exceeded wall-clock budget`)
       }
 
       const result = next.value
@@ -335,12 +372,20 @@ export class Swarm implements MultiAgent {
         error: nodeError,
       })
       throw nodeError
+    } finally {
+      if (timeoutHandle !== undefined) clearTimeout(timeoutHandle)
     }
   }
 
   private _validateConfig(): void {
     if (this.config.maxSteps < 1) {
       throw new Error(`max_steps=<${this.config.maxSteps}> | must be at least 1`)
+    }
+    if (this.config.timeout < 1) {
+      throw new Error(`timeout=<${this.config.timeout}> | must be at least 1`)
+    }
+    if (this.config.nodeTimeout < 1) {
+      throw new Error(`node_timeout=<${this.config.nodeTimeout}> | must be at least 1`)
     }
   }
 

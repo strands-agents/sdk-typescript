@@ -53,6 +53,8 @@ function sdkRules(options) {
       globals: {
         console: 'readonly',
         process: 'readonly',
+        setTimeout: 'readonly',
+        clearTimeout: 'readonly',
       },
     },
     plugins: {
@@ -86,6 +88,8 @@ function unitTestRules(options) {
         window: 'readonly',
         document: 'readonly',
         navigator: 'readonly',
+        setTimeout: 'readonly',
+        clearTimeout: 'readonly',
       },
     },
     plugins: {

@@ -4,6 +4,8 @@ import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
 import { collectGenerator } from '../../__fixtures__/model-test-helpers.js'
 import { BeforeNodeCallEvent, MultiAgentInitializedEvent } from '../events.js'
 import type { JSONValue } from '../../types/json.js'
+import type { AgentResult, InvokableAgent, InvokeArgs, InvokeOptions } from '../../types/agent.js'
+import type { StreamEvent } from '../../hooks/events.js'
 import { TextBlock } from '../../types/messages.js'
 import { Status, MultiAgentState } from '../state.js'
 import { AgentNode } from '../nodes.js'
@@ -34,6 +36,46 @@ function createHandoffAgent(
  */
 function createFinalAgent(agentId: string, message: string, description: string = `Agent ${agentId}`): Agent {
   return createHandoffAgent(agentId, { message }, description)
+}
+
+/**
+ * Custom InvokableAgent that sleeps for `delayMs` before resolving. Respects `cancelSignal`
+ * by aborting the sleep early. Used to exercise timeout behavior deterministically.
+ */
+function createSlowAgent(
+  agentId: string,
+  delayMs: number,
+  handoff: { agentId?: string; message: string } = { message: 'done' }
+): InvokableAgent {
+  const sleep = (signal?: AbortSignal): Promise<void> =>
+    new Promise((resolve, reject) => {
+      const timer = setTimeout(resolve, delayMs)
+      if (signal) {
+        const onAbort = (): void => {
+          clearTimeout(timer)
+          reject(new Error('cancelled'))
+        }
+        if (signal.aborted) onAbort()
+        else signal.addEventListener('abort', onAbort, { once: true })
+      }
+    })
+
+  return {
+    id: agentId,
+    description: `Agent ${agentId}`,
+    async invoke(_args: InvokeArgs, options?: InvokeOptions): Promise<AgentResult> {
+      await sleep(options?.cancelSignal)
+      return {
+        stopReason: 'endTurn',
+        lastMessage: { role: 'assistant', content: [new TextBlock(handoff.message)] },
+        structuredOutput: handoff,
+      } as AgentResult
+    },
+    // eslint-disable-next-line require-yield
+    async *stream(args: InvokeArgs, options?: InvokeOptions): AsyncGenerator<StreamEvent, AgentResult, undefined> {
+      return await this.invoke(args, options)
+    },
+  }
 }
 
 describe('Swarm', () => {
@@ -105,6 +147,38 @@ describe('Swarm', () => {
             maxSteps: 0,
           })
       ).toThrow('max_steps=<0> | must be at least 1')
+    })
+
+    it('defaults maxSteps, timeout, and nodeTimeout to Infinity', () => {
+      const swarm = new Swarm({
+        nodes: [createFinalAgent('a', 'hi')],
+        start: 'a',
+      })
+      expect(swarm.config.maxSteps).toBe(Infinity)
+      expect(swarm.config.timeout).toBe(Infinity)
+      expect(swarm.config.nodeTimeout).toBe(Infinity)
+    })
+
+    it('throws when timeout < 1', () => {
+      expect(
+        () =>
+          new Swarm({
+            nodes: [createFinalAgent('a', 'hi')],
+            start: 'a',
+            timeout: 0,
+          })
+      ).toThrow('timeout=<0> | must be at least 1')
+    })
+
+    it('throws when nodeTimeout < 1', () => {
+      expect(
+        () =>
+          new Swarm({
+            nodes: [createFinalAgent('a', 'hi')],
+            start: 'a',
+            nodeTimeout: 0,
+          })
+      ).toThrow('node_timeout=<0> | must be at least 1')
     })
   })
 
@@ -223,6 +297,61 @@ describe('Swarm', () => {
 
       expect(result.status).toBe(Status.COMPLETED)
       expect(result.results.map((r) => r.nodeId)).toStrictEqual(['a', 'b'])
+    })
+
+    it('throws when a node exceeds nodeTimeout', async () => {
+      const swarm = new Swarm({
+        nodes: [{ agent: createSlowAgent('slow', 100) }],
+        start: 'slow',
+        nodeTimeout: 20,
+      })
+
+      await expect(swarm.invoke('go')).rejects.toThrow(/node_timeout=<20>, node_id=<slow>/)
+    })
+
+    it('applies per-node timeout over nodeTimeout', async () => {
+      const swarm = new Swarm({
+        nodes: [{ agent: createSlowAgent('slow', 100), timeout: 15 }],
+        start: 'slow',
+        nodeTimeout: 10_000,
+      })
+
+      await expect(swarm.invoke('go')).rejects.toThrow(/node_timeout=<15>, node_id=<slow>/)
+    })
+
+    it('does not throw when nodeTimeout is Infinity', async () => {
+      const swarm = new Swarm({
+        nodes: [{ agent: createSlowAgent('a', 20) }],
+        start: 'a',
+        nodeTimeout: Infinity,
+      })
+
+      const result = await swarm.invoke('go')
+      expect(result.status).toBe(Status.COMPLETED)
+    })
+
+    it('per-node timeout of Infinity disables a finite nodeTimeout', async () => {
+      const swarm = new Swarm({
+        nodes: [{ agent: createSlowAgent('slow', 30), timeout: Infinity }],
+        start: 'slow',
+        nodeTimeout: 10,
+      })
+
+      const result = await swarm.invoke('go')
+      expect(result.status).toBe(Status.COMPLETED)
+    })
+
+    it('throws when timeout is exceeded between steps', async () => {
+      const swarm = new Swarm({
+        nodes: [
+          { agent: createSlowAgent('a', 30, { agentId: 'b', message: 'to b' }) },
+          { agent: createSlowAgent('b', 30) },
+        ],
+        start: 'a',
+        timeout: 20,
+      })
+
+      await expect(swarm.invoke('go')).rejects.toThrow(/timeout=<20>/)
     })
 
     it('returns cancelled result with custom message when cancel is a string', async () => {

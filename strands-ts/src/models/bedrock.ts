@@ -65,6 +65,13 @@ import { MODEL_DEFAULTS, defaultModelWarningMessage } from './defaults.js'
 const DEFAULT_BEDROCK_REGION_SUPPORTS_FIP = false
 
 /**
+ * Default request timeout in milliseconds. The AWS SDK defaults to 0 (disabled), which lets
+ * a stuck connection hang indefinitely — we pick 120s to bound that. Callers can override
+ * via `clientConfig.requestHandler.requestTimeout`.
+ */
+const DEFAULT_REQUEST_TIMEOUT_MS = 120_000
+
+/**
  * Models that require the status field in tool results.
  * According to AWS Bedrock API documentation, the status field is only supported by Anthropic Claude models.
  * @see https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_ToolResultBlock.html
@@ -376,9 +383,9 @@ export class BedrockModel extends Model<BedrockModelConfig> {
       ? `${clientConfig.customUserAgent} strands-agents-ts-sdk`
       : 'strands-agents-ts-sdk'
 
-    // Initialize Bedrock Runtime client with custom user agent
     this._client = new BedrockRuntimeClient({
       ...(clientConfig ?? {}),
+      requestHandler: withDefaultRequestTimeout(clientConfig?.requestHandler),
       // region takes precedence over clientConfig
       ...(region ? { region: region } : {}),
       customUserAgent,
@@ -1633,6 +1640,27 @@ export class BedrockModel extends Model<BedrockModelConfig> {
 
     return events
   }
+}
+
+/**
+ * Merges a default request timeout into the caller's requestHandler options.
+ *
+ * The SDK's `requestHandler` slot accepts either a constructed handler instance
+ * or an options bag that the SDK uses to build its default handler. We only
+ * inject a default in the options-bag case: a handler instance has its timeouts
+ * baked in at construction time, so we pass it through untouched.
+ *
+ * The handler-vs-options discriminator mirrors the SDK's own check — see
+ * `NodeHttp2Handler.create` in `@smithy/node-http-handler`.
+ */
+function withDefaultRequestTimeout(
+  handler: BedrockRuntimeClientConfig['requestHandler']
+): NonNullable<BedrockRuntimeClientConfig['requestHandler']> {
+  if (handler && typeof (handler as { handle?: unknown }).handle === 'function') {
+    return handler
+  }
+  const options = (handler ?? {}) as { requestTimeout?: number; [key: string]: unknown }
+  return { requestTimeout: DEFAULT_REQUEST_TIMEOUT_MS, ...options }
 }
 
 /**

@@ -4,6 +4,7 @@ import type { MultiAgentInput, MultiAgentInvokeOptions } from './multiagent.js'
 import type { ContentBlock } from '../types/messages.js'
 import { TextBlock, contentBlockFromData } from '../types/messages.js'
 import { logger } from '../logging/logger.js'
+import { warnOnce } from '../logging/warn-once.js'
 import { HookableEvent } from '../hooks/events.js'
 import { HookRegistryImplementation } from '../hooks/registry.js'
 import type { HookCallback, HookableEventConstructor, HookCleanup } from '../hooks/types.js'
@@ -37,10 +38,20 @@ import { normalizeError } from '../errors.js'
  * Runtime configuration for graph execution.
  */
 export interface GraphConfig {
-  /** Max nodes executing in parallel. */
+  /** Max nodes executing in parallel. Defaults to `Infinity` (no limit). */
   maxConcurrency?: number
-  /** Max total steps (prevents infinite loops in cyclic graphs). */
+  /** Max total steps (prevents infinite loops in cyclic graphs). Defaults to `Infinity` (no limit). */
   maxSteps?: number
+  /** Wall-clock ceiling for the entire graph invocation, in milliseconds. Defaults to `Infinity` (no limit). */
+  timeout?: number
+  /**
+   * Fallback per-node wall-clock ceiling in milliseconds. Applied to any `AgentNode` that
+   * doesn't set its own `timeout`. Defaults to `Infinity` (no limit).
+   *
+   * Enforced via `AbortSignal` — cancellation is cooperative, so a tool that neither polls
+   * its cancel signal nor forwards it to a cancellable API can run past this deadline.
+   */
+  nodeTimeout?: number
 }
 
 /**
@@ -117,8 +128,14 @@ export class Graph implements MultiAgent {
     this.config = {
       maxConcurrency: config.maxConcurrency ?? Infinity,
       maxSteps: config.maxSteps ?? Infinity,
+      timeout: config.timeout ?? Infinity,
+      nodeTimeout: config.nodeTimeout ?? Infinity,
     }
     this._validateConfig()
+
+    if (this.config.maxSteps === Infinity && this.config.timeout === Infinity) {
+      warnOnce(logger, 'graph has no maxSteps or timeout set; execution is unbounded')
+    }
 
     this.nodes = this._resolveNodes(nodes)
     this.edges = this._resolveEdges(edges)
@@ -233,17 +250,29 @@ export class Graph implements MultiAgent {
     // Resume: if state was restored, find nodes that are ready but haven't completed otherwise start from source nodes
     const targets = (await this._findResumeTargets(state)) ?? [...this._sources]
 
+    // Execution timeout: when fired, cancels all in-flight node invocations via their
+    // composed cancel signal. In-flight nodes return `stopReason: 'cancelled'`; the queue
+    // drains and the outer loop throws below when it sees the signal aborted.
+    const execController = Number.isFinite(this.config.timeout) ? new AbortController() : undefined
+    const execTimeoutHandle = execController ? setTimeout(() => execController.abort(), this.config.timeout) : undefined
+
     let caughtError: Error | undefined
     let result: MultiAgentResult | undefined
     try {
       while (targets.length > 0 || streams.size > 0) {
+        if (execController?.signal.aborted) {
+          throw new Error(`timeout=<${this.config.timeout}> | graph exceeded wall-clock budget`)
+        }
         while (targets.length > 0 && streams.size < this.config.maxConcurrency) {
           const node = targets.shift()!
 
           this._checkSteps(state)
           state.steps++
 
-          streams.set(node.id, this._streamNode(node, input, state, queue, multiAgentSpan, invocationState))
+          streams.set(
+            node.id,
+            this._streamNode(node, input, state, queue, multiAgentSpan, invocationState, execController?.signal)
+          )
         }
 
         await queue.wait()
@@ -290,6 +319,7 @@ export class Graph implements MultiAgent {
       caughtError = normalizeError(error)
       throw caughtError
     } finally {
+      if (execTimeoutHandle !== undefined) clearTimeout(execTimeoutHandle)
       queue.dispose()
       await Promise.allSettled(streams.values())
 
@@ -315,7 +345,8 @@ export class Graph implements MultiAgent {
     state: MultiAgentState,
     queue: Queue,
     multiAgentSpan: Span | null,
-    invocationState: InvocationState
+    invocationState: InvocationState,
+    executionSignal?: AbortSignal
   ): Promise<void> {
     const nodeState = state.node(node.id)!
 
@@ -347,15 +378,33 @@ export class Graph implements MultiAgent {
       return
     }
 
+    // Per-node timeout applies only to AgentNode. MultiAgentNode wraps a nested Swarm/Graph
+    // that has its own timeout config; cancelSignal isn't yet plumbed into nested orchestrators
+    // so bounding belongs on the child.
+    const nodeTimeout = node instanceof AgentNode ? (node.timeout ?? this.config.nodeTimeout) : Infinity
+    const nodeTimeoutController = Number.isFinite(nodeTimeout) ? new AbortController() : undefined
+    const nodeTimeoutHandle = nodeTimeoutController
+      ? setTimeout(() => nodeTimeoutController.abort(), nodeTimeout)
+      : undefined
+    const signals = [executionSignal, nodeTimeoutController?.signal].filter((s): s is AbortSignal => s !== undefined)
+    const cancelSignal = signals.length > 0 ? AbortSignal.any(signals) : undefined
+
     try {
       const nodeInput = this._resolveNodeInput(node, input, state)
 
-      const gen = this._tracer.withSpanContext(nodeSpan, () => node.stream(nodeInput, state, { invocationState }))
+      const gen = this._tracer.withSpanContext(nodeSpan, () =>
+        node.stream(nodeInput, state, { invocationState, ...(cancelSignal && { cancelSignal }) })
+      )
       let next = await this._tracer.withSpanContext(nodeSpan, () => gen.next())
       while (!next.done) {
         await queue.send({ type: 'event', node, event: next.value })
         next = await this._tracer.withSpanContext(nodeSpan, () => gen.next())
       }
+
+      if (nodeTimeoutController?.signal.aborted) {
+        throw new Error(`node_timeout=<${nodeTimeout}>, node_id=<${node.id}> | node exceeded wall-clock budget`)
+      }
+
       const result = next.value
       this._tracer.endNodeSpan(nodeSpan, { status: result.status, duration: result.duration, usage: result.usage })
       queue.push({ type: 'result', node, result })
@@ -385,6 +434,8 @@ export class Graph implements MultiAgent {
         node,
         error: nodeError,
       })
+    } finally {
+      if (nodeTimeoutHandle !== undefined) clearTimeout(nodeTimeoutHandle)
     }
   }
 
@@ -394,6 +445,12 @@ export class Graph implements MultiAgent {
     }
     if (this.config.maxSteps < 1) {
       throw new Error(`max_steps=<${this.config.maxSteps}> | must be at least 1`)
+    }
+    if (this.config.timeout < 1) {
+      throw new Error(`timeout=<${this.config.timeout}> | must be at least 1`)
+    }
+    if (this.config.nodeTimeout < 1) {
+      throw new Error(`node_timeout=<${this.config.nodeTimeout}> | must be at least 1`)
     }
   }
 

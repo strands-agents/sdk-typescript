@@ -218,6 +218,7 @@ describe('BedrockModel', () => {
       expect(BedrockRuntimeClient).toHaveBeenCalledWith({
         region: customRegion,
         customUserAgent: 'strands-agents-ts-sdk',
+        requestHandler: { requestTimeout: 120_000 },
       })
     })
 
@@ -227,6 +228,7 @@ describe('BedrockModel', () => {
       expect(BedrockRuntimeClient).toHaveBeenCalledWith({
         region: 'us-west-2',
         customUserAgent: 'my-app/1.0 strands-agents-ts-sdk',
+        requestHandler: { requestTimeout: 120_000 },
       })
     })
 
@@ -238,6 +240,7 @@ describe('BedrockModel', () => {
         region,
         endpoint,
         customUserAgent: 'strands-agents-ts-sdk',
+        requestHandler: { requestTimeout: 120_000 },
       })
     })
 
@@ -252,7 +255,35 @@ describe('BedrockModel', () => {
         region,
         credentials,
         customUserAgent: 'strands-agents-ts-sdk',
+        requestHandler: { requestTimeout: 120_000 },
       })
+    })
+
+    it('applies a default 120s request timeout', () => {
+      new BedrockModel({ region: 'us-west-2' })
+      expect(BedrockRuntimeClient).toHaveBeenCalledWith(
+        expect.objectContaining({ requestHandler: { requestTimeout: 120_000 } })
+      )
+    })
+
+    it('lets the caller override requestTimeout', () => {
+      new BedrockModel({ region: 'us-west-2', clientConfig: { requestHandler: { requestTimeout: 5_000 } } })
+      expect(BedrockRuntimeClient).toHaveBeenCalledWith(
+        expect.objectContaining({ requestHandler: { requestTimeout: 5_000 } })
+      )
+    })
+
+    it('merges the default timeout with other requestHandler options', () => {
+      new BedrockModel({ region: 'us-west-2', clientConfig: { requestHandler: { connectionTimeout: 1_000 } } })
+      expect(BedrockRuntimeClient).toHaveBeenCalledWith(
+        expect.objectContaining({ requestHandler: { requestTimeout: 120_000, connectionTimeout: 1_000 } })
+      )
+    })
+
+    it('passes a user-provided handler instance through untouched', () => {
+      const handler = { handle: vi.fn(), updateHttpClientConfig: vi.fn(), httpHandlerConfigs: vi.fn() }
+      new BedrockModel({ region: 'us-west-2', clientConfig: { requestHandler: handler } })
+      expect(BedrockRuntimeClient).toHaveBeenCalledWith(expect.objectContaining({ requestHandler: handler }))
     })
 
     it('adds api key middleware when apiKey is provided', () => {

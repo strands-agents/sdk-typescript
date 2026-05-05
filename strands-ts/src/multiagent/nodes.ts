@@ -41,6 +41,12 @@ export interface NodeInputOptions {
    * hooks/tools can read state written by a previous node.
    */
   invocationState?: InvocationState
+
+  /**
+   * Cancellation signal forwarded to the node's underlying agent. Used by
+   * orchestrators to enforce per-node timeouts or propagate external cancellation.
+   */
+  cancelSignal?: AbortSignal
 }
 
 /**
@@ -143,6 +149,13 @@ export abstract class Node {
 export interface AgentNodeOptions {
   /** The agent to wrap as a node. */
   agent: InvokableAgent
+  /**
+   * Per-node wall-clock ceiling in milliseconds. Overrides the orchestrator's
+   * default node timeout. Cancellation is cooperative — a tool that neither
+   * polls its cancel signal nor forwards it to a cancellable API can run past
+   * this deadline.
+   */
+  timeout?: number
 }
 
 /**
@@ -154,9 +167,10 @@ export interface AgentNodeOptions {
 export class AgentNode extends Node {
   readonly type = 'agentNode' as const
   private readonly _agent: InvokableAgent
+  readonly timeout?: number
 
   constructor(options: AgentNodeOptions) {
-    const { agent, ...config } = options
+    const { agent, timeout, ...config } = options
 
     super(agent.id, {
       ...config,
@@ -164,6 +178,9 @@ export class AgentNode extends Node {
     })
 
     this._agent = agent
+    if (timeout !== undefined) {
+      this.timeout = timeout
+    }
   }
 
   get agent(): InvokableAgent {
@@ -196,6 +213,7 @@ export class AgentNode extends Node {
     try {
       const invokeOptions: InvokeOptions = {
         ...(options?.structuredOutputSchema && { structuredOutputSchema: options.structuredOutputSchema }),
+        ...(options?.cancelSignal && { cancelSignal: options.cancelSignal }),
         invocationState,
       }
 
