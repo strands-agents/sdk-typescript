@@ -39,7 +39,7 @@ from strands._generated.types import (
 )
 from strands.hooks import AfterToolCallEvent, HookProvider, HookRegistry
 from strands.tools import DecoratedTool
-from strands.types.exceptions import ContextOverflowError, MaxTokensReachedException, ToolProviderException
+from strands.types.exceptions import ContextOverflowError, MaxTokensReachedException, StructuredOutputError, ToolProviderException
 from strands.types.tools import ToolContext
 
 log = logging.getLogger(__name__)
@@ -102,6 +102,7 @@ class StreamResult:
     stop_reason: str = "end_turn"
     usage: Any = None
     metrics: Metrics = field(default_factory=Metrics)
+    structured_output_json: str | None = None
 
 
 class AgentResult:
@@ -244,7 +245,7 @@ class Agent:
         hooks: list[HookProvider] | None = None,
         load_tools_from_directory: bool = False,
         printer: bool = True,
-        structured_output_model: type | None = None,
+        structured_output: type | None = None,
         agent_id: str | None = None,
         session_manager: Any = None,
         conversation_manager: Union[
@@ -270,7 +271,12 @@ class Agent:
         if hooks:
             for provider in hooks:
                 provider.register_hooks(self.hooks)
-        self._default_structured_output_model = structured_output_model
+        self._structured_output_model: type | None = None
+        self._structured_output_schema_json: str | None = None
+        if structured_output is not None:
+            schema = flatten_pydantic_schema(structured_output.model_json_schema())
+            self._structured_output_schema_json = json.dumps(schema)
+            self._structured_output_model = structured_output
         self._load_tools_from_directory = load_tools_from_directory
         self._tools_dir_mtimes: dict[str, float] = {}
         self._printer = printer
@@ -345,6 +351,7 @@ class Agent:
             tool_dispatcher=self._dispatcher,
             log_handler=_LogHandler(),
             conversation_manager_config=cm_config,
+            structured_output_schema=self._structured_output_schema_json,
             use_callback_relay=False,
         )
 
@@ -524,6 +531,7 @@ class Agent:
         *,
         tools: Any = None,
         tool_choice: Any = None,
+        structured_output_schema: str | None = None,
     ) -> StreamResult:
         import time as _time
 
@@ -531,7 +539,7 @@ class Agent:
         tool_metrics: list[dict[str, Any]] = []
         pending_tool_start: dict[str, float] = {}
 
-        if tools is not None or tool_choice is not None:
+        if tools is not None or tool_choice is not None or structured_output_schema is not None:
             wasm_tool_specs = (
                 [
                     _ToolSpec(
@@ -545,7 +553,7 @@ class Agent:
                 else None
             )
             stream = await self._wasm_agent.start_stream_with_options(
-                prompt, wasm_tool_specs, tool_choice,
+                prompt, wasm_tool_specs, tool_choice, structured_output_schema,
             )
         else:
             stream = await self._wasm_agent.start_stream(prompt)
@@ -581,6 +589,7 @@ class Agent:
                         result.usage = sd.usage
                         latency = sd.metrics.latency_ms if sd.metrics else 0.0
                         result.metrics = Metrics(latency_ms=latency)
+                        result.structured_output_json = sd.structured_output
                         if self._printer and result.text_parts:
                             print()
 
@@ -610,6 +619,8 @@ class Agent:
                             raise ContextOverflowError(err_msg)
                         if "maximum token" in err_msg.lower():
                             raise MaxTokensReachedException(err_msg)
+                        if "failed to invoke the structured output tool" in err_msg:
+                            raise StructuredOutputError(err_msg)
                         if self._printer:
                             print(f"\n[error: {err_msg}]", file=sys.stderr)
 
@@ -624,17 +635,21 @@ class Agent:
         return result
 
     async def _call_async(self, prompt: str, **kwargs: Any) -> AgentResult:
-        structured_output_model = kwargs.pop("structured_output_model", None)
-        so_model = structured_output_model or self._default_structured_output_model
+        per_invocation_so = kwargs.pop("structured_output", None)
+        so_model = per_invocation_so or self._structured_output_model
 
-        if so_model is not None:
-            return await self._call_with_structured_output_async(prompt, so_model)
+        so_schema_json: str | None = None
+        if per_invocation_so is not None:
+            schema = flatten_pydantic_schema(per_invocation_so.model_json_schema())
+            so_schema_json = json.dumps(schema)
+        elif self._structured_output_schema_json:
+            so_schema_json = self._structured_output_schema_json
 
         try:
-            sr = await self._consume_stream_async(prompt)
+            sr = await self._consume_stream_async(prompt, structured_output_schema=so_schema_json)
         except ContextOverflowError:
             await self._wasm_agent.set_messages_async("[]")
-            sr = await self._consume_stream_async(prompt)
+            sr = await self._consume_stream_async(prompt, structured_output_schema=so_schema_json)
         except MaxTokensReachedException:
             raw = await self._wasm_agent.get_messages_async()
             msgs = [convert_message(m) for m in json.loads(raw)]
@@ -655,64 +670,18 @@ class Agent:
             await self._wasm_agent.set_messages_async(json.dumps(msgs))
             raise MaxTokensReachedException("max tokens reached")
 
+        structured_output = None
+        if sr.structured_output_json and so_model:
+            data = json.loads(sr.structured_output_json)
+            structured_output = so_model(**data)
+
         return AgentResult(
             text="".join(sr.text_parts),
             stop_reason=sr.stop_reason,
             usage=sr.usage,
             metrics=sr.metrics,
+            structured_output=structured_output,
         )
-
-    async def _call_with_structured_output_async(
-        self, prompt: str, so_model: type,
-    ) -> AgentResult:
-        so_tool_name = so_model.__name__
-        schema = flatten_pydantic_schema(so_model.model_json_schema())  # type: ignore[attr-defined]
-        so_tool_spec: dict[str, Any] = {
-            "name": so_tool_name,
-            "description": (getattr(so_model, "__doc__", None) or so_tool_name)
-            + " -- You MUST call this tool to return structured output.",
-            "inputSchema": schema,
-        }
-
-        so_result: Any = None
-
-        def so_handler(input_json: str, _tool_use_id: str = "") -> str:
-            nonlocal so_result
-            data = json.loads(input_json)
-            try:
-                so_result = so_model(**data)
-                return json.dumps({"status": "success", "content": [{"text": json.dumps(data)}]})
-            except Exception as exc:
-                raise ValueError(f"Validation error: {exc}") from exc
-
-        self._dispatcher.register(so_tool_name, so_handler)
-        try:
-            existing_tools = [entry.spec for entry in self._tool_map.values()]
-            all_tools = existing_tools + [so_tool_spec]
-            sr = await self._consume_stream_async(prompt, tools=all_tools)
-
-            if so_result is None and sr.stop_reason != "max_tokens":
-                sr = await self._consume_stream_async(
-                    json.dumps([{
-                        "text": "You must format the previous response as structured output. "
-                        f"Call the {so_tool_name} tool now.",
-                    }]),
-                    tools=[so_tool_spec],
-                    tool_choice=json.dumps({"any": {}}),
-                )
-
-            if sr.stop_reason == "max_tokens":
-                raise MaxTokensReachedException("max tokens reached")
-
-            return AgentResult(
-                text="".join(sr.text_parts),
-                stop_reason=sr.stop_reason,
-                usage=sr.usage,
-                metrics=sr.metrics,
-                structured_output=so_result,
-            )
-        finally:
-            self._dispatcher.unregister(so_tool_name)
 
     def __call__(self, prompt: Any = None, **kwargs: Any) -> AgentResult:
         import asyncio
@@ -739,22 +708,22 @@ class Agent:
 
     def structured_output(self, output_model: type, prompt: Any, **kwargs: Any) -> Any:
         """Invoke the agent with structured output validation. Returns the parsed model instance."""
-        result = self(prompt, structured_output_model=output_model, **kwargs)
+        result = self(prompt, structured_output=output_model, **kwargs)
         return result.structured_output if result.structured_output is not None else result
 
     async def structured_output_async(self, output_model: type, prompt: Any, **kwargs: Any) -> Any:
         """Invoke the agent with structured output validation (async). Returns the parsed model instance."""
         if isinstance(prompt, list):
             prompt = json.dumps(prompt)
-        result = await self._call_async(str(prompt), structured_output_model=output_model, **kwargs)
+        result = await self._call_async(str(prompt), structured_output=output_model, **kwargs)
         return result.structured_output if result.structured_output is not None else result
 
     async def stream_async(self, prompt: Any, **kwargs: Any) -> Any:
-        structured_output_model = kwargs.pop("structured_output_model", None)
-        so_model = structured_output_model or self._default_structured_output_model
+        per_invocation_so = kwargs.pop("structured_output", None)
+        so_model = per_invocation_so or self._structured_output_model
 
         if so_model is not None:
-            result = await self._call_async(str(prompt), structured_output_model=so_model)
+            result = await self._call_async(str(prompt), structured_output=so_model)
             yield {"result": result}
             return
 

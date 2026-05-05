@@ -279,6 +279,7 @@ def _build_agent_config(
     system_prompt_blocks: str | None,
     tools: list[ToolSpec] | None,
     conversation_manager_config: dict[str, typing.Any] | None = None,
+    structured_output_schema: str | None = None,
 ) -> Record:
     model_variant = None
     if model is not None:
@@ -297,6 +298,7 @@ def _build_agent_config(
         "trace-context": None,
         "session": None,
         "conversation-manager": cm_variant,
+        "structured-output-schema": structured_output_schema,
     }
 
     return _rec(
@@ -310,9 +312,17 @@ def _build_stream_args(
     input_text: str,
     tools: list[ToolSpec] | None,
     tool_choice: str | None,
+    structured_output_schema: str | None = None,
 ) -> Record:
     tool_recs = [_build_tool_spec(t) for t in tools] if tools else None
-    return _rec(input=input_text, tools=tool_recs, **{"tool-choice": tool_choice})
+    return _rec(
+        input=input_text,
+        tools=tool_recs,
+        **{
+            "tool-choice": tool_choice,
+            "structured-output-schema": structured_output_schema,
+        },
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -388,6 +398,7 @@ def _convert_stream_event(v: Variant) -> StreamEvent:
             reason=_stop_reason_from_str(getattr(p, "reason")),
             usage=_convert_usage(_opt_attr(p, "usage")),
             metrics=_convert_metrics(_opt_attr(p, "metrics")),
+            structured_output=_opt_attr(p, "structured-output"),
         )
         return StreamEvent_Stop(value=sd)
 
@@ -553,6 +564,7 @@ class WasmAgent:
         tool_dispatcher: ToolDispatcherBase | None,
         log_handler: LogHandlerBase | None,
         conversation_manager_config: dict[str, typing.Any] | None = None,
+        structured_output_schema: str | None = None,
         use_callback_relay: bool = False,
     ):
         engine, component = _get_engine_and_component()
@@ -584,7 +596,7 @@ class WasmAgent:
         self._component = component
 
         # --- instantiate + construct agent (async, run synchronously) ---
-        agent_config = _build_agent_config(model, system_prompt, system_prompt_blocks, tools, conversation_manager_config)
+        agent_config = _build_agent_config(model, system_prompt, system_prompt_blocks, tools, conversation_manager_config, structured_output_schema)
         _run_sync(self._init_async(linker, store, component, agent_config))
 
     async def _init_async(
@@ -631,8 +643,9 @@ class WasmAgent:
         input_text: str,
         tools: list[ToolSpec] | None,
         tool_choice: str | None,
+        structured_output_schema: str | None = None,
     ) -> typing.Any:
-        args = _build_stream_args(input_text, tools, tool_choice)
+        args = _build_stream_args(input_text, tools, tool_choice, structured_output_schema)
         return await self._generate_fn.call_async(
             self._store, self._agent_handle, args
         )

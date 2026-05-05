@@ -3,7 +3,7 @@ Comprehensive integration tests for structured output passed into the agent func
 """
 
 import pytest
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
 
 from strands import Agent
 from strands.tools import tool
@@ -113,16 +113,9 @@ class Task(BaseModel):
 
 
 class NameWithValidation(BaseModel):
-    """Name model with validation that forces retry."""
+    """Name model with validation that forces retry via JSON schema pattern constraint."""
 
-    first_name: str
-
-    @field_validator("first_name")
-    @classmethod
-    def validate_first_name(cls, value: str) -> str:
-        if not value.endswith("abc"):
-            raise ValueError("You must append 'abc' to the end of my name")
-        return value
+    first_name: str = Field(pattern=r".*abc$", description="Must end with 'abc'")
 
 
 # ========== Tool Definitions ==========
@@ -164,14 +157,14 @@ class TestBasicStructuredOutput:
         result = agent("What can you do for me?")
 
         assert result.structured_output is None
-        assert agent._default_structured_output_model is None
+        assert agent._structured_output_model is None
 
     def test_simple_structured_output(self):
         """Test basic structured output with UserProfile."""
         agent = Agent()
 
         result = agent(
-            "Create a profile for John Doe who is a 25 year old dentist", structured_output_model=UserProfile
+            "Create a profile for John Doe who is a 25 year old dentist", structured_output=UserProfile
         )
 
         assert result.structured_output is not None
@@ -186,7 +179,7 @@ class TestBasicStructuredOutput:
 
         # First call with structured output
         result1 = agent(
-            "Create a profile for John Doe who is a 25 year old dentist", structured_output_model=UserProfile
+            "Create a profile for John Doe who is a 25 year old dentist", structured_output=UserProfile
         )
         assert result1.structured_output is not None
 
@@ -213,7 +206,7 @@ class TestToolUsage:
         """Test tool usage with structured output."""
         agent = Agent(tools=[calculator])
 
-        result = agent("Calculate 2 + 2 using the calculator tool", structured_output_model=MathResult)
+        result = agent("Calculate 2 + 2 using the calculator tool", structured_output=MathResult)
 
         assert result.structured_output is not None
         assert isinstance(result.structured_output, MathResult)
@@ -239,7 +232,7 @@ class TestAsyncOperations:
             is reasonable too. I'd definitely buy it again and recommend it to others.
             Rating: 5 stars"
             """,
-            structured_output_model=ProductReview,
+            structured_output=ProductReview,
         )
 
         assert result.structured_output is not None
@@ -262,7 +255,7 @@ class TestStreamingOperations:
 
         async for event in agent.stream_async(
             "Generate a weather forecast for Seattle: 68°F, partly cloudy, 55% humidity, 8 mph winds, for tomorrow",
-            structured_output_model=WeatherForecast,
+            structured_output=WeatherForecast,
         ):
             if "result" in event:
                 result_found = True
@@ -284,14 +277,14 @@ class TestMultipleInvocations:
         agent = Agent()
 
         # First invocation with Person model
-        person_result = agent("Extract person: John Doe, 35, john@test.com", structured_output_model=Person)
+        person_result = agent("Extract person: John Doe, 35, john@test.com", structured_output=Person)
         assert person_result.structured_output is not None
         assert isinstance(person_result.structured_output, Person)
         assert person_result.structured_output.name == "John Doe"
         assert person_result.structured_output.age == 35
 
         # Second invocation with Task model
-        task_result = agent("Create task: Review code, high priority, completed", structured_output_model=Task)
+        task_result = agent("Create task: Review code, high priority, completed", structured_output=Task)
         assert task_result.structured_output is not None
         assert isinstance(task_result.structured_output, Task)
         assert task_result.structured_output.title == "Review code"
@@ -308,7 +301,7 @@ class TestAgentInitialization:
 
     def test_agent_with_default_structured_output(self):
         """Test agent initialized with default structured output model."""
-        agent = Agent(structured_output_model=UserProfile)
+        agent = Agent(structured_output=UserProfile)
 
         result = agent("Create a profile for John Doe who is a 25 year old dentist")
 
@@ -326,7 +319,7 @@ class TestValidationRetry:
         """Test that validation errors force the model to retry."""
         agent = Agent()
 
-        result = agent("What's Aaron's name?", structured_output_model=NameWithValidation)
+        result = agent("What's Aaron's name?", structured_output=NameWithValidation)
 
         assert result.structured_output is not None
         assert isinstance(result.structured_output, NameWithValidation)

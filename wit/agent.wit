@@ -61,6 +61,8 @@ interface types {
     reason: stop-reason,
     usage: option<usage>,
     metrics: option<metrics>,
+    /// JSON-serialized structured output from the agent, if a schema was provided.
+    structured-output: option<string>,
   }
 
   /// Hook event types fired during the agent loop.
@@ -192,6 +194,8 @@ interface types {
     trace-context: option<string>,
     session: option<session-config>,
     conversation-manager: option<conversation-manager-config>,
+    /// JSON-serialized JSON Schema for structured output validation.
+    structured-output-schema: option<string>,
   }
 
   /// Arguments for a single tool call from guest to host.
@@ -211,6 +215,8 @@ interface types {
     input: string,
     tools: option<list<tool-spec>>,
     tool-choice: option<string>,
+    /// Per-invocation JSON Schema for structured output. Overrides agent-config schema.
+    structured-output-schema: option<string>,
   }
 
   /// Payload for responding to an interrupt.

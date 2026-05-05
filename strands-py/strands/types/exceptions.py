@@ -25,3 +25,7 @@ class ToolProviderException(Exception):
 class SessionException(Exception):
     """Raised when session operations fail."""
 
+
+class StructuredOutputError(Exception):
+    """Raised when the model fails to produce valid structured output after force-retry."""
+

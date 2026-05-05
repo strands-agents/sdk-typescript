@@ -225,3 +225,121 @@ Model config dict format:
     "api_key": "...",            # anthropic, openai, gemini only
 }
 ```
+
+---
+
+## Structured Output
+
+### Overview
+
+Structured output validation runs inside the TypeScript SDK WASM guest using `StructuredOutputTool`. Python sends a flattened JSON schema through the WIT contract. The TS agent loop registers the tool, handles force-retry when the model doesn't call it, validates with Zod, and returns the validated JSON on the stop event. Python instantiates the Pydantic model from the validated JSON.
+
+### 1. Parameter name changed
+
+**TS design:** The TS Agent accepts `structuredOutputSchema` (a Zod schema) on `AgentConfig` and `InvokeOptions`.
+
+```typescript
+// strands-ts/src/types/agent.ts:165
+structuredOutputSchema?: z.ZodSchema
+```
+
+**WASM bridge:** Python sends the JSON schema as a string through `structured-output-schema` on `agent-config` and `stream-args`. `entry.ts` reconstructs a Zod schema via `z.fromJSONSchema()`.
+
+**Python API change:**
+
+```python
+# Standalone Python SDK (1.x)
+agent = Agent(structured_output_model=MyModel)
+result = agent("prompt", structured_output_model=MyModel)
+
+# WASM bridged Python SDK (2.x)
+agent = Agent(structured_output=MyModel)
+result = agent("prompt", structured_output=MyModel)
+```
+
+### 2. Tool name is fixed
+
+**TS design:** `StructuredOutputTool` uses a fixed name defined in `strands-ts/src/tools/structured-output-tool.ts:9`:
+
+```typescript
+export const STRUCTURED_OUTPUT_TOOL_NAME = 'strands_structured_output'
+```
+
+**Python API change:**
+
+```python
+# Standalone Python SDK (1.x) — tool name was the Pydantic model class name
+# Conversation history shows: toolUse name="MyModel"
+
+# WASM bridged Python SDK (2.x) — fixed tool name
+# Conversation history shows: toolUse name="strands_structured_output"
+```
+
+This does not affect user code. The tool name appears in conversation history but users do not reference it directly.
+
+### 3. Force-retry uses toolChoice, not a user message
+
+**TS design:** When the model stops without calling the structured output tool, the TS agent loop sets `toolChoice: { tool: { name: 'strands_structured_output' } }` and continues the loop (`strands-ts/src/agent/agent.ts:771`). No user message is appended.
+
+**Python API change:**
+
+```python
+# Standalone Python SDK (1.x) — customizable force prompt
+agent = Agent()
+result = agent("prompt", structured_output_model=MyModel, structured_output_prompt="Format as MyModel now.")
+
+# WASM bridged Python SDK (2.x) — structured_output_prompt not available
+agent = Agent()
+result = agent("prompt", structured_output=MyModel)
+# Force-retry handled automatically by TS SDK via toolChoice
+```
+
+The TS mechanism is more reliable because it forces the model to call the specific tool rather than relying on a text prompt.
+
+### 4. Validation runs in Zod, instantiation in Pydantic
+
+**TS design:** `StructuredOutputTool.stream()` validates via `this._schema.parse(toolUse.input)` (Zod) at `strands-ts/src/tools/structured-output-tool.ts:59`. On success, returns a `JsonBlock` with the validated data. On error, returns the error message for LLM retry.
+
+**WASM bridge:** The validated JSON returns through `stop-data.structured-output` as a JSON string. Python instantiates the Pydantic model from it: `so_model(**json.loads(json_str))`.
+
+**Python API change:**
+
+```python
+# Both versions — same user experience
+result = agent("Describe a person", structured_output=Person)
+result.structured_output  # Person(name="Alice", age=30) — Pydantic instance
+```
+
+Validation errors from Zod trigger model retry inside the TS guest (the model sees the error message and corrects its output). Custom Pydantic `@field_validator` logic that goes beyond JSON schema constraints cannot be enforced by Zod. Zod validates schema structure; Pydantic adds business logic on instantiation.
+
+### 5. Deprecated method removed
+
+**TS design:** No equivalent to `agent.structured_output(model, prompt)`. Structured output is configured via the constructor or per-invocation options.
+
+**Python API change:**
+
+```python
+# Standalone Python SDK (1.x) — deprecated method
+result = agent.structured_output(MyModel, "prompt")
+
+# WASM bridged Python SDK (2.x) — use standard invocation
+result = agent("prompt", structured_output=MyModel)
+# Or via helper method:
+result = agent.structured_output(MyModel, "prompt")  # still available, delegates to above
+```
+
+### 6. Error on force failure
+
+**TS design:** Throws `StructuredOutputError` (`strands-ts/src/errors.ts:203`) with message `"The model failed to invoke the structured output tool even after it was forced."`.
+
+**Python API change:**
+
+```python
+# Standalone Python SDK (1.x)
+from strands.types.exceptions import StructuredOutputException
+
+# WASM bridged Python SDK (2.x)
+from strands.types.exceptions import StructuredOutputError
+```
+
+The exception is raised when the TS SDK's error message is detected in the stream.
