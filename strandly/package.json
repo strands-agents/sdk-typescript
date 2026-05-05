@@ -1,10 +1,10 @@
 {
-  "name": "@strands-agents/dev",
+  "name": "@strands-agents/strandly",
   "version": "0.0.1",
   "private": true,
   "type": "module",
   "bin": {
-    "strands-dev": "./src/cli.ts"
+    "strandly": "./src/cli.ts"
   },
   "scripts": {
     "type-check": "tsc --noEmit"

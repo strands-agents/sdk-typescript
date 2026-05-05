@@ -10,7 +10,7 @@ const PY = `${ROOT}/strands-py`
 
 process.env.PYTHONPYCACHEPREFIX ??= '.pycache'
 
-program.name('strands-dev').description(
+program.name('strandly').description(
   `Strands monorepo development CLI
 
 Build pipeline (each step feeds the next):
@@ -169,7 +169,16 @@ function py(cmd: string): void {
 
 function setup(opts?: { node?: boolean; python?: boolean }): void {
   const all = !opts?.node && !opts?.python
-  if (all || opts?.node) run('npm install')
+  if (all || opts?.node) {
+    run('npm install')
+    // Symlink strandly globally so users can run `strandly <cmd>` from
+    // any cwd. The symlink points back at the workspace copy, so edits to
+    // cli.ts are picked up live with no re-link. tsx has to be global too
+    // because the CLI's shebang is `#!/usr/bin/env tsx`. May require sudo
+    // depending on the global npm prefix.
+    run('npm install -g tsx')
+    run('npm link', { cwd: `${ROOT}/strandly` })
+  }
   if (all || opts?.python) {
     py('python3 -m venv .venv')
     py(".venv/bin/pip install -e '.[test,dev]' ruff")
@@ -238,7 +247,7 @@ function generate(opts?: { check?: boolean }): void {
         cwd: ROOT,
       })
     } catch {
-      console.error("error: generated files are out of date -- run 'strands-dev generate' and commit")
+      console.error("error: generated files are out of date -- run 'strandly generate' and commit")
       run('git diff --stat -- strands-wasm/generated/ strands-ts/generated/ strands-py/strands/_generated/')
       process.exit(1)
     }
