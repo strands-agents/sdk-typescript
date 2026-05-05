@@ -536,6 +536,16 @@ function createConversationManager(config: AgentConfig): ConversationManager | u
   }
 }
 
+/** Parse a JSON Schema string into a Zod schema for structured output validation. */
+function parseStructuredOutputSchema(jsonStr: string | undefined): z.ZodSchema | undefined {
+  if (!jsonStr) return undefined
+  try {
+    return z.fromJSONSchema(JSON.parse(jsonStr))
+  } catch (e) {
+    throw new Error(`Invalid structured output schema: ${e instanceof Error ? e.message : String(e)}`)
+  }
+}
+
 class AgentImpl {
   private agent: Agent
   private defaultTools: FunctionTool[] | undefined
@@ -556,14 +566,7 @@ class AgentImpl {
     this.sessionManager = createSessionManager(config)
     const conversationManager = createConversationManager(config)
 
-    let structuredOutputSchema: z.ZodSchema | undefined
-    if ((config as any).structuredOutputSchema) {
-      try {
-        structuredOutputSchema = z.fromJSONSchema(JSON.parse((config as any).structuredOutputSchema))
-      } catch (e) {
-        throw new Error(`Invalid structured output schema: ${e instanceof Error ? e.message : String(e)}`)
-      }
-    }
+    const structuredOutputSchema = parseStructuredOutputSchema(config.structuredOutputSchema)
 
     const plugins: Plugin[] = [this.lifecycleBridge]
 
@@ -601,14 +604,7 @@ class AgentImpl {
       this.agent.model = createToolChoiceProxy(originalModel, tc)
     }
 
-    let structuredOutputSchema: z.ZodSchema | undefined
-    if ((args as any).structuredOutputSchema) {
-      try {
-        structuredOutputSchema = z.fromJSONSchema(JSON.parse((args as any).structuredOutputSchema))
-      } catch (e) {
-        throw new Error(`Invalid structured output schema: ${e instanceof Error ? e.message : String(e)}`)
-      }
-    }
+    const structuredOutputSchema = parseStructuredOutputSchema(args.structuredOutputSchema)
 
     return new ResponseStreamImpl(
       this.agent,

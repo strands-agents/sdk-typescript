@@ -15,7 +15,8 @@
     "clean": "rm -rf dist node_modules package-lock.json"
   },
   "dependencies": {
-    "@strands-agents/sdk": "*"
+    "@strands-agents/sdk": "*",
+    "zod": "^4.1.12"
   },
   "devDependencies": {
     "@bytecodealliance/jco": "^1.16.1",

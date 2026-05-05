@@ -673,7 +673,12 @@ class Agent:
         structured_output = None
         if sr.structured_output_json and so_model:
             data = json.loads(sr.structured_output_json)
-            structured_output = so_model(**data)
+            try:
+                structured_output = so_model(**data)
+            except Exception as exc:
+                raise StructuredOutputError(
+                    f"Pydantic validation failed for {so_model.__name__}: {exc}"
+                ) from exc
 
         return AgentResult(
             text="".join(sr.text_parts),
@@ -719,6 +724,11 @@ class Agent:
         return result.structured_output if result.structured_output is not None else result
 
     async def stream_async(self, prompt: Any, **kwargs: Any) -> Any:
+        """Stream agent events. When structured_output is set, intermediate events
+        are not yielded — only the final result is produced after the agent loop completes.
+        This matches the TS SDK behavior where structured output requires the full
+        agent loop to finish before the validated result is available.
+        """
         per_invocation_so = kwargs.pop("structured_output", None)
         so_model = per_invocation_so or self._structured_output_model
 
