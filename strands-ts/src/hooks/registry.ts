@@ -7,6 +7,7 @@ import { InterruptError, Interrupt } from '../interrupt.js'
  */
 type CallbackEntry = {
   callback: HookCallback<HookableEvent>
+  order: number
 }
 
 /**
@@ -19,9 +20,14 @@ export interface HookRegistry {
    *
    * @param eventType - The event class constructor to register the callback for
    * @param callback - The callback function to invoke when the event occurs
+   * @param order - Execution priority. Lower values run first. Defaults to 0.
    * @returns Cleanup function that removes the callback when invoked
    */
-  addCallback<T extends HookableEvent>(eventType: HookableEventConstructor<T>, callback: HookCallback<T>): HookCleanup
+  addCallback<T extends HookableEvent>(
+    eventType: HookableEventConstructor<T>,
+    callback: HookCallback<T>,
+    order?: number
+  ): HookCleanup
 }
 
 /**
@@ -30,22 +36,35 @@ export interface HookRegistry {
  */
 export class HookRegistryImplementation implements HookRegistry {
   private readonly _callbacks: Map<HookableEventConstructor, CallbackEntry[]>
+  private _defaultOrder: number = 0
 
   constructor() {
     this._callbacks = new Map()
   }
 
-  /**
-   * Register a callback function for a specific event type.
-   *
-   * @param eventType - The event class constructor to register the callback for
-   * @param callback - The callback function to invoke when the event occurs
-   * @returns Cleanup function that removes the callback when invoked
-   */
-  addCallback<T extends HookableEvent>(eventType: HookableEventConstructor<T>, callback: HookCallback<T>): HookCleanup {
-    const entry: CallbackEntry = { callback: callback as HookCallback<HookableEvent> }
+  /** @internal Used by PluginRegistry during sequential plugin initialization. */
+  _setDefaultOrder(order: number): void {
+    this._defaultOrder = order
+  }
+
+  /** {@inheritDoc HookRegistry.addCallback} */
+  addCallback<T extends HookableEvent>(
+    eventType: HookableEventConstructor<T>,
+    callback: HookCallback<T>,
+    order?: number
+  ): HookCleanup {
+    const entry: CallbackEntry = {
+      callback: callback as HookCallback<HookableEvent>,
+      order: order ?? this._defaultOrder,
+    }
     const callbacks = this._callbacks.get(eventType) ?? []
-    callbacks.push(entry)
+    // Insert in sorted position: lower order first, same order preserves registration order
+    const insertAt = callbacks.findIndex((e) => e.order > entry.order)
+    if (insertAt === -1) {
+      callbacks.push(entry)
+    } else {
+      callbacks.splice(insertAt, 0, entry)
+    }
     this._callbacks.set(eventType, callbacks)
 
     return () => {

@@ -253,11 +253,29 @@ export interface LocalAgent {
   /**
    * Register a hook callback for a specific event type.
    *
+   * Hooks execute in order from lowest to highest on `Before*` events.
+   * On `After*` events the order is reversed (highest runs first), producing
+   * middleware-like wrapping: a hook with a low order enters first and exits last.
+   *
+   * To run a hook first on *both* Before and After events (e.g. redaction that
+   * must see data before any other hook), register separate hooks with different
+   * orders:
+   *
+   * ```typescript
+   * agent.addHook(BeforeToolCallEvent, redact, -100)  // runs first (low order)
+   * agent.addHook(AfterToolCallEvent, redact, 100)    // also runs first (high order, reversed)
+   * ```
+   *
    * @param eventType - The event class constructor to register the callback for
    * @param callback - The callback function to invoke when the event occurs
+   * @param order - Execution priority. Lower values run first on Before* events. Defaults to 0.
    * @returns Cleanup function that removes the callback when invoked
    */
-  addHook<T extends HookableEvent>(eventType: HookableEventConstructor<T>, callback: HookCallback<T>): HookCleanup
+  addHook<T extends HookableEvent>(
+    eventType: HookableEventConstructor<T>,
+    callback: HookCallback<T>,
+    order?: number
+  ): HookCleanup
 }
 
 /**

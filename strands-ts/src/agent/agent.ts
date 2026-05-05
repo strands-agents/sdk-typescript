@@ -323,12 +323,15 @@ export class Agent implements LocalAgent, InvokableAgent {
     // Initialize plugin registry with all plugins to be initialized during initialize()
     // ModelPlugin is registered last so that on AfterInvocationEvent (which uses reverse
     // callback ordering), it runs first — clearing messages before SessionManager saves.
-    this._pluginRegistry = new PluginRegistry([
-      this._conversationManager,
-      ...(config?.plugins ?? []),
-      ...(config?.sessionManager ? [config.sessionManager] : []),
-      new ModelPlugin(this.model),
-    ])
+    this._pluginRegistry = new PluginRegistry(
+      [
+        this._conversationManager,
+        ...(config?.plugins ?? []),
+        ...(config?.sessionManager ? [config.sessionManager] : []),
+        new ModelPlugin(this.model),
+      ],
+      this._hooksRegistry
+    )
 
     if (config?.systemPrompt !== undefined) {
       this.systemPrompt = systemPromptFromData(config.systemPrompt)
@@ -362,6 +365,7 @@ export class Agent implements LocalAgent, InvokableAgent {
    *
    * @param eventType - The event class constructor to register the callback for
    * @param callback - The callback function to invoke when the event occurs
+   * @param order - Execution priority. Lower values run first. Defaults to 0.
    * @returns Cleanup function that removes the callback when invoked
    *
    * @example
@@ -376,8 +380,12 @@ export class Agent implements LocalAgent, InvokableAgent {
    * cleanup()
    * ```
    */
-  addHook<T extends HookableEvent>(eventType: HookableEventConstructor<T>, callback: HookCallback<T>): HookCleanup {
-    return this._hooksRegistry.addCallback(eventType, callback)
+  addHook<T extends HookableEvent>(
+    eventType: HookableEventConstructor<T>,
+    callback: HookCallback<T>,
+    order?: number
+  ): HookCleanup {
+    return this._hooksRegistry.addCallback(eventType, callback, order)
   }
 
   public async initialize(): Promise<void> {

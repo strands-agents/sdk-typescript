@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { PluginRegistry } from '../registry.js'
 import type { Plugin } from '../plugin.js'
 import { BeforeInvocationEvent, type HookableEvent } from '../../hooks/events.js'
+import { HookRegistryImplementation } from '../../hooks/registry.js'
 import type { Tool } from '../../tools/tool.js'
 import type { HookableEventConstructor, HookCallback } from '../../hooks/types.js'
 import type { LocalAgent } from '../../types/agent.js'
@@ -93,7 +94,7 @@ describe('PluginRegistry', () => {
   describe('initialize', () => {
     it('initializes a plugin and calls initAgent', async () => {
       const plugin = new InitializableTestPlugin()
-      registry = new PluginRegistry([plugin])
+      registry = new PluginRegistry([plugin], new HookRegistryImplementation())
 
       await registry.initialize(mockAgent)
 
@@ -102,7 +103,7 @@ describe('PluginRegistry', () => {
 
     it('registers hooks via agent.addHook', async () => {
       const plugin = new TestPlugin()
-      registry = new PluginRegistry([plugin])
+      registry = new PluginRegistry([plugin], new HookRegistryImplementation())
 
       await registry.initialize(mockAgent)
 
@@ -113,7 +114,7 @@ describe('PluginRegistry', () => {
     it('throws error when plugins have duplicate names', async () => {
       const plugin1 = new TestPlugin('duplicate-name')
       const plugin2 = new TestPlugin('duplicate-name')
-      registry = new PluginRegistry([plugin1, plugin2])
+      registry = new PluginRegistry([plugin1, plugin2], new HookRegistryImplementation())
 
       await expect(registry.initialize(mockAgent)).rejects.toThrow(
         'plugin_name=<duplicate-name> | plugin already registered'
@@ -123,7 +124,7 @@ describe('PluginRegistry', () => {
     it('initializes multiple plugins with different names', async () => {
       const plugin1 = new TestPlugin('plugin-1')
       const plugin2 = new TestPlugin('plugin-2')
-      registry = new PluginRegistry([plugin1, plugin2])
+      registry = new PluginRegistry([plugin1, plugin2], new HookRegistryImplementation())
 
       await registry.initialize(mockAgent)
 
@@ -133,7 +134,7 @@ describe('PluginRegistry', () => {
     it('auto-registers tools from plugin.getTools()', async () => {
       const mockTool = createRandomTool('mock-tool')
       const plugin = new ToolProviderPlugin('tool-provider', [mockTool])
-      registry = new PluginRegistry([plugin])
+      registry = new PluginRegistry([plugin], new HookRegistryImplementation())
 
       await registry.initialize(mockAgent)
 
@@ -155,7 +156,7 @@ describe('PluginRegistry', () => {
       }
 
       const plugin = new AsyncPlugin()
-      registry = new PluginRegistry([plugin])
+      registry = new PluginRegistry([plugin], new HookRegistryImplementation())
 
       await registry.initialize(mockAgent)
 
@@ -164,7 +165,7 @@ describe('PluginRegistry', () => {
 
     it('is idempotent — calling initialize twice only runs plugins once', async () => {
       const plugin = new InitializableTestPlugin()
-      registry = new PluginRegistry([plugin])
+      registry = new PluginRegistry([plugin], new HookRegistryImplementation())
 
       await registry.initialize(mockAgent)
       plugin.initialized = false // reset to detect a second call
@@ -177,7 +178,7 @@ describe('PluginRegistry', () => {
   describe('hook invocation', () => {
     it('hooks are invoked when callbacks are called', async () => {
       const plugin = new TestPlugin()
-      registry = new PluginRegistry([plugin])
+      registry = new PluginRegistry([plugin], new HookRegistryImplementation())
       await registry.initialize(mockAgent)
 
       const callback = registeredHooks[0]?.callback
