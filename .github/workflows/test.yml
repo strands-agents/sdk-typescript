@@ -41,6 +41,9 @@ jobs:
       - name: Run unit tests
         run: npm run test:all:coverage
 
+      - name: Run WASM unit tests
+        run: npm run test -w strands-wasm
+
       - name: Upload test artifacts
         if: always()
         uses: actions/upload-artifact@v7

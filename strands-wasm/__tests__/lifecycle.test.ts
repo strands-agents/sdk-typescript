@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { LifecycleBridge } from '../../entry'
+import { LifecycleBridge } from '../entry'
 import { Agent, FunctionTool } from '@strands-agents/sdk'
 import { MockMessageModel } from '$/fixtures/mock-message-model'
 
