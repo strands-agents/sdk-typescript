@@ -16,6 +16,8 @@ import type { ToolContext } from '../tools/tool.js'
 import type { ElicitationCallback } from '../types/elicitation.js'
 import { context, propagation, trace, TraceFlags } from '@opentelemetry/api'
 import type { SpanContext } from '@opentelemetry/api'
+import { logger } from '../logging/index.js'
+import type { LoggingMessageNotificationParams } from '@modelcontextprotocol/sdk/types.js'
 
 /**
  * Helper to create a mock async generator that yields a result message.
@@ -35,6 +37,10 @@ vi.mock('@modelcontextprotocol/sdk/client/index.js', () => ({
       listTools: vi.fn(),
       callTool: vi.fn(),
       setRequestHandler: vi.fn(),
+      setNotificationHandler: vi.fn(),
+      getServerCapabilities: vi.fn(),
+      getServerVersion: vi.fn(),
+      getInstructions: vi.fn(),
       experimental: {
         tasks: {
           callToolStream: vi.fn(),
@@ -127,6 +133,10 @@ describe('MCP Integration', () => {
       listTools: ReturnType<typeof vi.fn>
       callTool: ReturnType<typeof vi.fn>
       setRequestHandler: ReturnType<typeof vi.fn>
+      setNotificationHandler: ReturnType<typeof vi.fn>
+      getServerCapabilities: ReturnType<typeof vi.fn>
+      getServerVersion: ReturnType<typeof vi.fn>
+      getInstructions: ReturnType<typeof vi.fn>
       experimental: { tasks: { callToolStream: ReturnType<typeof vi.fn> } }
     }
 
@@ -772,5 +782,261 @@ describe('MCP Integration', () => {
       expect(result.status).toBe('error')
       expect((result.content[0] as TextBlock).text).toBe('MCP error -32600: Bad request')
     })
+  })
+})
+
+describe('server metadata getters', () => {
+  let client: McpClient
+  let sdkClientMock: {
+    connect: ReturnType<typeof vi.fn>
+    getServerCapabilities: ReturnType<typeof vi.fn>
+    getServerVersion: ReturnType<typeof vi.fn>
+    getInstructions: ReturnType<typeof vi.fn>
+    setNotificationHandler: ReturnType<typeof vi.fn>
+    setRequestHandler: ReturnType<typeof vi.fn>
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    client = new McpClient({ applicationName: 'TestApp', transport: mockTransport })
+    sdkClientMock = vi.mocked(Client).mock.results.at(-1)!.value
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('returns undefined for all getters before connect', () => {
+    sdkClientMock.getServerCapabilities.mockReturnValue(undefined)
+    sdkClientMock.getServerVersion.mockReturnValue(undefined)
+    sdkClientMock.getInstructions.mockReturnValue(undefined)
+
+    expect(client.serverCapabilities).toBeUndefined()
+    expect(client.serverVersion).toBeUndefined()
+    expect(client.serverInstructions).toBeUndefined()
+  })
+
+  it('returns serverCapabilities after connect', async () => {
+    const caps = { tools: {} }
+    sdkClientMock.getServerCapabilities.mockReturnValue(caps)
+
+    await client.connect()
+
+    expect(client.serverCapabilities).toBe(caps)
+  })
+
+  it('returns serverVersion after connect', async () => {
+    const version = { name: 'my-server', version: '1.2.3' }
+    sdkClientMock.getServerVersion.mockReturnValue(version)
+
+    await client.connect()
+
+    expect(client.serverVersion).toBe(version)
+  })
+
+  it('returns serverInstructions after connect', async () => {
+    sdkClientMock.getInstructions.mockReturnValue('Use this server for X.')
+
+    await client.connect()
+
+    expect(client.serverInstructions).toBe('Use this server for X.')
+  })
+
+  it('connectionState is disconnected before connect', () => {
+    expect(client.connectionState).toBe('disconnected')
+  })
+
+  it('connectionState is connected after successful connect', async () => {
+    await client.connect()
+    expect(client.connectionState).toBe('connected')
+  })
+})
+
+describe('failOpen', () => {
+  let sdkClientMock: {
+    connect: ReturnType<typeof vi.fn>
+    listTools: ReturnType<typeof vi.fn>
+    callTool: ReturnType<typeof vi.fn>
+    setNotificationHandler: ReturnType<typeof vi.fn>
+    setRequestHandler: ReturnType<typeof vi.fn>
+    getServerCapabilities: ReturnType<typeof vi.fn>
+    getServerVersion: ReturnType<typeof vi.fn>
+    getInstructions: ReturnType<typeof vi.fn>
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('throws on connection failure by default', async () => {
+    const client = new McpClient({ applicationName: 'TestApp', transport: mockTransport })
+    sdkClientMock = vi.mocked(Client).mock.results.at(-1)!.value
+    sdkClientMock.connect.mockRejectedValue(new Error('connection refused'))
+
+    await expect(client.connect()).rejects.toThrow('connection refused')
+  })
+
+  it('swallows connection failure when failOpen is true', async () => {
+    const client = new McpClient({ applicationName: 'TestApp', transport: mockTransport, failOpen: true })
+    sdkClientMock = vi.mocked(Client).mock.results.at(-1)!.value
+    sdkClientMock.connect.mockRejectedValue(new Error('connection refused'))
+
+    await expect(client.connect()).resolves.toBeUndefined()
+  })
+
+  it('logs a warning when failOpen swallows a connection failure', async () => {
+    const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {})
+    const client = new McpClient({ applicationName: 'TestApp', transport: mockTransport, failOpen: true })
+    sdkClientMock = vi.mocked(Client).mock.results.at(-1)!.value
+    sdkClientMock.connect.mockRejectedValue(new Error('connection refused'))
+
+    await client.connect()
+
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('MCP server failed to connect'))
+  })
+
+  it('listTools returns empty array when failOpen and connection failed', async () => {
+    const client = new McpClient({ applicationName: 'TestApp', transport: mockTransport, failOpen: true })
+    sdkClientMock = vi.mocked(Client).mock.results.at(-1)!.value
+    sdkClientMock.connect.mockRejectedValue(new Error('connection refused'))
+
+    const tools = await client.listTools()
+
+    expect(tools).toEqual([])
+  })
+
+  it('callTool throws when failOpen and connection failed', async () => {
+    const client = new McpClient({ applicationName: 'TestApp', transport: mockTransport, failOpen: true })
+    sdkClientMock = vi.mocked(Client).mock.results.at(-1)!.value
+    sdkClientMock.connect.mockRejectedValue(new Error('connection refused'))
+    const tool = new McpTool({ name: 'my_tool', description: '', inputSchema: {}, client })
+
+    await expect(client.callTool(tool, {})).rejects.toThrow(
+      'MCP server failed to connect. Call connect(true) to retry.'
+    )
+  })
+
+  it('does not retry connection on subsequent calls after failOpen failure', async () => {
+    const client = new McpClient({ applicationName: 'TestApp', transport: mockTransport, failOpen: true })
+    sdkClientMock = vi.mocked(Client).mock.results.at(-1)!.value
+    sdkClientMock.connect.mockRejectedValue(new Error('connection refused'))
+
+    await client.listTools()
+    await client.listTools()
+
+    expect(sdkClientMock.connect).toHaveBeenCalledTimes(1)
+  })
+
+  it('recovers after explicit connect(true) when server comes back', async () => {
+    const client = new McpClient({ applicationName: 'TestApp', transport: mockTransport, failOpen: true })
+    sdkClientMock = vi.mocked(Client).mock.results.at(-1)!.value
+    sdkClientMock.connect.mockRejectedValueOnce(new Error('connection refused'))
+    sdkClientMock.listTools.mockResolvedValue({ tools: [] })
+
+    const firstTools = await client.listTools()
+    expect(firstTools).toEqual([])
+    expect(client.connectionState).toBe('failed')
+
+    await client.connect(true)
+    const secondTools = await client.listTools()
+
+    expect(secondTools).toEqual([])
+    expect(client.connectionState).toBe('connected')
+    expect(sdkClientMock.connect).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('log routing', () => {
+  let notificationHandler: (notification: { params: LoggingMessageNotificationParams }) => void
+  let sdkClientMock: {
+    connect: ReturnType<typeof vi.fn>
+    setNotificationHandler: ReturnType<typeof vi.fn>
+    setRequestHandler: ReturnType<typeof vi.fn>
+    getServerCapabilities: ReturnType<typeof vi.fn>
+    getServerVersion: ReturnType<typeof vi.fn>
+    getInstructions: ReturnType<typeof vi.fn>
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    new McpClient({ applicationName: 'TestApp', transport: mockTransport })
+    sdkClientMock = vi.mocked(Client).mock.results.at(-1)!.value
+    // Handler is registered in the constructor — read it from the first setNotificationHandler call
+    notificationHandler = sdkClientMock.setNotificationHandler.mock.calls[0]![1]
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('routes debug level to logger.debug', () => {
+    const spy = vi.spyOn(logger, 'debug').mockImplementation(() => {})
+    notificationHandler({ params: { level: 'debug', data: 'hello' } })
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining('hello'))
+  })
+
+  it('routes info level to logger.info', () => {
+    const spy = vi.spyOn(logger, 'info').mockImplementation(() => {})
+    notificationHandler({ params: { level: 'info', data: 'hello' } })
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining('hello'))
+  })
+
+  it('routes notice level to logger.info', () => {
+    const spy = vi.spyOn(logger, 'info').mockImplementation(() => {})
+    notificationHandler({ params: { level: 'notice', data: 'hello' } })
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining('hello'))
+  })
+
+  it('routes warning level to logger.warn', () => {
+    const spy = vi.spyOn(logger, 'warn').mockImplementation(() => {})
+    notificationHandler({ params: { level: 'warning', data: 'hello' } })
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining('hello'))
+  })
+
+  it('routes error level to logger.error', () => {
+    const spy = vi.spyOn(logger, 'error').mockImplementation(() => {})
+    notificationHandler({ params: { level: 'error', data: 'hello' } })
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining('hello'))
+  })
+
+  it('routes critical level to logger.error', () => {
+    const spy = vi.spyOn(logger, 'error').mockImplementation(() => {})
+    notificationHandler({ params: { level: 'critical', data: 'hello' } })
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining('hello'))
+  })
+
+  it('routes alert level to logger.error', () => {
+    const spy = vi.spyOn(logger, 'error').mockImplementation(() => {})
+    notificationHandler({ params: { level: 'alert', data: 'hello' } })
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining('hello'))
+  })
+
+  it('routes emergency level to logger.error', () => {
+    const spy = vi.spyOn(logger, 'error').mockImplementation(() => {})
+    notificationHandler({ params: { level: 'emergency', data: 'hello' } })
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining('hello'))
+  })
+
+  it('includes logger name and data in the message', () => {
+    const spy = vi.spyOn(logger, 'info').mockImplementation(() => {})
+    notificationHandler({ params: { level: 'info', logger: 'my-server', data: { key: 'val' } } })
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining('my-server'))
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining('key'))
+  })
+
+  it('calls custom logHandler when provided', () => {
+    const customHandler = vi.fn()
+    new McpClient({ applicationName: 'TestApp', transport: mockTransport, logHandler: customHandler })
+    const customSdkMock = vi.mocked(Client).mock.results.at(-1)!.value
+    const capturedHandler = customSdkMock.setNotificationHandler.mock.calls[0]![1]
+
+    const params: LoggingMessageNotificationParams = { level: 'info', data: 'test' }
+    capturedHandler({ params })
+
+    expect(customHandler).toHaveBeenCalledWith(params)
   })
 })

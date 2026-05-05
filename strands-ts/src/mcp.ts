@@ -1,7 +1,13 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
 import { takeResult } from '@modelcontextprotocol/sdk/shared/responseMessage.js'
-import { ElicitRequestSchema } from '@modelcontextprotocol/sdk/types.js'
+import {
+  ElicitRequestSchema,
+  LoggingMessageNotificationSchema,
+  type ServerCapabilities,
+  type Implementation,
+  type LoggingMessageNotificationParams,
+} from '@modelcontextprotocol/sdk/types.js'
 import { context, propagation, trace } from '@opentelemetry/api'
 import type { JSONSchema, JSONValue } from './types/json.js'
 import type { ElicitationCallback } from './types/elicitation.js'
@@ -48,6 +54,9 @@ export interface TasksConfig {
   pollTimeout?: number
 }
 
+/** Connection state of an MCP client. */
+export type McpConnectionState = 'disconnected' | 'connected' | 'failed'
+
 /** Arguments for configuring an MCP Client. */
 export type McpClientConfig = RuntimeConfig & {
   transport: McpTransport
@@ -68,6 +77,12 @@ export type McpClientConfig = RuntimeConfig & {
    * and routes incoming elicitation requests to this callback.
    */
   elicitationCallback?: ElicitationCallback
+
+  /** When true, connection failures are logged as warnings instead of throwing. */
+  failOpen?: boolean
+
+  /** Called when the server emits a log message. Defaults to routing through the Strands logger. */
+  logHandler?: (params: LoggingMessageNotificationParams) => void
 }
 
 /** MCP Client for interacting with Model Context Protocol servers. */
@@ -81,8 +96,10 @@ export class McpClient {
   private _clientName: string
   private _clientVersion: string
   private _transport: Transport
-  private _connected: boolean
+  private _state: McpConnectionState
   private _client: Client
+  private _failOpen: boolean
+  private _logHandler: (params: LoggingMessageNotificationParams) => void
   private _disableMcpInstrumentation: boolean
   private _tasksConfig: TasksConfig | undefined
   private _elicitationCallback: ElicitationCallback | undefined
@@ -91,7 +108,9 @@ export class McpClient {
     this._clientName = args.applicationName || 'strands-agents-ts-sdk'
     this._clientVersion = args.applicationVersion || '0.0.1'
     this._transport = args.transport as Transport
-    this._connected = false
+    this._state = 'disconnected'
+    this._failOpen = args.failOpen ?? false
+    this._logHandler = args.logHandler ?? defaultLogHandler
     this._tasksConfig = args.tasksConfig
     this._elicitationCallback = args.elicitationCallback
     this._client = new Client(
@@ -102,6 +121,10 @@ export class McpClient {
       this._elicitationCallback ? { capabilities: { elicitation: { form: {}, url: {} } } } : undefined
     )
 
+    this._client.setNotificationHandler(LoggingMessageNotificationSchema, (notification) => {
+      this._logHandler(notification.params)
+    })
+
     this._disableMcpInstrumentation = args.disableMcpInstrumentation ?? false
   }
 
@@ -109,21 +132,38 @@ export class McpClient {
     return this._client
   }
 
+  get serverCapabilities(): ServerCapabilities | undefined {
+    return this._client.getServerCapabilities()
+  }
+
+  get serverVersion(): Implementation | undefined {
+    return this._client.getServerVersion()
+  }
+
+  get serverInstructions(): string | undefined {
+    return this._client.getInstructions()
+  }
+
+  get connectionState(): McpConnectionState {
+    return this._state
+  }
+
   /**
    * Connects the MCP client to the server.
    *
-   * This function is exposed to allow consumers to connect manually, but will be called lazily before any operations that require a connection.
+   * Called lazily before any operation that requires a connection. When `failOpen` is true,
+   * connection failures are swallowed and the client enters a `'failed'` state — subsequent
+   * calls are no-ops until `connect(true)` is called explicitly to retry.
    *
+   * @param reconnect - When true, forces a reconnect even if already connected or failed.
    * @returns A promise that resolves when the connection is established.
    */
   public async connect(reconnect: boolean = false): Promise<void> {
-    if (this._connected && !reconnect) {
-      return
-    }
+    if (this._state !== 'disconnected' && !reconnect) return
 
-    if (this._connected && reconnect) {
+    if (this._state === 'connected' && reconnect) {
       await this._client.close()
-      this._connected = false
+      this._state = 'disconnected'
     }
 
     if (this._elicitationCallback) {
@@ -133,8 +173,16 @@ export class McpClient {
       })
     }
 
-    await this._client.connect(this._transport)
-    this._connected = true
+    try {
+      await this._client.connect(this._transport)
+      this._state = 'connected'
+    } catch (error) {
+      if (!this._failOpen) throw error
+      this._state = 'failed'
+      logger.warn(
+        `client=<${this._clientName}>, error=<${error}> | MCP server failed to connect, continuing with failOpen`
+      )
+    }
   }
 
   /**
@@ -146,7 +194,7 @@ export class McpClient {
     // Must be done sequentially
     await this._client.close()
     await this._transport.close()
-    this._connected = false
+    this._state = 'disconnected'
   }
 
   /**
@@ -156,6 +204,7 @@ export class McpClient {
    */
   public async listTools(): Promise<McpTool[]> {
     await this.connect()
+    if (this._state === 'failed') return []
 
     const tools: McpTool[] = []
     let cursor: string | undefined
@@ -194,6 +243,7 @@ export class McpClient {
    */
   public async callTool(tool: McpTool, args: JSONValue): Promise<JSONValue> {
     await this.connect()
+    if (this._state === 'failed') throw new Error('MCP server failed to connect. Call connect(true) to retry.')
 
     if (args === null || args === undefined) {
       return await this.callTool(tool, {})
@@ -228,6 +278,20 @@ export class McpClient {
 
     const result = await takeResult(stream)
     return result as JSONValue
+  }
+}
+
+function defaultLogHandler(params: LoggingMessageNotificationParams): void {
+  const { level, logger: serverLogger, data } = params
+  const message = `logger=<${serverLogger ?? 'mcp'}>, data=<${JSON.stringify(data)}> | MCP server log`
+  if (level === 'debug') {
+    logger.debug(message)
+  } else if (level === 'info' || level === 'notice') {
+    logger.info(message)
+  } else if (level === 'warning') {
+    logger.warn(message)
+  } else {
+    logger.error(message)
   }
 }
 
