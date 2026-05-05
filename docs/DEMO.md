@@ -51,9 +51,7 @@ world agent {
 }
 ```
 
-Identifiers are kebab-case in WIT and get transformed per-language (camelCase
-in TS, snake_case in Python). A `world` describes a complete WASM component:
-what it imports from the host and what it exports to the host.
+Identifiers are kebab-case in WIT and get transformed per-language. A `world` describes a complete WASM component: what it imports from the host and what it exports to the host.
 
 ### wasmtime: the runtime
 
@@ -123,7 +121,7 @@ flowchart TD
     WIT -->|generate_types.py| PY_BIND[strands-py/strands/_generated/<br/>Python bindings]
 
     TS_BIND --> TS[strands-ts/<br/>TypeScript SDK]
-    TS --> BRIDGE[strands-wasm/entry.ts<br/>TS-WIT bridge (May go away one day)]
+    TS --> BRIDGE[strands-wasm/entry.ts<br/>TS-WIT bridge]
     WASM_BIND --> BRIDGE
     BRIDGE -->|esbuild + componentize-js| WASM[strands-agent.wasm<br/>WASM component]
 
@@ -146,10 +144,10 @@ Feature: "add a new stop reason `rate-limited`."
 | Step                                                                             | Layer       |
 | -------------------------------------------------------------------------------- | ----------- |
 | 1. Add `rate-limited` to the `stop-reason` enum in `wit/agent.wit`               | WIT         |
-| 2. Regenerate bindings with `strandly generate`                               | codegen     |
+| 2. Regenerate bindings with `strandly generate`                                  | codegen     |
 | 3. Emit the new reason from the TS agent loop in `strands-ts/src/agent/agent.ts` | TS          |
 | 4. Map it in `strands-wasm/entry.ts::mapStopReasonTag`                           | TS          |
-| 5. Rebuild the WASM component with `strandly build --wasm`                    | build       |
+| 5. Rebuild the WASM component with `strandly build --wasm`                       | build       |
 | 6. Add tests in `strands-ts/src/**/__tests__/` and `strands-py/tests_integ/`     | TS + Python |
 
 A few things to note:
@@ -216,7 +214,7 @@ strandly <command> [--ts|--wasm|--py]
 
 Most-used:
 
-- `bootstrap`: first-time setup (install, generate, build, test).
+- `bootstrap`: first-time setup (install toolchains, generate bindings, build every layer).
 - `validate <layer>`: rebuild and test the layers affected by a change. The
   magic command when you're not sure if a change is local or cross-layer.
 - `ci`: the full pipeline, same thing CI runs.
@@ -262,9 +260,7 @@ npm install
 npm run dev -- bootstrap   # only this one time: runs `npm link` which may prompt for sudo
 ```
 
-`bootstrap` installs toolchains, generates bindings, builds every layer, runs
-tests. About 70 seconds on a warm machine. Ends with
-`strands-wasm/dist/strands-agent.wasm` around 40 MB.
+`bootstrap` installs toolchains, generates bindings, and builds every layer.
 
 It also symlinks `strandly` globally, so every command below runs bare.
 The symlink points back at `strandly/src/cli.ts` in this working copy —
@@ -272,7 +268,8 @@ edits to the CLI take effect immediately with no re-link.
 
 ### Step 1: see the gap
 
-TS SDK's StopReason union:
+TS SDK's StopReason union lives in `strands-ts/src/types/messages.ts`. Either
+open that file or run:
 
 ```bash
 grep -A 11 "^export type StopReason" strands-ts/src/types/messages.ts
@@ -292,7 +289,7 @@ export type StopReason =
   | (string & {})
 ```
 
-WIT contract:
+WIT contract lives in `wit/agent.wit`. Either open that file or run:
 
 ```bash
 grep -A 10 "enum stop-reason" wit/agent.wit
@@ -313,7 +310,8 @@ enum stop-reason {
 }
 ```
 
-Bridge mapping function:
+Bridge mapping function lives in `strands-wasm/entry.ts` under
+`mapStopReasonTag`. Either open that file or run:
 
 ```bash
 grep -A 22 "function mapStopReasonTag" strands-wasm/entry.ts
@@ -361,10 +359,11 @@ enum stop-reason {
 strandly generate
 ```
 
-Python's bindings now carry the new variant:
+Python's bindings now carry the new variant. The generated file is
+`strands-py/strands/_generated/types.py`. Either open it or run:
 
 ```bash
-grep -A 12 "class StopReason" strands-py/strands/_generated/types.py
+grep -A 13 "class StopReason" strands-py/strands/_generated/types.py
 ```
 
 ```
@@ -405,19 +404,44 @@ WIT changed, so run the full cascade:
 strandly validate wit
 ```
 
-That rebuilds WIT bindings, TS, WASM, and runs all tests. About 60 seconds.
+That rebuilds WIT bindings, TS, WASM, and runs TS tests. About 90 seconds.
 
 ### Step 6: see it work
 
-A Python snippet that triggers the interrupt path now reports the correct
-stop reason:
+Drop into the Python REPL with the new binding preloaded. The `-i` flag
+leaves you at a `>>>` prompt after the script runs, so you can poke at the
+enum live:
+
+```bash
+cd strands-py
+.venv/bin/python -i -c "
+from strands._generated.types import StopReason
+for r in StopReason:
+    print(f'  {r.name} = {r.value}')
+"
+```
 
 ```
-from strands import Agent
-# set up an agent with an interrupt hook
-result = agent("please stop")
-assert result.stop_reason == "interrupt"   # was "error" before the fix
+  END_TURN = 0
+  TOOL_USE = 1
+  MAX_TOKENS = 2
+  ERROR = 3
+  CONTENT_FILTERED = 4
+  GUARDRAIL_INTERVENED = 5
+  STOP_SEQUENCE = 6
+  MODEL_CONTEXT_WINDOW_EXCEEDED = 7
+  CANCELLED = 8
+  INTERRUPT = 9
+>>> StopReason.INTERRUPT
+<StopReason.INTERRUPT: 9>
+>>>
 ```
+
+`INTERRUPT = 9` is new. Before the WIT edit, the enum stopped at
+`CANCELLED = 8`. The Python bindings picked up the new variant with no
+Python-side change. Ctrl-D (or `exit()`) to leave the REPL.
+
+For an end-to-end interrupt flow, see `strands-py/tests_integ/interrupts/`. Running those requires AWS credentials because they invoke Bedrock.
 
 ### What we just demonstrated
 
@@ -431,8 +455,8 @@ assert result.stop_reason == "interrupt"   # was "error" before the fix
 
 ## 8. Stretch: generated types for the TS SDK too?
 
-The narrowing that tripped us up in the fix above — `if ('interrupt' in event)`
-matching anything with an `.interrupt` property — wasn't isolated to the
+The narrowing that tripped us up in the fix above (`if ('interrupt' in event)`
+matching anything with an `.interrupt` property) wasn't isolated to the
 bridge. It's the same pattern the TS SDK's public content-block types use,
 today, in `strands-ts/src/types/messages.ts`:
 
@@ -443,7 +467,7 @@ today, in `strands-ts/src/types/messages.ts`:
 // the narrowing silently breaks. Not idiomatic TS.
 
 type ContentBlockData =
-  | TextBlockData              // { text: string }
+  | TextBlockData // { text: string }
   | { toolUse: ToolUseBlockData }
   | { toolResult: ToolResultBlockData }
   | { reasoning: ReasoningBlockData }
@@ -456,7 +480,7 @@ function render(block: ContentBlockData) {
 }
 ```
 
-Switching to WIT-generated types fixes drift *and* the narrowing bug in one
+Switching to WIT-generated types fixes drift _and_ the narrowing bug in one
 step. jco's output is the same tagged-union shape that every serious TS
 discriminated-union library (neverthrow, ts-pattern, fp-ts Either) uses:
 
@@ -466,20 +490,17 @@ discriminated-union library (neverthrow, ts-pattern, fp-ts Either) uses:
 // Handles primitive payloads uniformly: `textDelta(string)` → {tag, val: string}.
 
 type ContentBlock =
-  | { tag: 'text',         val: TextBlock }
-  | { tag: 'tool-use',     val: ToolUseBlock }
-  | { tag: 'tool-result',  val: ToolResultBlock }
-  | { tag: 'reasoning',    val: ReasoningBlock }
-  | { tag: 'cache-point',  val: CachePointBlock }
+  | { tag: 'text'; val: TextBlock }
+  | { tag: 'tool-use'; val: ToolUseBlock }
+  | { tag: 'tool-result'; val: ToolResultBlock }
+  | { tag: 'reasoning'; val: ReasoningBlock }
+  | { tag: 'cache-point'; val: CachePointBlock }
 
 function render(block: ContentBlock) {
-  if (block.tag === 'text')        return block.val.text
-  if (block.tag === 'tool-use')    return block.val.name
+  if (block.tag === 'text') return block.val.text
+  if (block.tag === 'tool-use') return block.val.name
   if (block.tag === 'tool-result') return block.val.toolUseId
 }
 ```
 
-This is one example of the kind of breaking change WIT-as-truth enables. The
-spike at PR #997 has the mechanical migration working; adopting it is a
-public-API version bump, not a weekend fix. But the win is the same one §7
-demonstrated: one contract, zero drift.
+This is one example of the kind of breaking change WIT-as-truth enables.

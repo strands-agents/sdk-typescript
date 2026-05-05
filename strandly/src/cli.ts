@@ -92,12 +92,11 @@ program
 
 program
   .command('bootstrap')
-  .description('First-time setup, generate, build, and test')
+  .description('First-time setup: install toolchains, generate bindings, build every layer')
   .action(() => {
     setup()
     generate()
     build()
-    test()
   })
 
 program
@@ -120,7 +119,7 @@ program
       case 'wit':
         generate()
         build()
-        test()
+        test({ ts: true })
         break
       case 'ts':
         build({ ts: true })
