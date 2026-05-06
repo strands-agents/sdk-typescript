@@ -170,14 +170,14 @@ describe('HookRegistryImplementation', () => {
         () => {
           callOrder.push(100)
         },
-        100
+        { order: 100 }
       )
       registry.addCallback(
         BeforeInvocationEvent,
         () => {
           callOrder.push(-100)
         },
-        -100
+        { order: -100 }
       )
 
       await registry.invokeCallbacks(new BeforeInvocationEvent({ agent: mockAgent, invocationState: {} }))
@@ -192,21 +192,21 @@ describe('HookRegistryImplementation', () => {
         () => {
           callOrder.push('first')
         },
-        10
+        { order: 10 }
       )
       registry.addCallback(
         BeforeInvocationEvent,
         () => {
           callOrder.push('second')
         },
-        10
+        { order: 10 }
       )
       registry.addCallback(
         BeforeInvocationEvent,
         () => {
           callOrder.push('third')
         },
-        10
+        { order: 10 }
       )
 
       await registry.invokeCallbacks(new BeforeInvocationEvent({ agent: mockAgent, invocationState: {} }))
@@ -224,48 +224,12 @@ describe('HookRegistryImplementation', () => {
         () => {
           callOrder.push('early')
         },
-        -100
+        { order: -100 }
       )
 
       await registry.invokeCallbacks(new BeforeInvocationEvent({ agent: mockAgent, invocationState: {} }))
 
       expect(callOrder).toEqual(['early', 'default'])
-    })
-
-    it('_setDefaultOrder applies to hooks without explicit order', async () => {
-      const callOrder: string[] = []
-      registry._setDefaultOrder(-50)
-      registry.addCallback(BeforeInvocationEvent, () => {
-        callOrder.push('default-neg50')
-      })
-      registry._setDefaultOrder(0)
-      registry.addCallback(BeforeInvocationEvent, () => {
-        callOrder.push('default-0')
-      })
-
-      await registry.invokeCallbacks(new BeforeInvocationEvent({ agent: mockAgent, invocationState: {} }))
-
-      expect(callOrder).toEqual(['default-neg50', 'default-0'])
-    })
-
-    it('explicit order overrides defaultOrder', async () => {
-      const callOrder: string[] = []
-      registry._setDefaultOrder(-100)
-      registry.addCallback(
-        BeforeInvocationEvent,
-        () => {
-          callOrder.push('explicit-0')
-        },
-        0
-      )
-      registry.addCallback(BeforeInvocationEvent, () => {
-        callOrder.push('default-neg100')
-      })
-      registry._setDefaultOrder(0)
-
-      await registry.invokeCallbacks(new BeforeInvocationEvent({ agent: mockAgent, invocationState: {} }))
-
-      expect(callOrder).toEqual(['default-neg100', 'explicit-0'])
     })
 
     it('After events: lower order still runs first across groups', async () => {
@@ -275,14 +239,14 @@ describe('HookRegistryImplementation', () => {
         () => {
           callOrder.push('early')
         },
-        -100
+        { order: -100 }
       )
       registry.addCallback(
         AfterInvocationEvent,
         () => {
           callOrder.push('late')
         },
-        100
+        { order: 100 }
       )
 
       await registry.invokeCallbacks(new AfterInvocationEvent({ agent: mockAgent, invocationState: {} }))

@@ -186,6 +186,7 @@ export type { AgentStreamEvent } from './types/agent.js'
 // Hooks system
 export {
   HookRegistry,
+  HookOrder,
   StreamEvent,
   HookableEvent,
   InitializedEvent,
@@ -208,6 +209,7 @@ export {
 export type {
   HookCallback,
   HookableEventConstructor,
+  HookCallbackOptions,
   ModelStopResponse,
   Redaction,
   ToolUseData,

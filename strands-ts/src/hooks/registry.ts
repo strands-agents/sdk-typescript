@@ -1,5 +1,6 @@
 import type { HookableEvent } from './events.js'
-import type { HookCallback, HookableEventConstructor, HookCleanup } from './types.js'
+import { HookOrder } from './types.js'
+import type { HookCallback, HookableEventConstructor, HookCallbackOptions, HookCleanup } from './types.js'
 import { InterruptError, Interrupt } from '../interrupt.js'
 
 /**
@@ -20,13 +21,13 @@ export interface HookRegistry {
    *
    * @param eventType - The event class constructor to register the callback for
    * @param callback - The callback function to invoke when the event occurs
-   * @param order - Execution priority. Lower values run first. Defaults to 0.
+   * @param options - Optional configuration including execution order
    * @returns Cleanup function that removes the callback when invoked
    */
   addCallback<T extends HookableEvent>(
     eventType: HookableEventConstructor<T>,
     callback: HookCallback<T>,
-    order?: number
+    options?: HookCallbackOptions
   ): HookCleanup
 }
 
@@ -36,26 +37,20 @@ export interface HookRegistry {
  */
 export class HookRegistryImplementation implements HookRegistry {
   private readonly _callbacks: Map<HookableEventConstructor, CallbackEntry[]>
-  private _defaultOrder: number = 0
 
   constructor() {
     this._callbacks = new Map()
-  }
-
-  /** @internal Used by PluginRegistry during sequential plugin initialization. */
-  _setDefaultOrder(order: number): void {
-    this._defaultOrder = order
   }
 
   /** {@inheritDoc HookRegistry.addCallback} */
   addCallback<T extends HookableEvent>(
     eventType: HookableEventConstructor<T>,
     callback: HookCallback<T>,
-    order?: number
+    options?: HookCallbackOptions
   ): HookCleanup {
     const entry: CallbackEntry = {
       callback: callback as HookCallback<HookableEvent>,
-      order: order ?? this._defaultOrder,
+      order: options?.order ?? HookOrder.DEFAULT,
     }
     const callbacks = this._callbacks.get(eventType) ?? []
     // Insert in sorted position: lower order first, same order preserves registration order

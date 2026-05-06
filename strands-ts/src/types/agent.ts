@@ -22,7 +22,7 @@ import type {
   HookableEvent,
   StreamEvent,
 } from '../hooks/events.js'
-import type { HookCallback, HookableEventConstructor, HookCleanup } from '../hooks/types.js'
+import type { HookCallback, HookableEventConstructor, HookCallbackOptions, HookCleanup } from '../hooks/types.js'
 import type { ToolRegistry } from '../registry/tool-registry.js'
 import type { Model } from '../models/model.js'
 import type { z } from 'zod'
@@ -259,13 +259,13 @@ export interface LocalAgent {
    *
    * @param eventType - The event class constructor to register the callback for
    * @param callback - The callback function to invoke when the event occurs
-   * @param order - Execution priority. Lower values run first. Defaults to 0.
+   * @param options - Optional configuration including execution order
    * @returns Cleanup function that removes the callback when invoked
    */
   addHook<T extends HookableEvent>(
     eventType: HookableEventConstructor<T>,
     callback: HookCallback<T>,
-    order?: number
+    options?: HookCallbackOptions
   ): HookCleanup
 }
 

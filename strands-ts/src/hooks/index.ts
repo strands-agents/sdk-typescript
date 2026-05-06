@@ -42,4 +42,5 @@ export type { ModelStopData as ModelStopResponse, Redaction, ToolUseData } from 
 export { HookRegistryImplementation as HookRegistry } from './registry.js'
 
 // Types
-export type { HookCallback, HookableEventConstructor, HookCleanup } from './types.js'
+export type { HookCallback, HookableEventConstructor, HookCallbackOptions, HookCleanup } from './types.js'
+export { HookOrder } from './types.js'

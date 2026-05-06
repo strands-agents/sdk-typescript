@@ -58,14 +58,6 @@ export interface Plugin {
   readonly name: string
 
   /**
-   * Default execution priority for hooks registered by this plugin.
-   * Lower values always run first. Defaults to 0 when not specified.
-   *
-   * Individual hooks can override this via the `order` parameter on `addHook`.
-   */
-  readonly order?: number
-
-  /**
    * Initialize the plugin with the agent instance.
    *
    * Implement this method to register hooks and perform custom initialization.

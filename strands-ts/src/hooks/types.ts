@@ -20,8 +20,30 @@ export type HookableEventConstructor<T extends HookableEvent = HookableEvent> = 
 export type HookCallback<T extends HookableEvent> = (event: T) => void | Promise<void>
 
 /**
+ * Options for registering a hook callback.
+ */
+export interface HookCallbackOptions {
+  order?: number
+}
+
+/**
  * Function that removes a previously registered hook callback.
  * Safe to call multiple times (idempotent).
  * No-op if the callback is no longer registered.
  */
 export type HookCleanup = () => void
+
+/**
+ * Named constants for hook execution order.
+ * Lower values run first.
+ *
+ * @example
+ * ```typescript
+ * agent.addHook(BeforeToolCallEvent, callback, { order: HookOrder.FIRST })
+ * ```
+ */
+export const HookOrder = {
+  FIRST: -100,
+  DEFAULT: 0,
+  LAST: 100,
+} as const

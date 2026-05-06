@@ -4,7 +4,6 @@
 
 import type { Plugin } from './plugin.js'
 import type { LocalAgent } from '../types/agent.js'
-import type { HookRegistryImplementation } from '../hooks/registry.js'
 
 /**
  * Registry for managing plugins attached to an agent.
@@ -15,12 +14,10 @@ import type { HookRegistryImplementation } from '../hooks/registry.js'
 export class PluginRegistry {
   private readonly _plugins: Map<string, Plugin>
   private readonly _pending: Plugin[]
-  private readonly _hookRegistry: HookRegistryImplementation
 
-  constructor(plugins: Plugin[] = [], hookRegistry: HookRegistryImplementation) {
+  constructor(plugins: Plugin[] = []) {
     this._plugins = new Map()
     this._pending = [...plugins]
-    this._hookRegistry = hookRegistry
   }
 
   /**
@@ -47,14 +44,6 @@ export class PluginRegistry {
       agent.toolRegistry.add(tools)
     }
 
-    // Safe: plugins initialize sequentially; no concurrent addCallback calls during init
-    if (plugin.order !== undefined) {
-      this._hookRegistry._setDefaultOrder(plugin.order)
-    }
-    try {
-      await plugin.initAgent(agent)
-    } finally {
-      this._hookRegistry._setDefaultOrder(0)
-    }
+    await plugin.initAgent(agent)
   }
 }
