@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { NullConversationManager } from '../null-conversation-manager.js'
 import { Message, TextBlock } from '../../index.js'
-import { AfterModelCallEvent } from '../../hooks/events.js'
+import { AfterModelCallEvent, BeforeModelCallEvent } from '../../hooks/events.js'
 import { ContextWindowOverflowError } from '../../errors.js'
 import { createMockAgent, invokeTrackedHook } from '../../__fixtures__/agent-helpers.js'
 
@@ -39,14 +39,15 @@ describe('NullConversationManager', () => {
       expect(event.retry).toBeUndefined()
     })
 
-    it('registers only the overflow recovery hook', () => {
+    it('registers both the overflow recovery and proactive compression hooks', () => {
       const manager = new NullConversationManager()
       const mockAgent = createMockAgent()
       manager.initAgent(mockAgent)
 
-      // Base class registers exactly one hook (AfterModelCallEvent for overflow recovery)
-      expect(mockAgent.trackedHooks).toHaveLength(1)
+      // Base class always registers both hooks
+      expect(mockAgent.trackedHooks).toHaveLength(2)
       expect(mockAgent.trackedHooks[0]!.eventType).toBe(AfterModelCallEvent)
+      expect(mockAgent.trackedHooks[1]!.eventType).toBe(BeforeModelCallEvent)
     })
   })
 

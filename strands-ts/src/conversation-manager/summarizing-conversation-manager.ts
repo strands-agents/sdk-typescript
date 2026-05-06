@@ -12,7 +12,6 @@ import {
   ConversationManager,
   type ProactiveCompressionConfig,
   type ConversationManagerReduceOptions,
-  type ConversationManagerThresholdOptions,
 } from './conversation-manager.js'
 import { logger } from '../logging/logger.js'
 import type { Model } from '../models/model.js'
@@ -101,7 +100,7 @@ export class SummarizingConversationManager extends ConversationManager {
   private readonly _summarizationSystemPrompt: string
 
   constructor(config?: SummarizingConversationManagerConfig) {
-    super(config?.compressProactively)
+    super(config?.compressProactively !== undefined ? { compressProactively: config.compressProactively } : undefined)
     this._model = config?.model
     // clamped [0.1, 0.8]
     this._summaryRatio = Math.max(0.1, Math.min(0.8, config?.summaryRatio ?? 0.3))
@@ -112,6 +111,12 @@ export class SummarizingConversationManager extends ConversationManager {
   /**
    * Reduce the conversation history by summarizing older messages.
    *
+   * When `error` is set (reactive overflow recovery), summarization failure is rethrown
+   * with the original error as cause — the agent loop must not proceed with an overflow.
+   *
+   * When `error` is undefined (proactive compression), summarization failure is logged
+   * and returns `false` — the model call proceeds regardless.
+   *
    * @param options - The reduction options
    * @returns `true` if the history was reduced, `false` otherwise
    */
@@ -119,25 +124,15 @@ export class SummarizingConversationManager extends ConversationManager {
     try {
       return await this._summarizeOldest(agent, this._model ?? model)
     } catch (summarizationError) {
-      logger.error(`error=<${summarizationError}> | summarization failed`)
-      const wrapped = summarizationError instanceof Error ? summarizationError : new Error(String(summarizationError))
-      wrapped.cause = error
-      throw wrapped
-    }
-  }
-
-  /**
-   * Proactively reduce context by summarizing oldest messages.
-   *
-   * @param options - The threshold reduction options
-   * @returns `true` if the history was reduced, `false` otherwise
-   */
-  async reduceOnThreshold({ agent }: ConversationManagerThresholdOptions): Promise<boolean> {
-    // Best-effort: swallow errors so the model call can still proceed
-    try {
-      return await this._summarizeOldest(agent, this._model ?? agent.model)
-    } catch (summarizationError) {
-      logger.error(`error=<${summarizationError}> | proactive summarization failed`)
+      if (error) {
+        // Reactive: rethrow so the ContextWindowOverflowError propagates
+        logger.error(`error=<${summarizationError}> | summarization failed`)
+        const wrapped = summarizationError instanceof Error ? summarizationError : new Error(String(summarizationError))
+        wrapped.cause = error
+        throw wrapped
+      }
+      // Proactive: best-effort, swallow errors so the model call can still proceed.
+      logger.warn(`error=<${summarizationError}> | proactive summarization failed, continuing`)
       return false
     }
   }

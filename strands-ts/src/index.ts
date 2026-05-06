@@ -223,7 +223,7 @@ export {
   ConversationManager,
   type ProactiveCompressionConfig,
   type ConversationManagerReduceOptions,
-  type ConversationManagerThresholdOptions,
+  type ConversationManagerOptions,
 } from './conversation-manager/conversation-manager.js'
 export { NullConversationManager } from './conversation-manager/null-conversation-manager.js'
 export {

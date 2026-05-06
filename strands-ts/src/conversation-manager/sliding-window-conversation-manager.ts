@@ -12,7 +12,6 @@ import {
   ConversationManager,
   type ProactiveCompressionConfig,
   type ConversationManagerReduceOptions,
-  type ConversationManagerThresholdOptions,
 } from './conversation-manager.js'
 import { logger } from '../logging/logger.js'
 
@@ -53,6 +52,7 @@ export type SlidingWindowConversationManagerConfig = {
  * Registers hooks for:
  * - AfterInvocationEvent: Applies sliding window management after each invocation
  * - AfterModelCallEvent: Reduces context on overflow errors and requests retry (via super)
+ * - BeforeModelCallEvent: Proactive compression when threshold is exceeded (via super)
  */
 export class SlidingWindowConversationManager extends ConversationManager {
   private readonly _windowSize: number
@@ -69,7 +69,7 @@ export class SlidingWindowConversationManager extends ConversationManager {
    * @param config - Configuration options for the sliding window manager.
    */
   constructor(config?: SlidingWindowConversationManagerConfig) {
-    super(config?.compressProactively)
+    super(config?.compressProactively !== undefined ? { compressProactively: config.compressProactively } : undefined)
     this._windowSize = config?.windowSize ?? 40
     this._shouldTruncateResults = config?.shouldTruncateResults ?? true
   }
@@ -80,6 +80,7 @@ export class SlidingWindowConversationManager extends ConversationManager {
    * Registers:
    * - AfterInvocationEvent callback to apply sliding window management
    * - AfterModelCallEvent callback to handle context overflow and request retry (via super)
+   * - BeforeModelCallEvent callback for proactive compression (via super)
    *
    * @param agent - The agent to register hooks with
    */
@@ -92,25 +93,19 @@ export class SlidingWindowConversationManager extends ConversationManager {
   }
 
   /**
-   * Reduce the conversation history in response to a context overflow.
+   * Reduce the conversation history.
    *
-   * Attempts to truncate large tool results first before falling back to message trimming.
+   * When `error` is set (reactive overflow recovery), attempts to truncate large tool results
+   * first before falling back to message trimming.
+   *
+   * When `error` is undefined (proactive compression), only trims messages without attempting
+   * tool result truncation.
    *
    * @param options - The reduction options
    * @returns `true` if the history was reduced, `false` otherwise
    */
   reduce({ agent, error }: ConversationManagerReduceOptions): boolean {
     return this._reduceContext(agent.messages, error)
-  }
-
-  /**
-   * Proactively reduce context by trimming oldest messages.
-   *
-   * @param options - The threshold reduction options
-   * @returns `true` if the history was reduced, `false` otherwise
-   */
-  reduceOnThreshold({ agent }: ConversationManagerThresholdOptions): boolean {
-    return this._reduceContext(agent.messages, undefined)
   }
 
   /**

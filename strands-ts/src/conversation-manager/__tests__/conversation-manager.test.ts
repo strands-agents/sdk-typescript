@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import {
   ConversationManager,
   type ConversationManagerReduceOptions,
-  type ConversationManagerThresholdOptions,
+  type ConversationManagerOptions,
   type ProactiveCompressionConfig,
 } from '../conversation-manager.js'
 import { NullConversationManager } from '../null-conversation-manager.js'
@@ -24,8 +24,8 @@ class TestConversationManager extends ConversationManager {
   reduceCallCount = 0
   shouldReduce = true
 
-  constructor(compressProactively?: boolean | ProactiveCompressionConfig) {
-    super(compressProactively)
+  constructor(options?: ConversationManagerOptions) {
+    super(options)
   }
 
   reduce({ agent }: ConversationManagerReduceOptions): boolean {
@@ -38,20 +38,16 @@ class TestConversationManager extends ConversationManager {
 
 class ThresholdTestManager extends ConversationManager {
   readonly name = 'test:threshold-manager'
-  reduceOnThresholdCallCount = 0
-  shouldReduceOnThreshold = true
+  reduceCallCount = 0
+  shouldReduce = true
 
-  constructor(compressProactively?: boolean | ProactiveCompressionConfig) {
-    super(compressProactively)
+  constructor(options?: ConversationManagerOptions) {
+    super(options)
   }
 
-  reduce(): boolean {
-    return false
-  }
-
-  reduceOnThreshold({ agent }: ConversationManagerThresholdOptions): boolean {
-    this.reduceOnThresholdCallCount++
-    if (!this.shouldReduceOnThreshold) return false
+  reduce({ agent }: ConversationManagerReduceOptions): boolean {
+    this.reduceCallCount++
+    if (!this.shouldReduce) return false
     agent.messages.splice(0, 1)
     return true
   }
@@ -59,13 +55,15 @@ class ThresholdTestManager extends ConversationManager {
 
 describe('ConversationManager', () => {
   describe('initAgent', () => {
-    it('registers an AfterModelCallEvent hook', () => {
+    it('registers both AfterModelCallEvent and BeforeModelCallEvent hooks', () => {
       const manager = new TestConversationManager()
       const mockAgent = createMockAgent()
       manager.initAgent(mockAgent)
 
-      expect(mockAgent.trackedHooks).toHaveLength(1)
+      // Always registers both hooks now
+      expect(mockAgent.trackedHooks).toHaveLength(2)
       expect(mockAgent.trackedHooks[0]!.eventType).toBe(AfterModelCallEvent)
+      expect(mockAgent.trackedHooks[1]!.eventType).toBe(BeforeModelCallEvent)
     })
 
     it('calls reduce and sets retry=true on ContextWindowOverflowError when reduce returns true', async () => {
@@ -140,36 +138,35 @@ describe('ConversationManager', () => {
   describe('compressProactively', () => {
     const mockModel = { getConfig: () => ({ contextWindowLimit: 1000 }) as BaseModelConfig } as any
 
-    it('registers a BeforeModelCallEvent hook when compressProactively is true', () => {
-      const manager = new ThresholdTestManager(true)
-      const mockAgent = createMockAgent()
-      manager.initAgent(mockAgent)
-
-      expect(mockAgent.trackedHooks).toHaveLength(2)
-      expect(mockAgent.trackedHooks[0]!.eventType).toBe(AfterModelCallEvent)
-      expect(mockAgent.trackedHooks[1]!.eventType).toBe(BeforeModelCallEvent)
-    })
-
-    it('registers a BeforeModelCallEvent hook when compressProactively is a config object', () => {
-      const manager = new ThresholdTestManager({ compressionThreshold: 0.8 })
-      const mockAgent = createMockAgent()
-      manager.initAgent(mockAgent)
-
-      expect(mockAgent.trackedHooks).toHaveLength(2)
-      expect(mockAgent.trackedHooks[1]!.eventType).toBe(BeforeModelCallEvent)
-    })
-
-    it('does not register BeforeModelCallEvent hook when compressProactively is not set', () => {
+    it('always registers a BeforeModelCallEvent hook regardless of compressProactively setting', () => {
       const manager = new TestConversationManager()
       const mockAgent = createMockAgent()
       manager.initAgent(mockAgent)
 
-      expect(mockAgent.trackedHooks).toHaveLength(1)
+      // Both hooks always registered
+      expect(mockAgent.trackedHooks).toHaveLength(2)
       expect(mockAgent.trackedHooks[0]!.eventType).toBe(AfterModelCallEvent)
+      expect(mockAgent.trackedHooks[1]!.eventType).toBe(BeforeModelCallEvent)
+    })
+
+    it('BeforeModelCallEvent handler is a no-op when compressProactively is not set', async () => {
+      const manager = new ThresholdTestManager()
+      const mockAgent = createMockAgent()
+      manager.initAgent(mockAgent)
+
+      const event = new BeforeModelCallEvent({
+        agent: mockAgent,
+        model: mockModel,
+        invocationState: {},
+        projectedInputTokens: 900, // Would exceed any threshold
+      })
+      await invokeTrackedHook(mockAgent, event)
+
+      expect(manager.reduceCallCount).toBe(0)
     })
 
     it('uses default threshold of 0.7 when compressProactively is true', async () => {
-      const manager = new ThresholdTestManager(true)
+      const manager = new ThresholdTestManager({ compressProactively: true })
       const messages = [
         new Message({ role: 'user', content: [new TextBlock('Message 1')] }),
         new Message({ role: 'assistant', content: [new TextBlock('Response 1')] }),
@@ -185,7 +182,7 @@ describe('ConversationManager', () => {
         projectedInputTokens: 650,
       })
       await invokeTrackedHook(mockAgent, event)
-      expect(manager.reduceOnThresholdCallCount).toBe(0)
+      expect(manager.reduceCallCount).toBe(0)
 
       // 800/1000 = 0.8 >= 0.7 — should trigger
       const event2 = new BeforeModelCallEvent({
@@ -195,11 +192,21 @@ describe('ConversationManager', () => {
         projectedInputTokens: 800,
       })
       await invokeTrackedHook(mockAgent, event2)
-      expect(manager.reduceOnThresholdCallCount).toBe(1)
+      expect(manager.reduceCallCount).toBe(1)
     })
 
-    it('calls reduceOnThreshold when projected tokens exceed custom threshold', async () => {
-      const manager = new ThresholdTestManager({ compressionThreshold: 0.5 })
+    it('calls reduce without error when projected tokens exceed custom threshold', async () => {
+      const receivedArgs: ConversationManagerReduceOptions[] = []
+      class CapturingManager extends ConversationManager {
+        readonly name = 'test:capturing-threshold'
+        reduce(args: ConversationManagerReduceOptions): boolean {
+          receivedArgs.push(args)
+          args.agent.messages.splice(0, 1)
+          return true
+        }
+      }
+
+      const manager = new CapturingManager({ compressProactively: { compressionThreshold: 0.5 } })
       const messages = [
         new Message({ role: 'user', content: [new TextBlock('Message 1')] }),
         new Message({ role: 'assistant', content: [new TextBlock('Response 1')] }),
@@ -215,11 +222,14 @@ describe('ConversationManager', () => {
       })
       await invokeTrackedHook(mockAgent, event)
 
-      expect(manager.reduceOnThresholdCallCount).toBe(1)
+      expect(receivedArgs).toHaveLength(1)
+      expect(receivedArgs[0]!.error).toBeUndefined()
+      expect(receivedArgs[0]!.model).toBe(mockModel)
+      expect(receivedArgs[0]!.agent).toBe(mockAgent)
     })
 
-    it('does not call reduceOnThreshold when below threshold', async () => {
-      const manager = new ThresholdTestManager({ compressionThreshold: 0.7 })
+    it('does not call reduce when below threshold', async () => {
+      const manager = new ThresholdTestManager({ compressProactively: { compressionThreshold: 0.7 } })
       const mockAgent = createMockAgent()
       manager.initAgent(mockAgent)
 
@@ -231,11 +241,11 @@ describe('ConversationManager', () => {
       })
       await invokeTrackedHook(mockAgent, event)
 
-      expect(manager.reduceOnThresholdCallCount).toBe(0)
+      expect(manager.reduceCallCount).toBe(0)
     })
 
-    it('does not call reduceOnThreshold when projectedInputTokens is undefined', async () => {
-      const manager = new ThresholdTestManager(true)
+    it('does not call reduce when projectedInputTokens is undefined', async () => {
+      const manager = new ThresholdTestManager({ compressProactively: true })
       const mockAgent = createMockAgent()
       manager.initAgent(mockAgent)
 
@@ -246,61 +256,96 @@ describe('ConversationManager', () => {
       })
       await invokeTrackedHook(mockAgent, event)
 
-      expect(manager.reduceOnThresholdCallCount).toBe(0)
+      expect(manager.reduceCallCount).toBe(0)
     })
 
-    it('warns and skips when contextWindowLimit is undefined', async () => {
-      const manager = new ThresholdTestManager(true)
-      const mockAgent = createMockAgent()
+    it('uses 200k default when contextWindowLimit is undefined and logs warning', async () => {
+      const manager = new ThresholdTestManager({ compressProactively: { compressionThreshold: 0.7 } })
+      const messages = [
+        new Message({ role: 'user', content: [new TextBlock('Message 1')] }),
+        new Message({ role: 'assistant', content: [new TextBlock('Response 1')] }),
+      ]
+      const mockAgent = createMockAgent({ messages })
       manager.initAgent(mockAgent)
 
       const modelWithoutLimit = { getConfig: () => ({}) as BaseModelConfig } as any
+      // 150000/200000 = 0.75 >= 0.7 — should trigger with the 200k default
       const event = new BeforeModelCallEvent({
         agent: mockAgent,
         model: modelWithoutLimit,
         invocationState: {},
-        projectedInputTokens: 800,
+        projectedInputTokens: 150000,
       })
       await invokeTrackedHook(mockAgent, event)
 
-      expect(manager.reduceOnThresholdCallCount).toBe(0)
+      expect(manager.reduceCallCount).toBe(1)
       expect(warnOnce).toHaveBeenCalledWith(
         expect.anything(),
-        expect.stringContaining('contextWindowLimit is not set on the model, proactive compression is disabled')
+        expect.stringContaining('contextWindowLimit is not set on the model, using default of 200000')
       )
     })
 
-    it('warns when subclass does not implement reduceOnThreshold', async () => {
-      const { logger } = await import('../../logging/logger.js')
-      const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {})
-
-      const manager = new TestConversationManager(true)
+    it('does not trigger with 200k default when below threshold', async () => {
+      const manager = new ThresholdTestManager({ compressProactively: { compressionThreshold: 0.7 } })
       const mockAgent = createMockAgent()
       manager.initAgent(mockAgent)
 
-      expect(mockAgent.trackedHooks).toHaveLength(1)
-      expect(mockAgent.trackedHooks[0]!.eventType).toBe(AfterModelCallEvent)
-      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('reduceOnThreshold is not implemented'))
-      warnSpy.mockRestore()
+      const modelWithoutLimit = { getConfig: () => ({}) as BaseModelConfig } as any
+      // 100000/200000 = 0.5 < 0.7 — should NOT trigger
+      const event = new BeforeModelCallEvent({
+        agent: mockAgent,
+        model: modelWithoutLimit,
+        invocationState: {},
+        projectedInputTokens: 100000,
+      })
+      await invokeTrackedHook(mockAgent, event)
+
+      expect(manager.reduceCallCount).toBe(0)
+    })
+
+    it('swallows errors from proactive reduce and continues', async () => {
+      class ThrowingManager extends ConversationManager {
+        readonly name = 'test:throwing'
+        reduce({ error }: ConversationManagerReduceOptions): boolean {
+          if (!error) {
+            throw new Error('proactive compression exploded')
+          }
+          return false
+        }
+      }
+
+      const manager = new ThrowingManager({ compressProactively: true })
+      const mockAgent = createMockAgent()
+      manager.initAgent(mockAgent)
+
+      const event = new BeforeModelCallEvent({
+        agent: mockAgent,
+        model: mockModel,
+        invocationState: {},
+        projectedInputTokens: 800,
+      })
+
+      // Should not throw — error is swallowed
+      await expect(invokeTrackedHook(mockAgent, event)).resolves.toBeUndefined()
     })
 
     it('throws on compressionThreshold <= 0', () => {
-      expect(() => new ThresholdTestManager({ compressionThreshold: 0 })).toThrow(
+      expect(() => new ThresholdTestManager({ compressProactively: { compressionThreshold: 0 } })).toThrow(
         'must be between 0 (exclusive) and 1 (inclusive)'
       )
-      expect(() => new ThresholdTestManager({ compressionThreshold: -1 })).toThrow(
+      expect(() => new ThresholdTestManager({ compressProactively: { compressionThreshold: -1 } })).toThrow(
         'must be between 0 (exclusive) and 1 (inclusive)'
       )
     })
 
     it('throws on compressionThreshold > 1', () => {
-      expect(() => new ThresholdTestManager({ compressionThreshold: 1.5 })).toThrow(
+      expect(() => new ThresholdTestManager({ compressProactively: { compressionThreshold: 1.5 } })).toThrow(
         'must be between 0 (exclusive) and 1 (inclusive)'
       )
     })
 
     it('accepts compressionThreshold of exactly 1', () => {
-      expect(() => new ThresholdTestManager({ compressionThreshold: 1 })).not.toThrow()
+      expect(() => new ThresholdTestManager({ compressProactively: { compressionThreshold: 1 } })).not.toThrow()
     })
   })
 })

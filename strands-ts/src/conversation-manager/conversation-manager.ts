@@ -16,8 +16,17 @@ import { warnOnce } from '../logging/warn-once.js'
 /** Default compression threshold ratio. */
 const DEFAULT_COMPRESSION_THRESHOLD = 0.7
 
+/** Default context window limit fallback when the model doesn't report one. */
+const DEFAULT_CONTEXT_WINDOW_LIMIT = 200_000
+
 /**
  * Options passed to {@link ConversationManager.reduce}.
+ *
+ * When `error` is set, this is a reactive overflow recovery call — the implementation
+ * MUST remove enough history for the next model call to succeed.
+ *
+ * When `error` is undefined, this is a proactive compression call — best-effort reduction
+ * to avoid hitting the context window limit.
  */
 export type ConversationManagerReduceOptions = {
   /**
@@ -26,27 +35,22 @@ export type ConversationManagerReduceOptions = {
   agent: LocalAgent
 
   /**
-   * The model instance that triggered the overflow. Used by conversation
-   * managers that perform model-based reduction (e.g. summarization).
+   * The model instance. Used by conversation managers that perform model-based
+   * reduction (e.g. summarization).
    */
   model: Model
 
   /**
-   * The {@link ContextWindowOverflowError} that triggered this call.
-   * `reduce` MUST remove enough history for the next model call to succeed,
+   * The {@link ContextWindowOverflowError} that triggered this call, or `undefined`
+   * for proactive compression calls.
+   *
+   * When set, `reduce` MUST remove enough history for the next model call to succeed,
    * or this error will propagate out of the agent loop uncaught.
+   *
+   * When undefined, `reduce` is best-effort — errors are swallowed and the model call
+   * proceeds regardless.
    */
-  error: ContextWindowOverflowError
-}
-
-/**
- * Options passed to {@link ConversationManager.reduceOnThreshold}.
- */
-export type ConversationManagerThresholdOptions = {
-  /**
-   * The agent instance. Mutate `agent.messages` in place to reduce history.
-   */
-  agent: LocalAgent
+  error?: ContextWindowOverflowError
 }
 
 /**
@@ -62,19 +66,33 @@ export type ProactiveCompressionConfig = {
 }
 
 /**
+ * Configuration options for the ConversationManager base class.
+ */
+export type ConversationManagerOptions = {
+  /**
+   * Enable proactive context compression before the model call.
+   *
+   * - `true`: compress when 70% of the context window is used (default threshold).
+   * - `{ compressionThreshold: number }`: compress at the specified ratio (0, 1].
+   * - `false` or omitted: disabled, only reactive overflow recovery is used.
+   */
+  compressProactively?: boolean | ProactiveCompressionConfig
+}
+
+/**
  * Abstract base class for conversation history management strategies.
  *
  * The primary responsibility of a ConversationManager is overflow recovery: when the
  * model returns a {@link ContextWindowOverflowError}, {@link ConversationManager.reduce}
- * is called and MUST reduce the history enough for the next model call to succeed.
- * If `reduce` returns `false` (no reduction performed), the error propagates out of
- * the agent loop uncaught. This makes `reduce` a critical operation — implementations
- * must be able to make meaningful progress when called with `error` set.
+ * is called with `error` set and MUST reduce the history enough for the next model call
+ * to succeed. If `reduce` returns `false` (no reduction performed), the error propagates
+ * out of the agent loop uncaught. This makes `reduce` a critical operation —
+ * implementations must be able to make meaningful progress when called with `error` set.
  *
- * Subclasses can enable proactive compression by passing their `compressProactively`
- * option to the base constructor. When set, the base class registers a `BeforeModelCallEvent`
- * hook that checks projected input tokens against the model's context window limit and calls
- * {@link ConversationManager.reduceOnThreshold} when the threshold is exceeded.
+ * Subclasses can enable proactive compression by passing `compressProactively` in the
+ * options object to the base constructor. When enabled, the base class registers a
+ * `BeforeModelCallEvent` hook that checks projected input tokens against the model's
+ * context window limit and calls `reduce` (without `error`) when the threshold is exceeded.
  *
  * @example
  * ```typescript
@@ -98,10 +116,10 @@ export abstract class ConversationManager implements Plugin {
   protected readonly _compressionThreshold: number | undefined
 
   /**
-   * @param compressProactively - Enable proactive compression. `true` uses the default
-   *   threshold, a config object specifies a custom threshold, `undefined`/`false` disables.
+   * @param options - Configuration options for the conversation manager.
    */
-  constructor(compressProactively?: boolean | ProactiveCompressionConfig) {
+  constructor(options?: ConversationManagerOptions) {
+    const compressProactively = options?.compressProactively
     const threshold =
       compressProactively === true
         ? DEFAULT_COMPRESSION_THRESHOLD
@@ -118,11 +136,12 @@ export abstract class ConversationManager implements Plugin {
   /**
    * Reduce the conversation history.
    *
-   * Called automatically when a {@link ContextWindowOverflowError} occurs (with `error` set).
-   *
-   * This is a critical call: the implementation MUST remove enough history for the next model call to succeed.
-   * Returning `false` means no reduction was possible, and the {@link ContextWindowOverflowError} will
-   * propagate out of the agent loop.
+   * Called in two scenarios:
+   * 1. **Reactive** (error set): A {@link ContextWindowOverflowError} occurred. The implementation
+   *    MUST remove enough history for the next model call to succeed. Returning `false` means no
+   *    reduction was possible, and the error will propagate out of the agent loop.
+   * 2. **Proactive** (error undefined): The compression threshold was exceeded. This is best-effort —
+   *    returning `false` or throwing is acceptable; the model call proceeds regardless.
    *
    * Implementations should mutate `agent.messages` in place and return `true` if any reduction
    * was performed, `false` otherwise.
@@ -134,27 +153,14 @@ export abstract class ConversationManager implements Plugin {
   abstract reduce(options: ConversationManagerReduceOptions): boolean | Promise<boolean>
 
   /**
-   * Proactively reduce the conversation history before a model call.
-   *
-   * Called when projected input tokens exceed the configured compression threshold
-   * of the model's context window limit. Subclasses implement this to reduce
-   * context before the model call, avoiding overflow errors.
-   *
-   * @param options - The reduction options
-   * @returns `true` if the history was reduced, `false` otherwise.
-   *   May return a `Promise` for implementations that need async I/O.
-   */
-  reduceOnThreshold?(options: ConversationManagerThresholdOptions): boolean | Promise<boolean>
-
-  /**
    * Initialize the conversation manager with the agent instance.
    *
-   * Registers overflow recovery: when a {@link ContextWindowOverflowError} occurs,
-   * calls {@link ConversationManager.reduce} and retries the model call if reduction succeeded.
-   * If `reduce` returns `false`, the error propagates out of the agent loop uncaught.
-   *
-   * When a compression threshold is configured and the subclass implements `reduceOnThreshold`,
-   * also registers a `BeforeModelCallEvent` hook for proactive compression.
+   * Registers two hooks:
+   * 1. `AfterModelCallEvent`: Overflow recovery — when a {@link ContextWindowOverflowError} occurs,
+   *    calls {@link ConversationManager.reduce} with `error` set and retries if reduction succeeded.
+   * 2. `BeforeModelCallEvent`: Proactive compression — when projected input tokens exceed the
+   *    configured compression threshold, calls {@link ConversationManager.reduce} without `error`.
+   *    The hook is always registered but only acts when proactive compression is enabled.
    *
    * Subclasses that override `initAgent` MUST call `super.initAgent(agent)` to
    * preserve overflow recovery and proactive compression behavior.
@@ -162,6 +168,7 @@ export abstract class ConversationManager implements Plugin {
    * @param agent - The agent to register hooks with
    */
   initAgent(agent: LocalAgent): void {
+    // Reactive overflow recovery
     agent.addHook(AfterModelCallEvent, async (event) => {
       if (event.error instanceof ContextWindowOverflowError) {
         if (await this.reduce({ agent: event.agent, model: event.model, error: event.error })) {
@@ -170,35 +177,37 @@ export abstract class ConversationManager implements Plugin {
       }
     })
 
-    if (this._compressionThreshold !== undefined && !this.reduceOnThreshold) {
-      logger.warn(
-        `conversation_manager=<${this.name}> | compressProactively is enabled but reduceOnThreshold is not implemented, proactive compression is disabled`
-      )
-    }
+    // Proactive compression — always subscribe, check threshold in the handler
+    agent.addHook(BeforeModelCallEvent, async (event) => {
+      if (this._compressionThreshold === undefined) {
+        return
+      }
 
-    if (this._compressionThreshold !== undefined && this.reduceOnThreshold) {
-      agent.addHook(BeforeModelCallEvent, async (event) => {
-        const contextWindowLimit = event.model.getConfig().contextWindowLimit
-        if (contextWindowLimit === undefined) {
-          warnOnce(
-            logger,
-            `conversation_manager=<${this.name}> | contextWindowLimit is not set on the model, proactive compression is disabled | set contextWindowLimit in your model config`
-          )
-          return
-        }
+      let contextWindowLimit = event.model.getConfig().contextWindowLimit
+      if (contextWindowLimit === undefined) {
+        contextWindowLimit = DEFAULT_CONTEXT_WINDOW_LIMIT
+        warnOnce(
+          logger,
+          `conversation_manager=<${this.name}> | contextWindowLimit is not set on the model, using default of ${DEFAULT_CONTEXT_WINDOW_LIMIT} | set contextWindowLimit in your model config for accurate proactive compression`
+        )
+      }
 
-        if (event.projectedInputTokens === undefined) {
-          return
-        }
+      if (event.projectedInputTokens === undefined) {
+        return
+      }
 
-        const ratio = event.projectedInputTokens / contextWindowLimit
-        if (ratio >= this._compressionThreshold!) {
-          logger.debug(
-            `projected_tokens=<${event.projectedInputTokens}>, limit=<${contextWindowLimit}>, ratio=<${ratio.toFixed(2)}>, compression_threshold=<${this._compressionThreshold}> | compression threshold exceeded, reducing context`
-          )
-          await this.reduceOnThreshold!({ agent: event.agent })
+      const ratio = event.projectedInputTokens / contextWindowLimit
+      if (ratio >= this._compressionThreshold) {
+        logger.debug(
+          `projected_tokens=<${event.projectedInputTokens}>, limit=<${contextWindowLimit}>, ratio=<${ratio.toFixed(2)}>, compression_threshold=<${this._compressionThreshold}> | compression threshold exceeded, reducing context`
+        )
+        // Proactive compression is best-effort: swallow errors so the model call can still proceed.
+        try {
+          await this.reduce({ agent: event.agent, model: event.model })
+        } catch (e) {
+          logger.warn(`conversation_manager=<${this.name}> | proactive compression failed, continuing | error=<${e}>`)
         }
-      })
-    }
+      }
+    })
   }
 }
