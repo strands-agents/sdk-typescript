@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { Agent } from '../../agent/agent.js'
 import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
 import { collectGenerator } from '../../__fixtures__/model-test-helpers.js'
-import { createSlowAgent } from '../../__fixtures__/agent-helpers.js'
+import { createCancellableAgent } from '../../__fixtures__/agent-helpers.js'
 import { BeforeNodeCallEvent, MultiAgentInitializedEvent } from '../events.js'
 import type { JSONValue } from '../../types/json.js'
 import { TextBlock } from '../../types/messages.js'
@@ -260,7 +260,7 @@ describe('Swarm', () => {
 
     it('throws when a node exceeds nodeTimeout', async () => {
       const swarm = new Swarm({
-        nodes: [{ agent: createSlowAgent('slow', 100) }],
+        nodes: [{ agent: createCancellableAgent('slow', 100) }],
         start: 'slow',
         nodeTimeout: 20,
       })
@@ -270,7 +270,7 @@ describe('Swarm', () => {
 
     it('applies per-node timeout over nodeTimeout', async () => {
       const swarm = new Swarm({
-        nodes: [{ agent: createSlowAgent('slow', 100), timeout: 15 }],
+        nodes: [{ agent: createCancellableAgent('slow', 100), timeout: 15 }],
         start: 'slow',
         nodeTimeout: 10_000,
       })
@@ -280,7 +280,7 @@ describe('Swarm', () => {
 
     it('does not throw when nodeTimeout is Infinity', async () => {
       const swarm = new Swarm({
-        nodes: [{ agent: createSlowAgent('a', 20) }],
+        nodes: [{ agent: createCancellableAgent('a', 20) }],
         start: 'a',
         nodeTimeout: Infinity,
       })
@@ -291,7 +291,7 @@ describe('Swarm', () => {
 
     it('per-node timeout of Infinity disables a finite nodeTimeout', async () => {
       const swarm = new Swarm({
-        nodes: [{ agent: createSlowAgent('slow', 30), timeout: Infinity }],
+        nodes: [{ agent: createCancellableAgent('slow', 30), timeout: Infinity }],
         start: 'slow',
         nodeTimeout: 10,
       })
@@ -303,8 +303,8 @@ describe('Swarm', () => {
     it('throws when timeout is exceeded between steps', async () => {
       const swarm = new Swarm({
         nodes: [
-          { agent: createSlowAgent('a', 30, { agentId: 'b', message: 'to b' }) },
-          { agent: createSlowAgent('b', 30) },
+          { agent: createCancellableAgent('a', 30, { agentId: 'b', message: 'to b' }) },
+          { agent: createCancellableAgent('b', 30) },
         ],
         start: 'a',
         timeout: 20,
@@ -315,7 +315,7 @@ describe('Swarm', () => {
 
     it('aborts an in-flight node when the swarm timeout expires mid-step', async () => {
       const swarm = new Swarm({
-        nodes: [{ agent: createSlowAgent('slow', 200) }],
+        nodes: [{ agent: createCancellableAgent('slow', 200) }],
         start: 'slow',
         timeout: 20,
       })

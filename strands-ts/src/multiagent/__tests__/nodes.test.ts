@@ -118,6 +118,22 @@ describe('AgentNode', () => {
     state = new MultiAgentState({ nodeIds: ['agent-1'] })
   })
 
+  describe('constructor', () => {
+    it('throws when timeout < 1', () => {
+      expect(() => new AgentNode({ agent, timeout: 0 })).toThrow('timeout=<0>, node_id=<agent-1> | must be at least 1')
+    })
+
+    it('accepts a positive timeout', () => {
+      const timedNode = new AgentNode({ agent, timeout: 5_000 })
+      expect(timedNode.timeout).toBe(5_000)
+    })
+
+    it('accepts Infinity as an explicit opt-out', () => {
+      const timedNode = new AgentNode({ agent, timeout: Infinity })
+      expect(timedNode.timeout).toBe(Infinity)
+    })
+  })
+
   describe('handle', () => {
     it('wraps agent events and returns content', async () => {
       const { items, result } = await collectGenerator(node.stream([new TextBlock('prompt')], state))

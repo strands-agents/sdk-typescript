@@ -184,6 +184,9 @@ export class AgentNode extends Node {
 
     this._agent = agent
     if (timeout !== undefined) {
+      if (timeout < 1) {
+        throw new Error(`timeout=<${timeout}>, node_id=<${agent.id}> | must be at least 1`)
+      }
       this.timeout = timeout
     }
   }

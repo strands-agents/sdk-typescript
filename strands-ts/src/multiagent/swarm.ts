@@ -281,7 +281,9 @@ export class Swarm implements MultiAgent {
         handoff = nodeResult.structuredOutput as HandoffResult | undefined
 
         if (execController?.signal.aborted) {
-          throw new Error(`timeout=<${this.config.timeout}>, swarm_id=<${this.id}> | swarm exceeded wall-clock budget`)
+          throw new Error(
+            `timeout=<${this.config.timeout}>, swarm_id=<${this.id}>, node_id=<${node.id}> | swarm exceeded wall-clock budget during node execution`
+          )
         }
 
         // Check for terminal conditions

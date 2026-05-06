@@ -191,16 +191,17 @@ export function expectAgentResult(options: AgentResultMatcher): AgentResult {
 }
 
 /**
- * Creates a minimal InvokableAgent that sleeps for `delayMs` before resolving.
- * Respects `cancelSignal` by aborting the sleep early. Used to exercise timeout
- * behavior deterministically without spinning up a full Agent.
+ * Creates a minimal InvokableAgent that sleeps for `delayMs` before resolving,
+ * aborting the sleep early when the invocation's `cancelSignal` fires. Used to
+ * exercise timeout and cancellation behavior deterministically without spinning
+ * up a full Agent.
  *
  * @param id - The agent id
  * @param delayMs - How long the agent should sleep before returning
  * @param structuredOutput - Optional structured output (e.g. a swarm handoff). When present,
  *   its `message` field is used as the assistant text.
  */
-export function createSlowAgent(
+export function createCancellableAgent(
   id: string,
   delayMs: number,
   structuredOutput: { agentId?: string; message: string } = { message: 'done' }

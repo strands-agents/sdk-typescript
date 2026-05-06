@@ -20,6 +20,7 @@ All test fixtures are located in `src/__fixtures__/`. Use these helpers to reduc
 | `createMockContext()`  | `tool-helpers.ts`       | Create mock `ToolContext` for testing tool implementations directly                  | [Tool Fixtures](#tool-fixtures-tool-helpersts)                              |
 | `createMockAgent()`    | `agent-helpers.ts`      | Create minimal mock Agent with messages and state                                    | [Agent Fixtures](#agent-fixtures-agent-helpersts)                           |
 | `expectAgentResult()`  | `agent-helpers.ts`      | Assert on `AgentResult` with expected stop reason, message text, cycle count, and traces | [Agent Fixtures](#agent-fixtures-agent-helpersts)                           |
+| `createCancellableAgent()` | `agent-helpers.ts`  | Create a minimal `InvokableAgent` that sleeps for a configurable delay and aborts early when its `cancelSignal` fires — used for timeout/cancellation tests | [Agent Fixtures](#agent-fixtures-agent-helpersts)                           |
 | `isNode` / `isBrowser` | `environment.ts`        | Environment detection for conditional test execution                                 | [Environment Fixtures](#environment-fixtures-environmentts)                 |
 | `MockSpan`             | `mock-span.ts`          | Mock OTEL Span that records all setAttribute/addEvent/end calls for assertion            | [Telemetry Fixtures](#telemetry-fixtures-mock-spants-mock-meterts)          |
 | `eventAttr()`          | `mock-span.ts`          | Extract a string attribute from a mock span event                                        | [Telemetry Fixtures](#telemetry-fixtures-mock-spants-mock-meterts)          |
@@ -538,6 +539,18 @@ expect(result).toEqual(
 - `traceCount` (optional) - Expected exact number of traces. When omitted, validates at least one trace exists
 - `toolNames` (optional) - Expected tool names that were invoked
 - `usage` (optional) - Expected token usage. When omitted, validates shape with `expect.any(Number)`
+
+- **`createCancellableAgent(id, delayMs, structuredOutput?)`** - Creates a minimal `InvokableAgent` that sleeps for `delayMs` before resolving, aborting the sleep early when the invocation's `cancelSignal` fires. Use for exercising timeout and cancellation behavior in multi-agent orchestrators (swarm, graph) without standing up a full Agent.
+
+```typescript
+import { createCancellableAgent } from '../__fixtures__/agent-helpers'
+
+// Plain slow agent for a nodeTimeout test
+const slow = createCancellableAgent('slow', 100)
+
+// With a swarm handoff as structured output
+const handoffAgent = createCancellableAgent('a', 30, { agentId: 'b', message: 'to b' })
+```
 
 ### Environment Fixtures (`environment.ts`)
 

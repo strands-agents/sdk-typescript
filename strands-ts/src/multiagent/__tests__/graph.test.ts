@@ -3,7 +3,7 @@ import { Agent } from '../../agent/agent.js'
 import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
 import { MockSnapshotStorage } from '../../__fixtures__/mock-storage-provider.js'
 import { collectGenerator } from '../../__fixtures__/model-test-helpers.js'
-import { createSlowAgent } from '../../__fixtures__/agent-helpers.js'
+import { createCancellableAgent } from '../../__fixtures__/agent-helpers.js'
 import { AfterNodeCallEvent, BeforeNodeCallEvent, MultiAgentInitializedEvent } from '../events.js'
 import { TextBlock, type ContentBlockData } from '../../types/messages.js'
 import { Status, MultiAgentState } from '../state.js'
@@ -447,7 +447,7 @@ describe('Graph', () => {
 
     it('throws when a node exceeds nodeTimeout', async () => {
       const graph = new Graph({
-        nodes: [{ agent: createSlowAgent('slow', 100) }],
+        nodes: [{ agent: createCancellableAgent('slow', 100) }],
         edges: [],
         nodeTimeout: 20,
       })
@@ -457,7 +457,7 @@ describe('Graph', () => {
 
     it('applies per-node timeout over nodeTimeout', async () => {
       const graph = new Graph({
-        nodes: [{ agent: createSlowAgent('slow', 100), timeout: 15 }],
+        nodes: [{ agent: createCancellableAgent('slow', 100), timeout: 15 }],
         edges: [],
         nodeTimeout: 10_000,
       })
@@ -467,7 +467,7 @@ describe('Graph', () => {
 
     it('does not throw when nodeTimeout is Infinity', async () => {
       const graph = new Graph({
-        nodes: [{ agent: createSlowAgent('a', 20) }],
+        nodes: [{ agent: createCancellableAgent('a', 20) }],
         edges: [],
         nodeTimeout: Infinity,
       })
@@ -479,7 +479,7 @@ describe('Graph', () => {
 
     it('per-node timeout of Infinity disables a finite nodeTimeout', async () => {
       const graph = new Graph({
-        nodes: [{ agent: createSlowAgent('slow', 30), timeout: Infinity }],
+        nodes: [{ agent: createCancellableAgent('slow', 30), timeout: Infinity }],
         edges: [],
         nodeTimeout: 10,
       })
@@ -491,7 +491,7 @@ describe('Graph', () => {
 
     it('throws when timeout is exceeded', async () => {
       const graph = new Graph({
-        nodes: [{ agent: createSlowAgent('a', 30) }, { agent: createSlowAgent('b', 30) }],
+        nodes: [{ agent: createCancellableAgent('a', 30) }, { agent: createCancellableAgent('b', 30) }],
         edges: [['a', 'b']],
         timeout: 20,
       })
