@@ -76,7 +76,7 @@ export type ConversationManagerOptions = {
    * - `{ compressionThreshold: number }`: compress at the specified ratio (0, 1].
    * - `false` or omitted: disabled, only reactive overflow recovery is used.
    */
-  compressProactively?: boolean | ProactiveCompressionConfig
+  proactiveCompression?: boolean | ProactiveCompressionConfig
 }
 
 /**
@@ -89,7 +89,7 @@ export type ConversationManagerOptions = {
  * out of the agent loop uncaught. This makes `reduce` a critical operation —
  * implementations must be able to make meaningful progress when called with `error` set.
  *
- * Subclasses can enable proactive compression by passing `compressProactively` in the
+ * Subclasses can enable proactive compression by passing `proactiveCompression` in the
  * options object to the base constructor. When enabled, the base class registers a
  * `BeforeModelCallEvent` hook that checks projected input tokens against the model's
  * context window limit and calls `reduce` (without `error`) when the threshold is exceeded.
@@ -119,12 +119,12 @@ export abstract class ConversationManager implements Plugin {
    * @param options - Configuration options for the conversation manager.
    */
   constructor(options?: ConversationManagerOptions) {
-    const compressProactively = options?.compressProactively
+    const proactiveCompression = options?.proactiveCompression
     const threshold =
-      compressProactively === true
+      proactiveCompression === true
         ? DEFAULT_COMPRESSION_THRESHOLD
-        : compressProactively
-          ? compressProactively.compressionThreshold
+        : proactiveCompression
+          ? proactiveCompression.compressionThreshold
           : undefined
 
     if (threshold !== undefined && (threshold <= 0 || threshold > 1)) {

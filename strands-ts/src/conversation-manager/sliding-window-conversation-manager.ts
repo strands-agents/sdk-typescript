@@ -38,7 +38,7 @@ export type SlidingWindowConversationManagerConfig = {
    * - `{ compressionThreshold: number }`: compress at the specified ratio (0, 1].
    * - `false` or omitted: disabled, only reactive overflow recovery is used.
    */
-  compressProactively?: boolean | ProactiveCompressionConfig
+  proactiveCompression?: boolean | ProactiveCompressionConfig
 }
 
 /**
@@ -69,7 +69,7 @@ export class SlidingWindowConversationManager extends ConversationManager {
    * @param config - Configuration options for the sliding window manager.
    */
   constructor(config?: SlidingWindowConversationManagerConfig) {
-    super(config?.compressProactively !== undefined ? { compressProactively: config.compressProactively } : undefined)
+    super(config)
     this._windowSize = config?.windowSize ?? 40
     this._shouldTruncateResults = config?.shouldTruncateResults ?? true
   }

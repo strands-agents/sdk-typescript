@@ -81,7 +81,7 @@ export type SummarizingConversationManagerConfig = {
    * - `{ compressionThreshold: number }`: compress at the specified ratio (0, 1].
    * - `false` or omitted: disabled, only reactive overflow recovery is used.
    */
-  compressProactively?: boolean | ProactiveCompressionConfig
+  proactiveCompression?: boolean | ProactiveCompressionConfig
 }
 
 /**
@@ -100,7 +100,7 @@ export class SummarizingConversationManager extends ConversationManager {
   private readonly _summarizationSystemPrompt: string
 
   constructor(config?: SummarizingConversationManagerConfig) {
-    super(config?.compressProactively !== undefined ? { compressProactively: config.compressProactively } : undefined)
+    super(config)
     this._model = config?.model
     // clamped [0.1, 0.8]
     this._summaryRatio = Math.max(0.1, Math.min(0.8, config?.summaryRatio ?? 0.3))

@@ -767,7 +767,7 @@ describe('SlidingWindowConversationManager', () => {
     it('trims oldest messages when compressionThreshold is exceeded', async () => {
       const manager = new SlidingWindowConversationManager({
         windowSize: 4,
-        compressProactively: { compressionThreshold: 0.7 },
+        proactiveCompression: { compressionThreshold: 0.7 },
       })
       const messages = [
         new Message({ role: 'user', content: [new TextBlock('Message 1')] }),
@@ -795,7 +795,7 @@ describe('SlidingWindowConversationManager', () => {
     it('does not trim when below compressionThreshold', async () => {
       const manager = new SlidingWindowConversationManager({
         windowSize: 4,
-        compressProactively: { compressionThreshold: 0.7 },
+        proactiveCompression: { compressionThreshold: 0.7 },
       })
       const messages = [
         new Message({ role: 'user', content: [new TextBlock('Message 1')] }),

@@ -135,10 +135,10 @@ describe('ConversationManager', () => {
     })
   })
 
-  describe('compressProactively', () => {
+  describe('proactiveCompression', () => {
     const mockModel = { getConfig: () => ({ contextWindowLimit: 1000 }) as BaseModelConfig } as any
 
-    it('always registers a BeforeModelCallEvent hook regardless of compressProactively setting', () => {
+    it('always registers a BeforeModelCallEvent hook regardless of proactiveCompression setting', () => {
       const manager = new TestConversationManager()
       const mockAgent = createMockAgent()
       manager.initAgent(mockAgent)
@@ -149,7 +149,7 @@ describe('ConversationManager', () => {
       expect(mockAgent.trackedHooks[1]!.eventType).toBe(BeforeModelCallEvent)
     })
 
-    it('BeforeModelCallEvent handler is a no-op when compressProactively is not set', async () => {
+    it('BeforeModelCallEvent handler is a no-op when proactiveCompression is not set', async () => {
       const manager = new ThresholdTestManager()
       const mockAgent = createMockAgent()
       manager.initAgent(mockAgent)
@@ -165,8 +165,8 @@ describe('ConversationManager', () => {
       expect(manager.reduceCallCount).toBe(0)
     })
 
-    it('uses default threshold of 0.7 when compressProactively is true', async () => {
-      const manager = new ThresholdTestManager({ compressProactively: true })
+    it('uses default threshold of 0.7 when proactiveCompression is true', async () => {
+      const manager = new ThresholdTestManager({ proactiveCompression: true })
       const messages = [
         new Message({ role: 'user', content: [new TextBlock('Message 1')] }),
         new Message({ role: 'assistant', content: [new TextBlock('Response 1')] }),
@@ -206,7 +206,7 @@ describe('ConversationManager', () => {
         }
       }
 
-      const manager = new CapturingManager({ compressProactively: { compressionThreshold: 0.5 } })
+      const manager = new CapturingManager({ proactiveCompression: { compressionThreshold: 0.5 } })
       const messages = [
         new Message({ role: 'user', content: [new TextBlock('Message 1')] }),
         new Message({ role: 'assistant', content: [new TextBlock('Response 1')] }),
@@ -229,7 +229,7 @@ describe('ConversationManager', () => {
     })
 
     it('does not call reduce when below threshold', async () => {
-      const manager = new ThresholdTestManager({ compressProactively: { compressionThreshold: 0.7 } })
+      const manager = new ThresholdTestManager({ proactiveCompression: { compressionThreshold: 0.7 } })
       const mockAgent = createMockAgent()
       manager.initAgent(mockAgent)
 
@@ -245,7 +245,7 @@ describe('ConversationManager', () => {
     })
 
     it('does not call reduce when projectedInputTokens is undefined', async () => {
-      const manager = new ThresholdTestManager({ compressProactively: true })
+      const manager = new ThresholdTestManager({ proactiveCompression: true })
       const mockAgent = createMockAgent()
       manager.initAgent(mockAgent)
 
@@ -260,7 +260,7 @@ describe('ConversationManager', () => {
     })
 
     it('uses 200k default when contextWindowLimit is undefined and logs warning', async () => {
-      const manager = new ThresholdTestManager({ compressProactively: { compressionThreshold: 0.7 } })
+      const manager = new ThresholdTestManager({ proactiveCompression: { compressionThreshold: 0.7 } })
       const messages = [
         new Message({ role: 'user', content: [new TextBlock('Message 1')] }),
         new Message({ role: 'assistant', content: [new TextBlock('Response 1')] }),
@@ -286,7 +286,7 @@ describe('ConversationManager', () => {
     })
 
     it('does not trigger with 200k default when below threshold', async () => {
-      const manager = new ThresholdTestManager({ compressProactively: { compressionThreshold: 0.7 } })
+      const manager = new ThresholdTestManager({ proactiveCompression: { compressionThreshold: 0.7 } })
       const mockAgent = createMockAgent()
       manager.initAgent(mockAgent)
 
@@ -314,7 +314,7 @@ describe('ConversationManager', () => {
         }
       }
 
-      const manager = new ThrowingManager({ compressProactively: true })
+      const manager = new ThrowingManager({ proactiveCompression: true })
       const mockAgent = createMockAgent()
       manager.initAgent(mockAgent)
 
@@ -330,22 +330,22 @@ describe('ConversationManager', () => {
     })
 
     it('throws on compressionThreshold <= 0', () => {
-      expect(() => new ThresholdTestManager({ compressProactively: { compressionThreshold: 0 } })).toThrow(
+      expect(() => new ThresholdTestManager({ proactiveCompression: { compressionThreshold: 0 } })).toThrow(
         'must be between 0 (exclusive) and 1 (inclusive)'
       )
-      expect(() => new ThresholdTestManager({ compressProactively: { compressionThreshold: -1 } })).toThrow(
+      expect(() => new ThresholdTestManager({ proactiveCompression: { compressionThreshold: -1 } })).toThrow(
         'must be between 0 (exclusive) and 1 (inclusive)'
       )
     })
 
     it('throws on compressionThreshold > 1', () => {
-      expect(() => new ThresholdTestManager({ compressProactively: { compressionThreshold: 1.5 } })).toThrow(
+      expect(() => new ThresholdTestManager({ proactiveCompression: { compressionThreshold: 1.5 } })).toThrow(
         'must be between 0 (exclusive) and 1 (inclusive)'
       )
     })
 
     it('accepts compressionThreshold of exactly 1', () => {
-      expect(() => new ThresholdTestManager({ compressProactively: { compressionThreshold: 1 } })).not.toThrow()
+      expect(() => new ThresholdTestManager({ proactiveCompression: { compressionThreshold: 1 } })).not.toThrow()
     })
   })
 })
