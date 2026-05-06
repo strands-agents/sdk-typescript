@@ -128,6 +128,7 @@ export const openaiResponses = {
       ...config,
       api: 'responses',
       apiKey,
+      clientConfig: { ...(config.clientConfig ?? {}), dangerouslyAllowBrowser: true },
     })
   },
 }
