@@ -1325,5 +1325,16 @@ describe('GoogleModel', () => {
       expect(typeof result).toBe('number')
       expect(result).toBeGreaterThanOrEqual(0)
     })
+
+    it('should skip native API and use heuristic when useNativeTokenCount is false', async () => {
+      const mockCountTokens = vi.fn()
+      const client = createCountTokensClient(mockCountTokens)
+      const model = new GoogleModel({ client, modelId: 'gemini-2.5-flash', useNativeTokenCount: false })
+
+      const result = await model.countTokens(messages)
+
+      expect(mockCountTokens).not.toHaveBeenCalled()
+      expect(result).toBe(2) // heuristic: Math.ceil('hello'.length / 4)
+    })
   })
 })

@@ -281,6 +281,15 @@ export interface BedrockModelConfig extends BaseModelConfig {
    * @see https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails.html
    */
   guardrailConfig?: BedrockGuardrailConfig
+
+  /**
+   * Whether to use the native Bedrock CountTokens API.
+   *
+   * When `true` (default), `countTokens()` calls the Bedrock CountTokens API for
+   * accurate counts. When `false`, skips the API call and uses the character-based
+   * heuristic estimator.
+   */
+  useNativeTokenCount?: boolean
 }
 
 /**
@@ -501,6 +510,8 @@ export class BedrockModel extends Model<BedrockModelConfig> {
    * @returns Total input token count
    */
   override async countTokens(messages: Message[], options?: CountTokensOptions): Promise<number> {
+    if (this._config.useNativeTokenCount === false) return super.countTokens(messages, options)
+
     const modelId = this._config.modelId ?? MODEL_DEFAULTS.bedrock.modelId
 
     if (UNSUPPORTED_COUNT_TOKENS_MODELS.has(modelId)) {

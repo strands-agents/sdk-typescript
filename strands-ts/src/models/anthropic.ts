@@ -29,6 +29,15 @@ export interface AnthropicModelConfig extends BaseModelConfig {
   maxTokens?: number
   stopSequences?: string[]
   params?: Record<string, unknown>
+
+  /**
+   * Whether to use the native Anthropic countTokens API.
+   *
+   * When `true` (default), `countTokens()` calls the Anthropic token counting API for
+   * accurate counts. When `false`, skips the API call and uses the character-based
+   * heuristic estimator.
+   */
+  useNativeTokenCount?: boolean
 }
 
 export interface AnthropicModelOptions extends AnthropicModelConfig {
@@ -101,6 +110,8 @@ export class AnthropicModel extends Model<AnthropicModelConfig> {
    * @returns Total input token count
    */
   override async countTokens(messages: Message[], options?: CountTokensOptions): Promise<number> {
+    if (this._config.useNativeTokenCount === false) return super.countTokens(messages, options)
+
     try {
       const request = this._formatRequest(messages, options)
       const params: Anthropic.MessageCountTokensParams = {

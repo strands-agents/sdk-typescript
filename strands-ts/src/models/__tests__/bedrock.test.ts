@@ -4308,5 +4308,16 @@ describe('BedrockModel', () => {
       await model.countTokens(messages)
       expect(mockSend).toHaveBeenCalledTimes(2)
     })
+
+    it('should skip native API and use heuristic when useNativeTokenCount is false', async () => {
+      const mockSend = vi.fn()
+      mockBedrockClientImplementation({ send: mockSend })
+      const model = new BedrockModel({ useNativeTokenCount: false })
+
+      const result = await model.countTokens(messages)
+
+      expect(mockSend).not.toHaveBeenCalled()
+      expect(result).toBe(2) // heuristic: Math.ceil('hello'.length / 4)
+    })
   })
 })
