@@ -887,7 +887,7 @@ describe('Agent Hooks Integration', () => {
         .addTurn({ type: 'textBlock', text: 'Should not reach this' }),
     })
 
-    it('halts the loop when endTurn is true', async () => {
+    it('halts the loop when endTurn is true with default message', async () => {
       const { tool, model } = makeSingleToolSetup()
       const agent = new Agent({ model, tools: [tool], plugins: [mockPlugin] })
       agent.addHook(AfterToolsEvent, (event: AfterToolsEvent) => {
@@ -900,7 +900,12 @@ describe('Agent Hooks Integration', () => {
         expect.objectContaining({
           type: 'agentResult',
           stopReason: 'endTurn',
-          lastMessage: expect.objectContaining({ role: 'assistant' }),
+          lastMessage: expect.objectContaining({
+            role: 'assistant',
+            content: expect.arrayContaining([
+              expect.objectContaining({ type: 'textBlock', text: 'Turn ended early by hook after tool execution' }),
+            ]),
+          }),
         })
       )
       expect(model.callCount).toBe(1)
@@ -965,7 +970,7 @@ describe('Agent Hooks Integration', () => {
       expect(model.callCount).toBe(2)
     })
 
-    it('appends tool results to conversation history even on endTurn', async () => {
+    it('appends tool results and default endTurn message to conversation history', async () => {
       const { tool, model } = makeSingleToolSetup()
       const agent = new Agent({ model, tools: [tool] })
       agent.addHook(AfterToolsEvent, (event: AfterToolsEvent) => {
@@ -974,7 +979,7 @@ describe('Agent Hooks Integration', () => {
 
       await agent.invoke('Test')
 
-      expect(agent.messages).toHaveLength(3)
+      expect(agent.messages).toHaveLength(4)
 
       expect(agent.messages[0]!.role).toBe('user')
       expect(agent.messages[1]!.role).toBe('assistant')
@@ -984,6 +989,12 @@ describe('Agent Hooks Integration', () => {
       expect(agent.messages[2]!.role).toBe('user')
       expect(agent.messages[2]!.content).toEqual(
         expect.arrayContaining([expect.objectContaining({ type: 'toolResultBlock' })])
+      )
+      expect(agent.messages[3]!.role).toBe('assistant')
+      expect(agent.messages[3]!.content).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ type: 'textBlock', text: 'Turn ended early by hook after tool execution' }),
+        ])
       )
     })
 
