@@ -335,6 +335,8 @@ export class BedrockModel extends Model<BedrockModelConfig> {
   /**
    * Clears the cache of model IDs that do not support the CountTokens API.
    * After calling this, the next countTokens invocation will attempt the API again.
+   *
+   * @internal
    */
   static clearCountTokensCache(): void {
     UNSUPPORTED_COUNT_TOKENS_MODELS.clear()
