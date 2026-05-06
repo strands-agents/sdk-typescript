@@ -132,6 +132,15 @@ describe('AgentNode', () => {
       const timedNode = new AgentNode({ agent, timeout: Infinity })
       expect(timedNode.timeout).toBe(Infinity)
     })
+
+    it('defaults stateful to false', () => {
+      expect(node.stateful).toBe(false)
+    })
+
+    it('stores the stateful flag when provided', () => {
+      const statefulNode = new AgentNode({ agent, stateful: true })
+      expect(statefulNode.stateful).toBe(true)
+    })
   })
 
   describe('handle', () => {
@@ -169,6 +178,21 @@ describe('AgentNode', () => {
 
       expect(agent.messages).toStrictEqual(messagesBefore)
       expect(agent.appState.getAll()).toStrictEqual(stateBefore)
+    })
+
+    it('retains agent messages across executions when stateful', async () => {
+      const model = new MockMessageModel().addTurn(new TextBlock('reply-1')).addTurn(new TextBlock('reply-2'))
+      const statefulAgent = new Agent({ model, printer: false, id: 'stateful-agent' })
+      const statefulNode = new AgentNode({ agent: statefulAgent, stateful: true })
+      const statefulState = new MultiAgentState({ nodeIds: ['stateful-agent'] })
+
+      await collectGenerator(statefulNode.stream([new TextBlock('first')], statefulState))
+      const messagesAfterFirst = statefulAgent.messages.length
+      expect(messagesAfterFirst).toBeGreaterThan(0)
+
+      await collectGenerator(statefulNode.stream([new TextBlock('second')], statefulState))
+
+      expect(statefulAgent.messages.length).toBeGreaterThan(messagesAfterFirst)
     })
 
     it('passes structuredOutputSchema from options to the agent', async () => {
