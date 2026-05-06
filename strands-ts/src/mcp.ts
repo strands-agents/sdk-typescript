@@ -198,6 +198,14 @@ export class McpClient {
   }
 
   /**
+   * Enables the `await using` pattern for automatic resource cleanup.
+   * Delegates to {@link McpClient.disconnect}.
+   */
+  async [Symbol.asyncDispose](): Promise<void> {
+    await this.disconnect()
+  }
+
+  /**
    * Lists the tools available on the server and returns them as executable McpTool instances.
    *
    * @returns A promise that resolves with an array of McpTool instances.

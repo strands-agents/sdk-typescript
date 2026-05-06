@@ -375,6 +375,12 @@ describe('MCP Integration', () => {
       expect(mockTransport.close).toHaveBeenCalled()
     })
 
+    it('supports Symbol.asyncDispose for await using pattern', async () => {
+      await client[Symbol.asyncDispose]()
+      expect(sdkClientMock.close).toHaveBeenCalled()
+      expect(mockTransport.close).toHaveBeenCalled()
+    })
+
     it('registers elicitation handler before connecting when callback is provided', async () => {
       const resultsLengthBefore = vi.mocked(Client).mock.results.length
       const callback: ElicitationCallback = vi.fn()
