@@ -166,10 +166,10 @@
   },
   "homepage": "https://github.com/strands-agents/sdk-typescript#readme",
   "dependencies": {
-    "@aws-sdk/client-bedrock-runtime": "^3.1037.0",
+    "@aws-sdk/client-bedrock-runtime": "^3.1038.0",
     "@types/json-schema": "^7.0.15",
     "uuid": "^14.0.0",
-    "yaml": "^2.8.3"
+    "yaml": "^2.8.4"
   },
   "peerDependencies": {
     "@a2a-js/sdk": "^0.3.10",
