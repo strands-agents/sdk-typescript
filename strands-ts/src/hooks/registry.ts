@@ -124,15 +124,19 @@ export class HookRegistryImplementation implements HookRegistry {
   }
 
   /**
-   * Get callbacks for a specific event with proper ordering.
-   * Returns callbacks in reverse order if event should reverse callbacks.
+   * Get callbacks for a specific event in order.
+   * For After* events, reverses then re-sorts by order so that lower order
+   * still runs first, but same-order hooks run in reverse registration order.
    *
    * @param event - The event to get callbacks for
    * @returns Array of callbacks for the event
    */
   private getCallbacksFor<T extends HookableEvent>(event: T): HookCallback<T>[] {
     const entries = this._callbacks.get(event.constructor as HookableEventConstructor<T>) ?? []
-    const callbacks = entries.map((entry) => entry.callback)
-    return (event._shouldReverseCallbacks() ? [...callbacks].reverse() : callbacks) as HookCallback<T>[]
+    if (event._shouldReverseCallbacks()) {
+      const reversed = [...entries].reverse().sort((a, b) => a.order - b.order)
+      return reversed.map((entry) => entry.callback) as HookCallback<T>[]
+    }
+    return entries.map((entry) => entry.callback) as HookCallback<T>[]
   }
 }

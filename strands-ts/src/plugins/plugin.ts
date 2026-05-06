@@ -59,13 +59,9 @@ export interface Plugin {
 
   /**
    * Default execution priority for hooks registered by this plugin.
-   * Lower values run first on Before* events and last on After* events,
-   * producing middleware-like wrapping behavior around the operation.
-   * Defaults to 0 when not specified.
+   * Lower values always run first. Defaults to 0 when not specified.
    *
-   * Individual hooks can override this via the `order` parameter on `addHook`,
-   * which is useful when a plugin needs different ordering for Before* vs After*
-   * events (e.g. a redaction hook that must run first on both).
+   * Individual hooks can override this via the `order` parameter on `addHook`.
    */
   readonly order?: number
 

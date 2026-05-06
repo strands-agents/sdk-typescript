@@ -268,7 +268,7 @@ describe('HookRegistryImplementation', () => {
       expect(callOrder).toEqual(['default-neg100', 'explicit-0'])
     })
 
-    it('reverse-callback events run lowest order last', async () => {
+    it('After events: lower order still runs first across groups', async () => {
       const callOrder: string[] = []
       registry.addCallback(
         AfterInvocationEvent,
@@ -287,7 +287,7 @@ describe('HookRegistryImplementation', () => {
 
       await registry.invokeCallbacks(new AfterInvocationEvent({ agent: mockAgent, invocationState: {} }))
 
-      expect(callOrder).toEqual(['late', 'early'])
+      expect(callOrder).toEqual(['early', 'late'])
     })
   })
 
