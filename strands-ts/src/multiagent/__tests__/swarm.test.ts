@@ -2,10 +2,9 @@ import { describe, expect, it, vi } from 'vitest'
 import { Agent } from '../../agent/agent.js'
 import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
 import { collectGenerator } from '../../__fixtures__/model-test-helpers.js'
+import { createSlowAgent } from '../../__fixtures__/agent-helpers.js'
 import { BeforeNodeCallEvent, MultiAgentInitializedEvent } from '../events.js'
 import type { JSONValue } from '../../types/json.js'
-import type { AgentResult, InvokableAgent, InvokeArgs, InvokeOptions } from '../../types/agent.js'
-import type { StreamEvent } from '../../hooks/events.js'
 import { TextBlock } from '../../types/messages.js'
 import { Status, MultiAgentState } from '../state.js'
 import { AgentNode } from '../nodes.js'
@@ -36,46 +35,6 @@ function createHandoffAgent(
  */
 function createFinalAgent(agentId: string, message: string, description: string = `Agent ${agentId}`): Agent {
   return createHandoffAgent(agentId, { message }, description)
-}
-
-/**
- * Custom InvokableAgent that sleeps for `delayMs` before resolving. Respects `cancelSignal`
- * by aborting the sleep early. Used to exercise timeout behavior deterministically.
- */
-function createSlowAgent(
-  agentId: string,
-  delayMs: number,
-  handoff: { agentId?: string; message: string } = { message: 'done' }
-): InvokableAgent {
-  const sleep = (signal?: AbortSignal): Promise<void> =>
-    new Promise((resolve, reject) => {
-      const timer = setTimeout(resolve, delayMs)
-      if (signal) {
-        const onAbort = (): void => {
-          clearTimeout(timer)
-          reject(new Error('cancelled'))
-        }
-        if (signal.aborted) onAbort()
-        else signal.addEventListener('abort', onAbort, { once: true })
-      }
-    })
-
-  return {
-    id: agentId,
-    description: `Agent ${agentId}`,
-    async invoke(_args: InvokeArgs, options?: InvokeOptions): Promise<AgentResult> {
-      await sleep(options?.cancelSignal)
-      return {
-        stopReason: 'endTurn',
-        lastMessage: { role: 'assistant', content: [new TextBlock(handoff.message)] },
-        structuredOutput: handoff,
-      } as AgentResult
-    },
-    // eslint-disable-next-line require-yield
-    async *stream(args: InvokeArgs, options?: InvokeOptions): AsyncGenerator<StreamEvent, AgentResult, undefined> {
-      return await this.invoke(args, options)
-    },
-  }
 }
 
 describe('Swarm', () => {
@@ -348,6 +307,16 @@ describe('Swarm', () => {
           { agent: createSlowAgent('b', 30) },
         ],
         start: 'a',
+        timeout: 20,
+      })
+
+      await expect(swarm.invoke('go')).rejects.toThrow(/timeout=<20>/)
+    })
+
+    it('aborts an in-flight node when the swarm timeout expires mid-step', async () => {
+      const swarm = new Swarm({
+        nodes: [{ agent: createSlowAgent('slow', 200) }],
+        start: 'slow',
         timeout: 20,
       })
 

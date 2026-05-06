@@ -42,11 +42,21 @@ export interface GraphConfig {
   maxConcurrency?: number
   /** Max total steps (prevents infinite loops in cyclic graphs). Defaults to `Infinity` (no limit). */
   maxSteps?: number
-  /** Wall-clock ceiling for the entire graph invocation, in milliseconds. Defaults to `Infinity` (no limit). */
+  /**
+   * Wall-clock ceiling for the entire graph invocation, in milliseconds. Defaults to `Infinity`
+   * (no limit).
+   *
+   * Does not propagate into nested orchestrators wrapped via `MultiAgentNode` — a nested
+   * `Swarm`/`Graph` runs to completion under its own timeout config; the parent graph's
+   * timeout only fires once the nested node returns.
+   */
   timeout?: number
   /**
    * Fallback per-node wall-clock ceiling in milliseconds. Applied to any `AgentNode` that
    * doesn't set its own `timeout`. Defaults to `Infinity` (no limit).
+   *
+   * Does not apply to `MultiAgentNode`. Set `timeout`/`nodeTimeout` on the nested
+   * orchestrator to bound it.
    *
    * Enforced via `AbortSignal` — cancellation is cooperative, so a tool that neither polls
    * its cancel signal nor forwards it to a cancellable API can run past this deadline.
@@ -261,7 +271,7 @@ export class Graph implements MultiAgent {
     try {
       while (targets.length > 0 || streams.size > 0) {
         if (execController?.signal.aborted) {
-          throw new Error(`timeout=<${this.config.timeout}> | graph exceeded wall-clock budget`)
+          throw new Error(`timeout=<${this.config.timeout}>, graph_id=<${this.id}> | graph exceeded wall-clock budget`)
         }
         while (targets.length > 0 && streams.size < this.config.maxConcurrency) {
           const node = targets.shift()!
@@ -402,7 +412,9 @@ export class Graph implements MultiAgent {
       }
 
       if (nodeTimeoutController?.signal.aborted) {
-        throw new Error(`node_timeout=<${nodeTimeout}>, node_id=<${node.id}> | node exceeded wall-clock budget`)
+        throw new Error(
+          `node_timeout=<${nodeTimeout}>, node_id=<${node.id}>, graph_id=<${this.id}> | node exceeded wall-clock budget`
+        )
       }
 
       const result = next.value

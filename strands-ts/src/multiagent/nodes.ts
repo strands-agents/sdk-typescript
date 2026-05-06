@@ -167,6 +167,11 @@ export interface AgentNodeOptions {
 export class AgentNode extends Node {
   readonly type = 'agentNode' as const
   private readonly _agent: InvokableAgent
+  /**
+   * Per-node wall-clock ceiling in milliseconds. When set, overrides the orchestrator's
+   * `nodeTimeout` for this node. Undefined means "fall back to the orchestrator's setting."
+   * See {@link AgentNodeOptions.timeout}.
+   */
   readonly timeout?: number
 
   constructor(options: AgentNodeOptions) {

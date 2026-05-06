@@ -5,14 +5,14 @@
 
 import { expect } from 'vitest'
 import type { Agent } from '../agent/agent.js'
-import type { AgentResult } from '../types/agent.js'
+import type { AgentResult, InvokableAgent, InvokeArgs, InvokeOptions } from '../types/agent.js'
 import type { StopReason } from '../types/messages.js'
 import { Message, TextBlock } from '../types/messages.js'
 import type { Role } from '../types/messages.js'
 import { StateStore } from '../state-store.js'
 import type { JSONValue } from '../types/json.js'
 import { ToolRegistry } from '../registry/tool-registry.js'
-import type { HookableEvent } from '../hooks/events.js'
+import type { HookableEvent, StreamEvent } from '../hooks/events.js'
 import type { HookableEventConstructor, HookCallback } from '../hooks/types.js'
 import { expectLoopMetrics, type LoopMetricsMatcher } from './metrics-helpers.js'
 
@@ -188,4 +188,50 @@ export function expectAgentResult(options: AgentResultMatcher): AgentResult {
     traces: expectedTraces,
     invocationState: invocationState ?? expect.any(Object),
   }) as AgentResult
+}
+
+/**
+ * Creates a minimal InvokableAgent that sleeps for `delayMs` before resolving.
+ * Respects `cancelSignal` by aborting the sleep early. Used to exercise timeout
+ * behavior deterministically without spinning up a full Agent.
+ *
+ * @param id - The agent id
+ * @param delayMs - How long the agent should sleep before returning
+ * @param structuredOutput - Optional structured output (e.g. a swarm handoff). When present,
+ *   its `message` field is used as the assistant text.
+ */
+export function createSlowAgent(
+  id: string,
+  delayMs: number,
+  structuredOutput: { agentId?: string; message: string } = { message: 'done' }
+): InvokableAgent {
+  const sleep = (signal?: AbortSignal): Promise<void> =>
+    new Promise((resolve, reject) => {
+      const timer = setTimeout(resolve, delayMs)
+      if (signal) {
+        const onAbort = (): void => {
+          clearTimeout(timer)
+          reject(new Error('cancelled'))
+        }
+        if (signal.aborted) onAbort()
+        else signal.addEventListener('abort', onAbort, { once: true })
+      }
+    })
+
+  return {
+    id,
+    description: `Agent ${id}`,
+    async invoke(_args: InvokeArgs, options?: InvokeOptions): Promise<AgentResult> {
+      await sleep(options?.cancelSignal)
+      return {
+        stopReason: 'endTurn',
+        lastMessage: { role: 'assistant', content: [new TextBlock(structuredOutput.message)] },
+        structuredOutput,
+      } as AgentResult
+    },
+    // eslint-disable-next-line require-yield
+    async *stream(args: InvokeArgs, options?: InvokeOptions): AsyncGenerator<StreamEvent, AgentResult, undefined> {
+      return await this.invoke(args, options)
+    },
+  }
 }

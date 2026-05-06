@@ -38,8 +38,8 @@ export interface SwarmConfig {
   maxSteps?: number
   /**
    * Wall-clock ceiling for the entire swarm invocation, in milliseconds. Defaults to `Infinity`
-   * (no limit). Checked between steps — a long-running node may exceed this bound by up to its
-   * own `nodeTimeout` before the swarm throws.
+   * (no limit). Composed with each node's cancel signal, so a node that exceeds this bound
+   * mid-execution will be aborted (cooperatively).
    */
   timeout?: number
   /**
@@ -253,17 +253,36 @@ export class Swarm implements MultiAgent {
     let caughtError: Error | undefined
     let result: MultiAgentResult | undefined
 
+    // Swarm-level timeout: when fired, composes with each node's per-node signal so a node
+    // that hangs and ignores its own signal still gets an abort when the overall budget expires.
+    // The between-steps elapsed check below handles the case where the current node returned
+    // cleanly but we've run out of budget.
+    const execController = Number.isFinite(this.config.timeout) ? new AbortController() : undefined
+    const execTimeoutHandle = execController ? setTimeout(() => execController.abort(), this.config.timeout) : undefined
+
     try {
       while (state.steps < this.config.maxSteps) {
         const elapsed = Date.now() - state.startTime
         if (elapsed >= this.config.timeout) {
-          throw new Error(`timeout=<${this.config.timeout}> | swarm exceeded wall-clock budget`)
+          throw new Error(`timeout=<${this.config.timeout}>, swarm_id=<${this.id}> | swarm exceeded wall-clock budget`)
         }
         state.steps++
 
         // Execute current node
-        const nodeResult = yield* this._streamNode(node, input, state, handoff, multiAgentSpan, invocationState)
+        const nodeResult = yield* this._streamNode(
+          node,
+          input,
+          state,
+          handoff,
+          multiAgentSpan,
+          invocationState,
+          execController?.signal
+        )
         handoff = nodeResult.structuredOutput as HandoffResult | undefined
+
+        if (execController?.signal.aborted) {
+          throw new Error(`timeout=<${this.config.timeout}>, swarm_id=<${this.id}> | swarm exceeded wall-clock budget`)
+        }
 
         // Check for terminal conditions
         if (nodeResult.status === Status.FAILED || !handoff?.agentId) {
@@ -288,6 +307,7 @@ export class Swarm implements MultiAgent {
       caughtError = normalizeError(error)
       throw caughtError
     } finally {
+      if (execTimeoutHandle !== undefined) clearTimeout(execTimeoutHandle)
       this._tracer.endMultiAgentSpan(multiAgentSpan, {
         duration: Date.now() - state.startTime,
         ...(result && { usage: result.usage }),
@@ -307,7 +327,8 @@ export class Swarm implements MultiAgent {
     state: MultiAgentState,
     handoff: HandoffResult | undefined,
     multiAgentSpan: Span | null,
-    invocationState: InvocationState
+    invocationState: InvocationState,
+    executionSignal?: AbortSignal
   ): AsyncGenerator<MultiAgentStreamEvent, NodeResult, undefined> {
     const nodeState = state.node(node.id)!
     const handoffSchema = this._buildHandoffSchema(node.id)
@@ -335,13 +356,15 @@ export class Swarm implements MultiAgent {
     const nodeTimeout = node.timeout ?? this.config.nodeTimeout
     const timeoutController = Number.isFinite(nodeTimeout) ? new AbortController() : undefined
     const timeoutHandle = timeoutController ? setTimeout(() => timeoutController.abort(), nodeTimeout) : undefined
+    const signals = [executionSignal, timeoutController?.signal].filter((s): s is AbortSignal => s !== undefined)
+    const cancelSignal = signals.length > 0 ? AbortSignal.any(signals) : undefined
 
     try {
       const gen = this._tracer.withSpanContext(nodeSpan, () =>
         node.stream(nodeInput, state, {
           structuredOutputSchema: handoffSchema,
           invocationState,
-          ...(timeoutController && { cancelSignal: timeoutController.signal }),
+          ...(cancelSignal && { cancelSignal }),
         })
       )
       let next = await this._tracer.withSpanContext(nodeSpan, () => gen.next())
@@ -351,7 +374,9 @@ export class Swarm implements MultiAgent {
       }
 
       if (timeoutController?.signal.aborted) {
-        throw new Error(`node_timeout=<${nodeTimeout}>, node_id=<${node.id}> | node exceeded wall-clock budget`)
+        throw new Error(
+          `node_timeout=<${nodeTimeout}>, node_id=<${node.id}>, swarm_id=<${this.id}> | node exceeded wall-clock budget`
+        )
       }
 
       const result = next.value

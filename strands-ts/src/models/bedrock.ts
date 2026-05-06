@@ -1660,7 +1660,9 @@ function withDefaultRequestTimeout(
     return handler
   }
   const options = (handler ?? {}) as { requestTimeout?: number; [key: string]: unknown }
-  return { requestTimeout: DEFAULT_REQUEST_TIMEOUT_MS, ...options }
+  // Use `??` rather than spread order so an explicit `requestTimeout: undefined` still gets
+  // the default (spread would otherwise overwrite the default with `undefined`, disabling it).
+  return { ...options, requestTimeout: options.requestTimeout ?? DEFAULT_REQUEST_TIMEOUT_MS }
 }
 
 /**

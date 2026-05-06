@@ -3,52 +3,17 @@ import { Agent } from '../../agent/agent.js'
 import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
 import { MockSnapshotStorage } from '../../__fixtures__/mock-storage-provider.js'
 import { collectGenerator } from '../../__fixtures__/model-test-helpers.js'
+import { createSlowAgent } from '../../__fixtures__/agent-helpers.js'
 import { AfterNodeCallEvent, BeforeNodeCallEvent, MultiAgentInitializedEvent } from '../events.js'
 import { TextBlock, type ContentBlockData } from '../../types/messages.js'
 import { Status, MultiAgentState } from '../state.js'
 import { AgentNode, MultiAgentNode } from '../nodes.js'
 import { Graph } from '../graph.js'
 import { SessionManager } from '../../session/session-manager.js'
-import type { AgentResult, InvokableAgent, InvokeArgs, InvokeOptions } from '../../types/agent.js'
-import type { StreamEvent } from '../../hooks/events.js'
 
 function makeAgent(id: string, text = 'reply'): Agent {
   const model = new MockMessageModel().addTurn(new TextBlock(text))
   return new Agent({ model, printer: false, id })
-}
-
-/**
- * InvokableAgent that sleeps for `delayMs` and respects `cancelSignal` — used to
- * exercise timeout behavior deterministically.
- */
-function makeSlowAgent(id: string, delayMs: number, text: string = 'done'): InvokableAgent {
-  const sleep = (signal?: AbortSignal): Promise<void> =>
-    new Promise((resolve, reject) => {
-      const timer = setTimeout(resolve, delayMs)
-      if (signal) {
-        const onAbort = (): void => {
-          clearTimeout(timer)
-          reject(new Error('cancelled'))
-        }
-        if (signal.aborted) onAbort()
-        else signal.addEventListener('abort', onAbort, { once: true })
-      }
-    })
-  return {
-    id,
-    description: `Agent ${id}`,
-    async invoke(_args: InvokeArgs, options?: InvokeOptions): Promise<AgentResult> {
-      await sleep(options?.cancelSignal)
-      return {
-        stopReason: 'endTurn',
-        lastMessage: { role: 'assistant', content: [new TextBlock(text)] },
-      } as AgentResult
-    },
-    // eslint-disable-next-line require-yield
-    async *stream(args: InvokeArgs, options?: InvokeOptions): AsyncGenerator<StreamEvent, AgentResult, undefined> {
-      return await this.invoke(args, options)
-    },
-  }
 }
 
 describe('Graph', () => {
@@ -482,7 +447,7 @@ describe('Graph', () => {
 
     it('throws when a node exceeds nodeTimeout', async () => {
       const graph = new Graph({
-        nodes: [{ agent: makeSlowAgent('slow', 100) }],
+        nodes: [{ agent: createSlowAgent('slow', 100) }],
         edges: [],
         nodeTimeout: 20,
       })
@@ -492,7 +457,7 @@ describe('Graph', () => {
 
     it('applies per-node timeout over nodeTimeout', async () => {
       const graph = new Graph({
-        nodes: [{ agent: makeSlowAgent('slow', 100), timeout: 15 }],
+        nodes: [{ agent: createSlowAgent('slow', 100), timeout: 15 }],
         edges: [],
         nodeTimeout: 10_000,
       })
@@ -502,7 +467,7 @@ describe('Graph', () => {
 
     it('does not throw when nodeTimeout is Infinity', async () => {
       const graph = new Graph({
-        nodes: [{ agent: makeSlowAgent('a', 20) }],
+        nodes: [{ agent: createSlowAgent('a', 20) }],
         edges: [],
         nodeTimeout: Infinity,
       })
@@ -514,7 +479,7 @@ describe('Graph', () => {
 
     it('per-node timeout of Infinity disables a finite nodeTimeout', async () => {
       const graph = new Graph({
-        nodes: [{ agent: makeSlowAgent('slow', 30), timeout: Infinity }],
+        nodes: [{ agent: createSlowAgent('slow', 30), timeout: Infinity }],
         edges: [],
         nodeTimeout: 10,
       })
@@ -526,7 +491,7 @@ describe('Graph', () => {
 
     it('throws when timeout is exceeded', async () => {
       const graph = new Graph({
-        nodes: [{ agent: makeSlowAgent('a', 30) }, { agent: makeSlowAgent('b', 30) }],
+        nodes: [{ agent: createSlowAgent('a', 30) }, { agent: createSlowAgent('b', 30) }],
         edges: [['a', 'b']],
         timeout: 20,
       })
