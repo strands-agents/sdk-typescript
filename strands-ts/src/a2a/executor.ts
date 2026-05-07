@@ -2,17 +2,32 @@
  * A2A executor that bridges a Strands Agent into the A2A protocol.
  *
  * Implements the AgentExecutor interface from `@a2a-js/sdk/server` to allow
- * a Strands Agent to handle A2A JSON-RPC requests.
+ * a Strands Agent to handle A2A JSON-RPC requests. Supports the full A2A
+ * task lifecycle including `completed`, `failed`, `input_required`, and
+ * `canceled` states.
  */
 
 import type { ExecutionEventBus, RequestContext } from '@a2a-js/sdk/server'
 import type { AgentExecutor } from '@a2a-js/sdk/server'
 import { A2AError } from '@a2a-js/sdk/server'
+import type { Part } from '@a2a-js/sdk'
 import type { InvokableAgent } from '../types/agent.js'
 import { ModelStreamUpdateEvent, ContentBlockEvent } from '../hooks/events.js'
 import { contentBlocksToParts, partsToContentBlocks } from './adapters.js'
-import { normalizeError } from '../errors.js'
+import { CancelledError, normalizeError } from '../errors.js'
 import { logger } from '../logging/logger.js'
+
+/**
+ * Terminal task states in the A2A protocol.
+ * These states indicate the task has finished processing.
+ */
+const TERMINAL_STATES = new Set(['completed', 'failed', 'canceled', 'rejected'])
+
+/**
+ * Input-required states in the A2A protocol.
+ * These states indicate the task is waiting for additional user input.
+ */
+const INPUT_STATES = new Set(['input-required', 'auth-required'])
 
 /**
  * Bridges a Strands Agent into the A2A protocol as an AgentExecutor.
@@ -21,6 +36,14 @@ import { logger } from '../logging/logger.js'
  * execution, and publishes text deltas as artifact updates through the A2A
  * event bus. Text chunks are appended to a single artifact as they arrive,
  * implementing A2A-compliant streaming behavior.
+ *
+ * ## Task Lifecycle States
+ *
+ * The executor maps agent execution outcomes to A2A task states:
+ * - **completed** — Agent finished successfully with `stopReason: 'endTurn'`
+ * - **failed** — Agent threw an error during execution
+ * - **input_required** — Agent returned with `stopReason: 'interrupt'`
+ * - **canceled** — Task was canceled via `cancelTask()` or agent was cancelled
  *
  * ## Invocation state
  *
@@ -46,6 +69,7 @@ import { logger } from '../logging/logger.js'
  */
 export class A2AExecutor implements AgentExecutor {
   private _agent: InvokableAgent
+  private _runningTasks: Map<string, AbortController> = new Map()
 
   /**
    * Creates a new A2AExecutor.
@@ -63,8 +87,13 @@ export class A2AExecutor implements AgentExecutor {
    * agent execution. Text deltas are streamed incrementally into a single
    * artifact; non-text content blocks (images, videos, documents) are each
    * published as separate complete artifacts. A final artifact with
-   * `lastChunk: true` signals the end of the text artifact, followed by a
-   * completed status update.
+   * `lastChunk: true` signals the end of the text artifact.
+   *
+   * The final task state depends on the agent's execution outcome:
+   * - Normal completion → `completed`
+   * - Agent interrupts (needs human input) → `input-required`
+   * - Agent throws an error → `failed`
+   * - Agent was cancelled → `canceled`
    *
    * @param context - The A2A request context containing the user message
    * @param eventBus - The event bus for publishing A2A artifact and status events
@@ -83,12 +112,17 @@ export class A2AExecutor implements AgentExecutor {
     const artifactId = globalThis.crypto.randomUUID()
     let isFirstChunk = true
 
+    // Create an AbortController for this task so cancelTask() can signal cancellation
+    const abortController = new AbortController()
+    this._runningTasks.set(taskId, abortController)
+
     try {
       // Forward the A2A RequestContext to the agent under a reserved key so
       // hooks and tools can correlate with the A2A request (taskId, contextId,
       // user message metadata).
       const stream = this._agent.stream(contentBlocks, {
         invocationState: { a2aRequestContext: context },
+        cancelSignal: abortController.signal,
       })
       let next = await stream.next()
 
@@ -132,6 +166,9 @@ export class A2AExecutor implements AgentExecutor {
         next = await stream.next()
       }
 
+      // The stream is done — next.value is the AgentResult
+      const result = next.value
+
       // Publish final artifact chunk to signal end of artifact
       eventBus.publish({
         kind: 'artifact-update',
@@ -140,26 +177,103 @@ export class A2AExecutor implements AgentExecutor {
         artifact: {
           artifactId,
           // If no deltas were streamed, publish the full result; otherwise empty to close the artifact
-          parts: [{ kind: 'text', text: isFirstChunk && next.value ? next.value.toString() : '' }],
+          parts: [{ kind: 'text', text: isFirstChunk && result ? result.toString() : '' }],
         },
         append: !isFirstChunk, // false for new artifact, true to append to streamed chunks
         lastChunk: true, // Always true — this runs after the stream loop ends
       })
 
-      eventBus.publish({ kind: 'status-update', taskId, contextId, status: { state: 'completed' }, final: true })
+      // Determine final task state based on agent result
+      if (result.stopReason === 'interrupt') {
+        // Agent needs human input — transition to input-required
+        const interruptParts: Part[] = []
+        if (result.interrupts && result.interrupts.length > 0) {
+          const interruptText = result.interrupts
+            .map((i) => `[${i.name}]: ${i.reason ?? 'Input required'}`)
+            .join('\n')
+          interruptParts.push({ kind: 'text', text: interruptText })
+        } else {
+          interruptParts.push({ kind: 'text', text: 'Agent requires additional input' })
+        }
+        eventBus.publish({
+          kind: 'status-update',
+          taskId,
+          contextId,
+          status: {
+            state: 'input-required',
+            message: { kind: 'message', messageId: globalThis.crypto.randomUUID(), role: 'agent', parts: interruptParts },
+          },
+          final: true,
+        })
+      } else if (result.stopReason === 'cancelled') {
+        // Agent was cancelled cooperatively
+        eventBus.publish({
+          kind: 'status-update',
+          taskId,
+          contextId,
+          status: { state: 'canceled' },
+          final: true,
+        })
+      } else {
+        // Normal completion (endTurn, maxTokens, etc.)
+        eventBus.publish({ kind: 'status-update', taskId, contextId, status: { state: 'completed' }, final: true })
+      }
     } catch (error) {
-      logger.error(`task_id=<${taskId}> | error in streaming execution`, normalizeError(error))
-      throw error
+      if (error instanceof CancelledError) {
+        // Agent cancellation via CancelledError — transition to canceled
+        logger.debug(`task_id=<${taskId}> | agent execution cancelled`)
+        eventBus.publish({
+          kind: 'status-update',
+          taskId,
+          contextId,
+          status: { state: 'canceled' },
+          final: true,
+        })
+      } else {
+        // Agent execution failed — transition to failed state
+        logger.error(`task_id=<${taskId}> | agent execution failed`, normalizeError(error))
+        eventBus.publish({
+          kind: 'status-update',
+          taskId,
+          contextId,
+          status: {
+            state: 'failed',
+            message: {
+              kind: 'message',
+              messageId: globalThis.crypto.randomUUID(),
+              role: 'agent',
+              parts: [{ kind: 'text', text: 'Agent execution failed' }],
+            },
+          },
+          final: true,
+        })
+      }
+    } finally {
+      this._runningTasks.delete(taskId)
     }
   }
 
   /**
-   * Cancels a running task. Not supported by this executor.
+   * Cancels a running task by signaling the agent to stop.
+   *
+   * Uses cooperative cancellation via AbortController. The agent will stop
+   * at the next cancellation checkpoint and the task transitions to `canceled`.
+   * If the task is not currently running, throws A2AError.taskNotCancelable.
    *
    * @param taskId - The ID of the task to cancel
    * @param eventBus - The event bus for publishing status events
    */
-  async cancelTask(_taskId: string, _eventBus: ExecutionEventBus): Promise<void> {
-    throw A2AError.unsupportedOperation('Task cancellation is not supported')
+  async cancelTask(taskId: string, eventBus: ExecutionEventBus): Promise<void> {
+    const abortController = this._runningTasks.get(taskId)
+    if (!abortController) {
+      throw A2AError.taskNotCancelable(taskId)
+    }
+
+    // Signal cancellation — the agent will stop at the next checkpoint
+    abortController.abort()
+    logger.debug(`task_id=<${taskId}> | cancel signal sent`)
+
+    // Note: The execute() method handles publishing the 'canceled' status
+    // when it detects the CancelledError or cancelled stopReason.
   }
 }

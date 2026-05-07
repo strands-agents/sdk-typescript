@@ -215,6 +215,102 @@ describe('A2AAgent', () => {
     })
   })
 
+  describe('task lifecycle state mapping', () => {
+    it.each([
+      { state: 'completed', expectedStopReason: 'endTurn', expectedTaskState: 'completed' },
+      { state: 'failed', expectedStopReason: 'endTurn', expectedTaskState: 'failed' },
+      { state: 'canceled', expectedStopReason: 'cancelled', expectedTaskState: 'canceled' },
+      { state: 'rejected', expectedStopReason: 'endTurn', expectedTaskState: 'rejected' },
+      { state: 'input-required', expectedStopReason: 'interrupt', expectedTaskState: 'input-required' },
+      { state: 'auth-required', expectedStopReason: 'interrupt', expectedTaskState: 'auth-required' },
+      { state: 'unknown', expectedStopReason: 'endTurn', expectedTaskState: 'unknown' },
+    ])('maps $state to stopReason=$expectedStopReason', async ({ state, expectedStopReason, expectedTaskState }) => {
+      const statusUpdate: TaskStatusUpdateEvent = {
+        kind: 'status-update',
+        taskId: 'task-1',
+        contextId: 'ctx-1',
+        status: {
+          state: state as TaskStatusUpdateEvent['status']['state'],
+          message: {
+            kind: 'message',
+            messageId: 'msg-1',
+            role: 'agent',
+            parts: [{ kind: 'text', text: `Task ${state}` }],
+          },
+        },
+        final: true,
+      }
+      mockSendMessageStream.mockReturnValue(mockStream(statusUpdate))
+
+      const agent = new A2AAgent({ url: 'http://localhost:9000' })
+      const result = await agent.invoke('Hello')
+
+      expect(result.stopReason).toBe(expectedStopReason)
+      expect(result.invocationState.a2aTaskState).toBe(expectedTaskState)
+    })
+
+    it('includes a2aTaskState in invocationState for completed Task response', async () => {
+      const agent = new A2AAgent({ url: 'http://localhost:9000' })
+      const result = await agent.invoke('Hello')
+
+      expect(result.invocationState.a2aTaskState).toBe('completed')
+    })
+
+    it('recognizes all terminal states as complete events (stops streaming)', async () => {
+      // Simulate: working → failed (terminal) — should not loop forever
+      const workingUpdate: TaskStatusUpdateEvent = {
+        kind: 'status-update',
+        taskId: 'task-1',
+        contextId: 'ctx-1',
+        status: { state: 'working' },
+        final: false,
+      }
+      const failedUpdate: TaskStatusUpdateEvent = {
+        kind: 'status-update',
+        taskId: 'task-1',
+        contextId: 'ctx-1',
+        status: {
+          state: 'failed',
+          message: { kind: 'message', messageId: 'msg-1', role: 'agent', parts: [{ kind: 'text', text: 'Error' }] },
+        },
+        final: true,
+      }
+      mockSendMessageStream.mockReturnValue(mockStream(workingUpdate, failedUpdate))
+
+      const agent = new A2AAgent({ url: 'http://localhost:9000' })
+      const result = await agent.invoke('Hello')
+
+      expect(result.stopReason).toBe('endTurn')
+      expect(result.invocationState.a2aTaskState).toBe('failed')
+    })
+
+    it('recognizes input-required as complete event', async () => {
+      const inputRequired: TaskStatusUpdateEvent = {
+        kind: 'status-update',
+        taskId: 'task-1',
+        contextId: 'ctx-1',
+        status: {
+          state: 'input-required',
+          message: {
+            kind: 'message',
+            messageId: 'msg-1',
+            role: 'agent',
+            parts: [{ kind: 'text', text: 'Need more info' }],
+          },
+        },
+        final: true,
+      }
+      mockSendMessageStream.mockReturnValue(mockStream(inputRequired))
+
+      const agent = new A2AAgent({ url: 'http://localhost:9000' })
+      const result = await agent.invoke('Hello')
+
+      expect(result.stopReason).toBe('interrupt')
+      expect(result.invocationState.a2aTaskState).toBe('input-required')
+      expect((result.lastMessage.content[0] as TextBlock).text).toBe('Need more info')
+    })
+  })
+
   describe('stream', () => {
     it('yields A2AStreamUpdateEvent for each A2A event and A2AResultEvent at the end', async () => {
       const task = createMockTaskResponse()

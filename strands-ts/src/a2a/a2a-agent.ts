@@ -13,9 +13,51 @@ import { ClientFactory } from '@a2a-js/sdk/client'
 import type { InvocationState, InvokableAgent, InvokeArgs, InvokeOptions } from '../types/agent.js'
 import { AgentResult } from '../types/agent.js'
 import { Message, TextBlock, type ContentBlock, type ContentBlockData, type MessageData } from '../types/messages.js'
+import type { StopReason } from '../types/messages.js'
 import { A2AStreamUpdateEvent, A2AResultEvent, type A2AEventData, type A2AStreamEvent } from './events.js'
 import { logger } from '../logging/logger.js'
 import { logExperimentalWarning } from './logging.js'
+
+/**
+ * Maps A2A task states to Strands StopReason values.
+ *
+ * This is the single source of truth for state-to-stopReason mapping.
+ * Terminal states map to 'endTurn', input states map to 'interrupt'.
+ */
+const STATE_TO_STOP_REASON: Record<string, StopReason> = {
+  completed: 'endTurn',
+  failed: 'endTurn',
+  canceled: 'cancelled',
+  rejected: 'endTurn',
+  'input-required': 'interrupt',
+  'auth-required': 'interrupt',
+  unknown: 'endTurn',
+}
+
+/**
+ * Terminal states that indicate the task is finished.
+ * Derived from STATE_TO_STOP_REASON for single source of truth.
+ */
+const TERMINAL_STATES = new Set(
+  Object.entries(STATE_TO_STOP_REASON)
+    .filter(([, reason]) => reason === 'endTurn')
+    .map(([state]) => state)
+)
+
+/**
+ * Input-required states that indicate the task needs additional input.
+ * Derived from STATE_TO_STOP_REASON for single source of truth.
+ */
+const INPUT_STATES = new Set(
+  Object.entries(STATE_TO_STOP_REASON)
+    .filter(([, reason]) => reason === 'interrupt')
+    .map(([state]) => state)
+)
+
+/**
+ * All complete states (terminal + input).
+ */
+const COMPLETE_STATES = new Set([...TERMINAL_STATES, ...INPUT_STATES])
 
 /**
  * Configuration options for creating an A2AAgent.
@@ -42,6 +84,17 @@ export interface A2AAgentConfig {
  * On invocation, the agent lazily connects to the remote endpoint via the A2A protocol
  * and returns the response as an `AgentResult`.
  *
+ * ## Task Lifecycle State Support
+ *
+ * The agent recognizes all A2A task lifecycle states and maps them to appropriate
+ * `stopReason` values:
+ * - `completed`, `failed`, `rejected`, `unknown` → `stopReason: 'endTurn'`
+ * - `canceled` → `stopReason: 'cancelled'`
+ * - `input-required`, `auth-required` → `stopReason: 'interrupt'`
+ *
+ * The task state is also included in the result's `invocationState` under the
+ * key `a2aTaskState` for downstream consumers.
+ *
  * @example
  * ```typescript
  * import { A2AAgent } from '@strands-agents/sdk/a2a'
@@ -49,6 +102,7 @@ export interface A2AAgentConfig {
  * const remoteAgent = new A2AAgent({ url: 'http://localhost:9000' })
  * const result = await remoteAgent.invoke('Hello, remote agent!')
  * console.log(result.toString())
+ * console.log(result.invocationState.a2aTaskState) // 'completed'
  * ```
  */
 export class A2AAgent implements InvokableAgent {
@@ -228,6 +282,10 @@ export class A2AAgent implements InvokableAgent {
   /**
    * Checks whether an A2A streaming event represents a complete response.
    *
+   * Recognizes all terminal and input-required states from the A2A task lifecycle:
+   * - Terminal: completed, failed, canceled, rejected
+   * - Input: input-required, auth-required
+   *
    * @param event - The A2A streaming event
    * @returns True if the event is a terminal/complete event
    */
@@ -235,12 +293,32 @@ export class A2AAgent implements InvokableAgent {
     if (event.kind === 'message') return true
     if (event.kind === 'task') return true
     if (event.kind === 'artifact-update') return event.lastChunk === true
-    if (event.kind === 'status-update') return event.status.state === 'completed'
+    if (event.kind === 'status-update') {
+      return COMPLETE_STATES.has(event.status.state)
+    }
     return false
   }
 
   /**
+   * Extracts the A2A task state from the final event.
+   *
+   * @param event - The final A2A event
+   * @returns The task state string, or undefined if not available
+   */
+  private _extractTaskState(event: A2AEventData | undefined): string | undefined {
+    if (!event) return undefined
+    if (event.kind === 'task') return event.status?.state
+    if (event.kind === 'status-update') return event.status.state
+    return undefined
+  }
+
+  /**
    * Builds an AgentResult from the final A2A streaming event.
+   *
+   * Maps the A2A task state to the appropriate StopReason:
+   * - completed/failed/rejected/unknown → 'endTurn'
+   * - canceled → 'cancelled'
+   * - input-required/auth-required → 'interrupt'
    *
    * @param event - The final A2A event, or undefined if no events were received
    * @param invocationState - Caller-provided invocation state, threaded through to the result
@@ -257,7 +335,18 @@ export class A2AAgent implements InvokableAgent {
       role: 'assistant',
       content: [new TextBlock(text)],
     })
-    return new AgentResult({ stopReason: 'endTurn', lastMessage, invocationState })
+
+    // Determine stopReason from task state
+    const taskState = this._extractTaskState(event)
+    const stopReason: StopReason = taskState ? (STATE_TO_STOP_REASON[taskState] ?? 'endTurn') : 'endTurn'
+
+    // Include task state in invocationState for downstream consumers
+    const enrichedState: InvocationState = {
+      ...invocationState,
+      ...(taskState ? { a2aTaskState: taskState } : {}),
+    }
+
+    return new AgentResult({ stopReason, lastMessage, invocationState: enrichedState })
   }
 
   /**
