@@ -14,6 +14,7 @@ import {
   type ConversationManagerReduceOptions,
 } from './conversation-manager.js'
 import { logger } from '../logging/logger.js'
+import { normalizeError } from '../errors.js'
 import type { Model } from '../models/model.js'
 
 const DEFAULT_SUMMARIZATION_PROMPT = `You are a conversation summarizer. Provide a concise summary of the conversation \
@@ -127,7 +128,7 @@ export class SummarizingConversationManager extends ConversationManager {
       if (error) {
         // Reactive: rethrow so the ContextWindowOverflowError propagates
         logger.error(`error=<${summarizationError}> | summarization failed`)
-        const wrapped = summarizationError instanceof Error ? summarizationError : new Error(String(summarizationError))
+        const wrapped = normalizeError(summarizationError)
         wrapped.cause = error
         throw wrapped
       }

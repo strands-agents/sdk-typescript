@@ -3,7 +3,6 @@ import {
   ConversationManager,
   type ConversationManagerReduceOptions,
   type ConversationManagerOptions,
-  type ProactiveCompressionConfig,
 } from '../conversation-manager.js'
 import { NullConversationManager } from '../null-conversation-manager.js'
 import { Agent } from '../../agent/agent.js'
