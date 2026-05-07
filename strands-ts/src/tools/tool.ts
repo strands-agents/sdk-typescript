@@ -209,6 +209,9 @@ const TOOL_NAME_MAX_LENGTH = 64
 /**
  * Returns `true` when `name` satisfies the provider-accepted tool name format:
  * non-empty, 1–64 characters, and only letters, digits, underscores, or hyphens.
+ *
+ * @param name - The tool name to validate
+ * @returns `true` if the name is valid, `false` otherwise
  */
 export function isValidToolName(name: string): boolean {
   return name.length > 0 && name.length <= TOOL_NAME_MAX_LENGTH && TOOL_NAME_PATTERN.test(name)
