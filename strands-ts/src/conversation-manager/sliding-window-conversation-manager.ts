@@ -5,7 +5,7 @@
  * that preserves tool usage pairs and avoids invalid window states.
  */
 
-import { JsonBlock, Message, TextBlock, ToolResultBlock, type ToolResultContent } from '../types/messages.js'
+import { Message, TextBlock, ToolResultBlock, type ToolResultContent } from '../types/messages.js'
 import { DocumentBlock, ImageBlock, VideoBlock } from '../types/media.js'
 import type { LocalAgent } from '../types/agent.js'
 import { AfterInvocationEvent } from '../hooks/events.js'
@@ -71,9 +71,8 @@ function documentPlaceholder(doc: DocumentBlock): string {
  * reported so the model knows how much was dropped; truncating JSON
  * mid-structure would produce invalid output, so the whole block is replaced.
  */
-function jsonPlaceholder(json: JsonBlock): string {
-  const size = JSON.stringify(json.json).length
-  return `[json: ${size} chars]`
+function jsonPlaceholder(serializedLength: number): string {
+  return `[json: ${serializedLength} chars]`
 }
 
 /**
@@ -375,7 +374,7 @@ export class SlidingWindowConversationManager extends ConversationManager {
         if (item.type === 'jsonBlock') {
           const serializedLength = JSON.stringify(item.json).length
           if (serializedLength > TRUNCATION_THRESHOLD) {
-            newItems.push(new TextBlock(jsonPlaceholder(item)))
+            newItems.push(new TextBlock(jsonPlaceholder(serializedLength)))
             itemChanged = true
             continue
           }
