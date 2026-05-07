@@ -34,16 +34,19 @@ export interface HookCallbackOptions {
 export type HookCleanup = () => void
 
 /**
- * Named constants for hook execution order.
- * Lower values run first.
+ * Presets for hook execution order. Lower values run first.
+ * Any number is a valid order — these presets are not bounds, just convenient
+ * reference points. SDK_FIRST/SDK_LAST mark where the SDK's own hooks run,
+ * so you can position yours relative to them.
  *
  * @example
  * ```typescript
- * agent.addHook(BeforeToolCallEvent, callback, { order: HookOrder.FIRST })
+ * agent.addHook(BeforeToolCallEvent, callback, { order: HookOrder.SDK_FIRST }) // run with the SDK's earliest hooks
+ * agent.addHook(BeforeToolCallEvent, callback, { order: HookOrder.SDK_FIRST - 1 }) // run before the SDK's earliest hooks
  * ```
  */
 export const HookOrder = {
-  FIRST: -100,
+  SDK_FIRST: -100,
   DEFAULT: 0,
-  LAST: 100,
+  SDK_LAST: 100,
 } as const
