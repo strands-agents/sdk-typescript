@@ -2,11 +2,14 @@ import { describe, it, expect, vi } from 'vitest'
 import { SlidingWindowConversationManager } from '../sliding-window-conversation-manager.js'
 import {
   ContextWindowOverflowError,
+  DocumentBlock,
   ImageBlock,
+  JsonBlock,
   Message,
   TextBlock,
   ToolUseBlock,
   ToolResultBlock,
+  VideoBlock,
   type Model,
 } from '../../index.js'
 import { AfterInvocationEvent, AfterModelCallEvent } from '../../hooks/events.js'
@@ -181,14 +184,14 @@ describe('SlidingWindowConversationManager', () => {
 
       await triggerContextOverflow(manager, mockAgent, new ContextWindowOverflowError('Context overflow'))
 
-      const toolResult = messages[0]!.content[0]! as ToolResultBlock
-      // Status is preserved
-      expect(toolResult.status).toBe('success')
-      const first = toolResult.content[0]!
-      expect(first.type).toBe('textBlock')
-      const text = (first as TextBlock).text
-      const expected = `${'A'.repeat(200)}\n<truncated chars="${middle.length}"/>\n${'B'.repeat(200)}`
-      expect(text).toBe(expected)
+      const expectedText = `${'A'.repeat(200)}\n<truncated chars="${middle.length}"/>\n${'B'.repeat(200)}`
+      expect(messages[0]!.content[0]).toEqual(
+        new ToolResultBlock({
+          toolUseId: 'tool-1',
+          status: 'success',
+          content: [new TextBlock(expectedText)],
+        })
+      )
     })
 
     it('leaves small tool results unchanged', () => {
@@ -242,15 +245,22 @@ describe('SlidingWindowConversationManager', () => {
 
       await triggerContextOverflow(manager, mockAgent, new ContextWindowOverflowError('Context overflow'))
 
-      // Should truncate the last message with tool results (index 3)
-      const lastToolResult = messages[3]!.content[0]! as ToolResultBlock
-      expect(lastToolResult.status).toBe('success')
-      expect((lastToolResult.content[0] as TextBlock).text).toContain('<truncated chars="100"/>')
-
-      // Earlier tool result should remain unchanged
-      const firstToolResult = messages[1]!.content[0]! as ToolResultBlock
-      expect(firstToolResult.status).toBe('success')
-      expect(firstToolResult.content[0]).toEqual({ type: 'textBlock', text: firstOriginal })
+      // Last tool-result message is truncated; earlier one is untouched.
+      const expectedTruncated = `${'S'.repeat(200)}\n<truncated chars="100"/>\n${'S'.repeat(200)}`
+      expect(messages[3]!.content[0]).toEqual(
+        new ToolResultBlock({
+          toolUseId: 'tool-2',
+          status: 'success',
+          content: [new TextBlock(expectedTruncated)],
+        })
+      )
+      expect(messages[1]!.content[0]).toEqual(
+        new ToolResultBlock({
+          toolUseId: 'tool-1',
+          status: 'success',
+          content: [new TextBlock(firstOriginal)],
+        })
+      )
     })
 
     it('returns after successful truncation without trimming messages', async () => {
@@ -307,9 +317,13 @@ describe('SlidingWindowConversationManager', () => {
       expect(mockAgent.messages[0]!.role).toBe('user')
 
       // Tool result should not be truncated
-      const toolResult = mockAgent.messages[2]!.content[0]! as ToolResultBlock
-      expect(toolResult.status).toBe('success')
-      expect((toolResult.content[0] as TextBlock).text).toBe('L'.repeat(500))
+      expect(mockAgent.messages[2]!.content[0]).toEqual(
+        new ToolResultBlock({
+          toolUseId: 'tool-1',
+          status: 'success',
+          content: [new TextBlock('L'.repeat(500))],
+        })
+      )
     })
 
     it('does not re-truncate already-truncated results', async () => {
@@ -376,14 +390,13 @@ describe('SlidingWindowConversationManager', () => {
       const changed = (manager as any)._truncateToolResults(messages, 0)
       expect(changed).toBe(true)
 
-      const toolResult = messages[0]!.content[0] as ToolResultBlock
-      expect(toolResult.status).toBe('success')
-      expect(toolResult.content).toHaveLength(2)
-      expect(toolResult.content[0]).toEqual({
-        type: 'textBlock',
-        text: '[image: png, source: bytes, 1234 bytes]',
-      })
-      expect(toolResult.content[1]).toEqual({ type: 'textBlock', text: 'tail' })
+      expect(messages[0]!.content[0]).toEqual(
+        new ToolResultBlock({
+          toolUseId: 'tool-1',
+          status: 'success',
+          content: [new TextBlock('[image: png, source: bytes, 1234 bytes]'), new TextBlock('tail')],
+        })
+      )
     })
 
     it('preserves the error field on truncated tool results', () => {
@@ -406,9 +419,15 @@ describe('SlidingWindowConversationManager', () => {
       const changed = (manager as any)._truncateToolResults(messages, 0)
       expect(changed).toBe(true)
 
-      const toolResult = messages[0]!.content[0] as ToolResultBlock
-      expect(toolResult.status).toBe('error')
-      expect(toolResult.error).toBe(originalError)
+      const expectedText = `${'x'.repeat(200)}\n<truncated chars="100"/>\n${'x'.repeat(200)}`
+      expect(messages[0]!.content[0]).toEqual(
+        new ToolResultBlock({
+          toolUseId: 'tool-1',
+          status: 'error',
+          content: [new TextBlock(expectedText)],
+          error: originalError,
+        })
+      )
     })
 
     it('image placeholder reflects non-bytes source kinds honestly', () => {
@@ -431,9 +450,271 @@ describe('SlidingWindowConversationManager', () => {
 
       ;(manager as any)._truncateToolResults(messages, 0)
 
-      const toolResult = messages[0]!.content[0] as ToolResultBlock
-      expect(toolResult.content[0]).toEqual({ type: 'textBlock', text: '[image: jpeg, source: url]' })
-      expect(toolResult.content[1]).toEqual({ type: 'textBlock', text: '[image: png, source: s3]' })
+      expect(messages[0]!.content[0]).toEqual(
+        new ToolResultBlock({
+          toolUseId: 'tool-1',
+          status: 'success',
+          content: [new TextBlock('[image: jpeg, source: url]'), new TextBlock('[image: png, source: s3]')],
+        })
+      )
+    })
+
+    it('replaces video bytes blocks with a descriptive placeholder', () => {
+      const manager = new SlidingWindowConversationManager({ shouldTruncateResults: true })
+      const messages = [
+        new Message({
+          role: 'user',
+          content: [
+            new ToolResultBlock({
+              toolUseId: 'tool-1',
+              status: 'success',
+              content: [new VideoBlock({ format: 'mp4', source: { bytes: new Uint8Array(4096) } })],
+            }),
+          ],
+        }),
+      ]
+
+      const changed = (manager as any)._truncateToolResults(messages, 0)
+      expect(changed).toBe(true)
+      expect(messages[0]!.content[0]).toEqual(
+        new ToolResultBlock({
+          toolUseId: 'tool-1',
+          status: 'success',
+          content: [new TextBlock('[video: mp4, source: bytes, 4096 bytes]')],
+        })
+      )
+    })
+
+    it('replaces video s3 blocks with a descriptive placeholder', () => {
+      const manager = new SlidingWindowConversationManager({ shouldTruncateResults: true })
+      const messages = [
+        new Message({
+          role: 'user',
+          content: [
+            new ToolResultBlock({
+              toolUseId: 'tool-1',
+              status: 'success',
+              content: [
+                new VideoBlock({
+                  format: 'mp4',
+                  source: { location: { type: 's3', uri: 's3://bucket/key' } },
+                }),
+              ],
+            }),
+          ],
+        }),
+      ]
+
+      const changed = (manager as any)._truncateToolResults(messages, 0)
+      expect(changed).toBe(true)
+      expect(messages[0]!.content[0]).toEqual(
+        new ToolResultBlock({
+          toolUseId: 'tool-1',
+          status: 'success',
+          content: [new TextBlock('[video: mp4, source: s3]')],
+        })
+      )
+    })
+
+    it('replaces document bytes blocks with a descriptive placeholder', () => {
+      const manager = new SlidingWindowConversationManager({ shouldTruncateResults: true })
+      const messages = [
+        new Message({
+          role: 'user',
+          content: [
+            new ToolResultBlock({
+              toolUseId: 'tool-1',
+              status: 'success',
+              content: [
+                new DocumentBlock({
+                  name: 'report',
+                  format: 'pdf',
+                  source: { bytes: new Uint8Array(8192) },
+                }),
+              ],
+            }),
+          ],
+        }),
+      ]
+
+      const changed = (manager as any)._truncateToolResults(messages, 0)
+      expect(changed).toBe(true)
+      expect(messages[0]!.content[0]).toEqual(
+        new ToolResultBlock({
+          toolUseId: 'tool-1',
+          status: 'success',
+          content: [new TextBlock('[document: report, pdf, source: bytes, 8192 bytes]')],
+        })
+      )
+    })
+
+    it('replaces document s3 blocks with a descriptive placeholder', () => {
+      const manager = new SlidingWindowConversationManager({ shouldTruncateResults: true })
+      const messages = [
+        new Message({
+          role: 'user',
+          content: [
+            new ToolResultBlock({
+              toolUseId: 'tool-1',
+              status: 'success',
+              content: [
+                new DocumentBlock({
+                  name: 'spec',
+                  format: 'pdf',
+                  source: { location: { type: 's3', uri: 's3://b/k' } },
+                }),
+              ],
+            }),
+          ],
+        }),
+      ]
+
+      const changed = (manager as any)._truncateToolResults(messages, 0)
+      expect(changed).toBe(true)
+      expect(messages[0]!.content[0]).toEqual(
+        new ToolResultBlock({
+          toolUseId: 'tool-1',
+          status: 'success',
+          content: [new TextBlock('[document: spec, pdf, source: s3]')],
+        })
+      )
+    })
+
+    it('partially truncates large text inside a document text source', () => {
+      const manager = new SlidingWindowConversationManager({ shouldTruncateResults: true })
+      const middle = 'M'.repeat(240)
+      const originalText = 'A'.repeat(200) + middle + 'B'.repeat(200)
+      const messages = [
+        new Message({
+          role: 'user',
+          content: [
+            new ToolResultBlock({
+              toolUseId: 'tool-1',
+              status: 'success',
+              content: [new DocumentBlock({ name: 'report', format: 'txt', source: { text: originalText } })],
+            }),
+          ],
+        }),
+      ]
+
+      const changed = (manager as any)._truncateToolResults(messages, 0)
+      expect(changed).toBe(true)
+
+      const expectedText = `${'A'.repeat(200)}\n<truncated chars="${middle.length}"/>\n${'B'.repeat(200)}`
+      expect(messages[0]!.content[0]).toEqual(
+        new ToolResultBlock({
+          toolUseId: 'tool-1',
+          status: 'success',
+          content: [new DocumentBlock({ name: 'report', format: 'txt', source: { text: expectedText } })],
+        })
+      )
+    })
+
+    it('leaves small text inside a document text source unchanged', () => {
+      const manager = new SlidingWindowConversationManager({ shouldTruncateResults: true })
+      const messages = [
+        new Message({
+          role: 'user',
+          content: [
+            new ToolResultBlock({
+              toolUseId: 'tool-1',
+              status: 'success',
+              content: [new DocumentBlock({ name: 'short', format: 'txt', source: { text: 'hello' } })],
+            }),
+          ],
+        }),
+      ]
+
+      const changed = (manager as any)._truncateToolResults(messages, 0)
+      expect(changed).toBe(false)
+    })
+
+    it('truncates long nested text blocks inside a document content source', () => {
+      const manager = new SlidingWindowConversationManager({ shouldTruncateResults: true })
+      const longText = 'A'.repeat(200) + 'M'.repeat(240) + 'B'.repeat(200)
+      const messages = [
+        new Message({
+          role: 'user',
+          content: [
+            new ToolResultBlock({
+              toolUseId: 'tool-1',
+              status: 'success',
+              content: [
+                new DocumentBlock({
+                  name: 'pages',
+                  format: 'txt',
+                  source: { content: [new TextBlock(longText), new TextBlock('short')] },
+                }),
+              ],
+            }),
+          ],
+        }),
+      ]
+
+      const changed = (manager as any)._truncateToolResults(messages, 0)
+      expect(changed).toBe(true)
+
+      const expectedText = `${'A'.repeat(200)}\n<truncated chars="240"/>\n${'B'.repeat(200)}`
+      expect(messages[0]!.content[0]).toEqual(
+        new ToolResultBlock({
+          toolUseId: 'tool-1',
+          status: 'success',
+          content: [
+            new DocumentBlock({
+              name: 'pages',
+              format: 'txt',
+              source: { content: [new TextBlock(expectedText), new TextBlock('short')] },
+            }),
+          ],
+        })
+      )
+    })
+
+    it('replaces large json blocks with a size placeholder', () => {
+      const manager = new SlidingWindowConversationManager({ shouldTruncateResults: true })
+      const big = { payload: 'x'.repeat(1000) }
+      const size = JSON.stringify(big).length
+      const messages = [
+        new Message({
+          role: 'user',
+          content: [
+            new ToolResultBlock({
+              toolUseId: 'tool-1',
+              status: 'success',
+              content: [new JsonBlock({ json: big })],
+            }),
+          ],
+        }),
+      ]
+
+      const changed = (manager as any)._truncateToolResults(messages, 0)
+      expect(changed).toBe(true)
+      expect(messages[0]!.content[0]).toEqual(
+        new ToolResultBlock({
+          toolUseId: 'tool-1',
+          status: 'success',
+          content: [new TextBlock(`[json: ${size} chars]`)],
+        })
+      )
+    })
+
+    it('leaves small json blocks unchanged', () => {
+      const manager = new SlidingWindowConversationManager({ shouldTruncateResults: true })
+      const messages = [
+        new Message({
+          role: 'user',
+          content: [
+            new ToolResultBlock({
+              toolUseId: 'tool-1',
+              status: 'success',
+              content: [new JsonBlock({ json: { ok: true } })],
+            }),
+          ],
+        }),
+      ]
+
+      const changed = (manager as any)._truncateToolResults(messages, 0)
+      expect(changed).toBe(false)
     })
 
     it('does not call truncateToolResults unless an error is passed in', async () => {

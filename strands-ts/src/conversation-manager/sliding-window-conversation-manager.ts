@@ -5,8 +5,8 @@
  * that preserves tool usage pairs and avoids invalid window states.
  */
 
-import { Message, TextBlock, ToolResultBlock, type ToolResultContent } from '../types/messages.js'
-import { ImageBlock } from '../types/media.js'
+import { JsonBlock, Message, TextBlock, ToolResultBlock, type ToolResultContent } from '../types/messages.js'
+import { DocumentBlock, ImageBlock, VideoBlock } from '../types/media.js'
 import type { LocalAgent } from '../types/agent.js'
 import { AfterInvocationEvent } from '../hooks/events.js'
 import { ConversationManager, type ConversationManagerReduceOptions } from './conversation-manager.js'
@@ -16,6 +16,11 @@ const PRESERVE_CHARS = 200
 // Max plausible marker length, including newlines. Used as the minimum reduction
 // a re-truncation would need to produce in order to be worth running.
 const MIN_TRUNCATION_GAIN = 50
+// Text payloads at or below this length aren't worth truncating: the savings
+// would be smaller than the marker itself, and already-truncated output (which
+// lands just above `2 * PRESERVE_CHARS`) falls under this threshold so a
+// second pass is a natural no-op.
+const TRUNCATION_THRESHOLD = 2 * PRESERVE_CHARS + MIN_TRUNCATION_GAIN
 
 /**
  * Build a short textual stand-in for an image block, used when truncating tool
@@ -25,18 +30,50 @@ const MIN_TRUNCATION_GAIN = 50
  * their byte count isn't known locally.
  */
 function imagePlaceholder(image: ImageBlock): string {
-  const format = image.format ?? 'unknown'
   const source = image.source
   if (source.type === 'imageSourceBytes') {
-    return `[image: ${format}, source: bytes, ${source.bytes.byteLength} bytes]`
+    return `[image: ${image.format}, source: bytes, ${source.bytes.byteLength} bytes]`
   }
   if (source.type === 'imageSourceUrl') {
-    return `[image: ${format}, source: url]`
+    return `[image: ${image.format}, source: url]`
   }
-  if (source.type === 'imageSourceS3Location') {
-    return `[image: ${format}, source: s3]`
+  return `[image: ${image.format}, source: s3]`
+}
+
+/**
+ * Build a short textual stand-in for a video block. Binary payloads can't be
+ * partially inspected, so videos are replaced wholesale. The placeholder
+ * reports format and source kind; byte count is included for inline bytes.
+ */
+function videoPlaceholder(video: VideoBlock): string {
+  const source = video.source
+  if (source.type === 'videoSourceBytes') {
+    return `[video: ${video.format}, source: bytes, ${source.bytes.byteLength} bytes]`
   }
-  return `[image: ${format}]`
+  return `[video: ${video.format}, source: s3]`
+}
+
+/**
+ * Build a short textual stand-in for a document block with a binary or remote
+ * source. Text-based document sources (text / content) are truncated in place
+ * instead of replaced, so this is only called for bytes / s3.
+ */
+function documentPlaceholder(doc: DocumentBlock): string {
+  const source = doc.source
+  if (source.type === 'documentSourceBytes') {
+    return `[document: ${doc.name}, ${doc.format}, source: bytes, ${source.bytes.byteLength} bytes]`
+  }
+  return `[document: ${doc.name}, ${doc.format}, source: s3]`
+}
+
+/**
+ * Build a short textual stand-in for a JSON block. The serialized length is
+ * reported so the model knows how much was dropped; truncating JSON
+ * mid-structure would produce invalid output, so the whole block is replaced.
+ */
+function jsonPlaceholder(json: JsonBlock): string {
+  const size = JSON.stringify(json.json).length
+  return `[json: ${size} chars]`
 }
 
 /**
@@ -215,15 +252,37 @@ export class SlidingWindowConversationManager extends ConversationManager {
   }
 
   /**
-   * Truncate tool results and replace image blocks in a message to reduce context size.
+   * Apply head/tail truncation to a string if it exceeds the size threshold.
    *
-   * For text blocks inside tool results, content longer than 2 * {@link PRESERVE_CHARS}
-   * is partially truncated, keeping the first and last {@link PRESERVE_CHARS} characters
-   * and replacing the middle with a marker indicating how many characters were removed.
-   * Already-truncated text is skipped. The tool result status is preserved.
+   * Returns the truncated form (first {@link PRESERVE_CHARS} + marker + last
+   * {@link PRESERVE_CHARS}) when the input exceeds {@link TRUNCATION_THRESHOLD},
+   * otherwise `undefined`.
+   */
+  private _truncateLongText(text: string): string | undefined {
+    if (text.length <= TRUNCATION_THRESHOLD) {
+      return undefined
+    }
+    const prefix = text.slice(0, PRESERVE_CHARS)
+    const suffix = text.slice(-PRESERVE_CHARS)
+    const removed = text.length - 2 * PRESERVE_CHARS
+    return `${prefix}\n<truncated chars="${removed}"/>\n${suffix}`
+  }
+
+  /**
+   * Truncate tool result content in a message to reduce context size.
    *
-   * Image blocks nested inside tool result content are replaced with a short descriptive
-   * placeholder.
+   * Rule: preserve head/tail when the payload is plain-text-shaped; replace
+   * wholesale when it's binary or remote. Specifically:
+   * - Text blocks: partial head/tail truncation if over threshold.
+   * - Image, Video blocks: wholesale replacement with a textual placeholder.
+   * - Document blocks with bytes/s3 source: wholesale replacement.
+   * - Document blocks with text source: partial truncation of the inner text.
+   * - Document blocks with content source (TextBlock[]): partial truncation of
+   *   each nested block.
+   * - JSON blocks: wholesale replacement if serialized length is over threshold;
+   *   mid-structure truncation would produce invalid JSON.
+   *
+   * The tool result `status` and `error` fields are preserved.
    *
    * @param messages - The conversation message history.
    * @param msgIdx - Index of the message containing tool results to truncate.
@@ -256,13 +315,78 @@ export class SlidingWindowConversationManager extends ConversationManager {
           continue
         }
 
+        if (item.type === 'videoBlock') {
+          newItems.push(new TextBlock(videoPlaceholder(item)))
+          itemChanged = true
+          continue
+        }
+
+        if (item.type === 'documentBlock') {
+          const source = item.source
+          if (source.type === 'documentSourceBytes' || source.type === 'documentSourceS3Location') {
+            newItems.push(new TextBlock(documentPlaceholder(item)))
+            itemChanged = true
+            continue
+          }
+          if (source.type === 'documentSourceText') {
+            const truncated = this._truncateLongText(source.text)
+            if (truncated !== undefined) {
+              newItems.push(
+                new DocumentBlock({
+                  name: item.name,
+                  format: item.format,
+                  source: { text: truncated },
+                  ...(item.citations !== undefined ? { citations: item.citations } : {}),
+                  ...(item.context !== undefined ? { context: item.context } : {}),
+                })
+              )
+              itemChanged = true
+              continue
+            }
+          }
+          if (source.type === 'documentSourceContentBlock') {
+            let nestedChanged = false
+            const newContentBlocks = source.content.map((nested) => {
+              const truncated = this._truncateLongText(nested.text)
+              if (truncated !== undefined) {
+                nestedChanged = true
+                return new TextBlock(truncated)
+              }
+              return nested
+            })
+            if (nestedChanged) {
+              newItems.push(
+                new DocumentBlock({
+                  name: item.name,
+                  format: item.format,
+                  source: { content: newContentBlocks },
+                  ...(item.citations !== undefined ? { citations: item.citations } : {}),
+                  ...(item.context !== undefined ? { context: item.context } : {}),
+                })
+              )
+              itemChanged = true
+              continue
+            }
+          }
+          newItems.push(item)
+          continue
+        }
+
+        if (item.type === 'jsonBlock') {
+          const serializedLength = JSON.stringify(item.json).length
+          if (serializedLength > TRUNCATION_THRESHOLD) {
+            newItems.push(new TextBlock(jsonPlaceholder(item)))
+            itemChanged = true
+            continue
+          }
+          newItems.push(item)
+          continue
+        }
+
         if (item.type === 'textBlock') {
-          const text = item.text
-          if (text.length > 2 * PRESERVE_CHARS + MIN_TRUNCATION_GAIN) {
-            const prefix = text.slice(0, PRESERVE_CHARS)
-            const suffix = text.slice(-PRESERVE_CHARS)
-            const removed = text.length - 2 * PRESERVE_CHARS
-            newItems.push(new TextBlock(`${prefix}\n<truncated chars="${removed}"/>\n${suffix}`))
+          const truncated = this._truncateLongText(item.text)
+          if (truncated !== undefined) {
+            newItems.push(new TextBlock(truncated))
             itemChanged = true
             continue
           }
