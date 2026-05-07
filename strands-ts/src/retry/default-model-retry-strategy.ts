@@ -91,7 +91,7 @@ export class DefaultModelRetryStrategy extends ModelRetryStrategy {
    * Whether `error` should be retried. Override to extend or narrow the
    * retryable set (e.g. to also retry transient 5xx errors).
    */
-  public isRetryable(error: Error): boolean {
+  protected isRetryable(error: Error): boolean {
     return error instanceof ModelThrottledError
   }
 

@@ -84,6 +84,18 @@ export abstract class ModelRetryStrategy implements Plugin {
     event.retry = true
   }
 
+  /**
+   * Initialize the retry strategy with the agent instance.
+   *
+   * Enforces the single-agent attachment guard and registers the
+   * {@link AfterModelCallEvent} hook that drives retry orchestration.
+   *
+   * Subclasses that override this method MUST call `super.initAgent(agent)`
+   * to preserve the attachment guard and hook registration. Additional
+   * hooks may be registered after the `super` call.
+   *
+   * @param agent - The agent to register hooks with
+   */
   initAgent(agent: LocalAgent): void {
     if (this._attachedAgent !== undefined && this._attachedAgent !== agent) {
       throw new Error(

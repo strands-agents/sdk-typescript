@@ -219,7 +219,7 @@ describe('DefaultModelRetryStrategy', () => {
 
     class PermissiveStrategy extends DefaultModelRetryStrategy {
       override readonly name = 'test:permissive'
-      override isRetryable(error: Error): boolean {
+      protected override isRetryable(error: Error): boolean {
         return super.isRetryable(error) || error instanceof CustomError
       }
     }
