@@ -4294,6 +4294,26 @@ describe('BedrockModel', () => {
       expect(mockSend).toHaveBeenCalledOnce()
     })
 
+    it('should cache model ID and skip API call on AccessDeniedException', async () => {
+      const accessDeniedError = new Error(
+        'User: arn:aws:sts::123456789012:assumed-role/role is not authorized to perform: bedrock:CountTokens'
+      )
+      accessDeniedError.name = 'AccessDeniedException'
+      const mockSend = vi.fn(async () => {
+        throw accessDeniedError
+      })
+      mockBedrockClientImplementation({ send: mockSend })
+      const model = new BedrockModel()
+
+      // First call: hits API, gets AccessDeniedException, caches
+      await model.countTokens(messages)
+      expect(mockSend).toHaveBeenCalledOnce()
+
+      // Second call: skips API entirely due to caching
+      await model.countTokens(messages)
+      expect(mockSend).toHaveBeenCalledOnce()
+    })
+
     it('should not cache model ID for other errors', async () => {
       const mockSend = vi.fn(async () => {
         throw new Error('Transient network error')
