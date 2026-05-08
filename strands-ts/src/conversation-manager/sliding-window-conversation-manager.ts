@@ -186,9 +186,9 @@ export class SlidingWindowConversationManager extends ConversationManager {
    */
   private _reduceContext(messages: Message[], _error?: Error): boolean {
     // Only truncate tool results when handling a context overflow error, not for window size enforcement
-    const lastMessageIdxWithToolResults = this._findLastMessageWithToolResults(messages)
-    if (_error && lastMessageIdxWithToolResults !== undefined && this._shouldTruncateResults) {
-      const resultsTruncated = this._truncateToolResults(messages, lastMessageIdxWithToolResults)
+    const oldestMessageIdxWithToolResults = this._findOldestMessageWithToolResults(messages)
+    if (_error && oldestMessageIdxWithToolResults !== undefined && this._shouldTruncateResults) {
+      const resultsTruncated = this._truncateToolResults(messages, oldestMessageIdxWithToolResults)
       if (resultsTruncated) {
         return true
       }
@@ -420,16 +420,16 @@ export class SlidingWindowConversationManager extends ConversationManager {
   }
 
   /**
-   * Find the index of the last message containing tool results.
+   * Find the index of the oldest message containing tool results.
    *
-   * This is useful for identifying messages that might need to be truncated to reduce context size.
+   * Truncation targets the least-recent tool result first so the most relevant
+   * recent context is preserved as long as possible.
    *
    * @param messages - The conversation message history.
-   * @returns Index of the last message with tool results, or undefined if no such message exists.
+   * @returns Index of the oldest message with tool results, or undefined if no such message exists.
    */
-  private _findLastMessageWithToolResults(messages: Message[]): number | undefined {
-    // Iterate backwards through all messages (from newest to oldest)
-    for (let idx = messages.length - 1; idx >= 0; idx--) {
+  private _findOldestMessageWithToolResults(messages: Message[]): number | undefined {
+    for (let idx = 0; idx < messages.length; idx++) {
       const currentMessage = messages[idx]!
 
       const hasToolResult = currentMessage.content.some((block) => block.type === 'toolResultBlock')

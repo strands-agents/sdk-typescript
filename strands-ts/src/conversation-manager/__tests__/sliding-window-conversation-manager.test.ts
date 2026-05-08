@@ -213,7 +213,7 @@ describe('SlidingWindowConversationManager', () => {
       expect(result).toBe(false)
     })
 
-    it('finds last message with tool results', async () => {
+    it('finds oldest message with tool results', async () => {
       const manager = new SlidingWindowConversationManager({ shouldTruncateResults: true })
       const firstOriginal = 'F'.repeat(500)
       const secondOriginal = 'S'.repeat(500)
@@ -245,20 +245,20 @@ describe('SlidingWindowConversationManager', () => {
 
       await triggerContextOverflow(manager, mockAgent, new ContextWindowOverflowError('Context overflow'))
 
-      // Last tool-result message is truncated; earlier one is untouched.
-      const expectedTruncated = `${'S'.repeat(200)}\n<truncated chars="100"/>\n${'S'.repeat(200)}`
-      expect(messages[3]!.content[0]).toEqual(
-        new ToolResultBlock({
-          toolUseId: 'tool-2',
-          status: 'success',
-          content: [new TextBlock(expectedTruncated)],
-        })
-      )
+      // Oldest tool-result message is truncated; newer one is untouched.
+      const expectedTruncated = `${'F'.repeat(200)}\n<truncated chars="100"/>\n${'F'.repeat(200)}`
       expect(messages[1]!.content[0]).toEqual(
         new ToolResultBlock({
           toolUseId: 'tool-1',
           status: 'success',
-          content: [new TextBlock(firstOriginal)],
+          content: [new TextBlock(expectedTruncated)],
+        })
+      )
+      expect(messages[3]!.content[0]).toEqual(
+        new ToolResultBlock({
+          toolUseId: 'tool-2',
+          status: 'success',
+          content: [new TextBlock(secondOriginal)],
         })
       )
     })
@@ -363,7 +363,7 @@ describe('SlidingWindowConversationManager', () => {
         new Message({ role: 'assistant', content: [new TextBlock('Response')] }),
         new Message({ role: 'user', content: [new TextBlock('Message')] }),
       ]
-      const mockAgent = { messages: messages2 } as unknown as Agent
+      const mockAgent = createMockAgent({ messages: messages2 })
 
       await triggerContextOverflow(manager, mockAgent, new ContextWindowOverflowError('Context overflow'))
 
@@ -1041,7 +1041,7 @@ describe('SlidingWindowConversationManager', () => {
   })
 
   describe('helper methods', () => {
-    describe('findLastMessageWithToolResults', () => {
+    describe('findOldestMessageWithToolResults', () => {
       it('returns correct index when tool results exist', () => {
         const manager = new SlidingWindowConversationManager()
         const messages = [
@@ -1059,7 +1059,7 @@ describe('SlidingWindowConversationManager', () => {
           new Message({ role: 'assistant', content: [new TextBlock('Response')] }),
         ]
 
-        const index = (manager as any)._findLastMessageWithToolResults(messages)
+        const index = (manager as any)._findOldestMessageWithToolResults(messages)
         expect(index).toBe(1)
       })
 
@@ -1070,11 +1070,11 @@ describe('SlidingWindowConversationManager', () => {
           new Message({ role: 'assistant', content: [new TextBlock('Response 1')] }),
         ]
 
-        const index = (manager as any)._findLastMessageWithToolResults(messages)
+        const index = (manager as any)._findOldestMessageWithToolResults(messages)
         expect(index).toBeUndefined()
       })
 
-      it('iterates backwards from end', () => {
+      it('iterates forward from start', () => {
         const manager = new SlidingWindowConversationManager()
         const messages = [
           new Message({
@@ -1100,9 +1100,9 @@ describe('SlidingWindowConversationManager', () => {
           }),
         ]
 
-        const index = (manager as any)._findLastMessageWithToolResults(messages)
-        // Should find the last one (index 2), not the first one (index 0)
-        expect(index).toBe(2)
+        const index = (manager as any)._findOldestMessageWithToolResults(messages)
+        // Should find the first one (index 0), not the last (index 2)
+        expect(index).toBe(0)
       })
     })
 
