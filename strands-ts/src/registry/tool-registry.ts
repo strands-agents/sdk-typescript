@@ -27,8 +27,24 @@ export class ToolRegistry {
   add(tool: Tool | Tool[]): void {
     const tools = Array.isArray(tool) ? tool : [tool]
     for (const t of tools) {
-      this._validate(t)
+      this._validateProperties(t)
+      if (this._tools.has(t.name)) {
+        throw new ToolValidationError(`Tool with name '${t.name}' already registered`)
+      }
       this._tools.set(t.name, t)
+    }
+  }
+
+  /**
+   * Registers one or more tools, replacing any existing tools with the same name.
+   *
+   * @param tools - Array of tools to register
+   * @throws ToolValidationError If a tool's properties are invalid
+   */
+  addOrReplace(newTools: Tool[]): void {
+    for (const tool of newTools) {
+      this._validateProperties(tool)
+      this._tools.set(tool.name, tool)
     }
   }
 
@@ -67,13 +83,7 @@ export class ToolRegistry {
     return Array.from(this._tools.values())
   }
 
-  /**
-   * Validates a tool before registration.
-   *
-   * @param tool - The tool to validate
-   * @throws ToolValidationError If the tool's properties are invalid or its name is already registered
-   */
-  private _validate(tool: Tool): void {
+  private _validateProperties(tool: Tool): void {
     if (typeof tool.name !== 'string') {
       throw new ToolValidationError('Tool name must be a string')
     }
@@ -91,10 +101,6 @@ export class ToolRegistry {
       if (typeof tool.description !== 'string' || tool.description.length < 1) {
         throw new ToolValidationError('Tool description must be a non-empty string')
       }
-    }
-
-    if (this._tools.has(tool.name)) {
-      throw new ToolValidationError(`Tool with name '${tool.name}' already registered`)
     }
   }
 }

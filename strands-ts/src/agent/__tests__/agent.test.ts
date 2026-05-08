@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { Agent, type ToolList } from '../agent.js'
+import { McpClient } from '../../mcp.js'
+import { McpTool } from '../../tools/mcp-tool.js'
 import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
 import { collectGenerator } from '../../__fixtures__/model-test-helpers.js'
 import { createMockTool, createRandomTool } from '../../__fixtures__/tool-helpers.js'
@@ -1854,5 +1856,43 @@ describe('normalizeToolUseNames', () => {
       .find((m) => m.role === 'assistant')!
       .content.find((b) => b.type === 'toolUseBlock') as ToolUseBlock
     expect(sentToolUse).toStrictEqual(new ToolUseBlock({ name: 'good_tool-1', toolUseId: 'tu-1', input: {} }))
+  })
+
+  describe('MCP toolsChanged integration', () => {
+    it('removes old tools and adds new tools when onToolsChanged fires', async () => {
+      const mcpClient = new McpClient({
+        transport: { start: vi.fn(), send: vi.fn(), close: vi.fn() } as never,
+      })
+
+      const initialTools = [
+        new McpTool({ name: 'tool_a', description: 'A', inputSchema: {}, client: mcpClient }),
+        new McpTool({ name: 'tool_b', description: 'B', inputSchema: {}, client: mcpClient }),
+      ]
+      vi.spyOn(mcpClient, 'listTools').mockResolvedValue(initialTools)
+
+      let capturedCallback: ((oldTools: string[], newTools: McpTool[]) => void) | undefined
+      const setterSpy = vi.spyOn(McpClient.prototype, 'onToolsChanged', 'set').mockImplementation((cb) => {
+        capturedCallback = cb
+      })
+
+      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'done' })
+      const agent = new Agent({ model, tools: [mcpClient] })
+      await agent.initialize()
+
+      expect(agent.tools.map((t) => t.name)).toEqual(['tool_a', 'tool_b'])
+      expect(capturedCallback).toBeDefined()
+
+      const newTools = [
+        new McpTool({ name: 'tool_b', description: 'B-updated', inputSchema: {}, client: mcpClient }),
+        new McpTool({ name: 'tool_c', description: 'C', inputSchema: {}, client: mcpClient }),
+      ]
+
+      capturedCallback!(['tool_a', 'tool_b'], newTools)
+
+      expect(agent.tools.map((t) => t.name)).toEqual(['tool_b', 'tool_c'])
+      expect(agent.tools.find((t) => t.name === 'tool_b')!.description).toBe('B-updated')
+
+      setterSpy.mockRestore()
+    })
   })
 })

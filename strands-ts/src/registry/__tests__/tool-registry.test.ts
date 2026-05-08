@@ -110,6 +110,26 @@ describe('ToolRegistry', () => {
     })
   })
 
+  describe('addOrReplace', () => {
+    it('registers tools', () => {
+      const tool = createMockTool({ name: 'tool-1' })
+      registry.addOrReplace([tool])
+      expect(registry.get('tool-1')).toBe(tool)
+    })
+
+    it('replaces an existing tool with the same name', () => {
+      const original = createMockTool({ name: 'tool-1', description: 'original' })
+      const replacement = createMockTool({ name: 'tool-1', description: 'replacement' })
+      registry.add(original)
+      registry.addOrReplace([replacement])
+      expect(registry.get('tool-1')).toBe(replacement)
+    })
+
+    it('validates tool properties', () => {
+      expect(() => registry.addOrReplace([createMockTool({ name: 'invalid name!' })])).toThrow(ToolValidationError)
+    })
+  })
+
   describe('get', () => {
     it('retrieves a tool by name', () => {
       const tool = createMockTool({ name: 'find-me' })

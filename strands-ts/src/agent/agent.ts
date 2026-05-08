@@ -426,6 +426,10 @@ export class Agent implements LocalAgent, InvokableAgent {
       this._mcpClients.map(async (client) => {
         const tools = await client.listTools()
         this._toolRegistry.add(tools)
+        client.onToolsChanged = (oldTools, newTools): void => {
+          oldTools.forEach((name) => this._toolRegistry.remove(name))
+          this._toolRegistry.addOrReplace(newTools)
+        }
       })
     )
 

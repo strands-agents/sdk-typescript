@@ -103,6 +103,10 @@ export class McpClient {
   private _disableMcpInstrumentation: boolean
   private _tasksConfig: TasksConfig | undefined
   private _elicitationCallback: ElicitationCallback | undefined
+  private _registeredToolNames = new Set<string>()
+  private _onToolsChanged: ((oldTools: string[], newTools: McpTool[]) => void) | undefined
+  private _refreshingTools = false
+  private _pendingRefresh = false
 
   constructor(args: McpClientConfig) {
     this._clientName = args.applicationName || 'strands-agents-ts-sdk'
@@ -118,7 +122,18 @@ export class McpClient {
         name: this._clientName,
         version: this._clientVersion,
       },
-      this._elicitationCallback ? { capabilities: { elicitation: { form: {}, url: {} } } } : undefined
+      {
+        ...(this._elicitationCallback ? { capabilities: { elicitation: { form: {}, url: {} } } } : undefined),
+        listChanged: {
+          tools: {
+            autoRefresh: false,
+            debounceMs: 300,
+            onChanged: (): void => {
+              this._handleToolsChanged()
+            },
+          },
+        },
+      }
     )
 
     this._client.setNotificationHandler(LoggingMessageNotificationSchema, (notification) => {
@@ -235,7 +250,41 @@ export class McpClient {
       cursor = result.nextCursor
     } while (cursor)
 
+    this._registeredToolNames = new Set(tools.map((t) => t.name))
+
     return tools
+  }
+
+  /**
+   * Sets a callback invoked when the MCP server's tool list changes at runtime.
+   *
+   * @param callback - Handler receiving the previous tool names and the refreshed tool instances,
+   *                   or undefined to remove the callback.
+   */
+  set onToolsChanged(callback: ((oldTools: string[], newTools: McpTool[]) => void) | undefined) {
+    this._onToolsChanged = callback
+  }
+
+  private async _handleToolsChanged(): Promise<void> {
+    if (this._refreshingTools) {
+      this._pendingRefresh = true
+      return
+    }
+    this._refreshingTools = true
+    try {
+      do {
+        this._pendingRefresh = false
+        const oldTools = [...this._registeredToolNames]
+        const newTools = await this.listTools()
+        this._onToolsChanged?.(oldTools, newTools)
+      } while (this._pendingRefresh)
+    } catch (err) {
+      logger.warn(
+        `client=<${this._clientName}>, error=<${err}> | failed to refresh tools after toolsChanged notification`
+      )
+    } finally {
+      this._refreshingTools = false
+    }
   }
 
   /**
