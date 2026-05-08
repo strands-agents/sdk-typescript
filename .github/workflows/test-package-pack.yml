@@ -58,6 +58,7 @@ jobs:
           echo "Packed: $TARBALL_PATH"
 
           WORK=$(mktemp -d)
+          trap 'rm -rf "$WORK"' EXIT
           echo "Workspace: $WORK"
           cp strands-ts/test/packages/npm-pack/package.json \
              strands-ts/test/packages/npm-pack/tsconfig.json \

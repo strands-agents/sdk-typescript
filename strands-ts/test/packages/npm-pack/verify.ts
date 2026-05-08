@@ -57,7 +57,7 @@ if (response !== 'The weather in New York is 72F and sunny.') {
 }
 console.log('[pack-test] Tool invocation produced expected output')
 
-const agent = new Agent({ tools: [weatherTool] })
+const agent = new Agent({ model, tools: [weatherTool] })
 if (agent.tools.length === 0) {
   throw new Error('Tool was not correctly added to the agent')
 }
