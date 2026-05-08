@@ -722,7 +722,6 @@ describe("OpenAIModel (api: 'responses')", () => {
     it.each([
       'Input is too long for requested model',
       'input length and `max_tokens` exceed context limit',
-      'input length and max_tokens exceed context limit',
       'too many total text bytes',
     ])('wraps context overflow message pattern "%s" as ContextWindowOverflowError', async (message) => {
       const client: any = {

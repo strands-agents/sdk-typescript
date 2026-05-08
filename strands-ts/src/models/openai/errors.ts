@@ -10,13 +10,8 @@
  * @see https://platform.openai.com/docs/guides/error-codes
  */
 const CONTEXT_WINDOW_OVERFLOW_PATTERNS = [
-  'maximum context length',
-  'context_length_exceeded',
-  'too many tokens',
-  'context length',
-  'input is too long for requested model',
+  'Input is too long for requested model',
   'input length and `max_tokens` exceed context limit',
-  'input length and max_tokens exceed context limit',
   'too many total text bytes',
 ]
 
@@ -42,7 +37,10 @@ export function classifyOpenAIError(err: Error & { status?: number; code?: strin
     return 'throttling'
   }
 
-  if (code === 'context_length_exceeded' || CONTEXT_WINDOW_OVERFLOW_PATTERNS.some((p) => message.includes(p))) {
+  if (
+    code === 'context_length_exceeded' ||
+    CONTEXT_WINDOW_OVERFLOW_PATTERNS.some((pattern) => message.includes(pattern.toLowerCase()))
+  ) {
     return 'contextOverflow'
   }
 
