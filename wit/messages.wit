@@ -1,0 +1,341 @@
+package strands:agent;
+
+/// Message and content-block types.
+///
+/// First migration target for WIT-as-source-of-truth. Mirrors the shape
+/// of `strands-ts/src/types/messages.ts` with deliberate lossy conversions:
+///   - `JSONValue` → `string` (JSON-encoded). No recursive value type in WIT.
+///   - `Error` on `ToolResultBlock` → dropped. Not serializable.
+///   - `StopReason` becomes a closed enum; TS `| (string & {})` open form
+///     is lost. Carry provider-specific reasons in a companion field.
+///   - Class methods (`toJSON`, `fromJSON`) have no WIT equivalent and live
+///     at the SDK boundary.
+interface messages {
+  /// Who sent a message. User = human input, assistant = model output.
+  enum role {
+    user,
+    assistant,
+  }
+
+  /// Token consumption for a model invocation.
+  record message-usage {
+    input-tokens: s32,
+    output-tokens: s32,
+    total-tokens: s32,
+    cache-read-input-tokens: option<s32>,
+    cache-write-input-tokens: option<s32>,
+  }
+
+  /// Performance metrics for a model invocation.
+  record message-metrics {
+    latency-ms: f64,
+  }
+
+  /// Optional metadata attached to a message. Not sent to model
+  /// providers — persisted alongside the message in session storage.
+  record message-metadata {
+    usage: option<message-usage>,
+    metrics: option<message-metrics>,
+    /// JSON-encoded `Record<string, JSONValue>` for arbitrary metadata.
+    custom: option<string>,
+  }
+
+  /// Plain text content.
+  record text-block {
+    text: string,
+  }
+
+  /// Structured JSON data. WIT has no recursive value type — carried as
+  /// a JSON-encoded string.
+  record json-block {
+    json: string,
+  }
+
+  /// Tool use: a model-requested tool invocation.
+  record tool-use-block {
+    name: string,
+    tool-use-id: string,
+    /// JSON-encoded input parameters.
+    input: string,
+    /// Reasoning signature from thinking models (Gemini). Preserve and
+    /// send back to the model for multi-turn tool use.
+    reasoning-signature: option<string>,
+  }
+
+  /// Status of a tool execution.
+  enum tool-status {
+    success,
+    error,
+  }
+
+  /// Content payload inside a tool result.
+  variant tool-result-content {
+    text(text-block),
+    json(json-block),
+    image(image-block),
+    video(video-block),
+    document(document-block),
+  }
+
+  /// Tool execution result returned to the model.
+  ///
+  /// The TS `ToolResultBlock` also carries an optional JS `Error` for
+  /// inspection by hooks. Not representable in WIT; dropped.
+  record tool-result-block {
+    tool-use-id: string,
+    status: tool-status,
+    content: list<tool-result-content>,
+  }
+
+  /// Reasoning trace from a thinking model.
+  record reasoning-block {
+    text: option<string>,
+    signature: option<string>,
+    /// Raw bytes of redacted reasoning output. WIT maps `list<u8>` to
+    /// `Uint8Array` in jco.
+    redacted-content: option<list<u8>>,
+  }
+
+  /// Cache type for prompt caching. Currently only `default` upstream.
+  enum cache-type {
+    %default,
+  }
+
+  /// Marks a position in a prompt where caching should occur.
+  record cache-point-block {
+    cache-type: cache-type,
+  }
+
+  /// How guardrails should evaluate content.
+  enum guard-qualifier {
+    grounding-source,
+    query,
+    guard-content,
+  }
+
+  /// Text submitted to guardrails for evaluation.
+  record guard-content-text {
+    qualifiers: list<guard-qualifier>,
+    text: string,
+  }
+
+  /// Image formats supported by Bedrock guardrails.
+  enum guard-image-format {
+    png,
+    jpeg,
+  }
+
+  /// Image submitted to guardrails for evaluation. Bedrock only
+  /// supports raw bytes here.
+  record guard-content-image {
+    format: guard-image-format,
+    bytes: list<u8>,
+  }
+
+  /// Guard content: either text or image (not both, not neither). The
+  /// variant form enforces at compile time what the TS class enforces
+  /// at runtime.
+  variant guard-content-block {
+    text(guard-content-text),
+    image(guard-content-image),
+  }
+
+  // --- Media blocks ---
+
+  /// S3 location for media and document sources.
+  record s3-location {
+    /// S3 URI in format: `s3://bucket-name/key-name`.
+    uri: string,
+    /// AWS account ID of the S3 bucket owner (12-digit).
+    /// Required if the bucket belongs to another AWS account.
+    bucket-owner: option<string>,
+  }
+
+  enum image-format {
+    png,
+    jpeg,
+    gif,
+    webp,
+  }
+
+  variant image-source {
+    bytes(list<u8>),
+    s3-location(s3-location),
+    /// URL. Validated at the SDK boundary.
+    url(string),
+  }
+
+  record image-block {
+    format: image-format,
+    source: image-source,
+  }
+
+  enum video-format {
+    mp4,
+    mov,
+    webm,
+    flv,
+    mpeg,
+    mpg,
+    three-gp,
+    mkv,
+  }
+
+  variant video-source {
+    bytes(list<u8>),
+    s3-location(s3-location),
+  }
+
+  record video-block {
+    format: video-format,
+    source: video-source,
+  }
+
+  enum document-format {
+    pdf,
+    csv,
+    doc,
+    docx,
+    xls,
+    xlsx,
+    html,
+    txt,
+    md,
+  }
+
+  /// A nested content block within a document. Currently only text is
+  /// supported upstream — wrap as a variant for forward compatibility.
+  variant document-content-block {
+    text(text-block),
+  }
+
+  variant document-source {
+    bytes(list<u8>),
+    /// Inline text content (used for models that don't accept raw bytes).
+    content(list<document-content-block>),
+    s3-location(s3-location),
+  }
+
+  record document-block {
+    format: document-format,
+    name: string,
+    source: document-source,
+  }
+
+  // --- Citations ---
+
+  /// Location referencing character positions within a document.
+  record citation-document-char {
+    document-index: s32,
+    start: s32,
+    end: s32,
+  }
+
+  /// Location referencing page positions within a document.
+  record citation-document-page {
+    document-index: s32,
+    start: s32,
+    end: s32,
+  }
+
+  /// Location referencing chunk positions within a document.
+  record citation-document-chunk {
+    document-index: s32,
+    start: s32,
+    end: s32,
+  }
+
+  /// Location referencing a search result.
+  record citation-search-result {
+    search-result-index: s32,
+    start: s32,
+    end: s32,
+  }
+
+  /// Location referencing a web URL.
+  record citation-web {
+    url: string,
+    domain: option<string>,
+  }
+
+  /// Where a citation points. Variants per backing source kind.
+  variant citation-location {
+    document-char(citation-document-char),
+    document-page(citation-document-page),
+    document-chunk(citation-document-chunk),
+    search-result(citation-search-result),
+    web(citation-web),
+  }
+
+  /// Source content referenced by a citation.
+  record citation-source-content {
+    text: string,
+  }
+
+  /// Generated content associated with a citation.
+  record citation-generated-content {
+    text: string,
+  }
+
+  /// A single citation linking generated content to a source location.
+  record citation {
+    location: citation-location,
+    source: string,
+    source-content: list<citation-source-content>,
+    title: string,
+  }
+
+  record citations-block {
+    citations: list<citation>,
+    content: list<citation-generated-content>,
+  }
+
+  /// A single content block within a message.
+  variant content-block {
+    text(text-block),
+    tool-use(tool-use-block),
+    tool-result(tool-result-block),
+    reasoning(reasoning-block),
+    cache-point(cache-point-block),
+    guard-content(guard-content-block),
+    image(image-block),
+    video(video-block),
+    document(document-block),
+    citations(citations-block),
+  }
+
+  /// A message in a conversation.
+  record message {
+    role: role,
+    content: list<content-block>,
+    metadata: option<message-metadata>,
+  }
+
+  /// A content block allowed inside a system prompt. Subset of
+  /// `content-block` — only text, cache points, and guard content.
+  variant system-content-block {
+    text(text-block),
+    cache-point(cache-point-block),
+    guard-content(guard-content-block),
+  }
+
+  /// System prompt: either a plain string or an array of content blocks.
+  variant system-prompt {
+    text(string),
+    blocks(list<system-content-block>),
+  }
+
+  /// Why a model stopped generating. The TS type is open
+  /// (`| (string & {})`); WIT is closed. Provider-specific reasons
+  /// should be carried in a companion field.
+  enum stop-reason {
+    end-turn,
+    tool-use,
+    max-tokens,
+    stop-sequence,
+    content-filtered,
+    guardrail-intervened,
+    model-context-window-exceeded,
+    cancelled,
+  }
+}

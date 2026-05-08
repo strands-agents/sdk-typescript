@@ -82,7 +82,8 @@
     }
   },
   "scripts": {
-    "build": "tsc --project src/tsconfig.json",
+    "generate": "jco types ../wit --name strands:agent --world-name agent-types --out-dir generated",
+    "build": "npm run generate && tsc --project src/tsconfig.json",
     "prepack": "npm run build && cp ../README.md . && cp ../LICENSE.APACHE LICENSE",
     "postpack": "rm -f README.md LICENSE",
     "check": "npm run lint && npm run format && npm run type-check && npm run check:browser-bundle && npm run test:coverage && npm run test:package",
@@ -125,6 +126,7 @@
     "@anthropic-ai/sdk": "^0.92.0",
     "@aws-sdk/client-bedrock": "^3.943.0",
     "@aws-sdk/client-s3": "^3.943.0",
+    "@bytecodealliance/jco": "^1.16.1",
     "@aws-sdk/client-secrets-manager": "^3.943.0",
     "@aws-sdk/client-sts": "^3.996.0",
     "@aws-sdk/credential-providers": "^3.943.0",
