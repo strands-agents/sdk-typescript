@@ -5,7 +5,8 @@
  * that preserves tool usage pairs and avoids invalid window states.
  */
 
-import { Message, TextBlock, ToolResultBlock } from '../types/messages.js'
+import { Message, TextBlock, ToolResultBlock, type ToolResultContent } from '../types/messages.js'
+import { DocumentBlock, ImageBlock, VideoBlock } from '../types/media.js'
 import type { LocalAgent } from '../types/agent.js'
 import { AfterInvocationEvent } from '../hooks/events.js'
 import {
@@ -14,6 +15,69 @@ import {
   type ConversationManagerReduceOptions,
 } from './conversation-manager.js'
 import { logger } from '../logging/logger.js'
+
+const PRESERVE_CHARS = 200
+// Max plausible marker length, including newlines. Used as the minimum reduction
+// a re-truncation would need to produce in order to be worth running.
+const MIN_TRUNCATION_GAIN = 50
+// Text payloads at or below this length aren't worth truncating: the savings
+// would be smaller than the marker itself, and already-truncated output (which
+// lands just above `2 * PRESERVE_CHARS`) falls under this threshold so a
+// second pass is a natural no-op.
+const TRUNCATION_THRESHOLD = 2 * PRESERVE_CHARS + MIN_TRUNCATION_GAIN
+
+/**
+ * Build a short textual stand-in for an image block, used when truncating tool
+ * results. The placeholder identifies the image format and its source kind
+ * (bytes/url/s3) so the model can reason about what was dropped. For inline
+ * bytes the size is included; URL and S3 sources only report the kind since
+ * their byte count isn't known locally.
+ */
+function imagePlaceholder(image: ImageBlock): string {
+  const source = image.source
+  if (source.type === 'imageSourceBytes') {
+    return `[image: ${image.format}, source: bytes, ${source.bytes.byteLength} bytes]`
+  }
+  if (source.type === 'imageSourceUrl') {
+    return `[image: ${image.format}, source: url]`
+  }
+  return `[image: ${image.format}, source: s3]`
+}
+
+/**
+ * Build a short textual stand-in for a video block. Binary payloads can't be
+ * partially inspected, so videos are replaced wholesale. The placeholder
+ * reports format and source kind; byte count is included for inline bytes.
+ */
+function videoPlaceholder(video: VideoBlock): string {
+  const source = video.source
+  if (source.type === 'videoSourceBytes') {
+    return `[video: ${video.format}, source: bytes, ${source.bytes.byteLength} bytes]`
+  }
+  return `[video: ${video.format}, source: s3]`
+}
+
+/**
+ * Build a short textual stand-in for a document block with a binary or remote
+ * source. Text-based document sources (text / content) are truncated in place
+ * instead of replaced, so this is only called for bytes / s3.
+ */
+function documentPlaceholder(doc: DocumentBlock): string {
+  const source = doc.source
+  if (source.type === 'documentSourceBytes') {
+    return `[document: ${doc.name}, ${doc.format}, source: bytes, ${source.bytes.byteLength} bytes]`
+  }
+  return `[document: ${doc.name}, ${doc.format}, source: s3]`
+}
+
+/**
+ * Build a short textual stand-in for a JSON block. The serialized length is
+ * reported so the model knows how much was dropped; truncating JSON
+ * mid-structure would produce invalid output, so the whole block is replaced.
+ */
+function jsonPlaceholder(serializedLength: number): string {
+  return `[json: ${serializedLength} chars]`
+}
 
 /**
  * Configuration for the sliding window conversation manager.
@@ -141,9 +205,9 @@ export class SlidingWindowConversationManager extends ConversationManager {
    */
   private _reduceContext(messages: Message[], _error?: Error): boolean {
     // Only truncate tool results when handling a context overflow error, not for window size enforcement
-    const lastMessageIdxWithToolResults = this._findLastMessageWithToolResults(messages)
-    if (_error && lastMessageIdxWithToolResults !== undefined && this._shouldTruncateResults) {
-      const resultsTruncated = this._truncateToolResults(messages, lastMessageIdxWithToolResults)
+    const oldestMessageIdxWithToolResults = this._findOldestMessageWithToolResults(messages)
+    if (_error && oldestMessageIdxWithToolResults !== undefined && this._shouldTruncateResults) {
+      const resultsTruncated = this._truncateToolResults(messages, oldestMessageIdxWithToolResults)
       if (resultsTruncated) {
         return true
       }
@@ -206,10 +270,37 @@ export class SlidingWindowConversationManager extends ConversationManager {
   }
 
   /**
-   * Truncate tool results in a message to reduce context size.
+   * Apply head/tail truncation to a string if it exceeds the size threshold.
    *
-   * When a message contains tool results that are too large for the model's context window,
-   * this function replaces the content of those tool results with a simple error message.
+   * Returns the truncated form (first {@link PRESERVE_CHARS} + marker + last
+   * {@link PRESERVE_CHARS}) when the input exceeds {@link TRUNCATION_THRESHOLD},
+   * otherwise `undefined`.
+   */
+  private _truncateLongText(text: string): string | undefined {
+    if (text.length <= TRUNCATION_THRESHOLD) {
+      return undefined
+    }
+    const prefix = text.slice(0, PRESERVE_CHARS)
+    const suffix = text.slice(-PRESERVE_CHARS)
+    const removed = text.length - 2 * PRESERVE_CHARS
+    return `${prefix}\n<truncated chars="${removed}"/>\n${suffix}`
+  }
+
+  /**
+   * Truncate tool result content in a message to reduce context size.
+   *
+   * Rule: preserve head/tail when the payload is plain-text-shaped; replace
+   * wholesale when it's binary or remote. Specifically:
+   * - Text blocks: partial head/tail truncation if over threshold.
+   * - Image, Video blocks: wholesale replacement with a textual placeholder.
+   * - Document blocks with bytes/s3 source: wholesale replacement.
+   * - Document blocks with text source: partial truncation of the inner text.
+   * - Document blocks with content source (TextBlock[]): partial truncation of
+   *   each nested block.
+   * - JSON blocks: wholesale replacement if serialized length is over threshold;
+   *   mid-structure truncation would produce invalid JSON.
+   *
+   * The tool result `status` and `error` fields are preserved.
    *
    * @param messages - The conversation message history.
    * @param msgIdx - Index of the message containing tool results to truncate.
@@ -225,46 +316,120 @@ export class SlidingWindowConversationManager extends ConversationManager {
       return false
     }
 
-    const toolResultTooLargeMessage = 'The tool result was too large!'
-    let foundToolResultToTruncate = false
+    let changesMade = false
+    const newContent = message.content.map((block) => {
+      if (block.type !== 'toolResultBlock') {
+        return block
+      }
 
-    // First, check if there's a tool result that needs truncation
-    for (const block of message.content) {
-      if (block.type === 'toolResultBlock') {
-        const toolResultBlock = block as ToolResultBlock
+      const toolResultBlock = block as ToolResultBlock
+      const newItems: ToolResultContent[] = []
+      let itemChanged = false
 
-        // Check if already truncated
-        const firstContent = toolResultBlock.content[0]
-        const contentText = firstContent && firstContent.type === 'textBlock' ? firstContent.text : ''
-
-        if (toolResultBlock.status === 'error' && contentText === toolResultTooLargeMessage) {
-          return false
+      for (const item of toolResultBlock.content) {
+        if (item.type === 'imageBlock') {
+          newItems.push(new TextBlock(imagePlaceholder(item)))
+          itemChanged = true
+          continue
         }
 
-        foundToolResultToTruncate = true
-        break
-      }
-    }
+        if (item.type === 'videoBlock') {
+          newItems.push(new TextBlock(videoPlaceholder(item)))
+          itemChanged = true
+          continue
+        }
 
-    if (!foundToolResultToTruncate) {
+        if (item.type === 'documentBlock') {
+          const source = item.source
+          if (source.type === 'documentSourceBytes' || source.type === 'documentSourceS3Location') {
+            newItems.push(new TextBlock(documentPlaceholder(item)))
+            itemChanged = true
+            continue
+          }
+          if (source.type === 'documentSourceText') {
+            const truncated = this._truncateLongText(source.text)
+            if (truncated !== undefined) {
+              newItems.push(
+                new DocumentBlock({
+                  name: item.name,
+                  format: item.format,
+                  source: { text: truncated },
+                  ...(item.citations !== undefined ? { citations: item.citations } : {}),
+                  ...(item.context !== undefined ? { context: item.context } : {}),
+                })
+              )
+              itemChanged = true
+              continue
+            }
+          }
+          if (source.type === 'documentSourceContentBlock') {
+            let nestedChanged = false
+            const newContentBlocks = source.content.map((nested) => {
+              const truncated = this._truncateLongText(nested.text)
+              if (truncated !== undefined) {
+                nestedChanged = true
+                return new TextBlock(truncated)
+              }
+              return nested
+            })
+            if (nestedChanged) {
+              newItems.push(
+                new DocumentBlock({
+                  name: item.name,
+                  format: item.format,
+                  source: { content: newContentBlocks },
+                  ...(item.citations !== undefined ? { citations: item.citations } : {}),
+                  ...(item.context !== undefined ? { context: item.context } : {}),
+                })
+              )
+              itemChanged = true
+              continue
+            }
+          }
+          newItems.push(item)
+          continue
+        }
+
+        if (item.type === 'jsonBlock') {
+          const serializedLength = JSON.stringify(item.json).length
+          if (serializedLength > TRUNCATION_THRESHOLD) {
+            newItems.push(new TextBlock(jsonPlaceholder(serializedLength)))
+            itemChanged = true
+            continue
+          }
+          newItems.push(item)
+          continue
+        }
+
+        if (item.type === 'textBlock') {
+          const truncated = this._truncateLongText(item.text)
+          if (truncated !== undefined) {
+            newItems.push(new TextBlock(truncated))
+            itemChanged = true
+            continue
+          }
+        }
+
+        newItems.push(item)
+      }
+
+      if (!itemChanged) {
+        return block
+      }
+
+      changesMade = true
+      return new ToolResultBlock({
+        toolUseId: toolResultBlock.toolUseId,
+        status: toolResultBlock.status,
+        content: newItems,
+        ...(toolResultBlock.error !== undefined ? { error: toolResultBlock.error } : {}),
+      })
+    })
+
+    if (!changesMade) {
       return false
     }
 
-    // Create new content array with truncated tool results
-    const newContent = message.content.map((block) => {
-      if (block.type === 'toolResultBlock') {
-        const toolResultBlock = block as ToolResultBlock
-        // Create new ToolResultBlock with truncated content
-        return new ToolResultBlock({
-          toolUseId: toolResultBlock.toolUseId,
-          status: 'error',
-          content: [new TextBlock(toolResultTooLargeMessage)],
-        })
-      }
-      return block
-    })
-
-    // Replace the message in the array with a new message containing the modified content
     messages[msgIdx] = new Message({
       role: message.role,
       content: newContent,
@@ -274,16 +439,16 @@ export class SlidingWindowConversationManager extends ConversationManager {
   }
 
   /**
-   * Find the index of the last message containing tool results.
+   * Find the index of the oldest message containing tool results.
    *
-   * This is useful for identifying messages that might need to be truncated to reduce context size.
+   * Truncation targets the least-recent tool result first so the most relevant
+   * recent context is preserved as long as possible.
    *
    * @param messages - The conversation message history.
-   * @returns Index of the last message with tool results, or undefined if no such message exists.
+   * @returns Index of the oldest message with tool results, or undefined if no such message exists.
    */
-  private _findLastMessageWithToolResults(messages: Message[]): number | undefined {
-    // Iterate backwards through all messages (from newest to oldest)
-    for (let idx = messages.length - 1; idx >= 0; idx--) {
+  private _findOldestMessageWithToolResults(messages: Message[]): number | undefined {
+    for (let idx = 0; idx < messages.length; idx++) {
       const currentMessage = messages[idx]!
 
       const hasToolResult = currentMessage.content.some((block) => block.type === 'toolResultBlock')
