@@ -1,290 +1,238 @@
-package strands:agent;
+package strands:agent@0.1.0;
 
-/// Shared types used across all interfaces.
-interface types {
-  /// Why the model stopped generating.
-  enum stop-reason {
-    end-turn,
-    tool-use,
-    max-tokens,
-    error,
-    content-filtered,
-    guardrail-intervened,
-    stop-sequence,
-    model-context-window-exceeded,
-    cancelled,
-  }
-
-  /// Token consumption for a model invocation.
-  record usage {
-    input-tokens: s32,
-    output-tokens: s32,
-    total-tokens: s32,
-    cache-read-input-tokens: option<s32>,
-    cache-write-input-tokens: option<s32>,
-  }
-
-  /// Performance metrics for a model invocation.
-  record metrics {
-    latency-ms: f64,
-  }
-
-  /// Usage and metrics attached to a stream.
-  record metadata-event {
-    usage: option<usage>,
-    metrics: option<metrics>,
-  }
-
-  /// Model requesting a tool call.
-  record tool-use-event {
-    name: string,
-    tool-use-id: string,
-    input: string,
-  }
-
-  /// Result of a tool execution.
-  record tool-result-event {
-    tool-use-id: string,
-    status: string,
-    content: string,
-  }
-
-  /// Tool definition passed to the model.
-  record tool-spec {
-    name: string,
-    description: string,
-    input-schema: string,
-  }
-
-  /// Final stop data when the stream ends.
-  record stop-data {
-    reason: stop-reason,
-    usage: option<usage>,
-    metrics: option<metrics>,
-    /// JSON-serialized structured output from the agent, if a schema was provided.
-    structured-output: option<string>,
-  }
-
-  /// Hook event types fired during the agent loop.
-  enum lifecycle-event-type {
-    initialized,
-    before-invocation,
-    after-invocation,
-    before-model-call,
-    after-model-call,
-    before-tool-call,
-    after-tool-call,
-    message-added,
-  }
-
-  /// A lifecycle hook event with optional tool context.
-  record lifecycle-event {
-    event-type: lifecycle-event-type,
-    tool-use: option<string>,
-    tool-result: option<string>,
-  }
-
-  /// Events yielded during agent streaming.
-  variant stream-event {
-    text-delta(string),
-    tool-use(tool-use-event),
-    tool-result(tool-result-event),
-    metadata(metadata-event),
-    stop(stop-data),
-    error(string),
-    interrupt(string),
-    lifecycle(lifecycle-event),
-  }
-
-  /// Anthropic model provider config.
-  record anthropic-config {
-    model-id: option<string>,
-    api-key: option<string>,
-    additional-config: option<string>,
-  }
-
-  /// AWS Bedrock model provider config.
-  record bedrock-config {
-    model-id: string,
-    region: option<string>,
-    access-key-id: option<string>,
-    secret-access-key: option<string>,
-    session-token: option<string>,
-    additional-config: option<string>,
-  }
-
-  /// OpenAI model provider config.
-  record openai-config {
-    model-id: option<string>,
-    api-key: option<string>,
-    additional-config: option<string>,
-  }
-
-  /// Google Gemini model provider config.
-  record gemini-config {
-    model-id: option<string>,
-    api-key: option<string>,
-    additional-config: option<string>,
-  }
-
-  /// Which model provider to use.
-  variant model-config {
-    anthropic(anthropic-config),
-    bedrock(bedrock-config),
-    openai(openai-config),
-    gemini(gemini-config),
-  }
-
-  /// Sampling parameters for model inference.
-  record model-params {
-    max-tokens: option<s32>,
-    temperature: option<f64>,
-    top-p: option<f64>,
-  }
-
-  /// Local filesystem session storage config.
-  record file-storage-config {
-    base-dir: string,
-  }
-
-  /// S3 session storage config.
-  record s3-storage-config {
-    bucket: string,
-    region: option<string>,
-    prefix: option<string>,
-  }
-
-  /// Where to persist session snapshots.
-  variant storage-config {
-    file(file-storage-config),
-    s3(s3-storage-config),
-  }
-
-  /// Session persistence configuration.
-  record session-config {
-    session-id: string,
-    storage: storage-config,
-    save-latest-on: option<string>,
-  }
-
-  /// Conversation manager configuration.
-  /// The `strategy` field selects the manager: "none", "sliding-window", or "summarizing".
-  record conversation-manager-config {
-    strategy: string,
-    window-size: s32,
-    should-truncate-results: bool,
-    /// Ratio of messages to summarize (0.1–0.8). Only used when strategy is "summarizing".
-    summary-ratio: option<f64>,
-    /// Minimum number of recent messages to preserve. Only used when strategy is "summarizing".
-    preserve-recent-messages: option<s32>,
-    /// Custom system prompt for summarization. Only used when strategy is "summarizing".
-    summarization-system-prompt: option<string>,
-    /// JSON-serialized model config for the summarization model. Only used when strategy is "summarizing".
-    /// When absent, the agent's primary model is used.
-    summarization-model-config: option<string>,
-  }
-
-  /// Top-level agent configuration.
-  record agent-config {
-    model: option<model-config>,
-    model-params: option<model-params>,
-    system-prompt: option<string>,
-    system-prompt-blocks: option<string>,
-    tools: option<list<tool-spec>>,
-    trace-context: option<string>,
-    session: option<session-config>,
-    conversation-manager: option<conversation-manager-config>,
-    /// JSON-serialized JSON Schema for structured output validation.
-    structured-output-schema: option<string>,
-  }
-
-  /// Arguments for a single tool call from guest to host.
-  record call-tool-args {
-    name: string,
-    input: string,
-    tool-use-id: string,
-  }
-
-  /// Batch tool call arguments.
-  record call-tools-args {
-    calls: list<call-tool-args>,
-  }
-
-  /// Arguments for agent.generate().
-  record stream-args {
-    input: string,
-    tools: option<list<tool-spec>>,
-    tool-choice: option<string>,
-    /// Per-invocation JSON Schema for structured output. Overrides agent-config schema.
-    structured-output-schema: option<string>,
-  }
-
-  /// Payload for responding to an interrupt.
-  record respond-args {
-    payload: string,
-  }
-
-  /// Arguments for agent.set-messages().
-  record set-messages-args {
-    json: string,
-  }
-}
-
-/// Host-side tool execution. The guest calls these when the model requests tool use.
-interface tool-provider {
-  use types.{call-tool-args, call-tools-args};
-
-  call-tool: func(args: call-tool-args) -> result<string, string>;
-  call-tools: func(args: call-tools-args) -> list<result<string, string>>;
-}
-
-/// Structured logging from guest to host.
-interface host-log {
-  enum log-level {
-    trace,
-    debug,
-    info,
-    warn,
-    error,
-  }
-
-  record log-entry {
-    level: log-level,
-    message: string,
-    /// Optional JSON blob with structured context.
-    context: option<string>,
-  }
-
-  log: func(entry: log-entry);
-}
-
-/// The main API exported by the WASM guest.
+/// Top-level agent API. Construct an `agent`, call `generate` to start an
+/// invocation, and drain the returned `response-stream`.
 interface api {
-  use types.{agent-config, stream-event, stream-args, respond-args, set-messages-args};
+  use messages.{message, content-block, prompt-input};
+  use models.{model-config, model-params};
+  use tools.{tool-spec, tool-choice, agent-as-tool-config};
+  use sessions.{session-config, storage-error};
+  use conversation.{conversation-manager-config};
+  use retry.{retry-config};
+  use streaming.{stream-event, agent-trace, agent-metrics};
+  use vended.{vended-tool, vended-plugin};
+  use mcp.{mcp-client-config};
 
-  resource agent {
-    constructor(config: agent-config);
-    generate: func(args: stream-args) -> response-stream;
-    get-messages: func() -> string;
-    set-messages: func(args: set-messages-args);
-    save-session: func() -> result<_, string>;
-    list-snapshots: func() -> result<list<string>, string>;
-    delete-session: func() -> result<_, string>;
+  /// Concurrent-execution options.
+  record concurrent-options {
+    /// Upper bound on tool calls running at once. Absent means no limit.
+    max-concurrency: option<s32>,
   }
 
+  /// Strategy for executing tool calls emitted in a single assistant turn.
+  variant tool-executor-strategy {
+    /// Run tool calls one at a time, in order.
+    sequential,
+    /// Run tool calls in parallel (default).
+    concurrent(concurrent-options),
+  }
+
+  /// Scalar attribute value attached to a trace.
+  variant attribute-value {
+    /// String value.
+    string-value(string),
+    /// 64-bit signed integer.
+    int-value(s64),
+    /// 64-bit float.
+    double-value(f64),
+    /// Boolean.
+    bool-value(bool),
+  }
+
+  /// Single key-value pair attached to every OpenTelemetry span the
+  /// agent emits. The OTEL-typed `attribute-value` distinguishes these
+  /// from `streaming.trace-metadata-entry`, which annotates local
+  /// in-memory trace nodes and only carries strings.
+  record trace-attribute {
+    /// Attribute key.
+    key: string,
+    /// Attribute value.
+    value: attribute-value,
+  }
+
+  /// W3C Trace Context propagation headers. Links the agent's spans to a
+  /// caller-supplied trace.
+  record trace-context {
+    /// `traceparent` header value.
+    traceparent: string,
+    /// `tracestate` header value. Absent when no vendor state is set.
+    tracestate: option<string>,
+  }
+
+  /// Display-level identity of the agent. All fields are optional and
+  /// fall back to sensible defaults.
+  record agent-identity {
+    /// Display name. Defaults to `"Strands Agent"`.
+    name: option<string>,
+    /// Stable identifier. Defaults to `"agent"`.
+    id: option<string>,
+    /// Human-readable description of what the agent does.
+    description: option<string>,
+  }
+
+  /// Configuration passed to the `agent` constructor.
+  ///
+  /// Invalid configuration is not reported here (resource constructors
+  /// cannot return `result`); errors surface on the first `generate`
+  /// call as `agent-error::invalid-input`.
+  record agent-config {
+    /// Model provider. Defaults to Bedrock with a sensible model id when absent.
+    model: option<model-config>,
+    /// Sampling parameters applied to every model call.
+    model-params: option<model-params>,
+    /// Initial conversation history.
+    messages: option<list<message>>,
+    /// System prompt. Either plain text or structured content blocks.
+    system-prompt: option<prompt-input>,
+    /// Tools available to the model. Per-invocation overrides are possible
+    /// via `invoke-args.tools`.
+    tools: option<list<tool-spec>>,
+    /// Child agents exposed as tools to this agent's model, registered
+    /// alongside `tools`.
+    agent-tools: option<list<agent-as-tool-config>>,
+    /// Built-in tools to enable. Added to `tools`.
+    vended-tools: option<list<vended-tool>>,
+    /// Built-in plugins to enable.
+    vended-plugins: option<list<vended-plugin>>,
+    /// MCP clients whose tools should be exposed to the model. The host
+    /// opens and maintains each connection; the agent loop sees the
+    /// server-advertised tools alongside those in `tools`.
+    mcp-clients: option<list<mcp-client-config>>,
+    /// Display-level identity (name, id, description).
+    identity: option<agent-identity>,
+    /// How tool calls from a single assistant turn are scheduled.
+    tool-executor: option<tool-executor-strategy>,
+    /// Mirror agent output to the application's console. Defaults to `true`.
+    display-output: option<bool>,
+    /// Attributes added to every OpenTelemetry span.
+    trace-attributes: option<list<trace-attribute>>,
+    /// W3C Trace Context linking the agent's spans to a caller-supplied
+    /// trace.
+    trace-context: option<trace-context>,
+    /// Session persistence. Absent means no persistence.
+    session: option<session-config>,
+    /// Conversation history management. Absent applies a sliding-window
+    /// default.
+    conversation-manager: option<conversation-manager-config>,
+    /// Retry policy for failed model calls. Absent applies an exponential
+    /// backoff default capped at 6 attempts.
+    retry: option<retry-config>,
+    /// JSON Schema for structured output validation. Shape is user-defined
+    /// and therefore opaque on the wire.
+    structured-output-schema: option<string>,
+    /// Initial app-state values as an opaque JSON object. The agent does
+    /// not interpret this.
+    app-state: option<string>,
+    /// Initial model-provider state as an opaque JSON object. Typically
+    /// only set when hydrating from a snapshot.
+    model-state: option<string>,
+  }
+
+  /// Arguments for `agent.generate`.
+  record invoke-args {
+    /// User input.
+    input: prompt-input,
+    /// Per-invocation tool override. Replaces the agent's registered tools.
+    tools: option<list<tool-spec>>,
+    /// Tool choice policy.
+    tool-choice: option<tool-choice>,
+    /// Per-invocation structured-output schema. Overrides the agent-level one.
+    structured-output-schema: option<string>,
+  }
+
+  /// Payload supplied when resuming from a human-in-the-loop interrupt.
+  record respond-args {
+    /// Id of the interrupt being responded to. Matches the id from the
+    /// `interrupt` stream event.
+    interrupt-id: string,
+    /// User's response as a JSON value. Shape is interrupt-specific and
+    /// therefore opaque on the wire.
+    response: string,
+  }
+
+  /// Why an agent-resource call failed.
+  variant agent-error {
+    /// The agent was constructed without a session config.
+    no-session-configured,
+    /// The storage backend rejected the operation.
+    storage(storage-error),
+    /// Supplied payload did not match the expected shape.
+    invalid-input(string),
+    /// Supplied `interrupt-id` does not match any live interrupt.
+    unknown-interrupt(string),
+    /// Catch-all for internal failures.
+    internal(string),
+  }
+
+  /// An agent instance. Persistent across `generate` calls, carrying
+  /// conversation state and registered tools.
+  resource agent {
+    /// Construct an agent from config.
+    constructor(config: agent-config);
+    /// Start a generation. Returns a handle bound to the in-flight call.
+    generate: func(args: invoke-args) -> response-stream;
+    /// Fetch the conversation history.
+    get-messages: func() -> list<message>;
+    /// Replace the conversation history.
+    set-messages: func(messages: list<message>) -> result<_, agent-error>;
+    /// Fetch app state as an opaque JSON object.
+    get-app-state: func() -> string;
+    /// Replace app state. Input is an opaque JSON object.
+    set-app-state: func(json: string) -> result<_, agent-error>;
+    /// Fetch model-provider state as an opaque JSON object.
+    get-model-state: func() -> string;
+    /// Replace model-provider state. Input is an opaque JSON object.
+    set-model-state: func(json: string) -> result<_, agent-error>;
+    /// Fetch all in-memory traces collected this lifetime. Traces form a
+    /// tree linked by `parent-id`; the list is returned flat because WIT
+    /// does not permit recursive records.
+    get-traces: func() -> list<agent-trace>;
+    /// Fetch a snapshot of the current metrics totals.
+    get-metrics: func() -> agent-metrics;
+    /// Persist the current session.
+    save-session: func() -> result<_, agent-error>;
+    /// List snapshot ids for the current session.
+    list-snapshots: func() -> result<list<string>, agent-error>;
+    /// Delete the current session.
+    delete-session: func() -> result<_, agent-error>;
+  }
+
+  /// Handle to an in-flight `generate` invocation. Call `events` once to
+  /// get the event stream and drain it to completion; use `respond` and
+  /// `cancel` out-of-band to drive human-in-the-loop and cancellation.
   resource response-stream {
-    read-next: func() -> option<list<stream-event>>;
-    respond: func(args: respond-args);
+    /// Async stream of events produced during the invocation. Iterate
+    /// with your language's native async stream consumer.
+    events: func() -> stream<stream-event>;
+    /// Resume a human-in-the-loop interrupt with the user's response.
+    respond: func(args: respond-args) -> result<_, agent-error>;
+    /// Cancel the invocation, aborting any in-flight work. Fire-and-forget.
     cancel: func();
   }
 }
 
+/// Strands agent component. Your application implements the imported
+/// interfaces to plug in custom tools, storage, models, and other
+/// extension points; the agent API is ready to call.
 world agent {
+  /// Tools your application exposes to the agent's model.
   import tool-provider;
+  /// Receives structured log entries from the agent.
   import host-log;
+  /// Custom session snapshot storage. Selected by setting
+  /// `session-config.storage` to `custom`.
+  import snapshot-storage;
+  /// Custom policy deciding when to take session snapshots. Selected by
+  /// setting `session-config.save-latest` to the `trigger(id)` variant.
+  import snapshot-trigger-handler;
+  /// Custom model provider implementation. Selected via
+  /// `model-config.custom`.
+  import model-provider;
+  /// Conditional graph-edge callbacks for multi-agent orchestration.
+  import edge-handler-registry;
+  /// Responds to MCP elicitation requests. Enabled per client via
+  /// `mcp-client-config.elicitation-enabled`.
+  import elicitation-handler;
+  /// Agent API your application calls.
   export api;
-}
-
-world agent-types {
-  export types;
 }

@@ -1,34 +1,37 @@
 /**
  * WASM component — exports strands:agent/api.
  *
- * The Agent resource is persistent: it holds a TS Agent instance across
- * multiple generate() calls, maintaining conversation history.
- *
- * Each call to readNext() awaits the next generator value, which
- * causes componentize-js to yield via wasi:io/poll, letting the
- * host drive HTTP I/O forward.
+ * The Agent resource holds a TS SDK Agent instance across multiple
+ * generate() calls. Each generate() returns a response-stream whose
+ * events() method yields the typed WIT stream-event. Consumers drain
+ * the ReadableStream to completion; componentize-js turns that into
+ * the component-model `stream<T>` on the wire.
  */
 
-/// <reference path="./generated/interfaces/strands-agent-types.d.ts" />
+/// <reference path="./generated/interfaces/strands-agent-api.d.ts" />
+/// <reference path="./generated/interfaces/strands-agent-messages.d.ts" />
+/// <reference path="./generated/interfaces/strands-agent-streaming.d.ts" />
+/// <reference path="./generated/interfaces/strands-agent-models.d.ts" />
+/// <reference path="./generated/interfaces/strands-agent-tools.d.ts" />
+/// <reference path="./generated/interfaces/strands-agent-sessions.d.ts" />
+/// <reference path="./generated/interfaces/strands-agent-conversation.d.ts" />
 /// <reference path="./generated/interfaces/strands-agent-host-log.d.ts" />
 /// <reference path="./generated/interfaces/strands-agent-tool-provider.d.ts" />
 
+import type { AgentConfig, InvokeArgs, RespondArgs, AgentError } from 'strands:agent/api@0.1.0'
+import type { Message as WitMessage, PromptInput } from 'strands:agent/messages@0.1.0'
 import type {
-  AgentConfig,
-  StreamEvent,
-  StreamArgs,
-  RespondArgs,
-  SetMessagesArgs,
-  ModelConfig,
-  ModelParams,
-  StopData,
-  ToolSpec,
-  LifecycleEventType,
-  StreamEventLifecycle,
-} from 'strands:agent/types'
+  StreamEvent as WitStreamEvent,
+  StopEvent as WitStopEvent,
+  StopReason as WitStopReason,
+  AgentTrace as WitAgentTrace,
+  AgentMetrics as WitAgentMetrics,
+} from 'strands:agent/streaming@0.1.0'
+import type { ModelConfig as WitModelConfig, ModelParams as WitModelParams } from 'strands:agent/models@0.1.0'
+import type { ToolSpec, ToolChoice as WitToolChoice, ToolStreamEvent } from 'strands:agent/tools@0.1.0'
 
-import { callTool } from 'strands:agent/tool-provider'
-import { log as hostLog } from 'strands:agent/host-log'
+import { callTool } from 'strands:agent/tool-provider@0.1.0'
+import { log as hostLog } from 'strands:agent/host-log@0.1.0'
 import { Agent, FunctionTool, SessionManager, FileStorage } from '@strands-agents/sdk'
 import { S3Storage } from '@strands-agents/sdk/session/s3-storage'
 import { AnthropicModel } from '@strands-agents/sdk/models/anthropic'
@@ -47,13 +50,13 @@ import type {
   AgentResult,
   ToolContext,
   SystemPrompt,
-  InvokeArgs,
+  InvokeArgs as SdkInvokeArgs,
   Message,
   StreamOptions,
   ToolChoice,
   ModelStreamEvent,
   ContentBlock,
-  ToolStreamEvent,
+  ToolStreamEvent as SdkToolStreamEvent,
   SaveLatestStrategy,
   JSONValue,
 } from '@strands-agents/sdk'
@@ -65,33 +68,69 @@ import {
   AfterInvocationEvent,
   AfterModelCallEvent,
   AfterToolCallEvent,
-  InitializedEvent,
+  AfterToolsEvent,
+  AgentResultEvent,
   BeforeInvocationEvent,
   BeforeModelCallEvent,
   BeforeToolCallEvent,
+  BeforeToolsEvent,
+  ContentBlockEvent,
+  InitializedEvent,
   MessageAddedEvent,
+  ModelMessageEvent,
+  ModelStreamUpdateEvent,
+  ToolResultEvent,
+  ToolStreamUpdateEvent,
 } from '@strands-agents/sdk'
 import { z } from 'zod'
 
-// All log calls go through `hostLog` (the WIT import).  The host can
-// route them to the host language's logging framework (e.g. Python `logging`).
+//
+// --- logging + error helpers --------------------------------------------
+//
 
 type LogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error'
-
-type WitResult = { tag: 'ok' | 'err'; val: string }
 
 function glog(level: LogLevel, message: string, context?: Record<string, unknown>): void {
   hostLog({ level, message, context: context ? JSON.stringify(context) : undefined })
 }
 
-/** Capture a JS Error's stack and message as a structured context blob. */
-function errContext(err: unknown, extra?: Record<string, unknown>): Record<string, unknown> {
-  const e = err instanceof Error ? err : new Error(String(err))
-  return { error: e.message, stack: e.stack, ...extra }
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err)
 }
 
-/** Convert TS SDK Usage to WIT Usage. */
-function mapUsage(src: Partial<Usage> | null | undefined): import('strands:agent/types').Usage | undefined {
+/** Wrap a throwable promise as a typed `agent-error` result. */
+async function asAgentResult<T>(fn: () => Promise<T>, storageErrorWrap = false): Promise<{ tag: 'ok'; val: T } | { tag: 'err'; val: AgentError }> {
+  try {
+    return { tag: 'ok', val: await fn() }
+  } catch (err) {
+    const msg = errorMessage(err)
+    if (storageErrorWrap) {
+      return { tag: 'err', val: { tag: 'storage', val: { tag: 'permanent', val: msg } } }
+    }
+    return { tag: 'err', val: { tag: 'internal', val: msg } }
+  }
+}
+
+//
+// --- small shape maps ---------------------------------------------------
+//
+
+const STOP_REASON_MAP: Record<StopReason, WitStopReason> = {
+  endTurn: 'end-turn',
+  toolUse: 'tool-use',
+  maxTokens: 'max-tokens',
+  contentFiltered: 'content-filtered',
+  guardrailIntervened: 'guardrail-intervened',
+  stopSequence: 'stop-sequence',
+  modelContextWindowExceeded: 'model-context-window-exceeded',
+  cancelled: 'cancelled',
+} as unknown as Record<StopReason, WitStopReason>
+
+function mapStopReason(reason: StopReason): WitStopReason {
+  return STOP_REASON_MAP[reason] ?? 'error'
+}
+
+function mapUsage(src: Partial<Usage> | null | undefined): WitStopEvent['usage'] {
   if (src == null) return undefined
   return {
     inputTokens: src.inputTokens ?? 0,
@@ -102,82 +141,103 @@ function mapUsage(src: Partial<Usage> | null | undefined): import('strands:agent
   }
 }
 
-/** Convert TS SDK Metrics to WIT Metrics. */
-function mapMetrics(src: Partial<Metrics> | null | undefined): import('strands:agent/types').Metrics | undefined {
+function mapMetrics(src: Partial<Metrics> | null | undefined): WitStopEvent['metrics'] {
   if (src == null) return undefined
   return { latencyMs: typeof src.latencyMs === 'number' ? src.latencyMs : 0 }
 }
 
-/** Map a TS SDK StopReason string to the WIT reason tag. */
-function mapStopReasonTag(reason: StopReason): StopData['reason'] {
-  switch (reason) {
-    case 'endTurn':
-      return 'end-turn'
-    case 'toolUse':
-      return 'tool-use'
-    case 'maxTokens':
-      return 'max-tokens'
-    case 'contentFiltered':
-      return 'content-filtered'
-    case 'guardrailIntervened':
-      return 'guardrail-intervened'
-    case 'stopSequence':
-      return 'stop-sequence'
-    case 'modelContextWindowExceeded':
-      return 'model-context-window-exceeded'
-    case 'cancelled':
-      return 'cancelled'
-    default:
-      return 'error'
-  }
+/** Serialize a TS SDK Message to the WIT shape by round-tripping through JSON. */
+function mapMessage(message: Message): WitMessage {
+  return JSON.parse(JSON.stringify(message)) as WitMessage
 }
 
-/** Convert a TS SDK StopReason to a WIT StopData with usage/metrics. */
-function mapStopReason(
-  reason: StopReason,
-  stopData?: { usage?: Partial<Usage>; metrics?: Partial<Metrics>; structuredOutput?: unknown }
-): StopData {
-  return {
-    reason: mapStopReasonTag(reason),
-    usage: mapUsage(stopData?.usage),
-    metrics: mapMetrics(stopData?.metrics),
-    structuredOutput: stopData?.structuredOutput !== undefined ? JSON.stringify(stopData.structuredOutput) : undefined,
-  }
+/** Serialize a TS SDK ContentBlock to the WIT shape. */
+function mapContentBlock(block: ContentBlock): import('strands:agent/messages@0.1.0').ContentBlock {
+  return JSON.parse(JSON.stringify(block)) as import('strands:agent/messages@0.1.0').ContentBlock
 }
 
-/** Convert a TS SDK AgentStreamEvent to a WIT StreamEvent for the host. */
-function mapEvent(event: AgentStreamEvent): StreamEvent | null {
-  if ('interrupt' in event && typeof (event as unknown as Record<string, unknown>).interrupt !== 'function') {
-    return { tag: 'interrupt', val: JSON.stringify(event) }
-  }
+//
+// --- stream event mapping ------------------------------------------------
+//
 
+/**
+ * Translate a TS SDK `AgentStreamEvent` to its WIT counterpart. Returns
+ * `null` for events whose data is available through another arm (e.g.
+ * the terminal `AgentResultEvent`, which is surfaced via `stop`). See
+ * docs/BRIDGE-COLLAPSE-PLAN.md for the plan to delete this function.
+ */
+function mapEvent(event: AgentStreamEvent): WitStreamEvent | null {
   switch (event.type) {
-    // Mapped to WIT stream events for the Python host
-    case 'modelStreamUpdateEvent':
-      return mapModelStreamEvent(event.event)
-    case 'contentBlockEvent':
-      return mapContentBlock(event.contentBlock)
-    case 'toolResultEvent':
-      return mapContentBlock(event.result)
-    case 'toolStreamUpdateEvent':
-      return mapToolStreamEvent(event.event)
-
-    // Handled by LifecycleBridge via hook subscriptions
     case 'beforeInvocationEvent':
+      return { tag: 'before-invocation', val: { invocationState: '{}' } }
     case 'afterInvocationEvent':
-    case 'beforeModelCallEvent':
-    case 'afterModelCallEvent':
-    case 'beforeToolCallEvent':
-    case 'afterToolCallEvent':
+      return { tag: 'after-invocation', val: { invocationState: '{}' } }
     case 'messageAddedEvent':
-
-    // No WIT representation — data available through other channels
-    case 'modelMessageEvent':
-    case 'agentResultEvent':
+      return { tag: 'message-added', val: { message: mapMessage(event.message) } }
+    case 'beforeModelCallEvent':
+      return { tag: 'before-model-call', val: { projectedInputTokens: undefined } }
+    case 'afterModelCallEvent':
+      return {
+        tag: 'after-model-call',
+        val: {
+          attemptCount: 1,
+          stopData: event.stopData
+            ? {
+                message: mapMessage(event.stopData.message),
+                stopReason: mapStopReason(event.stopData.stopReason),
+                redaction: event.stopData.redaction ? { userMessage: event.stopData.redaction.userMessage } : undefined,
+              }
+            : undefined,
+          error: event.error ? { tag: 'internal', val: event.error.message } : undefined,
+        },
+      }
     case 'beforeToolsEvent':
+      return { tag: 'before-tools', val: { message: mapMessage(event.message) } }
     case 'afterToolsEvent':
+      return { tag: 'after-tools', val: { message: mapMessage(event.message) } }
+    case 'beforeToolCallEvent':
+      return {
+        tag: 'before-tool-call',
+        val: {
+          toolUse: {
+            name: event.toolUse.name,
+            toolUseId: event.toolUse.toolUseId,
+            input: JSON.stringify(event.toolUse.input ?? {}),
+          },
+        },
+      }
+    case 'afterToolCallEvent':
+      return {
+        tag: 'after-tool-call',
+        val: {
+          toolUse: {
+            name: event.toolUse.name,
+            toolUseId: event.toolUse.toolUseId,
+            input: JSON.stringify(event.toolUse.input ?? {}),
+          },
+          toolResult: mapContentBlock(event.result) as unknown as import('strands:agent/messages@0.1.0').ToolResultBlock,
+          error: event.error ? { tag: 'execution-failed', val: event.error.message } : undefined,
+        },
+      }
+    case 'contentBlockEvent':
+      return { tag: 'content-block', val: { contentBlock: mapContentBlock(event.contentBlock) } }
+    case 'modelMessageEvent':
+      return {
+        tag: 'model-message',
+        val: { message: mapMessage(event.message), stopReason: mapStopReason(event.stopReason) },
+      }
+    case 'toolResultEvent':
+      return {
+        tag: 'tool-result-hook',
+        val: { toolResult: mapContentBlock(event.result) as unknown as import('strands:agent/messages@0.1.0').ToolResultBlock },
+      }
+    case 'toolStreamUpdateEvent':
+      return { tag: 'tool-stream-update', val: { data: JSON.stringify(event.event.data ?? null) } }
+    case 'modelStreamUpdateEvent':
+      return { tag: 'model-stream-update', val: { event: JSON.stringify(event.event) } }
+    case 'agentResultEvent':
+      // The terminal `stop` arm carries this data instead.
       return null
-
     default: {
       const _: never = event
       return null
@@ -185,87 +245,23 @@ function mapEvent(event: AgentStreamEvent): StreamEvent | null {
   }
 }
 
-/** Convert a ModelStreamEvent to a WIT StreamEvent. */
-function mapModelStreamEvent(event: ModelStreamEvent): StreamEvent | null {
-  switch (event.type) {
-    case 'modelContentBlockDeltaEvent':
-      return event.delta.type === 'textDelta' ? { tag: 'text-delta', val: event.delta.text } : null
-    case 'modelContentBlockStartEvent':
-      return event.start?.type === 'toolUseStart'
-        ? {
-            tag: 'tool-use',
-            val: {
-              name: event.start.name,
-              toolUseId: event.start.toolUseId,
-              input: JSON.stringify({}),
-            },
-          }
-        : null
-    case 'modelMetadataEvent':
-      return { tag: 'metadata', val: { usage: mapUsage(event.usage), metrics: mapMetrics(event.metrics) } }
-    case 'modelContentBlockStopEvent':
-    case 'modelMessageStartEvent':
-    case 'modelMessageStopEvent':
-    case 'modelRedactionEvent':
-      return null
-    default: {
-      const _: never = event
-      return null
-    }
-  }
-}
-
-/** Convert a ContentBlock to a WIT StreamEvent. */
-function mapContentBlock(block: ContentBlock): StreamEvent | null {
-  switch (block.type) {
-    case 'toolUseBlock':
-      return {
-        tag: 'tool-use',
-        val: {
-          name: block.name,
-          toolUseId: block.toolUseId,
-          input: JSON.stringify(block.input ?? {}),
-        },
-      }
-    case 'toolResultBlock':
-      return {
-        tag: 'tool-result',
-        val: {
-          toolUseId: block.toolUseId,
-          status: block.status,
-          content: JSON.stringify(block.content ?? []),
-        },
-      }
-    case 'textBlock':
-    case 'reasoningBlock':
-    case 'cachePointBlock':
-    case 'guardContentBlock':
-    case 'imageBlock':
-    case 'videoBlock':
-    case 'documentBlock':
-    case 'citationsBlock':
-      return null
-    default: {
-      const _: never = block
-      return null
-    }
-  }
-}
-
-/** Convert a ToolStreamEvent to a WIT StreamEvent. */
-function mapToolStreamEvent(event: ToolStreamEvent): StreamEvent {
+function mapStopEvent(result: AgentResult): WitStreamEvent {
   return {
-    tag: 'tool-result',
+    tag: 'stop',
     val: {
-      toolUseId: '',
-      status: 'success',
-      content: JSON.stringify({ data: event.data ?? null }),
+      reason: mapStopReason(result.stopReason),
+      usage: mapUsage(result.metrics?.accumulatedUsage),
+      metrics: mapMetrics(result.metrics?.accumulatedMetrics),
+      structuredOutput: result.structuredOutput !== undefined ? JSON.stringify(result.structuredOutput) : undefined,
     },
   }
 }
 
-/** Extract WIT ModelParams into a plain config object for TS model constructors. */
-function modelParamsConfig(params?: ModelParams): Record<string, unknown> {
+//
+// --- config builders -----------------------------------------------------
+//
+
+function modelParamsConfig(params?: WitModelParams): Record<string, unknown> {
   if (!params) return {}
   return {
     ...(params.maxTokens != null ? { maxTokens: params.maxTokens } : {}),
@@ -274,20 +270,13 @@ function modelParamsConfig(params?: ModelParams): Record<string, unknown> {
   }
 }
 
-/** Instantiate a TS SDK Model from the WIT ModelConfig variant. */
-function createModel(config?: ModelConfig, params?: ModelParams): Model<BaseModelConfig> {
+function createModel(config?: WitModelConfig, params?: WitModelParams): Model<BaseModelConfig> {
   const base = modelParamsConfig(params)
-
-  if (!config) {
-    glog('info', 'createModel: defaulting to Bedrock')
-    return new BedrockModel(base)
-  }
-
-  const extra = config.val.additionalConfig ? JSON.parse(config.val.additionalConfig) : {}
+  if (!config) return new BedrockModel(base)
 
   switch (config.tag) {
     case 'anthropic': {
-      glog('info', 'createModel: Anthropic', { modelId: config.val.modelId })
+      const extra = config.val.additionalConfig ? JSON.parse(config.val.additionalConfig) : {}
       return new AnthropicModel({
         ...base,
         ...(config.val.modelId ? { modelId: config.val.modelId } : {}),
@@ -296,7 +285,7 @@ function createModel(config?: ModelConfig, params?: ModelParams): Model<BaseMode
       })
     }
     case 'bedrock': {
-      glog('info', 'createModel: Bedrock', { modelId: config.val.modelId, region: config.val.region })
+      const extra = config.val.additionalConfig ? JSON.parse(config.val.additionalConfig) : {}
       const clientConfig: Record<string, unknown> = extra.clientConfig ?? {}
       if (config.val.accessKeyId && config.val.secretAccessKey) {
         clientConfig.credentials = {
@@ -314,7 +303,7 @@ function createModel(config?: ModelConfig, params?: ModelParams): Model<BaseMode
       })
     }
     case 'openai': {
-      glog('info', 'createModel: OpenAI', { modelId: config.val.modelId })
+      const extra = config.val.additionalConfig ? JSON.parse(config.val.additionalConfig) : {}
       return new OpenAIModel({
         ...base,
         ...(config.val.modelId ? { modelId: config.val.modelId } : {}),
@@ -323,7 +312,7 @@ function createModel(config?: ModelConfig, params?: ModelParams): Model<BaseMode
       })
     }
     case 'gemini': {
-      glog('info', 'createModel: Gemini', { modelId: config.val.modelId })
+      const extra = config.val.additionalConfig ? JSON.parse(config.val.additionalConfig) : {}
       return new GoogleModel({
         ...base,
         ...(config.val.modelId ? { modelId: config.val.modelId } : {}),
@@ -331,12 +320,17 @@ function createModel(config?: ModelConfig, params?: ModelParams): Model<BaseMode
         ...extra,
       })
     }
-    default:
-      throw new Error(`Unknown model provider: ${(config as any).tag}`)
+    case 'custom':
+      // Phase 2: wire `model-provider` host interface.
+      throw new Error(`model-config.custom is not implemented yet (provider-id: ${config.val.providerId})`)
+    default: {
+      const _: never = config
+      throw new Error(`Unknown model-config arm`)
+    }
   }
 }
 
-/** Convert WIT ToolSpecs into TS FunctionTools that call back to the host via tool-provider. */
+/** Convert WIT ToolSpecs into TS FunctionTools that call back to the host. */
 function createTools(specs: ToolSpec[] | undefined): FunctionTool[] | undefined {
   if (!specs || specs.length === 0) return undefined
 
@@ -346,58 +340,42 @@ function createTools(specs: ToolSpec[] | undefined): FunctionTool[] | undefined 
         name: spec.name,
         description: spec.description,
         inputSchema: JSON.parse(spec.inputSchema),
-        callback: (input: unknown, toolContext: ToolContext) => {
-          const toolUseId = toolContext.toolUse.toolUseId
-
-          let rawResult: unknown
+        callback: async (input: unknown, toolContext: ToolContext) => {
+          const stream = callTool({
+            name: spec.name,
+            input: JSON.stringify(input),
+            toolUseId: toolContext.toolUse.toolUseId,
+          })
+          const reader = stream.getReader()
           try {
-            rawResult = callTool({
-              name: spec.name,
-              input: JSON.stringify(input),
-              toolUseId,
-            })
-          } catch (e: unknown) {
-            const err = e instanceof Error ? e : new Error(String(e))
-            glog('error', 'callTool: host threw', errContext(err, { tool: spec.name }))
-            throw err
-          }
-
-          let json: string
-          if (typeof rawResult === 'object' && rawResult !== null && 'tag' in rawResult) {
-            const result = rawResult as WitResult
-            if (result.tag === 'err') {
-              throw new Error(result.val)
+            for (;;) {
+              const { done, value } = await reader.read()
+              if (done) throw new Error(`tool ${spec.name} stream ended without complete/error`)
+              switch (value.tag) {
+                case 'data':
+                  // Streaming tool progress is not surfaced to the SDK caller today.
+                  continue
+                case 'complete':
+                  return value.val as unknown as JSONValue
+                case 'error':
+                  throw new Error(`tool ${spec.name} failed: ${value.val.tag}`)
+              }
             }
-            json = result.val
-          } else {
-            json = rawResult as string
+          } finally {
+            reader.releaseLock()
           }
-
-          const parsed = JSON.parse(json) as JSONValue
-          if (
-            parsed &&
-            typeof parsed === 'object' &&
-            !Array.isArray(parsed) &&
-            'status' in parsed &&
-            'content' in parsed
-          ) {
-            return parsed.content
-          }
-          return parsed
         },
       })
   )
 }
 
-/** Build a system prompt from the agent config (string or JSON content blocks). */
 function buildSystemPrompt(config: AgentConfig): SystemPrompt | undefined {
-  if (config.systemPromptBlocks) {
-    return JSON.parse(config.systemPromptBlocks) as SystemPrompt
-  }
-  return config.systemPrompt
+  const sp = config.systemPrompt
+  if (!sp) return undefined
+  if (sp.tag === 'text') return sp.val
+  return sp.val as unknown as SystemPrompt
 }
 
-/** Wrap a model in a Proxy that injects toolChoice into every stream() call. */
 function createToolChoiceProxy(baseModel: Model<BaseModelConfig>, toolChoice: ToolChoice): Model<BaseModelConfig> {
   return new Proxy(baseModel, {
     get(target, prop, receiver) {
@@ -411,67 +389,20 @@ function createToolChoiceProxy(baseModel: Model<BaseModelConfig>, toolChoice: To
   }) as Model<BaseModelConfig>
 }
 
-/** Bridges TS SDK lifecycle hooks to WIT StreamEvent lifecycle variants for the host. */
-class LifecycleBridge implements Plugin {
-  readonly name = 'strands:lifecycle-bridge'
-  queue: StreamEvent[] = []
-
-  private push(eventType: LifecycleEventType, toolUse?: unknown, toolResult?: unknown): void {
-    const event: StreamEventLifecycle = {
-      tag: 'lifecycle',
-      val: {
-        eventType,
-        toolUse: toolUse ? JSON.stringify(toolUse) : undefined,
-        toolResult: toolResult ? JSON.stringify(toolResult) : undefined,
-      },
-    }
-    this.queue.push(event)
-  }
-
-  initAgent(agent: LocalAgent): void {
-    agent.addHook(InitializedEvent, () => this.push('initialized'))
-    agent.addHook(BeforeInvocationEvent, () => this.push('before-invocation'))
-    agent.addHook(AfterInvocationEvent, () => this.push('after-invocation'))
-    agent.addHook(BeforeModelCallEvent, () => this.push('before-model-call'))
-    agent.addHook(AfterModelCallEvent, () => this.push('after-model-call'))
-    agent.addHook(MessageAddedEvent, () => this.push('message-added'))
-
-    agent.addHook(BeforeToolCallEvent, (event) => {
-      this.push('before-tool-call', event.toolUse)
-    })
-
-    agent.addHook(AfterToolCallEvent, (event) => {
-      this.push('after-tool-call', event.toolUse, event.result)
-    })
-  }
-
-  drain(): StreamEvent[] {
-    return this.queue.splice(0)
+/** Project a WIT `tool-choice` variant onto the TS SDK shape. */
+function toolChoiceFromWit(tc: WitToolChoice): ToolChoice {
+  switch (tc.tag) {
+    case 'auto':
+      return { auto: {} }
+    case 'any':
+      return { any: {} }
+    case 'tool':
+      return { tool: { name: tc.val } }
   }
 }
 
-/** Parse user input — JSON arrays pass through, plain strings stay as-is. */
-function parseInput(input: string): InvokeArgs {
-  try {
-    const parsed = JSON.parse(input)
-    if (Array.isArray(parsed)) return parsed as InvokeArgs
-  } catch {
-    /* not JSON, treat as plain string */
-  }
-  return input
-}
-
-/** Validate a WIT save-latest strategy string against the SDK's union type. */
-function parseSaveLatestStrategy(s?: string): SaveLatestStrategy | undefined {
-  if (s === 'message' || s === 'invocation' || s === 'trigger') return s
-  if (s) glog('warn', `save_latest_on=<${s}> | unknown strategy, using default`)
-  return undefined
-}
-
-/** Build a SessionManager from the WIT session config. */
 function createSessionManager(config: AgentConfig): SessionManager | undefined {
   if (!config.session) return undefined
-
   const sc = config.session
   let storage
   switch (sc.storage.tag) {
@@ -487,11 +418,16 @@ function createSessionManager(config: AgentConfig): SessionManager | undefined {
       })
       break
     }
-    default:
-      throw new Error(`Unknown storage type: ${(sc.storage as any).tag}`)
+    case 'custom':
+      // Phase 2: wire `snapshot-storage` host interface.
+      throw new Error(`storage-config.custom is not implemented yet (backend-id: ${sc.storage.val.backendId})`)
   }
 
-  const saveLatestOn = parseSaveLatestStrategy(sc.saveLatestOn)
+  const saveLatestOn: SaveLatestStrategy | undefined = sc.saveLatest
+    ? sc.saveLatest.tag === 'trigger'
+      ? 'trigger'
+      : sc.saveLatest.tag
+    : undefined
   return new SessionManager({
     sessionId: sc.sessionId,
     storage: { snapshot: storage },
@@ -499,148 +435,214 @@ function createSessionManager(config: AgentConfig): SessionManager | undefined {
   })
 }
 
-/** Instantiate a conversation manager from the WIT config, or undefined to use the TS Agent default. */
 function createConversationManager(config: AgentConfig): ConversationManager | undefined {
-  const cmConfig = config.conversationManager
-  if (!cmConfig) {
-    return undefined
-  }
-  switch (cmConfig.strategy) {
+  const cm = config.conversationManager
+  if (!cm) return undefined
+  switch (cm.tag) {
     case 'none':
       return new NullConversationManager()
     case 'sliding-window':
       return new SlidingWindowConversationManager({
-        windowSize: cmConfig.windowSize,
-        shouldTruncateResults: cmConfig.shouldTruncateResults,
+        windowSize: cm.val.windowSize,
+        shouldTruncateResults: cm.val.shouldTruncateResults,
       })
     case 'summarizing': {
-      let summaryModel: Model<BaseModelConfig> | undefined
-      if (cmConfig.summarizationModelConfig) {
-        try {
-          const parsed = JSON.parse(cmConfig.summarizationModelConfig)
-          summaryModel = createModel(parsed)
-        } catch (e) {
-          glog('warn', 'failed to parse summarization model config, using agent model', errContext(e))
-        }
-      }
+      const summaryModel = cm.val.summarizationModel ? createModel(cm.val.summarizationModel) : undefined
       return new SummarizingConversationManager({
         model: summaryModel,
-        summaryRatio: cmConfig.summaryRatio,
-        preserveRecentMessages: cmConfig.preserveRecentMessages,
-        summarizationSystemPrompt: cmConfig.summarizationSystemPrompt,
+        summaryRatio: cm.val.summaryRatio,
+        preserveRecentMessages: cm.val.preserveRecentMessages,
+        summarizationSystemPrompt: cm.val.summarizationSystemPrompt,
       })
     }
-    default:
-      glog('warn', `unknown conversation manager strategy: ${cmConfig.strategy}, using default`)
-      return undefined
   }
 }
 
-/** Parse a JSON Schema string into a Zod schema for structured output validation. */
 function parseStructuredOutputSchema(jsonStr: string | undefined): z.ZodSchema | undefined {
   if (!jsonStr) return undefined
   try {
-    return z.fromJSONSchema(JSON.parse(jsonStr))
+    return z.fromJSONSchema(JSON.parse(jsonStr)) as z.ZodSchema
   } catch (e) {
-    throw new Error(`Invalid structured output schema: ${e instanceof Error ? e.message : String(e)}`)
+    throw new Error(`Invalid structured output schema: ${errorMessage(e)}`)
+  }
+}
+
+function invokeInputFromWit(input: PromptInput): SdkInvokeArgs {
+  return input.tag === 'text' ? input.val : (input.val as unknown as SdkInvokeArgs)
+}
+
+//
+// --- resources -----------------------------------------------------------
+//
+
+/**
+ * TS hook events that should surface on the WIT stream but aren't part
+ * of `agent.stream()`'s async-iterator output. Subscribed via the
+ * plugin's `initAgent` and pushed through a queue the stream drains.
+ */
+const HOOKS_TO_FORWARD = [
+  InitializedEvent,
+  BeforeInvocationEvent,
+  AfterInvocationEvent,
+  MessageAddedEvent,
+  BeforeModelCallEvent,
+  AfterModelCallEvent,
+  BeforeToolsEvent,
+  AfterToolsEvent,
+  BeforeToolCallEvent,
+  AfterToolCallEvent,
+  ContentBlockEvent,
+  ModelMessageEvent,
+  ToolResultEvent,
+  ToolStreamUpdateEvent,
+  AgentResultEvent,
+  ModelStreamUpdateEvent,
+] as const
+
+class HookForwarder implements Plugin {
+  readonly name = 'strands:wit-hook-forwarder'
+  private queue: WitStreamEvent[] = []
+
+  initAgent(agent: LocalAgent): void {
+    for (const Event of HOOKS_TO_FORWARD) {
+      agent.addHook(Event as any, (event: AgentStreamEvent) => {
+        const mapped = mapEvent(event)
+        if (mapped) this.queue.push(mapped)
+      })
+    }
+  }
+
+  drain(): WitStreamEvent[] {
+    return this.queue.splice(0)
   }
 }
 
 class AgentImpl {
   private agent: Agent
   private defaultTools: FunctionTool[] | undefined
-  private lifecycleBridge: LifecycleBridge
+  private forwarder: HookForwarder
   private sessionManager: SessionManager | undefined
 
   constructor(config: AgentConfig) {
-    glog('info', 'AgentImpl: constructing', {
-      hasModel: !!config.model,
-      hasTools: !!config.tools?.length,
-      toolCount: config.tools?.length ?? 0,
-      hasSession: !!config.session,
-    })
-
     const model = createModel(config.model, config.modelParams)
     this.defaultTools = createTools(config.tools)
-    this.lifecycleBridge = new LifecycleBridge()
+    this.forwarder = new HookForwarder()
     this.sessionManager = createSessionManager(config)
-    const conversationManager = createConversationManager(config)
-
-    const structuredOutputSchema = parseStructuredOutputSchema(config.structuredOutputSchema)
-
-    const plugins: Plugin[] = [this.lifecycleBridge]
 
     this.agent = new Agent({
       model,
       systemPrompt: buildSystemPrompt(config),
       tools: this.defaultTools,
-      plugins,
+      plugins: [this.forwarder],
       sessionManager: this.sessionManager,
-      conversationManager,
-      structuredOutputSchema,
-      printer: false,
+      conversationManager: createConversationManager(config),
+      structuredOutputSchema: parseStructuredOutputSchema(config.structuredOutputSchema),
+      printer: config.displayOutput ?? true,
     })
   }
 
-  generate(args: StreamArgs): ResponseStreamImpl {
-    glog('debug', 'AgentImpl.generate', {
-      inputLen: args.input.length,
-      hasTools: !!args.tools?.length,
-      hasToolChoice: !!args.toolChoice,
-    })
-
+  generate(args: InvokeArgs): ResponseStreamImpl {
     if (args.tools) {
       const requestTools = createTools(args.tools)
       this.agent.toolRegistry.clear()
-      if (requestTools) {
-        this.agent.toolRegistry.add(requestTools)
-      }
+      if (requestTools) this.agent.toolRegistry.add(requestTools)
     }
 
     let originalModel: Model<BaseModelConfig> | undefined
     if (args.toolChoice) {
-      const tc = JSON.parse(args.toolChoice) as ToolChoice
       originalModel = this.agent.model
-      this.agent.model = createToolChoiceProxy(originalModel, tc)
+      this.agent.model = createToolChoiceProxy(originalModel, toolChoiceFromWit(args.toolChoice))
     }
 
     const structuredOutputSchema = parseStructuredOutputSchema(args.structuredOutputSchema)
-
     return new ResponseStreamImpl(
       this.agent,
       args.input,
-      this.lifecycleBridge,
+      this.forwarder,
       this.defaultTools,
       originalModel,
       structuredOutputSchema
     )
   }
 
-  getMessages(): string {
-    return JSON.stringify(this.agent.messages)
+  getMessages(): WitMessage[] {
+    return this.agent.messages.map(mapMessage)
   }
 
-  setMessages(args: SetMessagesArgs): void {
-    const newMessages = JSON.parse(args.json)
-    this.agent.messages.splice(0, this.agent.messages.length, ...newMessages)
+  setMessages(messages: WitMessage[]): { tag: 'ok'; val: void } | { tag: 'err'; val: AgentError } {
+    try {
+      const parsed = messages.map((m) => JSON.parse(JSON.stringify(m)) as Message)
+      this.agent.messages.splice(0, this.agent.messages.length, ...parsed)
+      return { tag: 'ok', val: undefined }
+    } catch (err) {
+      return { tag: 'err', val: { tag: 'invalid-input', val: errorMessage(err) } }
+    }
   }
 
-  async saveSession(): Promise<void> {
-    if (!this.sessionManager) throw new Error('No session manager configured')
-    await this.sessionManager.saveSnapshot({ target: this.agent, isLatest: true })
+  getAppState(): string {
+    return JSON.stringify(this.agent.appState.getAll())
   }
 
-  async listSnapshots(): Promise<string[]> {
-    if (!this.sessionManager) throw new Error('No session manager configured')
-    return this.sessionManager.listSnapshotIds({ target: this.agent })
+  setAppState(json: string): { tag: 'ok'; val: void } | { tag: 'err'; val: AgentError } {
+    try {
+      const parsed = JSON.parse(json) as Record<string, JSONValue>
+      this.agent.appState.clear()
+      for (const [k, v] of Object.entries(parsed)) this.agent.appState.set(k, v)
+      return { tag: 'ok', val: undefined }
+    } catch (err) {
+      return { tag: 'err', val: { tag: 'invalid-input', val: errorMessage(err) } }
+    }
   }
 
-  async deleteSession(): Promise<void> {
-    if (!this.sessionManager) throw new Error('No session manager configured')
-    // Delete by removing all snapshots - FileStorage/S3Storage don't have a bulk delete,
-    // so we'd need to implement this per-storage. For now, list and delete individually.
-    // TODO: Add deleteSession to SnapshotStorage interface upstream.
-    throw new Error('deleteSession not yet implemented')
+  getModelState(): string {
+    return JSON.stringify(this.agent.modelState.getAll())
+  }
+
+  setModelState(json: string): { tag: 'ok'; val: void } | { tag: 'err'; val: AgentError } {
+    try {
+      const parsed = JSON.parse(json) as Record<string, JSONValue>
+      this.agent.modelState.clear()
+      for (const [k, v] of Object.entries(parsed)) this.agent.modelState.set(k, v)
+      return { tag: 'ok', val: undefined }
+    } catch (err) {
+      return { tag: 'err', val: { tag: 'invalid-input', val: errorMessage(err) } }
+    }
+  }
+
+  getTraces(): WitAgentTrace[] {
+    // Phase 2: surface the SDK's traces here. For now return empty.
+    return []
+  }
+
+  getMetrics(): WitAgentMetrics {
+    // Phase 2: surface the SDK's metrics here. For now return zeroes.
+    return {
+      cycleCount: 0,
+      accumulatedUsage: { inputTokens: 0, outputTokens: 0, totalTokens: 0, cacheReadInputTokens: undefined, cacheWriteInputTokens: undefined },
+      accumulatedMetrics: { latencyMs: 0 },
+      invocations: [],
+      cycles: [],
+      toolMetrics: [],
+      latestContextSize: undefined,
+      projectedContextSize: undefined,
+    }
+  }
+
+  async saveSession(): Promise<{ tag: 'ok'; val: void } | { tag: 'err'; val: AgentError }> {
+    if (!this.sessionManager) return { tag: 'err', val: { tag: 'no-session-configured' } }
+    return asAgentResult(async () => {
+      await this.sessionManager!.saveSnapshot({ target: this.agent, isLatest: true })
+    }, true)
+  }
+
+  async listSnapshots(): Promise<{ tag: 'ok'; val: string[] } | { tag: 'err'; val: AgentError }> {
+    if (!this.sessionManager) return { tag: 'err', val: { tag: 'no-session-configured' } }
+    return asAgentResult(() => this.sessionManager!.listSnapshotIds({ target: this.agent }), true)
+  }
+
+  async deleteSession(): Promise<{ tag: 'ok'; val: void } | { tag: 'err'; val: AgentError }> {
+    if (!this.sessionManager) return { tag: 'err', val: { tag: 'no-session-configured' } }
+    return { tag: 'err', val: { tag: 'internal', val: 'deleteSession not yet implemented' } }
   }
 }
 
@@ -649,87 +651,83 @@ class ResponseStreamImpl {
   private generator: AsyncGenerator<AgentStreamEvent, AgentResult | undefined, undefined>
   private interruptResolve: ((payload: string) => void) | null = null
   private agent: Agent
-  private bridge: LifecycleBridge
+  private forwarder: HookForwarder
   private defaultTools: FunctionTool[] | undefined
   private originalModel: Model<BaseModelConfig> | undefined
 
   constructor(
     agent: Agent,
-    input: string,
-    bridge: LifecycleBridge,
+    input: PromptInput,
+    forwarder: HookForwarder,
     defaultTools?: FunctionTool[],
     originalModel?: Model<BaseModelConfig>,
     structuredOutputSchema?: z.ZodSchema
   ) {
     this.agent = agent
-    this.bridge = bridge
+    this.forwarder = forwarder
     this.defaultTools = defaultTools
     this.originalModel = originalModel
-    this.generator = agent.stream(parseInput(input), {
-      structuredOutputSchema,
-    })
+    this.generator = agent.stream(invokeInputFromWit(input), { structuredOutputSchema })
   }
 
   private restoreDefaults(): void {
-    if (this.originalModel) {
-      this.agent.model = this.originalModel
-    }
+    if (this.originalModel) this.agent.model = this.originalModel
     this.agent.toolRegistry.clear()
-    if (this.defaultTools) {
-      this.agent.toolRegistry.add(this.defaultTools)
-    }
+    if (this.defaultTools) this.agent.toolRegistry.add(this.defaultTools)
   }
 
-  async readNext(): Promise<StreamEvent[] | undefined> {
-    if (this.done) return undefined
-
-    try {
-      const result = await this.generator.next()
-      const lifecycle = this.bridge.drain()
-
-      if (result.done) {
-        this.done = true
-        this.restoreDefaults()
-        const agentResult = result.value
-        if (agentResult) {
-          return [
-            ...lifecycle,
-            {
-              tag: 'stop',
-              val: mapStopReason(agentResult.stopReason, {
-                usage: agentResult.metrics?.accumulatedUsage,
-                metrics: agentResult.metrics?.accumulatedMetrics,
-                structuredOutput: agentResult.structuredOutput,
-              }),
-            },
-          ]
+  events(): ReadableStream<WitStreamEvent> {
+    const self = this
+    return new ReadableStream<WitStreamEvent>({
+      async pull(controller) {
+        if (self.done) {
+          controller.close()
+          return
         }
-        return lifecycle.length > 0 ? lifecycle : undefined
-      }
+        try {
+          const result = await self.generator.next()
+          for (const event of self.forwarder.drain()) controller.enqueue(event)
 
-      const mapped = mapEvent(result.value)
-      if (mapped) lifecycle.push(mapped)
-      return lifecycle.length > 0 ? lifecycle : []
-    } catch (err: unknown) {
-      this.done = true
-      this.restoreDefaults()
-      const lifecycle = this.bridge.drain()
-      const msg = err instanceof Error ? err.message : String(err)
-      return [...lifecycle, { tag: 'error', val: msg }]
-    }
+          if (result.done) {
+            self.done = true
+            self.restoreDefaults()
+            if (result.value) controller.enqueue(mapStopEvent(result.value))
+            controller.close()
+            return
+          }
+
+          const mapped = mapEvent(result.value)
+          if (mapped) controller.enqueue(mapped)
+        } catch (err) {
+          self.done = true
+          self.restoreDefaults()
+          for (const event of self.forwarder.drain()) controller.enqueue(event)
+          controller.enqueue({ tag: 'error', val: { tag: 'internal', val: errorMessage(err) } })
+          controller.close()
+        }
+      },
+      cancel() {
+        self.done = true
+        self.restoreDefaults()
+        void self.generator.return(undefined)
+      },
+    })
   }
 
-  respond(args: RespondArgs): void {
-    if (this.interruptResolve) {
-      this.interruptResolve(args.payload)
-      this.interruptResolve = null
+  respond(args: RespondArgs): { tag: 'ok'; val: void } | { tag: 'err'; val: AgentError } {
+    if (!this.interruptResolve) {
+      return { tag: 'err', val: { tag: 'unknown-interrupt', val: args.interruptId } }
     }
+    // Phase 2: look up the interrupt by id and resolve the matching promise.
+    this.interruptResolve(args.response)
+    this.interruptResolve = null
+    return { tag: 'ok', val: undefined }
   }
 
   cancel(): void {
     this.done = true
     this.restoreDefaults()
-    this.generator.return(undefined)
+    void this.generator.return(undefined)
   }
 }
 
@@ -738,23 +736,5 @@ export const api = {
   ResponseStream: ResponseStreamImpl,
 }
 
-// Exported for contract testing. Not used by the WASM component build —
-// componentize-js generates bindings from the WIT world definition
-// (`world agent { export api; }`), which only declares the `api` export.
-// Additional ESM exports in bundle.js are inaccessible from the WASM boundary.
-export {
-  mapEvent,
-  mapModelStreamEvent,
-  mapContentBlock,
-  mapToolStreamEvent,
-  mapStopReason,
-  mapStopReasonTag,
-  mapUsage,
-  mapMetrics,
-  parseInput,
-  parseStructuredOutputSchema,
-  createTools,
-  LifecycleBridge,
-  parseSaveLatestStrategy,
-  createToolChoiceProxy,
-}
+// Exported for contract testing. Not used by the WASM component build.
+export { mapEvent, mapStopEvent, mapStopReason, mapUsage, mapMetrics, mapMessage, mapContentBlock, createTools, HookForwarder, createToolChoiceProxy, toolChoiceFromWit }

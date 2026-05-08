@@ -1,0 +1,50 @@
+name: Python Check
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        required: true
+        type: string
+
+jobs:
+  py-check:
+    name: Python (ruff + pyright + generated-up-to-date)
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install workspace dev tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+
+      - name: Ruff lint (strands-py + strandly scripts)
+        run: ruff check strands-py/src strandly/scripts
+
+      - name: Ruff format check
+        run: ruff format --check strands-py/src strandly/scripts
+
+      - name: Verify generated types match wit/
+        run: python strandly/scripts/generate_types.py --check
+
+      - name: Pyright on strands-py
+        run: pyright strands-py/src/strands
+
+      - name: Smoke-import strands
+        working-directory: strands-py
+        run: |
+          pip install -e .
+          python -c "import strands; assert strands.Agent; print('ok')"

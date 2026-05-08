@@ -237,7 +237,7 @@ sdk-typescript/
 │   ├── vitest.config.ts          # Test configuration (unit + guest projects)
 │   └── tsconfig.json             # TypeScript type-check configuration
 │
-├── strands-dev/                  # Developer CLI tooling
+├── strandly/                     # Developer CLI tooling
 │   ├── src/
 │   │   └── cli.ts                # CLI entry point
 │   ├── package.json              # Dev CLI package configuration
@@ -293,7 +293,7 @@ sdk-typescript/
 - **`strands-py/scripts/`**: Build and codegen scripts (type generation from WIT definitions)
 - **`strands-py/tests_integ/`**: Python integration tests
 - **`strands-wasm/`**: WASM build tooling for compiling the TS SDK to WebAssembly
-- **`strands-dev/`**: Developer CLI tooling for local development workflows
+- **`strandly/`**: Developer CLI tooling for local development workflows (install on PATH via `npm install && npm link -w strandly`, then call `strandly …`)
 - **`wit/`**: WebAssembly Interface Type (WIT) definitions defining the contract between the TS SDK and WASM hosts
 - **`docs/`**: Project documentation (testing guidelines, dependency management, PR guidelines)
 - **`.github/workflows/`**: CI/CD automation and quality gates

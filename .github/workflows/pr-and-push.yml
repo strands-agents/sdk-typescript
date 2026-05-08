@@ -20,15 +20,22 @@ jobs:
     with:
       ref: ${{ github.event.pull_request.head.sha }}
 
-  call-code-quality:
-    uses: ./.github/workflows/code-quality.yml
+  call-ts-check:
+    uses: ./.github/workflows/ts-check.yml
     permissions:
       contents: read
     with:
       ref: ${{ github.event.pull_request.head.sha }}
 
-  call-test:
-    uses: ./.github/workflows/test.yml
+  call-ts-test:
+    uses: ./.github/workflows/ts-test.yml
+    permissions:
+      contents: read
+    with:
+      ref: ${{ github.event.pull_request.head.sha }}
+
+  call-py-check:
+    uses: ./.github/workflows/py-check.yml
     permissions:
       contents: read
     with:
