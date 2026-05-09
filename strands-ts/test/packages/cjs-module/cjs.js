@@ -15,6 +15,7 @@ const { BedrockModel: BedrockFromSubpath } = require('@strands-agents/sdk/models
 const { OpenAIModel } = require('@strands-agents/sdk/models/openai')
 const { AnthropicModel } = require('@strands-agents/sdk/models/anthropic')
 const { GoogleModel } = require('@strands-agents/sdk/models/google')
+const { WebLLMModel, listWebLLMModels, WebLLMUnavailableError } = require('@strands-agents/sdk/models/webllm')
 
 const { z } = require('zod')
 
@@ -85,6 +86,21 @@ async function main() {
     throw new Error('BedrockModel from subpath should match main export')
   }
   console.log('✓ Model subpath exports verified')
+
+  // Verify WebLLM subpath export — constructor is available even in node without the peer dep.
+  if (typeof WebLLMModel !== 'function') {
+    throw new Error('WebLLMModel should be a constructor')
+  }
+  try {
+    await listWebLLMModels()
+    console.log('✓ WebLLM subpath exports loaded (with peer available)')
+  } catch (err) {
+    if (err instanceof WebLLMUnavailableError) {
+      console.log('✓ WebLLM subpath exports resolve and fail cleanly without peer dep')
+    } else {
+      throw err
+    }
+  }
 }
 
 main().catch((error) => {

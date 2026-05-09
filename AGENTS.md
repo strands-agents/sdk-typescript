@@ -78,10 +78,14 @@ sdk-typescript/
 │   │   │   ├── anthropic.ts      # Anthropic Claude
 │   │   │   ├── bedrock.ts        # AWS Bedrock
 │   │   │   ├── vercel.ts         # Vercel AI SDK
+│   │   │   ├── webllm/           # WebLLM (on-device via WebGPU) provider
+│   │   │   │   ├── __tests__/    # model.test.ts, cache.test.node.ts, browser.test.browser.ts
+│   │   │   │   ├── cache.ts      # Download / list / check / evict helpers + errors
+│   │   │   │   ├── model.ts      # WebLLMModel (runtime streaming + message formatting)
+│   │   │   │   └── index.ts
 │   │   │   ├── defaults.ts       # Centralized model defaults + warning messages
 │   │   │   ├── model.ts          # Base model interface
 │   │   │   └── streaming.ts      # Streaming event types
-│   │   │
 │   │   ├── multiagent/           # Multi-agent orchestration
 │   │   │   ├── __tests__/
 │   │   │   ├── graph.ts          # Graph orchestrator (DAG)
@@ -275,7 +279,7 @@ sdk-typescript/
 - **`strands-ts/src/conversation-manager/`**: Conversation history management strategies
 - **`strands-ts/src/hooks/`**: Hooks system for event-driven extensibility
 - **`strands-ts/src/logging/`**: Structured logging utilities
-- **`strands-ts/src/models/`**: Model provider implementations (Bedrock, Anthropic, OpenAI, Google, Vercel)
+- **`strands-ts/src/models/`**: Model provider implementations (Bedrock, Anthropic, OpenAI, Google, Vercel, WebLLM)
 - **`strands-ts/src/multiagent/`**: Multi-agent orchestration patterns (Graph for DAG execution, Swarm for handoff-based routing)
 - **`strands-ts/src/plugins/`**: Plugin system for extending agent functionality
 - **`strands-ts/src/registry/`**: Tool registry implementation

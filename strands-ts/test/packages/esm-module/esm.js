@@ -15,6 +15,7 @@ import { BedrockModel as BedrockFromSubpath } from '@strands-agents/sdk/models/b
 import { OpenAIModel } from '@strands-agents/sdk/models/openai'
 import { AnthropicModel } from '@strands-agents/sdk/models/anthropic'
 import { GoogleModel } from '@strands-agents/sdk/models/google'
+import { WebLLMModel, listWebLLMModels, WebLLMUnavailableError } from '@strands-agents/sdk/models/webllm'
 
 import { z } from 'zod'
 
@@ -110,3 +111,22 @@ if (BedrockFromSubpath !== BedrockModel) {
   throw new Error('BedrockModel from subpath should match main export')
 }
 console.log('✓ Model subpath exports verified')
+
+// Verify WebLLM subpath export — constructor is available and helpers work without a browser
+// as long as we don't touch the engine. Calling listWebLLMModels triggers module load, which
+// should fail cleanly with WebLLMUnavailableError in node (no @mlc-ai/web-llm installed).
+if (typeof WebLLMModel !== 'function') {
+  throw new Error('WebLLMModel should be a constructor')
+}
+try {
+  await listWebLLMModels()
+  // In the package-test environment there is no @mlc-ai/web-llm peer, so this should throw.
+  // If it ever resolves, we still want to succeed.
+  console.log('✓ WebLLM subpath exports loaded (with peer available)')
+} catch (err) {
+  if (err instanceof WebLLMUnavailableError) {
+    console.log('✓ WebLLM subpath exports resolve and fail cleanly without peer dep')
+  } else {
+    throw err
+  }
+}
