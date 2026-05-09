@@ -182,7 +182,7 @@ function setup(opts?: { node?: boolean; python?: boolean }): void {
   if (all || opts?.node) run('npm install')
   if (all || opts?.python) {
     run('python3 -m venv .venv', { cwd: ROOT })
-    run(`${VENV}/bin/pip install -e '.[test]'`, { cwd: ROOT })
+    run(`${VENV}/bin/pip install -e .`, { cwd: ROOT })
     run(`${VENV}/bin/pip install -e strands-py/`, { cwd: ROOT })
   }
 }
@@ -250,12 +250,12 @@ function generate(opts?: { check?: boolean }): void {
 
   if (opts?.check) {
     try {
-      execSync('git diff --quiet -- strands-wasm/generated/ strands-ts/generated/ strands-py/strands/_generated.py', {
+      execSync('git diff --quiet -- strands-wasm/generated/ strands-ts/generated/ strands-py/src/strands/_generated.py', {
         cwd: ROOT,
       })
     } catch {
       console.error("error: generated files are out of date -- run 'strandly generate' and commit")
-      run('git diff --stat -- strands-wasm/generated/ strands-ts/generated/ strands-py/strands/_generated.py')
+      run('git diff --stat -- strands-wasm/generated/ strands-ts/generated/ strands-py/src/strands/_generated.py')
       process.exit(1)
     }
   }

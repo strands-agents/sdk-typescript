@@ -5,7 +5,7 @@ description = "Shared Python tooling for the Strands monorepo. Not published."
 requires-python = ">=3.10"
 dependencies = [
     # Build-time codegen: parses WIT and emits Python bindings.
-    "componentize-py>=0.23.0",
+    "componentize-py>=0.23.0,<1.0.0",
     # Linter/formatter used by ``strandly check --py`` and ``strandly fmt``.
     "ruff>=0.13.0,<0.15.0",
     # Type checker used by ``strandly check --py``.
