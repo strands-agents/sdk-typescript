@@ -25,7 +25,6 @@ dependencies = [
 packages = []
 
 [tool.pytest.ini_options]
-testpaths = ["strands-py/tests_integ"]
 asyncio_mode = "auto"
 cache_dir = ".pytest_cache"
 
@@ -35,7 +34,7 @@ cache_dir = ".pytest_cache"
 # carry its own ruff table.
 [tool.ruff]
 line-length = 120
-include = ["strands-py/src/**/*.py", "strands-py/tests_integ/**/*.py", "strandly/scripts/**/*.py"]
+include = ["strands-py/src/**/*.py", "strandly/scripts/**/*.py"]
 # _generated.py is machine-written; neither lint nor format enforce rules on it.
 extend-exclude = ["strands-py/src/strands/_generated.py"]
 

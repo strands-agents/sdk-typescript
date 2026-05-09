@@ -204,13 +204,13 @@ function build(opts?: { ts?: boolean; wasm?: boolean; py?: boolean }): void {
 
 function test(opts?: { py?: boolean; ts?: boolean; file?: string }): void {
   const all = !opts?.py && !opts?.ts
-  if (all || opts?.py) py(opts?.file ? `pytest tests_integ/${opts.file} -v` : 'pytest')
+  if (all || opts?.py) py(opts?.file ? `pytest ${opts.file} -v` : 'pytest')
   if (all || opts?.ts) run('npm test -w strands-ts')
 }
 
 function check(opts?: { ts?: boolean; wasm?: boolean; py?: boolean }): void {
   const all = !opts?.ts && !opts?.wasm && !opts?.py
-  if (all || opts?.py) py('ruff check src/strands tests_integ')
+  if (all || opts?.py) py('ruff check src/strands')
   if (all || opts?.ts) run('npm run type-check -w strands-ts')
   if (all || opts?.wasm) run('npm run type-check -w strands-wasm')
 }
@@ -220,7 +220,7 @@ function fmt(opts?: { check?: boolean }): void {
   run(
     `npx prettier ${opts?.check ? '--check' : '--write'} 'strands-wasm/**/*.ts' 'strands-ts/**/*.ts' --ignore-path .gitignore`
   )
-  py(`ruff format${flag} src/strands tests_integ`)
+  py(`ruff format${flag} src/strands`)
 }
 
 function generate(opts?: { check?: boolean }): void {
