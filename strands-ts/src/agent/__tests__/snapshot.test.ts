@@ -437,3 +437,276 @@ describe('Snapshot API', () => {
     })
   })
 })
+
+describe('Agent.takeSnapshot / Agent.loadSnapshot (public API)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(MOCK_TIMESTAMP))
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  describe('takeSnapshot', () => {
+    it('captures session preset state via the Agent method', () => {
+      const agent = new Agent({ model: new TestModelProvider(), tools: [], printer: false })
+      agent.messages.push(new Message({ role: 'user', content: [new TextBlock('Hello')] }))
+      agent.appState.set('key', 'value')
+      agent.systemPrompt = 'Test prompt'
+
+      const snapshot = agent.takeSnapshot({ preset: 'session' })
+
+      expect(snapshot.scope).toBe('agent')
+      expect(snapshot.schemaVersion).toBe(SNAPSHOT_SCHEMA_VERSION)
+      expect(snapshot.createdAt).toBe(MOCK_TIMESTAMP)
+      expect(snapshot.data.messages).toEqual([{ role: 'user', content: [{ text: 'Hello' }] }])
+      expect(snapshot.data.state).toEqual({ key: 'value' })
+      expect(snapshot.data.systemPrompt).toBe('Test prompt')
+      expect(snapshot.appData).toEqual({})
+    })
+
+    it('supports include option to select specific fields', () => {
+      const agent = new Agent({ model: new TestModelProvider(), tools: [], printer: false })
+      agent.messages.push(new Message({ role: 'user', content: [new TextBlock('Hello')] }))
+      agent.appState.set('key', 'value')
+
+      const snapshot = agent.takeSnapshot({ include: ['messages'] })
+
+      expect(snapshot.data.messages).toBeDefined()
+      expect(snapshot.data.state).toBeUndefined()
+      expect(snapshot.data.systemPrompt).toBeUndefined()
+    })
+
+    it('supports exclude option to omit specific fields', () => {
+      const agent = new Agent({ model: new TestModelProvider(), tools: [], printer: false })
+
+      const snapshot = agent.takeSnapshot({ preset: 'session', exclude: ['interrupts', 'modelState'] })
+
+      expect(snapshot.data.interrupts).toBeUndefined()
+      expect(snapshot.data.modelState).toBeUndefined()
+      expect(snapshot.data.messages).toBeDefined()
+    })
+
+    it('stores appData in the snapshot', () => {
+      const agent = new Agent({ model: new TestModelProvider(), tools: [], printer: false })
+
+      const snapshot = agent.takeSnapshot({ preset: 'session', appData: { userId: 'u-123' } })
+
+      expect(snapshot.appData).toEqual({ userId: 'u-123' })
+    })
+
+    it('throws when no fields would be included', () => {
+      const agent = new Agent({ model: new TestModelProvider(), tools: [], printer: false })
+
+      expect(() => agent.takeSnapshot({})).toThrow('No fields to include in snapshot')
+    })
+  })
+
+  describe('loadSnapshot', () => {
+    it('restores messages from a snapshot', () => {
+      const agent = new Agent({ model: new TestModelProvider(), tools: [], printer: false })
+
+      const snapshot: Snapshot = {
+        scope: 'agent',
+        schemaVersion: SNAPSHOT_SCHEMA_VERSION,
+        createdAt: MOCK_TIMESTAMP,
+        data: {
+          messages: [{ role: 'user', content: [{ text: 'Restored' }] }],
+        },
+        appData: {},
+      }
+
+      agent.loadSnapshot(snapshot)
+
+      expect(agent.messages).toHaveLength(1)
+      expect(agent.messages[0]).toEqual(new Message({ role: 'user', content: [new TextBlock('Restored')] }))
+    })
+
+    it('restores state from a snapshot', () => {
+      const agent = new Agent({ model: new TestModelProvider(), tools: [], printer: false })
+
+      const snapshot: Snapshot = {
+        scope: 'agent',
+        schemaVersion: SNAPSHOT_SCHEMA_VERSION,
+        createdAt: MOCK_TIMESTAMP,
+        data: {
+          state: { restored: 'yes' },
+        },
+        appData: {},
+      }
+
+      agent.loadSnapshot(snapshot)
+
+      expect(agent.appState.get('restored')).toBe('yes')
+    })
+
+    it('restores systemPrompt from a snapshot', () => {
+      const agent = new Agent({ model: new TestModelProvider(), tools: [], printer: false })
+
+      const snapshot: Snapshot = {
+        scope: 'agent',
+        schemaVersion: SNAPSHOT_SCHEMA_VERSION,
+        createdAt: MOCK_TIMESTAMP,
+        data: {
+          systemPrompt: 'Restored prompt',
+        },
+        appData: {},
+      }
+
+      agent.loadSnapshot(snapshot)
+
+      expect(agent.systemPrompt).toBe('Restored prompt')
+    })
+
+    it('throws for incompatible schema version', () => {
+      const agent = new Agent({ model: new TestModelProvider(), tools: [], printer: false })
+
+      const snapshot: Snapshot = {
+        scope: 'agent',
+        schemaVersion: '99.0',
+        createdAt: MOCK_TIMESTAMP,
+        data: {},
+        appData: {},
+      }
+
+      expect(() => agent.loadSnapshot(snapshot)).toThrow('Unsupported snapshot schema version: 99.0')
+    })
+
+    it('throws for wrong scope', () => {
+      const agent = new Agent({ model: new TestModelProvider(), tools: [], printer: false })
+
+      const snapshot: Snapshot = {
+        scope: 'multiAgent',
+        schemaVersion: SNAPSHOT_SCHEMA_VERSION,
+        createdAt: MOCK_TIMESTAMP,
+        data: {},
+        appData: {},
+      }
+
+      expect(() => agent.loadSnapshot(snapshot)).toThrow("Expected snapshot scope 'agent', got 'multiAgent'")
+    })
+
+    it('leaves fields unchanged when absent from snapshot', () => {
+      const agent = new Agent({ model: new TestModelProvider(), tools: [], printer: false })
+      agent.messages.push(new Message({ role: 'user', content: [new TextBlock('Existing')] }))
+      agent.appState.set('existing', 'value')
+      agent.systemPrompt = 'Original prompt'
+
+      // Snapshot only has state — messages and systemPrompt should be untouched
+      const snapshot: Snapshot = {
+        scope: 'agent',
+        schemaVersion: SNAPSHOT_SCHEMA_VERSION,
+        createdAt: MOCK_TIMESTAMP,
+        data: {
+          state: { newKey: 'newValue' },
+        },
+        appData: {},
+      }
+
+      agent.loadSnapshot(snapshot)
+
+      expect(agent.messages).toHaveLength(1)
+      expect(agent.systemPrompt).toBe('Original prompt')
+      expect(agent.appState.get('newKey')).toBe('newValue')
+    })
+  })
+
+  describe('round-trip via Agent methods', () => {
+    it('preserves full agent state through takeSnapshot/loadSnapshot cycle', () => {
+      const agent = new Agent({ model: new TestModelProvider(), tools: [], printer: false })
+      agent.messages.push(
+        new Message({ role: 'user', content: [new TextBlock('Hello')] }),
+        new Message({ role: 'assistant', content: [new TextBlock('Hi!')] })
+      )
+      agent.appState.set('counter', 42)
+      agent.systemPrompt = 'Be helpful'
+
+      const snapshot = agent.takeSnapshot({ preset: 'session' })
+
+      // Mutate agent state
+      agent.messages.length = 0
+      agent.appState.clear()
+      agent.systemPrompt = 'Different'
+
+      // Restore
+      agent.loadSnapshot(snapshot)
+
+      expect(agent.messages).toHaveLength(2)
+      expect(agent.appState.get('counter')).toBe(42)
+      expect(agent.systemPrompt).toBe('Be helpful')
+    })
+
+    it('snapshot is independent of agent mutations after capture', () => {
+      const agent = new Agent({ model: new TestModelProvider(), tools: [], printer: false })
+      agent.messages.push(new Message({ role: 'user', content: [new TextBlock('Original')] }))
+
+      const snapshot = agent.takeSnapshot({ include: ['messages'] })
+
+      // Mutate agent messages
+      agent.messages.push(new Message({ role: 'assistant', content: [new TextBlock('Added later')] }))
+
+      // Snapshot should still have only the original message
+      expect((snapshot.data.messages as unknown[]).length).toBe(1)
+    })
+
+    it('supports JSON serialization round-trip via Agent methods', () => {
+      const agent = new Agent({ model: new TestModelProvider(), tools: [], printer: false })
+      agent.messages.push(new Message({ role: 'user', content: [new TextBlock('Persist me')] }))
+      agent.appState.set('session', 'abc')
+
+      const snapshot = agent.takeSnapshot({ preset: 'session' })
+      const json = JSON.stringify(snapshot)
+      const parsed = JSON.parse(json) as Snapshot
+
+      const newAgent = new Agent({ model: new TestModelProvider(), tools: [], printer: false })
+      newAgent.loadSnapshot(parsed)
+
+      expect(newAgent.messages).toHaveLength(1)
+      expect(newAgent.appState.get('session')).toBe('abc')
+    })
+  })
+
+  describe('interrupt state via Agent methods', () => {
+    it('preserves and restores interrupt state for resume', async () => {
+      const model = new MockMessageModel()
+        .addTurn({
+          type: 'toolUseBlock',
+          name: 'askUser',
+          toolUseId: 'tool-1',
+          input: { question: 'proceed?' },
+        })
+        .addTurn({ type: 'textBlock', text: 'Completed' })
+
+      const tool = createMockTool('askUser', (context) => {
+        const answer = context.interrupt<string>({ name: 'ask', reason: 'Need confirmation' })
+        return `User said: ${answer}`
+      })
+
+      const agent = new Agent({ model, tools: [tool], printer: false })
+
+      // Trigger interrupt
+      const result = await agent.invoke('Do something')
+      expect(result.stopReason).toBe('interrupt')
+
+      // Snapshot via public method
+      const snapshot = agent.takeSnapshot({ preset: 'session' })
+
+      // Restore into a fresh agent
+      const model2 = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Completed' })
+      const tool2 = createMockTool('askUser', (context) => {
+        const answer = context.interrupt<string>({ name: 'ask', reason: 'Need confirmation' })
+        return `User said: ${answer}`
+      })
+      const restored = new Agent({ model: model2, tools: [tool2], printer: false })
+      restored.loadSnapshot(snapshot)
+
+      // Resume
+      const finalResult = await restored.invoke([
+        { interruptResponse: { interruptId: result.interrupts![0]!.id, response: 'go ahead' } },
+      ])
+
+      expect(finalResult.stopReason).toBe('endTurn')
+    })
+  })
+})

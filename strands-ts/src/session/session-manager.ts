@@ -5,7 +5,6 @@ import type { Plugin } from '../plugins/plugin.js'
 import type { LocalAgent } from '../types/agent.js'
 import { AfterInvocationEvent, AfterModelCallEvent, InitializedEvent, MessageAddedEvent } from '../hooks/events.js'
 import { v7 as uuidV7 } from 'uuid'
-import { takeSnapshot, loadSnapshot } from '../agent/snapshot.js'
 import { logger } from '../logging/logger.js'
 import type { MultiAgentPlugin, MultiAgent } from '../multiagent/index.js'
 import { MultiAgentState } from '../multiagent/state.js'
@@ -144,7 +143,7 @@ export class SessionManager implements Plugin, MultiAgentPlugin {
   }): Promise<void> {
     const isAgent = 'messages' in params.target
     const snapshot = isAgent
-      ? takeSnapshot(params.target as LocalAgent, { preset: 'session' })
+      ? (params.target as LocalAgent).takeSnapshot({ preset: 'session' })
       : takeMultiAgentSnapshot(params.target as Graph | Swarm, params.state)
     const snapshotId = params.isLatest ? 'latest' : uuidV7()
     const location = isAgent
@@ -191,7 +190,7 @@ export class SessionManager implements Plugin, MultiAgentPlugin {
     if (!snapshot) return false
 
     if (isAgent) {
-      loadSnapshot(params.target as LocalAgent, snapshot)
+      ;(params.target as LocalAgent).loadSnapshot(snapshot)
     } else {
       loadMultiAgentSnapshot(params.target as Graph | Swarm, snapshot, params.state)
     }
@@ -250,7 +249,7 @@ export class SessionManager implements Plugin, MultiAgentPlugin {
 
   /** Captures one snapshot and writes it to both immutable history and snapshot_latest. */
   private async _saveImmutableAndLatest(agent: LocalAgent): Promise<void> {
-    const snapshot = takeSnapshot(agent, { preset: 'session' })
+    const snapshot = agent.takeSnapshot({ preset: 'session' })
     const snapshotId = uuidV7()
     await Promise.all([
       this._storage.snapshot.saveSnapshot({ location: this._location(agent), snapshotId, isLatest: false, snapshot }),

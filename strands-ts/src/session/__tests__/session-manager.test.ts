@@ -31,6 +31,9 @@ import {
   NodeResult,
   Status,
 } from '../../multiagent/index.js'
+import { takeSnapshot, loadSnapshot } from '../../agent/snapshot.js'
+import type { Snapshot } from '../../types/snapshot.js'
+import type { TakeSnapshotOptions } from '../../agent/snapshot.js'
 
 // Test fixtures
 function createMockAgent(id = 'agent'): Agent {
@@ -54,6 +57,12 @@ function createMockAgent(id = 'agent'): Agent {
     } as any,
     modelState: new StateStore(),
     systemPrompt: 'Test prompt',
+    takeSnapshot(options: TakeSnapshotOptions): Snapshot {
+      return takeSnapshot(agent as any, options)
+    },
+    loadSnapshot(snapshot: Snapshot): void {
+      loadSnapshot(agent as any, snapshot)
+    },
   } as unknown as Agent
   return agent
 }

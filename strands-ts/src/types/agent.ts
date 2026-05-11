@@ -3,6 +3,8 @@ import type { ContentBlock, ContentBlockData, Message, MessageData, StopReason, 
 import type { Interrupt } from '../interrupt.js'
 import type { InterruptResponseContent, InterruptResponseContentData } from './interrupt.js'
 import type { AgentTrace } from '../telemetry/tracer.js'
+import type { Snapshot } from './snapshot.js'
+import type { TakeSnapshotOptions } from '../agent/snapshot.js'
 import type {
   BeforeInvocationEvent,
   AfterInvocationEvent,
@@ -267,6 +269,23 @@ export interface LocalAgent {
     callback: HookCallback<T>,
     options?: HookCallbackOptions
   ): HookCleanup
+
+  /**
+   * Captures a point-in-time snapshot of the agent's current state.
+   *
+   * @param options - Controls which fields to capture and optional app data to store
+   * @returns A Snapshot containing the captured agent state
+   */
+  takeSnapshot(options: TakeSnapshotOptions): Snapshot
+
+  /**
+   * Restores agent state from a previously captured snapshot.
+   *
+   * Only fields present in `snapshot.data` are restored; absent fields are left unchanged.
+   *
+   * @param snapshot - The snapshot to restore from
+   */
+  loadSnapshot(snapshot: Snapshot): void
 }
 
 /**

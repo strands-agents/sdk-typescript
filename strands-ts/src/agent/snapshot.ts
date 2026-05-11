@@ -1,14 +1,10 @@
 /**
- * Snapshot API for capturing and restoring agent state.
+ * Snapshot helpers for agent state capture and restoration.
  *
- * This module provides types and utilities for point-in-time capture and restoration
- * of agent state, enabling use cases like checkpointing, undo/redo, and branching
- * conversation flows.
- *
- * NOTE: The takeSnapshot and loadSnapshot functions are currently internal implementation
- * details. We anticipate opening these up as public Agent methods in a future release
- * after API review, but for now they are top-level functions to unblock snapshot
- * functionality without committing to a public API surface.
+ * These functions provide the shared implementation for {@link LocalAgent.takeSnapshot}
+ * and {@link LocalAgent.loadSnapshot}. Since all `LocalAgent` implementations share the
+ * same snapshot logic, these helpers avoid duplication. The canonical public API is
+ * `agent.takeSnapshot()` / `agent.loadSnapshot()` — prefer calling those directly.
  */
 
 import type { JSONValue } from '../types/json.js'
@@ -79,10 +75,8 @@ export type TakeSnapshotOptions = {
 }
 
 /**
- * Takes a snapshot of the agent's current state.
- *
- * NOTE: This is currently an internal implementation detail. We anticipate
- * exposing this as a public Agent method in a future release after API review.
+ * Shared implementation for {@link LocalAgent.takeSnapshot}.
+ * Prefer calling `agent.takeSnapshot(options)` directly.
  *
  * @param agent - The agent to snapshot
  * @param options - Snapshot options
@@ -124,10 +118,8 @@ export function takeSnapshot(agent: LocalAgent, options: TakeSnapshotOptions): S
 }
 
 /**
- * Loads a snapshot into the agent, restoring its state.
- *
- * NOTE: This is currently an internal implementation detail. We anticipate
- * exposing this as a public Agent method in a future release after API review.
+ * Shared implementation for {@link LocalAgent.loadSnapshot}.
+ * Prefer calling `agent.loadSnapshot(snapshot)` directly.
  *
  * @param agent - The agent to restore state into
  * @param snapshot - The snapshot to load
