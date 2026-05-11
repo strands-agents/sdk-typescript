@@ -5,6 +5,9 @@ import { accumulateUsage, createEmptyUsage } from '../models/streaming.js'
 import type { z } from 'zod'
 import type { JSONValue } from '../types/json.js'
 import { normalizeError, serializeError } from '../errors.js'
+import { Interrupt } from '../interrupt.js'
+import type { MultiAgentInput } from './multiagent.js'
+import type { Snapshot } from '../types/snapshot.js'
 import {
   loadStateFromJSONSymbol,
   stateToJSONSymbol,
@@ -27,6 +30,8 @@ export const Status = {
   FAILED: 'FAILED',
   /** Execution was cancelled before or during processing. */
   CANCELLED: 'CANCELLED',
+  /** Execution paused awaiting an interrupt response; can be resumed. */
+  INTERRUPTED: 'INTERRUPTED',
 } as const
 
 /**
@@ -35,9 +40,13 @@ export const Status = {
 export type Status = (typeof Status)[keyof typeof Status]
 
 /**
- * Subset of {@link Status} representing terminal outcomes.
+ * Subset of {@link Status} valid for a {@link NodeResult}.
  */
-export type ResultStatus = typeof Status.COMPLETED | typeof Status.FAILED | typeof Status.CANCELLED
+export type ResultStatus =
+  | typeof Status.COMPLETED
+  | typeof Status.FAILED
+  | typeof Status.CANCELLED
+  | typeof Status.INTERRUPTED
 
 /**
  * Result of executing a single node.
@@ -54,6 +63,8 @@ export class NodeResult {
   readonly structuredOutput?: z.output<z.ZodType>
   /** Token usage from the node execution. */
   readonly usage?: Usage
+  /** Interrupts raised by the underlying agent/orchestrator. Present iff `status === 'INTERRUPTED'`. */
+  readonly interrupts?: Interrupt[]
 
   constructor(data: {
     nodeId: string
@@ -63,6 +74,7 @@ export class NodeResult {
     error?: Error
     structuredOutput?: z.output<z.ZodType>
     usage?: Usage
+    interrupts?: Interrupt[]
   }) {
     this.nodeId = data.nodeId
     this.status = data.status
@@ -71,6 +83,7 @@ export class NodeResult {
     if ('error' in data) this.error = data.error
     if ('structuredOutput' in data) this.structuredOutput = data.structuredOutput
     if ('usage' in data) this.usage = data.usage
+    if (data.interrupts && data.interrupts.length > 0) this.interrupts = data.interrupts
   }
 
   /** Serializes this result to a JSON-compatible value. */
@@ -84,6 +97,7 @@ export class NodeResult {
       ...(this.error && { error: serializeError(this.error) }),
       ...(this.structuredOutput !== undefined && { structuredOutput: this.structuredOutput as JSONValue }),
       ...(this.usage && { usage: { ...this.usage } }),
+      ...(this.interrupts && { interrupts: this.interrupts.map((i) => i.toJSON()) }),
     } as JSONValue
   }
 
@@ -98,6 +112,9 @@ export class NodeResult {
       ...(json.error && { error: normalizeError(json.error) }),
       ...(json.structuredOutput !== undefined && { structuredOutput: json.structuredOutput }),
       ...(json.usage && { usage: json.usage as unknown as Usage }),
+      ...(json.interrupts && {
+        interrupts: (json.interrupts as JSONValue[]).map((i) => Interrupt.fromJSON(i as never)),
+      }),
     })
   }
 }
@@ -122,12 +139,22 @@ export class NodeState implements StateSerializable {
   /** Node execution start time in milliseconds since epoch. */
   startTime: number
   readonly results: NodeResult[]
+  /** Unanswered interrupts raised during this node's most recent run. Populated when `status === 'INTERRUPTED'`. */
+  interrupts: Interrupt[]
+  /**
+   * Snapshot of the node's underlying runnable (Agent or nested orchestrator) captured
+   * when the node returned INTERRUPTED. Loaded back into the runnable on resume so it
+   * can pick up mid-execution without losing its interrupt bookkeeping. Cleared when
+   * the node completes.
+   */
+  resumeSnapshot?: Snapshot
 
   constructor() {
     this.status = Status.PENDING
     this.terminus = false
     this.startTime = Date.now()
     this.results = []
+    this.interrupts = []
   }
 
   /** Content from the most recent result, or empty array if none. */
@@ -143,6 +170,8 @@ export class NodeState implements StateSerializable {
       terminus: this.terminus,
       startTime: this.startTime,
       results: this.results.map((res) => res.toJSON()),
+      interrupts: this.interrupts.map((i) => i.toJSON()),
+      ...(this.resumeSnapshot && { resumeSnapshot: { ...this.resumeSnapshot } }),
     } as JSONValue
   }
 
@@ -155,6 +184,12 @@ export class NodeState implements StateSerializable {
     this.results.length = 0
     for (const entry of data.results as JSONValue[]) {
       this.results.push(NodeResult.fromJSON(entry))
+    }
+    this.interrupts = ((data.interrupts as JSONValue[] | undefined) ?? []).map((i) => Interrupt.fromJSON(i as never))
+    if (data.resumeSnapshot) {
+      this.resumeSnapshot = data.resumeSnapshot as unknown as Snapshot
+    } else {
+      delete this.resumeSnapshot
     }
   }
 }
@@ -172,6 +207,8 @@ export class MultiAgentResult {
   readonly error?: Error
   /** Aggregated token usage across all node results. */
   readonly usage: Usage
+  /** Interrupts aggregated across all node results. Present when any node ended INTERRUPTED. */
+  readonly interrupts?: Interrupt[]
 
   constructor(data: {
     status?: ResultStatus
@@ -179,6 +216,7 @@ export class MultiAgentResult {
     content?: ContentBlock[]
     duration: number
     error?: Error
+    interrupts?: Interrupt[]
   }) {
     this.status = data.status ?? this._resolveStatus(data.results)
     this.results = data.results
@@ -186,6 +224,8 @@ export class MultiAgentResult {
     this.duration = data.duration
     if ('error' in data) this.error = data.error
     this.usage = this._aggregateNodeUsage(data.results)
+    const interrupts = data.interrupts ?? data.results.flatMap((r) => r.interrupts ?? [])
+    if (interrupts.length > 0) this.interrupts = interrupts
   }
 
   /** Serializes this result to a JSON-compatible value. */
@@ -198,6 +238,7 @@ export class MultiAgentResult {
       duration: this.duration,
       usage: { ...this.usage },
       ...(this.error && { error: serializeError(this.error) }),
+      ...(this.interrupts && { interrupts: this.interrupts.map((i) => i.toJSON()) }),
     } as JSONValue
   }
 
@@ -210,12 +251,23 @@ export class MultiAgentResult {
       content: (json.content as JSONValue[]).map((c) => contentBlockFromData(c as never)),
       duration: json.duration as number,
       ...(json.error && { error: normalizeError(json.error) }),
+      ...(json.interrupts && {
+        interrupts: (json.interrupts as JSONValue[]).map((i) => Interrupt.fromJSON(i as never)),
+      }),
     })
   }
 
-  /** Derives the aggregate status from individual node results. */
+  /**
+   * Derives the aggregate status from individual node results.
+   *
+   * Precedence: FAILED \> INTERRUPTED \> CANCELLED \> COMPLETED. INTERRUPTED outranks
+   * CANCELLED because parallel-graph short-circuit aborts siblings as CANCELLED when
+   * one node interrupts — the actionable "resume me" signal should surface over the
+   * collateral cancellations.
+   */
   private _resolveStatus(results: NodeResult[]): ResultStatus {
     if (results.some((result) => result.status === Status.FAILED)) return Status.FAILED
+    if (results.some((result) => result.status === Status.INTERRUPTED)) return Status.INTERRUPTED
     if (results.some((result) => result.status === Status.CANCELLED)) return Status.CANCELLED
     return Status.COMPLETED
   }
@@ -243,6 +295,15 @@ export class MultiAgentState implements StateSerializable {
   readonly results: NodeResult[]
   /** App-level key-value state accessible from hooks, edge handlers, and custom nodes. */
   readonly app: StateStore
+  /**
+   * The invocation's input, carried through an interrupt pause so that resuming a
+   * run (on the same instance, or via a SessionManager) can re-enter nodes that
+   * never ran (hook-gated source/start nodes) with the original content. Cleared
+   * when the invocation terminates in any non-INTERRUPTED state.
+   *
+   * @internal — not part of the public state shape; orchestrator-owned.
+   */
+  _pendingInput?: MultiAgentInput
   private readonly _nodes: Map<string, NodeState>
 
   constructor(data?: { nodeIds?: string[] }) {
@@ -285,6 +346,7 @@ export class MultiAgentState implements StateSerializable {
       results: this.results.map((result) => result.toJSON()),
       app: serializeStateSerializable(this.app),
       nodes,
+      ...(this._pendingInput !== undefined && { _pendingInput: this._pendingInput as unknown as JSONValue }),
     } as JSONValue
   }
 
@@ -306,6 +368,11 @@ export class MultiAgentState implements StateSerializable {
         loadStateSerializable(nodeState, nodeData)
         this._nodes.set(id, nodeState)
       }
+    }
+    if (data._pendingInput !== undefined) {
+      this._pendingInput = data._pendingInput as unknown as MultiAgentInput
+    } else {
+      delete this._pendingInput
     }
   }
 }

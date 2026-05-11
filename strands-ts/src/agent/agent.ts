@@ -60,6 +60,7 @@ import {
   ToolResultEvent,
   AgentResultEvent,
   ToolStreamUpdateEvent,
+  InterruptEvent,
   type ModelStopData,
 } from '../hooks/events.js'
 import { StructuredOutputTool, STRUCTURED_OUTPUT_TOOL_NAME } from '../tools/structured-output-tool.js'
@@ -1070,6 +1071,12 @@ export class Agent implements LocalAgent, InvokableAgent {
         return result
       }
       if (error instanceof InterruptError) {
+        // Fan out one event per interrupt. Each event exposes `interrupt.source` so
+        // consumers can filter by origin (tool callback vs hook callback) without
+        // subscribing to separate event types.
+        for (const interrupt of error.interrupts) {
+          yield new InterruptEvent({ agent: this, interrupt, invocationState })
+        }
         result = this._createInterruptResult(invocationState)
         return result
       }
@@ -1870,7 +1877,7 @@ export class Agent implements LocalAgent, InvokableAgent {
           agent: this,
           invocationState,
           interrupt: <T = JSONValue>(params: InterruptParams): T => {
-            return interruptFromAgent<T>(this, `tool:${toolUseBlock.toolUseId}:${params.name}`, params)
+            return interruptFromAgent<T>(this, `tool:${toolUseBlock.toolUseId}:${params.name}`, params, 'tool')
           },
         }
 

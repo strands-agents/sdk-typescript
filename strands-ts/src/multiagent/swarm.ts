@@ -3,6 +3,14 @@ import { warnOnce } from '../logging/warn-once.js'
 import type { AttributeValue, Span } from '@opentelemetry/api'
 import type { InvocationState, InvokableAgent } from '../types/agent.js'
 import type { MultiAgentInput, MultiAgentInvokeOptions } from './multiagent.js'
+import {
+  applyOrchestratorHookResponses,
+  dropStaleInterruptedResult,
+  extractResumeResponses,
+  groupInterruptResponsesByNode,
+  recordHookInterrupt,
+} from './multiagent.js'
+import { InterruptError } from '../interrupt.js'
 import { z } from 'zod'
 import { HookableEvent } from '../hooks/events.js'
 import { HookRegistryImplementation } from '../hooks/registry.js'
@@ -26,6 +34,7 @@ import {
   MultiAgentInitializedEvent,
   MultiAgentResultEvent,
   NodeCancelEvent,
+  NodeResultEvent,
 } from './events.js'
 import { Tracer } from '../telemetry/tracer.js'
 import { normalizeError } from '../errors.js'
@@ -126,6 +135,13 @@ export class Swarm implements MultiAgent {
   readonly start: AgentNode
   readonly sessionManager?: SessionManager | undefined
   private _initialized: boolean
+  /**
+   * State retained across invocations when a run ends INTERRUPTED. Lets
+   * `swarm.invoke(responses)` resume on the same instance without requiring a
+   * SessionManager, mirroring single-agent ergonomics. Cleared when a run
+   * terminates in any non-INTERRUPTED state.
+   */
+  private _pendingInterruptState?: MultiAgentState
 
   constructor(options: SwarmOptions) {
     const { id, nodes, start, sessionManager, plugins, traceAttributes, ...config } = options
@@ -217,12 +233,11 @@ export class Swarm implements MultiAgent {
     // are visible to the next.
     const invocationState: InvocationState = options?.invocationState ?? {}
 
-    const gen = this._stream(input, invocationState)
+    // Hook invocation lives in `_stream` so hook-raised `InterruptError`s land in the
+    // same frame as the execution loop.
+    const gen = this._stream(input, invocationState, options?.cancelSignal)
     let next = await gen.next()
     while (!next.done) {
-      if (next.value instanceof HookableEvent) {
-        await this._hookRegistry.invokeCallbacks(next.value)
-      }
       yield next.value
       next = await gen.next()
     }
@@ -231,11 +246,17 @@ export class Swarm implements MultiAgent {
 
   private async *_stream(
     input: MultiAgentInput,
-    invocationState: InvocationState
+    invocationState: InvocationState,
+    externalCancelSignal?: AbortSignal
   ): AsyncGenerator<MultiAgentStreamEvent, MultiAgentResult, undefined> {
-    const state = new MultiAgentState({
-      nodeIds: [...this.nodes.keys()],
-    })
+    // Reuse state from a prior INTERRUPTED run so `swarm.invoke(responses)` can
+    // resume on the same instance without a SessionManager.
+    const state =
+      this._pendingInterruptState ??
+      new MultiAgentState({
+        nodeIds: [...this.nodes.keys()],
+      })
+    delete this._pendingInterruptState
 
     const multiAgentSpan = this._tracer.startMultiAgentSpan({
       orchestratorId: this.id,
@@ -244,40 +265,73 @@ export class Swarm implements MultiAgent {
     })
 
     // SessionManager (or plugins) may restore state.results here via the hook
-    yield new BeforeMultiAgentInvocationEvent({ orchestrator: this, state, invocationState })
+    yield* this._emit(new BeforeMultiAgentInvocationEvent({ orchestrator: this, state, invocationState }))
 
-    // Resume: if state was restored from a snapshot, derive the next node from the last handoff
-    const resumeNode = this._findResumeNode(state)
-    let node = resumeNode?.node ?? this.start
-    let handoff: HandoffResult | undefined = resumeNode?.lastHandoff
+    // Resume input bypasses handoff-derived resume (goes straight to the interrupted
+    // node). On fresh runs, stash the input for replay if a hook-gate pauses before
+    // the node runs.
+    const resumeResponses = extractResumeResponses(input)
+    const interruptResponsesByNode = resumeResponses ? groupInterruptResponsesByNode(resumeResponses, state) : undefined
+    if (!resumeResponses) {
+      state._pendingInput = input
+    }
+
+    let node: AgentNode
+    let handoff: HandoffResult | undefined
+    let nextInput: MultiAgentInput = input
+    if (interruptResponsesByNode) {
+      // Swarm is sequential, so at most one node is INTERRUPTED per run.
+      const entry = interruptResponsesByNode.entries().next().value
+      if (!entry) throw new Error(`swarm_id=<${this.id}> | no interrupt responses to route`)
+      const [nodeId, responses] = entry
+      node = this.nodes.get(nodeId)!
+
+      // Orchestrator hooks consume matching responses; leftovers go to the child
+      // agent. If the hook consumed everything, replay the original invocation input.
+      const forwarded = applyOrchestratorHookResponses(state.node(nodeId)!, responses)
+      nextInput = forwarded.length > 0 ? forwarded : (state._pendingInput ?? '')
+    } else {
+      const resumeNode = this._findResumeNode(state)
+      node = resumeNode?.node ?? this.start
+      handoff = resumeNode?.lastHandoff
+    }
+
     let caughtError: Error | undefined
     let result: MultiAgentResult | undefined
 
-    // Swarm-level timeout: when fired, composes with each node's per-node signal so a node
-    // that hangs and ignores its own signal still gets an abort when the overall budget expires.
-    // The between-steps elapsed check below handles the case where the current node returned
-    // cleanly but we've run out of budget.
+    // Swarm-level timeout composes with each node's signal so a hung node still gets
+    // aborted. Timer starts fresh per invocation; human response time between resumes
+    // is not deducted.
     const execController = Number.isFinite(this.config.timeout) ? new AbortController() : undefined
     const execTimeoutHandle = execController ? setTimeout(() => execController.abort(), this.config.timeout) : undefined
 
+    const nodeCancelSignal =
+      execController && externalCancelSignal
+        ? AbortSignal.any([execController.signal, externalCancelSignal])
+        : (execController?.signal ?? externalCancelSignal)
+
     try {
       while (state.steps < this.config.maxSteps) {
-        const elapsed = Date.now() - state.startTime
-        if (elapsed >= this.config.timeout) {
+        if (execController?.signal.aborted) {
           throw new Error(`timeout=<${this.config.timeout}>, swarm_id=<${this.id}> | swarm exceeded wall-clock budget`)
+        }
+        if (externalCancelSignal?.aborted) {
+          throw new Error(`swarm_id=<${this.id}> | swarm cancelled by external signal`)
         }
         state.steps++
 
-        // Execute current node
+        // After the first step (which may use routed resume responses), revert to the
+        // original input so post-handoff nodes see fresh content.
         const nodeResult = yield* this._streamNode(
           node,
-          input,
+          nextInput,
           state,
           handoff,
           multiAgentSpan,
           invocationState,
-          execController?.signal
+          nodeCancelSignal
         )
+        nextInput = input
         handoff = nodeResult.structuredOutput as HandoffResult | undefined
 
         if (execController?.signal.aborted) {
@@ -287,13 +341,13 @@ export class Swarm implements MultiAgent {
         }
 
         // Check for terminal conditions
-        if (nodeResult.status === Status.FAILED || !handoff?.agentId) {
+        if (nodeResult.status === Status.FAILED || nodeResult.status === Status.INTERRUPTED || !handoff?.agentId) {
           break
         }
 
         // Hand off to next agent
         const target = this.nodes.get(handoff.agentId)!
-        yield new MultiAgentHandoffEvent({ source: node.id, targets: [target.id], state, invocationState })
+        yield* this._emit(new MultiAgentHandoffEvent({ source: node.id, targets: [target.id], state, invocationState }))
         logger.debug(`source=<${node.id}>, target=<${target.id}> | swarm handoff`)
         node = target
       }
@@ -305,6 +359,13 @@ export class Swarm implements MultiAgent {
         content: this._resolveContent(state),
         duration: Date.now() - state.startTime,
       })
+      // Stash on interrupt so same-instance resume has state; otherwise start fresh.
+      if (result.status === Status.INTERRUPTED) {
+        this._pendingInterruptState = state
+      } else {
+        delete this._pendingInterruptState
+        delete state._pendingInput
+      }
     } catch (error) {
       caughtError = normalizeError(error)
       throw caughtError
@@ -316,11 +377,17 @@ export class Swarm implements MultiAgent {
         ...(caughtError && { error: caughtError }),
       })
 
-      yield new AfterMultiAgentInvocationEvent({ orchestrator: this, state, invocationState })
+      yield* this._emit(new AfterMultiAgentInvocationEvent({ orchestrator: this, state, invocationState }))
     }
 
-    yield new MultiAgentResultEvent({ result, invocationState })
+    yield* this._emit(new MultiAgentResultEvent({ result, invocationState }))
     return result
+  }
+
+  /** Invokes hook callbacks on an event, then yields it. */
+  private async *_emit<T extends HookableEvent>(event: T): AsyncGenerator<T, void, undefined> {
+    await this._hookRegistry.invokeCallbacks(event)
+    yield event
   }
 
   private async *_streamNode(
@@ -339,16 +406,32 @@ export class Swarm implements MultiAgent {
     )
 
     const beforeEvent = new BeforeNodeCallEvent({ orchestrator: this, state, nodeId: node.id, invocationState })
+    try {
+      await this._hookRegistry.invokeCallbacks(beforeEvent)
+    } catch (error) {
+      if (error instanceof InterruptError) {
+        const result = recordHookInterrupt(node.id, nodeState)
+        state.results.push(result)
+        yield beforeEvent
+        yield* this._emit(new NodeResultEvent({ nodeId: node.id, nodeType: node.type, state, result, invocationState }))
+        yield* this._emit(new AfterNodeCallEvent({ orchestrator: this, state, nodeId: node.id, invocationState }))
+        this._tracer.endNodeSpan(nodeSpan, { status: Status.INTERRUPTED, duration: result.duration })
+        return result
+      }
+      throw error
+    }
     yield beforeEvent
 
     if (beforeEvent.cancel) {
       const message = typeof beforeEvent.cancel === 'string' ? beforeEvent.cancel : 'node cancelled by hook'
+      // Cancel path doesn't go through Node.stream, so do its INTERRUPTED cleanup here.
+      dropStaleInterruptedResult(node.id, nodeState, state)
       const result = new NodeResult({ nodeId: node.id, status: Status.CANCELLED, duration: 0 })
       nodeState.status = Status.CANCELLED
       nodeState.results.push(result)
       state.results.push(result)
-      yield new NodeCancelEvent({ nodeId: node.id, state, message, invocationState })
-      yield new AfterNodeCallEvent({ orchestrator: this, state, nodeId: node.id, invocationState })
+      yield* this._emit(new NodeCancelEvent({ nodeId: node.id, state, message, invocationState }))
+      yield* this._emit(new AfterNodeCallEvent({ orchestrator: this, state, nodeId: node.id, invocationState }))
       this._tracer.endNodeSpan(nodeSpan, { status: Status.CANCELLED, duration: 0 })
       return result
     }
@@ -371,7 +454,11 @@ export class Swarm implements MultiAgent {
       )
       let next = await this._tracer.withSpanContext(nodeSpan, () => gen.next())
       while (!next.done) {
-        yield next.value
+        if (next.value instanceof HookableEvent) {
+          yield* this._emit(next.value)
+        } else {
+          yield next.value
+        }
         next = await this._tracer.withSpanContext(nodeSpan, () => gen.next())
       }
 
@@ -385,19 +472,15 @@ export class Swarm implements MultiAgent {
       this._tracer.endNodeSpan(nodeSpan, { status: result.status, duration: result.duration, usage: result.usage })
       state.results.push(result)
 
-      yield new AfterNodeCallEvent({ orchestrator: this, state, nodeId: node.id, invocationState })
+      yield* this._emit(new AfterNodeCallEvent({ orchestrator: this, state, nodeId: node.id, invocationState }))
       return result
     } catch (error) {
       const nodeError = normalizeError(error)
       this._tracer.endNodeSpan(nodeSpan, { error: nodeError })
 
-      yield new AfterNodeCallEvent({
-        orchestrator: this,
-        state,
-        nodeId: node.id,
-        invocationState,
-        error: nodeError,
-      })
+      yield* this._emit(
+        new AfterNodeCallEvent({ orchestrator: this, state, nodeId: node.id, invocationState, error: nodeError })
+      )
       throw nodeError
     } finally {
       if (timeoutHandle !== undefined) clearTimeout(timeoutHandle)
@@ -456,6 +539,12 @@ export class Swarm implements MultiAgent {
     return [...last.content]
   }
 
+  /**
+   * Builds the input for the next node after a handoff, or returns the input as-is
+   * when there is no handoff (initial or resume invocation). The caller passes the
+   * original `MultiAgentInput` through; resume responses flow through here untouched
+   * so the underlying agent sees them directly.
+   */
   private _resolveNodeInput(input: MultiAgentInput, handoff?: HandoffResult): MultiAgentInput {
     if (!handoff) return input
 

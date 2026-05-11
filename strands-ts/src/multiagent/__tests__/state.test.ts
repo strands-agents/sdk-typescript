@@ -3,6 +3,9 @@ import { NodeResult, NodeState, MultiAgentResult, MultiAgentState, Status } from
 import { TextBlock, ToolUseBlock } from '../../types/messages.js'
 import type { JSONValue } from '../../types/json.js'
 import { stateToJSONSymbol, loadStateFromJSONSymbol } from '../../types/serializable.js'
+import { Interrupt } from '../../interrupt.js'
+import { InterruptResponseContent } from '../../types/interrupt.js'
+import { groupInterruptResponsesByNode } from '../multiagent.js'
 
 describe('NodeResult', () => {
   describe('toJSON / fromJSON', () => {
@@ -247,6 +250,44 @@ describe('NodeState', () => {
       })
       expect(target.results).toHaveLength(1)
     })
+
+    it('round-trips interrupts and resumeSnapshot on an INTERRUPTED node', () => {
+      const original = new NodeState()
+      original.status = Status.INTERRUPTED
+      original.interrupts = [new Interrupt({ id: 'tool:1:confirm', name: 'confirm', reason: 'need it' })]
+      original.resumeSnapshot = {
+        scope: 'agent',
+        schemaVersion: '1.0',
+        createdAt: '2026-01-01T00:00:00Z',
+        data: { messages: [], interrupts: { activated: true, interrupts: {} } },
+        appData: {},
+      }
+
+      const restored = new NodeState()
+      restored[loadStateFromJSONSymbol](original[stateToJSONSymbol]())
+
+      expect(restored.status).toBe(Status.INTERRUPTED)
+      expect(restored.interrupts).toHaveLength(1)
+      expect(restored.interrupts[0]).toMatchObject({ id: 'tool:1:confirm', name: 'confirm', reason: 'need it' })
+      expect(restored.resumeSnapshot).toEqual(original.resumeSnapshot)
+    })
+
+    it('clears resumeSnapshot when it is absent from the serialized state', () => {
+      const original = new NodeState()
+      original.status = Status.COMPLETED
+
+      const restored = new NodeState()
+      restored.resumeSnapshot = {
+        scope: 'agent',
+        schemaVersion: '1.0',
+        createdAt: '2026-01-01T00:00:00Z',
+        data: {},
+        appData: {},
+      }
+      restored[loadStateFromJSONSymbol](original[stateToJSONSymbol]())
+
+      expect(restored.resumeSnapshot).toBeUndefined()
+    })
   })
 })
 
@@ -476,5 +517,91 @@ describe('MultiAgentState', () => {
         steps: 5,
       })
     })
+  })
+})
+
+describe('MultiAgentResult._resolveStatus precedence', () => {
+  function makeResult(
+    status: typeof Status.COMPLETED | typeof Status.FAILED | typeof Status.CANCELLED | typeof Status.INTERRUPTED,
+    nodeId = 'n'
+  ): NodeResult {
+    return new NodeResult({ nodeId, status, duration: 1 })
+  }
+
+  it('returns COMPLETED when all node results are completed', () => {
+    const r = new MultiAgentResult({
+      results: [makeResult(Status.COMPLETED), makeResult(Status.COMPLETED)],
+      duration: 10,
+    })
+    expect(r.status).toBe(Status.COMPLETED)
+  })
+
+  it('FAILED outranks INTERRUPTED', () => {
+    const r = new MultiAgentResult({
+      results: [makeResult(Status.INTERRUPTED), makeResult(Status.FAILED)],
+      duration: 10,
+    })
+    expect(r.status).toBe(Status.FAILED)
+  })
+
+  it('INTERRUPTED outranks CANCELLED', () => {
+    const r = new MultiAgentResult({
+      results: [makeResult(Status.CANCELLED), makeResult(Status.INTERRUPTED)],
+      duration: 10,
+    })
+    expect(r.status).toBe(Status.INTERRUPTED)
+  })
+
+  it('CANCELLED outranks COMPLETED', () => {
+    const r = new MultiAgentResult({
+      results: [makeResult(Status.COMPLETED), makeResult(Status.CANCELLED)],
+      duration: 10,
+    })
+    expect(r.status).toBe(Status.CANCELLED)
+  })
+
+  it('FAILED outranks CANCELLED', () => {
+    const r = new MultiAgentResult({ results: [makeResult(Status.CANCELLED), makeResult(Status.FAILED)], duration: 10 })
+    expect(r.status).toBe(Status.FAILED)
+  })
+})
+
+describe('groupInterruptResponsesByNode', () => {
+  function makeState(nodeInterrupts: Record<string, Interrupt[]>): MultiAgentState {
+    const state = new MultiAgentState({ nodeIds: Object.keys(nodeInterrupts) })
+    for (const [id, interrupts] of Object.entries(nodeInterrupts)) {
+      state.node(id)!.interrupts = interrupts
+    }
+    return state
+  }
+
+  it('groups responses by the node whose interrupts match each id', () => {
+    const state = makeState({
+      a: [new Interrupt({ id: 'tool:1:confirm', name: 'confirm' })],
+      b: [new Interrupt({ id: 'tool:2:approve', name: 'approve' })],
+    })
+    const responses = [
+      new InterruptResponseContent({ interruptId: 'tool:1:confirm', response: 'yes' }),
+      new InterruptResponseContent({ interruptId: 'tool:2:approve', response: 'ok' }),
+    ]
+
+    const grouped = groupInterruptResponsesByNode(responses, state)
+
+    expect(grouped.get('a')).toHaveLength(1)
+    expect(grouped.get('b')).toHaveLength(1)
+    expect(grouped.get('a')?.[0]?.interruptResponse.interruptId).toBe('tool:1:confirm')
+  })
+
+  it('throws when a response id does not match any node interrupt', () => {
+    const state = makeState({ a: [new Interrupt({ id: 'tool:1:confirm', name: 'confirm' })] })
+    const responses = [new InterruptResponseContent({ interruptId: 'tool:missing:xyz', response: 'yes' })]
+
+    expect(() => groupInterruptResponsesByNode(responses, state)).toThrow(/tool:missing:xyz/)
+  })
+
+  it('returns an empty map for empty responses', () => {
+    const state = makeState({ a: [new Interrupt({ id: 'tool:1:confirm', name: 'confirm' })] })
+    const grouped = groupInterruptResponsesByNode([], state)
+    expect(grouped.size).toBe(0)
   })
 })

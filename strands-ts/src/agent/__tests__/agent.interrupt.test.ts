@@ -3,7 +3,7 @@ import { Agent } from '../agent.js'
 import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
 import { createMockTool } from '../../__fixtures__/tool-helpers.js'
 import { ToolResultBlock } from '../../types/messages.js'
-import { AfterToolCallEvent, BeforeToolCallEvent, BeforeToolsEvent } from '../../hooks/events.js'
+import { AfterToolCallEvent, BeforeToolCallEvent, BeforeToolsEvent, InterruptEvent } from '../../hooks/events.js'
 import { FunctionTool } from '../../tools/function-tool.js'
 import { InterruptResponseContent } from '../../types/interrupt.js'
 import type { InterruptState, PendingToolExecution } from '../../interrupt.js'
@@ -102,8 +102,8 @@ describe('Agent interrupt system', () => {
       const interruptResult = await agent.invoke('Delete X')
 
       expect(interruptResult.stopReason).toBe('interrupt')
-      expect(interruptResult.interrupts).toEqual([
-        { id: expect.any(String), name: 'approve_delete', reason: 'Confirm delete?' },
+      expect(interruptResult.interrupts).toMatchObject([
+        { id: expect.any(String), name: 'approve_delete', reason: 'Confirm delete?', source: 'hook' },
       ])
       expect(toolExecuted).toBe(false)
       expect(model.callCount).toBe(1)
@@ -761,7 +761,9 @@ describe('Agent interrupt system', () => {
 
       expect(result.stopReason).toBe('interrupt')
       expect(toolACompleted).toBe(true)
-      expect(result.interrupts).toEqual([{ id: expect.any(String), name: 'confirm_b', reason: 'Approve B?' }])
+      expect(result.interrupts).toMatchObject([
+        { id: expect.any(String), name: 'confirm_b', reason: 'Approve B?', source: 'tool' },
+      ])
 
       // Verify A's result was captured in pending state
       const pendingExecution = getPendingToolExecution(agent)
@@ -882,10 +884,68 @@ describe('Agent interrupt system', () => {
       const interruptResult = await agent.invoke('Go')
 
       expect(interruptResult.stopReason).toBe('interrupt')
-      expect(interruptResult.interrupts).toEqual([{ id: expect.any(String), name: 'approve_b', reason: 'Approve B?' }])
+      expect(interruptResult.interrupts).toMatchObject([
+        { id: expect.any(String), name: 'approve_b', reason: 'Approve B?', source: 'hook' },
+      ])
       // A should have executed, B should not (interrupted before execution)
       expect(executionLog).toContain('A')
       expect(executionLog).not.toContain('B')
+    })
+  })
+
+  describe('InterruptEvent emission', () => {
+    it('yields one InterruptEvent per unanswered interrupt at stop, tagged with source', async () => {
+      const model = new MockMessageModel()
+        .addTurn({ type: 'toolUseBlock', name: 'toolA', toolUseId: 'tool-a', input: {} })
+        .addTurn({ type: 'textBlock', text: 'done' })
+
+      const toolA = createMockTool('toolA', (context) => {
+        context.interrupt({ name: 'confirm_tool', reason: 'ok?' })
+      })
+
+      const agent = new Agent({ model, tools: [toolA], printer: false })
+
+      // Hook-raised interrupt on a different identifier, via BeforeToolCallEvent.
+      agent.addHook(BeforeToolCallEvent, (event) => {
+        if (event.toolUse.name === 'toolA') {
+          event.interrupt({ name: 'confirm_hook', reason: 'hook ok?' })
+        }
+      })
+
+      const emittedEvents: InterruptEvent[] = []
+      agent.addHook(InterruptEvent, (event) => {
+        emittedEvents.push(event)
+      })
+
+      const result = await agent.invoke('go')
+
+      expect(result.stopReason).toBe('interrupt')
+      expect(result.interrupts).toHaveLength(emittedEvents.length)
+      // One event per interrupt, each tagged by its origin. Hook interrupts fire
+      // before tool callbacks, so the hook interrupt is the only one in this run.
+      for (const event of emittedEvents) {
+        expect(event.interrupt.source).toBe('hook')
+      }
+    })
+
+    it('InterruptEvent is available on the stream', async () => {
+      const model = new MockMessageModel()
+        .addTurn({ type: 'toolUseBlock', name: 'approveMe', toolUseId: 'tool-1', input: {} })
+        .addTurn({ type: 'textBlock', text: 'done' })
+
+      const tool = createMockTool('approveMe', (context) => {
+        context.interrupt({ name: 'approve', reason: 'please' })
+      })
+
+      const agent = new Agent({ model, tools: [tool], printer: false })
+
+      const events: InterruptEvent[] = []
+      for await (const event of agent.stream('go')) {
+        if (event instanceof InterruptEvent) events.push(event)
+      }
+
+      expect(events).toHaveLength(1)
+      expect(events[0]!.interrupt).toMatchObject({ name: 'approve', source: 'tool' })
     })
   })
 })

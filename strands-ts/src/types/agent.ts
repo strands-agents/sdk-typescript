@@ -21,6 +21,7 @@ import type {
   ToolResultEvent,
   ToolStreamUpdateEvent,
   AgentResultEvent,
+  InterruptEvent,
   HookableEvent,
   StreamEvent,
 } from '../hooks/events.js'
@@ -476,4 +477,5 @@ export type AgentStreamEvent =
   | BeforeToolCallEvent
   | AfterToolCallEvent
   | MessageAddedEvent
+  | InterruptEvent
   | AgentResultEvent

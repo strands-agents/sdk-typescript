@@ -258,18 +258,24 @@ describe('interruptFromAgent', () => {
     const state = new InterruptState()
     const agent = createMockAgent(state)
 
-    const result = interruptFromAgent(agent, 'test-id', {
-      name: 'confirm',
-      reason: 'need approval',
-      response: 'pre-approved',
-    })
+    const result = interruptFromAgent(
+      agent,
+      'test-id',
+      {
+        name: 'confirm',
+        reason: 'need approval',
+        response: 'pre-approved',
+      },
+      'tool'
+    )
 
     expect(result).toBe('pre-approved')
-    expect(state.interrupts['test-id']).toEqual({
+    expect(state.interrupts['test-id']).toMatchObject({
       id: 'test-id',
       name: 'confirm',
       reason: 'need approval',
       response: 'pre-approved',
+      source: 'tool',
     })
   })
 
@@ -280,14 +286,19 @@ describe('interruptFromAgent', () => {
 
     const agent = createMockAgent(state)
 
-    const result = interruptFromAgent(agent, 'test-id', {
-      name: 'confirm',
-      reason: 'need approval',
-      response: 'preemptive',
-    })
+    const result = interruptFromAgent(
+      agent,
+      'test-id',
+      {
+        name: 'confirm',
+        reason: 'need approval',
+        response: 'preemptive',
+      },
+      'tool'
+    )
 
     expect(result).toBe('user-provided')
-    expect(state.interrupts['test-id']).toEqual({
+    expect(state.interrupts['test-id']).toMatchObject({
       id: 'test-id',
       name: 'confirm',
       reason: 'need approval',
@@ -299,16 +310,22 @@ describe('interruptFromAgent', () => {
     const state = new InterruptState()
     const agent = createMockAgent(state)
 
-    const result = interruptFromAgent(agent, 'test-id', {
-      name: 'confirm',
-      response: null,
-    })
+    const result = interruptFromAgent(
+      agent,
+      'test-id',
+      {
+        name: 'confirm',
+        response: null,
+      },
+      'tool'
+    )
 
     expect(result).toBeNull()
-    expect(state.interrupts['test-id']).toEqual({
+    expect(state.interrupts['test-id']).toMatchObject({
       id: 'test-id',
       name: 'confirm',
       response: null,
+      source: 'tool',
     })
   })
 })

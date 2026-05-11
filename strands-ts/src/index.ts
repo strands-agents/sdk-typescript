@@ -37,7 +37,7 @@ export {
 } from './errors.js'
 
 // Interrupt system
-export type { Interrupt } from './interrupt.js'
+export type { Interrupt, InterruptSource } from './interrupt.js'
 export type { InterruptParams, InterruptResponse, InterruptResponseContentData } from './types/interrupt.js'
 export { InterruptResponseContent } from './types/interrupt.js'
 
@@ -209,6 +209,7 @@ export {
   ToolResultEvent,
   ToolStreamUpdateEvent,
   AgentResultEvent,
+  InterruptEvent,
   ModelStreamUpdateEvent,
 } from './hooks/index.js'
 export type {

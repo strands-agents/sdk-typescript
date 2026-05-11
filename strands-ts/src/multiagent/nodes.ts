@@ -1,6 +1,7 @@
 import { Agent } from '../agent/agent.js'
 import type { InvocationState, InvokeOptions, InvokableAgent, AgentStreamEvent } from '../types/agent.js'
 import type { MultiAgentInput } from './multiagent.js'
+import { dropStaleInterruptedResult } from './multiagent.js'
 import type { MultiAgentStreamEvent } from './events.js'
 import { NodeStreamUpdateEvent, NodeResultEvent } from './events.js'
 import { NodeResult, Status } from './state.js'
@@ -86,6 +87,10 @@ export abstract class Node {
     options?: NodeInputOptions
   ): AsyncGenerator<MultiAgentStreamEvent, NodeResult, undefined> {
     const nodeState = state.node(this.id)!
+
+    // Resuming from INTERRUPTED: drop the stale result so the fresh one replaces it.
+    dropStaleInterruptedResult(this.id, nodeState, state)
+
     nodeState.status = Status.EXECUTING
     nodeState.startTime = Date.now()
 
@@ -97,24 +102,36 @@ export abstract class Node {
     let result: NodeResult
     try {
       const update = yield* this.handle(input, state, resolvedOptions)
+      const defaultStatus = update.interrupts && update.interrupts.length > 0 ? Status.INTERRUPTED : Status.COMPLETED
       result = new NodeResult({
         nodeId: this.id,
-        status: Status.COMPLETED,
+        status: defaultStatus,
         duration: Date.now() - nodeState.startTime,
         content: [],
         ...update,
       })
     } catch (error) {
+      // Orchestrator cancellation (short-circuit or external) maps thrown errors to
+      // CANCELLED — node was stopped, not broken.
+      const status = options?.cancelSignal?.aborted ? Status.CANCELLED : Status.FAILED
       result = new NodeResult({
         nodeId: this.id,
-        status: Status.FAILED,
+        status,
         duration: Date.now() - nodeState.startTime,
         error: normalizeError(error),
       })
-      logger.warn(`node_id=<${this.id}>, error=<${result.error?.message}> | node execution failed`)
+      if (status === Status.FAILED) {
+        logger.warn(`node_id=<${this.id}>, error=<${result.error?.message}> | node execution failed`)
+      }
     } finally {
       nodeState.status = result!.status
       nodeState.results.push(result!)
+      nodeState.interrupts = result!.interrupts ?? []
+      // Clear the stored snapshot on non-INTERRUPTED terminal states; `handle()`
+      // repopulates it above if this run itself interrupted.
+      if (result!.status !== Status.INTERRUPTED) {
+        delete nodeState.resumeSnapshot
+      }
     }
 
     yield new NodeResultEvent({
@@ -212,11 +229,16 @@ export class AgentNode extends Node {
     // handle() is public API, so direct callers get per-call state.
     const invocationState: InvocationState = options?.invocationState ?? {}
 
-    // Only Agent instances support snapshot/restore for state isolation
-    const snapshot =
-      this._agent instanceof Agent
-        ? this._agent.takeSnapshot({ include: ['messages', 'state', 'modelState'] })
-        : undefined
+    // Only Agent instances support snapshot/restore for state isolation.
+    const isAgent = this._agent instanceof Agent
+    const preRunSnapshot = isAgent ? this._agent.takeSnapshot({ preset: 'session' }) : undefined
+
+    // Rehydrate agent state from a prior INTERRUPTED run (messages + interrupt state).
+    const nodeState = state.node(this.id)
+    if (isAgent && nodeState?.resumeSnapshot) {
+      this._agent.loadSnapshot(nodeState.resumeSnapshot)
+    }
+
     try {
       const invokeOptions: InvokeOptions = {
         ...(options?.structuredOutputSchema && { structuredOutputSchema: options.structuredOutputSchema }),
@@ -231,23 +253,34 @@ export class AgentNode extends Node {
           nodeId: this.id,
           nodeType: this.type,
           state,
-          inner:
-            this._agent instanceof Agent
-              ? { source: 'agent', event: next.value as AgentStreamEvent }
-              : { source: 'custom', event: next.value },
+          inner: isAgent
+            ? { source: 'agent', event: next.value as AgentStreamEvent }
+            : { source: 'custom', event: next.value },
           invocationState,
         })
         next = await gen.next()
       }
 
+      const agentResult = next.value
+      const interrupted =
+        agentResult.stopReason === 'interrupt' && agentResult.interrupts && agentResult.interrupts.length > 0
+
+      // Capture post-interrupt state for the next resume cycle. Only Agent instances
+      // are snapshottable.
+      if (interrupted && isAgent && nodeState) {
+        nodeState.resumeSnapshot = this._agent.takeSnapshot({ preset: 'session' })
+      }
+
       return {
-        content: next.value.lastMessage.content,
-        ...('structuredOutput' in next.value && { structuredOutput: next.value.structuredOutput }),
-        ...(next.value.metrics?.accumulatedUsage && { usage: next.value.metrics.accumulatedUsage }),
+        content: agentResult.lastMessage.content,
+        ...('structuredOutput' in agentResult && { structuredOutput: agentResult.structuredOutput }),
+        ...(agentResult.metrics?.accumulatedUsage && { usage: agentResult.metrics.accumulatedUsage }),
+        ...(interrupted && { interrupts: agentResult.interrupts }),
       }
     } finally {
-      if (snapshot) {
-        ;(this._agent as Agent).loadSnapshot(snapshot)
+      // Restore pre-run state — keeps the agent observably unchanged across runs.
+      if (preRunSnapshot) {
+        ;(this._agent as Agent).loadSnapshot(preRunSnapshot)
       }
     }
   }
@@ -302,7 +335,10 @@ export class MultiAgentNode extends Node {
     // handle() is public API, so direct callers get per-call state.
     const invocationState: InvocationState = options?.invocationState ?? {}
 
-    const gen = this._orchestrator.stream(input, { invocationState })
+    const gen = this._orchestrator.stream(input, {
+      invocationState,
+      ...(options?.cancelSignal && { cancelSignal: options.cancelSignal }),
+    })
     let next = await gen.next()
     while (!next.done) {
       const event = next.value
@@ -320,11 +356,14 @@ export class MultiAgentNode extends Node {
       next = await gen.next()
     }
     const innerResult = next.value
+    const interrupted = innerResult.interrupts && innerResult.interrupts.length > 0
+
     return {
       content: innerResult.content,
       usage: innerResult.usage,
       ...(innerResult.status !== Status.COMPLETED && { status: innerResult.status }),
       ...(innerResult.error && { error: innerResult.error }),
+      ...(interrupted && { interrupts: innerResult.interrupts }),
     }
   }
 }

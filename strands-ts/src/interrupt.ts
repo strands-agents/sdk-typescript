@@ -15,6 +15,14 @@ import type { LocalAgent } from './types/agent.js'
 import { Message, ToolResultBlock, type MessageData, type ToolResultBlockData } from './types/messages.js'
 
 /**
+ * Origin of an interrupt:
+ * - `'tool'` — raised by a tool callback via `ToolContext.interrupt()`.
+ * - `'hook'` — raised by an agent-level hook (e.g. `BeforeToolCallEvent.interrupt()`).
+ * - `'multiagent-hook'` — raised by a multi-agent hook (e.g. `BeforeNodeCallEvent.interrupt()`).
+ */
+export type InterruptSource = 'tool' | 'hook' | 'multiagent-hook'
+
+/**
  * Represents an interrupt that can pause agent execution for human-in-the-loop workflows.
  */
 export class Interrupt {
@@ -38,7 +46,13 @@ export class Interrupt {
    */
   response?: JSONValue
 
-  constructor(data: { id: string; name: string; reason?: JSONValue; response?: JSONValue }) {
+  /**
+   * Where this interrupt was raised from — a tool callback or a hook callback.
+   * Optional to preserve backward compatibility with older serialized snapshots.
+   */
+  readonly source?: InterruptSource
+
+  constructor(data: { id: string; name: string; reason?: JSONValue; response?: JSONValue; source?: InterruptSource }) {
     this.id = data.id
     this.name = data.name
     if (data.reason !== undefined) {
@@ -47,17 +61,21 @@ export class Interrupt {
     if (data.response !== undefined) {
       this.response = data.response
     }
+    if (data.source !== undefined) {
+      this.source = data.source
+    }
   }
 
   /**
    * Serializes the interrupt to a JSON-compatible object.
    */
-  toJSON(): { id: string; name: string; reason?: JSONValue; response?: JSONValue } {
+  toJSON(): { id: string; name: string; reason?: JSONValue; response?: JSONValue; source?: InterruptSource } {
     return {
       id: this.id,
       name: this.name,
       ...(this.reason !== undefined && { reason: this.reason }),
       ...(this.response !== undefined && { response: this.response }),
+      ...(this.source !== undefined && { source: this.source }),
     }
   }
 
@@ -67,7 +85,13 @@ export class Interrupt {
    * @param data - JSON data to deserialize
    * @returns Interrupt instance
    */
-  static fromJSON(data: { id: string; name: string; reason?: JSONValue; response?: JSONValue }): Interrupt {
+  static fromJSON(data: {
+    id: string
+    name: string
+    reason?: JSONValue
+    response?: JSONValue
+    source?: InterruptSource
+  }): Interrupt {
     return new Interrupt(data)
   }
 }
@@ -274,9 +298,16 @@ export class InterruptState implements InterruptStateData {
    * @param name - User-defined name for the interrupt
    * @param reason - Optional reason for the interrupt
    * @param response - Optional preemptive response to skip the interrupt
+   * @param source - Where the interrupt was raised from (tool or hook callback)
    * @returns The interrupt (may have a response if resuming or preemptive)
    */
-  getOrCreateInterrupt(id: string, name: string, reason?: JSONValue, response?: JSONValue): Interrupt {
+  getOrCreateInterrupt(
+    id: string,
+    name: string,
+    reason?: JSONValue,
+    response?: JSONValue,
+    source?: InterruptSource
+  ): Interrupt {
     const existing = this.interrupts[id]
     if (existing) {
       return existing
@@ -287,6 +318,7 @@ export class InterruptState implements InterruptStateData {
       name,
       ...(reason !== undefined && { reason }),
       ...(response !== undefined && { response }),
+      ...(source !== undefined && { source }),
     })
     this.interrupts[id] = interrupt
     return interrupt
@@ -349,18 +381,68 @@ export interface Interruptible {
  * @param agent - The agent whose interrupt state to access
  * @param interruptId - Unique identifier for this interrupt instance
  * @param params - Interrupt parameters including name and optional reason
+ * @param source - Where the interrupt was raised from (tool callback vs hook callback)
  * @returns The user's response when resuming from an interrupt
  * @throws InterruptError when no response is available (first invocation)
  *
  * @internal
  */
-export function interruptFromAgent<T>(agent: LocalAgent, interruptId: string, params: InterruptParams): T {
+export function interruptFromAgent<T>(
+  agent: LocalAgent,
+  interruptId: string,
+  params: InterruptParams,
+  source: InterruptSource
+): T {
   const interruptState = (agent as unknown as { _interruptState?: InterruptState })._interruptState
   if (!interruptState) {
     throw new Error('Interrupt state not available')
   }
 
-  const interrupt = interruptState.getOrCreateInterrupt(interruptId, params.name, params.reason, params.response)
+  const interrupt = interruptState.getOrCreateInterrupt(
+    interruptId,
+    params.name,
+    params.reason,
+    params.response,
+    source
+  )
+
+  if (interrupt.response !== undefined) {
+    return interrupt.response as T
+  }
+
+  throw new InterruptError(interrupt)
+}
+
+/**
+ * Interrupt-or-resume helper for multi-agent hooks where interrupts live on a per-node
+ * `Interrupt[]` list rather than on an agent's `InterruptState`. Mirrors the
+ * {@link interruptFromAgent} contract: returns the response if the interrupt already
+ * has one (resume path), otherwise records a new interrupt and throws `InterruptError`.
+ *
+ * @internal
+ */
+export function interruptFromMultiAgentNode<T>(
+  interrupts: Interrupt[],
+  interruptId: string,
+  params: InterruptParams,
+  source: InterruptSource
+): T {
+  const existing = interrupts.find((i) => i.id === interruptId)
+  if (existing?.response !== undefined) {
+    return existing.response as T
+  }
+
+  const interrupt =
+    existing ??
+    new Interrupt({
+      id: interruptId,
+      name: params.name,
+      ...(params.reason !== undefined && { reason: params.reason }),
+      ...(params.response !== undefined && { response: params.response }),
+      source,
+    })
+
+  if (!existing) interrupts.push(interrupt)
 
   if (interrupt.response !== undefined) {
     return interrupt.response as T
