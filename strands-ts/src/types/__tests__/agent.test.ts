@@ -4,6 +4,8 @@ import { AgentMetrics } from '../../telemetry/meter.js'
 import { AgentTrace } from '../../telemetry/tracer.js'
 import { Message } from '../messages.js'
 import { TextBlock, ReasoningBlock, ToolUseBlock, ToolResultBlock, CachePointBlock } from '../messages.js'
+import { CitationsBlock } from '../citations.js'
+import { Interrupt } from '../../interrupt.js'
 
 describe('AgentResult', () => {
   describe('toString', () => {
@@ -168,6 +170,119 @@ describe('AgentResult', () => {
         })
 
         expect(result.toString()).toBe('Before tool\n💭 Reasoning:\n   Thinking...\nAfter tool')
+      })
+    })
+
+    describe('when interrupts are present', () => {
+      it('returns JSON-stringified interrupts, taking priority over text content', () => {
+        const message = new Message({
+          role: 'assistant',
+          content: [new TextBlock('ignored')],
+        })
+
+        const interrupt = new Interrupt({ id: 'i-1', name: 'confirm', reason: 'ok?' })
+
+        const result = new AgentResult({
+          stopReason: 'interrupt',
+          lastMessage: message,
+          metrics: new AgentMetrics(),
+          invocationState: {},
+          interrupts: [interrupt],
+        })
+
+        expect(result.toString()).toBe(JSON.stringify([interrupt]))
+      })
+
+      it('falls through when interrupts array is empty', () => {
+        const message = new Message({
+          role: 'assistant',
+          content: [new TextBlock('Hello')],
+        })
+
+        const result = new AgentResult({
+          stopReason: 'endTurn',
+          lastMessage: message,
+          metrics: new AgentMetrics(),
+          invocationState: {},
+          interrupts: [],
+        })
+
+        expect(result.toString()).toBe('Hello')
+      })
+    })
+
+    describe('when structuredOutput is present', () => {
+      it('returns JSON-stringified structured output, taking priority over text content', () => {
+        const message = new Message({
+          role: 'assistant',
+          content: [new TextBlock('ignored')],
+        })
+
+        const structuredOutput = { answer: 42, note: 'hello' }
+
+        const result = new AgentResult({
+          stopReason: 'endTurn',
+          lastMessage: message,
+          metrics: new AgentMetrics(),
+          invocationState: {},
+          structuredOutput,
+        })
+
+        expect(result.toString()).toBe(JSON.stringify(structuredOutput))
+      })
+    })
+
+    describe('when interrupts and structuredOutput are both present', () => {
+      it('returns interrupts, taking priority over structuredOutput', () => {
+        const message = new Message({
+          role: 'assistant',
+          content: [new TextBlock('ignored')],
+        })
+
+        const interrupt = new Interrupt({ id: 'i-1', name: 'confirm' })
+        const structuredOutput = { answer: 42 }
+
+        const result = new AgentResult({
+          stopReason: 'interrupt',
+          lastMessage: message,
+          metrics: new AgentMetrics(),
+          invocationState: {},
+          interrupts: [interrupt],
+          structuredOutput,
+        })
+
+        expect(result.toString()).toBe(JSON.stringify([interrupt]))
+      })
+    })
+
+    describe('when content has CitationsBlock', () => {
+      it('concatenates generated content text from citations', () => {
+        const message = new Message({
+          role: 'assistant',
+          content: [
+            new TextBlock('Here is a citation:'),
+            new CitationsBlock({
+              citations: [
+                {
+                  location: { type: 'documentChar', documentIndex: 0, start: 0, end: 5 },
+                  source: 'doc',
+                  sourceContent: [{ text: 'source text' }],
+                  title: 'Doc',
+                },
+              ],
+              content: [{ text: 'cited fragment' }],
+            }),
+          ],
+        })
+
+        const result = new AgentResult({
+          stopReason: 'endTurn',
+          lastMessage: message,
+          metrics: new AgentMetrics(),
+          invocationState: {},
+        })
+
+        expect(result.toString()).toBe('Here is a citation:\ncited fragment')
       })
     })
 

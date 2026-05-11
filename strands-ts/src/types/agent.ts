@@ -381,12 +381,24 @@ export class AgentResult {
   }
 
   /**
-   * Extracts and concatenates all text content from the last message.
-   * Includes text from TextBlock and ReasoningBlock content blocks.
+   * Extracts a string representation of the result.
    *
-   * @returns The agent's last message as a string, with multiple blocks joined by newlines.
+   * Priority order:
+   * 1. `interrupts` serialized as JSON, if any are present
+   * 2. `structuredOutput` serialized as JSON
+   * 3. Text from `textBlock`, `reasoningBlock`, and `citationsBlock` content blocks
+   *
+   * @returns String representation of the result: JSON for interrupts/structuredOutput, or text content joined by newlines.
    */
   public toString(): string {
+    if (this.interrupts && this.interrupts.length > 0) {
+      return JSON.stringify(this.interrupts)
+    }
+
+    if (this.structuredOutput !== undefined) {
+      return JSON.stringify(this.structuredOutput)
+    }
+
     const textParts: string[] = []
 
     for (const block of this.lastMessage.content) {
@@ -399,6 +411,13 @@ export class AgentResult {
             // Add indentation to reasoning content
             const indentedText = block.text.replace(/\n/g, '\n   ')
             textParts.push(`💭 Reasoning:\n   ${indentedText}`)
+          }
+          break
+        case 'citationsBlock':
+          for (const c of block.content) {
+            if ('text' in c) {
+              textParts.push(c.text)
+            }
           }
           break
         default:
