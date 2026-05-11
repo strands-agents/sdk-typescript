@@ -145,9 +145,6 @@ export interface BedrockGuardrailRedactionConfig {
 /**
  * Configuration for Bedrock guardrails.
  *
- * For production use with sensitive content, consider `SessionManager` with `saveLatestOn: 'message'`
- * to persist redactions immediately.
- *
  * @see https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails.html
  */
 export interface BedrockGuardrailConfig {
