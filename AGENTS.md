@@ -5,6 +5,7 @@ This document provides guidance specifically for AI agents working on the Strand
 ## Purpose and Scope
 
 **AGENTS.md** contains agent-specific repository information including:
+
 - Directory structure with summaries of what is included in each directory
 - Development workflow instructions for agents to follow when developing features
 - Coding patterns and testing patterns to follow when writing code
@@ -14,149 +15,250 @@ This document provides guidance specifically for AI agents working on the Strand
 
 ## Directory Structure
 
+The repo is an npm workspace monorepo. The root `package.json` delegates all build/test/lint commands to the `strands-ts` workspace package.
+
 ```
 sdk-typescript/
-├── src/                          # Source code (all production code)
-│   ├── __tests__/                # Unit tests for root-level source files
-│   │   ├── errors.test.ts        # Tests for error classes
-│   │   ├── index.test.ts         # Tests for main entry point
-│   │   └── app-state.test.ts     # Tests for app state
+├── strands-ts/                   # SDK workspace package
+│   ├── src/                      # All production code
+│   │   ├── __fixtures__/         # Shared test fixtures (mocks, helpers)
+│   │   ├── __tests__/            # Unit tests for root-level source files
+│   │   │
+│   │   ├── a2a/                  # Agent-to-agent protocol
+│   │   │   ├── __tests__/
+│   │   │   ├── a2a-agent.ts      # A2A agent client
+│   │   │   ├── adapters.ts       # Strands/A2A type converters
+│   │   │   ├── events.ts         # A2A streaming events
+│   │   │   ├── executor.ts       # A2A executor
+│   │   │   ├── express-server.ts # Express-based A2A server
+│   │   │   ├── server.ts         # A2A server base
+│   │   │   └── index.ts
+│   │   │
+│   │   ├── agent/                # Agent loop and streaming
+│   │   │   ├── __tests__/
+│   │   │   ├── agent.ts          # Core agent implementation
+│   │   │   ├── agent-as-tool.ts  # Wrap agent as a tool
+│   │   │   ├── printer.ts        # Agent output printing
+│   │   │   └── snapshot.ts       # Agent state snapshots
+│   │   │
+│   │   ├── conversation-manager/ # Conversation history strategies
+│   │   │   ├── __tests__/
+│   │   │   ├── conversation-manager.ts
+│   │   │   ├── null-conversation-manager.ts
+│   │   │   ├── sliding-window-conversation-manager.ts
+│   │   │   ├── summarizing-conversation-manager.ts
+│   │   │   └── index.ts
+│   │   │
+│   │   ├── hooks/                # Hooks system for extensibility
+│   │   │   ├── __tests__/
+│   │   │   ├── events.ts
+│   │   │   ├── registry.ts
+│   │   │   ├── types.ts
+│   │   │   └── index.ts
+│   │   │
+│   │   ├── logging/              # Structured logging
+│   │   │   ├── __tests__/
+│   │   │   ├── logger.ts
+│   │   │   ├── warn-once.ts      # Dedupe warnings by message content
+│   │   │   ├── types.ts
+│   │   │   └── index.ts
+│   │   │
+│   │   ├── models/               # Model provider implementations
+│   │   │   ├── __tests__/
+│   │   │   ├── google/           # Google Gemini provider
+│   │   │   ├── openai/           # OpenAI provider (Chat Completions + Responses API)
+│   │   │   │   ├── __tests__/    # Unit tests (chat.test.ts, responses.test.ts)
+│   │   │   │   ├── chat-adapter.ts
+│   │   │   │   ├── responses-adapter.ts
+│   │   │   │   ├── formatting.ts
+│   │   │   │   ├── errors.ts
+│   │   │   │   ├── model.ts
+│   │   │   │   ├── types.ts
+│   │   │   │   └── index.ts
+│   │   │   ├── anthropic.ts      # Anthropic Claude
+│   │   │   ├── bedrock.ts        # AWS Bedrock
+│   │   │   ├── vercel.ts         # Vercel AI SDK
+│   │   │   ├── defaults.ts       # Centralized model defaults + warning messages
+│   │   │   ├── model.ts          # Base model interface
+│   │   │   └── streaming.ts      # Streaming event types
+│   │   │
+│   │   ├── multiagent/           # Multi-agent orchestration
+│   │   │   ├── __tests__/
+│   │   │   ├── graph.ts          # Graph orchestrator (DAG)
+│   │   │   ├── swarm.ts          # Swarm orchestrator (handoff)
+│   │   │   ├── multiagent.ts     # Base multi-agent class
+│   │   │   ├── nodes.ts          # Node types
+│   │   │   ├── state.ts          # State management
+│   │   │   ├── events.ts         # Streaming events
+│   │   │   ├── edge.ts           # Edge definitions
+│   │   │   ├── queue.ts          # Execution queue
+│   │   │   ├── snapshot.ts       # Multi-agent snapshots
+│   │   │   ├── plugins.ts        # Multi-agent plugins
+│   │   │   └── index.ts
+│   │   │
+│   │   ├── plugins/              # Plugin system
+│   │   │   ├── __tests__/
+│   │   │   ├── plugin.ts
+│   │   │   ├── registry.ts
+│   │   │   ├── model-plugin.ts   # Clears agent messages after invocation when model is stateful
+│   │   │   └── index.ts
+│   │   │
+│   │   ├── registry/             # Tool registry
+│   │   │   ├── __tests__/
+│   │   │   └── tool-registry.ts
+│   │   │
+│   │   ├── retry/                # Retry strategies for model calls
+│   │   │   ├── __tests__/
+│   │   │   ├── backoff-strategy.ts
+│   │   │   ├── model-retry-strategy.ts         # Abstract ModelRetryStrategy base class
+│   │   │   ├── default-model-retry-strategy.ts
+│   │   │   ├── retry-strategy.ts               # RetryStrategy union type + dedup helper
+│   │   │   └── index.ts
+│   │   │
+│   │   ├── session/              # Session management
+│   │   │   ├── __tests__/
+│   │   │   ├── session-manager.ts
+│   │   │   ├── storage.ts        # Storage interface
+│   │   │   ├── file-storage.ts   # File-based storage
+│   │   │   ├── s3-storage.ts     # S3 storage
+│   │   │   ├── types.ts
+│   │   │   ├── validation.ts
+│   │   │   └── index.ts
+│   │   │
+│   │   ├── telemetry/            # OpenTelemetry tracing and metrics
+│   │   │   ├── __tests__/
+│   │   │   ├── tracer.ts
+│   │   │   ├── meter.ts
+│   │   │   ├── config.ts
+│   │   │   ├── json.ts
+│   │   │   ├── types.ts
+│   │   │   ├── utils.ts
+│   │   │   └── index.ts
+│   │   │
+│   │   ├── tools/                # Tool definitions and types
+│   │   │   ├── __tests__/
+│   │   │   ├── function-tool.ts
+│   │   │   ├── mcp-tool.ts
+│   │   │   ├── noop-tool.ts
+│   │   │   ├── structured-output-tool.ts
+│   │   │   ├── tool-factory.ts
+│   │   │   ├── tool.ts
+│   │   │   ├── zod-tool.ts
+│   │   │   ├── zod-utils.ts
+│   │   │   └── types.ts
+│   │   │
+│   │   ├── types/                # Core type definitions
+│   │   │   ├── __tests__/
+│   │   │   ├── agent.ts
+│   │   │   ├── citations.ts
+│   │   │   ├── elicitation.ts
+│   │   │   ├── json.ts
+│   │   │   ├── media.ts
+│   │   │   ├── messages.ts
+│   │   │   ├── serializable.ts
+│   │   │   ├── snapshot.ts
+│   │   │   └── validation.ts
+│   │   │
+│   │   ├── vended-plugins/       # Optional vended plugins
+│   │   │   └── skills/           # AgentSkills plugin
+│   │   │
+│   │   ├── vended-tools/         # Optional vended tools
+│   │   │   ├── bash/
+│   │   │   ├── file-editor/
+│   │   │   ├── http-request/
+│   │   │   └── notebook/
+│   │   │
+│   │   ├── errors.ts             # Custom error classes
+│   │   ├── index.ts              # Main SDK entry point
+│   │   ├── mcp.ts                # MCP client implementation
+│   │   ├── mime.ts               # MIME type utilities
+│   │   └── state-store.ts        # State store implementation
 │   │
-│   ├── agent/                    # Agent loop and streaming
-│   │   ├── __tests__/            # Unit tests for agent loop
-│   │   │   ├── agent.test.ts     # Tests for agent implementation
-│   │   │   └── printer.test.ts   # Tests for printer
-│   │   ├── agent.ts              # Core agent implementation
-│   │   ├── printer.ts            # Agent output printing
-│   │   └── streaming.ts          # Agent streaming event types
+│   ├── test/                     # Tests outside of source
+│   │   ├── integ/                # Integration tests
+│   │   │   ├── a2a/
+│   │   │   ├── conversation-manager/
+│   │   │   ├── mcp/
+│   │   │   ├── models/
+│   │   │   ├── multiagent/
+│   │   │   ├── skills/
+│   │   │   ├── tools/
+│   │   │   ├── agent.test.ts
+│   │   │   └── ...
+│   │   └── packages/             # Package compatibility tests (CJS/ESM)
 │   │
-│   ├── conversation-manager/ # Conversation management implementations
-│   │   ├── __tests__/        # Unit tests for conversation managers
-│   │   │   ├── conversation-manager.test.ts
-│   │   │   ├── null-conversation-manager.test.ts
-│   │   │   └── sliding-window-conversation-manager.test.ts
-│   │   ├── conversation-manager.ts        # Abstract base class
-│   │   ├── null-conversation-manager.ts   # No-op implementation
-│   │   ├── sliding-window-conversation-manager.ts  # Sliding window strategy
-│   │   └── index.ts          # Public exports
+│   ├── examples/                 # Example applications
+│   │   ├── agents-as-tools/
+│   │   ├── browser-agent/
+│   │   ├── first-agent/
+│   │   ├── graph/
+│   │   ├── mcp/
+│   │   ├── swarm/
+│   │   └── telemetry/
 │   │
-│   ├── hooks/                    # Hooks system for extensibility
-│   │   ├── __tests__/            # Unit tests for hooks
-│   │   │   ├── events.test.ts    # Tests for hook events
-│   │   │   └── registry.test.ts  # Tests for HookRegistry
-│   │   ├── events.ts             # HookEvent base class and concrete events
-│   │   ├── registry.ts           # HookRegistry implementation
-│   │   ├── types.ts              # Hook-related type definitions
-│   │   └── index.ts              # Public exports for hooks
-│   │
-│   ├── plugins/                  # Plugin system for agent extensibility
-│   │   ├── __tests__/            # Unit tests for plugins
-│   │   │   ├── plugin.test.ts    # Tests for Plugin abstract class
-│   │   │   └── registry.test.ts  # Tests for PluginRegistry
-│   │   ├── plugin.ts             # Plugin abstract base class
-│   │   ├── registry.ts           # PluginRegistry implementation
-│   │   └── index.ts              # Public exports for plugins
-│   │
-│   ├── models/                   # Model provider implementations
-│   │   ├── __tests__/            # Unit tests for model providers
-│   │   │   └── bedrock.test.ts   # Tests for Bedrock model provider
-│   │   ├── bedrock.ts            # AWS Bedrock model provider
-│   │   ├── model.ts              # Base model provider interface
-│   │   └── streaming.ts          # Streaming event types
-│   │
-│   ├── tools/                    # Tool definitions and types
-│   │   ├── __tests__/            # Unit tests for tools
-│   │   │   ├── registry.test.ts  # Tests for ToolRegistry
-│   │   │   ├── tool.test.ts      # Tests for FunctionTool
-│   │   │   └── structured-output-tool.test.ts  # Tests for StructuredOutputTool
-│   │   ├── function-tool.ts      # FunctionTool implementation
-│   │   ├── mcp-tool.ts           # MCP tool wrapper
-│   │   ├── structured-output-tool.ts  # Structured output validation tool
-│   │   ├── registry.ts           # ToolRegistry implementation
-│   │   ├── tool.ts               # Tool interface
-│   │   ├── zod-utils.ts          # Zod to JSON Schema conversion
-│   │   └── types.ts              # Tool-related type definitions
-│   │
-│   ├── multiagent/               # Multi-agent orchestration patterns
-│   │   ├── __tests__/            # Unit tests for multi-agent
-│   │   │   ├── graph.test.ts     # Tests for Graph orchestrator
-│   │   │   ├── swarm.test.ts     # Tests for Swarm orchestrator
-│   │   │   ├── nodes.test.ts     # Tests for Node types
-│   │   │   ├── events.test.ts    # Tests for multi-agent events
-│   │   │   └── queue.test.ts     # Tests for execution queue
-│   │   ├── base.ts               # MultiAgentBase interface
-│   │   ├── graph.ts              # Graph orchestrator (DAG execution)
-│   │   ├── swarm.ts              # Swarm orchestrator (handoff-based)
-│   │   ├── nodes.ts              # Node types (AgentNode, MultiAgentNode)
-│   │   ├── state.ts              # MultiAgentState, NodeResult, Status
-│   │   ├── events.ts             # Multi-agent streaming events
-│   │   ├── edge.ts               # Graph edge definitions
-│   │   ├── queue.ts              # Node execution queue
-│   │   └── index.ts              # Public exports
-│   │
-│   ├── types/                    # Core type definitions
-│   │   ├── json.ts               # JSON schema and value types
-│   │   └── messages.ts           # Message and content block types
-│   │
-│   ├── __tests__/                # Unit tests for root-level source files
-│   │   ├── errors.test.ts        # Tests for error classes
-│   │   ├── index.test.ts         # Tests for main entry point
-│   │   └── mcp.test.ts           # Tests for MCP integration
-│   │
-│   ├── mcp.ts                    # MCP client implementation
-│   ├── errors.ts                 # Custom error classes
-│   ├── app-state.ts              # App state implementation
-│   └── index.ts                  # Main SDK entry point (single export point)
+│   ├── package.json              # SDK package config and dependencies
+│   ├── tsconfig.base.json        # TypeScript configuration
+│   ├── vitest.config.ts          # Testing configuration
+│   └── eslint.config.js          # Linting configuration
 │
-├── vended-tools/                 # Optional vended tools (not part of core SDK)
-│   ├── notebook/                 # Notebook tool for managing text notebooks
-│   │   ├── __tests__/            # Unit tests for notebook tool
-│   │   │   └── notebook.test.ts
-│   │   ├── notebook.ts           # Notebook implementation
-│   │   ├── types.ts              # Notebook type definitions
-│   │   ├── index.ts              # Public exports for notebook tool
-│   │   └── README.md             # Notebook tool documentation
-│   └── README.md                 # Vended tools overview
+├── strands-py/                   # Python SDK bindings (WASM-based)
+│   ├── strands/                  # Python package source
+│   │   ├── _generated/           # Auto-generated type bindings
+│   │   ├── agent/                # Agent implementation
+│   │   │   └── conversation_manager/
+│   │   ├── event_loop/           # Event loop and retry logic
+│   │   ├── models/               # Model providers (Bedrock, Anthropic, OpenAI, Gemini)
+│   │   ├── multiagent/           # Multi-agent orchestration (Graph, Swarm)
+│   │   ├── session/              # Session management (file, S3)
+│   │   ├── tools/                # Tool definitions and MCP client
+│   │   │   └── mcp/
+│   │   ├── types/                # Type definitions
+│   │   ├── _conversions.py       # Type conversions between TS and Python
+│   │   ├── _wasm_host.py         # WASM host runtime bridge
+│   │   ├── hooks.py              # Hooks system
+│   │   └── interrupt.py          # Interrupt handling
+│   ├── scripts/                  # Build/codegen scripts
+│   │   └── generate_types.py     # Type generation from WIT definitions
+│   ├── examples/                 # Example applications
+│   ├── tests_integ/              # Integration tests
+│   ├── pyproject.toml            # Python package configuration
+│   └── pyrightconfig.json        # Python type checking configuration
 │
-├── test/integ/                  # Integration tests (separate from source)
-│   ├── multiagent/               # Multi-agent integration tests
-│   │   ├── graph.test.ts         # Graph orchestrator integration tests
-│   │   └── swarm.test.ts         # Swarm orchestrator integration tests
-│   ├── bedrock.test.ts           # Bedrock integration tests (requires AWS credentials)
-│   ├── hooks.test.ts             # Hooks integration tests
-│   └── registry.test.ts          # ToolRegistry integration tests
+├── strands-wasm/                 # WASM build tooling
+│   ├── __fixtures__/             # Vitest module mocks for WIT imports
+│   ├── __tests__/                # Unit tests for entry.ts internals
+│   ├── test/                     # Tests outside of source
+│   │   └── guest/                # Tests that load the compiled WASM component
+│   ├── entry.ts                  # WASM entry point (TS SDK surface for WASM compilation)
+│   ├── build.js                  # Build script for WASM compilation
+│   ├── patches/                  # Runtime patches for WASM compatibility
+│   │   └── getChunkedStream.js
+│   ├── package.json              # WASM package configuration
+│   ├── vitest.config.ts          # Test configuration (unit + guest projects)
+│   └── tsconfig.json             # TypeScript type-check configuration
 │
-├── examples/                     # Example applications
-│   ├── first-agent/              # Basic agent usage example
-│   ├── graph/                    # Graph multi-agent orchestration example
-│   ├── mcp/                      # MCP integration examples
-│   ├── swarm/                    # Swarm multi-agent orchestration example
-│   └── telemetry/                # OpenTelemetry integration example
+├── strands-dev/                  # Developer CLI tooling
+│   ├── src/
+│   │   └── cli.ts                # CLI entry point
+│   ├── package.json              # Dev CLI package configuration
+│   └── tsconfig.json             # TypeScript configuration
+│
+├── wit/                          # WebAssembly Interface Type definitions
+│   └── agent.wit                 # WIT contract between TS SDK and WASM hosts
+│
+├── docs/                         # Project documentation
+│   ├── TESTING.md                # Comprehensive testing guidelines
+│   ├── DEPENDENCIES.md           # Dependency management guidelines
+│   └── PR.md                     # Pull request guidelines and template
 │
 ├── .github/                      # GitHub Actions workflows
-│   ├── workflows/                # CI/CD workflows
-│   │   ├── pr-and-push.yml       # Triggers test/lint on PR and push
-│   │   ├── test-lint.yml         # Unit tests and linting
-│   │   └── integration-test.yml  # Secure integration tests with AWS
-│   └── agent-sops/               # Agent system prompts
+│   └── workflows/
 │
-├── .project/                     # Project management (tasks, tracking)
-│   ├── tasks/                    # Active tasks
-│   ├── tasks/completed/          # Completed tasks
-│   ├── project-overview.md       # Project goals and roadmap
-│   └── task-registry.md          # Task dependencies
+├── .husky/                       # Git hooks (pre-commit checks)
 │
-├── dist/                         # Compiled output (generated, not in git)
-├── coverage/                     # Test coverage reports (generated)
-├── node_modules/                 # Dependencies (generated)
-│
-├── package.json                  # Project configuration and dependencies
-├── tsconfig.json                 # TypeScript compiler configuration
-├── vitest.config.ts              # Testing configuration (with unit/integ projects)
-├── eslint.config.js              # Linting configuration
+├── package.json                  # Root workspace config (delegates to strands-ts)
 ├── .prettierrc                   # Code formatting configuration
 ├── .gitignore                    # Git ignore rules
-├── .husky/                       # Git hooks (pre-commit checks)
 │
 ├── AGENTS.md                     # This file (agent guidance)
 ├── CONTRIBUTING.md               # Human contributor guidelines
@@ -165,20 +267,36 @@ sdk-typescript/
 
 ### Directory Purposes
 
-- **`src/`**: All production code lives here with co-located unit tests
-- **`src/__tests__/`**: Unit tests for root-level source files
-- **`src/agent/`**: Agent loop coordination, streaming event types, output printing, and conversation management
-- **`src/agent/conversation-manager/`**: Conversation history management strategies
-- **`src/hooks/`**: Hooks system for event-driven extensibility
-- **`src/plugins/`**: Plugin system for extending agent functionality
-- **`src/models/`**: Model provider implementations (Bedrock, OpenAI, future providers)
-- **`src/tools/`**: Tool definitions, types, and structured output validation with Zod schemas
-- **`src/multiagent/`**: Multi-agent orchestration patterns (Graph for DAG execution, Swarm for handoff-based routing)
-- **`src/types/`**: Core type definitions used across the SDK
-- **`src/vended-tools/`**: Optional vended tools (not part of core SDK, independently importable)
-- **`test/integ/`**: Integration tests (tests public API and external integrations)
+- **`strands-ts/`**: The SDK workspace package containing all source, tests, and examples
+- **`strands-ts/src/`**: All production code with co-located unit tests
+- **`strands-ts/src/__fixtures__/`**: Shared test fixtures (mock models, helpers)
+- **`strands-ts/src/a2a/`**: Agent-to-agent protocol (A2A client, server, adapters)
+- **`strands-ts/src/agent/`**: Agent loop coordination, output printing, snapshots
+- **`strands-ts/src/conversation-manager/`**: Conversation history management strategies
+- **`strands-ts/src/hooks/`**: Hooks system for event-driven extensibility
+- **`strands-ts/src/logging/`**: Structured logging utilities
+- **`strands-ts/src/models/`**: Model provider implementations (Bedrock, Anthropic, OpenAI, Google, Vercel)
+- **`strands-ts/src/multiagent/`**: Multi-agent orchestration patterns (Graph for DAG execution, Swarm for handoff-based routing)
+- **`strands-ts/src/plugins/`**: Plugin system for extending agent functionality
+- **`strands-ts/src/registry/`**: Tool registry implementation
+- **`strands-ts/src/retry/`**: Retry strategies for model calls (backoff strategies, abstract `ModelRetryStrategy` plugin base class, concrete `DefaultModelRetryStrategy`)
+- **`strands-ts/src/session/`**: Session management (file, S3, custom storage)
+- **`strands-ts/src/telemetry/`**: OpenTelemetry tracing and metrics
+- **`strands-ts/src/tools/`**: Tool definitions, types, and structured output validation with Zod schemas
+- **`strands-ts/src/types/`**: Core type definitions used across the SDK
+- **`strands-ts/src/vended-plugins/`**: Optional vended plugins (not part of core SDK, independently importable)
+- **`strands-ts/src/vended-tools/`**: Optional vended tools (bash, file-editor, http-request, notebook)
+- **`strands-ts/test/integ/`**: Integration tests (tests public API and external integrations)
+- **`strands-ts/examples/`**: Example applications
+- **`strands-py/`**: Python SDK bindings powered by the TS SDK compiled to WASM
+- **`strands-py/strands/`**: Python package source with agent, models, multiagent, session, tools, and type modules
+- **`strands-py/scripts/`**: Build and codegen scripts (type generation from WIT definitions)
+- **`strands-py/tests_integ/`**: Python integration tests
+- **`strands-wasm/`**: WASM build tooling for compiling the TS SDK to WebAssembly
+- **`strands-dev/`**: Developer CLI tooling for local development workflows
+- **`wit/`**: WebAssembly Interface Type (WIT) definitions defining the contract between the TS SDK and WASM hosts
+- **`docs/`**: Project documentation (testing guidelines, dependency management, PR guidelines)
 - **`.github/workflows/`**: CI/CD automation and quality gates
-- **`.project/`**: Task management and project tracking
 
 **IMPORTANT**: After making changes that affect the directory structure (adding new directories, moving files, or adding significant new files), you MUST update this directory structure section to reflect the current state of the repository.
 
@@ -187,6 +305,7 @@ sdk-typescript/
 ### 1. Environment Setup
 
 See [CONTRIBUTING.md - Development Environment](CONTRIBUTING.md#development-environment) for:
+
 - Prerequisites (Node.js 20+, npm)
 - Installation steps
 - Verification commands
@@ -215,7 +334,10 @@ See [PR.md](docs/PR.md) for the complete guidance and template.
 ### 4. Quality Gates
 
 Pre-commit hooks automatically run:
-- Unit tests (via npm test)
+
+- Build (via npm run build, required for workspace type resolution)
+- Unit tests with coverage (via npm run test:coverage)
+- WASM unit tests (via npm run test -w strands-wasm)
 - Linting (via npm run lint)
 - Format checking (via npm run format:check)
 - Type checking (via npm run type-check)
@@ -241,6 +363,7 @@ See [TESTING.md](docs/TESTING.md) for the complete testing reference.
 The SDK uses a structured logging format consistent with the Python SDK for better log parsing and searchability.
 
 **Format**:
+
 ```typescript
 // With context fields
 logger.warn(`field1=<${value1}>, field2=<${value2}> | human readable message`)
@@ -303,20 +426,23 @@ import { something } from 'external-package'
 ### File Organization Pattern
 
 **For source files**:
+
 ```
-src/
+strands-ts/src/
 ├── module.ts              # Source file
 └── __tests__/
     └── module.test.ts     # Unit tests co-located
 ```
 
 **Function ordering within files**:
+
 - Functions MUST be ordered from most general to most specific (top-down reading)
 - Public/exported functions MUST appear before private helper functions
 - Main entry point functions MUST be at the top of the file
 - Helper functions SHOULD follow in order of their usage
 
 **Example**:
+
 ```typescript
 // Good: Main function first, helpers follow
 export async function* mainFunction() {
@@ -344,8 +470,9 @@ export async function* mainFunction() {
 ```
 
 **For integration tests**:
+
 ```
-test/integ/
+strands-ts/test/integ/
 └── feature.test.ts        # Tests public API
 ```
 
@@ -365,6 +492,7 @@ return undefined
 ```
 
 **Strict requirements**:
+
 ```typescript
 // Good: Explicit return types
 export function process(input: string): string {
@@ -388,6 +516,7 @@ export function getData(): any {
 ```
 
 **Rules**:
+
 - Always provide explicit return types
 - Never use `any` type (enforced by ESLint)
 - Use TypeScript strict mode features
@@ -415,7 +544,7 @@ export class Example {
 
 // Bad: No underscore for private fields
 export class Example {
-  private readonly config: Config  // Missing underscore
+  private readonly config: Config // Missing underscore
 
   constructor(config: Config) {
     this.config = config
@@ -424,22 +553,44 @@ export class Example {
 ```
 
 **Rules**:
+
 - Private fields MUST use underscore prefix (e.g., `_field`)
 - Public fields MUST NOT use underscore prefix
 - This convention improves code readability and makes the distinction between public and private members immediately visible
+
+#### Naming Conventions for New Features
+
+When choosing names and constants that match an existing implementation in the Python SDK, use exactly the same literal used
+in the Python SDK. Wherever we can achieve compatibility, keep the previous convention.
+
+#### Plugin Naming
+
+Name plugins for what they do, not for the `Plugin` interface they implement.
+
+```typescript
+// Good
+export class AgentSkills implements Plugin { ... }
+export class DefaultModelRetryStrategy implements Plugin { ... }
+
+// Bad
+export class AgentSkillsPlugin implements Plugin { ... }
+export class DefaultModelRetryStrategyPlugin implements Plugin { ... }
+```
+
+Same rule for the associated config (`AgentSkillsConfig`, not `AgentSkillsPluginConfig`).
 
 ### Documentation Requirements
 
 **TSDoc format** (required for all exported functions):
 
-```typescript
+````typescript
 /**
  * Brief description of what the function does.
- * 
+ *
  * @param paramName - Description of the parameter
  * @param optionalParam - Description of optional parameter
  * @returns Description of what is returned
- * 
+ *
  * @example
  * ```typescript
  * const result = functionName('input')
@@ -449,7 +600,7 @@ export class Example {
 export function functionName(paramName: string, optionalParam?: number): string {
   // Implementation
 }
-```
+````
 
 **Interface property documentation**:
 
@@ -472,6 +623,7 @@ export interface MyConfig {
 ```
 
 **Requirements**:
+
 - All exported functions, classes, and interfaces must have TSDoc
 - Include `@param` for all parameters
 - Include `@returns` for return values
@@ -484,6 +636,7 @@ export interface MyConfig {
 ### Code Style Guidelines
 
 **Formatting** (enforced by Prettier):
+
 - No semicolons
 - Single quotes
 - Line length: 120 characters
@@ -491,6 +644,7 @@ export interface MyConfig {
 - Trailing commas in ES5 style
 
 **Example**:
+
 ```typescript
 export function example(name: string, options?: Options): Result {
   const config = {
@@ -509,6 +663,7 @@ export function example(name: string, options?: Options): Result {
 ### Import Organization
 
 Organize imports in this order:
+
 ```typescript
 // 1. External dependencies
 import { something } from 'external-package'
@@ -539,7 +694,9 @@ export type ContentBlock = TextBlock | ToolUseBlock | ToolResultBlock
 export class TextBlock {
   readonly type = 'textBlock' as const
   readonly text: string
-  constructor(data: { text: string }) { this.text = data.text }
+  constructor(data: { text: string }) {
+    this.text = data.text
+  }
 }
 
 export class ToolUseBlock {
@@ -573,7 +730,8 @@ export interface TextBlockData {
   text: string
 }
 
-export interface Message {  // Top-level should come first
+export interface Message {
+  // Top-level should come first
   role: Role
   content: ContentBlock[]
 }
@@ -588,22 +746,26 @@ export interface Message {  // Top-level should come first
 ```typescript
 // Correct - type matches class name (first letter lowercase)
 export class TextBlock {
-  readonly type = 'textBlock' as const  // Matches 'TextBlock' class name
+  readonly type = 'textBlock' as const // Matches 'TextBlock' class name
   readonly text: string
-  constructor(data: { text: string }) { this.text = data.text }
+  constructor(data: { text: string }) {
+    this.text = data.text
+  }
 }
 
 export class CachePointBlock {
-  readonly type = 'cachePointBlock' as const  // Matches 'CachePointBlock' class name
+  readonly type = 'cachePointBlock' as const // Matches 'CachePointBlock' class name
   readonly cacheType: 'default'
-  constructor(data: { cacheType: 'default' }) { this.cacheType = data.cacheType }
+  constructor(data: { cacheType: 'default' }) {
+    this.cacheType = data.cacheType
+  }
 }
 
 export type ContentBlock = TextBlock | ToolUseBlock | CachePointBlock
 
 // Wrong - type doesn't match class name
 export class CachePointBlock {
-  readonly type = 'cachePoint' as const  // Should be 'cachePointBlock'
+  readonly type = 'cachePoint' as const // Should be 'cachePointBlock'
   readonly cacheType: 'default'
 }
 ```
@@ -646,10 +808,11 @@ export interface CitationSourceContent {
 ```
 
 **Key points**:
+
 - Use `type` alias (not `interface`) so it can be expanded to a union later
 - Each variant's field is **required** within that variant
 - Use object-key discrimination (`'text' in source`) to narrow variants at runtime
-- See `DocumentSourceData` in `src/types/media.ts` and `CitationLocation` in `src/types/citations.ts` for reference implementations
+- See `DocumentSourceData` in `strands-ts/src/types/media.ts` and `CitationLocation` in `strands-ts/src/types/citations.ts` for reference implementations
 
 ### Error Handling
 
@@ -672,12 +835,13 @@ export class ValidationError extends Error {
 ```
 
 **Key Features:**
+
 - Automatic tool discovery and registration
 - Lazy connection (connects on first use)
 - Supports stdio and HTTP transports
 - Resource cleanup with `Symbol.dispose`
 
-**See [`examples/mcp/`](examples/mcp/) for complete working examples.**
+**See [`examples/mcp/`](strands-ts/examples/mcp/) for complete working examples.**
 
 ### Test Assertions
 
@@ -710,6 +874,7 @@ When adding or modifying dependencies, you **MUST** follow the guidelines in [do
 ## Things to Do
 
 **Do**:
+
 - Use relative imports for internal modules
 - Co-locate unit tests with source under `__tests__` directories
 - Follow nested describe pattern for test organization
@@ -723,8 +888,9 @@ When adding or modifying dependencies, you **MUST** follow the guidelines in [do
 ## Things NOT to Do
 
 **Don't**:
+
 - Use `any` type (enforced by ESLint)
-- Put unit tests in separate `tests/` directory (use `src/**/__tests__/**`)
+- Put unit tests in separate `tests/` directory (use `strands-ts/src/**/__tests__/**`)
 - Skip documentation for exported functions
 - Use semicolons (Prettier will remove them)
 - Commit without running pre-commit hooks
@@ -737,6 +903,7 @@ When adding or modifying dependencies, you **MUST** follow the guidelines in [do
 For detailed command usage, see [CONTRIBUTING.md - Testing Instructions](CONTRIBUTING.md#testing-instructions-and-best-practices).
 
 Quick reference:
+
 ```bash
 npm test              # Run unit tests in Node.js
 npm run test:browser  # Run unit tests in browser (Chromium via Playwright)
@@ -752,6 +919,7 @@ npm run build         # Compile TypeScript
 ## Troubleshooting Common Issues
 
 If TypeScript compilation fails:
+
 1. Run `npm run type-check` to see all type errors
 2. Ensure all functions have explicit return types
 3. Verify no `any` types are used
@@ -770,8 +938,8 @@ If TypeScript compilation fails:
 4. **Document as you go** with TSDoc comments
 5. **Run all checks** before committing (pre-commit hooks will enforce this)
 
-
 ### Writing code
+
 - YOU MUST make the SMALLEST reasonable changes to achieve the desired outcome.
 - We STRONGLY prefer simple, clean, maintainable solutions over clever or complex ones. Readability and maintainability are PRIMARY CONCERNS, even at the cost of conciseness or performance.
 - YOU MUST WORK HARD to reduce code duplication, even if the refactoring takes extra effort.
@@ -779,18 +947,18 @@ If TypeScript compilation fails:
 - YOU MUST NOT manually change whitespace that does not affect execution or output. Otherwise, use a formatting tool.
 - Fix broken things immediately when you find them. Don't ask permission to fix bugs.
 
-
 #### Code Comments
- - NEVER add comments explaining that something is "improved", "better", "new", "enhanced", or referencing what it used to be
- - Comments should explain WHAT the code does or WHY it exists, not how it's better than something else
- - YOU MUST NEVER add comments about what used to be there or how something has changed. 
- - YOU MUST NEVER refer to temporal context in comments (like "recently refactored" "moved") or code. Comments should be evergreen and describe the code as it is.
- - YOU MUST NEVER write overly verbose comments. Use concise language.
 
+- NEVER add comments explaining that something is "improved", "better", "new", "enhanced", or referencing what it used to be
+- Comments should explain WHAT the code does or WHY it exists, not how it's better than something else
+- YOU MUST NEVER add comments about what used to be there or how something has changed.
+- YOU MUST NEVER refer to temporal context in comments (like "recently refactored" "moved") or code. Comments should be evergreen and describe the code as it is.
+- YOU MUST NEVER write overly verbose comments. Use concise language.
 
 ### Code Review Considerations
 
 When responding to PR feedback:
+
 - Address all review comments
 - Test changes thoroughly
 - Update documentation if behavior changes
@@ -803,7 +971,8 @@ When responding to PR feedback:
 - **docs/TESTING.md**: Comprehensive testing guidelines (MUST follow when writing tests)
 - **docs/PR.md**: Pull request guidelines and template
 - **README.md**: Public-facing documentation, links to strandsagents.com
-- **package.json**: Defines all npm scripts referenced in documentation
+- **package.json**: Root workspace config that delegates to strands-ts
+- **strands-ts/package.json**: SDK package config, dependencies, and npm scripts
 
 ## Additional Resources
 

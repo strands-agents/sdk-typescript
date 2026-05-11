@@ -30,7 +30,6 @@ jobs:
       id-token: write
       pull-requests: read
       contents: read
-
     steps:
       - name: Configure Credentials
         uses: aws-actions/configure-aws-credentials@v6
@@ -53,7 +52,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          npm install
+          npm ci
           npm run test:browser:install
 
       - name: Build the package
@@ -67,7 +66,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: test-artifacts-integ
-          path: ./test/.artifacts/
+          path: ./strands-ts/test/.artifacts/
           retention-days: 4
           include-hidden-files: true # needed because the path has a directory starting with a '.'
           if-no-files-found: ignore

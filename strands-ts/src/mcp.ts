@@ -1,0 +1,347 @@
+import { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
+import { takeResult } from '@modelcontextprotocol/sdk/shared/responseMessage.js'
+import {
+  ElicitRequestSchema,
+  LoggingMessageNotificationSchema,
+  type ServerCapabilities,
+  type Implementation,
+  type LoggingMessageNotificationParams,
+} from '@modelcontextprotocol/sdk/types.js'
+import { context, propagation, trace } from '@opentelemetry/api'
+import type { JSONSchema, JSONValue } from './types/json.js'
+import type { ElicitationCallback } from './types/elicitation.js'
+import { McpTool } from './tools/mcp-tool.js'
+import { logger } from './logging/index.js'
+
+/**
+ * Widened transport type that accepts MCP transport implementations without requiring explicit casts.
+ *
+ * Under `exactOptionalPropertyTypes`, `StreamableHTTPClientTransport` is not directly assignable
+ * to `Transport` because its `sessionId` getter returns `string | undefined`, while `Transport`
+ * declares `sessionId?: string` (absent or string, but not explicitly undefined).
+ * This type relaxes that constraint so users can pass any MCP transport without `as Transport`.
+ */
+export type McpTransport = Omit<Transport, 'sessionId'> & { sessionId?: string | undefined }
+
+/** Temporary placeholder for RuntimeConfig */
+export interface RuntimeConfig {
+  applicationName?: string
+  applicationVersion?: string
+}
+
+/**
+ * Configuration for MCP task-augmented tool execution.
+ *
+ * WARNING: MCP Tasks is an experimental feature in both the MCP specification and this SDK.
+ * The API may change without notice in future versions.
+ *
+ * When provided to McpClient, enables task-based tool invocation which supports
+ * long-running tools with progress tracking. Without this config, tools are
+ * called directly without task management.
+ */
+export interface TasksConfig {
+  /**
+   * Time-to-live in milliseconds for task polling.
+   * Defaults to 60000 (60 seconds).
+   */
+  ttl?: number
+
+  /**
+   * Maximum time in milliseconds to wait for task completion during polling.
+   * Defaults to 300000 (5 minutes).
+   */
+  pollTimeout?: number
+}
+
+/** Connection state of an MCP client. */
+export type McpConnectionState = 'disconnected' | 'connected' | 'failed'
+
+/** Arguments for configuring an MCP Client. */
+export type McpClientConfig = RuntimeConfig & {
+  transport: McpTransport
+
+  /** Disable OpenTelemetry MCP instrumentation. */
+  disableMcpInstrumentation?: boolean
+
+  /**
+   * Configuration for task-augmented tool execution (experimental).
+   * When provided (even as empty object), enables MCP task-based tool invocation.
+   * When undefined, tools are called directly without task management.
+   */
+  tasksConfig?: TasksConfig
+
+  /**
+   * Callback to handle server-initiated elicitation requests.
+   * When provided, the client advertises elicitation support (form + url modes)
+   * and routes incoming elicitation requests to this callback.
+   */
+  elicitationCallback?: ElicitationCallback
+
+  /** When true, connection failures are logged as warnings instead of throwing. */
+  failOpen?: boolean
+
+  /** Called when the server emits a log message. Defaults to routing through the Strands logger. */
+  logHandler?: (params: LoggingMessageNotificationParams) => void
+}
+
+/** MCP Client for interacting with Model Context Protocol servers. */
+export class McpClient {
+  /** Default TTL for task polling in milliseconds (60 seconds). */
+  public static readonly DEFAULT_TTL = 60000
+
+  /** Default poll timeout for task completion in milliseconds (5 minutes). */
+  public static readonly DEFAULT_POLL_TIMEOUT = 300000
+
+  private _clientName: string
+  private _clientVersion: string
+  private _transport: Transport
+  private _state: McpConnectionState
+  private _client: Client
+  private _failOpen: boolean
+  private _logHandler: (params: LoggingMessageNotificationParams) => void
+  private _disableMcpInstrumentation: boolean
+  private _tasksConfig: TasksConfig | undefined
+  private _elicitationCallback: ElicitationCallback | undefined
+
+  constructor(args: McpClientConfig) {
+    this._clientName = args.applicationName || 'strands-agents-ts-sdk'
+    this._clientVersion = args.applicationVersion || '0.0.1'
+    this._transport = args.transport as Transport
+    this._state = 'disconnected'
+    this._failOpen = args.failOpen ?? false
+    this._logHandler = args.logHandler ?? defaultLogHandler
+    this._tasksConfig = args.tasksConfig
+    this._elicitationCallback = args.elicitationCallback
+    this._client = new Client(
+      {
+        name: this._clientName,
+        version: this._clientVersion,
+      },
+      this._elicitationCallback ? { capabilities: { elicitation: { form: {}, url: {} } } } : undefined
+    )
+
+    this._client.setNotificationHandler(LoggingMessageNotificationSchema, (notification) => {
+      this._logHandler(notification.params)
+    })
+
+    this._disableMcpInstrumentation = args.disableMcpInstrumentation ?? false
+  }
+
+  get client(): Client {
+    return this._client
+  }
+
+  get serverCapabilities(): ServerCapabilities | undefined {
+    return this._client.getServerCapabilities()
+  }
+
+  get serverVersion(): Implementation | undefined {
+    return this._client.getServerVersion()
+  }
+
+  get serverInstructions(): string | undefined {
+    return this._client.getInstructions()
+  }
+
+  get connectionState(): McpConnectionState {
+    return this._state
+  }
+
+  /**
+   * Connects the MCP client to the server.
+   *
+   * Called lazily before any operation that requires a connection. When `failOpen` is true,
+   * connection failures are swallowed and the client enters a `'failed'` state — subsequent
+   * calls are no-ops until `connect(true)` is called explicitly to retry.
+   *
+   * @param reconnect - When true, forces a reconnect even if already connected or failed.
+   * @returns A promise that resolves when the connection is established.
+   */
+  public async connect(reconnect: boolean = false): Promise<void> {
+    if (this._state !== 'disconnected' && !reconnect) return
+
+    if (this._state === 'connected' && reconnect) {
+      await this._client.close()
+      this._state = 'disconnected'
+    }
+
+    if (this._elicitationCallback) {
+      const callback = this._elicitationCallback
+      this._client.setRequestHandler(ElicitRequestSchema, async (request, extra) => {
+        return await callback(extra, request.params)
+      })
+    }
+
+    try {
+      await this._client.connect(this._transport)
+      this._state = 'connected'
+    } catch (error) {
+      if (!this._failOpen) throw error
+      this._state = 'failed'
+      logger.warn(
+        `client=<${this._clientName}>, error=<${error}> | MCP server failed to connect, continuing with failOpen`
+      )
+    }
+  }
+
+  /**
+   * Disconnects the MCP client from the server and cleans up resources.
+   *
+   * @returns A promise that resolves when the disconnection is complete.
+   */
+  public async disconnect(): Promise<void> {
+    // Must be done sequentially
+    await this._client.close()
+    await this._transport.close()
+    this._state = 'disconnected'
+  }
+
+  /**
+   * Enables the `await using` pattern for automatic resource cleanup.
+   * Delegates to {@link McpClient.disconnect}.
+   */
+  async [Symbol.asyncDispose](): Promise<void> {
+    await this.disconnect()
+  }
+
+  /**
+   * Lists the tools available on the server and returns them as executable McpTool instances.
+   *
+   * @returns A promise that resolves with an array of McpTool instances.
+   */
+  public async listTools(): Promise<McpTool[]> {
+    await this.connect()
+    if (this._state === 'failed') return []
+
+    const tools: McpTool[] = []
+    let cursor: string | undefined
+
+    do {
+      const result = await this._client.listTools(cursor ? { cursor } : undefined)
+
+      tools.push(
+        ...result.tools.map(
+          (toolSpec) =>
+            new McpTool({
+              name: toolSpec.name,
+              description: toolSpec.description || `Tool which performs ${toolSpec.name}`,
+              inputSchema: toolSpec.inputSchema as JSONSchema,
+              client: this,
+            })
+        )
+      )
+
+      cursor = result.nextCursor
+    } while (cursor)
+
+    return tools
+  }
+
+  /**
+   * Invoke a tool on the connected MCP server using an McpTool instance.
+   *
+   * When `tasksConfig` was provided to the client constructor, uses experimental
+   * task-based invocation which supports long-running tools with progress tracking.
+   * Otherwise, calls tools directly without task management.
+   *
+   * @param tool - The McpTool instance to invoke.
+   * @param args - The arguments to pass to the tool.
+   * @returns A promise that resolves with the result of the tool invocation.
+   */
+  public async callTool(tool: McpTool, args: JSONValue): Promise<JSONValue> {
+    await this.connect()
+    if (this._state === 'failed') throw new Error('MCP server failed to connect. Call connect(true) to retry.')
+
+    if (args === null || args === undefined) {
+      return await this.callTool(tool, {})
+    }
+
+    if (typeof args !== 'object' || Array.isArray(args)) {
+      throw new Error(
+        `MCP Protocol Error: Tool arguments must be a JSON Object (named parameters). Received: ${Array.isArray(args) ? 'Array' : typeof args}`
+      )
+    }
+
+    // Inject OpenTelemetry trace context into tool arguments for distributed tracing
+    const enhancedArgs = this._disableMcpInstrumentation ? args : injectTraceContext(args)
+    const toolArgs = enhancedArgs as Record<string, unknown>
+
+    // When tasksConfig is undefined, call tools directly without task management
+    if (this._tasksConfig === undefined) {
+      return (await this._client.callTool({ name: tool.name, arguments: toolArgs })) as JSONValue
+    }
+
+    // When tasksConfig is defined (even as empty object), use task-based invocation
+    // which supports long-running tools with progress tracking
+    const stream = this._client.experimental.tasks.callToolStream(
+      { name: tool.name, arguments: toolArgs },
+      undefined, // resultSchema - use default CallToolResultSchema
+      {
+        timeout: this._tasksConfig.ttl ?? McpClient.DEFAULT_TTL,
+        maxTotalTimeout: this._tasksConfig.pollTimeout ?? McpClient.DEFAULT_POLL_TIMEOUT,
+        resetTimeoutOnProgress: true,
+      }
+    )
+
+    const result = await takeResult(stream)
+    return result as JSONValue
+  }
+}
+
+function defaultLogHandler(params: LoggingMessageNotificationParams): void {
+  const { level, logger: serverLogger, data } = params
+  const message = `logger=<${serverLogger ?? 'mcp'}>, data=<${JSON.stringify(data)}> | MCP server log`
+  if (level === 'debug') {
+    logger.debug(message)
+  } else if (level === 'info' || level === 'notice') {
+    logger.info(message)
+  } else if (level === 'warning') {
+    logger.warn(message)
+  } else {
+    logger.error(message)
+  }
+}
+
+/**
+ * Carrier object for OpenTelemetry context propagation.
+ */
+interface ContextCarrier {
+  [key: string]: string | string[] | undefined
+}
+
+/**
+ * Injects OpenTelemetry trace context into MCP tool call arguments.
+ * Returns the args with a `_meta` field containing W3C traceparent headers.
+ * If no active span exists or injection fails, returns the original args unchanged.
+ *
+ * @param args - The tool call arguments (must be a non-null object)
+ * @returns The args with trace context injected, or the original args on failure
+ */
+function injectTraceContext(args: JSONValue): JSONValue {
+  try {
+    const currentContext = context.active()
+    const currentSpan = trace.getSpan(currentContext)
+
+    if (!currentSpan || !currentSpan.spanContext().traceId) {
+      return args
+    }
+
+    const carrier: ContextCarrier = {}
+    propagation.inject(currentContext, carrier)
+
+    const existingMeta = (args as Record<string, unknown>)._meta
+    const mergedMeta =
+      existingMeta && typeof existingMeta === 'object' && !Array.isArray(existingMeta)
+        ? { ...existingMeta, ...carrier }
+        : carrier
+
+    return {
+      ...(args as Record<string, unknown>),
+      _meta: mergedMeta as unknown as JSONValue,
+    }
+  } catch (error) {
+    logger.warn(`error=<${error}> | failed to inject trace context into mcp tool call args`)
+    return args
+  }
+}
