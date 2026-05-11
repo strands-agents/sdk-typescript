@@ -24,6 +24,8 @@ export type MultiAgentInput = Exclude<InvokeArgs, Message[] | MessageData[]>
  * The non-resume subset of {@link MultiAgentInput}. Internal orchestrator helpers that
  * participate in dependency resolution / handoff routing accept this narrower type so
  * they don't need to re-check for {@link InterruptResponseContent} entries at each call.
+ *
+ * @internal
  */
 export type MultiAgentContentInput = Exclude<
   MultiAgentInput,

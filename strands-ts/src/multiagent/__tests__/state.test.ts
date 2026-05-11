@@ -268,7 +268,7 @@ describe('NodeState', () => {
 
       expect(restored.status).toBe(Status.INTERRUPTED)
       expect(restored.interrupts).toHaveLength(1)
-      expect(restored.interrupts[0]).toMatchObject({ id: 'tool:1:confirm', name: 'confirm', reason: 'need it' })
+      expect(restored.interrupts[0]).toEqual(original.interrupts[0])
       expect(restored.resumeSnapshot).toEqual(original.resumeSnapshot)
     })
 
@@ -516,6 +516,32 @@ describe('MultiAgentState', () => {
         startTime: 1234567890,
         steps: 5,
       })
+    })
+
+    it('round-trips _pendingInput as a string', () => {
+      const original = new MultiAgentState()
+      original._pendingInput = 'hello'
+      const restored = new MultiAgentState()
+      restored[loadStateFromJSONSymbol](JSON.parse(JSON.stringify(original[stateToJSONSymbol]())) as JSONValue)
+      expect(restored._pendingInput).toBe('hello')
+    })
+
+    it('rehydrates _pendingInput ContentBlock[] to ContentBlock instances', () => {
+      // Round-trips through JSON.stringify/parse to simulate FileStorage persistence,
+      // then asserts the restored entries are real ContentBlock instances rather than
+      // raw data objects — agent message construction depends on instance shape for
+      // some downstream code paths.
+      const original = new MultiAgentState()
+      original._pendingInput = [new TextBlock('question')]
+      const serialized = JSON.parse(JSON.stringify(original[stateToJSONSymbol]())) as JSONValue
+      const restored = new MultiAgentState()
+      restored[loadStateFromJSONSymbol](serialized)
+
+      expect(Array.isArray(restored._pendingInput)).toBe(true)
+      const blocks = restored._pendingInput as TextBlock[]
+      expect(blocks).toHaveLength(1)
+      expect(blocks[0]).toBeInstanceOf(TextBlock)
+      expect(blocks[0]!.text).toBe('question')
     })
   })
 })

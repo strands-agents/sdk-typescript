@@ -284,6 +284,21 @@ export class MultiAgentResult {
 }
 
 /**
+ * Rehydrates a serialized `_pendingInput` back to its runtime shape. `string` round-trips
+ * as-is; array inputs (which serialize as `ContentBlockData[]` via each block's `toJSON`)
+ * are mapped through `contentBlockFromData` so downstream callers see `ContentBlock[]`
+ * instead of raw data objects.
+ */
+function rehydratePendingInput(value: JSONValue): MultiAgentInput {
+  if (typeof value === 'string') return value
+  if (Array.isArray(value)) {
+    return (value as JSONValue[]).map((entry) => contentBlockFromData(entry as never)) as ContentBlock[]
+  }
+  // Unexpected shape — pass through so callers see the exact value and can diagnose.
+  return value as unknown as MultiAgentInput
+}
+
+/**
  * Per-execution state for multi-agent orchestration, created fresh each invocation.
  */
 export class MultiAgentState implements StateSerializable {
@@ -370,7 +385,7 @@ export class MultiAgentState implements StateSerializable {
       }
     }
     if (data._pendingInput !== undefined) {
-      this._pendingInput = data._pendingInput as unknown as MultiAgentInput
+      this._pendingInput = rehydratePendingInput(data._pendingInput)
     } else {
       delete this._pendingInput
     }

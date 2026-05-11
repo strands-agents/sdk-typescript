@@ -48,7 +48,8 @@ export class Interrupt {
 
   /**
    * Where this interrupt was raised from — a tool callback or a hook callback.
-   * Optional to preserve backward compatibility with older serialized snapshots.
+   * Always populated on interrupts created by current code; only `undefined` when
+   * deserializing a snapshot produced by a pre-interrupt-source SDK version.
    */
   readonly source?: InterruptSource
 
@@ -442,10 +443,11 @@ export function interruptFromMultiAgentNode<T>(
       source,
     })
 
-  if (!existing) interrupts.push(interrupt)
-
-  if (interrupt.response !== undefined) {
-    return interrupt.response as T
+  if (!existing) {
+    interrupts.push(interrupt)
+    if (interrupt.response !== undefined) {
+      return interrupt.response as T
+    }
   }
 
   throw new InterruptError(interrupt)

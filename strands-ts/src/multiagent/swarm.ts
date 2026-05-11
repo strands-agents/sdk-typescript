@@ -280,15 +280,34 @@ export class Swarm implements MultiAgent {
     let handoff: HandoffResult | undefined
     let nextInput: MultiAgentInput = input
     if (interruptResponsesByNode) {
-      // Swarm is sequential, so at most one node is INTERRUPTED per run.
+      // Swarm runs sequentially, so at most one node can be INTERRUPTED per run.
+      // Assert the invariant so a future change that accidentally produces multiple
+      // interrupted nodes surfaces loudly rather than silently taking the first.
+      if (interruptResponsesByNode.size > 1) {
+        throw new Error(
+          `swarm_id=<${this.id}>, interrupted_nodes=<${[...interruptResponsesByNode.keys()].join(',')}> | swarm cannot have multiple interrupted nodes simultaneously`
+        )
+      }
       const entry = interruptResponsesByNode.entries().next().value
       if (!entry) throw new Error(`swarm_id=<${this.id}> | no interrupt responses to route`)
       const [nodeId, responses] = entry
-      node = this.nodes.get(nodeId)!
+      const resolvedNode = this.nodes.get(nodeId)
+      if (!resolvedNode) {
+        throw new Error(
+          `node_id=<${nodeId}>, swarm_id=<${this.id}> | resume response targets a node missing from the swarm; topology changed between save and resume?`
+        )
+      }
+      node = resolvedNode
+      const resolvedNodeState = state.node(nodeId)
+      if (!resolvedNodeState) {
+        throw new Error(
+          `node_id=<${nodeId}>, swarm_id=<${this.id}> | routed interrupt response targets a node missing from state; topology changed between save and resume?`
+        )
+      }
 
       // Orchestrator hooks consume matching responses; leftovers go to the child
       // agent. If the hook consumed everything, replay the original invocation input.
-      const forwarded = applyOrchestratorHookResponses(state.node(nodeId)!, responses)
+      const forwarded = applyOrchestratorHookResponses(resolvedNodeState, responses)
       nextInput = forwarded.length > 0 ? forwarded : (state._pendingInput ?? '')
     } else {
       const resumeNode = this._findResumeNode(state)

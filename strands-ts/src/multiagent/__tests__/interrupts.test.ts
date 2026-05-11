@@ -406,4 +406,37 @@ describe('Multi-agent interrupts: round-trip', () => {
     expect(eventTypes.indexOf('beforeNodeCallEvent')).toBeLessThan(eventTypes.indexOf('nodeResultEvent'))
     expect(eventTypes.indexOf('nodeResultEvent')).toBeLessThan(eventTypes.indexOf('afterNodeCallEvent'))
   })
+
+  it('Graph: resume against a graph whose topology changed throws a descriptive error', async () => {
+    // Simulate a save/restore where the reconstructed graph is missing a node that
+    // had an outstanding interrupt in the saved state. The routing lookup should fail
+    // loudly rather than silently (which would previously have crashed on a non-null
+    // assertion with an unhelpful TypeError).
+    const storage = new MockSnapshotStorage()
+    const tool = interruptingTool('confirmTool', 'confirm_top', 'ok')
+
+    const model1 = new MockMessageModel().addTurn({
+      type: 'toolUseBlock',
+      name: 'confirmTool',
+      toolUseId: 'tool-topo',
+      input: {},
+    })
+    const agent1 = new Agent({ model: model1, tools: [tool], printer: false, id: 'will-vanish' })
+    const graph1 = new Graph({ nodes: [agent1], edges: [], sessionManager: makeSessionManager(storage) })
+    const interruptResult = await graph1.invoke('go')
+    expect(interruptResult.status).toBe(Status.INTERRUPTED)
+
+    const differentAgent = new Agent({
+      model: new MockMessageModel(),
+      printer: false,
+      id: 'different-node',
+    })
+    const graph2 = new Graph({ nodes: [differentAgent], edges: [], sessionManager: makeSessionManager(storage) })
+    const response = new InterruptResponseContent({
+      interruptId: interruptResult.interrupts![0]!.id,
+      response: 'yes',
+    })
+
+    await expect(graph2.invoke([response])).rejects.toThrow(/topology changed between save and resume/)
+  })
 })

@@ -290,11 +290,25 @@ export class Graph implements MultiAgent {
     }
 
     const targets = interruptResponsesByNode
-      ? [...interruptResponsesByNode.keys()].map((id) => this.nodes.get(id)!)
+      ? [...interruptResponsesByNode.keys()].map((id) => {
+          const node = this.nodes.get(id)
+          if (!node) {
+            throw new Error(
+              `node_id=<${id}>, graph_id=<${this.id}> | resume response targets a node missing from the graph; topology changed between save and resume?`
+            )
+          }
+          return node
+        })
       : ((await this._findResumeTargets(state)) ?? [...this._sources])
 
-    // execController fires on both timeout and interrupt short-circuit; external
-    // cancellation stays on its own signal so the loop can distinguish the two causes.
+    // execController has two abort sources that the loop must distinguish:
+    //   1. The `setTimeout` below fires when `config.timeout` elapses → real timeout.
+    //   2. The interrupt short-circuit (`execController.abort()` below the queue drain)
+    //      fires to stop in-flight siblings when any node returns INTERRUPTED.
+    // The loop's timeout check gates on `!interrupted` so an interrupt-driven abort
+    // doesn't get misreported as a timeout. External cancellation stays on its own
+    // signal for the same reason — we need to know whose abort it was. Keep that
+    // `!interrupted` discriminator intact when editing this loop.
     const execController = new AbortController()
     const execTimeoutHandle = Number.isFinite(this.config.timeout)
       ? setTimeout(() => execController.abort(), this.config.timeout)
@@ -699,7 +713,13 @@ export class Graph implements MultiAgent {
     state: MultiAgentState
   ): MultiAgentInput {
     if (routed) {
-      const forwarded = applyOrchestratorHookResponses(state.node(node.id)!, routed)
+      const nodeState = state.node(node.id)
+      if (!nodeState) {
+        throw new Error(
+          `node_id=<${node.id}>, graph_id=<${this.id}> | routed interrupt response targets a node missing from state; topology changed between save and resume?`
+        )
+      }
+      const forwarded = applyOrchestratorHookResponses(nodeState, routed)
       if (forwarded.length > 0) return forwarded
     }
     if (contentInput === undefined) {
