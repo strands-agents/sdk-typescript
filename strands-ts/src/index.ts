@@ -19,6 +19,7 @@ export type { InvocationState, InvokeArgs, InvokeOptions, LocalAgent } from './t
 
 // Snapshot types
 export { SNAPSHOT_SCHEMA_VERSION } from './types/snapshot.js'
+export type { Scope, Snapshot } from './types/snapshot.js'
 export type { TakeSnapshotOptions, SnapshotField, SnapshotPreset } from './agent/snapshot.js'
 
 // Error types
@@ -275,7 +276,6 @@ export type {
 export type { SnapshotManifest, SnapshotTriggerCallback, SnapshotTriggerParams } from './session/types.js'
 export type { SessionStorage, SnapshotStorage, SnapshotLocation } from './session/storage.js'
 export { FileStorage } from './session/file-storage.js'
-export type { Scope, Snapshot } from './types/snapshot.js'
 
 // Local Traces
 export { AgentTrace } from './telemetry/tracer.js'
