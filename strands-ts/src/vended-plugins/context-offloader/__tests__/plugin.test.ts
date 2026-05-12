@@ -69,11 +69,12 @@ describe('ContextOffloader', () => {
       expect(agent.trackedHooks[0]!.eventType).toBe(AfterToolCallEvent)
     })
 
-    it('returns retrieval tool by default', () => {
+    it('returns retrieval and search tools by default', () => {
       const plugin = new ContextOffloader({ storage: new InMemoryStorage() })
       const tools = plugin.getTools()
-      expect(tools).toHaveLength(1)
+      expect(tools).toHaveLength(2)
       expect(tools[0]!.name).toBe('retrieve_offloaded_content')
+      expect(tools[1]!.name).toBe('search_offloaded_content')
     })
 
     it('returns empty tools when includeRetrievalTool is false', () => {
@@ -121,6 +122,23 @@ describe('ContextOffloader', () => {
       plugin.initAgent(agent)
 
       const event = makeEvent([new TextBlock('x'.repeat(1000))], { toolName: 'retrieve_offloaded_content' })
+      await invokeTrackedHook(agent, event)
+
+      expect((event.result.content[0] as TextBlock).text).toBe('x'.repeat(1000))
+    })
+
+    it('does not offload search tool results', async () => {
+      const storage = new InMemoryStorage()
+      const plugin = new ContextOffloader({
+        storage,
+        maxResultTokens: 10,
+        previewTokens: 5,
+        includeRetrievalTool: true,
+      })
+      const agent = createMockAgent()
+      plugin.initAgent(agent)
+
+      const event = makeEvent([new TextBlock('x'.repeat(1000))], { toolName: 'search_offloaded_content' })
       await invokeTrackedHook(agent, event)
 
       expect((event.result.content[0] as TextBlock).text).toBe('x'.repeat(1000))
@@ -215,7 +233,7 @@ describe('ContextOffloader', () => {
       expect(event.result).toBe(originalResult)
     })
 
-    it('includes retrieval tool guidance when enabled', async () => {
+    it('includes search and retrieval tool guidance when enabled', async () => {
       const storage = new InMemoryStorage()
       const plugin = new ContextOffloader({
         storage,
@@ -230,6 +248,7 @@ describe('ContextOffloader', () => {
       await invokeTrackedHook(agent, event)
 
       const preview = (event.result.content[0] as TextBlock).text
+      expect(preview).toContain('search_offloaded_content')
       expect(preview).toContain('retrieve_offloaded_content')
     })
 
@@ -353,6 +372,224 @@ describe('ContextOffloader', () => {
         reference: 'nonexistent',
       })
       expect(result).toContain('Error: reference not found')
+    })
+  })
+
+  describe('search tool', () => {
+    function getSearchTool(plugin: ContextOffloader) {
+      const tools = plugin.getTools()
+      return tools[1]! as unknown as { invoke(input: unknown): Promise<unknown> }
+    }
+
+    it('finds matching lines with context', async () => {
+      const storage = new InMemoryStorage()
+      const content = Array.from({ length: 20 }, (_, i) => `line ${i + 1}`).join('\n')
+      const ref = await storage.store('k1', new TextEncoder().encode(content), 'text/plain')
+
+      const plugin = new ContextOffloader({ storage, includeRetrievalTool: true })
+      const result = (await getSearchTool(plugin).invoke({
+        reference: ref,
+        pattern: 'line 10',
+        context_lines: 2,
+      })) as string
+
+      expect(result).toContain('1 match for /line 10/')
+      expect(result).toContain('> 10| line 10')
+      expect(result).toContain('   8| line 8')
+      expect(result).toContain('  12| line 12')
+    })
+
+    it('returns line range without pattern', async () => {
+      const storage = new InMemoryStorage()
+      const content = Array.from({ length: 50 }, (_, i) => `line ${i + 1}`).join('\n')
+      const ref = await storage.store('k1', new TextEncoder().encode(content), 'text/plain')
+
+      const plugin = new ContextOffloader({ storage, includeRetrievalTool: true })
+      const result = (await getSearchTool(plugin).invoke({
+        reference: ref,
+        line_range: { start: 5, end: 10 },
+      })) as string
+
+      expect(result).toContain('[Lines 5-10 of 50]')
+      expect(result).toContain('  5| line 5')
+      expect(result).toContain(' 10| line 10')
+      expect(result).not.toContain('line 4')
+      expect(result).not.toContain('line 11')
+    })
+
+    it('searches within line range when both provided', async () => {
+      const storage = new InMemoryStorage()
+      const content = Array.from({ length: 30 }, (_, i) => `item ${i + 1}`).join('\n')
+      const ref = await storage.store('k1', new TextEncoder().encode(content), 'text/plain')
+
+      const plugin = new ContextOffloader({ storage, includeRetrievalTool: true })
+      const result = (await getSearchTool(plugin).invoke({
+        reference: ref,
+        pattern: 'item 1',
+        line_range: { start: 10, end: 20 },
+        context_lines: 0,
+      })) as string
+
+      expect(result).toContain('in lines 10-20')
+      expect(result).toContain('> 10| item 10')
+      expect(result).toContain('> 11| item 11')
+      expect(result).not.toContain('> 1|')
+    })
+
+    it('respects custom context_lines', async () => {
+      const storage = new InMemoryStorage()
+      const content = Array.from({ length: 20 }, (_, i) => `line ${i + 1}`).join('\n')
+      const ref = await storage.store('k1', new TextEncoder().encode(content), 'text/plain')
+
+      const plugin = new ContextOffloader({ storage, includeRetrievalTool: true })
+      const result = (await getSearchTool(plugin).invoke({
+        reference: ref,
+        pattern: 'line 10',
+        context_lines: 0,
+      })) as string
+
+      expect(result).toContain('> 10| line 10')
+      expect(result).not.toContain('line 9')
+      expect(result).not.toContain('line 11')
+    })
+
+    it('returns error for binary content', async () => {
+      const storage = new InMemoryStorage()
+      const ref = await storage.store('k1', new Uint8Array([137, 80, 78, 71]), 'image/png')
+
+      const plugin = new ContextOffloader({ storage, includeRetrievalTool: true })
+      const result = (await getSearchTool(plugin).invoke({
+        reference: ref,
+        pattern: 'test',
+      })) as string
+
+      expect(result).toContain('Error: cannot search binary content (image/png)')
+    })
+
+    it('falls back to literal match on invalid regex', async () => {
+      const storage = new InMemoryStorage()
+      const content = 'foo (bar\nbaz\nfoo (bar again'
+      const ref = await storage.store('k1', new TextEncoder().encode(content), 'text/plain')
+
+      const plugin = new ContextOffloader({ storage, includeRetrievalTool: true })
+      const result = (await getSearchTool(plugin).invoke({
+        reference: ref,
+        pattern: 'foo (bar',
+        context_lines: 0,
+      })) as string
+
+      expect(result).toContain('2 matches')
+      expect(result).toContain('> 1| foo (bar')
+      expect(result).toContain('> 3| foo (bar again')
+    })
+
+    it('returns error for missing reference', async () => {
+      const storage = new InMemoryStorage()
+      const plugin = new ContextOffloader({ storage, includeRetrievalTool: true })
+      const result = (await getSearchTool(plugin).invoke({
+        reference: 'nonexistent',
+        pattern: 'test',
+      })) as string
+
+      expect(result).toContain('Error: reference not found')
+    })
+
+    it('searches JSON content', async () => {
+      const storage = new InMemoryStorage()
+      const json = JSON.stringify({ name: 'test', items: [1, 2, 3] }, null, 2)
+      const ref = await storage.store('k1', new TextEncoder().encode(json), 'application/json')
+
+      const plugin = new ContextOffloader({ storage, includeRetrievalTool: true })
+      const result = (await getSearchTool(plugin).invoke({
+        reference: ref,
+        pattern: 'items',
+        context_lines: 1,
+      })) as string
+
+      expect(result).toContain('1 match for /items/')
+      expect(result).toContain('items')
+    })
+
+    it('reports no matches', async () => {
+      const storage = new InMemoryStorage()
+      const content = 'hello\nworld\n'
+      const ref = await storage.store('k1', new TextEncoder().encode(content), 'text/plain')
+
+      const plugin = new ContextOffloader({ storage, includeRetrievalTool: true })
+      const result = (await getSearchTool(plugin).invoke({
+        reference: ref,
+        pattern: 'nonexistent',
+      })) as string
+
+      expect(result).toContain("No matches found for pattern 'nonexistent'")
+    })
+
+    it('truncates output when too many matches', async () => {
+      const storage = new InMemoryStorage()
+      const content = Array.from({ length: 500 }, (_, i) => `match line ${i + 1}`).join('\n')
+      const ref = await storage.store('k1', new TextEncoder().encode(content), 'text/plain')
+
+      const plugin = new ContextOffloader({
+        storage,
+        maxResultTokens: 50,
+        previewTokens: 10,
+        includeRetrievalTool: true,
+      })
+      const result = (await getSearchTool(plugin).invoke({
+        reference: ref,
+        pattern: 'match',
+        context_lines: 0,
+      })) as string
+
+      expect(result).toContain('output truncated, narrow your search')
+      expect(result.length).toBeLessThan(content.length)
+    })
+
+    it('merges overlapping context into single group', async () => {
+      const storage = new InMemoryStorage()
+      const content = Array.from({ length: 10 }, (_, i) => `line ${i + 1}`).join('\n')
+      const ref = await storage.store('k1', new TextEncoder().encode(content), 'text/plain')
+
+      const plugin = new ContextOffloader({ storage, includeRetrievalTool: true })
+      const result = (await getSearchTool(plugin).invoke({
+        reference: ref,
+        pattern: 'line [45]',
+        context_lines: 2,
+      })) as string
+
+      expect(result).toContain('2 matches')
+      // Lines 4 and 5 are adjacent — with context_lines=2 they should merge into one group
+      expect(result).not.toContain('---')
+    })
+
+    it('returns error when line_range.start > totalLines', async () => {
+      const storage = new InMemoryStorage()
+      const content = 'line 1\nline 2\nline 3'
+      const ref = await storage.store('k1', new TextEncoder().encode(content), 'text/plain')
+
+      const plugin = new ContextOffloader({ storage, includeRetrievalTool: true })
+      const result = (await getSearchTool(plugin).invoke({
+        reference: ref,
+        line_range: { start: 100, end: 200 },
+      })) as string
+
+      expect(result).toContain('beyond content length (3 lines)')
+    })
+
+    it('clamps line_range.end to actual content length', async () => {
+      const storage = new InMemoryStorage()
+      const content = 'line 1\nline 2\nline 3'
+      const ref = await storage.store('k1', new TextEncoder().encode(content), 'text/plain')
+
+      const plugin = new ContextOffloader({ storage, includeRetrievalTool: true })
+      const result = (await getSearchTool(plugin).invoke({
+        reference: ref,
+        line_range: { start: 2, end: 100 },
+      })) as string
+
+      expect(result).toContain('[Lines 2-3 of 3]')
+      expect(result).toContain('line 2')
+      expect(result).toContain('line 3')
     })
   })
 })

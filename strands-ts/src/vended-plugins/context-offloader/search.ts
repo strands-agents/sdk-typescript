@@ -1,0 +1,132 @@
+/**
+ * Search and formatting utilities for offloaded content.
+ *
+ * Provides grep-like pattern matching and line-range random access over stored
+ * text content, with output capped to a character budget.
+ */
+
+/** Cuts output at the last newline before {@link maxChars} and appends a truncation message. */
+function truncate(output: string, maxChars: number, message: string): string {
+  if (output.length <= maxChars) return output
+
+  const cut = output.lastIndexOf('\n', maxChars)
+  if (cut <= 0) return output
+
+  return output.slice(0, cut) + `\n\n[${message}]`
+}
+
+/** Formats line indices with line numbers, `>` prefixes for matches, and `---` separators for gaps. */
+function formatLines(lines: string[], indices: number[], matchedSet: Set<number>): string {
+  if (indices.length === 0) return ''
+  const padWidth = String(indices[indices.length - 1]! + 1).length
+  const output: string[] = []
+  for (let i = 0; i < indices.length; i++) {
+    const idx = indices[i]!
+    if (i > 0 && idx > indices[i - 1]! + 1) output.push('---')
+    const lineNum = String(idx + 1).padStart(padWidth)
+    const prefix = matchedSet.has(idx) ? '>' : ' '
+    output.push(`${prefix} ${lineNum}| ${lines[idx]}`)
+  }
+  return output.join('\n')
+}
+
+/** Finds lines matching a pattern, expands with context, and formats with truncation. */
+function searchByPattern(
+  lines: string[],
+  pattern: string,
+  scopeStart: number,
+  scopeEnd: number,
+  contextLines: number,
+  maxChars: number,
+  scopeLabel: string
+): string {
+  let regex: RegExp
+  try {
+    regex = new RegExp(pattern)
+  } catch {
+    regex = new RegExp(pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+  }
+
+  const matchedSet = new Set<number>()
+  for (let i = scopeStart; i <= scopeEnd; i++) {
+    if (regex.test(lines[i]!)) matchedSet.add(i)
+  }
+
+  if (matchedSet.size === 0) {
+    return `No matches found for pattern '${pattern}'${scopeLabel} (searched ${scopeEnd - scopeStart + 1} lines).`
+  }
+
+  const visible = new Set<number>()
+  for (const idx of matchedSet) {
+    for (let i = Math.max(scopeStart, idx - contextLines); i <= Math.min(scopeEnd, idx + contextLines); i++) {
+      visible.add(i)
+    }
+  }
+
+  const safePattern = pattern.replace(/[\n\r\]]/g, ' ')
+  const header = `[${matchedSet.size} match${matchedSet.size > 1 ? 'es' : ''} for /${safePattern}/${scopeLabel}]`
+  const body = formatLines(
+    lines,
+    [...visible].sort((a, b) => a - b),
+    matchedSet
+  )
+  return truncate(`${header}\n\n${body}`, maxChars, 'output truncated, narrow your search')
+}
+
+/** Formats a contiguous range of lines with truncation. */
+function searchByLineRange(lines: string[], start: number, end: number, totalLines: number, maxChars: number): string {
+  const indices = Array.from({ length: end - start + 1 }, (_, i) => start + i)
+  const header = `[Lines ${start + 1}-${end + 1} of ${totalLines}]`
+  const body = formatLines(lines, indices, new Set())
+  return truncate(`${header}\n\n${body}`, maxChars, 'output truncated, narrow your range')
+}
+
+/** Returns whether the given MIME content type can be searched as text. */
+export function isSearchableContent(contentType: string): boolean {
+  return contentType.startsWith('text/') || contentType === 'application/json'
+}
+
+/**
+ * Search offloaded text content by pattern or line range.
+ *
+ * @param text - The full text content to search
+ * @param input - Search parameters (pattern, line_range, context_lines)
+ * @param maxChars - Maximum output size in characters; results are truncated beyond this
+ * @returns Formatted search results with line numbers, or an error/empty message
+ */
+export function searchContent(
+  text: string,
+  input: {
+    pattern?: string | undefined
+    line_range?: { start: number; end: number } | undefined
+    context_lines: number
+  },
+  maxChars: number
+): string {
+  const lines = text.split('\n')
+  const totalLines = lines.length
+
+  if (totalLines === 0 || (totalLines === 1 && lines[0] === '')) {
+    return 'Content is empty (0 lines).'
+  }
+
+  let scopeStart = 0
+  let scopeEnd = totalLines - 1
+  if (input.line_range) {
+    if (input.line_range.start > input.line_range.end) {
+      return `Error: line_range.start (${input.line_range.start}) must be <= line_range.end (${input.line_range.end}).`
+    }
+    if (input.line_range.start > totalLines) {
+      return `Error: line_range.start (${input.line_range.start}) is beyond content length (${totalLines} lines).`
+    }
+    scopeStart = input.line_range.start - 1
+    scopeEnd = Math.min(input.line_range.end - 1, totalLines - 1)
+  }
+
+  if (input.pattern) {
+    const scopeLabel = input.line_range ? ` in lines ${input.line_range.start}-${scopeEnd + 1}` : ''
+    return searchByPattern(lines, input.pattern, scopeStart, scopeEnd, input.context_lines, maxChars, scopeLabel)
+  }
+
+  return searchByLineRange(lines, scopeStart, scopeEnd, totalLines, maxChars)
+}
