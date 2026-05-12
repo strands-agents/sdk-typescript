@@ -54,16 +54,18 @@ export class InterventionRegistry {
   }
 
   private _registerHooks(hookRegistry: HookRegistry): void {
-    // Before*: interventions run last (closest to execution)
     for (const [method, eventType] of BEFORE_EVENTS) {
       if (this._handlers.some((h) => h[method] !== InterventionHandler.prototype[method])) {
-        hookRegistry.addCallback(eventType, (event) => this._dispatch(event, method), { order: HookOrder.SDK_LAST })
+        hookRegistry.addCallback(eventType, (event) => this._dispatch(event, method), {
+          order: HookOrder.INTERVENTIONS_BEFORE,
+        })
       }
     }
-    // After*: interventions run first (closest to execution)
     for (const [method, eventType] of AFTER_EVENTS) {
       if (this._handlers.some((h) => h[method] !== InterventionHandler.prototype[method])) {
-        hookRegistry.addCallback(eventType, (event) => this._dispatch(event, method), { order: HookOrder.SDK_FIRST })
+        hookRegistry.addCallback(eventType, (event) => this._dispatch(event, method), {
+          order: HookOrder.INTERVENTIONS_AFTER,
+        })
       }
     }
   }

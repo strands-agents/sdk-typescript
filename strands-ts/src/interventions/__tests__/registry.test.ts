@@ -519,7 +519,7 @@ describe('InterventionRegistry', () => {
       expect(toolExecuted).toBe(false)
     })
 
-    it('interventions run closest to execution (after plugins on Before*, before plugins on After*)', async () => {
+    it('interventions run before plugins (HookOrder.INTERVENTIONS < DEFAULT)', async () => {
       const { MockMessageModel } = await import('../../__fixtures__/mock-message-model.js')
       const { createMockTool } = await import('../../__fixtures__/tool-helpers.js')
 
@@ -530,7 +530,7 @@ describe('InterventionRegistry', () => {
       class OrderTracker extends InterventionHandler {
         readonly name = 'order-tracker'
         override beforeToolCall(): InterventionAction {
-          callOrder.push('intervention-before')
+          callOrder.push('intervention')
           return { type: 'proceed' }
         }
       }
@@ -546,14 +546,14 @@ describe('InterventionRegistry', () => {
       })
 
       agent.addHook(BeforeToolCallEvent, () => {
-        callOrder.push('plugin-before')
+        callOrder.push('plugin')
       })
 
       await agent.invoke('Test')
 
-      // On Before*: plugins run first, intervention runs last (closest to tool execution)
-      expect(callOrder[0]).toBe('plugin-before')
-      expect(callOrder[1]).toBe('intervention-before')
+      // On Before*: plugins run first (DEFAULT:0), interventions last (INTERVENTIONS:90)
+      expect(callOrder[0]).toBe('plugin')
+      expect(callOrder[1]).toBe('intervention')
     })
   })
 
