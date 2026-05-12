@@ -644,7 +644,7 @@ describe('InterventionRegistry', () => {
       new InterventionRegistry([new InterruptOnInvocation()], hookRegistry)
 
       await hookRegistry.invokeCallbacks(makeBeforeInvocationEvent())
-      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('has no effect on this event type'))
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('has no effect'))
 
       warnSpy.mockRestore()
     })

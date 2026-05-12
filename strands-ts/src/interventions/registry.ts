@@ -8,26 +8,12 @@ import {
 } from '../hooks/events.js'
 import type { HookRegistry } from '../hooks/registry.js'
 import { HookOrder } from '../hooks/types.js'
-import type { HookableEventConstructor } from '../hooks/types.js'
 import { Message, TextBlock } from '../types/messages.js'
 import type { Guide, InterventionAction } from './actions.js'
 import { InterventionHandler } from './handler.js'
 import { logger } from '../logging/logger.js'
 
 type LifecycleMethod = 'beforeInvocation' | 'beforeToolCall' | 'afterToolCall' | 'beforeModelCall' | 'afterModelCall'
-
-// Before* events: interventions run last (closest to execution, highest order).
-const BEFORE_EVENTS: ReadonlyArray<[LifecycleMethod, HookableEventConstructor]> = [
-  ['beforeInvocation', BeforeInvocationEvent],
-  ['beforeToolCall', BeforeToolCallEvent],
-  ['beforeModelCall', BeforeModelCallEvent],
-]
-
-// After* events: interventions run first (closest to execution, lowest order).
-const AFTER_EVENTS: ReadonlyArray<[LifecycleMethod, HookableEventConstructor]> = [
-  ['afterToolCall', AfterToolCallEvent],
-  ['afterModelCall', AfterModelCallEvent],
-]
 
 /**
  * Bridges {@link InterventionHandler} instances and the Strands hook system.
@@ -54,20 +40,140 @@ export class InterventionRegistry {
   }
 
   private _registerHooks(hookRegistry: HookRegistry): void {
-    for (const [method, eventType] of BEFORE_EVENTS) {
-      if (this._handlers.some((h) => h[method] !== InterventionHandler.prototype[method])) {
-        hookRegistry.addCallback(eventType, (event) => this._dispatch(event, method), {
-          order: HookOrder.INTERVENTIONS_BEFORE,
-        })
-      }
+    if (this._handlers.some((h) => h.beforeInvocation !== InterventionHandler.prototype.beforeInvocation)) {
+      hookRegistry.addCallback(BeforeInvocationEvent, (e) => this._onBeforeInvocation(e), {
+        order: HookOrder.INTERVENTION_INPUT,
+      })
     }
-    for (const [method, eventType] of AFTER_EVENTS) {
-      if (this._handlers.some((h) => h[method] !== InterventionHandler.prototype[method])) {
-        hookRegistry.addCallback(eventType, (event) => this._dispatch(event, method), {
-          order: HookOrder.INTERVENTIONS_AFTER,
-        })
-      }
+    if (this._handlers.some((h) => h.beforeToolCall !== InterventionHandler.prototype.beforeToolCall)) {
+      hookRegistry.addCallback(BeforeToolCallEvent, (e) => this._onBeforeToolCall(e), {
+        order: HookOrder.INTERVENTION_INPUT,
+      })
     }
+    if (this._handlers.some((h) => h.afterToolCall !== InterventionHandler.prototype.afterToolCall)) {
+      hookRegistry.addCallback(AfterToolCallEvent, (e) => this._onAfterToolCall(e), {
+        order: HookOrder.INTERVENTION_OUTPUT,
+      })
+    }
+    if (this._handlers.some((h) => h.beforeModelCall !== InterventionHandler.prototype.beforeModelCall)) {
+      hookRegistry.addCallback(BeforeModelCallEvent, (e) => this._onBeforeModelCall(e), {
+        order: HookOrder.INTERVENTION_INPUT,
+      })
+    }
+    if (this._handlers.some((h) => h.afterModelCall !== InterventionHandler.prototype.afterModelCall)) {
+      hookRegistry.addCallback(AfterModelCallEvent, (e) => this._onAfterModelCall(e), {
+        order: HookOrder.INTERVENTION_OUTPUT,
+      })
+    }
+  }
+
+  private async _onBeforeInvocation(event: BeforeInvocationEvent): Promise<void> {
+    return this._dispatch(event, 'beforeInvocation', (action, handlerName) => {
+      switch (action.type) {
+        case 'deny':
+          event.cancel = `DENIED: ${action.reason}`
+          return true
+        case 'guide':
+          event.cancel = `GUIDANCE: ${action.feedback}`
+          return false
+        case 'transform':
+          action.apply(event)
+          return false
+        case 'proceed':
+          return false
+        default:
+          logger.warn(`handler=<${handlerName}>, event=<beforeInvocation> | ${action.type} has no effect`)
+          return false
+      }
+    })
+  }
+
+  private async _onBeforeToolCall(event: BeforeToolCallEvent): Promise<void> {
+    return this._dispatch(event, 'beforeToolCall', (action, handlerName) => {
+      const actionType = action.type
+      switch (actionType) {
+        case 'deny':
+          event.cancel = `DENIED: ${action.reason}`
+          return true
+        case 'interrupt':
+          event.interrupt({ name: handlerName, reason: action.prompt })
+          return true
+        case 'guide':
+          event.cancel = `GUIDANCE: ${action.feedback}`
+          return false
+        case 'transform':
+          action.apply(event)
+          return false
+        case 'proceed':
+          return false
+        default:
+          logger.warn(`handler=<${handlerName}>, event=<beforeToolCall> | ${actionType} has no effect`)
+          return false
+      }
+    })
+  }
+
+  private async _onAfterToolCall(event: AfterToolCallEvent): Promise<void> {
+    return this._dispatch(event, 'afterToolCall', (action, handlerName) => {
+      switch (action.type) {
+        case 'transform':
+          action.apply(event)
+          return false
+        case 'proceed':
+          return false
+        default:
+          logger.warn(`handler=<${handlerName}>, event=<afterToolCall> | ${action.type} has no effect`)
+          return false
+      }
+    })
+  }
+
+  // Guide on beforeModelCall injects feedback as a user message so the model sees
+  // it on this call, rather than cancelling (which would end the invocation).
+  private async _onBeforeModelCall(event: BeforeModelCallEvent): Promise<void> {
+    return this._dispatch(event, 'beforeModelCall', (action, handlerName) => {
+      switch (action.type) {
+        case 'deny':
+          event.cancel = `DENIED: ${action.reason}`
+          return true
+        case 'guide':
+          // Direct push bypasses MessageAddedEvent and conversation manager.
+          // This matches what plugins can do today via event.agent.messages.
+          event.agent.messages.push(new Message({ role: 'user', content: [new TextBlock(action.feedback)] }))
+          return false
+        case 'transform':
+          action.apply(event)
+          return false
+        case 'proceed':
+          return false
+        default:
+          logger.warn(`handler=<${handlerName}>, event=<beforeModelCall> | ${action.type} has no effect`)
+          return false
+      }
+    })
+  }
+
+  private async _onAfterModelCall(event: AfterModelCallEvent): Promise<void> {
+    return this._dispatch(event, 'afterModelCall', (action, handlerName) => {
+      switch (action.type) {
+        case 'guide':
+          event.retry = true
+          // Direct push bypasses MessageAddedEvent and conversation manager, so this
+          // message won't trigger context management and could push the context over
+          // the limit. LocalAgent doesn't expose a message-append method that goes
+          // through the hook pipeline. This matches what plugins can do today.
+          event.agent.messages.push(new Message({ role: 'user', content: [new TextBlock(action.feedback)] }))
+          return false
+        case 'transform':
+          action.apply(event)
+          return false
+        case 'proceed':
+          return false
+        default:
+          logger.warn(`handler=<${handlerName}>, event=<afterModelCall> | ${action.type} has no effect`)
+          return false
+      }
+    })
   }
 
   /**
@@ -79,10 +185,13 @@ export class InterventionRegistry {
    * - If a handler throws, behavior depends on {@link InterventionHandler.onError}:
    *   `'throw'` (default) rethrows, `'deny'` fails closed, `'proceed'` skips.
    */
-  private async _dispatch(event: HookableEvent, method: LifecycleMethod): Promise<void> {
+  private async _dispatch(
+    event: HookableEvent,
+    method: LifecycleMethod,
+    apply: (action: InterventionAction, handlerName: string) => boolean
+  ): Promise<void> {
     logger.debug(`event=<${method}> | dispatching to ${this._handlers.length} handler(s)`)
     const guides: Array<{ handlerName: string; action: Guide }> = []
-    const apply = this._getApplier(event, method)
 
     for (const handler of this._handlers) {
       if (handler[method] === InterventionHandler.prototype[method]) continue
@@ -91,8 +200,6 @@ export class InterventionRegistry {
 
       let action: InterventionAction | undefined
       try {
-        // Safe: _registerHooks() only wires each method to its matching event type,
-        // so the event is always the correct type for the method being called.
         action = await handler[method](event as never)
       } catch (error) {
         action = this._handleError(handler, method, error)
@@ -120,145 +227,12 @@ export class InterventionRegistry {
       }
     }
 
-    // Guide feedback accumulates across handlers. Only logged and applied if
+    // Guide feedback accumulates across handlers. Only applied if
     // no earlier handler short-circuited (deny/interrupt).
     if (guides.length > 0) {
       logger.debug(`event=<${method}> | applying accumulated guide from ${guides.length} handler(s)`)
       const feedback = guides.map((g) => `[${g.handlerName}] ${g.action.feedback}`).join('\n')
       apply({ type: 'guide', feedback }, '')
-    }
-  }
-
-  /**
-   * Returns a function that applies a single action to the event.
-   * Returns true if the action short-circuits (deny/interrupt), false otherwise.
-   */
-  private _getApplier(
-    event: HookableEvent,
-    method: LifecycleMethod
-  ): (action: InterventionAction, handlerName: string) => boolean {
-    // beforeToolCall: supports all actions including native interrupt
-    if (event instanceof BeforeToolCallEvent) {
-      return (action, handlerName) => {
-        const actionType = action.type
-        switch (actionType) {
-          case 'deny':
-            event.cancel = `DENIED: ${action.reason}`
-            return true
-          case 'interrupt':
-            event.interrupt({ name: handlerName, reason: action.prompt })
-            return true
-          case 'guide':
-            event.cancel = `GUIDANCE: ${action.feedback}`
-            return false
-          case 'transform':
-            action.apply(event)
-            return false
-          case 'proceed':
-            return false
-          default:
-            logger.warn(`handler=<${handlerName}>, event=<${method}> | ${actionType} has no effect on this event type`)
-            return false
-        }
-      }
-    }
-
-    // beforeInvocation: cancel-based (does not implement Interruptible)
-    if (event instanceof BeforeInvocationEvent) {
-      return (action, handlerName) => {
-        const actionType = action.type
-        switch (actionType) {
-          case 'deny':
-            event.cancel = `DENIED: ${action.reason}`
-            return true
-          case 'guide':
-            event.cancel = `GUIDANCE: ${action.feedback}`
-            return false
-          case 'transform':
-            action.apply(event)
-            return false
-          case 'proceed':
-            return false
-          default:
-            logger.warn(`handler=<${handlerName}>, event=<${method}> | ${actionType} has no effect on this event type`)
-            return false
-        }
-      }
-    }
-
-    // beforeModelCall: Guide injects feedback as a user message so the model sees
-    // it on this call, rather than cancelling (which would end the invocation).
-    if (event instanceof BeforeModelCallEvent) {
-      return (action, handlerName) => {
-        switch (action.type) {
-          case 'deny':
-            event.cancel = `DENIED: ${action.reason}`
-            return true
-          case 'guide':
-            // Direct push bypasses MessageAddedEvent and conversation manager.
-            // This matches what plugins can do today via event.agent.messages.
-            event.agent.messages.push(new Message({ role: 'user', content: [new TextBlock(action.feedback)] }))
-            return false
-          case 'transform':
-            action.apply(event)
-            return false
-          case 'proceed':
-            return false
-          default:
-            logger.warn(
-              `handler=<${handlerName}>, event=<${method}> | ${(action as InterventionAction).type} has no effect on this event type`
-            )
-            return false
-        }
-      }
-    }
-
-    // afterToolCall: tool already ran, only Transform (e.g. redact result) is meaningful
-    if (event instanceof AfterToolCallEvent) {
-      return (action, handlerName) => {
-        switch (action.type) {
-          case 'transform':
-            action.apply(event)
-            return false
-          case 'proceed':
-            return false
-          default:
-            logger.warn(`handler=<${handlerName}>, event=<${method}> | ${action.type} has no effect on this event type`)
-            return false
-        }
-      }
-    }
-
-    // afterModelCall: has retry
-    if (event instanceof AfterModelCallEvent) {
-      return (action, handlerName) => {
-        switch (action.type) {
-          case 'guide':
-            event.retry = true
-            // Direct push bypasses MessageAddedEvent and conversation manager, so this
-            // message won't trigger context management and could push the context over
-            // the limit. LocalAgent doesn't expose a message-append method that goes
-            // through the hook pipeline. This matches what plugins can do today.
-            event.agent.messages.push(new Message({ role: 'user', content: [new TextBlock(action.feedback)] }))
-            return false
-          case 'transform':
-            action.apply(event)
-            return false
-          case 'proceed':
-            return false
-          default:
-            logger.warn(`handler=<${handlerName}>, event=<${method}> | ${action.type} has no effect on this event type`)
-            return false
-        }
-      }
-    }
-
-    // Fallback for future event types not yet handled above
-    return (action, handlerName) => {
-      if (action.type !== 'proceed') {
-        logger.warn(`handler=<${handlerName}>, event=<${method}> | ${action.type} has no effect on this event type`)
-      }
-      return false
     }
   }
 

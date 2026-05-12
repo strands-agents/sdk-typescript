@@ -286,7 +286,7 @@ export class Agent implements LocalAgent, InvokableAgent {
 
   private readonly _hooksRegistry: HookRegistryImplementation
   private readonly _pluginRegistry: PluginRegistry
-  private readonly _interventionRegistry?: InterventionRegistry
+  private readonly _interventionRegistry: InterventionRegistry
   private _toolRegistry: ToolRegistry
   private _mcpClients: McpClient[]
   private _initialized: boolean
@@ -344,9 +344,7 @@ export class Agent implements LocalAgent, InvokableAgent {
     // Initialize hooks registry
     this._hooksRegistry = new HookRegistryImplementation()
 
-    if (config?.interventions && config.interventions.length > 0) {
-      this._interventionRegistry = new InterventionRegistry(config.interventions, this._hooksRegistry)
-    }
+    this._interventionRegistry = new InterventionRegistry(config?.interventions ?? [], this._hooksRegistry)
 
     // `undefined` (omitted) → install the default; `null`/`[]` → explicit opt-out.
     const retryStrategies: RetryStrategy[] =

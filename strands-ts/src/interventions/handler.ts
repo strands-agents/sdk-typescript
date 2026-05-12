@@ -7,6 +7,8 @@ import type {
 } from '../hooks/events.js'
 import type { Proceed, Deny, Guide, Interrupt, Transform } from './actions.js'
 
+type Awaitable<T> = T | Promise<T>
+
 /**
  * What to do when a handler throws during evaluation.
  *
@@ -43,29 +45,23 @@ export abstract class InterventionHandler {
   /** What to do when this handler throws. Defaults to 'throw'. */
   readonly onError: OnError = 'throw'
 
-  beforeInvocation(
-    _event: BeforeInvocationEvent
-  ): (Proceed | Deny | Guide | Transform) | Promise<Proceed | Deny | Guide | Transform> {
+  beforeInvocation(_event: BeforeInvocationEvent): Awaitable<Proceed | Deny | Guide | Transform> {
     return { type: 'proceed' }
   }
 
-  beforeToolCall(
-    _event: BeforeToolCallEvent
-  ): (Proceed | Deny | Guide | Interrupt | Transform) | Promise<Proceed | Deny | Guide | Interrupt | Transform> {
+  beforeToolCall(_event: BeforeToolCallEvent): Awaitable<Proceed | Deny | Guide | Interrupt | Transform> {
     return { type: 'proceed' }
   }
 
-  afterToolCall(_event: AfterToolCallEvent): (Proceed | Transform) | Promise<Proceed | Transform> {
+  afterToolCall(_event: AfterToolCallEvent): Awaitable<Proceed | Transform> {
     return { type: 'proceed' }
   }
 
-  beforeModelCall(
-    _event: BeforeModelCallEvent
-  ): (Proceed | Deny | Guide | Transform) | Promise<Proceed | Deny | Guide | Transform> {
+  beforeModelCall(_event: BeforeModelCallEvent): Awaitable<Proceed | Deny | Guide | Transform> {
     return { type: 'proceed' }
   }
 
-  afterModelCall(_event: AfterModelCallEvent): (Proceed | Guide | Transform) | Promise<Proceed | Guide | Transform> {
+  afterModelCall(_event: AfterModelCallEvent): Awaitable<Proceed | Guide | Transform> {
     return { type: 'proceed' }
   }
 }
