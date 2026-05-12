@@ -31,6 +31,7 @@ export class ToolRegistry {
       if (this._tools.has(t.name)) {
         throw new ToolValidationError(`Tool with name '${t.name}' already registered`)
       }
+      this._checkNormalizedConflict(t.name)
       this._tools.set(t.name, t)
     }
   }
@@ -44,6 +45,9 @@ export class ToolRegistry {
   addOrReplace(newTools: Tool[]): void {
     for (const tool of newTools) {
       this._validateProperties(tool)
+      if (!this._tools.has(tool.name)) {
+        this._checkNormalizedConflict(tool.name)
+      }
       this._tools.set(tool.name, tool)
     }
   }
@@ -100,6 +104,18 @@ export class ToolRegistry {
     if (tool.description !== undefined && tool.description !== null) {
       if (typeof tool.description !== 'string' || tool.description.length < 1) {
         throw new ToolValidationError('Tool description must be a non-empty string')
+      }
+    }
+  }
+
+  private _checkNormalizedConflict(name: string): void {
+    const normalized = name.replaceAll('-', '_')
+    for (const existing of this._tools.keys()) {
+      if (existing !== name && existing.replaceAll('-', '_') === normalized) {
+        throw new ToolValidationError(
+          `Tool name '${name}' already exists as '${existing}'.` +
+            " Cannot add a duplicate tool which differs by a '-' or '_'"
+        )
       }
     }
   }

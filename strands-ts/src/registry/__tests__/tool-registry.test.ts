@@ -49,6 +49,14 @@ describe('ToolRegistry', () => {
       )
     })
 
+    it("throws ToolValidationError when a name differs only by '-' vs '_'", () => {
+      registry.add(createMockTool({ name: 'foo-bar' }))
+      expect(() => registry.add(createMockTool({ name: 'foo_bar' }))).toThrow(ToolValidationError)
+      expect(() => registry.add(createMockTool({ name: 'foo_bar' }))).toThrow(
+        "Tool name 'foo_bar' already exists as 'foo-bar'. Cannot add a duplicate tool which differs by a '-' or '_'"
+      )
+    })
+
     it('throws ToolValidationError for an invalid tool name pattern', () => {
       expect(() => registry.add(createMockTool({ name: 'invalid name!' }))).toThrow(ToolValidationError)
       expect(() => registry.add(createMockTool({ name: 'invalid name!' }))).toThrow(
@@ -127,6 +135,11 @@ describe('ToolRegistry', () => {
 
     it('validates tool properties', () => {
       expect(() => registry.addOrReplace([createMockTool({ name: 'invalid name!' })])).toThrow(ToolValidationError)
+    })
+
+    it("throws ToolValidationError when a new tool name differs only by '-' vs '_'", () => {
+      registry.add(createMockTool({ name: 'foo-bar' }))
+      expect(() => registry.addOrReplace([createMockTool({ name: 'foo_bar' })])).toThrow(ToolValidationError)
     })
   })
 
