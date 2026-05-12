@@ -1332,6 +1332,37 @@ describe('Agent', () => {
       expect(result.structuredOutput).toEqual({ value: 42 })
     })
 
+    it('does not send assistant-ended conversation when forcing structured output retry', async () => {
+      // Regression for https://github.com/strands-agents/sdk-typescript/issues/1039
+      // When the model responds with plain text instead of calling the structured output tool,
+      // the forced-retry model call must not see a conversation ending with an assistant message.
+      // Bedrock/Anthropic-family models reject assistant message prefill.
+      const schema = z.object({ value: z.number() })
+
+      const model = new MockMessageModel()
+        .addTurn({ type: 'textBlock', text: 'Plain text, no tool call' })
+        .addTurn({ type: 'toolUseBlock', name: 'strands_structured_output', toolUseId: 'tool-1', input: { value: 42 } })
+        .addTurn({ type: 'textBlock', text: 'Done' })
+
+      // Snapshot the role sequence at each model call, since `messages` is passed by reference
+      // and mutates during the agent loop.
+      const roleSnapshots: string[][] = []
+      const originalStream = model.stream.bind(model)
+      vi.spyOn(model, 'stream').mockImplementation((messages, options) => {
+        roleSnapshots.push(messages.map((m) => m.role))
+        return originalStream(messages, options)
+      })
+
+      const agent = new Agent({ model, structuredOutputSchema: schema })
+      await agent.invoke('Test')
+
+      expect(roleSnapshots.length).toBeGreaterThanOrEqual(2)
+
+      // The forced-retry (second) call must not see a conversation ending with an assistant turn.
+      const secondCallRoles = roleSnapshots[1]!
+      expect(secondCallRoles[secondCallRoles.length - 1]).toBe('user')
+    })
+
     it('throws StructuredOutputError when model refuses to use tool after forcing', async () => {
       const schema = z.object({ value: z.number() })
 

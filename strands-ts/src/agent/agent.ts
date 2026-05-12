@@ -910,26 +910,30 @@ export class Agent implements LocalAgent, InvokableAgent {
             const modelResult = yield* this._invokeModel(invocationState, structuredOutputChoice)
 
             if (modelResult.stopReason !== 'toolUse') {
-              // If structured output is required, force it
-              if (structuredOutputTool) {
-                if (structuredOutputChoice) {
-                  throw new StructuredOutputError(
-                    'The model failed to invoke the structured output tool even after it was forced.'
-                  )
-                }
-
-                structuredOutputChoice = { tool: { name: STRUCTURED_OUTPUT_TOOL_NAME } }
+              // Schema set, we already forced, and the model still refused.
+              // Throw before closing the span so the cycle span records the error.
+              if (structuredOutputTool && structuredOutputChoice) {
+                throw new StructuredOutputError(
+                  'The model failed to invoke the structured output tool even after it was forced.'
+                )
               }
 
               this._meter.endCycle(cycleStartTime)
               this._tracer.endAgentLoopSpan(cycleSpan)
 
-              yield this._appendMessage(modelResult.message, invocationState)
-
-              if (structuredOutputChoice) {
+              // Schema set, model ignored the tool — drop the response and force the tool next cycle.
+              // Appending the plain-text turn here would leave the conversation ending on an
+              // assistant message, which providers like Bedrock reject as assistant prefill.
+              if (structuredOutputTool) {
+                structuredOutputChoice = { tool: { name: STRUCTURED_OUTPUT_TOOL_NAME } }
+                logger.debug(
+                  'structured output schema set but model responded with plain text; forcing tool use on next cycle'
+                )
                 continue
               }
 
+              // Normal end of turn.
+              yield this._appendMessage(modelResult.message, invocationState)
               result = new AgentResult({
                 stopReason: modelResult.stopReason,
                 lastMessage: modelResult.message,
