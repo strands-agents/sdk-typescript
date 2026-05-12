@@ -147,7 +147,7 @@ export class NodeState implements StateSerializable {
    * can pick up mid-execution without losing its interrupt bookkeeping. Cleared when
    * the node completes.
    */
-  resumeSnapshot?: Snapshot
+  interruptedSnapshot?: Snapshot
 
   constructor() {
     this.status = Status.PENDING
@@ -171,7 +171,7 @@ export class NodeState implements StateSerializable {
       startTime: this.startTime,
       results: this.results.map((res) => res.toJSON()),
       interrupts: this.interrupts.map((i) => i.toJSON()),
-      ...(this.resumeSnapshot && { resumeSnapshot: { ...this.resumeSnapshot } }),
+      ...(this.interruptedSnapshot && { interruptedSnapshot: { ...this.interruptedSnapshot } }),
     } as JSONValue
   }
 
@@ -186,10 +186,10 @@ export class NodeState implements StateSerializable {
       this.results.push(NodeResult.fromJSON(entry))
     }
     this.interrupts = ((data.interrupts as JSONValue[] | undefined) ?? []).map((i) => Interrupt.fromJSON(i as never))
-    if (data.resumeSnapshot) {
-      this.resumeSnapshot = data.resumeSnapshot as unknown as Snapshot
+    if (data.interruptedSnapshot) {
+      this.interruptedSnapshot = data.interruptedSnapshot as unknown as Snapshot
     } else {
-      delete this.resumeSnapshot
+      delete this.interruptedSnapshot
     }
   }
 }

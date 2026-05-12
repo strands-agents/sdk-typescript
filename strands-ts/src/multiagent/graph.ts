@@ -301,14 +301,9 @@ export class Graph implements MultiAgent {
         })
       : ((await this._findResumeTargets(state)) ?? [...this._sources])
 
-    // execController has two abort sources that the loop must distinguish:
-    //   1. The `setTimeout` below fires when `config.timeout` elapses → real timeout.
-    //   2. The interrupt short-circuit (`execController.abort()` below the queue drain)
-    //      fires to stop in-flight siblings when any node returns INTERRUPTED.
-    // The loop's timeout check gates on `!interrupted` so an interrupt-driven abort
-    // doesn't get misreported as a timeout. External cancellation stays on its own
-    // signal for the same reason — we need to know whose abort it was. Keep that
-    // `!interrupted` discriminator intact when editing this loop.
+    // Wall-clock timeout for the whole graph invocation. External cancellation is kept
+    // on its own signal so the loop's abort checks below can distinguish the two causes
+    // and produce the right error message.
     const execController = new AbortController()
     const execTimeoutHandle = Number.isFinite(this.config.timeout)
       ? setTimeout(() => execController.abort(), this.config.timeout)
@@ -323,7 +318,7 @@ export class Graph implements MultiAgent {
     let result: MultiAgentResult | undefined
     try {
       while (targets.length > 0 || streams.size > 0) {
-        if (execTimeoutHandle !== undefined && execController.signal.aborted && !interrupted) {
+        if (execTimeoutHandle !== undefined && execController.signal.aborted) {
           throw new Error(`timeout=<${this.config.timeout}>, graph_id=<${this.id}> | graph exceeded wall-clock budget`)
         }
         if (externalCancelSignal?.aborted) {
@@ -385,11 +380,10 @@ export class Graph implements MultiAgent {
 
           if (interrupted) continue
 
-          // Short-circuit: first node to interrupt aborts in-flight siblings so they
-          // don't keep burning work past the point we're going to pause.
+          // Stop scheduling new nodes once any node has interrupted; in-flight siblings
+          // run to completion on their own.
           if (nodeResult.status === Status.INTERRUPTED) {
             interrupted = true
-            execController.abort()
             continue
           }
 

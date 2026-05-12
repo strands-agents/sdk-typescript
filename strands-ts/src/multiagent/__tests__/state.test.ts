@@ -2,10 +2,15 @@ import { describe, expect, it } from 'vitest'
 import { NodeResult, NodeState, MultiAgentResult, MultiAgentState, Status } from '../state.js'
 import { TextBlock, ToolUseBlock } from '../../types/messages.js'
 import type { JSONValue } from '../../types/json.js'
-import { stateToJSONSymbol, loadStateFromJSONSymbol } from '../../types/serializable.js'
+import {
+  stateToJSONSymbol,
+  loadStateFromJSONSymbol,
+  serializeStateSerializable,
+  loadStateSerializable,
+} from '../../types/serializable.js'
 import { Interrupt } from '../../interrupt.js'
 import { InterruptResponseContent } from '../../types/interrupt.js'
-import { groupInterruptResponsesByNode } from '../multiagent.js'
+import { extractResumeResponses, groupInterruptResponsesByNode } from '../multiagent.js'
 
 describe('NodeResult', () => {
   describe('toJSON / fromJSON', () => {
@@ -251,11 +256,11 @@ describe('NodeState', () => {
       expect(target.results).toHaveLength(1)
     })
 
-    it('round-trips interrupts and resumeSnapshot on an INTERRUPTED node', () => {
+    it('round-trips interrupts and interruptedSnapshot on an INTERRUPTED node', () => {
       const original = new NodeState()
       original.status = Status.INTERRUPTED
       original.interrupts = [new Interrupt({ id: 'tool:1:confirm', name: 'confirm', reason: 'need it' })]
-      original.resumeSnapshot = {
+      original.interruptedSnapshot = {
         scope: 'agent',
         schemaVersion: '1.0',
         createdAt: '2026-01-01T00:00:00Z',
@@ -264,29 +269,26 @@ describe('NodeState', () => {
       }
 
       const restored = new NodeState()
-      restored[loadStateFromJSONSymbol](original[stateToJSONSymbol]())
+      loadStateSerializable(restored, serializeStateSerializable(original))
 
-      expect(restored.status).toBe(Status.INTERRUPTED)
-      expect(restored.interrupts).toHaveLength(1)
-      expect(restored.interrupts[0]).toEqual(original.interrupts[0])
-      expect(restored.resumeSnapshot).toEqual(original.resumeSnapshot)
+      expect(restored).toEqual(original)
     })
 
-    it('clears resumeSnapshot when it is absent from the serialized state', () => {
+    it('clears interruptedSnapshot when it is absent from the serialized state', () => {
       const original = new NodeState()
       original.status = Status.COMPLETED
 
       const restored = new NodeState()
-      restored.resumeSnapshot = {
+      restored.interruptedSnapshot = {
         scope: 'agent',
         schemaVersion: '1.0',
         createdAt: '2026-01-01T00:00:00Z',
         data: {},
         appData: {},
       }
-      restored[loadStateFromJSONSymbol](original[stateToJSONSymbol]())
+      loadStateSerializable(restored, serializeStateSerializable(original))
 
-      expect(restored.resumeSnapshot).toBeUndefined()
+      expect(restored).toEqual(original)
     })
   })
 })
@@ -522,7 +524,7 @@ describe('MultiAgentState', () => {
       const original = new MultiAgentState()
       original._pendingInput = 'hello'
       const restored = new MultiAgentState()
-      restored[loadStateFromJSONSymbol](JSON.parse(JSON.stringify(original[stateToJSONSymbol]())) as JSONValue)
+      loadStateSerializable(restored, JSON.parse(JSON.stringify(serializeStateSerializable(original))) as JSONValue)
       expect(restored._pendingInput).toBe('hello')
     })
 
@@ -533,15 +535,12 @@ describe('MultiAgentState', () => {
       // some downstream code paths.
       const original = new MultiAgentState()
       original._pendingInput = [new TextBlock('question')]
-      const serialized = JSON.parse(JSON.stringify(original[stateToJSONSymbol]())) as JSONValue
+      const serialized = JSON.parse(JSON.stringify(serializeStateSerializable(original))) as JSONValue
       const restored = new MultiAgentState()
-      restored[loadStateFromJSONSymbol](serialized)
+      loadStateSerializable(restored, serialized)
 
-      expect(Array.isArray(restored._pendingInput)).toBe(true)
-      const blocks = restored._pendingInput as TextBlock[]
-      expect(blocks).toHaveLength(1)
-      expect(blocks[0]).toBeInstanceOf(TextBlock)
-      expect(blocks[0]!.text).toBe('question')
+      expect(restored._pendingInput).toEqual([new TextBlock('question')])
+      expect((restored._pendingInput as TextBlock[])[0]).toBeInstanceOf(TextBlock)
     })
   })
 })
@@ -629,5 +628,23 @@ describe('groupInterruptResponsesByNode', () => {
     const state = makeState({ a: [new Interrupt({ id: 'tool:1:confirm', name: 'confirm' })] })
     const grouped = groupInterruptResponsesByNode([], state)
     expect(grouped.size).toBe(0)
+  })
+})
+
+describe('extractResumeResponses', () => {
+  it('throws when interrupt responses are mixed with other content', () => {
+    // Cast through `unknown` since the public type rejects mixed arrays at compile-time;
+    // this test pins the runtime guard for callers that bypass typing.
+    const mixed = [
+      new InterruptResponseContent({ interruptId: 'tool:1:confirm', response: 'ok' }),
+      new TextBlock('stray content'),
+    ] as unknown as InterruptResponseContent[]
+    expect(() => extractResumeResponses(mixed)).toThrow(TypeError)
+  })
+
+  it('returns undefined for empty input or non-response arrays', () => {
+    expect(extractResumeResponses([])).toBeUndefined()
+    expect(extractResumeResponses('hello')).toBeUndefined()
+    expect(extractResumeResponses([new TextBlock('hi')])).toBeUndefined()
   })
 })

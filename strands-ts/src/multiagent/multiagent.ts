@@ -104,9 +104,18 @@ export interface MultiAgent {
 export function extractResumeResponses(input: MultiAgentInput): InterruptResponseContent[] | undefined {
   if (!Array.isArray(input) || input.length === 0) return undefined
   if (!isInterruptResponseContent(input[0])) return undefined
-  return (input as readonly (InterruptResponseContent | InterruptResponseContentData)[]).map((entry) =>
-    entry instanceof InterruptResponseContent ? entry : InterruptResponseContent.fromJSON(entry)
-  )
+
+  const responses: InterruptResponseContent[] = []
+  for (const entry of input) {
+    if (entry instanceof InterruptResponseContent) {
+      responses.push(entry)
+    } else if (isInterruptResponseContent(entry)) {
+      responses.push(InterruptResponseContent.fromJSON(entry as InterruptResponseContentData))
+    } else {
+      throw new TypeError('Must resume from interrupt with a list of interruptResponse content blocks only')
+    }
+  }
+  return responses
 }
 
 /**

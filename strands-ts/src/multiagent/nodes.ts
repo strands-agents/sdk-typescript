@@ -10,6 +10,7 @@ import type { MultiAgent } from './multiagent.js'
 import { logger } from '../logging/logger.js'
 import type { z } from 'zod'
 import { normalizeError } from '../errors.js'
+import { omitUndefined } from '../types/json.js'
 
 /**
  * Known node type identifiers with extensibility for custom nodes.
@@ -130,7 +131,7 @@ export abstract class Node {
       // Clear the stored snapshot on non-INTERRUPTED terminal states; `handle()`
       // repopulates it above if this run itself interrupted.
       if (result!.status !== Status.INTERRUPTED) {
-        delete nodeState.resumeSnapshot
+        delete nodeState.interruptedSnapshot
       }
     }
 
@@ -235,8 +236,8 @@ export class AgentNode extends Node {
 
     // Rehydrate agent state from a prior INTERRUPTED run (messages + interrupt state).
     const nodeState = state.node(this.id)
-    if (isAgent && nodeState?.resumeSnapshot) {
-      this._agent.loadSnapshot(nodeState.resumeSnapshot)
+    if (isAgent && nodeState?.interruptedSnapshot) {
+      this._agent.loadSnapshot(nodeState.interruptedSnapshot)
     }
 
     try {
@@ -268,15 +269,15 @@ export class AgentNode extends Node {
       // Capture post-interrupt state for the next resume cycle. Only Agent instances
       // are snapshottable.
       if (interrupted && isAgent && nodeState) {
-        nodeState.resumeSnapshot = this._agent.takeSnapshot({ preset: 'session' })
+        nodeState.interruptedSnapshot = this._agent.takeSnapshot({ preset: 'session' })
       }
 
-      return {
+      return omitUndefined({
         content: agentResult.lastMessage.content,
-        ...('structuredOutput' in agentResult && { structuredOutput: agentResult.structuredOutput }),
-        ...(agentResult.metrics?.accumulatedUsage && { usage: agentResult.metrics.accumulatedUsage }),
-        ...(interrupted && { interrupts: agentResult.interrupts }),
-      }
+        structuredOutput: 'structuredOutput' in agentResult ? agentResult.structuredOutput : undefined,
+        usage: agentResult.metrics?.accumulatedUsage,
+        interrupts: interrupted ? agentResult.interrupts : undefined,
+      })
     } finally {
       // Restore pre-run state — keeps the agent observably unchanged across runs.
       if (preRunSnapshot) {
@@ -358,13 +359,13 @@ export class MultiAgentNode extends Node {
     const innerResult = next.value
     const interrupted = innerResult.interrupts && innerResult.interrupts.length > 0
 
-    return {
+    return omitUndefined({
       content: innerResult.content,
       usage: innerResult.usage,
-      ...(innerResult.status !== Status.COMPLETED && { status: innerResult.status }),
-      ...(innerResult.error && { error: innerResult.error }),
-      ...(interrupted && { interrupts: innerResult.interrupts }),
-    }
+      status: innerResult.status !== Status.COMPLETED ? innerResult.status : undefined,
+      error: innerResult.error,
+      interrupts: interrupted ? innerResult.interrupts : undefined,
+    })
   }
 }
 

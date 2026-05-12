@@ -134,13 +134,13 @@ describe('Multi-agent interrupts: round-trip', () => {
     expect(finalResult.status).toBe(Status.COMPLETED)
   })
 
-  it('Graph parallel: interrupt on one branch short-circuits in-flight sibling', async () => {
+  it('Graph parallel: interrupt on one branch lets in-flight sibling finish', async () => {
     const tool = interruptingTool('confirmTool', 'confirm', 'approved')
 
     // Source node 'start' runs quickly and produces two parallel branches.
-    // Branch 'interrupter' interrupts immediately. Branch 'slow' sleeps long enough
-    // that it's still in flight when 'interrupter' returns; the short-circuit should
-    // abort it via the composed cancel signal.
+    // Branch 'interrupter' interrupts immediately. Branch 'sibling' takes a moment
+    // to complete. The interrupt does not abort siblings — they run to completion
+    // and the aggregate result carries both outcomes.
     const startModel = new MockMessageModel().addTurn({ type: 'textBlock', text: 'go' })
     const start = new Agent({ model: startModel, printer: false, id: 'start' })
 
@@ -152,26 +152,25 @@ describe('Multi-agent interrupts: round-trip', () => {
     })
     const interrupter = new Agent({ model: interrupterModel, tools: [tool], printer: false, id: 'interrupter' })
 
-    const slow = createCancellableAgent('slow', 2_000)
+    const sibling = createCancellableAgent('sibling', 50)
 
     const graph = new Graph({
-      nodes: [start, interrupter, slow],
+      nodes: [start, interrupter, sibling],
       edges: [
         ['start', 'interrupter'],
-        ['start', 'slow'],
+        ['start', 'sibling'],
       ],
-      timeout: 1_000,
+      timeout: 5_000,
     })
 
     const result = await graph.invoke('begin')
 
-    // Aggregate status surfaces INTERRUPTED (the actionable state) rather than being
-    // masked by the short-circuited sibling — cancelSignal-driven aborts produce
-    // CANCELLED NodeResults, which _resolveStatus ranks below INTERRUPTED.
+    // Aggregate status surfaces INTERRUPTED (the actionable state) — `_resolveStatus`
+    // ranks INTERRUPTED above COMPLETED.
     expect(result.status).toBe(Status.INTERRUPTED)
 
-    const slowResult = result.results.find((r) => r.nodeId === 'slow')
-    expect(slowResult?.status).toBe(Status.CANCELLED)
+    const siblingResult = result.results.find((r) => r.nodeId === 'sibling')
+    expect(siblingResult?.status).toBe(Status.COMPLETED)
 
     const interrupterResult = result.results.find((r) => r.nodeId === 'interrupter')
     expect(interrupterResult?.status).toBe(Status.INTERRUPTED)
