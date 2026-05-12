@@ -10,7 +10,6 @@ import type { HookRegistry } from '../hooks/registry.js'
 import { HookOrder } from '../hooks/types.js'
 import type { HookableEventConstructor } from '../hooks/types.js'
 import { Message, TextBlock } from '../types/messages.js'
-import type { LocalAgent } from '../types/agent.js'
 import type { Guide, InterventionAction } from './actions.js'
 import { InterventionHandler } from './handler.js'
 import { logger } from '../logging/logger.js'
@@ -67,17 +66,6 @@ export class InterventionRegistry {
         hookRegistry.addCallback(eventType, (event) => this._dispatch(event, method), { order: HookOrder.SDK_FIRST })
       }
     }
-  }
-
-  private _initialized = false
-
-  /** Initialize all handlers. Safe to call multiple times — only runs once. */
-  async initialize(agent: LocalAgent): Promise<void> {
-    if (this._initialized) return
-    for (const handler of this._handlers) {
-      await handler.initAgent(agent)
-    }
-    this._initialized = true
   }
 
   /**

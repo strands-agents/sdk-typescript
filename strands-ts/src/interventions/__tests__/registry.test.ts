@@ -485,41 +485,6 @@ describe('InterventionRegistry', () => {
     })
   })
 
-  describe('initAgent', () => {
-    it('is called during initialize()', async () => {
-      const initFn = vi.fn()
-
-      class InitHandler extends InterventionHandler {
-        readonly name = 'init-handler'
-        override initAgent(): void {
-          initFn()
-        }
-      }
-
-      const registry = new InterventionRegistry([new InitHandler()], hookRegistry)
-      expect(initFn).not.toHaveBeenCalled()
-
-      await registry.initialize({} as never)
-      expect(initFn).toHaveBeenCalledOnce()
-    })
-
-    it('only runs once even if called multiple times', async () => {
-      const initFn = vi.fn()
-
-      class InitHandler extends InterventionHandler {
-        readonly name = 'init-handler'
-        override initAgent(): void {
-          initFn()
-        }
-      }
-
-      const registry = new InterventionRegistry([new InitHandler()], hookRegistry)
-      await registry.initialize({} as never)
-      await registry.initialize({} as never)
-      expect(initFn).toHaveBeenCalledOnce()
-    })
-  })
-
   describe('agent integration', () => {
     it('deny on beforeToolCall prevents tool execution', async () => {
       const { MockMessageModel } = await import('../../__fixtures__/mock-message-model.js')
@@ -662,19 +627,26 @@ describe('InterventionRegistry', () => {
       await expect(hookRegistry.invokeCallbacks(makeBeforeToolCallEvent())).rejects.toThrow('apply boom')
     })
 
-    it('initAgent throwing leaves registry uninitialized for retry', async () => {
-      class FailingInit extends InterventionHandler {
-        readonly name = 'failing-init'
-        override initAgent(): void {
-          throw new Error('init failed')
+    it('warns when action has no effect on event type', async () => {
+      const { logger } = await import('../../logging/logger.js')
+      const warnSpy = vi.spyOn(logger, 'warn')
+
+      // Force an interrupt return on beforeInvocation (which doesn't support it)
+      // via cast to test the runtime warning path
+      class InterruptOnInvocation extends InterventionHandler {
+        readonly name = 'interrupt-invocation'
+        override beforeInvocation() {
+          // Force an interrupt return via any cast to test the runtime warning
+          return { type: 'interrupt', prompt: 'test' } as never
         }
       }
 
-      const registry = new InterventionRegistry([new FailingInit()], hookRegistry)
+      new InterventionRegistry([new InterruptOnInvocation()], hookRegistry)
 
-      await expect(registry.initialize({} as never)).rejects.toThrow('init failed')
-      // Can retry — not marked as initialized
-      await expect(registry.initialize({} as never)).rejects.toThrow('init failed')
+      await hookRegistry.invokeCallbacks(makeBeforeInvocationEvent())
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('has no effect on this event type'))
+
+      warnSpy.mockRestore()
     })
   })
 })
