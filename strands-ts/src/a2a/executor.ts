@@ -3,7 +3,7 @@
  *
  * Implements the AgentExecutor interface from `@a2a-js/sdk/server` to allow
  * a Strands Agent to handle A2A JSON-RPC requests. Supports the full A2A
- * task lifecycle including `completed`, `failed`, `input_required`, and
+ * task lifecycle including `completed`, `failed`, `input-required`, and
  * `canceled` states.
  */
 
@@ -18,18 +18,6 @@ import { CancelledError, normalizeError } from '../errors.js'
 import { logger } from '../logging/logger.js'
 
 /**
- * Terminal task states in the A2A protocol.
- * These states indicate the task has finished processing.
- */
-const TERMINAL_STATES = new Set(['completed', 'failed', 'canceled', 'rejected'])
-
-/**
- * Input-required states in the A2A protocol.
- * These states indicate the task is waiting for additional user input.
- */
-const INPUT_STATES = new Set(['input-required', 'auth-required'])
-
-/**
  * Bridges a Strands Agent into the A2A protocol as an AgentExecutor.
  *
  * Converts A2A message parts to Strands content blocks, streams the agent
@@ -42,7 +30,7 @@ const INPUT_STATES = new Set(['input-required', 'auth-required'])
  * The executor maps agent execution outcomes to A2A task states:
  * - **completed** — Agent finished successfully with `stopReason: 'endTurn'`
  * - **failed** — Agent threw an error during execution
- * - **input_required** — Agent returned with `stopReason: 'interrupt'`
+ * - **input-required** — Agent returned with `stopReason: 'interrupt'`
  * - **canceled** — Task was canceled via `cancelTask()` or agent was cancelled
  *
  * ## Invocation state
@@ -188,9 +176,7 @@ export class A2AExecutor implements AgentExecutor {
         // Agent needs human input — transition to input-required
         const interruptParts: Part[] = []
         if (result.interrupts && result.interrupts.length > 0) {
-          const interruptText = result.interrupts
-            .map((i) => `[${i.name}]: ${i.reason ?? 'Input required'}`)
-            .join('\n')
+          const interruptText = result.interrupts.map((i) => `[${i.name}]: ${i.reason ?? 'Input required'}`).join('\n')
           interruptParts.push({ kind: 'text', text: interruptText })
         } else {
           interruptParts.push({ kind: 'text', text: 'Agent requires additional input' })
@@ -201,7 +187,12 @@ export class A2AExecutor implements AgentExecutor {
           contextId,
           status: {
             state: 'input-required',
-            message: { kind: 'message', messageId: globalThis.crypto.randomUUID(), role: 'agent', parts: interruptParts },
+            message: {
+              kind: 'message',
+              messageId: globalThis.crypto.randomUUID(),
+              role: 'agent',
+              parts: interruptParts,
+            },
           },
           final: true,
         })
@@ -263,7 +254,7 @@ export class A2AExecutor implements AgentExecutor {
    * @param taskId - The ID of the task to cancel
    * @param eventBus - The event bus for publishing status events
    */
-  async cancelTask(taskId: string, eventBus: ExecutionEventBus): Promise<void> {
+  async cancelTask(taskId: string, _eventBus: ExecutionEventBus): Promise<void> {
     const abortController = this._runningTasks.get(taskId)
     if (!abortController) {
       throw A2AError.taskNotCancelable(taskId)

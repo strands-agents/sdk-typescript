@@ -12,6 +12,7 @@ import { ContentBlockEvent, ModelStreamUpdateEvent } from '../../hooks/events.js
 import { AgentResult } from '../../types/agent.js'
 import { Message } from '../../types/messages.js'
 import { CancelledError } from '../../errors.js'
+import { Interrupt } from '../../interrupt.js'
 
 function createMockEventBus(): ExecutionEventBus & { events: AgentExecutionEvent[] } {
   const events: AgentExecutionEvent[] = []
@@ -203,6 +204,7 @@ describe('A2AExecutor', () => {
         id: 'test-agent',
         name: 'Test Agent',
         invoke: vi.fn(),
+        // eslint-disable-next-line require-yield
         async *stream() {
           throw new CancelledError()
         },
@@ -224,6 +226,7 @@ describe('A2AExecutor', () => {
         id: 'test-agent',
         name: 'Test Agent',
         invoke: vi.fn(),
+        // eslint-disable-next-line require-yield
         async *stream() {
           return new AgentResult({
             stopReason: 'cancelled',
@@ -249,12 +252,13 @@ describe('A2AExecutor', () => {
         id: 'test-agent',
         name: 'Test Agent',
         invoke: vi.fn(),
+        // eslint-disable-next-line require-yield
         async *stream() {
           return new AgentResult({
             stopReason: 'interrupt',
             lastMessage: new Message({ role: 'assistant', content: [new TextBlock('Need input')] }),
             invocationState: {},
-            interrupts: [{ id: 'int-1', name: 'confirm', reason: 'Please confirm the action' }],
+            interrupts: [new Interrupt({ id: 'int-1', name: 'confirm', reason: 'Please confirm the action' })],
           })
         },
       }
@@ -279,6 +283,7 @@ describe('A2AExecutor', () => {
         id: 'test-agent',
         name: 'Test Agent',
         invoke: vi.fn(),
+        // eslint-disable-next-line require-yield
         async *stream() {
           return new AgentResult({
             stopReason: 'interrupt',
@@ -306,14 +311,15 @@ describe('A2AExecutor', () => {
         id: 'test-agent',
         name: 'Test Agent',
         invoke: vi.fn(),
+        // eslint-disable-next-line require-yield
         async *stream() {
           return new AgentResult({
             stopReason: 'interrupt',
             lastMessage: new Message({ role: 'assistant', content: [new TextBlock('')] }),
             invocationState: {},
             interrupts: [
-              { id: 'int-1', name: 'approve', reason: 'Approve deployment' },
-              { id: 'int-2', name: 'select_env', reason: 'Choose environment' },
+              new Interrupt({ id: 'int-1', name: 'approve', reason: 'Approve deployment' }),
+              new Interrupt({ id: 'int-2', name: 'select_env', reason: 'Choose environment' }),
             ],
           })
         },
@@ -417,6 +423,7 @@ describe('A2AExecutor', () => {
         id: 'test-agent',
         name: 'Test Agent',
         invoke: vi.fn(),
+        // eslint-disable-next-line require-yield
         async *stream(_args, options) {
           cancelSignalReceived = options?.cancelSignal
           // Simulate some work
