@@ -6,6 +6,7 @@ import type OpenAI from 'openai'
 import type { ApiKeySetter } from 'openai/client'
 import type { ClientOptions } from 'openai'
 import type { BaseModelConfig } from '../model.js'
+import type { BedrockMantleConfig } from './mantle.js'
 
 /**
  * Supported OpenAI API modes.
@@ -117,6 +118,17 @@ interface OpenAIClientOptions {
    * Additional OpenAI client configuration. Only used if `client` is not provided.
    */
   clientConfig?: ClientOptions
+
+  /**
+   * Route requests through Amazon Bedrock's OpenAI-compatible "Mantle"
+   * endpoint. When set, the OpenAI client's `baseURL` and `apiKey` are derived
+   * from this config; the top-level `apiKey`, `clientConfig.apiKey`, and
+   * `clientConfig.baseURL` options must not be passed alongside it. Cannot be
+   * combined with a pre-built `client`. Requires the optional peer dependency
+   * `@aws/bedrock-token-generator`.
+   * @see https://docs.aws.amazon.com/bedrock/latest/userguide/inference-openai.html
+   */
+  bedrockMantleConfig?: BedrockMantleConfig
 }
 
 /**

@@ -18,6 +18,7 @@ import { ContextWindowOverflowError, ModelThrottledError } from '../../errors.js
 import { logger } from '../../logging/logger.js'
 import { warnOnce } from '../../logging/warn-once.js'
 import { MODEL_DEFAULTS, defaultModelWarningMessage } from '../defaults.js'
+import { bedrockMantleBaseUrl, createMantleApiKeySetter, resolveMantleRegion } from './mantle.js'
 import { classifyOpenAIError } from './errors.js'
 import { formatChatRequest, mapChatChunkToEvents, warnManagedParams as warnChatManagedParams } from './chat-adapter.js'
 import {
@@ -71,7 +72,7 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
 
   constructor(options: OpenAIModelOptions) {
     super()
-    const { apiKey, client, clientConfig, api = 'responses', ...modelConfig } = options
+    const { apiKey, client, clientConfig, bedrockMantleConfig, api = 'responses', ...modelConfig } = options
 
     if (api !== 'chat' && api !== 'responses') {
       throw new Error(`Unsupported OpenAI API: '${api}'. Supported values: 'chat', 'responses'`)
@@ -92,8 +93,14 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
       warnChatManagedParams(modelConfig.params)
     }
 
+    if (bedrockMantleConfig && client) {
+      throw new Error("'bedrockMantleConfig' cannot be combined with a pre-built 'client'.")
+    }
+
     if (client) {
       this._client = client
+    } else if (bedrockMantleConfig) {
+      this._client = buildMantleClient(bedrockMantleConfig, apiKey, clientConfig)
     } else {
       const hasEnvKey =
         typeof process !== 'undefined' && typeof process.env !== 'undefined' && process.env.OPENAI_API_KEY
@@ -257,4 +264,35 @@ export class OpenAIModel extends Model<OpenAIModelConfig> {
 
     return error
   }
+}
+
+function buildMantleClient(
+  bedrockMantleConfig: NonNullable<OpenAIModelOptions['bedrockMantleConfig']>,
+  apiKey: OpenAIModelOptions['apiKey'],
+  clientConfig: OpenAIModelOptions['clientConfig']
+): OpenAI {
+  if (apiKey !== undefined) {
+    throw new Error(
+      "'apiKey' cannot be combined with 'bedrockMantleConfig'; the API key is derived from the Mantle config automatically."
+    )
+  }
+
+  const conflicting: string[] = []
+  if (clientConfig?.apiKey !== undefined) conflicting.push('apiKey')
+  if (clientConfig?.baseURL !== undefined) conflicting.push('baseURL')
+  if (conflicting.length > 0) {
+    throw new Error(
+      `clientConfig must not contain ${conflicting.join(', ')} when bedrockMantleConfig is set; ` +
+        'these are derived from the Mantle config automatically.'
+    )
+  }
+
+  // Resolve the region eagerly so missing-region configuration fails fast.
+  const region = resolveMantleRegion(bedrockMantleConfig)
+
+  return new OpenAI({
+    ...clientConfig,
+    baseURL: bedrockMantleBaseUrl(region),
+    apiKey: createMantleApiKeySetter(bedrockMantleConfig, region),
+  })
 }
