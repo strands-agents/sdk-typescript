@@ -268,6 +268,7 @@ export {
   type McpClientConfig,
   type McpClientCredentials,
   type McpTransport,
+  type McpCallToolOptions,
   type TasksConfig,
   type McpConnectionState,
   McpClient,

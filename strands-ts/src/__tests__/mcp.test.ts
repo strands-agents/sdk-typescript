@@ -336,11 +336,45 @@ describe('MCP Integration', () => {
       await client.callTool(tool, { op: 'add' })
 
       expect(sdkClientMock.connect).toHaveBeenCalled()
-      expect(sdkClientMock.callTool).toHaveBeenCalledWith({
-        name: 'calc',
-        arguments: { op: 'add' },
-      })
+      expect(sdkClientMock.callTool).toHaveBeenCalledWith(
+        { name: 'calc', arguments: { op: 'add' } },
+        undefined,
+        undefined
+      )
       expect(sdkClientMock.experimental.tasks.callToolStream).not.toHaveBeenCalled()
+    })
+
+    it('forwards abort signal to SDK callTool', async () => {
+      const tool = new McpTool({ name: 'calc', description: '', inputSchema: {}, client })
+      sdkClientMock.callTool.mockResolvedValue({ content: [] })
+      const controller = new AbortController()
+
+      await client.callTool(tool, { op: 'add' }, { signal: controller.signal })
+
+      expect(sdkClientMock.callTool).toHaveBeenCalledWith({ name: 'calc', arguments: { op: 'add' } }, undefined, {
+        signal: controller.signal,
+      })
+    })
+
+    it('forwards abort signal to callToolStream when tasksConfig is provided', async () => {
+      const resultsLengthBefore = vi.mocked(Client).mock.results.length
+      const taskClient = new McpClient({
+        applicationName: 'TestApp',
+        transport: mockTransport,
+        tasksConfig: {},
+      })
+      const taskSdkClientMock = vi.mocked(Client).mock.results[resultsLengthBefore]!.value
+      const tool = new McpTool({ name: 'calc', description: '', inputSchema: {}, client: taskClient })
+      taskSdkClientMock.experimental.tasks.callToolStream.mockReturnValue(createMockCallToolStream({ content: [] })())
+      const controller = new AbortController()
+
+      await taskClient.callTool(tool, { op: 'add' }, { signal: controller.signal })
+
+      expect(taskSdkClientMock.experimental.tasks.callToolStream).toHaveBeenCalledWith(
+        { name: 'calc', arguments: { op: 'add' } },
+        undefined,
+        { timeout: 60000, maxTotalTimeout: 300000, resetTimeoutOnProgress: true, signal: controller.signal }
+      )
     })
 
     it('uses callToolStream when tasksConfig is provided (empty object)', async () => {
@@ -647,12 +681,28 @@ describe('MCP Integration', () => {
 
     const toolContext: ToolContext = {
       toolUse: { toolUseId: 'id-123', name: 'weather', input: { city: 'NYC' } },
-      agent: {} as LocalAgent,
+      agent: { cancelSignal: new AbortController().signal } as LocalAgent,
       invocationState: {},
       interrupt: () => {
         throw new Error('interrupt not available in mock context')
       },
     }
+
+    it('forwards agent cancelSignal to callTool', async () => {
+      vi.mocked(mockClientWrapper.callTool).mockResolvedValue({
+        content: [{ type: 'text', text: 'ok' }],
+      })
+
+      await runTool<ToolResultBlock>(tool.stream(toolContext))
+
+      expect(mockClientWrapper.callTool).toHaveBeenCalledWith(
+        tool,
+        { city: 'NYC' },
+        {
+          signal: toolContext.agent.cancelSignal,
+        }
+      )
+    })
 
     it('returns text results on success', async () => {
       vi.mocked(mockClientWrapper.callTool).mockResolvedValue({

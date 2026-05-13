@@ -60,6 +60,12 @@ export interface TasksConfig {
 /** Connection state of an MCP client. */
 export type McpConnectionState = 'disconnected' | 'connected' | 'failed'
 
+/** Options for MCP tool invocation. */
+export interface McpCallToolOptions {
+  /** AbortSignal to cancel the in-flight request. */
+  signal?: AbortSignal
+}
+
 /** OAuth client credentials for machine-to-machine authentication. */
 export interface McpClientCredentials {
   clientId: string
@@ -356,14 +362,15 @@ export class McpClient {
    *
    * @param tool - The McpTool instance to invoke.
    * @param args - The arguments to pass to the tool.
+   * @param options - Optional settings for the request.
    * @returns A promise that resolves with the result of the tool invocation.
    */
-  public async callTool(tool: McpTool, args: JSONValue): Promise<JSONValue> {
+  public async callTool(tool: McpTool, args: JSONValue, options?: McpCallToolOptions): Promise<JSONValue> {
     await this.connect()
     if (this._state === 'failed') throw new Error('MCP server failed to connect. Call connect(true) to retry.')
 
     if (args === null || args === undefined) {
-      return await this.callTool(tool, {})
+      return await this.callTool(tool, {}, options)
     }
 
     if (typeof args !== 'object' || Array.isArray(args)) {
@@ -378,20 +385,17 @@ export class McpClient {
 
     // When tasksConfig is undefined, call tools directly without task management
     if (this._tasksConfig === undefined) {
-      return (await this._client.callTool({ name: tool.name, arguments: toolArgs })) as JSONValue
+      return (await this._client.callTool({ name: tool.name, arguments: toolArgs }, undefined, options)) as JSONValue
     }
 
     // When tasksConfig is defined (even as empty object), use task-based invocation
     // which supports long-running tools with progress tracking
-    const stream = this._client.experimental.tasks.callToolStream(
-      { name: tool.name, arguments: toolArgs },
-      undefined, // resultSchema - use default CallToolResultSchema
-      {
-        timeout: this._tasksConfig.ttl ?? McpClient.DEFAULT_TTL,
-        maxTotalTimeout: this._tasksConfig.pollTimeout ?? McpClient.DEFAULT_POLL_TIMEOUT,
-        resetTimeoutOnProgress: true,
-      }
-    )
+    const stream = this._client.experimental.tasks.callToolStream({ name: tool.name, arguments: toolArgs }, undefined, {
+      timeout: this._tasksConfig.ttl ?? McpClient.DEFAULT_TTL,
+      maxTotalTimeout: this._tasksConfig.pollTimeout ?? McpClient.DEFAULT_POLL_TIMEOUT,
+      resetTimeoutOnProgress: true,
+      ...options,
+    })
 
     const result = await takeResult(stream)
     return result as JSONValue
