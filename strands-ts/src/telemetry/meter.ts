@@ -83,7 +83,7 @@ export interface InvocationMetricsData {
  */
 export interface AgentMetricsData {
   /**
-   * Number of agent loop cycles executed.
+   * Total number of agent loop cycles executed across all invocations.
    */
   cycleCount: number
 
@@ -121,7 +121,7 @@ export interface AgentMetricsData {
   projectedContextSize?: number
 
   /**
-   * Total duration of all cycles in milliseconds.
+   * Total duration of all cycles across all invocations in milliseconds.
    */
   totalDuration?: number
 }
@@ -165,7 +165,7 @@ interface ToolUsageOptions {
  */
 export class AgentMetrics implements JSONSerializable<AgentMetricsData> {
   /**
-   * Number of agent loop cycles executed.
+   * Total number of agent loop cycles executed across all invocations.
    */
   readonly cycleCount: number
 
@@ -206,7 +206,7 @@ export class AgentMetrics implements JSONSerializable<AgentMetricsData> {
   readonly projectedContextSize: number | undefined
 
   /**
-   * Total duration of all cycles in milliseconds.
+   * Total duration of all cycles across all invocations in milliseconds.
    */
   readonly totalDuration: number
 
