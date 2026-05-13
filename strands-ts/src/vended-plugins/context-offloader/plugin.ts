@@ -19,25 +19,25 @@ const DEFAULT_PREVIEW_TOKENS = 1_000
 const RETRIEVAL_TOOL_NAME = 'retrieve_offloaded_content'
 
 const retrievalInputSchema = z.object({
-  reference: z.string().describe('The storage reference from the offload placeholder.'),
+  reference: z.string().describe('The reference string from the offload placeholder (e.g. "mem_1_tool-123_0").'),
   pattern: z
     .string()
     .optional()
-    .describe('Regex or keyword pattern to search for. Returns matching lines with context instead of full content.'),
+    .describe('Regex or keyword to grep for. Returns only matching lines with context — not the full content.'),
   line_range: z
     .object({
-      start: z.number().int().min(1).describe('Start line number (1-indexed, inclusive).'),
-      end: z.number().int().min(1).describe('End line number (1-indexed, inclusive).'),
+      start: z.number().int().min(1).describe('First line to return (1-indexed).'),
+      end: z.number().int().min(1).describe('Last line to return (1-indexed).'),
     })
     .optional()
-    .describe('Range of lines to retrieve (1-indexed, inclusive). Returns only this span instead of full content.'),
+    .describe('Return only this span of lines. Combine with pattern to search within the range.'),
   context_lines: z
     .number()
     .int()
     .min(0)
     .optional()
     .describe(
-      'Lines to show before AND after each match, like grep -C (default: 5). When provided without pattern or line_range, returns the first N lines.'
+      'Lines before AND after each match (like grep -C). Default: 5. Without pattern/line_range, returns first N lines.'
     ),
 })
 
@@ -170,16 +170,19 @@ export class ContextOffloader implements Plugin {
     return tool({
       name: RETRIEVAL_TOOL_NAME,
       description:
-        'Retrieve offloaded content by reference. Use this when you see a placeholder with a reference (ref: ...). ' +
-        'Prefer using pattern or line_range to retrieve only what you need — this avoids loading the full content back into context. ' +
-        'Only omit pattern/line_range as a last resort when you truly need the entire content. ' +
-        'Search params only work on text content — omit them for binary. ' +
-        'Line numbers in search results can be used in follow-up line_range calls for deeper exploration.\n\n' +
+        'Access offloaded content by reference. Use when you see an offload placeholder with a reference.\n\n' +
+        'Returns:\n' +
+        '  - With pattern: matching lines with line numbers and surrounding context\n' +
+        '  - With line_range: the specified span of lines with line numbers\n' +
+        '  - Without pattern/line_range: the full original content (use sparingly — re-injects all tokens)\n\n' +
+        'Constraints:\n' +
+        '  - pattern/line_range/context_lines only work on text content. For binary content, omit them.\n' +
+        '  - Line numbers in results are 1-indexed and can be used in follow-up line_range calls.\n\n' +
         'Examples:\n' +
-        '  - { reference: "ref_1", pattern: "error" } — find lines containing "error"\n' +
-        '  - { reference: "ref_1", pattern: "error|warning", context_lines: 3 } — regex search with 3 lines context\n' +
-        '  - { reference: "ref_1", line_range: { start: 10, end: 25 } } — read lines 10-25\n' +
-        '  - { reference: "ref_1", pattern: "TODO", line_range: { start: 1, end: 50 } } — search within a range',
+        '  { reference: "ref_1", pattern: "error" } → lines containing "error" with 5 lines context\n' +
+        '  { reference: "ref_1", pattern: "error|warning", context_lines: 3 } → regex, 3 lines context\n' +
+        '  { reference: "ref_1", line_range: { start: 10, end: 25 } } → lines 10-25\n' +
+        '  { reference: "ref_1", pattern: "TODO", line_range: { start: 1, end: 50 } } → search within range',
       inputSchema: retrievalInputSchema,
       callback: async (input) => {
         try {
