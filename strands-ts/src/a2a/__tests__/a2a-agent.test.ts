@@ -347,12 +347,12 @@ describe('A2AAgent', () => {
       expect(result.interrupts).toBeDefined()
       expect(result.interrupts).toHaveLength(2)
       expect(result.interrupts![0]).toBeInstanceOf(Interrupt)
-      expect(result.interrupts![0]!.id).toBe('int-1')
-      expect(result.interrupts![0]!.name).toBe('confirm-deploy')
-      expect(result.interrupts![0]!.reason).toBe('Are you sure?')
-      expect(result.interrupts![1]!.id).toBe('int-2')
-      expect(result.interrupts![1]!.name).toBe('provide-credentials')
-      expect(result.interrupts![1]!.reason).toBeUndefined()
+      expect(result.interrupts![0]!.toJSON()).toStrictEqual({
+        id: 'int-1',
+        name: 'confirm-deploy',
+        reason: 'Are you sure?',
+      })
+      expect(result.interrupts![1]!.toJSON()).toStrictEqual({ id: 'int-2', name: 'provide-credentials' })
     })
 
     it('creates synthetic Interrupt from text when no structured data available', async () => {
@@ -380,9 +380,11 @@ describe('A2AAgent', () => {
       expect(result.interrupts).toBeDefined()
       expect(result.interrupts).toHaveLength(1)
       expect(result.interrupts![0]).toBeInstanceOf(Interrupt)
-      expect(result.interrupts![0]!.id).toBe('a2a-input-required')
-      expect(result.interrupts![0]!.name).toBe('input-required')
-      expect(result.interrupts![0]!.reason).toBe('Please provide your API key')
+      expect(result.interrupts![0]!.toJSON()).toStrictEqual({
+        id: 'a2a-input-required',
+        name: 'input-required',
+        reason: 'Please provide your API key',
+      })
     })
 
     it('does not populate interrupts for non-interrupt states', async () => {

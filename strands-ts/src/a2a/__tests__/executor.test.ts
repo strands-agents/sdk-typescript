@@ -221,6 +221,28 @@ describe('A2AExecutor', () => {
       expect(statusEvents[0]!.final).toBe(true)
     })
 
+    it('transitions to canceled state when DOMException AbortError is thrown', async () => {
+      const mockAgent: InvokableAgent = {
+        id: 'test-agent',
+        name: 'Test Agent',
+        invoke: vi.fn(),
+        // eslint-disable-next-line require-yield
+        async *stream() {
+          throw new DOMException('The operation was aborted', 'AbortError')
+        },
+      }
+
+      const executor = new A2AExecutor(mockAgent)
+      const eventBus = createMockEventBus()
+
+      await executor.execute(createRequestContext('Hello'), eventBus)
+
+      const statusEvents = eventBus.events.filter((e): e is TaskStatusUpdateEvent => e.kind === 'status-update')
+      expect(statusEvents).toHaveLength(1)
+      expect(statusEvents[0]!.status.state).toBe('canceled')
+      expect(statusEvents[0]!.final).toBe(true)
+    })
+
     it('transitions to canceled state when agent returns stopReason cancelled', async () => {
       const mockAgent: InvokableAgent = {
         id: 'test-agent',
@@ -349,6 +371,40 @@ describe('A2AExecutor', () => {
             { id: 'int-2', name: 'select_env', reason: 'Choose environment' },
           ],
         },
+      })
+    })
+
+    it('renders object reasons as JSON strings in the text part', async () => {
+      const mockAgent: InvokableAgent = {
+        id: 'test-agent',
+        name: 'Test Agent',
+        invoke: vi.fn(),
+        // eslint-disable-next-line require-yield
+        async *stream() {
+          return new AgentResult({
+            stopReason: 'interrupt',
+            lastMessage: new Message({ role: 'assistant', content: [new TextBlock('')] }),
+            invocationState: {},
+            interrupts: [
+              new Interrupt({
+                id: 'int-1',
+                name: 'deploy',
+                reason: { step: 'deploy', target: 'prod' } as unknown as string,
+              }),
+            ],
+          })
+        },
+      }
+
+      const executor = new A2AExecutor(mockAgent)
+      const eventBus = createMockEventBus()
+
+      await executor.execute(createRequestContext('Deploy'), eventBus)
+
+      const statusEvents = eventBus.events.filter((e): e is TaskStatusUpdateEvent => e.kind === 'status-update')
+      expect(statusEvents[0]!.status.message!.parts[0]).toStrictEqual({
+        kind: 'text',
+        text: '[deploy]: {"step":"deploy","target":"prod"}',
       })
     })
 
