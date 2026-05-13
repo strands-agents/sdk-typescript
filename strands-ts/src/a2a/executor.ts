@@ -176,13 +176,27 @@ export class A2AExecutor implements AgentExecutor {
         // Agent needs human input — transition to input-required
         const interruptParts: Part[] = []
         if (result.interrupts && result.interrupts.length > 0) {
-          const interruptText = result.interrupts.map((i) => `[${i.name}]: ${i.reason ?? 'Input required'}`).join('\n')
+          // Render human-readable text — JSON.stringify for non-string reasons
+          const interruptText = result.interrupts
+            .map((i) => {
+              const reasonStr =
+                typeof i.reason === 'string' ? i.reason : i.reason != null ? JSON.stringify(i.reason) : 'Input required'
+              return `[${i.name}]: ${reasonStr}`
+            })
+            .join('\n')
           interruptParts.push({ kind: 'text', text: interruptText })
           // Include structured interrupt data for round-tripping through the A2A protocol.
-          // The DataPart preserves id, name, and reason so clients can reconstruct Interrupt objects.
+          // Only serialize id, name, and reason — exclude response to prevent leaking
+          // user input from previous resume cycles.
           interruptParts.push({
             kind: 'data',
-            data: { interrupts: result.interrupts.map((i) => i.toJSON()) },
+            data: {
+              interrupts: result.interrupts.map((i) => ({
+                id: i.id,
+                name: i.name,
+                ...(i.reason !== undefined ? { reason: i.reason } : {}),
+              })),
+            },
           })
         } else {
           interruptParts.push({ kind: 'text', text: 'Agent requires additional input' })
@@ -216,8 +230,12 @@ export class A2AExecutor implements AgentExecutor {
         eventBus.publish({ kind: 'status-update', taskId, contextId, status: { state: 'completed' }, final: true })
       }
     } catch (error) {
-      if (error instanceof CancelledError) {
-        // Agent cancellation via CancelledError — transition to canceled
+      if (
+        error instanceof CancelledError ||
+        (error instanceof DOMException && error.name === 'AbortError') ||
+        (error instanceof Error && error.name === 'AbortError')
+      ) {
+        // Agent cancellation via CancelledError or AbortError — transition to canceled
         logger.debug(`task_id=<${taskId}> | agent execution cancelled`)
         eventBus.publish({
           kind: 'status-update',

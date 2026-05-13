@@ -379,17 +379,15 @@ export class A2AAgent implements InvokableAgent {
     // Look for structured interrupt data in DataPart entries
     for (const part of parts) {
       if (part.kind === 'data' && Array.isArray((part.data as Record<string, unknown>)?.interrupts)) {
-        const rawInterrupts = (part.data as { interrupts: Array<{ id: string; name: string; reason?: unknown }> })
-          .interrupts
-        if (rawInterrupts.length > 0) {
-          return rawInterrupts.map(
-            (raw) =>
-              new Interrupt({
-                id: raw.id,
-                name: raw.name,
-                ...(raw.reason !== undefined ? { reason: raw.reason as JSONValue } : {}),
-              })
-          )
+        const rawEntries = (part.data as { interrupts: unknown[] }).interrupts
+        // Validate entries: skip malformed items missing required id/name fields
+        const validEntries = rawEntries.filter(
+          (raw): raw is { id: string; name: string; reason?: JSONValue } =>
+            typeof (raw as Record<string, unknown>)?.id === 'string' &&
+            typeof (raw as Record<string, unknown>)?.name === 'string'
+        )
+        if (validEntries.length > 0) {
+          return validEntries.map((raw) => Interrupt.fromJSON(raw))
         }
       }
     }
