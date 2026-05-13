@@ -279,6 +279,13 @@ export class Graph implements MultiAgent {
 
     // Resume input bypasses dependency resolution (routed by interrupt id). On fresh
     // runs, stash the input so resume can replay it to hook-gated nodes that never ran.
+    //
+    // Example: Source node A has a `BeforeNodeCallEvent` hook that interrupts. The user
+    // calls `graph.invoke('original task')`, the hook fires before A executes, the run
+    // pauses with status INTERRUPTED. On resume, `graph.invoke([response])` only carries
+    // the response — A still needs `'original task'` as its input because A never ran
+    // and has no snapshot or upstream results to fall back on. `state._pendingInput`
+    // carries `'original task'` across the pause so resume can replay it.
     const resumeResponses = extractResumeResponses(input)
     const interruptResponsesByNode = resumeResponses ? groupInterruptResponsesByNode(resumeResponses, state) : undefined
     let contentInput: MultiAgentContentInput | undefined

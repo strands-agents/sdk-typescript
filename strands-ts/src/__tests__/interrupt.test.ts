@@ -16,6 +16,7 @@ describe('Interrupt', () => {
       name: 'confirm_action',
       reason: 'Please confirm',
       response: 'approved',
+      source: 'hook',
     })
 
     // response is mutable after construction
@@ -41,7 +42,7 @@ describe('Interrupt', () => {
     const interrupt = new Interrupt({ id: 'int-1', name: 'test' })
 
     const json = interrupt.toJSON()
-    expect(json).toStrictEqual({ id: 'int-1', name: 'test' })
+    expect(json).toStrictEqual({ id: 'int-1', name: 'test', source: 'hook' })
     expect('reason' in json).toBe(false)
     expect('response' in json).toBe(false)
   })
@@ -81,7 +82,7 @@ describe('InterruptState', () => {
 
       const interrupt = state.getOrCreateInterrupt('int-1', 'test', 'reason')
 
-      expect(interrupt).toEqual({ id: 'int-1', name: 'test', reason: 'reason' })
+      expect(interrupt).toEqual({ id: 'int-1', name: 'test', reason: 'reason', source: 'hook' })
       expect(state.interrupts['int-1']).toBe(interrupt)
       expect(state.getInterruptsList()).toStrictEqual([interrupt])
     })
@@ -119,6 +120,7 @@ describe('InterruptState', () => {
         name: 'confirm',
         reason: 'reason',
         response: 'pre-approved',
+        source: 'hook',
       })
     })
 
@@ -135,6 +137,7 @@ describe('InterruptState', () => {
         name: 'confirm',
         reason: 'reason',
         response: 'user response',
+        source: 'hook',
       })
     })
   })

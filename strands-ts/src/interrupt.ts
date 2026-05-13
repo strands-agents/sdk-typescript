@@ -47,11 +47,11 @@ export class Interrupt {
   response?: JSONValue
 
   /**
-   * Where this interrupt was raised from — a tool callback or a hook callback.
-   * Always populated on interrupts created by current code; only `undefined` when
-   * deserializing a snapshot produced by a pre-interrupt-source SDK version.
+   * Where this interrupt was raised from — a tool callback, an agent-level hook, or
+   * a multi-agent orchestrator hook. Always populated. When deserializing a snapshot
+   * produced by an older SDK that did not record this field, defaults to `'hook'`.
    */
-  readonly source?: InterruptSource
+  readonly source: InterruptSource
 
   constructor(data: { id: string; name: string; reason?: JSONValue; response?: JSONValue; source?: InterruptSource }) {
     this.id = data.id
@@ -62,21 +62,21 @@ export class Interrupt {
     if (data.response !== undefined) {
       this.response = data.response
     }
-    if (data.source !== undefined) {
-      this.source = data.source
-    }
+    // Default for legacy snapshots that predate the `source` field; current code
+    // paths always supply a value explicitly.
+    this.source = data.source ?? 'hook'
   }
 
   /**
    * Serializes the interrupt to a JSON-compatible object.
    */
-  toJSON(): { id: string; name: string; reason?: JSONValue; response?: JSONValue; source?: InterruptSource } {
+  toJSON(): { id: string; name: string; reason?: JSONValue; response?: JSONValue; source: InterruptSource } {
     return {
       id: this.id,
       name: this.name,
       ...(this.reason !== undefined && { reason: this.reason }),
       ...(this.response !== undefined && { response: this.response }),
-      ...(this.source !== undefined && { source: this.source }),
+      source: this.source,
     }
   }
 
