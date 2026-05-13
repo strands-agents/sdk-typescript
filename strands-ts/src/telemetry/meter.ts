@@ -98,7 +98,8 @@ export interface AgentMetricsData {
   accumulatedMetrics: Metrics
 
   /**
-   * Per-invocation metrics.
+   * Per-invocation metrics for recent invocations.
+   * Only the most recent 100 entries are retained.
    */
   agentInvocations: InvocationMetricsData[]
 
@@ -179,7 +180,9 @@ export class AgentMetrics implements JSONSerializable<AgentMetricsData> {
   readonly accumulatedMetrics: Metrics
 
   /**
-   * Per-invocation metrics.
+   * Per-invocation metrics for recent invocations.
+   * Only the most recent 100 entries are retained to prevent unbounded memory growth.
+   * For full history, collect {@link latestAgentInvocation} from each {@link AgentResult}.
    */
   readonly agentInvocations: InvocationMetricsData[]
 
