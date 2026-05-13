@@ -574,5 +574,38 @@ describe('ContextOffloader', () => {
       expect(result).toContain('line 2')
       expect(result).toContain('line 3')
     })
+
+    it('returns first N lines when only context_lines is provided', async () => {
+      const storage = new InMemoryStorage()
+      const content = Array.from({ length: 20 }, (_, i) => `line ${i + 1}`).join('\n')
+      const ref = await storage.store('k1', new TextEncoder().encode(content), 'text/plain')
+
+      const plugin = new ContextOffloader({ storage, includeRetrievalTool: true })
+      const result = (await getRetrievalTool(plugin).invoke({
+        reference: ref,
+        context_lines: 10,
+      })) as string
+
+      expect(result).toContain('[Lines 1-10 of 20]')
+      expect(result).toContain('line 1')
+      expect(result).toContain('line 10')
+      expect(result).not.toContain('line 11')
+    })
+
+    it('returns first line when context_lines is 0', async () => {
+      const storage = new InMemoryStorage()
+      const content = Array.from({ length: 10 }, (_, i) => `line ${i + 1}`).join('\n')
+      const ref = await storage.store('k1', new TextEncoder().encode(content), 'text/plain')
+
+      const plugin = new ContextOffloader({ storage, includeRetrievalTool: true })
+      const result = (await getRetrievalTool(plugin).invoke({
+        reference: ref,
+        context_lines: 0,
+      })) as string
+
+      expect(result).toContain('[Lines 1-1 of 10]')
+      expect(result).toContain('line 1')
+      expect(result).not.toContain('line 2')
+    })
   })
 })

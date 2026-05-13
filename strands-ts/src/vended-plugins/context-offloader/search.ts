@@ -30,6 +30,8 @@ function formatLines(lines: string[], indices: number[], matchedSet: Set<number>
   return output.join('\n')
 }
 
+// Mitigates ReDoS from overly long patterns. Short pathological patterns (e.g. `(a+)+$`)
+// are still possible but unlikely since the agent provides the pattern, not end users.
 const MAX_PATTERN_LENGTH = 200
 
 /** Finds lines matching a pattern, expands with context, and formats with truncation. */

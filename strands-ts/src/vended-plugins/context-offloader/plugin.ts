@@ -35,8 +35,10 @@ const retrievalInputSchema = z.object({
     .number()
     .int()
     .min(0)
-    .default(5)
-    .describe('Number of lines of context before/after each match. Only used with pattern. Defaults to 5.'),
+    .optional()
+    .describe(
+      'Lines of context around each match (default: 5). When provided without pattern or line_range, returns the first N lines.'
+    ),
 })
 
 function slicePreview(text: string, previewTokens: number): string {
@@ -174,20 +176,25 @@ export class ContextOffloader implements Plugin {
         'Line numbers in search results can be used in follow-up line_range calls for deeper exploration.\n\n' +
         'Examples:\n' +
         '  - { reference: "ref_1", pattern: "error" } — find lines containing "error"\n' +
-        '  - { reference: "ref_1", pattern: "function\\\\s+\\\\w+", context_lines: 3 } — regex search with 3 lines context\n' +
+        '  - { reference: "ref_1", pattern: "error|warning", context_lines: 3 } — regex search with 3 lines context\n' +
         '  - { reference: "ref_1", line_range: { start: 10, end: 25 } } — read lines 10-25\n' +
         '  - { reference: "ref_1", pattern: "TODO", line_range: { start: 1, end: 50 } } — search within a range',
       inputSchema: retrievalInputSchema,
       callback: async (input) => {
         try {
           const result = await storage.retrieve(input.reference)
+          const contextLines = input.context_lines ?? 5
 
-          if (input.pattern || input.line_range) {
+          if (input.pattern || input.line_range || input.context_lines !== undefined) {
             if (!isSearchableContent(result.contentType)) {
-              return `Error: cannot search binary content (${result.contentType}). Omit pattern/line_range to retrieve the full content.`
+              return `Error: cannot search binary content (${result.contentType}). Omit pattern/line_range/context_lines to retrieve the full content.`
             }
             const text = new TextDecoder().decode(result.content)
-            return searchContent(text, input, maxChars)
+            if (!input.pattern && !input.line_range) {
+              const end = Math.max(1, contextLines)
+              return searchContent(text, { context_lines: contextLines, line_range: { start: 1, end } }, maxChars)
+            }
+            return searchContent(text, { ...input, context_lines: contextLines }, maxChars)
           }
 
           return decodeStoredContent(result.content, result.contentType, input.reference)
