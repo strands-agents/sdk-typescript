@@ -178,6 +178,12 @@ export class A2AExecutor implements AgentExecutor {
         if (result.interrupts && result.interrupts.length > 0) {
           const interruptText = result.interrupts.map((i) => `[${i.name}]: ${i.reason ?? 'Input required'}`).join('\n')
           interruptParts.push({ kind: 'text', text: interruptText })
+          // Include structured interrupt data for round-tripping through the A2A protocol.
+          // The DataPart preserves id, name, and reason so clients can reconstruct Interrupt objects.
+          interruptParts.push({
+            kind: 'data',
+            data: { interrupts: result.interrupts.map((i) => i.toJSON()) },
+          })
         } else {
           interruptParts.push({ kind: 'text', text: 'Agent requires additional input' })
         }

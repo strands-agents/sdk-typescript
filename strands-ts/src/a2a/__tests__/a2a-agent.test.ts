@@ -9,6 +9,7 @@ import type {
   TaskStatusUpdateEvent,
 } from '@a2a-js/sdk'
 import { TextBlock, Message } from '../../types/messages.js'
+import { Interrupt } from '../../interrupt.js'
 import type { InvokeArgs } from '../../types/agent.js'
 
 // Mock the A2A SDK client
@@ -308,6 +309,105 @@ describe('A2AAgent', () => {
       expect(result.stopReason).toBe('interrupt')
       expect(result.invocationState.a2aTaskState).toBe('input-required')
       expect((result.lastMessage.content[0] as TextBlock).text).toBe('Need more info')
+    })
+
+    it('reconstructs Interrupt objects from structured DataPart in input-required', async () => {
+      const inputRequired: TaskStatusUpdateEvent = {
+        kind: 'status-update',
+        taskId: 'task-1',
+        contextId: 'ctx-1',
+        status: {
+          state: 'input-required',
+          message: {
+            kind: 'message',
+            messageId: 'msg-1',
+            role: 'agent',
+            parts: [
+              { kind: 'text', text: '[confirm-deploy]: Are you sure?' },
+              {
+                kind: 'data',
+                data: {
+                  interrupts: [
+                    { id: 'int-1', name: 'confirm-deploy', reason: 'Are you sure?' },
+                    { id: 'int-2', name: 'provide-credentials' },
+                  ],
+                },
+              },
+            ],
+          },
+        },
+        final: true,
+      }
+      mockSendMessageStream.mockReturnValue(mockStream(inputRequired))
+
+      const agent = new A2AAgent({ url: 'http://localhost:9000' })
+      const result = await agent.invoke('Deploy to production')
+
+      expect(result.stopReason).toBe('interrupt')
+      expect(result.interrupts).toBeDefined()
+      expect(result.interrupts).toHaveLength(2)
+      expect(result.interrupts![0]).toBeInstanceOf(Interrupt)
+      expect(result.interrupts![0]!.id).toBe('int-1')
+      expect(result.interrupts![0]!.name).toBe('confirm-deploy')
+      expect(result.interrupts![0]!.reason).toBe('Are you sure?')
+      expect(result.interrupts![1]!.id).toBe('int-2')
+      expect(result.interrupts![1]!.name).toBe('provide-credentials')
+      expect(result.interrupts![1]!.reason).toBeUndefined()
+    })
+
+    it('creates synthetic Interrupt from text when no structured data available', async () => {
+      const inputRequired: TaskStatusUpdateEvent = {
+        kind: 'status-update',
+        taskId: 'task-1',
+        contextId: 'ctx-1',
+        status: {
+          state: 'input-required',
+          message: {
+            kind: 'message',
+            messageId: 'msg-1',
+            role: 'agent',
+            parts: [{ kind: 'text', text: 'Please provide your API key' }],
+          },
+        },
+        final: true,
+      }
+      mockSendMessageStream.mockReturnValue(mockStream(inputRequired))
+
+      const agent = new A2AAgent({ url: 'http://localhost:9000' })
+      const result = await agent.invoke('Hello')
+
+      expect(result.stopReason).toBe('interrupt')
+      expect(result.interrupts).toBeDefined()
+      expect(result.interrupts).toHaveLength(1)
+      expect(result.interrupts![0]).toBeInstanceOf(Interrupt)
+      expect(result.interrupts![0]!.id).toBe('a2a-input-required')
+      expect(result.interrupts![0]!.name).toBe('input-required')
+      expect(result.interrupts![0]!.reason).toBe('Please provide your API key')
+    })
+
+    it('does not populate interrupts for non-interrupt states', async () => {
+      const completed: TaskStatusUpdateEvent = {
+        kind: 'status-update',
+        taskId: 'task-1',
+        contextId: 'ctx-1',
+        status: {
+          state: 'completed',
+          message: {
+            kind: 'message',
+            messageId: 'msg-1',
+            role: 'agent',
+            parts: [{ kind: 'text', text: 'Done' }],
+          },
+        },
+        final: true,
+      }
+      mockSendMessageStream.mockReturnValue(mockStream(completed))
+
+      const agent = new A2AAgent({ url: 'http://localhost:9000' })
+      const result = await agent.invoke('Hello')
+
+      expect(result.stopReason).toBe('endTurn')
+      expect(result.interrupts).toBeUndefined()
     })
   })
 

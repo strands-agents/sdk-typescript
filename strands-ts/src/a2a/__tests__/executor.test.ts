@@ -276,6 +276,11 @@ describe('A2AExecutor', () => {
         kind: 'text',
         text: '[confirm]: Please confirm the action',
       })
+      // Structured interrupt data should be included as a DataPart for round-tripping
+      expect(statusEvents[0]!.status.message!.parts[1]).toStrictEqual({
+        kind: 'data',
+        data: { interrupts: [{ id: 'int-1', name: 'confirm', reason: 'Please confirm the action' }] },
+      })
     })
 
     it('transitions to input-required with generic message when no interrupts provided', async () => {
@@ -334,6 +339,16 @@ describe('A2AExecutor', () => {
       expect(statusEvents[0]!.status.message!.parts[0]).toStrictEqual({
         kind: 'text',
         text: '[approve]: Approve deployment\n[select_env]: Choose environment',
+      })
+      // Structured interrupt data for round-tripping
+      expect(statusEvents[0]!.status.message!.parts[1]).toStrictEqual({
+        kind: 'data',
+        data: {
+          interrupts: [
+            { id: 'int-1', name: 'approve', reason: 'Approve deployment' },
+            { id: 'int-2', name: 'select_env', reason: 'Choose environment' },
+          ],
+        },
       })
     })
 

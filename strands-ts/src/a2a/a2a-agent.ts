@@ -15,6 +15,8 @@ import { AgentResult } from '../types/agent.js'
 import { Message, TextBlock, type ContentBlock, type ContentBlockData, type MessageData } from '../types/messages.js'
 import type { StopReason } from '../types/messages.js'
 import { A2AStreamUpdateEvent, A2AResultEvent, type A2AEventData, type A2AStreamEvent } from './events.js'
+import { Interrupt } from '../interrupt.js'
+import type { JSONValue } from '../types/json.js'
 import { logger } from '../logging/logger.js'
 import { logExperimentalWarning } from './logging.js'
 
@@ -346,7 +348,81 @@ export class A2AAgent implements InvokableAgent {
       ...(taskState ? { a2aTaskState: taskState } : {}),
     }
 
-    return new AgentResult({ stopReason, lastMessage, invocationState: enrichedState })
+    // Reconstruct Interrupt objects when task is input-required
+    const interrupts = stopReason === 'interrupt' ? this._extractInterrupts(event, text) : undefined
+
+    return new AgentResult({
+      stopReason,
+      lastMessage,
+      invocationState: enrichedState,
+      ...(interrupts ? { interrupts } : {}),
+    })
+  }
+
+  /**
+   * Extracts Interrupt objects from an A2A event.
+   *
+   * Looks for structured interrupt data in DataPart entries first (round-trip from
+   * our executor), then falls back to creating a synthetic interrupt from the
+   * status message text for interoperability with other A2A servers.
+   *
+   * @param event - The A2A event to extract interrupts from
+   * @param fallbackText - Text to use for a synthetic interrupt if no structured data is found
+   * @returns Array of Interrupt objects, or undefined if none found
+   */
+  private _extractInterrupts(event: A2AEventData | undefined, fallbackText: string): Interrupt[] | undefined {
+    if (!event) return undefined
+
+    // Extract parts from the event (status-update message parts or task status message parts)
+    const parts = this._getStatusParts(event)
+
+    // Look for structured interrupt data in DataPart entries
+    for (const part of parts) {
+      if (part.kind === 'data' && Array.isArray((part.data as Record<string, unknown>)?.interrupts)) {
+        const rawInterrupts = (part.data as { interrupts: Array<{ id: string; name: string; reason?: unknown }> })
+          .interrupts
+        if (rawInterrupts.length > 0) {
+          return rawInterrupts.map(
+            (raw) =>
+              new Interrupt({
+                id: raw.id,
+                name: raw.name,
+                ...(raw.reason !== undefined ? { reason: raw.reason as JSONValue } : {}),
+              })
+          )
+        }
+      }
+    }
+
+    // Fallback: create a synthetic interrupt from the status text.
+    // This handles A2A servers that don't send structured interrupt data.
+    if (fallbackText) {
+      return [
+        new Interrupt({
+          id: 'a2a-input-required',
+          name: 'input-required',
+          reason: fallbackText,
+        }),
+      ]
+    }
+
+    return undefined
+  }
+
+  /**
+   * Extracts status message parts from an A2A event.
+   *
+   * @param event - The A2A event
+   * @returns Array of parts from the status message, or empty array
+   */
+  private _getStatusParts(event: A2AEventData): Part[] {
+    if (event.kind === 'status-update' && event.status.message) {
+      return event.status.message.parts
+    }
+    if (event.kind === 'task' && event.status?.message) {
+      return event.status.message.parts
+    }
+    return []
   }
 
   /**
