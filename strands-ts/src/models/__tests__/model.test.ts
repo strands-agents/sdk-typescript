@@ -323,19 +323,41 @@ describe('Model', () => {
         )
       })
 
-      it('preserves SyntaxError instead of overwriting with MaxTokensError when tool input JSON is malformed', async () => {
+      it('throws MaxTokenError when contentBlockStop arrives with truncated tool input JSON and stopReason is maxTokens', async () => {
         const provider = new TestModelProvider(async function* () {
           yield { type: 'modelMessageStartEvent', role: 'assistant' }
           yield {
             type: 'modelContentBlockStartEvent',
-            start: { type: 'toolUseStart', toolUseId: 'tool1', name: 'get_weather' },
+            start: { type: 'toolUseStart', toolUseId: 't', name: 'tool' },
+          }
+          yield {
+            type: 'modelContentBlockDeltaEvent',
+            delta: { type: 'toolUseInputDelta', input: '{"field": "value"' },
+          }
+          yield { type: 'modelContentBlockStopEvent' }
+          yield { type: 'modelMessageStopEvent', stopReason: 'maxTokens' }
+        })
+
+        const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
+
+        await expect(async () => await collectGenerator(provider.streamAggregated(messages))).rejects.toThrow(
+          MaxTokensError
+        )
+      })
+
+      it('surfaces SyntaxError as cause when tool input JSON is malformed and stopReason is not maxTokens', async () => {
+        const provider = new TestModelProvider(async function* () {
+          yield { type: 'modelMessageStartEvent', role: 'assistant' }
+          yield {
+            type: 'modelContentBlockStartEvent',
+            start: { type: 'toolUseStart', toolUseId: 't', name: 'tool' },
           }
           yield {
             type: 'modelContentBlockDeltaEvent',
             delta: { type: 'toolUseInputDelta', input: '{invalid json' },
           }
           yield { type: 'modelContentBlockStopEvent' }
-          yield { type: 'modelMessageStopEvent', stopReason: 'maxTokens' }
+          yield { type: 'modelMessageStopEvent', stopReason: 'toolUse' }
         })
 
         const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
