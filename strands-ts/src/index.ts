@@ -15,6 +15,7 @@ export { StateStore } from './state-store.js'
 export { AgentResult } from './types/agent.js'
 export type { AgentConfig, ToolList, ToolExecutorStrategy } from './agent/agent.js'
 export type { AgentAsToolOptions } from './agent/agent-as-tool.js'
+export type { ToolCaller, ToolCallerProxy, ToolCallerFn, DirectToolCallOptions } from './agent/tool-caller.js'
 export type { InvocationState, InvokeArgs, InvokeOptions, LocalAgent } from './types/agent.js'
 
 // Snapshot types

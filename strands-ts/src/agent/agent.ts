@@ -65,6 +65,8 @@ import {
 import { StructuredOutputTool, STRUCTURED_OUTPUT_TOOL_NAME } from '../tools/structured-output-tool.js'
 import { AgentAsTool } from './agent-as-tool.js'
 import type { AgentAsToolOptions } from './agent-as-tool.js'
+import { ToolCaller } from './tool-caller.js'
+import type { ToolCallerProxy } from './tool-caller.js'
 
 import type { z } from 'zod'
 import { SessionManager } from '../session/session-manager.js'
@@ -296,6 +298,7 @@ export class Agent implements LocalAgent, InvokableAgent {
   _interruptState: InterruptState
   /** Strategy for executing tool calls from a single assistant turn. */
   private readonly _toolExecutor: ToolExecutorStrategy
+  private readonly _toolCaller!: ToolCaller
 
   /**
    * Creates an instance of the Agent.
@@ -387,6 +390,7 @@ export class Agent implements LocalAgent, InvokableAgent {
     this._interruptState = new InterruptState()
 
     this._toolExecutor = config?.toolExecutor ?? 'concurrent'
+    this._toolCaller = new ToolCaller(this) as unknown as ToolCaller
 
     this._initialized = false
   }
@@ -485,6 +489,30 @@ export class Agent implements LocalAgent, InvokableAgent {
   get toolRegistry(): ToolRegistry {
     return this._toolRegistry
   }
+
+  /**
+   * Whether the agent is currently processing an invocation.
+   */
+  get isInvoking(): boolean {
+    return this._isInvoking
+  }
+
+  /**
+   * Direct tool calling accessor.
+   *
+   * Call tools directly without model inference:
+   * ```typescript
+   * const result = await agent.tool.calculator({ a: 5, b: 3 })
+   * ```
+   *
+   * Supports underscore-to-hyphen and case-insensitive name resolution.
+   * Results are recorded in message history by default (pass
+   * `{ recordDirectToolCall: false }` to skip).
+   */
+  get tool(): ToolCallerProxy {
+    return this._toolCaller as unknown as ToolCallerProxy
+  }
+
 
   /**
    * The cancellation signal for the current invocation.
