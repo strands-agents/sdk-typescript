@@ -46,6 +46,9 @@ export type Deny = { type: 'deny'; reason: string }
  * On afterModelCall, the response is discarded and the model retries with the
  * feedback injected as a user message.
  *
+ * @param feedback - The guidance text shown to the model.
+ * @param reason - Optional metadata for debugging/logging. Not shown to the model.
+ *
  * @example
  * ```typescript
  * override afterModelCall(event: AfterModelCallEvent): InterventionAction {
