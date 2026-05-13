@@ -73,6 +73,7 @@ describe('Meter', () => {
       const snapshot = meter.metrics
 
       expect(snapshot.cycleCount).toBe(2)
+      expect(snapshot.totalDuration).toBe(8000)
       expect(snapshot.accumulatedUsage).toStrictEqual({ inputTokens: 30, outputTokens: 15, totalTokens: 45 })
       expect(snapshot.accumulatedMetrics).toStrictEqual({ latencyMs: 350 })
       expect(snapshot.toolMetrics).toStrictEqual({
