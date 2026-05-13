@@ -969,17 +969,18 @@ describe('BedrockModel', () => {
       })
     })
 
-    it('yields and validates citationsContent events correctly', async () => {
-      // Bedrock wire format uses object-key discrimination
+    it('yields and validates citation events correctly', async () => {
+      // Bedrock streaming sends individual citation deltas with key 'citation'
+      const bedrockCitationDelta = {
+        location: { documentChar: { documentIndex: 0, start: 10, end: 50 } },
+        sourceContent: [{ text: 'source text' }],
+        source: 'doc-0',
+        title: 'Test Doc',
+      }
+
+      // Bedrock non-streaming wire format uses object-key discrimination
       const bedrockCitationsData = {
-        citations: [
-          {
-            location: { documentChar: { documentIndex: 0, start: 10, end: 50 } },
-            sourceContent: [{ text: 'source text' }],
-            source: 'doc-0',
-            title: 'Test Doc',
-          },
-        ],
+        citations: [bedrockCitationDelta],
         content: [{ text: 'generated text' }],
       }
 
@@ -991,7 +992,7 @@ describe('BedrockModel', () => {
               yield { contentBlockStart: {} }
               yield {
                 contentBlockDelta: {
-                  delta: { citationsContent: bedrockCitationsData },
+                  delta: { citation: bedrockCitationDelta },
                 },
               }
               yield { contentBlockStop: {} }
@@ -1036,7 +1037,7 @@ describe('BedrockModel', () => {
               title: 'Test Doc',
             },
           ],
-          content: [{ text: 'generated text' }],
+          content: stream ? [] : [{ text: 'generated text' }],
         },
       })
       expect(events).toContainEqual({ type: 'modelContentBlockStopEvent' })

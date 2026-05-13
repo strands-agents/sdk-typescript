@@ -40,6 +40,7 @@ import {
   type CitationLocation as BedrockCitationLocation,
   type Citation as BedrockCitation,
   type CitationsContentBlock as BedrockCitationsContentBlock,
+  type CitationsDelta as BedrockCitationsDelta,
   type GuardrailTraceAssessment,
 } from '@aws-sdk/client-bedrock-runtime'
 import {
@@ -1390,15 +1391,24 @@ export class BedrockModel extends Model<BedrockModelConfig> {
               events.push({ type: 'modelContentBlockDeltaEvent', delta: reasoningDelta })
             }
           },
-          citationsContent: (block: BedrockCitationsContentBlock): void => {
-            if (!block) return
-            const mapped = this._mapBedrockCitationsData(block)
-            const delta: CitationsDelta = {
-              type: 'citationsDelta',
-              citations: mapped.citations,
-              content: mapped.content,
-            }
-            events.push({ type: 'modelContentBlockDeltaEvent', delta })
+          citation: (citation: BedrockCitationsDelta): void => {
+            const location = citation.location ? this._mapBedrockCitationLocation(citation.location) : undefined
+            if (!location) return
+            events.push({
+              type: 'modelContentBlockDeltaEvent',
+              delta: {
+                type: 'citationsDelta',
+                citations: [
+                  {
+                    location,
+                    sourceContent: (citation.sourceContent ?? []).map((sc) => ({ text: sc.text! })),
+                    source: citation.source ?? '',
+                    title: citation.title ?? '',
+                  },
+                ],
+                content: [],
+              },
+            })
           },
         }
 
