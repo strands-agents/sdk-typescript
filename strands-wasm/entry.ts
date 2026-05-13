@@ -644,26 +644,6 @@ class AgentImpl {
     if (!this.sessionManager) return { tag: 'err', val: { tag: 'no-session-configured' } }
     return { tag: 'err', val: { tag: 'internal', val: 'deleteSession not yet implemented' } }
   }
-
-  /**
-   * Call a tool directly without model inference, via the TS SDK's ToolCaller.
-   * Used by Python bindings for `agent.tool.my_tool()` support.
-   */
-  async callToolDirect(name: string, inputJson: string, recordInHistory: boolean): Promise<{ tag: 'ok'; val: { status: string; content: string } } | { tag: 'err'; val: AgentError }> {
-    try {
-      const input = JSON.parse(inputJson)
-      const result = await this.agent.tool[name]!(input, { recordDirectToolCall: recordInHistory })
-      return {
-        tag: 'ok',
-        val: {
-          status: result.status,
-          content: JSON.stringify(result.content),
-        },
-      }
-    } catch (err) {
-      return { tag: 'err', val: { tag: 'internal', val: errorMessage(err) } }
-    }
-  }
 }
 
 class ResponseStreamImpl {

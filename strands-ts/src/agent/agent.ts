@@ -298,8 +298,8 @@ export class Agent implements LocalAgent, InvokableAgent {
   _interruptState: InterruptState
   /** Strategy for executing tool calls from a single assistant turn. */
   private readonly _toolExecutor: ToolExecutorStrategy
-  /** Direct tool caller. Uses `!` because the ToolCaller constructor returns a Proxy, confusing TS control flow. */
-  private readonly _toolCaller!: ToolCaller
+  /** Direct tool caller — created via {@link ToolCaller.create} factory. */
+  private readonly _toolCaller: ToolCallerProxy
 
   /**
    * Creates an instance of the Agent.
@@ -391,7 +391,7 @@ export class Agent implements LocalAgent, InvokableAgent {
     this._interruptState = new InterruptState()
 
     this._toolExecutor = config?.toolExecutor ?? 'concurrent'
-    this._toolCaller = new ToolCaller(this) as unknown as ToolCaller
+    this._toolCaller = ToolCaller.create(this)
 
     this._initialized = false
   }
@@ -511,7 +511,7 @@ export class Agent implements LocalAgent, InvokableAgent {
    * `{ recordDirectToolCall: false }` to skip).
    */
   get tool(): ToolCallerProxy {
-    return this._toolCaller as unknown as ToolCallerProxy
+    return this._toolCaller
   }
 
   /**

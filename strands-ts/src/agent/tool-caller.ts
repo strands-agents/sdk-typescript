@@ -68,7 +68,18 @@ export type ToolCallerProxy = Record<string, ToolCallerFn>
 export class ToolCaller {
   private readonly _agent: Agent
 
-  constructor(agent: Agent) {
+  /**
+   * Creates a ToolCaller proxy for the given agent.
+   *
+   * Encapsulates the Proxy cast so callers don't need to handle the
+   * implementation detail that the constructor returns a Proxy, not
+   * a plain ToolCaller instance.
+   */
+  static create(agent: Agent): ToolCallerProxy {
+    return new ToolCaller(agent) as unknown as ToolCallerProxy
+  }
+
+  private constructor(agent: Agent) {
     this._agent = agent
 
     // Return a Proxy that intercepts property access to resolve tool names
