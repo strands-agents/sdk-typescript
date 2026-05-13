@@ -1258,10 +1258,21 @@ describe('GoogleModel', () => {
       } as unknown as GoogleGenAI
     }
 
+    it('should use heuristic by default when useNativeTokenCount is not set', async () => {
+      const mockCountTokens = vi.fn()
+      const client = createCountTokensClient(mockCountTokens)
+      const model = new GoogleModel({ client, modelId: 'gemini-2.5-flash' })
+
+      const result = await model.countTokens(messages)
+
+      expect(mockCountTokens).not.toHaveBeenCalled()
+      expect(result).toBe(2) // heuristic: Math.ceil('hello'.length / 4)
+    })
+
     it('should return native token count on success', async () => {
       const mockCountTokens = vi.fn(async () => ({ totalTokens: 42 }))
       const client = createCountTokensClient(mockCountTokens)
-      const model = new GoogleModel({ client, modelId: 'gemini-2.5-flash' })
+      const model = new GoogleModel({ client, modelId: 'gemini-2.5-flash', useNativeTokenCount: true })
 
       const result = await model.countTokens(messages)
 
@@ -1272,7 +1283,7 @@ describe('GoogleModel', () => {
     it('should add heuristic estimate for system prompt', async () => {
       const mockCountTokens = vi.fn(async () => ({ totalTokens: 55 }))
       const client = createCountTokensClient(mockCountTokens)
-      const model = new GoogleModel({ client, modelId: 'gemini-2.5-flash' })
+      const model = new GoogleModel({ client, modelId: 'gemini-2.5-flash', useNativeTokenCount: true })
 
       const result = await model.countTokens(messages, { systemPrompt: 'Be helpful.' })
 
@@ -1282,7 +1293,7 @@ describe('GoogleModel', () => {
     it('should add heuristic estimate for tool specs', async () => {
       const mockCountTokens = vi.fn(async () => ({ totalTokens: 100 }))
       const client = createCountTokensClient(mockCountTokens)
-      const model = new GoogleModel({ client, modelId: 'gemini-2.5-flash' })
+      const model = new GoogleModel({ client, modelId: 'gemini-2.5-flash', useNativeTokenCount: true })
 
       const result = await model.countTokens(messages, { toolSpecs })
 
@@ -1292,7 +1303,7 @@ describe('GoogleModel', () => {
     it('should fall back on null totalTokens', async () => {
       const mockCountTokens = vi.fn(async () => ({ totalTokens: null }))
       const client = createCountTokensClient(mockCountTokens)
-      const model = new GoogleModel({ client, modelId: 'gemini-2.5-flash' })
+      const model = new GoogleModel({ client, modelId: 'gemini-2.5-flash', useNativeTokenCount: true })
 
       const result = await model.countTokens(messages)
 
@@ -1305,7 +1316,7 @@ describe('GoogleModel', () => {
         throw new Error('Unsupported')
       })
       const client = createCountTokensClient(mockCountTokens)
-      const model = new GoogleModel({ client, modelId: 'gemini-2.5-flash' })
+      const model = new GoogleModel({ client, modelId: 'gemini-2.5-flash', useNativeTokenCount: true })
 
       const result = await model.countTokens(messages)
 
@@ -1318,7 +1329,7 @@ describe('GoogleModel', () => {
         throw new Error('Connection failed')
       })
       const client = createCountTokensClient(mockCountTokens)
-      const model = new GoogleModel({ client, modelId: 'gemini-2.5-flash' })
+      const model = new GoogleModel({ client, modelId: 'gemini-2.5-flash', useNativeTokenCount: true })
 
       const result = await model.countTokens(messages)
 

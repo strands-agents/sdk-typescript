@@ -285,9 +285,11 @@ export interface BedrockModelConfig extends BaseModelConfig {
   /**
    * Whether to use the native Bedrock CountTokens API.
    *
-   * When `true` (default), `countTokens()` calls the Bedrock CountTokens API for
-   * accurate counts. When `false`, skips the API call and uses the character-based
-   * heuristic estimator.
+   * When `true`, `countTokens()` calls the Bedrock CountTokens API for
+   * accurate counts. When `false` or not set (default), skips the API call and uses
+   * the character-based heuristic estimator.
+   *
+   * @defaultValue false
    */
   useNativeTokenCount?: boolean
 }
@@ -510,7 +512,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
    * @returns Total input token count
    */
   override async countTokens(messages: Message[], options?: CountTokensOptions): Promise<number> {
-    if (this._config.useNativeTokenCount === false) return super.countTokens(messages, options)
+    if (this._config.useNativeTokenCount !== true) return super.countTokens(messages, options)
 
     const modelId = this._config.modelId ?? MODEL_DEFAULTS.bedrock.modelId
 

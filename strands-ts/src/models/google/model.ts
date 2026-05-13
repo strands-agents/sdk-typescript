@@ -160,7 +160,7 @@ export class GoogleModel extends Model<GoogleModelConfig> {
    * @returns Total input token count
    */
   override async countTokens(messages: Message[], options?: CountTokensOptions): Promise<number> {
-    if (this._config.useNativeTokenCount === false) return super.countTokens(messages, options)
+    if (this._config.useNativeTokenCount !== true) return super.countTokens(messages, options)
 
     try {
       const params = this._formatRequest(messages, options)

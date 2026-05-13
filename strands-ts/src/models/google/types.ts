@@ -45,9 +45,11 @@ export interface GoogleModelConfig extends BaseModelConfig {
   /**
    * Whether to use the native Gemini countTokens API.
    *
-   * When `true` (default), `countTokens()` calls the Gemini token counting API for
-   * accurate counts. When `false`, skips the API call and uses the character-based
-   * heuristic estimator.
+   * When `true`, `countTokens()` calls the Gemini token counting API for
+   * accurate counts. When `false` or not set (default), skips the API call and uses
+   * the character-based heuristic estimator.
+   *
+   * @defaultValue false
    */
   useNativeTokenCount?: boolean
 }
