@@ -275,6 +275,14 @@ export class AgentMetrics implements JSONSerializable<AgentMetricsData> {
 }
 
 /**
+ * Maximum number of invocation history entries retained by the Meter.
+ * Prevents unbounded memory growth on long-lived Agent instances.
+ * Users who need full history can collect per-invocation metrics
+ * from successive AgentResult objects.
+ */
+const MAX_INVOCATION_HISTORY = 100
+
+/**
  * Accumulates local metrics during agent invocation.
  *
  * Tracks cycle counts, token usage, tool execution stats, and model latency.
@@ -382,8 +390,13 @@ export class Meter {
   /**
    * Begin tracking a new agent invocation.
    * Creates a new InvocationMetricsData entry for per-invocation metrics.
+   * Evicts the oldest entry when the history exceeds MAX_INVOCATION_HISTORY.
    */
   startNewInvocation(): void {
+    if (this._agentInvocations.length >= MAX_INVOCATION_HISTORY) {
+      this._agentInvocations.shift()
+    }
+
     this._agentInvocations.push({
       cycles: [],
       usage: createEmptyUsage(),

@@ -142,6 +142,14 @@ describe('Meter', () => {
       expect(snapshot.agentInvocations).toHaveLength(2)
       expect(snapshot.latestAgentInvocation).toBe(snapshot.agentInvocations[1])
     })
+
+    it('evicts oldest entries when exceeding max history cap', () => {
+      for (let i = 0; i < 110; i++) {
+        meter.startNewInvocation()
+      }
+
+      expect(meter.metrics.agentInvocations).toHaveLength(100)
+    })
   })
 
   describe('startCycle', () => {
