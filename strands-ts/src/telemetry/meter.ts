@@ -118,6 +118,11 @@ export interface AgentMetricsData {
    * Represents the baseline token count the next invocation will start with.
    */
   projectedContextSize?: number
+
+  /**
+   * Total duration of all cycles in milliseconds.
+   */
+  totalDuration?: number
 }
 
 /**
@@ -197,6 +202,11 @@ export class AgentMetrics implements JSONSerializable<AgentMetricsData> {
    */
   readonly projectedContextSize: number | undefined
 
+  /**
+   * Total duration of all cycles in milliseconds.
+   */
+  readonly totalDuration: number
+
   constructor(data?: Partial<AgentMetricsData>) {
     this.cycleCount = data?.cycleCount ?? 0
     this.accumulatedUsage = data?.accumulatedUsage ?? createEmptyUsage()
@@ -205,6 +215,7 @@ export class AgentMetrics implements JSONSerializable<AgentMetricsData> {
     this.toolMetrics = data?.toolMetrics ?? {}
     this.latestContextSize = data?.latestContextSize
     this.projectedContextSize = data?.projectedContextSize
+    this.totalDuration = data?.totalDuration ?? 0
   }
 
   /**
@@ -222,18 +233,10 @@ export class AgentMetrics implements JSONSerializable<AgentMetricsData> {
   }
 
   /**
-   * Total duration of all cycles in milliseconds.
-   */
-  get totalDuration(): number {
-    return this.agentInvocations.flatMap((inv) => inv.cycles.map((c) => c.duration)).reduce((sum, d) => sum + d, 0)
-  }
-
-  /**
    * Average cycle duration in milliseconds, or 0 if no cycles exist.
    */
   get averageCycleTime(): number {
-    const durations = this.agentInvocations.flatMap((inv) => inv.cycles.map((c) => c.duration))
-    return durations.length > 0 ? durations.reduce((sum, d) => sum + d, 0) / durations.length : 0
+    return this.cycleCount > 0 ? this.totalDuration / this.cycleCount : 0
   }
 
   /**
@@ -264,6 +267,7 @@ export class AgentMetrics implements JSONSerializable<AgentMetricsData> {
       accumulatedMetrics: this.accumulatedMetrics,
       agentInvocations: this.agentInvocations,
       toolMetrics: this.toolMetrics,
+      totalDuration: this.totalDuration,
       ...(this.latestContextSize !== undefined && { latestContextSize: this.latestContextSize }),
       ...(this.projectedContextSize !== undefined && { projectedContextSize: this.projectedContextSize }),
     }
@@ -316,6 +320,11 @@ export class Meter {
    * Projected context size for the next model call (inputTokens + outputTokens).
    */
   private _projectedContextSize: number | undefined
+
+  /**
+   * Running total of all cycle durations in milliseconds.
+   */
+  private _totalDuration: number = 0
 
   // OTEL instruments (no-op when no MeterProvider is registered)
   private readonly _otelMeter: OtelMeter
@@ -415,6 +424,8 @@ export class Meter {
     const duration = Date.now() - startTime
     this._otelCycleDuration.record(duration)
 
+    this._totalDuration += duration
+
     const latestInvocation = this._latestAgentInvocation
     if (latestInvocation) {
       const cycles = latestInvocation.cycles
@@ -478,6 +489,7 @@ export class Meter {
       accumulatedMetrics: this._accumulatedMetrics,
       agentInvocations: this._agentInvocations,
       toolMetrics: this._toolMetrics,
+      totalDuration: this._totalDuration,
       ...(this._latestContextSize !== undefined && { latestContextSize: this._latestContextSize }),
       ...(this._projectedContextSize !== undefined && { projectedContextSize: this._projectedContextSize }),
     })
