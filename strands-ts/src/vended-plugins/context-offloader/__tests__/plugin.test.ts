@@ -69,12 +69,11 @@ describe('ContextOffloader', () => {
       expect(agent.trackedHooks[0]!.eventType).toBe(AfterToolCallEvent)
     })
 
-    it('returns retrieval and search tools by default', () => {
+    it('returns retrieval tool by default', () => {
       const plugin = new ContextOffloader({ storage: new InMemoryStorage() })
       const tools = plugin.getTools()
-      expect(tools).toHaveLength(2)
+      expect(tools).toHaveLength(1)
       expect(tools[0]!.name).toBe('retrieve_offloaded_content')
-      expect(tools[1]!.name).toBe('search_offloaded_content')
     })
 
     it('returns empty tools when includeRetrievalTool is false', () => {
@@ -122,23 +121,6 @@ describe('ContextOffloader', () => {
       plugin.initAgent(agent)
 
       const event = makeEvent([new TextBlock('x'.repeat(1000))], { toolName: 'retrieve_offloaded_content' })
-      await invokeTrackedHook(agent, event)
-
-      expect((event.result.content[0] as TextBlock).text).toBe('x'.repeat(1000))
-    })
-
-    it('does not offload search tool results', async () => {
-      const storage = new InMemoryStorage()
-      const plugin = new ContextOffloader({
-        storage,
-        maxResultTokens: 10,
-        previewTokens: 5,
-        includeRetrievalTool: true,
-      })
-      const agent = createMockAgent()
-      plugin.initAgent(agent)
-
-      const event = makeEvent([new TextBlock('x'.repeat(1000))], { toolName: 'search_offloaded_content' })
       await invokeTrackedHook(agent, event)
 
       expect((event.result.content[0] as TextBlock).text).toBe('x'.repeat(1000))
@@ -233,7 +215,7 @@ describe('ContextOffloader', () => {
       expect(event.result).toBe(originalResult)
     })
 
-    it('includes search and retrieval tool guidance when enabled', async () => {
+    it('includes retrieval tool guidance when enabled', async () => {
       const storage = new InMemoryStorage()
       const plugin = new ContextOffloader({
         storage,
@@ -248,8 +230,9 @@ describe('ContextOffloader', () => {
       await invokeTrackedHook(agent, event)
 
       const preview = (event.result.content[0] as TextBlock).text
-      expect(preview).toContain('search_offloaded_content')
       expect(preview).toContain('retrieve_offloaded_content')
+      expect(preview).toContain('pattern')
+      expect(preview).toContain('line_range')
     })
 
     it('respects custom previewTokens', async () => {
@@ -375,10 +358,10 @@ describe('ContextOffloader', () => {
     })
   })
 
-  describe('search tool', () => {
-    function getSearchTool(plugin: ContextOffloader) {
+  describe('search via retrieval tool', () => {
+    function getRetrievalTool(plugin: ContextOffloader) {
       const tools = plugin.getTools()
-      return tools[1]! as unknown as { invoke(input: unknown): Promise<unknown> }
+      return tools[0]! as unknown as { invoke(input: unknown): Promise<unknown> }
     }
 
     it('finds matching lines with context', async () => {
@@ -387,7 +370,7 @@ describe('ContextOffloader', () => {
       const ref = await storage.store('k1', new TextEncoder().encode(content), 'text/plain')
 
       const plugin = new ContextOffloader({ storage, includeRetrievalTool: true })
-      const result = (await getSearchTool(plugin).invoke({
+      const result = (await getRetrievalTool(plugin).invoke({
         reference: ref,
         pattern: 'line 10',
         context_lines: 2,
@@ -405,7 +388,7 @@ describe('ContextOffloader', () => {
       const ref = await storage.store('k1', new TextEncoder().encode(content), 'text/plain')
 
       const plugin = new ContextOffloader({ storage, includeRetrievalTool: true })
-      const result = (await getSearchTool(plugin).invoke({
+      const result = (await getRetrievalTool(plugin).invoke({
         reference: ref,
         line_range: { start: 5, end: 10 },
       })) as string
@@ -423,7 +406,7 @@ describe('ContextOffloader', () => {
       const ref = await storage.store('k1', new TextEncoder().encode(content), 'text/plain')
 
       const plugin = new ContextOffloader({ storage, includeRetrievalTool: true })
-      const result = (await getSearchTool(plugin).invoke({
+      const result = (await getRetrievalTool(plugin).invoke({
         reference: ref,
         pattern: 'item 1',
         line_range: { start: 10, end: 20 },
@@ -442,7 +425,7 @@ describe('ContextOffloader', () => {
       const ref = await storage.store('k1', new TextEncoder().encode(content), 'text/plain')
 
       const plugin = new ContextOffloader({ storage, includeRetrievalTool: true })
-      const result = (await getSearchTool(plugin).invoke({
+      const result = (await getRetrievalTool(plugin).invoke({
         reference: ref,
         pattern: 'line 10',
         context_lines: 0,
@@ -458,7 +441,7 @@ describe('ContextOffloader', () => {
       const ref = await storage.store('k1', new Uint8Array([137, 80, 78, 71]), 'image/png')
 
       const plugin = new ContextOffloader({ storage, includeRetrievalTool: true })
-      const result = (await getSearchTool(plugin).invoke({
+      const result = (await getRetrievalTool(plugin).invoke({
         reference: ref,
         pattern: 'test',
       })) as string
@@ -472,7 +455,7 @@ describe('ContextOffloader', () => {
       const ref = await storage.store('k1', new TextEncoder().encode(content), 'text/plain')
 
       const plugin = new ContextOffloader({ storage, includeRetrievalTool: true })
-      const result = (await getSearchTool(plugin).invoke({
+      const result = (await getRetrievalTool(plugin).invoke({
         reference: ref,
         pattern: 'foo (bar',
         context_lines: 0,
@@ -486,7 +469,7 @@ describe('ContextOffloader', () => {
     it('returns error for missing reference', async () => {
       const storage = new InMemoryStorage()
       const plugin = new ContextOffloader({ storage, includeRetrievalTool: true })
-      const result = (await getSearchTool(plugin).invoke({
+      const result = (await getRetrievalTool(plugin).invoke({
         reference: 'nonexistent',
         pattern: 'test',
       })) as string
@@ -500,7 +483,7 @@ describe('ContextOffloader', () => {
       const ref = await storage.store('k1', new TextEncoder().encode(json), 'application/json')
 
       const plugin = new ContextOffloader({ storage, includeRetrievalTool: true })
-      const result = (await getSearchTool(plugin).invoke({
+      const result = (await getRetrievalTool(plugin).invoke({
         reference: ref,
         pattern: 'items',
         context_lines: 1,
@@ -516,7 +499,7 @@ describe('ContextOffloader', () => {
       const ref = await storage.store('k1', new TextEncoder().encode(content), 'text/plain')
 
       const plugin = new ContextOffloader({ storage, includeRetrievalTool: true })
-      const result = (await getSearchTool(plugin).invoke({
+      const result = (await getRetrievalTool(plugin).invoke({
         reference: ref,
         pattern: 'nonexistent',
       })) as string
@@ -535,7 +518,7 @@ describe('ContextOffloader', () => {
         previewTokens: 10,
         includeRetrievalTool: true,
       })
-      const result = (await getSearchTool(plugin).invoke({
+      const result = (await getRetrievalTool(plugin).invoke({
         reference: ref,
         pattern: 'match',
         context_lines: 0,
@@ -551,7 +534,7 @@ describe('ContextOffloader', () => {
       const ref = await storage.store('k1', new TextEncoder().encode(content), 'text/plain')
 
       const plugin = new ContextOffloader({ storage, includeRetrievalTool: true })
-      const result = (await getSearchTool(plugin).invoke({
+      const result = (await getRetrievalTool(plugin).invoke({
         reference: ref,
         pattern: 'line [45]',
         context_lines: 2,
@@ -568,7 +551,7 @@ describe('ContextOffloader', () => {
       const ref = await storage.store('k1', new TextEncoder().encode(content), 'text/plain')
 
       const plugin = new ContextOffloader({ storage, includeRetrievalTool: true })
-      const result = (await getSearchTool(plugin).invoke({
+      const result = (await getRetrievalTool(plugin).invoke({
         reference: ref,
         line_range: { start: 100, end: 200 },
       })) as string
@@ -582,7 +565,7 @@ describe('ContextOffloader', () => {
       const ref = await storage.store('k1', new TextEncoder().encode(content), 'text/plain')
 
       const plugin = new ContextOffloader({ storage, includeRetrievalTool: true })
-      const result = (await getSearchTool(plugin).invoke({
+      const result = (await getRetrievalTool(plugin).invoke({
         reference: ref,
         line_range: { start: 2, end: 100 },
       })) as string

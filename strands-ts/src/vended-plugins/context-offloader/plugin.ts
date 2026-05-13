@@ -17,29 +17,27 @@ const CHARS_PER_TOKEN = 4
 const DEFAULT_MAX_RESULT_TOKENS = 2_500
 const DEFAULT_PREVIEW_TOKENS = 1_000
 const RETRIEVAL_TOOL_NAME = 'retrieve_offloaded_content'
-const SEARCH_TOOL_NAME = 'search_offloaded_content'
 
-const searchInputSchema = z
-  .object({
-    reference: z.string().describe('The storage reference from the offload placeholder.'),
-    pattern: z.string().optional().describe('Regex or keyword pattern to search for in the content.'),
-    line_range: z
-      .object({
-        start: z.number().int().min(1).describe('Start line number (1-indexed, inclusive).'),
-        end: z.number().int().min(1).describe('End line number (1-indexed, inclusive).'),
-      })
-      .optional()
-      .describe('Range of lines to retrieve (1-indexed, inclusive).'),
-    context_lines: z
-      .number()
-      .int()
-      .min(0)
-      .default(5)
-      .describe('Number of lines of context before/after each match. Defaults to 5.'),
-  })
-  .refine((data) => data.pattern !== undefined || data.line_range !== undefined, {
-    message: "At least one of 'pattern' or 'line_range' must be provided.",
-  })
+const retrievalInputSchema = z.object({
+  reference: z.string().describe('The storage reference from the offload placeholder.'),
+  pattern: z
+    .string()
+    .optional()
+    .describe('Regex or keyword pattern to search for. Returns matching lines with context instead of full content.'),
+  line_range: z
+    .object({
+      start: z.number().int().min(1).describe('Start line number (1-indexed, inclusive).'),
+      end: z.number().int().min(1).describe('End line number (1-indexed, inclusive).'),
+    })
+    .optional()
+    .describe('Range of lines to retrieve (1-indexed, inclusive). Returns only this span instead of full content.'),
+  context_lines: z
+    .number()
+    .int()
+    .min(0)
+    .default(5)
+    .describe('Number of lines of context before/after each match. Only used with pattern. Defaults to 5.'),
+})
 
 function slicePreview(text: string, previewTokens: number): string {
   const maxChars = previewTokens * CHARS_PER_TOKEN
@@ -109,7 +107,7 @@ export interface ContextOffloaderConfig {
   maxResultTokens?: number
   /** Number of tokens to keep as an inline preview. Defaults to 1,000. */
   previewTokens?: number
-  /** Whether to register the `retrieve_offloaded_content` and `search_offloaded_content` tools. Defaults to true. */
+  /** Whether to register the `retrieve_offloaded_content` tool. Defaults to true. */
   includeRetrievalTool?: boolean
 }
 
@@ -138,7 +136,6 @@ export class ContextOffloader implements Plugin {
   private readonly _previewTokens: number
   private readonly _includeRetrievalTool: boolean
   private _retrievalTool: Tool | undefined
-  private _searchTool: Tool | undefined
 
   constructor(config: ContextOffloaderConfig) {
     const maxResultTokens = config.maxResultTokens ?? DEFAULT_MAX_RESULT_TOKENS
@@ -161,51 +158,39 @@ export class ContextOffloader implements Plugin {
   getTools(): Tool[] {
     if (!this._includeRetrievalTool) return []
     if (!this._retrievalTool) this._retrievalTool = this._createRetrievalTool()
-    if (!this._searchTool) this._searchTool = this._createSearchTool()
-    return [this._retrievalTool, this._searchTool]
+    return [this._retrievalTool]
   }
 
   private _createRetrievalTool(): Tool {
     const storage = this._storage
-    return tool({
-      name: RETRIEVAL_TOOL_NAME,
-      description:
-        'Retrieve offloaded content by reference. Use this tool when you see a placeholder with a reference (ref: ...) and need the full content. Only use this as a fallback if the data cannot be accessed using your existing tools.',
-      inputSchema: z.object({
-        reference: z.string().describe('The reference string from the offload placeholder.'),
-      }),
-      callback: async (input) => {
-        try {
-          const result = await storage.retrieve(input.reference)
-          return decodeStoredContent(result.content, result.contentType, input.reference)
-        } catch {
-          return `Error: reference not found: ${input.reference}`
-        }
-      },
-    })
-  }
-
-  private _createSearchTool(): Tool {
-    const storage = this._storage
     const maxChars = this._maxResultTokens * CHARS_PER_TOKEN
 
     return tool({
-      name: SEARCH_TOOL_NAME,
+      name: RETRIEVAL_TOOL_NAME,
       description:
-        'Search offloaded content by reference. When a tool result was too large and got offloaded, ' +
-        'use this to find specific information without loading the full content back into context. ' +
-        'Provide a regex/keyword pattern to grep for matching lines (returned with surrounding context), ' +
-        'or a line_range to read a specific span of lines. You can combine both to search within a range. ' +
-        'Line numbers in results can be used in follow-up line_range calls for deeper exploration.',
-      inputSchema: searchInputSchema,
+        'Retrieve offloaded content by reference. Use this when you see a placeholder with a reference (ref: ...). ' +
+        'Prefer using pattern or line_range to retrieve only what you need — this avoids loading the full content back into context. ' +
+        'Only omit pattern/line_range as a last resort when you truly need the entire content. ' +
+        'Line numbers in search results can be used in follow-up line_range calls for deeper exploration.\n\n' +
+        'Examples:\n' +
+        '  - { reference: "ref_1", pattern: "error" } — find lines containing "error"\n' +
+        '  - { reference: "ref_1", pattern: "function\\\\s+\\\\w+", context_lines: 3 } — regex search with 3 lines context\n' +
+        '  - { reference: "ref_1", line_range: { start: 10, end: 25 } } — read lines 10-25\n' +
+        '  - { reference: "ref_1", pattern: "TODO", line_range: { start: 1, end: 50 } } — search within a range',
+      inputSchema: retrievalInputSchema,
       callback: async (input) => {
         try {
           const result = await storage.retrieve(input.reference)
-          if (!isSearchableContent(result.contentType)) {
-            return `Error: cannot search binary content (${result.contentType}). Use retrieve_offloaded_content for binary data.`
+
+          if (input.pattern || input.line_range) {
+            if (!isSearchableContent(result.contentType)) {
+              return `Error: cannot search binary content (${result.contentType}). Omit pattern/line_range to retrieve the full content.`
+            }
+            const text = new TextDecoder().decode(result.content)
+            return searchContent(text, input, maxChars)
           }
-          const text = new TextDecoder().decode(result.content)
-          return searchContent(text, input, maxChars)
+
+          return decodeStoredContent(result.content, result.contentType, input.reference)
         } catch {
           return `Error: reference not found: ${input.reference}`
         }
@@ -262,10 +247,10 @@ export class ContextOffloader implements Plugin {
       'Tool result was offloaded to external storage due to size.\n' + 'Use the preview below to answer if possible.\n'
     if (this._includeRetrievalTool) {
       guidance +=
-        'Use search_offloaded_content with a reference and either:\n' +
+        'Use retrieve_offloaded_content with a reference and either:\n' +
         '  - pattern: regex or keyword to find matching lines with context\n' +
         '  - line_range: { start, end } to read a specific span of lines\n' +
-        'You can also use retrieve_offloaded_content to get the full content as a fallback.'
+        'Only retrieve the full content (omit pattern/line_range) as a last resort.'
     } else {
       guidance += 'Use your available tools to selectively access the data you need.'
     }
@@ -281,12 +266,8 @@ export class ContextOffloader implements Plugin {
   private async _handleToolResult(event: AfterToolCallEvent): Promise<void> {
     if (event.result.status === 'error') return
 
-    // Skip results from retrieval/search tools to prevent circular offloading
-    if (
-      this._includeRetrievalTool &&
-      (event.toolUse.name === RETRIEVAL_TOOL_NAME || event.toolUse.name === SEARCH_TOOL_NAME)
-    )
-      return
+    // Skip results from the retrieval tool to prevent circular offloading
+    if (this._includeRetrievalTool && event.toolUse.name === RETRIEVAL_TOOL_NAME) return
 
     const content = event.result.content
     const toolUseId = event.result.toolUseId

@@ -10,9 +10,9 @@ function truncate(output: string, maxChars: number, message: string): string {
   if (output.length <= maxChars) return output
 
   const cut = output.lastIndexOf('\n', maxChars)
-  if (cut <= 0) return output
+  const sliceEnd = cut > 0 ? cut : maxChars
 
-  return output.slice(0, cut) + `\n\n[${message}]`
+  return output.slice(0, sliceEnd) + `\n\n[${message}]`
 }
 
 /** Formats line indices with line numbers, `>` prefixes for matches, and `---` separators for gaps. */
@@ -30,6 +30,8 @@ function formatLines(lines: string[], indices: number[], matchedSet: Set<number>
   return output.join('\n')
 }
 
+const MAX_PATTERN_LENGTH = 200
+
 /** Finds lines matching a pattern, expands with context, and formats with truncation. */
 function searchByPattern(
   lines: string[],
@@ -41,10 +43,14 @@ function searchByPattern(
   scopeLabel: string
 ): string {
   let regex: RegExp
+  const safeInput =
+    pattern.length > MAX_PATTERN_LENGTH
+      ? pattern.slice(0, MAX_PATTERN_LENGTH).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      : pattern
   try {
-    regex = new RegExp(pattern)
+    regex = new RegExp(safeInput)
   } catch {
-    regex = new RegExp(pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    regex = new RegExp(safeInput.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
   }
 
   const matchedSet = new Set<number>()
@@ -63,7 +69,7 @@ function searchByPattern(
     }
   }
 
-  const safePattern = pattern.replace(/[\n\r\]]/g, ' ')
+  const safePattern = pattern.replace(/[\n\r/\]]/g, ' ').slice(0, 50)
   const header = `[${matchedSet.size} match${matchedSet.size > 1 ? 'es' : ''} for /${safePattern}/${scopeLabel}]`
   const body = formatLines(
     lines,
@@ -81,9 +87,22 @@ function searchByLineRange(lines: string[], start: number, end: number, totalLin
   return truncate(`${header}\n\n${body}`, maxChars, 'output truncated, narrow your range')
 }
 
+const TEXT_APPLICATION_TYPES = new Set([
+  'application/json',
+  'application/xml',
+  'application/javascript',
+  'application/typescript',
+  'application/yaml',
+  'application/x-yaml',
+  'application/toml',
+  'application/sql',
+  'application/graphql',
+  'application/xhtml+xml',
+])
+
 /** Returns whether the given MIME content type can be searched as text. */
 export function isSearchableContent(contentType: string): boolean {
-  return contentType.startsWith('text/') || contentType === 'application/json'
+  return contentType.startsWith('text/') || TEXT_APPLICATION_TYPES.has(contentType)
 }
 
 /**
