@@ -37,7 +37,7 @@ const retrievalInputSchema = z.object({
     .min(0)
     .optional()
     .describe(
-      'Lines of context around each match (default: 5). When provided without pattern or line_range, returns the first N lines.'
+      'Lines to show before AND after each match, like grep -C (default: 5). When provided without pattern or line_range, returns the first N lines.'
     ),
 })
 
@@ -173,6 +173,7 @@ export class ContextOffloader implements Plugin {
         'Retrieve offloaded content by reference. Use this when you see a placeholder with a reference (ref: ...). ' +
         'Prefer using pattern or line_range to retrieve only what you need — this avoids loading the full content back into context. ' +
         'Only omit pattern/line_range as a last resort when you truly need the entire content. ' +
+        'Search params only work on text content — omit them for binary. ' +
         'Line numbers in search results can be used in follow-up line_range calls for deeper exploration.\n\n' +
         'Examples:\n' +
         '  - { reference: "ref_1", pattern: "error" } — find lines containing "error"\n' +
@@ -183,21 +184,20 @@ export class ContextOffloader implements Plugin {
       callback: async (input) => {
         try {
           const result = await storage.retrieve(input.reference)
-          const contextLines = input.context_lines ?? 5
 
-          if (input.pattern || input.line_range || input.context_lines !== undefined) {
-            if (!isSearchableContent(result.contentType)) {
-              return `Error: cannot search binary content (${result.contentType}). Omit pattern/line_range/context_lines to retrieve the full content.`
-            }
-            const text = new TextDecoder().decode(result.content)
-            if (!input.pattern && !input.line_range) {
-              const end = Math.max(1, contextLines)
-              return searchContent(text, { context_lines: contextLines, line_range: { start: 1, end } }, maxChars)
-            }
-            return searchContent(text, { ...input, context_lines: contextLines }, maxChars)
+          if (!input.pattern && !input.line_range && input.context_lines === undefined) {
+            return decodeStoredContent(result.content, result.contentType, input.reference)
           }
 
-          return decodeStoredContent(result.content, result.contentType, input.reference)
+          if (!isSearchableContent(result.contentType)) {
+            return `Error: cannot search binary content (${result.contentType}). Omit pattern/line_range/context_lines to retrieve the full content.`
+          }
+
+          const text = new TextDecoder().decode(result.content)
+          const contextLines = input.context_lines ?? 5
+          const lineRange = input.line_range ?? (!input.pattern ? { start: 1, end: Math.max(1, contextLines) } : undefined)
+
+          return searchContent(text, { pattern: input.pattern, line_range: lineRange, context_lines: contextLines }, maxChars)
         } catch {
           return `Error: reference not found: ${input.reference}`
         }
@@ -251,15 +251,16 @@ export class ContextOffloader implements Plugin {
       .join('\n')
 
     let guidance =
-      'Tool result was offloaded to external storage due to size.\n' + 'Use the preview below to answer if possible.\n'
+      'Tool result was offloaded to external storage due to size.\n' +
+      'Use the preview below if it answers your question.\n'
     if (this._includeRetrievalTool) {
       guidance +=
-        'Use retrieve_offloaded_content with a reference and either:\n' +
+        'If you need more detail, use retrieve_offloaded_content with a reference and:\n' +
         '  - pattern: regex or keyword to find matching lines with context\n' +
         '  - line_range: { start, end } to read a specific span of lines\n' +
-        'Only retrieve the full content (omit pattern/line_range) as a last resort.'
+        'Retrieve full content (omit pattern/line_range) as a last resort.'
     } else {
-      guidance += 'Use your available tools to selectively access the data you need.'
+      guidance += 'If you need more detail, use your available tools to access specific data.'
     }
 
     return (
