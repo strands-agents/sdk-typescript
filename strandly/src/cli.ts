@@ -1,7 +1,7 @@
 #!/usr/bin/env tsx
 
 import { execSync } from 'node:child_process'
-import { existsSync, globSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { program } from 'commander'
 
@@ -230,7 +230,9 @@ function generate(opts?: { check?: boolean }): void {
 
   // Tag generated TS/WASM type declarations.
   for (const dir of ['strands-wasm/generated', 'strands-ts/generated']) {
-    for (const file of globSync('**/*.d.ts', { cwd: join(ROOT, dir) })) {
+    for (const file of readdirSync(join(ROOT, dir), { recursive: true, encoding: 'utf-8' }).filter((f) =>
+      f.endsWith('.d.ts')
+    )) {
       const path = join(ROOT, dir, file)
       const content = readFileSync(path, 'utf-8')
       if (!content.startsWith('// @generated')) {
