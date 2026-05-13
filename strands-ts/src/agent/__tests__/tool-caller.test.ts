@@ -120,6 +120,20 @@ describe('ToolCaller', () => {
             content: [new TextBlock('8')],
           })
       )
+      // Override toolSpec to include input properties so params survive filtering
+      Object.defineProperty(tool, 'toolSpec', {
+        value: {
+          name: 'calculator',
+          description: 'Mock tool calculator',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              a: { type: 'number' },
+              b: { type: 'number' },
+            },
+          },
+        },
+      })
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
       const agent = new Agent({ model, tools: [tool] })
 
@@ -127,20 +141,29 @@ describe('ToolCaller', () => {
 
       // Should have 3 messages: assistant (tool use), user (tool result), assistant (acknowledgement)
       expect(agent.messages).toHaveLength(3)
-      expect(agent.messages[0]!.role).toBe('assistant')
-      expect(agent.messages[1]!.role).toBe('user')
-      expect(agent.messages[2]!.role).toBe('assistant')
 
-      // Verify assistant tool use message contains the tool use block
-      // Verify assistant tool use message
-      const toolUseContent = agent.messages[0]!.content[0]
-      expect(toolUseContent).toBeInstanceOf(ToolUseBlock)
-      expect((toolUseContent as ToolUseBlock).name).toBe('calculator')
+      // Message 0: Assistant message with ToolUseBlock
+      const toolUseMsg = agent.messages[0]!
+      expect(toolUseMsg.role).toBe('assistant')
+      const toolUseBlock = toolUseMsg.content[0] as ToolUseBlock
+      expect(toolUseBlock).toBeInstanceOf(ToolUseBlock)
+      expect(toolUseBlock.name).toBe('calculator')
+      expect(toolUseBlock.input).toStrictEqual({ a: 5, b: 3 })
+      expect(toolUseBlock.toolUseId).toMatch(/^tooluse_/)
 
-      // Verify assistant acknowledgement
-      const ackContent = agent.messages[2]!.content[0]
-      expect(ackContent).toBeInstanceOf(TextBlock)
-      expect((ackContent as TextBlock).text).toBe('agent.tool.calculator was called.')
+      // Message 1: User message with ToolResultBlock
+      const toolResultMsg = agent.messages[1]!
+      expect(toolResultMsg.role).toBe('user')
+      const toolResultBlock = toolResultMsg.content[0] as ToolResultBlock
+      expect(toolResultBlock).toBeInstanceOf(ToolResultBlock)
+      expect(toolResultBlock.status).toBe('success')
+
+      // Message 2: Assistant acknowledgement
+      const ackMsg = agent.messages[2]!
+      expect(ackMsg.role).toBe('assistant')
+      const ackBlock = ackMsg.content[0] as TextBlock
+      expect(ackBlock).toBeInstanceOf(TextBlock)
+      expect(ackBlock.text).toBe('agent.tool.calculator was called.')
     })
 
     it('does not record when recordDirectToolCall is false per-call', async () => {
@@ -273,12 +296,10 @@ describe('ToolCaller', () => {
 
       await agent.tool.strict_tool!({ allowed: 'yes', extra: 'no' })
 
-      // Check that the recorded message only has 'allowed' parameter
-      const toolUseMsg = agent.messages[0]!
+      // Verify the recorded message only has schema-defined parameters
       const recToolUseBlock = agent.messages[0]!.content[0] as ToolUseBlock
-      const text = JSON.stringify(recToolUseBlock.input)
-      expect(text).toContain('"allowed"')
-      expect(text).not.toContain('"extra"')
+      expect(recToolUseBlock).toBeInstanceOf(ToolUseBlock)
+      expect(recToolUseBlock.input).toStrictEqual({ allowed: 'yes' })
     })
   })
 
@@ -315,14 +336,21 @@ describe('ToolCaller', () => {
       await agent.tool.id_tool!()
       await agent.tool.id_tool!()
 
-      // Both calls recorded — tool use IDs in messages should be different
-      const toolUse1 = agent.messages[1]!.content[0] as ToolUseBlock
-      const toolUse2 = agent.messages[5]!.content[0] as ToolUseBlock
+      // Each call records 3 messages: [0]=assistant(toolUse), [1]=user(toolResult), [2]=assistant(ack)
+      // Second call: [3]=assistant(toolUse), [4]=user(toolResult), [5]=assistant(ack)
+      expect(agent.messages).toHaveLength(6)
+
+      const toolUse1 = agent.messages[0]!.content[0] as ToolUseBlock
+      const toolUse2 = agent.messages[3]!.content[0] as ToolUseBlock
+
+      // Verify both are ToolUseBlocks at the correct indices
+      expect(toolUse1).toBeInstanceOf(ToolUseBlock)
+      expect(toolUse2).toBeInstanceOf(ToolUseBlock)
+
+      // Verify IDs are unique and follow the expected format
+      expect(toolUse1.toolUseId).toMatch(/^tooluse_/)
+      expect(toolUse2.toolUseId).toMatch(/^tooluse_/)
       expect(toolUse1.toolUseId).not.toBe(toolUse2.toolUseId)
-      const msg1ToolUse = agent.messages[0]!.content[0] as ToolUseBlock
-      expect(msg1ToolUse.toolUseId).toMatch(/^tooluse_/)
-      const msg2ToolUse = agent.messages[3]!.content[0] as ToolUseBlock
-      expect(msg2ToolUse.toolUseId).toMatch(/^tooluse_/)
     })
   })
 
@@ -403,11 +431,9 @@ describe('ToolCaller', () => {
       expect(receivedInput).toStrictEqual({ allowed: 'yes', extra: 'should-pass-through' })
 
       // But recorded history should only contain filtered parameters
-      const toolUseMsg = agent.messages[0]!
       const recToolUseBlock = agent.messages[0]!.content[0] as ToolUseBlock
-      const text = JSON.stringify(recToolUseBlock.input)
-      expect(text).toContain('"allowed"')
-      expect(text).not.toContain('"extra"')
+      expect(recToolUseBlock).toBeInstanceOf(ToolUseBlock)
+      expect(recToolUseBlock.input).toStrictEqual({ allowed: 'yes' })
     })
   })
 

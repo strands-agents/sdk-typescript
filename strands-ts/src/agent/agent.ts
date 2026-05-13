@@ -298,6 +298,7 @@ export class Agent implements LocalAgent, InvokableAgent {
   _interruptState: InterruptState
   /** Strategy for executing tool calls from a single assistant turn. */
   private readonly _toolExecutor: ToolExecutorStrategy
+  /** Direct tool caller. Uses `!` because the ToolCaller constructor returns a Proxy, confusing TS control flow. */
   private readonly _toolCaller!: ToolCaller
 
   /**
@@ -512,7 +513,6 @@ export class Agent implements LocalAgent, InvokableAgent {
   get tool(): ToolCallerProxy {
     return this._toolCaller as unknown as ToolCallerProxy
   }
-
 
   /**
    * The cancellation signal for the current invocation.
