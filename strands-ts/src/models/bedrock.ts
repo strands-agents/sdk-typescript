@@ -102,6 +102,11 @@ const BEDROCK_CONTEXT_WINDOW_OVERFLOW_MESSAGES = [
  */
 const SKIP_COUNT_TOKENS_MODELS = new Set<string>()
 
+type LegacyBedrockCacheOptions = {
+  cachePrompt?: unknown
+  cacheTools?: unknown
+}
+
 /**
  * Mapping of Bedrock stop reasons to SDK stop reasons.
  */
@@ -387,6 +392,14 @@ export class BedrockModel extends Model<BedrockModelConfig> {
    */
   constructor(options?: BedrockModelOptions) {
     super()
+
+    const legacyCacheOptions = options as (BedrockModelOptions & LegacyBedrockCacheOptions) | undefined
+    if (legacyCacheOptions?.cachePrompt !== undefined || legacyCacheOptions?.cacheTools !== undefined) {
+      warnOnce(
+        logger,
+        'unsupported_fields=<cachePrompt,cacheTools> | cachePrompt and cacheTools are not supported by BedrockModel, use cacheConfig instead'
+      )
+    }
 
     const { region, clientConfig, apiKey, ...modelConfig } = options ?? {}
 
