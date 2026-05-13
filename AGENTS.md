@@ -31,6 +31,7 @@ sdk-typescript/
 │   │   │   ├── events.ts         # A2A streaming events
 │   │   │   ├── executor.ts       # A2A executor
 │   │   │   ├── express-server.ts # Express-based A2A server
+│   │   │   ├── logging.ts        # A2A-specific logging
 │   │   │   ├── server.ts         # A2A server base
 │   │   │   └── index.ts
 │   │   │
@@ -66,6 +67,11 @@ sdk-typescript/
 │   │   ├── models/               # Model provider implementations
 │   │   │   ├── __tests__/
 │   │   │   ├── google/           # Google Gemini provider
+│   │   │   │   ├── adapters.ts
+│   │   │   │   ├── errors.ts
+│   │   │   │   ├── model.ts
+│   │   │   │   ├── types.ts
+│   │   │   │   └── index.ts
 │   │   │   ├── openai/           # OpenAI provider (Chat Completions + Responses API)
 │   │   │   │   ├── __tests__/    # Unit tests (chat.test.ts, responses.test.ts)
 │   │   │   │   ├── chat-adapter.ts
@@ -152,6 +158,7 @@ sdk-typescript/
 │   │   │   ├── agent.ts
 │   │   │   ├── citations.ts
 │   │   │   ├── elicitation.ts
+│   │   │   ├── interrupt.ts
 │   │   │   ├── json.ts
 │   │   │   ├── media.ts
 │   │   │   ├── messages.ts
@@ -160,7 +167,16 @@ sdk-typescript/
 │   │   │   └── validation.ts
 │   │   │
 │   │   ├── vended-plugins/       # Optional vended plugins
+│   │   │   ├── context-offloader/ # Context offloading plugin
+│   │   │   │   ├── __tests__/
+│   │   │   │   ├── plugin.ts
+│   │   │   │   ├── storage.ts
+│   │   │   │   └── index.ts
 │   │   │   └── skills/           # AgentSkills plugin
+│   │   │       ├── __tests__/
+│   │   │       ├── agent-skills.ts
+│   │   │       ├── skill.ts
+│   │   │       └── index.ts
 │   │   │
 │   │   ├── vended-tools/         # Optional vended tools
 │   │   │   ├── bash/
@@ -170,21 +186,28 @@ sdk-typescript/
 │   │   │
 │   │   ├── errors.ts             # Custom error classes
 │   │   ├── index.ts              # Main SDK entry point
+│   │   ├── interrupt.ts          # Interrupt handling
 │   │   ├── mcp.ts                # MCP client implementation
 │   │   ├── mime.ts               # MIME type utilities
 │   │   └── state-store.ts        # State store implementation
 │   │
+│   ├── generated/                # Auto-generated WIT type declarations
+│   │   ├── interfaces/           # Per-interface type definitions
+│   │   └── strands:agent.d.ts    # Top-level WIT agent declaration
+│   │
 │   ├── test/                     # Tests outside of source
 │   │   ├── integ/                # Integration tests
+│   │   │   ├── __fixtures__/     # Integration test fixtures
+│   │   │   ├── __resources__/    # Static resources for integration tests
 │   │   │   ├── a2a/
 │   │   │   ├── conversation-manager/
 │   │   │   ├── mcp/
 │   │   │   ├── models/
+│   │   │   │   └── openai/
 │   │   │   ├── multiagent/
 │   │   │   ├── skills/
 │   │   │   ├── tools/
-│   │   │   ├── agent.test.ts
-│   │   │   └── ...
+│   │   │   └── agent.test.ts
 │   │   └── packages/             # Package compatibility tests (CJS/ESM)
 │   │
 │   ├── examples/                 # Example applications
@@ -200,6 +223,22 @@ sdk-typescript/
 │   ├── tsconfig.base.json        # TypeScript configuration
 │   ├── vitest.config.ts          # Testing configuration
 │   └── eslint.config.js          # Linting configuration
+│
+├── strands-wasm/                 # WASM build tooling
+│   ├── __fixtures__/             # Vitest module mocks for WIT imports
+│   ├── __tests__/                # Unit tests for entry.ts internals
+│   ├── generated/                # Auto-generated WIT type declarations
+│   │   └── interfaces/           # Per-interface type definitions
+│   ├── test/                     # Tests outside of source
+│   │   └── guest/                # Tests that load the compiled WASM component
+│   ├── docs/                     # WASM-specific documentation
+│   ├── patches/                  # Runtime patches for WASM compatibility
+│   │   └── getChunkedStream.js
+│   ├── entry.ts                  # WASM entry point (TS SDK surface for WASM compilation)
+│   ├── build.js                  # Build script for WASM compilation
+│   ├── package.json              # WASM package configuration
+│   ├── vitest.config.ts          # Test configuration (unit + guest projects)
+│   └── tsconfig.json             # TypeScript type-check configuration
 │
 ├── strands-py/                   # Python SDK bindings (WASM-based)
 │   ├── strands/                  # Python package source
@@ -224,35 +263,41 @@ sdk-typescript/
 │   ├── pyproject.toml            # Python package configuration
 │   └── pyrightconfig.json        # Python type checking configuration
 │
-├── strands-wasm/                 # WASM build tooling
-│   ├── __fixtures__/             # Vitest module mocks for WIT imports
-│   ├── __tests__/                # Unit tests for entry.ts internals
-│   ├── test/                     # Tests outside of source
-│   │   └── guest/                # Tests that load the compiled WASM component
-│   ├── entry.ts                  # WASM entry point (TS SDK surface for WASM compilation)
-│   ├── build.js                  # Build script for WASM compilation
-│   ├── patches/                  # Runtime patches for WASM compatibility
-│   │   └── getChunkedStream.js
-│   ├── package.json              # WASM package configuration
-│   ├── vitest.config.ts          # Test configuration (unit + guest projects)
-│   └── tsconfig.json             # TypeScript type-check configuration
-│
 ├── strandly/                     # Developer CLI tooling
+│   ├── scripts/
+│   │   └── generate_types.py     # Type generation script
 │   ├── src/
 │   │   └── cli.ts                # CLI entry point
 │   ├── package.json              # Dev CLI package configuration
 │   └── tsconfig.json             # TypeScript configuration
 │
 ├── wit/                          # WebAssembly Interface Type definitions
-│   └── agent.wit                 # WIT contract between TS SDK and WASM hosts
+│   ├── deps/                     # WIT dependency interfaces
+│   │   ├── clocks/clocks.wit
+│   │   └── io/io.wit
+│   ├── agent.wit                 # Top-level WIT world definition
+│   ├── conversation.wit          # Conversation management interfaces
+│   ├── logging.wit               # Logging interfaces
+│   ├── mcp.wit                   # MCP protocol interfaces
+│   ├── messages.wit              # Message type definitions
+│   ├── models.wit                # Model provider interfaces
+│   ├── multiagent.wit            # Multi-agent interfaces
+│   ├── retry.wit                 # Retry strategy interfaces
+│   ├── sessions.wit              # Session management interfaces
+│   ├── streaming.wit             # Streaming event interfaces
+│   ├── tools.wit                 # Tool interfaces
+│   └── vended.wit                # Vended plugin/tool interfaces
 │
 ├── docs/                         # Project documentation
 │   ├── TESTING.md                # Comprehensive testing guidelines
 │   ├── DEPENDENCIES.md           # Dependency management guidelines
+│   ├── DIVERGENCES.md            # Divergences from Python SDK
 │   └── PR.md                     # Pull request guidelines and template
 │
-├── .github/                      # GitHub Actions workflows
-│   └── workflows/
+├── .github/                      # GitHub configuration
+│   ├── ISSUE_TEMPLATE/           # Issue templates (bug report, feature request)
+│   ├── PULL_REQUEST_TEMPLATE.md  # PR template
+│   └── workflows/                # CI/CD workflows
 │
 ├── .husky/                       # Git hooks (pre-commit checks)
 │
@@ -261,6 +306,7 @@ sdk-typescript/
 ├── .gitignore                    # Git ignore rules
 │
 ├── AGENTS.md                     # This file (agent guidance)
+├── COMPATIBILITY.MD              # Compatibility documentation
 ├── CONTRIBUTING.md               # Human contributor guidelines
 └── README.md                     # Project overview and usage
 ```
@@ -270,7 +316,7 @@ sdk-typescript/
 - **`strands-ts/`**: The SDK workspace package containing all source, tests, and examples
 - **`strands-ts/src/`**: All production code with co-located unit tests
 - **`strands-ts/src/__fixtures__/`**: Shared test fixtures (mock models, helpers)
-- **`strands-ts/src/a2a/`**: Agent-to-agent protocol (A2A client, server, adapters)
+- **`strands-ts/src/a2a/`**: Agent-to-agent protocol (A2A client, server, adapters, logging)
 - **`strands-ts/src/agent/`**: Agent loop coordination, output printing, snapshots
 - **`strands-ts/src/conversation-manager/`**: Conversation history management strategies
 - **`strands-ts/src/hooks/`**: Hooks system for event-driven extensibility
@@ -284,18 +330,23 @@ sdk-typescript/
 - **`strands-ts/src/telemetry/`**: OpenTelemetry tracing and metrics
 - **`strands-ts/src/tools/`**: Tool definitions, types, and structured output validation with Zod schemas
 - **`strands-ts/src/types/`**: Core type definitions used across the SDK
-- **`strands-ts/src/vended-plugins/`**: Optional vended plugins (not part of core SDK, independently importable)
+- **`strands-ts/src/vended-plugins/`**: Optional vended plugins (context-offloader, skills — not part of core SDK, independently importable)
 - **`strands-ts/src/vended-tools/`**: Optional vended tools (bash, file-editor, http-request, notebook)
+- **`strands-ts/generated/`**: Auto-generated WIT interface type declarations
 - **`strands-ts/test/integ/`**: Integration tests (tests public API and external integrations)
 - **`strands-ts/examples/`**: Example applications
+- **`strands-wasm/`**: WASM build tooling for compiling the TS SDK to WebAssembly
+- **`strands-wasm/generated/`**: Auto-generated WIT interface type declarations for WASM
+- **`strands-wasm/test/guest/`**: Tests that load the compiled WASM component
+- **`strands-wasm/docs/`**: WASM-specific development documentation
 - **`strands-py/`**: Python SDK bindings powered by the TS SDK compiled to WASM
 - **`strands-py/strands/`**: Python package source with agent, models, multiagent, session, tools, and type modules
 - **`strands-py/scripts/`**: Build and codegen scripts (type generation from WIT definitions)
 - **`strands-py/tests_integ/`**: Python integration tests
-- **`strands-wasm/`**: WASM build tooling for compiling the TS SDK to WebAssembly
 - **`strandly/`**: Developer CLI tooling for local development workflows (install on PATH via `npm install && npm link -w strandly`, then call `strandly …`)
 - **`wit/`**: WebAssembly Interface Type (WIT) definitions defining the contract between the TS SDK and WASM hosts
-- **`docs/`**: Project documentation (testing guidelines, dependency management, PR guidelines)
+- **`wit/deps/`**: External WIT dependency interfaces (clocks, io)
+- **`docs/`**: Project documentation (testing guidelines, dependency management, divergences, PR guidelines)
 - **`.github/workflows/`**: CI/CD automation and quality gates
 
 **IMPORTANT**: After making changes that affect the directory structure (adding new directories, moving files, or adding significant new files), you MUST update this directory structure section to reflect the current state of the repository.
