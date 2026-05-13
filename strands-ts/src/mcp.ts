@@ -1,5 +1,8 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
+import { ClientCredentialsProvider } from '@modelcontextprotocol/sdk/client/auth-extensions.js'
+import type { OAuthClientProvider } from '@modelcontextprotocol/sdk/client/auth.js'
 import { takeResult } from '@modelcontextprotocol/sdk/shared/responseMessage.js'
 import {
   ElicitRequestSchema,
@@ -57,9 +60,30 @@ export interface TasksConfig {
 /** Connection state of an MCP client. */
 export type McpConnectionState = 'disconnected' | 'connected' | 'failed'
 
+/** OAuth client credentials for machine-to-machine authentication. */
+export interface McpClientCredentials {
+  clientId: string
+  clientSecret: string
+  /** OAuth scopes to request. Joined with spaces before sending to the token endpoint. */
+  scopes?: string[]
+}
+
 /** Arguments for configuring an MCP Client. */
 export type McpClientConfig = RuntimeConfig & {
-  transport: McpTransport
+  /** Pre-constructed transport. Mutually exclusive with `url`. */
+  transport?: McpTransport
+
+  /** Server URL. When provided, a StreamableHTTP transport is constructed automatically. */
+  url?: string | URL
+
+  /** Client credentials for OAuth machine-to-machine auth. Requires `url`. */
+  auth?: McpClientCredentials
+
+  /** Custom OAuth provider for advanced auth flows. Requires `url`. Mutually exclusive with `auth`. */
+  authProvider?: OAuthClientProvider
+
+  /** Custom headers to include on every request to the server. Requires `url`. */
+  headers?: Record<string, string>
 
   /** Disable OpenTelemetry MCP instrumentation. */
   disableMcpInstrumentation?: boolean
@@ -111,7 +135,7 @@ export class McpClient {
   constructor(args: McpClientConfig) {
     this._clientName = args.applicationName || 'strands-agents-ts-sdk'
     this._clientVersion = args.applicationVersion || '0.0.1'
-    this._transport = args.transport as Transport
+    this._transport = McpClient._resolveTransport(args)
     this._state = 'disconnected'
     this._failOpen = args.failOpen ?? false
     this._logHandler = args.logHandler ?? defaultLogHandler
@@ -141,6 +165,42 @@ export class McpClient {
     })
 
     this._disableMcpInstrumentation = args.disableMcpInstrumentation ?? false
+  }
+
+  private static _resolveTransport(args: McpClientConfig): Transport {
+    if (args.transport && args.url) {
+      throw new Error('McpClientConfig: provide either "transport" or "url", not both')
+    }
+    if (!args.transport && !args.url) {
+      throw new Error('McpClientConfig: either "transport" or "url" must be provided')
+    }
+    if (args.transport) {
+      if (args.auth || args.authProvider || args.headers) {
+        throw new Error(
+          'McpClientConfig: "auth", "authProvider", and "headers" require "url" (not compatible with "transport")'
+        )
+      }
+      return args.transport as Transport
+    }
+    if (args.auth && args.authProvider) {
+      throw new Error('McpClientConfig: provide either "auth" or "authProvider", not both')
+    }
+
+    const authProvider = args.auth
+      ? new ClientCredentialsProvider({
+          clientId: args.auth.clientId,
+          clientSecret: args.auth.clientSecret,
+          ...(args.auth.scopes && { scope: args.auth.scopes.join(' ') }),
+        })
+      : args.authProvider
+
+    const url = args.url instanceof URL ? args.url : new URL(args.url!)
+    return new StreamableHTTPClientTransport(
+      url,
+      authProvider || args.headers
+        ? { ...(authProvider && { authProvider }), ...(args.headers && { requestInit: { headers: args.headers } }) }
+        : undefined
+    ) as Transport
   }
 
   get client(): Client {
