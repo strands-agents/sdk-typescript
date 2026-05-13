@@ -40,6 +40,7 @@ import {
   type CitationLocation as BedrockCitationLocation,
   type Citation as BedrockCitation,
   type CitationsContentBlock as BedrockCitationsContentBlock,
+  type CitationsDelta as BedrockCitationsDelta,
   type GuardrailTraceAssessment,
 } from '@aws-sdk/client-bedrock-runtime'
 import {
@@ -97,10 +98,10 @@ const BEDROCK_CONTEXT_WINDOW_OVERFLOW_MESSAGES = [
 ]
 
 /**
- * Cache of model IDs that do not support the CountTokens API.
- * Prevents repeated failing API calls for models that will never support token counting.
+ * Cache of model IDs for which CountTokens API calls should be skipped.
+ * Prevents repeated failing API calls that will never succeed for the lifetime of the process.
  */
-const UNSUPPORTED_COUNT_TOKENS_MODELS = new Set<string>()
+const SKIP_COUNT_TOKENS_MODELS = new Set<string>()
 
 /**
  * Mapping of Bedrock stop reasons to SDK stop reasons.
@@ -144,9 +145,6 @@ export interface BedrockGuardrailRedactionConfig {
 
 /**
  * Configuration for Bedrock guardrails.
- *
- * For production use with sensitive content, consider `SessionManager` with `saveLatestOn: 'message'`
- * to persist redactions immediately.
  *
  * @see https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails.html
  */
@@ -285,9 +283,11 @@ export interface BedrockModelConfig extends BaseModelConfig {
   /**
    * Whether to use the native Bedrock CountTokens API.
    *
-   * When `true` (default), `countTokens()` calls the Bedrock CountTokens API for
-   * accurate counts. When `false`, skips the API call and uses the character-based
-   * heuristic estimator.
+   * When `true`, `countTokens()` calls the Bedrock CountTokens API for
+   * accurate counts. When `false` or not set (default), skips the API call and uses
+   * the character-based heuristic estimator.
+   *
+   * @defaultValue false
    */
   useNativeTokenCount?: boolean
 }
@@ -349,13 +349,13 @@ export class BedrockModel extends Model<BedrockModelConfig> {
   private _client: BedrockRuntimeClient
 
   /**
-   * Clears the cache of model IDs that do not support the CountTokens API.
+   * Clears the cache of model IDs for which CountTokens is skipped.
    * After calling this, the next countTokens invocation will attempt the API again.
    *
    * @internal
    */
   static clearCountTokensCache(): void {
-    UNSUPPORTED_COUNT_TOKENS_MODELS.clear()
+    SKIP_COUNT_TOKENS_MODELS.clear()
   }
 
   /**
@@ -510,11 +510,11 @@ export class BedrockModel extends Model<BedrockModelConfig> {
    * @returns Total input token count
    */
   override async countTokens(messages: Message[], options?: CountTokensOptions): Promise<number> {
-    if (this._config.useNativeTokenCount === false) return super.countTokens(messages, options)
+    if (this._config.useNativeTokenCount !== true) return super.countTokens(messages, options)
 
     const modelId = this._config.modelId ?? MODEL_DEFAULTS.bedrock.modelId
 
-    if (UNSUPPORTED_COUNT_TOKENS_MODELS.has(modelId)) {
+    if (SKIP_COUNT_TOKENS_MODELS.has(modelId)) {
       return super.countTokens(messages, options)
     }
 
@@ -539,7 +539,13 @@ export class BedrockModel extends Model<BedrockModelConfig> {
       logger.debug(`total_tokens=<${response.inputTokens}> | native token count`)
       return response.inputTokens
     } catch (error) {
-      if (
+      if (error instanceof Error && error.name === 'AccessDeniedException') {
+        warnOnce(
+          logger,
+          `model_id=<${modelId}> | bedrock:CountTokens permission denied, falling back to heuristic estimation`
+        )
+        SKIP_COUNT_TOKENS_MODELS.add(modelId)
+      } else if (
         error instanceof Error &&
         error.name === 'ValidationException' &&
         error.message.includes("doesn't support counting tokens")
@@ -547,7 +553,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
         logger.debug(
           `model_id=<${modelId}> | model does not support CountTokens, caching for future calls, falling back to estimation`
         )
-        UNSUPPORTED_COUNT_TOKENS_MODELS.add(modelId)
+        SKIP_COUNT_TOKENS_MODELS.add(modelId)
       } else {
         logger.debug(`error=<${error}> | native token counting failed, falling back to estimation`)
       }
@@ -1385,15 +1391,24 @@ export class BedrockModel extends Model<BedrockModelConfig> {
               events.push({ type: 'modelContentBlockDeltaEvent', delta: reasoningDelta })
             }
           },
-          citationsContent: (block: BedrockCitationsContentBlock): void => {
-            if (!block) return
-            const mapped = this._mapBedrockCitationsData(block)
-            const delta: CitationsDelta = {
-              type: 'citationsDelta',
-              citations: mapped.citations,
-              content: mapped.content,
-            }
-            events.push({ type: 'modelContentBlockDeltaEvent', delta })
+          citation: (citation: BedrockCitationsDelta): void => {
+            const location = citation.location ? this._mapBedrockCitationLocation(citation.location) : undefined
+            if (!location) return
+            events.push({
+              type: 'modelContentBlockDeltaEvent',
+              delta: {
+                type: 'citationsDelta',
+                citations: [
+                  {
+                    location,
+                    sourceContent: (citation.sourceContent ?? []).map((sc) => ({ text: sc.text! })),
+                    source: citation.source ?? '',
+                    title: citation.title ?? '',
+                  },
+                ],
+                content: [],
+              },
+            })
           },
         }
 

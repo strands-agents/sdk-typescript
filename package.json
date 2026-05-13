@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "workspaces": [
-    "strands-dev",
+    "strandly",
     "strands-ts",
     "strands-wasm"
   ],
@@ -12,7 +12,7 @@
     "prettier": "^3.7.4"
   },
   "scripts": {
-    "dev": "strands-dev",
+    "dev": "strandly",
     "prepare": "husky && npm run build",
     "build": "npm run build -w strands-ts",
     "test": "npm run test -w strands-ts",

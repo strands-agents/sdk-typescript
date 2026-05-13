@@ -719,6 +719,28 @@ describe("OpenAIModel (api: 'responses')", () => {
       ).rejects.toBeInstanceOf(ContextWindowOverflowError)
     })
 
+    it.each([
+      'maximum context length exceeded',
+      'context_length_exceeded',
+      'too many tokens',
+      'context length',
+      'Input is too long for requested model',
+      'input length and `max_tokens` exceed context limit',
+      'too many total text bytes',
+    ])('wraps context overflow message pattern "%s" as ContextWindowOverflowError', async (message) => {
+      const client: any = {
+        responses: {
+          create: vi.fn(async () => {
+            throw new Error(message)
+          }),
+        },
+      }
+      const model = new OpenAIModel({ api: 'responses', client })
+      await expect(
+        collectIterator(model.stream([new Message({ role: 'user', content: [new TextBlock('x')] })]))
+      ).rejects.toBeInstanceOf(ContextWindowOverflowError)
+    })
+
     it('rethrows unknown errors untouched', async () => {
       const client: any = {
         responses: {

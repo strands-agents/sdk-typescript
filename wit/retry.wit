@@ -1,0 +1,86 @@
+package strands:agent@0.1.0;
+
+/// Retry policy for failed model and tool calls.
+interface retry {
+  use wasi:clocks/monotonic-clock@0.2.6.{duration};
+
+  /// How much random variation to apply to computed delays.
+  enum jitter-kind {
+    /// No jitter applied.
+    none,
+    /// Uniform random in `[0, delay]`.
+    full,
+    /// Uniform random in `[delay/2, delay]`.
+    equal,
+    /// Decorrelated exponential jitter (AWS-style).
+    decorrelated,
+  }
+
+  /// Fixed delay between attempts.
+  record constant-backoff-config {
+    /// Delay returned for every retry.
+    delay: duration,
+  }
+
+  /// Delay grows linearly with attempt number.
+  record linear-backoff-config {
+    /// Base delay. Delay on attempt N is `base * N`.
+    base: duration,
+    /// Upper bound applied before jitter.
+    max: duration,
+    /// Jitter mode.
+    jitter: jitter-kind,
+  }
+
+  /// Delay grows exponentially with attempt number.
+  record exponential-backoff-config {
+    /// Base delay on the first retry.
+    base: duration,
+    /// Upper bound applied before jitter.
+    max: duration,
+    /// Growth factor. Delay on attempt N is `base * factor^(N-1)`.
+    factor: f64,
+    /// Jitter mode.
+    jitter: jitter-kind,
+  }
+
+  /// Backoff curve applied between attempts.
+  variant backoff-strategy {
+    /// Fixed delay.
+    constant(constant-backoff-config),
+    /// Linear growth.
+    linear(linear-backoff-config),
+    /// Exponential growth.
+    exponential(exponential-backoff-config),
+  }
+
+  /// A single retry strategy for model calls.
+  ///
+  /// Defaults approximate the TS `DefaultModelRetryStrategy`: exponential
+  /// backoff with full jitter, capped at 6 attempts.
+  record model-retry-strategy {
+    /// Maximum number of attempts, including the initial call.
+    max-attempts: s32,
+    /// Backoff curve applied between attempts.
+    backoff: backoff-strategy,
+    /// Upper bound on total retry window. Once exceeded, further retries
+    /// are abandoned. Absent means no cap.
+    total-budget: option<duration>,
+  }
+
+  /// Retry configuration attached to an agent.
+  ///
+  /// Strategies compose: every strategy observes every failure, and a
+  /// retry is attempted if any strategy requests one. The first strategy
+  /// to request a delay wins. Registration order does not affect
+  /// correctness. Supplying two strategies with the same `backoff` arm
+  /// is almost certainly a mistake and may surface as
+  /// `agent-error::invalid-input`.
+  ///
+  /// An empty list disables retries; omitting the config from
+  /// `agent-config.retry` applies a default single `exponential` strategy.
+  record retry-config {
+    /// Strategies evaluated on every retryable failure.
+    strategies: list<model-retry-strategy>,
+  }
+}

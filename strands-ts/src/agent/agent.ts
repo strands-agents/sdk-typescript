@@ -79,6 +79,9 @@ import { warnOnDuplicateRetryStrategyTypes } from '../retry/retry-strategy.js'
 import { InterruptError, InterruptState, interruptFromAgent } from '../interrupt.js'
 import type { InterruptParams } from '../types/interrupt.js'
 import { isInterruptResponseContent, type InterruptResponseContent } from '../types/interrupt.js'
+import { takeSnapshot as takeSnapshotInternal, loadSnapshot as loadSnapshotInternal } from './snapshot.js'
+import type { TakeSnapshotOptions } from './snapshot.js'
+import type { Snapshot } from '../types/snapshot.js'
 
 /**
  * Recursive type definition for nested tool arrays.
@@ -426,6 +429,10 @@ export class Agent implements LocalAgent, InvokableAgent {
       this._mcpClients.map(async (client) => {
         const tools = await client.listTools()
         this._toolRegistry.add(tools)
+        client.onToolsChanged = (oldTools, newTools): void => {
+          oldTools.forEach((name) => this._toolRegistry.remove(name))
+          this._toolRegistry.addOrReplace(newTools)
+        }
       })
     )
 
@@ -712,6 +719,69 @@ export class Agent implements LocalAgent, InvokableAgent {
   }
 
   /**
+   * Captures a point-in-time snapshot of the agent's current state.
+   *
+   * Use snapshots to checkpoint agent state for later restoration, enabling
+   * use cases like undo/redo, branching conversations, and session persistence.
+   *
+   * Fields are selected via a preset/include/exclude model:
+   * 1. Start with preset fields (e.g. `'session'` captures all fields)
+   * 2. Add any `include` fields
+   * 3. Remove any `exclude` fields
+   *
+   * @param options - Controls which fields to capture and optional app data to store
+   * @returns A {@link Snapshot} containing the captured agent state
+   * @throws Error if no fields would be included after applying options
+   *
+   * @example
+   * ```typescript
+   * // Capture all session-relevant state
+   * const snapshot = agent.takeSnapshot({ preset: 'session' })
+   *
+   * // Capture only messages and state
+   * const partial = agent.takeSnapshot({ include: ['messages', 'state'] })
+   *
+   * // Capture session state but exclude interrupts
+   * const noInterrupts = agent.takeSnapshot({ preset: 'session', exclude: ['interrupts'] })
+   *
+   * // Attach application-owned metadata
+   * const withMeta = agent.takeSnapshot({ preset: 'session', appData: { userId: 'u-123' } })
+   * ```
+   */
+  public takeSnapshot(options: TakeSnapshotOptions): Snapshot {
+    return takeSnapshotInternal(this, options)
+  }
+
+  /**
+   * Restores agent state from a previously captured snapshot.
+   *
+   * Only fields present in `snapshot.data` are restored; absent fields are left
+   * unchanged. This allows partial snapshots to update specific aspects of state
+   * without affecting others.
+   *
+   * @param snapshot - The snapshot to restore from
+   * @throws Error if `snapshot.schemaVersion` is incompatible or scope is wrong
+   *
+   * @example
+   * ```typescript
+   * // Save and restore a conversation checkpoint
+   * const checkpoint = agent.takeSnapshot({ preset: 'session' })
+   *
+   * // ... agent continues processing ...
+   *
+   * // Restore to the checkpoint
+   * agent.loadSnapshot(checkpoint)
+   *
+   * // Restore from a JSON-serialized snapshot (e.g. from storage)
+   * const stored = JSON.parse(savedSnapshotJson)
+   * agent.loadSnapshot(stored)
+   * ```
+   */
+  public loadSnapshot(snapshot: Snapshot): void {
+    loadSnapshotInternal(this, snapshot)
+  }
+
+  /**
    * Invokes hook callbacks and printer for a stream event.
    *
    * @param event - The event to process
@@ -840,26 +910,30 @@ export class Agent implements LocalAgent, InvokableAgent {
             const modelResult = yield* this._invokeModel(invocationState, structuredOutputChoice)
 
             if (modelResult.stopReason !== 'toolUse') {
-              // If structured output is required, force it
-              if (structuredOutputTool) {
-                if (structuredOutputChoice) {
-                  throw new StructuredOutputError(
-                    'The model failed to invoke the structured output tool even after it was forced.'
-                  )
-                }
-
-                structuredOutputChoice = { tool: { name: STRUCTURED_OUTPUT_TOOL_NAME } }
+              // Schema set, we already forced, and the model still refused.
+              // Throw before closing the span so the cycle span records the error.
+              if (structuredOutputTool && structuredOutputChoice) {
+                throw new StructuredOutputError(
+                  'The model failed to invoke the structured output tool even after it was forced.'
+                )
               }
 
               this._meter.endCycle(cycleStartTime)
               this._tracer.endAgentLoopSpan(cycleSpan)
 
-              yield this._appendMessage(modelResult.message, invocationState)
-
-              if (structuredOutputChoice) {
+              // Schema set, model ignored the tool — drop the response and force the tool next cycle.
+              // Appending the plain-text turn here would leave the conversation ending on an
+              // assistant message, which providers like Bedrock reject as assistant prefill.
+              if (structuredOutputTool) {
+                structuredOutputChoice = { tool: { name: STRUCTURED_OUTPUT_TOOL_NAME } }
+                logger.debug(
+                  'structured output schema set but model responded with plain text; forcing tool use on next cycle'
+                )
                 continue
               }
 
+              // Normal end of turn.
+              yield this._appendMessage(modelResult.message, invocationState)
               result = new AgentResult({
                 stopReason: modelResult.stopReason,
                 lastMessage: modelResult.message,

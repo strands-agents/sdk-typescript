@@ -358,10 +358,17 @@ describe('AnthropicModel', () => {
       await expect(collectIterator(provider.stream(messages))).rejects.toThrow('API Error')
     })
 
-    it('maps overload error to ContextWindowOverflowError', async () => {
+    it.each([
+      'PROMPT IS TOO LONG: request exceeds context window',
+      'max_tokens exceeded',
+      'input too long',
+      'input is too long',
+      'input length exceeds context window',
+      'input and output tokens exceed your context limit',
+    ])('maps context overflow error "%s" to ContextWindowOverflowError', async (message) => {
       const mockClient = createMockClient(async function* () {
         yield { type: 'ping' } // Satisfy linter require-yield
-        throw new Error('prompt is too long')
+        throw new Error(message)
       })
       const provider = new AnthropicModel({ client: mockClient })
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
@@ -739,10 +746,21 @@ describe('AnthropicModel', () => {
       } as unknown as Anthropic
     }
 
+    it('should use heuristic by default when useNativeTokenCount is not set', async () => {
+      const mockCountTokens = vi.fn()
+      const client = createCountTokensClient(mockCountTokens)
+      const model = new AnthropicModel({ client, modelId: 'claude-sonnet-4-6' })
+
+      const result = await model.countTokens(messages)
+
+      expect(mockCountTokens).not.toHaveBeenCalled()
+      expect(result).toBe(2) // heuristic: Math.ceil('hello'.length / 4)
+    })
+
     it('should return native token count on success', async () => {
       const mockCountTokens = vi.fn(async () => ({ input_tokens: 42 }))
       const client = createCountTokensClient(mockCountTokens)
-      const model = new AnthropicModel({ client, modelId: 'claude-sonnet-4-6' })
+      const model = new AnthropicModel({ client, modelId: 'claude-sonnet-4-6', useNativeTokenCount: true })
 
       const result = await model.countTokens(messages)
 
@@ -753,7 +771,7 @@ describe('AnthropicModel', () => {
     it('should include system prompt in request', async () => {
       const mockCountTokens = vi.fn(async () => ({ input_tokens: 55 }))
       const client = createCountTokensClient(mockCountTokens)
-      const model = new AnthropicModel({ client, modelId: 'claude-sonnet-4-6' })
+      const model = new AnthropicModel({ client, modelId: 'claude-sonnet-4-6', useNativeTokenCount: true })
 
       const result = await model.countTokens(messages, { systemPrompt: 'Be helpful.' })
 
@@ -768,7 +786,7 @@ describe('AnthropicModel', () => {
     it('should include tool specs in request', async () => {
       const mockCountTokens = vi.fn(async () => ({ input_tokens: 100 }))
       const client = createCountTokensClient(mockCountTokens)
-      const model = new AnthropicModel({ client, modelId: 'claude-sonnet-4-6' })
+      const model = new AnthropicModel({ client, modelId: 'claude-sonnet-4-6', useNativeTokenCount: true })
 
       const result = await model.countTokens(messages, { toolSpecs })
 
@@ -783,7 +801,7 @@ describe('AnthropicModel', () => {
     it('should strip max_tokens from request', async () => {
       const mockCountTokens = vi.fn(async () => ({ input_tokens: 10 }))
       const client = createCountTokensClient(mockCountTokens)
-      const model = new AnthropicModel({ client, modelId: 'claude-sonnet-4-6' })
+      const model = new AnthropicModel({ client, modelId: 'claude-sonnet-4-6', useNativeTokenCount: true })
 
       await model.countTokens(messages)
 
@@ -798,7 +816,7 @@ describe('AnthropicModel', () => {
         throw new Error('Unsupported')
       })
       const client = createCountTokensClient(mockCountTokens)
-      const model = new AnthropicModel({ client, modelId: 'claude-sonnet-4-6' })
+      const model = new AnthropicModel({ client, modelId: 'claude-sonnet-4-6', useNativeTokenCount: true })
 
       const result = await model.countTokens(messages)
 
@@ -811,7 +829,7 @@ describe('AnthropicModel', () => {
         throw new Error('Connection failed')
       })
       const client = createCountTokensClient(mockCountTokens)
-      const model = new AnthropicModel({ client, modelId: 'claude-sonnet-4-6' })
+      const model = new AnthropicModel({ client, modelId: 'claude-sonnet-4-6', useNativeTokenCount: true })
 
       const result = await model.countTokens(messages)
 

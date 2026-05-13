@@ -205,8 +205,9 @@ export class AfterInvocationEvent extends HookableEvent {
 
 /**
  * Event triggered when the framework adds a message to the conversation history.
- * Fired during the agent loop execution for framework-generated messages.
- * Does not fire for initial messages from AgentConfig or user input messages.
+ * Fired for user input, assistant responses, and tool-result messages added
+ * during agent execution. Does not fire for messages preloaded via
+ * `AgentConfig.messages` or messages manually pushed to `agent.messages`.
  */
 export class MessageAddedEvent extends HookableEvent {
   readonly type = 'messageAddedEvent' as const

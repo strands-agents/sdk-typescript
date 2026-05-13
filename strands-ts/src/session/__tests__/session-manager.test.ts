@@ -31,6 +31,9 @@ import {
   NodeResult,
   Status,
 } from '../../multiagent/index.js'
+import { takeSnapshot, loadSnapshot } from '../../agent/snapshot.js'
+import type { Snapshot } from '../../types/snapshot.js'
+import type { TakeSnapshotOptions } from '../../agent/snapshot.js'
 
 // Test fixtures
 function createMockAgent(id = 'agent'): Agent {
@@ -54,6 +57,12 @@ function createMockAgent(id = 'agent'): Agent {
     } as any,
     modelState: new StateStore(),
     systemPrompt: 'Test prompt',
+    takeSnapshot(options: TakeSnapshotOptions): Snapshot {
+      return takeSnapshot(agent as any, options)
+    },
+    loadSnapshot(snapshot: Snapshot): void {
+      loadSnapshot(agent as any, snapshot)
+    },
   } as unknown as Agent
   return agent
 }
@@ -645,18 +654,63 @@ describe('SessionManager', () => {
       expect(snapshot).toBeNull()
     })
 
-    it('does not save when saveLatestOn is invocation', async () => {
+    it.each(['invocation', 'message'] as const)(
+      'saves snapshot_latest on redaction when saveLatestOn is %s',
+      async (saveLatestOn) => {
+        sessionManager = new SessionManager({
+          sessionId: 'test-session',
+          storage: { snapshot: storage },
+          saveLatestOn,
+        })
+
+        const assistantMessage = new Message({ role: 'assistant', content: [new TextBlock('Response')] })
+        const event = new AfterModelCallEvent({
+          agent: mockAgent,
+          model: {} as any,
+          stopData: {
+            message: assistantMessage,
+            stopReason: 'endTurn' as const,
+            redaction: { userMessage: '[User input redacted.]' },
+          },
+        } as any)
+
+        await initPluginAndInvokeHook(sessionManager, event)
+
+        const snapshot = await storage.loadSnapshot({
+          location: { sessionId: 'test-session', scope: 'agent', scopeId: 'test-agent' },
+        })
+        expect(snapshot).not.toBeNull()
+      }
+    )
+
+    it('does not register AfterModelCallEvent hook when saveLatestOn is trigger', async () => {
+      sessionManager = new SessionManager({
+        sessionId: 'test-session',
+        storage: { snapshot: storage },
+        saveLatestOn: 'trigger',
+      })
+
+      const pluginAgent = createMockAgentWithHooks()
+      sessionManager.initAgent(pluginAgent)
+      const afterModelHook = pluginAgent.trackedHooks.find((h) => h.eventType === AfterModelCallEvent)
+      expect(afterModelHook).toBeUndefined()
+    })
+
+    it('does not save on AfterModelCallEvent without redaction under saveLatestOn=invocation', async () => {
       sessionManager = new SessionManager({
         sessionId: 'test-session',
         storage: { snapshot: storage },
         saveLatestOn: 'invocation',
       })
 
-      // AfterModelCallEvent hook is not registered when saveLatestOn is 'invocation'
-      const pluginAgent = createMockAgentWithHooks()
-      sessionManager.initAgent(pluginAgent)
-      const afterModelHook = pluginAgent.trackedHooks.find((h) => h.eventType === AfterModelCallEvent)
-      expect(afterModelHook).toBeUndefined()
+      const assistantMessage = new Message({ role: 'assistant', content: [new TextBlock('Response')] })
+      const event = new AfterModelCallEvent({
+        agent: mockAgent,
+        model: {} as any,
+        stopData: { message: assistantMessage, stopReason: 'endTurn' as const },
+      } as any)
+
+      await initPluginAndInvokeHook(sessionManager, event)
 
       const snapshot = await storage.loadSnapshot({
         location: { sessionId: 'test-session', scope: 'agent', scopeId: 'test-agent' },

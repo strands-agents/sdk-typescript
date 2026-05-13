@@ -5,7 +5,6 @@ import type { Plugin } from '../plugins/plugin.js'
 import type { LocalAgent } from '../types/agent.js'
 import { AfterInvocationEvent, AfterModelCallEvent, InitializedEvent, MessageAddedEvent } from '../hooks/events.js'
 import { v7 as uuidV7 } from 'uuid'
-import { takeSnapshot, loadSnapshot } from '../agent/snapshot.js'
 import { logger } from '../logging/logger.js'
 import type { MultiAgentPlugin, MultiAgent } from '../multiagent/index.js'
 import { MultiAgentState } from '../multiagent/state.js'
@@ -34,9 +33,12 @@ import type { Swarm } from '../multiagent/swarm.js'
  *
  * `SaveLatestStrategy` controls how frequently `snapshot_latest` is updated:
  * - `'invocation'`: after every agent invocation completes (default; balances durability and I/O)
- * - `'message'`: after every message added and after model calls with guardrail redactions
- *   (most durable, highest I/O)
+ * - `'message'`: after every message added (most durable, highest I/O)
  * - `'trigger'`: only when a `snapshotTrigger` fires (or manually via `saveSnapshot`)
+ *
+ * Under `'invocation'` and `'message'`, guardrail redactions are persisted immediately so
+ * pre-redaction content never sits at rest. Under `'trigger'`, the caller's `snapshotTrigger`
+ * stays in control; redactions are only flushed if the trigger fires or `saveSnapshot` is called.
  */
 export type SaveLatestStrategy = 'message' | 'invocation' | 'trigger'
 
@@ -119,8 +121,12 @@ export class SessionManager implements Plugin, MultiAgentPlugin {
       agent.addHook(MessageAddedEvent, async (event) => {
         await this._onMessageAdded(event)
       })
-      // Also listen to AfterModelCallEvent when saving per-message to ensure
-      // message modifications (e.g., guardrail redactions) are persisted immediately
+    }
+
+    // Persist guardrail redactions immediately for auto-save strategies.
+    // 'trigger' is an explicit opt-out from auto-saves, so the caller's snapshotTrigger
+    // stays in control there.
+    if (this._saveLatestOn !== 'trigger') {
       agent.addHook(AfterModelCallEvent, async (event) => {
         await this._onAfterModelCall(event)
       })
@@ -144,7 +150,7 @@ export class SessionManager implements Plugin, MultiAgentPlugin {
   }): Promise<void> {
     const isAgent = 'messages' in params.target
     const snapshot = isAgent
-      ? takeSnapshot(params.target as LocalAgent, { preset: 'session' })
+      ? (params.target as LocalAgent).takeSnapshot({ preset: 'session' })
       : takeMultiAgentSnapshot(params.target as Graph | Swarm, params.state)
     const snapshotId = params.isLatest ? 'latest' : uuidV7()
     const location = isAgent
@@ -191,7 +197,7 @@ export class SessionManager implements Plugin, MultiAgentPlugin {
     if (!snapshot) return false
 
     if (isAgent) {
-      loadSnapshot(params.target as LocalAgent, snapshot)
+      ;(params.target as LocalAgent).loadSnapshot(snapshot)
     } else {
       loadMultiAgentSnapshot(params.target as Graph | Swarm, snapshot, params.state)
     }
@@ -250,7 +256,7 @@ export class SessionManager implements Plugin, MultiAgentPlugin {
 
   /** Captures one snapshot and writes it to both immutable history and snapshot_latest. */
   private async _saveImmutableAndLatest(agent: LocalAgent): Promise<void> {
-    const snapshot = takeSnapshot(agent, { preset: 'session' })
+    const snapshot = agent.takeSnapshot({ preset: 'session' })
     const snapshotId = uuidV7()
     await Promise.all([
       this._storage.snapshot.saveSnapshot({ location: this._location(agent), snapshotId, isLatest: false, snapshot }),

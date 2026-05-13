@@ -6,15 +6,15 @@ on:
       - published
 
 jobs:
-  call-code-quality:
-    uses: ./.github/workflows/code-quality.yml
+  call-ts-check:
+    uses: ./.github/workflows/ts-check.yml
     permissions:
       contents: read
     with:
       ref: ${{ github.event.release.target_commitish }}
 
-  call-test:
-    uses: ./.github/workflows/test.yml
+  call-ts-test:
+    uses: ./.github/workflows/ts-test.yml
     permissions:
       contents: read
     with:
@@ -23,8 +23,8 @@ jobs:
   publish:
     name: Build and publish to NPM
     needs:
-      - call-code-quality
-      - call-test
+      - call-ts-check
+      - call-ts-test
     runs-on: ubuntu-latest
 
     environment:

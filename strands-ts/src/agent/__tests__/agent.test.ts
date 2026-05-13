@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { Agent, type ToolList } from '../agent.js'
+import { McpClient } from '../../mcp.js'
+import { McpTool } from '../../tools/mcp-tool.js'
 import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
 import { collectGenerator } from '../../__fixtures__/model-test-helpers.js'
 import { createMockTool, createRandomTool } from '../../__fixtures__/tool-helpers.js'
@@ -1330,6 +1332,37 @@ describe('Agent', () => {
       expect(result.structuredOutput).toEqual({ value: 42 })
     })
 
+    it('does not send assistant-ended conversation when forcing structured output retry', async () => {
+      // Regression for https://github.com/strands-agents/sdk-typescript/issues/1039
+      // When the model responds with plain text instead of calling the structured output tool,
+      // the forced-retry model call must not see a conversation ending with an assistant message.
+      // Bedrock/Anthropic-family models reject assistant message prefill.
+      const schema = z.object({ value: z.number() })
+
+      const model = new MockMessageModel()
+        .addTurn({ type: 'textBlock', text: 'Plain text, no tool call' })
+        .addTurn({ type: 'toolUseBlock', name: 'strands_structured_output', toolUseId: 'tool-1', input: { value: 42 } })
+        .addTurn({ type: 'textBlock', text: 'Done' })
+
+      // Snapshot the role sequence at each model call, since `messages` is passed by reference
+      // and mutates during the agent loop.
+      const roleSnapshots: string[][] = []
+      const originalStream = model.stream.bind(model)
+      vi.spyOn(model, 'stream').mockImplementation((messages, options) => {
+        roleSnapshots.push(messages.map((m) => m.role))
+        return originalStream(messages, options)
+      })
+
+      const agent = new Agent({ model, structuredOutputSchema: schema })
+      await agent.invoke('Test')
+
+      expect(roleSnapshots.length).toBeGreaterThanOrEqual(2)
+
+      // The forced-retry (second) call must not see a conversation ending with an assistant turn.
+      const secondCallRoles = roleSnapshots[1]!
+      expect(secondCallRoles[secondCallRoles.length - 1]).toBe('user')
+    })
+
     it('throws StructuredOutputError when model refuses to use tool after forcing', async () => {
       const schema = z.object({ value: z.number() })
 
@@ -1854,5 +1887,43 @@ describe('normalizeToolUseNames', () => {
       .find((m) => m.role === 'assistant')!
       .content.find((b) => b.type === 'toolUseBlock') as ToolUseBlock
     expect(sentToolUse).toStrictEqual(new ToolUseBlock({ name: 'good_tool-1', toolUseId: 'tu-1', input: {} }))
+  })
+
+  describe('MCP toolsChanged integration', () => {
+    it('removes old tools and adds new tools when onToolsChanged fires', async () => {
+      const mcpClient = new McpClient({
+        transport: { start: vi.fn(), send: vi.fn(), close: vi.fn() } as never,
+      })
+
+      const initialTools = [
+        new McpTool({ name: 'tool_a', description: 'A', inputSchema: {}, client: mcpClient }),
+        new McpTool({ name: 'tool_b', description: 'B', inputSchema: {}, client: mcpClient }),
+      ]
+      vi.spyOn(mcpClient, 'listTools').mockResolvedValue(initialTools)
+
+      let capturedCallback: ((oldTools: string[], newTools: McpTool[]) => void) | undefined
+      const setterSpy = vi.spyOn(McpClient.prototype, 'onToolsChanged', 'set').mockImplementation((cb) => {
+        capturedCallback = cb
+      })
+
+      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'done' })
+      const agent = new Agent({ model, tools: [mcpClient] })
+      await agent.initialize()
+
+      expect(agent.tools.map((t) => t.name)).toEqual(['tool_a', 'tool_b'])
+      expect(capturedCallback).toBeDefined()
+
+      const newTools = [
+        new McpTool({ name: 'tool_b', description: 'B-updated', inputSchema: {}, client: mcpClient }),
+        new McpTool({ name: 'tool_c', description: 'C', inputSchema: {}, client: mcpClient }),
+      ]
+
+      capturedCallback!(['tool_a', 'tool_b'], newTools)
+
+      expect(agent.tools.map((t) => t.name)).toEqual(['tool_b', 'tool_c'])
+      expect(agent.tools.find((t) => t.name === 'tool_b')!.description).toBe('B-updated')
+
+      setterSpy.mockRestore()
+    })
   })
 })

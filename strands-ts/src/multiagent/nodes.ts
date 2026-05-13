@@ -1,7 +1,6 @@
 import { Agent } from '../agent/agent.js'
 import type { InvocationState, InvokeOptions, InvokableAgent, AgentStreamEvent } from '../types/agent.js'
 import type { MultiAgentInput } from './multiagent.js'
-import { takeSnapshot, loadSnapshot } from '../agent/snapshot.js'
 import type { MultiAgentStreamEvent } from './events.js'
 import { NodeStreamUpdateEvent, NodeResultEvent } from './events.js'
 import { NodeResult, Status } from './state.js'
@@ -216,7 +215,7 @@ export class AgentNode extends Node {
     // Only Agent instances support snapshot/restore for state isolation
     const snapshot =
       this._agent instanceof Agent
-        ? takeSnapshot(this._agent, { include: ['messages', 'state', 'modelState'] })
+        ? this._agent.takeSnapshot({ include: ['messages', 'state', 'modelState'] })
         : undefined
     try {
       const invokeOptions: InvokeOptions = {
@@ -248,7 +247,7 @@ export class AgentNode extends Node {
       }
     } finally {
       if (snapshot) {
-        loadSnapshot(this._agent as Agent, snapshot)
+        ;(this._agent as Agent).loadSnapshot(snapshot)
       }
     }
   }

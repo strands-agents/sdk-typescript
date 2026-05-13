@@ -400,9 +400,12 @@ describe.each(allProviders)('Agent with $name', ({ name, skip, createModel, mode
         expect(followUp.lastMessage.content.length).toBeGreaterThan(0)
       })
 
-      it('emits citationsDelta events via agent.stream()', async () => {
+      it.each([
+        { mode: 'non-streaming', stream: false as const },
+        { mode: 'streaming', stream: true as const },
+      ])('emits citationsDelta events in $mode mode', async ({ stream }) => {
         const agent = new Agent({
-          model: createModel({ stream: false }),
+          model: createModel({ stream }),
           printer: false,
         })
 

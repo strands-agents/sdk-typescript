@@ -437,3 +437,132 @@ describe('Snapshot API', () => {
     })
   })
 })
+
+describe('Agent.takeSnapshot / Agent.loadSnapshot (public API)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(MOCK_TIMESTAMP))
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('takeSnapshot captures state and loadSnapshot restores it (round-trip)', () => {
+    const agent = new Agent({ model: new TestModelProvider(), tools: [], printer: false })
+    agent.messages.push(
+      new Message({ role: 'user', content: [new TextBlock('Hello')] }),
+      new Message({ role: 'assistant', content: [new TextBlock('Hi!')] })
+    )
+    agent.appState.set('counter', 42)
+    agent.systemPrompt = 'Be helpful'
+
+    const snapshot = agent.takeSnapshot({ preset: 'session' })
+
+    expect(snapshot).toEqual({
+      scope: 'agent',
+      schemaVersion: SNAPSHOT_SCHEMA_VERSION,
+      createdAt: MOCK_TIMESTAMP,
+      data: {
+        messages: [
+          { role: 'user', content: [{ text: 'Hello' }] },
+          { role: 'assistant', content: [{ text: 'Hi!' }] },
+        ],
+        state: { counter: 42 },
+        systemPrompt: 'Be helpful',
+        modelState: {},
+        interrupts: { interrupts: {}, activated: false },
+      },
+      appData: {},
+    })
+
+    // Mutate agent state
+    agent.messages.length = 0
+    agent.appState.clear()
+    agent.systemPrompt = 'Different'
+
+    // Restore
+    agent.loadSnapshot(snapshot)
+
+    expect(agent.messages).toHaveLength(2)
+    expect(agent.appState.get('counter')).toBe(42)
+    expect(agent.systemPrompt).toBe('Be helpful')
+  })
+
+  it('propagates errors from loadSnapshot for invalid snapshots', () => {
+    const agent = new Agent({ model: new TestModelProvider(), tools: [], printer: false })
+
+    expect(() =>
+      agent.loadSnapshot({ scope: 'agent', schemaVersion: '99.0', createdAt: '', data: {}, appData: {} })
+    ).toThrow('Unsupported snapshot schema version: 99.0')
+
+    expect(() =>
+      agent.loadSnapshot({
+        scope: 'multiAgent',
+        schemaVersion: SNAPSHOT_SCHEMA_VERSION,
+        createdAt: '',
+        data: {},
+        appData: {},
+      })
+    ).toThrow("Expected snapshot scope 'agent', got 'multiAgent'")
+
+    expect(() => agent.takeSnapshot({})).toThrow('No fields to include in snapshot')
+  })
+
+  it('supports JSON serialization round-trip', () => {
+    const agent = new Agent({ model: new TestModelProvider(), tools: [], printer: false })
+    agent.messages.push(new Message({ role: 'user', content: [new TextBlock('Persist me')] }))
+    agent.appState.set('session', 'abc')
+
+    const snapshot = agent.takeSnapshot({ preset: 'session' })
+    const json = JSON.stringify(snapshot)
+    const parsed = JSON.parse(json) as Snapshot
+
+    const newAgent = new Agent({ model: new TestModelProvider(), tools: [], printer: false })
+    newAgent.loadSnapshot(parsed)
+
+    expect(newAgent.messages).toHaveLength(1)
+    expect(newAgent.appState.get('session')).toBe('abc')
+  })
+
+  it('preserves and restores interrupt state for resume', async () => {
+    const model = new MockMessageModel()
+      .addTurn({
+        type: 'toolUseBlock',
+        name: 'askUser',
+        toolUseId: 'tool-1',
+        input: { question: 'proceed?' },
+      })
+      .addTurn({ type: 'textBlock', text: 'Completed' })
+
+    const tool = createMockTool('askUser', (context) => {
+      const answer = context.interrupt<string>({ name: 'ask', reason: 'Need confirmation' })
+      return `User said: ${answer}`
+    })
+
+    const agent = new Agent({ model, tools: [tool], printer: false })
+
+    // Trigger interrupt
+    const result = await agent.invoke('Do something')
+    expect(result.stopReason).toBe('interrupt')
+
+    // Snapshot via public method
+    const snapshot = agent.takeSnapshot({ preset: 'session' })
+
+    // Restore into a fresh agent
+    const model2 = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Completed' })
+    const tool2 = createMockTool('askUser', (context) => {
+      const answer = context.interrupt<string>({ name: 'ask', reason: 'Need confirmation' })
+      return `User said: ${answer}`
+    })
+    const restored = new Agent({ model: model2, tools: [tool2], printer: false })
+    restored.loadSnapshot(snapshot)
+
+    // Resume
+    const finalResult = await restored.invoke([
+      { interruptResponse: { interruptId: result.interrupts![0]!.id, response: 'go ahead' } },
+    ])
+
+    expect(finalResult.stopReason).toBe('endTurn')
+  })
+})

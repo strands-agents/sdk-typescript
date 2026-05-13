@@ -19,6 +19,7 @@
     <a href="https://github.com/strands-agents/sdk-typescript/pulls"><img alt="GitHub open pull requests" src="https://img.shields.io/github/issues-pr/strands-agents/sdk-typescript"/></a>
     <a href="https://github.com/strands-agents/sdk-typescript/blob/main/LICENSE.APACHE"><img alt="License" src="https://img.shields.io/github/license/strands-agents/sdk-typescript"/></a>
     <a href="https://www.npmjs.com/package/@strands-agents/sdk"><img alt="NPM Version" src="https://img.shields.io/npm/v/@strands-agents/sdk"/></a>
+    <a href="https://discord.gg/strands"><img alt="Strands Discord" src="https://img.shields.io/badge/Discord-Strands-5865F2?logo=discord&logoColor=white"/></a>
   </div>
   
   <p>
@@ -325,6 +326,11 @@ We welcome contributions! See our [Contributing Guide](CONTRIBUTING.md) for deta
 - Pull request process
 - Code of Conduct
 - Security issue reporting
+
+---
+
+## Stay in touch with the team
+Come meet the Strands team and other users on [**Discord**](https://discord.com/invite/strands)
 
 ---
 

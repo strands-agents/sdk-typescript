@@ -17,6 +17,11 @@ export type { AgentConfig, ToolList, ToolExecutorStrategy } from './agent/agent.
 export type { AgentAsToolOptions } from './agent/agent-as-tool.js'
 export type { InvocationState, InvokeArgs, InvokeOptions, LocalAgent } from './types/agent.js'
 
+// Snapshot types
+export { SNAPSHOT_SCHEMA_VERSION } from './types/snapshot.js'
+export type { Scope, Snapshot } from './types/snapshot.js'
+export type { TakeSnapshotOptions, SnapshotField, SnapshotPreset } from './agent/snapshot.js'
+
 // Error types
 // Note: CancelledError is intentionally not exported — it is an internal
 // control-flow mechanism, never thrown to consumers. See its docstring in errors.ts.
@@ -271,7 +276,6 @@ export type {
 export type { SnapshotManifest, SnapshotTriggerCallback, SnapshotTriggerParams } from './session/types.js'
 export type { SessionStorage, SnapshotStorage, SnapshotLocation } from './session/storage.js'
 export { FileStorage } from './session/file-storage.js'
-export type { Scope, Snapshot } from './types/snapshot.js'
 
 // Local Traces
 export { AgentTrace } from './telemetry/tracer.js'

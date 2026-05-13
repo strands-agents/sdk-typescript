@@ -1,64 +1,53 @@
 /**
- * Verification script to ensure the built package can be imported without a bundler.
- * This script runs in a pure Node.js ES module environment.
+ * Verification script to ensure the built package can be imported from a
+ * pure-CJS Node project via dynamic import(). The SDK itself is ESM-only;
+ * CJS consumers interop by using await import().
  */
 
-const { Agent, BedrockModel, tool, Tool } = require('@strands-agents/sdk')
-
-const { notebook } = require('@strands-agents/sdk/vended-tools/notebook')
-const { fileEditor } = require('@strands-agents/sdk/vended-tools/file-editor')
-const { httpRequest } = require('@strands-agents/sdk/vended-tools/http-request')
-const { bash } = require('@strands-agents/sdk/vended-tools/bash')
-
-// Verify model subpath exports
-const { BedrockModel: BedrockFromSubpath } = require('@strands-agents/sdk/models/bedrock')
-const { OpenAIModel } = require('@strands-agents/sdk/models/openai')
-const { AnthropicModel } = require('@strands-agents/sdk/models/anthropic')
-const { GoogleModel } = require('@strands-agents/sdk/models/google')
-
-const { z } = require('zod')
-
-console.log('✓ Import from main entry point successful')
-
-// Verify BedrockModel can be instantiated
-const model = new BedrockModel({ region: 'us-west-2' })
-console.log('✓ BedrockModel instantiation successful')
-
-// Verify basic functionality
-const config = model.getConfig()
-if (!config) {
-  throw new Error('BedrockModel config is invalid')
-}
-console.log('✓ BedrockModel configuration retrieval successful')
-
-// Define a tool
-const example_tool = tool({
-  name: 'get_weather',
-  description: 'Get the current weather for a specific location.',
-  inputSchema: z.object({
-    location: z.string().describe('The city and state, e.g., San Francisco, CA'),
-  }),
-  callback: (input) => {
-    console.log(`\n[WeatherTool] Getting weather for ${input.location}...`)
-
-    const fakeWeatherData = {
-      temperature: '72°F',
-      conditions: 'sunny',
-    }
-
-    return `The weather in ${input.location} is ${fakeWeatherData.temperature} and ${fakeWeatherData.conditions}.`
-  },
-})
-console.log('✓ Tool created successful')
-
 async function main() {
-  // Verify tool can be called
+  const { Agent, BedrockModel, tool, Tool } = await import('@strands-agents/sdk')
+
+  const { notebook } = await import('@strands-agents/sdk/vended-tools/notebook')
+  const { fileEditor } = await import('@strands-agents/sdk/vended-tools/file-editor')
+  const { httpRequest } = await import('@strands-agents/sdk/vended-tools/http-request')
+  const { bash } = await import('@strands-agents/sdk/vended-tools/bash')
+
+  const { BedrockModel: BedrockFromSubpath } = await import('@strands-agents/sdk/models/bedrock')
+  const { OpenAIModel } = await import('@strands-agents/sdk/models/openai')
+  const { AnthropicModel } = await import('@strands-agents/sdk/models/anthropic')
+  const { GoogleModel } = await import('@strands-agents/sdk/models/google')
+
+  const { z } = await import('zod')
+
+  console.log('✓ Import from main entry point successful')
+
+  const model = new BedrockModel({ region: 'us-west-2' })
+  console.log('✓ BedrockModel instantiation successful')
+
+  const config = model.getConfig()
+  if (!config) {
+    throw new Error('BedrockModel config is invalid')
+  }
+  console.log('✓ BedrockModel configuration retrieval successful')
+
+  const example_tool = tool({
+    name: 'get_weather',
+    description: 'Get the current weather for a specific location.',
+    inputSchema: z.object({
+      location: z.string().describe('The city and state, e.g., San Francisco, CA'),
+    }),
+    callback: (input) => {
+      console.log(`\n[WeatherTool] Getting weather for ${input.location}...`)
+      return `The weather in ${input.location} is 72°F and sunny.`
+    },
+  })
+  console.log('✓ Tool created successful')
+
   const response = await example_tool.invoke({ location: 'New York' })
   if (response !== `The weather in New York is 72°F and sunny.`) {
     throw new Error('Tool returned invalid response')
   }
 
-  // Verify Agent can be instantiated
   const agent = new Agent({
     tools: [example_tool],
   })
@@ -67,24 +56,22 @@ async function main() {
     throw new Error('Tool was not correctly added to the agent')
   }
 
-  const tools = {
-    notebook,
-    fileEditor,
-    httpRequest,
-    bash,
-  }
-
+  const tools = { notebook, fileEditor, httpRequest, bash }
   for (const tool of Object.values(tools)) {
     if (!(tool instanceof Tool)) {
       throw new Error(`Tool ${tool.name} isn't an instance of a tool`)
     }
   }
 
-  // Verify model subpath exports resolve correctly
   if (BedrockFromSubpath !== BedrockModel) {
     throw new Error('BedrockModel from subpath should match main export')
   }
   console.log('✓ Model subpath exports verified')
+
+  // Reference remaining imports so static analysis doesn't flag them unused.
+  void OpenAIModel
+  void AnthropicModel
+  void GoogleModel
 }
 
 main().catch((error) => {

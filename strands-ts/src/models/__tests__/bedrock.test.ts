@@ -969,17 +969,18 @@ describe('BedrockModel', () => {
       })
     })
 
-    it('yields and validates citationsContent events correctly', async () => {
-      // Bedrock wire format uses object-key discrimination
+    it('yields and validates citation events correctly', async () => {
+      // Bedrock streaming sends individual citation deltas with key 'citation'
+      const bedrockCitationDelta = {
+        location: { documentChar: { documentIndex: 0, start: 10, end: 50 } },
+        sourceContent: [{ text: 'source text' }],
+        source: 'doc-0',
+        title: 'Test Doc',
+      }
+
+      // Bedrock non-streaming wire format uses object-key discrimination
       const bedrockCitationsData = {
-        citations: [
-          {
-            location: { documentChar: { documentIndex: 0, start: 10, end: 50 } },
-            sourceContent: [{ text: 'source text' }],
-            source: 'doc-0',
-            title: 'Test Doc',
-          },
-        ],
+        citations: [bedrockCitationDelta],
         content: [{ text: 'generated text' }],
       }
 
@@ -991,7 +992,7 @@ describe('BedrockModel', () => {
               yield { contentBlockStart: {} }
               yield {
                 contentBlockDelta: {
-                  delta: { citationsContent: bedrockCitationsData },
+                  delta: { citation: bedrockCitationDelta },
                 },
               }
               yield { contentBlockStop: {} }
@@ -1036,7 +1037,7 @@ describe('BedrockModel', () => {
               title: 'Test Doc',
             },
           ],
-          content: [{ text: 'generated text' }],
+          content: stream ? [] : [{ text: 'generated text' }],
         },
       })
       expect(events).toContainEqual({ type: 'modelContentBlockStopEvent' })
@@ -4171,10 +4172,21 @@ describe('BedrockModel', () => {
       BedrockModel.clearCountTokensCache()
     })
 
+    it('should use heuristic by default when useNativeTokenCount is not set', async () => {
+      const mockSend = vi.fn()
+      mockBedrockClientImplementation({ send: mockSend })
+      const model = new BedrockModel()
+
+      const result = await model.countTokens(messages)
+
+      expect(mockSend).not.toHaveBeenCalled()
+      expect(result).toBe(2) // heuristic: Math.ceil('hello'.length / 4)
+    })
+
     it('should return native token count on success', async () => {
       const mockSend = vi.fn(async () => ({ inputTokens: 42 }))
       mockBedrockClientImplementation({ send: mockSend })
-      const model = new BedrockModel()
+      const model = new BedrockModel({ useNativeTokenCount: true })
 
       const result = await model.countTokens(messages)
 
@@ -4185,7 +4197,7 @@ describe('BedrockModel', () => {
     it('should include system prompt in request', async () => {
       const mockSend = vi.fn(async () => ({ inputTokens: 55 }))
       mockBedrockClientImplementation({ send: mockSend })
-      const model = new BedrockModel()
+      const model = new BedrockModel({ useNativeTokenCount: true })
 
       const result = await model.countTokens(messages, { systemPrompt: 'Be helpful.' })
 
@@ -4205,7 +4217,7 @@ describe('BedrockModel', () => {
     it('should include tool specs in request', async () => {
       const mockSend = vi.fn(async () => ({ inputTokens: 100 }))
       mockBedrockClientImplementation({ send: mockSend })
-      const model = new BedrockModel()
+      const model = new BedrockModel({ useNativeTokenCount: true })
 
       const result = await model.countTokens(messages, { toolSpecs })
 
@@ -4235,7 +4247,7 @@ describe('BedrockModel', () => {
     it('should strip inferenceConfig from request', async () => {
       const mockSend = vi.fn(async () => ({ inputTokens: 10 }))
       mockBedrockClientImplementation({ send: mockSend })
-      const model = new BedrockModel({ maxTokens: 100 })
+      const model = new BedrockModel({ maxTokens: 100, useNativeTokenCount: true })
 
       await model.countTokens(messages)
 
@@ -4255,7 +4267,7 @@ describe('BedrockModel', () => {
         throw new Error('API error')
       })
       mockBedrockClientImplementation({ send: mockSend })
-      const model = new BedrockModel()
+      const model = new BedrockModel({ useNativeTokenCount: true })
 
       const result = await model.countTokens(messages)
 
@@ -4268,7 +4280,7 @@ describe('BedrockModel', () => {
         throw new Error('Connection failed')
       })
       mockBedrockClientImplementation({ send: mockSend })
-      const model = new BedrockModel()
+      const model = new BedrockModel({ useNativeTokenCount: true })
 
       const result = await model.countTokens(messages)
 
@@ -4283,7 +4295,7 @@ describe('BedrockModel', () => {
         throw unsupportedError
       })
       mockBedrockClientImplementation({ send: mockSend })
-      const model = new BedrockModel()
+      const model = new BedrockModel({ useNativeTokenCount: true })
 
       // First call: hits API, gets error, caches
       await model.countTokens(messages)
@@ -4294,12 +4306,32 @@ describe('BedrockModel', () => {
       expect(mockSend).toHaveBeenCalledOnce()
     })
 
+    it('should cache model ID and skip API call on AccessDeniedException', async () => {
+      const accessDeniedError = new Error(
+        'User: arn:aws:sts::123456789012:assumed-role/role is not authorized to perform: bedrock:CountTokens'
+      )
+      accessDeniedError.name = 'AccessDeniedException'
+      const mockSend = vi.fn(async () => {
+        throw accessDeniedError
+      })
+      mockBedrockClientImplementation({ send: mockSend })
+      const model = new BedrockModel({ useNativeTokenCount: true })
+
+      // First call: hits API, gets AccessDeniedException, caches
+      await model.countTokens(messages)
+      expect(mockSend).toHaveBeenCalledOnce()
+
+      // Second call: skips API entirely due to caching
+      await model.countTokens(messages)
+      expect(mockSend).toHaveBeenCalledOnce()
+    })
+
     it('should not cache model ID for other errors', async () => {
       const mockSend = vi.fn(async () => {
         throw new Error('Transient network error')
       })
       mockBedrockClientImplementation({ send: mockSend })
-      const model = new BedrockModel()
+      const model = new BedrockModel({ useNativeTokenCount: true })
 
       await model.countTokens(messages)
       expect(mockSend).toHaveBeenCalledTimes(1)

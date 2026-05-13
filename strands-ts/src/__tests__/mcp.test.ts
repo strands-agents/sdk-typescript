@@ -149,7 +149,14 @@ describe('MCP Integration', () => {
     })
 
     it('initializes SDK client with correct configuration', () => {
-      expect(Client).toHaveBeenCalledWith({ name: 'TestApp', version: '0.0.1' }, undefined)
+      expect(Client).toHaveBeenCalledWith(
+        { name: 'TestApp', version: '0.0.1' },
+        expect.objectContaining({
+          listChanged: expect.objectContaining({
+            tools: expect.objectContaining({ autoRefresh: false, debounceMs: 300 }),
+          }),
+        })
+      )
     })
 
     it('injects trace context into tool arguments when active span exists', async () => {
@@ -414,7 +421,7 @@ describe('MCP Integration', () => {
       })
 
       const lastCall = vi.mocked(Client).mock.calls.at(-1)!
-      expect(lastCall[1]).toEqual({ capabilities: { elicitation: { form: {}, url: {} } } })
+      expect(lastCall[1]).toEqual(expect.objectContaining({ capabilities: { elicitation: { form: {}, url: {} } } }))
     })
 
     it('elicitation handler returns accepted result with content', async () => {
@@ -482,6 +489,136 @@ describe('MCP Integration', () => {
       const extra = { signal: new AbortController().signal }
 
       await expect(handler(request, extra)).rejects.toThrow('User cancelled')
+    })
+  })
+
+  describe('tools list changed', () => {
+    let client: McpClient
+    let sdkClientMock: {
+      connect: ReturnType<typeof vi.fn>
+      close: ReturnType<typeof vi.fn>
+      listTools: ReturnType<typeof vi.fn>
+      callTool: ReturnType<typeof vi.fn>
+      setRequestHandler: ReturnType<typeof vi.fn>
+      setNotificationHandler: ReturnType<typeof vi.fn>
+      getServerCapabilities: ReturnType<typeof vi.fn>
+      getServerVersion: ReturnType<typeof vi.fn>
+      getInstructions: ReturnType<typeof vi.fn>
+      experimental: { tasks: { callToolStream: ReturnType<typeof vi.fn> } }
+    }
+
+    beforeEach(() => {
+      client = new McpClient({ applicationName: 'TestApp', transport: mockTransport })
+      sdkClientMock = vi.mocked(Client).mock.results.at(-1)!.value
+      sdkClientMock.connect.mockResolvedValue(undefined)
+    })
+
+    function triggerToolsChanged(): void {
+      const ctorCall = vi.mocked(Client).mock.calls.at(-1)!
+      ctorCall[1]!.listChanged!.tools!.onChanged(null, null)
+    }
+
+    it('calls onToolsChanged with old names and new tools when list changes', async () => {
+      sdkClientMock.listTools.mockResolvedValue({
+        tools: [{ name: 'tool_a', description: 'A', inputSchema: {} }],
+      })
+      await client.listTools()
+
+      const onToolsChanged = vi.fn()
+      client.onToolsChanged = onToolsChanged
+
+      sdkClientMock.listTools.mockResolvedValue({
+        tools: [
+          { name: 'tool_a', description: 'A', inputSchema: {} },
+          { name: 'tool_b', description: 'B', inputSchema: {} },
+        ],
+      })
+
+      triggerToolsChanged()
+      await vi.waitFor(() => expect(onToolsChanged).toHaveBeenCalled())
+
+      expect(onToolsChanged).toHaveBeenCalledWith(['tool_a'], expect.any(Array))
+      const newTools = onToolsChanged.mock.calls[0]![1] as McpTool[]
+      expect(newTools.map((t) => t.name)).toEqual(['tool_a', 'tool_b'])
+    })
+
+    it('updates registered tool names after each listTools call', async () => {
+      sdkClientMock.listTools.mockResolvedValue({
+        tools: [
+          { name: 'x', description: 'X', inputSchema: {} },
+          { name: 'y', description: 'Y', inputSchema: {} },
+        ],
+      })
+      await client.listTools()
+
+      const onToolsChanged = vi.fn()
+      client.onToolsChanged = onToolsChanged
+
+      sdkClientMock.listTools.mockResolvedValue({
+        tools: [{ name: 'z', description: 'Z', inputSchema: {} }],
+      })
+
+      triggerToolsChanged()
+      await vi.waitFor(() => expect(onToolsChanged).toHaveBeenCalled())
+
+      expect(onToolsChanged).toHaveBeenCalledWith(['x', 'y'], expect.any(Array))
+      const newTools = onToolsChanged.mock.calls[0]![1] as McpTool[]
+      expect(newTools.map((t) => t.name)).toEqual(['z'])
+    })
+
+    it('does not throw when onToolsChanged is not set', async () => {
+      sdkClientMock.listTools.mockResolvedValue({
+        tools: [{ name: 'tool_a', description: 'A', inputSchema: {} }],
+      })
+      await client.listTools()
+
+      sdkClientMock.listTools.mockResolvedValue({
+        tools: [{ name: 'tool_b', description: 'B', inputSchema: {} }],
+      })
+
+      triggerToolsChanged()
+      await new Promise((r) => setTimeout(r, 0))
+    })
+
+    it('logs warning and preserves registry when listTools fails during refresh', async () => {
+      sdkClientMock.listTools.mockResolvedValue({
+        tools: [{ name: 'tool_a', description: 'A', inputSchema: {} }],
+      })
+      await client.listTools()
+
+      const onToolsChanged = vi.fn()
+      client.onToolsChanged = onToolsChanged
+
+      sdkClientMock.listTools.mockRejectedValue(new Error('server disconnected'))
+      const warnSpy = vi.spyOn(logger, 'warn')
+
+      triggerToolsChanged()
+      await vi.waitFor(() => expect(warnSpy).toHaveBeenCalled())
+
+      expect(onToolsChanged).not.toHaveBeenCalled()
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('failed to refresh tools'))
+    })
+
+    it('coalesces notifications received during an in-flight refresh into one extra refresh', async () => {
+      sdkClientMock.listTools.mockResolvedValue({
+        tools: [{ name: 'tool_a', description: 'A', inputSchema: {} }],
+      })
+      await client.listTools()
+
+      const onToolsChanged = vi.fn()
+      client.onToolsChanged = onToolsChanged
+
+      let resolveListTools: (value: unknown) => void
+      sdkClientMock.listTools.mockReturnValue(new Promise((r) => (resolveListTools = r)))
+
+      triggerToolsChanged()
+      triggerToolsChanged()
+      triggerToolsChanged()
+
+      resolveListTools!({ tools: [{ name: 'tool_b', description: 'B', inputSchema: {} }] })
+      await vi.waitFor(() => expect(onToolsChanged).toHaveBeenCalledTimes(2))
+
+      expect(sdkClientMock.listTools).toHaveBeenCalledTimes(3)
     })
   })
 

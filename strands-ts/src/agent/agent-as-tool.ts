@@ -7,7 +7,6 @@
  */
 
 import type { Agent } from './agent.js'
-import { takeSnapshot, loadSnapshot } from './snapshot.js'
 import type { Snapshot } from '../types/snapshot.js'
 import type { JSONValue } from '../types/json.js'
 import { JsonBlock, TextBlock, ToolResultBlock } from '../types/messages.js'
@@ -111,7 +110,7 @@ export class AgentAsTool extends Tool {
     }
 
     if (!this._preserveContext) {
-      this._initialSnapshot = takeSnapshot(this._agent, { preset: 'session' })
+      this._initialSnapshot = this._agent.takeSnapshot({ preset: 'session' })
     }
 
     this.name = config.name ?? config.agent.name
@@ -159,7 +158,7 @@ export class AgentAsTool extends Tool {
 
       // Reset agent state if not preserving context
       if (this._initialSnapshot) {
-        loadSnapshot(this._agent, this._initialSnapshot)
+        this._agent.loadSnapshot(this._initialSnapshot)
       }
 
       // Stream the sub-agent, forwarding the outer invocation's state so

@@ -1,9 +1,0 @@
-{
-  "include": ["strands"],
-  "exclude": ["**/node_modules", "**/__pycache__", "**/.*"],
-  "pythonVersion": "3.10",
-  "pythonPlatform": "All",
-  "typeCheckingMode": "standard",
-  "reportMissingTypeStubs": false,
-  "reportMissingImports": "warning"
-}

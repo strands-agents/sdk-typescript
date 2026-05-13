@@ -2,10 +2,14 @@ import { describe, it, expect, vi } from 'vitest'
 import { SlidingWindowConversationManager } from '../sliding-window-conversation-manager.js'
 import {
   ContextWindowOverflowError,
+  DocumentBlock,
+  ImageBlock,
+  JsonBlock,
   Message,
   TextBlock,
   ToolUseBlock,
   ToolResultBlock,
+  VideoBlock,
   type Model,
 } from '../../index.js'
 import { AfterInvocationEvent, AfterModelCallEvent, BeforeModelCallEvent } from '../../hooks/events.js'
@@ -66,7 +70,7 @@ describe('SlidingWindowConversationManager', () => {
             new ToolResultBlock({
               toolUseId: 'tool-1',
               status: 'success',
-              content: [new TextBlock('Large tool result content')],
+              content: [new TextBlock('x'.repeat(500))],
             }),
           ],
         }),
@@ -161,8 +165,10 @@ describe('SlidingWindowConversationManager', () => {
   })
 
   describe('reduceContext - tool result truncation', () => {
-    it('truncates tool results when shouldTruncateResults is true', async () => {
+    it('partially truncates large tool results preserving first and last 200 chars', async () => {
       const manager = new SlidingWindowConversationManager({ shouldTruncateResults: true })
+      const middle = 'MIDDLE_CONTENT_TO_REMOVE'.repeat(10) // 240 chars, safely above MIN_TRUNCATION_GAIN
+      const original = 'A'.repeat(200) + middle + 'B'.repeat(200)
       const messages = [
         new Message({
           role: 'user',
@@ -170,7 +176,7 @@ describe('SlidingWindowConversationManager', () => {
             new ToolResultBlock({
               toolUseId: 'tool-1',
               status: 'success',
-              content: [new TextBlock('Large tool result content')],
+              content: [new TextBlock(original)],
             }),
           ],
         }),
@@ -179,13 +185,39 @@ describe('SlidingWindowConversationManager', () => {
 
       await triggerContextOverflow(manager, mockAgent, new ContextWindowOverflowError('Context overflow'))
 
-      const toolResult = messages[0]!.content[0]! as ToolResultBlock
-      expect(toolResult.status).toBe('error')
-      expect(toolResult.content[0]).toEqual({ type: 'textBlock', text: 'The tool result was too large!' })
+      const expectedText = `${'A'.repeat(200)}\n<truncated chars="${middle.length}"/>\n${'B'.repeat(200)}`
+      expect(messages[0]!.content[0]).toEqual(
+        new ToolResultBlock({
+          toolUseId: 'tool-1',
+          status: 'success',
+          content: [new TextBlock(expectedText)],
+        })
+      )
     })
 
-    it('finds last message with tool results', async () => {
+    it('leaves small tool results unchanged', () => {
       const manager = new SlidingWindowConversationManager({ shouldTruncateResults: true })
+      const messages = [
+        new Message({
+          role: 'user',
+          content: [
+            new ToolResultBlock({
+              toolUseId: 'tool-1',
+              status: 'success',
+              content: [new TextBlock('Small result')],
+            }),
+          ],
+        }),
+      ]
+
+      const result = (manager as any)._truncateToolResults(messages, 0)
+      expect(result).toBe(false)
+    })
+
+    it('finds oldest message with tool results', async () => {
+      const manager = new SlidingWindowConversationManager({ shouldTruncateResults: true })
+      const firstOriginal = 'F'.repeat(500)
+      const secondOriginal = 'S'.repeat(500)
       const messages = [
         new Message({ role: 'user', content: [new TextBlock('Message 1')] }),
         new Message({
@@ -194,7 +226,7 @@ describe('SlidingWindowConversationManager', () => {
             new ToolResultBlock({
               toolUseId: 'tool-1',
               status: 'success',
-              content: [new TextBlock('First result')],
+              content: [new TextBlock(firstOriginal)],
             }),
           ],
         }),
@@ -205,7 +237,7 @@ describe('SlidingWindowConversationManager', () => {
             new ToolResultBlock({
               toolUseId: 'tool-2',
               status: 'success',
-              content: [new TextBlock('Second result')],
+              content: [new TextBlock(secondOriginal)],
             }),
           ],
         }),
@@ -214,15 +246,22 @@ describe('SlidingWindowConversationManager', () => {
 
       await triggerContextOverflow(manager, mockAgent, new ContextWindowOverflowError('Context overflow'))
 
-      // Should truncate the last message with tool results (index 3)
-      const lastToolResult = messages[3]!.content[0]! as ToolResultBlock
-      expect(lastToolResult.status).toBe('error')
-      expect(lastToolResult.content[0]).toEqual({ type: 'textBlock', text: 'The tool result was too large!' })
-
-      // Earlier tool result should remain unchanged
-      const firstToolResult = messages[1]!.content[0]! as ToolResultBlock
-      expect(firstToolResult.status).toBe('success')
-      expect(firstToolResult.content[0]).toEqual({ type: 'textBlock', text: 'First result' })
+      // Oldest tool-result message is truncated; newer one is untouched.
+      const expectedTruncated = `${'F'.repeat(200)}\n<truncated chars="100"/>\n${'F'.repeat(200)}`
+      expect(messages[1]!.content[0]).toEqual(
+        new ToolResultBlock({
+          toolUseId: 'tool-1',
+          status: 'success',
+          content: [new TextBlock(expectedTruncated)],
+        })
+      )
+      expect(messages[3]!.content[0]).toEqual(
+        new ToolResultBlock({
+          toolUseId: 'tool-2',
+          status: 'success',
+          content: [new TextBlock(secondOriginal)],
+        })
+      )
     })
 
     it('returns after successful truncation without trimming messages', async () => {
@@ -236,7 +275,7 @@ describe('SlidingWindowConversationManager', () => {
             new ToolResultBlock({
               toolUseId: 'tool-1',
               status: 'success',
-              content: [new TextBlock('Large result')],
+              content: [new TextBlock('L'.repeat(500))],
             }),
           ],
         }),
@@ -265,7 +304,7 @@ describe('SlidingWindowConversationManager', () => {
             new ToolResultBlock({
               toolUseId: 'tool-1',
               status: 'success',
-              content: [new TextBlock('Large result')],
+              content: [new TextBlock('L'.repeat(500))],
             }),
           ],
         }),
@@ -279,26 +318,34 @@ describe('SlidingWindowConversationManager', () => {
       expect(mockAgent.messages[0]!.role).toBe('user')
 
       // Tool result should not be truncated
-      const toolResult = mockAgent.messages[2]!.content[0]! as ToolResultBlock
-      expect(toolResult.status).toBe('success')
+      expect(mockAgent.messages[2]!.content[0]).toEqual(
+        new ToolResultBlock({
+          toolUseId: 'tool-1',
+          status: 'success',
+          content: [new TextBlock('L'.repeat(500))],
+        })
+      )
     })
 
-    it('does not truncate already-truncated results', async () => {
+    it('does not re-truncate already-truncated results', async () => {
       const manager = new SlidingWindowConversationManager({ shouldTruncateResults: true })
+      // Produced by an earlier run: 200 chars + marker + 200 chars = well under the 450-char
+      // threshold below which truncation is not worth running.
+      const alreadyTruncated = 'A'.repeat(200) + '\n<truncated chars="1000"/>\n' + 'B'.repeat(200)
       const messages = [
         new Message({
           role: 'user',
           content: [
             new ToolResultBlock({
               toolUseId: 'tool-1',
-              status: 'error',
-              content: [new TextBlock('The tool result was too large!')],
+              status: 'success',
+              content: [new TextBlock(alreadyTruncated)],
             }),
           ],
         }),
       ]
 
-      // First call should return false (already truncated)
+      // First call should return false (too short to gain anything from re-truncating)
       const result = (manager as any)._truncateToolResults(messages, 0)
       expect(result).toBe(false)
 
@@ -309,20 +356,366 @@ describe('SlidingWindowConversationManager', () => {
           content: [
             new ToolResultBlock({
               toolUseId: 'tool-1',
-              status: 'error',
-              content: [new TextBlock('The tool result was too large!')],
+              status: 'success',
+              content: [new TextBlock(alreadyTruncated)],
             }),
           ],
         }),
         new Message({ role: 'assistant', content: [new TextBlock('Response')] }),
         new Message({ role: 'user', content: [new TextBlock('Message')] }),
       ]
-      const mockAgent = { messages: messages2 } as unknown as Agent
+      const mockAgent = createMockAgent({ messages: messages2 })
 
       await triggerContextOverflow(manager, mockAgent, new ContextWindowOverflowError('Context overflow'))
 
       // Should have trimmed messages since truncation was skipped
       expect(mockAgent.messages.length).toBeLessThan(3)
+    })
+
+    it('replaces image blocks nested in tool results with descriptive placeholders', () => {
+      const manager = new SlidingWindowConversationManager({ shouldTruncateResults: true })
+      const bytes = new Uint8Array(1234)
+      const messages = [
+        new Message({
+          role: 'user',
+          content: [
+            new ToolResultBlock({
+              toolUseId: 'tool-1',
+              status: 'success',
+              content: [new ImageBlock({ format: 'png', source: { bytes } }), new TextBlock('tail')],
+            }),
+          ],
+        }),
+      ]
+
+      const changed = (manager as any)._truncateToolResults(messages, 0)
+      expect(changed).toBe(true)
+
+      expect(messages[0]!.content[0]).toEqual(
+        new ToolResultBlock({
+          toolUseId: 'tool-1',
+          status: 'success',
+          content: [new TextBlock('[image: png, source: bytes, 1234 bytes]'), new TextBlock('tail')],
+        })
+      )
+    })
+
+    it('preserves the error field on truncated tool results', () => {
+      const manager = new SlidingWindowConversationManager({ shouldTruncateResults: true })
+      const originalError = new Error('tool blew up')
+      const messages = [
+        new Message({
+          role: 'user',
+          content: [
+            new ToolResultBlock({
+              toolUseId: 'tool-1',
+              status: 'error',
+              content: [new TextBlock('x'.repeat(500))],
+              error: originalError,
+            }),
+          ],
+        }),
+      ]
+
+      const changed = (manager as any)._truncateToolResults(messages, 0)
+      expect(changed).toBe(true)
+
+      const expectedText = `${'x'.repeat(200)}\n<truncated chars="100"/>\n${'x'.repeat(200)}`
+      expect(messages[0]!.content[0]).toEqual(
+        new ToolResultBlock({
+          toolUseId: 'tool-1',
+          status: 'error',
+          content: [new TextBlock(expectedText)],
+          error: originalError,
+        })
+      )
+    })
+
+    it('image placeholder reflects non-bytes source kinds honestly', () => {
+      const manager = new SlidingWindowConversationManager({ shouldTruncateResults: true })
+      const messages = [
+        new Message({
+          role: 'user',
+          content: [
+            new ToolResultBlock({
+              toolUseId: 'tool-1',
+              status: 'success',
+              content: [
+                new ImageBlock({ format: 'jpeg', source: { url: 'https://example.com/x.jpg' } }),
+                new ImageBlock({ format: 'png', source: { location: { type: 's3', uri: 's3://bucket/key' } } }),
+              ],
+            }),
+          ],
+        }),
+      ]
+
+      ;(manager as any)._truncateToolResults(messages, 0)
+
+      expect(messages[0]!.content[0]).toEqual(
+        new ToolResultBlock({
+          toolUseId: 'tool-1',
+          status: 'success',
+          content: [new TextBlock('[image: jpeg, source: url]'), new TextBlock('[image: png, source: s3]')],
+        })
+      )
+    })
+
+    it('replaces video bytes blocks with a descriptive placeholder', () => {
+      const manager = new SlidingWindowConversationManager({ shouldTruncateResults: true })
+      const messages = [
+        new Message({
+          role: 'user',
+          content: [
+            new ToolResultBlock({
+              toolUseId: 'tool-1',
+              status: 'success',
+              content: [new VideoBlock({ format: 'mp4', source: { bytes: new Uint8Array(4096) } })],
+            }),
+          ],
+        }),
+      ]
+
+      const changed = (manager as any)._truncateToolResults(messages, 0)
+      expect(changed).toBe(true)
+      expect(messages[0]!.content[0]).toEqual(
+        new ToolResultBlock({
+          toolUseId: 'tool-1',
+          status: 'success',
+          content: [new TextBlock('[video: mp4, source: bytes, 4096 bytes]')],
+        })
+      )
+    })
+
+    it('replaces video s3 blocks with a descriptive placeholder', () => {
+      const manager = new SlidingWindowConversationManager({ shouldTruncateResults: true })
+      const messages = [
+        new Message({
+          role: 'user',
+          content: [
+            new ToolResultBlock({
+              toolUseId: 'tool-1',
+              status: 'success',
+              content: [
+                new VideoBlock({
+                  format: 'mp4',
+                  source: { location: { type: 's3', uri: 's3://bucket/key' } },
+                }),
+              ],
+            }),
+          ],
+        }),
+      ]
+
+      const changed = (manager as any)._truncateToolResults(messages, 0)
+      expect(changed).toBe(true)
+      expect(messages[0]!.content[0]).toEqual(
+        new ToolResultBlock({
+          toolUseId: 'tool-1',
+          status: 'success',
+          content: [new TextBlock('[video: mp4, source: s3]')],
+        })
+      )
+    })
+
+    it('replaces document bytes blocks with a descriptive placeholder', () => {
+      const manager = new SlidingWindowConversationManager({ shouldTruncateResults: true })
+      const messages = [
+        new Message({
+          role: 'user',
+          content: [
+            new ToolResultBlock({
+              toolUseId: 'tool-1',
+              status: 'success',
+              content: [
+                new DocumentBlock({
+                  name: 'report',
+                  format: 'pdf',
+                  source: { bytes: new Uint8Array(8192) },
+                }),
+              ],
+            }),
+          ],
+        }),
+      ]
+
+      const changed = (manager as any)._truncateToolResults(messages, 0)
+      expect(changed).toBe(true)
+      expect(messages[0]!.content[0]).toEqual(
+        new ToolResultBlock({
+          toolUseId: 'tool-1',
+          status: 'success',
+          content: [new TextBlock('[document: report, pdf, source: bytes, 8192 bytes]')],
+        })
+      )
+    })
+
+    it('replaces document s3 blocks with a descriptive placeholder', () => {
+      const manager = new SlidingWindowConversationManager({ shouldTruncateResults: true })
+      const messages = [
+        new Message({
+          role: 'user',
+          content: [
+            new ToolResultBlock({
+              toolUseId: 'tool-1',
+              status: 'success',
+              content: [
+                new DocumentBlock({
+                  name: 'spec',
+                  format: 'pdf',
+                  source: { location: { type: 's3', uri: 's3://b/k' } },
+                }),
+              ],
+            }),
+          ],
+        }),
+      ]
+
+      const changed = (manager as any)._truncateToolResults(messages, 0)
+      expect(changed).toBe(true)
+      expect(messages[0]!.content[0]).toEqual(
+        new ToolResultBlock({
+          toolUseId: 'tool-1',
+          status: 'success',
+          content: [new TextBlock('[document: spec, pdf, source: s3]')],
+        })
+      )
+    })
+
+    it('partially truncates large text inside a document text source', () => {
+      const manager = new SlidingWindowConversationManager({ shouldTruncateResults: true })
+      const middle = 'M'.repeat(240)
+      const originalText = 'A'.repeat(200) + middle + 'B'.repeat(200)
+      const messages = [
+        new Message({
+          role: 'user',
+          content: [
+            new ToolResultBlock({
+              toolUseId: 'tool-1',
+              status: 'success',
+              content: [new DocumentBlock({ name: 'report', format: 'txt', source: { text: originalText } })],
+            }),
+          ],
+        }),
+      ]
+
+      const changed = (manager as any)._truncateToolResults(messages, 0)
+      expect(changed).toBe(true)
+
+      const expectedText = `${'A'.repeat(200)}\n<truncated chars="${middle.length}"/>\n${'B'.repeat(200)}`
+      expect(messages[0]!.content[0]).toEqual(
+        new ToolResultBlock({
+          toolUseId: 'tool-1',
+          status: 'success',
+          content: [new DocumentBlock({ name: 'report', format: 'txt', source: { text: expectedText } })],
+        })
+      )
+    })
+
+    it('leaves small text inside a document text source unchanged', () => {
+      const manager = new SlidingWindowConversationManager({ shouldTruncateResults: true })
+      const messages = [
+        new Message({
+          role: 'user',
+          content: [
+            new ToolResultBlock({
+              toolUseId: 'tool-1',
+              status: 'success',
+              content: [new DocumentBlock({ name: 'short', format: 'txt', source: { text: 'hello' } })],
+            }),
+          ],
+        }),
+      ]
+
+      const changed = (manager as any)._truncateToolResults(messages, 0)
+      expect(changed).toBe(false)
+    })
+
+    it('truncates long nested text blocks inside a document content source', () => {
+      const manager = new SlidingWindowConversationManager({ shouldTruncateResults: true })
+      const longText = 'A'.repeat(200) + 'M'.repeat(240) + 'B'.repeat(200)
+      const messages = [
+        new Message({
+          role: 'user',
+          content: [
+            new ToolResultBlock({
+              toolUseId: 'tool-1',
+              status: 'success',
+              content: [
+                new DocumentBlock({
+                  name: 'pages',
+                  format: 'txt',
+                  source: { content: [new TextBlock(longText), new TextBlock('short')] },
+                }),
+              ],
+            }),
+          ],
+        }),
+      ]
+
+      const changed = (manager as any)._truncateToolResults(messages, 0)
+      expect(changed).toBe(true)
+
+      const expectedText = `${'A'.repeat(200)}\n<truncated chars="240"/>\n${'B'.repeat(200)}`
+      expect(messages[0]!.content[0]).toEqual(
+        new ToolResultBlock({
+          toolUseId: 'tool-1',
+          status: 'success',
+          content: [
+            new DocumentBlock({
+              name: 'pages',
+              format: 'txt',
+              source: { content: [new TextBlock(expectedText), new TextBlock('short')] },
+            }),
+          ],
+        })
+      )
+    })
+
+    it('replaces large json blocks with a size placeholder', () => {
+      const manager = new SlidingWindowConversationManager({ shouldTruncateResults: true })
+      const big = { payload: 'x'.repeat(1000) }
+      const size = JSON.stringify(big).length
+      const messages = [
+        new Message({
+          role: 'user',
+          content: [
+            new ToolResultBlock({
+              toolUseId: 'tool-1',
+              status: 'success',
+              content: [new JsonBlock({ json: big })],
+            }),
+          ],
+        }),
+      ]
+
+      const changed = (manager as any)._truncateToolResults(messages, 0)
+      expect(changed).toBe(true)
+      expect(messages[0]!.content[0]).toEqual(
+        new ToolResultBlock({
+          toolUseId: 'tool-1',
+          status: 'success',
+          content: [new TextBlock(`[json: ${size} chars]`)],
+        })
+      )
+    })
+
+    it('leaves small json blocks unchanged', () => {
+      const manager = new SlidingWindowConversationManager({ shouldTruncateResults: true })
+      const messages = [
+        new Message({
+          role: 'user',
+          content: [
+            new ToolResultBlock({
+              toolUseId: 'tool-1',
+              status: 'success',
+              content: [new JsonBlock({ json: { ok: true } })],
+            }),
+          ],
+        }),
+      ]
+
+      const changed = (manager as any)._truncateToolResults(messages, 0)
+      expect(changed).toBe(false)
     })
 
     it('does not call truncateToolResults unless an error is passed in', async () => {
@@ -650,7 +1043,7 @@ describe('SlidingWindowConversationManager', () => {
   })
 
   describe('helper methods', () => {
-    describe('findLastMessageWithToolResults', () => {
+    describe('findOldestMessageWithToolResults', () => {
       it('returns correct index when tool results exist', () => {
         const manager = new SlidingWindowConversationManager()
         const messages = [
@@ -668,7 +1061,7 @@ describe('SlidingWindowConversationManager', () => {
           new Message({ role: 'assistant', content: [new TextBlock('Response')] }),
         ]
 
-        const index = (manager as any)._findLastMessageWithToolResults(messages)
+        const index = (manager as any)._findOldestMessageWithToolResults(messages)
         expect(index).toBe(1)
       })
 
@@ -679,11 +1072,11 @@ describe('SlidingWindowConversationManager', () => {
           new Message({ role: 'assistant', content: [new TextBlock('Response 1')] }),
         ]
 
-        const index = (manager as any)._findLastMessageWithToolResults(messages)
+        const index = (manager as any)._findOldestMessageWithToolResults(messages)
         expect(index).toBeUndefined()
       })
 
-      it('iterates backwards from end', () => {
+      it('iterates forward from start', () => {
         const manager = new SlidingWindowConversationManager()
         const messages = [
           new Message({
@@ -709,9 +1102,9 @@ describe('SlidingWindowConversationManager', () => {
           }),
         ]
 
-        const index = (manager as any)._findLastMessageWithToolResults(messages)
-        // Should find the last one (index 2), not the first one (index 0)
-        expect(index).toBe(2)
+        const index = (manager as any)._findOldestMessageWithToolResults(messages)
+        // Should find the first one (index 0), not the last (index 2)
+        expect(index).toBe(0)
       })
     })
 
@@ -725,7 +1118,7 @@ describe('SlidingWindowConversationManager', () => {
               new ToolResultBlock({
                 toolUseId: 'id-1',
                 status: 'success',
-                content: [new TextBlock('Large result')],
+                content: [new TextBlock('x'.repeat(500))],
               }),
             ],
           }),
@@ -737,14 +1130,15 @@ describe('SlidingWindowConversationManager', () => {
 
       it('returns false when already truncated', () => {
         const manager = new SlidingWindowConversationManager()
+        const alreadyTruncated = 'A'.repeat(200) + '\n<truncated chars="1000"/>\n' + 'B'.repeat(200)
         const messages = [
           new Message({
             role: 'user',
             content: [
               new ToolResultBlock({
                 toolUseId: 'id-1',
-                status: 'error',
-                content: [new TextBlock('The tool result was too large!')],
+                status: 'success',
+                content: [new TextBlock(alreadyTruncated)],
               }),
             ],
           }),
