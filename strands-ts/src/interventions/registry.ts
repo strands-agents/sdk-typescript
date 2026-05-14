@@ -112,7 +112,7 @@ export class InterventionRegistry {
           const response = event.interrupt<JSONValue>({ name: handlerName, reason: action.prompt })
           const check = action.evaluate ?? isApproved
           if (!check(response)) {
-            event.cancel = `DENIED: Confirm denied execution`
+            event.cancel = `CONFIRMATION_FAILED: ${action.prompt}`
             return true
           }
           return false

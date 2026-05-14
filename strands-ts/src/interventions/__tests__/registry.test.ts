@@ -336,7 +336,7 @@ describe('InterventionRegistry', () => {
     }
 
     describe('approve/deny on resume', () => {
-      const DENIED = 'DENIED: Confirm denied execution'
+      const DENIED = 'CONFIRMATION_FAILED: approve this action?'
 
       it.each([
         [true, false],
@@ -378,7 +378,7 @@ describe('InterventionRegistry', () => {
 
       const event = makeBeforeToolCallEvent()
       await hookRegistry.invokeCallbacks(event)
-      expect(event.cancel).toBe('DENIED: Confirm denied execution')
+      expect(event.cancel).toBe('CONFIRMATION_FAILED: approve?')
     })
 
     it('custom evaluate approves when its condition is met', async () => {
@@ -439,7 +439,7 @@ describe('InterventionRegistry', () => {
 
       const event = makeBeforeToolCallEvent()
       await hookRegistry.invokeCallbacks(event)
-      expect(event.cancel).toBe('DENIED: Confirm denied execution')
+      expect(event.cancel).toBe('CONFIRMATION_FAILED: approve this action?')
       expect(laterCalled).not.toHaveBeenCalled()
     })
 
