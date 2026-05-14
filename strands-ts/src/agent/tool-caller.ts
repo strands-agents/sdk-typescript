@@ -15,7 +15,7 @@ import { TextBlock, ToolUseBlock } from '../types/messages.js'
 import type { Tool, ToolContext } from '../tools/tool.js'
 import type { ToolUse } from '../tools/types.js'
 import type { Agent } from './agent.js'
-import { ConcurrentInvocationError } from '../errors.js'
+import { ConcurrentInvocationError, ToolNotFoundError } from '../errors.js'
 
 /**
  * Options for direct tool call execution.
@@ -210,17 +210,16 @@ export class ToolCaller {
       return caseMatch.name
     }
 
-    throw new Error(`Tool '${name}' not found`)
+    throw new ToolNotFoundError(name)
   }
 
   /**
    * Records a tool execution in the agent's message history.
    *
-   * Creates a sequence of messages that represent the tool execution:
-   * 1. A user message with the tool use block (model sees what was called)
-   * 2. An assistant message acknowledging the tool use
-   * 3. A user message with the tool result
-   * 4. An assistant message acknowledging the result
+   * Creates a sequence of 3 messages that represent the tool execution:
+   * 1. An assistant message with the ToolUseBlock (what was called and with what params)
+   * 2. A user message with the ToolResultBlock (tool output)
+   * 3. An assistant message acknowledging the result
    */
   private _recordToolExecution(toolUse: ToolUse, toolResult: ToolResultBlock): void {
     const filteredInput = this._filterToolParameters(toolUse.name, toolUse.input)

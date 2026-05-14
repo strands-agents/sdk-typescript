@@ -35,6 +35,7 @@ export {
   ModelThrottledError,
   ToolValidationError,
   StructuredOutputError,
+  ToolNotFoundError,
 } from './errors.js'
 
 // Interrupt system

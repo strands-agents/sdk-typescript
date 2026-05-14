@@ -3,7 +3,7 @@ import { Agent } from '../agent.js'
 import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
 import { createMockTool } from '../../__fixtures__/tool-helpers.js'
 import { ToolResultBlock, TextBlock, ToolUseBlock } from '../../types/messages.js'
-import { ConcurrentInvocationError } from '../../errors.js'
+import { ConcurrentInvocationError, ToolNotFoundError } from '../../errors.js'
 import { ToolStreamEvent } from '../../tools/tool.js'
 import type { ToolContext } from '../../tools/tool.js'
 
@@ -61,6 +61,7 @@ describe('ToolCaller', () => {
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
       const agent = new Agent({ model, tools: [] })
 
+      await expect(agent.tool.nonexistent!()).rejects.toThrow(ToolNotFoundError)
       await expect(agent.tool.nonexistent!()).rejects.toThrow("Tool 'nonexistent' not found")
     })
   })
