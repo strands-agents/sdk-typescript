@@ -170,7 +170,8 @@ export class ContextOffloader implements Plugin {
     return tool({
       name: RETRIEVAL_TOOL_NAME,
       description:
-        'Access offloaded content by reference. Use when you see an offload placeholder with a reference.\n\n' +
+        'When a tool result was too large to keep in context, it was stored externally and replaced with a preview and a reference. ' +
+        'Use this tool with that reference to access the stored content.\n\n' +
         'Returns:\n' +
         '  - With pattern: matching lines with line numbers and surrounding context\n' +
         '  - With line_range: the specified span of lines with line numbers\n' +
@@ -198,9 +199,14 @@ export class ContextOffloader implements Plugin {
 
           const text = new TextDecoder().decode(result.content)
           const contextLines = input.context_lines ?? 5
-          const lineRange = input.line_range ?? (!input.pattern ? { start: 1, end: Math.max(1, contextLines) } : undefined)
+          const lineRange =
+            input.line_range ?? (!input.pattern ? { start: 1, end: Math.max(1, contextLines) } : undefined)
 
-          return searchContent(text, { pattern: input.pattern, line_range: lineRange, context_lines: contextLines }, maxChars)
+          return searchContent(
+            text,
+            { pattern: input.pattern, line_range: lineRange, context_lines: contextLines },
+            maxChars
+          )
         } catch {
           return `Error: reference not found: ${input.reference}`
         }
