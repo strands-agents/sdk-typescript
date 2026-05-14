@@ -183,9 +183,8 @@ export interface AgentNodeOptions {
    * execution and restored in `finally`, so the node is stateless across
    * visits.
    *
-   * Only applies when the wrapped agent is an {@link Agent} instance;
-   * non-`Agent` `InvokableAgent`s are never snapshotted regardless of this
-   * flag.
+   * Throws at construction time when set to `true` with a non-`Agent`
+   * `InvokableAgent`, since snapshot/restore only applies to `Agent` instances.
    */
   stateful?: boolean
 }

@@ -142,6 +142,23 @@ describe('AgentNode', () => {
       const statefulNode = new AgentNode({ agent, stateful: true })
       expect(statefulNode.stateful).toBe(true)
     })
+
+    it('throws when stateful is set with a non-Agent InvokableAgent', () => {
+      const customAgent = {
+        id: 'custom',
+        async invoke() {
+          throw new Error('not used')
+        },
+        // eslint-disable-next-line require-yield
+        async *stream() {
+          throw new Error('not used')
+        },
+        addHook() {
+          return () => {}
+        },
+      }
+      expect(() => new AgentNode({ agent: customAgent, stateful: true })).toThrow(/stateful=true requires an Agent/)
+    })
   })
 
   describe('handle', () => {
@@ -212,23 +229,6 @@ describe('AgentNode', () => {
 
       await collectGenerator(statefulNode.stream([new TextBlock('second')], statefulState))
       expect(statefulAgent.appState.get<{ count: number }>('count')).toBe(2)
-    })
-
-    it('throws when stateful is set with a non-Agent InvokableAgent', () => {
-      const customAgent = {
-        id: 'custom',
-        async invoke() {
-          throw new Error('not used')
-        },
-        // eslint-disable-next-line require-yield
-        async *stream() {
-          throw new Error('not used')
-        },
-        addHook() {
-          return () => {}
-        },
-      }
-      expect(() => new AgentNode({ agent: customAgent, stateful: true })).toThrow(/stateful=true requires an Agent/)
     })
 
     it('passes structuredOutputSchema from options to the agent', async () => {
