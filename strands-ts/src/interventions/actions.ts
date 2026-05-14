@@ -139,33 +139,46 @@ export type Transform = { type: 'transform'; apply: (event: LifecycleEvent) => v
  */
 export type InterventionAction = Proceed | Deny | Guide | Interrupt | Transform
 
-/** Allow the operation to continue. */
+/**
+ * Allow the operation to continue.
+ * @param options - Options: reason (debug metadata).
+ */
 export function proceed(options?: { reason?: string }): Proceed {
   return { type: 'proceed', ...options }
 }
 
-/** Block the operation. */
+/**
+ * Block the operation.
+ * @param reason - Why the operation was blocked. Shown to the model.
+ */
 export function deny(reason: string): Deny {
   return { type: 'deny', reason }
 }
 
-/** Provide feedback to steer behavior. */
+/**
+ * Provide feedback to steer behavior.
+ * @param feedback - The guidance text shown to the model.
+ * @param options - Options: reason (debug metadata).
+ */
 export function guide(feedback: string, options?: { reason?: string }): Guide {
   return { type: 'guide', feedback, ...options }
 }
 
 /**
  * Pause for human approval.
- * @param prompt - Message shown to the human.
- * @param options.reason - Optional metadata for debugging/logging.
- * @param options.isApproved - Optional custom response validator. Defaults to accepting
- *   `true` or `'y'`/`'yes'` (case-insensitive).
+ * @param prompt - Message shown to the human. Not shown to the model.
+ * @param options - Options: reason (debug metadata), isApproved (custom response
+ * validator, defaults to accepting true or y/yes case-insensitive).
  */
 export function interrupt(prompt: string, options?: { reason?: string; isApproved?: (response: JSONValue) => boolean }): Interrupt {
   return { type: 'interrupt', prompt, ...options }
 }
 
-/** Modify event content in-place. */
+/**
+ * Modify event content in-place.
+ * @param apply - Function that mutates the event.
+ * @param options - Options: reason (debug metadata).
+ */
 export function transform(apply: (event: LifecycleEvent) => void, options?: { reason?: string }): Transform {
   return { type: 'transform', apply, ...options }
 }
