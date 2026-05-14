@@ -5,6 +5,7 @@ import type {
   BeforeModelCallEvent,
   AfterModelCallEvent,
 } from '../hooks/events.js'
+import type { JSONValue } from '../types/json.js'
 
 export type LifecycleEvent =
   | BeforeInvocationEvent
@@ -67,22 +68,31 @@ export type Guide = { type: 'guide'; feedback: string; reason?: string }
 
 /**
  * Pause for human approval. Calls event.interrupt() to halt agent execution
- * until the user responds. Only supported on beforeToolCall.
+ * until the user responds. On resume, the response is checked against an
+ * `isApproved` function (defaults to accepting `true` or `'y'`/`'yes'`
+ * case-insensitive). If denied, sets event.cancel. Only supported on beforeToolCall.
  *
  * @param prompt - The message shown to the human for approval. Not shown to the model.
  * @param reason - Optional metadata for debugging/logging. Not shown to the model.
+ * @param isApproved - Optional custom validator for the human's response. Defaults to
+ *   accepting `true` or `'y'`/`'yes'` (case-insensitive).
  *
  * @example
  * ```typescript
  * override beforeToolCall(event: BeforeToolCallEvent): InterventionAction {
  *   if (this.requiresApproval(event.toolUse.name)) {
- *     return { type: 'interrupt', prompt: `Approve ${event.toolUse.name}?` }
+ *     return interrupt(`Approve ${event.toolUse.name}?`)
  *   }
- *   return { type: 'proceed' }
+ *   return proceed()
  * }
  * ```
  */
-export type Interrupt = { type: 'interrupt'; prompt: string; reason?: string }
+export type Interrupt = {
+  type: 'interrupt'
+  prompt: string
+  reason?: string
+  isApproved?: (response: JSONValue) => boolean
+}
 
 /**
  * Modify event content in-place. The `apply` function mutates the event before
@@ -122,7 +132,7 @@ export type Transform = { type: 'transform'; apply: (event: LifecycleEvent) => v
  * — = no-op (logged in audit trail, warns at runtime)
  * cancel = sets event.cancel, short-circuits (remaining handlers skipped)
  * cancel+ = sets event.cancel with accumulated feedback from all guiding handlers
- * interrupt = calls event.interrupt() for native pause/resume (human-in-the-loop)
+ * interrupt = calls event.interrupt(), checks response with isApproved, sets cancel if denied
  * inject = appends accumulated feedback as a user message so the model sees it on this call
  * inject + retry = appends accumulated feedback and retries so the model sees guidance
  * apply = calls action.apply(event) for in-place mutation, later handlers see the change
@@ -144,9 +154,20 @@ export function guide(feedback: string, reason?: string): Guide {
   return { type: 'guide', feedback, ...(reason !== undefined && { reason }) }
 }
 
-/** Pause for human approval. */
-export function interrupt(prompt: string, reason?: string): Interrupt {
-  return { type: 'interrupt', prompt, ...(reason !== undefined && { reason }) }
+/**
+ * Pause for human approval.
+ * @param prompt - Message shown to the human.
+ * @param reason - Optional metadata for debugging/logging.
+ * @param isApproved - Optional custom response validator. Defaults to accepting
+ *   `true` or `'y'`/`'yes'` (case-insensitive).
+ */
+export function interrupt(prompt: string, reason?: string, isApproved?: (response: JSONValue) => boolean): Interrupt {
+  return {
+    type: 'interrupt',
+    prompt,
+    ...(reason !== undefined && { reason }),
+    ...(isApproved !== undefined && { isApproved }),
+  }
 }
 
 /** Modify event content in-place. */

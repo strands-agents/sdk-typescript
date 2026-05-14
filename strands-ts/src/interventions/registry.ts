@@ -12,6 +12,15 @@ import { Message, TextBlock } from '../types/messages.js'
 import type { Guide, InterventionAction } from './actions.js'
 import { InterventionHandler } from './handler.js'
 import { logger } from '../logging/logger.js'
+import type { JSONValue } from '../types/json.js'
+
+const APPROVED_RESPONSES = new Set(['y', 'yes'])
+
+function isApproved(response: JSONValue): boolean {
+  if (response === true) return true
+  if (typeof response === 'string') return APPROVED_RESPONSES.has(response.toLowerCase().trim())
+  return false
+}
 
 type LifecycleMethod = 'beforeInvocation' | 'beforeToolCall' | 'afterToolCall' | 'beforeModelCall' | 'afterModelCall'
 
@@ -20,7 +29,7 @@ type LifecycleMethod = 'beforeInvocation' | 'beforeToolCall' | 'afterToolCall' |
  *
  * Registers one hook callback per lifecycle event type, then dispatches to
  * all handlers that override that method — in registration order, with
- * short-circuiting on Deny/Interrupt and accumulation for Guide.
+ * short-circuiting on Deny (and denied Interrupts) and accumulation for Guide.
  *
  * See {@link InterventionAction} for the action-to-event compatibility matrix.
  */
@@ -95,9 +104,15 @@ export class InterventionRegistry {
         case 'deny':
           event.cancel = `DENIED: ${action.reason}`
           return true
-        case 'interrupt':
-          event.interrupt({ name: handlerName, reason: action.prompt })
-          return true
+        case 'interrupt': {
+          const response = event.interrupt<JSONValue>({ name: handlerName, reason: action.prompt })
+          const check = action.isApproved ?? isApproved
+          if (!check(response)) {
+            event.cancel = `INTERRUPTED: Interrupt denied execution`
+            return true
+          }
+          return false
+        }
         case 'guide':
           event.cancel = `GUIDANCE: ${action.feedback}`
           return false
@@ -179,7 +194,8 @@ export class InterventionRegistry {
   /**
    * Iterate handlers in registration order and resolve the winning action.
    *
-   * - Deny / Interrupt short-circuit immediately (remaining handlers are skipped).
+   * - Deny short-circuits immediately (remaining handlers are skipped).
+   * - Interrupt pauses for human input; if denied short-circuits, if approved continues.
    * - Guide feedback strings accumulate across handlers and are applied at the end.
    * - Transform is applied in-place so later handlers see the mutation.
    * - If a handler throws, behavior depends on {@link InterventionHandler.onError}:
