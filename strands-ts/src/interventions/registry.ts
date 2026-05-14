@@ -11,6 +11,7 @@ import { HookOrder } from '../hooks/types.js'
 import { Message, TextBlock } from '../types/messages.js'
 import type { Guide, InterventionAction } from './actions.js'
 import { InterventionHandler } from './handler.js'
+import { InterruptError } from '../interrupt.js'
 import { logger } from '../logging/logger.js'
 import type { JSONValue } from '../types/json.js'
 
@@ -105,6 +106,9 @@ export class InterventionRegistry {
           event.cancel = `DENIED: ${action.reason}`
           return true
         case 'interrupt': {
+          // event.interrupt() throws InterruptError on first call (pausing the agent).
+          // InterruptError always propagates (bypasses onError) since it's intentional
+          // control flow, not a handler failure. On resume, returns the human's response.
           const response = event.interrupt<JSONValue>({ name: handlerName, reason: action.prompt })
           const check = action.isApproved ?? isApproved
           if (!check(response)) {
@@ -233,6 +237,11 @@ export class InterventionRegistry {
             return
           }
         } catch (error) {
+          // InterruptError is intentional control flow (pauses the agent),
+          // not a handler failure. Always propagate regardless of onError.
+          if (error instanceof InterruptError) {
+            throw error
+          }
           const errorAction = this._handleError(handler, method, error)
           if (errorAction) {
             if (apply(errorAction, handler.name)) {

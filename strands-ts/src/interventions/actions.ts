@@ -140,8 +140,8 @@ export type Transform = { type: 'transform'; apply: (event: LifecycleEvent) => v
 export type InterventionAction = Proceed | Deny | Guide | Interrupt | Transform
 
 /** Allow the operation to continue. */
-export function proceed(reason?: string): Proceed {
-  return { type: 'proceed', ...(reason !== undefined && { reason }) }
+export function proceed(options?: { reason?: string }): Proceed {
+  return { type: 'proceed', ...options }
 }
 
 /** Block the operation. */
@@ -150,27 +150,22 @@ export function deny(reason: string): Deny {
 }
 
 /** Provide feedback to steer behavior. */
-export function guide(feedback: string, reason?: string): Guide {
-  return { type: 'guide', feedback, ...(reason !== undefined && { reason }) }
+export function guide(feedback: string, options?: { reason?: string }): Guide {
+  return { type: 'guide', feedback, ...options }
 }
 
 /**
  * Pause for human approval.
  * @param prompt - Message shown to the human.
- * @param reason - Optional metadata for debugging/logging.
- * @param isApproved - Optional custom response validator. Defaults to accepting
+ * @param options.reason - Optional metadata for debugging/logging.
+ * @param options.isApproved - Optional custom response validator. Defaults to accepting
  *   `true` or `'y'`/`'yes'` (case-insensitive).
  */
-export function interrupt(prompt: string, reason?: string, isApproved?: (response: JSONValue) => boolean): Interrupt {
-  return {
-    type: 'interrupt',
-    prompt,
-    ...(reason !== undefined && { reason }),
-    ...(isApproved !== undefined && { isApproved }),
-  }
+export function interrupt(prompt: string, options?: { reason?: string; isApproved?: (response: JSONValue) => boolean }): Interrupt {
+  return { type: 'interrupt', prompt, ...options }
 }
 
 /** Modify event content in-place. */
-export function transform(apply: (event: LifecycleEvent) => void, reason?: string): Transform {
-  return { type: 'transform', apply, ...(reason !== undefined && { reason }) }
+export function transform(apply: (event: LifecycleEvent) => void, options?: { reason?: string }): Transform {
+  return { type: 'transform', apply, ...options }
 }

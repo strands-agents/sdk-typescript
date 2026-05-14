@@ -423,14 +423,27 @@ describe('InterventionRegistry', () => {
       expect(laterCalled).toHaveBeenCalled()
     })
 
-    it('InterruptError respects onError=throw (default) — propagates', async () => {
-      new InterventionRegistry([new InterruptHandler()], hookRegistry)
+    it('denied interrupt short-circuits later handlers', async () => {
+      preloadInterruptResponse('interrupt-handler', 'no')
+      const laterCalled = vi.fn()
+
+      class LaterHandler extends InterventionHandler {
+        readonly name = 'later'
+        override beforeToolCall(): InterventionAction {
+          laterCalled()
+          return { type: 'proceed' }
+        }
+      }
+
+      new InterventionRegistry([new InterruptHandler(), new LaterHandler()], hookRegistry)
 
       const event = makeBeforeToolCallEvent()
-      await expect(hookRegistry.invokeCallbacks(event)).rejects.toThrow('Interrupt raised')
+      await hookRegistry.invokeCallbacks(event)
+      expect(event.cancel).toBe('INTERRUPTED: Interrupt denied execution')
+      expect(laterCalled).not.toHaveBeenCalled()
     })
 
-    it('InterruptError respects onError=proceed — skips interrupt, tool proceeds', async () => {
+    it('InterruptError always propagates regardless of onError policy', async () => {
       class InterruptProceedOnError extends InterventionHandler {
         readonly name = 'interrupt-proceed-onerror'
         override readonly onError = 'proceed' as const
@@ -442,24 +455,7 @@ describe('InterventionRegistry', () => {
       new InterventionRegistry([new InterruptProceedOnError()], hookRegistry)
 
       const event = makeBeforeToolCallEvent()
-      await hookRegistry.invokeCallbacks(event)
-      expect(event.cancel).toBe(false)
-    })
-
-    it('InterruptError respects onError=deny — converts to denial', async () => {
-      class InterruptDenyOnError extends InterventionHandler {
-        readonly name = 'interrupt-deny-onerror'
-        override readonly onError = 'deny' as const
-        override beforeToolCall(): InterventionAction {
-          return { type: 'interrupt', prompt: 'approve?' }
-        }
-      }
-
-      new InterventionRegistry([new InterruptDenyOnError()], hookRegistry)
-
-      const event = makeBeforeToolCallEvent()
-      await hookRegistry.invokeCallbacks(event)
-      expect(event.cancel).toContain('DENIED: Handler threw: Interrupt raised')
+      await expect(hookRegistry.invokeCallbacks(event)).rejects.toThrow('Interrupt raised')
     })
   })
 
