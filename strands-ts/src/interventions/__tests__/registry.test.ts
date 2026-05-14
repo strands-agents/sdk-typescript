@@ -443,20 +443,23 @@ describe('InterventionRegistry', () => {
       expect(laterCalled).not.toHaveBeenCalled()
     })
 
-    it('InterruptError always propagates regardless of onError policy', async () => {
-      class InterruptProceedOnError extends InterventionHandler {
-        readonly name = 'confirm-proceed-onerror'
-        override readonly onError = 'proceed' as const
-        override beforeToolCall(): InterventionAction {
-          return { type: 'confirm', prompt: 'approve?' }
+    it.each(['proceed', 'deny'] as const)(
+      'InterruptError always propagates regardless of onError=%s',
+      async (onError) => {
+        class ConfirmWithOnError extends InterventionHandler {
+          readonly name = 'confirm-onerror'
+          override readonly onError = onError
+          override beforeToolCall(): InterventionAction {
+            return { type: 'confirm', prompt: 'approve?' }
+          }
         }
+
+        new InterventionRegistry([new ConfirmWithOnError()], hookRegistry)
+
+        const event = makeBeforeToolCallEvent()
+        await expect(hookRegistry.invokeCallbacks(event)).rejects.toThrow('Interrupt raised')
       }
-
-      new InterventionRegistry([new InterruptProceedOnError()], hookRegistry)
-
-      const event = makeBeforeToolCallEvent()
-      await expect(hookRegistry.invokeCallbacks(event)).rejects.toThrow('Interrupt raised')
-    })
+    )
   })
 
   describe('transform', () => {
