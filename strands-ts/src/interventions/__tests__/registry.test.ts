@@ -30,11 +30,11 @@ class GuideHandler extends InterventionHandler {
   }
 }
 
-class InterruptHandler extends InterventionHandler {
-  readonly name = 'interrupt-handler'
+class ConfirmHandler extends InterventionHandler {
+  readonly name = 'confirm-handler'
 
   override beforeToolCall(): InterventionAction {
-    return { type: 'interrupt', prompt: 'approve this action?' }
+    return { type: 'confirm', prompt: 'approve this action?' }
   }
 }
 
@@ -299,9 +299,9 @@ describe('InterventionRegistry', () => {
     })
   })
 
-  describe('interrupt', () => {
-    it('calls event.interrupt() on BeforeToolCallEvent', async () => {
-      new InterventionRegistry([new InterruptHandler()], hookRegistry)
+  describe('confirm', () => {
+    it('calls event.interrupt() on BeforeToolCallEvent for confirm action', async () => {
+      new InterventionRegistry([new ConfirmHandler()], hookRegistry)
 
       const event = makeBeforeToolCallEvent()
       await expect(hookRegistry.invokeCallbacks(event)).rejects.toThrow('Interrupt raised')
@@ -318,7 +318,7 @@ describe('InterventionRegistry', () => {
         }
       }
 
-      new InterventionRegistry([new InterruptHandler(), new LaterHandler()], hookRegistry)
+      new InterventionRegistry([new ConfirmHandler(), new LaterHandler()], hookRegistry)
 
       await expect(hookRegistry.invokeCallbacks(makeBeforeToolCallEvent())).rejects.toThrow()
       expect(laterCalled).not.toHaveBeenCalled()
@@ -336,7 +336,7 @@ describe('InterventionRegistry', () => {
     }
 
     describe('approve/deny on resume', () => {
-      const DENIED = 'INTERRUPTED: Interrupt denied execution'
+      const DENIED = 'DENIED: Confirm denied execution'
 
       it.each([
         [true, false],
@@ -350,8 +350,8 @@ describe('InterventionRegistry', () => {
         [null, DENIED],
         ['', DENIED],
       ])('response %j → cancel=%j', async (response, expectedCancel) => {
-        preloadInterruptResponse('interrupt-handler', response)
-        new InterventionRegistry([new InterruptHandler()], hookRegistry)
+        preloadInterruptResponse('confirm-handler', response)
+        new InterventionRegistry([new ConfirmHandler()], hookRegistry)
 
         const event = makeBeforeToolCallEvent()
         await hookRegistry.invokeCallbacks(event)
@@ -359,36 +359,36 @@ describe('InterventionRegistry', () => {
       })
     })
 
-    it('uses custom isApproved when provided', async () => {
+    it('uses custom evaluate when provided', async () => {
       class CustomApprovalHandler extends InterventionHandler {
         readonly name = 'custom-approval'
         override beforeToolCall(): InterventionAction {
           return {
-            type: 'interrupt',
+            type: 'confirm',
             prompt: 'approve?',
-            isApproved: (response) => response === 'custom-yes',
+            evaluate: (response) => response === 'custom-yes',
           }
         }
       }
 
-      // 'yes' would pass default isApproved but fails custom
+      // 'yes' would pass default evaluate but fails custom
       preloadInterruptResponse('custom-approval', 'yes')
 
       new InterventionRegistry([new CustomApprovalHandler()], hookRegistry)
 
       const event = makeBeforeToolCallEvent()
       await hookRegistry.invokeCallbacks(event)
-      expect(event.cancel).toBe('INTERRUPTED: Interrupt denied execution')
+      expect(event.cancel).toBe('DENIED: Confirm denied execution')
     })
 
-    it('custom isApproved approves when its condition is met', async () => {
+    it('custom evaluate approves when its condition is met', async () => {
       class CustomApprovalHandler extends InterventionHandler {
         readonly name = 'custom-approval'
         override beforeToolCall(): InterventionAction {
           return {
-            type: 'interrupt',
+            type: 'confirm',
             prompt: 'approve?',
-            isApproved: (response) => response === 'custom-yes',
+            evaluate: (response) => response === 'custom-yes',
           }
         }
       }
@@ -402,8 +402,8 @@ describe('InterventionRegistry', () => {
       expect(event.cancel).toBe(false)
     })
 
-    it('approved interrupt does not short-circuit later handlers', async () => {
-      preloadInterruptResponse('interrupt-handler', 'yes')
+    it('approved confirm does not short-circuit later handlers', async () => {
+      preloadInterruptResponse('confirm-handler', 'yes')
 
       const laterCalled = vi.fn()
 
@@ -415,7 +415,7 @@ describe('InterventionRegistry', () => {
         }
       }
 
-      new InterventionRegistry([new InterruptHandler(), new LaterHandler()], hookRegistry)
+      new InterventionRegistry([new ConfirmHandler(), new LaterHandler()], hookRegistry)
 
       const event = makeBeforeToolCallEvent()
       await hookRegistry.invokeCallbacks(event)
@@ -423,8 +423,8 @@ describe('InterventionRegistry', () => {
       expect(laterCalled).toHaveBeenCalled()
     })
 
-    it('denied interrupt short-circuits later handlers', async () => {
-      preloadInterruptResponse('interrupt-handler', 'no')
+    it('denied confirm short-circuits later handlers', async () => {
+      preloadInterruptResponse('confirm-handler', 'no')
       const laterCalled = vi.fn()
 
       class LaterHandler extends InterventionHandler {
@@ -435,20 +435,20 @@ describe('InterventionRegistry', () => {
         }
       }
 
-      new InterventionRegistry([new InterruptHandler(), new LaterHandler()], hookRegistry)
+      new InterventionRegistry([new ConfirmHandler(), new LaterHandler()], hookRegistry)
 
       const event = makeBeforeToolCallEvent()
       await hookRegistry.invokeCallbacks(event)
-      expect(event.cancel).toBe('INTERRUPTED: Interrupt denied execution')
+      expect(event.cancel).toBe('DENIED: Confirm denied execution')
       expect(laterCalled).not.toHaveBeenCalled()
     })
 
     it('InterruptError always propagates regardless of onError policy', async () => {
       class InterruptProceedOnError extends InterventionHandler {
-        readonly name = 'interrupt-proceed-onerror'
+        readonly name = 'confirm-proceed-onerror'
         override readonly onError = 'proceed' as const
         override beforeToolCall(): InterventionAction {
-          return { type: 'interrupt', prompt: 'approve?' }
+          return { type: 'confirm', prompt: 'approve?' }
         }
       }
 
@@ -613,8 +613,8 @@ describe('InterventionRegistry', () => {
       expect(event.cancel).toBe('DENIED: not authorized')
     })
 
-    it('interrupt short-circuits before guide can accumulate', async () => {
-      new InterventionRegistry([new InterruptHandler(), new GuideHandler()], hookRegistry)
+    it('confirm short-circuits before guide can accumulate', async () => {
+      new InterventionRegistry([new ConfirmHandler(), new GuideHandler()], hookRegistry)
 
       await expect(hookRegistry.invokeCallbacks(makeBeforeToolCallEvent())).rejects.toThrow('Interrupt raised')
     })
@@ -766,13 +766,13 @@ describe('InterventionRegistry', () => {
       const { logger } = await import('../../logging/logger.js')
       const warnSpy = vi.spyOn(logger, 'warn')
 
-      // Force an interrupt return on beforeInvocation (which doesn't support it)
+      // Force a confirm return on beforeInvocation (which doesn't support it)
       // via cast to test the runtime warning path
       class InterruptOnInvocation extends InterventionHandler {
-        readonly name = 'interrupt-invocation'
+        readonly name = 'confirm-invocation'
         override beforeInvocation() {
-          // Force an interrupt return via any cast to test the runtime warning
-          return { type: 'interrupt', prompt: 'test' } as never
+          // Force a confirm return via any cast to test the runtime warning
+          return { type: 'confirm', prompt: 'test' } as never
         }
       }
 

@@ -5,7 +5,7 @@ import type {
   BeforeModelCallEvent,
   AfterModelCallEvent,
 } from '../hooks/events.js'
-import type { Proceed, Deny, Guide, Interrupt, Transform } from './actions.js'
+import type { Proceed, Deny, Guide, Confirm, Transform } from './actions.js'
 
 type Awaitable<T> = T | Promise<T>
 
@@ -49,7 +49,7 @@ export abstract class InterventionHandler {
     return { type: 'proceed' }
   }
 
-  beforeToolCall(_event: BeforeToolCallEvent): Awaitable<Proceed | Deny | Guide | Interrupt | Transform> {
+  beforeToolCall(_event: BeforeToolCallEvent): Awaitable<Proceed | Deny | Guide | Confirm | Transform> {
     return { type: 'proceed' }
   }
 

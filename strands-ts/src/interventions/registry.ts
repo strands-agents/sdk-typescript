@@ -30,7 +30,7 @@ type LifecycleMethod = 'beforeInvocation' | 'beforeToolCall' | 'afterToolCall' |
  *
  * Registers one hook callback per lifecycle event type, then dispatches to
  * all handlers that override that method — in registration order, with
- * short-circuiting on Deny (and denied Interrupts) and accumulation for Guide.
+ * short-circuiting on Deny (and denied Confirms) and accumulation for Guide.
  *
  * See {@link InterventionAction} for the action-to-event compatibility matrix.
  */
@@ -105,14 +105,14 @@ export class InterventionRegistry {
         case 'deny':
           event.cancel = `DENIED: ${action.reason}`
           return true
-        case 'interrupt': {
+        case 'confirm': {
           // event.interrupt() throws InterruptError on first call (pausing the agent).
           // InterruptError always propagates (bypasses onError) since it's intentional
           // control flow, not a handler failure. On resume, returns the human's response.
           const response = event.interrupt<JSONValue>({ name: handlerName, reason: action.prompt })
-          const check = action.isApproved ?? isApproved
+          const check = action.evaluate ?? isApproved
           if (!check(response)) {
-            event.cancel = `INTERRUPTED: Interrupt denied execution`
+            event.cancel = `DENIED: Confirm denied execution`
             return true
           }
           return false
@@ -199,7 +199,7 @@ export class InterventionRegistry {
    * Iterate handlers in registration order and resolve the winning action.
    *
    * - Deny short-circuits immediately (remaining handlers are skipped).
-   * - Interrupt pauses for human input; if denied short-circuits, if approved continues.
+   * - Confirm pauses for human input; if denied short-circuits, if approved continues.
    * - Guide feedback strings accumulate across handlers and are applied at the end.
    * - Transform is applied in-place so later handlers see the mutation.
    * - If a handler throws, behavior depends on {@link InterventionHandler.onError}:
@@ -253,7 +253,7 @@ export class InterventionRegistry {
     }
 
     // Guide feedback accumulates across handlers. Only applied if
-    // no earlier handler short-circuited (deny/interrupt).
+    // no earlier handler short-circuited (deny/confirm).
     if (guides.length > 0) {
       logger.debug(`event=<${method}> | applying accumulated guide from ${guides.length} handler(s)`)
       const feedback = guides.map((g) => `[${g.handlerName}] ${g.action.feedback}`).join('\n')
