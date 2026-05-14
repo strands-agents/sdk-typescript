@@ -11,6 +11,9 @@ import { ConstantBackoff } from '../../retry/backoff-strategy.js'
 import { ModelThrottledError } from '../../errors.js'
 import { AfterModelCallEvent } from '../../hooks/events.js'
 import { logger } from '../../logging/logger.js'
+import '../../sandbox/not-a-sandbox-local-environment.js'
+// eslint-disable-next-line no-restricted-imports
+import '../../vended-tools/sandbox-default-tools.js'
 
 describe('Agent retryStrategy wiring', () => {
   beforeEach(() => {
@@ -34,7 +37,6 @@ describe('Agent retryStrategy wiring', () => {
     })
 
     const invokePromise = agent.invoke('hi')
-    // Flush any pending timers the retry scheduled.
     await vi.runAllTimersAsync()
     const result = await invokePromise
 

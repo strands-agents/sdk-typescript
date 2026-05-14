@@ -7,7 +7,7 @@
  */
 
 import { readdirSync, statSync, existsSync } from 'fs'
-import { join, resolve, relative, sep } from 'path'
+import { join, relative, sep } from 'path'
 import { z } from 'zod'
 import { tool } from '../../tools/tool-factory.js'
 import { BeforeInvocationEvent } from '../../hooks/events.js'
@@ -98,6 +98,8 @@ export class AgentSkills implements Plugin {
   private readonly _stateKey: string
   /** Resolves when all async skill sources (e.g. URLs) have been loaded. */
   private _ready: Promise<void>
+  /** Path-based sources deferred until initAgent when agent.sandbox is available. */
+  private readonly _pathSources: string[] = []
 
   constructor(config: AgentSkillsConfig) {
     this._strict = config.strict ?? false
@@ -117,6 +119,8 @@ export class AgentSkills implements Plugin {
    */
   async initAgent(agent: LocalAgent): Promise<void> {
     await this._ready
+
+    await this._resolvePathSources(agent)
 
     if (this._skills.size === 0) {
       logger.warn('no skills were loaded, the agent will have no skills available')
@@ -207,47 +211,7 @@ export class AgentSkills implements Plugin {
           )
         )
       } else {
-        const p = source as string
-        const resolvedPath = resolve(p)
-
-        // Probe the filesystem to decide which loader to use instead of
-        // relying on exceptions for control flow.
-        const isDir = existsSync(resolvedPath) && statSync(resolvedPath).isDirectory()
-        const isSkillFile =
-          existsSync(resolvedPath) && statSync(resolvedPath).isFile() && resolvedPath.toLowerCase().endsWith('skill.md')
-        const hasSkillMd =
-          isDir &&
-          ['SKILL.md', 'skill.md'].some((name) => {
-            const candidate = join(resolvedPath, name)
-            return existsSync(candidate) && statSync(candidate).isFile()
-          })
-
-        if (isSkillFile || hasSkillMd) {
-          // Single skill directory (or direct SKILL.md path)
-          try {
-            const skill = Skill.fromFile(p, { strict: this._strict })
-            if (resolved.has(skill.name)) {
-              logger.warn(`name=<${skill.name}> | duplicate skill name, overwriting previous skill`)
-            }
-            resolved.set(skill.name, skill)
-          } catch (error) {
-            logger.warn(`path=<${p}> | failed to load skill: ${error}`)
-          }
-        } else if (isDir) {
-          // Parent directory containing skill subdirectories
-          try {
-            for (const skill of Skill.fromDirectory(p, { strict: this._strict })) {
-              if (resolved.has(skill.name)) {
-                logger.warn(`name=<${skill.name}> | duplicate skill name, overwriting previous skill`)
-              }
-              resolved.set(skill.name, skill)
-            }
-          } catch (error) {
-            logger.warn(`path=<${p}> | failed to load skills from directory: ${error}`)
-          }
-        } else {
-          logger.warn(`path=<${p}> | skill source does not exist or is not a valid path`)
-        }
+        this._pathSources.push(source)
       }
     }
 
@@ -264,6 +228,18 @@ export class AgentSkills implements Plugin {
     }
 
     return { skills: resolved, ready }
+  }
+
+  private async _resolvePathSources(agent: LocalAgent): Promise<void> {
+    for (const path of this._pathSources) {
+      try {
+        for (const skill of await Skill.fromSandbox(agent.sandbox, path, { strict: this._strict })) {
+          this._skills.set(skill.name, skill)
+        }
+      } catch (error) {
+        logger.warn(`path=<${path}> | failed to load skill: ${error}`)
+      }
+    }
   }
 
   /**

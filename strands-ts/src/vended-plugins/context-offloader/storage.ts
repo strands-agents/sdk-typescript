@@ -1,10 +1,21 @@
 /**
  * Storage backends for offloaded tool result content.
  *
- * This module defines the {@link Storage} interface and provides three built-in
- * implementations: {@link InMemoryStorage}, {@link FileStorage}, and {@link S3Storage}.
+ * This module defines the {@link Storage} interface and provides built-in
+ * implementations: {@link InMemoryStorage}, {@link FileStorage}, {@link S3Storage},
+ * and {@link SandboxStorage}.
  * Each content block from a tool result is stored individually with its content type preserved.
  */
+
+import type { Sandbox } from '../../sandbox/base.js'
+import { toMediaFormat } from '../../mime.js'
+
+function extensionForMime(contentType: string): string {
+  const format = toMediaFormat(contentType)
+  if (format) return `.${format}`
+  const subtype = contentType.split('/')[1] ?? 'bin'
+  return `.${subtype.split('+').pop()!.split('.').pop()!}`
+}
 
 /**
  * Backend for storing and retrieving offloaded content blocks.
@@ -95,11 +106,6 @@ export class FileStorage implements Storage {
     this._artifactDir = artifactDir
   }
 
-  private static _extensionFor(contentType: string): string {
-    if (contentType === 'text/plain') return '.txt'
-    return `.${contentType.split('/').pop()}`
-  }
-
   private async _ensureDir(): Promise<typeof import('node:fs/promises')> {
     const fs = await import('node:fs/promises')
     await fs.mkdir(this._artifactDir, { recursive: true })
@@ -135,7 +141,7 @@ export class FileStorage implements Storage {
     const sanitizedKey = sanitizeId(key)
     const timestampMs = Date.now()
     this._counter++
-    const ext = FileStorage._extensionFor(contentType)
+    const ext = extensionForMime(contentType)
     const filename = `${timestampMs}_${this._counter}_${sanitizedKey}${ext}`
 
     this._contentTypes[filename] = contentType
@@ -257,6 +263,62 @@ export class S3Storage implements Storage {
         throw new Error(`Reference not found: ${reference}`)
       }
       throw error
+    }
+  }
+}
+
+/**
+ * Sandbox-based storage backend.
+ *
+ * Stores offloaded content in the agent's sandbox filesystem. This co-locates
+ * offloaded data with the agent's workspace, making it accessible via sandbox
+ * tools (editor, run) in addition to the retrieval tool.
+ *
+ * Content-type tracking is ephemeral: it is held in-memory on this instance.
+ * If the sandbox is paused/resumed with a different SandboxStorage instance,
+ * retrieval falls back to "application/octet-stream".
+ *
+ * @param sandbox - Sandbox instance to store content in
+ * @param basePath - Directory within the sandbox for offloaded content (default: "./artifacts")
+ */
+export class SandboxStorage implements Storage {
+  private readonly _sandbox: Sandbox
+  private readonly _basePath: string
+  private readonly _contentTypes = new Map<string, string>()
+  private _counter = 0
+
+  constructor(sandbox: Sandbox, basePath: string = './artifacts') {
+    this._sandbox = sandbox
+    this._basePath = basePath
+  }
+
+  /** {@inheritdoc} */
+  async store(key: string, content: Uint8Array, contentType: string = 'text/plain'): Promise<string> {
+    this._counter++
+    const sanitized = sanitizeId(key)
+    const ext = extensionForMime(contentType)
+    const filename = `${Date.now()}_${this._counter}_${sanitized}${ext}`
+    const path = `${this._basePath}/${filename}`
+
+    await this._sandbox.writeFile(path, content)
+    this._contentTypes.set(path, contentType)
+
+    return path
+  }
+
+  /** {@inheritdoc} */
+  async retrieve(reference: string): Promise<{ content: Uint8Array; contentType: string }> {
+    const base = this._basePath.endsWith('/') ? this._basePath : `${this._basePath}/`
+    if (!reference.startsWith(base) || reference.includes('..')) {
+      throw new Error(`Reference not found: ${reference}`)
+    }
+
+    try {
+      const content = await this._sandbox.readFile(reference)
+      const contentType = this._contentTypes.get(reference) ?? 'application/octet-stream'
+      return { content, contentType }
+    } catch {
+      throw new Error(`Reference not found: ${reference}`)
     }
   }
 }

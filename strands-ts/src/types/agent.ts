@@ -1,4 +1,5 @@
 import type { StateStore } from '../state-store.js'
+import type { Sandbox } from '../sandbox/base.js'
 import type { ContentBlock, ContentBlockData, Message, MessageData, StopReason, SystemPrompt } from './messages.js'
 import type { Interrupt } from '../interrupt.js'
 import type { InterruptResponseContent, InterruptResponseContentData } from './interrupt.js'
@@ -212,6 +213,11 @@ export interface LocalAgent {
    * The model provider used by the agent for inference.
    */
   readonly model: Model
+
+  /**
+   * Sandbox for tool code execution and filesystem access.
+   */
+  readonly sandbox: Sandbox
 
   /**
    * The system prompt to pass to the model provider.
