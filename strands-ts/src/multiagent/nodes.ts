@@ -228,6 +228,11 @@ export class AgentNode extends Node {
       }
       this.timeout = timeout
     }
+    if (stateful && !(agent instanceof Agent)) {
+      throw new Error(
+        `node_id=<${agent.id}> | stateful=true requires an Agent instance; non-Agent InvokableAgents cannot be snapshotted`
+      )
+    }
     this.stateful = stateful ?? false
   }
 

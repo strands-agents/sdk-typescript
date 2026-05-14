@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { Agent } from '../../agent/agent.js'
+import { BeforeInvocationEvent } from '../../hooks/events.js'
 import type { MultiAgentInput } from '../multiagent.js'
 import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
 import { collectGenerator } from '../../__fixtures__/model-test-helpers.js'
@@ -193,6 +194,41 @@ describe('AgentNode', () => {
       await collectGenerator(statefulNode.stream([new TextBlock('second')], statefulState))
 
       expect(statefulAgent.messages.length).toBeGreaterThan(messagesAfterFirst)
+    })
+
+    it('retains appState mutations across executions when stateful', async () => {
+      const model = new MockMessageModel().addTurn(new TextBlock('reply-1')).addTurn(new TextBlock('reply-2'))
+      const statefulAgent = new Agent({ model, printer: false, id: 'stateful-agent' })
+      // Hook bumps a counter on appState every time the agent is invoked.
+      statefulAgent.addHook(BeforeInvocationEvent, (event) => {
+        const count = event.agent.appState.get<{ count: number }>('count') ?? 0
+        event.agent.appState.set('count', count + 1)
+      })
+      const statefulNode = new AgentNode({ agent: statefulAgent, stateful: true })
+      const statefulState = new MultiAgentState({ nodeIds: ['stateful-agent'] })
+
+      await collectGenerator(statefulNode.stream([new TextBlock('first')], statefulState))
+      expect(statefulAgent.appState.get<{ count: number }>('count')).toBe(1)
+
+      await collectGenerator(statefulNode.stream([new TextBlock('second')], statefulState))
+      expect(statefulAgent.appState.get<{ count: number }>('count')).toBe(2)
+    })
+
+    it('throws when stateful is set with a non-Agent InvokableAgent', () => {
+      const customAgent = {
+        id: 'custom',
+        async invoke() {
+          throw new Error('not used')
+        },
+        // eslint-disable-next-line require-yield
+        async *stream() {
+          throw new Error('not used')
+        },
+        addHook() {
+          return () => {}
+        },
+      }
+      expect(() => new AgentNode({ agent: customAgent, stateful: true })).toThrow(/stateful=true requires an Agent/)
     })
 
     it('passes structuredOutputSchema from options to the agent', async () => {
