@@ -7,6 +7,18 @@ import type {
 } from '../hooks/events.js'
 import type { JSONValue } from '../types/json.js'
 
+const APPROVED_RESPONSES = new Set(['y', 'yes'])
+
+/**
+ * Default evaluate function for the confirm action.
+ * Accepts: true, 'y'/'yes' (case-insensitive, whitespace-trimmed).
+ */
+export function defaultEvaluate(response: JSONValue): boolean {
+  if (response === true) return true
+  if (typeof response === 'string') return APPROVED_RESPONSES.has(response.toLowerCase().trim())
+  return false
+}
+
 export type LifecycleEvent =
   | BeforeInvocationEvent
   | BeforeToolCallEvent
@@ -133,7 +145,7 @@ export type Transform = { type: 'transform'; apply: (event: LifecycleEvent) => v
  * — = no-op (logged in audit trail, warns at runtime)
  * cancel = sets event.cancel, short-circuits (remaining handlers skipped)
  * cancel+ = sets event.cancel with accumulated feedback from all guiding handlers
- * confirm = collects response (via ask or interrupt), checks with evaluate, sets cancel if denied
+ * confirm = uses preemptive response or interrupt, checks with evaluate, sets cancel if denied
  * inject = appends accumulated feedback as a user message so the model sees it on this call
  * inject + retry = appends accumulated feedback and retries so the model sees guidance
  * apply = calls action.apply(event) for in-place mutation, later handlers see the change
@@ -180,7 +192,7 @@ export function confirm(
     evaluate?: (response: JSONValue) => boolean
   }
 ): Confirm {
-  return { type: 'confirm', prompt, ...options }
+  return { type: 'confirm', prompt, evaluate: defaultEvaluate, ...options }
 }
 
 /**

@@ -10,18 +10,11 @@ import type { HookRegistry } from '../hooks/registry.js'
 import { HookOrder } from '../hooks/types.js'
 import { Message, TextBlock } from '../types/messages.js'
 import type { Guide, InterventionAction } from './actions.js'
+import { defaultEvaluate } from './actions.js'
 import { InterventionHandler } from './handler.js'
 import { InterruptError } from '../interrupt.js'
 import { logger } from '../logging/logger.js'
 import type { JSONValue } from '../types/json.js'
-
-const APPROVED_RESPONSES = new Set(['y', 'yes'])
-
-function isApproved(response: JSONValue): boolean {
-  if (response === true) return true
-  if (typeof response === 'string') return APPROVED_RESPONSES.has(response.toLowerCase().trim())
-  return false
-}
 
 type LifecycleMethod = 'beforeInvocation' | 'beforeToolCall' | 'afterToolCall' | 'beforeModelCall' | 'afterModelCall'
 
@@ -115,7 +108,7 @@ export class InterventionRegistry {
             reason: action.prompt,
             ...(action.response !== undefined && { response: action.response }),
           })
-          const check = action.evaluate ?? isApproved
+          const check = action.evaluate ?? defaultEvaluate
           if (!check(result)) {
             event.cancel = `CONFIRMATION_FAILED: ${action.prompt}`
             return true

@@ -300,7 +300,7 @@ describe('InterventionRegistry', () => {
   })
 
   describe('confirm', () => {
-    it('calls event.interrupt() on BeforeToolCallEvent for confirm action', async () => {
+    it('pauses agent when no response is provided', async () => {
       new InterventionRegistry([new ConfirmHandler()], hookRegistry)
 
       const event = makeBeforeToolCallEvent()
@@ -494,7 +494,7 @@ describe('InterventionRegistry', () => {
         expect(event.cancel).toBe(false)
       })
 
-      it('passes response to event.interrupt() as preemptive value', async () => {
+      it('passes response as preemptive value so agent never pauses', async () => {
         class InlineConfirmHandler extends InterventionHandler {
           readonly name = 'inline-confirm'
           override beforeToolCall(): InterventionAction {
@@ -507,7 +507,22 @@ describe('InterventionRegistry', () => {
         const event = makeBeforeToolCallEvent()
         const interruptSpy = vi.spyOn(event, 'interrupt')
         await hookRegistry.invokeCallbacks(event)
-        expect(interruptSpy).toHaveBeenCalledWith(expect.objectContaining({ response: 'yes' }))
+        expect(interruptSpy).toHaveBeenCalledWith({ name: 'inline-confirm', reason: 'approve?', response: 'yes' })
+      })
+
+      it('denies when response is falsy but defined (false)', async () => {
+        class InlineConfirmHandler extends InterventionHandler {
+          readonly name = 'inline-confirm'
+          override beforeToolCall(): InterventionAction {
+            return { type: 'confirm', prompt: 'approve?', response: false }
+          }
+        }
+
+        new InterventionRegistry([new InlineConfirmHandler()], hookRegistry)
+
+        const event = makeBeforeToolCallEvent()
+        await hookRegistry.invokeCallbacks(event)
+        expect(event.cancel).toBe('CONFIRMATION_FAILED: approve?')
       })
     })
 
