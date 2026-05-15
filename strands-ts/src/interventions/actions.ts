@@ -95,7 +95,7 @@ export type Guide = { type: 'guide'; feedback: string; reason?: string }
  * @example
  * ```typescript
  * // Inline mode (handler collected the response already)
- * const answer = await this._ask(prompt)
+ * const answer = await rl.question(`${prompt} (y/n): `)
  * return confirm(prompt, { response: answer })
  *
  * // Stateless mode (interrupt/resume)
