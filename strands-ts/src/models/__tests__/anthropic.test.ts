@@ -270,6 +270,24 @@ describe('AnthropicModel', () => {
       expect(events).toContainEqual({ type: 'modelMessageStopEvent', stopReason: 'toolUse' })
     })
 
+    it.each([
+      ['pause_turn', 'pauseTurn'],
+      ['refusal', 'refusal'],
+    ])('maps anthropic stop reason "%s" to "%s"', async (anthropicReason, expected) => {
+      const mockClient = createMockClient(async function* () {
+        yield { type: 'message_start', message: { role: 'assistant', usage: { input_tokens: 1 } } }
+        yield { type: 'message_delta', delta: { stop_reason: anthropicReason }, usage: { output_tokens: 1 } }
+        yield { type: 'message_stop' }
+      })
+
+      const provider = new AnthropicModel({ client: mockClient })
+      const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
+
+      const events = await collectIterator(provider.stream(messages))
+
+      expect(events).toContainEqual({ type: 'modelMessageStopEvent', stopReason: expected })
+    })
+
     it('handles thinking/reasoning events', async () => {
       const mockClient = createMockClient(async function* () {
         yield { type: 'message_start', message: { role: 'assistant', usage: { input_tokens: 10 } } }
@@ -393,11 +411,12 @@ describe('AnthropicModel', () => {
   describe('request formatting', () => {
     // Helper to capture request arguments
     const setupCapture = () => {
-      const captured: { request: any } = { request: null }
+      const captured: { request: any; options: any } = { request: null, options: null }
       const mockClient = {
         messages: {
-          stream: vi.fn((req) => {
+          stream: vi.fn((req, opts) => {
             captured.request = req
+            captured.options = opts
             return (async function* () {})()
           }),
         },
@@ -565,6 +584,7 @@ describe('AnthropicModel', () => {
         const content = captured.request.messages[0].content[0]
         expect(content.type).toBe('document')
         expect(content.source.media_type).toBe('application/pdf')
+        expect(content.title).toBe('doc.pdf')
       })
 
       it('logs warning for unsupported GuardContentBlock in user message', async () => {
@@ -727,6 +747,49 @@ describe('AnthropicModel', () => {
         expect(content.content).toBe('result')
         expect(warnSpy).toHaveBeenCalled()
         warnSpy.mockRestore()
+      })
+    })
+
+    describe('Beta headers', () => {
+      it('does not pass per-request options when betas is unset', async () => {
+        const { captured, mockClient } = setupCapture()
+        const provider = new AnthropicModel({ client: mockClient })
+        const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
+
+        await collectIterator(provider.stream(messages))
+
+        expect(captured.options).toBeUndefined()
+      })
+
+      it('forwards configured betas as a per-request anthropic-beta header', async () => {
+        const { captured, mockClient } = setupCapture()
+        const provider = new AnthropicModel({
+          client: mockClient,
+          betas: ['interleaved-thinking-2025-05-14', 'mcp-client-2025-11-20'],
+        })
+        const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
+
+        await collectIterator(provider.stream(messages))
+
+        expect(captured.options).toEqual({
+          headers: { 'anthropic-beta': 'interleaved-thinking-2025-05-14,mcp-client-2025-11-20' },
+        })
+      })
+
+      it('reflects updateConfig({ betas }) on the next request', async () => {
+        const { captured, mockClient } = setupCapture()
+        const provider = new AnthropicModel({ client: mockClient })
+        const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
+
+        await collectIterator(provider.stream(messages))
+        expect(captured.options).toBeUndefined()
+
+        provider.updateConfig({ betas: ['interleaved-thinking-2025-05-14'] })
+        await collectIterator(provider.stream(messages))
+
+        expect(captured.options).toEqual({
+          headers: { 'anthropic-beta': 'interleaved-thinking-2025-05-14' },
+        })
       })
     })
   })
