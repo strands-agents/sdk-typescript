@@ -12,6 +12,9 @@ const APPROVED_RESPONSES = new Set(['y', 'yes'])
 /**
  * Default evaluate function for the confirm action.
  * Accepts: true, 'y'/'yes' (case-insensitive, whitespace-trimmed).
+ *
+ * @param response - The human's response value to evaluate.
+ * @returns true if the response is considered an approval, false otherwise.
  */
 export function defaultEvaluate(response: JSONValue): boolean {
   if (response === true) return true
@@ -84,7 +87,7 @@ export type Guide = { type: 'guide'; feedback: string; reason?: string }
  * Two modes depending on whether `response` is provided:
  * - With `response`: passed as a preemptive value to the interrupt system, agent
  *   never pauses. Handlers collect the response themselves (e.g. via readline).
- * - Without `response`: uses the interrupt system to pause the agent for external resume.
+ * - Without `response`: breaks out of the agent loop to pause for external resume.
  *
  * The response is checked against `evaluate` (defaults to accepting `true` or
  * `'y'`/`'yes'` case-insensitive). If denied, sets event.cancel.
