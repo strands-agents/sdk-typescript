@@ -219,7 +219,7 @@ export class ToolCaller {
 
     // Record in message history if configured
     if (shouldRecord) {
-      this._recordToolExecution(toolUse, toolResult)
+      await this._recordToolExecution(toolUse, toolResult)
     }
 
     return toolResult
@@ -242,14 +242,17 @@ export class ToolCaller {
   }
 
   /**
-   * Records a tool execution in the agent's message history.
+   * Records a tool execution in the agent's message history and fires MessageAddedEvent hooks.
    *
    * Creates a sequence of 3 messages that represent the tool execution:
    * 1. An assistant message with the ToolUseBlock (what was called and with what input)
    * 2. A user message with the ToolResultBlock (tool output)
    * 3. An assistant message acknowledging the result
+   *
+   * Each message fires a {@link MessageAddedEvent} so that hooks registered via
+   * `agent.addHook(MessageAddedEvent, ...)` are notified of direct tool call messages.
    */
-  private _recordToolExecution(toolUse: ToolUse, toolResult: ToolResultBlock): void {
+  private async _recordToolExecution(toolUse: ToolUse, toolResult: ToolResultBlock): Promise<void> {
     const toolUseBlock = new ToolUseBlock({
       toolUseId: toolUse.toolUseId,
       name: toolUse.name,
@@ -263,7 +266,9 @@ export class ToolCaller {
       content: [new TextBlock(`agent.tool.${toolUse.name} was called.`)],
     })
 
-    // Add to message history
-    this._agent.messages.push(toolUseMsg, toolResultMsg, assistantMsg)
+    // Append messages and fire MessageAddedEvent hooks for each
+    await this._agent.appendMessage(toolUseMsg)
+    await this._agent.appendMessage(toolResultMsg)
+    await this._agent.appendMessage(assistantMsg)
   }
 }

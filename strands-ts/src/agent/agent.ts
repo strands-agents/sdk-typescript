@@ -2078,6 +2078,21 @@ export class Agent implements LocalAgent, InvokableAgent {
   }
 
   /**
+   * Appends a message to the conversation history and fires MessageAddedEvent hooks.
+   *
+   * Use this from non-streaming contexts (e.g., direct tool calls via {@link ToolCaller})
+   * where the caller cannot yield events into the agent stream.
+   *
+   * @param message - The message to append
+   * @param invocationState - Optional invocation state (defaults to empty)
+   * @internal
+   */
+  async appendMessage(message: Message, invocationState: InvocationState = {}): Promise<void> {
+    this.messages.push(message)
+    await this._hooksRegistry.invokeCallbacks(new MessageAddedEvent({ agent: this, message, invocationState }))
+  }
+
+  /**
    * Appends a message to the conversation history and returns the event for yielding.
    *
    * @param message - The message to append

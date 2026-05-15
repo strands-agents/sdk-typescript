@@ -536,3 +536,69 @@ describe('ToolCaller', () => {
     })
   })
 })
+
+describe('MessageAddedEvent hooks', () => {
+  it('fires MessageAddedEvent for each message recorded during direct tool call', async () => {
+    const { MessageAddedEvent } = await import('../../hooks/events.js')
+
+    const tool = createMockTool(
+      'calculator',
+      () =>
+        new ToolResultBlock({
+          toolUseId: 'test-id',
+          status: 'success',
+          content: [new TextBlock('8')],
+        })
+    )
+    const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
+    const agent = new Agent({ model, tools: [tool] })
+
+    const firedEvents: InstanceType<typeof MessageAddedEvent>[] = []
+    agent.addHook(MessageAddedEvent, (event) => {
+      firedEvents.push(event)
+    })
+
+    await agent.tool.calculator!.invoke({ a: 5, b: 3 })
+
+    // Should fire 3 MessageAddedEvents (one per recorded message)
+    expect(firedEvents).toHaveLength(3)
+
+    // Event 0: assistant message with ToolUseBlock
+    expect(firedEvents[0]!.message.role).toBe('assistant')
+    expect(firedEvents[0]!.message.content[0]).toBeInstanceOf(ToolUseBlock)
+
+    // Event 1: user message with ToolResultBlock
+    expect(firedEvents[1]!.message.role).toBe('user')
+    expect(firedEvents[1]!.message.content[0]).toBeInstanceOf(ToolResultBlock)
+
+    // Event 2: assistant acknowledgement
+    expect(firedEvents[2]!.message.role).toBe('assistant')
+    expect(firedEvents[2]!.message.content[0]).toBeInstanceOf(TextBlock)
+  })
+
+  it('does not fire MessageAddedEvent when recordDirectToolCall is false', async () => {
+    const { MessageAddedEvent } = await import('../../hooks/events.js')
+
+    const tool = createMockTool(
+      'calculator',
+      () =>
+        new ToolResultBlock({
+          toolUseId: 'test-id',
+          status: 'success',
+          content: [new TextBlock('8')],
+        })
+    )
+    const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
+    const agent = new Agent({ model, tools: [tool] })
+
+    const firedEvents: InstanceType<typeof MessageAddedEvent>[] = []
+    agent.addHook(MessageAddedEvent, (event) => {
+      firedEvents.push(event)
+    })
+
+    await agent.tool.calculator!.invoke({ a: 5, b: 3 }, { recordDirectToolCall: false })
+
+    // No events should fire when recording is disabled
+    expect(firedEvents).toHaveLength(0)
+  })
+})
