@@ -501,9 +501,14 @@ export class Agent implements LocalAgent, InvokableAgent {
   /**
    * Direct tool calling accessor.
    *
-   * Call tools directly without model inference:
+   * Returns a proxy where each property is a {@link ToolHandle} with
+   * `.invoke()` and `.stream()` methods:
    * ```typescript
-   * const result = await agent.tool.calculator({ a: 5, b: 3 })
+   * const result = await agent.tool.calculator!.invoke({ a: 5, b: 3 })
+   *
+   * for await (const event of agent.tool.calculator!.stream({ a: 5, b: 3 })) {
+   *   console.log('progress:', event)
+   * }
    * ```
    *
    * Supports underscore-to-hyphen and case-insensitive name resolution.

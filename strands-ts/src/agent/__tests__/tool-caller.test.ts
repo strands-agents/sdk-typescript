@@ -8,7 +8,7 @@ import { ToolStreamEvent } from '../../tools/tool.js'
 import type { ToolContext } from '../../tools/tool.js'
 
 describe('ToolCaller', () => {
-  describe('basic tool calling', () => {
+  describe('basic tool calling via .invoke()', () => {
     it('calls a tool by name and returns the result', async () => {
       const tool = createMockTool(
         'calculator',
@@ -22,7 +22,7 @@ describe('ToolCaller', () => {
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
       const agent = new Agent({ model, tools: [tool] })
 
-      const result = await agent.tool.calculator!({ a: 5, b: 3 })
+      const result = await agent.tool.calculator!.invoke({ a: 5, b: 3 })
 
       expect(result).toStrictEqual(
         new ToolResultBlock({
@@ -46,7 +46,7 @@ describe('ToolCaller', () => {
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
       const agent = new Agent({ model, tools: [tool] })
 
-      const result = await agent.tool.ping!()
+      const result = await agent.tool.ping!.invoke()
 
       expect(result).toStrictEqual(
         new ToolResultBlock({
@@ -61,8 +61,8 @@ describe('ToolCaller', () => {
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
       const agent = new Agent({ model, tools: [] })
 
-      await expect(agent.tool.nonexistent!()).rejects.toThrow(ToolNotFoundError)
-      await expect(agent.tool.nonexistent!()).rejects.toThrow("Tool 'nonexistent' not found")
+      await expect(agent.tool.nonexistent!.invoke()).rejects.toThrow(ToolNotFoundError)
+      await expect(agent.tool.nonexistent!.invoke()).rejects.toThrow("Tool 'nonexistent' not found")
     })
   })
 
@@ -80,7 +80,7 @@ describe('ToolCaller', () => {
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
       const agent = new Agent({ model, tools: [tool] })
 
-      const result = await agent.tool.my_tool!()
+      const result = await agent.tool.my_tool!.invoke()
 
       expect(result.status).toBe('success')
     })
@@ -98,7 +98,7 @@ describe('ToolCaller', () => {
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
       const agent = new Agent({ model, tools: [exactTool] })
 
-      const result = await agent.tool.my_tool!()
+      const result = await agent.tool.my_tool!.invoke()
 
       expect(result).toStrictEqual(
         new ToolResultBlock({
@@ -124,7 +124,7 @@ describe('ToolCaller', () => {
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
       const agent = new Agent({ model, tools: [tool] })
 
-      const result = await agent.tool.mytool!()
+      const result = await agent.tool.mytool!.invoke()
 
       expect(result.status).toBe('success')
     })
@@ -151,7 +151,7 @@ describe('ToolCaller', () => {
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
       const agent = new Agent({ model, tools: [exactTool, upperTool] })
 
-      const result = await agent.tool.myTool!()
+      const result = await agent.tool.myTool!.invoke()
 
       expect(result.content[0]).toStrictEqual(new TextBlock('exact'))
     })
@@ -168,24 +168,10 @@ describe('ToolCaller', () => {
             content: [new TextBlock('8')],
           })
       )
-      // Override toolSpec to include input properties so params survive filtering
-      Object.defineProperty(tool, 'toolSpec', {
-        value: {
-          name: 'calculator',
-          description: 'Mock tool calculator',
-          inputSchema: {
-            type: 'object',
-            properties: {
-              a: { type: 'number' },
-              b: { type: 'number' },
-            },
-          },
-        },
-      })
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
       const agent = new Agent({ model, tools: [tool] })
 
-      await agent.tool.calculator!({ a: 5, b: 3 })
+      await agent.tool.calculator!.invoke({ a: 5, b: 3 })
 
       // Should have 3 messages: assistant (tool use), user (tool result), assistant (acknowledgement)
       expect(agent.messages).toHaveLength(3)
@@ -227,7 +213,7 @@ describe('ToolCaller', () => {
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
       const agent = new Agent({ model, tools: [tool] })
 
-      await agent.tool.calculator!({ a: 5, b: 3 }, { recordDirectToolCall: false })
+      await agent.tool.calculator!.invoke({ a: 5, b: 3 }, { recordDirectToolCall: false })
 
       expect(agent.messages).toHaveLength(0)
     })
@@ -245,9 +231,42 @@ describe('ToolCaller', () => {
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
       const agent = new Agent({ model, tools: [tool] })
 
-      await agent.tool.calculator!({ a: 5, b: 3 }, { recordDirectToolCall: true })
+      await agent.tool.calculator!.invoke({ a: 5, b: 3 }, { recordDirectToolCall: true })
 
       expect(agent.messages).toHaveLength(3)
+    })
+
+    it('records full input without filtering', async () => {
+      const tool = createMockTool(
+        'my-tool',
+        () =>
+          new ToolResultBlock({
+            toolUseId: 'test-id',
+            status: 'success',
+            content: [new TextBlock('ok')],
+          })
+      )
+      Object.defineProperty(tool, 'toolSpec', {
+        value: {
+          name: 'my-tool',
+          description: 'Tool with strict schema',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              allowed: { type: 'string' },
+            },
+          },
+        },
+      })
+      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
+      const agent = new Agent({ model, tools: [tool] })
+
+      await agent.tool.my_tool!.invoke({ allowed: 'yes', extra: 'also-recorded' })
+
+      // Input is recorded as-is — no filtering
+      const recToolUseBlock = agent.messages[0]!.content[0] as ToolUseBlock
+      expect(recToolUseBlock).toBeInstanceOf(ToolUseBlock)
+      expect(recToolUseBlock.input).toStrictEqual({ allowed: 'yes', extra: 'also-recorded' })
     })
   })
 
@@ -268,8 +287,8 @@ describe('ToolCaller', () => {
       // Simulate the agent being in the middle of an invocation by mocking isInvoking
       Object.defineProperty(agent, 'isInvoking', { get: () => true })
 
-      await expect(agent.tool.slow_tool!()).rejects.toThrow(ConcurrentInvocationError)
-      await expect(agent.tool.slow_tool!()).rejects.toThrow(
+      await expect(agent.tool.slow_tool!.invoke()).rejects.toThrow(ConcurrentInvocationError)
+      await expect(agent.tool.slow_tool!.invoke()).rejects.toThrow(
         'Direct tool call cannot be made while the agent is in the middle of an invocation'
       )
     })
@@ -291,7 +310,7 @@ describe('ToolCaller', () => {
       Object.defineProperty(agent, 'isInvoking', { get: () => true })
 
       // Should NOT throw when recording is disabled
-      const result = await agent.tool.quick_tool!({}, { recordDirectToolCall: false })
+      const result = await agent.tool.quick_tool!.invoke({}, { recordDirectToolCall: false })
       expect(result.status).toBe('success')
     })
 
@@ -311,43 +330,7 @@ describe('ToolCaller', () => {
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
       const agent = new Agent({ model, tools: [throwingTool] })
 
-      await expect(agent.tool.thrower!()).rejects.toThrow('Boom!')
-    })
-  })
-
-  describe('parameter filtering', () => {
-    it('filters parameters not in tool spec when recording', async () => {
-      const tool = createMockTool(
-        'strict-tool',
-        () =>
-          new ToolResultBlock({
-            toolUseId: 'test-id',
-            status: 'success',
-            content: [new TextBlock('ok')],
-          })
-      )
-      // Override the toolSpec to include input schema with specific properties
-      Object.defineProperty(tool, 'toolSpec', {
-        value: {
-          name: 'strict-tool',
-          description: 'Tool with strict schema',
-          inputSchema: {
-            type: 'object',
-            properties: {
-              allowed: { type: 'string' },
-            },
-          },
-        },
-      })
-      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
-      const agent = new Agent({ model, tools: [tool] })
-
-      await agent.tool.strict_tool!({ allowed: 'yes', extra: 'no' })
-
-      // Verify the recorded message only has schema-defined parameters
-      const recToolUseBlock = agent.messages[0]!.content[0] as ToolUseBlock
-      expect(recToolUseBlock).toBeInstanceOf(ToolUseBlock)
-      expect(recToolUseBlock.input).toStrictEqual({ allowed: 'yes' })
+      await expect(agent.tool.thrower!.invoke()).rejects.toThrow('Boom!')
     })
   })
 
@@ -365,6 +348,24 @@ describe('ToolCaller', () => {
 
       expect(agent.tool).toBe(agent.tool)
     })
+
+    it('returns a ToolHandle with invoke and stream methods', () => {
+      const tool = createMockTool(
+        'calculator',
+        () =>
+          new ToolResultBlock({
+            toolUseId: 'test-id',
+            status: 'success',
+            content: [new TextBlock('ok')],
+          })
+      )
+      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
+      const agent = new Agent({ model, tools: [tool] })
+
+      const handle = agent.tool.calculator!
+      expect(typeof handle.invoke).toBe('function')
+      expect(typeof handle.stream).toBe('function')
+    })
   })
 
   describe('tool use ID generation', () => {
@@ -381,8 +382,8 @@ describe('ToolCaller', () => {
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
       const agent = new Agent({ model, tools: [tool] })
 
-      await agent.tool.id_tool!()
-      await agent.tool.id_tool!()
+      await agent.tool.id_tool!.invoke()
+      await agent.tool.id_tool!.invoke()
 
       // Each call records 3 messages: [0]=assistant(toolUse), [1]=user(toolResult), [2]=assistant(ack)
       // Second call: [3]=assistant(toolUse), [4]=user(toolResult), [5]=assistant(ack)
@@ -402,8 +403,8 @@ describe('ToolCaller', () => {
     })
   })
 
-  describe('streaming generator consumption', () => {
-    it('fully consumes multi-yield generator before returning final result', async () => {
+  describe('streaming via .stream()', () => {
+    it('yields intermediate events and returns final result', async () => {
       const yields: string[] = []
       const streamingTool = {
         name: 'streamer',
@@ -430,17 +431,61 @@ describe('ToolCaller', () => {
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
       const agent = new Agent({ model, tools: [streamingTool] })
 
-      const result = await agent.tool.streamer!()
+      const events: ToolStreamEvent[] = []
+      const gen = agent.tool.streamer!.stream()
+      let result = await gen.next()
+      while (!result.done) {
+        events.push(result.value)
+        result = await gen.next()
+      }
+      const finalResult = result.value
+
+      expect(finalResult.status).toBe('success')
+      expect(finalResult.content[0]).toStrictEqual(new TextBlock('complete'))
+      // Verify all yields were consumed (generator fully iterated)
+      expect(yields).toStrictEqual(['first', 'second', 'third'])
+      // Verify we received all 3 stream events
+      expect(events).toHaveLength(3)
+    })
+
+    it('invoke() also fully consumes multi-yield generator', async () => {
+      const yields: string[] = []
+      const streamingTool = {
+        name: 'streamer',
+        description: 'A tool that yields progress events',
+        toolSpec: {
+          name: 'streamer',
+          description: 'A tool that yields progress events',
+          inputSchema: { type: 'object' as const, properties: {} },
+        },
+        async *stream(): AsyncGenerator<ToolStreamEvent, ToolResultBlock, undefined> {
+          yields.push('first')
+          yield new ToolStreamEvent({ data: 'step 1' })
+          yields.push('second')
+          yield new ToolStreamEvent({ data: 'step 2' })
+          yields.push('third')
+          yield new ToolStreamEvent({ data: 'step 3' })
+          return new ToolResultBlock({
+            toolUseId: 'stream-id',
+            status: 'success',
+            content: [new TextBlock('complete')],
+          })
+        },
+      }
+      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
+      const agent = new Agent({ model, tools: [streamingTool] })
+
+      const result = await agent.tool.streamer!.invoke()
 
       expect(result.status).toBe('success')
       expect(result.content[0]).toStrictEqual(new TextBlock('complete'))
-      // Verify all yields were consumed (generator fully iterated)
+      // Verify all yields were consumed even when using .invoke()
       expect(yields).toStrictEqual(['first', 'second', 'third'])
     })
   })
 
-  describe('parameter filtering contract', () => {
-    it('passes ALL parameters to tool but filters when recording in history', async () => {
+  describe('tool input passthrough', () => {
+    it('passes ALL parameters to tool execution', async () => {
       let receivedInput: unknown = null
       const tool = createMockTool(
         'capture-tool',
@@ -457,31 +502,13 @@ describe('ToolCaller', () => {
         receivedInput = context.toolUse.input
         return originalStream(context)
       }
-      // Override toolSpec to include inputSchema with specific properties
-      Object.defineProperty(tool, 'toolSpec', {
-        value: {
-          name: 'capture-tool',
-          description: 'Captures input for verification',
-          inputSchema: {
-            type: 'object',
-            properties: {
-              allowed: { type: 'string' },
-            },
-          },
-        },
-      })
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
       const agent = new Agent({ model, tools: [tool] })
 
-      await agent.tool.capture_tool!({ allowed: 'yes', extra: 'should-pass-through' })
+      await agent.tool.capture_tool!.invoke({ allowed: 'yes', extra: 'should-pass-through' })
 
-      // Tool MUST receive ALL parameters (including extra)
+      // Tool receives ALL parameters
       expect(receivedInput).toStrictEqual({ allowed: 'yes', extra: 'should-pass-through' })
-
-      // But recorded history should only contain filtered parameters
-      const recToolUseBlock = agent.messages[0]!.content[0] as ToolUseBlock
-      expect(recToolUseBlock).toBeInstanceOf(ToolUseBlock)
-      expect(recToolUseBlock.input).toStrictEqual({ allowed: 'yes' })
     })
   })
 
@@ -502,7 +529,7 @@ describe('ToolCaller', () => {
       )
       agent.toolRegistry.add(laterTool)
 
-      const result = await agent.tool.later_tool!()
+      const result = await agent.tool.later_tool!.invoke()
 
       expect(result.status).toBe('success')
       expect(result.content[0]).toStrictEqual(new TextBlock('dynamic'))
