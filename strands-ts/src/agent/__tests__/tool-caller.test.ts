@@ -110,6 +110,53 @@ describe('ToolCaller', () => {
     })
   })
 
+  describe('case-insensitive name resolution', () => {
+    it('resolves tool names case-insensitively', async () => {
+      const tool = createMockTool(
+        'MyTool',
+        () =>
+          new ToolResultBlock({
+            toolUseId: 'test-id',
+            status: 'success',
+            content: [new TextBlock('ok')],
+          })
+      )
+      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
+      const agent = new Agent({ model, tools: [tool] })
+
+      const result = await agent.tool.mytool!()
+
+      expect(result.status).toBe('success')
+    })
+
+    it('prefers exact match over case-insensitive match', async () => {
+      const exactTool = createMockTool(
+        'myTool',
+        () =>
+          new ToolResultBlock({
+            toolUseId: 'test-id',
+            status: 'success',
+            content: [new TextBlock('exact')],
+          })
+      )
+      const upperTool = createMockTool(
+        'MYTOOL',
+        () =>
+          new ToolResultBlock({
+            toolUseId: 'test-id',
+            status: 'success',
+            content: [new TextBlock('upper')],
+          })
+      )
+      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
+      const agent = new Agent({ model, tools: [exactTool, upperTool] })
+
+      const result = await agent.tool.myTool!()
+
+      expect(result.content[0]).toStrictEqual(new TextBlock('exact'))
+    })
+  })
+
   describe('message history recording', () => {
     it('records tool call in message history by default', async () => {
       const tool = createMockTool(

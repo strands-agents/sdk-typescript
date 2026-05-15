@@ -207,7 +207,6 @@ export class StructuredOutputError extends Error {
   }
 }
 
-
 /**
  * Error thrown when a tool cannot be found by name during direct tool calling.
  *
