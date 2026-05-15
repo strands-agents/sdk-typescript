@@ -443,6 +443,74 @@ describe('InterventionRegistry', () => {
       expect(laterCalled).not.toHaveBeenCalled()
     })
 
+    describe('preemptive response (inline mode)', () => {
+      it('approves when response is an approved value', async () => {
+        class InlineConfirmHandler extends InterventionHandler {
+          readonly name = 'inline-confirm'
+          override beforeToolCall(): InterventionAction {
+            return { type: 'confirm', prompt: 'approve?', response: 'yes' }
+          }
+        }
+
+        new InterventionRegistry([new InlineConfirmHandler()], hookRegistry)
+
+        const event = makeBeforeToolCallEvent()
+        await hookRegistry.invokeCallbacks(event)
+        expect(event.cancel).toBe(false)
+      })
+
+      it('denies when response is a non-approved value', async () => {
+        class InlineConfirmHandler extends InterventionHandler {
+          readonly name = 'inline-confirm'
+          override beforeToolCall(): InterventionAction {
+            return { type: 'confirm', prompt: 'approve?', response: 'no' }
+          }
+        }
+
+        new InterventionRegistry([new InlineConfirmHandler()], hookRegistry)
+
+        const event = makeBeforeToolCallEvent()
+        await hookRegistry.invokeCallbacks(event)
+        expect(event.cancel).toBe('CONFIRMATION_FAILED: approve?')
+      })
+
+      it('uses custom evaluate with preemptive response', async () => {
+        class OtpHandler extends InterventionHandler {
+          readonly name = 'otp-handler'
+          override beforeToolCall(): InterventionAction {
+            return {
+              type: 'confirm',
+              prompt: 'Enter OTP:',
+              response: '123456',
+              evaluate: (r) => r === '123456',
+            }
+          }
+        }
+
+        new InterventionRegistry([new OtpHandler()], hookRegistry)
+
+        const event = makeBeforeToolCallEvent()
+        await hookRegistry.invokeCallbacks(event)
+        expect(event.cancel).toBe(false)
+      })
+
+      it('passes response to event.interrupt() as preemptive value', async () => {
+        class InlineConfirmHandler extends InterventionHandler {
+          readonly name = 'inline-confirm'
+          override beforeToolCall(): InterventionAction {
+            return { type: 'confirm', prompt: 'approve?', response: 'yes' }
+          }
+        }
+
+        new InterventionRegistry([new InlineConfirmHandler()], hookRegistry)
+
+        const event = makeBeforeToolCallEvent()
+        const interruptSpy = vi.spyOn(event, 'interrupt')
+        await hookRegistry.invokeCallbacks(event)
+        expect(interruptSpy).toHaveBeenCalledWith(expect.objectContaining({ response: 'yes' }))
+      })
+    })
+
     it.each(['proceed', 'deny'] as const)(
       'InterruptError always propagates regardless of onError=%s',
       async (onError) => {

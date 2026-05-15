@@ -106,12 +106,17 @@ export class InterventionRegistry {
           event.cancel = `DENIED: ${action.reason}`
           return true
         case 'confirm': {
-          // event.interrupt() throws InterruptError on first call (pausing the agent).
-          // InterruptError always propagates (bypasses onError) since it's intentional
-          // control flow, not a handler failure. On resume, returns the human's response.
-          const response = event.interrupt<JSONValue>({ name: handlerName, reason: action.prompt })
+          // If response is provided, it's passed as a preemptive value to
+          // event.interrupt() — the interrupt is registered but never pauses.
+          // If no response, event.interrupt() throws InterruptError on first
+          // call (pausing the agent for external resume).
+          const result = event.interrupt<JSONValue>({
+            name: handlerName,
+            reason: action.prompt,
+            ...(action.response !== undefined && { response: action.response }),
+          })
           const check = action.evaluate ?? isApproved
-          if (!check(response)) {
+          if (!check(result)) {
             event.cancel = `CONFIRMATION_FAILED: ${action.prompt}`
             return true
           }
