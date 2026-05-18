@@ -446,6 +446,8 @@ export class Agent implements LocalAgent, InvokableAgent {
       })
     )
 
+    await this._interventionRegistry.initialize(this)
+
     await this._pluginRegistry.initialize(this)
 
     await this._hooksRegistry.invokeCallbacks(new InitializedEvent({ agent: this }))
