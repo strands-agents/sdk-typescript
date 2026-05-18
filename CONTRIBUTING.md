@@ -36,7 +36,7 @@ When proposing solutions or reviewing code, we reference these principles to gui
 
    This also installs git hooks (via husky) that automatically build the SDK, run tests, linting, formatting checks, and type checking before each commit.
 
-   > **Note**: Use `npm ci` for installing dependencies. Use `npm install` only when intentionally adding or updating dependencies. See [Dependency Guidelines](docs/DEPENDENCIES.md) for details.
+   > **Note**: Use `npm ci` for installing dependencies. Use `npm install` only when intentionally adding or updating dependencies. See [Dependency Guidelines](dev-docs/DEPENDENCIES.md) for details.
 
 2. Install Playwright browsers for browser testing:
    ```bash
@@ -112,7 +112,7 @@ npm run test:integ -- test/integ/models/openai.test.ts  # Single integ test file
 - **Integration Tests**: Test complete workflows in `test/integ/` directory
 - **TSDoc Coverage**: All exported functions must have complete documentation
 
-For detailed testing patterns and guidelines, see [Testing Guidelines](docs/TESTING.md).
+For detailed testing patterns and guidelines, see [Testing Guidelines](dev-docs/TESTING.md).
 
 ### Documentation Updates
 
@@ -166,7 +166,7 @@ To send us a pull request, please:
 - **Formatting**: Prettier formatting applied consistently
 - **Type safety**: No `any` types allowed, explicit return types required
 - **Conventional commits**: Use conventional commit message format
-- **PR description**: Follow the [PR description guidelines](docs/PR.md) for writing effective descriptions
+- **PR description**: Follow the [PR description guidelines](dev-docs/PR.md) for writing effective descriptions
 
 GitHub provides additional documentation on [forking a repository](https://help.github.com/articles/fork-a-repo/) and
 [creating a pull request](https://help.github.com/articles/creating-a-pull-request/).
