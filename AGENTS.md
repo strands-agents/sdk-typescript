@@ -179,6 +179,11 @@ sdk-typescript/
 │   │   │   │   ├── plugin.ts
 │   │   │   │   ├── storage.ts
 │   │   │   │   └── index.ts
+│   │   │   ├── goal/             # Iterative-refinement plugin (validator-driven retry loop)
+│   │   │   │   ├── __tests__/
+│   │   │   │   ├── plugin.ts
+│   │   │   │   ├── judge.ts      # NL-judge prompt + outcome schema
+│   │   │   │   └── index.ts
 │   │   │   └── skills/           # AgentSkills plugin
 │   │   │       ├── __tests__/
 │   │   │       ├── agent-skills.ts
@@ -208,6 +213,7 @@ sdk-typescript/
 │   │   │   ├── __resources__/    # Static resources for integration tests
 │   │   │   ├── a2a/
 │   │   │   ├── conversation-manager/
+│   │   │   ├── goal/
 │   │   │   ├── mcp/
 │   │   │   ├── models/
 │   │   │   │   └── openai/
@@ -337,7 +343,7 @@ sdk-typescript/
 - **`strands-ts/src/telemetry/`**: OpenTelemetry tracing and metrics
 - **`strands-ts/src/tools/`**: Tool definitions, types, and structured output validation with Zod schemas
 - **`strands-ts/src/types/`**: Core type definitions used across the SDK
-- **`strands-ts/src/vended-plugins/`**: Optional vended plugins (context-offloader, skills — not part of core SDK, independently importable)
+- **`strands-ts/src/vended-plugins/`**: Optional vended plugins (context-offloader, goal, skills — not part of core SDK, independently importable)
 - **`strands-ts/src/vended-tools/`**: Optional vended tools (bash, file-editor, http-request, notebook)
 - **`strands-ts/generated/`**: Auto-generated WIT interface type declarations
 - **`strands-ts/test/integ/`**: Integration tests (tests public API and external integrations)
