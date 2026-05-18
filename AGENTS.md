@@ -247,7 +247,7 @@ sdk-typescript/
 │   ├── vitest.config.ts          # Test configuration (unit + guest projects)
 │   └── tsconfig.json             # TypeScript type-check configuration
 │
-├── strands-py/                   # Python SDK bindings (WASM-based)
+├── strands-py-wasm/               # Python SDK bindings (WASM-based)
 │   ├── strands/                  # Python package source
 │   │   ├── _generated/           # Auto-generated type bindings
 │   │   ├── agent/                # Agent implementation
@@ -346,10 +346,10 @@ sdk-typescript/
 - **`strands-wasm/generated/`**: Auto-generated WIT interface type declarations for WASM
 - **`strands-wasm/test/guest/`**: Tests that load the compiled WASM component
 - **`strands-wasm/docs/`**: WASM-specific development documentation
-- **`strands-py/`**: Python SDK bindings powered by the TS SDK compiled to WASM
-- **`strands-py/strands/`**: Python package source with agent, models, multiagent, session, tools, and type modules
-- **`strands-py/scripts/`**: Build and codegen scripts (type generation from WIT definitions)
-- **`strands-py/tests_integ/`**: Python integration tests
+- **`strands-py-wasm/`**: Python SDK bindings powered by the TS SDK compiled to WASM
+- **`strands-py-wasm/strands/`**: Python package source with agent, models, multiagent, session, tools, and type modules
+- **`strands-py-wasm/scripts/`**: Build and codegen scripts (type generation from WIT definitions)
+- **`strands-py-wasm/tests_integ/`**: Python integration tests
 - **`strandly/`**: Developer CLI tooling for local development workflows (install on PATH via `npm install && npm link -w strandly`, then call `strandly …`)
 - **`wit/`**: WebAssembly Interface Type (WIT) definitions defining the contract between the TS SDK and WASM hosts
 - **`wit/deps/`**: External WIT dependency interfaces (clocks, io)

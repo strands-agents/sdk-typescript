@@ -47,7 +47,7 @@ graph TD
     TS -->|esbuild bundle| WASM_BUNDLE["strands-wasm (ESM bundle)"]
     WASM_GEN --> WASM_BUNDLE
     WASM_BUNDLE -->|componentize-js| WASM["agent.wasm (WASM component)"]
-    WASM -->|wasmtime-py| PY["strands-py (Python package)"]
+    WASM -->|wasmtime-py| PY["strands-py-wasm (Python package)"]
 ```
 
 | Directory      | Language   | What it is                                                          |
@@ -55,7 +55,7 @@ graph TD
 | `wit/`         | WIT        | Interface contract between the WASM guest and host                  |
 | `strands-ts/`  | TypeScript | Agent runtime: event loop, model providers, tools, hooks, streaming |
 | `strands-wasm/` | TypeScript | Bridges the TS SDK to WIT exports, compiles to a WASM component    |
-| `strands-py/`  | Python     | Python wrapper: Agent class, @tool decorator, direct WASM host      |
+| `strands-py-wasm/`  | Python     | Python wrapper: Agent class, @tool decorator, direct WASM host      |
 | `strands-dev/` | TypeScript | Dev CLI that orchestrates build, test, lint, and CI                 |
 | `docs/`        | Markdown   | Design proposal and team decisions                                  |
 
@@ -68,14 +68,14 @@ graph TD
 
 Generated files are created by running `npm run dev -- generate` (or `bootstrap`) and are gitignored. Do not edit them by hand. CI runs `generate --check` and fails if they are stale.
 
-Python types are auto-generated into `strands-py/strands/_generated/types.py` by `strands-py/scripts/generate_types.py`.
+Python types are auto-generated into `strands-py-wasm/strands/_generated/types.py` by `strands-py-wasm/scripts/generate_types.py`.
 
 ### Tests
 
 | Layer          | Framework | Location                                                          |
 | -------------- | --------- | ----------------------------------------------------------------- |
 | TypeScript SDK | vitest    | `strands-ts/src/**/__tests__/` (unit), `strands-ts/test/` (integ) |
-| Python wrapper | pytest    | `strands-py/tests_integ/`                                         |
+| Python wrapper | pytest    | `strands-py-wasm/tests_integ/`                                         |
 
 Add tests alongside the code you change. Bug fixes should include a test that reproduces the original issue.
 
@@ -89,7 +89,7 @@ Each layer depends on the layers above it in the pipeline. The `validate` comman
 | TS SDK internals                      | `npm run dev -- validate ts`          |
 | TS SDK public API                     | `npm run dev -- validate ts-api`      |
 | WASM bridge (`strands-wasm/entry.ts`) | `npm run dev -- validate wasm`        |
-| Pure Python (`strands-py/`)           | `npm run dev -- validate py`          |
+| Pure Python (`strands-py-wasm/`)           | `npm run dev -- validate py`          |
 
 **TS internals vs. public API:** The WASM bridge (`strands-wasm/entry.ts`) imports specific types and functions from `strands-ts/`. If your change modifies something the bridge imports, it is a public API change — use `validate ts-api`. If the bridge does not import it, use `validate ts`.
 

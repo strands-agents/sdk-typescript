@@ -6,7 +6,7 @@ import { join, resolve } from 'node:path'
 import { program } from 'commander'
 
 const ROOT = resolve(import.meta.dirname, '../..')
-const PY = `${ROOT}/strands-py`
+const PY = `${ROOT}/strands-py-wasm`
 const VENV = `${ROOT}/.venv`
 
 process.env.PYTHONPYCACHEPREFIX ??= `${ROOT}/.pycache`
@@ -168,7 +168,7 @@ function run(cmd: string, opts?: { cwd?: string; env?: Record<string, string> })
 }
 
 /** Run a command with the repo-root venv on PATH. ``cwd`` defaults to
- * strands-py because most Python commands (pytest, ruff) act on that
+ * strands-py-wasm because most Python commands (pytest, ruff) act on that
  * package's source, but callers can override. */
 function py(cmd: string, opts?: { cwd?: string }): void {
   run(cmd, {
@@ -183,7 +183,7 @@ function setup(opts?: { node?: boolean; python?: boolean }): void {
   if (all || opts?.python) {
     run('python3 -m venv .venv', { cwd: ROOT })
     run(`${VENV}/bin/pip install -e .`, { cwd: ROOT })
-    run(`${VENV}/bin/pip install -e strands-py/`, { cwd: ROOT })
+    run(`${VENV}/bin/pip install -e strands-py-wasm/`, { cwd: ROOT })
   }
 }
 
@@ -252,12 +252,12 @@ function generate(opts?: { check?: boolean }): void {
 
   if (opts?.check) {
     try {
-      execSync('git diff --quiet -- strands-wasm/generated/ strands-ts/generated/ strands-py/src/strands/_generated.py', {
+      execSync('git diff --quiet -- strands-wasm/generated/ strands-ts/generated/ strands-py-wasm/src/strands/_generated.py', {
         cwd: ROOT,
       })
     } catch {
       console.error("error: generated files are out of date -- run 'strandly generate' and commit")
-      run('git diff --stat -- strands-wasm/generated/ strands-ts/generated/ strands-py/src/strands/_generated.py')
+      run('git diff --stat -- strands-wasm/generated/ strands-ts/generated/ strands-py-wasm/src/strands/_generated.py')
       process.exit(1)
     }
   }
@@ -269,5 +269,5 @@ function clean(): void {
   } catch (e) {
     console.warn('workspace clean failed (continuing):', (e as Error).message)
   }
-  run('rm -rf .venv strands-py/target')
+  run('rm -rf .venv strands-py-wasm/target')
 }

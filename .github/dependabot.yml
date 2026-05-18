@@ -32,7 +32,7 @@ updates:
           - 'patch'
       # Because major production updates aren't matched by any group, they will have individual PRs
   - package-ecosystem: 'pip'
-    directory: '/strands-py'
+    directory: '/strands-py-wasm'
     schedule:
       interval: 'daily'
     commit-message:
