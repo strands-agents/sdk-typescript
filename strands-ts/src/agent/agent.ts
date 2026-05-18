@@ -391,7 +391,11 @@ export class Agent implements LocalAgent, InvokableAgent {
     this._interruptState = new InterruptState()
 
     this._toolExecutor = config?.toolExecutor ?? 'concurrent'
-    this._toolCaller = ToolCaller.create(this)
+    // Pass a private helper into ToolCaller so message append + hook firing
+    // remains an internal concern of Agent (not exposed as a public method).
+    this._toolCaller = ToolCaller.create(this, (message, invocationState) =>
+      this._appendMessageAndFireHooks(message, invocationState)
+    )
 
     this._initialized = false
   }
@@ -2080,14 +2084,11 @@ export class Agent implements LocalAgent, InvokableAgent {
   /**
    * Appends a message to the conversation history and fires MessageAddedEvent hooks.
    *
-   * Use this from non-streaming contexts (e.g., direct tool calls via {@link ToolCaller})
-   * where the caller cannot yield events into the agent stream.
-   *
-   * @param message - The message to append
-   * @param invocationState - Optional invocation state (defaults to empty)
-   * @internal
+   * Used by {@link ToolCaller} (via the helper passed to `ToolCaller.create`) for
+   * direct tool calls that cannot yield events into the agent stream. This stays
+   * private — callers outside the agent should never directly mutate messages.
    */
-  async appendMessage(message: Message, invocationState: InvocationState = {}): Promise<void> {
+  private async _appendMessageAndFireHooks(message: Message, invocationState: InvocationState = {}): Promise<void> {
     this.messages.push(message)
     await this._hooksRegistry.invokeCallbacks(new MessageAddedEvent({ agent: this, message, invocationState }))
   }

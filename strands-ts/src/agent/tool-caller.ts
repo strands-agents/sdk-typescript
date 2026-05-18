@@ -12,6 +12,7 @@ import type { JSONValue } from '../types/json.js'
 import type { ToolResultBlock } from '../types/messages.js'
 import { Message } from '../types/messages.js'
 import { TextBlock, ToolUseBlock } from '../types/messages.js'
+import type { InvocationState } from '../types/agent.js'
 import type { Tool, ToolContext } from '../tools/tool.js'
 import { ToolStreamEvent } from '../tools/tool.js'
 import type { ToolUse } from '../tools/types.js'
@@ -67,6 +68,16 @@ export interface ToolHandle {
 export type ToolCallerProxy = Record<string, ToolHandle>
 
 /**
+ * Helper passed in from Agent for appending messages and firing MessageAddedEvent hooks.
+ *
+ * Defined here (not in agent.ts) so that the message-mutation capability stays
+ * encapsulated — only the Agent knows how to mutate messages safely, and it
+ * passes a bound helper into ToolCaller. ToolCaller never gets direct access
+ * to `agent.messages` or the hooks registry.
+ */
+export type AppendMessageFn = (message: Message, invocationState?: InvocationState) => Promise<void>
+
+/**
  * Provides direct tool calling through the agent.
  *
  * Enables programmatic tool invocation without model inference via
@@ -95,6 +106,7 @@ export type ToolCallerProxy = Record<string, ToolHandle>
  */
 export class ToolCaller {
   private readonly _agent: Agent
+  private readonly _appendMessage: AppendMessageFn
 
   /**
    * Creates a ToolCaller proxy for the given agent.
@@ -102,13 +114,19 @@ export class ToolCaller {
    * Encapsulates the Proxy cast so callers don't need to handle the
    * implementation detail that the constructor returns a Proxy, not
    * a plain ToolCaller instance.
+   *
+   * @param agent - The owning agent instance
+   * @param appendMessage - Helper provided by the agent to append messages and fire hooks.
+   *   Passed in (rather than calling a public agent method) so message mutation stays
+   *   encapsulated within the agent.
    */
-  static create(agent: Agent): ToolCallerProxy {
-    return new ToolCaller(agent) as unknown as ToolCallerProxy
+  static create(agent: Agent, appendMessage: AppendMessageFn): ToolCallerProxy {
+    return new ToolCaller(agent, appendMessage) as unknown as ToolCallerProxy
   }
 
-  private constructor(agent: Agent) {
+  private constructor(agent: Agent, appendMessage: AppendMessageFn) {
     this._agent = agent
+    this._appendMessage = appendMessage
 
     // Return a Proxy that intercepts property access to resolve tool names
     return new Proxy(this, {
@@ -266,9 +284,11 @@ export class ToolCaller {
       content: [new TextBlock(`agent.tool.${toolUse.name} was called.`)],
     })
 
-    // Append messages and fire MessageAddedEvent hooks for each
-    await this._agent.appendMessage(toolUseMsg)
-    await this._agent.appendMessage(toolResultMsg)
-    await this._agent.appendMessage(assistantMsg)
+    // Append messages and fire MessageAddedEvent hooks for each, using the
+    // helper provided by Agent. This keeps message mutation encapsulated in
+    // the agent — ToolCaller never touches `agent.messages` directly.
+    await this._appendMessage(toolUseMsg)
+    await this._appendMessage(toolResultMsg)
+    await this._appendMessage(assistantMsg)
   }
 }
