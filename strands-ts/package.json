@@ -80,6 +80,10 @@
       "types": "./dist/src/vended-plugins/context-offloader/index.d.ts",
       "default": "./dist/src/vended-plugins/context-offloader/index.js"
     },
+    "./vended-plugins/goal": {
+      "types": "./dist/src/vended-plugins/goal/index.d.ts",
+      "default": "./dist/src/vended-plugins/goal/index.js"
+    },
     "./vended-interventions/hitl": {
       "types": "./dist/src/vended-interventions/hitl/index.d.ts",
       "default": "./dist/src/vended-interventions/hitl/index.js"
