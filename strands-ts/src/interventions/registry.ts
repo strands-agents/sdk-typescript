@@ -8,6 +8,7 @@ import {
 } from '../hooks/events.js'
 import type { HookRegistry } from '../hooks/registry.js'
 import { HookOrder } from '../hooks/types.js'
+import type { LocalAgent } from '../types/agent.js'
 import { Message, TextBlock } from '../types/messages.js'
 import type { Guide, InterventionAction } from './actions.js'
 import { defaultEvaluate } from './actions.js'
@@ -40,6 +41,16 @@ export class InterventionRegistry {
     }
     this._handlers = handlers
     this._registerHooks(hookRegistry)
+  }
+
+  /**
+   * Run each handler's optional `initAgent` hook. Called once by the agent
+   * during {@link Agent.initialize}.
+   */
+  async initialize(agent: LocalAgent): Promise<void> {
+    for (const handler of this._handlers) {
+      await handler.initAgent(agent)
+    }
   }
 
   private _registerHooks(hookRegistry: HookRegistry): void {

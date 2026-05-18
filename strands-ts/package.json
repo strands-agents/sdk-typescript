@@ -83,6 +83,10 @@
     "./vended-interventions/hitl": {
       "types": "./dist/src/vended-interventions/hitl/index.d.ts",
       "default": "./dist/src/vended-interventions/hitl/index.js"
+    },
+    "./vended-interventions/steering": {
+      "types": "./dist/src/vended-interventions/steering/index.d.ts",
+      "default": "./dist/src/vended-interventions/steering/index.js"
     }
   },
   "scripts": {
@@ -127,13 +131,12 @@
     "@ai-sdk/openai": "^3.0.41",
     "@ai-sdk/provider": "^3.0.0",
     "@anthropic-ai/sdk": "^0.92.0",
-    "@aws/bedrock-token-generator": "^1.1.0",
     "@aws-sdk/client-bedrock": "^3.943.0",
     "@aws-sdk/client-s3": "^3.943.0",
     "@aws-sdk/client-secrets-manager": "^3.943.0",
     "@aws-sdk/client-sts": "^3.996.0",
     "@aws-sdk/credential-providers": "^3.943.0",
-    "@smithy/types": "^4.0.0",
+    "@aws/bedrock-token-generator": "^1.1.0",
     "@eslint/js": "^9.39.4",
     "@google/genai": "^1.40.0",
     "@opentelemetry/api": "^1.9.0",
@@ -143,6 +146,7 @@
     "@opentelemetry/sdk-metrics": "^2.6.1",
     "@opentelemetry/sdk-trace-base": "^2.6.1",
     "@opentelemetry/sdk-trace-node": "^2.6.1",
+    "@smithy/types": "^4.0.0",
     "@types/express": "^5.0.6",
     "@types/node": "^25.6.0",
     "@types/uuid": "^11.0.0",
@@ -174,6 +178,7 @@
   "dependencies": {
     "@aws-sdk/client-bedrock-runtime": "^3.1037.0",
     "@types/json-schema": "^7.0.15",
+    "dedent": "^1.7.2",
     "uuid": "^14.0.0",
     "yaml": "^2.8.3"
   },
@@ -181,9 +186,8 @@
     "@a2a-js/sdk": "^0.3.10",
     "@ai-sdk/provider": "^3.0.0",
     "@anthropic-ai/sdk": "^0.92.0",
-    "@aws/bedrock-token-generator": "^1.1.0",
     "@aws-sdk/client-s3": "^3.943.0",
-    "@smithy/types": "^4.0.0",
+    "@aws/bedrock-token-generator": "^1.1.0",
     "@google/genai": "^1.40.0",
     "@modelcontextprotocol/sdk": "^1.25.2",
     "@opentelemetry/api": "^1.9.0",
@@ -193,6 +197,7 @@
     "@opentelemetry/sdk-metrics": "^2.6.1",
     "@opentelemetry/sdk-trace-base": "^2.6.1",
     "@opentelemetry/sdk-trace-node": "^2.6.1",
+    "@smithy/types": "^4.0.0",
     "express": "^5.1.0",
     "openai": "^6.7.0",
     "zod": "^4.1.12"
