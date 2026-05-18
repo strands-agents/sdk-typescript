@@ -15,7 +15,7 @@ program.name('strandly').description(
   `Strands monorepo development CLI
 
 Build pipeline (each step feeds the next):
-  wit/agent.wit -> strands-ts -> strands-wasm -> strands-py
+  wit/agent.wit -> strands-ts -> strands-wasm -> strands-py-wasm
 
 Most commands accept layer flags (--ts, --wasm, --py).
 No flags = run all layers.`
