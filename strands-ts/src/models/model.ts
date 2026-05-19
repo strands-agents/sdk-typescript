@@ -1,4 +1,5 @@
 import {
+  type CacheTTL,
   type ContentBlock,
   Message,
   type MessageMetadata,
@@ -74,6 +75,14 @@ export interface CacheConfig {
    * - "anthropic": Force enable Anthropic-style caching (useful for application inference profiles)
    */
   strategy: 'auto' | 'anthropic'
+
+  /**
+   * Optional TTL applied to auto-injected cache points (after tools and the last user message).
+   * When omitted, the provider's default TTL is used.
+   *
+   * Use a per-block `ttl` on a {@link CachePointBlock} to override on a specific cache point.
+   */
+  ttl?: CacheTTL
 }
 
 /**

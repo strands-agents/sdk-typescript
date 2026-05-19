@@ -53,6 +53,7 @@ export type {
   ToolResultBlockData,
   ReasoningBlockData,
   CachePointBlockData,
+  CacheTTL,
   GuardContentBlockData,
   GuardContentText,
   GuardContentImage,
