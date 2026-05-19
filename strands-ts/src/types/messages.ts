@@ -531,15 +531,6 @@ export class ReasoningBlock
 }
 
 /**
- * TTL duration for a cache point.
- *
- * Bedrock currently accepts `'5m'` (default) and `'1h'`.
- *
- * @see https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_CachePointBlock.html
- */
-export type CacheTTL = '5m' | '1h'
-
-/**
  * Data for a cache point block.
  */
 export interface CachePointBlockData {
@@ -550,8 +541,12 @@ export interface CachePointBlockData {
 
   /**
    * Optional TTL for the cache entry. When omitted, the provider's default TTL is used.
+   *
+   * The accepted value space is provider-specific. For example, the Bedrock provider only
+   * accepts the values defined by `BedrockCacheTTL` (`'5m'` and `'1h'`). Other providers
+   * may accept different values or ignore this field.
    */
-  ttl?: CacheTTL
+  ttl?: string
 }
 
 /**
@@ -570,9 +565,10 @@ export class CachePointBlock implements CachePointBlockData, JSONSerializable<{ 
   readonly cacheType: 'default'
 
   /**
-   * Optional TTL for the cache entry.
+   * Optional TTL for the cache entry. See {@link CachePointBlockData.ttl} for the
+   * provider-specific value space.
    */
-  readonly ttl?: CacheTTL
+  readonly ttl?: string
 
   constructor(data: CachePointBlockData) {
     this.cacheType = data.cacheType

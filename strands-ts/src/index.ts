@@ -53,7 +53,6 @@ export type {
   ToolResultBlockData,
   ReasoningBlockData,
   CachePointBlockData,
-  CacheTTL,
   GuardContentBlockData,
   GuardContentText,
   GuardContentImage,
@@ -184,6 +183,7 @@ export type {
   BedrockModelOptions,
   BedrockGuardrailConfig,
   BedrockGuardrailRedactionConfig,
+  BedrockCacheTTL,
 } from './models/bedrock.js'
 
 // Agent streaming event types

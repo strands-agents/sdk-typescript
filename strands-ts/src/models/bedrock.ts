@@ -10,6 +10,7 @@
 import {
   BedrockRuntimeClient,
   type BedrockRuntimeClientConfig,
+  type CachePointBlock as BedrockCachePointBlock,
   type ContentBlock as BedrockContentBlock,
   type ContentBlockDeltaEvent as BedrockContentBlockDeltaEvent,
   type ContentBlockStartEvent as BedrockContentBlockStartEvent,
@@ -124,6 +125,18 @@ const DEFAULT_REDACT_INPUT_MESSAGE = '[User input redacted.]'
  * Default message for redacted output.
  */
 const DEFAULT_REDACT_OUTPUT_MESSAGE = '[Assistant output redacted.]'
+
+/**
+ * TTL durations accepted by Bedrock for prompt-cache checkpoints.
+ *
+ * Bedrock currently accepts `'5m'` (default) and `'1h'`. Note that Bedrock requires
+ * checkpoint TTLs to be **non-increasing** across `toolConfig` → system → messages —
+ * setting a longer TTL on a later checkpoint than an earlier one will be rejected by
+ * the service.
+ *
+ * @see https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_CachePointBlock.html
+ */
+export type BedrockCacheTTL = '5m' | '1h'
 
 /**
  * Redaction configuration for Bedrock guardrails.
@@ -679,8 +692,12 @@ export class BedrockModel extends Model<BedrockModelConfig> {
       )
 
       if (this._shouldEnableCaching()) {
-        const ttl = this._config.cacheConfig?.ttlTool
-        tools.push({ cachePoint: { type: 'default', ...(ttl !== undefined && { ttl }) } })
+        const cachePoint: BedrockCachePointBlock = { type: 'default' }
+        const ttl = this._config.cacheConfig?.toolsTTL
+        if (ttl !== undefined) {
+          cachePoint.ttl = ttl as BedrockCacheTTL
+        }
+        tools.push({ cachePoint })
       }
 
       const toolConfig: ToolConfiguration = {
@@ -836,8 +853,12 @@ export class BedrockModel extends Model<BedrockModelConfig> {
     if (lastUserIdx !== null) {
       const lastMsg = messages[lastUserIdx]
       if (lastMsg && lastMsg.content) {
-        const ttl = this._config.cacheConfig?.ttlMessages
-        lastMsg.content.push({ cachePoint: { type: 'default', ...(ttl !== undefined && { ttl }) } })
+        const cachePoint: BedrockCachePointBlock = { type: 'default' }
+        const ttl = this._config.cacheConfig?.messagesTTL
+        if (ttl !== undefined) {
+          cachePoint.ttl = ttl as BedrockCacheTTL
+        }
+        lastMsg.content.push({ cachePoint })
         logger.debug(`msg_idx=<${lastUserIdx}> | added cache point to last user message`)
       }
     }
@@ -1042,8 +1063,13 @@ export class BedrockModel extends Model<BedrockModelConfig> {
         }
       }
 
-      case 'cachePointBlock':
-        return { cachePoint: { type: block.cacheType, ...(block.ttl !== undefined && { ttl: block.ttl }) } }
+      case 'cachePointBlock': {
+        const cachePoint: BedrockCachePointBlock = { type: block.cacheType }
+        if (block.ttl !== undefined) {
+          cachePoint.ttl = block.ttl as BedrockCacheTTL
+        }
+        return { cachePoint }
+      }
 
       case 'imageBlock':
         return {

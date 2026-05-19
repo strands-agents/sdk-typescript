@@ -1611,7 +1611,7 @@ describe('BedrockModel', () => {
 
     it('propagates cacheConfig ttls independently to tools and last user message', async () => {
       const provider = new BedrockModel({
-        cacheConfig: { strategy: 'auto', ttlTool: '1h', ttlMessages: '5m' },
+        cacheConfig: { strategy: 'auto', toolsTTL: '1h', messagesTTL: '5m' },
       })
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
       const options: StreamOptions = {
@@ -1642,8 +1642,8 @@ describe('BedrockModel', () => {
       expect(lastBlock).toStrictEqual({ cachePoint: { type: 'default', ttl: '5m' } })
     })
 
-    it('propagates only ttlTool when ttlMessages is not set', async () => {
-      const provider = new BedrockModel({ cacheConfig: { strategy: 'auto', ttlTool: '1h' } })
+    it('propagates only toolsTTL when messagesTTL is not set', async () => {
+      const provider = new BedrockModel({ cacheConfig: { strategy: 'auto', toolsTTL: '1h' } })
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
       const options: StreamOptions = {
         toolSpecs: [
@@ -1665,8 +1665,8 @@ describe('BedrockModel', () => {
       expect(lastBlock).toStrictEqual({ cachePoint: { type: 'default' } })
     })
 
-    it('propagates only ttlMessages when ttlTool is not set', async () => {
-      const provider = new BedrockModel({ cacheConfig: { strategy: 'auto', ttlMessages: '1h' } })
+    it('propagates only messagesTTL when toolsTTL is not set', async () => {
+      const provider = new BedrockModel({ cacheConfig: { strategy: 'auto', messagesTTL: '1h' } })
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
       const options: StreamOptions = {
         toolSpecs: [

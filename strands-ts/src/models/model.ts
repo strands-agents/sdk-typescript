@@ -1,5 +1,4 @@
 import {
-  type CacheTTL,
   type ContentBlock,
   Message,
   type MessageMetadata,
@@ -78,15 +77,17 @@ export interface CacheConfig {
 
   /**
    * Optional TTL applied to the auto-injected cache point appended after `toolConfig.tools`.
-   * When omitted, the provider's default TTL is used.
+   * When omitted, the provider's default TTL is used. The accepted value space is
+   * provider-specific.
    */
-  ttlTool?: CacheTTL
+  toolsTTL?: string
 
   /**
    * Optional TTL applied to the auto-injected cache point appended to the last user message.
-   * When omitted, the provider's default TTL is used.
+   * When omitted, the provider's default TTL is used. The accepted value space is
+   * provider-specific.
    */
-  ttlMessages?: CacheTTL
+  messagesTTL?: string
 }
 
 /**
