@@ -174,7 +174,6 @@
   "dependencies": {
     "@aws-sdk/client-bedrock-runtime": "^3.1037.0",
     "@types/json-schema": "^7.0.15",
-    "dedent": "^1.7.2",
     "uuid": "^14.0.0",
     "yaml": "^2.8.3"
   },

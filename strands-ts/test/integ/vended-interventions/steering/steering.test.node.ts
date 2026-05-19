@@ -1,12 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { Agent, tool } from '$/sdk/index.js'
-import {
-  SteeringHandler,
-  ToolLedgerProvider,
-  type ToolSteeringAction,
-} from '$/sdk/vended-interventions/steering/index.js'
-import type { ToolUse } from '$/sdk/tools/types.js'
+import { guide, proceed, type Guide, type Proceed } from '$/sdk/interventions/actions.js'
+import { SteeringHandler, ToolLedgerProvider } from '$/sdk/vended-interventions/steering/index.js'
+import type { BeforeToolCallEvent } from '$/sdk/hooks/events.js'
 import { bedrock } from '../../__fixtures__/model-providers.js'
 
 const sendEmail = tool({
@@ -29,11 +26,11 @@ describe.skipIf(bedrock.skip)('Steering integration', () => {
   it('redirects send_email to send_notification via Guide', async () => {
     class RedirectEmailHandler extends SteeringHandler {
       override readonly name = 'redirect-email'
-      override async steerBeforeTool(_agent: Agent, toolUse: ToolUse): Promise<ToolSteeringAction> {
-        if (toolUse.name === 'send_email') {
-          return { type: 'guide', feedback: 'Use send_notification instead of send_email for better delivery.' }
+      override async beforeToolCall(event: BeforeToolCallEvent): Promise<Guide | Proceed> {
+        if (event.toolUse.name === 'send_email') {
+          return guide('Use send_notification instead of send_email for better delivery.')
         }
-        return { type: 'proceed' }
+        return proceed()
       }
     }
 
@@ -66,13 +63,13 @@ describe.skipIf(bedrock.skip)('Steering integration', () => {
     class LedgerCheckingHandler extends SteeringHandler {
       override readonly name = 'ledger-check'
 
-      override async steerBeforeTool(_agent: Agent, toolUse: ToolUse): Promise<ToolSteeringAction> {
+      override async beforeToolCall(event: BeforeToolCallEvent): Promise<Proceed> {
         const calls = (ledger.context.calls ?? []) as Array<Record<string, unknown>>
-        const current = calls.find((c) => c.name === toolUse.name)
+        const current = calls.find((c) => c.name === event.toolUse.name)
         expect(current).toBeDefined()
-        expect(current?.args).toEqual(toolUse.input)
+        expect(current?.args).toEqual(event.toolUse.input)
         expect(current?.status).toBe('pending')
-        return { type: 'proceed' }
+        return proceed()
       }
     }
 

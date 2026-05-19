@@ -5,14 +5,14 @@
  * rather than front-loading all instructions. Handlers integrate with the intervention
  * system to intercept actions and provide just-in-time feedback based on local context.
  *
- * Subclass {@link SteeringHandler} and override {@link steerBeforeTool} and/or
- * {@link steerAfterModel}. Both methods have default implementations that return Proceed.
+ * Subclass {@link SteeringHandler} and override {@link beforeToolCall} and/or
+ * {@link afterModelCall} from {@link InterventionHandler}.
  *
  * @example
  * ```typescript
  * class MySteeringHandler extends SteeringHandler {
- *   override async steerBeforeTool(agent, toolUse) {
- *     if (toolUse.name === 'dangerous_tool') {
+ *   override async beforeToolCall(event) {
+ *     if (event.toolUse.name === 'dangerous_tool') {
  *       return { type: 'guide', feedback: 'This tool requires extra caution.' }
  *     }
  *     return { type: 'proceed' }
@@ -23,20 +23,10 @@
  * ```
  */
 
-import type { AfterModelCallEvent, BeforeToolCallEvent } from '../../../hooks/events.js'
 import { InterventionHandler } from '../../../interventions/handler.js'
-import type { Confirm, Guide, Proceed } from '../../../interventions/actions.js'
 import { logger } from '../../../logging/logger.js'
 import type { LocalAgent } from '../../../types/agent.js'
-import type { Message, StopReason } from '../../../types/messages.js'
-import type { ToolUse } from '../../../tools/types.js'
 import type { SteeringContextData, SteeringContextProvider } from '../providers/context-provider.js'
-
-/** Steering decisions valid before tool execution. */
-export type ToolSteeringAction = Proceed | Guide | Confirm
-
-/** Steering decisions valid after a model response. */
-export type ModelSteeringAction = Proceed | Guide
 
 /**
  * Configuration shared by all steering handlers.
@@ -83,33 +73,5 @@ export abstract class SteeringHandler extends InterventionHandler {
    */
   getSteeringContext(): SteeringContextData[] {
     return this._contextProviders.map((provider) => provider.context)
-  }
-
-  override async beforeToolCall(event: BeforeToolCallEvent): Promise<ToolSteeringAction> {
-    return this.steerBeforeTool(event.agent, event.toolUse)
-  }
-
-  override async afterModelCall(event: AfterModelCallEvent): Promise<ModelSteeringAction> {
-    if (!event.stopData) {
-      logger.debug('no stop data available | skipping model steering')
-      return { type: 'proceed' }
-    }
-    return this.steerAfterModel(event.agent, event.stopData.message, event.stopData.stopReason)
-  }
-
-  /**
-   * Provide contextual guidance before tool execution. Override to customize.
-   * Default implementation proceeds.
-   */
-  async steerBeforeTool(_agent: LocalAgent, _toolUse: ToolUse): Promise<ToolSteeringAction> {
-    return { type: 'proceed' }
-  }
-
-  /**
-   * Provide contextual guidance after a model response. Override to customize.
-   * Default implementation proceeds.
-   */
-  async steerAfterModel(_agent: LocalAgent, _message: Message, _stopReason: StopReason): Promise<ModelSteeringAction> {
-    return { type: 'proceed' }
   }
 }

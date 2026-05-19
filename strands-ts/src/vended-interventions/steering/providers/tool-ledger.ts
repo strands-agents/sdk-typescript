@@ -7,6 +7,7 @@
  */
 
 import { AfterInvocationEvent, AfterToolCallEvent, BeforeToolCallEvent } from '../../../hooks/events.js'
+import type { ToolResultStatus } from '../../../tools/types.js'
 import type { LocalAgent } from '../../../types/agent.js'
 import type { JSONValue } from '../../../types/json.js'
 import type { SteeringContextData, SteeringContextProvider } from './context-provider.js'
@@ -29,8 +30,8 @@ interface LedgerToolCall {
   result?: JSONValue
   /** When the tool call was initiated. */
   startTime: string
-  /** Current execution state: pending, success, or error. */
-  status: 'pending' | 'success' | 'error'
+  /** Current execution state: pending while in-flight, then the underlying {@link ToolResultStatus}. */
+  status: 'pending' | ToolResultStatus
 }
 
 /**
@@ -112,7 +113,7 @@ export class ToolLedgerProvider implements SteeringContextProvider {
         const call = this._toolCalls[i]
         if (call?.id === toolUseId) {
           call.endTime = new Date().toISOString()
-          call.status = event.result.status === 'success' ? 'success' : 'error'
+          call.status = event.result.status
           call.result = event.result.content.map((block) => block.toJSON()) as JSONValue
           call.error = event.error ? event.error.message : null
           break
