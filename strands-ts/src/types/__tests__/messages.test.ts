@@ -207,8 +207,11 @@ describe('CachePointBlock', () => {
   test('roundtrips ttl via fromJSON', () => {
     const block = CachePointBlock.fromJSON({ cachePoint: { cacheType: 'default', ttl: '1h' } })
 
-    expect(block.cacheType).toBe('default')
-    expect(block.ttl).toBe('1h')
+    expect(block).toEqual({
+      type: 'cachePointBlock',
+      cacheType: 'default',
+      ttl: '1h',
+    })
   })
 })
 

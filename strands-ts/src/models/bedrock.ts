@@ -680,7 +680,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
 
       if (this._shouldEnableCaching()) {
         const ttl = this._config.cacheConfig?.ttlTool
-        tools.push({ cachePoint: { type: 'default', ...(ttl && { ttl }) } })
+        tools.push({ cachePoint: { type: 'default', ...(ttl !== undefined && { ttl }) } })
       }
 
       const toolConfig: ToolConfiguration = {
@@ -837,7 +837,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
       const lastMsg = messages[lastUserIdx]
       if (lastMsg && lastMsg.content) {
         const ttl = this._config.cacheConfig?.ttlMessages
-        lastMsg.content.push({ cachePoint: { type: 'default', ...(ttl && { ttl }) } })
+        lastMsg.content.push({ cachePoint: { type: 'default', ...(ttl !== undefined && { ttl }) } })
         logger.debug(`msg_idx=<${lastUserIdx}> | added cache point to last user message`)
       }
     }
@@ -1043,7 +1043,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
       }
 
       case 'cachePointBlock':
-        return { cachePoint: { type: block.cacheType, ...(block.ttl && { ttl: block.ttl }) } }
+        return { cachePoint: { type: block.cacheType, ...(block.ttl !== undefined && { ttl: block.ttl }) } }
 
       case 'imageBlock':
         return {
