@@ -97,7 +97,7 @@ export function tool<TInput, TReturn extends JSONValue = JSONValue>(
  * // With JSON schema (untyped, no validation)
  * const greeter = tool({
  *   name: 'greeter',
- *   description: 'Greets a person by name',
+ *   description: 'Greets a person',
  *   inputSchema: {
  *     type: 'object',
  *     properties: { name: { type: 'string' } },
