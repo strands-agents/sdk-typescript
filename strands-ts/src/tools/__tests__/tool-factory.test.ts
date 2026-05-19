@@ -174,5 +174,15 @@ describe('tool factory', () => {
       expect(derived.toolSpec.inputSchema).toStrictEqual(functionTool.toolSpec.inputSchema)
       expect(await derived.invoke({ x: 42 })).toBe('wrapped: 42')
     })
+
+    it('preserves Zod validation from source ZodTool', async () => {
+      const derived = tool({
+        name: 'derived',
+        inputSchema: zodTool,
+        callback: async (input) => input.url,
+      })
+
+      await expect(derived.invoke({ url: 'not-a-url', method: 'GET' })).rejects.toThrow()
+    })
   })
 })
