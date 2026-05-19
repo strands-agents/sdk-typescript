@@ -27,12 +27,7 @@
 
 // Core
 export type { SteeringContextData, SteeringContextProvider } from './providers/context-provider.js'
-export {
-  SteeringHandler,
-  type ModelSteeringAction,
-  type SteeringHandlerConfig,
-  type ToolSteeringAction,
-} from './handlers/handler.js'
+export { SteeringHandler, type SteeringHandlerConfig } from './handlers/handler.js'
 
 // Context providers
 export { ToolLedgerProvider, type ToolLedgerProviderConfig } from './providers/tool-ledger.js'

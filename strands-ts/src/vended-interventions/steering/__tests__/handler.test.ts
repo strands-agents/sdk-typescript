@@ -3,12 +3,12 @@ import { Agent } from '../../../agent/agent.js'
 import { HookRegistryImplementation } from '../../../hooks/registry.js'
 import { AfterModelCallEvent, BeforeToolCallEvent } from '../../../hooks/events.js'
 import { Interrupt, InterruptState } from '../../../interrupt.js'
+import { confirm, guide, type Confirm, type Guide, type Proceed } from '../../../interventions/actions.js'
 import { InterventionRegistry } from '../../../interventions/registry.js'
 import { Message, TextBlock } from '../../../types/messages.js'
 import type { ToolUse } from '../../../tools/types.js'
 import type { LocalAgent } from '../../../types/agent.js'
 import { SteeringHandler } from '../handlers/handler.js'
-import type { ModelSteeringAction, ToolSteeringAction } from '../handlers/handler.js'
 import type { SteeringContextData, SteeringContextProvider } from '../providers/context-provider.js'
 
 describe('SteeringHandler', () => {
@@ -31,15 +31,15 @@ describe('SteeringHandler', () => {
     })
   }
 
-  it('routes beforeToolCall to steerBeforeTool with agent and toolUse', async () => {
+  it('routes beforeToolCall to subclass override with the event', async () => {
     const seen: { agent?: LocalAgent; toolUse?: ToolUse } = {}
 
     class Spy extends SteeringHandler {
       override readonly name = 'spy'
-      override async steerBeforeTool(agent: LocalAgent, tu: ToolUse): Promise<ToolSteeringAction> {
-        seen.agent = agent
-        seen.toolUse = tu
-        return { type: 'guide', feedback: 'try again' }
+      override async beforeToolCall(event: BeforeToolCallEvent): Promise<Guide> {
+        seen.agent = event.agent
+        seen.toolUse = event.toolUse
+        return guide('try again')
       }
     }
 
@@ -56,19 +56,16 @@ describe('SteeringHandler', () => {
     expect(event.cancel).toContain('try again')
   })
 
-  it('routes afterModelCall to steerAfterModel with message and stopReason', async () => {
+  it('routes afterModelCall to subclass override with the event', async () => {
     const seen: { message?: Message; stopReason?: string } = {}
 
     class Spy extends SteeringHandler {
       override readonly name = 'spy'
-      override async steerAfterModel(
-        _agent: LocalAgent,
-        message: Message,
-        stopReason: string
-      ): Promise<ModelSteeringAction> {
-        seen.message = message
-        seen.stopReason = stopReason
-        return { type: 'guide', feedback: 'be terser' }
+      override async afterModelCall(event: AfterModelCallEvent): Promise<Guide | Proceed> {
+        if (!event.stopData) return { type: 'proceed' }
+        seen.message = event.stopData.message
+        seen.stopReason = event.stopData.stopReason
+        return guide('be terser')
       }
     }
 
@@ -84,19 +81,6 @@ describe('SteeringHandler', () => {
     expect(event.retry).toBe(true)
   })
 
-  it('default implementations proceed', async () => {
-    class Empty extends SteeringHandler {
-      override readonly name = 'empty'
-    }
-
-    const handler = new Empty()
-    const proceed = { type: 'proceed' }
-    expect(await handler.steerBeforeTool({} as never, toolUse)).toEqual(proceed)
-    expect(await handler.steerAfterModel({} as never, new Message({ role: 'user', content: [] }), 'endTurn')).toEqual(
-      proceed
-    )
-  })
-
   it('exposes provider context to subclasses via getSteeringContext', async () => {
     const fakeProvider: SteeringContextProvider = {
       name: 'fake',
@@ -110,7 +94,7 @@ describe('SteeringHandler', () => {
 
     class ContextReader extends SteeringHandler {
       override readonly name = 'context-reader'
-      override async steerBeforeTool(): Promise<ToolSteeringAction> {
+      override async beforeToolCall(): Promise<Proceed> {
         observedContext = this.getSteeringContext()
         return { type: 'proceed' }
       }
@@ -135,13 +119,13 @@ describe('SteeringHandler', () => {
     ).not.toThrow()
   })
 
-  it('skips afterModelCall when stopData is missing', async () => {
+  it('does not invoke afterModelCall when stopData is missing', async () => {
     const called = vi.fn()
 
     class Spy extends SteeringHandler {
       override readonly name = 'spy'
-      override async steerAfterModel(): Promise<ModelSteeringAction> {
-        called()
+      override async afterModelCall(event: AfterModelCallEvent): Promise<Proceed> {
+        if (event.stopData) called()
         return { type: 'proceed' }
       }
     }
@@ -164,8 +148,8 @@ describe('SteeringHandler', () => {
   it('confirm decision flows through the interrupt system on resume (approved)', async () => {
     class Approver extends SteeringHandler {
       override readonly name = 'approver'
-      override async steerBeforeTool(): Promise<ToolSteeringAction> {
-        return { type: 'confirm', prompt: 'approve searchWeb?' }
+      override async beforeToolCall(): Promise<Confirm> {
+        return confirm('approve searchWeb?')
       }
     }
 
@@ -193,8 +177,8 @@ describe('SteeringHandler', () => {
   it('confirm decision sets cancel when human denies', async () => {
     class Approver extends SteeringHandler {
       override readonly name = 'approver'
-      override async steerBeforeTool(): Promise<ToolSteeringAction> {
-        return { type: 'confirm', prompt: 'approve searchWeb?' }
+      override async beforeToolCall(): Promise<Confirm> {
+        return confirm('approve searchWeb?')
       }
     }
 
