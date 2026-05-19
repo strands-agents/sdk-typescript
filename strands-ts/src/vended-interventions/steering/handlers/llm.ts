@@ -90,7 +90,7 @@ export interface LLMSteeringHandlerConfig {
    * Context providers for populating steering context.
    * Defaults to [new ToolLedgerProvider()] if undefined. Pass an empty array to disable.
    */
-  providers?: SteeringContextProvider[]
+  contextProviders?: SteeringContextProvider[]
 
   /**
    * Identifier for this handler instance. Defaults to `'strands:steering'`.
@@ -140,7 +140,8 @@ export class LLMSteeringHandler extends SteeringHandler {
   private readonly _systemPrompt?: SystemPrompt
 
   constructor(config: LLMSteeringHandlerConfig) {
-    const contextProviders = config.providers === undefined ? [new ToolLedgerProvider()] : config.providers
+    const contextProviders =
+      config.contextProviders === undefined ? [new ToolLedgerProvider()] : config.contextProviders
     super({ contextProviders, ...(config.name !== undefined && { name: config.name }) })
 
     this._promptBuilder = config.promptBuilder ?? defaultPromptBuilder
@@ -176,6 +177,6 @@ export class LLMSteeringHandler extends SteeringHandler {
       printer: false,
     })
     const result = await inner.invoke(prompt)
-    return result.structuredOutput as SteeringDecision
+    return STEERING_DECISION.parse(result.structuredOutput)
   }
 }

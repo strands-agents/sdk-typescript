@@ -34,24 +34,6 @@ interface LedgerToolCall {
 }
 
 /**
- * Context provider that tracks tool call history.
- *
- * Records every tool invocation with inputs, execution time, and success/failure status.
- * The ledger is available to steering handlers for pattern detection
- * (e.g., repeated failures, excessive retries).
- *
- * When the ledger exceeds maxEntries, the oldest entries are dropped.
- *
- * @example
- * ```typescript
- * const handler = new LLMSteeringHandler({
- *   systemPrompt: '...',
- *   model: new BedrockModel(),
- *   providers: [new ToolLedgerProvider()],
- * })
- * ```
- */
-/**
  * Configuration for {@link ToolLedgerProvider}.
  */
 export interface ToolLedgerProviderConfig {
@@ -66,6 +48,24 @@ export interface ToolLedgerProviderConfig {
   name?: string
 }
 
+/**
+ * Context provider that tracks tool call history.
+ *
+ * Records every tool invocation with inputs, execution time, and success/failure status.
+ * The ledger is available to steering handlers for pattern detection
+ * (e.g., repeated failures, excessive retries).
+ *
+ * When the ledger exceeds maxEntries, the oldest entries are dropped.
+ *
+ * @example
+ * ```typescript
+ * const handler = new LLMSteeringHandler({
+ *   systemPrompt: '...',
+ *   model: new BedrockModel(),
+ *   contextProviders: [new ToolLedgerProvider()],
+ * })
+ * ```
+ */
 export class ToolLedgerProvider implements SteeringContextProvider {
   readonly name: string
   private readonly _maxEntries: number = 100

@@ -35,7 +35,7 @@ export {
 } from './handlers/handler.js'
 
 // Context providers
-export { ToolLedgerProvider } from './providers/tool-ledger.js'
+export { ToolLedgerProvider, type ToolLedgerProviderConfig } from './providers/tool-ledger.js'
 
 // Handler implementations
 export { LLMSteeringHandler, type LLMSteeringHandlerConfig, type PromptBuilder } from './handlers/llm.js'
