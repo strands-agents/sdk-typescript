@@ -77,12 +77,16 @@ export interface CacheConfig {
   strategy: 'auto' | 'anthropic'
 
   /**
-   * Optional TTL applied to auto-injected cache points (after tools and the last user message).
+   * Optional TTL applied to the auto-injected cache point appended after `toolConfig.tools`.
    * When omitted, the provider's default TTL is used.
-   *
-   * Use a per-block `ttl` on a {@link CachePointBlock} to override on a specific cache point.
    */
-  ttl?: CacheTTL
+  ttlTool?: CacheTTL
+
+  /**
+   * Optional TTL applied to the auto-injected cache point appended to the last user message.
+   * When omitted, the provider's default TTL is used.
+   */
+  ttlMessages?: CacheTTL
 }
 
 /**

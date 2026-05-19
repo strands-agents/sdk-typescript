@@ -1609,8 +1609,10 @@ describe('BedrockModel', () => {
       expect(assistantLastBlock).not.toStrictEqual({ cachePoint: { type: 'default' } })
     })
 
-    it('propagates cacheConfig.ttl to auto-injected cache points on tools and last user message', async () => {
-      const provider = new BedrockModel({ cacheConfig: { strategy: 'auto', ttl: '1h' } })
+    it('propagates cacheConfig ttls independently to tools and last user message', async () => {
+      const provider = new BedrockModel({
+        cacheConfig: { strategy: 'auto', ttlTool: '1h', ttlMessages: '5m' },
+      })
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
       const options: StreamOptions = {
         toolSpecs: [
@@ -1637,10 +1639,56 @@ describe('BedrockModel', () => {
       ])
       const userMsg = call?.messages?.[0]
       const lastBlock = userMsg?.content?.[userMsg.content.length - 1]
+      expect(lastBlock).toStrictEqual({ cachePoint: { type: 'default', ttl: '5m' } })
+    })
+
+    it('propagates only ttlTool when ttlMessages is not set', async () => {
+      const provider = new BedrockModel({ cacheConfig: { strategy: 'auto', ttlTool: '1h' } })
+      const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
+      const options: StreamOptions = {
+        toolSpecs: [
+          {
+            name: 'calculator',
+            description: 'Calculate',
+            inputSchema: { type: 'object' },
+          },
+        ],
+      }
+
+      collectIterator(provider.stream(messages, options))
+
+      const call = mockConverseStreamCommand.mock.lastCall?.[0]
+      const toolsLast = call?.toolConfig?.tools?.[call.toolConfig.tools.length - 1]
+      expect(toolsLast).toStrictEqual({ cachePoint: { type: 'default', ttl: '1h' } })
+      const userMsg = call?.messages?.[0]
+      const lastBlock = userMsg?.content?.[userMsg.content.length - 1]
+      expect(lastBlock).toStrictEqual({ cachePoint: { type: 'default' } })
+    })
+
+    it('propagates only ttlMessages when ttlTool is not set', async () => {
+      const provider = new BedrockModel({ cacheConfig: { strategy: 'auto', ttlMessages: '1h' } })
+      const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
+      const options: StreamOptions = {
+        toolSpecs: [
+          {
+            name: 'calculator',
+            description: 'Calculate',
+            inputSchema: { type: 'object' },
+          },
+        ],
+      }
+
+      collectIterator(provider.stream(messages, options))
+
+      const call = mockConverseStreamCommand.mock.lastCall?.[0]
+      const toolsLast = call?.toolConfig?.tools?.[call.toolConfig.tools.length - 1]
+      expect(toolsLast).toStrictEqual({ cachePoint: { type: 'default' } })
+      const userMsg = call?.messages?.[0]
+      const lastBlock = userMsg?.content?.[userMsg.content.length - 1]
       expect(lastBlock).toStrictEqual({ cachePoint: { type: 'default', ttl: '1h' } })
     })
 
-    it('omits ttl on auto-injected cache points when cacheConfig.ttl is not set', async () => {
+    it('omits ttl on auto-injected cache points when no ttl is set', async () => {
       const provider = new BedrockModel({ cacheConfig: { strategy: 'auto' } })
       const messages = [new Message({ role: 'user', content: [new TextBlock('Hello')] })]
       const options: StreamOptions = {
