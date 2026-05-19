@@ -58,9 +58,8 @@ export class ZodTool<TInput extends z.ZodType | undefined, TReturn extends JSONV
 
   /**
    * Zod schema for input validation.
-   * Note: undefined is normalized to z.void() in constructor, so this is always defined.
    */
-  private readonly _inputSchema: z.ZodType
+  readonly inputSchema: TInput extends z.ZodType ? TInput : z.ZodVoid
 
   /**
    * User callback function.
@@ -75,20 +74,20 @@ export class ZodTool<TInput extends z.ZodType | undefined, TReturn extends JSONV
     const { name, description = '', inputSchema, callback } = config
 
     // Normalize undefined to z.void() to simplify logic throughout
-    this._inputSchema = inputSchema ?? z.void()
+    this.inputSchema = (inputSchema ?? z.void()) as TInput extends z.ZodType ? TInput : z.ZodVoid
     this._callback = callback
 
     let generatedSchema: JSONSchema
 
     // Handle z.void() - use default empty object schema
-    if (this._inputSchema instanceof ZodVoid) {
+    if (this.inputSchema instanceof ZodVoid) {
       generatedSchema = {
         type: 'object',
         properties: {},
         additionalProperties: false,
       }
     } else {
-      generatedSchema = zodSchemaToJsonSchema(this._inputSchema)
+      generatedSchema = zodSchemaToJsonSchema(this.inputSchema)
     }
 
     // Create a FunctionTool with a validation wrapper
@@ -101,7 +100,7 @@ export class ZodTool<TInput extends z.ZodType | undefined, TReturn extends JSONV
         toolContext: ToolContext
       ): AsyncGenerator<JSONValue, JSONValue, never> | Promise<JSONValue> | JSONValue => {
         // Only validate if schema is not z.void() (after normalization, it's never undefined)
-        const validatedInput = this._inputSchema instanceof ZodVoid ? input : this._inputSchema.parse(input)
+        const validatedInput = this.inputSchema instanceof ZodVoid ? input : this.inputSchema.parse(input)
         // Execute user callback with validated input
         return callback(validatedInput as ZodInferred<TInput>, toolContext) as
           | AsyncGenerator<JSONValue, JSONValue, never>
@@ -157,7 +156,7 @@ export class ZodTool<TInput extends z.ZodType | undefined, TReturn extends JSONV
    */
   async invoke(input: ZodInferred<TInput>, context?: ToolContext): Promise<TReturn> {
     // Only validate if schema is not z.void() (after normalization, it's never undefined)
-    const validatedInput = this._inputSchema instanceof ZodVoid ? input : this._inputSchema.parse(input)
+    const validatedInput = this.inputSchema instanceof ZodVoid ? input : this.inputSchema.parse(input)
 
     // Execute callback with validated input
     const result = this._callback(validatedInput as ZodInferred<TInput>, context)

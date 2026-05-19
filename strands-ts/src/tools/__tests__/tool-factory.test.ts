@@ -110,4 +110,69 @@ describe('tool factory', () => {
       expect(myTool.description).toBe('')
     })
   })
+
+  describe('DerivedTool (inputSchema as existing tool)', () => {
+    const zodTool = tool({
+      name: 'zod_tool',
+      description: 'A Zod schema tool',
+      inputSchema: z.object({ url: z.string().url(), method: z.enum(['GET', 'POST']) }),
+      callback: async (input) => ({ fetched: input.url, method: input.method }),
+    })
+
+    const functionTool = tool({
+      name: 'function_tool',
+      description: 'A JSON schema tool',
+      inputSchema: { type: 'object', properties: { x: { type: 'number' } } },
+      callback: (input) => `got ${(input as { x: number }).x}`,
+    })
+
+    it('inherits input schema and defaults description from source tool', () => {
+      const derived = tool({
+        name: 'derived_tool',
+        inputSchema: zodTool,
+        callback: async (input) => input.url,
+      })
+
+      expect(derived).toBeInstanceOf(Tool)
+      expect(derived.name).toBe('derived_tool')
+      expect(derived.description).toBe('A Zod schema tool')
+      expect(derived.toolSpec.inputSchema).toStrictEqual(zodTool.toolSpec.inputSchema)
+    })
+
+    it('overrides description when provided', () => {
+      const derived = tool({
+        name: 'derived',
+        description: 'Custom description',
+        inputSchema: zodTool,
+        callback: async (input) => input.url,
+      })
+
+      expect(derived.description).toBe('Custom description')
+    })
+
+    it('delegates to source tool with typed input', async () => {
+      const derived = tool({
+        name: 'derived',
+        inputSchema: zodTool,
+        callback: async (input, context) => {
+          const result = await zodTool.invoke(input, context)
+          return { ...result, wrapped: true }
+        },
+      })
+
+      const result = await derived.invoke({ url: 'https://example.com', method: 'POST' })
+      expect(result).toStrictEqual({ fetched: 'https://example.com', method: 'POST', wrapped: true })
+    })
+
+    it('inherits input schema from a FunctionTool source', async () => {
+      const derived = tool({
+        name: 'derived_json',
+        inputSchema: functionTool,
+        callback: (input) => `wrapped: ${(input as { x: number }).x}`,
+      })
+
+      expect(derived.toolSpec.inputSchema).toStrictEqual(functionTool.toolSpec.inputSchema)
+      expect(await derived.invoke({ x: 42 })).toBe('wrapped: 42')
+    })
+  })
 })
