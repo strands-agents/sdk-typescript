@@ -208,9 +208,9 @@ export class StructuredOutputError extends Error {
 }
 
 /**
- * Error thrown when a tool cannot be found by name during direct tool calling.
+ * Error thrown when a tool cannot be found by name.
  *
- * This error is thrown by the ToolCaller when the requested tool name doesn't
+ * Thrown by {@link ToolRegistry.resolve} when the requested tool name doesn't
  * match any registered tool, even after underscore-to-hyphen normalization
  * and case-insensitive matching.
  */

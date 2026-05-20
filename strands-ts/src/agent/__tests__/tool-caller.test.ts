@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { Agent } from '../agent.js'
 import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
 import { createMockTool } from '../../__fixtures__/tool-helpers.js'
-import { ToolResultBlock, TextBlock, ToolUseBlock } from '../../types/messages.js'
+import { Message, ToolResultBlock, TextBlock, ToolUseBlock } from '../../types/messages.js'
 import { ConcurrentInvocationError, ToolNotFoundError } from '../../errors.js'
 import { ToolStreamEvent } from '../../tools/tool.js'
 import type { ToolContext } from '../../tools/tool.js'
@@ -173,31 +173,34 @@ describe('ToolCaller', () => {
 
       await agent.tool.calculator!.invoke({ a: 5, b: 3 })
 
-      // Should have 3 messages: assistant (tool use), user (tool result), assistant (acknowledgement)
-      expect(agent.messages).toHaveLength(3)
-
-      // Message 0: Assistant message with ToolUseBlock
-      const toolUseMsg = agent.messages[0]!
-      expect(toolUseMsg.role).toBe('assistant')
-      const toolUseBlock = toolUseMsg.content[0] as ToolUseBlock
-      expect(toolUseBlock).toBeInstanceOf(ToolUseBlock)
-      expect(toolUseBlock.name).toBe('calculator')
-      expect(toolUseBlock.input).toStrictEqual({ a: 5, b: 3 })
-      expect(toolUseBlock.toolUseId).toMatch(/^tooluse_/)
-
-      // Message 1: User message with ToolResultBlock
-      const toolResultMsg = agent.messages[1]!
-      expect(toolResultMsg.role).toBe('user')
-      const toolResultBlock = toolResultMsg.content[0] as ToolResultBlock
-      expect(toolResultBlock).toBeInstanceOf(ToolResultBlock)
-      expect(toolResultBlock.status).toBe('success')
-
-      // Message 2: Assistant acknowledgement
-      const ackMsg = agent.messages[2]!
-      expect(ackMsg.role).toBe('assistant')
-      const ackBlock = ackMsg.content[0] as TextBlock
-      expect(ackBlock).toBeInstanceOf(TextBlock)
-      expect(ackBlock.text).toBe('agent.tool.calculator was called.')
+      // Per TESTING.md, prefer full-object assertions over per-field checks.
+      // toolUseId is non-deterministic (UUID), so use expect.stringMatching.
+      expect(agent.messages).toEqual([
+        new Message({
+          role: 'assistant',
+          content: [
+            new ToolUseBlock({
+              toolUseId: expect.stringMatching(/^tooluse_/) as unknown as string,
+              name: 'calculator',
+              input: { a: 5, b: 3 },
+            }),
+          ],
+        }),
+        new Message({
+          role: 'user',
+          content: [
+            new ToolResultBlock({
+              toolUseId: 'test-id',
+              status: 'success',
+              content: [new TextBlock('8')],
+            }),
+          ],
+        }),
+        new Message({
+          role: 'assistant',
+          content: [new TextBlock('agent.tool.calculator was called.')],
+        }),
+      ])
     })
 
     it('does not record when recordDirectToolCall is false per-call', async () => {
@@ -560,20 +563,39 @@ describe('MessageAddedEvent hooks', () => {
 
     await agent.tool.calculator!.invoke({ a: 5, b: 3 })
 
-    // Should fire 3 MessageAddedEvents (one per recorded message)
+    // Should fire 3 MessageAddedEvents (one per recorded message).
+    // Use full-object assertions per TESTING.md.
     expect(firedEvents).toHaveLength(3)
-
-    // Event 0: assistant message with ToolUseBlock
-    expect(firedEvents[0]!.message.role).toBe('assistant')
-    expect(firedEvents[0]!.message.content[0]).toBeInstanceOf(ToolUseBlock)
-
-    // Event 1: user message with ToolResultBlock
-    expect(firedEvents[1]!.message.role).toBe('user')
-    expect(firedEvents[1]!.message.content[0]).toBeInstanceOf(ToolResultBlock)
-
-    // Event 2: assistant acknowledgement
-    expect(firedEvents[2]!.message.role).toBe('assistant')
-    expect(firedEvents[2]!.message.content[0]).toBeInstanceOf(TextBlock)
+    expect(firedEvents[0]!.message).toEqual(
+      new Message({
+        role: 'assistant',
+        content: [
+          new ToolUseBlock({
+            toolUseId: expect.stringMatching(/^tooluse_/) as unknown as string,
+            name: 'calculator',
+            input: { a: 5, b: 3 },
+          }),
+        ],
+      })
+    )
+    expect(firedEvents[1]!.message).toEqual(
+      new Message({
+        role: 'user',
+        content: [
+          new ToolResultBlock({
+            toolUseId: 'test-id',
+            status: 'success',
+            content: [new TextBlock('8')],
+          }),
+        ],
+      })
+    )
+    expect(firedEvents[2]!.message).toEqual(
+      new Message({
+        role: 'assistant',
+        content: [new TextBlock('agent.tool.calculator was called.')],
+      })
+    )
   })
 
   it('does not fire MessageAddedEvent when recordDirectToolCall is false', async () => {
