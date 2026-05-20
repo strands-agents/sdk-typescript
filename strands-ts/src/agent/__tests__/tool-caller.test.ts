@@ -363,81 +363,8 @@ describe('ToolCaller', () => {
       const agent = new Agent({ model, tools: [tool] })
 
       const handle = agent.tool.calculator!
-      // Handle is itself callable (sugar for .invoke()) AND exposes named methods
-      expect(typeof handle).toBe('function')
       expect(typeof handle.invoke).toBe('function')
       expect(typeof handle.stream).toBe('function')
-    })
-  })
-
-  describe('call sugar (ToolHandle is callable)', () => {
-    it('agent.tool.foo(input) is equivalent to agent.tool.foo.invoke(input)', async () => {
-      const tool = createMockTool(
-        'calculator',
-        (context) =>
-          new ToolResultBlock({
-            toolUseId: context.toolUse.toolUseId,
-            status: 'success',
-            content: [new TextBlock(JSON.stringify(context.toolUse.input))],
-          })
-      )
-      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
-      const agent = new Agent({ model, tools: [tool] })
-
-      // Call sugar
-      const sugarResult = await agent.tool.calculator!({ a: 5, b: 3 })
-      // Explicit invoke
-      const invokeResult = await agent.tool.calculator!.invoke({ a: 5, b: 3 })
-
-      expect(sugarResult.status).toBe('success')
-      expect(invokeResult.status).toBe('success')
-      // Both should receive the same input — the only difference is syntax sugar
-      expect((sugarResult.content[0] as TextBlock).text).toBe('{"a":5,"b":3}')
-      expect((invokeResult.content[0] as TextBlock).text).toBe('{"a":5,"b":3}')
-    })
-
-    it('call sugar supports the options arg (recordDirectToolCall: false)', async () => {
-      const tool = createMockTool(
-        'calculator',
-        () =>
-          new ToolResultBlock({
-            toolUseId: 'test-id',
-            status: 'success',
-            content: [new TextBlock('ok')],
-          })
-      )
-      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
-      const agent = new Agent({ model, tools: [tool] })
-
-      await agent.tool.calculator!({ a: 5, b: 3 }, { recordDirectToolCall: false })
-
-      // Verify nothing was recorded
-      expect(agent.messages).toHaveLength(0)
-    })
-
-    it('call sugar throws ToolNotFoundError for missing tools', async () => {
-      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
-      const agent = new Agent({ model, tools: [] })
-
-      await expect(agent.tool.nonexistent!()).rejects.toThrow(ToolNotFoundError)
-    })
-
-    it('call sugar with no input defaults to empty object', async () => {
-      const tool = createMockTool(
-        'ping',
-        () =>
-          new ToolResultBlock({
-            toolUseId: 'test-id',
-            status: 'success',
-            content: [new TextBlock('pong')],
-          })
-      )
-      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'Hello' })
-      const agent = new Agent({ model, tools: [tool] })
-
-      const result = await agent.tool.ping!()
-      expect(result.status).toBe('success')
-      expect((result.content[0] as TextBlock).text).toBe('pong')
     })
   })
 
