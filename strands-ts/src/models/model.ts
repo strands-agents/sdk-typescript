@@ -500,7 +500,7 @@ export abstract class Model<T extends BaseModelConfig = BaseModelConfig> {
       }
 
       if (deferredToolInputParseError !== undefined) {
-        throw deferredToolInputParseError
+        throw new ModelError('unable to parse tool input JSON', { cause: deferredToolInputParseError })
       }
 
       // Return the final message with stop reason and optional metadata

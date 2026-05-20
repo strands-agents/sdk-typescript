@@ -368,6 +368,34 @@ describe('Model', () => {
         } catch (error) {
           expect(error).toBeInstanceOf(ModelError)
           expect(error).not.toBeInstanceOf(MaxTokensError)
+          expect((error as ModelError).message).toBe('unable to parse tool input JSON')
+          expect((error as ModelError).cause).toBeInstanceOf(SyntaxError)
+        }
+      })
+
+      it('attaches SyntaxError as cause when stream ends without a stop event after malformed tool input', async () => {
+        const provider = new TestModelProvider(async function* () {
+          yield { type: 'modelMessageStartEvent', role: 'assistant' }
+          yield {
+            type: 'modelContentBlockStartEvent',
+            start: { type: 'toolUseStart', toolUseId: 't', name: 'tool' },
+          }
+          yield {
+            type: 'modelContentBlockDeltaEvent',
+            delta: { type: 'toolUseInputDelta', input: '{invalid json' },
+          }
+          yield { type: 'modelContentBlockStopEvent' }
+        })
+
+        const messages = [new Message({ role: 'user', content: [new TextBlock('Hi')] })]
+
+        try {
+          await collectGenerator(provider.streamAggregated(messages))
+          expect.fail('Expected error to be thrown')
+        } catch (error) {
+          expect(error).toBeInstanceOf(ModelError)
+          expect(error).not.toBeInstanceOf(MaxTokensError)
+          expect((error as ModelError).message).toBe('Stream ended without completing a message')
           expect((error as ModelError).cause).toBeInstanceOf(SyntaxError)
         }
       })
