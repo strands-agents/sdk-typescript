@@ -136,7 +136,34 @@ const DEFAULT_REDACT_OUTPUT_MESSAGE = '[Assistant output redacted.]'
  *
  * @see https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_CachePointBlock.html
  */
-export type BedrockCacheTTL = '5m' | '1h'
+const BEDROCK_CACHE_TTLS = ['5m', '1h'] as const
+export type BedrockCacheTTL = (typeof BEDROCK_CACHE_TTLS)[number]
+
+/**
+ * Bedrock-specific prompt-caching configuration. Narrows the TTL fields on the common
+ * {@link CacheConfig} to the values accepted by Bedrock.
+ */
+export interface BedrockCacheConfig extends CacheConfig {
+  /** TTL applied to the auto-injected cache point appended after `toolConfig.tools`. */
+  toolsTTL?: BedrockCacheTTL
+
+  /** TTL applied to the auto-injected cache point appended to the last user message. */
+  messagesTTL?: BedrockCacheTTL
+}
+
+/**
+ * Asserts that a TTL string passed via a user-supplied `CachePointBlock` matches one of
+ * Bedrock's accepted values. Throws with the offending field name to make the
+ * misconfiguration easy to locate, and narrows the type for the caller.
+ */
+function validateBedrockCacheTTL(value: string, field: string): asserts value is BedrockCacheTTL {
+  if (!(BEDROCK_CACHE_TTLS as readonly string[]).includes(value)) {
+    throw new Error(
+      `Invalid Bedrock cache TTL for ${field}: ${JSON.stringify(value)}. ` +
+        `Expected one of ${BEDROCK_CACHE_TTLS.map((v) => JSON.stringify(v)).join(', ')}.`
+    )
+  }
+}
 
 /**
  * Redaction configuration for Bedrock guardrails.
@@ -251,7 +278,7 @@ export interface BedrockModelConfig extends BaseModelConfig {
    *
    * @see https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-caching.html
    */
-  cacheConfig?: CacheConfig
+  cacheConfig?: BedrockCacheConfig
 
   /**
    * Additional fields to include in the Bedrock request.
@@ -695,7 +722,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
         const cachePoint: BedrockCachePointBlock = { type: 'default' }
         const ttl = this._config.cacheConfig?.toolsTTL
         if (ttl !== undefined) {
-          cachePoint.ttl = ttl as BedrockCacheTTL
+          cachePoint.ttl = ttl
         }
         tools.push({ cachePoint })
       }
@@ -856,7 +883,7 @@ export class BedrockModel extends Model<BedrockModelConfig> {
         const cachePoint: BedrockCachePointBlock = { type: 'default' }
         const ttl = this._config.cacheConfig?.messagesTTL
         if (ttl !== undefined) {
-          cachePoint.ttl = ttl as BedrockCacheTTL
+          cachePoint.ttl = ttl
         }
         lastMsg.content.push({ cachePoint })
         logger.debug(`msg_idx=<${lastUserIdx}> | added cache point to last user message`)
@@ -1066,7 +1093,8 @@ export class BedrockModel extends Model<BedrockModelConfig> {
       case 'cachePointBlock': {
         const cachePoint: BedrockCachePointBlock = { type: block.cacheType }
         if (block.ttl !== undefined) {
-          cachePoint.ttl = block.ttl as BedrockCacheTTL
+          validateBedrockCacheTTL(block.ttl, 'CachePointBlock.ttl')
+          cachePoint.ttl = block.ttl
         }
         return { cachePoint }
       }

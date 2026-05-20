@@ -183,6 +183,7 @@ export type {
   BedrockModelOptions,
   BedrockGuardrailConfig,
   BedrockGuardrailRedactionConfig,
+  BedrockCacheConfig,
   BedrockCacheTTL,
 } from './models/bedrock.js'
 

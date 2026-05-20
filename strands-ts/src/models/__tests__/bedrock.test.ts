@@ -780,6 +780,20 @@ describe('BedrockModel', () => {
         { cachePoint: { type: 'default', ttl: '5m' } },
       ])
     })
+
+    it('rejects invalid ttl on user-supplied cache point with a descriptive error', async () => {
+      const provider = new BedrockModel()
+      const messages = [
+        new Message({
+          role: 'user',
+          content: [new TextBlock('Hello'), new CachePointBlock({ cacheType: 'default', ttl: '2h' })],
+        }),
+      ]
+
+      await expect(collectIterator(provider.stream(messages))).rejects.toThrow(
+        /Invalid Bedrock cache TTL for CachePointBlock\.ttl: "2h"\. Expected one of "5m", "1h"\./
+      )
+    })
   })
 
   describe.each([
