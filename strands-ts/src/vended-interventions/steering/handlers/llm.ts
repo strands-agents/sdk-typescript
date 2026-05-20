@@ -87,8 +87,8 @@ export interface LLMSteeringHandlerConfig {
   contextProviders?: SteeringContextProvider[]
 
   /**
-   * Identifier for this handler instance. Defaults to `'strands:steering'`.
-   * Override when attaching multiple steering handlers to the same agent.
+   * Identifier for this handler instance. Defaults to `'strands:llm-steering-handler'`.
+   * Override when attaching multiple LLM steering handlers to the same agent.
    */
   name?: string
 }
@@ -128,6 +128,8 @@ type SteeringDecision = z.infer<typeof STEERING_DECISION>
  * ```
  */
 export class LLMSteeringHandler extends SteeringHandler {
+  override readonly name: string
+
   private readonly _promptBuilder: PromptBuilder
   private readonly _model: Model
   private readonly _systemPrompt?: SystemPrompt
@@ -135,8 +137,9 @@ export class LLMSteeringHandler extends SteeringHandler {
   constructor(config: LLMSteeringHandlerConfig = {}) {
     const contextProviders =
       config.contextProviders === undefined ? [new ToolLedgerProvider()] : config.contextProviders
-    super({ contextProviders, ...(config.name !== undefined && { name: config.name }) })
+    super({ contextProviders })
 
+    this.name = config.name ?? 'strands:llm-steering-handler'
     this._promptBuilder = config.promptBuilder ?? defaultPromptBuilder
     this._model = config.model ?? new BedrockModel()
     if (config.systemPrompt !== undefined) {
@@ -144,7 +147,7 @@ export class LLMSteeringHandler extends SteeringHandler {
     }
   }
 
-  override async beforeToolCall(event: BeforeToolCallEvent): Promise<Proceed | Guide | Confirm> {
+  protected override async evaluateToolCall(event: BeforeToolCallEvent): Promise<Proceed | Guide | Confirm> {
     const context = this.getSteeringContext()
     const prompt = this._promptBuilder(context, event.toolUse)
     const decision = await this._invoke(prompt)

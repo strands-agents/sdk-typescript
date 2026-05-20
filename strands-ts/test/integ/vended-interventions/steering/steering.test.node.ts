@@ -26,7 +26,7 @@ describe.skipIf(bedrock.skip)('Steering integration', () => {
   it('redirects send_email to send_notification via Guide', async () => {
     class RedirectEmailHandler extends SteeringHandler {
       override readonly name = 'redirect-email'
-      override async beforeToolCall(event: BeforeToolCallEvent): Promise<Guide | Proceed> {
+      protected override async evaluateToolCall(event: BeforeToolCallEvent): Promise<Guide | Proceed> {
         if (event.toolUse.name === 'send_email') {
           return guide('Use send_notification instead of send_email for better delivery.')
         }
@@ -63,7 +63,7 @@ describe.skipIf(bedrock.skip)('Steering integration', () => {
     class LedgerCheckingHandler extends SteeringHandler {
       override readonly name = 'ledger-check'
 
-      override async beforeToolCall(event: BeforeToolCallEvent): Promise<Proceed> {
+      protected override async evaluateToolCall(event: BeforeToolCallEvent): Promise<Proceed> {
         const calls = (ledger.context.calls ?? []) as Array<Record<string, unknown>>
         const current = calls.find((c) => c.name === event.toolUse.name)
         expect(current).toBeDefined()
