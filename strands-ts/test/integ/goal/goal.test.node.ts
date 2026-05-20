@@ -1,5 +1,5 @@
 /**
- * Integration tests for GoalPlugin.
+ * Integration tests for GoalLoop.
  *
  * Design principle: assertions must be deterministic regardless of model
  * output. We never assert "the model produced X" — only structural properties
@@ -11,10 +11,10 @@
 
 import { describe, expect, it } from 'vitest'
 import { Agent } from '$/sdk/index.js'
-import { GoalPlugin } from '$/sdk/vended-plugins/goal/index.js'
+import { GoalLoop } from '$/sdk/vended-plugins/goal/index.js'
 import { bedrock } from '../__fixtures__/model-providers.js'
 
-describe.skipIf(bedrock.skip)('GoalPlugin Integration', () => {
+describe.skipIf(bedrock.skip)('GoalLoop Integration', () => {
   const createModel = (): ReturnType<typeof bedrock.createModel> => bedrock.createModel({ maxTokens: 512 })
 
   describe('standard refinement loop', () => {
@@ -23,7 +23,7 @@ describe.skipIf(bedrock.skip)('GoalPlugin Integration', () => {
       // validator is user code so the loop length is deterministic regardless
       // of what the model emits.
       let calls = 0
-      const plugin = new GoalPlugin({
+      const plugin = new GoalLoop({
         name: 'integ-standard',
         validate: () => {
           calls++
@@ -53,11 +53,11 @@ describe.skipIf(bedrock.skip)('GoalPlugin Integration', () => {
     }, 120_000)
   })
 
-  describe('freshContextPerAttempt (Ralph loop)', () => {
+  describe('preserveContext: false (Ralph loop)', () => {
     it('restores transcript between attempts; only the final assistant turn survives', async () => {
       // Force 3 attempts: fail twice, pass third.
       let calls = 0
-      const plugin = new GoalPlugin({
+      const plugin = new GoalLoop({
         name: 'integ-fresh-context',
         validate: () => {
           calls++
@@ -65,7 +65,7 @@ describe.skipIf(bedrock.skip)('GoalPlugin Integration', () => {
           return true
         },
         maxAttempts: 5,
-        freshContextPerAttempt: true,
+        preserveContext: false,
       })
 
       const agent = new Agent({ model: createModel(), plugins: [plugin], printer: false })

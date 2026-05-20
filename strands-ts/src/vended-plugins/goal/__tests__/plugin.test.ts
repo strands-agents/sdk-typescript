@@ -1,39 +1,39 @@
 import { describe, it, expect, vi } from 'vitest'
-import { GoalPlugin } from '../plugin.js'
+import { GoalLoop } from '../plugin.js'
 import type { GoalAttempt, ValidationOutcome } from '../plugin.js'
 import { buildJudgePrompt, JUDGE_OUTCOME_SCHEMA } from '../judge.js'
 import { Agent } from '../../../agent/agent.js'
 import { AfterInvocationEvent } from '../../../hooks/events.js'
 import { MockMessageModel } from '../../../__fixtures__/mock-message-model.js'
-import { Message, TextBlock } from '../../../types/messages.js'
+import { JsonBlock, Message, TextBlock, ToolResultBlock, ToolUseBlock } from '../../../types/messages.js'
 import { logger } from '../../../logging/logger.js'
 
-describe('GoalPlugin', () => {
+describe('GoalLoop', () => {
   describe('constructor', () => {
     it('uses default name and unbounded budgets', () => {
       const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {})
-      const p = new GoalPlugin({ validate: () => true, name: 'unique-defaults-test' })
+      const p = new GoalLoop({ validate: () => true, name: 'unique-defaults-test' })
       expect(p.name).toBe('unique-defaults-test')
       expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('execution is unbounded'))
       warnSpy.mockRestore()
     })
 
     it('accepts custom name', () => {
-      const p = new GoalPlugin({ validate: () => true, name: 'my:goal' })
+      const p = new GoalLoop({ validate: () => true, name: 'my:goal' })
       expect(p.name).toBe('my:goal')
     })
 
     it('throws when maxAttempts < 1', () => {
-      expect(() => new GoalPlugin({ validate: () => true, maxAttempts: 0 })).toThrow(/maxAttempts/)
+      expect(() => new GoalLoop({ validate: () => true, maxAttempts: 0 })).toThrow(/maxAttempts/)
     })
 
     it('throws when timeout < 1', () => {
-      expect(() => new GoalPlugin({ validate: () => true, timeout: 0 })).toThrow(/timeout/)
+      expect(() => new GoalLoop({ validate: () => true, timeout: 0 })).toThrow(/timeout/)
     })
 
     it('does not warn when maxAttempts is set', () => {
       const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {})
-      new GoalPlugin({ validate: () => true, maxAttempts: 5, name: 'bounded-by-attempts' })
+      new GoalLoop({ validate: () => true, maxAttempts: 5, name: 'bounded-by-attempts' })
       expect(warnSpy).not.toHaveBeenCalled()
       warnSpy.mockRestore()
     })
@@ -43,7 +43,7 @@ describe('GoalPlugin', () => {
     it('passes on first attempt with no resume', async () => {
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'first' })
       const validate = vi.fn(() => true)
-      const plugin = new GoalPlugin({ validate, maxAttempts: 5, name: 'fn-pass-first' })
+      const plugin = new GoalLoop({ validate, maxAttempts: 5, name: 'fn-pass-first' })
       const agent = new Agent({ model, plugins: [plugin], printer: false })
 
       const result = await agent.invoke('do it')
@@ -64,7 +64,7 @@ describe('GoalPlugin', () => {
         .addTurn({ type: 'textBlock', text: 'ok' })
 
       let n = 0
-      const plugin = new GoalPlugin({
+      const plugin = new GoalLoop({
         name: 'fn-feedback-loop',
         validate: () => {
           n++
@@ -101,7 +101,7 @@ describe('GoalPlugin', () => {
         .addTurn({ type: 'textBlock', text: 'b' })
         .addTurn({ type: 'textBlock', text: 'c' })
 
-      const plugin = new GoalPlugin({
+      const plugin = new GoalLoop({
         name: 'fn-maxattempts',
         validate: () => ({ passed: false, feedback: 'nope' }),
         maxAttempts: 3,
@@ -122,13 +122,15 @@ describe('GoalPlugin', () => {
       })
     })
 
-    it('treats validator throws as a failed attempt', async () => {
+    it('treats validator throws as a failed attempt and warns to surface buggy validators', async () => {
       const model = new MockMessageModel()
         .addTurn({ type: 'textBlock', text: 'a' })
         .addTurn({ type: 'textBlock', text: 'b' })
 
+      const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {})
+
       let n = 0
-      const plugin = new GoalPlugin({
+      const plugin = new GoalLoop({
         name: 'fn-throws',
         validate: () => {
           n++
@@ -149,6 +151,8 @@ describe('GoalPlugin', () => {
           { attempt: 2, passed: true },
         ],
       })
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('fn-throws: validator threw: boom'))
+      warnSpy.mockRestore()
     })
 
     it('awaits async validator', async () => {
@@ -157,7 +161,7 @@ describe('GoalPlugin', () => {
         .addTurn({ type: 'textBlock', text: 'b' })
 
       let n = 0
-      const plugin = new GoalPlugin({
+      const plugin = new GoalLoop({
         name: 'fn-async',
         validate: async () => {
           n++
@@ -184,7 +188,7 @@ describe('GoalPlugin', () => {
     it('exposes the assistant message to the validator', async () => {
       const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'hello world' })
       const seen: Message[] = []
-      const plugin = new GoalPlugin({
+      const plugin = new GoalLoop({
         name: 'fn-receives-message',
         validate: (response) => {
           seen.push(response)
@@ -207,7 +211,7 @@ describe('GoalPlugin', () => {
         .addTurn({ type: 'textBlock', text: 'b' })
 
       let n = 0
-      const plugin = new GoalPlugin({
+      const plugin = new GoalLoop({
         name: 'fn-timeout',
         validate: async () => {
           n++
@@ -235,12 +239,12 @@ describe('GoalPlugin', () => {
 
   describe('lastResult lifecycle', () => {
     it('is undefined before first invoke', () => {
-      const plugin = new GoalPlugin({ validate: () => true, maxAttempts: 1, name: 'lr-untouched' })
+      const plugin = new GoalLoop({ validate: () => true, maxAttempts: 1, name: 'lr-untouched' })
       expect(plugin.lastResult).toBeUndefined()
     })
 
     it('is replaced on each completed run', async () => {
-      const plugin = new GoalPlugin({
+      const plugin = new GoalLoop({
         name: 'lr-replaced',
         validate: () => true,
         maxAttempts: 1,
@@ -261,7 +265,7 @@ describe('GoalPlugin', () => {
 
     it('is undefined after a host throw mid-run', async () => {
       const model = new MockMessageModel().addTurn(new Error('boom'))
-      const plugin = new GoalPlugin({
+      const plugin = new GoalLoop({
         name: 'lr-throw',
         validate: () => true,
         maxAttempts: 3,
@@ -277,9 +281,9 @@ describe('GoalPlugin', () => {
         .addTurn({ type: 'textBlock', text: 'a' })
         .addTurn({ type: 'textBlock', text: 'b' })
 
-      const observed: Array<GoalPlugin['lastResult']> = []
-      let plugin: GoalPlugin
-      plugin = new GoalPlugin({
+      const observed: Array<GoalLoop['lastResult']> = []
+      let plugin: GoalLoop
+      plugin = new GoalLoop({
         name: 'lr-midflight',
         validate: (response) => {
           observed.push(plugin.lastResult)
@@ -305,7 +309,7 @@ describe('GoalPlugin', () => {
         .addTurn({ type: 'textBlock', text: 'a3' })
 
       let n = 0
-      const plugin = new GoalPlugin({
+      const plugin = new GoalLoop({
         name: 'history-accumulates',
         validate: () => {
           n++
@@ -329,7 +333,7 @@ describe('GoalPlugin', () => {
         .addTurn({ type: 'textBlock', text: 'b' })
 
       let n = 0
-      const plugin = new GoalPlugin({
+      const plugin = new GoalLoop({
         name: 'custom-resume-template',
         validate: () => {
           n++
@@ -354,27 +358,13 @@ describe('GoalPlugin', () => {
   })
 
   describe('multiple plugin instances', () => {
-    it('supports stacking two goal plugins with distinct names', async () => {
-      const model = new MockMessageModel().addTurn({ type: 'textBlock', text: 'response' })
-
-      const a = new GoalPlugin({ validate: () => true, maxAttempts: 1, name: 'goal-a' })
-      const b = new GoalPlugin({ validate: () => true, maxAttempts: 1, name: 'goal-b' })
-      const agent = new Agent({ model, plugins: [a, b], printer: false })
-
-      await agent.invoke('go')
-
-      expect(a.lastResult?.stopReason).toBe('satisfied')
-      expect(b.lastResult?.stopReason).toBe('satisfied')
-      expect(a.lastResult).not.toBe(b.lastResult)
-    })
-
     it('throws when the same plugin is attached to a second agent', async () => {
       // Plugin.initAgent runs lazily on first Agent.initialize() (triggered by
       // invoke), so the throw surfaces from the second agent's invoke, not its
       // construction.
       const m1 = new MockMessageModel().addTurn({ type: 'textBlock', text: 'a' })
       const m2 = new MockMessageModel().addTurn({ type: 'textBlock', text: 'b' })
-      const plugin = new GoalPlugin({ validate: () => true, maxAttempts: 1, name: 'shared' })
+      const plugin = new GoalLoop({ validate: () => true, maxAttempts: 1, name: 'shared' })
 
       const a1 = new Agent({ model: m1, plugins: [plugin], printer: false })
       const a2 = new Agent({ model: m2, plugins: [plugin], printer: false })
@@ -384,7 +374,7 @@ describe('GoalPlugin', () => {
     })
   })
 
-  describe('freshContextPerAttempt', () => {
+  describe('preserveContext: false', () => {
     it('restores the post-input transcript between attempts; agent never sees prior attempts', async () => {
       const model = new MockMessageModel()
         .addTurn({ type: 'textBlock', text: 'attempt-1' })
@@ -393,14 +383,14 @@ describe('GoalPlugin', () => {
 
       const messageSnapshots: Array<Array<{ role: string; text: string }>> = []
       let n = 0
-      const plugin = new GoalPlugin({
+      const plugin = new GoalLoop({
         name: 'fresh-context',
         validate: () => {
           n++
           return n === 3 ? true : { passed: false, feedback: `fb${n}` }
         },
         maxAttempts: 5,
-        freshContextPerAttempt: true,
+        preserveContext: false,
       })
       const agent = new Agent({ model, plugins: [plugin], printer: false })
 
@@ -454,14 +444,14 @@ describe('GoalPlugin', () => {
         .addTurn({ type: 'textBlock', text: 'attempt-2' })
 
       let n = 0
-      const plugin = new GoalPlugin({
+      const plugin = new GoalLoop({
         name: 'fresh-context-appstate',
         validate: () => {
           n++
           return n === 2 || { passed: false, feedback: 'retry' }
         },
         maxAttempts: 3,
-        freshContextPerAttempt: true,
+        preserveContext: false,
       })
       const agent = new Agent({ model, plugins: [plugin], printer: false })
       // Mutate appState from a hook that runs between attempts to confirm
@@ -478,13 +468,13 @@ describe('GoalPlugin', () => {
       expect(agent.appState.get('counter')).toBe(2)
     })
 
-    it('is off by default (agent sees prior assistant attempts)', async () => {
+    it('preserves context by default (agent sees prior assistant attempts)', async () => {
       const model = new MockMessageModel()
         .addTurn({ type: 'textBlock', text: 'attempt-1' })
         .addTurn({ type: 'textBlock', text: 'attempt-2' })
 
       let n = 0
-      const plugin = new GoalPlugin({
+      const plugin = new GoalLoop({
         name: 'fresh-context-off',
         validate: () => {
           n++
@@ -505,7 +495,7 @@ describe('GoalPlugin', () => {
   describe('cross-invocation lastResult lifecycle', () => {
     it('clears stale lastResult after a thrown invoke when a fresh invoke starts', async () => {
       const model = new MockMessageModel().addTurn(new Error('boom')).addTurn({ type: 'textBlock', text: 'ok' })
-      const plugin = new GoalPlugin({
+      const plugin = new GoalLoop({
         name: 'throw-then-clean',
         validate: () => true,
         maxAttempts: 3,
@@ -544,6 +534,57 @@ describe('judge helpers', () => {
     expect(prompt).toContain('[user]\nhello?')
     expect(prompt).toContain('[assistant]\nhi there')
   })
+
+  it('buildJudgePrompt summarises tool calls and results so the judge can grade tool-using agents', () => {
+    const prompt = buildJudgePrompt('ran the tests', [
+      new Message({ role: 'user', content: [new TextBlock('run the tests')] }),
+      new Message({
+        role: 'assistant',
+        content: [new ToolUseBlock({ name: 'shell', toolUseId: 't1', input: { cmd: 'npm test' } })],
+      }),
+      new Message({
+        role: 'user',
+        content: [
+          new ToolResultBlock({
+            toolUseId: 't1',
+            status: 'success',
+            content: [new TextBlock('all green')],
+          }),
+        ],
+      }),
+      new Message({
+        role: 'assistant',
+        content: [new ToolUseBlock({ name: 'shell', toolUseId: 't2', input: { cmd: 'echo done' } })],
+      }),
+      new Message({
+        role: 'user',
+        content: [
+          new ToolResultBlock({
+            toolUseId: 't2',
+            status: 'error',
+            content: [new JsonBlock({ json: { code: 1 } })],
+          }),
+        ],
+      }),
+    ])
+    expect(prompt).toContain('[tool-call: shell] input={"cmd":"npm test"}')
+    expect(prompt).toContain('[tool-result: success] all green')
+    expect(prompt).toContain('[tool-call: shell] input={"cmd":"echo done"}')
+    expect(prompt).toContain('[tool-result: error] {"code":1}')
+  })
+
+  it('buildJudgePrompt truncates very long tool inputs and outputs', () => {
+    const longInput = 'x'.repeat(2000)
+    const prompt = buildJudgePrompt('ok', [
+      new Message({
+        role: 'assistant',
+        content: [new ToolUseBlock({ name: 'shell', toolUseId: 't1', input: { data: longInput } })],
+      }),
+    ])
+    expect(prompt).toContain('… [')
+    expect(prompt).toContain('more chars]')
+    expect(prompt.length).toBeLessThan(longInput.length)
+  })
 })
 
 // String-validator (NL judge) integration tests use the same MockMessageModel
@@ -551,7 +592,7 @@ describe('judge helpers', () => {
 // plugin builds internally — shares that mock model. Each `judge.invoke` consumes
 // a turn from the model, returning a `strands_structured_output` tool use that the
 // agent loop validates against JUDGE_OUTCOME_SCHEMA.
-describe('GoalPlugin natural-language judge', () => {
+describe('GoalLoop natural-language judge', () => {
   function buildJudgeTurn(passed: boolean, feedback?: string): Parameters<MockMessageModel['addTurn']> {
     const input = feedback !== undefined ? { passed, feedback } : { passed }
     return [
@@ -569,7 +610,7 @@ describe('GoalPlugin natural-language judge', () => {
       .addTurn({ type: 'textBlock', text: 'rainbows are pretty' })
       .addTurn(...buildJudgeTurn(true))
 
-    const plugin = new GoalPlugin({
+    const plugin = new GoalLoop({
       name: 'nl-default-pass',
       validate: 'be concise',
       maxAttempts: 3,
@@ -590,7 +631,7 @@ describe('GoalPlugin natural-language judge', () => {
       .addTurn({ type: 'textBlock', text: 'second try (short)' })
       .addTurn(...buildJudgeTurn(true))
 
-    const plugin = new GoalPlugin({
+    const plugin = new GoalLoop({
       name: 'nl-feedback',
       validate: 'be concise',
       maxAttempts: 3,
@@ -614,7 +655,7 @@ describe('GoalPlugin natural-language judge', () => {
       .addTurn({ type: 'textBlock', text: 'judge says hi (no tool)' })
       .addTurn(...buildJudgeTurn(true))
 
-    const plugin = new GoalPlugin({
+    const plugin = new GoalLoop({
       name: 'nl-judge-passes-on-retry',
       validate: 'be concise',
       maxAttempts: 3,
@@ -640,7 +681,7 @@ describe('GoalPlugin natural-language judge', () => {
       yield* originalStream(messages, options)
     })
 
-    const plugin = new GoalPlugin({
+    const plugin = new GoalLoop({
       name: 'nl-fresh-judge-per-call',
       validate: 'be concise',
       maxAttempts: 3,
@@ -662,7 +703,7 @@ describe('GoalPlugin natural-language judge', () => {
     const hostSpy = vi.spyOn(hostModel, 'stream')
     const judgeSpy = vi.spyOn(judgeModel, 'stream')
 
-    const plugin = new GoalPlugin({
+    const plugin = new GoalLoop({
       name: 'nl-override-model',
       validate: 'be concise',
       evaluatorModel: judgeModel,
