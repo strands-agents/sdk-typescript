@@ -8,10 +8,10 @@
  * @example
  * ```ts
  * import { Agent } from '@strands-agents/sdk'
- * import { GoalPlugin } from '@strands-agents/sdk/vended-plugins/goal'
+ * import { GoalLoop } from '@strands-agents/sdk/vended-plugins/goal'
  *
  * // Natural-language goal — judged by an internal Agent built from the host's model.
- * const concise = new GoalPlugin({
+ * const concise = new GoalLoop({
  *   validate: 'At most 3 sentences, accessible to a 10-year-old, no jargon.',
  *   maxAttempts: 3,
  * })
@@ -23,7 +23,7 @@
  * @example
  * ```ts
  * // Programmatic validator — runs your own check (here, a word-count cap).
- * const wordCount = new GoalPlugin({
+ * const wordCount = new GoalLoop({
  *   validate: (response) => {
  *     const text = response.content.flatMap((b) => (b.type === 'textBlock' ? [b.text] : [])).join(' ')
  *     const words = text.trim().split(/\s+/).length
@@ -43,7 +43,7 @@
  * import { promisify } from 'node:util'
  * const execAsync = promisify(exec)
  *
- * new GoalPlugin({
+ * new GoalLoop({
  *   validate: async () => {
  *     try {
  *       await execAsync('npm test')
@@ -97,15 +97,15 @@ export interface GoalAttempt {
   feedback?: string
 }
 
-/** Aggregate result of a goal run, exposed via `GoalPlugin.lastResult`. */
+/** Aggregate result of a goal run, exposed via `GoalLoop.lastResult`. */
 export interface GoalResult {
   passed: boolean
   stopReason: GoalStopReason
   attempts: readonly GoalAttempt[]
 }
 
-/** Configuration for {@link GoalPlugin}. */
-export interface GoalPluginOptions {
+/** Configuration for {@link GoalLoop}. */
+export interface GoalLoopOptions {
   /**
    * Validator. Pass a string for a natural-language goal — an internal judge
    * Agent grades the response. Pass a function for a programmatic predicate.
@@ -119,18 +119,36 @@ export interface GoalPluginOptions {
   evaluatorModel?: Model
   /** Max attempts. Defaults to `Infinity`. `warnOnce` when both this and `timeout` are unbounded. */
   maxAttempts?: number
-  /** Wall-clock budget for the whole run, in ms. Defaults to `Infinity`. */
+  /**
+   * Wall-clock budget for the whole run, in ms. Defaults to `Infinity`.
+   * Checked between attempts (after each `AfterInvocationEvent`), so an
+   * in-flight invocation isn't interrupted mid-stream — actual wall-clock
+   * may exceed this by one attempt's duration.
+   */
   timeout?: number
-  /** Plugin name. Defaults to `'strands:goal'`. Override only when stacking multiple goal plugins. */
+  /**
+   * Plugin name. Defaults to `'strands:goal-loop'`. Only one goal-loop plugin
+   * is supported per agent; if you need multiple constraints, compose them in
+   * a single validator function rather than attaching multiple instances.
+   */
   name?: string
   /**
-   * Ralph-Wiggum-style retry loop: each failed attempt restores the agent's
-   * transcript to its initial post-input state, then re-runs the goal with
-   * the latest validator feedback as a fresh user message. The agent never
-   * sees its own prior attempts. Other state (appState, modelState,
-   * systemPrompt) accumulates normally — only messages rewind.
+   * Whether to preserve the agent's conversation history across retry attempts.
+   *
+   * When `true` (default), the agent sees its own prior responses and the
+   * validator's feedback messages — use when prior attempts inform the next.
+   *
+   * When `false` (Ralph-Wiggum mode), each failed attempt restores the agent's
+   * full model-visible session (messages, systemPrompt, modelState, interrupts)
+   * to its initial post-input state, then re-runs the goal with the latest
+   * validator feedback as a fresh user message. The agent never sees its own
+   * prior attempts — including via server-side conversation chaining (e.g.
+   * OpenAI's `previous_response_id`). Only `appState` accumulates across
+   * attempts, since that's plugin scratch space invisible to the model.
+   *
+   * @defaultValue true
    */
-  freshContextPerAttempt?: boolean
+  preserveContext?: boolean
   /**
    * Builds the user message fed to the agent before each retry. Receives the
    * trimmed validator feedback (or `undefined` if the validator gave none).
@@ -155,45 +173,48 @@ interface RunState {
   result?: GoalResult
   resumed?: boolean
   /**
-   * Set on attempt 1 when `freshContextPerAttempt` is enabled. Captures the
-   * post-input transcript only (no appState / modelState / systemPrompt /
-   * interrupts — those accumulate normally across attempts). Restored before
-   * each retry so the agent sees the original input and nothing else.
+   * Set on attempt 1 when `preserveContext` is `false`. Captures the full
+   * model-visible session (messages, systemPrompt, modelState, interrupts) and
+   * is restored before each retry so the agent — and any server-side stateful
+   * model — sees the original input and nothing else. `appState` is excluded
+   * deliberately: it's plugin scratch space invisible to the model, and other
+   * plugins (rate-limiters, cost-trackers, custom counters) rely on their
+   * mutations surviving across attempts.
    */
   initialSnapshot?: Snapshot
 }
 
 /**
- * Iterative-refinement plugin. Construct a separate `GoalPlugin` for each `Agent`
+ * Iterative-refinement plugin. Construct a separate `GoalLoop` for each `Agent`
  * you attach it to — sharing one instance across multiple agents is not supported.
  */
-export class GoalPlugin implements Plugin {
+export class GoalLoop implements Plugin {
   readonly name: string
 
   private readonly _validate: Validator
   private readonly _evaluatorModel?: Model
   private readonly _maxAttempts: number
   private readonly _timeout: number
-  private readonly _freshContextPerAttempt: boolean
+  private readonly _preserveContext: boolean
   private readonly _resumePromptTemplate: (feedback: string | undefined) => string
   private _run: RunState | undefined = undefined
   // Set in `initAgent` before any hook fires.
   private _validator!: (response: Message) => Promise<ValidationOutcome>
   private _initialised = false
 
-  constructor(opts: GoalPluginOptions) {
+  constructor(opts: GoalLoopOptions) {
     if ((opts.maxAttempts ?? Infinity) < 1) {
       throw new Error(`maxAttempts=<${opts.maxAttempts}> | must be at least 1`)
     }
     if ((opts.timeout ?? Infinity) < 1) {
       throw new Error(`timeout=<${opts.timeout}> | must be at least 1`)
     }
-    this.name = opts.name ?? 'strands:goal'
+    this.name = opts.name ?? 'strands:goal-loop'
     this._validate = opts.validate
     if (opts.evaluatorModel !== undefined) this._evaluatorModel = opts.evaluatorModel
     this._maxAttempts = opts.maxAttempts ?? Infinity
     this._timeout = opts.timeout ?? Infinity
-    this._freshContextPerAttempt = opts.freshContextPerAttempt ?? false
+    this._preserveContext = opts.preserveContext ?? true
     this._resumePromptTemplate = opts.resumePromptTemplate ?? defaultResumePrompt
     if (this._maxAttempts === Infinity && this._timeout === Infinity) {
       warnOnce(logger, `${this.name} has no maxAttempts or timeout; execution is unbounded`)
@@ -211,11 +232,11 @@ export class GoalPlugin implements Plugin {
   }
 
   initAgent(agent: LocalAgent): void {
-    // Sharing a GoalPlugin across agents would silently judge the wrong
+    // Sharing a GoalLoop across agents would silently judge the wrong
     // transcript (the validator closes over the first agent) or interleave
     // runs across hosts. Fail loudly.
     if (this._initialised) {
-      throw new Error(`${this.name}: GoalPlugin instances cannot be shared across agents; construct one per agent`)
+      throw new Error(`${this.name}: GoalLoop instances cannot be shared across agents; construct one per agent`)
     }
     this._initialised = true
     this._validator = this._buildValidator(this._validate, agent)
@@ -232,12 +253,20 @@ export class GoalPlugin implements Plugin {
       this._run = { startTime: Date.now(), attempts: [] }
     })
 
-    // On attempt 1 only, snapshot the transcript while messages = [user: input]
-    // (no assistant turn yet) so retries restore to that exact state.
-    if (this._freshContextPerAttempt) {
+    // On attempt 1 only, snapshot the model-visible session while
+    // messages = [user: input] (no assistant turn yet) so retries restore to
+    // that exact state. `state` (appState) is excluded deliberately: it's
+    // plugin scratch space invisible to the model, and other plugins
+    // (rate-limiters, cost-trackers, custom counters) rely on their mutations
+    // surviving across attempts. Everything else in the `session` preset
+    // (messages, systemPrompt, modelState, interrupts) is what the model sees
+    // — including via server-side chaining like OpenAI's `previous_response_id`
+    // stashed in `modelState` — so all of it must rewind for Ralph mode to
+    // actually hide prior attempts from the model.
+    if (!this._preserveContext) {
       agent.addHook(BeforeModelCallEvent, () => {
         if (this._run && !this._run.initialSnapshot) {
-          this._run.initialSnapshot = agent.takeSnapshot({ include: ['messages'] })
+          this._run.initialSnapshot = agent.takeSnapshot({ preset: 'session', exclude: ['state'] })
         }
       })
     }
@@ -269,6 +298,10 @@ export class GoalPlugin implements Plugin {
       try {
         outcome = await this._validator(response)
       } catch (validatorError) {
+        // Surface validator throws so a buggy validator (e.g. a TypeError that
+        // fails identically on every attempt) is visible in logs rather than
+        // silently burning the attempt budget.
+        logger.warn(`${this.name}: validator threw: ${(validatorError as Error).message}`)
         outcome = { passed: false, feedback: `Validator error: ${(validatorError as Error).message}` }
       }
 
@@ -313,6 +346,9 @@ export class GoalPlugin implements Plugin {
       }
     }
     const goalDescription = validator
+    // The NL judge intentionally ignores the `response` argument — its prompt
+    // includes the full host transcript (via `buildJudgePrompt`) so the judge
+    // can evaluate against context, not just the last assistant turn.
     return async () => {
       const judge = new Agent({
         model: this._evaluatorModel ?? hostAgent.model,

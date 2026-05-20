@@ -5,9 +5,9 @@
  * @example
  * ```ts
  * import { Agent } from '@strands-agents/sdk'
- * import { GoalPlugin } from '@strands-agents/sdk/vended-plugins/goal'
+ * import { GoalLoop } from '@strands-agents/sdk/vended-plugins/goal'
  *
- * const concise = new GoalPlugin({
+ * const concise = new GoalLoop({
  *   validate: 'At most 3 sentences, accessible to a 10-year-old.',
  *   maxAttempts: 3,
  * })
@@ -16,9 +16,9 @@
  * ```
  */
 
-export { GoalPlugin } from './plugin.js'
+export { GoalLoop } from './plugin.js'
 export type {
-  GoalPluginOptions,
+  GoalLoopOptions,
   Validator,
   ValidationOutcome,
   GoalAttempt,
