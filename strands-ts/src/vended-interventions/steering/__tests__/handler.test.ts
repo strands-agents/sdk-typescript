@@ -43,9 +43,9 @@ describe('SteeringHandler', () => {
       }
     }
 
-    const hookRegistry = new HookRegistryImplementation()
     const agent = new Agent()
-    new InterventionRegistry([new Spy()], hookRegistry)
+    const hookRegistry = (agent as unknown as { _hooksRegistry: HookRegistryImplementation })._hooksRegistry
+    new InterventionRegistry([new Spy()], agent)
 
     const event = makeBeforeToolCallEvent(agent)
     await hookRegistry.invokeCallbacks(event)
@@ -69,9 +69,9 @@ describe('SteeringHandler', () => {
       }
     }
 
-    const hookRegistry = new HookRegistryImplementation()
     const agent = new Agent()
-    new InterventionRegistry([new Spy()], hookRegistry)
+    const hookRegistry = (agent as unknown as { _hooksRegistry: HookRegistryImplementation })._hooksRegistry
+    new InterventionRegistry([new Spy()], agent)
 
     const event = makeAfterModelCallEvent(agent)
     await hookRegistry.invokeCallbacks(event)
@@ -99,9 +99,9 @@ describe('SteeringHandler', () => {
       }
     }
 
-    const hookRegistry = new HookRegistryImplementation()
     const agent = new Agent()
-    new InterventionRegistry([new ContextReader({ contextProviders: [fakeProvider] })], hookRegistry)
+    const hookRegistry = (agent as unknown as { _hooksRegistry: HookRegistryImplementation })._hooksRegistry
+    new InterventionRegistry([new ContextReader({ contextProviders: [fakeProvider] })], agent)
 
     await hookRegistry.invokeCallbacks(makeBeforeToolCallEvent(agent))
 
@@ -116,8 +116,8 @@ describe('SteeringHandler', () => {
       override readonly name = 'steer:model'
     }
 
-    const hookRegistry = new HookRegistryImplementation()
-    expect(() => new InterventionRegistry([new A(), new B()], hookRegistry)).not.toThrow()
+    const agent = new Agent()
+    expect(() => new InterventionRegistry([new A(), new B()], agent)).not.toThrow()
   })
 
   it('does not invoke evaluateModelOutput when stopData is missing', async () => {
@@ -131,9 +131,9 @@ describe('SteeringHandler', () => {
       }
     }
 
-    const hookRegistry = new HookRegistryImplementation()
     const agent = new Agent()
-    new InterventionRegistry([new Spy()], hookRegistry)
+    const hookRegistry = (agent as unknown as { _hooksRegistry: HookRegistryImplementation })._hooksRegistry
+    new InterventionRegistry([new Spy()], agent)
 
     const event = new AfterModelCallEvent({
       agent,
@@ -154,8 +154,8 @@ describe('SteeringHandler', () => {
       }
     }
 
-    const hookRegistry = new HookRegistryImplementation()
     const agent = new Agent()
+    const hookRegistry = (agent as unknown as { _hooksRegistry: HookRegistryImplementation })._hooksRegistry
 
     // Preload an approval response so event.interrupt() returns it instead of pausing
     const interruptId = `hook:beforeToolCall:${toolUse.toolUseId}:approver`
@@ -167,7 +167,7 @@ describe('SteeringHandler', () => {
       source: 'hook',
     })
 
-    new InterventionRegistry([new Approver()], hookRegistry)
+    new InterventionRegistry([new Approver()], agent)
 
     const event = makeBeforeToolCallEvent(agent)
     await hookRegistry.invokeCallbacks(event)
@@ -183,8 +183,8 @@ describe('SteeringHandler', () => {
       }
     }
 
-    const hookRegistry = new HookRegistryImplementation()
     const agent = new Agent()
+    const hookRegistry = (agent as unknown as { _hooksRegistry: HookRegistryImplementation })._hooksRegistry
 
     const interruptId = `hook:beforeToolCall:${toolUse.toolUseId}:approver`
     const interruptState = (agent as unknown as { _interruptState: InterruptState })._interruptState
@@ -195,7 +195,7 @@ describe('SteeringHandler', () => {
       source: 'hook',
     })
 
-    new InterventionRegistry([new Approver()], hookRegistry)
+    new InterventionRegistry([new Approver()], agent)
 
     const event = makeBeforeToolCallEvent(agent)
     await hookRegistry.invokeCallbacks(event)

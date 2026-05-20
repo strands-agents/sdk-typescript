@@ -5,6 +5,7 @@ import type {
   BeforeModelCallEvent,
   AfterModelCallEvent,
 } from '../hooks/events.js'
+import type { LocalAgent } from '../types/agent.js'
 import type { Proceed, Deny, Guide, Confirm, Transform } from './actions.js'
 
 type Awaitable<T> = T | Promise<T>
@@ -64,4 +65,12 @@ export abstract class InterventionHandler {
   afterModelCall(_event: AfterModelCallEvent): Awaitable<Proceed | Guide | Transform> {
     return { type: 'proceed' }
   }
+
+  /**
+   * Subscribe to hook events beyond the five decision methods above. Called
+   * once when the handler is registered with an agent. Use `agent.addHook`
+   * to observe events that have no intervention return contract
+   * (e.g. {@link AfterInvocationEvent}, {@link MessageAddedEvent}).
+   */
+  registerHooks?(agent: LocalAgent): void
 }

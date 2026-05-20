@@ -5,13 +5,7 @@
  * for evaluation decisions.
  */
 
-import type {
-  AfterModelCallEvent,
-  AfterToolCallEvent,
-  BeforeInvocationEvent,
-  BeforeModelCallEvent,
-  BeforeToolCallEvent,
-} from '../../../hooks/events.js'
+import type { LocalAgent } from '../../../types/agent.js'
 import type { JSONValue } from '../../../types/json.js'
 
 /**
@@ -26,14 +20,13 @@ export interface SteeringContextData {
 }
 
 /**
- * A passive observer that accumulates data from intervention lifecycle events.
+ * Passive observer that accumulates data from agent hook events and exposes a
+ * snapshot via `context`.
  *
- * The owning {@link SteeringHandler} feeds each event to its providers before
- * running its own decision logic. Implement only the lifecycle methods you need;
- * unimplemented methods are skipped.
- *
- * Providers expose accumulated state through the `context` getter, which the
- * handler reads when making steering decisions.
+ * Providers self-subscribe to whichever {@link HookableEvent}s they need by
+ * implementing {@link registerHooks}. The owning {@link SteeringHandler} forwards
+ * its `registerHooks` call to its providers, so subscriptions are wired at the
+ * same time the handler attaches to an agent.
  *
  * @example
  * ```typescript
@@ -41,8 +34,10 @@ export interface SteeringContextData {
  *   readonly name = 'costTracker'
  *   private _toolCalls = 0
  *
- *   afterToolCall(_event: AfterToolCallEvent): void {
- *     this._toolCalls += 1
+ *   registerHooks(agent: LocalAgent): void {
+ *     agent.addHook(AfterToolCallEvent, () => {
+ *       this._toolCalls += 1
+ *     })
  *   }
  *
  *   get context(): SteeringContextData {
@@ -58,9 +53,9 @@ export interface SteeringContextProvider {
   /** Return the current context snapshot for steering evaluation. */
   get context(): SteeringContextData
 
-  beforeInvocation?(event: BeforeInvocationEvent): void | Promise<void>
-  beforeToolCall?(event: BeforeToolCallEvent): void | Promise<void>
-  afterToolCall?(event: AfterToolCallEvent): void | Promise<void>
-  beforeModelCall?(event: BeforeModelCallEvent): void | Promise<void>
-  afterModelCall?(event: AfterModelCallEvent): void | Promise<void>
+  /**
+   * Subscribe to hook events. Called once by the owning {@link SteeringHandler}
+   * when the handler is registered with an agent.
+   */
+  registerHooks?(agent: LocalAgent): void
 }

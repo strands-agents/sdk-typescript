@@ -349,7 +349,7 @@ export class Agent implements LocalAgent, InvokableAgent {
     // Initialize hooks registry
     this._hooksRegistry = new HookRegistryImplementation()
 
-    this._interventionRegistry = new InterventionRegistry(config?.interventions ?? [], this._hooksRegistry)
+    this._interventionRegistry = new InterventionRegistry(config?.interventions ?? [], this)
 
     // `undefined` (omitted) → install the default; `null`/`[]` → explicit opt-out.
     const retryStrategies: RetryStrategy[] =

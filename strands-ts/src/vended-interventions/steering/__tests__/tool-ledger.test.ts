@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { Agent } from '../../../agent/agent.js'
+import type { Agent } from '../../../agent/agent.js'
+import { createMockAgent, invokeTrackedHook, type MockAgent } from '../../../__fixtures__/agent-helpers.js'
 import { AfterToolCallEvent, BeforeToolCallEvent } from '../../../hooks/events.js'
 import { TextBlock, ToolResultBlock } from '../../../types/messages.js'
 import { ToolLedgerProvider } from '../providers/tool-ledger.js'
@@ -27,14 +28,20 @@ describe('ToolLedgerProvider', () => {
     })
   }
 
-  it('records pending entry on beforeToolCall', () => {
-    const agent = new Agent()
-    const provider = new ToolLedgerProvider()
+  function setup(config?: { maxEntries?: number }): { agent: MockAgent; provider: ToolLedgerProvider } {
+    const agent = createMockAgent()
+    const provider = new ToolLedgerProvider(config)
+    provider.registerHooks(agent)
+    return { agent, provider }
+  }
+
+  it('records pending entry on beforeToolCall', async () => {
+    const { agent, provider } = setup()
 
     expect(provider.context.type).toBe('toolLedger')
     expect(provider.context.calls).toEqual([])
 
-    provider.beforeToolCall(makeBefore(agent))
+    await invokeTrackedHook(agent, makeBefore(agent))
 
     const calls = provider.context.calls as Array<Record<string, unknown>>
     expect(calls).toHaveLength(1)
@@ -46,12 +53,11 @@ describe('ToolLedgerProvider', () => {
     })
   })
 
-  it('flips pending to success after afterToolCall', () => {
-    const agent = new Agent()
-    const provider = new ToolLedgerProvider()
+  it('flips pending to success after afterToolCall', async () => {
+    const { agent, provider } = setup()
 
-    provider.beforeToolCall(makeBefore(agent))
-    provider.afterToolCall(makeAfter(agent, 'success'))
+    await invokeTrackedHook(agent, makeBefore(agent))
+    await invokeTrackedHook(agent, makeAfter(agent, 'success'))
 
     const calls = provider.context.calls as Array<Record<string, unknown>>
     expect(calls).toHaveLength(1)
@@ -65,24 +71,23 @@ describe('ToolLedgerProvider', () => {
     })
   })
 
-  it('records error status and message', () => {
-    const agent = new Agent()
-    const provider = new ToolLedgerProvider()
+  it('records error status and message', async () => {
+    const { agent, provider } = setup()
 
-    provider.beforeToolCall(makeBefore(agent))
-    provider.afterToolCall(makeAfter(agent, 'error', new Error('boom')))
+    await invokeTrackedHook(agent, makeBefore(agent))
+    await invokeTrackedHook(agent, makeAfter(agent, 'error', new Error('boom')))
 
     const calls = provider.context.calls as Array<Record<string, unknown>>
     expect(calls[0]?.status).toBe('error')
     expect(calls[0]?.error).toBe('boom')
   })
 
-  it('drops oldest entries when ledger exceeds maxEntries', () => {
-    const agent = new Agent()
-    const provider = new ToolLedgerProvider({ maxEntries: 2 })
+  it('drops oldest entries when ledger exceeds maxEntries', async () => {
+    const { agent, provider } = setup({ maxEntries: 2 })
 
     for (const id of ['a', 'b', 'c']) {
-      provider.beforeToolCall(
+      await invokeTrackedHook(
+        agent,
         new BeforeToolCallEvent({
           agent,
           toolUse: { name: 't', toolUseId: id, input: {} },
