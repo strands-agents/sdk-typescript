@@ -74,20 +74,6 @@ export interface CacheConfig {
    * - "anthropic": Force enable Anthropic-style caching (useful for application inference profiles)
    */
   strategy: 'auto' | 'anthropic'
-
-  /**
-   * Optional TTL applied to the auto-injected cache point appended after `toolConfig.tools`.
-   * When omitted, the provider's default TTL is used. The accepted value space is
-   * provider-specific.
-   */
-  toolsTTL?: string
-
-  /**
-   * Optional TTL applied to the auto-injected cache point appended to the last user message.
-   * When omitted, the provider's default TTL is used. The accepted value space is
-   * provider-specific.
-   */
-  messagesTTL?: string
 }
 
 /**

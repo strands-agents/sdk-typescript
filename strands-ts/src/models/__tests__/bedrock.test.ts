@@ -781,7 +781,7 @@ describe('BedrockModel', () => {
       ])
     })
 
-    it('rejects invalid ttl on user-supplied cache point with a descriptive error', async () => {
+    it('forwards arbitrary ttl strings without client-side validation (Bedrock validates server-side)', async () => {
       const provider = new BedrockModel()
       const messages = [
         new Message({
@@ -790,9 +790,12 @@ describe('BedrockModel', () => {
         }),
       ]
 
-      await expect(collectIterator(provider.stream(messages))).rejects.toThrow(
-        /Invalid Bedrock cache TTL for CachePointBlock\.ttl: "2h"\. Expected one of "5m", "1h"\./
-      )
+      collectIterator(provider.stream(messages))
+
+      const call = mockConverseStreamCommand.mock.lastCall?.[0]
+      const userMsg = call?.messages?.[0]
+      const lastBlock = userMsg?.content?.[userMsg.content.length - 1]
+      expect(lastBlock).toStrictEqual({ cachePoint: { type: 'default', ttl: '2h' } })
     })
   })
 
