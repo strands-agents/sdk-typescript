@@ -32,20 +32,50 @@ export interface DirectToolCallOptions {
 }
 
 /**
- * A handle to a specific tool, providing `.invoke()` and `.stream()` methods.
+ * A handle to a specific tool, providing call sugar plus `.invoke()` / `.stream()` methods.
  *
  * Returned by the Proxy get trap when accessing `agent.tool.toolName`.
- * This aligns with the agent-level `agent.invoke()` / `agent.stream()` pattern.
+ *
+ * Three usage forms are supported:
+ * ```typescript
+ * // 1. Call sugar (shortest — sugar for .invoke())
+ * await agent.tool.calculator!({ a: 5, b: 3 })
+ *
+ * // 2. Explicit .invoke() — same as call sugar, returns a Promise<ToolResultBlock>
+ * await agent.tool.calculator!.invoke({ a: 5, b: 3 })
+ *
+ * // 3. Streaming — yields intermediate events
+ * for await (const event of agent.tool.calculator!.stream({ a: 5, b: 3 })) {
+ *   console.log(event)
+ * }
+ * ```
+ *
+ * The call sugar (`agent.tool.foo(...)`) and `.invoke()` are equivalent; pick whichever
+ * reads better. `.invoke()` / `.stream()` align with the agent-level
+ * `agent.invoke()` / `agent.stream()` pattern for consistency.
  */
 export interface ToolHandle {
   /**
-   * Invoke the tool and return the final result.
+   * Invoke the tool and return the final result. Sugar for {@link ToolHandle.invoke}.
    *
    * @param input - The input parameters for the tool
    * @param options - Optional configuration for this call
    * @returns The tool result
    */
-  invoke: (input?: JSONValue, options?: DirectToolCallOptions) => Promise<ToolResultBlock>
+  (input?: JSONValue, options?: DirectToolCallOptions): Promise<ToolResultBlock>
+
+  /**
+   * Invoke the tool and return the final result.
+   *
+   * Equivalent to calling the handle directly (`agent.tool.foo(input)` ===
+   * `agent.tool.foo.invoke(input)`). Use this form when you prefer the
+   * symmetry with `agent.invoke()` / `agent.stream()`.
+   *
+   * @param input - The input parameters for the tool
+   * @param options - Optional configuration for this call
+   * @returns The tool result
+   */
+  invoke(input?: JSONValue, options?: DirectToolCallOptions): Promise<ToolResultBlock>
 
   /**
    * Stream the tool execution, yielding intermediate events and returning the final result.
@@ -54,10 +84,10 @@ export interface ToolHandle {
    * @param options - Optional configuration for this call
    * @returns Async generator that yields ToolStreamEvents and returns ToolResultBlock
    */
-  stream: (
+  stream(
     input?: JSONValue,
     options?: DirectToolCallOptions
-  ) => AsyncGenerator<ToolStreamEvent, ToolResultBlock, undefined>
+  ): AsyncGenerator<ToolStreamEvent, ToolResultBlock, undefined>
 }
 
 /**
@@ -156,19 +186,24 @@ export class ToolCaller {
 
   /**
    * Creates a ToolHandle for the given tool name.
+   *
+   * The handle is a callable function (call sugar for `.invoke()`) with `.invoke()`
+   * and `.stream()` methods attached. This lets users write either
+   * `agent.tool.foo(input)` or `agent.tool.foo.invoke(input)` interchangeably.
    */
   private _createToolHandle(name: string): ToolHandle {
-    return {
-      invoke: (input?: JSONValue, options?: DirectToolCallOptions): Promise<ToolResultBlock> => {
-        return this._callTool(name, input ?? {}, options)
-      },
-      stream: (
-        input?: JSONValue,
-        options?: DirectToolCallOptions
-      ): AsyncGenerator<ToolStreamEvent, ToolResultBlock, undefined> => {
-        return this._streamTool(name, input ?? {}, options)
-      },
-    }
+    const handle = ((input?: JSONValue, options?: DirectToolCallOptions): Promise<ToolResultBlock> =>
+      this._callTool(name, input ?? {}, options)) as ToolHandle
+    // Attach explicit methods. They share an implementation with the callable form
+    // so behavior is guaranteed identical between `agent.tool.foo(x)` and
+    // `agent.tool.foo.invoke(x)`.
+    handle.invoke = (input?: JSONValue, options?: DirectToolCallOptions): Promise<ToolResultBlock> =>
+      this._callTool(name, input ?? {}, options)
+    handle.stream = (
+      input?: JSONValue,
+      options?: DirectToolCallOptions
+    ): AsyncGenerator<ToolStreamEvent, ToolResultBlock, undefined> => this._streamTool(name, input ?? {}, options)
+    return handle
   }
 
   /**
