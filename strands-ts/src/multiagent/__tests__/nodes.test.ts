@@ -134,16 +134,16 @@ describe('AgentNode', () => {
       expect(timedNode.timeout).toBe(Infinity)
     })
 
-    it('defaults stateful to false', () => {
-      expect(node.stateful).toBe(false)
+    it('defaults preserveContext to false', () => {
+      expect(node.preserveContext).toBe(false)
     })
 
-    it('stores the stateful flag when provided', () => {
-      const statefulNode = new AgentNode({ agent, stateful: true })
-      expect(statefulNode.stateful).toBe(true)
+    it('stores the preserveContext flag when provided', () => {
+      const preserveContextNode = new AgentNode({ agent, preserveContext: true })
+      expect(preserveContextNode.preserveContext).toBe(true)
     })
 
-    it('throws when stateful is set with a non-Agent InvokableAgent', () => {
+    it('throws when preserveContext is set with a non-Agent InvokableAgent', () => {
       const customAgent = {
         id: 'custom',
         async invoke() {
@@ -157,7 +157,9 @@ describe('AgentNode', () => {
           return () => {}
         },
       }
-      expect(() => new AgentNode({ agent: customAgent, stateful: true })).toThrow(/stateful=true requires an Agent/)
+      expect(() => new AgentNode({ agent: customAgent, preserveContext: true })).toThrow(
+        /preserveContext=true requires an Agent/
+      )
     })
   })
 
@@ -198,37 +200,37 @@ describe('AgentNode', () => {
       expect(agent.appState.getAll()).toStrictEqual(stateBefore)
     })
 
-    it('retains agent messages across executions when stateful', async () => {
+    it('retains agent messages across executions when preserveContext is true', async () => {
       const model = new MockMessageModel().addTurn(new TextBlock('reply-1')).addTurn(new TextBlock('reply-2'))
-      const statefulAgent = new Agent({ model, printer: false, id: 'stateful-agent' })
-      const statefulNode = new AgentNode({ agent: statefulAgent, stateful: true })
-      const statefulState = new MultiAgentState({ nodeIds: ['stateful-agent'] })
+      const preserveContextAgent = new Agent({ model, printer: false, id: 'preserve-context-agent' })
+      const preserveContextNode = new AgentNode({ agent: preserveContextAgent, preserveContext: true })
+      const preserveContextState = new MultiAgentState({ nodeIds: ['preserve-context-agent'] })
 
-      await collectGenerator(statefulNode.stream([new TextBlock('first')], statefulState))
-      const messagesAfterFirst = statefulAgent.messages.length
+      await collectGenerator(preserveContextNode.stream([new TextBlock('first')], preserveContextState))
+      const messagesAfterFirst = preserveContextAgent.messages.length
       expect(messagesAfterFirst).toBeGreaterThan(0)
 
-      await collectGenerator(statefulNode.stream([new TextBlock('second')], statefulState))
+      await collectGenerator(preserveContextNode.stream([new TextBlock('second')], preserveContextState))
 
-      expect(statefulAgent.messages.length).toBeGreaterThan(messagesAfterFirst)
+      expect(preserveContextAgent.messages.length).toBeGreaterThan(messagesAfterFirst)
     })
 
-    it('retains appState mutations across executions when stateful', async () => {
+    it('retains appState mutations across executions when preserveContext is true', async () => {
       const model = new MockMessageModel().addTurn(new TextBlock('reply-1')).addTurn(new TextBlock('reply-2'))
-      const statefulAgent = new Agent({ model, printer: false, id: 'stateful-agent' })
+      const preserveContextAgent = new Agent({ model, printer: false, id: 'preserve-context-agent' })
       // Hook bumps a counter on appState every time the agent is invoked.
-      statefulAgent.addHook(BeforeInvocationEvent, (event) => {
+      preserveContextAgent.addHook(BeforeInvocationEvent, (event) => {
         const count = event.agent.appState.get<{ count: number }>('count') ?? 0
         event.agent.appState.set('count', count + 1)
       })
-      const statefulNode = new AgentNode({ agent: statefulAgent, stateful: true })
-      const statefulState = new MultiAgentState({ nodeIds: ['stateful-agent'] })
+      const preserveContextNode = new AgentNode({ agent: preserveContextAgent, preserveContext: true })
+      const preserveContextState = new MultiAgentState({ nodeIds: ['preserve-context-agent'] })
 
-      await collectGenerator(statefulNode.stream([new TextBlock('first')], statefulState))
-      expect(statefulAgent.appState.get<{ count: number }>('count')).toBe(1)
+      await collectGenerator(preserveContextNode.stream([new TextBlock('first')], preserveContextState))
+      expect(preserveContextAgent.appState.get<{ count: number }>('count')).toBe(1)
 
-      await collectGenerator(statefulNode.stream([new TextBlock('second')], statefulState))
-      expect(statefulAgent.appState.get<{ count: number }>('count')).toBe(2)
+      await collectGenerator(preserveContextNode.stream([new TextBlock('second')], preserveContextState))
+      expect(preserveContextAgent.appState.get<{ count: number }>('count')).toBe(2)
     })
 
     it('passes structuredOutputSchema from options to the agent', async () => {
