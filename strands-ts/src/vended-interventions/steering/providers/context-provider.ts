@@ -5,7 +5,13 @@
  * for evaluation decisions.
  */
 
-import type { Plugin } from '../../../plugins/plugin.js'
+import type {
+  AfterModelCallEvent,
+  AfterToolCallEvent,
+  BeforeInvocationEvent,
+  BeforeModelCallEvent,
+  BeforeToolCallEvent,
+} from '../../../hooks/events.js'
 import type { JSONValue } from '../../../types/json.js'
 
 /**
@@ -20,34 +26,41 @@ export interface SteeringContextData {
 }
 
 /**
- * A component that provides context data for steering evaluation.
+ * A passive observer that accumulates data from intervention lifecycle events.
  *
- * Providers register hooks via initAgent to observe agent activity,
- * and expose accumulated data through the context getter. Each provider
- * instance is bound to a single agent — construct a new provider per agent
- * rather than sharing.
+ * The owning {@link SteeringHandler} feeds each event to its providers before
+ * running its own decision logic. Implement only the lifecycle methods you need;
+ * unimplemented methods are skipped.
+ *
+ * Providers expose accumulated state through the `context` getter, which the
+ * handler reads when making steering decisions.
  *
  * @example
  * ```typescript
  * class CostTracker implements SteeringContextProvider {
  *   readonly name = 'costTracker'
- *   private _totalTokens = 0
+ *   private _toolCalls = 0
  *
- *   initAgent(agent: LocalAgent): void {
- *     agent.addHook(AfterModelCallEvent, (event) => {
- *       this._totalTokens += getTokenCount(event)
- *     })
+ *   afterToolCall(_event: AfterToolCallEvent): void {
+ *     this._toolCalls += 1
  *   }
  *
  *   get context(): SteeringContextData {
- *     return { type: 'costTracker', totalTokens: this._totalTokens }
+ *     return { type: 'costTracker', toolCalls: this._toolCalls }
  *   }
  * }
  * ```
  */
-export interface SteeringContextProvider extends Pick<Plugin, 'initAgent' | 'name'> {
-  /**
-   * Return the current context snapshot for steering evaluation.
-   */
+export interface SteeringContextProvider {
+  /** Identifier for this provider instance. */
+  readonly name: string
+
+  /** Return the current context snapshot for steering evaluation. */
   get context(): SteeringContextData
+
+  beforeInvocation?(event: BeforeInvocationEvent): void | Promise<void>
+  beforeToolCall?(event: BeforeToolCallEvent): void | Promise<void>
+  afterToolCall?(event: AfterToolCallEvent): void | Promise<void>
+  beforeModelCall?(event: BeforeModelCallEvent): void | Promise<void>
+  afterModelCall?(event: AfterModelCallEvent): void | Promise<void>
 }

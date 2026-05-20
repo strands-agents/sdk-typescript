@@ -31,12 +31,12 @@ describe('SteeringHandler', () => {
     })
   }
 
-  it('routes beforeToolCall to subclass override with the event', async () => {
+  it('routes beforeToolCall to subclass evaluateToolCall with the event', async () => {
     const seen: { agent?: LocalAgent; toolUse?: ToolUse } = {}
 
     class Spy extends SteeringHandler {
       override readonly name = 'spy'
-      override async beforeToolCall(event: BeforeToolCallEvent): Promise<Guide> {
+      protected override async evaluateToolCall(event: BeforeToolCallEvent): Promise<Guide> {
         seen.agent = event.agent
         seen.toolUse = event.toolUse
         return guide('try again')
@@ -56,12 +56,12 @@ describe('SteeringHandler', () => {
     expect(event.cancel).toContain('try again')
   })
 
-  it('routes afterModelCall to subclass override with the event', async () => {
+  it('routes afterModelCall to subclass evaluateModelOutput with the event', async () => {
     const seen: { message?: Message; stopReason?: string } = {}
 
     class Spy extends SteeringHandler {
       override readonly name = 'spy'
-      override async afterModelCall(event: AfterModelCallEvent): Promise<Guide | Proceed> {
+      protected override async evaluateModelOutput(event: AfterModelCallEvent): Promise<Guide | Proceed> {
         if (!event.stopData) return { type: 'proceed' }
         seen.message = event.stopData.message
         seen.stopReason = event.stopData.stopReason
@@ -84,7 +84,6 @@ describe('SteeringHandler', () => {
   it('exposes provider context to subclasses via getSteeringContext', async () => {
     const fakeProvider: SteeringContextProvider = {
       name: 'fake',
-      initAgent: () => {},
       get context(): SteeringContextData {
         return { type: 'fake', tokens: 42 }
       },
@@ -94,7 +93,7 @@ describe('SteeringHandler', () => {
 
     class ContextReader extends SteeringHandler {
       override readonly name = 'context-reader'
-      override async beforeToolCall(): Promise<Proceed> {
+      protected override async evaluateToolCall(): Promise<Proceed> {
         observedContext = this.getSteeringContext()
         return { type: 'proceed' }
       }
@@ -109,22 +108,24 @@ describe('SteeringHandler', () => {
     expect(observedContext).toEqual([{ type: 'fake', tokens: 42 }])
   })
 
-  it('uses custom name when provided so siblings can coexist on one agent', () => {
-    class A extends SteeringHandler {}
-    class B extends SteeringHandler {}
+  it('siblings with distinct names can coexist on one agent', () => {
+    class A extends SteeringHandler {
+      override readonly name = 'steer:tool'
+    }
+    class B extends SteeringHandler {
+      override readonly name = 'steer:model'
+    }
 
     const hookRegistry = new HookRegistryImplementation()
-    expect(
-      () => new InterventionRegistry([new A({ name: 'steer:tool' }), new B({ name: 'steer:model' })], hookRegistry)
-    ).not.toThrow()
+    expect(() => new InterventionRegistry([new A(), new B()], hookRegistry)).not.toThrow()
   })
 
-  it('does not invoke afterModelCall when stopData is missing', async () => {
+  it('does not invoke evaluateModelOutput when stopData is missing', async () => {
     const called = vi.fn()
 
     class Spy extends SteeringHandler {
       override readonly name = 'spy'
-      override async afterModelCall(event: AfterModelCallEvent): Promise<Proceed> {
+      protected override async evaluateModelOutput(event: AfterModelCallEvent): Promise<Proceed> {
         if (event.stopData) called()
         return { type: 'proceed' }
       }
@@ -148,7 +149,7 @@ describe('SteeringHandler', () => {
   it('confirm decision flows through the interrupt system on resume (approved)', async () => {
     class Approver extends SteeringHandler {
       override readonly name = 'approver'
-      override async beforeToolCall(): Promise<Confirm> {
+      protected override async evaluateToolCall(): Promise<Confirm> {
         return confirm('approve searchWeb?')
       }
     }
@@ -177,7 +178,7 @@ describe('SteeringHandler', () => {
   it('confirm decision sets cancel when human denies', async () => {
     class Approver extends SteeringHandler {
       override readonly name = 'approver'
-      override async beforeToolCall(): Promise<Confirm> {
+      protected override async evaluateToolCall(): Promise<Confirm> {
         return confirm('approve searchWeb?')
       }
     }

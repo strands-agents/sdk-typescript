@@ -5,7 +5,6 @@ import type {
   BeforeModelCallEvent,
   AfterModelCallEvent,
 } from '../hooks/events.js'
-import type { LocalAgent } from '../types/agent.js'
 import type { Proceed, Deny, Guide, Confirm, Transform } from './actions.js'
 
 type Awaitable<T> = T | Promise<T>
@@ -45,14 +44,6 @@ export abstract class InterventionHandler {
 
   /** What to do when this handler throws. Defaults to 'throw'. */
   readonly onError: OnError = 'throw'
-
-  /**
-   * Optional one-time setup called when the agent initializes. Use this to
-   * register additional hooks or stateful sub-systems the handler depends on
-   * (for example, context providers that observe events between intervention
-   * calls). Default is a no-op.
-   */
-  initAgent(_agent: LocalAgent): void | Promise<void> {}
 
   beforeInvocation(_event: BeforeInvocationEvent): Awaitable<Proceed | Deny | Guide | Transform> {
     return { type: 'proceed' }

@@ -1,21 +1,20 @@
 /**
  * Steering handler base class for providing contextual guidance to agents.
  *
- * Provides modular prompting through contextual guidance that appears when relevant,
- * rather than front-loading all instructions. Handlers integrate with the intervention
- * system to intercept actions and provide just-in-time feedback based on local context.
- *
- * Subclass {@link SteeringHandler} and override {@link beforeToolCall} and/or
- * {@link afterModelCall} from {@link InterventionHandler}.
+ * Subclass {@link SteeringHandler} and override {@link evaluateToolCall} and/or
+ * {@link evaluateModelOutput} — these carry the narrow steering contract
+ * (Proceed | Guide | Confirm for tool calls, Proceed | Guide for model output).
  *
  * @example
  * ```typescript
  * class MySteeringHandler extends SteeringHandler {
- *   override async beforeToolCall(event) {
+ *   override readonly name = 'my-steering'
+ *
+ *   override async evaluateToolCall(event) {
  *     if (event.toolUse.name === 'dangerous_tool') {
- *       return { type: 'guide', feedback: 'This tool requires extra caution.' }
+ *       return guide('This tool requires extra caution.')
  *     }
- *     return { type: 'proceed' }
+ *     return proceed()
  *   }
  * }
  *
@@ -23,10 +22,18 @@
  * ```
  */
 
+import type {
+  AfterModelCallEvent,
+  AfterToolCallEvent,
+  BeforeInvocationEvent,
+  BeforeModelCallEvent,
+  BeforeToolCallEvent,
+} from '../../../hooks/events.js'
 import { InterventionHandler } from '../../../interventions/handler.js'
-import { logger } from '../../../logging/logger.js'
-import type { LocalAgent } from '../../../types/agent.js'
+import { proceed, type Confirm, type Guide, type Proceed } from '../../../interventions/actions.js'
 import type { SteeringContextData, SteeringContextProvider } from '../providers/context-provider.js'
+
+type Awaitable<T> = T | Promise<T>
 
 /**
  * Configuration shared by all steering handlers.
@@ -34,37 +41,80 @@ import type { SteeringContextData, SteeringContextProvider } from '../providers/
 export interface SteeringHandlerConfig {
   /** Providers that supply evaluation context. */
   contextProviders?: SteeringContextProvider[]
-  /**
-   * Identifier for this handler instance. Defaults to `'strands:steering'`.
-   * Override when attaching multiple steering handlers to the same agent —
-   * `InterventionRegistry` rejects duplicate names.
-   */
-  name?: string
 }
 
 /**
  * Base class for steering handlers that provide contextual guidance to agents.
  *
- * Steering handlers accept context providers that track agent activity, and
+ * Steering handlers accept context providers that observe agent activity, and
  * use the accumulated context to make guidance decisions. The handler is an
  * {@link InterventionHandler} — pass it via `interventions:` on the agent.
+ *
+ * Subclasses must declare a `name` (inherited as `abstract` from
+ * {@link InterventionHandler}). When attaching multiple steering handlers to
+ * one agent, ensure their names are distinct — `InterventionRegistry` rejects
+ * duplicates.
+ *
+ * The intervention lifecycle methods (`beforeToolCall`, `afterModelCall`, etc.)
+ * are reserved for feeding providers and delegating to the narrow steering
+ * methods. Subclasses should override {@link evaluateToolCall} and
+ * {@link evaluateModelOutput} instead.
  */
 export abstract class SteeringHandler extends InterventionHandler {
-  override readonly name: string
+  abstract override readonly name: string
 
   private readonly _contextProviders: SteeringContextProvider[]
 
   constructor(config?: SteeringHandlerConfig) {
     super()
-    this.name = config?.name ?? 'strands:steering'
     this._contextProviders = config?.contextProviders ?? []
-    logger.debug(`handler_class=<${this.constructor.name}>, name=<${this.name}> | initialized`)
   }
 
-  override async initAgent(agent: LocalAgent): Promise<void> {
-    for (const provider of this._contextProviders) {
-      await provider.initAgent(agent)
-    }
+  // ---------------------------------------------------------------------------
+  // Steering moments — feed providers, then delegate to the narrow evaluator.
+  // ---------------------------------------------------------------------------
+
+  override async beforeToolCall(event: BeforeToolCallEvent): Promise<Proceed | Guide | Confirm> {
+    for (const p of this._contextProviders) await p.beforeToolCall?.(event)
+    return this.evaluateToolCall(event)
+  }
+
+  override async afterModelCall(event: AfterModelCallEvent): Promise<Proceed | Guide> {
+    for (const p of this._contextProviders) await p.afterModelCall?.(event)
+    return this.evaluateModelOutput(event)
+  }
+
+  // ---------------------------------------------------------------------------
+  // Observation moments — feed providers, always proceed.
+  // ---------------------------------------------------------------------------
+
+  override async beforeInvocation(event: BeforeInvocationEvent): Promise<Proceed> {
+    for (const p of this._contextProviders) await p.beforeInvocation?.(event)
+    return proceed()
+  }
+
+  override async afterToolCall(event: AfterToolCallEvent): Promise<Proceed> {
+    for (const p of this._contextProviders) await p.afterToolCall?.(event)
+    return proceed()
+  }
+
+  override async beforeModelCall(event: BeforeModelCallEvent): Promise<Proceed> {
+    for (const p of this._contextProviders) await p.beforeModelCall?.(event)
+    return proceed()
+  }
+
+  // ---------------------------------------------------------------------------
+  // Subclass extension points — narrow steering contract.
+  // ---------------------------------------------------------------------------
+
+  /** Evaluate a pending tool call. Default: proceed. */
+  protected evaluateToolCall(_event: BeforeToolCallEvent): Awaitable<Proceed | Guide | Confirm> {
+    return proceed()
+  }
+
+  /** Evaluate the model's response. Default: proceed. */
+  protected evaluateModelOutput(_event: AfterModelCallEvent): Awaitable<Proceed | Guide> {
+    return proceed()
   }
 
   /**

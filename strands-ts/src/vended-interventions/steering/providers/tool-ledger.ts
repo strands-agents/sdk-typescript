@@ -6,9 +6,8 @@
  * based on agent behavior patterns and history.
  */
 
-import { AfterInvocationEvent, AfterToolCallEvent, BeforeToolCallEvent } from '../../../hooks/events.js'
+import type { AfterToolCallEvent, BeforeToolCallEvent } from '../../../hooks/events.js'
 import type { ToolResultStatus } from '../../../tools/types.js'
-import type { LocalAgent } from '../../../types/agent.js'
 import type { JSONValue } from '../../../types/json.js'
 import type { SteeringContextData, SteeringContextProvider } from './context-provider.js'
 
@@ -40,17 +39,12 @@ interface LedgerToolCall {
 export interface ToolLedgerProviderConfig {
   /** Maximum number of tool calls to retain. Older entries are dropped. Defaults to 100. */
   maxEntries?: number
-  /**
-   * Identifier used as the {@link Agent.appState} key for persisted ledger
-   * data. Defaults to `'strands:steering:toolLedger'`. Override when
-   * attaching multiple ledger providers to the same agent so each persists
-   * to its own slot.
-   */
+  /** Identifier for this provider instance. Defaults to `'strands:steering:toolLedger'`. */
   name?: string
 }
 
 /**
- * Context provider that tracks tool call history.
+ * Context provider that tracks tool call history within a single invocation.
  *
  * Records every tool invocation with inputs, execution time, and success/failure status.
  * The ledger is available to steering handlers for pattern detection
@@ -62,7 +56,6 @@ export interface ToolLedgerProviderConfig {
  * ```typescript
  * const handler = new LLMSteeringHandler({
  *   systemPrompt: '...',
- *   model: new BedrockModel(),
  *   contextProviders: [new ToolLedgerProvider()],
  * })
  * ```
@@ -71,7 +64,6 @@ export class ToolLedgerProvider implements SteeringContextProvider {
   readonly name: string
   private readonly _maxEntries: number = 100
   private readonly _toolCalls: LedgerToolCall[] = []
-  private _attachedAgent?: LocalAgent
 
   constructor(config?: ToolLedgerProviderConfig) {
     this.name = config?.name ?? 'strands:steering:toolLedger'
@@ -80,50 +72,31 @@ export class ToolLedgerProvider implements SteeringContextProvider {
     }
   }
 
-  initAgent(agent: LocalAgent): void {
-    if (this._attachedAgent !== undefined && this._attachedAgent !== agent) {
-      throw new Error(
-        `ToolLedgerProvider is already attached to a different Agent. Construct a new provider per Agent instead of sharing.`
-      )
+  beforeToolCall(event: BeforeToolCallEvent): void {
+    this._toolCalls.push({
+      startTime: new Date().toISOString(),
+      id: event.toolUse.toolUseId,
+      name: event.toolUse.name,
+      args: event.toolUse.input,
+      status: 'pending',
+    })
+    if (this._toolCalls.length > this._maxEntries) {
+      this._toolCalls.splice(0, this._toolCalls.length - this._maxEntries)
     }
-    this._attachedAgent = agent
+  }
 
-    // Rehydrate from appState if a previous session was restored
-    const saved = agent.appState.get(this.name)
-    if (Array.isArray(saved)) {
-      this._toolCalls.push(...(saved as unknown as LedgerToolCall[]))
+  afterToolCall(event: AfterToolCallEvent): void {
+    const toolUseId = event.toolUse.toolUseId
+    for (let i = this._toolCalls.length - 1; i >= 0; i--) {
+      const call = this._toolCalls[i]
+      if (call?.id === toolUseId) {
+        call.endTime = new Date().toISOString()
+        call.status = event.result.status
+        call.result = event.result.content.map((block) => block.toJSON()) as JSONValue
+        call.error = event.error ? event.error.message : null
+        break
+      }
     }
-
-    agent.addHook(BeforeToolCallEvent, (event) => {
-      this._toolCalls.push({
-        startTime: new Date().toISOString(),
-        id: event.toolUse.toolUseId,
-        name: event.toolUse.name,
-        args: event.toolUse.input,
-        status: 'pending',
-      })
-      if (this._toolCalls.length > this._maxEntries) {
-        this._toolCalls.splice(0, this._toolCalls.length - this._maxEntries)
-      }
-    })
-
-    agent.addHook(AfterToolCallEvent, (event) => {
-      const toolUseId = event.toolUse.toolUseId
-      for (let i = this._toolCalls.length - 1; i >= 0; i--) {
-        const call = this._toolCalls[i]
-        if (call?.id === toolUseId) {
-          call.endTime = new Date().toISOString()
-          call.status = event.result.status
-          call.result = event.result.content.map((block) => block.toJSON()) as JSONValue
-          call.error = event.error ? event.error.message : null
-          break
-        }
-      }
-    })
-
-    agent.addHook(AfterInvocationEvent, (event) => {
-      event.agent.appState.set(this.name, this._toolCalls as unknown as JSONValue)
-    })
   }
 
   /**
