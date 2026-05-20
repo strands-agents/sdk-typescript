@@ -31,6 +31,7 @@ export {
   ToolResultEvent,
   ToolStreamUpdateEvent,
   AgentResultEvent,
+  InterruptEvent,
   BeforeToolsEvent,
   AfterToolsEvent,
 } from './events.js'

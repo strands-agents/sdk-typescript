@@ -47,6 +47,8 @@ export type HookCleanup = () => void
  */
 export const HookOrder = {
   SDK_FIRST: -100,
+  INTERVENTION_OUTPUT: -90,
   DEFAULT: 0,
+  INTERVENTION_INPUT: 90,
   SDK_LAST: 100,
 } as const

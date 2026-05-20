@@ -4,7 +4,7 @@ import type {
   ModelContentBlockDeltaEventData,
   ModelContentBlockStartEventData,
 } from '../models/streaming.js'
-import type { ToolResultEvent } from '../hooks/events.js'
+import type { BeforeToolCallEvent, BeforeToolsEvent, ToolResultEvent } from '../hooks/events.js'
 
 /**
  * Creates a default appender function for the current environment.
@@ -73,6 +73,14 @@ export class AgentPrinter implements Printer {
     switch (event.type) {
       case 'modelStreamUpdateEvent':
         this.handleModelStreamEvent(event.event)
+        break
+
+      case 'beforeToolCallEvent':
+        this.handleBeforeToolCall(event)
+        break
+
+      case 'beforeToolsEvent':
+        this.handleBeforeTools(event)
         break
 
       case 'toolResultEvent':
@@ -163,15 +171,13 @@ export class AgentPrinter implements Printer {
 
   /**
    * Handle content block start events.
-   * Detects tool use starts.
+   * Prints a subtle preview during streaming; the definitive announcement
+   * (with numbering and status icon) comes in beforeToolCallEvent after hooks resolve.
    */
   private handleContentBlockStart(event: ModelContentBlockStartEventData): void {
     if (event.start?.type === 'toolUseStart') {
-      // Tool execution starting
-      this._toolCount++
-      this.write(`\n🔧 Tool #${this._toolCount}: ${event.start.name}\n`)
+      this.write(`\n  ⏳ ${event.start.name}\n`)
     }
-    // Don't assume reasoning blocks on contentBlockStart - wait for reasoningContentDelta
   }
 
   /**
@@ -186,6 +192,31 @@ export class AgentPrinter implements Printer {
       }
       this._inReasoningBlock = false
       this._needReasoningIndent = false
+    }
+  }
+
+  /**
+   * Handle before-tool-call events.
+   * Announces the tool after hooks have resolved, so denied tools get a
+   * distinct indicator instead of looking like they executed.
+   */
+  private handleBeforeToolCall(event: BeforeToolCallEvent): void {
+    this._toolCount++
+    if (event.cancel) {
+      this.write(`\n🚫 Tool #${this._toolCount}: ${event.toolUse.name} (denied)\n`)
+    } else {
+      this.write(`\n🔧 Tool #${this._toolCount}: ${event.toolUse.name}\n`)
+    }
+  }
+
+  /**
+   * Handle before-tools events.
+   * When all tools are batch-cancelled, prints a notice since no individual
+   * BeforeToolCallEvent will fire.
+   */
+  private handleBeforeTools(event: BeforeToolsEvent): void {
+    if (event.cancel) {
+      this.write('\n🚫 All tools denied\n')
     }
   }
 

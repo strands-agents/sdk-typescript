@@ -5,6 +5,7 @@ import { MockMessageModel } from '../../__fixtures__/mock-message-model.js'
 import { collectGenerator } from '../../__fixtures__/model-test-helpers.js'
 import { createMockTool } from '../../__fixtures__/tool-helpers.js'
 import { TextBlock, ToolResultBlock } from '../../types/messages.js'
+import { BeforeToolCallEvent, BeforeToolsEvent } from '../../hooks/events.js'
 
 describe('AgentPrinter', () => {
   describe('end-to-end scenarios', () => {
@@ -104,7 +105,7 @@ describe('AgentPrinter', () => {
       await collectGenerator(agent.stream('Test'))
 
       const allOutput = outputs.join('')
-      expect(allOutput).toBe('\n🔧 Tool #1: calc\n✓ Tool completed\nResult: 4\n')
+      expect(allOutput).toBe('\n  ⏳ calc\n\n🔧 Tool #1: calc\n✓ Tool completed\nResult: 4\n')
     })
 
     it('prints tool error', async () => {
@@ -131,7 +132,71 @@ describe('AgentPrinter', () => {
       await collectGenerator(agent.stream('Test'))
 
       const allOutput = outputs.join('')
-      expect(allOutput).toBe('\n🔧 Tool #1: bad_tool\n✗ Tool failed\nError handled\n')
+      expect(allOutput).toBe('\n  ⏳ bad_tool\n\n🔧 Tool #1: bad_tool\n✗ Tool failed\nError handled\n')
+    })
+
+    it('prints denied tool with denied icon', async () => {
+      const model = new MockMessageModel()
+        .addTurn({ type: 'toolUseBlock', name: 'dangerous_tool', toolUseId: 'tool-1', input: {} })
+        .addTurn({ type: 'textBlock', text: 'Tool was denied' })
+
+      const tool = createMockTool(
+        'dangerous_tool',
+        () =>
+          new ToolResultBlock({
+            toolUseId: 'tool-1',
+            status: 'error' as const,
+            content: [new TextBlock('denied')],
+          })
+      )
+
+      const outputs: string[] = []
+      const mockAppender = (text: string) => outputs.push(text)
+
+      const agent = new Agent({ model, tools: [tool], printer: false })
+      ;(agent as any)._printer = new AgentPrinter(mockAppender)
+
+      agent.addHook(BeforeToolCallEvent, (event: BeforeToolCallEvent) => {
+        event.cancel = 'Tool not allowed'
+      })
+
+      await collectGenerator(agent.stream('Test'))
+
+      const allOutput = outputs.join('')
+      expect(allOutput).toBe(
+        '\n  ⏳ dangerous_tool\n\n🚫 Tool #1: dangerous_tool (denied)\n✗ Tool failed\nTool was denied\n'
+      )
+    })
+
+    it('prints batch cancel notice when BeforeToolsEvent cancels', async () => {
+      const model = new MockMessageModel()
+        .addTurn({ type: 'toolUseBlock', name: 'tool_a', toolUseId: 'tool-1', input: {} })
+        .addTurn({ type: 'textBlock', text: 'Done' })
+
+      const tool = createMockTool(
+        'tool_a',
+        () =>
+          new ToolResultBlock({
+            toolUseId: 'tool-1',
+            status: 'success' as const,
+            content: [new TextBlock('ok')],
+          })
+      )
+
+      const outputs: string[] = []
+      const mockAppender = (text: string) => outputs.push(text)
+
+      const agent = new Agent({ model, tools: [tool], printer: false })
+      ;(agent as any)._printer = new AgentPrinter(mockAppender)
+
+      agent.addHook(BeforeToolsEvent, (event: BeforeToolsEvent) => {
+        event.cancel = true
+      })
+
+      await collectGenerator(agent.stream('Test'))
+
+      const allOutput = outputs.join('')
+      expect(allOutput).toBe('\n  ⏳ tool_a\n\n🚫 All tools denied\n✗ Tool failed\nDone\n')
     })
 
     it('prints comprehensive scenario with all output types', async () => {
@@ -180,22 +245,21 @@ describe('AgentPrinter', () => {
       await collectGenerator(agent.stream('Test'))
 
       const allOutput = outputs.join('')
-      const expected = `Let me help you. 
-💭 Reasoning:
-   I need to use the calculator
-
-🔧 Tool #1: calculator
-✓ Tool completed
-The calculation succeeded. 
-💭 Reasoning:
-   Now trying validation
-
-🔧 Tool #2: validator
-✗ Tool failed
-All done. 
-💭 Reasoning:
-   Task completed successfully
-\n`
+      const expected = [
+        'Let me help you. ',
+        '\n💭 Reasoning:\n   I need to use the calculator\n',
+        '\n  ⏳ calculator\n',
+        '\n🔧 Tool #1: calculator\n',
+        '✓ Tool completed\n',
+        'The calculation succeeded. ',
+        '\n💭 Reasoning:\n   Now trying validation\n',
+        '\n  ⏳ validator\n',
+        '\n🔧 Tool #2: validator\n',
+        '✗ Tool failed\n',
+        'All done. ',
+        '\n💭 Reasoning:\n   Task completed successfully\n',
+        '\n',
+      ].join('')
 
       expect(allOutput).toBe(expected)
     })

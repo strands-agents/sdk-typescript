@@ -28,8 +28,8 @@ from pathlib import Path
 # Paths are relative to the repo root so ``strandly`` can invoke this
 # script from there without any cwd gymnastics.
 DEFAULT_WIT_DIR = Path("wit")
-DEFAULT_OUTPUT = Path("strands-py") / "src" / "strands" / "_generated.py"
-DEFAULT_SDK_INIT = Path("strands-py") / "src" / "strands" / "__init__.py"
+DEFAULT_OUTPUT = Path("strands-py-wasm") / "src" / "strands" / "_generated.py"
+DEFAULT_SDK_INIT = Path("strands-py-wasm") / "src" / "strands" / "__init__.py"
 WORLD_NAME = "agent"
 
 FILE_HEADER = '''\

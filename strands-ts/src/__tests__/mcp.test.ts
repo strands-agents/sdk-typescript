@@ -7,6 +7,8 @@ import {
   ElicitRequestSchema,
   UrlElicitationRequiredError,
 } from '@modelcontextprotocol/sdk/types.js'
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
+import { ClientCredentialsProvider } from '@modelcontextprotocol/sdk/client/auth-extensions.js'
 import { McpClient } from '../mcp.js'
 import { McpTool } from '../tools/mcp-tool.js'
 import { JsonBlock, type TextBlock, type ToolResultBlock } from '../types/messages.js'
@@ -28,6 +30,18 @@ function createMockCallToolStream(result: unknown) {
     yield { type: 'result', result }
   }
 }
+
+vi.mock('@modelcontextprotocol/sdk/client/streamableHttp.js', () => ({
+  StreamableHTTPClientTransport: vi.fn(function () {
+    return { start: vi.fn(), send: vi.fn(), close: vi.fn() }
+  }),
+}))
+
+vi.mock('@modelcontextprotocol/sdk/client/auth-extensions.js', () => ({
+  ClientCredentialsProvider: vi.fn(function () {
+    return { redirectUrl: undefined, clientMetadata: { client_id: 'test' } }
+  }),
+}))
 
 vi.mock('@modelcontextprotocol/sdk/client/index.js', () => ({
   Client: vi.fn(function () {
@@ -322,11 +336,45 @@ describe('MCP Integration', () => {
       await client.callTool(tool, { op: 'add' })
 
       expect(sdkClientMock.connect).toHaveBeenCalled()
-      expect(sdkClientMock.callTool).toHaveBeenCalledWith({
-        name: 'calc',
-        arguments: { op: 'add' },
-      })
+      expect(sdkClientMock.callTool).toHaveBeenCalledWith(
+        { name: 'calc', arguments: { op: 'add' } },
+        undefined,
+        undefined
+      )
       expect(sdkClientMock.experimental.tasks.callToolStream).not.toHaveBeenCalled()
+    })
+
+    it('forwards abort signal to SDK callTool', async () => {
+      const tool = new McpTool({ name: 'calc', description: '', inputSchema: {}, client })
+      sdkClientMock.callTool.mockResolvedValue({ content: [] })
+      const controller = new AbortController()
+
+      await client.callTool(tool, { op: 'add' }, { signal: controller.signal })
+
+      expect(sdkClientMock.callTool).toHaveBeenCalledWith({ name: 'calc', arguments: { op: 'add' } }, undefined, {
+        signal: controller.signal,
+      })
+    })
+
+    it('forwards abort signal to callToolStream when tasksConfig is provided', async () => {
+      const resultsLengthBefore = vi.mocked(Client).mock.results.length
+      const taskClient = new McpClient({
+        applicationName: 'TestApp',
+        transport: mockTransport,
+        tasksConfig: {},
+      })
+      const taskSdkClientMock = vi.mocked(Client).mock.results[resultsLengthBefore]!.value
+      const tool = new McpTool({ name: 'calc', description: '', inputSchema: {}, client: taskClient })
+      taskSdkClientMock.experimental.tasks.callToolStream.mockReturnValue(createMockCallToolStream({ content: [] })())
+      const controller = new AbortController()
+
+      await taskClient.callTool(tool, { op: 'add' }, { signal: controller.signal })
+
+      expect(taskSdkClientMock.experimental.tasks.callToolStream).toHaveBeenCalledWith(
+        { name: 'calc', arguments: { op: 'add' } },
+        undefined,
+        { timeout: 60000, maxTotalTimeout: 300000, resetTimeoutOnProgress: true, signal: controller.signal }
+      )
     })
 
     it('uses callToolStream when tasksConfig is provided (empty object)', async () => {
@@ -633,12 +681,28 @@ describe('MCP Integration', () => {
 
     const toolContext: ToolContext = {
       toolUse: { toolUseId: 'id-123', name: 'weather', input: { city: 'NYC' } },
-      agent: {} as LocalAgent,
+      agent: { cancelSignal: new AbortController().signal } as LocalAgent,
       invocationState: {},
       interrupt: () => {
         throw new Error('interrupt not available in mock context')
       },
     }
+
+    it('forwards agent cancelSignal to callTool', async () => {
+      vi.mocked(mockClientWrapper.callTool).mockResolvedValue({
+        content: [{ type: 'text', text: 'ok' }],
+      })
+
+      await runTool<ToolResultBlock>(tool.stream(toolContext))
+
+      expect(mockClientWrapper.callTool).toHaveBeenCalledWith(
+        tool,
+        { city: 'NYC' },
+        {
+          signal: toolContext.agent.cancelSignal,
+        }
+      )
+    })
 
     it('returns text results on success', async () => {
       vi.mocked(mockClientWrapper.callTool).mockResolvedValue({
@@ -1181,5 +1245,104 @@ describe('log routing', () => {
     capturedHandler({ params })
 
     expect(customHandler).toHaveBeenCalledWith(params)
+  })
+})
+
+describe('McpClient transport resolution', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('constructs StreamableHTTPClientTransport when url is provided', () => {
+    new McpClient({ url: 'https://mcp.example.com' })
+    expect(StreamableHTTPClientTransport).toHaveBeenCalledWith(new URL('https://mcp.example.com'), undefined)
+  })
+
+  it('constructs ClientCredentialsProvider when auth is provided', () => {
+    new McpClient({ url: 'https://mcp.example.com', auth: { clientId: 'id', clientSecret: 'secret' } })
+    expect(ClientCredentialsProvider).toHaveBeenCalledWith({ clientId: 'id', clientSecret: 'secret' })
+    expect(StreamableHTTPClientTransport).toHaveBeenCalledWith(new URL('https://mcp.example.com'), {
+      authProvider: expect.anything(),
+    })
+  })
+
+  it('passes scopes as space-separated string', () => {
+    new McpClient({
+      url: 'https://mcp.example.com',
+      auth: { clientId: 'id', clientSecret: 'secret', scopes: ['read', 'write'] },
+    })
+    expect(ClientCredentialsProvider).toHaveBeenCalledWith({
+      clientId: 'id',
+      clientSecret: 'secret',
+      scope: 'read write',
+    })
+  })
+
+  it('passes custom authProvider to transport', () => {
+    const customProvider = { redirectUrl: undefined, clientMetadata: {} } as never
+    new McpClient({ url: 'https://mcp.example.com', authProvider: customProvider })
+    expect(StreamableHTTPClientTransport).toHaveBeenCalledWith(new URL('https://mcp.example.com'), {
+      authProvider: customProvider,
+    })
+  })
+
+  it('throws when both transport and url are provided', () => {
+    expect(() => new McpClient({ transport: mockTransport, url: 'https://mcp.example.com' } as never)).toThrow(
+      'provide either "transport" or "url", not both'
+    )
+  })
+
+  it('throws when neither transport nor url is provided', () => {
+    expect(() => new McpClient({} as never)).toThrow('either "transport" or "url" must be provided')
+  })
+
+  it('throws when auth is provided with transport', () => {
+    expect(
+      () => new McpClient({ transport: mockTransport, auth: { clientId: 'x', clientSecret: 'y' } } as never)
+    ).toThrow('"auth", "authProvider", and "headers" require "url"')
+  })
+
+  it('throws when both auth and authProvider are provided', () => {
+    const customProvider = {} as never
+    expect(
+      () =>
+        new McpClient({
+          url: 'https://mcp.example.com',
+          auth: { clientId: 'x', clientSecret: 'y' },
+          authProvider: customProvider,
+        } as never)
+    ).toThrow('provide either "auth" or "authProvider", not both')
+  })
+
+  it('accepts URL instance for url field', () => {
+    const url = new URL('https://mcp.example.com/path')
+    new McpClient({ url })
+    expect(StreamableHTTPClientTransport).toHaveBeenCalledWith(url, undefined)
+  })
+
+  it('passes headers as requestInit to transport', () => {
+    new McpClient({ url: 'https://mcp.example.com', headers: { 'X-Api-Key': 'abc' } })
+    expect(StreamableHTTPClientTransport).toHaveBeenCalledWith(new URL('https://mcp.example.com'), {
+      requestInit: { headers: { 'X-Api-Key': 'abc' } },
+    })
+  })
+
+  it('passes both auth and headers to transport', () => {
+    new McpClient({
+      url: 'https://mcp.example.com',
+      auth: { clientId: 'id', clientSecret: 'secret' },
+      headers: { 'X-Trace': '123' },
+    })
+    expect(ClientCredentialsProvider).toHaveBeenCalledWith({ clientId: 'id', clientSecret: 'secret' })
+    expect(StreamableHTTPClientTransport).toHaveBeenCalledWith(new URL('https://mcp.example.com'), {
+      authProvider: expect.anything(),
+      requestInit: { headers: { 'X-Trace': '123' } },
+    })
+  })
+
+  it('throws when headers is provided with transport', () => {
+    expect(() => new McpClient({ transport: mockTransport, headers: { 'X-Foo': 'bar' } } as never)).toThrow(
+      '"auth", "authProvider", and "headers" require "url"'
+    )
   })
 })

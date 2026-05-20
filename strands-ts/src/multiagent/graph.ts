@@ -1,8 +1,17 @@
 import type { AttributeValue } from '@opentelemetry/api'
 import type { InvocationState, InvokableAgent } from '../types/agent.js'
-import type { MultiAgentInput, MultiAgentInvokeOptions } from './multiagent.js'
+import type { MultiAgentContentInput, MultiAgentInput, MultiAgentInvokeOptions } from './multiagent.js'
+import {
+  applyOrchestratorHookResponses,
+  dropStaleInterruptedResult,
+  extractResumeResponses,
+  groupInterruptResponsesByNode,
+  recordHookInterrupt,
+} from './multiagent.js'
 import type { ContentBlock } from '../types/messages.js'
 import { TextBlock, contentBlockFromData } from '../types/messages.js'
+import type { InterruptResponseContent } from '../types/interrupt.js'
+import { InterruptError } from '../interrupt.js'
 import { logger } from '../logging/logger.js'
 import { warnOnce } from '../logging/warn-once.js'
 import { HookableEvent } from '../hooks/events.js'
@@ -26,6 +35,7 @@ import {
   MultiAgentInitializedEvent,
   MultiAgentResultEvent,
   NodeCancelEvent,
+  NodeResultEvent,
 } from './events.js'
 import type { EdgeDefinition } from './edge.js'
 import { Edge } from './edge.js'
@@ -129,6 +139,13 @@ export class Graph implements MultiAgent {
   private readonly _tracer: Tracer
   readonly sessionManager?: SessionManager | undefined
   private _initialized: boolean
+  /**
+   * State retained across invocations when a run ends INTERRUPTED. Lets
+   * `graph.invoke(responses)` resume on the same instance without requiring a
+   * SessionManager, mirroring single-agent ergonomics. Cleared when a run
+   * terminates in any non-INTERRUPTED state.
+   */
+  private _pendingInterruptState?: MultiAgentState
 
   constructor(options: GraphOptions) {
     const { id, nodes, edges, sources, sessionManager, plugins, traceAttributes, ...config } = options
@@ -223,13 +240,12 @@ export class Graph implements MultiAgent {
     // child agent so mutations in one node are visible in the next.
     const invocationState: InvocationState = options?.invocationState ?? {}
 
-    const gen = this._stream(input, invocationState)
+    // Hook invocation lives in `_stream` so hook-raised `InterruptError`s land in the
+    // same frame as the execution loop.
+    const gen = this._stream(input, invocationState, options?.cancelSignal)
     try {
       let next = await gen.next()
       while (!next.done) {
-        if (next.value instanceof HookableEvent) {
-          await this._hookRegistry.invokeCallbacks(next.value)
-        }
         yield next.value
         next = await gen.next()
       }
@@ -241,9 +257,13 @@ export class Graph implements MultiAgent {
 
   private async *_stream(
     input: MultiAgentInput,
-    invocationState: InvocationState
+    invocationState: InvocationState,
+    externalCancelSignal?: AbortSignal
   ): AsyncGenerator<MultiAgentStreamEvent, MultiAgentResult, undefined> {
-    const state = new MultiAgentState({ nodeIds: [...this.nodes.keys()] })
+    // Reuse state from a prior INTERRUPTED run so `graph.invoke(responses)` can
+    // resume on the same instance without a SessionManager.
+    const state = this._pendingInterruptState ?? new MultiAgentState({ nodeIds: [...this.nodes.keys()] })
+    delete this._pendingInterruptState
 
     const queue = new Queue()
     const streams = new Map<string, Promise<void>>()
@@ -255,34 +275,91 @@ export class Graph implements MultiAgent {
     })
 
     // SessionManager (or plugins) may restore state.results here via the hook
-    yield new BeforeMultiAgentInvocationEvent({ orchestrator: this, state, invocationState })
+    yield* this._emit(new BeforeMultiAgentInvocationEvent({ orchestrator: this, state, invocationState }))
 
-    // Resume: if state was restored, find nodes that are ready but haven't completed otherwise start from source nodes
-    const targets = (await this._findResumeTargets(state)) ?? [...this._sources]
+    // Resume input bypasses dependency resolution (routed by interrupt id). On fresh
+    // runs, stash the input so resume can replay it to hook-gated nodes that never ran.
+    //
+    // Example: Source node A has a `BeforeNodeCallEvent` hook that interrupts. The user
+    // calls `graph.invoke('original task')`, the hook fires before A executes, the run
+    // pauses with status INTERRUPTED. On resume, `graph.invoke([response])` only carries
+    // the response — A still needs `'original task'` as its input because A never ran
+    // and has no snapshot or upstream results to fall back on. `state._pendingInput`
+    // carries `'original task'` across the pause so resume can replay it.
+    const resumeResponses = extractResumeResponses(input)
+    const interruptResponsesByNode = resumeResponses ? groupInterruptResponsesByNode(resumeResponses, state) : undefined
+    let contentInput: MultiAgentContentInput | undefined
+    if (resumeResponses) {
+      contentInput = state._pendingInput as MultiAgentContentInput | undefined
+    } else {
+      contentInput = input as MultiAgentContentInput
+      state._pendingInput = contentInput
+    }
 
-    // Execution timeout: when fired, cancels all in-flight node invocations via their
-    // composed cancel signal. In-flight nodes return `stopReason: 'cancelled'`; the queue
-    // drains and the outer loop throws below when it sees the signal aborted.
-    const execController = Number.isFinite(this.config.timeout) ? new AbortController() : undefined
-    const execTimeoutHandle = execController ? setTimeout(() => execController.abort(), this.config.timeout) : undefined
+    const targets = interruptResponsesByNode
+      ? [...interruptResponsesByNode.keys()].map((id) => {
+          const node = this.nodes.get(id)
+          if (!node) {
+            throw new Error(
+              `node_id=<${id}>, graph_id=<${this.id}> | resume response targets a node missing from the graph; topology changed between save and resume?`
+            )
+          }
+          return node
+        })
+      : ((await this._findResumeTargets(state)) ?? [...this._sources])
 
+    // Wall-clock timeout for the whole graph invocation. External cancellation is kept
+    // on its own signal so the loop's abort checks below can distinguish the two causes
+    // and produce the right error message.
+    const execController = new AbortController()
+    const execTimeoutHandle = Number.isFinite(this.config.timeout)
+      ? setTimeout(() => execController.abort(), this.config.timeout)
+      : undefined
+
+    const cancelSignal = externalCancelSignal
+      ? AbortSignal.any([execController.signal, externalCancelSignal])
+      : execController.signal
+
+    let interrupted = false
     let caughtError: Error | undefined
     let result: MultiAgentResult | undefined
     try {
       while (targets.length > 0 || streams.size > 0) {
-        if (execController?.signal.aborted) {
+        if (execTimeoutHandle !== undefined && execController.signal.aborted) {
           throw new Error(`timeout=<${this.config.timeout}>, graph_id=<${this.id}> | graph exceeded wall-clock budget`)
         }
-        while (targets.length > 0 && streams.size < this.config.maxConcurrency) {
+        if (externalCancelSignal?.aborted) {
+          throw new Error(`graph_id=<${this.id}> | graph cancelled by external signal`)
+        }
+        while (!interrupted && targets.length > 0 && streams.size < this.config.maxConcurrency) {
           const node = targets.shift()!
 
           this._checkSteps(state)
           state.steps++
 
-          streams.set(
-            node.id,
-            this._streamNode(node, input, state, queue, multiAgentSpan, invocationState, execController?.signal)
+          // Resolve input first so `applyOrchestratorHookResponses` has populated the
+          // stored `Interrupt.response` entries before the BeforeNodeCall hook reads them.
+          const nodeInput = this._resolveInputForScheduling(
+            node,
+            interruptResponsesByNode?.get(node.id),
+            contentInput,
+            state
           )
+
+          const nodeSpan = this._tracer.withSpanContext(multiAgentSpan, () =>
+            this._tracer.startNodeSpan({ nodeId: node.id, nodeType: node.type })
+          )
+
+          const preResult = yield* this._runBeforeNodeCall(node, nodeSpan, state, invocationState)
+          if (preResult !== undefined) {
+            // Hook gated the node before it could run; surface the synthetic result
+            // through the queue so the main loop handles short-circuit and downstream
+            // scheduling uniformly with normal node results.
+            queue.push({ type: 'result', node, result: preResult })
+            continue
+          }
+
+          streams.set(node.id, this._streamNode(node, nodeInput, state, queue, nodeSpan, invocationState, cancelSignal))
         }
 
         await queue.wait()
@@ -290,6 +367,7 @@ export class Graph implements MultiAgent {
           const { data, ack } = queue.shift()!
 
           if (data.type === 'event') {
+            await this._hookRegistry.invokeCallbacks(data.event)
             yield data.event
             ack()
             continue
@@ -307,14 +385,25 @@ export class Graph implements MultiAgent {
 
           state.results.push(nodeResult)
 
+          if (interrupted) continue
+
+          // Stop scheduling new nodes once any node has interrupted; in-flight siblings
+          // run to completion on their own.
+          if (nodeResult.status === Status.INTERRUPTED) {
+            interrupted = true
+            continue
+          }
+
           const ready = await this._findReady(node, state, streams, targets)
           if (ready.length > 0) {
-            yield new MultiAgentHandoffEvent({
-              source: node.id,
-              targets: ready.map((n) => n.id),
-              state,
-              invocationState,
-            })
+            yield* this._emit(
+              new MultiAgentHandoffEvent({
+                source: node.id,
+                targets: ready.map((n) => n.id),
+                state,
+                invocationState,
+              })
+            )
             targets.push(...ready)
           }
         }
@@ -325,6 +414,13 @@ export class Graph implements MultiAgent {
         content: this._resolveContent(state),
         duration: Date.now() - state.startTime,
       })
+      // Stash on interrupt so same-instance resume has state; otherwise start fresh.
+      if (result.status === Status.INTERRUPTED) {
+        this._pendingInterruptState = state
+      } else {
+        delete this._pendingInterruptState
+        delete state._pendingInput
+      }
     } catch (error) {
       caughtError = normalizeError(error)
       throw caughtError
@@ -339,58 +435,86 @@ export class Graph implements MultiAgent {
         ...(caughtError && { error: caughtError }),
       })
 
-      yield new AfterMultiAgentInvocationEvent({ orchestrator: this, state, invocationState })
+      yield* this._emit(new AfterMultiAgentInvocationEvent({ orchestrator: this, state, invocationState }))
     }
 
-    yield new MultiAgentResultEvent({ result, invocationState })
+    yield* this._emit(new MultiAgentResultEvent({ result, invocationState }))
     return result
   }
 
   /**
-   * Executes a single node, pushing streaming events to the shared queue in real-time.
+   * Invokes hook callbacks on an event, then yields it.
+   */
+  private async *_emit<T extends HookableEvent>(event: T): AsyncGenerator<T, void, undefined> {
+    await this._hookRegistry.invokeCallbacks(event)
+    yield event
+  }
+
+  /**
+   * Fires `BeforeNodeCallEvent` and handles hook-raised interrupts or cancels inline.
+   * Returns a synthetic NodeResult (INTERRUPTED or CANCELLED) when a hook gates the
+   * node, in which case the caller skips `_streamNode` and surfaces the result directly.
+   * Returns `undefined` when no hook gated the node and execution should proceed.
+   *
+   * Owns the `nodeSpan` on gated paths — `_streamNode` owns it on the ungated path.
+   * Yields the `NodeResultEvent` + `AfterNodeCallEvent` lifecycle pair on gated paths
+   * so observers see the same event sequence regardless of how the node terminated.
+   */
+  private async *_runBeforeNodeCall(
+    node: Node,
+    nodeSpan: Span | null,
+    state: MultiAgentState,
+    invocationState: InvocationState
+  ): AsyncGenerator<MultiAgentStreamEvent, NodeResult | undefined, undefined> {
+    const nodeState = state.node(node.id)!
+    const beforeEvent = new BeforeNodeCallEvent({ orchestrator: this, state, nodeId: node.id, invocationState })
+    try {
+      await this._hookRegistry.invokeCallbacks(beforeEvent)
+    } catch (error) {
+      if (error instanceof InterruptError) {
+        const result = recordHookInterrupt(node.id, nodeState)
+        yield beforeEvent
+        yield* this._emit(new NodeResultEvent({ nodeId: node.id, nodeType: node.type, state, result, invocationState }))
+        yield* this._emit(new AfterNodeCallEvent({ orchestrator: this, state, nodeId: node.id, invocationState }))
+        this._tracer.endNodeSpan(nodeSpan, { status: Status.INTERRUPTED, duration: result.duration })
+        return result
+      }
+      throw error
+    }
+    yield beforeEvent
+
+    if (beforeEvent.cancel) {
+      const message = typeof beforeEvent.cancel === 'string' ? beforeEvent.cancel : 'node cancelled by hook'
+      // Cancel path doesn't go through Node.stream, so do its INTERRUPTED cleanup here.
+      dropStaleInterruptedResult(node.id, nodeState, state)
+      const result = new NodeResult({ nodeId: node.id, status: Status.CANCELLED, duration: 0 })
+      nodeState.status = Status.CANCELLED
+      nodeState.results.push(result)
+      yield* this._emit(new NodeCancelEvent({ nodeId: node.id, state, message, invocationState }))
+      yield* this._emit(new AfterNodeCallEvent({ orchestrator: this, state, nodeId: node.id, invocationState }))
+      this._tracer.endNodeSpan(nodeSpan, { status: Status.CANCELLED, duration: 0 })
+      return result
+    }
+
+    return undefined
+  }
+
+  /**
+   * Runs a node whose `BeforeNodeCallEvent` already fired without a hook gating it
+   * (interrupt or cancel are handled by `_runBeforeNodeCall` before this coroutine
+   * is spawned). Takes ownership of the already-started `nodeSpan` and ends it.
    */
   private async _streamNode(
     node: Node,
     input: MultiAgentInput,
     state: MultiAgentState,
     queue: Queue,
-    multiAgentSpan: Span | null,
+    nodeSpan: Span | null,
     invocationState: InvocationState,
     executionSignal?: AbortSignal
   ): Promise<void> {
-    const nodeState = state.node(node.id)!
-
-    const nodeSpan = this._tracer.withSpanContext(multiAgentSpan, () =>
-      this._tracer.startNodeSpan({ nodeId: node.id, nodeType: node.type })
-    )
-
-    const beforeEvent = new BeforeNodeCallEvent({ orchestrator: this, state, nodeId: node.id, invocationState })
-    await queue.send({ type: 'event', node, event: beforeEvent })
-
-    if (beforeEvent.cancel) {
-      const message = typeof beforeEvent.cancel === 'string' ? beforeEvent.cancel : 'node cancelled by hook'
-      const result = new NodeResult({ nodeId: node.id, status: Status.CANCELLED, duration: 0 })
-      nodeState.status = Status.CANCELLED
-      nodeState.results.push(result)
-
-      await queue.send({
-        type: 'event',
-        node,
-        event: new NodeCancelEvent({ nodeId: node.id, state, message, invocationState }),
-      })
-      await queue.send({
-        type: 'event',
-        node,
-        event: new AfterNodeCallEvent({ orchestrator: this, state, nodeId: node.id, invocationState }),
-      })
-      this._tracer.endNodeSpan(nodeSpan, { status: Status.CANCELLED, duration: 0 })
-      queue.push({ type: 'result', node, result })
-      return
-    }
-
-    // Per-node timeout applies only to AgentNode. MultiAgentNode wraps a nested Swarm/Graph
-    // that has its own timeout config; cancelSignal isn't yet plumbed into nested orchestrators
-    // so bounding belongs on the child.
+    // Per-node timeout only applies to AgentNode; a nested MultiAgentNode manages
+    // its own node-level timeouts.
     const nodeTimeout = node instanceof AgentNode ? (node.timeout ?? this.config.nodeTimeout) : Infinity
     const nodeTimeoutController = Number.isFinite(nodeTimeout) ? new AbortController() : undefined
     const nodeTimeoutHandle = nodeTimeoutController
@@ -400,10 +524,8 @@ export class Graph implements MultiAgent {
     const cancelSignal = signals.length > 0 ? AbortSignal.any(signals) : undefined
 
     try {
-      const nodeInput = this._resolveNodeInput(node, input, state)
-
       const gen = this._tracer.withSpanContext(nodeSpan, () =>
-        node.stream(nodeInput, state, { invocationState, ...(cancelSignal && { cancelSignal }) })
+        node.stream(input, state, { invocationState, ...(cancelSignal && { cancelSignal }) })
       )
       let next = await this._tracer.withSpanContext(nodeSpan, () => gen.next())
       while (!next.done) {
@@ -579,9 +701,43 @@ export class Graph implements MultiAgent {
   }
 
   /**
-   * Builds the input for a node by combining the original task with dependency outputs.
+   * Chooses the input for a node about to be scheduled, handling the three resume cases:
+   * routed orchestrator-hook responses (forward leftovers to the agent), routed responses
+   * fully consumed by the hook (replay the original invocation input), and fresh runs
+   * (dependency-merged). Falls back to an empty input with a warning if a custom
+   * SessionManager dropped `_pendingInput`.
    */
-  private _resolveNodeInput(node: Node, input: MultiAgentInput, state: MultiAgentState): MultiAgentInput {
+  private _resolveInputForScheduling(
+    node: Node,
+    routed: InterruptResponseContent[] | undefined,
+    contentInput: MultiAgentContentInput | undefined,
+    state: MultiAgentState
+  ): MultiAgentInput {
+    if (routed) {
+      const nodeState = state.node(node.id)
+      if (!nodeState) {
+        throw new Error(
+          `node_id=<${node.id}>, graph_id=<${this.id}> | routed interrupt response targets a node missing from state; topology changed between save and resume?`
+        )
+      }
+      const forwarded = applyOrchestratorHookResponses(nodeState, routed)
+      if (forwarded.length > 0) return forwarded
+    }
+    if (contentInput === undefined) {
+      logger.warn(`node_id=<${node.id}>, graph_id=<${this.id}> | no pending input on resume; using empty`)
+      return this._resolveNodeInput(node, '', state)
+    }
+    return this._resolveNodeInput(node, contentInput, state)
+  }
+
+  /**
+   * Builds the input for a node by combining the original task with dependency outputs.
+   *
+   * Only called for non-resume executions: the caller routes resume responses directly
+   * to interrupted nodes without going through dependency resolution, so this helper
+   * never sees `InterruptResponseContent[]`.
+   */
+  private _resolveNodeInput(node: Node, input: MultiAgentContentInput, state: MultiAgentState): MultiAgentInput {
     const deps: ContentBlock[] = []
     for (const edge of this.edges.filter((e) => e.target.id === node.id)) {
       const ns = state.node(edge.source.id)!

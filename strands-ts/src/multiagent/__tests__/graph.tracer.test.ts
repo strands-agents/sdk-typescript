@@ -194,6 +194,23 @@ describe('Graph tracer integration', () => {
 
       expect(tracer.endNodeSpan.mock.calls).toEqual([[{ mock: 'nodeSpan' }, { status: Status.CANCELLED, duration: 0 }]])
     })
+
+    it('ends node span with INTERRUPTED status when a hook raises an interrupt', async () => {
+      graph = new Graph({ nodes: [makeAgent('a')], edges: [] })
+      tracer = getGraphTracer()
+      graph.addHook(BeforeNodeCallEvent, (event) => {
+        event.interrupt({ name: 'gate', reason: 'approve?' })
+      })
+
+      const result = await graph.invoke('Hello')
+
+      expect(result.status).toBe(Status.INTERRUPTED)
+      expect(tracer.endNodeSpan).toHaveBeenCalledTimes(1)
+      const [span, endArgs] = tracer.endNodeSpan.mock.calls[0]!
+      expect(span).toEqual({ mock: 'nodeSpan' })
+      expect(endArgs.status).toBe(Status.INTERRUPTED)
+      expect(typeof endArgs.duration).toBe('number')
+    })
   })
 
   describe('null span handling', () => {

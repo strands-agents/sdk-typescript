@@ -4,7 +4,7 @@ Two lists.
 
 - **Proposed TS SDK changes** — places where the TS surface should move toward
   what the WIT contract already says. Open proposals, not landed changes.
-- **`strands-py` vs upstream `sdk-python`** — deliberate differences in our
+- **`strands-py-wasm` vs upstream `sdk-python`** — deliberate differences in our
   Python package, given the agent loop runs in WASM here.
 
 ---
@@ -39,7 +39,7 @@ Two lists.
 
 ---
 
-## `strands-py` vs upstream `sdk-python`
+## `strands-py-wasm` vs upstream `sdk-python`
 
 - `types/content.py` + `types/tools.py` → all generated types live in `_generated.py` (one file, auto-written from the WIT bindings).
 - `agent/conversation_manager/*.py` → `SlidingWindowConversationManager` / `SummarizingConversationManager` are config-only dataclasses; execution is in the WASM guest.
@@ -52,7 +52,7 @@ Two lists.
 - Custom storage: set `StorageConfig_Custom(backend_id=...)` and implement the `snapshot-storage` host interface. No extra config record needed.
 - `save_latest_policy.trigger` holds the handler id inline. Upstream's optional trigger-callback-on-config field is gone.
 - `Graph`, `Swarm`, and `McpClient` are config-builder subclasses of the generated WIT records, not host-side orchestration runtimes. Orchestration and MCP transport management run in the guest.
-- Interrupts are stream events, not exceptions. Upstream raises `InterruptException` from hooks and aggregates them in the registry; strands-py emits `StreamEventInterrupt(value=Interrupt)` on the event stream and resumes via `agent.respond(interrupt_id, payload)`. The `HookRegistry` does not interpret or aggregate interrupts.
+- Interrupts are stream events, not exceptions. Upstream raises `InterruptException` from hooks and aggregates them in the registry; strands-py-wasm emits `StreamEventInterrupt(value=Interrupt)` on the event stream and resumes via `agent.respond(interrupt_id, payload)`. The `HookRegistry` does not interpret or aggregate interrupts.
 - `HookRegistry` has no `order=` / `HookOrder` knobs; LIFO dispatch for `After*` arms is inferred from the class name. Upstream has a `should_reverse_callbacks` property on each event; our inference replaces the hand-set property.
 - No type-hint inference on `add_callback`. Users pass `event_type` explicitly. Upstream's `add_callback(None, fn)` auto-inference added a `_type_inference.py` module we consider more trouble than it's worth.
 - No `BaseHookEvent.__setattr__` immutability gate. Our hook events come from the WIT generator as `@dataclass` records; if immutability becomes required we'll add `frozen=True` at the generator level for both wire and hook consumers.

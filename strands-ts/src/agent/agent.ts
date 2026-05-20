@@ -36,6 +36,8 @@ import { ToolRegistry } from '../registry/tool-registry.js'
 import { StateStore } from '../state-store.js'
 import { AgentPrinter, getDefaultAppender, type Printer } from './printer.js'
 import type { Plugin } from '../plugins/plugin.js'
+import type { InterventionHandler } from '../interventions/handler.js'
+import { InterventionRegistry } from '../interventions/registry.js'
 import { PluginRegistry } from '../plugins/registry.js'
 import { SlidingWindowConversationManager } from '../conversation-manager/sliding-window-conversation-manager.js'
 import { NullConversationManager } from '../conversation-manager/null-conversation-manager.js'
@@ -60,6 +62,7 @@ import {
   ToolResultEvent,
   AgentResultEvent,
   ToolStreamUpdateEvent,
+  InterruptEvent,
   type ModelStopData,
 } from '../hooks/events.js'
 import { StructuredOutputTool, STRUCTURED_OUTPUT_TOOL_NAME } from '../tools/structured-output-tool.js'
@@ -183,6 +186,10 @@ export type AgentConfig = {
    */
   retryStrategy?: RetryStrategy | RetryStrategy[] | null
   /**
+   * Intervention handlers evaluated in registration order at each lifecycle point.
+   */
+  interventions?: InterventionHandler[]
+  /**
    * Zod schema for structured output validation.
    */
   structuredOutputSchema?: z.ZodSchema
@@ -282,6 +289,7 @@ export class Agent implements LocalAgent, InvokableAgent {
 
   private readonly _hooksRegistry: HookRegistryImplementation
   private readonly _pluginRegistry: PluginRegistry
+  private readonly _interventionRegistry: InterventionRegistry
   private _toolRegistry: ToolRegistry
   private _mcpClients: McpClient[]
   private _initialized: boolean
@@ -340,6 +348,8 @@ export class Agent implements LocalAgent, InvokableAgent {
 
     // Initialize hooks registry
     this._hooksRegistry = new HookRegistryImplementation()
+
+    this._interventionRegistry = new InterventionRegistry(config?.interventions ?? [], this._hooksRegistry)
 
     // `undefined` (omitted) → install the default; `null`/`[]` → explicit opt-out.
     const retryStrategies: RetryStrategy[] =
@@ -1111,6 +1121,12 @@ export class Agent implements LocalAgent, InvokableAgent {
         return result
       }
       if (error instanceof InterruptError) {
+        // Fan out one event per interrupt. Each event exposes `interrupt.source` so
+        // consumers can filter by origin (tool callback vs hook callback) without
+        // subscribing to separate event types.
+        for (const interrupt of error.interrupts) {
+          yield new InterruptEvent({ agent: this, interrupt, invocationState })
+        }
         result = this._createInterruptResult(invocationState)
         return result
       }
@@ -1911,7 +1927,7 @@ export class Agent implements LocalAgent, InvokableAgent {
           agent: this,
           invocationState,
           interrupt: <T = JSONValue>(params: InterruptParams): T => {
-            return interruptFromAgent<T>(this, `tool:${toolUseBlock.toolUseId}:${params.name}`, params)
+            return interruptFromAgent<T>(this, `tool:${toolUseBlock.toolUseId}:${params.name}`, params, 'tool')
           },
         }
 

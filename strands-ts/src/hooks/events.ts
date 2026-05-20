@@ -4,7 +4,7 @@ import { type Tool, ToolStreamEvent } from '../tools/tool.js'
 import type { JSONValue } from '../types/json.js'
 import type { ModelStreamEvent } from '../models/streaming.js'
 import type { Model } from '../models/model.js'
-import { interruptFromAgent, type Interruptible } from '../interrupt.js'
+import { interruptFromAgent, type Interrupt, type Interruptible } from '../interrupt.js'
 import type { InterruptParams } from '../types/interrupt.js'
 
 /**
@@ -289,7 +289,12 @@ export class BeforeToolCallEvent extends HookableEvent implements Interruptible 
    * @returns The user's response when resuming from an interrupt
    */
   interrupt<T = JSONValue>(params: InterruptParams): T {
-    return interruptFromAgent<T>(this.agent, `hook:beforeToolCall:${this.toolUse.toolUseId}:${params.name}`, params)
+    return interruptFromAgent<T>(
+      this.agent,
+      `hook:beforeToolCall:${this.toolUse.toolUseId}:${params.name}`,
+      params,
+      'hook'
+    )
   }
 
   /**
@@ -696,6 +701,30 @@ export class AgentResultEvent extends HookableEvent {
 }
 
 /**
+ * Event emitted when an interrupt is raised during agent execution. The `interrupt.source`
+ * field discriminates between tool-callback and hook-callback origins. One event fires
+ * per unanswered interrupt at the moment the agent stops to wait for responses.
+ */
+export class InterruptEvent extends HookableEvent {
+  readonly type = 'interruptEvent' as const
+  readonly agent: LocalAgent
+  readonly interrupt: Interrupt
+  readonly invocationState: InvocationState
+
+  constructor(data: { agent: LocalAgent; interrupt: Interrupt; invocationState: InvocationState }) {
+    super()
+    this.agent = data.agent
+    this.interrupt = data.interrupt
+    this.invocationState = data.invocationState
+  }
+
+  /** Serializes for wire transport, excluding agent and invocationState. */
+  toJSON(): Pick<InterruptEvent, 'type'> & { interrupt: ReturnType<Interrupt['toJSON']> } {
+    return { type: this.type, interrupt: this.interrupt.toJSON() }
+  }
+}
+
+/**
  * Event triggered before executing tools.
  * Fired when the model returns tool use blocks that need to be executed.
  * Hook callbacks can set {@link cancel} to prevent all tools from executing.
@@ -729,7 +758,7 @@ export class BeforeToolsEvent extends HookableEvent implements Interruptible {
    * @returns The user's response when resuming from an interrupt
    */
   interrupt<T = JSONValue>(params: InterruptParams): T {
-    return interruptFromAgent<T>(this.agent, `hook:beforeTools:${params.name}`, params)
+    return interruptFromAgent<T>(this.agent, `hook:beforeTools:${params.name}`, params, 'hook')
   }
 
   /**

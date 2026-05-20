@@ -73,6 +73,7 @@ describe('Meter', () => {
       const snapshot = meter.metrics
 
       expect(snapshot.cycleCount).toBe(2)
+      expect(snapshot.totalDuration).toBe(8000)
       expect(snapshot.accumulatedUsage).toStrictEqual({ inputTokens: 30, outputTokens: 15, totalTokens: 45 })
       expect(snapshot.accumulatedMetrics).toStrictEqual({ latencyMs: 350 })
       expect(snapshot.toolMetrics).toStrictEqual({
@@ -649,12 +650,14 @@ describe('AgentMetrics', () => {
         accumulatedMetrics: { latencyMs: 0 },
         agentInvocations: [],
         toolMetrics: {},
+        totalDuration: 0,
       })
     })
 
     it('returns data from provided metrics', () => {
       const metrics = new AgentMetrics({
         cycleCount: 2,
+        totalDuration: 8000,
         toolMetrics: {
           search: { callCount: 2, successCount: 1, errorCount: 1, totalTime: 2.0 },
         },
@@ -687,6 +690,7 @@ describe('AgentMetrics', () => {
         toolMetrics: {
           search: { callCount: 2, successCount: 1, errorCount: 1, totalTime: 2.0 },
         },
+        totalDuration: 8000,
       })
     })
   })
@@ -761,33 +765,10 @@ describe('AgentMetrics', () => {
       })
     })
 
-    it('totalDuration sums cycle durations', () => {
-      const metrics = new AgentMetrics({
-        agentInvocations: [
-          {
-            usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
-            cycles: [
-              { cycleId: 'cycle-1', duration: 3000, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 } },
-              { cycleId: 'cycle-2', duration: 5000, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 } },
-            ],
-          },
-        ],
-      })
-      expect(metrics.totalDuration).toBe(8000)
-    })
-
     it('averageCycleTime computes average', () => {
       const metrics = new AgentMetrics({
         cycleCount: 2,
-        agentInvocations: [
-          {
-            usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
-            cycles: [
-              { cycleId: 'cycle-1', duration: 3000, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 } },
-              { cycleId: 'cycle-2', duration: 5000, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 } },
-            ],
-          },
-        ],
+        totalDuration: 8000,
       })
       expect(metrics.averageCycleTime).toBe(4000)
     })
@@ -833,11 +814,6 @@ describe('AgentMetrics', () => {
           successRate: 0,
         },
       })
-    })
-
-    it('totalDuration returns 0 when no invocations exist', () => {
-      const metrics = new AgentMetrics()
-      expect(metrics.totalDuration).toBe(0)
     })
   })
 })

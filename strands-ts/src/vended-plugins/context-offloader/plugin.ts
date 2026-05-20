@@ -11,11 +11,35 @@ import { z } from 'zod'
 import { logger } from '../../logging/logger.js'
 import type { JSONValue } from '../../types/json.js'
 import type { Storage } from './storage.js'
+import { isSearchableContent, searchContent } from './search.js'
 
 const CHARS_PER_TOKEN = 4
 const DEFAULT_MAX_RESULT_TOKENS = 2_500
 const DEFAULT_PREVIEW_TOKENS = 1_000
 const RETRIEVAL_TOOL_NAME = 'retrieve_offloaded_content'
+
+const retrievalInputSchema = z.object({
+  reference: z.string().describe('The reference string from the offload placeholder (e.g. "mem_1_tool-123_0").'),
+  pattern: z
+    .string()
+    .optional()
+    .describe('Regex or keyword to grep for. Returns only matching lines with context — not the full content.'),
+  line_range: z
+    .object({
+      start: z.number().int().min(1).describe('First line to return (1-indexed).'),
+      end: z.number().int().min(1).describe('Last line to return (1-indexed).'),
+    })
+    .optional()
+    .describe('Return only this span of lines. Combine with pattern to search within the range.'),
+  context_lines: z
+    .number()
+    .int()
+    .min(0)
+    .optional()
+    .describe(
+      'Lines before AND after each match (like grep -C). Default: 5. Without pattern/line_range, returns first N lines.'
+    ),
+})
 
 function slicePreview(text: string, previewTokens: number): string {
   const maxChars = previewTokens * CHARS_PER_TOKEN
@@ -135,25 +159,54 @@ export class ContextOffloader implements Plugin {
 
   getTools(): Tool[] {
     if (!this._includeRetrievalTool) return []
-    if (!this._retrievalTool) {
-      this._retrievalTool = this._createRetrievalTool()
-    }
+    if (!this._retrievalTool) this._retrievalTool = this._createRetrievalTool()
     return [this._retrievalTool]
   }
 
   private _createRetrievalTool(): Tool {
     const storage = this._storage
+    const maxChars = this._maxResultTokens * CHARS_PER_TOKEN
+
     return tool({
       name: RETRIEVAL_TOOL_NAME,
       description:
-        'Retrieve offloaded content by reference. Use this tool when you see a placeholder with a reference (ref: ...) and need the full content. Only use this as a fallback if the data cannot be accessed using your existing tools.',
-      inputSchema: z.object({
-        reference: z.string().describe('The reference string from the offload placeholder.'),
-      }),
+        'When a tool result was too large to keep in context, it was stored externally and replaced with a preview and a reference. ' +
+        'Use this tool with that reference to access the stored content.\n\n' +
+        'Returns:\n' +
+        '  - With pattern: matching lines with line numbers and surrounding context\n' +
+        '  - With line_range: the specified span of lines with line numbers\n' +
+        '  - Without pattern/line_range: the full original content (use sparingly — re-injects all tokens)\n\n' +
+        'Constraints:\n' +
+        '  - pattern/line_range/context_lines only work on text content. For binary content, omit them.\n' +
+        '  - Line numbers in results are 1-indexed and can be used in follow-up line_range calls.\n\n' +
+        'Examples:\n' +
+        '  { reference: "ref_1", pattern: "error" } → lines containing "error" with 5 lines context\n' +
+        '  { reference: "ref_1", pattern: "error|warning", context_lines: 3 } → regex, 3 lines context\n' +
+        '  { reference: "ref_1", line_range: { start: 10, end: 25 } } → lines 10-25\n' +
+        '  { reference: "ref_1", pattern: "TODO", line_range: { start: 1, end: 50 } } → search within range',
+      inputSchema: retrievalInputSchema,
       callback: async (input) => {
         try {
           const result = await storage.retrieve(input.reference)
-          return decodeStoredContent(result.content, result.contentType, input.reference)
+
+          if (!input.pattern && !input.line_range && input.context_lines === undefined) {
+            return decodeStoredContent(result.content, result.contentType, input.reference)
+          }
+
+          if (!isSearchableContent(result.contentType)) {
+            return `Error: cannot search binary content (${result.contentType}). Omit pattern/line_range/context_lines to retrieve the full content.`
+          }
+
+          const text = new TextDecoder().decode(result.content)
+          const contextLines = input.context_lines ?? 5
+          const lineRange =
+            input.line_range ?? (!input.pattern ? { start: 1, end: Math.max(1, contextLines) } : undefined)
+
+          return searchContent(
+            text,
+            { pattern: input.pattern, line_range: lineRange, context_lines: contextLines },
+            maxChars
+          )
         } catch {
           return `Error: reference not found: ${input.reference}`
         }
@@ -208,10 +261,15 @@ export class ContextOffloader implements Plugin {
 
     let guidance =
       'Tool result was offloaded to external storage due to size.\n' +
-      'Use the preview below to answer if possible.\n' +
-      'Use your available tools to selectively access the data you need.'
+      'Use the preview below if it answers your question.\n'
     if (this._includeRetrievalTool) {
-      guidance += '\nYou can also use retrieve_offloaded_content with a reference to get the full content.'
+      guidance +=
+        'If you need more detail, use retrieve_offloaded_content with a reference and:\n' +
+        '  - pattern: regex or keyword to find matching lines with context\n' +
+        '  - line_range: { start, end } to read a specific span of lines\n' +
+        'Retrieve full content (omit pattern/line_range) as a last resort.'
+    } else {
+      guidance += 'If you need more detail, use your available tools to access specific data.'
     }
 
     return (

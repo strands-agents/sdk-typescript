@@ -3,6 +3,10 @@ import type { AgentStreamEvent, InvocationState } from '../types/agent.js'
 import type { MultiAgentResult, MultiAgentState, NodeResult } from './state.js'
 import type { MultiAgent } from './multiagent.js'
 import type { NodeType } from './nodes.js'
+import type { Interruptible } from '../interrupt.js'
+import { interruptFromMultiAgentNode } from '../interrupt.js'
+import type { InterruptParams } from '../types/interrupt.js'
+import type { JSONValue } from '../types/json.js'
 
 /**
  * Event triggered when a multi-agent orchestrator has finished initialization.
@@ -71,7 +75,7 @@ export class AfterMultiAgentInvocationEvent extends HookableEvent {
  * Event triggered before a node begins execution.
  * Hook callbacks can set {@link cancel} to prevent the node from executing.
  */
-export class BeforeNodeCallEvent extends HookableEvent {
+export class BeforeNodeCallEvent extends HookableEvent implements Interruptible {
   readonly type = 'beforeNodeCallEvent' as const
   readonly orchestrator: MultiAgent
   readonly state: MultiAgentState
@@ -96,6 +100,29 @@ export class BeforeNodeCallEvent extends HookableEvent {
     this.state = data.state
     this.nodeId = data.nodeId
     this.invocationState = data.invocationState
+  }
+
+  /**
+   * Raises an orchestrator-level interrupt that pauses the run before this node
+   * executes. If a prior resume has answered the interrupt, returns the response;
+   * otherwise throws an `InterruptError` and the orchestrator produces an
+   * INTERRUPTED result with the pending interrupt.
+   *
+   * The interrupt is stored on the target node's `NodeState.interrupts`, so resume
+   * via `InterruptResponseContent[]` routes through the same machinery as child-
+   * agent interrupts.
+   */
+  interrupt<T = JSONValue>(params: InterruptParams): T {
+    const nodeState = this.state.node(this.nodeId)
+    if (!nodeState) {
+      throw new Error(`node_id=<${this.nodeId}> | node state not found`)
+    }
+    return interruptFromMultiAgentNode<T>(
+      nodeState.interrupts,
+      `multiagent-hook:beforeNodeCall:${this.nodeId}:${params.name}`,
+      params,
+      'multiagent-hook'
+    )
   }
 
   toJSON(): Pick<BeforeNodeCallEvent, 'type' | 'nodeId'> {

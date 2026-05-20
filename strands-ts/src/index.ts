@@ -39,7 +39,7 @@ export {
 } from './errors.js'
 
 // Interrupt system
-export type { Interrupt } from './interrupt.js'
+export type { Interrupt, InterruptSource } from './interrupt.js'
 export type { InterruptParams, InterruptResponse, InterruptResponseContentData } from './types/interrupt.js'
 export { InterruptResponseContent } from './types/interrupt.js'
 
@@ -211,6 +211,7 @@ export {
   ToolResultEvent,
   ToolStreamUpdateEvent,
   AgentResultEvent,
+  InterruptEvent,
   ModelStreamUpdateEvent,
 } from './hooks/index.js'
 export type {
@@ -224,6 +225,10 @@ export type {
 
 // Plugin system
 export type { Plugin } from './plugins/index.js'
+
+// Intervention system
+export { InterventionHandler, InterventionActions } from './interventions/index.js'
+export type { OnError } from './interventions/index.js'
 
 // Retry
 export {
@@ -265,7 +270,15 @@ export { configureLogging } from './logging/logger.js'
 export type { Logger } from './logging/types.js'
 
 // MCP Client types and implementations
-export { type McpClientConfig, type McpTransport, type TasksConfig, type McpConnectionState, McpClient } from './mcp.js'
+export {
+  type McpClientConfig,
+  type McpClientCredentials,
+  type McpTransport,
+  type McpCallToolOptions,
+  type TasksConfig,
+  type McpConnectionState,
+  McpClient,
+} from './mcp.js'
 export type { ElicitationCallback, ElicitationContext } from './types/elicitation.js'
 
 // Session management

@@ -36,7 +36,7 @@ When proposing solutions or reviewing code, we reference these principles to gui
 
    This also installs git hooks (via husky) that automatically build the SDK, run tests, linting, formatting checks, and type checking before each commit.
 
-   > **Note**: Use `npm ci` for installing dependencies. Use `npm install` only when intentionally adding or updating dependencies. See [Dependency Guidelines](docs/DEPENDENCIES.md) for details.
+   > **Note**: Use `npm ci` for installing dependencies. Use `npm install` only when intentionally adding or updating dependencies. See [Dependency Guidelines](dev-docs/DEPENDENCIES.md) for details.
 
 2. Install Playwright browsers for browser testing:
    ```bash
@@ -55,7 +55,7 @@ The repo is an npm workspace. The SDK source lives in `strands-ts/`, and the roo
 
 ### WASM and Python Development
 
-If you're working on the WASM bridge (`strands-wasm/`) or the Python SDK (`strands-py/`), additional setup is needed:
+If you're working on the WASM bridge (`strands-wasm/`) or the Python SDK (`strands-py-wasm/`), additional setup is needed:
 
 1. Build the full pipeline (TS → WASM → Python types):
    ```bash
@@ -64,13 +64,13 @@ If you're working on the WASM bridge (`strands-wasm/`) or the Python SDK (`stran
 
 2. Set up the Python virtual environment:
    ```bash
-   python3 -m venv strands-py/.venv
-   source strands-py/.venv/bin/activate
-   pip install -e "strands-py[dev]"
+   python3 -m venv strands-py-wasm/.venv
+   source strands-py-wasm/.venv/bin/activate
+   pip install -e "strands-py-wasm[dev]"
    pip install componentize-py boto3 pytest pytest-asyncio
    ```
 
-3. Run Python integration tests (from `strands-py/`, venv activated):
+3. Run Python integration tests (from `strands-py-wasm/`, venv activated):
    ```bash
    python3 -m pytest tests_integ/models/test_model_bedrock.py -xvs
    ```
@@ -112,7 +112,7 @@ npm run test:integ -- test/integ/models/openai.test.ts  # Single integ test file
 - **Integration Tests**: Test complete workflows in `test/integ/` directory
 - **TSDoc Coverage**: All exported functions must have complete documentation
 
-For detailed testing patterns and guidelines, see [Testing Guidelines](docs/TESTING.md).
+For detailed testing patterns and guidelines, see [Testing Guidelines](dev-docs/TESTING.md).
 
 ### Documentation Updates
 
@@ -166,7 +166,7 @@ To send us a pull request, please:
 - **Formatting**: Prettier formatting applied consistently
 - **Type safety**: No `any` types allowed, explicit return types required
 - **Conventional commits**: Use conventional commit message format
-- **PR description**: Follow the [PR description guidelines](docs/PR.md) for writing effective descriptions
+- **PR description**: Follow the [PR description guidelines](dev-docs/PR.md) for writing effective descriptions
 
 GitHub provides additional documentation on [forking a repository](https://help.github.com/articles/fork-a-repo/) and
 [creating a pull request](https://help.github.com/articles/creating-a-pull-request/).

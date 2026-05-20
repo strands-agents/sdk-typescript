@@ -1,12 +1,12 @@
 #!/usr/bin/env tsx
 
 import { execSync } from 'node:child_process'
-import { existsSync, globSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { program } from 'commander'
 
 const ROOT = resolve(import.meta.dirname, '../..')
-const PY = `${ROOT}/strands-py`
+const PY = `${ROOT}/strands-py-wasm`
 const VENV = `${ROOT}/.venv`
 
 process.env.PYTHONPYCACHEPREFIX ??= `${ROOT}/.pycache`
@@ -15,7 +15,7 @@ program.name('strandly').description(
   `Strands monorepo development CLI
 
 Build pipeline (each step feeds the next):
-  wit/agent.wit -> strands-ts -> strands-wasm -> strands-py
+  wit/agent.wit -> strands-ts -> strands-wasm -> strands-py-wasm
 
 Most commands accept layer flags (--ts, --wasm, --py).
 No flags = run all layers.`
@@ -168,7 +168,7 @@ function run(cmd: string, opts?: { cwd?: string; env?: Record<string, string> })
 }
 
 /** Run a command with the repo-root venv on PATH. ``cwd`` defaults to
- * strands-py because most Python commands (pytest, ruff) act on that
+ * strands-py-wasm because most Python commands (pytest, ruff) act on that
  * package's source, but callers can override. */
 function py(cmd: string, opts?: { cwd?: string }): void {
   run(cmd, {
@@ -183,7 +183,7 @@ function setup(opts?: { node?: boolean; python?: boolean }): void {
   if (all || opts?.python) {
     run('python3 -m venv .venv', { cwd: ROOT })
     run(`${VENV}/bin/pip install -e .`, { cwd: ROOT })
-    run(`${VENV}/bin/pip install -e strands-py/`, { cwd: ROOT })
+    run(`${VENV}/bin/pip install -e strands-py-wasm/`, { cwd: ROOT })
   }
 }
 
@@ -230,7 +230,9 @@ function generate(opts?: { check?: boolean }): void {
 
   // Tag generated TS/WASM type declarations.
   for (const dir of ['strands-wasm/generated', 'strands-ts/generated']) {
-    for (const file of globSync('**/*.d.ts', { cwd: join(ROOT, dir) })) {
+    for (const file of readdirSync(join(ROOT, dir), { recursive: true, encoding: 'utf-8' }).filter((f) =>
+      f.endsWith('.d.ts')
+    )) {
       const path = join(ROOT, dir, file)
       const content = readFileSync(path, 'utf-8')
       if (!content.startsWith('// @generated')) {
@@ -250,12 +252,12 @@ function generate(opts?: { check?: boolean }): void {
 
   if (opts?.check) {
     try {
-      execSync('git diff --quiet -- strands-wasm/generated/ strands-ts/generated/ strands-py/src/strands/_generated.py', {
+      execSync('git diff --quiet -- strands-wasm/generated/ strands-ts/generated/ strands-py-wasm/src/strands/_generated.py', {
         cwd: ROOT,
       })
     } catch {
       console.error("error: generated files are out of date -- run 'strandly generate' and commit")
-      run('git diff --stat -- strands-wasm/generated/ strands-ts/generated/ strands-py/src/strands/_generated.py')
+      run('git diff --stat -- strands-wasm/generated/ strands-ts/generated/ strands-py-wasm/src/strands/_generated.py')
       process.exit(1)
     }
   }
@@ -267,5 +269,5 @@ function clean(): void {
   } catch (e) {
     console.warn('workspace clean failed (continuing):', (e as Error).message)
   }
-  run('rm -rf .venv strands-py/target')
+  run('rm -rf .venv strands-py-wasm/target')
 }

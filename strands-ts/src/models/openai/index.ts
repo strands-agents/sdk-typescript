@@ -23,3 +23,4 @@ export type {
   OpenAIModelOptions,
   OpenAIResponsesConfig,
 } from './types.js'
+export type { BedrockMantleConfig } from './mantle.js'

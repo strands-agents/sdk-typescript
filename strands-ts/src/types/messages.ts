@@ -639,6 +639,8 @@ export class JsonBlock implements JsonBlockData, JSONSerializable<JsonBlockData>
  * - `guardrailIntervened` - A guardrail policy stopped generation
  * - `interrupt` - Agent execution was interrupted for human input
  * - `maxTokens` - Maximum token limit was reached
+ * - `pauseTurn` - Model paused a long-running turn; the response should be sent back to continue
+ * - `refusal` - A streaming classifier intervened to handle a potential policy violation
  * - `stopSequence` - A stop sequence was encountered
  * - `toolUse` - Model wants to use a tool
  * - `modelContextWindowExceeded` - Input exceeded the model's context window
@@ -650,6 +652,8 @@ export type StopReason =
   | 'guardrailIntervened'
   | 'interrupt'
   | 'maxTokens'
+  | 'pauseTurn'
+  | 'refusal'
   | 'stopSequence'
   | 'toolUse'
   | 'modelContextWindowExceeded'

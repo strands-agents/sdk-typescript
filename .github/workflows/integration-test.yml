@@ -19,7 +19,7 @@ jobs:
         with:
           skip-check: ${{ github.event_name == 'merge_group' }}
           username: ${{ github.event.pull_request.user.login || 'invalid' }}
-          allowed-roles: 'triage,write,admin'
+          allowed-roles: 'triage,write,maintain,admin'
 
   run-integration-tests:
     name: Run integration tests

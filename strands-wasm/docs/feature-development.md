@@ -12,15 +12,15 @@ Know which file owns which concern. Read the relevant files before modifying the
 |---|---|---|
 | `wit/agent.wit` | Boundary types and contract between guest and host | Adding new config fields, new WIT records, new resource methods, or new import/export interfaces |
 | `strands-wasm/entry.ts` | Config deserialization, TS SDK instantiation, event mapping | Changing how config is read from WIT and passed to TS SDK constructors, adding new `createXxx()` functions, modifying stream event mapping |
-| `strands-py/strands/_wasm_host.py` | Config serialization (Python → WIT records), WASM runtime management (`WasmAgent`), raw wasmtime `Variant` → Python `StreamEvent` dataclass conversion | Adding `_build_xxx()` serialization functions, modifying `WasmAgent` methods, changing how raw wasmtime variants are converted to `StreamEvent` dataclasses |
-| `strands-py/strands/agent/__init__.py` | Python user-facing API, config extraction from Python objects to dicts | Adding/modifying constructor parameters, extracting config from Python class instances |
-| `strands-py/strands/_conversions.py` | `StreamEvent` dataclass → Python SDK dict format, TS SDK message format → Python SDK message format | Modifying how `StreamEvent` dataclasses are converted to dicts (`event_to_dict`), how TS messages are converted to Python format (`convert_message`), or how lifecycle events are mapped to hook events (`lifecycle_event_from_wit`) |
+| `strands-py-wasm/strands/_wasm_host.py` | Config serialization (Python → WIT records), WASM runtime management (`WasmAgent`), raw wasmtime `Variant` → Python `StreamEvent` dataclass conversion | Adding `_build_xxx()` serialization functions, modifying `WasmAgent` methods, changing how raw wasmtime variants are converted to `StreamEvent` dataclasses |
+| `strands-py-wasm/strands/agent/__init__.py` | Python user-facing API, config extraction from Python objects to dicts | Adding/modifying constructor parameters, extracting config from Python class instances |
+| `strands-py-wasm/strands/_conversions.py` | `StreamEvent` dataclass → Python SDK dict format, TS SDK message format → Python SDK message format | Modifying how `StreamEvent` dataclasses are converted to dicts (`event_to_dict`), how TS messages are converted to Python format (`convert_message`), or how lifecycle events are mapped to hook events (`lifecycle_event_from_wit`) |
 
 ### Files you must not edit manually
 
 | File | Why |
 |---|---|
-| `strands-py/strands/_generated/types.py` | Auto-generated from `wit/agent.wit` by `strands-py/scripts/generate_types.py`. Regenerate with `npm run dev -- generate`. |
+| `strands-py-wasm/strands/_generated/types.py` | Auto-generated from `wit/agent.wit` by `strands-py-wasm/scripts/generate_types.py`. Regenerate with `npm run dev -- generate`. |
 | `strands-wasm/generated/` | Auto-generated WIT type bindings. Regenerate with `npm run dev -- generate`. |
 | `strands-wasm/build.js` | Build pipeline script. Rarely needs changes unless adding a new esbuild plugin or changing the componentize step. |
 | `strands-wasm/patches/getChunkedStream.js` | WASI buffer reuse workaround. Only modify if fixing the specific componentize-js buffering bug it addresses. |
@@ -33,7 +33,7 @@ Each layer uses a different case convention. Use the correct case for the layer 
 |---|---|---|
 | WIT (`wit/agent.wit`) | `kebab-case` | `window-size`, `should-truncate-results` |
 | TS (`strands-wasm/entry.ts`) | `camelCase` | `windowSize`, `shouldTruncateResults` |
-| Python (`strands-py/`) | `snake_case` | `window_size`, `should_truncate_results` |
+| Python (`strands-py-wasm/`) | `snake_case` | `window_size`, `should_truncate_results` |
 
 componentize-js translates WIT `kebab-case` to JS `camelCase` automatically. When `entry.ts` reads `cmConfig.windowSize`, it is accessing the WIT field `window-size`. Do not convert manually in `entry.ts`.
 
@@ -97,7 +97,7 @@ record my-feature-config {
 
 **Extending existing WIT variants.** Adding a new variant case to an existing WIT `variant` type (e.g., a new model provider to `model-config`, or a new tag to `stream-event`) is a non-breaking change per the project's [compatibility policy](../../COMPATIBILITY.MD). Existing host code that pattern-matches on known tags will ignore the new tag. Do not add backwards-compatibility shims for new variant cases.
 
-**Regenerate types** after updating `wit/agent.wit`: run `npm run dev -- generate`. This updates `strands-wasm/generated/` and `strands-py/strands/_generated/types.py` to match the new contract.
+**Regenerate types** after updating `wit/agent.wit`: run `npm run dev -- generate`. This updates `strands-wasm/generated/` and `strands-py-wasm/strands/_generated/types.py` to match the new contract.
 
 **Verification:** Run `npm run dev -- validate wit`. Fix any compile errors in downstream layers before proceeding.
 
@@ -134,7 +134,7 @@ Pass the result to the `Agent` constructor in `AgentImpl`.
 
 Read each file in full before modifying it.
 
-**`strands-py/strands/_wasm_host.py`** — Add a `_build_xxx_variant()` function that serializes a Python config dict to a WIT record. Add the parameter to `_build_agent_config()` and `WasmAgent.__init__()`.
+**`strands-py-wasm/strands/_wasm_host.py`** — Add a `_build_xxx_variant()` function that serializes a Python config dict to a WIT record. Add the parameter to `_build_agent_config()` and `WasmAgent.__init__()`.
 
 ```python
 def _build_my_feature_variant(config: dict[str, typing.Any] | None) -> Record | None:
@@ -151,7 +151,7 @@ def _build_my_feature_variant(config: dict[str, typing.Any] | None) -> Record | 
 
 Pass through values the user provided. Do not insert defaults here — let the TS SDK apply its own defaults for absent fields.
 
-**`strands-py/strands/agent/__init__.py`** — Add the parameter to `Agent.__init__()` with a proper type hint. Add config extraction logic that inspects the instance type and builds a config dict. Always include a `dict` passthrough and an `else` warning for unknown types.
+**`strands-py-wasm/strands/agent/__init__.py`** — Add the parameter to `Agent.__init__()` with a proper type hint. Add config extraction logic that inspects the instance type and builds a config dict. Always include a `dict` passthrough and an `else` warning for unknown types.
 
 ```python
 feat_config: dict[str, Any] | None = None
@@ -168,7 +168,7 @@ if my_feature is not None:
         log.warning("unknown my_feature type: %s, ignoring", type(my_feature).__name__)
 ```
 
-**Feature module** (e.g., `strands-py/strands/agent/my_feature/`) — Create config holder classes that store user-provided config and nothing else. They extend `HookProvider` for type compatibility with the `Agent` constructor, but must **not** register any hooks. Hook registration happens in the TS SDK's `initAgent()` inside the WASM guest.
+**Feature module** (e.g., `strands-py-wasm/strands/agent/my_feature/`) — Create config holder classes that store user-provided config and nothing else. They extend `HookProvider` for type compatibility with the `Agent` constructor, but must **not** register any hooks. Hook registration happens in the TS SDK's `initAgent()` inside the WASM guest.
 
 ```python
 class MyFeatureManager(HookProvider):
@@ -177,15 +177,15 @@ class MyFeatureManager(HookProvider):
         self.field_b = field_b
 ```
 
-**Verification:** Run `python -m pytest strands-py/tests_unit/` to validate serialization.
+**Verification:** Run `python -m pytest strands-py-wasm/tests_unit/` to validate serialization.
 
 ### Step 5: Write tests
 
 The project requires 80% test coverage (see [CONTRIBUTING.md](../../CONTRIBUTING.md)).
 
-**Unit tests** (`strands-py/tests_unit/`): Test the serialization boundary. Verify that config holder classes store the right values, that `_build_xxx_variant()` produces correct WIT records, and that edge cases (missing fields, invalid values) are handled.
+**Unit tests** (`strands-py-wasm/tests_unit/`): Test the serialization boundary. Verify that config holder classes store the right values, that `_build_xxx_variant()` produces correct WIT records, and that edge cases (missing fields, invalid values) are handled.
 
-**Integration tests** (`strands-py/tests_integ/`): Test end-to-end behavior. Create an agent with the feature configured, invoke it, and verify observable behavior. Do **not** test by calling internal methods on config holder classes — the implementation runs in the TS guest, so test through the agent's public API.
+**Integration tests** (`strands-py-wasm/tests_integ/`): Test end-to-end behavior. Create an agent with the feature configured, invoke it, and verify observable behavior. Do **not** test by calling internal methods on config holder classes — the implementation runs in the TS guest, so test through the agent's public API.
 
 ### Step 6: Document the change
 
@@ -206,7 +206,7 @@ Modifications (adding a parameter, fixing a bug, changing a default) are more co
 Grep for the feature across all layers to find every file involved:
 
 ```bash
-grep -rn 'feature_name\|featureName\|feature-name' wit/ strands-wasm/entry.ts strands-py/strands/
+grep -rn 'feature_name\|featureName\|feature-name' wit/ strands-wasm/entry.ts strands-py-wasm/strands/
 ```
 
 Read every file that appears in the results. Trace the full path: Python construction → WIT serialization → TS instantiation. Identify every function, record, and field involved before making changes.
@@ -227,8 +227,8 @@ Changes cascade through the pipeline. Make changes in this order so each layer c
 1. `wit/agent.wit` (if the contract changes)
 2. Regenerate types: `npm run dev -- generate`
 3. `strands-wasm/entry.ts`
-4. `strands-py/strands/_wasm_host.py`
-5. `strands-py/strands/agent/__init__.py` and feature modules
+4. `strands-py-wasm/strands/_wasm_host.py`
+5. `strands-py-wasm/strands/agent/__init__.py` and feature modules
 6. Tests
 
 ### Step 4: Verify at each layer
@@ -239,7 +239,7 @@ After modifying each layer, run the appropriate validation:
 |---|---|
 | `wit/agent.wit` | `npm run dev -- validate wit` |
 | `strands-wasm/entry.ts` | `npm run dev -- validate wasm` |
-| `strands-py/` | `python -m pytest strands-py/tests_unit/` |
+| `strands-py-wasm/` | `python -m pytest strands-py-wasm/tests_unit/` |
 | All layers | `npm run dev -- ci` |
 
 ## Common pitfalls
@@ -250,7 +250,7 @@ After modifying each layer, run the appropriate validation:
 
 **Do not register hooks in Python config holders.** Config holder classes extend `HookProvider` for type compatibility only. All hook registration happens in the TS SDK's `initAgent()` inside the WASM guest. Registering hooks on the Python side creates duplicate behavior.
 
-**Do not edit generated files.** `strands-py/strands/_generated/types.py` and `strands-wasm/generated/` are auto-generated. Edits are overwritten on the next `npm run dev -- generate`.
+**Do not edit generated files.** `strands-py-wasm/strands/_generated/types.py` and `strands-wasm/generated/` are auto-generated. Edits are overwritten on the next `npm run dev -- generate`.
 
 **Separate formatting from feature changes.** Keep formatting (Prettier, ruff) in separate commits or PRs. Mixed diffs obscure functional changes.
 
