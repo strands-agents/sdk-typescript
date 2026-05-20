@@ -138,7 +138,7 @@ export class HumanInTheLoop extends InterventionHandler {
     super()
     this._allowedTools = new Set(config?.allowedTools ?? [])
     this._enableTrust = config?.enableTrust ?? false
-    this._evaluateTrust = config?.evaluateTrust ?? ((r) => this._isTrustResponse(r))
+    this._evaluateTrust = config?.evaluateTrust ?? ((r: JSONValue): boolean => this._isTrustResponse(r))
     this._evaluate = config?.evaluate
     this._ask = config?.ask === 'stdio' ? createStdioAsk(this._enableTrust) : config?.ask
   }
@@ -151,8 +151,10 @@ export class HumanInTheLoop extends InterventionHandler {
 
     const prompt = `Tool "${toolName}" requires human approval. Input: ${JSON.stringify(event.toolUse.input)}`
 
+    const isNegated = this._allowedTools.has(`!${toolName}`)
+
     const evaluate = (response: JSONValue): boolean => {
-      if (this._enableTrust && this._evaluateTrust(response)) {
+      if (!isNegated && this._enableTrust && this._evaluateTrust(response)) {
         this._trustTool(event, toolName)
         return true
       }
@@ -165,7 +167,7 @@ export class HumanInTheLoop extends InterventionHandler {
 
     const response = await this._ask(prompt)
 
-    if (this._enableTrust && this._evaluateTrust(response)) {
+    if (!isNegated && this._enableTrust && this._evaluateTrust(response)) {
       this._trustTool(event, toolName)
       return proceed()
     }

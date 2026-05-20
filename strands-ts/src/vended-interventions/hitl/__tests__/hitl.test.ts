@@ -360,15 +360,49 @@ describe('HumanInTheLoop', () => {
       expect(askCount).toBe(1)
     })
 
+    it('supports custom evaluateTrust function', async () => {
+      let askCount = 0
+
+      const model = new MockMessageModel()
+        .addTurn({ type: 'toolUseBlock', name: 'myTool', toolUseId: 'tool-1', input: {} })
+        .addTurn({ type: 'toolUseBlock', name: 'myTool', toolUseId: 'tool-2', input: {} })
+        .addTurn({ type: 'textBlock', text: 'Done' })
+
+      const tool = createMockTool('myTool', () => 'executed')
+
+      const agent = new Agent({
+        model,
+        tools: [tool],
+        interventions: [
+          new HumanInTheLoop({
+            enableTrust: true,
+            evaluateTrust: (r) => r === 'approve-and-remember',
+            ask: async () => {
+              askCount++
+              return 'approve-and-remember'
+            },
+          }),
+        ],
+        printer: false,
+      })
+
+      await agent.invoke('Run tool twice')
+      expect(askCount).toBe(1)
+    })
+
     it('negated tools cannot be trusted even with "t" response', async () => {
       let askCount = 0
+      let toolExecuted = false
 
       const model = new MockMessageModel()
         .addTurn({ type: 'toolUseBlock', name: 'dangerTool', toolUseId: 'tool-1', input: {} })
         .addTurn({ type: 'toolUseBlock', name: 'dangerTool', toolUseId: 'tool-2', input: {} })
         .addTurn({ type: 'textBlock', text: 'Done' })
 
-      const tool = createMockTool('dangerTool', () => 'ran')
+      const tool = createMockTool('dangerTool', () => {
+        toolExecuted = true
+        return 'ran'
+      })
 
       const agent = new Agent({
         model,
@@ -388,7 +422,7 @@ describe('HumanInTheLoop', () => {
 
       await agent.invoke('Run danger twice')
       expect(askCount).toBe(2)
+      expect(toolExecuted).toBe(false)
     })
   })
-
 })
