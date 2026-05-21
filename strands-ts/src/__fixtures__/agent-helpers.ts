@@ -12,6 +12,7 @@ import type { Role } from '../types/messages.js'
 import { StateStore } from '../state-store.js'
 import type { JSONValue } from '../types/json.js'
 import { ToolRegistry } from '../registry/tool-registry.js'
+import type { Sandbox } from '../sandbox/base.js'
 import type { HookableEvent, StreamEvent } from '../hooks/events.js'
 import type { HookableEventConstructor, HookCallback } from '../hooks/types.js'
 import { expectLoopMetrics, type LoopMetricsMatcher } from './metrics-helpers.js'
@@ -41,6 +42,10 @@ export interface MockAgentData {
    */
   toolRegistry?: ToolRegistry
   /**
+   * Sandbox instance for the agent.
+   */
+  sandbox?: Sandbox
+  /**
    * Additional properties to spread onto the mock agent.
    */
   extra?: Partial<Agent>
@@ -66,6 +71,7 @@ export function createMockAgent(data?: MockAgentData): MockAgent {
     appState: new StateStore(data?.appState ?? {}),
     modelState: new StateStore(),
     toolRegistry: data?.toolRegistry ?? new ToolRegistry(),
+    sandbox: data?.sandbox,
     cancelSignal: new AbortController().signal,
     addHook: <T extends HookableEvent>(eventType: HookableEventConstructor<T>, callback: HookCallback<T>) => {
       trackedHooks.push({

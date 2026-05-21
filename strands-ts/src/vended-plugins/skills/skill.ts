@@ -435,4 +435,39 @@ export class Skill {
     logger.debug(`path=<${resolvedDir}>, count=<${skills.length}> | loaded skills from directory`)
     return skills
   }
+
+  /**
+   * Load a single skill from a sandbox filesystem.
+   *
+   * Reads SKILL.md content from the sandbox and parses it. The path can point
+   * to a skill directory (will look for SKILL.md inside) or directly to a SKILL.md file.
+   *
+   * @param sandbox - Sandbox instance to read from.
+   * @param skillPath - Path to the skill directory or SKILL.md file in the sandbox.
+   * @param options - Optional settings.
+   * @returns A Promise resolving to a Skill instance.
+   */
+  static async fromSandbox(
+    sandbox: import('../../sandbox/base.js').Sandbox,
+    skillPath: string,
+    options?: { strict?: boolean }
+  ): Promise<Skill[]> {
+    const content = await sandbox.readText(`${skillPath}/SKILL.md`).catch(() => undefined)
+    if (content !== undefined) return [Skill.fromContent(content, { ...options, path: skillPath })]
+
+    const direct = await sandbox.readText(skillPath).catch(() => undefined)
+    if (direct && direct.trim()) return [Skill.fromContent(direct, { ...options, path: skillPath })]
+
+    const entries = await sandbox.listFiles(skillPath)
+    const skills: Skill[] = []
+    for (const entry of entries) {
+      if (!entry.isDir) continue
+      try {
+        skills.push(...(await Skill.fromSandbox(sandbox, `${skillPath}/${entry.name}`, options)))
+      } catch {
+        // Subdirectory without valid skill — skip
+      }
+    }
+    return skills
+  }
 }

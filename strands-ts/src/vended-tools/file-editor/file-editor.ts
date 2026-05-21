@@ -1,43 +1,52 @@
 import { tool } from '../../tools/tool-factory.js'
 import { z } from 'zod'
-import type { IFileReader } from './types.js'
-import { promises as fs } from 'fs'
-import * as path from 'path'
+import type { Sandbox } from '../../sandbox/base.js'
+import { shellQuote } from '../../utils/shell-quote.js'
 
 const SNIPPET_LINES = 4
 const DEFAULT_MAX_FILE_SIZE = 1048576 // 1MB
 const MAX_DIRECTORY_DEPTH = 2
+
+const undoStore = new WeakMap<object, Map<string, string>>()
+
+function getUndoMap(agent: object): Map<string, string> {
+  let map = undoStore.get(agent)
+  if (!map) {
+    map = new Map()
+    undoStore.set(agent, map)
+  }
+  return map
+}
 
 /**
  * Zod schema for file editor input validation.
  */
 const fileEditorInputSchema = z.object({
   command: z
-    .enum(['view', 'create', 'str_replace', 'insert'])
-    .describe('The operation to perform: `view`, `create`, `str_replace`, `insert`.'),
-  path: z.string().describe('Absolute path to the file or directory.'),
+    .enum(['view', 'create', 'str_replace', 'insert', 'undo', 'grep', 'glob'])
+    .describe('The operation to perform: `view`, `create`, `str_replace`, `insert`, `undo`, `grep`, `glob`.'),
+  path: z.string().describe('Path to the file or directory. Can be absolute or relative to the working directory.'),
   file_text: z.string().optional().describe('Content for new file (required for create command).'),
   view_range: z
     .tuple([z.number(), z.number()])
     .optional()
     .describe('Line range to view [start, end]. 1-indexed. End can be -1 for end of file.'),
   old_str: z.string().optional().describe('Exact string to find and replace (required for str_replace command).'),
-  new_str: z.string().optional().describe('Replacement string (for str_replace and insert commands).'),
+  new_str: z.string().optional().describe('Replacement string for str_replace, or text to insert for insert command.'),
   insert_line: z
     .number()
     .optional()
     .describe('Line number where text should be inserted (0-indexed, required for insert command).'),
+  pattern: z
+    .string()
+    .optional()
+    .describe('Search pattern. Regex for grep, glob pattern (e.g., **/*.ts) for glob command.'),
+  include: z
+    .string()
+    .optional()
+    .describe('File glob filter for grep (e.g., *.ts). Only searches files matching this pattern.'),
+  max_results: z.number().optional().describe('Maximum number of results to return for grep or glob commands.'),
 })
-
-/**
- * Text file reader implementation.
- * Reads files as UTF-8 encoded text.
- */
-class TextFileReader implements IFileReader {
-  async read(filePath: string): Promise<string> {
-    return await fs.readFile(filePath, 'utf-8')
-  }
-}
 
 /**
  * File editor tool for viewing, creating, and editing files programmatically.
@@ -63,32 +72,45 @@ class TextFileReader implements IFileReader {
 export const fileEditor = tool({
   name: 'fileEditor',
   description:
-    'Filesystem editor tool for viewing, creating, and editing files. Supports view (with line ranges), create, str_replace, and insert operations. Files must use absolute paths.',
+    'Filesystem tool for viewing, creating, editing, and searching files. Supports view (with line ranges), create, str_replace, insert, undo, grep (search file contents), and glob (find files by name). Paths can be absolute or relative to the working directory.',
   inputSchema: fileEditorInputSchema,
   callback: async (input, context) => {
     if (!context) {
       throw new Error('Tool context is required for file editor operations')
     }
 
-    const fileReader = new TextFileReader()
+    const sandbox = context.agent.sandbox
+    const undoMap = getUndoMap(context.agent)
 
     let result: string
 
     switch (input.command) {
       case 'view':
-        result = await handleView(input.path, input.view_range, fileReader)
+        result = await handleView(sandbox, input.path, input.view_range)
         break
 
       case 'create':
-        result = await handleCreate(input.path, input.file_text!)
+        result = await handleCreate(sandbox, input.path, input.file_text!)
         break
 
       case 'str_replace':
-        result = await handleStrReplace(input.path, input.old_str!, input.new_str, fileReader)
+        result = await handleStrReplace(sandbox, undoMap, input.path, input.old_str!, input.new_str!)
         break
 
       case 'insert':
-        result = await handleInsert(input.path, input.insert_line!, input.new_str!, fileReader)
+        result = await handleInsert(sandbox, undoMap, input.path, input.insert_line!, input.new_str!)
+        break
+
+      case 'undo':
+        result = await handleUndo(sandbox, undoMap, input.path)
+        break
+
+      case 'grep':
+        result = await handleGrep(sandbox, input.path, input.pattern!, input.include, input.max_results)
+        break
+
+      case 'glob':
+        result = await handleGlob(sandbox, input.path, input.pattern!, input.max_results)
         break
 
       default:
@@ -98,62 +120,6 @@ export const fileEditor = tool({
     return result
   },
 })
-
-/**
- * Validates that a path is absolute and doesn't contain directory traversal.
- */
-function validatePath(command: string, filePath: string): void {
-  // Check if it's an absolute path
-  if (!path.isAbsolute(filePath)) {
-    const suggestedPath = path.resolve(filePath)
-    throw new Error(
-      `The path ${filePath} is not an absolute path, it should start with \`/\`. Maybe you meant ${suggestedPath}?`
-    )
-  }
-
-  // Check for directory traversal - reject paths containing '..' segments
-  const normalized = path.normalize(filePath)
-  if (normalized.includes('..')) {
-    throw new Error(`Invalid path: path traversal is not allowed`)
-  }
-}
-
-/**
- * Checks if a file exists.
- */
-async function fileExists(filePath: string): Promise<boolean> {
-  try {
-    await fs.access(filePath)
-    return true
-  } catch {
-    return false
-  }
-}
-
-/**
- * Checks if a path is a directory.
- */
-async function isDirectory(filePath: string): Promise<boolean> {
-  try {
-    const stats = await fs.stat(filePath)
-    return stats.isDirectory()
-  } catch {
-    return false
-  }
-}
-
-/**
- * Checks file size against limit.
- */
-async function checkFileSize(filePath: string, maxSize: number = DEFAULT_MAX_FILE_SIZE): Promise<void> {
-  const stats = await fs.stat(filePath).catch((err) => {
-    throw new Error(`Failed to check file size: ${err}`)
-  })
-
-  if (stats.size > maxSize) {
-    throw new Error(`File size (${stats.size} bytes) exceeds maximum allowed size (${maxSize} bytes)`)
-  }
-}
 
 /**
  * Formats file content with line numbers (cat -n style).
@@ -174,24 +140,21 @@ function makeOutput(fileContent: string, fileDescriptor: string, initLine: numbe
 /**
  * Lists directory contents up to 2 levels deep, excluding hidden files.
  */
-async function listDirectory(dirPath: string): Promise<string> {
+async function listDirectory(sandbox: Sandbox, dirPath: string): Promise<string> {
   const items: string[] = []
 
-  async function walk(currentPath: string, depth: number): Promise<void> {
+  async function walk(currentPath: string, prefix: string, depth: number): Promise<void> {
     try {
-      const entries = await fs.readdir(currentPath, { withFileTypes: true })
+      const entries = await sandbox.listFiles(currentPath)
 
       for (const entry of entries) {
-        // Skip hidden files/directories
         if (entry.name.startsWith('.')) continue
 
-        const fullPath = path.join(currentPath, entry.name)
-        const relativePath = path.relative(dirPath, fullPath)
-        items.push(relativePath || entry.name)
+        const relativePath = prefix ? `${prefix}/${entry.name}` : entry.name
+        items.push(relativePath)
 
-        // Continue walking if we haven't reached max depth yet
-        if (entry.isDirectory() && depth < MAX_DIRECTORY_DEPTH) {
-          await walk(fullPath, depth + 1)
+        if (entry.isDir && depth < MAX_DIRECTORY_DEPTH) {
+          await walk(`${currentPath}/${entry.name}`, relativePath, depth + 1)
         }
       }
     } catch {
@@ -199,7 +162,7 @@ async function listDirectory(dirPath: string): Promise<string> {
     }
   }
 
-  await walk(dirPath, 0)
+  await walk(dirPath, '', 0)
 
   const result = items.sort().join('\n')
   return `Here's the files and directories up to 2 levels deep in ${dirPath}, excluding hidden items:\n${result}\n`
@@ -209,31 +172,31 @@ async function listDirectory(dirPath: string): Promise<string> {
  * Handles the view command.
  */
 async function handleView(
+  sandbox: Sandbox,
   filePath: string,
-  viewRange: [number, number] | undefined,
-  fileReader: IFileReader
+  viewRange: [number, number] | undefined
 ): Promise<string> {
-  validatePath('view', filePath)
+  const info = await sandbox.statFile(filePath)
 
-  const exists = await fileExists(filePath)
-  if (!exists) {
-    throw new Error(`The path ${filePath} does not exist. Please provide a valid path.`)
-  }
-
-  const isDir = await isDirectory(filePath)
-
-  if (isDir) {
+  if (info.isDir) {
     if (viewRange) {
       throw new Error('The `view_range` parameter is not allowed when `path` points to a directory.')
     }
-    return await listDirectory(filePath)
+    return await listDirectory(sandbox, filePath)
   }
 
-  // Check file size before reading
-  await checkFileSize(filePath)
+  if (info.size !== undefined && info.size > DEFAULT_MAX_FILE_SIZE) {
+    throw new Error(`File size (${info.size} bytes) exceeds maximum allowed size (${DEFAULT_MAX_FILE_SIZE} bytes)`)
+  }
 
-  // Read file content - only if not a directory
-  const fileContent = await fileReader.read(filePath)
+  const raw = await sandbox.readFile(filePath)
+
+  // Null byte heuristic for binary detection (same as git)
+  if (raw.includes(0)) {
+    return `Binary file: ${filePath} (${raw.length} bytes)`
+  }
+
+  const fileContent = new TextDecoder().decode(raw)
 
   let initLine = 1
   let contentToShow = fileContent
@@ -276,24 +239,21 @@ async function handleView(
 /**
  * Handles the create command.
  */
-async function handleCreate(filePath: string, fileText: string): Promise<string> {
+async function handleCreate(sandbox: Sandbox, filePath: string, fileText: string): Promise<string> {
   if (fileText === undefined) {
     throw new Error('Parameter `file_text` is required for command: create')
   }
 
-  validatePath('create', filePath)
+  const exists = await sandbox.statFile(filePath).then(
+    () => true,
+    () => false
+  )
 
-  const exists = await fileExists(filePath)
   if (exists) {
     throw new Error(`File already exists at: ${filePath}. Cannot overwrite files using command \`create\`.`)
   }
 
-  // Create parent directories if needed
-  const dir = path.dirname(filePath)
-  await fs.mkdir(dir, { recursive: true })
-
-  // Write file
-  await fs.writeFile(filePath, fileText, 'utf-8')
+  await sandbox.writeText(filePath, fileText)
 
   return `File created successfully at: ${filePath}`
 }
@@ -302,153 +262,177 @@ async function handleCreate(filePath: string, fileText: string): Promise<string>
  * Handles the str_replace command.
  */
 async function handleStrReplace(
+  sandbox: Sandbox,
+  undoMap: Map<string, string>,
   filePath: string,
   oldStr: string,
-  newStr: string | undefined,
-  fileReader: IFileReader
+  newStr: string
 ): Promise<string> {
-  if (oldStr === undefined) {
-    throw new Error('Parameter `old_str` is required for command: str_replace')
-  }
+  const info = await sandbox.statFile(filePath)
 
-  validatePath('str_replace', filePath)
-
-  const exists = await fileExists(filePath)
-  if (!exists) {
-    throw new Error(`The path ${filePath} does not exist. Please provide a valid path.`)
-  }
-
-  const isDir = await isDirectory(filePath)
-  if (isDir) {
+  if (info.isDir) {
     throw new Error(`The path ${filePath} is a directory and only the \`view\` command can be used on directories`)
   }
 
-  await checkFileSize(filePath)
+  if (info.size !== undefined && info.size > DEFAULT_MAX_FILE_SIZE) {
+    throw new Error(`File size (${info.size} bytes) exceeds maximum allowed size (${DEFAULT_MAX_FILE_SIZE} bytes)`)
+  }
 
-  // Read file content
-  let fileContent = await fileReader.read(filePath)
+  const fileContent = await sandbox.readText(filePath)
 
-  // Expand tabs in content and search string
-  fileContent = fileContent.replace(/\t/g, '        ')
-  const expandedOldStr = oldStr.replace(/\t/g, '        ')
-  const expandedNewStr = newStr ? newStr.replace(/\t/g, '        ') : ''
-
-  // Check if old_str is unique
-  const occurrences = (fileContent.match(new RegExp(escapeRegExp(expandedOldStr), 'g')) || []).length
-
-  if (occurrences === 0) {
+  const first = fileContent.indexOf(oldStr)
+  if (first === -1) {
     throw new Error(`No replacement was performed, old_str \`${oldStr}\` did not appear verbatim in ${filePath}.`)
   }
 
-  if (occurrences > 1) {
+  if (fileContent.indexOf(oldStr, first + 1) !== -1) {
     const lines = fileContent.split('\n')
-    const lineNumbers = lines
-      .map((line, index) => (line.includes(expandedOldStr) ? index + 1 : -1))
-      .filter((num) => num !== -1)
+    const lineNumbers = lines.map((line, index) => (line.includes(oldStr) ? index + 1 : -1)).filter((num) => num !== -1)
     throw new Error(
       `No replacement was performed. Multiple occurrences of old_str \`${oldStr}\` in lines ${JSON.stringify(lineNumbers)}. Please ensure it is unique`
     )
   }
 
-  // Perform replacement
-  const newFileContent = fileContent.replace(expandedOldStr, () => expandedNewStr)
+  undoMap.set(filePath, fileContent)
 
-  // Write back to file
-  await fs.writeFile(filePath, newFileContent, 'utf-8')
+  const newFileContent = fileContent.slice(0, first) + newStr + fileContent.slice(first + oldStr.length)
 
-  // Create snippet
-  const replacementLine = fileContent.substring(0, fileContent.indexOf(expandedOldStr)).split('\n').length - 1
-  const insertedLines = expandedNewStr.split('\n').length
-  const originalLines = expandedOldStr.split('\n').length
-  const lineDifference = insertedLines - originalLines
+  await sandbox.writeText(filePath, newFileContent)
+
+  const replacementLine = fileContent.slice(0, first).split('\n').length - 1
+  const lineDifference = newStr.split('\n').length - oldStr.split('\n').length
 
   const lines = newFileContent.split('\n')
   const startLine = Math.max(0, replacementLine - SNIPPET_LINES)
   const endLine = Math.min(lines.length, replacementLine + SNIPPET_LINES + lineDifference + 1)
-  const snippetLines = lines.slice(startLine, endLine)
-  const snippet = snippetLines.join('\n')
+  const snippet = lines.slice(startLine, endLine).join('\n')
 
-  const successMsg = `The file ${filePath} has been edited. ${makeOutput(snippet, `a snippet of ${filePath}`, startLine + 1)}Review the changes and make sure they are as expected. Edit the file again if necessary.`
-
-  return successMsg
+  return `The file ${filePath} has been edited. ${makeOutput(snippet, `a snippet of ${filePath}`, startLine + 1)}Review the changes and make sure they are as expected. Edit the file again if necessary.`
 }
 
 /**
  * Handles the insert command.
  */
 async function handleInsert(
+  sandbox: Sandbox,
+  undoMap: Map<string, string>,
   filePath: string,
   insertLine: number,
-  newStr: string,
-  fileReader: IFileReader
+  newStr: string
 ): Promise<string> {
   if (insertLine === undefined || newStr === undefined) {
     throw new Error('Parameters `insert_line` and `new_str` are required for command: insert')
   }
 
-  validatePath('insert', filePath)
+  const info = await sandbox.statFile(filePath)
 
-  const exists = await fileExists(filePath)
-  if (!exists) {
-    throw new Error(`The path ${filePath} does not exist. Please provide a valid path.`)
-  }
-
-  const isDir = await isDirectory(filePath)
-  if (isDir) {
+  if (info.isDir) {
     throw new Error(`The path ${filePath} is a directory and only the \`view\` command can be used on directories`)
   }
 
-  await checkFileSize(filePath)
+  if (info.size !== undefined && info.size > DEFAULT_MAX_FILE_SIZE) {
+    throw new Error(`File size (${info.size} bytes) exceeds maximum allowed size (${DEFAULT_MAX_FILE_SIZE} bytes)`)
+  }
 
-  // Read file content
-  let fileText = await fileReader.read(filePath)
-
-  // Expand tabs
-  fileText = fileText.replace(/\t/g, '        ')
-  const expandedNewStr = newStr.replace(/\t/g, '        ')
+  const fileText = await sandbox.readText(filePath)
 
   const fileTextLines = fileText.split('\n')
   const nLines = fileTextLines.length
 
-  // Validate insert_line
   if (insertLine < 0 || insertLine > nLines) {
     throw new Error(
       `Invalid \`insert_line\` parameter: ${insertLine}. It should be within the range of lines of the file: [0, ${nLines}]`
     )
   }
 
-  // Perform insertion
-  const newStrLines = expandedNewStr.split('\n')
+  const newStrLines = newStr.split('\n')
+  const newFileTextLines =
+    fileText === ''
+      ? newStrLines
+      : [...fileTextLines.slice(0, insertLine), ...newStrLines, ...fileTextLines.slice(insertLine)]
 
-  // Handle empty file case
-  let newFileTextLines: string[]
-  if (fileText === '') {
-    newFileTextLines = newStrLines
-  } else {
-    newFileTextLines = [...fileTextLines.slice(0, insertLine), ...newStrLines, ...fileTextLines.slice(insertLine)]
-  }
+  undoMap.set(filePath, fileText)
 
   const newFileText = newFileTextLines.join('\n')
 
-  // Write back to file
-  await fs.writeFile(filePath, newFileText, 'utf-8')
+  await sandbox.writeText(filePath, newFileText)
 
-  // Create snippet - show lines around the insertion point
-  // Show 4 lines before the insertion line and 4 lines after
   const snippetStartLine = Math.max(0, insertLine - SNIPPET_LINES)
   const snippetEndLine = Math.min(newFileTextLines.length, insertLine + newStrLines.length + SNIPPET_LINES)
-  const snippetLines = newFileTextLines.slice(snippetStartLine, snippetEndLine)
-  const snippet = snippetLines.join('\n')
-  const startLine = snippetStartLine + 1
+  const snippet = newFileTextLines.slice(snippetStartLine, snippetEndLine).join('\n')
 
-  const successMsg = `The file ${filePath} has been edited. ${makeOutput(snippet, 'a snippet of the edited file', startLine)}Review the changes and make sure they are as expected (correct indentation, no duplicate lines, etc). Edit the file again if necessary.`
+  return `The file ${filePath} has been edited. ${makeOutput(snippet, 'a snippet of the edited file', snippetStartLine + 1)}Review the changes and make sure they are as expected (correct indentation, no duplicate lines, etc). Edit the file again if necessary.`
+}
 
-  return successMsg
+async function handleGrep(
+  sandbox: Sandbox,
+  dirPath: string,
+  pattern: string,
+  include: string | undefined,
+  maxResults: number | undefined
+): Promise<string> {
+  const includeFlag = include ? ` --include=${shellQuote(include)}` : ''
+  const result = await sandbox.execute(`grep -rn${includeFlag} ${shellQuote(pattern)} ${shellQuote(dirPath)}`)
+
+  if (result.exitCode === 1) {
+    return `No matches found for pattern \`${pattern}\` in ${dirPath}`
+  }
+  if (result.exitCode !== 0) {
+    throw new Error(result.stderr || `grep failed with exit code ${result.exitCode}`)
+  }
+
+  const lines = result.stdout.trim().split('\n')
+  const limited = maxResults ? lines.slice(0, maxResults) : lines
+
+  let output = limited.join('\n')
+  if (maxResults && lines.length > maxResults) {
+    output += `\n\n(${lines.length - maxResults} more results truncated)`
+  }
+
+  return output
+}
+
+async function handleGlob(
+  sandbox: Sandbox,
+  dirPath: string,
+  pattern: string,
+  maxResults: number | undefined
+): Promise<string> {
+  const flag = pattern.includes('/') ? '-path' : '-name'
+  const result = await sandbox.execute(`find ${shellQuote(dirPath)} ${flag} ${shellQuote(pattern)}`)
+
+  if (result.exitCode !== 0) {
+    throw new Error(result.stderr || `find failed with exit code ${result.exitCode}`)
+  }
+
+  const paths = result.stdout.trim().split('\n').filter(Boolean)
+
+  if (paths.length === 0) {
+    return `No files found matching pattern \`${pattern}\` in ${dirPath}`
+  }
+
+  const limited = maxResults ? paths.slice(0, maxResults) : paths
+
+  let output = limited.join('\n')
+  if (maxResults && paths.length > maxResults) {
+    output += `\n\n(${paths.length - maxResults} more results truncated)`
+  }
+
+  return output
 }
 
 /**
- * Escapes special regex characters in a string.
+ * Handles the undo command.
  */
-function escapeRegExp(string: string): string {
-  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+async function handleUndo(sandbox: Sandbox, undoMap: Map<string, string>, filePath: string): Promise<string> {
+  const previous = undoMap.get(filePath)
+
+  if (previous === undefined) {
+    throw new Error(`Nothing to undo for ${filePath}`)
+  }
+
+  await sandbox.writeText(filePath, previous)
+  undoMap.delete(filePath)
+
+  return `Reverted: ${filePath}`
 }

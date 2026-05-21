@@ -8,6 +8,7 @@ import {
   type LocalAgent,
   type localAgentSymbol,
 } from '../types/agent.js'
+import type { Sandbox } from '../sandbox/base.js'
 import { BedrockModel } from '../models/bedrock.js'
 import {
   contentBlockFromData,
@@ -220,6 +221,14 @@ export type AgentConfig = {
    * Defaults to `'concurrent'`. See {@link ToolExecutorStrategy} for details.
    */
   toolExecutor?: ToolExecutorStrategy
+  /**
+   * Sandbox for tool code execution and filesystem access.
+   * When provided, sandbox default tools (fileEditor, exec, codeInterpreter) are
+   * auto-registered and execute within the sandbox.
+   * When omitted, no sandbox tools are auto-registered.
+   * Pass `false` to explicitly disable sandbox and sandbox tool auto-registration.
+   */
+  sandbox?: Sandbox | false
 }
 
 /** Default name assigned to agents when none is provided. */
@@ -261,6 +270,19 @@ export class Agent implements LocalAgent, InvokableAgent {
    * The model provider used by the agent for inference.
    */
   public model: Model
+
+  /**
+   * Sandbox for tool code execution and filesystem access.
+   * Set immediately if passed via config, otherwise defaults to NotASandboxLocalEnvironment during initialize().
+   */
+  private _sandbox: Sandbox | false | undefined
+
+  get sandbox(): Sandbox {
+    if (!this._sandbox) {
+      throw new Error('Sandbox is not available. Pass a Sandbox instance to the agent config to enable it.')
+    }
+    return this._sandbox
+  }
 
   /**
    * The system prompt to pass to the model provider.
@@ -407,6 +429,8 @@ export class Agent implements LocalAgent, InvokableAgent {
       this._appendMessageAndFireHooks(message, invocationState)
     )
 
+    this._sandbox = config?.sandbox
+
     this._initialized = false
   }
 
@@ -443,6 +467,17 @@ export class Agent implements LocalAgent, InvokableAgent {
       return
     }
 
+    const userProvidedSandbox = this._sandbox !== undefined && this._sandbox !== false
+
+    if (!userProvidedSandbox && typeof process !== 'undefined' && process.versions?.node) {
+      const { NotASandboxLocalEnvironment } = await import('../sandbox/not-a-sandbox-local-environment.js')
+      this._sandbox = new NotASandboxLocalEnvironment()
+    }
+
+    if (this._sandbox) {
+      await this._sandbox.start()
+    }
+
     // Initialize MCP clients and register their tools
     await Promise.all(
       this._mcpClients.map(async (client) => {
@@ -456,6 +491,15 @@ export class Agent implements LocalAgent, InvokableAgent {
     )
 
     await this._pluginRegistry.initialize(this)
+
+    if (userProvidedSandbox) {
+      const { SANDBOX_DEFAULT_TOOLS } = await import('../vended-tools/sandbox-default-tools.js')
+      for (const tool of SANDBOX_DEFAULT_TOOLS) {
+        if (!this._toolRegistry.get(tool.name)) {
+          this._toolRegistry.add(tool)
+        }
+      }
+    }
 
     await this._hooksRegistry.invokeCallbacks(new InitializedEvent({ agent: this }))
 
