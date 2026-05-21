@@ -28,7 +28,7 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
-    "wasmtime>=37.0.0,<38.0.0",
+    "wasmtime>=37.0.0,<45.0.0",
 ]
 
 
