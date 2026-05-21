@@ -247,7 +247,7 @@ sdk-typescript/
 │   ├── vitest.config.ts          # Test configuration (unit + guest projects)
 │   └── tsconfig.json             # TypeScript type-check configuration
 │
-├── strands-py/                   # Python SDK bindings (WASM-based)
+├── strands-py-wasm/               # Python SDK bindings (WASM-based)
 │   ├── strands/                  # Python package source
 │   │   ├── _generated/           # Auto-generated type bindings
 │   │   ├── agent/                # Agent implementation
@@ -295,7 +295,7 @@ sdk-typescript/
 │   ├── tools.wit                 # Tool interfaces
 │   └── vended.wit                # Vended plugin/tool interfaces
 │
-├── docs/                         # Project documentation
+├── dev-docs/                     # Project documentation
 │   ├── TESTING.md                # Comprehensive testing guidelines
 │   ├── DEPENDENCIES.md           # Dependency management guidelines
 │   ├── DIVERGENCES.md            # Divergences from Python SDK
@@ -346,14 +346,14 @@ sdk-typescript/
 - **`strands-wasm/generated/`**: Auto-generated WIT interface type declarations for WASM
 - **`strands-wasm/test/guest/`**: Tests that load the compiled WASM component
 - **`strands-wasm/docs/`**: WASM-specific development documentation
-- **`strands-py/`**: Python SDK bindings powered by the TS SDK compiled to WASM
-- **`strands-py/strands/`**: Python package source with agent, models, multiagent, session, tools, and type modules
-- **`strands-py/scripts/`**: Build and codegen scripts (type generation from WIT definitions)
-- **`strands-py/tests_integ/`**: Python integration tests
+- **`strands-py-wasm/`**: Python SDK bindings powered by the TS SDK compiled to WASM
+- **`strands-py-wasm/strands/`**: Python package source with agent, models, multiagent, session, tools, and type modules
+- **`strands-py-wasm/scripts/`**: Build and codegen scripts (type generation from WIT definitions)
+- **`strands-py-wasm/tests_integ/`**: Python integration tests
 - **`strandly/`**: Developer CLI tooling for local development workflows (install on PATH via `npm install && npm link -w strandly`, then call `strandly …`)
 - **`wit/`**: WebAssembly Interface Type (WIT) definitions defining the contract between the TS SDK and WASM hosts
 - **`wit/deps/`**: External WIT dependency interfaces (clocks, io)
-- **`docs/`**: Project documentation (testing guidelines, dependency management, divergences, PR guidelines)
+- **`dev-docs/`**: Project documentation (testing guidelines, dependency management, divergences, PR guidelines)
 - **`.github/workflows/`**: CI/CD automation and quality gates
 
 **IMPORTANT**: After making changes that affect the directory structure (adding new directories, moving files, or adding significant new files), you MUST update this directory structure section to reflect the current state of the repository.
@@ -375,11 +375,11 @@ See [CONTRIBUTING.md - Development Environment](CONTRIBUTING.md#development-envi
 3. **Run quality checks** before committing (pre-commit hooks will run automatically)
 4. **Commit with conventional commits**: `feat:`, `fix:`, `refactor:`, `docs:`, etc.
 5. **Push to remote**: `git push origin agent-tasks/{ISSUE_NUMBER}`
-6. **Create pull request** following [PR.md](docs/PR.md) guidelines
+6. **Create pull request** following [PR.md](dev-docs/PR.md) guidelines
 
 ### 3. Pull Request Guidelines
 
-When creating pull requests, you **MUST** follow the guidelines in [PR.md](docs/PR.md). Key principles:
+When creating pull requests, you **MUST** follow the guidelines in [PR.md](dev-docs/PR.md). Key principles:
 
 - **Focus on WHY**: Explain motivation and user impact, not implementation details
 - **Document public API changes**: Show before/after code examples
@@ -387,7 +387,7 @@ When creating pull requests, you **MUST** follow the guidelines in [PR.md](docs/
 - **Target senior engineers**: Assume familiarity with the SDK
 - **Exclude implementation details**: Leave these to code comments and diffs
 
-See [PR.md](docs/PR.md) for the complete guidance and template.
+See [PR.md](dev-docs/PR.md) for the complete guidance and template.
 
 ### 4. Quality Gates
 
@@ -404,7 +404,7 @@ All checks must pass before commit is allowed.
 
 ### 5. Testing Guidelines
 
-When writing tests, you **MUST** follow the guidelines in [docs/TESTING.md](docs/TESTING.md). Key topics covered:
+When writing tests, you **MUST** follow the guidelines in [dev-docs/TESTING.md](dev-docs/TESTING.md). Key topics covered:
 
 - Test organization and file location
 - Test batching strategy
@@ -412,7 +412,7 @@ When writing tests, you **MUST** follow the guidelines in [docs/TESTING.md](docs
 - Test coverage requirements
 - Multi-environment testing (Node.js and browser)
 
-See [TESTING.md](docs/TESTING.md) for the complete testing reference.
+See [TESTING.md](dev-docs/TESTING.md) for the complete testing reference.
 
 ## Coding Patterns and Best Practices
 
@@ -921,7 +921,7 @@ expect(provider.getConfig().params.temperature).toBe(0.5)
 
 ### Dependency Management
 
-When adding or modifying dependencies, you **MUST** follow the guidelines in [docs/DEPENDENCIES.md](docs/DEPENDENCIES.md). Key points:
+When adding or modifying dependencies, you **MUST** follow the guidelines in [dev-docs/DEPENDENCIES.md](dev-docs/DEPENDENCIES.md). Key points:
 
 - **`dependencies`**: Core SDK functionality that users don't interact with directly
 - **`peerDependencies`**: Dependencies that cross API boundaries (users construct/pass instances)
@@ -1026,8 +1026,8 @@ When responding to PR feedback:
 ### Integration with Other Files
 
 - **CONTRIBUTING.md**: Contains testing/setup commands and human contribution guidelines
-- **docs/TESTING.md**: Comprehensive testing guidelines (MUST follow when writing tests)
-- **docs/PR.md**: Pull request guidelines and template
+- **dev-docs/TESTING.md**: Comprehensive testing guidelines (MUST follow when writing tests)
+- **dev-docs/PR.md**: Pull request guidelines and template
 - **README.md**: Public-facing documentation, links to strandsagents.com
 - **package.json**: Root workspace config that delegates to strands-ts
 - **strands-ts/package.json**: SDK package config, dependencies, and npm scripts

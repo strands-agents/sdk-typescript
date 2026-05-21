@@ -13,7 +13,7 @@ dependencies = [
     # Test runner for the shared venv.
     "pytest>=9.0.3",
     "pytest-asyncio>=1.3.0",
-    # Optional runtime extras used by strands-py integration tests.
+    # Optional runtime extras used by strands-py-wasm integration tests.
     "pydantic>=2.13.3",
     "docstring-parser>=0.18.0",
     "boto3>=1.43.2",
@@ -30,13 +30,13 @@ cache_dir = ".pytest_cache"
 
 
 # Ruff config lives here because ruff walks up from the file it's linting
-# and the monorepo has a single style. strands-py/pyproject.toml does not
+# and the monorepo has a single style. strands-py-wasm/pyproject.toml does not
 # carry its own ruff table.
 [tool.ruff]
 line-length = 120
-include = ["strands-py/src/**/*.py", "strandly/scripts/**/*.py"]
+include = ["strands-py-wasm/src/**/*.py", "strandly/scripts/**/*.py"]
 # _generated.py is machine-written; neither lint nor format enforce rules on it.
-extend-exclude = ["strands-py/src/strands/_generated.py"]
+extend-exclude = ["strands-py-wasm/src/strands/_generated.py"]
 
 [tool.ruff.lint]
 select = [
@@ -54,7 +54,7 @@ select = [
 # (**/node_modules, **/__pycache__, **/.*); setting it would replace
 # those, not merge.
 [tool.pyright]
-include = ["strands-py/src/strands"]
+include = ["strands-py-wasm/src/strands"]
 pythonVersion = "3.10"
 pythonPlatform = "All"
 typeCheckingMode = "standard"

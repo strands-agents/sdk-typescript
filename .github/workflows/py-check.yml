@@ -31,20 +31,20 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e .
 
-      - name: Ruff lint (strands-py + strandly scripts)
-        run: ruff check strands-py/src strandly/scripts
+      - name: Ruff lint (strands-py-wasm + strandly scripts)
+        run: ruff check strands-py-wasm/src strandly/scripts
 
       - name: Ruff format check
-        run: ruff format --check strands-py/src strandly/scripts
+        run: ruff format --check strands-py-wasm/src strandly/scripts
 
       - name: Verify generated types match wit/
         run: python strandly/scripts/generate_types.py --check
 
-      - name: Pyright on strands-py
-        run: pyright strands-py/src/strands
+      - name: Pyright on strands-py-wasm
+        run: pyright strands-py-wasm/src/strands
 
       - name: Smoke-import strands
-        working-directory: strands-py
+        working-directory: strands-py-wasm
         run: |
           pip install -e .
           python -c "import strands; assert strands.Agent; print('ok')"

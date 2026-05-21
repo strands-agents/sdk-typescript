@@ -5,6 +5,22 @@ import type {
   BeforeModelCallEvent,
   AfterModelCallEvent,
 } from '../hooks/events.js'
+import type { JSONValue } from '../types/json.js'
+
+const APPROVED_RESPONSES = new Set(['y', 'yes'])
+
+/**
+ * Default evaluate function for the confirm action.
+ * Accepts: true, 'y'/'yes' (case-insensitive, whitespace-trimmed).
+ *
+ * @param response - The human's response value to evaluate.
+ * @returns true if the response is considered an approval, false otherwise.
+ */
+export function defaultEvaluate(response: JSONValue): boolean {
+  if (response === true) return true
+  if (typeof response === 'string') return APPROVED_RESPONSES.has(response.toLowerCase().trim())
+  return false
+}
 
 export type LifecycleEvent =
   | BeforeInvocationEvent
@@ -66,23 +82,33 @@ export type Deny = { type: 'deny'; reason: string }
 export type Guide = { type: 'guide'; feedback: string; reason?: string }
 
 /**
- * Pause for human approval. Calls event.interrupt() to halt agent execution
- * until the user responds. Only supported on beforeToolCall.
+ * Request human approval before proceeding. Only supported on beforeToolCall.
  *
- * @param prompt - The message shown to the human for approval. Not shown to the model.
- * @param reason - Optional metadata for debugging/logging. Not shown to the model.
+ * Two modes depending on whether `response` is provided:
+ * - With `response`: passed as a preemptive value to the interrupt system, agent
+ *   never pauses. Handlers collect the response themselves (e.g. via readline).
+ * - Without `response`: breaks out of the agent loop to pause for external resume.
+ *
+ * The response is checked against `evaluate` (defaults to accepting `true` or
+ * `'y'`/`'yes'` case-insensitive). If denied, sets event.cancel.
  *
  * @example
  * ```typescript
- * override beforeToolCall(event: BeforeToolCallEvent): InterventionAction {
- *   if (this.requiresApproval(event.toolUse.name)) {
- *     return { type: 'interrupt', prompt: `Approve ${event.toolUse.name}?` }
- *   }
- *   return { type: 'proceed' }
- * }
+ * // Inline mode (handler collected the response already)
+ * const answer = await rl.question(`${prompt} (y/n): `)
+ * return confirm(prompt, { response: answer })
+ *
+ * // Stateless mode (interrupt/resume)
+ * return confirm(`Approve ${event.toolUse.name}?`)
  * ```
  */
-export type Interrupt = { type: 'interrupt'; prompt: string; reason?: string }
+export type Confirm = {
+  type: 'confirm'
+  prompt: string
+  reason?: string
+  response?: JSONValue
+  evaluate?: (response: JSONValue) => boolean
+}
 
 /**
  * Modify event content in-place. The `apply` function mutates the event before
@@ -116,40 +142,67 @@ export type Transform = { type: 'transform'; apply: (event: LifecycleEvent) => v
  * | Proceed   | —                | —              | —               | —             | —              |
  * | Deny      | cancel           | cancel         | cancel          | —             | —              |
  * | Guide     | cancel+          | cancel+        | inject          | —             | inject + retry |
- * | Interrupt | —                | interrupt      | —               | —             | —              |
+ * | Confirm   | —                | confirm        | —               | —             | —              |
  * | Transform | apply            | apply          | apply           | apply         | apply          |
  *
  * — = no-op (logged in audit trail, warns at runtime)
  * cancel = sets event.cancel, short-circuits (remaining handlers skipped)
  * cancel+ = sets event.cancel with accumulated feedback from all guiding handlers
- * interrupt = calls event.interrupt() for native pause/resume (human-in-the-loop)
+ * confirm = uses preemptive response or interrupt, checks with evaluate, sets cancel if denied
  * inject = appends accumulated feedback as a user message so the model sees it on this call
  * inject + retry = appends accumulated feedback and retries so the model sees guidance
  * apply = calls action.apply(event) for in-place mutation, later handlers see the change
  */
-export type InterventionAction = Proceed | Deny | Guide | Interrupt | Transform
+export type InterventionAction = Proceed | Deny | Guide | Confirm | Transform
 
-/** Allow the operation to continue. */
-export function proceed(reason?: string): Proceed {
-  return { type: 'proceed', ...(reason !== undefined && { reason }) }
+/**
+ * Allow the operation to continue.
+ * @param options - Options: reason (debug metadata).
+ */
+export function proceed(options?: { reason?: string }): Proceed {
+  return { type: 'proceed', ...options }
 }
 
-/** Block the operation. */
+/**
+ * Block the operation.
+ * @param reason - Why the operation was blocked. Shown to the model.
+ */
 export function deny(reason: string): Deny {
   return { type: 'deny', reason }
 }
 
-/** Provide feedback to steer behavior. */
-export function guide(feedback: string, reason?: string): Guide {
-  return { type: 'guide', feedback, ...(reason !== undefined && { reason }) }
+/**
+ * Provide feedback to steer behavior.
+ * @param feedback - The guidance text shown to the model.
+ * @param options - Options: reason (debug metadata).
+ */
+export function guide(feedback: string, options?: { reason?: string }): Guide {
+  return { type: 'guide', feedback, ...options }
 }
 
-/** Pause for human approval. */
-export function interrupt(prompt: string, reason?: string): Interrupt {
-  return { type: 'interrupt', prompt, ...(reason !== undefined && { reason }) }
+/**
+ * Request human approval.
+ * @param prompt - Message shown to the human. Not shown to the model.
+ * @param options - Options: reason (debug metadata), evaluate (custom response
+ * validator, defaults to accepting true or y/yes case-insensitive), response
+ * (pre-collected value to skip pausing the agent).
+ */
+export function confirm(
+  prompt: string,
+  options?: {
+    reason?: string
+    response?: JSONValue
+    evaluate?: (response: JSONValue) => boolean
+  }
+): Confirm {
+  return { type: 'confirm', prompt, evaluate: defaultEvaluate, ...options }
 }
 
-/** Modify event content in-place. */
-export function transform(apply: (event: LifecycleEvent) => void, reason?: string): Transform {
-  return { type: 'transform', apply, ...(reason !== undefined && { reason }) }
+/**
+ * Modify event content in-place.
+ * @param apply - Function that mutates the event.
+ * @param options - Options: reason (debug metadata).
+ */
+export function transform(apply: (event: LifecycleEvent) => void, options?: { reason?: string }): Transform {
+  return { type: 'transform', apply, ...options }
 }
