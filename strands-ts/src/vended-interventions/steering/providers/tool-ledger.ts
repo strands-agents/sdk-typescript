@@ -6,8 +6,7 @@
  * based on agent behavior patterns and history.
  */
 
-import { AfterToolCallEvent, BeforeToolCallEvent } from '../../../hooks/events.js'
-import type { LocalAgent } from '../../../types/agent.js'
+import type { AfterToolCallEvent, BeforeToolCallEvent } from '../../../hooks/events.js'
 import type { ToolResultStatus } from '../../../tools/types.js'
 import type { JSONValue } from '../../../types/json.js'
 import type { SteeringContextData, SteeringContextProvider } from './context-provider.js'
@@ -73,12 +72,7 @@ export class ToolLedgerProvider implements SteeringContextProvider {
     }
   }
 
-  registerHooks(agent: LocalAgent): void {
-    agent.addHook(BeforeToolCallEvent, (event) => this._recordPending(event))
-    agent.addHook(AfterToolCallEvent, (event) => this._recordResult(event))
-  }
-
-  private _recordPending(event: BeforeToolCallEvent): void {
+  beforeToolCall(event: BeforeToolCallEvent): void {
     this._toolCalls.push({
       startTime: new Date().toISOString(),
       id: event.toolUse.toolUseId,
@@ -91,7 +85,7 @@ export class ToolLedgerProvider implements SteeringContextProvider {
     }
   }
 
-  private _recordResult(event: AfterToolCallEvent): void {
+  afterToolCall(event: AfterToolCallEvent): void {
     const toolUseId = event.toolUse.toolUseId
     for (let i = this._toolCalls.length - 1; i >= 0; i--) {
       const call = this._toolCalls[i]
