@@ -22,10 +22,15 @@
  * ```
  */
 
-import type { AfterModelCallEvent, BeforeToolCallEvent } from '../../../hooks/events.js'
+import type {
+  AfterModelCallEvent,
+  AfterToolCallEvent,
+  BeforeInvocationEvent,
+  BeforeModelCallEvent,
+  BeforeToolCallEvent,
+} from '../../../hooks/events.js'
 import { InterventionHandler } from '../../../interventions/handler.js'
 import { proceed, type Confirm, type Guide, type Proceed } from '../../../interventions/actions.js'
-import type { LocalAgent } from '../../../types/agent.js'
 import type { SteeringContextData, SteeringContextProvider } from '../providers/context-provider.js'
 
 type Awaitable<T> = T | Promise<T>
@@ -50,9 +55,10 @@ export interface SteeringHandlerConfig {
  * one agent, ensure their names are distinct — `InterventionRegistry` rejects
  * duplicates.
  *
- * Subclasses should override {@link evaluateToolCall} and
- * {@link evaluateModelOutput} to carry the narrow steering contract; the base
- * class wires these into the intervention lifecycle.
+ * The intervention lifecycle methods (`beforeToolCall`, `afterModelCall`, etc.)
+ * are reserved for feeding providers and delegating to the narrow steering
+ * methods. Subclasses should override {@link evaluateToolCall} and
+ * {@link evaluateModelOutput} instead.
  */
 export abstract class SteeringHandler extends InterventionHandler {
   abstract override readonly name: string
@@ -64,19 +70,42 @@ export abstract class SteeringHandler extends InterventionHandler {
     this._contextProviders = config?.contextProviders ?? []
   }
 
-  override registerHooks(agent: LocalAgent): void {
-    for (const provider of this._contextProviders) {
-      provider.registerHooks?.(agent)
-    }
-  }
+  // ---------------------------------------------------------------------------
+  // Steering moments — feed providers, then delegate to the narrow evaluator.
+  // ---------------------------------------------------------------------------
 
   override async beforeToolCall(event: BeforeToolCallEvent): Promise<Proceed | Guide | Confirm> {
+    for (const p of this._contextProviders) await p.beforeToolCall?.(event)
     return this.evaluateToolCall(event)
   }
 
   override async afterModelCall(event: AfterModelCallEvent): Promise<Proceed | Guide> {
+    for (const p of this._contextProviders) await p.afterModelCall?.(event)
     return this.evaluateModelOutput(event)
   }
+
+  // ---------------------------------------------------------------------------
+  // Observation moments — feed providers, always proceed.
+  // ---------------------------------------------------------------------------
+
+  override async beforeInvocation(event: BeforeInvocationEvent): Promise<Proceed> {
+    for (const p of this._contextProviders) await p.beforeInvocation?.(event)
+    return proceed()
+  }
+
+  override async afterToolCall(event: AfterToolCallEvent): Promise<Proceed> {
+    for (const p of this._contextProviders) await p.afterToolCall?.(event)
+    return proceed()
+  }
+
+  override async beforeModelCall(event: BeforeModelCallEvent): Promise<Proceed> {
+    for (const p of this._contextProviders) await p.beforeModelCall?.(event)
+    return proceed()
+  }
+
+  // ---------------------------------------------------------------------------
+  // Subclass extension points — narrow steering contract.
+  // ---------------------------------------------------------------------------
 
   /** Evaluate a pending tool call. Default: proceed. */
   protected evaluateToolCall(_event: BeforeToolCallEvent): Awaitable<Proceed | Guide | Confirm> {

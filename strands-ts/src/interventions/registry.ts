@@ -6,9 +6,9 @@ import {
   AfterModelCallEvent,
   type HookableEvent,
 } from '../hooks/events.js'
+import type { HookRegistry } from '../hooks/registry.js'
 import { HookOrder } from '../hooks/types.js'
 import { Message, TextBlock } from '../types/messages.js'
-import type { LocalAgent } from '../types/agent.js'
 import type { Guide, InterventionAction } from './actions.js'
 import { defaultEvaluate } from './actions.js'
 import { InterventionHandler } from './handler.js'
@@ -30,7 +30,7 @@ type LifecycleMethod = 'beforeInvocation' | 'beforeToolCall' | 'afterToolCall' |
 export class InterventionRegistry {
   private readonly _handlers: InterventionHandler[]
 
-  constructor(handlers: InterventionHandler[], agent: LocalAgent) {
+  constructor(handlers: InterventionHandler[], hookRegistry: HookRegistry) {
     const seen = new Set<string>()
     for (const h of handlers) {
       if (seen.has(h.name)) {
@@ -39,35 +39,32 @@ export class InterventionRegistry {
       seen.add(h.name)
     }
     this._handlers = handlers
-    for (const handler of handlers) {
-      handler.registerHooks?.(agent)
-    }
-    this._registerHooks(agent)
+    this._registerHooks(hookRegistry)
   }
 
-  private _registerHooks(agent: LocalAgent): void {
+  private _registerHooks(hookRegistry: HookRegistry): void {
     if (this._handlers.some((h) => h.beforeInvocation !== InterventionHandler.prototype.beforeInvocation)) {
-      agent.addHook(BeforeInvocationEvent, (e) => this._onBeforeInvocation(e), {
+      hookRegistry.addCallback(BeforeInvocationEvent, (e) => this._onBeforeInvocation(e), {
         order: HookOrder.INTERVENTION_INPUT,
       })
     }
     if (this._handlers.some((h) => h.beforeToolCall !== InterventionHandler.prototype.beforeToolCall)) {
-      agent.addHook(BeforeToolCallEvent, (e) => this._onBeforeToolCall(e), {
+      hookRegistry.addCallback(BeforeToolCallEvent, (e) => this._onBeforeToolCall(e), {
         order: HookOrder.INTERVENTION_INPUT,
       })
     }
     if (this._handlers.some((h) => h.afterToolCall !== InterventionHandler.prototype.afterToolCall)) {
-      agent.addHook(AfterToolCallEvent, (e) => this._onAfterToolCall(e), {
+      hookRegistry.addCallback(AfterToolCallEvent, (e) => this._onAfterToolCall(e), {
         order: HookOrder.INTERVENTION_OUTPUT,
       })
     }
     if (this._handlers.some((h) => h.beforeModelCall !== InterventionHandler.prototype.beforeModelCall)) {
-      agent.addHook(BeforeModelCallEvent, (e) => this._onBeforeModelCall(e), {
+      hookRegistry.addCallback(BeforeModelCallEvent, (e) => this._onBeforeModelCall(e), {
         order: HookOrder.INTERVENTION_INPUT,
       })
     }
     if (this._handlers.some((h) => h.afterModelCall !== InterventionHandler.prototype.afterModelCall)) {
-      agent.addHook(AfterModelCallEvent, (e) => this._onAfterModelCall(e), {
+      hookRegistry.addCallback(AfterModelCallEvent, (e) => this._onAfterModelCall(e), {
         order: HookOrder.INTERVENTION_OUTPUT,
       })
     }
