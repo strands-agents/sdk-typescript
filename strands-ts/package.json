@@ -79,6 +79,10 @@
     "./vended-plugins/context-offloader": {
       "types": "./dist/src/vended-plugins/context-offloader/index.d.ts",
       "default": "./dist/src/vended-plugins/context-offloader/index.js"
+    },
+    "./vended-interventions/hitl": {
+      "types": "./dist/src/vended-interventions/hitl/index.d.ts",
+      "default": "./dist/src/vended-interventions/hitl/index.js"
     }
   },
   "scripts": {
