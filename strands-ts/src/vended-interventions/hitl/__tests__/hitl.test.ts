@@ -216,37 +216,6 @@ describe('HumanInTheLoop', () => {
       expect(prompts[0]).toContain('bob@example.com')
     })
 
-    it('receives the BeforeToolCallEvent for context-aware routing', async () => {
-      const model = new MockMessageModel()
-        .addTurn({ type: 'toolUseBlock', name: 'shell', toolUseId: 'tool-1', input: { command: 'ls -la' } })
-        .addTurn({ type: 'textBlock', text: 'Done' })
-
-      let toolExecuted = false
-      const tool = createMockTool('shell', () => {
-        toolExecuted = true
-        return 'output'
-      })
-
-      const agent = new Agent({
-        model,
-        tools: [tool],
-        interventions: [
-          new HumanInTheLoop({
-            ask: async (_prompt, event) => {
-              const input = event.toolUse.input as { command: string }
-              if (input.command.startsWith('ls')) return 'yes'
-              return 'no'
-            },
-          }),
-        ],
-        printer: false,
-      })
-
-      const result = await agent.invoke('List files')
-      expect(result.stopReason).toBe('endTurn')
-      expect(toolExecuted).toBe(true)
-    })
-
     it('supports custom evaluate function', async () => {
       const model = new MockMessageModel()
         .addTurn({ type: 'toolUseBlock', name: 'myTool', toolUseId: 'tool-1', input: {} })

@@ -11,11 +11,11 @@ const TRUSTED_TOOLS_KEY = 'hitl:trustedTools'
  * CLI prompt that reads from stdin.
  * Serializes prompts so concurrent tool calls don't collide on stdin.
  */
-function createStdioAsk(includeTrust: boolean): (prompt: string, event: BeforeToolCallEvent) => Promise<JSONValue> {
+function createStdioAsk(includeTrust: boolean): (prompt: string) => Promise<JSONValue> {
   const options = includeTrust ? '(y/n/t)' : '(y/n)'
   let queue: Promise<unknown> = Promise.resolve()
 
-  return (prompt: string, _event: BeforeToolCallEvent) => {
+  return (prompt: string) => {
     const task = queue.then(async () => {
       const { createInterface } = await import('node:readline')
       const rl = createInterface({ input: process.stdin, output: process.stdout })
@@ -85,9 +85,8 @@ export interface HumanInTheLoopConfig {
    * - **Default** (omitted): uses interrupt/resume — agent pauses, caller resumes with response.
    * - **`'stdio'`**: prompts via CLI readline (Node.js only). Agent blocks inline until human responds.
    * - **Custom function**: your own async prompt logic (Slack, web UI, etc.). Agent blocks inline.
-   *   Receives the prompt string and the `BeforeToolCallEvent` for context-aware routing.
    */
-  ask?: ((prompt: string, event: BeforeToolCallEvent) => Promise<JSONValue>) | 'stdio'
+  ask?: ((prompt: string) => Promise<JSONValue>) | 'stdio'
 }
 
 /**
@@ -133,7 +132,7 @@ export class HumanInTheLoop extends InterventionHandler {
   private readonly _enableTrust: boolean
   private readonly _evaluateTrust: (response: JSONValue) => boolean
   private readonly _evaluate: ((response: JSONValue) => boolean) | undefined
-  private readonly _ask: ((prompt: string, event: BeforeToolCallEvent) => Promise<JSONValue>) | undefined
+  private readonly _ask: ((prompt: string) => Promise<JSONValue>) | undefined
 
   constructor(config?: HumanInTheLoopConfig) {
     super()
@@ -166,7 +165,7 @@ export class HumanInTheLoop extends InterventionHandler {
       return confirm(prompt, { evaluate })
     }
 
-    const response = await this._ask(prompt, event)
+    const response = await this._ask(prompt)
 
     if (!isNegated && this._enableTrust && this._evaluateTrust(response)) {
       this._trustTool(event, toolName)
