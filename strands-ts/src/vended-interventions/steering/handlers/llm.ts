@@ -1,0 +1,178 @@
+/**
+ * LLM-based steering handler that uses an LLM to provide contextual guidance.
+ */
+
+import { z } from 'zod'
+import { Agent } from '../../../agent/agent.js'
+import { confirm, guide, proceed, type Confirm, type Guide, type Proceed } from '../../../interventions/actions.js'
+import type { Model } from '../../../models/model.js'
+import { BedrockModel } from '../../../models/bedrock.js'
+import type { ContentBlock, SystemPrompt } from '../../../types/messages.js'
+import { CachePointBlock, TextBlock } from '../../../types/messages.js'
+import type { ToolUse } from '../../../tools/types.js'
+import type { BeforeToolCallEvent } from '../../../hooks/events.js'
+import type { SteeringContextData, SteeringContextProvider } from '../providers/context-provider.js'
+import { ToolLedgerProvider } from '../providers/tool-ledger.js'
+import { SteeringHandler } from './handler.js'
+
+// ---------------------------------------------------------------------------
+// Prompt building
+// ---------------------------------------------------------------------------
+
+/**
+ * Builds the evaluation prompt sent to the steering LLM.
+ * Return a string for simple prompts, or ContentBlock[] to use cache points.
+ */
+export type PromptBuilder = (context: SteeringContextData[], toolUse?: ToolUse) => string | ContentBlock[]
+
+/**
+ * Default prompt builder. Returns content blocks with a cache point
+ * between static instructions and dynamic context/event data.
+ */
+function defaultPromptBuilder(context: SteeringContextData[], toolUse?: ToolUse): ContentBlock[] {
+  const contextStr = context.length > 0 ? JSON.stringify(context, null, 2) : 'No context available'
+
+  let eventDescription: string
+  if (toolUse) {
+    eventDescription = `Tool: ${toolUse.name}\nArguments: ${JSON.stringify(toolUse.input, null, 2)}`
+  } else {
+    eventDescription = 'General evaluation'
+  }
+
+  const hasLedger = context.some((c) => c.type === 'toolLedger')
+
+  const ledgerExplanation = hasLedger
+    ? `\n\nThe context includes a ledger with tool_calls. Each entry has a "status" field:
+- "pending": the tool is currently being evaluated by you and has NOT started executing yet
+- "success": the tool completed successfully in a previous turn
+- "error": the tool failed or was cancelled in a previous turn`
+    : ''
+
+  const instructions = `You are a steering agent that evaluates actions another agent is attempting.
+Decide whether the action should proceed, be guided with feedback, or pause for human confirmation.
+
+Rules:
+- Base decisions ONLY on the provided context data
+- Do not use external knowledge about tools or domains
+- Focus on patterns: repeated failures, inappropriate timing, excessive retries${ledgerExplanation}`
+
+  return [
+    new TextBlock(instructions),
+    new CachePointBlock({ cacheType: 'default' }),
+    new TextBlock(`Context:\n${contextStr}\n\nEvent:\n${eventDescription}`),
+  ]
+}
+
+// ---------------------------------------------------------------------------
+// LLM steering handler
+// ---------------------------------------------------------------------------
+
+/**
+ * Configuration for the LLMSteeringHandler.
+ */
+export interface LLMSteeringHandlerConfig {
+  /** Model for steering evaluation. Defaults to a {@link BedrockModel} instance. */
+  model?: Model
+
+  /** Optional system prompt for the steering LLM. */
+  systemPrompt?: SystemPrompt
+
+  /** Custom prompt builder for evaluation prompts. Defaults to defaultPromptBuilder. */
+  promptBuilder?: PromptBuilder
+
+  /**
+   * Context providers for populating steering context.
+   * Defaults to [new ToolLedgerProvider()] if undefined. Pass an empty array to disable.
+   */
+  contextProviders?: SteeringContextProvider[]
+
+  /**
+   * Identifier for this handler instance. Defaults to `'strands:llm-steering-handler'`.
+   * Override when attaching multiple LLM steering handlers to the same agent.
+   */
+  name?: string
+}
+
+/** Schema returned by the steering LLM. */
+const STEERING_DECISION = z.object({
+  type: z
+    .enum(['proceed', 'guide', 'confirm'])
+    .describe(
+      "Steering decision: 'proceed' to continue, 'guide' to provide feedback, 'confirm' to pause for human approval"
+    ),
+  reason: z.string().describe('Clear explanation of the steering decision and any guidance provided'),
+})
+
+type SteeringDecision = z.infer<typeof STEERING_DECISION>
+
+/**
+ * Steering handler that uses an LLM to provide contextual guidance.
+ *
+ * Uses natural language prompts to evaluate tool calls and produce an
+ * intervention action.
+ *
+ * Only `beforeToolCall` is implemented — model-output steering is not
+ * delegated to the LLM. Subclass and override `afterModelCall` to
+ * add LLM-driven evaluation of model responses.
+ *
+ * @example
+ * ```typescript
+ * import { Agent } from '@strands-agents/sdk'
+ * import { LLMSteeringHandler } from '@strands-agents/sdk/vended-interventions/steering'
+ *
+ * const handler = new LLMSteeringHandler({
+ *   systemPrompt: `You ensure emails maintain a cheerful, positive tone.`,
+ * })
+ *
+ * const agent = new Agent({ tools: [sendEmail], interventions: [handler] })
+ * ```
+ */
+export class LLMSteeringHandler extends SteeringHandler {
+  override readonly name: string
+
+  private readonly _promptBuilder: PromptBuilder
+  private readonly _model: Model
+  private readonly _systemPrompt?: SystemPrompt
+
+  constructor(config: LLMSteeringHandlerConfig = {}) {
+    const contextProviders =
+      config.contextProviders === undefined ? [new ToolLedgerProvider()] : config.contextProviders
+    super({ contextProviders })
+
+    this.name = config.name ?? 'strands:llm-steering-handler'
+    this._promptBuilder = config.promptBuilder ?? defaultPromptBuilder
+    this._model = config.model ?? new BedrockModel()
+    if (config.systemPrompt !== undefined) {
+      this._systemPrompt = config.systemPrompt
+    }
+  }
+
+  protected override async evaluateToolCall(event: BeforeToolCallEvent): Promise<Proceed | Guide | Confirm> {
+    const context = this.getSteeringContext()
+    const prompt = this._promptBuilder(context, event.toolUse)
+    const decision = await this._invoke(prompt)
+
+    switch (decision.type) {
+      case 'proceed':
+        return proceed({ reason: decision.reason })
+      case 'guide':
+        return guide(decision.reason)
+      case 'confirm':
+        return confirm(decision.reason, { reason: decision.reason })
+    }
+  }
+
+  // Constructs a fresh inner agent per call so the handler has no shared
+  // mutable state between invocations — this keeps it safe to attach to
+  // multiple parent agents (whose tool calls may evaluate concurrently).
+  private async _invoke(prompt: string | ContentBlock[]): Promise<SteeringDecision> {
+    const inner = new Agent({
+      model: this._model,
+      ...(this._systemPrompt !== undefined && { systemPrompt: this._systemPrompt }),
+      structuredOutputSchema: STEERING_DECISION,
+      printer: false,
+    })
+    const result = await inner.invoke(prompt)
+    return STEERING_DECISION.parse(result.structuredOutput)
+  }
+}
