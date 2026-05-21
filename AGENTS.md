@@ -40,7 +40,8 @@ sdk-typescript/
 │   │   │   ├── agent.ts          # Core agent implementation
 │   │   │   ├── agent-as-tool.ts  # Wrap agent as a tool
 │   │   │   ├── printer.ts        # Agent output printing
-│   │   │   └── snapshot.ts       # Agent state snapshots
+│   │   │   ├── snapshot.ts       # Agent state snapshots
+│   │   │   └── tool-caller.ts     # Direct tool calling via agent.tool accessor
 │   │   │
 │   │   ├── conversation-manager/ # Conversation history strategies
 │   │   │   ├── __tests__/

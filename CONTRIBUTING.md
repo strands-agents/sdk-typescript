@@ -55,20 +55,25 @@ The repo is an npm workspace. The SDK source lives in `strands-ts/`, and the roo
 
 ### WASM and Python Development
 
-To work on the WASM bridge or the Python SDK:
+If you're working on the WASM bridge (`strands-wasm/`) or the Python SDK (`strands-py-wasm/`), additional setup is needed:
 
-```bash
-npm run dev -- bootstrap
-source .venv/bin/activate
-```
+1. Build the full pipeline (TS → WASM → Python types):
+   ```bash
+   npm run dev -- bootstrap
+   ```
 
-That installs everything, generates types, builds TS and WASM, and puts
-`strandly` on PATH.
+2. Set up the Python virtual environment:
+   ```bash
+   python3 -m venv strands-py-wasm/.venv
+   source strands-py-wasm/.venv/bin/activate
+   pip install -e "strands-py-wasm[dev]"
+   pip install componentize-py boto3 pytest pytest-asyncio
+   ```
 
-Run integration tests:
-```bash
-pytest strands-py-wasm/tests_integ/models/test_model_bedrock.py -xvs
-```
+3. Run Python integration tests (from `strands-py-wasm/`, venv activated):
+   ```bash
+   python3 -m pytest tests_integ/models/test_model_bedrock.py -xvs
+   ```
 
 See [strands-wasm/README.md](strands-wasm/README.md) for the full architecture guide and `validate` commands.
 
